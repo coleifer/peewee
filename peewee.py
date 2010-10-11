@@ -119,12 +119,12 @@ class BaseQuery(object):
         return self
     
     def join(self, model):
-        if self.model._meta.rel_exists(model):
+        if self.query_context._meta.rel_exists(model):
             self._joins.append(model)
             self.query_context = model
         else:
             raise AttributeError('No foreign key found between %s and %s' % \
-                (self.model.__name__, model.__name__))
+                (self.query_context.__name__, model.__name__))
         return self
     
     def combine_field(self, alias, field_name):

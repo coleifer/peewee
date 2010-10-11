@@ -78,6 +78,49 @@ class QueryTests(BasePeeweeTestCase):
         self.assertEqual(sorted([o.id for o in sq.execute()]), [1, 2])
         self.assertEqual(sorted([o.title for o in sq.execute()]), ['a', 'b'])
     
+    def test_selecting_across_joins(self):
+        a = self.create_blog(title='a')
+        a1 = self.create_entry(title='a1', content='a1', blog=a)
+        a2 = self.create_entry(title='a2', content='a2', blog=a)
+        
+        b = self.create_blog(title='b')
+        b1 = self.create_entry(title='b1', content='b1', blog=b)
+        b2 = self.create_entry(title='b2', content='b2', blog=b)
+        
+        sq = peewee.SelectQuery(Entry, '*').where(title='a1').join(Blog).where(title='a')
+        
+        self.assertEqual(sq._where, {
+            Entry: {'title': '= "a1"'},
+            Blog: {'title': '= "a"'}
+        })
+        self.assertEqual(sq._joins, [Blog])
+        self.assertEqual(sq.sql(), 'SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t1.title = "a1" AND t2.title = "a"')
+        
+        self.assertEqual(list(sq), [a1])
+        
+        sq = peewee.SelectQuery(Blog, '*').join(Entry).where(title='a1')
+        
+        self.assertEqual(sq._where, {
+            Entry: {'title': '= "a1"'}
+        })
+        self.assertEqual(sq._joins, [Entry])
+        
+        self.assertEqual(list(sq), [a])
+        
+        t1 = self.create_entry_tag(tag='t1', entry=a2)
+        t2 = self.create_entry_tag(tag='t2', entry=b2)
+        
+        sq = peewee.SelectQuery(EntryTag, '*').join(Entry).join(Blog).where(title='a')
+        
+        self.assertEqual(sq._where, {
+            Blog: {'title': '= "a"'}
+        })
+        self.assertEqual(sq._joins, [Entry, Blog])
+        self.assertEqual(list(sq), [t1])
+        
+        sq = peewee.SelectQuery(Blog, '*').join(Entry).join(EntryTag).where(tag='t2')
+        self.assertEqual(list(sq), [b])
+    
     def test_insert(self):
         iq = peewee.InsertQuery(Blog, title='a')
         self.assertEqual(iq.sql(), 'INSERT INTO blog (title) VALUES ("a")')
@@ -171,6 +214,9 @@ class RelatedFieldTests(BasePeeweeTestCase):
         b1 = self.create_entry(title='b1', content='b1', blog=b)
         b2 = self.create_entry(title='b2', content='b2', blog=b)
         
+        t1 = self.create_entry_tag(tag='t1', entry=a2)
+        t2 = self.create_entry_tag(tag='t1', entry=b2)
+        
         self.assertEqual(a1.blog, a)
         self.assertNotEqual(a1.blog, b)
         
@@ -179,6 +225,9 @@ class RelatedFieldTests(BasePeeweeTestCase):
         
         self.assertEqual(b1.blog, b)
         self.assertNotEqual(b1.blog, a)
+        
+        self.assertEqual(t1.entry.blog, a)
+        self.assertEqual(t2.entry.blog, b)
         
         a3 = Entry(title='a3', content='a3')
         a3.blog = a
@@ -206,51 +255,21 @@ class RelatedFieldTests(BasePeeweeTestCase):
         b1 = self.create_entry(title='b1', content='b1', blog=b)
         b2 = self.create_entry(title='b2', content='b2', blog=b)
         
-        results = []
-        for entry in a.entry_set:
-            results.append(entry.title)
+        t1 = self.create_entry_tag(tag='t1', entry=a2)
+        t2 = self.create_entry_tag(tag='t1', entry=b2)
         
-        self.assertEqual(sorted(results), ['a1', 'a2'])
+        self.assertEqual(sorted(a.entry_set), [a1, a2])
         
-        results = []
-        for entry in a.entry_set.where(title='a1'):
-            results.append(entry.title)
+        self.assertEqual(sorted(a.entry_set.where(title='a1')), [a1])
         
-        self.assertEqual(sorted(results), ['a1'])
+        self.assertEqual(list(a1.entrytag_set), [])
+        self.assertEqual(list(a2.entrytag_set), [t1])
     
     def test_querying_across_joins(self):
         a = self.create_blog(title='a')
         a1 = self.create_entry(title='a1', content='a1', blog=a)
         a2 = self.create_entry(title='a2', content='a2', blog=a)
         
-        a1_tag1 = self.create_entry_tag(tag='a', entry=a1)
-        a1_tag2 = self.create_entry_tag(tag='1', entry=a1)
-        
-        a2_tag1 = self.create_entry_tag(tag='a', entry=a2)
-        a2_tag2 = self.create_entry_tag(tag='2', entry=a2)
-        
         b = self.create_blog(title='b')
         b1 = self.create_entry(title='b1', content='b1', blog=b)
         b2 = self.create_entry(title='b2', content='b2', blog=b)
-        
-        b1_tag1 = self.create_entry_tag(tag='b', entry=b1)
-        b1_tag2 = self.create_entry_tag(tag='1', entry=b1)
-        
-        b2_tag1 = self.create_entry_tag(tag='b', entry=b2)
-        b2_tag2 = self.create_entry_tag(tag='2', entry=b2)
-
-        sq = Blog._meta.select().where(title='a').join(Entry).where(title='a2')
-        
-        results = []
-        for entry in sq:
-            results.append(entry.title)
-        
-        self.assertEqual(results, ['a'])
-        
-        sq = Blog._meta.select().join(Entry).where(title='b2')
-        
-        results = []
-        for entry in sq:
-            results.append(entry.title)
-        
-        self.assertEqual(results, ['b'])
