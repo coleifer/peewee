@@ -26,6 +26,12 @@ class Database(object):
             framing % (model_class._meta.db_table, ', '.join(columns))
         )
         self.conn.commit()
+    
+    def drop_table(self, model_class):
+        cursor = self.conn.cursor()
+        cursor.execute('DROP TABLE %s;' % model_class._meta.db_table)
+        self.conn.commit()
+
 
 database = Database('test.db')
 
@@ -193,7 +199,7 @@ class SelectQuery(BaseQuery):
         joins, where, alias_map = self.compile_where()
         
         table = self.model._meta.db_table
-        if alias_map[self.model]:
+        if self.model in alias_map:
             table = '%s AS %s' % (table, alias_map[self.model])
             if self.query == '*':
                 self.query = '%s*' % alias_map[self.model]
