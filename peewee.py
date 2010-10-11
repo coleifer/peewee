@@ -231,8 +231,9 @@ class SelectQuery(BaseQuery):
         
         pieces = [select]
         
-        if where:
+        if joins:
             pieces.append(joins)
+        if where:
             pieces.append('WHERE %s' % where)
         if group_by:
             pieces.append('GROUP BY %s' % group_by)

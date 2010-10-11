@@ -121,6 +121,23 @@ class QueryTests(BasePeeweeTestCase):
         sq = peewee.SelectQuery(Blog, '*').join(Entry).join(EntryTag).where(tag='t2')
         self.assertEqual(list(sq), [b])
     
+    def test_selecting_with_aggregation(self):
+        a_id = peewee.InsertQuery(Blog, title='a').execute()
+        b_id = peewee.InsertQuery(Blog, title='b').execute()
+        
+        peewee.InsertQuery(Entry, title='a1', blog_id=a_id).execute()
+        peewee.InsertQuery(Entry, title='a2', blog_id=a_id).execute()
+        peewee.InsertQuery(Entry, title='a3', blog_id=a_id).execute()
+        peewee.InsertQuery(Entry, title='b1', blog_id=b_id).execute()
+
+        sq = peewee.SelectQuery(Blog, 't1.*, COUNT(t2.id) AS count').join(Entry).group_by('t1.id')
+        a, b = list(sq)
+        self.assertEqual(a.count, 3)
+        self.assertEqual(b.count, 1)
+        
+        sq = sq.having('count > 2')
+        self.assertEqual(list(sq), [a])
+    
     def test_insert(self):
         iq = peewee.InsertQuery(Blog, title='a')
         self.assertEqual(iq.sql(), 'INSERT INTO blog (title) VALUES ("a")')
