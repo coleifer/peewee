@@ -119,12 +119,18 @@ class BaseQuery(object):
         return self
     
     def join(self, model):
-        for field in self.model._meta.fields.values():
-            if isinstance(field, ForeignKeyField) and field.to == model:
-                self._joins.append(model)
-                self.query_context = model
-        
+        if self.model._meta.rel_exists(model):
+            self._joins.append(model)
+            self.query_context = model
+        else:
+            raise AttributeError('No foreign key found between %s and %s' % \
+                (self.model.__name__, model.__name__))
         return self
+    
+    def combine_field(self, alias, field_name):
+        if alias:
+            return '%s.%s' % (alias, field_name)
+        return field_name
     
     def compile_where(self):
         alias_count = 0
@@ -133,7 +139,7 @@ class BaseQuery(object):
         alias_required = len(self._joins) > 0
 
         joins = list(self._joins)
-        if self._where:
+        if self._where or len(joins):
             joins.insert(0, self.model)
         
         where_with_alias = []
@@ -142,31 +148,37 @@ class BaseQuery(object):
         for i, model in enumerate(joins):
             if alias_required:
                 alias_count += 1
-                alias_map[model] = 't%d.' % alias_count
+                alias_map[model] = 't%d' % alias_count
             else:
                 alias_map[model] = ''
             
-            for name, lookup in self._where[model].iteritems():
-                if name == '__raw__':
-                    where_with_alias.append(lookup)
-                else:
-                    where_with_alias.append('%s%s %s' % (
-                        alias_map[model], name, lookup))
+            if model in self._where:
+                for name, lookup in self._where[model].iteritems():
+                    if name == '__raw__':
+                        where_with_alias.append(lookup)
+                    else:
+                        where_with_alias.append('%s %s' % (
+                            self.combine_field(alias_map[model], name), lookup))
             
             if i > 0:
                 from_model = joins[i-1]
-                for field in from_model._meta.fields.values():
-                    if isinstance(field, ForeignKeyField) and field.to == model:
-                        computed_joins.append(
-                            'INNER JOIN %s AS %s ON %s%s = %s%s' % (
-                                model._meta.db_table,
-                                alias_map[model],
-                                alias_map[from_model],
-                                field.name,
-                                alias_map[model],
-                                'id'
-                            )
-                        )
+                field = from_model._meta.get_related_field_for_model(model)
+                if field:
+                    left_field = field.name
+                    right_field = 'id'
+                else:
+                    field = from_model._meta.get_reverse_related_field_for_model(model)
+                    left_field = 'id'
+                    right_field = field.name
+                
+                computed_joins.append(
+                    'INNER JOIN %s AS %s ON %s = %s' % (
+                        model._meta.db_table,
+                        alias_map[model],
+                        self.combine_field(alias_map[from_model], left_field),
+                        self.combine_field(alias_map[model], right_field),
+                    )
+                )
         
         return computed_joins, where_with_alias, alias_map
     
@@ -205,7 +217,7 @@ class SelectQuery(BaseQuery):
         if alias_map.get(self.model, None):
             table = '%s AS %s' % (table, alias_map[self.model])
             if self.query == '*':
-                self.query = '%s*' % alias_map[self.model]
+                self.query = '%s.*' % alias_map[self.model]
             else:
                 pass # handle list of params here
         
@@ -510,6 +522,15 @@ class BaseModel(type):
                 for field in self.fields.values():
                     if isinstance(field, ForeignKeyField) and field.to == model:
                         return field
+            
+            def get_reverse_related_field_for_model(self, model):
+                for field in model._meta.fields.values():
+                    if isinstance(field, ForeignKeyField) and field.to == self.model_class:
+                        return field
+            
+            def rel_exists(self, model):
+                return self.get_related_field_for_model(model) or \
+                       self.get_reverse_related_field_for_model(model)
             
             def get_field_dict(self, instance):
                 field_val = lambda f: (f.name, getattr(instance, f.name))

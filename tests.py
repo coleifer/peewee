@@ -49,6 +49,11 @@ class BaseWeezTestCase(unittest.TestCase):
         entry = Entry(**kwargs)
         entry.save()
         return entry
+    
+    def create_entry_tag(self, **kwargs):
+        entry_tag = EntryTag(**kwargs)
+        entry_tag.save()
+        return entry_tag
 
 
 class QueryTests(BaseWeezTestCase):
@@ -212,3 +217,40 @@ class RelatedFieldTests(BaseWeezTestCase):
             results.append(entry.title)
         
         self.assertEqual(sorted(results), ['a1'])
+    
+    def test_querying_across_joins(self):
+        a = self.create_blog(title='a')
+        a1 = self.create_entry(title='a1', content='a1', blog=a)
+        a2 = self.create_entry(title='a2', content='a2', blog=a)
+        
+        a1_tag1 = self.create_entry_tag(tag='a', entry=a1)
+        a1_tag2 = self.create_entry_tag(tag='1', entry=a1)
+        
+        a2_tag1 = self.create_entry_tag(tag='a', entry=a2)
+        a2_tag2 = self.create_entry_tag(tag='2', entry=a2)
+        
+        b = self.create_blog(title='b')
+        b1 = self.create_entry(title='b1', content='b1', blog=b)
+        b2 = self.create_entry(title='b2', content='b2', blog=b)
+        
+        b1_tag1 = self.create_entry_tag(tag='b', entry=b1)
+        b1_tag2 = self.create_entry_tag(tag='1', entry=b1)
+        
+        b2_tag1 = self.create_entry_tag(tag='b', entry=b2)
+        b2_tag2 = self.create_entry_tag(tag='2', entry=b2)
+
+        sq = Blog._meta.select().where(title='a').join(Entry).where(title='a2')
+        
+        results = []
+        for entry in sq:
+            results.append(entry.title)
+        
+        self.assertEqual(results, ['a'])
+        
+        sq = Blog._meta.select().join(Entry).where(title='b2')
+        
+        results = []
+        for entry in sq:
+            results.append(entry.title)
+        
+        self.assertEqual(results, ['b'])
