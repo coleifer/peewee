@@ -1,44 +1,44 @@
 from datetime import datetime
 import unittest
 
-import weez
+import peewee
 
 # test models
-class Blog(weez.Model):
-    title = weez.CharField()
+class Blog(peewee.Model):
+    title = peewee.CharField()
     
     def __unicode__(self):
         return self.title
 
 
-class Entry(weez.Model):
-    title = weez.CharField(max_length=50)
-    content = weez.TextField()
-    pub_date = weez.DateTimeField()
-    blog = weez.ForeignKeyField(Blog)
+class Entry(peewee.Model):
+    title = peewee.CharField(max_length=50)
+    content = peewee.TextField()
+    pub_date = peewee.DateTimeField()
+    blog = peewee.ForeignKeyField(Blog)
     
     def __unicode__(self):
         return '%s: %s' % (self.blog.title, self.title)
 
 
-class EntryTag(weez.Model):
-    tag = weez.CharField(max_length=50)
-    entry = weez.ForeignKeyField(Entry)
+class EntryTag(peewee.Model):
+    tag = peewee.CharField(max_length=50)
+    entry = peewee.ForeignKeyField(Entry)
     
     def __unicode__(self):
         return self.tag
 
 
-class BaseWeezTestCase(unittest.TestCase):
+class BasePeeweeTestCase(unittest.TestCase):
     def setUp(self):
-        weez.database.create_table(Blog)
-        weez.database.create_table(Entry)
-        weez.database.create_table(EntryTag)
+        peewee.database.create_table(Blog)
+        peewee.database.create_table(Entry)
+        peewee.database.create_table(EntryTag)
     
     def tearDown(self):
-        weez.database.drop_table(EntryTag)
-        weez.database.drop_table(Entry)
-        weez.database.drop_table(Blog)
+        peewee.database.drop_table(EntryTag)
+        peewee.database.drop_table(Entry)
+        peewee.database.drop_table(Blog)
     
     def create_blog(self, **kwargs):
         blog = Blog(**kwargs)
@@ -56,49 +56,49 @@ class BaseWeezTestCase(unittest.TestCase):
         return entry_tag
 
 
-class QueryTests(BaseWeezTestCase):
+class QueryTests(BasePeeweeTestCase):
     def test_select(self):
         a = self.create_blog(title='a')
         b = self.create_blog(title='b')
         c = self.create_blog(title='c')
         
-        sq = weez.SelectQuery(Blog, '*')
+        sq = peewee.SelectQuery(Blog, '*')
         self.assertEqual(sorted([o.id for o in sq.execute()]), [1, 2, 3])
         self.assertEqual(sorted([o.title for o in sq.execute()]), ['a', 'b', 'c'])
         
-        sq = weez.SelectQuery(Blog, '*').where(title='a')
+        sq = peewee.SelectQuery(Blog, '*').where(title='a')
         self.assertEqual(sorted([o.id for o in sq.execute()]), [1])
         self.assertEqual(sorted([o.title for o in sq.execute()]), ['a'])
         
-        sq = weez.SelectQuery(Blog, '*').where(title='a').where(id=1)
+        sq = peewee.SelectQuery(Blog, '*').where(title='a').where(id=1)
         self.assertEqual(sorted([o.id for o in sq.execute()]), [1])
         self.assertEqual(sorted([o.title for o in sq.execute()]), ['a'])
         
-        sq = weez.SelectQuery(Blog, '*').where(title__in=['a', 'b'])
+        sq = peewee.SelectQuery(Blog, '*').where(title__in=['a', 'b'])
         self.assertEqual(sorted([o.id for o in sq.execute()]), [1, 2])
         self.assertEqual(sorted([o.title for o in sq.execute()]), ['a', 'b'])
     
     def test_insert(self):
-        iq = weez.InsertQuery(Blog, title='a')
+        iq = peewee.InsertQuery(Blog, title='a')
         self.assertEqual(iq.sql(), 'INSERT INTO blog (title) VALUES ("a")')
         self.assertEqual(iq.execute(), 1)
         
         a = Blog._meta.get(id=1)
         self.assertEqual(a.title, 'a')
         
-        iq = weez.InsertQuery(Blog, title='b')
+        iq = peewee.InsertQuery(Blog, title='b')
         self.assertEqual(iq.execute(), 2)
         
         b = Blog._meta.get(id=2)
         self.assertEqual(b.title, 'b')
     
     def test_update(self):
-        iq = weez.InsertQuery(Blog, title='a')
+        iq = peewee.InsertQuery(Blog, title='a')
         a_id = iq.execute()
         a = Blog._meta.get(id=a_id)
         self.assertEqual(a.title, 'a')
         
-        uq = weez.UpdateQuery(Blog, title='A').where(id=a_id)
+        uq = peewee.UpdateQuery(Blog, title='A').where(id=a_id)
         self.assertEqual(uq.sql(), 'UPDATE blog SET title="A" WHERE id = 1')
         
         uq.execute()
@@ -106,22 +106,22 @@ class QueryTests(BaseWeezTestCase):
         self.assertEqual(a2.title, 'A')
     
     def test_delete(self):
-        weez.InsertQuery(Blog, title='a').execute()
-        weez.InsertQuery(Blog, title='b').execute()
-        weez.InsertQuery(Blog, title='c').execute()
+        peewee.InsertQuery(Blog, title='a').execute()
+        peewee.InsertQuery(Blog, title='b').execute()
+        peewee.InsertQuery(Blog, title='c').execute()
         
-        dq = weez.DeleteQuery(Blog).where(title='b')
+        dq = peewee.DeleteQuery(Blog).where(title='b')
         self.assertEqual(dq.sql(), 'DELETE FROM blog WHERE title = "b"')
         self.assertEqual(dq.execute(), 1)
         
-        sq = weez.SelectQuery(Blog)
+        sq = peewee.SelectQuery(Blog)
         self.assertEqual(sorted([o.title for o in sq.execute()]), ['a', 'c'])
         
-        dq = weez.DeleteQuery(Blog).execute()
+        dq = peewee.DeleteQuery(Blog).execute()
         self.assertEqual(dq, 2)
 
 
-class ModelTests(BaseWeezTestCase):
+class ModelTests(BasePeeweeTestCase):
     def test_model_save(self):
         a = self.create_blog(title='a')
         self.assertEqual(a.id, 1)
@@ -161,7 +161,7 @@ class ModelTests(BaseWeezTestCase):
         self.assertEqual(sorted(results), ['a', 'c'])
 
 
-class RelatedFieldTests(BaseWeezTestCase):
+class RelatedFieldTests(BasePeeweeTestCase):
     def test_foreign_keys(self):
         a = self.create_blog(title='a')
         a1 = self.create_entry(title='a1', content='a1', blog=a)
