@@ -572,5 +572,8 @@ class Model(object):
         for k, v in kwargs.items():
             setattr(self, k, v)
     
+    def __eq__(self, other):
+        return other.__class__ == self.__class__ and self.id and other.id == self.id
+    
     def save(self):
         return self._meta.save(self)

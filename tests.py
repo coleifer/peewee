@@ -29,7 +29,7 @@ class EntryTag(weez.Model):
         return self.tag
 
 
-class WeezModelTests(unittest.TestCase):
+class BaseWeezTestCase(unittest.TestCase):
     def setUp(self):
         weez.database.create_table(Blog)
         weez.database.create_table(Entry)
@@ -45,6 +45,13 @@ class WeezModelTests(unittest.TestCase):
         blog.save()
         return blog
     
+    def create_entry(self, **kwargs):
+        entry = Entry(**kwargs)
+        entry.save()
+        return entry
+
+
+class QueryTests(BaseWeezTestCase):
     def test_select(self):
         a = self.create_blog(title='a')
         b = self.create_blog(title='b')
@@ -98,22 +105,23 @@ class WeezModelTests(unittest.TestCase):
         weez.InsertQuery(Blog, title='b').execute()
         weez.InsertQuery(Blog, title='c').execute()
         
-        dq = weez.DeleteQuery(Blog).where(title='b').execute()
-        self.assertEqual(dq, 1)
+        dq = weez.DeleteQuery(Blog).where(title='b')
+        self.assertEqual(dq.sql(), 'DELETE FROM blog WHERE title = "b"')
+        self.assertEqual(dq.execute(), 1)
         
         sq = weez.SelectQuery(Blog)
         self.assertEqual(sorted([o.title for o in sq.execute()]), ['a', 'c'])
         
         dq = weez.DeleteQuery(Blog).execute()
         self.assertEqual(dq, 2)
-    
-    def test_persistence(self):
-        a = Blog(title='a')
-        a.save()
+
+
+class ModelTests(BaseWeezTestCase):
+    def test_model_save(self):
+        a = self.create_blog(title='a')
         self.assertEqual(a.id, 1)
         
-        b = Blog(title='b')
-        b.save()
+        b = self.create_blog(title='b')
         self.assertEqual(b.id, 2)
         
         a.save()
@@ -121,3 +129,86 @@ class WeezModelTests(unittest.TestCase):
         
         all_blogs = list(Blog._meta.select())
         self.assertEqual(len(all_blogs), 2)
+    
+    def test_model_get(self):
+        a = self.create_blog(title='a')
+        b = self.create_blog(title='b')
+        c = self.create_blog(title='c')
+        
+        b2 = Blog._meta.get(title='b')
+        self.assertEqual(b2.id, b.id)
+    
+    def test_model_select(self):
+        a = self.create_blog(title='a')
+        b = self.create_blog(title='b')
+        c = self.create_blog(title='c')
+        
+        results = []
+        for obj in Blog._meta.select():
+            results.append(obj.title)
+        
+        self.assertEqual(sorted(results), ['a', 'b', 'c'])
+        
+        results = []
+        for obj in Blog._meta.select().where(title__in=['a', 'c']):
+            results.append(obj.title)
+        
+        self.assertEqual(sorted(results), ['a', 'c'])
+
+
+class RelatedFieldTests(BaseWeezTestCase):
+    def test_foreign_keys(self):
+        a = self.create_blog(title='a')
+        a1 = self.create_entry(title='a1', content='a1', blog=a)
+        a2 = self.create_entry(title='a2', content='a2', blog=a)
+        
+        b = self.create_blog(title='b')
+        b1 = self.create_entry(title='b1', content='b1', blog=b)
+        b2 = self.create_entry(title='b2', content='b2', blog=b)
+        
+        self.assertEqual(a1.blog, a)
+        self.assertNotEqual(a1.blog, b)
+        
+        self.assertEqual(a1.blog_id, a.id)
+        self.assertEqual(a2.blog_id, a1.blog_id)
+        
+        self.assertEqual(b1.blog, b)
+        self.assertNotEqual(b1.blog, a)
+        
+        a3 = Entry(title='a3', content='a3')
+        a3.blog = a
+        self.assertEqual(a3.blog, a)
+        self.assertEqual(a3.blog_id, a.id)
+        
+        a3.save()
+        self.assertEqual(a3.blog, a)
+        self.assertEqual(a3.blog_id, a.id)
+        
+        a3.blog = b
+        self.assertEqual(a3.blog, b)
+        self.assertEqual(a3.blog_id, b.id)
+        
+        a3.save()
+        self.assertEqual(a3.blog, b)
+        self.assertEqual(a3.blog_id, b.id)
+    
+    def test_reverse_fk(self):
+        a = self.create_blog(title='a')
+        a1 = self.create_entry(title='a1', content='a1', blog=a)
+        a2 = self.create_entry(title='a2', content='a2', blog=a)
+        
+        b = self.create_blog(title='b')
+        b1 = self.create_entry(title='b1', content='b1', blog=b)
+        b2 = self.create_entry(title='b2', content='b2', blog=b)
+        
+        results = []
+        for entry in a.entry_set:
+            results.append(entry.title)
+        
+        self.assertEqual(sorted(results), ['a1', 'a2'])
+        
+        results = []
+        for entry in a.entry_set.where(title='a1'):
+            results.append(entry.title)
+        
+        self.assertEqual(sorted(results), ['a1'])
