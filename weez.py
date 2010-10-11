@@ -159,7 +159,7 @@ class BaseQuery(object):
                             )
                         )
         
-        return computed_joins, where_with_alias
+        return computed_joins, where_with_alias, alias_map
     
     def raw_execute(self):
         cursor = database.conn.cursor()
@@ -176,7 +176,7 @@ class SelectQuery(BaseQuery):
     requires_commit = False
     
     def __init__(self, model, query=None):
-        self.query = query or 't1.*'
+        self.query = query or '*'
         self._group_by = []
         self._having = []
         super(SelectQuery, self).__init__(model)
@@ -190,9 +190,17 @@ class SelectQuery(BaseQuery):
         return self
     
     def sql(self):
-        joins, where = self.compile_where()
+        joins, where, alias_map = self.compile_where()
         
-        select = 'SELECT %s FROM %s AS t1' % (self.query, self.model._meta.db_table)
+        table = self.model._meta.db_table
+        if alias_map[self.model]:
+            table = '%s AS %s' % (table, alias_map[self.model])
+            if self.query == '*':
+                self.query = '%s*' % alias_map[self.model]
+            else:
+                pass # handle list of params here
+        
+        select = 'SELECT %s FROM %s' % (self.query, table)
         joins = '\n'.join(joins)
         where = ' AND '.join(where)
         group_by = ', '.join(self._group_by)
@@ -234,7 +242,7 @@ class UpdateQuery(BaseQuery):
         return ', '.join(sets)
     
     def sql(self):
-        joins, where = self.compile_where()
+        joins, where, alias_map = self.compile_where()
         set_statement = self.parse_update()
         
         update = 'UPDATE %s SET %s' % (self.model._meta.db_table, set_statement)
@@ -260,7 +268,7 @@ class DeleteQuery(BaseQuery):
     Model.delete().where(some_field=some_val)
     """
     def sql(self):
-        joins, where = self.compile_where()
+        joins, where, alias_map = self.compile_where()
         
         delete = 'DELETE FROM %s' % (self.model._meta.db_table)
         where = ' AND '.join(where)
