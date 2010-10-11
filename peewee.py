@@ -1,5 +1,7 @@
+from datetime import datetime
 import re
 import sqlite3
+import time
 
 
 class Database(object):
@@ -557,7 +559,6 @@ class BaseModel(type):
                 if instance.id:
                     delete = DeleteQuery(self.model_class).where(id=instance.id)
                     return database.execute(delete)
-            
             
         
         _meta = Meta(cls)

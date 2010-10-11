@@ -1,4 +1,4 @@
-from datetime import datetime
+import datetime
 import unittest
 
 import peewee
@@ -286,3 +286,46 @@ class RelatedFieldTests(BasePeeweeTestCase):
         
         sq = EntryTag._meta.select().join(Entry).where(title='a2').join(Blog).where(title='a')
         self.assertEqual(list(sq), [t1])
+
+
+class FieldTypeTests(BasePeeweeTestCase):
+    def jd(self, d):
+        return datetime.datetime(2010, 1, d)
+    
+    def create_common(self):
+        b = self.create_blog(title='dummy')
+        self.create_entry(title='b1', content='b1', pub_date=self.jd(1), blog=b)
+        self.create_entry(title='b2', content='b2', pub_date=self.jd(2), blog=b)
+        self.create_entry(title='b3', content='b3', pub_date=self.jd(3), blog=b)
+    
+    def assertSQEqual(self, sq, lst):
+        self.assertEqual(sorted([x.title for x in sq]), sorted(lst))
+        
+    def test_lookups_charfield(self):
+        self.create_common()
+        
+        self.assertSQEqual(Entry._meta.select().where(title__gt='b1'), ['b2', 'b3'])
+        self.assertSQEqual(Entry._meta.select().where(title__gte='b2'), ['b2', 'b3'])
+        
+        self.assertSQEqual(Entry._meta.select().where(title__lt='b3'), ['b1', 'b2'])
+        self.assertSQEqual(Entry._meta.select().where(title__lte='b2'), ['b1', 'b2'])
+        
+        self.assertSQEqual(Entry._meta.select().where(title__icontains='b'), ['b1', 'b2', 'b3'])
+        self.assertSQEqual(Entry._meta.select().where(title__icontains='2'), ['b2'])
+        
+        self.assertSQEqual(Entry._meta.select().where(title__contains='b'), ['b1', 'b2', 'b3'])
+        
+        self.assertSQEqual(Entry._meta.select().where(title__in=['b1', 'b3']), ['b1', 'b3'])
+        self.assertSQEqual(Entry._meta.select().where(title__in=[]), [])
+    
+    def test_lookups_datefield(self):
+        self.create_common()
+        
+        self.assertSQEqual(Entry._meta.select().where(pub_date__gt=self.jd(1)), ['b2', 'b3'])
+        self.assertSQEqual(Entry._meta.select().where(pub_date__gte=self.jd(2)), ['b2', 'b3'])
+        
+        self.assertSQEqual(Entry._meta.select().where(pub_date__lt=self.jd(3)), ['b1', 'b2'])
+        self.assertSQEqual(Entry._meta.select().where(pub_date__lte=self.jd(2)), ['b1', 'b2'])
+        
+        self.assertSQEqual(Entry._meta.select().where(pub_date__in=[self.jd(1), self.jd(3)]), ['b1', 'b3'])
+        self.assertSQEqual(Entry._meta.select().where(pub_date__in=[]), [])
