@@ -205,7 +205,7 @@ class ModelTests(BasePeeweeTestCase):
 
 
 class RelatedFieldTests(BasePeeweeTestCase):
-    def test_foreign_keys(self):
+    def get_common_objects(self):
         a = self.create_blog(title='a')
         a1 = self.create_entry(title='a1', content='a1', blog=a)
         a2 = self.create_entry(title='a2', content='a2', blog=a)
@@ -215,7 +215,11 @@ class RelatedFieldTests(BasePeeweeTestCase):
         b2 = self.create_entry(title='b2', content='b2', blog=b)
         
         t1 = self.create_entry_tag(tag='t1', entry=a2)
-        t2 = self.create_entry_tag(tag='t1', entry=b2)
+        t2 = self.create_entry_tag(tag='t2', entry=b2)
+        return a, a1, a2, b, b1, b2, t1, t2
+    
+    def test_foreign_keys(self):
+        a, a1, a2, b, b1, b2, t1, t2 = self.get_common_objects()
         
         self.assertEqual(a1.blog, a)
         self.assertNotEqual(a1.blog, b)
@@ -247,29 +251,38 @@ class RelatedFieldTests(BasePeeweeTestCase):
         self.assertEqual(a3.blog_id, b.id)
     
     def test_reverse_fk(self):
-        a = self.create_blog(title='a')
-        a1 = self.create_entry(title='a1', content='a1', blog=a)
-        a2 = self.create_entry(title='a2', content='a2', blog=a)
+        a, a1, a2, b, b1, b2, t1, t2 = self.get_common_objects()
         
-        b = self.create_blog(title='b')
-        b1 = self.create_entry(title='b1', content='b1', blog=b)
-        b2 = self.create_entry(title='b2', content='b2', blog=b)
+        self.assertEqual(list(a.entry_set), [a1, a2])
         
-        t1 = self.create_entry_tag(tag='t1', entry=a2)
-        t2 = self.create_entry_tag(tag='t1', entry=b2)
-        
-        self.assertEqual(sorted(a.entry_set), [a1, a2])
-        
-        self.assertEqual(sorted(a.entry_set.where(title='a1')), [a1])
+        self.assertEqual(list(a.entry_set.where(title='a1')), [a1])
         
         self.assertEqual(list(a1.entrytag_set), [])
         self.assertEqual(list(a2.entrytag_set), [t1])
     
     def test_querying_across_joins(self):
-        a = self.create_blog(title='a')
-        a1 = self.create_entry(title='a1', content='a1', blog=a)
-        a2 = self.create_entry(title='a2', content='a2', blog=a)
+        a, a1, a2, b, b1, b2, t1, t2 = self.get_common_objects()
         
-        b = self.create_blog(title='b')
-        b1 = self.create_entry(title='b1', content='b1', blog=b)
-        b2 = self.create_entry(title='b2', content='b2', blog=b)
+        sq = Blog._meta.select().join(Entry).join(EntryTag).where(tag='t1')
+        self.assertEqual(list(sq), [a])
+        
+        sq = Blog._meta.select().join(Entry).join(EntryTag).where(tag='t2')
+        self.assertEqual(list(sq), [b])
+        
+        sq = Blog._meta.select().join(Entry).where(title='a1').join(EntryTag).where(tag='t1')
+        self.assertEqual(list(sq), [])
+        
+        sq = Blog._meta.select().join(Entry).where(title='a2').join(EntryTag).where(tag='t1')
+        self.assertEqual(list(sq), [a])
+        
+        sq = EntryTag._meta.select().join(Entry).join(Blog).where(title='a')
+        self.assertEqual(list(sq), [t1])
+        
+        sq = EntryTag._meta.select().join(Entry).join(Blog).where(title='b')
+        self.assertEqual(list(sq), [t2])
+        
+        sq = EntryTag._meta.select().join(Entry).where(title='a1').join(Blog).where(title='a')
+        self.assertEqual(list(sq), [])
+        
+        sq = EntryTag._meta.select().join(Entry).where(title='a2').join(Blog).where(title='a')
+        self.assertEqual(list(sq), [t1])
