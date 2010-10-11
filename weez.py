@@ -98,7 +98,10 @@ class BaseQuery(object):
                 op = 'eq'
 
             field = self.query_context._meta.get_field_by_name(lhs)
-            lookup_value = field.lookup_value(op, rhs)
+            if op == 'in':
+                lookup_value = ','.join([field.lookup_value(op, o) for o in rhs])
+            else:
+                lookup_value = field.lookup_value(op, rhs)
             parsed[field.name] = self.operations[op] % lookup_value
         
         return parsed
@@ -199,7 +202,7 @@ class SelectQuery(BaseQuery):
         joins, where, alias_map = self.compile_where()
         
         table = self.model._meta.db_table
-        if self.model in alias_map:
+        if alias_map.get(self.model, None):
             table = '%s AS %s' % (table, alias_map[self.model])
             if self.query == '*':
                 self.query = '%s*' % alias_map[self.model]
@@ -515,6 +518,9 @@ class BaseModel(type):
             
             def select(self, query=None):
                 return SelectQuery(self.model_class, query)
+            
+            def get(self, **query):
+                return self.select().where(**query).execute().next()
             
             def save(self, instance):
                 field_dict = self.get_field_dict(instance)
