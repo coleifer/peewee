@@ -555,13 +555,13 @@ class ForeignKeyField(IntegerField):
 class BaseModel(type):
     def __new__(cls, name, bases, attrs):
         cls = super(BaseModel, cls).__new__(cls, name, bases, attrs)
-    
+
         class Meta(object):
             fields = {}
             
             def __init__(self, model_class):
                 self.model_class = model_class
-                self.database = database
+                self.database = self.model_class.database
             
             def get_field_by_name(self, name):
                 if name in self.fields:
@@ -637,6 +637,7 @@ class BaseModel(type):
 
 class Model(object):
     __metaclass__ = BaseModel
+    database = database
     
     def __init__(self, *args, **kwargs):
         for k, v in kwargs.items():
