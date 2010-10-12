@@ -33,7 +33,7 @@ class Database(object):
         return result.fetchone()[0]
     
     def create_table(self, model_class):
-        framing = "CREATE TABLE %s (%s);"
+        framing = "CREATE TABLE IF NOT EXISTS %s (%s);"
         columns = []
 
         for field in model_class._meta.fields.values():
