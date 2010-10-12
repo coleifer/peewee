@@ -560,11 +560,16 @@ class ReverseForeignRelatedObject(object):
 
 
 class ForeignKeyField(IntegerField):
-    field_template = '%(db_field)s NOT NULL REFERENCES "%(to_table)s" ("id")'
+    field_template = '%(db_field)s %(nullable)s REFERENCES "%(to_table)s" ("id")'
     
-    def __init__(self, to, *args, **kwargs):
+    def __init__(self, to, null=False, *args, **kwargs):
         self.to = to
+        self.null = null
         kwargs['to_table'] = to._meta.db_table
+        if null:
+            kwargs['nullable'] = ''
+        else:
+            kwargs['nullable'] = 'NOT NULL'
         super(ForeignKeyField, self).__init__(*args, **kwargs)
     
     def add_to_class(self, klass, name):
