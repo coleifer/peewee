@@ -528,21 +528,23 @@ class PrimaryKeyField(IntegerField):
     field_template = "%(db_field)s NOT NULL PRIMARY KEY"
 
 
-class ForeignRelatedObject(object):
-    _object_cache = None
-    
+class ForeignRelatedObject(object):    
     def __init__(self, to, name):
         self.field_name = name
         self.to = to
+        self.cache_name = '_cache_%s' % name
     
     def __get__(self, instance, instance_type=None):
-        id = getattr(instance, self.field_name, 0)
-        qr = self.to.select().where(id=id).execute()
-        return qr.next()
+        if not getattr(instance, self.cache_name, None):
+            id = getattr(instance, self.field_name, 0)
+            qr = self.to.select().where(id=id).execute()
+            setattr(instance, self.cache_name, qr.next())
+        return getattr(instance, self.cache_name)
     
     def __set__(self, instance, obj):
         assert isinstance(obj, self.to), "Cannot assign %s, invalid type" % obj
         setattr(instance, self.field_name, obj.id)
+        setattr(instance, self.cache_name, obj)
 
 
 class ReverseForeignRelatedObject(object):
