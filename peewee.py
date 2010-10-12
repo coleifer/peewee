@@ -1,4 +1,5 @@
 from datetime import datetime
+import logging
 import os
 import re
 import sqlite3
@@ -6,6 +7,7 @@ import time
 
 
 DATABASE_NAME = os.environ.get('PEEWEE_DATABASE', 'peewee.db')
+logger = logging.getLogger('peewee.logger')
 
 
 class Database(object):
@@ -216,6 +218,7 @@ class BaseQuery(object):
         result = cursor.execute(self.sql())
         if self.requires_commit:
             self.database.conn.commit()
+        logger.debug(self.sql())
         return result
 
 
