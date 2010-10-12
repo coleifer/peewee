@@ -71,6 +71,13 @@ class QueryResultWrapper(object):
             raise StopIteration
 
 
+def asc(f):
+    return (f, 'ASC')
+
+def desc(f):
+    return (f, 'DESC')
+
+
 class BaseQuery(object):
     operations = {
         'lt': '< %s',
@@ -202,6 +209,7 @@ class SelectQuery(BaseQuery):
         self.query = query or '*'
         self._group_by = []
         self._having = []
+        self._order_by = []
         super(SelectQuery, self).__init__(model)
     
     def group_by(self, clause):
@@ -210,6 +218,16 @@ class SelectQuery(BaseQuery):
     
     def having(self, clause):
         self._having.append(clause)
+        return self
+    
+    def order_by(self, field_or_string):
+        if isinstance(field_or_string, tuple):
+            field_or_string, ordering = field_or_string
+        else:
+            ordering = 'ASC'
+        
+        self._order_by.append((self.query_context, '%s %s' % (field_or_string, ordering)))
+        
         return self
     
     def sql(self):
@@ -229,6 +247,15 @@ class SelectQuery(BaseQuery):
         group_by = ', '.join(self._group_by)
         having = ' AND '.join(self._having)
         
+        order_by = []
+        for piece in self._order_by:
+            model, clause = piece
+            if model in alias_map:
+                piece = '%s.%s' % (alias_map[model], clause)
+            else:
+                piece = clause
+            order_by.append(piece)
+        
         pieces = [select]
         
         if joins:
@@ -239,6 +266,8 @@ class SelectQuery(BaseQuery):
             pieces.append('GROUP BY %s' % group_by)
         if having:
             pieces.append('HAVING %s' % having)
+        if order_by:
+            pieces.append('ORDER BY %s' % ', '.join(order_by))
         
         return ' '.join(pieces)
     

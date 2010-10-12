@@ -138,6 +138,23 @@ class QueryTests(BasePeeweeTestCase):
         sq = sq.having('count > 2')
         self.assertEqual(list(sq), [a])
     
+    def test_selecting_with_ordering(self):
+        a = self.create_blog(title='a')
+        b = self.create_blog(title='b')
+        c = self.create_blog(title='c')
+        
+        a1 = self.create_entry(title='a1', blog=a)
+        a2 = self.create_entry(title='a2', blog=a)
+        b1 = self.create_entry(title='b1', blog=b)
+        b2 = self.create_entry(title='b2', blog=b)
+        c1 = self.create_entry(title='c1', blog=c)
+        
+        sq = peewee.SelectQuery(Blog).order_by('title')
+        self.assertEqual(list(sq), [a, b, c])
+        
+        sq = peewee.SelectQuery(Blog).order_by(peewee.desc('title'))
+        self.assertEqual(list(sq), [c, b, a])
+    
     def test_insert(self):
         iq = peewee.InsertQuery(Blog, title='a')
         self.assertEqual(iq.sql(), 'INSERT INTO blog (title) VALUES ("a")')
