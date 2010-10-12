@@ -210,8 +210,8 @@ class QueryTests(BasePeeweeTestCase):
         count = peewee.database.select(Blog).count()
         self.assertEqual(count, 10)
         
-        for i in xrange(20):
-            for blog in peewee.database.select(Blog):
+        for blog in peewee.database.select(Blog):
+            for i in xrange(20):
                 self.create_entry(title='entry%d' % i, blog=blog)
         
         count = peewee.database.select(Entry).count()
