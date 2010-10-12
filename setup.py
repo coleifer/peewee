@@ -13,11 +13,7 @@ setup(
     author='Charles Leifer',
     author_email='coleifer@gmail.com',
     url='http://github.com/coleifer/peewee/',
-    packages=find_packages(),
-    package_data = {
-        'peewee': [
-        ],
-    },
+    py_modules=['peewee'],
     classifiers=[
         'Development Status :: 4 - Beta',
         'Environment :: Web Environment',
