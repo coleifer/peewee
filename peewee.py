@@ -242,6 +242,8 @@ class SelectQuery(BaseQuery):
     
     def count(self):
         tmp_pagination = self._pagination
+        self._pagination = None
+        
         tmp_query = self.query
         
         if self.use_aliases():
