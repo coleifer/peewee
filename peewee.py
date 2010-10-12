@@ -153,6 +153,9 @@ class BaseQuery(object):
                 (self.query_context.__name__, model.__name__))
         return self
     
+    def use_aliases(self):
+        return len(self._joins) > 0
+    
     def combine_field(self, alias, field_name):
         if alias:
             return '%s.%s' % (alias, field_name)
@@ -162,7 +165,7 @@ class BaseQuery(object):
         alias_count = 0
         alias_map = {}
 
-        alias_required = len(self._joins) > 0
+        alias_required = self.use_aliases()
 
         joins = list(self._joins)
         if self._where or len(joins):
@@ -227,7 +230,29 @@ class SelectQuery(BaseQuery):
         self._group_by = []
         self._having = []
         self._order_by = []
+        self._pagination = None # return all by default
         super(SelectQuery, self).__init__(database, model)
+    
+    def paginate(self, page_num, paginate_by=20):
+        self._pagination = (page_num, paginate_by)
+        return self
+    
+    def count(self):
+        tmp_pagination = self._pagination
+        tmp_query = self.query
+        
+        if self.use_aliases():
+            self.query = 'COUNT(t1.id)'
+        else:
+            self.query = 'COUNT(id)'
+        
+        cursor = self.database.conn.cursor()
+        res = cursor.execute(self.sql())
+        
+        self.query = tmp_query
+        self._pagination = tmp_pagination
+        
+        return res.fetchone()[0]
     
     def group_by(self, clause):
         self._group_by.append(clause)
@@ -285,6 +310,11 @@ class SelectQuery(BaseQuery):
             pieces.append('HAVING %s' % having)
         if order_by:
             pieces.append('ORDER BY %s' % ', '.join(order_by))
+        if self._pagination:
+            page, paginate_by = self._pagination
+            if page > 0:
+                page -= 1
+            pieces.append('LIMIT %d OFFSET %d' % (paginate_by, page * paginate_by))
         
         return ' '.join(pieces)
     

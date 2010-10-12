@@ -202,6 +202,42 @@ class QueryTests(BasePeeweeTestCase):
         
         dq = peewee.database.delete(Blog).execute()
         self.assertEqual(dq, 2)
+    
+    def test_count(self):
+        for i in xrange(10):
+            self.create_blog(title='a%d' % i)
+        
+        count = peewee.database.select(Blog).count()
+        self.assertEqual(count, 10)
+        
+        for i in xrange(20):
+            for blog in peewee.database.select(Blog):
+                self.create_entry(title='entry%d' % i, blog=blog)
+        
+        count = peewee.database.select(Entry).count()
+        self.assertEqual(count, 200)
+        
+        count = peewee.database.select(Entry).join(Blog).where(title="a0").count()
+        self.assertEqual(count, 20)
+        
+        count = peewee.database.select(Entry).where(
+            title__icontains="0"
+        ).join(Blog).where(
+            title="a5"
+        ).count()
+        self.assertEqual(count, 2)
+    
+    def test_pagination(self):
+        for i in xrange(100):
+            self.create_blog(title='%s' % i)
+        
+        first_page = peewee.database.select(Blog).paginate(1, 20)
+        titles = [blog.title for blog in first_page]
+        self.assertEqual(titles, map(str, range(20)))
+        
+        second_page = peewee.database.select(Blog).paginate(3, 30)
+        titles = [blog.title for blog in second_page]
+        self.assertEqual(titles, map(str, range(60, 90)))
 
 
 class ModelTests(BasePeeweeTestCase):
