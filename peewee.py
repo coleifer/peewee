@@ -662,6 +662,14 @@ class Model(object):
         return dict(pairs)
     
     @classmethod
+    def create_table(cls):
+        cls.database.create_table(cls)
+    
+    @classmethod
+    def drop_table(cls):
+        cls.database.drop_table(cls)
+    
+    @classmethod
     def select(cls, query=None):
         return cls.database.select(cls, query)
     

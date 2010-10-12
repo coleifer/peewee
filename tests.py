@@ -31,14 +31,14 @@ class EntryTag(peewee.Model):
 
 class BasePeeweeTestCase(unittest.TestCase):
     def setUp(self):
-        peewee.database.create_table(Blog)
-        peewee.database.create_table(Entry)
-        peewee.database.create_table(EntryTag)
+        Blog.create_table()
+        Entry.create_table()
+        EntryTag.create_table()
     
     def tearDown(self):
-        peewee.database.drop_table(EntryTag)
-        peewee.database.drop_table(Entry)
-        peewee.database.drop_table(Blog)
+        EntryTag.drop_table()
+        Entry.drop_table()
+        Blog.drop_table()
     
     def create_blog(self, **kwargs):
         blog = Blog(**kwargs)

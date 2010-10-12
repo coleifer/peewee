@@ -29,8 +29,8 @@ smells like django::
     
 create some tables::
 
-    >>> peewee.database.create_table(Blog)
-    >>> peewee.database.create_table(Entry)
+    >>> Blog.create_table()
+    >>> Entry.create_table()
 
 
 foreign keys work like django's
@@ -66,3 +66,9 @@ queries come in 4 flavors (select/update/insert/delete)::
     >>> [obj.title for obj in Blog.select().paginate(3, 10)]
     [u'blog-20', u'blog-21', u'blog-22', u'blog-23', u'blog-24',
      u'blog-25', u'blog-26', u'blog-27', u'blog-28', u'blog-29']
+    
+    >>> [obj.title for obj in Blog.select().join(Entry).where(title__contains='entry-45')]
+    [u'blog-46', u'blog-47', u'blog-48', u'blog-49']
+    
+    >>> Blog.select().join(Entry).where(title__contains='entry-29').count()
+    20
