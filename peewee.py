@@ -542,7 +542,7 @@ class ForeignRelatedObject(object):
     
     def __get__(self, instance, instance_type=None):
         id = getattr(instance, self.field_name, 0)
-        qr = self.to._meta.select().where(id=id).execute()
+        qr = self.to.select().where(id=id).execute()
         return qr.next()
     
     def __set__(self, instance, obj):
@@ -557,7 +557,7 @@ class ReverseForeignRelatedObject(object):
     
     def __get__(self, instance, instance_type=None):
         query = {self.field_name: instance.id}
-        qr = self.related_model._meta.select().where(**query)
+        qr = self.related_model.select().where(**query)
         return qr
 
 
@@ -615,32 +615,6 @@ class BaseModel(type):
                 return self.get_related_field_for_model(model) or \
                        self.get_reverse_related_field_for_model(model)
             
-            def get_field_dict(self, instance):
-                field_val = lambda f: (f.name, getattr(instance, f.name))
-                pairs = map(field_val, self.fields.values())
-                return dict(pairs)
-            
-            def select(self, query=None):
-                return self.database.select(self.model_class, query)
-            
-            def get(self, **query):
-                return self.select().where(**query).execute().next()
-            
-            def save(self, instance):
-                field_dict = self.get_field_dict(instance)
-                field_dict.pop('id')
-                if instance.id:
-                    update = self.database.update(self.model_class, **field_dict).where(id=instance.id)
-                    update.execute()
-                else:
-                    insert = self.database.insert(self.model_class, **field_dict)
-                    instance.id = insert.execute()
-            
-            def delete(self, instance):
-                if instance.id:
-                    delete = self.database.delete(self.model_class).where(id=instance.id)
-                    return database.execute(delete)
-            
         
         _meta = Meta(cls)
         setattr(cls, '_meta', _meta)
@@ -679,5 +653,38 @@ class Model(object):
     def __eq__(self, other):
         return other.__class__ == self.__class__ and self.id and other.id == self.id
     
+                
+    def get_field_dict(self):
+        field_val = lambda f: (f.name, getattr(self, f.name))
+        pairs = map(field_val, self._meta.fields.values())
+        return dict(pairs)
+    
+    @classmethod
+    def select(cls, query=None):
+        return cls.database.select(cls, query)
+    
+    @classmethod
+    def update(cls, **query):
+        return cls.database.update(cls, **query)
+    
+    @classmethod
+    def insert(cls, **query):
+        return cls.database.insert(cls, **query)
+    
+    @classmethod
+    def delete(cls, **query):
+        return cls.database.delete(cls, **query)
+    
+    @classmethod            
+    def get(cls, **query):
+        return cls.select().where(**query).execute().next()
+    
     def save(self):
-        return self._meta.save(self)
+        field_dict = self.get_field_dict()
+        field_dict.pop('id')
+        if self.id:
+            update = self.update(**field_dict).where(id=self.id)
+            update.execute()
+        else:
+            insert = self.insert(**field_dict)
+            self.id = insert.execute()

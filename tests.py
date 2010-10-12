@@ -166,26 +166,26 @@ class QueryTests(BasePeeweeTestCase):
         self.assertEqual(iq.sql(), 'INSERT INTO blog (title) VALUES ("a")')
         self.assertEqual(iq.execute(), 1)
         
-        a = Blog._meta.get(id=1)
+        a = Blog.get(id=1)
         self.assertEqual(a.title, 'a')
         
         iq = peewee.database.insert(Blog, title='b')
         self.assertEqual(iq.execute(), 2)
         
-        b = Blog._meta.get(id=2)
+        b = Blog.get(id=2)
         self.assertEqual(b.title, 'b')
     
     def test_update(self):
         iq = peewee.database.insert(Blog, title='a')
         a_id = iq.execute()
-        a = Blog._meta.get(id=a_id)
+        a = Blog.get(id=a_id)
         self.assertEqual(a.title, 'a')
         
         uq = peewee.database.update(Blog, title='A').where(id=a_id)
         self.assertEqual(uq.sql(), 'UPDATE blog SET title="A" WHERE id = 1')
         
         uq.execute()
-        a2 = Blog._meta.get(id=a_id)
+        a2 = Blog.get(id=a_id)
         self.assertEqual(a2.title, 'A')
     
     def test_delete(self):
@@ -251,7 +251,7 @@ class ModelTests(BasePeeweeTestCase):
         a.save()
         b.save()
         
-        all_blogs = list(Blog._meta.select())
+        all_blogs = list(Blog.select())
         self.assertEqual(len(all_blogs), 2)
     
     def test_model_get(self):
@@ -259,7 +259,7 @@ class ModelTests(BasePeeweeTestCase):
         b = self.create_blog(title='b')
         c = self.create_blog(title='c')
         
-        b2 = Blog._meta.get(title='b')
+        b2 = Blog.get(title='b')
         self.assertEqual(b2.id, b.id)
     
     def test_model_select(self):
@@ -268,13 +268,13 @@ class ModelTests(BasePeeweeTestCase):
         c = self.create_blog(title='c')
         
         results = []
-        for obj in Blog._meta.select():
+        for obj in Blog.select():
             results.append(obj.title)
         
         self.assertEqual(sorted(results), ['a', 'b', 'c'])
         
         results = []
-        for obj in Blog._meta.select().where(title__in=['a', 'c']):
+        for obj in Blog.select().where(title__in=['a', 'c']):
             results.append(obj.title)
         
         self.assertEqual(sorted(results), ['a', 'c'])
@@ -339,28 +339,28 @@ class RelatedFieldTests(BasePeeweeTestCase):
     def test_querying_across_joins(self):
         a, a1, a2, b, b1, b2, t1, t2 = self.get_common_objects()
         
-        sq = Blog._meta.select().join(Entry).join(EntryTag).where(tag='t1')
+        sq = Blog.select().join(Entry).join(EntryTag).where(tag='t1')
         self.assertEqual(list(sq), [a])
         
-        sq = Blog._meta.select().join(Entry).join(EntryTag).where(tag='t2')
+        sq = Blog.select().join(Entry).join(EntryTag).where(tag='t2')
         self.assertEqual(list(sq), [b])
         
-        sq = Blog._meta.select().join(Entry).where(title='a1').join(EntryTag).where(tag='t1')
+        sq = Blog.select().join(Entry).where(title='a1').join(EntryTag).where(tag='t1')
         self.assertEqual(list(sq), [])
         
-        sq = Blog._meta.select().join(Entry).where(title='a2').join(EntryTag).where(tag='t1')
+        sq = Blog.select().join(Entry).where(title='a2').join(EntryTag).where(tag='t1')
         self.assertEqual(list(sq), [a])
         
-        sq = EntryTag._meta.select().join(Entry).join(Blog).where(title='a')
+        sq = EntryTag.select().join(Entry).join(Blog).where(title='a')
         self.assertEqual(list(sq), [t1])
         
-        sq = EntryTag._meta.select().join(Entry).join(Blog).where(title='b')
+        sq = EntryTag.select().join(Entry).join(Blog).where(title='b')
         self.assertEqual(list(sq), [t2])
         
-        sq = EntryTag._meta.select().join(Entry).where(title='a1').join(Blog).where(title='a')
+        sq = EntryTag.select().join(Entry).where(title='a1').join(Blog).where(title='a')
         self.assertEqual(list(sq), [])
         
-        sq = EntryTag._meta.select().join(Entry).where(title='a2').join(Blog).where(title='a')
+        sq = EntryTag.select().join(Entry).where(title='a2').join(Blog).where(title='a')
         self.assertEqual(list(sq), [t1])
 
 
@@ -380,28 +380,28 @@ class FieldTypeTests(BasePeeweeTestCase):
     def test_lookups_charfield(self):
         self.create_common()
         
-        self.assertSQEqual(Entry._meta.select().where(title__gt='b1'), ['b2', 'b3'])
-        self.assertSQEqual(Entry._meta.select().where(title__gte='b2'), ['b2', 'b3'])
+        self.assertSQEqual(Entry.select().where(title__gt='b1'), ['b2', 'b3'])
+        self.assertSQEqual(Entry.select().where(title__gte='b2'), ['b2', 'b3'])
         
-        self.assertSQEqual(Entry._meta.select().where(title__lt='b3'), ['b1', 'b2'])
-        self.assertSQEqual(Entry._meta.select().where(title__lte='b2'), ['b1', 'b2'])
+        self.assertSQEqual(Entry.select().where(title__lt='b3'), ['b1', 'b2'])
+        self.assertSQEqual(Entry.select().where(title__lte='b2'), ['b1', 'b2'])
         
-        self.assertSQEqual(Entry._meta.select().where(title__icontains='b'), ['b1', 'b2', 'b3'])
-        self.assertSQEqual(Entry._meta.select().where(title__icontains='2'), ['b2'])
+        self.assertSQEqual(Entry.select().where(title__icontains='b'), ['b1', 'b2', 'b3'])
+        self.assertSQEqual(Entry.select().where(title__icontains='2'), ['b2'])
         
-        self.assertSQEqual(Entry._meta.select().where(title__contains='b'), ['b1', 'b2', 'b3'])
+        self.assertSQEqual(Entry.select().where(title__contains='b'), ['b1', 'b2', 'b3'])
         
-        self.assertSQEqual(Entry._meta.select().where(title__in=['b1', 'b3']), ['b1', 'b3'])
-        self.assertSQEqual(Entry._meta.select().where(title__in=[]), [])
+        self.assertSQEqual(Entry.select().where(title__in=['b1', 'b3']), ['b1', 'b3'])
+        self.assertSQEqual(Entry.select().where(title__in=[]), [])
     
     def test_lookups_datefield(self):
         self.create_common()
         
-        self.assertSQEqual(Entry._meta.select().where(pub_date__gt=self.jd(1)), ['b2', 'b3'])
-        self.assertSQEqual(Entry._meta.select().where(pub_date__gte=self.jd(2)), ['b2', 'b3'])
+        self.assertSQEqual(Entry.select().where(pub_date__gt=self.jd(1)), ['b2', 'b3'])
+        self.assertSQEqual(Entry.select().where(pub_date__gte=self.jd(2)), ['b2', 'b3'])
         
-        self.assertSQEqual(Entry._meta.select().where(pub_date__lt=self.jd(3)), ['b1', 'b2'])
-        self.assertSQEqual(Entry._meta.select().where(pub_date__lte=self.jd(2)), ['b1', 'b2'])
+        self.assertSQEqual(Entry.select().where(pub_date__lt=self.jd(3)), ['b1', 'b2'])
+        self.assertSQEqual(Entry.select().where(pub_date__lte=self.jd(2)), ['b1', 'b2'])
         
-        self.assertSQEqual(Entry._meta.select().where(pub_date__in=[self.jd(1), self.jd(3)]), ['b1', 'b3'])
-        self.assertSQEqual(Entry._meta.select().where(pub_date__in=[]), [])
+        self.assertSQEqual(Entry.select().where(pub_date__in=[self.jd(1), self.jd(3)]), ['b1', 'b3'])
+        self.assertSQEqual(Entry.select().where(pub_date__in=[]), [])
