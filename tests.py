@@ -154,6 +154,9 @@ class QueryTests(BasePeeweeTestCase):
         
         sq = peewee.SelectQuery(Blog).order_by(peewee.desc('title'))
         self.assertEqual(list(sq), [c, b, a])
+        
+        sq = peewee.SelectQuery(Entry).order_by(peewee.desc('title')).join(Blog).where(title='a')
+        self.assertEqual(list(sq), [a2, a1])
     
     def test_insert(self):
         iq = peewee.InsertQuery(Blog, title='a')
