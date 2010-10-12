@@ -18,6 +18,13 @@ class Database(object):
     def get_connection(self):
         return sqlite3.connect(self.database)
     
+    def execute(self, sql, commit=False):
+        cursor = self.conn.cursor()
+        res = cursor.execute(sql)
+        if commit:
+            self.conn.commit()
+        return res
+    
     def last_insert_id(self):
         result = self.execute("SELECT last_insert_rowid();")
         return result.fetchone()[0]
@@ -202,11 +209,9 @@ class BaseQuery(object):
         return computed_joins, where_with_alias, alias_map
     
     def raw_execute(self):
-        cursor = self.database.conn.cursor()
-        result = cursor.execute(self.sql())
-        if self.requires_commit:
-            self.database.conn.commit()
-        logger.debug(self.sql())
+        query = self.sql()
+        result = self.database.execute(query, self.requires_commit)
+        logger.debug(query)
         return result
 
 
