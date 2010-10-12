@@ -1,8 +1,6 @@
 import os
 from setuptools import setup, find_packages
 
-from peewee import VERSION
-
 f = open(os.path.join(os.path.dirname(__file__), 'README.rst'))
 readme = f.read()
 f.close()
