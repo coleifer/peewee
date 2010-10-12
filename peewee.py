@@ -39,18 +39,6 @@ class Database(object):
         cursor = self.conn.cursor()
         cursor.execute('DROP TABLE %s;' % model_class._meta.db_table)
         self.conn.commit()
-    
-    def select(self, *args, **kwargs):
-        return SelectQuery(self, *args, **kwargs)
-    
-    def insert(self, *args, **kwargs):
-        return InsertQuery(self, *args, **kwargs)
-    
-    def update(self, *args, **kwargs):
-        return UpdateQuery(self, *args, **kwargs)
-    
-    def delete(self, *args, **kwargs):
-        return DeleteQuery(self, *args, **kwargs)
 
 
 database = Database(DATABASE_NAME)
@@ -655,7 +643,6 @@ class Model(object):
     def __eq__(self, other):
         return other.__class__ == self.__class__ and self.id and other.id == self.id
     
-                
     def get_field_dict(self):
         field_val = lambda f: (f.name, getattr(self, f.name))
         pairs = map(field_val, self._meta.fields.values())
@@ -671,19 +658,19 @@ class Model(object):
     
     @classmethod
     def select(cls, query=None):
-        return cls.database.select(cls, query)
+        return SelectQuery(cls.database, cls, query)
     
     @classmethod
     def update(cls, **query):
-        return cls.database.update(cls, **query)
+        return UpdateQuery(cls.database, cls, **query)
     
     @classmethod
     def insert(cls, **query):
-        return cls.database.insert(cls, **query)
+        return InsertQuery(cls.database, cls, **query)
     
     @classmethod
     def delete(cls, **query):
-        return cls.database.delete(cls, **query)
+        return DeleteQuery(cls.database, cls, **query)
     
     @classmethod            
     def get(cls, **query):
