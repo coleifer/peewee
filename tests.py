@@ -62,19 +62,19 @@ class QueryTests(BasePeeweeTestCase):
         b = self.create_blog(title='b')
         c = self.create_blog(title='c')
         
-        sq = peewee.SelectQuery(Blog, '*')
+        sq = peewee.database.select(Blog, '*')
         self.assertEqual(sorted([o.id for o in sq.execute()]), [1, 2, 3])
         self.assertEqual(sorted([o.title for o in sq.execute()]), ['a', 'b', 'c'])
         
-        sq = peewee.SelectQuery(Blog, '*').where(title='a')
+        sq = peewee.database.select(Blog, '*').where(title='a')
         self.assertEqual(sorted([o.id for o in sq.execute()]), [1])
         self.assertEqual(sorted([o.title for o in sq.execute()]), ['a'])
         
-        sq = peewee.SelectQuery(Blog, '*').where(title='a').where(id=1)
+        sq = peewee.database.select(Blog, '*').where(title='a').where(id=1)
         self.assertEqual(sorted([o.id for o in sq.execute()]), [1])
         self.assertEqual(sorted([o.title for o in sq.execute()]), ['a'])
         
-        sq = peewee.SelectQuery(Blog, '*').where(title__in=['a', 'b'])
+        sq = peewee.database.select(Blog, '*').where(title__in=['a', 'b'])
         self.assertEqual(sorted([o.id for o in sq.execute()]), [1, 2])
         self.assertEqual(sorted([o.title for o in sq.execute()]), ['a', 'b'])
     
@@ -87,7 +87,7 @@ class QueryTests(BasePeeweeTestCase):
         b1 = self.create_entry(title='b1', content='b1', blog=b)
         b2 = self.create_entry(title='b2', content='b2', blog=b)
         
-        sq = peewee.SelectQuery(Entry, '*').where(title='a1').join(Blog).where(title='a')
+        sq = peewee.database.select(Entry, '*').where(title='a1').join(Blog).where(title='a')
         
         self.assertEqual(sq._where, {
             Entry: {'title': '= "a1"'},
@@ -98,7 +98,7 @@ class QueryTests(BasePeeweeTestCase):
         
         self.assertEqual(list(sq), [a1])
         
-        sq = peewee.SelectQuery(Blog, '*').join(Entry).where(title='a1')
+        sq = peewee.database.select(Blog, '*').join(Entry).where(title='a1')
         
         self.assertEqual(sq._where, {
             Entry: {'title': '= "a1"'}
@@ -110,7 +110,7 @@ class QueryTests(BasePeeweeTestCase):
         t1 = self.create_entry_tag(tag='t1', entry=a2)
         t2 = self.create_entry_tag(tag='t2', entry=b2)
         
-        sq = peewee.SelectQuery(EntryTag, '*').join(Entry).join(Blog).where(title='a')
+        sq = peewee.database.select(EntryTag, '*').join(Entry).join(Blog).where(title='a')
         
         self.assertEqual(sq._where, {
             Blog: {'title': '= "a"'}
@@ -118,19 +118,19 @@ class QueryTests(BasePeeweeTestCase):
         self.assertEqual(sq._joins, [Entry, Blog])
         self.assertEqual(list(sq), [t1])
         
-        sq = peewee.SelectQuery(Blog, '*').join(Entry).join(EntryTag).where(tag='t2')
+        sq = peewee.database.select(Blog, '*').join(Entry).join(EntryTag).where(tag='t2')
         self.assertEqual(list(sq), [b])
     
     def test_selecting_with_aggregation(self):
-        a_id = peewee.InsertQuery(Blog, title='a').execute()
-        b_id = peewee.InsertQuery(Blog, title='b').execute()
+        a_id = peewee.database.insert(Blog, title='a').execute()
+        b_id = peewee.database.insert(Blog, title='b').execute()
         
-        peewee.InsertQuery(Entry, title='a1', blog_id=a_id).execute()
-        peewee.InsertQuery(Entry, title='a2', blog_id=a_id).execute()
-        peewee.InsertQuery(Entry, title='a3', blog_id=a_id).execute()
-        peewee.InsertQuery(Entry, title='b1', blog_id=b_id).execute()
+        peewee.database.insert(Entry, title='a1', blog_id=a_id).execute()
+        peewee.database.insert(Entry, title='a2', blog_id=a_id).execute()
+        peewee.database.insert(Entry, title='a3', blog_id=a_id).execute()
+        peewee.database.insert(Entry, title='b1', blog_id=b_id).execute()
 
-        sq = peewee.SelectQuery(Blog, 't1.*, COUNT(t2.id) AS count').join(Entry).group_by('t1.id')
+        sq = peewee.database.select(Blog, 't1.*, COUNT(t2.id) AS count').join(Entry).group_by('t1.id')
         a, b = list(sq)
         self.assertEqual(a.count, 3)
         self.assertEqual(b.count, 1)
@@ -149,39 +149,39 @@ class QueryTests(BasePeeweeTestCase):
         b2 = self.create_entry(title='b2', blog=b)
         c1 = self.create_entry(title='c1', blog=c)
         
-        sq = peewee.SelectQuery(Blog).order_by('title')
+        sq = peewee.database.select(Blog).order_by('title')
         self.assertEqual(list(sq), [a, b, c])
         
-        sq = peewee.SelectQuery(Blog).order_by(peewee.desc('title'))
+        sq = peewee.database.select(Blog).order_by(peewee.desc('title'))
         self.assertEqual(list(sq), [c, b, a])
         
-        sq = peewee.SelectQuery(Entry).order_by(peewee.desc('title')).join(Blog).where(title='a')
+        sq = peewee.database.select(Entry).order_by(peewee.desc('title')).join(Blog).where(title='a')
         self.assertEqual(list(sq), [a2, a1])
         
-        sq = peewee.SelectQuery(Entry).order_by(peewee.desc('title')).join(Blog).order_by('title')
+        sq = peewee.database.select(Entry).order_by(peewee.desc('title')).join(Blog).order_by('title')
         self.assertEqual(list(sq), [c1, b2, b1, a2, a1])
     
     def test_insert(self):
-        iq = peewee.InsertQuery(Blog, title='a')
+        iq = peewee.database.insert(Blog, title='a')
         self.assertEqual(iq.sql(), 'INSERT INTO blog (title) VALUES ("a")')
         self.assertEqual(iq.execute(), 1)
         
         a = Blog._meta.get(id=1)
         self.assertEqual(a.title, 'a')
         
-        iq = peewee.InsertQuery(Blog, title='b')
+        iq = peewee.database.insert(Blog, title='b')
         self.assertEqual(iq.execute(), 2)
         
         b = Blog._meta.get(id=2)
         self.assertEqual(b.title, 'b')
     
     def test_update(self):
-        iq = peewee.InsertQuery(Blog, title='a')
+        iq = peewee.database.insert(Blog, title='a')
         a_id = iq.execute()
         a = Blog._meta.get(id=a_id)
         self.assertEqual(a.title, 'a')
         
-        uq = peewee.UpdateQuery(Blog, title='A').where(id=a_id)
+        uq = peewee.database.update(Blog, title='A').where(id=a_id)
         self.assertEqual(uq.sql(), 'UPDATE blog SET title="A" WHERE id = 1')
         
         uq.execute()
@@ -189,18 +189,18 @@ class QueryTests(BasePeeweeTestCase):
         self.assertEqual(a2.title, 'A')
     
     def test_delete(self):
-        peewee.InsertQuery(Blog, title='a').execute()
-        peewee.InsertQuery(Blog, title='b').execute()
-        peewee.InsertQuery(Blog, title='c').execute()
+        peewee.database.insert(Blog, title='a').execute()
+        peewee.database.insert(Blog, title='b').execute()
+        peewee.database.insert(Blog, title='c').execute()
         
-        dq = peewee.DeleteQuery(Blog).where(title='b')
+        dq = peewee.database.delete(Blog).where(title='b')
         self.assertEqual(dq.sql(), 'DELETE FROM blog WHERE title = "b"')
         self.assertEqual(dq.execute(), 1)
         
-        sq = peewee.SelectQuery(Blog)
+        sq = peewee.database.select(Blog)
         self.assertEqual(sorted([o.title for o in sq.execute()]), ['a', 'c'])
         
-        dq = peewee.DeleteQuery(Blog).execute()
+        dq = peewee.database.delete(Blog).execute()
         self.assertEqual(dq, 2)
 
 

@@ -37,6 +37,18 @@ class Database(object):
         cursor = self.conn.cursor()
         cursor.execute('DROP TABLE %s;' % model_class._meta.db_table)
         self.conn.commit()
+    
+    def select(self, *args, **kwargs):
+        return SelectQuery(self, *args, **kwargs)
+    
+    def insert(self, *args, **kwargs):
+        return InsertQuery(self, *args, **kwargs)
+    
+    def update(self, *args, **kwargs):
+        return UpdateQuery(self, *args, **kwargs)
+    
+    def delete(self, *args, **kwargs):
+        return DeleteQuery(self, *args, **kwargs)
 
 
 database = Database(DATABASE_NAME)
@@ -96,7 +108,8 @@ class BaseQuery(object):
     query_separator = '__'
     requires_commit = True
     
-    def __init__(self, model):
+    def __init__(self, database, model):
+        self.database = database
         self.model = model
         self.query_context = model
         self._where = {}
@@ -196,10 +209,10 @@ class BaseQuery(object):
         return computed_joins, where_with_alias, alias_map
     
     def raw_execute(self):
-        cursor = database.conn.cursor()
+        cursor = self.database.conn.cursor()
         result = cursor.execute(self.sql())
         if self.requires_commit:
-            database.conn.commit()
+            self.database.conn.commit()
         return result
 
 
@@ -209,12 +222,12 @@ class SelectQuery(BaseQuery):
     """
     requires_commit = False
     
-    def __init__(self, model, query=None):
+    def __init__(self, database, model, query=None):
         self.query = query or '*'
         self._group_by = []
         self._having = []
         self._order_by = []
-        super(SelectQuery, self).__init__(model)
+        super(SelectQuery, self).__init__(database, model)
     
     def group_by(self, clause):
         self._group_by.append(clause)
@@ -286,9 +299,9 @@ class UpdateQuery(BaseQuery):
     """
     Model.update(field=val, field2=val2).where(some_field=some_val)
     """
-    def __init__(self, model, **kwargs):
+    def __init__(self, database, model, **kwargs):
         self.update_query = kwargs
-        super(UpdateQuery, self).__init__(model)
+        super(UpdateQuery, self).__init__(database, model)
     
     def parse_update(self):
         sets = []
@@ -349,9 +362,9 @@ class InsertQuery(BaseQuery):
     """
     Model.insert(field=val, field2=val2)
     """
-    def __init__(self, model, **kwargs):
+    def __init__(self, database, model, **kwargs):
         self.insert_query = kwargs
-        super(InsertQuery, self).__init__(model)
+        super(InsertQuery, self).__init__(database, model)
     
     def parse_insert(self):
         cols = []
@@ -548,6 +561,7 @@ class BaseModel(type):
             
             def __init__(self, model_class):
                 self.model_class = model_class
+                self.database = database
             
             def get_field_by_name(self, name):
                 if name in self.fields:
@@ -574,7 +588,7 @@ class BaseModel(type):
                 return dict(pairs)
             
             def select(self, query=None):
-                return SelectQuery(self.model_class, query)
+                return self.database.select(self.model_class, query)
             
             def get(self, **query):
                 return self.select().where(**query).execute().next()
@@ -583,15 +597,15 @@ class BaseModel(type):
                 field_dict = self.get_field_dict(instance)
                 field_dict.pop('id')
                 if instance.id:
-                    update = UpdateQuery(self.model_class, **field_dict).where(id=instance.id)
+                    update = self.database.update(self.model_class, **field_dict).where(id=instance.id)
                     update.execute()
                 else:
-                    insert = InsertQuery(self.model_class, **field_dict)
+                    insert = self.database.insert(self.model_class, **field_dict)
                     instance.id = insert.execute()
             
             def delete(self, instance):
                 if instance.id:
-                    delete = DeleteQuery(self.model_class).where(id=instance.id)
+                    delete = self.database.delete(self.model_class).where(id=instance.id)
                     return database.execute(delete)
             
         
