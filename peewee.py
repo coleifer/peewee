@@ -1,7 +1,11 @@
 from datetime import datetime
+import os
 import re
 import sqlite3
 import time
+
+
+DATABASE_NAME = os.environ.get('PEEWEE_DATABASE', 'peewee.db')
 
 
 class Database(object):
@@ -35,7 +39,7 @@ class Database(object):
         self.conn.commit()
 
 
-database = Database('test.db')
+database = Database(DATABASE_NAME)
 
 
 class QueryResultWrapper(object):
