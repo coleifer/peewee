@@ -13,16 +13,19 @@ logger = logging.getLogger('peewee.logger')
 class Database(object):
     def __init__(self, database):
         self.database = database
-        self.conn = self.get_connection()
     
-    def get_connection(self):
-        return sqlite3.connect(self.database)
+    def connect(self):
+        self.conn = sqlite3.connect(self.database)
+    
+    def close(self):
+        self.conn.close()
     
     def execute(self, sql, commit=False):
         cursor = self.conn.cursor()
         res = cursor.execute(sql)
         if commit:
             self.conn.commit()
+        logger.debug(sql)
         return res
     
     def last_insert_id(self):
@@ -211,7 +214,6 @@ class BaseQuery(object):
     def raw_execute(self):
         query = self.sql()
         result = self.database.execute(query, self.requires_commit)
-        logger.debug(query)
         return result
 
 
@@ -244,8 +246,7 @@ class SelectQuery(BaseQuery):
         else:
             self.query = 'COUNT(id)'
         
-        cursor = self.database.conn.cursor()
-        res = cursor.execute(self.sql())
+        res = self.database.execute(self.sql())
         
         self.query = tmp_query
         self._pagination = tmp_pagination

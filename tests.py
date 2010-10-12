@@ -2,7 +2,8 @@ import datetime
 import unittest
 
 import peewee
-from peewee import SelectQuery, InsertQuery, UpdateQuery, DeleteQuery
+from peewee import SelectQuery, InsertQuery, UpdateQuery, DeleteQuery, database
+
 
 # test models
 class Blog(peewee.Model):
@@ -32,6 +33,7 @@ class EntryTag(peewee.Model):
 
 class BasePeeweeTestCase(unittest.TestCase):
     def setUp(self):
+        database.connect()
         Blog.create_table()
         Entry.create_table()
         EntryTag.create_table()
@@ -40,6 +42,7 @@ class BasePeeweeTestCase(unittest.TestCase):
         EntryTag.drop_table()
         Entry.drop_table()
         Blog.drop_table()
+        database.close()
     
     def create_blog(self, **kwargs):
         blog = Blog(**kwargs)
