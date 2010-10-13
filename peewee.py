@@ -39,16 +39,12 @@ class Database(object):
         for field in model_class._meta.fields.values():
             columns.append(field.to_sql())
         
-        cursor = self.conn.cursor()
-        cursor.execute(
-            framing % (model_class._meta.db_table, ', '.join(columns))
+        self.execute(
+            framing % (model_class._meta.db_table, ', '.join(columns)), True
         )
-        self.conn.commit()
     
     def drop_table(self, model_class):
-        cursor = self.conn.cursor()
-        cursor.execute('DROP TABLE %s;' % model_class._meta.db_table)
-        self.conn.commit()
+        self.execute('DROP TABLE %s;' % model_class._meta.db_table, True)
 
 
 database = Database(DATABASE_NAME)
