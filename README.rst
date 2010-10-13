@@ -26,7 +26,13 @@ smells like django::
 
         def __unicode__(self):
             return '%s: %s' % (self.blog.title, self.title)
-    
+
+
+gotta connect::
+
+    >>> from peewee import database
+    >>> database.connect()
+
 create some tables::
 
     >>> Blog.create_table()
@@ -72,3 +78,6 @@ queries come in 4 flavors (select/update/insert/delete)::
     
     >>> Blog.select().join(Entry).where(title__contains='entry-29').count()
     20
+
+there's the notion of a *query context* which is the model being selected
+or, if there is a join, the model being joined on.
