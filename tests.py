@@ -344,17 +344,28 @@ class RelatedFieldTests(BasePeeweeTestCase):
     def test_foreign_keys(self):
         a, a1, a2, b, b1, b2, t1, t2 = self.get_common_objects()
         
+        self.assertEqual(len(self.queries()), 8)
+        
         self.assertEqual(a1.blog, a)
         self.assertNotEqual(a1.blog, b)
         
         self.assertEqual(a1.blog_id, a.id)
-        self.assertEqual(a2.blog_id, a1.blog_id)
         
         self.assertEqual(b1.blog, b)
-        self.assertNotEqual(b1.blog, a)
+        self.assertEqual(b1.blog_id, b.id)
         
         self.assertEqual(t1.entry.blog, a)
         self.assertEqual(t2.entry.blog, b)
+        
+        # no queries!
+        self.assertEqual(len(self.queries()), 8)
+        
+        t = EntryTag.get(id=t1.id)
+        self.assertEqual(t.entry.blog, a)
+        self.assertEqual(t.entry.blog, a)
+        
+        # just 3, tag select, entry select, blog select
+        self.assertEqual(len(self.queries()), 11)
         
         a3 = Entry(title='a3', content='a3')
         a3.blog = a
