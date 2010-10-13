@@ -297,7 +297,7 @@ class SelectQuery(BaseQuery):
         order_by = []
         for piece in self._order_by:
             model, clause = piece
-            if model in alias_map:
+            if self.use_aliases():
                 piece = '%s.%s' % (alias_map[model], clause)
             else:
                 piece = clause

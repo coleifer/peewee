@@ -289,17 +289,19 @@ class ModelTests(BasePeeweeTestCase):
         b = self.create_blog(title='b')
         c = self.create_blog(title='c')
         
-        results = []
-        for obj in Blog.select():
-            results.append(obj.title)
+        qr = Blog.select().order_by('title')
+        self.assertEqual(list(qr), [a, b, c])
         
-        self.assertEqual(sorted(results), ['a', 'b', 'c'])
+        qr = Blog.select().where(title__in=['a', 'c']).order_by(peewee.desc('title'))
+        self.assertEqual(list(qr), [c, a])
         
-        results = []
-        for obj in Blog.select().where(title__in=['a', 'c']):
-            results.append(obj.title)
-        
-        self.assertEqual(sorted(results), ['a', 'c'])
+        self.assertQueriesEqual([
+            'INSERT INTO blog (title) VALUES ("a")', 
+            'INSERT INTO blog (title) VALUES ("b")', 
+            'INSERT INTO blog (title) VALUES ("c")', 
+            'SELECT * FROM blog ORDER BY title ASC', 
+            'SELECT * FROM blog WHERE title IN ("a","c") ORDER BY title DESC'
+        ])
 
 
 class RelatedFieldTests(BasePeeweeTestCase):
@@ -315,6 +317,29 @@ class RelatedFieldTests(BasePeeweeTestCase):
         t1 = self.create_entry_tag(tag='t1', entry=a2)
         t2 = self.create_entry_tag(tag='t2', entry=b2)
         return a, a1, a2, b, b1, b2, t1, t2
+    
+    def test_fk_caching(self):
+        a = self.create_blog(title='a')
+        e = self.create_entry(title='e', blog=a)
+        
+        self.assertEqual(e.blog, a)
+        self.assertEqual(e.blog, a)
+        
+        self.assertQueriesEqual([
+            'INSERT INTO blog (title) VALUES ("a")', 
+            'INSERT INTO entry (content,blog_id,pub_date,title) VALUES ("",1,NULL,"e")'
+        ])
+        
+        e2 = Entry.get(id=e.id)
+        self.assertEqual(e2.blog, a)
+        self.assertEqual(e2.blog, a)
+        
+        self.assertQueriesEqual([
+            'INSERT INTO blog (title) VALUES ("a")', 
+            'INSERT INTO entry (content,blog_id,pub_date,title) VALUES ("",1,NULL,"e")',
+            'SELECT * FROM entry WHERE id = 1 LIMIT 1 OFFSET 0',
+            'SELECT * FROM blog WHERE id = 1'
+        ])
     
     def test_foreign_keys(self):
         a, a1, a2, b, b1, b2, t1, t2 = self.get_common_objects()
