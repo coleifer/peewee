@@ -329,6 +329,45 @@ class ModelTests(BasePeeweeTestCase):
         self.assertEqual(blogs, [a, b])
         
         self.assertEqual(len(self.queries()), 3)
+    
+    def test_select_caching(self):
+        a = self.create_blog(title='a')
+        b = self.create_blog(title='b')
+        
+        sq = Blog.select().order_by('title')
+        blogs = [b for b in sq]
+        self.assertEqual(blogs, [a, b])
+        
+        self.assertQueriesEqual([
+            'INSERT INTO blog (title) VALUES ("a")', 
+            'INSERT INTO blog (title) VALUES ("b")', 
+            'SELECT * FROM blog ORDER BY title ASC'
+        ])
+        
+        self.assertFalse(sq._dirty)
+
+        blogs = [b for b in sq]
+        self.assertEqual(blogs, [a, b])
+        self.assertEqual(len(self.queries()), 3)
+        
+        # mark dirty
+        sq = sq.where(title='a')
+        self.assertTrue(sq._dirty)
+        
+        blogs = [b for b in sq]
+        self.assertEqual(blogs, [a])
+        
+        self.assertQueriesEqual([
+            'INSERT INTO blog (title) VALUES ("a")', 
+            'INSERT INTO blog (title) VALUES ("b")', 
+            'SELECT * FROM blog ORDER BY title ASC',
+            'SELECT * FROM blog WHERE title = "a" ORDER BY title ASC'
+        ])
+        
+        blogs = [b for b in sq]
+        self.assertEqual(blogs, [a])
+        
+        self.assertEqual(len(self.queries()), 4)
 
 
 class RelatedFieldTests(BasePeeweeTestCase):

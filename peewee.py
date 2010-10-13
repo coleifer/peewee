@@ -95,6 +95,12 @@ def asc(f):
 def desc(f):
     return (f, 'DESC')
 
+def mark_query_dirty(func):
+    def inner(self, *args, **kwargs):
+        self._dirty = True
+        return func(self, *args, **kwargs)
+    return inner
+
 
 class BaseQuery(object):
     operations = {
@@ -116,6 +122,7 @@ class BaseQuery(object):
         self.query_context = model
         self._where = {}
         self._joins = []
+        self._dirty = True
     
     def parse_query_args(self, **query):
         parsed = {}
@@ -134,6 +141,7 @@ class BaseQuery(object):
         
         return parsed
     
+    @mark_query_dirty
     def where(self, query='', **kwargs):
         self._where.setdefault(self.query_context, {})
         if query != '':
@@ -146,6 +154,7 @@ class BaseQuery(object):
         
         return self
     
+    @mark_query_dirty
     def join(self, model):
         if self.query_context._meta.rel_exists(model):
             self._joins.append(model)
@@ -237,8 +246,10 @@ class SelectQuery(BaseQuery):
         self._having = []
         self._order_by = []
         self._pagination = None # return all by default
+        self._qr = None
         super(SelectQuery, self).__init__(database, model)
     
+    @mark_query_dirty
     def paginate(self, page_num, paginate_by=20):
         self._pagination = (page_num, paginate_by)
         return self
@@ -261,14 +272,17 @@ class SelectQuery(BaseQuery):
         
         return res.fetchone()[0]
     
+    @mark_query_dirty
     def group_by(self, clause):
         self._group_by.append(clause)
         return self
     
+    @mark_query_dirty
     def having(self, clause):
         self._having.append(clause)
         return self
     
+    @mark_query_dirty
     def order_by(self, field_or_string):
         if isinstance(field_or_string, tuple):
             field_or_string, ordering = field_or_string
@@ -326,7 +340,13 @@ class SelectQuery(BaseQuery):
         return ' '.join(pieces)
     
     def execute(self):
-        return QueryResultWrapper(self.model, self.raw_execute())
+        if self._dirty:
+            self._qr = QueryResultWrapper(self.model, self.raw_execute())
+            self._dirty = False
+            return self._qr
+        else:
+            # call the __iter__ method directly
+            return iter(self._qr)
     
     def __iter__(self):
         return self.execute()
