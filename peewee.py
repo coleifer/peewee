@@ -101,7 +101,7 @@ class BaseQuery(object):
         'gt': '> %s',
         'gte': '>= %s',
         'eq': '= %s',
-        'in': ' IN (%s)',
+        'in': 'IN (%s)',
         'icontains': "LIKE '%%%s%%' ESCAPE '\\'",
         'contains': "GLOB '*%s*'",
     }
@@ -194,14 +194,20 @@ class BaseQuery(object):
                 field = from_model._meta.get_related_field_for_model(model)
                 if field:
                     left_field = field.name
-                    right_field = 'id'
+                    right_field = 'id'                        
                 else:
                     field = from_model._meta.get_reverse_related_field_for_model(model)
                     left_field = 'id'
                     right_field = field.name
                 
+                if field.null:
+                    join_type = 'LEFT OUTER'
+                else:
+                    join_type = 'INNER'
+                
                 computed_joins.append(
-                    'INNER JOIN %s AS %s ON %s = %s' % (
+                    '%s JOIN %s AS %s ON %s = %s' % (
+                        join_type,
                         model._meta.db_table,
                         alias_map[model],
                         self.combine_field(alias_map[from_model], left_field),
@@ -687,7 +693,7 @@ class Model(object):
     
     @classmethod            
     def get(cls, **query):
-        return cls.select().where(**query).execute().next()
+        return cls.select().where(**query).paginate(1, 1).execute().next()
     
     def save(self):
         field_dict = self.get_field_dict()
