@@ -302,6 +302,33 @@ class ModelTests(BasePeeweeTestCase):
             'SELECT * FROM blog ORDER BY title ASC', 
             'SELECT * FROM blog WHERE title IN ("a","c") ORDER BY title DESC'
         ])
+    
+    def test_query_results_wrapper(self):
+        a = self.create_blog(title='a')
+        b = self.create_blog(title='b')
+        
+        qr = Blog.select().order_by('title').execute()
+        self.assertFalse(qr._populated)
+        
+        blogs = [b for b in qr]
+        self.assertEqual(blogs, [a, b])
+        self.assertTrue(qr._populated)
+        
+        self.assertQueriesEqual([
+            'INSERT INTO blog (title) VALUES ("a")', 
+            'INSERT INTO blog (title) VALUES ("b")', 
+            'SELECT * FROM blog ORDER BY title ASC'
+        ])
+        
+        blogs = [b for b in qr]
+        self.assertEqual(blogs, [a, b])
+        
+        self.assertEqual(len(self.queries()), 3)
+        
+        blogs = [b for b in qr]
+        self.assertEqual(blogs, [a, b])
+        
+        self.assertEqual(len(self.queries()), 3)
 
 
 class RelatedFieldTests(BasePeeweeTestCase):

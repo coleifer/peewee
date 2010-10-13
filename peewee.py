@@ -51,11 +51,11 @@ database = Database(DATABASE_NAME)
 
 
 class QueryResultWrapper(object):
-    _result_cache = []
-    
     def __init__(self, model, cursor):
         self.model = model
         self.cursor = cursor
+        self._result_cache = []
+        self._populated = False
     
     def model_from_rowset(self, model_class, row_dict):
         instance = model_class()
@@ -72,14 +72,20 @@ class QueryResultWrapper(object):
             for i, value in enumerate(row))
     
     def __iter__(self):
-        return self
+        if not self._populated:
+            return self
+        else:
+            return iter(self._result_cache)
     
     def next(self):
         row = self.cursor.fetchone()
         if row:
             row_dict = self._row_to_dict(row, self.cursor)
-            return self.model_from_rowset(self.model, row_dict)
+            instance = self.model_from_rowset(self.model, row_dict)
+            self._result_cache.append(instance)
+            return instance
         else:
+            self._populated = True
             raise StopIteration
 
 
