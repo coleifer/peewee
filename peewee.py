@@ -289,7 +289,9 @@ class SelectQuery(BaseQuery):
         else:
             ordering = 'ASC'
         
-        self._order_by.append((self.query_context, '%s %s' % (field_or_string, ordering)))
+        self._order_by.append(
+            (self.query_context, field_or_string, ordering)
+        )
         
         return self
     
@@ -312,12 +314,10 @@ class SelectQuery(BaseQuery):
         
         order_by = []
         for piece in self._order_by:
-            model, clause = piece
-            if self.use_aliases():
-                piece = '%s.%s' % (alias_map[model], clause)
-            else:
-                piece = clause
-            order_by.append(piece)
+            model, field, ordering = piece
+            if self.use_aliases() and field in model._meta.fields:
+                field = '%s.%s' % (alias_map[model], field)
+            order_by.append('%s %s' % (field, ordering))
         
         pieces = [select]
         

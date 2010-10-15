@@ -156,7 +156,13 @@ class QueryTests(BasePeeweeTestCase):
         
         sq = SelectQuery(peewee.database, Entry).join(Blog).order_by(peewee.desc('title'))
         self.assertEqual(sq.sql(), 'SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id ORDER BY t2.title DESC')
-    
+
+    def test_ordering_on_aggregates(self):
+        sq = SelectQuery(
+            peewee.database, Blog, 't1.*, COUNT(t2.id) as count'
+        ).join(Entry).order_by(peewee.desc('count'))
+        self.assertEqual(sq.sql(), 'SELECT t1.*, COUNT(t2.id) as count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id ORDER BY count DESC')
+
     def test_insert(self):
         iq = InsertQuery(peewee.database, Blog, title='a')
         self.assertEqual(iq.sql(), 'INSERT INTO blog (title) VALUES ("a")')
@@ -486,6 +492,26 @@ class RelatedFieldTests(BasePeeweeTestCase):
         
         sq = EntryTag.select().join(Entry).where(title='a2').join(Blog).where(title='a')
         self.assertEqual(list(sq), [t1])
+
+    def test_ordering_across_joins(self):
+        a, a1, a2, b, b1, b2, t1, t2 = self.get_common_objects()
+        b3 = self.create_entry(title='b3', blog=b)
+        c = self.create_blog(title='c')
+        c1 = self.create_entry(title='c1', blog=c)
+
+        sq = Blog.select().join(Entry).order_by(peewee.desc('title')).group_by('t1.id')
+        self.assertEqual(list(sq), [c, b, a])
+
+        sq = Blog.select().where(title__in=['a', 'b']).join(Entry).order_by(peewee.desc('title')).group_by('t1.id')
+        self.assertEqual(list(sq), [b, a])
+
+        sq = Blog.select('t1.*, COUNT(t2.id) AS count').join(Entry).order_by(peewee.desc('count')).group_by('t1.id')
+        qr = list(sq)
+
+        self.assertEqual(qr, [b, a, c])
+        self.assertEqual(qr[0].count, 3)
+        self.assertEqual(qr[1].count, 2)
+        self.assertEqual(qr[2].count, 1)
 
 
 class FieldTypeTests(BasePeeweeTestCase):
