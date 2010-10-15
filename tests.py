@@ -104,7 +104,23 @@ class QueryTests(BasePeeweeTestCase):
         sq = SelectQuery(peewee.database, Blog, '*').where(title__in=['a', 'b'])
         self.assertEqual(sq.sql(), 'SELECT * FROM blog WHERE title IN ("a","b")')
         self.assertEqual(sq._where, {Blog: {'title': 'IN ("a","b")'}})
+
+    def test_select_with_models(self):
+        sq = SelectQuery(peewee.database, Blog, {Blog: '*'})
+        self.assertEqual(sq.sql(), 'SELECT * FROM blog')
+
+        sq = SelectQuery(peewee.database, Blog, {Blog: ['title', 'id']})
+        self.assertEqual(sq.sql(), 'SELECT title, id FROM blog')
     
+        sq = SelectQuery(peewee.database, Blog, {Blog: ['title', 'id']}).join(Entry)
+        self.assertEqual(sq.sql(), 'SELECT t1.title, t1.id FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id')
+
+        sq = SelectQuery(peewee.database, Blog, {Blog: ['title', 'id'], Entry: [peewee.Count('id')]}).join(Entry)
+        self.assertEqual(sq.sql(), 'SELECT t1.title, t1.id, COUNT(t2.id) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id')
+
+        sq = SelectQuery(peewee.database, Blog, {Blog: ['title', 'id'], Entry: [peewee.Max('id')]}).join(Entry)
+        self.assertEqual(sq.sql(), 'SELECT t1.title, t1.id, MAX(t2.id) AS max FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id')
+
     def test_selecting_across_joins(self):
         sq = SelectQuery(peewee.database, Entry, '*').where(title='a1').join(Blog).where(title='a')
         self.assertEqual(sq._where, {
@@ -136,7 +152,7 @@ class QueryTests(BasePeeweeTestCase):
         self.assertEqual(sq.sql(), 'SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id\nINNER JOIN entrytag AS t3 ON t2.id = t3.entry_id WHERE t3.tag = "t2"')
     
     def test_selecting_with_aggregation(self):
-        sq = SelectQuery(peewee.database, Blog, 't1.*, COUNT(t2.id) AS count').join(Entry).group_by('t1.id')
+        sq = SelectQuery(peewee.database, Blog, 't1.*, COUNT(t2.id) AS count').group_by('id').join(Entry)
         self.assertEqual(sq._where, {})
         self.assertEqual(sq._joins, [Entry])
         self.assertEqual(sq.sql(), 'SELECT t1.*, COUNT(t2.id) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id')

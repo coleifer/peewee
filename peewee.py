@@ -95,6 +95,16 @@ def asc(f):
 def desc(f):
     return (f, 'DESC')
 
+# select wrappers
+def Count(f, alias='count'):
+    return ('COUNT', f, alias)
+
+def Max(f, alias='max'):
+    return ('MAX', f, alias)
+
+def Min(f, alias='min'):
+    return ('MIN', f, alias)
+
 def mark_query_dirty(func):
     def inner(self, *args, **kwargs):
         self._dirty = True
@@ -184,7 +194,7 @@ class BaseQuery(object):
         
         where_with_alias = []
         computed_joins = []
-        
+
         for i, model in enumerate(joins):
             if alias_required:
                 alias_count += 1
@@ -241,6 +251,12 @@ class SelectQuery(BaseQuery):
     requires_commit = False
     
     def __init__(self, database, model, query=None):
+        """
+        Allow a string or a dictionary keyed by model->fields
+        
+        .select('t1.*, COUNT(t2.id) AS count') or
+        .select({Blog: '*', Entry: Count('id')})
+        """
         self.query = query or '*'
         self._group_by = []
         self._having = []
@@ -274,7 +290,7 @@ class SelectQuery(BaseQuery):
     
     @mark_query_dirty
     def group_by(self, clause):
-        self._group_by.append(clause)
+        self._group_by.append((self.query_context, clause))
         return self
     
     @mark_query_dirty
@@ -294,22 +310,49 @@ class SelectQuery(BaseQuery):
         )
         
         return self
+
+    def parse_select_query(self, alias_map):
+        if isinstance(self.query, basestring):
+            if self.query == '*' and self.use_aliases():
+                return '%s.*' % alias_map[self.model]
+            return self.query
+        elif isinstance(self.query, dict):
+            qparts = []
+            for model, cols in self.query.iteritems():
+                alias = alias_map.get(model, '')
+                for col in cols:
+                    if isinstance(col, tuple):
+                        func, col, col_alias = col
+                        qparts.append('%s(%s) AS %s' % \
+                            (func, self.combine_field(alias, col), col_alias)
+                        )
+                    else:
+                        qparts.append(self.combine_field(alias, col))
+            return ', '.join(qparts)
+        else:
+            raise TypeError('Unknown type encountered parsing select query')
     
     def sql(self):
         joins, where, alias_map = self.compile_where()
         
         table = self.model._meta.db_table
-        if alias_map.get(self.model, None):
-            table = '%s AS %s' % (table, alias_map[self.model])
-            if self.query == '*':
-                self.query = '%s.*' % alias_map[self.model]
-            else:
-                pass # handle list of params here
+
+        group_by = []
         
-        select = 'SELECT %s FROM %s' % (self.query, table)
+        if self.use_aliases():
+            table = '%s AS %s' % (table, alias_map[self.model])
+            for model, clause in self._group_by:
+                alias = alias_map[model]
+                group_by.append(self.combine_field(alias, clause))
+        else:
+            group_by = list(self._group_by)
+
+        parsed_query = self.parse_select_query(alias_map)
+        
+        select = 'SELECT %s FROM %s' % (parsed_query, table)
         joins = '\n'.join(joins)
         where = ' AND '.join(where)
-        group_by = ', '.join(self._group_by)
+        group_by = ', '.join(group_by)
         having = ' AND '.join(self._having)
         
         order_by = []
