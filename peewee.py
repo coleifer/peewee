@@ -221,7 +221,7 @@ class BaseQuery(object):
                     left_field = 'id'
                     right_field = field.name
                 
-                if field.null:
+                if field.null and model not in self._where:
                     join_type = 'LEFT OUTER'
                 else:
                     join_type = 'INNER'
