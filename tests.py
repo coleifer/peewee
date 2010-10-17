@@ -515,19 +515,55 @@ class RelatedFieldTests(BasePeeweeTestCase):
         c = self.create_blog(title='c')
         c1 = self.create_entry(title='c1', blog=c)
 
-        sq = Blog.select().join(Entry).order_by(peewee.desc('title')).group_by('t1.id')
+        sq = Blog.select().join(Entry).order_by(peewee.desc('title')).group_by('blog_id')
         self.assertEqual(list(sq), [c, b, a])
 
-        sq = Blog.select().where(title__in=['a', 'b']).join(Entry).order_by(peewee.desc('title')).group_by('t1.id')
+        sq = Blog.select().where(title__in=['a', 'b']).join(Entry).order_by(peewee.desc('title')).group_by('blog_id')
         self.assertEqual(list(sq), [b, a])
 
-        sq = Blog.select('t1.*, COUNT(t2.id) AS count').join(Entry).order_by(peewee.desc('count')).group_by('t1.id')
+        sq = Blog.select('t1.*, COUNT(t2.id) AS count').join(Entry).order_by(peewee.desc('count')).group_by('blog_id')
         qr = list(sq)
 
         self.assertEqual(qr, [b, a, c])
         self.assertEqual(qr[0].count, 3)
         self.assertEqual(qr[1].count, 2)
         self.assertEqual(qr[2].count, 1)
+        
+        sq = Blog.select({
+            Blog: ['*'],
+            Entry: [peewee.Count('id', 'count')]
+        }).join(Entry).group_by('blog_id').order_by(peewee.desc('count'))
+        qr = list(sq)
+        
+        self.assertEqual(qr, [b, a, c])
+        self.assertEqual(qr[0].count, 3)
+        self.assertEqual(qr[1].count, 2)
+        self.assertEqual(qr[2].count, 1)
+    
+    def test_nullable_fks(self):
+        a = self.create_blog(title='a')
+        b = self.create_blog(title='b')
+        c = self.create_blog(title='c')
+        
+        user_a = User(username='user_a', blog=a)
+        user_a.save()
+        
+        user_a2 = User(username='user_a2', blog=a)
+        user_a2.save()
+        
+        user_b = User(username='user_b', blog=b)
+        user_b.save()
+        
+        sq = Blog.select({
+            Blog: ['*'],
+            User: [peewee.Count('id', 'count')]
+        }).join(User).group_by('blog_id').order_by(peewee.desc('count'))
+        qr = list(sq)
+        
+        self.assertEqual(qr, [a, b, c])
+        self.assertEqual(qr[0].count, 2)
+        self.assertEqual(qr[1].count, 1)
+        self.assertEqual(qr[2].count, 0)
 
 
 class FieldTypeTests(BasePeeweeTestCase):

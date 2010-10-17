@@ -120,6 +120,7 @@ class BaseQuery(object):
         'gte': '>= %s',
         'eq': '= %s',
         'in': 'IN (%s)',
+        'is': 'IS %s',
         'icontains': "LIKE '%%%s%%' ESCAPE '\\'",
         'contains': "GLOB '*%s*'",
     }
