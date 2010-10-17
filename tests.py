@@ -517,8 +517,14 @@ class RelatedFieldTests(BasePeeweeTestCase):
 
         sq = Blog.select().join(Entry).order_by(peewee.desc('title')).group_by('blog_id')
         self.assertEqual(list(sq), [c, b, a])
+        
+        sq = Blog.select().join(Entry).order_by(peewee.desc('title')).distinct()
+        self.assertEqual(list(sq), [c, b, a])
 
         sq = Blog.select().where(title__in=['a', 'b']).join(Entry).order_by(peewee.desc('title')).group_by('blog_id')
+        self.assertEqual(list(sq), [b, a])
+        
+        sq = Blog.select().where(title__in=['a', 'b']).join(Entry).order_by(peewee.desc('title')).distinct()
         self.assertEqual(list(sq), [b, a])
 
         sq = Blog.select('t1.*, COUNT(t2.id) AS count').join(Entry).order_by(peewee.desc('count')).group_by('blog_id')

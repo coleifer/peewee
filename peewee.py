@@ -263,6 +263,7 @@ class SelectQuery(BaseQuery):
         self._having = []
         self._order_by = []
         self._pagination = None # return all by default
+        self._distinct = False
         self._qr = None
         super(SelectQuery, self).__init__(database, model)
     
@@ -297,6 +298,11 @@ class SelectQuery(BaseQuery):
     @mark_query_dirty
     def having(self, clause):
         self._having.append(clause)
+        return self
+    
+    @mark_query_dirty
+    def distinct(self):
+        self._distinct = True
         return self
     
     @mark_query_dirty
@@ -350,7 +356,12 @@ class SelectQuery(BaseQuery):
 
         parsed_query = self.parse_select_query(alias_map)
         
-        select = 'SELECT %s FROM %s' % (parsed_query, table)
+        if self._distinct:
+            sel = 'SELECT DISTINCT'
+        else:
+            sel = 'SELECT'
+        
+        select = '%s %s FROM %s' % (sel, parsed_query, table)
         joins = '\n'.join(joins)
         where = ' AND '.join(where)
         group_by = ', '.join(group_by)
