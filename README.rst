@@ -1,7 +1,31 @@
 peewee
 ======
 
-fiddling around with an orm
+a small orm
+
+written to provide a lightweight querying interface over sql
+
+uses sql concepts when querying, like joins, group by, having, etc.
+
+Examples::
+
+    # a simple query selecting a user
+    User.select().where(username='charles')
+    
+    # get the tweets by a user named charles and order the newest to oldest
+    Tweet.select().order_by(('pub_date', 'desc')).join(User).where(username='charles')
+    
+    # how many active users are there?
+    User.select().where(active=True).count()
+    
+    # paginate the user table and show me page 3 (users 41-60)
+    User.select().order_by(('username', 'asc')).paginate(3, 20)
+    
+    # order users by number of tweets
+    User.select({
+        User: ['*'],
+        Tweet: [Count('id', 'num_tweets')]
+    }).join(Tweet).group_by('id').order_by(('num_tweets', 'desc'))
 
 
 model definitions and schema creation
@@ -54,30 +78,27 @@ foreign keys work like django's
     Greatest movie ever?
 
 
-bizarre querying
-----------------
+querying
+--------
 
-queries come in 4 flavors (select/update/insert/delete)::
-
-    >>> for i in xrange(50):
-    ...     b = Blog(title='blog-%d' % i)
-    ...     b.save()
-    ...     for j in xrange(i):
-    ...         e = Entry(title='entry-%d' % j, blog=b)
-    ...         e.save()
-    ... 
-    >>> [obj.title for obj in Blog.select().where(title__contains='0')]
-    [u'blog-0', u'blog-10', u'blog-20', u'blog-30', u'blog-40']
-    
-    >>> [obj.title for obj in Blog.select().paginate(3, 10)]
-    [u'blog-20', u'blog-21', u'blog-22', u'blog-23', u'blog-24',
-     u'blog-25', u'blog-26', u'blog-27', u'blog-28', u'blog-29']
-    
-    >>> [obj.title for obj in Blog.select().join(Entry).where(title__contains='entry-45')]
-    [u'blog-46', u'blog-47', u'blog-48', u'blog-49']
-    
-    >>> Blog.select().join(Entry).where(title__contains='entry-29').count()
-    20
+queries come in 4 flavors (select/update/insert/delete).
 
 there's the notion of a *query context* which is the model being selected
-or, if there is a join, the model being joined on.
+or joined on::
+
+    User.select().where(active=True).order_by(('username', 'asc'))
+
+since User is the model being selected, the where clause and the order_by will
+pertain to attributes on the User model.  User is the current query context
+when the .where() and .order_by() are evaluated.
+
+an example using joins::
+
+    Tweet.select().where(deleted=False).order_by(('pub_date', 'desc')).join(
+        User
+    ).where(active=True)
+
+this will select non-deleted tweets from active users.  the first .where() and
+.order_by() occur when Tweet is the current *query context*.  As soon as the
+join is evaluated, User becomes the *query context* and so the following
+where() pertains to the User model.
