@@ -25,7 +25,7 @@ Examples::
     User.select({
         User: ['*'],
         Tweet: [Count('id', 'num_tweets')]
-    }).join(Tweet).group_by('id').order_by(('num_tweets', 'desc'))
+    }).group_by('id').join(Tweet).order_by(('num_tweets', 'desc'))
 
 
 model definitions and schema creation
