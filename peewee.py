@@ -166,9 +166,9 @@ class BaseQuery(object):
         return self
     
     @mark_query_dirty
-    def join(self, model):
+    def join(self, model, join_type=None):
         if self.query_context._meta.rel_exists(model):
-            self._joins.append(model)
+            self._joins.append((model, join_type))
             self.query_context = model
         else:
             raise AttributeError('No foreign key found between %s and %s' % \
@@ -191,12 +191,12 @@ class BaseQuery(object):
 
         joins = list(self._joins)
         if self._where or len(joins):
-            joins.insert(0, self.model)
+            joins.insert(0, (self.model, None))
         
         where_with_alias = []
         computed_joins = []
 
-        for i, model in enumerate(joins):
+        for i, (model, join_type) in enumerate(joins):
             if alias_required:
                 alias_count += 1
                 alias_map[model] = 't%d' % alias_count
@@ -212,7 +212,7 @@ class BaseQuery(object):
                             self.combine_field(alias_map[model], name), lookup))
             
             if i > 0:
-                from_model = joins[i-1]
+                from_model = joins[i-1][0]
                 field = from_model._meta.get_related_field_for_model(model)
                 if field:
                     left_field = field.name
@@ -222,10 +222,11 @@ class BaseQuery(object):
                     left_field = 'id'
                     right_field = field.name
                 
-                if field.null and model not in self._where:
-                    join_type = 'LEFT OUTER'
-                else:
-                    join_type = 'INNER'
+                if join_type is None:
+                    if field.null and model not in self._where:
+                        join_type = 'LEFT OUTER'
+                    else:
+                        join_type = 'INNER'
                 
                 computed_joins.append(
                     '%s JOIN %s AS %s ON %s = %s' % (

@@ -127,34 +127,34 @@ class QueryTests(BasePeeweeTestCase):
             Entry: {'title': '= "a1"'},
             Blog: {'title': '= "a"'}
         })
-        self.assertEqual(sq._joins, [Blog])
+        self.assertEqual(sq._joins, [(Blog, None)])
         self.assertEqual(sq.sql(), 'SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t1.title = "a1" AND t2.title = "a"')
         
         sq = SelectQuery(peewee.database, Blog, '*').join(Entry).where(title='a1')        
         self.assertEqual(sq._where, {
             Entry: {'title': '= "a1"'}
         })
-        self.assertEqual(sq._joins, [Entry])
+        self.assertEqual(sq._joins, [(Entry, None)])
         self.assertEqual(sq.sql(), 'SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id WHERE t2.title = "a1"')
 
         sq = SelectQuery(peewee.database, EntryTag, '*').join(Entry).join(Blog).where(title='a')        
         self.assertEqual(sq._where, {
             Blog: {'title': '= "a"'}
         })
-        self.assertEqual(sq._joins, [Entry, Blog])
+        self.assertEqual(sq._joins, [(Entry, None), (Blog, None)])
         self.assertEqual(sq.sql(), 'SELECT t1.* FROM entrytag AS t1 INNER JOIN entry AS t2 ON t1.entry_id = t2.id\nINNER JOIN blog AS t3 ON t2.blog_id = t3.id WHERE t3.title = "a"')
         
         sq = SelectQuery(peewee.database, Blog, '*').join(Entry).join(EntryTag).where(tag='t2')
         self.assertEqual(sq._where, {
             EntryTag: {'tag': '= "t2"'}
         })
-        self.assertEqual(sq._joins, [Entry, EntryTag])
+        self.assertEqual(sq._joins, [(Entry, None), (EntryTag, None)])
         self.assertEqual(sq.sql(), 'SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id\nINNER JOIN entrytag AS t3 ON t2.id = t3.entry_id WHERE t3.tag = "t2"')
     
     def test_selecting_with_aggregation(self):
         sq = SelectQuery(peewee.database, Blog, 't1.*, COUNT(t2.id) AS count').group_by('id').join(Entry)
         self.assertEqual(sq._where, {})
-        self.assertEqual(sq._joins, [Entry])
+        self.assertEqual(sq._joins, [(Entry, None)])
         self.assertEqual(sq.sql(), 'SELECT t1.*, COUNT(t2.id) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id')
         
         sq = sq.having('count > 2')
