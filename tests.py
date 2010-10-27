@@ -91,38 +91,38 @@ class BasePeeweeTestCase(unittest.TestCase):
 
 class QueryTests(BasePeeweeTestCase):
     def test_select(self):
-        sq = SelectQuery(peewee.database, Blog, '*')
+        sq = SelectQuery(Blog, '*')
         self.assertEqual(sq.sql(), 'SELECT * FROM blog')
         
-        sq = SelectQuery(peewee.database, Blog, '*').where(title='a')
+        sq = SelectQuery(Blog, '*').where(title='a')
         self.assertEqual(sq.sql(), 'SELECT * FROM blog WHERE title = "a"')
         self.assertEqual(sq._where, {Blog: {'title': '= "a"'}})
         
-        sq = SelectQuery(peewee.database, Blog, '*').where(title='a').where(id=1)
+        sq = SelectQuery(Blog, '*').where(title='a').where(id=1)
         self.assertEqual(sq._where, {Blog: {'title': '= "a"', 'id': '= 1'}})
         
-        sq = SelectQuery(peewee.database, Blog, '*').where(title__in=['a', 'b'])
+        sq = SelectQuery(Blog, '*').where(title__in=['a', 'b'])
         self.assertEqual(sq.sql(), 'SELECT * FROM blog WHERE title IN ("a","b")')
         self.assertEqual(sq._where, {Blog: {'title': 'IN ("a","b")'}})
 
     def test_select_with_models(self):
-        sq = SelectQuery(peewee.database, Blog, {Blog: '*'})
+        sq = SelectQuery(Blog, {Blog: '*'})
         self.assertEqual(sq.sql(), 'SELECT * FROM blog')
 
-        sq = SelectQuery(peewee.database, Blog, {Blog: ['title', 'id']})
+        sq = SelectQuery(Blog, {Blog: ['title', 'id']})
         self.assertEqual(sq.sql(), 'SELECT title, id FROM blog')
     
-        sq = SelectQuery(peewee.database, Blog, {Blog: ['title', 'id']}).join(Entry)
+        sq = SelectQuery(Blog, {Blog: ['title', 'id']}).join(Entry)
         self.assertEqual(sq.sql(), 'SELECT t1.title, t1.id FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id')
 
-        sq = SelectQuery(peewee.database, Blog, {Blog: ['title', 'id'], Entry: [peewee.Count('id')]}).join(Entry)
+        sq = SelectQuery(Blog, {Blog: ['title', 'id'], Entry: [peewee.Count('id')]}).join(Entry)
         self.assertEqual(sq.sql(), 'SELECT t1.title, t1.id, COUNT(t2.id) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id')
 
-        sq = SelectQuery(peewee.database, Blog, {Blog: ['title', 'id'], Entry: [peewee.Max('id')]}).join(Entry)
+        sq = SelectQuery(Blog, {Blog: ['title', 'id'], Entry: [peewee.Max('id')]}).join(Entry)
         self.assertEqual(sq.sql(), 'SELECT t1.title, t1.id, MAX(t2.id) AS max FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id')
 
     def test_selecting_across_joins(self):
-        sq = SelectQuery(peewee.database, Entry, '*').where(title='a1').join(Blog).where(title='a')
+        sq = SelectQuery(Entry, '*').where(title='a1').join(Blog).where(title='a')
         self.assertEqual(sq._where, {
             Entry: {'title': '= "a1"'},
             Blog: {'title': '= "a"'}
@@ -130,21 +130,21 @@ class QueryTests(BasePeeweeTestCase):
         self.assertEqual(sq._joins, [(Blog, None)])
         self.assertEqual(sq.sql(), 'SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t1.title = "a1" AND t2.title = "a"')
         
-        sq = SelectQuery(peewee.database, Blog, '*').join(Entry).where(title='a1')        
+        sq = SelectQuery(Blog, '*').join(Entry).where(title='a1')        
         self.assertEqual(sq._where, {
             Entry: {'title': '= "a1"'}
         })
         self.assertEqual(sq._joins, [(Entry, None)])
         self.assertEqual(sq.sql(), 'SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id WHERE t2.title = "a1"')
 
-        sq = SelectQuery(peewee.database, EntryTag, '*').join(Entry).join(Blog).where(title='a')        
+        sq = SelectQuery(EntryTag, '*').join(Entry).join(Blog).where(title='a')        
         self.assertEqual(sq._where, {
             Blog: {'title': '= "a"'}
         })
         self.assertEqual(sq._joins, [(Entry, None), (Blog, None)])
         self.assertEqual(sq.sql(), 'SELECT t1.* FROM entrytag AS t1 INNER JOIN entry AS t2 ON t1.entry_id = t2.id\nINNER JOIN blog AS t3 ON t2.blog_id = t3.id WHERE t3.title = "a"')
         
-        sq = SelectQuery(peewee.database, Blog, '*').join(Entry).join(EntryTag).where(tag='t2')
+        sq = SelectQuery(Blog, '*').join(Entry).join(EntryTag).where(tag='t2')
         self.assertEqual(sq._where, {
             EntryTag: {'tag': '= "t2"'}
         })
@@ -152,7 +152,7 @@ class QueryTests(BasePeeweeTestCase):
         self.assertEqual(sq.sql(), 'SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id\nINNER JOIN entrytag AS t3 ON t2.id = t3.entry_id WHERE t3.tag = "t2"')
     
     def test_selecting_with_aggregation(self):
-        sq = SelectQuery(peewee.database, Blog, 't1.*, COUNT(t2.id) AS count').group_by('id').join(Entry)
+        sq = SelectQuery(Blog, 't1.*, COUNT(t2.id) AS count').group_by('id').join(Entry)
         self.assertEqual(sq._where, {})
         self.assertEqual(sq._joins, [(Entry, None)])
         self.assertEqual(sq.sql(), 'SELECT t1.*, COUNT(t2.id) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id')
@@ -161,89 +161,89 @@ class QueryTests(BasePeeweeTestCase):
         self.assertEqual(sq.sql(), 'SELECT t1.*, COUNT(t2.id) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id HAVING count > 2')
     
     def test_selecting_with_ordering(self):        
-        sq = SelectQuery(peewee.database, Blog).order_by('title')
+        sq = SelectQuery(Blog).order_by('title')
         self.assertEqual(sq.sql(), 'SELECT * FROM blog ORDER BY title ASC')
         
-        sq = SelectQuery(peewee.database, Blog).order_by(peewee.desc('title'))
+        sq = SelectQuery(Blog).order_by(peewee.desc('title'))
         self.assertEqual(sq.sql(), 'SELECT * FROM blog ORDER BY title DESC')
         
-        sq = SelectQuery(peewee.database, Entry).order_by(peewee.desc('title')).join(Blog).where(title='a')
+        sq = SelectQuery(Entry).order_by(peewee.desc('title')).join(Blog).where(title='a')
         self.assertEqual(sq.sql(), 'SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t2.title = "a" ORDER BY t1.title DESC')
         
-        sq = SelectQuery(peewee.database, Entry).join(Blog).order_by(peewee.desc('title'))
+        sq = SelectQuery(Entry).join(Blog).order_by(peewee.desc('title'))
         self.assertEqual(sq.sql(), 'SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id ORDER BY t2.title DESC')
 
     def test_ordering_on_aggregates(self):
         sq = SelectQuery(
-            peewee.database, Blog, 't1.*, COUNT(t2.id) as count'
+            Blog, 't1.*, COUNT(t2.id) as count'
         ).join(Entry).order_by(peewee.desc('count'))
         self.assertEqual(sq.sql(), 'SELECT t1.*, COUNT(t2.id) as count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id ORDER BY count DESC')
 
     def test_insert(self):
-        iq = InsertQuery(peewee.database, Blog, title='a')
+        iq = InsertQuery(Blog, title='a')
         self.assertEqual(iq.sql(), 'INSERT INTO blog (title) VALUES ("a")')
         self.assertEqual(iq.execute(), 1)
         
-        iq = InsertQuery(peewee.database, Blog, title='b')
+        iq = InsertQuery(Blog, title='b')
         self.assertEqual(iq.sql(), 'INSERT INTO blog (title) VALUES ("b")')
         self.assertEqual(iq.execute(), 2)
     
     def test_update(self):
-        iq = InsertQuery(peewee.database, Blog, title='a').execute()
+        iq = InsertQuery(Blog, title='a').execute()
         
-        uq = UpdateQuery(peewee.database,Blog, title='A').where(id=1)
+        uq = UpdateQuery(Blog, title='A').where(id=1)
         self.assertEqual(uq.sql(), 'UPDATE blog SET title="A" WHERE id = 1')
         self.assertEqual(uq.execute(), 1)
         
-        iq2 = InsertQuery(peewee.database, Blog, title='b').execute()
+        iq2 = InsertQuery(Blog, title='b').execute()
         
-        uq = UpdateQuery(peewee.database, Blog, title='B').where(id=2)
+        uq = UpdateQuery(Blog, title='B').where(id=2)
         self.assertEqual(uq.sql(), 'UPDATE blog SET title="B" WHERE id = 2')
         self.assertEqual(uq.execute(), 1)
         
-        sq = SelectQuery(peewee.database, Blog).order_by('id')
+        sq = SelectQuery(Blog).order_by('id')
         self.assertEqual([x.title for x in sq], ['A', 'B'])
     
     def test_delete(self):
-        InsertQuery(peewee.database, Blog, title='a').execute()
-        InsertQuery(peewee.database, Blog, title='b').execute()
-        InsertQuery(peewee.database, Blog, title='c').execute()
+        InsertQuery(Blog, title='a').execute()
+        InsertQuery(Blog, title='b').execute()
+        InsertQuery(Blog, title='c').execute()
         
-        dq = DeleteQuery(peewee.database, Blog).where(title='b')
+        dq = DeleteQuery(Blog).where(title='b')
         self.assertEqual(dq.sql(), 'DELETE FROM blog WHERE title = "b"')
         self.assertEqual(dq.execute(), 1)
         
-        sq = SelectQuery(peewee.database, Blog).order_by('id')
+        sq = SelectQuery(Blog).order_by('id')
         self.assertEqual([x.title for x in sq], ['a', 'c'])
         
-        dq = DeleteQuery(peewee.database, Blog)
+        dq = DeleteQuery(Blog)
         self.assertEqual(dq.sql(), 'DELETE FROM blog')
         self.assertEqual(dq.execute(), 2)
         
-        sq = SelectQuery(peewee.database, Blog).order_by('id')
+        sq = SelectQuery(Blog).order_by('id')
         self.assertEqual([x.title for x in sq], [])
     
     def test_count(self):
         for i in xrange(10):
             self.create_blog(title='a%d' % i)
         
-        count = SelectQuery(peewee.database, Blog).count()
+        count = SelectQuery(Blog).count()
         self.assertEqual(count, 10)
         
         count = Blog.select().count()
         self.assertEqual(count, 10)
         
-        for blog in SelectQuery(peewee.database, Blog):
+        for blog in SelectQuery(Blog):
             for i in xrange(20):
                 self.create_entry(title='entry%d' % i, blog=blog)
         
-        count = SelectQuery(peewee.database, Entry).count()
+        count = SelectQuery(Entry).count()
         self.assertEqual(count, 200)
         
-        count = SelectQuery(peewee.database, Entry).join(Blog).where(title="a0").count()
+        count = SelectQuery(Entry).join(Blog).where(title="a0").count()
         self.assertEqual(count, 20)
         
-        count = SelectQuery(peewee.database, Entry).where(
+        count = SelectQuery(Entry).where(
             title__icontains="0"
         ).join(Blog).where(
             title="a5"
@@ -251,24 +251,24 @@ class QueryTests(BasePeeweeTestCase):
         self.assertEqual(count, 2)
     
     def test_pagination(self):
-        sq = SelectQuery(peewee.database, Blog).paginate(1, 20)
+        sq = SelectQuery(Blog).paginate(1, 20)
         self.assertEqual(sq.sql(), 'SELECT * FROM blog LIMIT 20 OFFSET 0')
         
-        sq = SelectQuery(peewee.database, Blog).paginate(3, 30)
+        sq = SelectQuery(Blog).paginate(3, 30)
         self.assertEqual(sq.sql(), 'SELECT * FROM blog LIMIT 30 OFFSET 60')
     
     def test_inner_joins(self):
-        sql = SelectQuery(peewee.database, Blog).join(Entry).sql()
+        sql = SelectQuery(Blog).join(Entry).sql()
         self.assertEqual(sql, 'SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id')
         
-        sql = SelectQuery(peewee.database, Entry).join(Blog).sql()
+        sql = SelectQuery(Entry).join(Blog).sql()
         self.assertEqual(sql, 'SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id')
 
     def test_outer_joins(self):
-        sql = SelectQuery(peewee.database, User).join(Blog).sql()
+        sql = SelectQuery(User).join(Blog).sql()
         self.assertEqual(sql, 'SELECT t1.* FROM user AS t1 LEFT OUTER JOIN blog AS t2 ON t1.blog_id = t2.id')
         
-        sql = SelectQuery(peewee.database, Blog).join(User).sql()
+        sql = SelectQuery(Blog).join(User).sql()
         self.assertEqual(sql, 'SELECT t1.* FROM blog AS t1 LEFT OUTER JOIN user AS t2 ON t1.id = t2.blog_id')
 
 

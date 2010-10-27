@@ -127,8 +127,7 @@ class BaseQuery(object):
     query_separator = '__'
     requires_commit = True
     
-    def __init__(self, database, model):
-        self.database = database
+    def __init__(self, model):
         self.model = model
         self.query_context = model
         self._where = {}
@@ -242,7 +241,8 @@ class BaseQuery(object):
     
     def raw_execute(self):
         query = self.sql()
-        result = self.database.execute(query, self.requires_commit)
+        db = self.model._meta.get_database()
+        result = db.execute(query, self.requires_commit)
         return result
 
 
@@ -252,7 +252,7 @@ class SelectQuery(BaseQuery):
     """
     requires_commit = False
     
-    def __init__(self, database, model, query=None):
+    def __init__(self, model, query=None):
         """
         Allow a string or a dictionary keyed by model->fields
         
@@ -266,7 +266,7 @@ class SelectQuery(BaseQuery):
         self._pagination = None # return all by default
         self._distinct = False
         self._qr = None
-        super(SelectQuery, self).__init__(database, model)
+        super(SelectQuery, self).__init__(model)
     
     @mark_query_dirty
     def paginate(self, page_num, paginate_by=20):
@@ -284,7 +284,8 @@ class SelectQuery(BaseQuery):
         else:
             self.query = 'COUNT(id)'
         
-        res = self.database.execute(self.sql())
+        db = self.model._meta.get_database()
+        res = db.execute(self.sql())
         
         self.query = tmp_query
         self._pagination = tmp_pagination
@@ -412,9 +413,9 @@ class UpdateQuery(BaseQuery):
     """
     Model.update(field=val, field2=val2).where(some_field=some_val)
     """
-    def __init__(self, database, model, **kwargs):
+    def __init__(self, model, **kwargs):
         self.update_query = kwargs
-        super(UpdateQuery, self).__init__(database, model)
+        super(UpdateQuery, self).__init__(model)
     
     def parse_update(self):
         sets = []
@@ -475,9 +476,9 @@ class InsertQuery(BaseQuery):
     """
     Model.insert(field=val, field2=val2)
     """
-    def __init__(self, database, model, **kwargs):
+    def __init__(self, model, **kwargs):
         self.insert_query = kwargs
-        super(InsertQuery, self).__init__(database, model)
+        super(InsertQuery, self).__init__(model)
     
     def parse_insert(self):
         cols = []
@@ -681,7 +682,9 @@ class BaseModel(type):
             
             def __init__(self, model_class):
                 self.model_class = model_class
-                self.database = self.model_class.database
+
+            def get_database(self):
+                return self.model_class.database
             
             def get_field_by_name(self, name):
                 if name in self.fields:
@@ -755,19 +758,19 @@ class Model(object):
     
     @classmethod
     def select(cls, query=None):
-        return SelectQuery(cls.database, cls, query)
+        return SelectQuery(cls, query)
     
     @classmethod
     def update(cls, **query):
-        return UpdateQuery(cls.database, cls, **query)
+        return UpdateQuery(cls, **query)
     
     @classmethod
     def insert(cls, **query):
-        return InsertQuery(cls.database, cls, **query)
+        return InsertQuery(cls, **query)
     
     @classmethod
     def delete(cls, **query):
-        return DeleteQuery(cls.database, cls, **query)
+        return DeleteQuery(cls, **query)
     
     @classmethod            
     def get(cls, **query):
