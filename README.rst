@@ -7,6 +7,8 @@ written to provide a lightweight querying interface over sql
 
 uses sql concepts when querying, like joins, group by, having, etc.
 
+pagination is handled for you automatically
+
 Examples::
 
     # a simple query selecting a user
@@ -26,6 +28,12 @@ Examples::
         User: ['*'],
         Tweet: [Count('id', 'num_tweets')]
     }).group_by('id').join(Tweet).order_by(('num_tweets', 'desc'))
+
+
+what it doesn't do (yet?)
+-------------------------
+
+OR queries
 
 
 model definitions and schema creation
