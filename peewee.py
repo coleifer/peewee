@@ -27,6 +27,23 @@ class Database(object):
 		logger.debug(sql)
 		return res, cursor
 	
+	def fetchall(self, *args, **kwargs):
+		result, cursor = self.execute(*args, **kwargs)
+		
+		if cursor:
+			reswrap = QueryResultWrapper(model=None, cursor=cursor)
+			return reswrap
+		
+		return None
+	
+	def fetchone(self, *args, **kwargs):
+		result = self.fetchall(*args, **kwargs)
+		
+		if result:
+			return result.next()
+		
+		return None
+	
 	def last_insert_id(self):
 		result = self.execute("SELECT last_insert_rowid();")
 		return result.fetchone()[0]
@@ -82,9 +99,12 @@ class QueryResultWrapper(object):
 		row = self.cursor.fetchone()
 		if row:
 			row_dict = self._row_to_dict(row, self.cursor)
-			instance = self.model_from_rowset(self.model, row_dict)
-			self._result_cache.append(instance)
-			return instance
+			if self.model:
+				instance = self.model_from_rowset(self.model, row_dict)
+				self._result_cache.append(instance)
+				return instance
+			else:
+				return row_dict
 		else:
 			self._populated = True
 			raise StopIteration
