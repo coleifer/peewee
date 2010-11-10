@@ -1,4 +1,4 @@
-peewee
+peewee (now with experimental MySQL support via the OurSQL library!)
 ======
 
 a small orm
