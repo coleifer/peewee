@@ -534,11 +534,15 @@ class InsertQuery(BaseQuery):
 
 class Field(object):
 	db_field = ''
+	default = None
+	blank = False
+	max_length = None
+	choices = None
 	real_name = None
 	field_template = "%(db_field)s"
 	
 	def get_attributes(self):
-		return {}
+		return {'default': None,}
 	
 	def __init__(self, *args, **kwargs):
 		self.attributes = self.get_attributes()
@@ -587,6 +591,24 @@ class CharField(Field):
 			return '"%s"' % self.db_value(value)
 
 
+class URLField(Field):
+	db_field = 'VARCHAR'
+	field_template = "%(db_field)s(%(max_length)d) NOT NULL"
+	
+	def get_attributes(self):
+		return {'max_length': 2048}
+	
+	def db_value(self, value):
+		value = value or ''
+		return value[:self.attributes['max_length']]
+	
+	def lookup_value(self, lookup_type, value):
+		if lookup_type in ('contains', 'icontains'):
+			return self.db_value(value)
+		else:
+			return '"%s"' % self.db_value(value)
+
+
 class TextField(Field):
 	db_field = 'TEXT'
 	
@@ -612,6 +634,31 @@ class DateTimeField(Field):
 		if value is not None:
 			return '"%s"' % value.strftime('%Y-%m-%d %H:%M:%S')
 		return "NULL"
+
+
+class EpochTimestampField(Field):
+	db_field = 'INTEGER'
+	field_template = "%(db_field)s NOT NULL"
+	
+	def db_value(self, value):
+		if isinstance(value, datetime):
+			return int(time.mktime(value.timetuple()))
+		
+		return value or 0
+	
+	def python_value(self, value):
+		return datetime.fromtimestamp(int(value or 0))
+
+
+class BooleanField(Field):
+	db_field = 'TINYINT'
+	field_template = "%(db_field)s NOT NULL"
+	
+	def db_value(self, value):
+		return bool(value)
+	
+	def python_value(self, value):
+		return bool(value or 0)
 
 
 class IntegerField(Field):
@@ -736,6 +783,7 @@ class BaseModel(type):
 		setattr(cls, '_meta', _meta)
 		
 		_meta.db_table = re.sub('[^a-z]+', '_', cls.__name__.lower())
+		_meta.object_name = cls.__name__
 		
 		has_primary_key = False
 		
