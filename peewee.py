@@ -142,8 +142,9 @@ class BaseQuery(object):
 		'eq': '= %s',
 		'in': 'IN (%s)',
 		'is': 'IS %s',
-		'icontains': "LIKE '%%%s%%' ESCAPE '\\'",
+		'icontains': "LIKE '%%%s%%'",
 		'contains': "GLOB '*%s*'",
+		'startswith': "LIKE '%s%%'",
 	}
 	query_separator = '__'
 	requires_commit = True
@@ -236,7 +237,7 @@ class BaseQuery(object):
 				field = from_model._meta.get_related_field_for_model(model)
 				if field:
 					left_field = field.name
-					right_field = 'id'
+					right_field = field.relation_name or 'id'
 				else:
 					field = from_model._meta.get_reverse_related_field_for_model(model)
 					left_field = 'id'
@@ -304,15 +305,15 @@ class SelectQuery(BaseQuery):
 		if self.use_aliases():
 			self.query = 'COUNT(t1.id)'
 		else:
-			self.query = 'COUNT(id)'
+			self.query = 'COUNT(%s)' %  (self.model._meta.primary_key.real_name,)
 		
 		db = self.model._meta.get_database()
-		res = db.execute(self.sql())
+		res, cursor = db.execute(self.sql())
 		
 		self.query = tmp_query
 		self._pagination = tmp_pagination
 		
-		return res.fetchone()[0]
+		return cursor.fetchone()[0]
 	
 	@mark_query_dirty
 	def group_by(self, clause):
@@ -428,6 +429,12 @@ class SelectQuery(BaseQuery):
 			# call the __iter__ method directly
 			return iter(self._qr)
 	
+	def first(self):
+		try:
+			return self.execute().next()
+		except StopIteration:
+			return None
+	
 	def __iter__(self):
 		return self.execute()
 
@@ -444,7 +451,8 @@ class UpdateQuery(BaseQuery):
 		sets = []
 		for k, v in self.update_query.iteritems():
 			field = self.model._meta.get_field_by_name(k)
-			sets.append('%s=%s' % (k, field.lookup_value(None, v)))
+			column_name = field.attributes.get('real_name', field.name)
+			sets.append('%s=%s' % (column_name, field.lookup_value(None, v)))
 		
 		return ', '.join(sets)
 	
@@ -467,7 +475,7 @@ class UpdateQuery(BaseQuery):
 	
 	def execute(self):
 		result, cursor = self.raw_execute()
-		return result.rowcount
+		return cursor.rowcount
 
 
 class DeleteQuery(BaseQuery):
@@ -492,7 +500,7 @@ class DeleteQuery(BaseQuery):
 	
 	def execute(self):
 		result, cursor = self.raw_execute()
-		return result.rowcount
+		return cursor.rowcount
 
 
 class InsertQuery(BaseQuery):
@@ -508,7 +516,9 @@ class InsertQuery(BaseQuery):
 		vals = []
 		for k, v in self.insert_query.iteritems():
 			field = self.model._meta.get_field_by_name(k)
-			cols.append(k)
+			column_name = field.attributes.get('real_name', field.name)
+			
+			cols.append(column_name)
 			vals.append(str(field.lookup_value(None, v)))
 		
 		return cols, vals
@@ -529,7 +539,7 @@ class InsertQuery(BaseQuery):
 	
 	def execute(self):
 		result, cursor = self.raw_execute()
-		return result.lastrowid
+		return cursor.lastrowid
 
 
 class Field(object):
@@ -538,8 +548,17 @@ class Field(object):
 	blank = False
 	max_length = None
 	choices = None
-	real_name = None
+	label = None
+	help_text = None
+	# real_name = None
 	field_template = "%(db_field)s"
+	
+	@property
+	def real_name(self):
+		if 'real_name' in self.attributes:
+			return self.attributes['real_name']
+		
+		return self.name
 	
 	def get_attributes(self):
 		return {'default': None,}
@@ -585,7 +604,7 @@ class CharField(Field):
 		return value[:self.attributes['max_length']]
 	
 	def lookup_value(self, lookup_type, value):
-		if lookup_type in ('contains', 'icontains'):
+		if lookup_type in ('contains', 'icontains', 'startswith'):
 			return self.db_value(value)
 		else:
 			return '"%s"' % self.db_value(value)
@@ -603,7 +622,7 @@ class URLField(Field):
 		return value[:self.attributes['max_length']]
 	
 	def lookup_value(self, lookup_type, value):
-		if lookup_type in ('contains', 'icontains'):
+		if lookup_type in ('contains', 'icontains', 'startswith'):
 			return self.db_value(value)
 		else:
 			return '"%s"' % self.db_value(value)
@@ -616,7 +635,7 @@ class TextField(Field):
 		return value or ''
 	
 	def lookup_value(self, lookup_type, value):
-		if lookup_type in ('contains', 'icontains'):
+		if lookup_type in ('contains', 'icontains', 'startswith'):
 			return self.db_value(value)
 		else:
 			return '"%s"' % self.db_value(value)
@@ -696,11 +715,14 @@ class ForeignRelatedObject(object):
 	def __get__(self, instance, instance_type=None):
 		if not getattr(instance, self.cache_name, None):
 			id = getattr(instance, self.field_name, 0)
-			qr = self.to.select().where(id=id).execute()
-			setattr(instance, self.cache_name, qr.next())
-		return getattr(instance, self.cache_name)
+			if id > 0:
+				qr = self.to.select().where(id=id).execute()
+				setattr(instance, self.cache_name, qr.next())
+			
+		return hasattr(instance, self.cache_name) and getattr(instance, self.cache_name) or None
 	
 	def __set__(self, instance, obj):
+		
 		assert isinstance(obj, self.to), "Cannot assign %s, invalid type" % obj
 		setattr(instance, self.field_name, obj.id)
 		setattr(instance, self.cache_name, obj)
@@ -720,9 +742,10 @@ class ReverseForeignRelatedObject(object):
 class ForeignKeyField(IntegerField):
 	field_template = '%(db_field)s %(nullable)s REFERENCES "%(to_table)s" ("id")'
 	
-	def __init__(self, to, null=False, *args, **kwargs):
+	def __init__(self, to, null=False, relation_name=None, *args, **kwargs):
 		self.to = to
 		self.null = null
+		self.relation_name = relation_name
 		kwargs['to_table'] = to._meta.db_table
 		if null:
 			kwargs['nullable'] = ''
@@ -732,7 +755,8 @@ class ForeignKeyField(IntegerField):
 	
 	def add_to_class(self, klass, name):
 		self.descriptor = name
-		self.name = name + '_id'
+		
+		self.name = self.relation_name or name + '_id'
 		self.related_name = klass._meta.db_table + '_set'
 		setattr(klass, self.descriptor, ForeignRelatedObject(self.to, self.name))
 		setattr(klass, self.name, None)
@@ -752,6 +776,7 @@ class BaseModel(type):
 		
 		class Meta(object):
 			fields = {}
+			primary_key = None
 			
 			def __init__(self, model_class):
 				self.model_class = model_class
@@ -795,11 +820,13 @@ class BaseModel(type):
 				_meta.fields[attr.name] = attr
 				if isinstance(attr, PrimaryKeyField):
 					has_primary_key = True
+					_meta.primary_key = attr
 		
 		if not has_primary_key:
 			pk = PrimaryKeyField()
 			pk.add_to_class(cls, 'id')
 			_meta.fields['id'] = pk
+			_meta.primary_key = pk
 		
 		if hasattr(cls, '__unicode__'):
 			setattr(cls, '__repr__', lambda self: '<%s: %s>' % (
@@ -819,10 +846,30 @@ class Model(object):
 	def __eq__(self, other):
 		return other.__class__ == self.__class__ and self.id and other.id == self.id
 	
+	def __iter__(self):
+		for field_name in self._meta.fields:
+			if hasattr(self, field_name):
+				yield (field_name, getattr(self, field_name))
+	
+	@property
+	def primary_key(self):
+		return getattr(self, self._meta.primary_key.name)
+	
+	def fields(self):
+		for field_name in self._meta.fields:
+			yield field_name
+	
 	def get_field_dict(self):
 		field_val = lambda f: (f.name, getattr(self, f.name))
 		pairs = map(field_val, self._meta.fields.values())
 		return dict(pairs)
+	
+	@classmethod
+	def get_field_def(cls, field_name):
+		if field_name in cls._meta.fields:
+			return cls._meta.fields[field_name]
+		
+		return False
 	
 	def to_dict(self):
 		obj = {}
@@ -840,6 +887,10 @@ class Model(object):
 	@classmethod
 	def drop_table(cls):
 		cls.database.drop_table(cls)
+	
+	@classmethod
+	def count(cls, query=None):
+		return SelectQuery(cls, query).count()
 	
 	@classmethod
 	def select(cls, query=None):
