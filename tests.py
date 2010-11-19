@@ -92,113 +92,113 @@ class BasePeeweeTestCase(unittest.TestCase):
 class QueryTests(BasePeeweeTestCase):
     def test_select(self):
         sq = SelectQuery(Blog, '*')
-        self.assertEqual(sq.sql(), 'SELECT * FROM blog')
-        
+        self.assertEqual(sq.sql(), ('SELECT * FROM blog', []))
+
         sq = SelectQuery(Blog, '*').where(title='a')
-        self.assertEqual(sq.sql(), 'SELECT * FROM blog WHERE title = "a"')
-        self.assertEqual(sq._where, {Blog: {'title': '= "a"'}})
+        self.assertEqual(sq.sql(), ('SELECT * FROM blog WHERE title = ?', ['a']))
+        self.assertEqual(sq._where, {Blog: {'title': ('= ?', 'a')}})
         
         sq = SelectQuery(Blog, '*').where(title='a').where(id=1)
-        self.assertEqual(sq._where, {Blog: {'title': '= "a"', 'id': '= 1'}})
+        self.assertEqual(sq._where, {Blog: {'title': ('= ?', 'a'), 'id': ('= ?', 1)}})
         
         sq = SelectQuery(Blog, '*').where(title__in=['a', 'b'])
-        self.assertEqual(sq.sql(), 'SELECT * FROM blog WHERE title IN ("a","b")')
-        self.assertEqual(sq._where, {Blog: {'title': 'IN ("a","b")'}})
+        self.assertEqual(sq.sql(), ('SELECT * FROM blog WHERE title IN (?,?)', ['a', 'b']))
+        self.assertEqual(sq._where, {Blog: {'title': ('IN (?,?)', ['a', 'b'])}})
 
     def test_select_with_models(self):
         sq = SelectQuery(Blog, {Blog: '*'})
-        self.assertEqual(sq.sql(), 'SELECT * FROM blog')
+        self.assertEqual(sq.sql(), ('SELECT * FROM blog', []))
 
         sq = SelectQuery(Blog, {Blog: ['title', 'id']})
-        self.assertEqual(sq.sql(), 'SELECT title, id FROM blog')
+        self.assertEqual(sq.sql(), ('SELECT title, id FROM blog', []))
     
         sq = SelectQuery(Blog, {Blog: ['title', 'id']}).join(Entry)
-        self.assertEqual(sq.sql(), 'SELECT t1.title, t1.id FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id')
+        self.assertEqual(sq.sql(), ('SELECT t1.title, t1.id FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id', []))
 
         sq = SelectQuery(Blog, {Blog: ['title', 'id'], Entry: [peewee.Count('id')]}).join(Entry)
-        self.assertEqual(sq.sql(), 'SELECT t1.title, t1.id, COUNT(t2.id) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id')
+        self.assertEqual(sq.sql(), ('SELECT t1.title, t1.id, COUNT(t2.id) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id', []))
 
         sq = SelectQuery(Blog, {Blog: ['title', 'id'], Entry: [peewee.Max('id')]}).join(Entry)
-        self.assertEqual(sq.sql(), 'SELECT t1.title, t1.id, MAX(t2.id) AS max FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id')
+        self.assertEqual(sq.sql(), ('SELECT t1.title, t1.id, MAX(t2.id) AS max FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id', []))
 
     def test_selecting_across_joins(self):
         sq = SelectQuery(Entry, '*').where(title='a1').join(Blog).where(title='a')
         self.assertEqual(sq._where, {
-            Entry: {'title': '= "a1"'},
-            Blog: {'title': '= "a"'}
+            Entry: {'title': ('= ?', 'a1')},
+            Blog: {'title': ('= ?', 'a')}
         })
         self.assertEqual(sq._joins, [(Blog, None)])
-        self.assertEqual(sq.sql(), 'SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t1.title = "a1" AND t2.title = "a"')
+        self.assertEqual(sq.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t1.title = ? AND t2.title = ?', ['a1', 'a']))
         
         sq = SelectQuery(Blog, '*').join(Entry).where(title='a1')        
         self.assertEqual(sq._where, {
-            Entry: {'title': '= "a1"'}
+            Entry: {'title': ('= ?', 'a1')}
         })
         self.assertEqual(sq._joins, [(Entry, None)])
-        self.assertEqual(sq.sql(), 'SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id WHERE t2.title = "a1"')
+        self.assertEqual(sq.sql(), ('SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id WHERE t2.title = ?', ['a1']))
 
         sq = SelectQuery(EntryTag, '*').join(Entry).join(Blog).where(title='a')        
         self.assertEqual(sq._where, {
-            Blog: {'title': '= "a"'}
+            Blog: {'title': ('= ?', 'a')}
         })
         self.assertEqual(sq._joins, [(Entry, None), (Blog, None)])
-        self.assertEqual(sq.sql(), 'SELECT t1.* FROM entrytag AS t1 INNER JOIN entry AS t2 ON t1.entry_id = t2.id\nINNER JOIN blog AS t3 ON t2.blog_id = t3.id WHERE t3.title = "a"')
+        self.assertEqual(sq.sql(), ('SELECT t1.* FROM entrytag AS t1 INNER JOIN entry AS t2 ON t1.entry_id = t2.id\nINNER JOIN blog AS t3 ON t2.blog_id = t3.id WHERE t3.title = ?', ['a']))
         
         sq = SelectQuery(Blog, '*').join(Entry).join(EntryTag).where(tag='t2')
         self.assertEqual(sq._where, {
-            EntryTag: {'tag': '= "t2"'}
+            EntryTag: {'tag': ('= ?', 't2')}
         })
         self.assertEqual(sq._joins, [(Entry, None), (EntryTag, None)])
-        self.assertEqual(sq.sql(), 'SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id\nINNER JOIN entrytag AS t3 ON t2.id = t3.entry_id WHERE t3.tag = "t2"')
+        self.assertEqual(sq.sql(), ('SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id\nINNER JOIN entrytag AS t3 ON t2.id = t3.entry_id WHERE t3.tag = ?', ['t2']))
     
     def test_selecting_with_aggregation(self):
         sq = SelectQuery(Blog, 't1.*, COUNT(t2.id) AS count').group_by('id').join(Entry)
         self.assertEqual(sq._where, {})
         self.assertEqual(sq._joins, [(Entry, None)])
-        self.assertEqual(sq.sql(), 'SELECT t1.*, COUNT(t2.id) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id')
+        self.assertEqual(sq.sql(), ('SELECT t1.*, COUNT(t2.id) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id', []))
         
         sq = sq.having('count > 2')
-        self.assertEqual(sq.sql(), 'SELECT t1.*, COUNT(t2.id) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id HAVING count > 2')
+        self.assertEqual(sq.sql(), ('SELECT t1.*, COUNT(t2.id) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id HAVING count > 2', []))
     
     def test_selecting_with_ordering(self):        
         sq = SelectQuery(Blog).order_by('title')
-        self.assertEqual(sq.sql(), 'SELECT * FROM blog ORDER BY title ASC')
+        self.assertEqual(sq.sql(), ('SELECT * FROM blog ORDER BY title ASC', []))
         
         sq = SelectQuery(Blog).order_by(peewee.desc('title'))
-        self.assertEqual(sq.sql(), 'SELECT * FROM blog ORDER BY title DESC')
+        self.assertEqual(sq.sql(), ('SELECT * FROM blog ORDER BY title DESC', []))
         
         sq = SelectQuery(Entry).order_by(peewee.desc('title')).join(Blog).where(title='a')
-        self.assertEqual(sq.sql(), 'SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t2.title = "a" ORDER BY t1.title DESC')
+        self.assertEqual(sq.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t2.title = ? ORDER BY t1.title DESC', ['a']))
         
         sq = SelectQuery(Entry).join(Blog).order_by(peewee.desc('title'))
-        self.assertEqual(sq.sql(), 'SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id ORDER BY t2.title DESC')
+        self.assertEqual(sq.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id ORDER BY t2.title DESC', []))
 
     def test_ordering_on_aggregates(self):
         sq = SelectQuery(
             Blog, 't1.*, COUNT(t2.id) as count'
         ).join(Entry).order_by(peewee.desc('count'))
-        self.assertEqual(sq.sql(), 'SELECT t1.*, COUNT(t2.id) as count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id ORDER BY count DESC')
+        self.assertEqual(sq.sql(), ('SELECT t1.*, COUNT(t2.id) as count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id ORDER BY count DESC', []))
 
     def test_insert(self):
         iq = InsertQuery(Blog, title='a')
-        self.assertEqual(iq.sql(), 'INSERT INTO blog (title) VALUES ("a")')
+        self.assertEqual(iq.sql(), ('INSERT INTO blog (title) VALUES (?)', ['a']))
         self.assertEqual(iq.execute(), 1)
         
         iq = InsertQuery(Blog, title='b')
-        self.assertEqual(iq.sql(), 'INSERT INTO blog (title) VALUES ("b")')
+        self.assertEqual(iq.sql(), ('INSERT INTO blog (title) VALUES (?)', ['b']))
         self.assertEqual(iq.execute(), 2)
     
     def test_update(self):
         iq = InsertQuery(Blog, title='a').execute()
         
         uq = UpdateQuery(Blog, title='A').where(id=1)
-        self.assertEqual(uq.sql(), 'UPDATE blog SET title="A" WHERE id = 1')
+        self.assertEqual(uq.sql(), ('UPDATE blog SET title=? WHERE id = ?', ['A', 1]))
         self.assertEqual(uq.execute(), 1)
         
         iq2 = InsertQuery(Blog, title='b').execute()
         
         uq = UpdateQuery(Blog, title='B').where(id=2)
-        self.assertEqual(uq.sql(), 'UPDATE blog SET title="B" WHERE id = 2')
+        self.assertEqual(uq.sql(), ('UPDATE blog SET title=? WHERE id = ?', ['B', 2]))
         self.assertEqual(uq.execute(), 1)
         
         sq = SelectQuery(Blog).order_by('id')
@@ -210,14 +210,14 @@ class QueryTests(BasePeeweeTestCase):
         InsertQuery(Blog, title='c').execute()
         
         dq = DeleteQuery(Blog).where(title='b')
-        self.assertEqual(dq.sql(), 'DELETE FROM blog WHERE title = "b"')
+        self.assertEqual(dq.sql(), ('DELETE FROM blog WHERE title = ?', ['b']))
         self.assertEqual(dq.execute(), 1)
         
         sq = SelectQuery(Blog).order_by('id')
         self.assertEqual([x.title for x in sq], ['a', 'c'])
         
         dq = DeleteQuery(Blog)
-        self.assertEqual(dq.sql(), 'DELETE FROM blog')
+        self.assertEqual(dq.sql(), ('DELETE FROM blog', []))
         self.assertEqual(dq.execute(), 2)
         
         sq = SelectQuery(Blog).order_by('id')
@@ -226,7 +226,7 @@ class QueryTests(BasePeeweeTestCase):
     def test_count(self):
         for i in xrange(10):
             self.create_blog(title='a%d' % i)
-        
+
         count = SelectQuery(Blog).count()
         self.assertEqual(count, 10)
         
@@ -252,24 +252,24 @@ class QueryTests(BasePeeweeTestCase):
     
     def test_pagination(self):
         sq = SelectQuery(Blog).paginate(1, 20)
-        self.assertEqual(sq.sql(), 'SELECT * FROM blog LIMIT 20 OFFSET 0')
+        self.assertEqual(sq.sql(), ('SELECT * FROM blog LIMIT 20 OFFSET 0', []))
         
         sq = SelectQuery(Blog).paginate(3, 30)
-        self.assertEqual(sq.sql(), 'SELECT * FROM blog LIMIT 30 OFFSET 60')
+        self.assertEqual(sq.sql(), ('SELECT * FROM blog LIMIT 30 OFFSET 60', []))
     
     def test_inner_joins(self):
         sql = SelectQuery(Blog).join(Entry).sql()
-        self.assertEqual(sql, 'SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id')
+        self.assertEqual(sql, ('SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id', []))
         
         sql = SelectQuery(Entry).join(Blog).sql()
-        self.assertEqual(sql, 'SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id')
+        self.assertEqual(sql, ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id', []))
 
     def test_outer_joins(self):
         sql = SelectQuery(User).join(Blog).sql()
-        self.assertEqual(sql, 'SELECT t1.* FROM user AS t1 LEFT OUTER JOIN blog AS t2 ON t1.blog_id = t2.id')
+        self.assertEqual(sql, ('SELECT t1.* FROM user AS t1 LEFT OUTER JOIN blog AS t2 ON t1.blog_id = t2.id', []))
         
         sql = SelectQuery(Blog).join(User).sql()
-        self.assertEqual(sql, 'SELECT t1.* FROM blog AS t1 LEFT OUTER JOIN user AS t2 ON t1.id = t2.blog_id')
+        self.assertEqual(sql, ('SELECT t1.* FROM blog AS t1 LEFT OUTER JOIN user AS t2 ON t1.id = t2.blog_id', []))
 
 
 class ModelTests(BasePeeweeTestCase):
@@ -284,10 +284,10 @@ class ModelTests(BasePeeweeTestCase):
         b.save()
         
         self.assertQueriesEqual([
-            'INSERT INTO blog (title) VALUES ("a")',
-            'INSERT INTO blog (title) VALUES ("b")',
-            'UPDATE blog SET title="a" WHERE id = 1',
-            'UPDATE blog SET title="b" WHERE id = 2'
+            'INSERT INTO blog (title) VALUES (?)',
+            'INSERT INTO blog (title) VALUES (?)',
+            'UPDATE blog SET title=? WHERE id = ?',
+            'UPDATE blog SET title=? WHERE id = ?'
         ])
 
         all_blogs = list(Blog.select().order_by('id'))
@@ -301,9 +301,9 @@ class ModelTests(BasePeeweeTestCase):
         self.assertEqual(b2.id, b.id)
         
         self.assertQueriesEqual([
-            'INSERT INTO blog (title) VALUES ("a")',
-            'INSERT INTO blog (title) VALUES ("b")',
-            'SELECT * FROM blog WHERE title = "b" LIMIT 1 OFFSET 0'
+            'INSERT INTO blog (title) VALUES (?)',
+            'INSERT INTO blog (title) VALUES (?)',
+            'SELECT * FROM blog WHERE title = ? LIMIT 1 OFFSET 0'
         ])
     
     def test_model_select(self):
@@ -318,11 +318,11 @@ class ModelTests(BasePeeweeTestCase):
         self.assertEqual(list(qr), [c, a])
         
         self.assertQueriesEqual([
-            'INSERT INTO blog (title) VALUES ("a")', 
-            'INSERT INTO blog (title) VALUES ("b")', 
-            'INSERT INTO blog (title) VALUES ("c")', 
+            'INSERT INTO blog (title) VALUES (?)', 
+            'INSERT INTO blog (title) VALUES (?)', 
+            'INSERT INTO blog (title) VALUES (?)', 
             'SELECT * FROM blog ORDER BY title ASC', 
-            'SELECT * FROM blog WHERE title IN ("a","c") ORDER BY title DESC'
+            'SELECT * FROM blog WHERE title IN (?,?) ORDER BY title DESC'
         ])
     
     def test_query_results_wrapper(self):
@@ -337,8 +337,8 @@ class ModelTests(BasePeeweeTestCase):
         self.assertTrue(qr._populated)
         
         self.assertQueriesEqual([
-            'INSERT INTO blog (title) VALUES ("a")', 
-            'INSERT INTO blog (title) VALUES ("b")', 
+            'INSERT INTO blog (title) VALUES (?)', 
+            'INSERT INTO blog (title) VALUES (?)', 
             'SELECT * FROM blog ORDER BY title ASC'
         ])
         
@@ -361,8 +361,8 @@ class ModelTests(BasePeeweeTestCase):
         self.assertEqual(blogs, [a, b])
         
         self.assertQueriesEqual([
-            'INSERT INTO blog (title) VALUES ("a")', 
-            'INSERT INTO blog (title) VALUES ("b")', 
+            'INSERT INTO blog (title) VALUES (?)', 
+            'INSERT INTO blog (title) VALUES (?)', 
             'SELECT * FROM blog ORDER BY title ASC'
         ])
         
@@ -380,10 +380,10 @@ class ModelTests(BasePeeweeTestCase):
         self.assertEqual(blogs, [a])
         
         self.assertQueriesEqual([
-            'INSERT INTO blog (title) VALUES ("a")', 
-            'INSERT INTO blog (title) VALUES ("b")', 
+            'INSERT INTO blog (title) VALUES (?)', 
+            'INSERT INTO blog (title) VALUES (?)', 
             'SELECT * FROM blog ORDER BY title ASC',
-            'SELECT * FROM blog WHERE title = "a" ORDER BY title ASC'
+            'SELECT * FROM blog WHERE title = ? ORDER BY title ASC'
         ])
         
         blogs = [b for b in sq]
@@ -414,8 +414,8 @@ class RelatedFieldTests(BasePeeweeTestCase):
         self.assertEqual(e.blog, a)
         
         self.assertQueriesEqual([
-            'INSERT INTO blog (title) VALUES ("a")', 
-            'INSERT INTO entry (content,blog_id,pub_date,title) VALUES ("",1,NULL,"e")'
+            'INSERT INTO blog (title) VALUES (?)', 
+            'INSERT INTO entry (content,blog_id,pub_date,title) VALUES (?,?,?,?)'
         ])
         
         e2 = Entry.get(id=e.id)
@@ -423,10 +423,10 @@ class RelatedFieldTests(BasePeeweeTestCase):
         self.assertEqual(e2.blog, a)
         
         self.assertQueriesEqual([
-            'INSERT INTO blog (title) VALUES ("a")', 
-            'INSERT INTO entry (content,blog_id,pub_date,title) VALUES ("",1,NULL,"e")',
-            'SELECT * FROM entry WHERE id = 1 LIMIT 1 OFFSET 0',
-            'SELECT * FROM blog WHERE id = 1'
+            'INSERT INTO blog (title) VALUES (?)', 
+            'INSERT INTO entry (content,blog_id,pub_date,title) VALUES (?,?,?,?)',
+            'SELECT * FROM entry WHERE id = ? LIMIT 1 OFFSET 0',
+            'SELECT * FROM blog WHERE id = ?'
         ])
     
     def test_foreign_keys(self):

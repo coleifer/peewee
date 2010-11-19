@@ -29,9 +29,9 @@ class Database(object):
     def close(self):
         self.conn.close()
     
-    def execute(self, sql, commit=False):
+    def execute(self, sql, params=None, commit=False):
         cursor = self.conn.cursor()
-        res = cursor.execute(sql)
+        res = cursor.execute(sql, params or ())
         if commit:
             self.conn.commit()
         logger.debug(sql)
@@ -47,13 +47,13 @@ class Database(object):
 
         for field in model_class._meta.fields.values():
             columns.append(field.to_sql())
+
+        query = framing % (model_class._meta.db_table, ', '.join(columns))
         
-        self.execute(
-            framing % (model_class._meta.db_table, ', '.join(columns)), True
-        )
+        self.execute(query, commit=True)
     
     def drop_table(self, model_class):
-        self.execute('DROP TABLE %s;' % model_class._meta.db_table, True)
+        self.execute('DROP TABLE %s;' % model_class._meta.db_table, commit=True)
 
 
 database = Database(DATABASE_NAME)
@@ -123,15 +123,15 @@ def mark_query_dirty(func):
 
 class BaseQuery(object):
     operations = {
-        'lt': '< %s',
-        'lte': '<= %s',
-        'gt': '> %s',
-        'gte': '>= %s',
-        'eq': '= %s',
-        'in': 'IN (%s)',
-        'is': 'IS %s',
-        'icontains': "LIKE '%%%s%%' ESCAPE '\\'",
-        'contains': "GLOB '*%s*'",
+        'lt': '< ?',
+        'lte': '<= ?',
+        'gt': '> ?',
+        'gte': '>= ?',
+        'eq': '= ?',
+        'in': 'IN (%s)', # special-case to list q-marks
+        'is': 'IS ?',
+        'icontains': "LIKE ? ESCAPE '\\'", # surround param with %'s
+        'contains': "GLOB ?", # surround param with *'s
     }
     query_separator = '__'
     requires_commit = True
@@ -153,10 +153,13 @@ class BaseQuery(object):
 
             field = self.query_context._meta.get_field_by_name(lhs)
             if op == 'in':
-                lookup_value = ','.join([field.lookup_value(op, o) for o in rhs])
+                lookup_value = [field.lookup_value(op, o) for o in rhs]
+                operation = self.operations[op] % (','.join(['?' for v in lookup_value]))
             else:
                 lookup_value = field.lookup_value(op, rhs)
-            parsed[field.name] = self.operations[op] % lookup_value
+                operation = self.operations[op]
+            
+            parsed[field.name] = (operation, lookup_value)
         
         return parsed
     
@@ -202,6 +205,7 @@ class BaseQuery(object):
             joins.insert(0, (self.model, None))
         
         where_with_alias = []
+        where_data = []
         computed_joins = []
 
         for i, (model, join_type) in enumerate(joins):
@@ -216,8 +220,10 @@ class BaseQuery(object):
                     if name == '__raw__':
                         where_with_alias.append(lookup)
                     else:
-                        where_with_alias.append('%s %s' % (
-                            self.combine_field(alias_map[model], name), lookup))
+                        operation, value = lookup
+                        where_data.append(value)
+                        combined = self.combine_field(alias_map[model], name)
+                        where_with_alias.append('%s %s' % (combined, operation))
             
             if i > 0:
                 from_model = joins[i-1][0]
@@ -246,12 +252,12 @@ class BaseQuery(object):
                     )
                 )
         
-        return computed_joins, where_with_alias, alias_map
+        return computed_joins, where_with_alias, where_data, alias_map
     
     def raw_execute(self):
-        query = self.sql()
+        query, params = self.sql()
         db = self.model._meta.get_database()
-        result = db.execute(query, self.requires_commit)
+        result = db.execute(query, params, self.requires_commit)
         return result
 
 
@@ -294,7 +300,7 @@ class SelectQuery(BaseQuery):
             self.query = 'COUNT(id)'
         
         db = self.model._meta.get_database()
-        res = db.execute(self.sql())
+        res = db.execute(*self.sql())
         
         self.query = tmp_query
         self._pagination = tmp_pagination
@@ -351,10 +357,11 @@ class SelectQuery(BaseQuery):
             raise TypeError('Unknown type encountered parsing select query')
     
     def sql(self):
-        joins, where, alias_map = self.compile_where()
+        joins, where, where_data, alias_map = self.compile_where()
         
         table = self.model._meta.db_table
 
+        params = []
         group_by = []
         
         if self.use_aliases():
@@ -391,6 +398,11 @@ class SelectQuery(BaseQuery):
             pieces.append(joins)
         if where:
             pieces.append('WHERE %s' % where)
+            for clause in where_data:
+                if isinstance(clause, (tuple, list)):
+                    params.extend(clause)
+                else:
+                    params.append(clause)
         if group_by:
             pieces.append('GROUP BY %s' % group_by)
         if having:
@@ -403,7 +415,7 @@ class SelectQuery(BaseQuery):
                 page -= 1
             pieces.append('LIMIT %d OFFSET %d' % (paginate_by, page * paginate_by))
         
-        return ' '.join(pieces)
+        return ' '.join(pieces), params
     
     def execute(self):
         if self._dirty:
@@ -427,26 +439,35 @@ class UpdateQuery(BaseQuery):
         super(UpdateQuery, self).__init__(model)
     
     def parse_update(self):
-        sets = []
+        sets = {}
         for k, v in self.update_query.iteritems():
             field = self.model._meta.get_field_by_name(k)
-            sets.append('%s=%s' % (k, field.lookup_value(None, v)))
+            sets[field.name] = field.lookup_value(None, v)
         
-        return ', '.join(sets)
+        return sets
     
     def sql(self):
-        joins, where, alias_map = self.compile_where()
+        joins, where, where_data, alias_map = self.compile_where()
         set_statement = self.parse_update()
+
+        params = []
+        update_params = []
+
+        for k, v in set_statement.iteritems():
+            params.append(v)
+            update_params.append('%s=?' % k)
         
-        update = 'UPDATE %s SET %s' % (self.model._meta.db_table, set_statement)
+        update = 'UPDATE %s SET %s' % (
+            self.model._meta.db_table, ', '.join(update_params))
         where = ' AND '.join(where)
         
         pieces = [update]
         
         if where:
             pieces.append('WHERE %s' % where)
+            params.extend(where_data)
         
-        return ' '.join(pieces)
+        return ' '.join(pieces), params
     
     def join(self, *args, **kwargs):
         raise AttributeError('Update queries do not support JOINs in sqlite')
@@ -461,7 +482,9 @@ class DeleteQuery(BaseQuery):
     Model.delete().where(some_field=some_val)
     """
     def sql(self):
-        joins, where, alias_map = self.compile_where()
+        joins, where, where_data, alias_map = self.compile_where()
+
+        params = []
         
         delete = 'DELETE FROM %s' % (self.model._meta.db_table)
         where = ' AND '.join(where)
@@ -470,8 +493,9 @@ class DeleteQuery(BaseQuery):
         
         if where:
             pieces.append('WHERE %s' % where)
+            params.extend(where_data)
         
-        return ' '.join(pieces)
+        return ' '.join(pieces), params
     
     def join(self, *args, **kwargs):
         raise AttributeError('Update queries do not support JOINs in sqlite')
@@ -495,7 +519,7 @@ class InsertQuery(BaseQuery):
         for k, v in self.insert_query.iteritems():
             field = self.model._meta.get_field_by_name(k)
             cols.append(k)
-            vals.append(str(field.lookup_value(None, v)))
+            vals.append(field.lookup_value(None, v))
         
         return cols, vals
     
@@ -503,9 +527,9 @@ class InsertQuery(BaseQuery):
         cols, vals = self.parse_insert()
         
         insert = 'INSERT INTO %s (%s) VALUES (%s)' % (
-            self.model._meta.db_table, ','.join(cols), ','.join(vals))
+            self.model._meta.db_table, ','.join(cols), ','.join('?' for v in vals))
         
-        return insert
+        return insert, vals
     
     def where(self, *args, **kwargs):
         raise AttributeError('Insert queries do not support WHERE clauses')
@@ -543,7 +567,7 @@ class Field(object):
         return '"%s" %s' % (self.name, rendered)
     
     def db_value(self, value):
-        return value or "NULL"
+        return value
     
     def python_value(self, value):
         return value
@@ -564,10 +588,12 @@ class CharField(Field):
         return value[:self.attributes['max_length']]
     
     def lookup_value(self, lookup_type, value):
-        if lookup_type in ('contains', 'icontains'):
-            return self.db_value(value)
+        if lookup_type == 'contains':
+            return '*%s*' % self.db_value(value)
+        elif lookup_type == 'icontains':
+            return '%%%s%%' % self.db_value(value)
         else:
-            return '"%s"' % self.db_value(value)
+            return self.db_value(value)
     
 
 class TextField(Field):
@@ -577,10 +603,12 @@ class TextField(Field):
         return value or ''
     
     def lookup_value(self, lookup_type, value):
-        if lookup_type in ('contains', 'icontains'):
-            return self.db_value(value)
+        if lookup_type == 'contains':
+            return '*%s*' % self.db_value(value)
+        elif lookup_type == 'icontains':
+            return '%%%s%%' % self.db_value(value)
         else:
-            return '"%s"' % self.db_value(value)
+            return self.db_value(value)
 
 
 class DateTimeField(Field):
@@ -592,9 +620,7 @@ class DateTimeField(Field):
             return datetime(*time.strptime(value, '%Y-%m-%d %H:%M:%S')[:6])
     
     def db_value(self, value):
-        if value is not None:
-            return '"%s"' % value.strftime('%Y-%m-%d %H:%M:%S')
-        return "NULL"
+        return value or None
 
 
 class IntegerField(Field):
@@ -679,7 +705,7 @@ class ForeignKeyField(IntegerField):
     def lookup_value(self, lookup_type, value):
         if isinstance(value, Model):
             return value.id
-        return value or "NULL"
+        return value or None
 
 
 class BaseModel(type):
