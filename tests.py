@@ -284,10 +284,10 @@ class ModelTests(BasePeeweeTestCase):
         b.save()
         
         self.assertQueriesEqual([
-            'INSERT INTO blog (title) VALUES (?)',
-            'INSERT INTO blog (title) VALUES (?)',
-            'UPDATE blog SET title=? WHERE id = ?',
-            'UPDATE blog SET title=? WHERE id = ?'
+            ('INSERT INTO blog (title) VALUES (?)', ['a']),
+            ('INSERT INTO blog (title) VALUES (?)', ['b']),
+            ('UPDATE blog SET title=? WHERE id = ?', ['a', 1]),
+            ('UPDATE blog SET title=? WHERE id = ?', ['b', 2]),
         ])
 
         all_blogs = list(Blog.select().order_by('id'))
@@ -301,9 +301,9 @@ class ModelTests(BasePeeweeTestCase):
         self.assertEqual(b2.id, b.id)
         
         self.assertQueriesEqual([
-            'INSERT INTO blog (title) VALUES (?)',
-            'INSERT INTO blog (title) VALUES (?)',
-            'SELECT * FROM blog WHERE title = ? LIMIT 1 OFFSET 0'
+            ('INSERT INTO blog (title) VALUES (?)', ['a']),
+            ('INSERT INTO blog (title) VALUES (?)', ['b']),
+            ('SELECT * FROM blog WHERE title = ? LIMIT 1 OFFSET 0', ['b']),
         ])
     
     def test_model_select(self):
@@ -318,11 +318,11 @@ class ModelTests(BasePeeweeTestCase):
         self.assertEqual(list(qr), [c, a])
         
         self.assertQueriesEqual([
-            'INSERT INTO blog (title) VALUES (?)', 
-            'INSERT INTO blog (title) VALUES (?)', 
-            'INSERT INTO blog (title) VALUES (?)', 
-            'SELECT * FROM blog ORDER BY title ASC', 
-            'SELECT * FROM blog WHERE title IN (?,?) ORDER BY title DESC'
+            ('INSERT INTO blog (title) VALUES (?)', ['a']),
+            ('INSERT INTO blog (title) VALUES (?)', ['b']),
+            ('INSERT INTO blog (title) VALUES (?)', ['c']),
+            ('SELECT * FROM blog ORDER BY title ASC', []),
+            ('SELECT * FROM blog WHERE title IN (?,?) ORDER BY title DESC', ['a', 'c']),
         ])
     
     def test_query_results_wrapper(self):
@@ -337,9 +337,9 @@ class ModelTests(BasePeeweeTestCase):
         self.assertTrue(qr._populated)
         
         self.assertQueriesEqual([
-            'INSERT INTO blog (title) VALUES (?)', 
-            'INSERT INTO blog (title) VALUES (?)', 
-            'SELECT * FROM blog ORDER BY title ASC'
+            ('INSERT INTO blog (title) VALUES (?)', ['a']),
+            ('INSERT INTO blog (title) VALUES (?)', ['b']),
+            ('SELECT * FROM blog ORDER BY title ASC', []),
         ])
         
         blogs = [b for b in qr]
@@ -361,9 +361,9 @@ class ModelTests(BasePeeweeTestCase):
         self.assertEqual(blogs, [a, b])
         
         self.assertQueriesEqual([
-            'INSERT INTO blog (title) VALUES (?)', 
-            'INSERT INTO blog (title) VALUES (?)', 
-            'SELECT * FROM blog ORDER BY title ASC'
+            ('INSERT INTO blog (title) VALUES (?)', ['a']),
+            ('INSERT INTO blog (title) VALUES (?)', ['b']),
+            ('SELECT * FROM blog ORDER BY title ASC', []),
         ])
         
         self.assertFalse(sq._dirty)
@@ -380,10 +380,10 @@ class ModelTests(BasePeeweeTestCase):
         self.assertEqual(blogs, [a])
         
         self.assertQueriesEqual([
-            'INSERT INTO blog (title) VALUES (?)', 
-            'INSERT INTO blog (title) VALUES (?)', 
-            'SELECT * FROM blog ORDER BY title ASC',
-            'SELECT * FROM blog WHERE title = ? ORDER BY title ASC'
+            ('INSERT INTO blog (title) VALUES (?)', ['a']),
+            ('INSERT INTO blog (title) VALUES (?)', ['b']),
+            ('SELECT * FROM blog ORDER BY title ASC', []),
+            ('SELECT * FROM blog WHERE title = ? ORDER BY title ASC', ['a']),
         ])
         
         blogs = [b for b in sq]
@@ -414,8 +414,8 @@ class RelatedFieldTests(BasePeeweeTestCase):
         self.assertEqual(e.blog, a)
         
         self.assertQueriesEqual([
-            'INSERT INTO blog (title) VALUES (?)', 
-            'INSERT INTO entry (content,blog_id,pub_date,title) VALUES (?,?,?,?)'
+            ('INSERT INTO blog (title) VALUES (?)', ['a']),
+            ('INSERT INTO entry (content,blog_id,pub_date,title) VALUES (?,?,?,?)', ['', a.id, None, 'e']),
         ])
         
         e2 = Entry.get(id=e.id)
@@ -423,10 +423,10 @@ class RelatedFieldTests(BasePeeweeTestCase):
         self.assertEqual(e2.blog, a)
         
         self.assertQueriesEqual([
-            'INSERT INTO blog (title) VALUES (?)', 
-            'INSERT INTO entry (content,blog_id,pub_date,title) VALUES (?,?,?,?)',
-            'SELECT * FROM entry WHERE id = ? LIMIT 1 OFFSET 0',
-            'SELECT * FROM blog WHERE id = ?'
+            ('INSERT INTO blog (title) VALUES (?)', ['a']),
+            ('INSERT INTO entry (content,blog_id,pub_date,title) VALUES (?,?,?,?)', ['', a.id, None, 'e']),
+            ('SELECT * FROM entry WHERE id = ? LIMIT 1 OFFSET 0', [e.id]),
+            ('SELECT * FROM blog WHERE id = ?', [a.id]),
         ])
     
     def test_foreign_keys(self):

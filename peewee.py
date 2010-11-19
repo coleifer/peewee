@@ -34,7 +34,7 @@ class Database(object):
         res = cursor.execute(sql, params or ())
         if commit:
             self.conn.commit()
-        logger.debug(sql)
+        logger.debug((sql, params))
         return res
     
     def last_insert_id(self):
