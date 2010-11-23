@@ -3,7 +3,8 @@ import logging
 import unittest
 
 import peewee
-from peewee import SelectQuery, InsertQuery, UpdateQuery, DeleteQuery, Node, Q, database
+from peewee import (SelectQuery, InsertQuery, UpdateQuery, DeleteQuery, Node, 
+        Q, database, parseq)
 
 
 class QueryLogHandler(logging.Handler):
@@ -386,6 +387,54 @@ class ModelTests(BasePeeweeTestCase):
         self.assertEqual(blogs, [a])
         
         self.assertEqual(len(self.queries()), 4)
+
+
+class NodeTests(BasePeeweeTestCase):
+    def test_simple(self):
+        node = Q(a='A') | Q(b='B')
+        self.assertEqual(unicode(node), 'a = A OR b = B')
+        
+        node = parseq(Q(a='A') | Q(b='B'))
+        self.assertEqual(unicode(node), '(a = A OR b = B)')
+        
+        node = Q(a='A') & Q(b='B')
+        self.assertEqual(unicode(node), 'a = A AND b = B')
+        
+        node = parseq(Q(a='A') & Q(b='B'))
+        self.assertEqual(unicode(node), '(a = A AND b = B)')
+    
+    def test_kwargs(self):
+        node = parseq(a='A', b='B')
+        self.assertEqual(unicode(node), '(a = A AND b = B)')
+    
+    def test_mixed(self):
+        node = parseq(Q(a='A'), Q(b='B'), c='C', d='D')
+        self.assertEqual(unicode(node), 'a = A AND b = B AND (c = C AND d = D)')
+        
+        node = parseq((Q(a='A') & Q(b='B')), c='C', d='D')
+        self.assertEqual(unicode(node), '(c = C AND d = D) AND (a = A AND b = B)')
+        
+        node = parseq((Q(a='A') | Q(b='B')), c='C', d='D')
+        self.assertEqual(unicode(node), '(c = C AND d = D) AND (a = A OR b = B)')
+    
+    def test_nesting(self):
+        node = parseq(
+            (Q(a='A') | Q(b='B')),
+            (Q(c='C') | Q(d='D'))
+        )
+        self.assertEqual(unicode(node), '(a = A OR b = B) AND (c = C OR d = D)')
+        
+        node = parseq(
+            (Q(a='A') | Q(b='B')) &
+            (Q(c='C') | Q(d='D'))
+        )
+        self.assertEqual(unicode(node), '((a = A OR b = B) AND (c = C OR d = D))')
+
+        node = parseq(
+            (Q(a='A') | Q(b='B')) |
+            (Q(c='C') | Q(d='D'))
+        )
+        self.assertEqual(unicode(node), '((a = A OR b = B) OR (c = C OR d = D))')
 
 
 class RelatedFieldTests(BasePeeweeTestCase):

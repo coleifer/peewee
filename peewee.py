@@ -143,14 +143,14 @@ class Node(object):
     def __and__(self, rhs):
         return self.connect(rhs, 'AND')
     
-    def to_sql(self):
+    def __unicode__(self):
         query = []
         nodes = []
         for child in self.children:
             if isinstance(child, Q):
-                query.append(child.to_sql())
+                query.append(unicode(child))
             elif isinstance(child, Node):
-                nodes.append('(%s)' % child.to_sql())
+                nodes.append('(%s)' % unicode(child))
         query.extend(nodes)
         connector = ' %s ' % self.connector
         return connector.join(query)
@@ -174,7 +174,7 @@ class Q(object):
         self.connect()
         return self.parent & rhs
     
-    def to_sql(self):
+    def __unicode__(self):
         bits = ['%s = %s' % (k, v) for k, v in self.query.items()]
         if len(self.query.items()) > 1:
             connector = ' AND '
