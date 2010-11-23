@@ -154,6 +154,14 @@ class QueryTests(BasePeeweeTestCase):
         
         sq = SelectQuery(Blog, '*').where(~(Q(title='a') | Q(title='b')))
         self.assertEqual(sq.sql(), ('SELECT * FROM blog WHERE (NOT (title = ? OR title = ?))', ['a', 'b']))
+        
+        # chaining?
+        sq = SelectQuery(Blog, '*').where(~(Q(title='a') | Q(id=1))).where(Q(id=3))
+        self.assertEqual(sq.sql(), ('SELECT * FROM blog WHERE (NOT (title = ? OR id = ?)) AND id = ?', ['a', 1, 3]))
+        
+        # mix n'match?
+        sq = SelectQuery(Blog, '*').where(Q(title='a') | Q(id=1)).where(~(Q(title='c') | Q(id=3)), title='b')
+        self.assertEqual(sq.sql(), ('SELECT * FROM blog WHERE (title = ? OR id = ?) AND (NOT (title = ? OR id = ?)) AND title = ?', ['a', 1, 'c', 3, 'b']))
 
     def test_select_with_models(self):
         sq = SelectQuery(Blog, {Blog: '*'})
