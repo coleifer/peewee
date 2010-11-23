@@ -112,8 +112,17 @@ class QueryTests(BasePeeweeTestCase):
         sq = SelectQuery(Blog, '*').where(title='a', id=1)
         self.assertEqual(sq.sql(), ('SELECT * FROM blog WHERE (id = ? AND title = ?)', [1, 'a']))
         
+        # check that chaining works as expected
+        sq = SelectQuery(Blog, '*').where(title='a').where(id=1)
+        self.assertEqual(sq.sql(), ('SELECT * FROM blog WHERE title = ? AND id = ?', ['a', 1]))
+        
+        # check that IN query special-case works
         sq = SelectQuery(Blog, '*').where(title__in=['a', 'b'])
         self.assertEqual(sq.sql(), ('SELECT * FROM blog WHERE title IN (?,?)', ['a', 'b']))
+    
+    def test_select_with_q(self):
+        sq = SelectQuery(Blog, '*').where(Q(title='a') | Q(id='1'))
+        self.assertEqual(sq.sql(), ('SELECT * FROM blog WHERE (title = ? OR id = ?)', ['a', 1]))
 
     def test_select_with_models(self):
         sq = SelectQuery(Blog, {Blog: '*'})
@@ -468,6 +477,7 @@ class NodeTests(BasePeeweeTestCase):
             )
         ), a='A', b='B')
         self.assertEqual(unicode(node), '(a = A AND b = B) AND ((c = C OR d = D) OR ((e = E AND f = F) OR (h = H AND g = G)))')
+
 
 class RelatedFieldTests(BasePeeweeTestCase):
     def get_common_objects(self):

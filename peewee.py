@@ -330,7 +330,7 @@ class BaseQuery(object):
                 query.append(parsed)
                 query_data.extend(data)
             elif isinstance(child, Node):
-                parsed, data = self.parse_node(node, model, alias)
+                parsed, data = self.parse_node(child, model, alias)
                 query.append('(%s)' % parsed)
                 query_data.extend(data)
         query.extend(nodes)
