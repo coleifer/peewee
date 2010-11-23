@@ -110,3 +110,24 @@ this will select non-deleted tweets from active users.  the first .where() and
 .order_by() occur when Tweet is the current *query context*.  As soon as the
 join is evaluated, User becomes the *query context* and so the following
 where() pertains to the User model.
+
+
+now with q objects
+------------------
+
+for users familiar with django's orm, I've implemented OR queries and complex
+query nesting using similar notation::
+
+    User.select().where(
+        Q(is_superuser = True) |
+        Q(is_staff = True)
+    )
+
+    SomeModel.select().where(
+        (Q(a='A') | Q(b='B')) &
+        (Q(c='C') | Q(d='D'))
+    )
+
+    # generates something like:
+    # SELECT * FROM some_obj 
+    # WHERE ((a = "A" OR b = "B") AND (c = "C" OR d = "D"))
