@@ -3,7 +3,7 @@ import logging
 import unittest
 
 import peewee
-from peewee import SelectQuery, InsertQuery, UpdateQuery, DeleteQuery, database
+from peewee import SelectQuery, InsertQuery, UpdateQuery, DeleteQuery, Node, Q, database
 
 
 class QueryLogHandler(logging.Handler):
@@ -73,6 +73,17 @@ class BasePeeweeTestCase(unittest.TestCase):
     def assertQueriesEqual(self, queries):
         self.assertEqual(queries, self.queries())
     
+    def assertNodeEqual(self, lhs, rhs):
+        for i, lchild in enumerate(lhs.children):
+            rchild = rhs.children[i]
+            self.assertEqual(type(lchild), type(rchild))
+            if isinstance(lchild, Q):
+                self.assertEqual(lchild.query, rchild.query)
+            elif isinstance(lchild, Node):
+                self.assertNodeEqual(lchild, rchild)
+            else:
+                raise TypeError("Invalid type passed to assertNodeEqual")
+    
     def create_blog(self, **kwargs):
         blog = Blog(**kwargs)
         blog.save()
@@ -96,14 +107,12 @@ class QueryTests(BasePeeweeTestCase):
 
         sq = SelectQuery(Blog, '*').where(title='a')
         self.assertEqual(sq.sql(), ('SELECT * FROM blog WHERE title = ?', ['a']))
-        self.assertEqual(sq._where, {Blog: {'title': ('= ?', 'a')}})
         
-        sq = SelectQuery(Blog, '*').where(title='a').where(id=1)
-        self.assertEqual(sq._where, {Blog: {'title': ('= ?', 'a'), 'id': ('= ?', 1)}})
+        sq = SelectQuery(Blog, '*').where(title='a', id=1)
+        self.assertEqual(sq.sql(), ('SELECT * FROM blog WHERE (id = ? AND title = ?)', [1, 'a']))
         
         sq = SelectQuery(Blog, '*').where(title__in=['a', 'b'])
         self.assertEqual(sq.sql(), ('SELECT * FROM blog WHERE title IN (?,?)', ['a', 'b']))
-        self.assertEqual(sq._where, {Blog: {'title': ('IN (?,?)', ['a', 'b'])}})
 
     def test_select_with_models(self):
         sq = SelectQuery(Blog, {Blog: '*'})
@@ -123,31 +132,18 @@ class QueryTests(BasePeeweeTestCase):
 
     def test_selecting_across_joins(self):
         sq = SelectQuery(Entry, '*').where(title='a1').join(Blog).where(title='a')
-        self.assertEqual(sq._where, {
-            Entry: {'title': ('= ?', 'a1')},
-            Blog: {'title': ('= ?', 'a')}
-        })
         self.assertEqual(sq._joins, [(Blog, None)])
         self.assertEqual(sq.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t1.title = ? AND t2.title = ?', ['a1', 'a']))
         
         sq = SelectQuery(Blog, '*').join(Entry).where(title='a1')        
-        self.assertEqual(sq._where, {
-            Entry: {'title': ('= ?', 'a1')}
-        })
         self.assertEqual(sq._joins, [(Entry, None)])
         self.assertEqual(sq.sql(), ('SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id WHERE t2.title = ?', ['a1']))
 
         sq = SelectQuery(EntryTag, '*').join(Entry).join(Blog).where(title='a')        
-        self.assertEqual(sq._where, {
-            Blog: {'title': ('= ?', 'a')}
-        })
         self.assertEqual(sq._joins, [(Entry, None), (Blog, None)])
         self.assertEqual(sq.sql(), ('SELECT t1.* FROM entrytag AS t1 INNER JOIN entry AS t2 ON t1.entry_id = t2.id\nINNER JOIN blog AS t3 ON t2.blog_id = t3.id WHERE t3.title = ?', ['a']))
         
         sq = SelectQuery(Blog, '*').join(Entry).join(EntryTag).where(tag='t2')
-        self.assertEqual(sq._where, {
-            EntryTag: {'tag': ('= ?', 't2')}
-        })
         self.assertEqual(sq._joins, [(Entry, None), (EntryTag, None)])
         self.assertEqual(sq.sql(), ('SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id\nINNER JOIN entrytag AS t3 ON t2.id = t3.entry_id WHERE t3.tag = ?', ['t2']))
     
@@ -511,7 +507,7 @@ class RelatedFieldTests(BasePeeweeTestCase):
     
     def test_multiple_in(self):
         sq = Blog.select().where(title__in=['a', 'b']).join(Entry).where(title__in=['c', 'd'], content='foo')
-        self.assertEqual(sq.sql(), ('SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id WHERE t1.title IN (?,?) AND t2.content = ? AND t2.title IN (?,?)', ['a', 'b', 'foo', 'c', 'd']))
+        self.assertEqual(sq.sql(), ('SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id WHERE t1.title IN (?,?) AND (t2.content = ? AND t2.title IN (?,?))', ['a', 'b', 'foo', 'c', 'd']))
 
     def test_ordering_across_joins(self):
         a, a1, a2, b, b1, b2, t1, t2 = self.get_common_objects()

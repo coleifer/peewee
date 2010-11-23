@@ -241,9 +241,6 @@ class BaseQuery(object):
     
     @mark_query_dirty
     def where(self, *args, **kwargs):
-        #if kwargs:
-        #    parsed = self.parse_query_args(**kwargs)
-        #    self._where[self.query_context].update(**parsed)
         self._where[self.query_context] = parseq(*args, **kwargs)
         return self
     
@@ -315,14 +312,6 @@ class BaseQuery(object):
 
         for (model, join_type) in joins:
             if model in self._where:
-                #for name, lookup in self._where[model].iteritems():
-                #    if name == '__raw__':
-                #        where_with_alias.append(lookup)
-                #    else:
-                #        operation, value = lookup
-                #        where_data.append(value)
-                #        combined = self.combine_field(alias_map[model], name)
-                #        where_with_alias.append('%s %s' % (combined, operation))
                 node = self._where[model]
                 query, data = self.parse_node(node, model, alias_map[model])
                 where_with_alias.append(query)
@@ -363,11 +352,6 @@ class BaseQuery(object):
             query = query[0]
         
         return query, query_data
-        #bits = ['%s = %s' % (k, v) for k, v in q.query.items()]
-        #if len(q.query.items()) > 1:
-        #    connector = ' AND '
-        #    return '(%s)' % connector.join(bits)
-        #return bits[0]
     
     def raw_execute(self):
         query, params = self.sql()
