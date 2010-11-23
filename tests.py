@@ -204,6 +204,13 @@ class QueryTests(BasePeeweeTestCase):
         sq = SelectQuery(Blog).order_by('id')
         self.assertEqual([x.title for x in sq], ['A', 'B'])
     
+    def test_update_with_q(self):
+        uq = UpdateQuery(Blog, title='A').where(Q(id=1))
+        self.assertEqual(uq.sql(), ('UPDATE blog SET title=? WHERE id = ?', ['A', 1]))
+        
+        uq = UpdateQuery(Blog, title='A').where(Q(id=1) | Q(id=3))
+        self.assertEqual(uq.sql(), ('UPDATE blog SET title=? WHERE (id = ? OR id = ?)', ['A', 1, 3]))
+    
     def test_delete(self):
         InsertQuery(Blog, title='a').execute()
         InsertQuery(Blog, title='b').execute()
