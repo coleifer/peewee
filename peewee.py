@@ -120,6 +120,82 @@ def mark_query_dirty(func):
         return func(self, *args, **kwargs)
     return inner
 
+class Node(object):
+    def __init__(self, connector='AND'):
+        self.connector = connector
+        self.children = []
+    
+    def connect(self, rhs, connector):
+        if isinstance(rhs, Q):
+            self.connector = connector
+            self.children.append(rhs)
+            return self
+        elif isinstance(rhs, Node):
+            p = Node()
+            p.connector = connector
+            p.children.append(self)
+            p.children.append(rhs)
+            return p
+    
+    def __or__(self, rhs):
+        return self.connect(rhs, 'OR')
+
+    def __and__(self, rhs):
+        return self.connect(rhs, 'AND')
+    
+    def to_sql(self):
+        query = []
+        nodes = []
+        for child in self.children:
+            if isinstance(child, Q):
+                query.append(child.to_sql())
+            elif isinstance(child, Node):
+                nodes.append('(%s)' % child.to_sql())
+        query.extend(nodes)
+        connector = ' %s ' % self.connector
+        return connector.join(query)
+    
+
+class Q(object):
+    def __init__(self, **kwargs):
+        self.query = kwargs
+        self.parent = None
+    
+    def connect(self):
+        if self.parent is None:
+            self.parent = Node()
+            self.parent.children.append(self)
+    
+    def __or__(self, rhs):
+        self.connect()
+        return self.parent | rhs
+    
+    def __and__(self, rhs):
+        self.connect()
+        return self.parent & rhs
+    
+    def to_sql(self):
+        bits = ['%s = %s' % (k, v) for k, v in self.query.items()]
+        if len(self.query.items()) > 1:
+            connector = ' AND '
+            return '(%s)' % connector.join(bits)
+        return bits[0]
+
+
+def parseq(*args, **kwargs):
+    node = Node()
+    
+    for piece in args:
+        if isinstance(piece, (Q, Node)):
+            node.children.append(piece)
+        else:
+            raise TypeError('Unknown object: %s', piece)
+
+    if kwargs:
+        node.children.append(Q(**kwargs))
+
+    return node
+
 
 class BaseQuery(object):
     operations = {
@@ -143,7 +219,7 @@ class BaseQuery(object):
         self._joins = []
         self._dirty = True
     
-    def parse_query_args(self, **query):
+    def parse_query_args(self, model, **query):
         parsed = {}
         for lhs, rhs in query.iteritems():
             if self.query_separator in lhs:
@@ -151,7 +227,7 @@ class BaseQuery(object):
             else:
                 op = 'eq'
 
-            field = self.query_context._meta.get_field_by_name(lhs)
+            field = model._meta.get_field_by_name(lhs)
             if op == 'in':
                 lookup_value = [field.lookup_value(op, o) for o in rhs]
                 operation = self.operations[op] % (','.join(['?' for v in lookup_value]))
@@ -164,16 +240,11 @@ class BaseQuery(object):
         return parsed
     
     @mark_query_dirty
-    def where(self, query='', **kwargs):
-        self._where.setdefault(self.query_context, {})
-        if query != '':
-            if '__raw__' in self._where[self.query_context]:
-                raise ValueError('A raw query has already been specified')
-            self._where[self.query_context]['__raw__'] = query
-        if kwargs:
-            parsed = self.parse_query_args(**kwargs)
-            self._where[self.query_context].update(**parsed)
-        
+    def where(self, *args, **kwargs):
+        #if kwargs:
+        #    parsed = self.parse_query_args(**kwargs)
+        #    self._where[self.query_context].update(**parsed)
+        self._where[self.query_context] = parseq(*args, **kwargs)
         return self
     
     @mark_query_dirty
@@ -215,16 +286,6 @@ class BaseQuery(object):
             else:
                 alias_map[model] = ''
             
-            if model in self._where:
-                for name, lookup in self._where[model].iteritems():
-                    if name == '__raw__':
-                        where_with_alias.append(lookup)
-                    else:
-                        operation, value = lookup
-                        where_data.append(value)
-                        combined = self.combine_field(alias_map[model], name)
-                        where_with_alias.append('%s %s' % (combined, operation))
-            
             if i > 0:
                 from_model = joins[i-1][0]
                 field = from_model._meta.get_related_field_for_model(model)
@@ -251,8 +312,62 @@ class BaseQuery(object):
                         self.combine_field(alias_map[model], right_field),
                     )
                 )
+
+        for (model, join_type) in joins:
+            if model in self._where:
+                #for name, lookup in self._where[model].iteritems():
+                #    if name == '__raw__':
+                #        where_with_alias.append(lookup)
+                #    else:
+                #        operation, value = lookup
+                #        where_data.append(value)
+                #        combined = self.combine_field(alias_map[model], name)
+                #        where_with_alias.append('%s %s' % (combined, operation))
+                node = self._where[model]
+                query, data = self.parse_node(node, model, alias_map[model])
+                where_with_alias.append(query)
+                where_data.extend(data)
         
         return computed_joins, where_with_alias, where_data, alias_map
+    
+    def parse_node(self, node, model, alias):
+        query = []
+        query_data = []
+        nodes = []
+        for child in node.children:
+            if isinstance(child, Q):
+                parsed, data = self.parse_q(child, model, alias)
+                query.append(parsed)
+                query_data.extend(data)
+            elif isinstance(child, Node):
+                parsed, data = self.parse_node(node, model, alias)
+                query.append('(%s)' % parsed)
+                query_data.extend(data)
+        query.extend(nodes)
+        connector = ' %s ' % node.connector
+        return connector.join(query), query_data
+    
+    def parse_q(self, q, model, alias):
+        query = []
+        query_data = []
+        parsed = self.parse_query_args(model, **q.query)
+        for (name, lookup) in parsed.iteritems():
+            operation, value = lookup
+            query_data.append(value)
+            combined = self.combine_field(alias, name)
+            query.append('%s %s' % (combined, operation))
+        
+        if len(query) > 1:
+            query = '(%s)' % (' AND '.join(query))
+        else:
+            query = query[0]
+        
+        return query, query_data
+        #bits = ['%s = %s' % (k, v) for k, v in q.query.items()]
+        #if len(q.query.items()) > 1:
+        #    connector = ' AND '
+        #    return '(%s)' % connector.join(bits)
+        #return bits[0]
     
     def raw_execute(self):
         query, params = self.sql()
