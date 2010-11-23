@@ -33,7 +33,7 @@ Examples::
 what it doesn't do (yet?)
 -------------------------
 
-OR queries
+NOT queries
 
 
 model definitions and schema creation
