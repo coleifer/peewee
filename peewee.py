@@ -241,7 +241,8 @@ class BaseQuery(object):
     
     @mark_query_dirty
     def where(self, *args, **kwargs):
-        self._where[self.query_context] = parseq(*args, **kwargs)
+        self._where.setdefault(self.query_context, [])
+        self._where[self.query_context].append(parseq(*args, **kwargs))
         return self
     
     @mark_query_dirty
@@ -312,10 +313,10 @@ class BaseQuery(object):
 
         for (model, join_type) in joins:
             if model in self._where:
-                node = self._where[model]
-                query, data = self.parse_node(node, model, alias_map[model])
-                where_with_alias.append(query)
-                where_data.extend(data)
+                for node in self._where[model]:
+                    query, data = self.parse_node(node, model, alias_map[model])
+                    where_with_alias.append(query)
+                    where_data.extend(data)
         
         return computed_joins, where_with_alias, where_data, alias_map
     
