@@ -176,7 +176,26 @@ class QueryTests(BasePeeweeTestCase):
         self.assertEqual(sq.sql(), ('SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id\nINNER JOIN entrytag AS t3 ON t2.id = t3.entry_id WHERE t3.tag = ?', ['t2']))
     
     def test_selecting_across_joins_with_q(self):
-        pass
+        sq = SelectQuery(Entry, '*').where(Q(title='a') | Q(id=1)).join(Blog).where(title='e')
+        self.assertEqual(sq.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE (t1.title = ? OR t1.id = ?) AND t2.title = ?', ['a', 1, 'e']))
+        
+        sq = SelectQuery(Entry, '*').where(Q(title='a') | Q(id=1) | Q(title='b')).join(Blog).where(title='e')
+        self.assertEqual(sq.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE (t1.title = ? OR t1.id = ? OR t1.title = ?) AND t2.title = ?', ['a', 1, 'b', 'e']))
+
+        # test simple chaining
+        sq = SelectQuery(Entry, '*').where(Q(title='a') | Q(id=1)).where(Q(title='b')).join(Blog).where(title='e')
+        self.assertEqual(sq.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE (t1.title = ? OR t1.id = ?) AND t1.title = ? AND t2.title = ?', ['a', 1, 'b', 'e']))
+        
+        sq = SelectQuery(Entry, '*').where(Q(title='a') | Q(id=1)).where(title='b').join(Blog).where(title='e')
+        self.assertEqual(sq.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE (t1.title = ? OR t1.id = ?) AND t1.title = ? AND t2.title = ?', ['a', 1, 'b', 'e']))
+
+        # test q on both models
+        sq = SelectQuery(Entry, '*').where(Q(title='a') | Q(id=1)).join(Blog).where(Q(title='e') | Q(id=2))
+        self.assertEqual(sq.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE (t1.title = ? OR t1.id = ?) AND (t2.title = ? OR t2.id = ?)', ['a', 1, 'e', 2]))
+    
+        # test q on both with nesting
+        sq = SelectQuery(Entry, '*').where(Q(title='a') | Q(id=1)).join(Blog).where((Q(title='e') | Q(id=2)) & (Q(title='f') | Q(id=3)))
+        self.assertEqual(sq.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE (t1.title = ? OR t1.id = ?) AND ((t2.title = ? OR t2.id = ?) AND (t2.title = ? OR t2.id = ?))', ['a', 1, 'e', 2, 'f', 3]))
     
     def test_selecting_with_aggregation(self):
         sq = SelectQuery(Blog, 't1.*, COUNT(t2.id) AS count').group_by('id').join(Entry)
