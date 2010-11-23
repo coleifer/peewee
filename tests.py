@@ -435,7 +435,39 @@ class NodeTests(BasePeeweeTestCase):
             (Q(c='C') | Q(d='D'))
         )
         self.assertEqual(unicode(node), '((a = A OR b = B) OR (c = C OR d = D))')
-
+    
+    def test_weird_nesting(self):
+        node = parseq(
+            Q(a='A', b='B'),
+            (
+                Q(c='C') |
+                Q(d='D')
+            )
+        )
+        self.assertEqual(unicode(node), '(a = A AND b = B) AND (c = C OR d = D)')
+        
+        node = parseq((
+            (
+                Q(c='C') |
+                Q(d='D')
+            ) |
+            (
+                Q(e='E', f='F')
+            )
+        ), a='A', b='B')
+        self.assertEqual(unicode(node), '(a = A AND b = B) AND (c = C OR d = D OR (e = E AND f = F))')
+        
+        node = parseq((
+            (
+                Q(c='C') |
+                Q(d='D')
+            ) |
+            (
+                Q(e='E', f='F') |
+                Q(g='G', h='H')
+            )
+        ), a='A', b='B')
+        self.assertEqual(unicode(node), '(a = A AND b = B) AND ((c = C OR d = D) OR ((e = E AND f = F) OR (h = H AND g = G)))')
 
 class RelatedFieldTests(BasePeeweeTestCase):
     def get_common_objects(self):
