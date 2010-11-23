@@ -10,33 +10,71 @@ logger = logging.getLogger('peewee.logger')
 
 class Database(object):
 	def connect(self, host='localhost', port=3306, dbname='test', username='root', password=None):
-		self.conn = oursql.connect(host=host,
+		self._conn_info = dict(host=host,
 									port=port,
 									db=dbname,
 									user=username,
 									passwd=password)
+		
+		self._conn = None
+		self.reconnect()
 	
 	def close(self):
-		self.conn.close()
+		self._conn.close()
+	
+	def reconnect(self):
+		if not self._conn_info:
+			raise Exception, "Cannot find connection info for MySQL."
+		
+		if self._conn:
+			try:
+				self._conn.close()
+			except:
+				pass
+			finally:
+				self._conn = None
+		
+		self._conn = oursql.connect(**self._conn_info)
+	
+	def ensure_connected(self):
+		if not self._conn:
+			self.reconnect()
+		
+		try:
+			self._conn.ping()
+		except:
+			self.reconnect()
 	
 	def execute(self, sql, sql_params=(), commit=False):
+		self.ensure_connected()
+		
 		if isinstance(sql_params, list):
 			sql_params = tuple(sql_params)
-			
-		cursor = self.conn.cursor()
-		res = cursor.execute(sql, params=sql_params)
-		if commit:
-			self.conn.commit()
+		
+		try:
+			cursor = self._conn.cursor()
+			res = cursor.execute(sql, params=sql_params)
+			if commit:
+				self._conn.commit()
+		except OperationalError, ex:
+			if ex.errno == 2006:
+				self.reconnect()
 		
 		logger.debug(sql, sql_params)
 		
 		return res, cursor
 	
 	def fetchall(self, *args, **kwargs):
+		model = None
+		
+		if 'model' in kwargs:
+			model = kwargs['model']
+			del kwargs['model']
+		
 		result, cursor = self.execute(*args, **kwargs)
 		
 		if cursor:
-			return QueryResultWrapper(model=None, cursor=cursor)
+			return QueryResultWrapper(model=model, cursor=cursor)
 		
 		return None
 	
@@ -697,7 +735,7 @@ class BooleanField(Field):
 	field_template = "%(db_field)s NOT NULL"
 	
 	def db_value(self, value):
-		return bool(value)
+		return int(value)
 	
 	def python_value(self, value):
 		return bool(value or 0)
@@ -849,6 +887,7 @@ class BaseModel(type):
 				if isinstance(attr, PrimaryKeyField):
 					has_primary_key = True
 					_meta.primary_key = attr
+			
 		
 		if not has_primary_key:
 			pk = PrimaryKeyField()
@@ -888,8 +927,20 @@ class Model(object):
 			yield field_name
 	
 	def get_field_dict(self):
+		def get_field_pair(f):
+			val = getattr(self, f.name)
+			
+			if val is None and 'default' in f.attributes:
+				try:
+					val = f.attributes['default']()
+				except TypeError:
+					val = f.attributes['default']
+			
+			return (f.name, val)
+		
 		field_val = lambda f: (f.name, getattr(self, f.name))
-		pairs = map(field_val, self._meta.fields.values())
+		pairs = map(get_field_pair, self._meta.fields.values())
+		
 		return dict(pairs)
 	
 	@classmethod
@@ -942,8 +993,9 @@ class Model(object):
 	
 	def save(self):
 		field_dict = self.get_field_dict()
-		field_dict.pop('id')
-		if self.id:
+		if self.primary_key:
+			field_dict.pop(self._meta.primary_key.name)
+			
 			update = self.update(**field_dict).where(id=self.id)
 			update.execute()
 		else:
