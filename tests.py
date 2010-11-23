@@ -142,6 +142,19 @@ class QueryTests(BasePeeweeTestCase):
         sq = SelectQuery(Blog, '*').where(Q(title='a') | Q(id=1)).where((Q(title='c') | Q(id=3)), title='b')
         self.assertEqual(sq.sql(), ('SELECT * FROM blog WHERE (title = ? OR id = ?) AND (title = ? OR id = ?) AND title = ?', ['a', 1, 'c', 3, 'b']))
 
+    def test_select_with_negation(self):
+        sq = SelectQuery(Blog, '*').where(~Q(title='a'))
+        self.assertEqual(sq.sql(), ('SELECT * FROM blog WHERE NOT title = ?', ['a']))
+        
+        sq = SelectQuery(Blog, '*').where(~Q(title='a') | Q(title='b'))
+        self.assertEqual(sq.sql(), ('SELECT * FROM blog WHERE (NOT title = ? OR title = ?)', ['a', 'b']))
+        
+        sq = SelectQuery(Blog, '*').where(~Q(title='a') | ~Q(title='b'))
+        self.assertEqual(sq.sql(), ('SELECT * FROM blog WHERE (NOT title = ? OR NOT title = ?)', ['a', 'b']))
+        
+        sq = SelectQuery(Blog, '*').where(~(Q(title='a') | Q(title='b')))
+        self.assertEqual(sq.sql(), ('SELECT * FROM blog WHERE (NOT (title = ? OR title = ?))', ['a', 'b']))
+
     def test_select_with_models(self):
         sq = SelectQuery(Blog, {Blog: '*'})
         self.assertEqual(sq.sql(), ('SELECT * FROM blog', []))

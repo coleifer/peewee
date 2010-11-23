@@ -124,6 +124,7 @@ class Node(object):
     def __init__(self, connector='AND'):
         self.connector = connector
         self.children = []
+        self.negated = False
     
     def connect(self, rhs, connector):
         if isinstance(rhs, Q):
@@ -143,6 +144,10 @@ class Node(object):
     def __and__(self, rhs):
         return self.connect(rhs, 'AND')
     
+    def __invert__(self):
+        self.negated = not self.negated
+        return self
+    
     def __unicode__(self):
         query = []
         nodes = []
@@ -153,13 +158,17 @@ class Node(object):
                 nodes.append('(%s)' % unicode(child))
         query.extend(nodes)
         connector = ' %s ' % self.connector
-        return connector.join(query)
+        query = connector.join(query)
+        if self.negated:
+            query = 'NOT %s' % query
+        return query
     
 
 class Q(object):
     def __init__(self, **kwargs):
         self.query = kwargs
         self.parent = None
+        self.negated = False
     
     def connect(self):
         if self.parent is None:
@@ -174,12 +183,20 @@ class Q(object):
         self.connect()
         return self.parent & rhs
     
+    def __invert__(self):
+        self.negated = not self.negated
+        return self
+    
     def __unicode__(self):
         bits = ['%s = %s' % (k, v) for k, v in self.query.items()]
         if len(self.query.items()) > 1:
             connector = ' AND '
-            return '(%s)' % connector.join(bits)
-        return bits[0]
+            expr = '(%s)' % connector.join(bits)
+        else:
+            expr = bits[0]
+        if self.negated:
+            expr = 'NOT %s' % expr
+        return expr
 
 
 def parseq(*args, **kwargs):
@@ -204,6 +221,7 @@ class BaseQuery(object):
         'gt': '> ?',
         'gte': '>= ?',
         'eq': '= ?',
+        'ne': '!= ?', # watch yourself with this one
         'in': 'IN (%s)', # special-case to list q-marks
         'is': 'IS ?',
         'icontains': "LIKE ? ESCAPE '\\'", # surround param with %'s
@@ -335,7 +353,10 @@ class BaseQuery(object):
                 query_data.extend(data)
         query.extend(nodes)
         connector = ' %s ' % node.connector
-        return connector.join(query), query_data
+        query = connector.join(query)
+        if node.negated:
+            query = 'NOT (%s)' % query
+        return query, query_data
     
     def parse_q(self, q, model, alias):
         query = []
@@ -351,6 +372,9 @@ class BaseQuery(object):
             query = '(%s)' % (' AND '.join(query))
         else:
             query = query[0]
+        
+        if q.negated:
+            query = 'NOT %s' % query
         
         return query, query_data
     
