@@ -301,6 +301,12 @@ class BaseQuery(object):
                 alias_map[model] = 't%d' % alias_count
             else:
                 alias_map[model] = ''
+
+            if model in self._where:
+                for node in self._where[model]:
+                    query, data = self.parse_node(node, model, alias_map[model])
+                    where_with_alias.append(query)
+                    where_data.extend(data)
             
             if i > 0:
                 from_model = joins[i-1][0]
@@ -328,13 +334,6 @@ class BaseQuery(object):
                         self.combine_field(alias_map[model], right_field),
                     )
                 )
-
-        for (model, join_type) in joins:
-            if model in self._where:
-                for node in self._where[model]:
-                    query, data = self.parse_node(node, model, alias_map[model])
-                    where_with_alias.append(query)
-                    where_data.extend(data)
         
         return computed_joins, where_with_alias, where_data, alias_map
     
