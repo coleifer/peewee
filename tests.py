@@ -121,8 +121,26 @@ class QueryTests(BasePeeweeTestCase):
         self.assertEqual(sq.sql(), ('SELECT * FROM blog WHERE title IN (?,?)', ['a', 'b']))
     
     def test_select_with_q(self):
-        sq = SelectQuery(Blog, '*').where(Q(title='a') | Q(id='1'))
+        sq = SelectQuery(Blog, '*').where(Q(title='a') | Q(id=1))
         self.assertEqual(sq.sql(), ('SELECT * FROM blog WHERE (title = ? OR id = ?)', ['a', 1]))
+        
+        sq = SelectQuery(Blog, '*').where(Q(title='a') | Q(id=1) | Q(id=3))
+        self.assertEqual(sq.sql(), ('SELECT * FROM blog WHERE (title = ? OR id = ? OR id = ?)', ['a', 1, 3]))
+        
+        # test simple chaining
+        sq = SelectQuery(Blog, '*').where(Q(title='a') | Q(id=1)).where(Q(id=3))
+        self.assertEqual(sq.sql(), ('SELECT * FROM blog WHERE (title = ? OR id = ?) AND id = ?', ['a', 1, 3]))
+        
+        sq = SelectQuery(Blog, '*').where(Q(title='a') | Q(id=1)).where(id=3)
+        self.assertEqual(sq.sql(), ('SELECT * FROM blog WHERE (title = ? OR id = ?) AND id = ?', ['a', 1, 3]))
+        
+        # test chaining with Q objects
+        sq = SelectQuery(Blog, '*').where(Q(title='a') | Q(id=1)).where((Q(title='c') | Q(id=3)))
+        self.assertEqual(sq.sql(), ('SELECT * FROM blog WHERE (title = ? OR id = ?) AND (title = ? OR id = ?)', ['a', 1, 'c', 3]))
+
+        # test mixing it all up
+        sq = SelectQuery(Blog, '*').where(Q(title='a') | Q(id=1)).where((Q(title='c') | Q(id=3)), title='b')
+        self.assertEqual(sq.sql(), ('SELECT * FROM blog WHERE (title = ? OR id = ?) AND (title = ? OR id = ?) AND title = ?', ['a', 1, 'c', 3, 'b']))
 
     def test_select_with_models(self):
         sq = SelectQuery(Blog, {Blog: '*'})
@@ -156,6 +174,9 @@ class QueryTests(BasePeeweeTestCase):
         sq = SelectQuery(Blog, '*').join(Entry).join(EntryTag).where(tag='t2')
         self.assertEqual(sq._joins, [(Entry, None), (EntryTag, None)])
         self.assertEqual(sq.sql(), ('SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id\nINNER JOIN entrytag AS t3 ON t2.id = t3.entry_id WHERE t3.tag = ?', ['t2']))
+    
+    def test_selecting_across_joins_with_q(self):
+        pass
     
     def test_selecting_with_aggregation(self):
         sq = SelectQuery(Blog, 't1.*, COUNT(t2.id) AS count').group_by('id').join(Entry)
