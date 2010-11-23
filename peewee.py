@@ -56,7 +56,7 @@ class Database(object):
 			res = cursor.execute(sql, params=sql_params)
 			if commit:
 				self._conn.commit()
-		except OperationalError, ex:
+		except oursql.OperationalError, ex:
 			if ex.errno == 2006:
 				self.reconnect()
 		
