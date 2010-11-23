@@ -359,6 +359,19 @@ class ModelTests(BasePeeweeTestCase):
             ('SELECT * FROM blog WHERE title = ? LIMIT 1 OFFSET 0', ['b']),
         ])
     
+    def test_model_get_with_q(self):
+        a = self.create_blog(title='a')
+        b = self.create_blog(title='b')
+        
+        b2 = Blog.get(Q(title='b') | Q(title='c'))
+        self.assertEqual(b2.id, b.id)
+        
+        self.assertQueriesEqual([
+            ('INSERT INTO blog (title) VALUES (?)', ['a']),
+            ('INSERT INTO blog (title) VALUES (?)', ['b']),
+            ('SELECT * FROM blog WHERE (title = ? OR title = ?) LIMIT 1 OFFSET 0', ['b', 'c']),
+        ])
+    
     def test_model_select(self):
         a = self.create_blog(title='a')
         b = self.create_blog(title='b')
@@ -376,6 +389,23 @@ class ModelTests(BasePeeweeTestCase):
             ('INSERT INTO blog (title) VALUES (?)', ['c']),
             ('SELECT * FROM blog ORDER BY title ASC', []),
             ('SELECT * FROM blog WHERE title IN (?,?) ORDER BY title DESC', ['a', 'c']),
+        ])
+    
+    def test_model_select_with_q(self):
+        a = self.create_blog(title='a')
+        b = self.create_blog(title='b')
+        
+        qr = Blog.select().where(Q(title='a') | Q(title='b'))
+        self.assertEqual(list(qr), [a, b])
+        
+        qr = Blog.select().where(Q(title__in=['a']) | Q(title__in=['c', 'd']))
+        self.assertEqual(list(qr), [a])
+        
+        self.assertQueriesEqual([
+            ('INSERT INTO blog (title) VALUES (?)', ['a']),
+            ('INSERT INTO blog (title) VALUES (?)', ['b']),
+            ('SELECT * FROM blog WHERE (title = ? OR title = ?)', ['a', 'b']),
+            ('SELECT * FROM blog WHERE (title IN (?) OR title IN (?,?))', ['a', 'c', 'd']),
         ])
     
     def test_query_results_wrapper(self):

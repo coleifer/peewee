@@ -908,8 +908,8 @@ class Model(object):
         return DeleteQuery(cls, **query)
     
     @classmethod            
-    def get(cls, **query):
-        return cls.select().where(**query).paginate(1, 1).execute().next()
+    def get(cls, *args, **kwargs):
+        return cls.select().where(*args, **kwargs).paginate(1, 1).execute().next()
     
     def save(self):
         field_dict = self.get_field_dict()
