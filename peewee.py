@@ -938,6 +938,12 @@ class Model(object):
     @classmethod
     def delete(cls, **query):
         return DeleteQuery(cls, **query)
+
+    @classmethod
+    def create(cls, **query):
+        inst = cls(**query)
+        inst.save()
+        return inst
     
     @classmethod            
     def get(cls, *args, **kwargs):
