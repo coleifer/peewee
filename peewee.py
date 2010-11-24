@@ -393,18 +393,9 @@ class BaseQuery(object):
 
 
 class SelectQuery(BaseQuery):
-    """
-    Model.select('*').where(field=val).join(RelModel).where(rel_field=val)
-    """
     requires_commit = False
     
     def __init__(self, model, query=None):
-        """
-        Allow a string or a dictionary keyed by model->fields
-        
-        .select('t1.*, COUNT(t2.id) AS count') or
-        .select({Blog: '*', Entry: Count('id')})
-        """
         self.query = query or '*'
         self._group_by = []
         self._having = []
@@ -562,9 +553,6 @@ class SelectQuery(BaseQuery):
 
 
 class UpdateQuery(BaseQuery):
-    """
-    Model.update(field=val, field2=val2).where(some_field=some_val)
-    """
     def __init__(self, model, **kwargs):
         self.update_query = kwargs
         super(UpdateQuery, self).__init__(model)
@@ -609,9 +597,6 @@ class UpdateQuery(BaseQuery):
 
 
 class DeleteQuery(BaseQuery):
-    """
-    Model.delete().where(some_field=some_val)
-    """
     def sql(self):
         joins, where, where_data, alias_map = self.compile_where()
 
@@ -637,9 +622,6 @@ class DeleteQuery(BaseQuery):
 
 
 class InsertQuery(BaseQuery):
-    """
-    Model.insert(field=val, field2=val2)
-    """
     def __init__(self, model, **kwargs):
         self.insert_query = kwargs
         super(InsertQuery, self).__init__(model)
