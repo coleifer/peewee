@@ -377,6 +377,7 @@ class BaseQuery(object):
         for (name, lookup) in parsed.iteritems():
             operation, value = lookup
             if isinstance(value, SelectQuery):
+                # XXX: all this stuff needs to be cleaned up!
                 value.query, orig_query = 'id', value.query
                 sql, data = value.sql(len(alias_map) + 1)
                 value.query = orig_query
@@ -472,8 +473,8 @@ class SelectQuery(BaseQuery):
 
     def parse_select_query(self, alias_map):
         if isinstance(self.query, basestring):
-            if self.query == '*' and self.use_aliases():
-                return '%s.*' % alias_map[self.model]
+            if self.query in ('*', 'id') and self.use_aliases():
+                return '%s.%s' % (alias_map[self.model], self.query)
             return self.query
         elif isinstance(self.query, dict):
             qparts = []

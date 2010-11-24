@@ -916,6 +916,14 @@ class RelatedFieldTests(BasePeeweeTestCase):
         blogs = Blog.select().join(User).where(id__in=some_users)
         
         self.assertEqual(list(blogs), [a_blog, b_blog])
+        
+        a_entry = Entry.create(title='a entry', blog=a_blog)
+        b_entry = Entry.create(title='b entry', blog=b_blog)
+        c_entry = Entry.create(title='c entry', blog=c_blog)
+        
+        # this is an inadvisable query but useful for testing!
+        some_entries = Entry.select().join(Blog).where(id__in=blogs)
+        self.assertEqual(list(some_entries), [a_entry, b_entry])
 
 
 class FieldTypeTests(BasePeeweeTestCase):
