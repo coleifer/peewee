@@ -540,11 +540,11 @@ class ModelTests(BasePeeweeTestCase):
         b = Blog.create(title='b blog')
         self.assertEqual(len(self.queries()), 5)
 
-        u2 = User.get_or_create(username='b', blog_id=b.id)
-        self.assertEqual(u2.blog_id, b.id)
+        u2 = User.get_or_create(username='b', blog=b)
+        self.assertEqual(u2.blog, b)
         self.assertEqual(len(self.queries()), 7)
 
-        other_u2 = User.get_or_create(username='b', blog_id=b.id)
+        other_u2 = User.get_or_create(username='b', blog=b)
         self.assertEqual(len(self.queries()), 8)
 
         self.assertEqual(User.select().count(), 2)
@@ -720,6 +720,14 @@ class RelatedFieldTests(BasePeeweeTestCase):
         
         self.assertEqual(list(a1.entrytag_set), [])
         self.assertEqual(list(a2.entrytag_set), [t1])
+
+    def test_fk_querying(self):
+        a_blog = Blog.create(title='a blog')
+        a = User.create(username='a', blog=a_blog)
+        b = User.create(username='b')
+
+        qr = User.select().where(blog=a_blog)
+        self.assertEqual(list(qr), [a])
     
     def test_querying_across_joins(self):
         a, a1, a2, b, b1, b2, t1, t2 = self.get_common_objects()

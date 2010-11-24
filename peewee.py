@@ -6,7 +6,7 @@
 #    =====))=))===() 
 #      ///'       
 #     //
-#    '            
+#    '
 from datetime import datetime
 import logging
 import os
@@ -244,8 +244,16 @@ class BaseQuery(object):
                 lhs, op = lhs.rsplit(self.query_separator, 1)
             else:
                 op = 'eq'
-
-            field = model._meta.get_field_by_name(lhs)
+            
+            try:
+                field = model._meta.get_field_by_name(lhs)
+            except AttributeError:
+                field = model._meta.get_related_field_by_name(lhs)
+                if field is None:
+                    raise
+                if isinstance(rhs, Model):
+                    rhs = rhs.id
+            
             if op == 'in':
                 lookup_value = [field.lookup_value(op, o) for o in rhs]
                 operation = self.operations[op] % (','.join(['?' for v in lookup_value]))
@@ -822,6 +830,8 @@ class ForeignKeyField(IntegerField):
         self.name = name + '_id'
         if self.related_name is None:
             self.related_name = klass._meta.db_table + '_set'
+        
+        klass._meta.rel_fields[name] = self.name
         setattr(klass, self.descriptor, ForeignRelatedObject(self.to, self.name))
         setattr(klass, self.name, None)
         
@@ -841,6 +851,7 @@ class BaseModel(type):
         meta_attrs = attrs.pop('Meta', None)
 
         class Meta(object):
+            rel_fields = {}
             fields = {}
             database = database
             
@@ -851,6 +862,10 @@ class BaseModel(type):
                 if name in self.fields:
                     return self.fields[name]
                 raise AttributeError('Field named %s not found' % name)
+            
+            def get_related_field_by_name(self, name):
+                if name in self.rel_fields:
+                    return self.fields[self.rel_fields[name]]
             
             def get_related_field_for_model(self, model, name=None):
                 for field in self.fields.values():
