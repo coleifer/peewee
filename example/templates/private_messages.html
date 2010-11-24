@@ -1,0 +1,10 @@
+{% extends "layout.html" %}
+{% block body %}
+  <h2>Private Timeline</h2>
+  <ul>
+    {% for message in message_list %}
+      <li>{% include "includes/message.html" %}</li>
+    {% endfor %}
+  </ul>
+  {% include "includes/pagination.html" %}
+{% endblock %}

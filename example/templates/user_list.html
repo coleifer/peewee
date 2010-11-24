@@ -1,0 +1,10 @@
+{% extends "layout.html" %}
+{% block body %}
+  <h2>Users</h2>
+  <ul>
+    {% for user in user_list %}
+      <li><a href="{{ url_for('user_detail', username=user.username) }}">{{ user.username }}</a></li>
+    {% endfor %}
+  </ul>
+  {% include "includes/pagination.html" %}
+{% endblock %}
