@@ -30,12 +30,6 @@ Examples::
     }).group_by('id').join(Tweet).order_by(('num_tweets', 'desc'))
 
 
-what it doesn't do (yet?)
--------------------------
-
-subqueries
-
-
 model definitions and schema creation
 -------------------------------------
 
