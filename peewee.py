@@ -944,6 +944,14 @@ class Model(object):
         inst = cls(**query)
         inst.save()
         return inst
+
+    @classmethod
+    def get_or_create(cls, **query):
+        try:
+            inst = cls.get(**query)
+        except StopIteration:
+            inst = cls.create(**query)
+        return inst
     
     @classmethod            
     def get(cls, *args, **kwargs):

@@ -504,6 +504,50 @@ class ModelTests(BasePeeweeTestCase):
         self.assertEqual(blogs, [a])
         
         self.assertEqual(len(self.queries()), 4)
+    
+    def test_create(self):
+        u = User.create(username='a')
+        self.assertEqual(u.username, 'a')
+        self.assertQueriesEqual([
+            ('INSERT INTO user (username,blog_id) VALUES (?,?)', ['a', None]),
+        ])
+
+        b = Blog.create(title='b blog')
+        u2 = User.create(username='b', blog=b)
+        self.assertEqual(u2.blog, b)
+
+        self.assertQueriesEqual([
+            ('INSERT INTO user (username,blog_id) VALUES (?,?)', ['a', None]),
+            ('INSERT INTO blog (title) VALUES (?)', ['b blog']),
+            ('INSERT INTO user (username,blog_id) VALUES (?,?)', ['b', b.id]),
+        ])
+
+    def test_get_or_create(self):
+        u = User.get_or_create(username='a')
+        self.assertEqual(u.username, 'a')
+        self.assertQueriesEqual([
+            ('SELECT * FROM user WHERE username = ? LIMIT 1 OFFSET 0', ['a']),
+            ('INSERT INTO user (username,blog_id) VALUES (?,?)', ['a', None]),
+        ])
+
+        other_u = User.get_or_create(username='a')
+        self.assertEqual(len(self.queries()), 3)
+
+        self.assertEqual(other_u.id, u.id)
+        self.assertEqual(User.select().count(), 1)
+        self.assertEqual(len(self.queries()), 4)
+
+        b = Blog.create(title='b blog')
+        self.assertEqual(len(self.queries()), 5)
+
+        u2 = User.get_or_create(username='b', blog_id=b.id)
+        self.assertEqual(u2.blog_id, b.id)
+        self.assertEqual(len(self.queries()), 7)
+
+        other_u2 = User.get_or_create(username='b', blog_id=b.id)
+        self.assertEqual(len(self.queries()), 8)
+
+        self.assertEqual(User.select().count(), 2)
 
 
 class NodeTests(BasePeeweeTestCase):
