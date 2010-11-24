@@ -1,0 +1,17 @@
+{% extends "layout.html" %}
+{% block body %}
+  <h2>Join</h2>
+  <form action="{{ url_for('join') }}" method="post">
+    <dl>
+      <dt>Username:</dt>
+      <dd><input type="text" name="username"></dd>
+      <dt>Password:</dt>
+      <dd><input type="password" name="password"></dd>
+      <dt>Email:</dt>
+      <dd><input type="text" name="email">
+        <p><small>(used for gravatar)</small></p>
+      </dd>
+      <dd><input type="submit" value="Join">
+    </dl>
+  </form>
+{% endblock %}
