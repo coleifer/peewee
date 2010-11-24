@@ -902,6 +902,20 @@ class RelatedFieldTests(BasePeeweeTestCase):
             Relationship, on='from_user_id'
         ).where(to_user_id=c.id)
         self.assertEqual(list(followers), [b])
+    
+    def test_subquery(self):
+        a_blog = Blog.create(title='a blog')
+        b_blog = Blog.create(title='b blog')
+        c_blog = Blog.create(title='c blog')
+        
+        a = User.create(username='a', blog=a_blog)
+        b = User.create(username='b', blog=b_blog)
+        c = User.create(username='c', blog=c_blog)
+        
+        some_users = User.select().where(username__in=['a', 'b'])
+        blogs = Blog.select().join(User).where(id__in=some_users)
+        
+        self.assertEqual(list(blogs), [a_blog, b_blog])
 
 
 class FieldTypeTests(BasePeeweeTestCase):

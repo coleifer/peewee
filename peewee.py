@@ -255,8 +255,13 @@ class BaseQuery(object):
                     rhs = rhs.id
             
             if op == 'in':
-                lookup_value = [field.lookup_value(op, o) for o in rhs]
-                operation = self.operations[op] % (','.join(['?' for v in lookup_value]))
+                if isinstance(rhs, SelectQuery):
+                    lookup_value = rhs
+                    operation = 'IN (%s)'
+                else:
+                    lookup_value = [field.lookup_value(op, o) for o in rhs]
+                    operation = self.operations[op] % \
+                        (','.join(['?' for v in lookup_value]))
             else:
                 lookup_value = field.lookup_value(op, rhs)
                 operation = self.operations[op]
@@ -283,14 +288,14 @@ class BaseQuery(object):
     
     def use_aliases(self):
         return len(self._joins) > 0
-    
+
     def combine_field(self, alias, field_name):
         if alias:
             return '%s.%s' % (alias, field_name)
         return field_name
     
-    def compile_where(self):
-        alias_count = 0
+    def compile_where(self, alias_start=0):
+        alias_count = alias_start
         alias_map = {}
 
         alias_required = self.use_aliases()
@@ -309,12 +314,6 @@ class BaseQuery(object):
                 alias_map[model] = 't%d' % alias_count
             else:
                 alias_map[model] = ''
-
-            if model in self._where:
-                for node in self._where[model]:
-                    query, data = self.parse_node(node, model, alias_map[model])
-                    where_with_alias.append(query)
-                    where_data.extend(data)
             
             if i > 0:
                 from_model = joins[i-1][0]
@@ -343,19 +342,25 @@ class BaseQuery(object):
                     )
                 )
         
+        for model in self._where:
+            for node in self._where[model]:
+                query, data = self.parse_node(node, model, alias_map)
+                where_with_alias.append(query)
+                where_data.extend(data)
+        
         return computed_joins, where_with_alias, where_data, alias_map
     
-    def parse_node(self, node, model, alias):
+    def parse_node(self, node, model, alias_map):
         query = []
         query_data = []
         nodes = []
         for child in node.children:
             if isinstance(child, Q):
-                parsed, data = self.parse_q(child, model, alias)
+                parsed, data = self.parse_q(child, model, alias_map)
                 query.append(parsed)
                 query_data.extend(data)
             elif isinstance(child, Node):
-                parsed, data = self.parse_node(child, model, alias)
+                parsed, data = self.parse_node(child, model, alias_map)
                 query.append('(%s)' % parsed)
                 query_data.extend(data)
         query.extend(nodes)
@@ -365,14 +370,22 @@ class BaseQuery(object):
             query = 'NOT (%s)' % query
         return query, query_data
     
-    def parse_q(self, q, model, alias):
+    def parse_q(self, q, model, alias_map):
         query = []
         query_data = []
         parsed = self.parse_query_args(model, **q.query)
         for (name, lookup) in parsed.iteritems():
             operation, value = lookup
-            query_data.append(value)
-            combined = self.combine_field(alias, name)
+            if isinstance(value, SelectQuery):
+                value.query, orig_query = 'id', value.query
+                sql, data = value.sql(len(alias_map) + 1)
+                value.query = orig_query
+                operation = operation % sql
+                query_data.append(data)
+            else:
+                query_data.append(value)
+            
+            combined = self.combine_field(alias_map[model], name)
             query.append('%s %s' % (combined, operation))
         
         if len(query) > 1:
@@ -478,8 +491,8 @@ class SelectQuery(BaseQuery):
         else:
             raise TypeError('Unknown type encountered parsing select query')
     
-    def sql(self):
-        joins, where, where_data, alias_map = self.compile_where()
+    def sql(self, alias_start=0):
+        joins, where, where_data, alias_map = self.compile_where(alias_start)
         
         table = self.model._meta.db_table
 
