@@ -379,7 +379,7 @@ class BaseQuery(object):
     
     def raw_execute(self):
         query, params = self.sql()
-        db = self.model._meta.get_database()
+        db = self.model._meta.database
         result = db.execute(query, params, self.requires_commit)
         return result
 
@@ -422,7 +422,7 @@ class SelectQuery(BaseQuery):
         else:
             self.query = 'COUNT(id)'
         
-        db = self.model._meta.get_database()
+        db = self.model._meta.database
         res = db.execute(*self.sql())
         
         self.query = tmp_query
@@ -805,9 +805,10 @@ class ReverseForeignRelatedObject(object):
 class ForeignKeyField(IntegerField):
     field_template = '%(db_field)s %(nullable)s REFERENCES "%(to_table)s" ("id")'
     
-    def __init__(self, to, null=False, *args, **kwargs):
+    def __init__(self, to, null=False, related_name=None, *args, **kwargs):
         self.to = to
         self.null = null
+        self.related_name = related_name
         kwargs['to_table'] = to._meta.db_table
         if null:
             kwargs['nullable'] = ''
@@ -818,7 +819,8 @@ class ForeignKeyField(IntegerField):
     def add_to_class(self, klass, name):
         self.descriptor = name
         self.name = name + '_id'
-        self.related_name = klass._meta.db_table + '_set'
+        if self.related_name is None:
+            self.related_name = klass._meta.db_table + '_set'
         setattr(klass, self.descriptor, ForeignRelatedObject(self.to, self.name))
         setattr(klass, self.name, None)
         
@@ -835,14 +837,14 @@ class BaseModel(type):
     def __new__(cls, name, bases, attrs):
         cls = super(BaseModel, cls).__new__(cls, name, bases, attrs)
 
+        meta_attrs = attrs.pop('Meta', None)
+
         class Meta(object):
             fields = {}
+            database = database
             
             def __init__(self, model_class):
                 self.model_class = model_class
-
-            def get_database(self):
-                return self.model_class.database
             
             def get_field_by_name(self, name):
                 if name in self.fields:
@@ -865,6 +867,11 @@ class BaseModel(type):
             
         
         _meta = Meta(cls)
+
+        if meta_attrs:
+            for k, v in meta_attrs.__dict__.items():
+                setattr(_meta, k, v)
+
         setattr(cls, '_meta', _meta)
         
         _meta.db_table = re.sub('[^a-z]+', '_', cls.__name__.lower())
@@ -892,7 +899,6 @@ class BaseModel(type):
 
 class Model(object):
     __metaclass__ = BaseModel
-    database = database
     
     def __init__(self, *args, **kwargs):
         for k, v in kwargs.items():
@@ -908,11 +914,11 @@ class Model(object):
     
     @classmethod
     def create_table(cls):
-        cls.database.create_table(cls)
+        cls._meta.database.create_table(cls)
     
     @classmethod
     def drop_table(cls):
-        cls.database.drop_table(cls)
+        cls._meta.database.drop_table(cls)
     
     @classmethod
     def select(cls, query=None):
