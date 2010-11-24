@@ -45,6 +45,14 @@ class User(peewee.Model):
     username = peewee.CharField(max_length=50)
     blog = peewee.ForeignKeyField(Blog, null=True)
 
+    def __unicode__(self):
+        return self.username
+
+
+class Relationship(peewee.Model):
+    from_user = peewee.ForeignKeyField(User, related_name='relationships')
+    to_user = peewee.ForeignKeyField(User, related_name='related_to')
+
 
 class BasePeeweeTestCase(unittest.TestCase):
     def setUp(self):
@@ -53,6 +61,7 @@ class BasePeeweeTestCase(unittest.TestCase):
         Entry.create_table()
         EntryTag.create_table()
         User.create_table()
+        Relationship.create_table()
         
         self.qh = QueryLogHandler()
         peewee.logger.setLevel(logging.DEBUG)
@@ -61,6 +70,7 @@ class BasePeeweeTestCase(unittest.TestCase):
     def tearDown(self):
         peewee.logger.removeHandler(self.qh)
         
+        Relationship.drop_table()
         User.drop_table()
         EntryTag.drop_table()
         Entry.drop_table()
@@ -581,6 +591,52 @@ class RelatedFieldTests(BasePeeweeTestCase):
         self.assertEqual(qr[0].count, 2)
         self.assertEqual(qr[1].count, 1)
         self.assertEqual(qr[2].count, 0)
+
+    def test_multiple_fks(self):
+        a = User.create(username='a')
+        b = User.create(username='b')
+        c = User.create(username='c')
+
+        self.assertEqual(list(a.relationships), [])
+        self.assertEqual(list(a.related_to), [])
+
+        r_ab = Relationship.create(from_user=a, to_user=b)
+        self.assertEqual(list(a.relationships), [r_ab])
+        self.assertEqual(list(a.related_to), [])
+        self.assertEqual(list(b.relationships), [])
+        self.assertEqual(list(b.related_to), [r_ab])
+
+        r_bc = Relationship.create(from_user=b, to_user=c)
+
+        following = User.select().join(
+            Relationship, on='to_user_id'
+        ).where(from_user_id=a.id)
+        self.assertEqual(list(following), [b])
+
+        followers = User.select().join(
+            Relationship, on='from_user_id'
+        ).where(to_user_id=a.id)
+        self.assertEqual(list(followers), [])
+
+        following = User.select().join(
+            Relationship, on='to_user_id'
+        ).where(from_user_id=b.id)
+        self.assertEqual(list(following), [c])
+
+        followers = User.select().join(
+            Relationship, on='from_user_id'
+        ).where(to_user_id=b.id)
+        self.assertEqual(list(followers), [a])
+
+        following = User.select().join(
+            Relationship, on='to_user_id'
+        ).where(from_user_id=c.id)
+        self.assertEqual(list(following), [])
+
+        followers = User.select().join(
+            Relationship, on='from_user_id'
+        ).where(to_user_id=c.id)
+        self.assertEqual(list(followers), [b])
 
 
 class FieldTypeTests(BasePeeweeTestCase):
