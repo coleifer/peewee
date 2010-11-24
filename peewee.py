@@ -264,9 +264,9 @@ class BaseQuery(object):
         return self
     
     @mark_query_dirty
-    def join(self, model, join_type=None):
+    def join(self, model, join_type=None, on=None):
         if self.query_context._meta.rel_exists(model):
-            self._joins.append((model, join_type))
+            self._joins.append((model, join_type, on))
             self.query_context = model
         else:
             raise AttributeError('No foreign key found between %s and %s' % \
@@ -289,13 +289,13 @@ class BaseQuery(object):
 
         joins = list(self._joins)
         if self._where or len(joins):
-            joins.insert(0, (self.model, None))
+            joins.insert(0, (self.model, None, None))
         
         where_with_alias = []
         where_data = []
         computed_joins = []
 
-        for i, (model, join_type) in enumerate(joins):
+        for i, (model, join_type, on) in enumerate(joins):
             if alias_required:
                 alias_count += 1
                 alias_map[model] = 't%d' % alias_count
@@ -310,12 +310,12 @@ class BaseQuery(object):
             
             if i > 0:
                 from_model = joins[i-1][0]
-                field = from_model._meta.get_related_field_for_model(model)
+                field = from_model._meta.get_related_field_for_model(model, on)
                 if field:
                     left_field = field.name
                     right_field = 'id'                        
                 else:
-                    field = from_model._meta.get_reverse_related_field_for_model(model)
+                    field = from_model._meta.get_reverse_related_field_for_model(model, on)
                     left_field = 'id'
                     right_field = field.name
                 
@@ -852,15 +852,17 @@ class BaseModel(type):
                     return self.fields[name]
                 raise AttributeError('Field named %s not found' % name)
             
-            def get_related_field_for_model(self, model):
+            def get_related_field_for_model(self, model, name=None):
                 for field in self.fields.values():
                     if isinstance(field, ForeignKeyField) and field.to == model:
-                        return field
+                        if name is None or name == field.name:
+                            return field
             
-            def get_reverse_related_field_for_model(self, model):
+            def get_reverse_related_field_for_model(self, model, name=None):
                 for field in model._meta.fields.values():
                     if isinstance(field, ForeignKeyField) and field.to == self.model_class:
-                        return field
+                        if name is None or name == field.name:
+                            return field
             
             def rel_exists(self, model):
                 return self.get_related_field_for_model(model) or \
