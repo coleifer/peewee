@@ -740,6 +740,7 @@ class DateTimeField(Field):
     
     def python_value(self, value):
         if value is not None:
+            value = value.rsplit('.', 1)[0]
             return datetime(*time.strptime(value, '%Y-%m-%d %H:%M:%S')[:6])
     
     def db_value(self, value):
