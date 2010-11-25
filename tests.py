@@ -940,6 +940,26 @@ class RelatedFieldTests(BasePeeweeTestCase):
         # this should work the same
         some_tags = EntryTag.select().where(entry__in=some_entries)
         self.assertEqual(list(some_tags), [a_tag, b_tag])
+    
+    def test_complex_subquery(self):
+        a_blog = Blog.create(title='a blog')
+        b_blog = Blog.create(title='b blog')
+        c_blog = Blog.create(title='c blog')
+        
+        a = User.create(username='a', blog=a_blog)
+        b = User.create(username='b', blog=b_blog)
+        c = User.create(username='c', blog=c_blog)
+        
+        some_users = User.select().where(username__in=['a', 'b'])
+        
+        c_blog_qr = Blog.select().join(User).where(~Q(id__in=some_users))
+        self.assertEqual(list(c_blog_qr), [c_blog])
+        
+        ac_blog_qr = Blog.select().join(User).where(
+            ~Q(id__in=some_users) |
+            Q(username='a')
+        )
+        self.assertEqual(list(ac_blog_qr), [a_blog, c_blog])
 
 
 class FieldTypeTests(BasePeeweeTestCase):
