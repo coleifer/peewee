@@ -123,7 +123,7 @@ def homepage():
 def private_timeline():
     user = session['user']
     messages = Message.select().where(
-        user_id__in=user.following()
+        user__in=user.following()
     ).order_by(('pub_date', 'desc'))
     return object_list('private_messages.html', messages, 'message_list')
 
@@ -205,7 +205,7 @@ def user_follow(username):
         user = User.get(username=username)
     except StopIteration:
         abort(404)
-    r = Relationship.get_or_create(
+    Relationship.get_or_create(
         from_user=session['user'],
         to_user=user,
     )
