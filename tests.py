@@ -924,6 +924,10 @@ class RelatedFieldTests(BasePeeweeTestCase):
         # this is an inadvisable query but useful for testing!
         some_entries = Entry.select().join(Blog).where(id__in=blogs)
         self.assertEqual(list(some_entries), [a_entry, b_entry])
+
+        # check it without the join and a subquery on the FK
+        some_entries2 = Entry.select().where(blog__in=blogs)
+        self.assertEqual(list(some_entries2), [a_entry, b_entry])
         
         # ok, last one
         a_tag = EntryTag.create(tag='a', entry=a_entry)
@@ -931,6 +935,10 @@ class RelatedFieldTests(BasePeeweeTestCase):
         c_tag = EntryTag.create(tag='c', entry=c_entry)
 
         some_tags = EntryTag.select().join(Entry).where(id__in=some_entries)
+        self.assertEqual(list(some_tags), [a_tag, b_tag])
+
+        # this should work the same
+        some_tags = EntryTag.select().where(entry__in=some_entries)
         self.assertEqual(list(some_tags), [a_tag, b_tag])
 
 
