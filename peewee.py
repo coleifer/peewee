@@ -229,6 +229,7 @@ class BaseQuery(object):
     }
     query_separator = '__'
     requires_commit = True
+    force_alias = False
     
     def __init__(self, model):
         self.model = model
@@ -287,15 +288,15 @@ class BaseQuery(object):
         return self
     
     def use_aliases(self):
-        return len(self._joins) > 0
+        return len(self._joins) > 0 or self.force_alias
 
     def combine_field(self, alias, field_name):
         if alias:
             return '%s.%s' % (alias, field_name)
         return field_name
     
-    def compile_where(self, alias_start=0):
-        alias_count = alias_start
+    def compile_where(self):
+        alias_count = 0
         alias_map = {}
 
         alias_required = self.use_aliases()
@@ -377,14 +378,10 @@ class BaseQuery(object):
         for (name, lookup) in parsed.iteritems():
             operation, value = lookup
             if isinstance(value, SelectQuery):
-                # XXX: all this stuff needs to be cleaned up!
-                value.query, orig_query = 'id', value.query
-                sql, data = value.sql(len(alias_map) + 1)
-                value.query = orig_query
+                sql, value = self.convert_subquery(value)
                 operation = operation % sql
-                query_data.append(data)
-            else:
-                query_data.append(value)
+
+            query_data.append(value)
             
             combined = self.combine_field(alias_map[model], name)
             query.append('%s %s' % (combined, operation))
@@ -398,6 +395,14 @@ class BaseQuery(object):
             query = 'NOT %s' % query
         
         return query, query_data
+
+    def convert_subquery(self, subquery):
+        subquery.query, orig_query = 'id', subquery.query
+        subquery.force_alias, orig_alias = True, subquery.force_alias
+        sql, data = subquery.sql()
+        subquery.query = orig_query
+        subquery.force_alias = orig_alias
+        return sql, data
     
     def raw_execute(self):
         query, params = self.sql()
@@ -492,8 +497,8 @@ class SelectQuery(BaseQuery):
         else:
             raise TypeError('Unknown type encountered parsing select query')
     
-    def sql(self, alias_start=0):
-        joins, where, where_data, alias_map = self.compile_where(alias_start)
+    def sql(self):
+        joins, where, where_data, alias_map = self.compile_where()
         
         table = self.model._meta.db_table
 
