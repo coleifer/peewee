@@ -960,6 +960,53 @@ class RelatedFieldTests(BasePeeweeTestCase):
             Q(username='a')
         )
         self.assertEqual(list(ac_blog_qr), [a_blog, c_blog])
+    
+    def test_many_to_many(self):
+        class Team(peewee.Model):
+            name = peewee.CharField()
+        
+        class Member(peewee.Model):
+            username = peewee.CharField()
+        
+        class Membership(peewee.Model):
+            team = peewee.ForeignKeyField(Team)
+            member = peewee.ForeignKeyField(Member)
+
+        Team.create_table()
+        Member.create_table()
+        Membership.create_table()
+        
+        a_team = Team.create(name='a-team')
+        b_team = Team.create(name='b-team')
+        
+        a_member1 = Member.create(username='a1')
+        a_member2 = Member.create(username='a2')
+        
+        b_member1 = Member.create(username='b1')
+        b_member2 = Member.create(username='b2')
+        
+        ab_member = Member.create(username='ab')
+        
+        Membership.create(team=a_team, member=a_member1)
+        Membership.create(team=a_team, member=a_member2)
+        
+        Membership.create(team=b_team, member=b_member1)
+        Membership.create(team=b_team, member=b_member2)
+        
+        Membership.create(team=a_team, member=ab_member)
+        Membership.create(team=b_team, member=ab_member)
+        
+        a_team_members = Member.select().join(Membership).where(team=a_team)
+        self.assertEqual(list(a_team_members), [a_member1, a_member2, ab_member])
+        
+        b_team_members = Member.select().join(Membership).where(team=b_team)
+        self.assertEqual(list(b_team_members), [b_member1, b_member2, ab_member])
+        
+        a_member_teams = Team.select().join(Membership).where(member=a_member1)
+        self.assertEqual(list(a_member_teams), [a_team])
+        
+        ab_member_teams = Team.select().join(Membership).where(member=ab_member)
+        self.assertEqual(list(ab_member_teams), [a_team, b_team])
 
 
 class FieldTypeTests(BasePeeweeTestCase):
