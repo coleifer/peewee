@@ -122,8 +122,9 @@ def homepage():
 @app.route('/private/')
 def private_timeline():
     user = session['user']
-    following_ids = [u.id for u in user.following()]
-    messages = Message.select().where(user_id__in=following_ids).order_by(('pub_date', 'desc'))
+    messages = Message.select().where(
+        user_id__in=user.following()
+    ).order_by(('pub_date', 'desc'))
     return object_list('private_messages.html', messages, 'message_list')
 
 @app.route('/public/')
