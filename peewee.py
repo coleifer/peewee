@@ -276,7 +276,7 @@ class BaseQuery(object):
         self._where.setdefault(self.query_context, [])
         self._where[self.query_context].append(parseq(*args, **kwargs))
         return self
-    
+
     @mark_query_dirty
     def join(self, model, join_type=None, on=None):
         if self.query_context._meta.rel_exists(model):
@@ -286,6 +286,17 @@ class BaseQuery(object):
             raise AttributeError('No foreign key found between %s and %s' % \
                 (self.query_context.__name__, model.__name__))
         return self
+
+    def switch(self, model):
+        if model == self.model:
+            self.query_context = model
+            return self
+
+        for klass, join_type, on in self._joins:
+            if model == klass:
+                self.query_context = model
+                return self
+        raise AttributeError('You must JOIN on %s' % model.__name__)
     
     def use_aliases(self):
         return len(self._joins) > 0 or self.force_alias
