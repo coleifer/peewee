@@ -45,6 +45,7 @@ class EntryTag(peewee.Model):
 class User(peewee.Model):
     username = peewee.CharField(max_length=50)
     blog = peewee.ForeignKeyField(Blog, null=True)
+    active = peewee.BooleanField()
 
     def __unicode__(self):
         return self.username
@@ -513,7 +514,7 @@ class ModelTests(BasePeeweeTestCase):
         u = User.create(username='a')
         self.assertEqual(u.username, 'a')
         self.assertQueriesEqual([
-            ('INSERT INTO user (username,blog_id) VALUES (?,?)', ['a', None]),
+            ('INSERT INTO user (username,active,blog_id) VALUES (?,?,?)', ['a', 0, None]),
         ])
 
         b = Blog.create(title='b blog')
@@ -521,9 +522,9 @@ class ModelTests(BasePeeweeTestCase):
         self.assertEqual(u2.blog, b)
 
         self.assertQueriesEqual([
-            ('INSERT INTO user (username,blog_id) VALUES (?,?)', ['a', None]),
+            ('INSERT INTO user (username,active,blog_id) VALUES (?,?,?)', ['a', 0, None]),
             ('INSERT INTO blog (title) VALUES (?)', ['b blog']),
-            ('INSERT INTO user (username,blog_id) VALUES (?,?)', ['b', b.id]),
+            ('INSERT INTO user (username,active,blog_id) VALUES (?,?,?)', ['b', 0, b.id]),
         ])
 
     def test_get_or_create(self):
@@ -531,7 +532,7 @@ class ModelTests(BasePeeweeTestCase):
         self.assertEqual(u.username, 'a')
         self.assertQueriesEqual([
             ('SELECT * FROM user WHERE username = ? LIMIT 1 OFFSET 0', ['a']),
-            ('INSERT INTO user (username,blog_id) VALUES (?,?)', ['a', None]),
+            ('INSERT INTO user (username,active,blog_id) VALUES (?,?,?)', ['a', 0, None]),
         ])
 
         other_u = User.get_or_create(username='a')
@@ -1054,3 +1055,19 @@ class FieldTypeTests(BasePeeweeTestCase):
         
         self.assertSQEqual(Entry.select().where(pub_date__in=[self.jd(1), self.jd(3)]), ['b1', 'b3'])
         self.assertSQEqual(Entry.select().where(pub_date__in=[]), [])
+
+    def test_lookups_boolean_field(self):
+        user_a = User.create(username='a', active=True)
+        user_b = User.create(username='b')
+        
+        active = User.select().where(active=True)
+        self.assertEqual(list(active), [user_a])
+        
+        inactive = User.select().where(active=False)
+        self.assertEqual(list(inactive), [user_b])
+        
+        from_db_a = User.get(username='a')
+        self.assertTrue(from_db_a.active)
+        
+        from_db_b = User.get(username='b')
+        self.assertFalse(from_db_b.active)

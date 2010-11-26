@@ -778,6 +778,16 @@ class IntegerField(Field):
         return int(value or 0)
 
 
+class BooleanField(IntegerField):
+    def db_value(self, value):
+        if value:
+            return 1
+        return 0
+    
+    def python_value(self, value):
+        return bool(value)
+
+
 class FloatField(Field):
     db_field = 'REAL'
     field_template = "%(db_field)s NOT NULL"
