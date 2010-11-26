@@ -48,7 +48,6 @@ class User(peewee.Model):
 
 
 class Relationship(peewee.Model):
-    database = database
     from_user = peewee.ForeignKeyField(User, related_name='relationships')
     to_user = peewee.ForeignKeyField(User, related_name='related_to')
 
@@ -57,7 +56,6 @@ class Relationship(peewee.Model):
 
 
 class Message(peewee.Model):
-    database = database
     user = peewee.ForeignKeyField(User)
     content = peewee.TextField()
     pub_date = peewee.DateTimeField()
