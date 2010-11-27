@@ -250,6 +250,9 @@ class QueryTests(BasePeeweeTestCase):
         
         sq = sq.having('count > 2')
         self.assertEqual(sq.sql(), ('SELECT t1.*, COUNT(t2.id) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id HAVING count > 2', []))
+        
+        sq = sq.order_by(('count', 'desc'))
+        self.assertEqual(sq.sql(), ('SELECT t1.*, COUNT(t2.id) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id HAVING count > 2 ORDER BY count desc', []))
     
     def test_selecting_with_ordering(self):        
         sq = SelectQuery(Blog).order_by('title')
