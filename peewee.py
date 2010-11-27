@@ -163,6 +163,9 @@ class QueryResultWrapper(object):
 	def _row_to_dict(self, row, result_cursor):
 		return DictObj((result_cursor.description[i][0], value) for i, value in enumerate(row))
 	
+	def __len__(self):
+		return self.cursor.rowcount
+	
 	def __iter__(self):
 		if not self._populated:
 			return self
