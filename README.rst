@@ -31,6 +31,10 @@ Examples::
     }).group_by('id').join(Tweet).order_by(('num_tweets', 'desc'))
 
 
+check the `documentation <http://charlesleifer.com/docs/peewee/>`_ for more
+examples.
+
+
 Why?
 ----
 
