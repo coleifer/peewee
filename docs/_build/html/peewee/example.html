@@ -1,0 +1,373 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Example app &mdash; peewee v0.3.0 documentation</title>
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '0.3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="peewee v0.3.0 documentation" href="../index.html" />
+    <link rel="next" title="Model API (smells like django)" href="models.html" />
+    <link rel="prev" title="Installing peewee" href="installation.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="models.html" title="Model API (smells like django)"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="installation.html" title="Installing peewee"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">peewee v0.3.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="example-app">
+<h1>Example app<a class="headerlink" href="#example-app" title="Permalink to this headline">¶</a></h1>
+<img alt="../_images/tweepee.jpg" src="../_images/tweepee.jpg" />
+<p>peewee ships with an example web app that runs on the
+<a class="reference external" href="http://flask.pocoo.org/">Flask</a> microframework.  If you already have flask
+and its dependencies installed you should be good to go, otherwise install from
+the included requirements file:</p>
+<div class="highlight-python"><pre>cd example/
+pip install -r requirements.txt</pre>
+</div>
+<div class="section" id="running-the-example">
+<h2>Running the example<a class="headerlink" href="#running-the-example" title="Permalink to this headline">¶</a></h2>
+<p>After ensuring that flask, jinja2, werkzeug and sqlite3 are all installed,
+switch to the example directory and execute the <em>run_example.py</em> script:</p>
+<div class="highlight-python"><pre>python run_example.py</pre>
+</div>
+</div>
+<div class="section" id="diving-into-the-code">
+<h2>Diving into the code<a class="headerlink" href="#diving-into-the-code" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="models">
+<h3>Models<a class="headerlink" href="#models" title="Permalink to this headline">¶</a></h3>
+<p>In the spirit of the ur-python framework, django, peewee uses declarative model
+definitions.  If you&#8217;re not familiar with django, the idea is that you declare
+a class with some members which map directly to the database schema.  For the
+twitter clone, there are just three models:</p>
+<dl class="docutils">
+<dt>User:</dt>
+<dd>represents a user account and stores the username and password, an email
+address for generating avatars using <em>gravatar</em>, and a datetime field
+indicating when that account was created</dd>
+<dt>Relationship:</dt>
+<dd>this is a &#8220;utility model&#8221; that contains two foreign-keys to
+the User model and represents <em>&#8220;following&#8221;</em>.</dd>
+<dt>Message:</dt>
+<dd>analagous to a tweet. this model stores the text content of
+the message, when it was created, and who posted it (foreign key to User).</dd>
+</dl>
+<p>If you like UML, this is basically what it looks like:</p>
+<img alt="../_images/schema.jpg" src="../_images/schema.jpg" />
+<p>Here is the code:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">database</span> <span class="o">=</span> <span class="n">peewee</span><span class="o">.</span><span class="n">Database</span><span class="p">(</span><span class="n">DATABASE</span><span class="p">)</span>
+
+<span class="c"># model definitions</span>
+<span class="k">class</span> <span class="nc">User</span><span class="p">(</span><span class="n">peewee</span><span class="o">.</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">username</span> <span class="o">=</span> <span class="n">peewee</span><span class="o">.</span><span class="n">CharField</span><span class="p">()</span>
+    <span class="n">password</span> <span class="o">=</span> <span class="n">peewee</span><span class="o">.</span><span class="n">CharField</span><span class="p">()</span>
+    <span class="n">email</span> <span class="o">=</span> <span class="n">peewee</span><span class="o">.</span><span class="n">CharField</span><span class="p">()</span>
+    <span class="n">join_date</span> <span class="o">=</span> <span class="n">peewee</span><span class="o">.</span><span class="n">DateTimeField</span><span class="p">()</span>
+
+    <span class="k">class</span> <span class="nc">Meta</span><span class="p">:</span>
+        <span class="n">database</span> <span class="o">=</span> <span class="n">database</span>
+
+    <span class="k">def</span> <span class="nf">following</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">User</span><span class="o">.</span><span class="n">select</span><span class="p">()</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+            <span class="n">Relationship</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s">&#39;to_user_id&#39;</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">from_user</span><span class="o">=</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="s">&#39;username&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">followers</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">User</span><span class="o">.</span><span class="n">select</span><span class="p">()</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+            <span class="n">Relationship</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">to_user</span><span class="o">=</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="s">&#39;username&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">is_following</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Relationship</span><span class="o">.</span><span class="n">select</span><span class="p">()</span><span class="o">.</span><span class="n">where</span><span class="p">(</span>
+            <span class="n">from_user</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
+            <span class="n">to_user</span><span class="o">=</span><span class="n">user</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">count</span><span class="p">()</span> <span class="o">&gt;</span> <span class="mi">0</span>
+
+    <span class="k">def</span> <span class="nf">gravatar_url</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">80</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&#39;http://www.gravatar.com/avatar/</span><span class="si">%s</span><span class="s">?d=identicon&amp;s=</span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> \
+            <span class="p">(</span><span class="n">md5</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">email</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s">&#39;utf-8&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">(),</span> <span class="n">size</span><span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">Relationship</span><span class="p">(</span><span class="n">peewee</span><span class="o">.</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">from_user</span> <span class="o">=</span> <span class="n">peewee</span><span class="o">.</span><span class="n">ForeignKeyField</span><span class="p">(</span><span class="n">User</span><span class="p">,</span> <span class="n">related_name</span><span class="o">=</span><span class="s">&#39;relationships&#39;</span><span class="p">)</span>
+    <span class="n">to_user</span> <span class="o">=</span> <span class="n">peewee</span><span class="o">.</span><span class="n">ForeignKeyField</span><span class="p">(</span><span class="n">User</span><span class="p">,</span> <span class="n">related_name</span><span class="o">=</span><span class="s">&#39;related_to&#39;</span><span class="p">)</span>
+
+    <span class="k">class</span> <span class="nc">Meta</span><span class="p">:</span>
+        <span class="n">database</span> <span class="o">=</span> <span class="n">database</span>
+
+
+<span class="k">class</span> <span class="nc">Message</span><span class="p">(</span><span class="n">peewee</span><span class="o">.</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">user</span> <span class="o">=</span> <span class="n">peewee</span><span class="o">.</span><span class="n">ForeignKeyField</span><span class="p">(</span><span class="n">User</span><span class="p">)</span>
+    <span class="n">content</span> <span class="o">=</span> <span class="n">peewee</span><span class="o">.</span><span class="n">TextField</span><span class="p">()</span>
+    <span class="n">pub_date</span> <span class="o">=</span> <span class="n">peewee</span><span class="o">.</span><span class="n">DateTimeField</span><span class="p">()</span>
+
+    <span class="k">class</span> <span class="nc">Meta</span><span class="p">:</span>
+        <span class="n">database</span> <span class="o">=</span> <span class="n">database</span>
+</pre></div>
+</div>
+<p>peewee supports a handful of field types which map to different column types in
+sqlite.  Conversion between python and the database is handled transparently,
+including the proper handling of None/NULL.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">you might have noticed that each model sets the database attribute
+explicitly.  by default peewee will use &#8220;peewee.db&#8221;. explicitly setting this
+instructs peewee to use the database specified by <tt class="docutils literal"><span class="pre">DATABASE</span></tt> (tweepee.db).</p>
+</div>
+</div>
+<div class="section" id="creating-the-initial-tables">
+<h3>Creating the initial tables<a class="headerlink" href="#creating-the-initial-tables" title="Permalink to this headline">¶</a></h3>
+<p>In order to start using the models, its necessary to create the tables.  This is
+a one-time operation and can be done quickly using the interactive interpreter:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">app</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">create_tables</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>The <tt class="docutils literal"><span class="pre">create_tables()</span></tt> method is defined in the app module and looks like this:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">create_tables</span><span class="p">():</span>
+    <span class="n">database</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span> <span class="c"># &lt;-- note the explicit call to connect()</span>
+    <span class="n">User</span><span class="o">.</span><span class="n">create_table</span><span class="p">()</span>
+    <span class="n">Relationship</span><span class="o">.</span><span class="n">create_table</span><span class="p">()</span>
+    <span class="n">Message</span><span class="o">.</span><span class="n">create_table</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Every model has a <tt class="docutils literal"><span class="pre">create_table()</span></tt> classmethod which runs a <tt class="docutils literal"><span class="pre">CREATE</span> <span class="pre">TABLE</span></tt>
+statement in the database.  Usually this is something you&#8217;ll only do once,
+whenever a new model is added.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">adding fields after the table has been created will required you to
+either drop the table and re-create it or manually add the columns using
+<tt class="docutils literal"><span class="pre">ALTER</span> <span class="pre">TABLE</span></tt>.</p>
+</div>
+</div>
+<div class="section" id="connecting-to-the-database">
+<h3>Connecting to the database<a class="headerlink" href="#connecting-to-the-database" title="Permalink to this headline">¶</a></h3>
+<p>You may have noticed in the above model code that there is a class defined
+within each model named <tt class="docutils literal"><span class="pre">Meta</span></tt> that sets the <tt class="docutils literal"><span class="pre">database</span></tt> attribute.  peewee
+allows every model to specify which database it uses, defaulting to &#8220;peewee.db&#8221;,
+but since you probably want a bit more control, you can instantiate your own
+database and point your models at it:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># config</span>
+<span class="n">DATABASE</span> <span class="o">=</span> <span class="s">&#39;tweepee.db&#39;</span>
+
+<span class="c"># ... more config here, omitted</span>
+
+<span class="n">database</span> <span class="o">=</span> <span class="n">peewee</span><span class="o">.</span><span class="n">Database</span><span class="p">(</span><span class="n">DATABASE</span><span class="p">)</span> <span class="c"># tell our models to use &quot;tweepee.db&quot;</span>
+</pre></div>
+</div>
+<p>Because sqlite likes to have a separate connection per-thread, we will tell
+flask that during the request/response cycle we need to create a connection to
+the database.  Flask provides some handy decorators to make this a snap:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="nd">@app.before_request</span>
+<span class="k">def</span> <span class="nf">before_request</span><span class="p">():</span>
+    <span class="n">g</span><span class="o">.</span><span class="n">db</span> <span class="o">=</span> <span class="n">database</span>
+    <span class="n">g</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>
+
+<span class="nd">@app.after_request</span>
+<span class="k">def</span> <span class="nf">after_request</span><span class="p">(</span><span class="n">response</span><span class="p">):</span>
+    <span class="n">g</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">response</span>
+</pre></div>
+</div>
+<p>Note that we&#8217;re storing the db on the magical variable <tt class="docutils literal"><span class="pre">g</span></tt> - that&#8217;s a
+flask-ism and can be ignored as an implementation detail.  The meat of this code
+is in the idea that we connect to our db every request and close that connection
+every response.  Django does the <a class="reference external" href="http://code.djangoproject.com/browser/django/tags/releases/1.2.3/django/db/__init__.py#L80">exact same thing</a>.</p>
+</div>
+<div class="section" id="doing-queries">
+<h3>Doing queries<a class="headerlink" href="#doing-queries" title="Permalink to this headline">¶</a></h3>
+<p>In the <tt class="docutils literal"><span class="pre">User</span></tt> model there are a few instance methods that encapsulate some
+user-specific functionality, i.e.</p>
+<ul class="simple">
+<li><tt class="docutils literal"><span class="pre">following()</span></tt>: who is this user following?</li>
+<li><tt class="docutils literal"><span class="pre">followers()</span></tt>: who is following this user?</li>
+</ul>
+<p>These methods are rather similar in their implementation but with one key
+difference:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">following</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">User</span><span class="o">.</span><span class="n">select</span><span class="p">()</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+        <span class="n">Relationship</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s">&#39;to_user_id&#39;</span>
+    <span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">from_user</span><span class="o">=</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="s">&#39;username&#39;</span><span class="p">)</span>
+
+<span class="k">def</span> <span class="nf">followers</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">User</span><span class="o">.</span><span class="n">select</span><span class="p">()</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+        <span class="n">Relationship</span>
+    <span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">to_user</span><span class="o">=</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="s">&#39;username&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Specifying the foreign key manually instructs peewee to join on the <tt class="docutils literal"><span class="pre">to_user_id</span></tt> field.
+the queries end up looking like:</p>
+<div class="highlight-python"><pre># following:
+SELECT t1.*
+FROM user AS t1
+INNER JOIN relationship AS t2
+    ON t1.id = t2.to_user_id  # &lt;-- joining on to_user_id
+WHERE t2.from_user_id = ?
+ORDER BY username ASC
+
+# followers
+SELECT t1.*
+FROM user AS t1
+INNER JOIN relationship AS t2
+    ON t1.id = t2.from_user_id # &lt;-- joining on from_user_id
+WHERE t2.to_user_id = ?
+ORDER BY username ASC</pre>
+</div>
+</div>
+<div class="section" id="creating-new-objects">
+<h3>Creating new objects<a class="headerlink" href="#creating-new-objects" title="Permalink to this headline">¶</a></h3>
+<p>So what happens when a new user wants to join the site?  Looking at the
+business end of the <tt class="docutils literal"><span class="pre">join()</span></tt> view, we can that it does a quick check to see
+if the username is taken, and if not executes a <tt class="docutils literal"><span class="pre">.create()</span></tt>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">try</span><span class="p">:</span>
+    <span class="n">user</span> <span class="o">=</span> <span class="n">User</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">username</span><span class="o">=</span><span class="n">request</span><span class="o">.</span><span class="n">form</span><span class="p">[</span><span class="s">&#39;username&#39;</span><span class="p">])</span>
+    <span class="n">flash</span><span class="p">(</span><span class="s">&#39;That username is already taken&#39;</span><span class="p">)</span>
+<span class="k">except</span> <span class="ne">StopIteration</span><span class="p">:</span>
+    <span class="n">user</span> <span class="o">=</span> <span class="n">User</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
+        <span class="n">username</span><span class="o">=</span><span class="n">request</span><span class="o">.</span><span class="n">form</span><span class="p">[</span><span class="s">&#39;username&#39;</span><span class="p">],</span>
+        <span class="n">password</span><span class="o">=</span><span class="n">md5</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">form</span><span class="p">[</span><span class="s">&#39;password&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">(),</span>
+        <span class="n">email</span><span class="o">=</span><span class="n">request</span><span class="o">.</span><span class="n">form</span><span class="p">[</span><span class="s">&#39;email&#39;</span><span class="p">],</span>
+        <span class="n">join_date</span><span class="o">=</span><span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
+    <span class="p">)</span>
+</pre></div>
+</div>
+<p>Much like the <tt class="docutils literal"><span class="pre">create()</span></tt> method, all models come with a built-in method called
+<tt class="docutils literal"><span class="pre">get_or_create</span></tt> which is used when one user follows another:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">Relationship</span><span class="o">.</span><span class="n">get_or_create</span><span class="p">(</span>
+    <span class="n">from_user</span><span class="o">=</span><span class="n">session</span><span class="p">[</span><span class="s">&#39;user&#39;</span><span class="p">],</span> <span class="c"># &lt;-- the logged-in user</span>
+    <span class="n">to_user</span><span class="o">=</span><span class="n">user</span><span class="p">,</span> <span class="c"># &lt;-- the user they want to follow</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="doing-subqueries">
+<h3>Doing subqueries<a class="headerlink" href="#doing-subqueries" title="Permalink to this headline">¶</a></h3>
+<p>If you are logged-in and visit the twitter homepage, you will see tweets from
+the users that you follow.  In order to implement this, it is necessary to do
+a subquery:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">qr</span> <span class="o">=</span> <span class="n">Message</span><span class="o">.</span><span class="n">select</span><span class="p">()</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">user__in</span><span class="o">=</span><span class="n">some_user</span><span class="o">.</span><span class="n">following</span><span class="p">())</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">qr</span><span class="o">.</span><span class="n">sql</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span> <span class="c"># formatting cleaned up for readability</span>
+<span class="go">SELECT *</span>
+<span class="go">FROM message</span>
+<span class="go">WHERE user_id IN (</span>
+<span class="go">    SELECT t1.id</span>
+<span class="go">    FROM user AS t1</span>
+<span class="go">    INNER JOIN relationship AS t2</span>
+<span class="go">        ON t1.id = t2.to_user_id</span>
+<span class="go">    WHERE t2.from_user_id = ?</span>
+<span class="go">    ORDER BY username ASC</span>
+<span class="go">)</span>
+</pre></div>
+</div>
+<p>peewee supports doing subqueries on any <tt class="docutils literal"><span class="pre">ForeignKeyField</span></tt> or
+<tt class="docutils literal"><span class="pre">PrimaryKeyField</span></tt>.</p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Example app</a><ul>
+<li><a class="reference internal" href="#running-the-example">Running the example</a></li>
+<li><a class="reference internal" href="#diving-into-the-code">Diving into the code</a><ul>
+<li><a class="reference internal" href="#models">Models</a></li>
+<li><a class="reference internal" href="#creating-the-initial-tables">Creating the initial tables</a></li>
+<li><a class="reference internal" href="#connecting-to-the-database">Connecting to the database</a></li>
+<li><a class="reference internal" href="#doing-queries">Doing queries</a></li>
+<li><a class="reference internal" href="#creating-new-objects">Creating new objects</a></li>
+<li><a class="reference internal" href="#doing-subqueries">Doing subqueries</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="installation.html"
+                        title="previous chapter">Installing peewee</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="models.html"
+                        title="next chapter">Model API (smells like django)</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/peewee/example.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" size="18" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="models.html" title="Model API (smells like django)"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="installation.html" title="Installing peewee"
+             >previous</a> |</li>
+        <li><a href="../index.html">peewee v0.3.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2010, charles leifer.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.0.1.
+    </div>
+  </body>
+</html>

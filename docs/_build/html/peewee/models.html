@@ -1,0 +1,345 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Model API (smells like django) &mdash; peewee v0.3.0 documentation</title>
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '0.3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="peewee v0.3.0 documentation" href="../index.html" />
+    <link rel="next" title="Querying API" href="querying.html" />
+    <link rel="prev" title="Example app" href="example.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="querying.html" title="Querying API"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="example.html" title="Example app"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">peewee v0.3.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="model-api-smells-like-django">
+<h1>Model API (smells like django)<a class="headerlink" href="#model-api-smells-like-django" title="Permalink to this headline">¶</a></h1>
+<p>Models and their fields map directly to database tables and columns.  Consider
+the following:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">Blog</span><span class="p">(</span><span class="n">peewee</span><span class="o">.</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="n">peewee</span><span class="o">.</span><span class="n">CharField</span><span class="p">()</span> <span class="c"># &lt;-- VARCHAR</span>
+
+
+<span class="k">class</span> <span class="nc">Entry</span><span class="p">(</span><span class="n">peewee</span><span class="o">.</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">headline</span> <span class="o">=</span> <span class="n">peewee</span><span class="o">.</span><span class="n">CharField</span><span class="p">()</span>
+    <span class="n">content</span> <span class="o">=</span> <span class="n">peewee</span><span class="o">.</span><span class="n">TextField</span><span class="p">()</span> <span class="c"># &lt;-- TEXT</span>
+    <span class="n">pub_date</span> <span class="o">=</span> <span class="n">peewee</span><span class="o">.</span><span class="n">DateTimeField</span><span class="p">()</span> <span class="c"># &lt;-- DATETIME</span>
+    <span class="n">blog</span> <span class="o">=</span> <span class="n">peewee</span><span class="o">.</span><span class="n">ForeignKeyField</span><span class="p">()</span> <span class="c"># &lt;-- INTEGER referencing the Blog table</span>
+</pre></div>
+</div>
+<div class="section" id="creating-tables">
+<h2>Creating tables<a class="headerlink" href="#creating-tables" title="Permalink to this headline">¶</a></h2>
+<p>In order to start using these models, its necessary to open a connection to the
+database and create the tables first:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">peewee</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">peewee</span><span class="o">.</span><span class="n">database</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span> <span class="c"># &lt;-- opens connection to the default db, `peewee.db`</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">Blog</span><span class="o">.</span><span class="n">create_table</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">Entry</span><span class="o">.</span><span class="n">create_table</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="model-instances">
+<h2>Model instances<a class="headerlink" href="#model-instances" title="Permalink to this headline">¶</a></h2>
+<p>Assuming you&#8217;ve created the tables and connected to the database, you are now
+free to create models and execute queries.</p>
+<p>Creating models from the command-line is a snap:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">blog</span> <span class="o">=</span> <span class="n">Blog</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s">&#39;Funny pictures of animals blog&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">cat_entry</span> <span class="o">=</span> <span class="n">Entry</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">headline</span><span class="o">=</span><span class="s">&#39;maru the kitty&#39;</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">content</span><span class="o">=</span><span class="s">&#39;http://www.youtube.com/watch?v=xdhLQCYQ-nQ&#39;</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">pub_date</span><span class="o">=</span><span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(),</span>
+<span class="gp">... </span>    <span class="n">blog</span><span class="o">=</span><span class="n">blog</span>
+<span class="gp">... </span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">entry</span><span class="o">.</span><span class="n">blog</span>
+<span class="go">&lt;__main__.Blog object at 0x151f4d0&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">entry</span><span class="o">.</span><span class="n">blog</span><span class="o">.</span><span class="n">name</span>
+<span class="go">&#39;Funny pictures of animals blog&#39;</span>
+</pre></div>
+</div>
+<p>As you can see from above, the foreign key from <tt class="docutils literal"><span class="pre">Entry</span></tt> to <tt class="docutils literal"><span class="pre">Blog</span></tt> can be
+traversed automatically.  The reverse is also true:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">blog</span><span class="o">.</span><span class="n">entry_set</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="k">print</span> <span class="n">entry</span><span class="o">.</span><span class="n">headline</span>
+<span class="gp">...</span>
+<span class="go">maru the kitty</span>
+</pre></div>
+</div>
+<p>Under the hood, the <tt class="docutils literal"><span class="pre">entry_set</span></tt> attribute is just a <tt class="docutils literal"><span class="pre">SelectQuery</span></tt>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">blog</span><span class="o">.</span><span class="n">entry_set</span>
+<span class="go">&lt;peewee.SelectQuery object at 0x151f510&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">blog</span><span class="o">.</span><span class="n">entry_set</span><span class="o">.</span><span class="n">sql</span><span class="p">()</span>
+<span class="go">(&#39;SELECT * FROM entry WHERE blog_id = ?&#39;, [1])</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="model-options">
+<h2>Model options<a class="headerlink" href="#model-options" title="Permalink to this headline">¶</a></h2>
+<p>In order not to pollute the model namespace, model-specific configuration is
+placed in a special class called <tt class="docutils literal"><span class="pre">Meta</span></tt>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">import</span> <span class="nn">peewee</span>
+
+<span class="n">custom_db</span> <span class="o">=</span> <span class="n">peewee</span><span class="o">.</span><span class="n">Database</span><span class="p">(</span><span class="s">&#39;custom.db&#39;</span><span class="p">)</span>
+
+<span class="k">class</span> <span class="nc">CustomModel</span><span class="p">(</span><span class="n">peewee</span><span class="o">.</span><span class="n">Model</span><span class="p">):</span>
+    <span class="o">...</span> <span class="n">fields</span> <span class="o">...</span>
+
+    <span class="k">class</span> <span class="nc">Meta</span><span class="p">:</span>
+        <span class="n">database</span> <span class="o">=</span> <span class="n">custom_db</span>
+</pre></div>
+</div>
+<p>This instructs peewee that whenever a query is executed on CustomModel to use
+the custom database.  Like the default database, a connection to <tt class="docutils literal"><span class="pre">custom_db</span></tt>
+must be created before any queries can be executed.</p>
+</div>
+<div class="section" id="model-methods">
+<h2>Model methods<a class="headerlink" href="#model-methods" title="Permalink to this headline">¶</a></h2>
+<dl class="method">
+<dt id="save">
+<tt class="descname">save</tt><big>(</big><em>self</em><big>)</big><a class="headerlink" href="#save" title="Permalink to this definition">¶</a></dt>
+<dd><p>save the given instance, creating or updating depending on whether it has a
+primary key.</p>
+<p>example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">some_obj</span><span class="o">.</span><span class="n">title</span> <span class="o">=</span> <span class="s">&#39;new title&#39;</span> <span class="c"># &lt;-- does not touch the database</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">some_obj</span><span class="o">.</span><span class="n">save</span><span class="p">()</span> <span class="c"># &lt;-- change is persisted to the db</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="create_table">
+<tt class="descname">create_table</tt><big>(</big><em>cls</em><big>)</big><a class="headerlink" href="#create_table" title="Permalink to this definition">¶</a></dt>
+<dd><p>create the table for the given model.  executes a <tt class="docutils literal"><span class="pre">CREATE</span> <span class="pre">TABLE</span> <span class="pre">IF</span> <span class="pre">NOT</span> <span class="pre">EXISTS</span></tt>
+so it won&#8217;t throw an error if the table already exists.</p>
+<p>example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">database</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">SomeModel</span><span class="o">.</span><span class="n">create_table</span><span class="p">()</span> <span class="c"># &lt;-- creates the table for SomeModel</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="drop_table">
+<tt class="descname">drop_table</tt><big>(</big><em>cls</em><big>)</big><a class="headerlink" href="#drop_table" title="Permalink to this definition">¶</a></dt>
+<dd><p>drops the table for the given model.  will fail if the table does not exist.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="create">
+<tt class="descname">create</tt><big>(</big><em>cls</em>, <em>**attributes</em><big>)</big><a class="headerlink" href="#create" title="Permalink to this definition">¶</a></dt>
+<dd><p>create an instance of <tt class="docutils literal"><span class="pre">cls</span></tt> with the given attributes set.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>attributes</strong> &#8211; key/value pairs of model attributes</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p>example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">user</span> <span class="o">=</span> <span class="n">User</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">username</span><span class="o">=</span><span class="s">&#39;admin&#39;</span><span class="p">,</span> <span class="n">password</span><span class="o">=</span><span class="s">&#39;test&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="get">
+<tt class="descname">get</tt><big>(</big><em>cls</em>, <em>**attributes</em><big>)</big><a class="headerlink" href="#get" title="Permalink to this definition">¶</a></dt>
+<dd><p>get an instance of <tt class="docutils literal"><span class="pre">cls</span></tt> with the given attributes set.  if the instance
+does not exist, a <tt class="docutils literal"><span class="pre">StopIteration</span></tt> exception will be raised.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>attributes</strong> &#8211; key/value pairs of model attributes</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p>example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">admin_user</span> <span class="o">=</span> <span class="n">User</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">username</span><span class="o">=</span><span class="s">&#39;admin&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="get_or_create">
+<tt class="descname">get_or_create</tt><big>(</big><em>cls</em>, <em>**attributes</em><big>)</big><a class="headerlink" href="#get_or_create" title="Permalink to this definition">¶</a></dt>
+<dd><p>get the instance of <tt class="docutils literal"><span class="pre">cls</span></tt> with the given attributes set.  if the instance
+does not exist it will be created.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>attributes</strong> &#8211; key/value pairs of model attributes</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p>example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">CachedObj</span><span class="o">.</span><span class="n">get_or_create</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="n">key</span><span class="p">,</span> <span class="n">val</span><span class="o">=</span><span class="n">some_val</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="select">
+<tt class="descname">select</tt><big>(</big><em>cls</em>, <em>query=None</em><big>)</big><a class="headerlink" href="#select" title="Permalink to this definition">¶</a></dt>
+<dd><p>create a SelectQuery for the given <tt class="docutils literal"><span class="pre">cls</span></tt></p>
+<p>example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">User</span><span class="o">.</span><span class="n">select</span><span class="p">()</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">active</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="s">&#39;username&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="update">
+<tt class="descname">update</tt><big>(</big><em>cls</em>, <em>**query</em><big>)</big><a class="headerlink" href="#update" title="Permalink to this definition">¶</a></dt>
+<dd><p>create an UpdateQuery for the given <tt class="docutils literal"><span class="pre">cls</span></tt></p>
+<p>example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">q</span> <span class="o">=</span> <span class="n">User</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">active</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">registration_expired</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">q</span><span class="o">.</span><span class="n">sql</span><span class="p">()</span>
+<span class="go">(&#39;UPDATE user SET active=? WHERE registration_expired = ?&#39;, [0, 1])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">q</span><span class="o">.</span><span class="n">execute</span><span class="p">()</span> <span class="c"># &lt;-- execute it</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="delete">
+<tt class="descname">delete</tt><big>(</big><em>cls</em>, <em>**query</em><big>)</big><a class="headerlink" href="#delete" title="Permalink to this definition">¶</a></dt>
+<dd><p>create an DeleteQuery for the given <tt class="docutils literal"><span class="pre">cls</span></tt></p>
+<p>example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">q</span> <span class="o">=</span> <span class="n">User</span><span class="o">.</span><span class="n">delete</span><span class="p">()</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">active</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">q</span><span class="o">.</span><span class="n">sql</span><span class="p">()</span>
+<span class="go">(&#39;DELETE FROM user WHERE active = ?&#39;, [0])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">q</span><span class="o">.</span><span class="n">execute</span><span class="p">()</span> <span class="c"># &lt;-- execute it</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="insert">
+<tt class="descname">insert</tt><big>(</big><em>cls</em>, <em>**query</em><big>)</big><a class="headerlink" href="#insert" title="Permalink to this definition">¶</a></dt>
+<dd><p>create an InsertQuery for the given <tt class="docutils literal"><span class="pre">cls</span></tt></p>
+<p>example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">q</span> <span class="o">=</span> <span class="n">User</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="n">username</span><span class="o">=</span><span class="s">&#39;admin&#39;</span><span class="p">,</span> <span class="n">active</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">registration_expired</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">q</span><span class="o">.</span><span class="n">sql</span><span class="p">()</span>
+<span class="go">(&#39;INSERT INTO user (username,active,registration_expired) VALUES (?,?,?)&#39;, [&#39;admin&#39;, 1, 0])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">q</span><span class="o">.</span><span class="n">execute</span><span class="p">()</span>
+<span class="go">1</span>
+</pre></div>
+</div>
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Model API (smells like django)</a><ul>
+<li><a class="reference internal" href="#creating-tables">Creating tables</a></li>
+<li><a class="reference internal" href="#model-instances">Model instances</a></li>
+<li><a class="reference internal" href="#model-options">Model options</a></li>
+<li><a class="reference internal" href="#model-methods">Model methods</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="example.html"
+                        title="previous chapter">Example app</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="querying.html"
+                        title="next chapter">Querying API</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/peewee/models.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" size="18" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="querying.html" title="Querying API"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="example.html" title="Example app"
+             >previous</a> |</li>
+        <li><a href="../index.html">peewee v0.3.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2010, charles leifer.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.0.1.
+    </div>
+  </body>
+</html>

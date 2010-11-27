@@ -1,0 +1,571 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Querying API &mdash; peewee v0.3.0 documentation</title>
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '0.3.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="peewee v0.3.0 documentation" href="../index.html" />
+    <link rel="prev" title="Model API (smells like django)" href="models.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="models.html" title="Model API (smells like django)"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">peewee v0.3.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="querying-api">
+<h1>Querying API<a class="headerlink" href="#querying-api" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="constructing-queries">
+<h2>Constructing queries<a class="headerlink" href="#constructing-queries" title="Permalink to this headline">¶</a></h2>
+<p>Queries in peewee are constructed one piece at a time.</p>
+<p>The &#8220;pieces&#8221; of a peewee query are generally representative of clauses you might
+find in a SQL query.  All pieces are chainable so rather complex queries are
+possible.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">user_q</span> <span class="o">=</span> <span class="n">User</span><span class="o">.</span><span class="n">select</span><span class="p">()</span> <span class="c"># &lt;-- query is not executed</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">user_q</span>
+<span class="go">&lt;peewee.SelectQuery object at 0x7f6b0810c610&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="p">[</span><span class="n">u</span><span class="o">.</span><span class="n">username</span> <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="n">user_q</span><span class="p">]</span> <span class="c"># &lt;-- query is evaluated here</span>
+<span class="go">[u&#39;admin&#39;, u&#39;staff&#39;, u&#39;editor&#39;]</span>
+</pre></div>
+</div>
+<p>We can build up the query by adding some clauses to it:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">user_q</span> <span class="o">=</span> <span class="n">user_q</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">username__in</span><span class="o">=</span><span class="p">[</span><span class="s">&#39;admin&#39;</span><span class="p">,</span> <span class="s">&#39;editor&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">order_by</span><span class="p">((</span><span class="s">&#39;username&#39;</span><span class="p">,</span> <span class="s">&#39;desc&#39;</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="p">[</span><span class="n">u</span><span class="o">.</span><span class="n">username</span> <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="n">user_q</span><span class="p">]</span> <span class="c"># &lt;-- query is re-evaluated here</span>
+<span class="go">[u&#39;editor&#39;, u&#39;admin&#39;]</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="where-clause">
+<h2>Where clause<a class="headerlink" href="#where-clause" title="Permalink to this headline">¶</a></h2>
+<p>All queries except <tt class="docutils literal"><span class="pre">InsertQuery</span></tt> support the <tt class="docutils literal"><span class="pre">where()</span></tt> method.  If you are
+familiar with Django&#8217;s ORM, it is analagous to the <tt class="docutils literal"><span class="pre">filter()</span></tt> method.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">User</span><span class="o">.</span><span class="n">select</span><span class="p">()</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">is_staff</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span><span class="o">.</span><span class="n">sql</span><span class="p">()</span>
+<span class="go">(&#39;SELECT * FROM user WHERE is_staff = ?&#39;, [1])</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last"><tt class="docutils literal"><span class="pre">User.select()</span></tt> is equivalent to <tt class="docutils literal"><span class="pre">SelectQuery(User)</span></tt>.</p>
+</div>
+<p>The <tt class="docutils literal"><span class="pre">where()</span></tt> method acts on the <tt class="docutils literal"><span class="pre">Model</span></tt> that is the current &#8220;context&#8221;.
+This is either:</p>
+<ul class="simple">
+<li>the model the query class was initialized with</li>
+<li>the model most recently JOINed on</li>
+</ul>
+<p>Here is an example using JOINs:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">User</span><span class="o">.</span><span class="n">select</span><span class="p">()</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">is_staff</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">Blog</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">status</span><span class="o">=</span><span class="n">LIVE</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This query grabs all staff users who have a blog that is &#8220;LIVE&#8221;.  This does the
+opposite, grabs all the blogs that are live whose author is a staffer:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">Blog</span><span class="o">.</span><span class="n">select</span><span class="p">()</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">status</span><span class="o">=</span><span class="n">LIVE</span><span class="p">)</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">User</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">is_staff</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">to <tt class="docutils literal"><span class="pre">join()</span></tt> from one model to another there must be a
+<tt class="docutils literal"><span class="pre">ForeignKeyField</span></tt> linking the two.</p>
+</div>
+<p>Another way to write the above query would be:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">Blog</span><span class="o">.</span><span class="n">select</span><span class="p">()</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">status</span><span class="o">=</span><span class="n">LIVE</span><span class="p">,</span> <span class="n">user__in</span><span class="o">=</span><span class="n">User</span><span class="o">.</span><span class="n">select</span><span class="p">()</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">is_staff</span><span class="o">=</span><span class="bp">True</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>The above bears a little bit of explanation.  First off the SQL generated will
+not perform any explicit JOINs - it will rather use a subquery in the WHERE
+clause:</p>
+<div class="highlight-python"><pre># using subqueries
+SELECT * FROM blog
+WHERE (
+    status = ? AND
+    user_id IN (
+        SELECT t1.id FROM user AS t1 WHERE t1.is_staff = ?
+    )
+)
+
+# using joins
+SELECT t1.* FROM blog AS t1
+INNER JOIN user AS t2
+    ON t1.user_id = t2.id
+WHERE
+    t1.status = ? AND
+    t2.is_staff = ?</pre>
+</div>
+<p>The other bit that&#8217;s unique about the query is that it specifies &#8220;user__in&#8221;.
+Users familiar with Django will recognize this syntax - lookups other than &#8220;=&#8221;
+are signified by a double-underscore followed by the lookup type.  The following
+lookup types are available in peewee:</p>
+<dl class="docutils">
+<dt><tt class="docutils literal"><span class="pre">__eq</span></tt>:</dt>
+<dd>x = y, the default</dd>
+<dt><tt class="docutils literal"><span class="pre">__lt</span></tt>:</dt>
+<dd>x &lt; y</dd>
+<dt><tt class="docutils literal"><span class="pre">__lte</span></tt>:</dt>
+<dd>x &lt;= y</dd>
+<dt><tt class="docutils literal"><span class="pre">__gt</span></tt>:</dt>
+<dd>x &gt; y</dd>
+<dt><tt class="docutils literal"><span class="pre">__gte</span></tt>:</dt>
+<dd>x &gt;= y</dd>
+<dt><tt class="docutils literal"><span class="pre">__ne</span></tt>:</dt>
+<dd>x != y</dd>
+<dt><tt class="docutils literal"><span class="pre">__is</span></tt>:</dt>
+<dd>x IS y, used for testing against NULL values</dd>
+<dt><tt class="docutils literal"><span class="pre">__contains</span></tt>:</dt>
+<dd>case-sensitive check for substring</dd>
+<dt><tt class="docutils literal"><span class="pre">__icontains</span></tt>:</dt>
+<dd>case-insensitive check for substring</dd>
+<dt><tt class="docutils literal"><span class="pre">__in</span></tt>:</dt>
+<dd>x IN y, where y is either a list of values or a <tt class="docutils literal"><span class="pre">SelectQuery</span></tt></dd>
+</dl>
+<div class="section" id="performing-advanced-queries">
+<h3>Performing advanced queries<a class="headerlink" href="#performing-advanced-queries" title="Permalink to this headline">¶</a></h3>
+<p>As you may have noticed, all the examples up to now have shown queries that
+combine multiple clauses with &#8220;AND&#8221;.  Taking another page from Django&#8217;s ORM,
+peewee allows the creation of arbitrarily complex queries using a special
+notation called <strong>Q objects</strong>.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">sq</span> <span class="o">=</span> <span class="n">User</span><span class="o">.</span><span class="n">select</span><span class="p">()</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">Q</span><span class="p">(</span><span class="n">is_staff</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span> <span class="o">|</span> <span class="n">Q</span><span class="p">(</span><span class="n">is_superuser</span><span class="o">=</span><span class="bp">True</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">sq</span><span class="o">.</span><span class="n">sql</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+<span class="go">SELECT * FROM user WHERE (is_staff = ? OR is_superuser = ?)</span>
+</pre></div>
+</div>
+<p>Q objects can be combined using the bitwise &#8220;or&#8221; and &#8220;and&#8221; operators.  In order
+to negate a Q object, use the bitwise &#8220;invert&#8221; operator:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">staff_users</span> <span class="o">=</span> <span class="n">User</span><span class="o">.</span><span class="n">select</span><span class="p">()</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">is_staff</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">Blog</span><span class="o">.</span><span class="n">select</span><span class="p">()</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="o">~</span><span class="n">Q</span><span class="p">(</span><span class="n">user__in</span><span class="o">=</span><span class="n">staff_users</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>This query generates the following SQL:</p>
+<div class="highlight-python"><pre>SELECT * FROM blog
+WHERE
+    NOT user_id IN (
+        SELECT t1.id FROM user AS t1 WHERE t1.is_staff = ?
+    )</pre>
+</div>
+<p>Rather complex lookups are possible:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">sq</span> <span class="o">=</span> <span class="n">User</span><span class="o">.</span><span class="n">select</span><span class="p">()</span><span class="o">.</span><span class="n">where</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="p">(</span><span class="n">Q</span><span class="p">(</span><span class="n">is_staff</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span> <span class="o">|</span> <span class="n">Q</span><span class="p">(</span><span class="n">is_superuser</span><span class="o">=</span><span class="bp">True</span><span class="p">))</span> <span class="o">&amp;</span>
+<span class="gp">... </span>    <span class="p">(</span><span class="n">Q</span><span class="p">(</span><span class="n">join_date__gte</span><span class="o">=</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2009</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span> <span class="o">|</span> <span class="n">Q</span><span class="p">(</span><span class="n">join_date__lt</span><span class="o">=</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2005</span><span class="p">,</span> <span class="mi">1</span> <span class="mi">1</span><span class="p">)))</span>
+<span class="gp">... </span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">sq</span><span class="o">.</span><span class="n">sql</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span> <span class="c"># cleaned up</span>
+<span class="go">SELECT * FROM user</span>
+<span class="go">WHERE (</span>
+<span class="go">    (is_staff = ? OR is_superuser = ?) AND</span>
+<span class="go">    (join_date &gt;= ? OR join_date &lt; ?)</span>
+<span class="go">)</span>
+</pre></div>
+</div>
+<p>This query selects all staff or super users who joined after 2009 or before
+2005.</p>
+</div>
+</div>
+<div class="section" id="query-evaluation">
+<h2>Query evaluation<a class="headerlink" href="#query-evaluation" title="Permalink to this headline">¶</a></h2>
+<p>In order to execute a query, it is <em>always</em> necessary to call the <tt class="docutils literal"><span class="pre">execute()</span></tt>
+method.</p>
+<p>To get a better idea of how querying works let&#8217;s look at some example queries
+and their return values:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dq</span> <span class="o">=</span> <span class="n">User</span><span class="o">.</span><span class="n">delete</span><span class="p">()</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">active</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span> <span class="c"># &lt;-- returns a DeleteQuery</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dq</span>
+<span class="go">&lt;peewee.DeleteQuery object at 0x7fc866ada4d0&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dq</span><span class="o">.</span><span class="n">execute</span><span class="p">()</span> <span class="c"># &lt;-- executes the query and returns number of rows deleted</span>
+<span class="go">3</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">uq</span> <span class="o">=</span> <span class="n">User</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">active</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">id__gt</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="c"># &lt;-- returns an UpdateQuery</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">uq</span>
+<span class="go">&lt;peewee.UpdateQuery object at 0x7fc865beff50&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">uq</span><span class="o">.</span><span class="n">execute</span><span class="p">()</span> <span class="c"># &lt;-- executes the query and returns number of rows updated</span>
+<span class="go">2</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">iq</span> <span class="o">=</span> <span class="n">User</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="n">username</span><span class="o">=</span><span class="s">&#39;new user&#39;</span><span class="p">)</span> <span class="c"># &lt;-- returns an InsertQuery</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">iq</span>
+<span class="go">&lt;peewee.InsertQuery object at 0x7fc865beff10&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">iq</span><span class="o">.</span><span class="n">execute</span><span class="p">()</span> <span class="c"># &lt;-- executes query and returns the new row&#39;s PK</span>
+<span class="go">3</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">sq</span> <span class="o">=</span> <span class="n">User</span><span class="o">.</span><span class="n">select</span><span class="p">()</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">active</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span> <span class="c"># &lt;-- returns a SelectQuery</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">sq</span>
+<span class="go">&lt;peewee.SelectQuery object at 0x7fc865b7a510&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">qr</span> <span class="o">=</span> <span class="n">sq</span><span class="o">.</span><span class="n">execute</span><span class="p">()</span> <span class="c"># &lt;-- executes query and returns a QueryResultWrapper</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">qr</span>
+<span class="go">&lt;peewee.QueryResultWrapper object at 0x7fc865b7a6d0&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="p">[</span><span class="n">u</span><span class="o">.</span><span class="n">id</span> <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="n">qr</span><span class="p">]</span>
+<span class="go">[1, 2, 3, 4, 7, 8]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="p">[</span><span class="n">u</span><span class="o">.</span><span class="n">id</span> <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="n">qr</span><span class="p">]</span> <span class="c"># &lt;-- re-iterating over qr does not re-execute query</span>
+<span class="go">[1, 2, 3, 4, 7, 8]</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="p">[</span><span class="n">u</span><span class="o">.</span><span class="n">id</span> <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="n">sq</span><span class="p">]</span> <span class="c"># &lt;-- as a shortcut, you can iterate directly over</span>
+<span class="gp">&gt;&gt;&gt; </span>                   <span class="c">#     a SelectQuery (which uses a QueryResultWrapper</span>
+<span class="gp">&gt;&gt;&gt; </span>                   <span class="c">#     behind-the-scenes)</span>
+<span class="go">[1, 2, 3, 4, 7, 8]</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">iterating over a SelectQuery will cause it to be evaluated, but iterating
+over it multiple times will not result in the query being executed again.</p>
+</div>
+</div>
+<div class="section" id="queryresultwrapper">
+<h2>QueryResultWrapper<a class="headerlink" href="#queryresultwrapper" title="Permalink to this headline">¶</a></h2>
+<p>As I hope the previous bit showed, Delete, Insert and Update queries are all
+pretty straightforward.  Select queries are a little bit tricky in that they
+return a special object called a <tt class="docutils literal"><span class="pre">QueryResultWrapper</span></tt>.  The sole purpose of this
+class is to allow the results of a query to be iterated over efficiently.  In
+general it should not need to be dealt with explicitly.</p>
+<p>The preferred method of iterating over a result set is to iterate directly over
+the <tt class="docutils literal"><span class="pre">SelectQuery</span></tt>, allowing it to manage the <tt class="docutils literal"><span class="pre">QueryResultWrapper</span></tt> internally.</p>
+</div>
+<div class="section" id="selectquery">
+<h2>SelectQuery<a class="headerlink" href="#selectquery" title="Permalink to this headline">¶</a></h2>
+<p><tt class="docutils literal"><span class="pre">SelectQuery</span></tt> is by far the most complex of the 4 query classes available in
+peewee.  It supports JOINing on other tables, aggregation via GROUP BY and HAVING
+clauses, ordering via ORDER BY, and can be sliced to return only a subset of
+results.  All methods are chain-able.</p>
+<dl class="method">
+<dt id="__init__">
+<tt class="descname">__init__</tt><big>(</big><em>self</em>, <em>model</em>, <em>query=None</em><big>)</big><a class="headerlink" href="#__init__" title="Permalink to this definition">¶</a></dt>
+<dd><p>if no query is provided, it will default to &#8216;*&#8217;.  this parameter can be
+either a dictionary or a string:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">sq</span> <span class="o">=</span> <span class="n">SelectQuery</span><span class="p">(</span><span class="n">Blog</span><span class="p">,</span> <span class="p">{</span><span class="n">Blog</span><span class="p">:</span> <span class="p">[</span><span class="s">&#39;id&#39;</span><span class="p">,</span> <span class="s">&#39;title&#39;</span><span class="p">]})</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">sq</span> <span class="o">=</span> <span class="n">SelectQuery</span><span class="p">(</span><span class="n">Blog</span><span class="p">,</span> <span class="p">{</span>
+<span class="gp">... </span>    <span class="n">Blog</span><span class="p">:</span> <span class="p">[</span><span class="s">&#39;*&#39;</span><span class="p">],</span>
+<span class="gp">... </span>    <span class="n">Entry</span><span class="p">:</span> <span class="p">[</span><span class="n">peewee</span><span class="o">.</span><span class="n">Count</span><span class="p">(</span><span class="s">&#39;id&#39;</span><span class="p">)]</span>
+<span class="gp">... </span><span class="p">})</span><span class="o">.</span><span class="n">group_by</span><span class="p">(</span><span class="s">&#39;id&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">Entry</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">sq</span><span class="o">.</span><span class="n">sql</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span> <span class="c"># formatted</span>
+<span class="go">SELECT t1.*, COUNT(t2.id) AS count</span>
+<span class="go">FROM blog AS t1</span>
+<span class="go">INNER JOIN entry AS t2</span>
+<span class="go">    ON t1.id = t2.blog_id</span>
+<span class="go">GROUP BY t1.id</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">sq</span> <span class="o">=</span> <span class="n">SelectQuery</span><span class="p">(</span><span class="n">Blog</span><span class="p">,</span> <span class="s">&#39;id, title&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">sq</span><span class="o">.</span><span class="n">sql</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+<span class="go">SELECT id, title FROM blog</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="where">
+<tt class="descname">where</tt><big>(</big><em>self</em>, <em>*args</em>, <em>**kwargs</em><big>)</big><a class="headerlink" href="#where" title="Permalink to this definition">¶</a></dt>
+<dd><p>generate a WHERE clause for the current &#8220;query context&#8221;.  <a href="#id1"><span class="problematic" id="id2">*</span></a>args is either
+a list of <tt class="docutils literal"><span class="pre">Q</span></tt> or <tt class="docutils literal"><span class="pre">Node</span></tt> objects, and <a href="#id3"><span class="problematic" id="id4">**</span></a>kwargs is a mapping of
+column + lookup to value:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">sq</span> <span class="o">=</span> <span class="n">SelectQuery</span><span class="p">(</span><span class="n">Blog</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">title</span><span class="o">=</span><span class="s">&#39;some title&#39;</span><span class="p">,</span> <span class="n">author</span><span class="o">=</span><span class="n">some_user</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">sq</span> <span class="o">=</span> <span class="n">SelectQuery</span><span class="p">(</span><span class="n">Blog</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">Q</span><span class="p">(</span><span class="n">title</span><span class="o">=</span><span class="s">&#39;some title&#39;</span><span class="p">)</span> <span class="o">|</span> <span class="n">Q</span><span class="p">(</span><span class="n">title</span><span class="o">=</span><span class="s">&#39;other title&#39;</span><span class="p">))</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="join">
+<tt class="descname">join</tt><big>(</big><em>self</em>, <em>model</em>, <em>join_type=None</em>, <em>on=None</em><big>)</big><a class="headerlink" href="#join" title="Permalink to this definition">¶</a></dt>
+<dd><p>generate a JOIN clause from the current &#8220;query context&#8221; to the <tt class="docutils literal"><span class="pre">model</span></tt> passed
+in, and establishes <tt class="docutils literal"><span class="pre">model</span></tt> as the new &#8220;query context&#8221;.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>model</strong> &#8211; the model to join on.  there must be a <tt class="docutils literal"><span class="pre">ForeignKeyField</span></tt> between
+the current &#8220;query context&#8221; and the model passed in.</li>
+<li><strong>join_type</strong> &#8211; allows the type of JOIN used to be specified explicitly</li>
+<li><strong>on</strong> &#8211; if multiple foreign keys exist between two models, this parameter
+is a string containing the name of the ForeignKeyField to join on.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">sq</span> <span class="o">=</span> <span class="n">SelectQuery</span><span class="p">(</span><span class="n">Blog</span><span class="p">)</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">Entry</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">title</span><span class="o">=</span><span class="s">&#39;Some Entry&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">sq</span> <span class="o">=</span> <span class="n">SelectQuery</span><span class="p">(</span><span class="n">User</span><span class="p">)</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">Relationship</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s">&#39;to_user_id&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">from_user</span><span class="o">=</span><span class="bp">self</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="switch">
+<tt class="descname">switch</tt><big>(</big><em>self</em>, <em>model</em><big>)</big><a class="headerlink" href="#switch" title="Permalink to this definition">¶</a></dt>
+<dd><p>switches the &#8220;query context&#8221; to the given model.  raises an exception if the
+model has not been selected or joined on previously.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">sq</span> <span class="o">=</span> <span class="n">SelectQuery</span><span class="p">(</span><span class="n">Blog</span><span class="p">)</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">Entry</span><span class="p">)</span><span class="o">.</span><span class="n">switch</span><span class="p">(</span><span class="n">Blog</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">title</span><span class="o">=</span><span class="s">&#39;Some Blog&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="count">
+<tt class="descname">count</tt><big>(</big><em>self</em><big>)</big><a class="headerlink" href="#count" title="Permalink to this definition">¶</a></dt>
+<dd><p>returns an integer representing the number of rows in the current query</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">sq</span> <span class="o">=</span> <span class="n">SelectQuery</span><span class="p">(</span><span class="n">Blog</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">sq</span><span class="o">.</span><span class="n">count</span><span class="p">()</span>
+<span class="go">45 # &lt;-- number of blogs</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">sq</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">status</span><span class="o">=</span><span class="n">DELETED</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">sq</span><span class="o">.</span><span class="n">count</span><span class="p">()</span>
+<span class="go">3 # &lt;-- number of blogs that are marked as deleted</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="group_by">
+<tt class="descname">group_by</tt><big>(</big><em>self</em>, <em>field_name</em><big>)</big><a class="headerlink" href="#group_by" title="Permalink to this definition">¶</a></dt>
+<dd><p>adds field_name to the GROUP BY clause where field_name is a field on the
+current &#8220;query context&#8221;:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">sq</span> <span class="o">=</span> <span class="n">Blog</span><span class="o">.</span><span class="n">select</span><span class="p">({</span>
+</pre></div>
+</div>
+<p>...     Blog: [&#8216;*&#8217;],
+...     Entry: [Count(&#8216;id&#8217;)]
+... }).group_by(&#8216;id&#8217;).join(Entry)</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="having">
+<tt class="descname">having</tt><big>(</big><em>self</em>, <em>clause</em><big>)</big><a class="headerlink" href="#having" title="Permalink to this definition">¶</a></dt>
+<dd><p>adds the clause to the HAVING clause</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">sq</span> <span class="o">=</span> <span class="n">Blog</span><span class="o">.</span><span class="n">select</span><span class="p">({</span>
+<span class="gp">... </span>    <span class="n">Blog</span><span class="p">:</span> <span class="p">[</span><span class="s">&#39;*&#39;</span><span class="p">],</span>
+<span class="gp">... </span>    <span class="n">Entry</span><span class="p">:</span> <span class="p">[</span><span class="n">Count</span><span class="p">(</span><span class="s">&#39;id&#39;</span><span class="p">,</span> <span class="s">&#39;num_entries&#39;</span><span class="p">)]</span>
+<span class="gp">... </span><span class="p">})</span><span class="o">.</span><span class="n">group_by</span><span class="p">(</span><span class="s">&#39;id&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">Entry</span><span class="p">)</span><span class="o">.</span><span class="n">having</span><span class="p">(</span><span class="s">&#39;num_entries &gt; 10&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="order_by">
+<tt class="descname">order_by</tt><big>(</big><em>self</em>, <em>clause</em><big>)</big><a class="headerlink" href="#order_by" title="Permalink to this definition">¶</a></dt>
+<dd><p>adds the provided clause (a field name or alias) to the query&#8217;s
+ORDER BY clause.  if a field name is passed in, it must be a field on the
+current &#8220;query context&#8221;, otherwise it is treated as an alias.  peewee also
+provides two convenience methods to allow ordering ascending or descending,
+called <tt class="docutils literal"><span class="pre">asc()</span></tt> and <tt class="docutils literal"><span class="pre">desc()</span></tt>.</p>
+<p>example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">sq</span> <span class="o">=</span> <span class="n">Blog</span><span class="o">.</span><span class="n">select</span><span class="p">()</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="s">&#39;title&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">sq</span> <span class="o">=</span> <span class="n">Blog</span><span class="o">.</span><span class="n">select</span><span class="p">({</span>
+<span class="gp">... </span>    <span class="n">Blog</span><span class="p">:</span> <span class="p">[</span><span class="s">&#39;*&#39;</span><span class="p">],</span>
+<span class="gp">... </span>    <span class="n">Entry</span><span class="p">:</span> <span class="p">[</span><span class="n">Max</span><span class="p">(</span><span class="s">&#39;pub_date&#39;</span><span class="p">,</span> <span class="s">&#39;max_pub&#39;</span><span class="p">)]</span>
+<span class="gp">... </span><span class="p">})</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">Entry</span><span class="p">)</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="n">desc</span><span class="p">(</span><span class="s">&#39;max_pub&#39;</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>check out how the query context applies to ordering:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">blog_title</span> <span class="o">=</span> <span class="n">Blog</span><span class="o">.</span><span class="n">select</span><span class="p">()</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="s">&#39;title&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">Entry</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">blog_title</span><span class="o">.</span><span class="n">sql</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+<span class="go">SELECT t1.* FROM blog AS t1</span>
+<span class="go">INNER JOIN entry AS t2</span>
+<span class="go">    ON t1.id = t2.blog_id</span>
+<span class="go">ORDER BY t1.title</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">entry_title</span> <span class="o">=</span> <span class="n">Blog</span><span class="o">.</span><span class="n">select</span><span class="p">()</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">Entry</span><span class="p">)</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="s">&#39;title&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">entry_title</span><span class="o">.</span><span class="n">sql</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+<span class="go">SELECT t1.* FROM blog AS t1</span>
+<span class="go">INNER JOIN entry AS t2</span>
+<span class="go">    ON t1.id = t2.blog_id</span>
+<span class="go">ORDER BY t2.title # &lt;-- note that it&#39;s using the title on Entry this time</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="paginate">
+<tt class="descname">paginate</tt><big>(</big><em>self</em>, <em>page_num</em>, <em>paginate_by=20</em><big>)</big><a class="headerlink" href="#paginate" title="Permalink to this definition">¶</a></dt>
+<dd><p>applies a LIMIT and OFFSET to the query.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">Blog</span><span class="o">.</span><span class="n">select</span><span class="p">()</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="s">&#39;username&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">paginate</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">20</span><span class="p">)</span> <span class="c"># &lt;-- get blogs 41-60</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="distinct">
+<tt class="descname">distinct</tt><big>(</big><em>self</em><big>)</big><a class="headerlink" href="#distinct" title="Permalink to this definition">¶</a></dt>
+<dd><p>indicates that this query should only return distinct rows.  results in a
+SELECT DISTINCT query.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="execute">
+<tt class="descname">execute</tt><big>(</big><em>self</em><big>)</big><a class="headerlink" href="#execute" title="Permalink to this definition">¶</a></dt>
+<dd><p>executes the query and returns a <tt class="docutils literal"><span class="pre">QueryResultWrapper</span></tt> for iterating over
+the result set.  the results are managed internally by the query and whenever
+a clause is added that would possibly alter the result set, the query is
+marked for re-execution.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="__iter__">
+<tt class="descname">__iter__</tt><big>(</big><em>self</em><big>)</big><a class="headerlink" href="#__iter__" title="Permalink to this definition">¶</a></dt>
+<dd><p>executes the query:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">user</span> <span class="ow">in</span> <span class="n">User</span><span class="o">.</span><span class="n">select</span><span class="p">()</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">active</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">print</span> <span class="n">user</span><span class="o">.</span><span class="n">username</span>
+</pre></div>
+</div>
+</dd></dl>
+
+</div>
+<div class="section" id="updatequery">
+<h2>UpdateQuery<a class="headerlink" href="#updatequery" title="Permalink to this headline">¶</a></h2>
+<p><tt class="docutils literal"><span class="pre">UpdateQuery</span></tt> is fairly straightforward and is used for updating rows in the
+database.</p>
+<dl class="method">
+<dt>
+<tt class="descname">__init__</tt><big>(</big><em>self</em>, <em>model</em>, <em>**kwargs</em><big>)</big></dt>
+<dd><p>creates an <tt class="docutils literal"><span class="pre">UpdateQuery</span></tt> instance for the given model.  &#8220;kwargs&#8221; is a dictionary
+of field: value pairs:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">uq</span> <span class="o">=</span> <span class="n">UpdateQuery</span><span class="p">(</span><span class="n">User</span><span class="p">,</span> <span class="n">active</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">registration_expired</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">uq</span><span class="o">.</span><span class="n">sql</span><span class="p">()</span>
+<span class="go">(&#39;UPDATE user SET active=? WHERE registration_expired = ?&#39;, [0, 1])</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt>
+<tt class="descname">execute</tt><big>(</big><em>self</em><big>)</big></dt>
+<dd><p>performs the query, returning the number of rows that were updated</p>
+</dd></dl>
+
+</div>
+<div class="section" id="deletequery">
+<h2>DeleteQuery<a class="headerlink" href="#deletequery" title="Permalink to this headline">¶</a></h2>
+<p><tt class="docutils literal"><span class="pre">DeleteQuery</span></tt> deletes rows of the given model.  It will <em>not</em> traverse
+foreign keys or ensure that constraints are obeyed, so use it with care.</p>
+<dl class="method">
+<dt>
+<tt class="descname">__init__</tt><big>(</big><em>self</em>, <em>model</em><big>)</big></dt>
+<dd><p>creates a <tt class="docutils literal"><span class="pre">DeleteQuery</span></tt> instance for the given model:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dq</span> <span class="o">=</span> <span class="n">DeleteQuery</span><span class="p">(</span><span class="n">User</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">active</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">dq</span><span class="o">.</span><span class="n">sql</span><span class="p">()</span>
+<span class="go">(&#39;DELETE FROM user WHERE active = ?&#39;, [0])</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt>
+<tt class="descname">execute</tt><big>(</big><em>self</em><big>)</big></dt>
+<dd><p>performs the query, returning the number of rows that were deleted</p>
+</dd></dl>
+
+</div>
+<div class="section" id="insertquery">
+<h2>InsertQuery<a class="headerlink" href="#insertquery" title="Permalink to this headline">¶</a></h2>
+<p><tt class="docutils literal"><span class="pre">InsertQuery</span></tt> creates a new row for the given model.</p>
+<dl class="method">
+<dt>
+<tt class="descname">__init__</tt><big>(</big><em>self</em>, <em>model</em>, <em>**kwargs</em><big>)</big></dt>
+<dd><p>creates an <tt class="docutils literal"><span class="pre">InsertQuery</span></tt> instance for the given model where kwargs is a
+dictionary of field name to value:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">iq</span> <span class="o">=</span> <span class="n">InsertQuery</span><span class="p">(</span><span class="n">User</span><span class="p">,</span> <span class="n">username</span><span class="o">=</span><span class="s">&#39;admin&#39;</span><span class="p">,</span> <span class="n">password</span><span class="o">=</span><span class="s">&#39;test&#39;</span><span class="p">,</span> <span class="n">active</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">iq</span><span class="o">.</span><span class="n">sql</span><span class="p">()</span>
+<span class="go">(&#39;INSERT INTO user (username, password, active) VALUES (?, ?, ?)&#39;, [&#39;admin&#39;, &#39;test&#39;, 1])</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt>
+<tt class="descname">execute</tt><big>(</big><em>self</em><big>)</big></dt>
+<dd><p>performs the query, returning the primary key of the row that was added</p>
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Querying API</a><ul>
+<li><a class="reference internal" href="#constructing-queries">Constructing queries</a></li>
+<li><a class="reference internal" href="#where-clause">Where clause</a><ul>
+<li><a class="reference internal" href="#performing-advanced-queries">Performing advanced queries</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#query-evaluation">Query evaluation</a></li>
+<li><a class="reference internal" href="#queryresultwrapper">QueryResultWrapper</a></li>
+<li><a class="reference internal" href="#selectquery">SelectQuery</a></li>
+<li><a class="reference internal" href="#updatequery">UpdateQuery</a></li>
+<li><a class="reference internal" href="#deletequery">DeleteQuery</a></li>
+<li><a class="reference internal" href="#insertquery">InsertQuery</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="models.html"
+                        title="previous chapter">Model API (smells like django)</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/peewee/querying.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" size="18" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="models.html" title="Model API (smells like django)"
+             >previous</a> |</li>
+        <li><a href="../index.html">peewee v0.3.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2010, charles leifer.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.0.1.
+    </div>
+  </body>
+</html>
