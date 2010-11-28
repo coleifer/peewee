@@ -76,11 +76,15 @@ class Database(object):
 	def fetchrows(self, *args, **kwargs):
 		result, cursor = self.execute(*args, **kwargs)
 		
-		rows = []
-		for row in cursor.fetchall():
-			rows.append(dict((cursor.description[i][0], value) for i, value in enumerate(row)))
-		
-		return rows
+		try:
+			rows = []
+			for row in cursor.fetchall():
+				rows.append(dict((cursor.description[i][0], value) for i, value in enumerate(row)))
+			
+			return rows
+		except Exception, e:
+			logging.error(e)
+			return None
 	
 	def fetchall(self, *args, **kwargs):
 		model = None
