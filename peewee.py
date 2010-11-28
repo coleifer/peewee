@@ -73,6 +73,11 @@ class Database(object):
 		
 		return res, cursor
 	
+	def fetchrows(self, *args, **kwargs):
+		result, cursor = self.execute(*args, **kwargs)
+		
+		return [row for row in cursor.fetchall()]
+	
 	def fetchall(self, *args, **kwargs):
 		model = None
 		
@@ -127,6 +132,9 @@ class DictObj(dict):
 	def __setitem__(self, name, value):
 		return self.__setattr__(name, value)
 	
+	def __delitem__(self, name):
+		return self.__delattr__(name)
+	
 	def __getattr__(self, name):
 		if name in self.__dict__:
 			return self.__dict__[name]
@@ -135,6 +143,15 @@ class DictObj(dict):
 	
 	def __setattr__(self, name, value):
 		self.__dict__[name] = value
+	
+	def __delattr__(self, name):
+		del self.__dict__[name]
+	
+	def __unicode__(self):
+		return unicode(self.__dict__)
+	
+	def __str__(self):
+		return str(self.__dict__)
 	
 	def items(self): return self.__dict__.items()
 	def iteritems(self): return self.__dict__.iteritems()
@@ -162,9 +179,6 @@ class QueryResultWrapper(object):
 	
 	def _row_to_dict(self, row, result_cursor):
 		return DictObj((result_cursor.description[i][0], value) for i, value in enumerate(row))
-	
-	def __len__(self):
-		return self.cursor.rowcount
 	
 	def __iter__(self):
 		if not self._populated:
