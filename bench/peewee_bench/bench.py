@@ -37,3 +37,9 @@ def get_user_count():
 
 def list_entries_subquery(user):
     return list(Entry.select().where(blog__in=Blog.select().where(user=user)))
+
+def get_user(username):
+    return User.get(username=username)
+
+def get_or_create_user(username):
+    return User.get_or_create(username=username)

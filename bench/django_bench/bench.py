@@ -43,3 +43,9 @@ def get_user_count():
 
 def list_entries_subquery(user):
     return list(Entry.objects.filter(blog__in=Blog.objects.filter(user=user)))
+
+def get_user(username):
+    return User.objects.get(username=username)
+
+def get_or_create_user(username):
+    return User.objects.get_or_create(username=username)

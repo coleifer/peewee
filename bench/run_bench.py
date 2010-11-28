@@ -43,6 +43,23 @@ def test_get_user_count(m):
     for i in xrange(100):
         m.get_user_count()
 
+def test_get_user(m):
+    for i in xrange(100):
+        m.get_user('user%d' % i)
+
+    for i in xrange(1000, 1100):
+        try:
+            m.get_user('user%d' % i)
+        except:
+            pass
+
+def test_get_or_create(m):
+    for i in xrange(100):
+        m.get_or_create_user('user%d' % i)
+
+    for i in xrange(1000, 1100):
+        m.get_or_create_user('user%d' % i)
+
 def test_list_blogs_for_user(m):
     for i in xrange(10):
         u = m.create_user('user%d' % i)
@@ -75,6 +92,8 @@ if __name__ == '__main__':
     run(test_creation, False)
     run(test_list_users, False)
     run(test_list_users_ordered, False)
+    run(test_get_user, False)
+    run(test_get_or_create, False)
     run(test_get_user_count)
     run(test_list_blogs_for_user)
     run(test_list_entries_for_user, False)
