@@ -54,18 +54,22 @@ class Database(object):
 		except:
 			self.reconnect()
 	
-	def execute(self, sql, sql_params=(), commit=False):
+	def execute(self, sql, sql_params=(), commit=False, plain_query=False):
 		self.ensure_connected()
 		
 		if isinstance(sql_params, list):
 			sql_params = tuple(sql_params)
 		
+		if plain_query:
+			sql_params = None
+		
 		try:
 			cursor = self._conn.cursor()
-			res = cursor.execute(sql, params=sql_params)
+			res = cursor.execute(sql, params=sql_params, plain_query=plain_query)
 			if commit:
 				self._conn.commit()
 		except oursql.OperationalError, ex:
+			logger.error(ex)
 			if ex.errno == 2006:
 				self.reconnect()
 		
