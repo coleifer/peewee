@@ -20,7 +20,7 @@ class Blog(Base):
     __tablename__ = 'sqlalc_blogs'
 
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('sqlalc_users.id'))
+    user_id = Column(Integer, ForeignKey('sqlalc_users.id'), index=True)
     name = Column(String)
 
     user = relationship(User, backref=backref('blog_set'))
@@ -30,7 +30,7 @@ class Entry(Base):
     __tablename__ = 'sqlalc_entries'
 
     id = Column(Integer, primary_key=True)
-    blog_id = Column(Integer, ForeignKey('sqlalc_blogs.id'))
+    blog_id = Column(Integer, ForeignKey('sqlalc_blogs.id'), index=True)
     title = Column(String)
     content = Column(String)
     pub_date = Column(DateTime)
