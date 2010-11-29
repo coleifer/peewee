@@ -6,7 +6,7 @@ from sqlalchemy.orm import sessionmaker
 
 from models import User, Blog, Entry
 
-db_file = os.path.join(os.getcwd(), 'test.db')
+db_file = os.path.join(os.getcwd(), 'test_sa.db')
 engine = create_engine('sqlite:///%s' % db_file)
 
 Session = sessionmaker(bind=engine)

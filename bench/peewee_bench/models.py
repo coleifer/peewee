@@ -1,7 +1,7 @@
 import peewee
 
 
-test_db = peewee.Database('test.db')
+test_db = peewee.Database('test_pw.db')
 
 class User(peewee.Model):
     username = peewee.CharField()
