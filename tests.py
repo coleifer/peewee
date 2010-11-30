@@ -1083,3 +1083,43 @@ class FieldTypeTests(BasePeeweeTestCase):
         
         from_db_b = User.get(username='b')
         self.assertFalse(from_db_b.active)
+
+
+class ModelOptionsTest(BasePeeweeTestCase):
+    def test_option_inheritance(self):
+        test_db = peewee.Database('testing.db')
+        child2_db = peewee.Database('child2.db')
+
+        class ParentModel(peewee.Model):
+            title = peewee.CharField()
+
+            class Meta:
+                database = test_db
+
+        class ChildModel(ParentModel):
+            pass
+
+        class ChildModel2(ParentModel):
+            class Meta:
+                database = child2_db
+
+        class GrandChildModel(ChildModel):
+            pass
+
+        class GrandChildModel2(ChildModel2):
+            pass
+
+        self.assertEqual(ParentModel._meta.database.database, 'testing.db')
+        self.assertEqual(ParentModel._meta.model_class, ParentModel)
+
+        self.assertEqual(ChildModel._meta.database.database, 'testing.db')
+        self.assertEqual(ChildModel._meta.model_class, ChildModel)
+
+        self.assertEqual(ChildModel2._meta.database.database, 'child2.db')
+        self.assertEqual(ChildModel2._meta.model_class, ChildModel2)
+
+        self.assertEqual(GrandChildModel._meta.database.database, 'testing.db')
+        self.assertEqual(GrandChildModel._meta.model_class, GrandChildModel)
+
+        self.assertEqual(GrandChildModel2._meta.database.database, 'child2.db')
+        self.assertEqual(GrandChildModel2._meta.model_class, GrandChildModel2)

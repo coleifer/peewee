@@ -866,55 +866,64 @@ class ForeignKeyField(IntegerField):
         return value or None
 
 
+class BaseModelOptions(object):
+    def __init__(self, model_class, options=None):
+        self.rel_fields = {}
+        self.fields = {}
+        self.model_class = model_class
+        
+        # configurable options
+        options = options or {}
+        self.database = options.get('database', database)
+    
+    def get_field_by_name(self, name):
+        if name in self.fields:
+            return self.fields[name]
+        raise AttributeError('Field named %s not found' % name)
+    
+    def get_related_field_by_name(self, name):
+        if name in self.rel_fields:
+            return self.fields[self.rel_fields[name]]
+    
+    def get_related_field_for_model(self, model, name=None):
+        for field in self.fields.values():
+            if isinstance(field, ForeignKeyField) and field.to == model:
+                if name is None or name == field.name:
+                    return field
+    
+    def get_reverse_related_field_for_model(self, model, name=None):
+        for field in model._meta.fields.values():
+            if isinstance(field, ForeignKeyField) and field.to == self.model_class:
+                if name is None or name == field.name:
+                    return field
+    
+    def rel_exists(self, model):
+        return self.get_related_field_for_model(model) or \
+               self.get_reverse_related_field_for_model(model)
+
+
 class BaseModel(type):
     def __new__(cls, name, bases, attrs):
         cls = super(BaseModel, cls).__new__(cls, name, bases, attrs)
 
-        meta_attrs = attrs.pop('Meta', None)
-
-        class Meta(object):
-            rel_fields = {}
-            fields = {}
-            database = database
-            
-            def __init__(self, model_class):
-                self.model_class = model_class
-            
-            def get_field_by_name(self, name):
-                if name in self.fields:
-                    return self.fields[name]
-                raise AttributeError('Field named %s not found' % name)
-            
-            def get_related_field_by_name(self, name):
-                if name in self.rel_fields:
-                    return self.fields[self.rel_fields[name]]
-            
-            def get_related_field_for_model(self, model, name=None):
-                for field in self.fields.values():
-                    if isinstance(field, ForeignKeyField) and field.to == model:
-                        if name is None or name == field.name:
-                            return field
-            
-            def get_reverse_related_field_for_model(self, model, name=None):
-                for field in model._meta.fields.values():
-                    if isinstance(field, ForeignKeyField) and field.to == self.model_class:
-                        if name is None or name == field.name:
-                            return field
-            
-            def rel_exists(self, model):
-                return self.get_related_field_for_model(model) or \
-                       self.get_reverse_related_field_for_model(model)
-            
+        attr_dict = {}
+        meta = attrs.pop('Meta', None)
+        if meta:
+            attr_dict = meta.__dict__
         
-        _meta = Meta(cls)
-
-        if meta_attrs:
-            for k, v in meta_attrs.__dict__.items():
-                setattr(_meta, k, v)
+        for b in bases:
+            base_meta = getattr(b, '_meta', None)
+            if not base_meta:
+                continue
+            
+            for (k, v) in base_meta.__dict__.items():
+                if not k.startswith('_') and k not in attr_dict:
+                    attr_dict[k] = v
+        
+        _meta = BaseModelOptions(cls, attr_dict)
+        _meta.db_table = re.sub('[^a-z]+', '_', cls.__name__.lower())
 
         setattr(cls, '_meta', _meta)
-        
-        _meta.db_table = re.sub('[^a-z]+', '_', cls.__name__.lower())
         
         has_primary_key = False
 
