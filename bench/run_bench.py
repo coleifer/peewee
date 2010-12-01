@@ -86,9 +86,7 @@ def test_list_entries_subquery(m):
         for i in xrange(100):
             entries = m.list_entries_subquery(user)
 
-
-if __name__ == '__main__':
-    print 'Running benchmarks for %s' % (', '.join(b for b in benchmarks))
+def run_all_benches():
     run(test_creation, False)
     run(test_list_users, False)
     run(test_list_users_ordered, False)
@@ -98,6 +96,11 @@ if __name__ == '__main__':
     run(test_list_blogs_for_user)
     run(test_list_entries_for_user, False)
     run(test_list_entries_subquery)
+
+
+if __name__ == '__main__':
+    print 'Running benchmarks for %s' % (', '.join(b for b in benchmarks))
+    run_all_benches()
 
     pw_k = 'peewee_bench'
     non_pw = [b for b in benchmarks if b != pw_k]
