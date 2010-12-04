@@ -120,6 +120,10 @@ def mark_query_dirty(func):
         return func(self, *args, **kwargs)
     return inner
 
+# helpers
+ternary = lambda cond, t, f: (cond and [t] or [f])[0]
+
+
 class Node(object):
     def __init__(self, connector='AND'):
         self.connector = connector
@@ -128,14 +132,16 @@ class Node(object):
     
     def connect(self, rhs, connector):
         if isinstance(rhs, Q):
-            self.connector = connector
-            self.children.append(rhs)
-            return self
+            if connector == self.connector:
+                self.children.append(rhs)
+                return self
+            else:
+                p = Node(connector)
+                p.children = [self, rhs]
+                return p
         elif isinstance(rhs, Node):
-            p = Node()
-            p.connector = connector
-            p.children.append(self)
-            p.children.append(rhs)
+            p = Node(connector)
+            p.children = [self, rhs]
             return p
     
     def __or__(self, rhs):
@@ -170,17 +176,17 @@ class Q(object):
         self.parent = None
         self.negated = False
     
-    def connect(self):
+    def connect(self, connector):
         if self.parent is None:
-            self.parent = Node()
+            self.parent = Node(connector)
             self.parent.children.append(self)
     
     def __or__(self, rhs):
-        self.connect()
+        self.connect('OR')
         return self.parent | rhs
     
     def __and__(self, rhs):
-        self.connect()
+        self.connect('AND')
         return self.parent & rhs
     
     def __invert__(self):

@@ -646,6 +646,16 @@ class NodeTests(BasePeeweeTestCase):
             )
         ), a='A', b='B')
         self.assertEqual(unicode(node), '(a = A AND b = B) AND ((c = C OR d = D) OR ((e = E AND f = F) OR (h = H AND g = G)))')
+    
+    def test_node_and_q(self):
+        node = parseq(
+            (Q(a='A') & Q(b='B')) |
+            (Q(c='C'))
+        )
+        self.assertEqual(unicode(node), '(c = C OR (a = A AND b = B))')
+        
+        node = parseq(Q(c='C') & (Q(a='A') | Q(b='B')))
+        self.assertEqual(unicode(node), '((c = C) AND (a = A OR b = B))')
 
 
 class RelatedFieldTests(BasePeeweeTestCase):
