@@ -693,15 +693,17 @@ class InsertQuery(BaseQuery):
 
 class Field(object):
     db_field = ''
-    field_template = "%(db_field)s"
+    field_template = "%(db_field)s%(nullable)s"
 
     def get_attributes(self):
         return {}
     
-    def __init__(self, *args, **kwargs):
+    def __init__(self, null=False, *args, **kwargs):
+        self.null = null
         self.attributes = self.get_attributes()
         if 'db_field' not in kwargs:
             kwargs['db_field'] = self.db_field
+        kwargs['nullable'] = ternary(self.null, '', ' NOT NULL')
         self.attributes.update(kwargs)
     
     def add_to_class(self, klass, name):
@@ -715,6 +717,11 @@ class Field(object):
         rendered = self.render_field_template()
         return '"%s" %s' % (self.name, rendered)
     
+    def null_wrapper(self, value, default=None):
+        if (self.null and value is None) or default is None:
+            return value
+        return value or default
+    
     def db_value(self, value):
         return value
     
@@ -727,12 +734,14 @@ class Field(object):
 
 class CharField(Field):
     db_field = 'VARCHAR'
-    field_template = "%(db_field)s(%(max_length)d) NOT NULL"
+    field_template = '%(db_field)s(%(max_length)d)%(nullable)s'
     
     def get_attributes(self):
         return {'max_length': 255}
     
     def db_value(self, value):
+        if self.null and value is None:
+            return value
         value = value or ''
         return value[:self.attributes['max_length']]
     
@@ -749,7 +758,7 @@ class TextField(Field):
     db_field = 'TEXT'
     
     def db_value(self, value):
-        return value or ''
+        return self.null_wrapper(value, '')
     
     def lookup_value(self, lookup_type, value):
         if lookup_type == 'contains':
@@ -762,26 +771,22 @@ class TextField(Field):
 
 class DateTimeField(Field):
     db_field = 'DATETIME'
-    field_template = "%(db_field)s"
     
     def python_value(self, value):
         if value is not None:
             value = value.rsplit('.', 1)[0]
             return datetime(*time.strptime(value, '%Y-%m-%d %H:%M:%S')[:6])
-    
-    def db_value(self, value):
-        return value or None
 
 
 class IntegerField(Field):
     db_field = 'INTEGER'
-    field_template = "%(db_field)s NOT NULL"
     
     def db_value(self, value):
-        return value or 0
+        return self.null_wrapper(value, 0)
     
     def python_value(self, value):
-        return int(value or 0)
+        if value is not None:
+            return int(value)
 
 
 class BooleanField(IntegerField):
@@ -796,13 +801,13 @@ class BooleanField(IntegerField):
 
 class FloatField(Field):
     db_field = 'REAL'
-    field_template = "%(db_field)s NOT NULL"
     
     def db_value(self, value):
-        return value or 0.0
+        return self.null_wrapper(value, 0.0)
     
     def python_value(self, value):
-        return float(value or 0)
+        if value is not None:
+            return float(value)
 
 
 class PrimaryKeyField(IntegerField):
@@ -840,18 +845,13 @@ class ReverseForeignRelatedObject(object):
 
 
 class ForeignKeyField(IntegerField):
-    field_template = '%(db_field)s %(nullable)s REFERENCES "%(to_table)s" ("id")'
+    field_template = '%(db_field)s%(nullable)s REFERENCES "%(to_table)s" ("id")'
     
     def __init__(self, to, null=False, related_name=None, *args, **kwargs):
         self.to = to
-        self.null = null
         self.related_name = related_name
         kwargs['to_table'] = to._meta.db_table
-        if null:
-            kwargs['nullable'] = ''
-        else:
-            kwargs['nullable'] = 'NOT NULL'
-        super(ForeignKeyField, self).__init__(*args, **kwargs)
+        super(ForeignKeyField, self).__init__(null=null, *args, **kwargs)
     
     def add_to_class(self, klass, name):
         self.descriptor = name

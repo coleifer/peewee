@@ -27,7 +27,7 @@ class Blog(peewee.Model):
 class Entry(peewee.Model):
     title = peewee.CharField(max_length=50)
     content = peewee.TextField()
-    pub_date = peewee.DateTimeField()
+    pub_date = peewee.DateTimeField(null=True)
     blog = peewee.ForeignKeyField(Blog)
     
     def __unicode__(self):
@@ -56,6 +56,14 @@ class Relationship(peewee.Model):
     to_user = peewee.ForeignKeyField(User, related_name='related_to')
 
 
+class NullModel(peewee.Model):
+    char_field = peewee.CharField(null=True)
+    text_field = peewee.TextField(null=True)
+    datetime_field = peewee.DateTimeField(null=True)
+    int_field = peewee.IntegerField(null=True)
+    float_field = peewee.FloatField(null=True)
+
+
 class BasePeeweeTestCase(unittest.TestCase):
     def setUp(self):
         database.connect()
@@ -64,6 +72,7 @@ class BasePeeweeTestCase(unittest.TestCase):
         EntryTag.create_table()
         User.create_table()
         Relationship.create_table()
+        NullModel.create_table()
         
         self.qh = QueryLogHandler()
         peewee.logger.setLevel(logging.DEBUG)
@@ -72,6 +81,7 @@ class BasePeeweeTestCase(unittest.TestCase):
     def tearDown(self):
         peewee.logger.removeHandler(self.qh)
         
+        NullModel.drop_table()
         Relationship.drop_table()
         User.drop_table()
         EntryTag.drop_table()
@@ -1093,6 +1103,44 @@ class FieldTypeTests(BasePeeweeTestCase):
         
         from_db_b = User.get(username='b')
         self.assertFalse(from_db_b.active)
+     
+    def test_null_models_and_lookups(self):
+        nm = NullModel.create()
+        self.assertEqual(nm.char_field, None)
+        self.assertEqual(nm.text_field, None)
+        self.assertEqual(nm.datetime_field, None)
+        self.assertEqual(nm.int_field, None)
+        self.assertEqual(nm.float_field, None)
+        
+        null_lookup = NullModel.select().where(char_field__is=None)
+        self.assertEqual(null_lookup.sql(), ('SELECT * FROM nullmodel WHERE char_field IS ?', [None]))
+        
+        self.assertEqual(list(null_lookup), [nm])
+        
+        non_null_lookup = NullModel.select().where(char_field='')
+        self.assertEqual(non_null_lookup.sql(), ('SELECT * FROM nullmodel WHERE char_field = ?', ['']))
+        
+        self.assertEqual(list(non_null_lookup), [])
+        
+        nm_from_db = NullModel.get(id=nm.id)
+        self.assertEqual(nm_from_db.char_field, None)
+        self.assertEqual(nm_from_db.text_field, None)
+        self.assertEqual(nm_from_db.datetime_field, None)
+        self.assertEqual(nm_from_db.int_field, None)
+        self.assertEqual(nm_from_db.float_field, None)
+        
+        nm.char_field = ''
+        nm.text_field = ''
+        nm.int_field = 0
+        nm.float_field = 0.0
+        nm.save()
+        
+        nm_from_db = NullModel.get(id=nm.id)
+        self.assertEqual(nm_from_db.char_field, '')
+        self.assertEqual(nm_from_db.text_field, '')
+        self.assertEqual(nm_from_db.datetime_field, None)
+        self.assertEqual(nm_from_db.int_field, 0)
+        self.assertEqual(nm_from_db.float_field, 0.0)
 
 
 class ModelOptionsTest(BasePeeweeTestCase):
