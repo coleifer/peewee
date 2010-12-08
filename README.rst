@@ -34,6 +34,8 @@ Examples::
 check the `documentation <http://charlesleifer.com/docs/peewee/>`_ for more
 examples.
 
+specific question?  come hang out in the #peewee channel on freenode.irc.net
+
 
 Why?
 ----
