@@ -6,6 +6,8 @@
 peewee
 ======
 
+.. image:: pw.jpg
+
 * a small orm
 * written in python
 * provides a lightweight querying interface over sql
