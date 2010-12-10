@@ -1,3 +1,5 @@
+.. image:: http://charlesleifer.com/media/images/peewee-transparent.png
+
 peewee
 ======
 

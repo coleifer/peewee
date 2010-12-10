@@ -3,10 +3,10 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
+.. image:: peewee-white.png
+
 peewee
 ======
-
-.. image:: pw.jpg
 
 * a small orm
 * written in python
