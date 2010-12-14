@@ -505,17 +505,18 @@ class SelectQuery(BaseQuery):
             return self.query
         elif isinstance(self.query, dict):
             qparts = []
+            aggregates = []
             for model, cols in self.query.iteritems():
                 alias = alias_map.get(model, '')
                 for col in cols:
                     if isinstance(col, tuple):
                         func, col, col_alias = col
-                        qparts.append('%s(%s) AS %s' % \
+                        aggregates.append('%s(%s) AS %s' % \
                             (func, self.combine_field(alias, col), col_alias)
                         )
                     else:
                         qparts.append(self.combine_field(alias, col))
-            return ', '.join(qparts)
+            return ', '.join(qparts + aggregates)
         else:
             raise TypeError('Unknown type encountered parsing select query')
     
