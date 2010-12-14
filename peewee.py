@@ -365,11 +365,12 @@ class BaseQuery(object):
                     )
                 )
         
-        for model in self._where:
-            for node in self._where[model]:
-                query, data = self.parse_node(node, model, alias_map)
-                where_with_alias.append(query)
-                where_data.extend(data)
+        for (model, join_type, on) in joins:
+            if model in self._where:
+                for node in self._where[model]:
+                    query, data = self.parse_node(node, model, alias_map)
+                    where_with_alias.append(query)
+                    where_data.extend(data)
         
         return computed_joins, where_with_alias, where_data, alias_map
     
