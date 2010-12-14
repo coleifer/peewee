@@ -269,6 +269,11 @@ class BaseQuery(object):
                     lookup_value = [field.lookup_value(op, o) for o in rhs]
                     operation = self.operations[op] % \
                         (','.join(['?' for v in lookup_value]))
+            elif op == 'is':
+                if rhs is not None:
+                    raise ValueError('__is lookups only accept None')
+                operation = 'IS NULL'
+                lookup_value = []
             else:
                 lookup_value = field.lookup_value(op, rhs)
                 operation = self.operations[op]

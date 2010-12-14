@@ -1117,7 +1117,7 @@ class FieldTypeTests(BasePeeweeTestCase):
         self.assertEqual(nm.float_field, None)
         
         null_lookup = NullModel.select().where(char_field__is=None)
-        self.assertEqual(null_lookup.sql(), ('SELECT * FROM nullmodel WHERE char_field IS ?', [None]))
+        self.assertEqual(null_lookup.sql(), ('SELECT * FROM nullmodel WHERE char_field IS NULL', []))
         
         self.assertEqual(list(null_lookup), [nm])
         
