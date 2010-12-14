@@ -9,7 +9,7 @@ import tests
 def runtests(*test_args):
     suite = unittest.TestLoader().loadTestsFromModule(tests)
     result = unittest.TextTestRunner(verbosity=2).run(suite)
-    sys.exit()
+    sys.exit(bool(result.failures))
 
 if __name__ == '__main__':
     runtests(*sys.argv[1:])
