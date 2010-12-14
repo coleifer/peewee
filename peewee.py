@@ -894,13 +894,13 @@ class BaseModelOptions(object):
     def get_related_field_for_model(self, model, name=None):
         for field in self.fields.values():
             if isinstance(field, ForeignKeyField) and field.to == model:
-                if name is None or name == field.name:
+                if name is None or name == field.name or name == field.descriptor:
                     return field
     
     def get_reverse_related_field_for_model(self, model, name=None):
         for field in model._meta.fields.values():
             if isinstance(field, ForeignKeyField) and field.to == self.model_class:
-                if name is None or name == field.name:
+                if name is None or name == field.name or name == field.descriptor:
                     return field
     
     def rel_exists(self, model):

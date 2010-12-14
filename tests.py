@@ -909,6 +909,10 @@ class RelatedFieldTests(BasePeeweeTestCase):
         self.assertEqual(list(b.related_to), [r_ab])
 
         r_bc = Relationship.create(from_user=b, to_user=c)
+        
+        loose = User.select().join(Relationship, on='to_user').where(from_user=a).sql()
+        strict = User.select().join(Relationship, on='to_user_id').where(from_user_id=a.id).sql()
+        self.assertEqual(loose, strict)
 
         following = User.select().join(
             Relationship, on='to_user_id'
