@@ -259,7 +259,7 @@ class BaseQuery(object):
                 if field is None:
                     raise
                 if isinstance(rhs, Model):
-                    rhs = rhs.id
+                    rhs = rhs.get_pk()
             
             if op == 'in':
                 if isinstance(rhs, SelectQuery):
@@ -343,10 +343,10 @@ class BaseQuery(object):
                 field = from_model._meta.get_related_field_for_model(model, on)
                 if field:
                     left_field = field.name
-                    right_field = 'id'                        
+                    right_field = model._meta.pk_name
                 else:
                     field = from_model._meta.get_reverse_related_field_for_model(model, on)
-                    left_field = 'id'
+                    left_field = from_model._meta.pk_name
                     right_field = field.name
                 
                 if join_type is None:
@@ -420,7 +420,7 @@ class BaseQuery(object):
         return query, query_data
 
     def convert_subquery(self, subquery):
-        subquery.query, orig_query = 'id', subquery.query
+        subquery.query, orig_query = subquery.model._meta.pk_name, subquery.query
         subquery.force_alias, orig_alias = True, subquery.force_alias
         sql, data = subquery.sql()
         subquery.query = orig_query
@@ -459,9 +459,9 @@ class SelectQuery(BaseQuery):
         tmp_query = self.query
         
         if self.use_aliases():
-            self.query = 'COUNT(t1.id)'
+            self.query = 'COUNT(t1.%s)' % (self.model._meta.pk_name)
         else:
-            self.query = 'COUNT(id)'
+            self.query = 'COUNT(%s)' % (self.model._meta.pk_name)
         
         db = self.model._meta.database
         res = db.execute(*self.sql())
@@ -501,7 +501,7 @@ class SelectQuery(BaseQuery):
 
     def parse_select_query(self, alias_map):
         if isinstance(self.query, basestring):
-            if self.query in ('*', 'id') and self.use_aliases():
+            if self.query in ('*', self.model._meta.pk_name) and self.use_aliases():
                 return '%s.%s' % (alias_map[self.model], self.query)
             return self.query
         elif isinstance(self.query, dict):
@@ -830,13 +830,13 @@ class ForeignRelatedObject(object):
     def __get__(self, instance, instance_type=None):
         if not getattr(instance, self.cache_name, None):
             id = getattr(instance, self.field_name, 0)
-            qr = self.to.select().where(id=id).execute()
+            qr = self.to.select().where(**{self.to._meta.pk_name: id}).execute()
             setattr(instance, self.cache_name, qr.next())
         return getattr(instance, self.cache_name)
     
     def __set__(self, instance, obj):
         assert isinstance(obj, self.to), "Cannot assign %s, invalid type" % obj
-        setattr(instance, self.field_name, obj.id)
+        setattr(instance, self.field_name, obj.get_pk())
         setattr(instance, self.cache_name, obj)
 
 
@@ -846,18 +846,21 @@ class ReverseForeignRelatedObject(object):
         self.related_model = related_model
     
     def __get__(self, instance, instance_type=None):
-        query = {self.field_name: instance.id}
+        query = {self.field_name: instance.get_pk()}
         qr = self.related_model.select().where(**query)
         return qr
 
 
 class ForeignKeyField(IntegerField):
-    field_template = '%(db_field)s%(nullable)s REFERENCES "%(to_table)s" ("id")'
+    field_template = '%(db_field)s%(nullable)s REFERENCES "%(to_table)s" ("%(to_pk)s")'
     
     def __init__(self, to, null=False, related_name=None, *args, **kwargs):
         self.to = to
         self.related_name = related_name
-        kwargs['to_table'] = to._meta.db_table
+        kwargs.update({
+            'to_table': to._meta.db_table,
+            'to_pk': to._meta.pk_name
+        })
         super(ForeignKeyField, self).__init__(null=null, *args, **kwargs)
     
     def add_to_class(self, klass, name):
@@ -875,7 +878,7 @@ class ForeignKeyField(IntegerField):
     
     def lookup_value(self, lookup_type, value):
         if isinstance(value, Model):
-            return value.id
+            return value.get_pk()
         return value or None
 
 
@@ -938,19 +941,21 @@ class BaseModel(type):
 
         setattr(cls, '_meta', _meta)
         
-        has_primary_key = False
+        _meta.pk_name = None
 
         for name, attr in cls.__dict__.items():
             if isinstance(attr, Field):
                 attr.add_to_class(cls, name)
                 _meta.fields[attr.name] = attr
                 if isinstance(attr, PrimaryKeyField):
-                    has_primary_key = True
+                    _meta.pk_name = attr.name
         
-        if not has_primary_key:
+        if _meta.pk_name is None:
+            _meta.pk_name = 'id'
             pk = PrimaryKeyField()
-            pk.add_to_class(cls, 'id')
-            _meta.fields['id'] = pk
+            pk.add_to_class(cls, _meta.pk_name)
+            _meta.fields[_meta.pk_name] = pk
+            
                 
         if hasattr(cls, '__unicode__'):
             setattr(cls, '__repr__', lambda self: '<%s: %s>' % (
@@ -967,7 +972,9 @@ class Model(object):
             setattr(self, k, v)
     
     def __eq__(self, other):
-        return other.__class__ == self.__class__ and self.id and other.id == self.id
+        return other.__class__ == self.__class__ and \
+               self.get_pk() and \
+               other.get_pk() == self.get_pk()
     
     def get_field_dict(self):
         field_val = lambda f: (f.name, getattr(self, f.name))
@@ -1016,12 +1023,18 @@ class Model(object):
     def get(cls, *args, **kwargs):
         return cls.select().where(*args, **kwargs).paginate(1, 1).execute().next()
     
+    def get_pk(self):
+        return getattr(self, self._meta.pk_name, None)
+    
     def save(self):
         field_dict = self.get_field_dict()
-        field_dict.pop('id')
-        if self.id:
-            update = self.update(**field_dict).where(id=self.id)
+        field_dict.pop(self._meta.pk_name)
+        if self.get_pk():
+            update = self.update(
+                **field_dict
+            ).where(**{self._meta.pk_name: self.get_pk()})
             update.execute()
         else:
             insert = self.insert(**field_dict)
-            self.id = insert.execute()
+            new_pk = insert.execute()
+            setattr(self, self._meta.pk_name, new_pk)
