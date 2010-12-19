@@ -195,11 +195,11 @@ class QueryTests(BasePeeweeTestCase):
         sq = SelectQuery(Blog, {Blog: ['title', 'id']}).join(Entry)
         self.assertEqual(sq.sql(), ('SELECT t1.title, t1.id FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id', []))
 
-        sq = SelectQuery(Blog, {Blog: ['title', 'id'], Entry: [peewee.Count('id')]}).join(Entry)
-        self.assertEqual(sq.sql(), ('SELECT t1.title, t1.id, COUNT(t2.id) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id', []))
+        sq = SelectQuery(Blog, {Blog: ['title', 'id'], Entry: [peewee.Count('pk')]}).join(Entry)
+        self.assertEqual(sq.sql(), ('SELECT t1.title, t1.id, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id', []))
 
-        sq = SelectQuery(Blog, {Blog: ['title', 'id'], Entry: [peewee.Max('id')]}).join(Entry)
-        self.assertEqual(sq.sql(), ('SELECT t1.title, t1.id, MAX(t2.id) AS max FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id', []))
+        sq = SelectQuery(Blog, {Blog: ['title', 'id'], Entry: [peewee.Max('pk')]}).join(Entry)
+        self.assertEqual(sq.sql(), ('SELECT t1.title, t1.id, MAX(t2.pk) AS max FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id', []))
 
     def test_selecting_across_joins(self):
         sq = SelectQuery(Entry, '*').where(title='a1').join(Blog).where(title='a')
@@ -245,25 +245,25 @@ class QueryTests(BasePeeweeTestCase):
         self.assertEqual(sq.sql(), ('SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id WHERE t1.title = ?', ['a']))
     
     def test_selecting_with_aggregation(self):
-        sq = SelectQuery(Blog, 't1.*, COUNT(t2.id) AS count').group_by('id').join(Entry)
+        sq = SelectQuery(Blog, 't1.*, COUNT(t2.pk) AS count').group_by('id').join(Entry)
         self.assertEqual(sq._where, {})
         self.assertEqual(sq._joins, [(Entry, None, None)])
-        self.assertEqual(sq.sql(), ('SELECT t1.*, COUNT(t2.id) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id', []))
+        self.assertEqual(sq.sql(), ('SELECT t1.*, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id', []))
         
         sq = sq.having('count > 2')
-        self.assertEqual(sq.sql(), ('SELECT t1.*, COUNT(t2.id) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id HAVING count > 2', []))
+        self.assertEqual(sq.sql(), ('SELECT t1.*, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id HAVING count > 2', []))
         
         sq = SelectQuery(Blog, {
             Blog: ['*'],
-            Entry: [peewee.Count('id')]
+            Entry: [peewee.Count('pk')]
         }).group_by('id').join(Entry)
-        self.assertEqual(sq.sql(), ('SELECT t1.*, COUNT(t2.id) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id', []))
+        self.assertEqual(sq.sql(), ('SELECT t1.*, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id', []))
         
         sq = sq.having('count > 2')
-        self.assertEqual(sq.sql(), ('SELECT t1.*, COUNT(t2.id) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id HAVING count > 2', []))
+        self.assertEqual(sq.sql(), ('SELECT t1.*, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id HAVING count > 2', []))
         
         sq = sq.order_by(('count', 'desc'))
-        self.assertEqual(sq.sql(), ('SELECT t1.*, COUNT(t2.id) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id HAVING count > 2 ORDER BY count desc', []))
+        self.assertEqual(sq.sql(), ('SELECT t1.*, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id HAVING count > 2 ORDER BY count desc', []))
     
     def test_selecting_with_ordering(self):        
         sq = SelectQuery(Blog).order_by('title')
@@ -280,9 +280,9 @@ class QueryTests(BasePeeweeTestCase):
 
     def test_ordering_on_aggregates(self):
         sq = SelectQuery(
-            Blog, 't1.*, COUNT(t2.id) as count'
+            Blog, 't1.*, COUNT(t2.pk) as count'
         ).join(Entry).order_by(peewee.desc('count'))
-        self.assertEqual(sq.sql(), ('SELECT t1.*, COUNT(t2.id) as count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id ORDER BY count DESC', []))
+        self.assertEqual(sq.sql(), ('SELECT t1.*, COUNT(t2.pk) as count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id ORDER BY count DESC', []))
 
     def test_insert(self):
         iq = InsertQuery(Blog, title='a')
