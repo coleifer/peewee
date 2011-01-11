@@ -248,9 +248,9 @@ class BaseQuery(object):
 		'eq': '= ?',
 		'in': 'IN (?)',
 		'is': 'IS ?',
-		'icontains': "LIKE '%%?%%'",
+		'icontains': lambda x: ("LIKE ?", '%%%s%%' % x),
 		'contains': "GLOB '*?*'",
-		'startswith': "LIKE '?%%'",
+		'startswith': lambda x: ("LIKE ?", '%s%%' % x),
 	}
 	query_separator = '__'
 	requires_commit = True
@@ -276,7 +276,12 @@ class BaseQuery(object):
 			else:
 				lookup_value = field.lookup_value(op, rhs)
 			
-			parsed[field.attributes.get('real_name', field.name)] = (self.operations[op], lookup_value)
+			operation = self.operations[op]
+			
+			if callable(operation):
+				operation, lookup_value = operation(lookup_value)
+			
+			parsed[field.attributes.get('real_name', field.name)] = (operation, lookup_value)
 		
 		return parsed
 	
@@ -566,7 +571,11 @@ class UpdateQuery(BaseQuery):
 			field = self.model._meta.get_field_by_name(k)
 			column_name = field.attributes.get('real_name', field.name)
 			
-			sets[column_name] = field.lookup_value(None, v)
+			found_value = str(field.lookup_value(None, v))
+			if found_value in ('NULL', 'None'):
+				found_value = None
+			
+			sets[column_name] = found_value
 		
 		return sets
 	
@@ -643,7 +652,12 @@ class InsertQuery(BaseQuery):
 			column_name = field.attributes.get('real_name', field.name)
 			
 			cols.append(column_name)
-			vals.append(str(field.lookup_value(None, v)))
+			
+			found_value = str(field.lookup_value(None, v))
+			if found_value in ('NULL', 'None'):
+				found_value = None
+			
+			vals.append(found_value)
 		
 		return cols, vals
 	
@@ -847,6 +861,7 @@ class ForeignRelatedObject(object):
 		return hasattr(instance, self.cache_name) and getattr(instance, self.cache_name) or None
 	
 	def __set__(self, instance, obj):
+		if obj is None: return
 		
 		assert isinstance(obj, self.to), "Cannot assign %s, invalid type" % obj
 		setattr(instance, self.field_name, obj.id)
