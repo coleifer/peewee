@@ -447,15 +447,21 @@ class SelectQuery(BaseQuery):
 		return self
 	
 	@mark_query_dirty
-	def order_by(self, field_or_string):
-		if isinstance(field_or_string, tuple):
-			field_or_string, ordering = field_or_string
-		else:
-			ordering = 'ASC'
+	def order_by(self, field_or_string=None, **kwargs):
+		if field_or_string is not None:
+			if isinstance(field_or_string, tuple):
+				field_or_string, ordering = field_or_string
+			else:
+				ordering = 'ASC'
 		
-		self._order_by.append(
-			(self.query_context, field_or_string, ordering)
-		)
+			self._order_by.append(
+				(self.query_context, field_or_string, ordering)
+			)
+		
+		for field_name, ordering in kwargs.iteritems():
+			self._order_by.append(
+				(self.query_context, field_name, ordering)
+			)
 		
 		return self
 	
@@ -748,6 +754,27 @@ class CharField(Field):
 			return self.db_value(value)
 
 
+class EnumField(Field):
+	db_field = 'ENUM'
+	field_template = "%(db_field)s(%(max_length)d) NOT NULL"
+
+	def get_attributes(self):
+		return {'choices': ()}
+
+	def db_value(self, value):
+		value = value or ''
+		if value not in self.attributes['choices']:
+			raise ValueError('%s not an allowed choice!' % (value,))
+		
+		return value
+
+	def lookup_value(self, lookup_type, value):
+		if lookup_type in ('contains', 'icontains', 'startswith'):
+			return self.db_value(value)
+		else:
+			return self.db_value(value)
+
+
 class URLField(Field):
 	db_field = 'VARCHAR'
 	field_template = "%(db_field)s(%(max_length)d) NOT NULL"
@@ -861,7 +888,9 @@ class ForeignRelatedObject(object):
 		return hasattr(instance, self.cache_name) and getattr(instance, self.cache_name) or None
 	
 	def __set__(self, instance, obj):
-		if obj is None: return
+		if obj is None:
+			setattr(instance, self.field_name, None)
+			return
 		
 		assert isinstance(obj, self.to), "Cannot assign %s, invalid type" % obj
 		setattr(instance, self.field_name, obj.id)
@@ -1077,6 +1106,8 @@ class Model(object):
 			
 			update = self.update(**field_dict).where(id=self.id)
 			update.execute()
+			return update
 		else:
 			insert = self.insert(**field_dict)
 			self.id = insert.execute()
+			return insert
