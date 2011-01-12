@@ -68,14 +68,17 @@ class Database(object):
 			res = cursor.execute(sql, params=sql_params, plain_query=plain_query)
 			if commit:
 				self._conn.commit()
+			
+			return res, cursor
 		except oursql.OperationalError, ex:
-			logger.error(ex)
 			if ex.errno == 2006:
 				self.reconnect()
+			else:
+				raise ex
 		
 		logger.debug(sql, sql_params)
 		
-		return res, cursor
+		return False
 	
 	def fetchrows(self, *args, **kwargs):
 		result, cursor = self.execute(*args, **kwargs)
