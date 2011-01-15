@@ -249,7 +249,8 @@ class BaseQuery(object):
 		'gt': '> ?',
 		'gte': '>= ?',
 		'eq': '= ?',
-		'in': 'IN (?)',
+		# 'in': 'IN (?)',
+		'in': lambda x: ("IN (?)", ','.join([str(y) for y in x])),
 		'is': 'IS ?',
 		'icontains': lambda x: ("LIKE ?", '%%%s%%' % x),
 		'contains': "GLOB '*?*'",
@@ -274,17 +275,15 @@ class BaseQuery(object):
 				op = 'eq'
 			
 			field = self.query_context._meta.get_field_by_name(lhs)
-			if op == 'in':
-				lookup_value = ','.join([field.lookup_value(op, o) for o in rhs])
-			else:
-				lookup_value = field.lookup_value(op, rhs)
+			lookup_value = field.lookup_value(op, rhs)
 			
 			operation = self.operations[op]
 			
 			if callable(operation):
 				operation, lookup_value = operation(lookup_value)
 			
-			parsed[field.attributes.get('real_name', field.name)] = (operation, lookup_value)
+			col_name = field.attributes.get('real_name', field.name)
+			parsed['`%s`' % col_name] = (operation, lookup_value)
 		
 		return parsed
 	
@@ -316,7 +315,7 @@ class BaseQuery(object):
 	
 	def combine_field(self, alias, field_name):
 		if alias:
-			return '%s.%s' % (alias, field_name)
+			return '`%s`.`%s`' % (alias, field_name)
 		return field_name
 	
 	def compile_where(self):
@@ -368,7 +367,7 @@ class BaseQuery(object):
 						join_type = 'INNER'
 				
 				computed_joins.append(
-					'%s JOIN %s AS %s ON %s = %s' % (
+					'%s JOIN `%s` AS `%s` ON %s = %s' % (
 						join_type,
 						model._meta.db_table,
 						alias_map[model],
@@ -421,9 +420,9 @@ class SelectQuery(BaseQuery):
 		tmp_query = self.query
 		
 		if self.use_aliases():
-			self.query = 'COUNT(t1.id)'
+			self.query = 'COUNT(`t1`.`id`)'
 		else:
-			self.query = 'COUNT(%s)' %	(self.model._meta.primary_key.real_name,)
+			self.query = 'COUNT(`%s`)' %	(self.model._meta.primary_key.real_name,)
 		
 		db = self.model._meta.get_database()
 		query, sql_params = self.sql()
@@ -471,7 +470,7 @@ class SelectQuery(BaseQuery):
 	def parse_select_query(self, alias_map):
 		if isinstance(self.query, basestring):
 			if self.query == '*' and self.use_aliases():
-				return '%s.*' % alias_map[self.model]
+				return '`%s`.*' % alias_map[self.model]
 			return self.query
 		elif isinstance(self.query, dict):
 			qparts = []
@@ -512,7 +511,7 @@ class SelectQuery(BaseQuery):
 		else:
 			sel = 'SELECT'
 		
-		select = '%s %s FROM %s' % (sel, parsed_query, table)
+		select = '%s %s FROM `%s`' % (sel, parsed_query, table)
 		joins = '\n'.join(joins)
 		where = ' AND '.join(where)
 		group_by = ', '.join(group_by)
@@ -522,7 +521,7 @@ class SelectQuery(BaseQuery):
 		for piece in self._order_by:
 			model, field, ordering = piece
 			if self.use_aliases() and field in model._meta.fields:
-				field = '%s.%s' % (alias_map[model], field)
+				field = '`%s`.`%s`' % (alias_map[model], field)
 			order_by.append('%s %s' % (field, ordering))
 		
 		pieces = [select]
@@ -584,7 +583,7 @@ class UpdateQuery(BaseQuery):
 			if found_value in ('NULL', 'None'):
 				found_value = None
 			
-			sets[column_name] = found_value
+			sets['`%s`' % column_name] = found_value
 		
 		return sets
 	
@@ -658,7 +657,7 @@ class InsertQuery(BaseQuery):
 		vals = []
 		for k, v in self.insert_query.iteritems():
 			field = self.model._meta.get_field_by_name(k)
-			column_name = field.attributes.get('real_name', field.name)
+			column_name = '`%s`' % field.attributes.get('real_name', field.name)
 			
 			cols.append(column_name)
 			
@@ -1046,10 +1045,11 @@ class Model(object):
 					val = f.attributes['default']()
 				except TypeError:
 					val = f.attributes['default']
+				
+				setattr(self, f.name, val)
 			
 			return (f.name, val)
 		
-		field_val = lambda f: (f.name, getattr(self, f.name))
 		pairs = map(get_field_pair, self._meta.fields.values())
 		
 		return dict(pairs)
