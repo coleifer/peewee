@@ -120,9 +120,6 @@ def mark_query_dirty(func):
         return func(self, *args, **kwargs)
     return inner
 
-# helpers
-ternary = lambda cond, t, f: (cond and [t] or [f])[0]
-
 
 class Node(object):
     def __init__(self, connector='AND'):
@@ -710,7 +707,7 @@ class Field(object):
         self.attributes = self.get_attributes()
         if 'db_field' not in kwargs:
             kwargs['db_field'] = self.db_field
-        kwargs['nullable'] = ternary(self.null, '', ' NOT NULL')
+        kwargs['nullable'] = '' if self.null else ' NOT NULL'
         self.attributes.update(kwargs)
     
     def add_to_class(self, klass, name):
