@@ -20,11 +20,12 @@ logger = logging.getLogger('peewee.logger')
 
 
 class Database(object):
-    def __init__(self, database):
+    def __init__(self, database, connect_kwargs=None):
         self.database = database
+        self.connect_kwargs = connect_kwargs if connect_kwargs else {}
     
     def connect(self):
-        self.conn = sqlite3.connect(self.database)
+        self.conn = sqlite3.connect(self.database, **self.connect_kwargs)
     
     def close(self):
         self.conn.close()
