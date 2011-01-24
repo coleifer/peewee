@@ -46,7 +46,7 @@ class EntryTag(peewee.Model):
 class User(peewee.Model):
     username = peewee.CharField(max_length=50)
     blog = peewee.ForeignKeyField(Blog, null=True)
-    active = peewee.BooleanField()
+    active = peewee.BooleanField(db_index=True)
 
     def __unicode__(self):
         return self.username
@@ -64,6 +64,16 @@ class NullModel(peewee.Model):
     int_field = peewee.IntegerField(null=True)
     float_field = peewee.FloatField(null=True)
 
+class Team(peewee.Model):
+    name = peewee.CharField()
+
+class Member(peewee.Model):
+    username = peewee.CharField()
+
+class Membership(peewee.Model):
+    team = peewee.ForeignKeyField(Team)
+    member = peewee.ForeignKeyField(Member)
+
 
 class BasePeeweeTestCase(unittest.TestCase):
     def setUp(self):
@@ -74,6 +84,9 @@ class BasePeeweeTestCase(unittest.TestCase):
         User.create_table()
         Relationship.create_table()
         NullModel.create_table()
+        Team.create_table()
+        Member.create_table()
+        Membership.create_table()
         
         self.qh = QueryLogHandler()
         peewee.logger.setLevel(logging.DEBUG)
@@ -82,6 +95,9 @@ class BasePeeweeTestCase(unittest.TestCase):
     def tearDown(self):
         peewee.logger.removeHandler(self.qh)
         
+        Membership.drop_table()
+        Member.drop_table()
+        Team.drop_table()
         NullModel.drop_table()
         Relationship.drop_table()
         User.drop_table()
@@ -1004,20 +1020,6 @@ class RelatedFieldTests(BasePeeweeTestCase):
         self.assertEqual(list(ac_blog_qr), [a_blog, c_blog])
     
     def test_many_to_many(self):
-        class Team(peewee.Model):
-            name = peewee.CharField()
-        
-        class Member(peewee.Model):
-            username = peewee.CharField()
-        
-        class Membership(peewee.Model):
-            team = peewee.ForeignKeyField(Team)
-            member = peewee.ForeignKeyField(Member)
-
-        Team.create_table()
-        Member.create_table()
-        Membership.create_table()
-        
         a_team = Team.create(name='a-team')
         b_team = Team.create(name='b-team')
         
@@ -1146,6 +1148,25 @@ class FieldTypeTests(BasePeeweeTestCase):
         self.assertEqual(nm_from_db.datetime_field, None)
         self.assertEqual(nm_from_db.int_field, 0)
         self.assertEqual(nm_from_db.float_field, 0.0)
+    
+    def get_sorted_indexes(self, model):
+        res = database.execute('PRAGMA index_list(%s);' % model._meta.db_table)
+        rows = sorted([r[1:] for r in res.fetchall()])
+        return rows
+    
+    def test_primary_key_index(self):
+        entry_indexes = self.get_sorted_indexes(Entry)
+        self.assertEqual(entry_indexes, [
+            ('entry_blog_id', 0),
+            ('entry_pk', 1),
+        ])
+        
+        user_indexes = self.get_sorted_indexes(User)
+        self.assertEqual(user_indexes, [
+            ('user_active', 0),
+            ('user_blog_id', 0),
+            ('user_id', 1),
+        ])
 
 
 class ModelOptionsTest(BasePeeweeTestCase):

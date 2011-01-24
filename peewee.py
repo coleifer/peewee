@@ -53,6 +53,24 @@ class Database(object):
         
         self.execute(query, commit=True)
     
+    def create_index(self, model_class, field, unique=False):
+        framing = 'CREATE %(unique)s INDEX %(model)s_%(field)s ON %(model)s(%(field)s);'
+        
+        if field not in model_class._meta.fields:
+            raise AttributeError(
+                'Field %s not on model %s' % (field, model_class)
+            )
+        
+        unique_expr = ternary(unique, 'UNIQUE', '')
+        
+        query = framing % {
+            'unique': unique_expr,
+            'model': model_class._meta.db_table,
+            'field': field
+        }
+        
+        self.execute(query, commit=True)
+    
     def drop_table(self, model_class):
         self.execute('DROP TABLE %s;' % model_class._meta.db_table, commit=True)
 
@@ -706,8 +724,9 @@ class Field(object):
     def get_attributes(self):
         return {}
     
-    def __init__(self, null=False, *args, **kwargs):
+    def __init__(self, null=False, db_index=False, *args, **kwargs):
         self.null = null
+        self.db_index = db_index
         self.attributes = self.get_attributes()
         if 'db_field' not in kwargs:
             kwargs['db_field'] = self.db_field
@@ -985,6 +1004,14 @@ class Model(object):
     @classmethod
     def create_table(cls):
         cls._meta.database.create_table(cls)
+        
+        for field_name, field_obj in cls._meta.fields.items():
+            if isinstance(field_obj, PrimaryKeyField):
+                cls._meta.database.create_index(cls, field_obj.name, True)
+            elif isinstance(field_obj, ForeignKeyField):
+                cls._meta.database.create_index(cls, field_obj.name)
+            elif field_obj.db_index:
+                cls._meta.database.create_index(cls, field_obj.name)
     
     @classmethod
     def drop_table(cls):
