@@ -62,10 +62,16 @@ class Database(object):
 		
 		if plain_query:
 			sql_params = None
-		
+
 		try:
 			cursor = self._conn.cursor()
-			res = cursor.execute(sql, params=sql_params, plain_query=plain_query)
+			# fix params
+			params = []
+			for param in sql_params:
+				if isinstance(param, (list,tuple)):
+					params.extend(param)
+				else: params.append(param)
+			res = cursor.execute(sql, params=params, plain_query=plain_query)
 			if commit:
 				self._conn.commit()
 			
@@ -250,7 +256,8 @@ class BaseQuery(object):
 		'gte': '>= ?',
 		'eq': '= ?',
 		# 'in': 'IN (?)',
-		'in': lambda x: ("IN (?)", ','.join([str(y) for y in x])),
+		#'in': lambda x: ("IN (?)", ','.join([str(y) for y in x])),
+		'in': 'IN (%s)', # special-case to list q-marks
 		'is': 'IS ?',
 		'icontains': lambda x: ("LIKE ?", '%%%s%%' % x),
 		'contains': "GLOB '*?*'",
@@ -279,10 +286,28 @@ class BaseQuery(object):
 			
 			operation = self.operations[op]
 			
-			if callable(operation):
-				operation, lookup_value = operation(lookup_value)
-			
+			if op == 'in':
+				if isinstance(rhs, SelectQuery):
+					lookup_value = rhs
+					operation = 'IN (%s)'
+				else:
+					lookup_value = [field.lookup_value(op, o) for o in rhs]
+					operation = self.operations[op] % \
+						(','.join(['?' for v in lookup_value]))
+			elif op == 'is':
+				if rhs is not None:
+					raise ValueError('__is lookups only accept None')
+				operation = 'IS NULL'
+				lookup_value = []
+			else:
+				lookup_value = field.lookup_value(op, rhs)
+				operation = self.operations[op]
+				
+			# if callable(operation):
+			# 	operation, lookup_value = operation(lookup_value)
+			 
 			col_name = field.attributes.get('real_name', field.name)
+			
 			parsed['`%s`' % col_name] = (operation, lookup_value)
 		
 		return parsed
