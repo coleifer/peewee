@@ -19,16 +19,90 @@ DATABASE_NAME = os.environ.get('PEEWEE_DATABASE', 'peewee.db')
 logger = logging.getLogger('peewee.logger')
 
 
+class BaseAdapter(object):
+    operations = {'eq': '= %s'}
+    interpolation = '%s'
+    
+    def get_field_types(self):
+        field_types = {
+            'integer': 'INTEGER',
+            'float': 'REAL',
+            'decimal': 'NUMERIC',
+            'string': 'VARCHAR',
+            'text': 'TEXT',
+            'datetime': 'DATETIME',
+            'primary_key': 'INTEGER',
+            'foreign_key': 'INTEGER',
+            'boolean': 'SMALLINT',
+        }
+        field_types.update(self.get_field_overrides())
+        return field_types
+    
+    def get_field_overrides(self):
+        return {}
+    
+    def connect(self, database, **kwargs):
+        raise NotImplementedError
+    
+    def close(self, conn):
+        conn.close()
+    
+    def lookup_cast(self, lookup, value):
+        return value
+    
+    def last_insert_id(self, cursor, model):
+        raise NotImplementedError
+    
+    def rows_affected(self, cursor):
+        return cursor.rowcount
+
+
+class SqliteAdapter(BaseAdapter):
+    operations = {
+        'lt': '< ?',
+        'lte': '<= ?',
+        'gt': '> ?',
+        'gte': '>= ?',
+        'eq': '= ?',
+        'ne': '!= ?', # watch yourself with this one
+        'in': 'IN (%s)', # special-case to list q-marks
+        'is': 'IS ?',
+        'icontains': "LIKE ? ESCAPE '\\'", # surround param with %'s
+        'contains': "GLOB ?", # surround param with *'s
+        'istartswith': "LIKE ? ESCAPE '\\'",
+        'startswith': "GLOB ?",
+    }
+    interpolation = '?'
+    
+    def connect(self, database, **kwargs):
+        return sqlite3.connect(database, **kwargs)
+    
+    def last_insert_id(self, cursor, model):
+        return cursor.lastrowid
+    
+    def lookup_cast(self, lookup, value):
+        if lookup == 'contains':
+            return '*%s*' % value
+        elif lookup == 'icontains':
+            return '%%%s%%' % value
+        elif lookup == 'startswith':
+            return '%s*' % value
+        elif lookup == 'istartswith':
+            return '%s%%' % value
+        return value
+
+
 class Database(object):
-    def __init__(self, database, connect_kwargs=None):
+    def __init__(self, adapter, database, **connect_kwargs):
+        self.adapter = adapter
         self.database = database
-        self.connect_kwargs = connect_kwargs or {}
+        self.connect_kwargs = connect_kwargs
     
     def connect(self):
-        self.conn = sqlite3.connect(self.database, **self.connect_kwargs)
+        self.conn = self.adapter.connect(self.database, **self.connect_kwargs)
     
     def close(self):
-        self.conn.close()
+        self.adapter.close(self.conn)
     
     def execute(self, sql, params=None, commit=False):
         cursor = self.conn.cursor()
@@ -36,11 +110,21 @@ class Database(object):
         if commit:
             self.conn.commit()
         logger.debug((sql, params))
-        return res
+        return cursor
     
-    def last_insert_id(self):
-        result = self.execute("SELECT last_insert_rowid();")
-        return result.fetchone()[0]
+    def last_insert_id(self, cursor, model):
+        return self.adapter.last_insert_id(cursor, model)
+    
+    def rows_affected(self, cursor):
+        return self.adapter.rows_affected(cursor)
+    
+    def column_for_field(self, db_field):
+        try:
+            return self.adapter.get_field_types()[db_field]
+        except KeyError:
+            raise AttributeError('Unknown field type: "%s", valid types are: %s' % \
+                db_field, ', '.join(self.adapter.get_field_types().keys())
+            )
     
     def create_table(self, model_class):
         framing = "CREATE TABLE IF NOT EXISTS %s (%s);"
@@ -75,7 +159,7 @@ class Database(object):
         self.execute('DROP TABLE %s;' % model_class._meta.db_table, commit=True)
 
 
-database = Database(DATABASE_NAME)
+database = Database(SqliteAdapter(), DATABASE_NAME)
 
 
 class QueryResultWrapper(object):
@@ -240,18 +324,6 @@ def parseq(*args, **kwargs):
 
 
 class BaseQuery(object):
-    operations = {
-        'lt': '< ?',
-        'lte': '<= ?',
-        'gt': '> ?',
-        'gte': '>= ?',
-        'eq': '= ?',
-        'ne': '!= ?', # watch yourself with this one
-        'in': 'IN (%s)', # special-case to list q-marks
-        'is': 'IS ?',
-        'icontains': "LIKE ? ESCAPE '\\'", # surround param with %'s
-        'contains': "GLOB ?", # surround param with *'s
-    }
     query_separator = '__'
     requires_commit = True
     force_alias = False
@@ -259,9 +331,16 @@ class BaseQuery(object):
     def __init__(self, model):
         self.model = model
         self.query_context = model
+        self.database = self.model._meta.database
+        self.operations = self.database.adapter.operations
+        self.interpolation = self.database.adapter.interpolation
+        
         self._where = {}
         self._joins = []
         self._dirty = True
+    
+    def lookup_cast(self, lookup, value):
+        return self.database.adapter.lookup_cast(lookup, value)
     
     def parse_query_args(self, model, **query):
         parsed = {}
@@ -285,19 +364,19 @@ class BaseQuery(object):
                     lookup_value = rhs
                     operation = 'IN (%s)'
                 else:
-                    lookup_value = [field.lookup_value(op, o) for o in rhs]
+                    lookup_value = [field.db_value(o) for o in rhs]
                     operation = self.operations[op] % \
-                        (','.join(['?' for v in lookup_value]))
+                        (','.join([self.interpolation for v in lookup_value]))
             elif op == 'is':
                 if rhs is not None:
                     raise ValueError('__is lookups only accept None')
                 operation = 'IS NULL'
                 lookup_value = []
             else:
-                lookup_value = field.lookup_value(op, rhs)
+                lookup_value = field.db_value(rhs)
                 operation = self.operations[op]
             
-            parsed[field.name] = (operation, lookup_value)
+            parsed[field.name] = (operation, self.lookup_cast(op, lookup_value))
         
         return parsed
     
@@ -448,9 +527,7 @@ class BaseQuery(object):
     
     def raw_execute(self):
         query, params = self.sql()
-        db = self.model._meta.database
-        result = db.execute(query, params, self.requires_commit)
-        return result
+        return self.database.execute(query, params, self.requires_commit)
 
 
 class SelectQuery(BaseQuery):
@@ -623,7 +700,7 @@ class UpdateQuery(BaseQuery):
         sets = {}
         for k, v in self.update_query.iteritems():
             field = self.model._meta.get_field_by_name(k)
-            sets[field.name] = field.lookup_value(None, v)
+            sets[field.name] = field.db_value(v)
         
         return sets
     
@@ -636,7 +713,7 @@ class UpdateQuery(BaseQuery):
 
         for k, v in set_statement.iteritems():
             params.append(v)
-            update_params.append('%s=?' % k)
+            update_params.append('%s=%s' % (k, self.interpolation))
         
         update = 'UPDATE %s SET %s' % (
             self.model._meta.db_table, ', '.join(update_params))
@@ -655,7 +732,7 @@ class UpdateQuery(BaseQuery):
     
     def execute(self):
         result = self.raw_execute()
-        return result.rowcount
+        return self.database.rows_affected(result)
 
 
 class DeleteQuery(BaseQuery):
@@ -680,7 +757,7 @@ class DeleteQuery(BaseQuery):
     
     def execute(self):
         result = self.raw_execute()
-        return result.rowcount
+        return self.database.rows_affected(result)
 
 
 class InsertQuery(BaseQuery):
@@ -694,7 +771,7 @@ class InsertQuery(BaseQuery):
         for k, v in self.insert_query.iteritems():
             field = self.model._meta.get_field_by_name(k)
             cols.append(k)
-            vals.append(field.lookup_value(None, v))
+            vals.append(field.db_value(v))
         
         return cols, vals
     
@@ -702,7 +779,10 @@ class InsertQuery(BaseQuery):
         cols, vals = self.parse_insert()
         
         insert = 'INSERT INTO %s (%s) VALUES (%s)' % (
-            self.model._meta.db_table, ','.join(cols), ','.join('?' for v in vals))
+            self.model._meta.db_table,
+            ','.join(cols),
+            ','.join(self.interpolation for v in vals)
+        )
         
         return insert, vals
     
@@ -714,12 +794,12 @@ class InsertQuery(BaseQuery):
     
     def execute(self):
         result = self.raw_execute()
-        return result.lastrowid
+        return self.database.last_insert_id(result, self.model)
 
 
 class Field(object):
     db_field = ''
-    field_template = "%(db_field)s%(nullable)s"
+    field_template = "%(column_type)s%(nullable)s"
 
     def get_attributes(self):
         return {}
@@ -728,16 +808,18 @@ class Field(object):
         self.null = null
         self.db_index = db_index
         self.attributes = self.get_attributes()
-        if 'db_field' not in kwargs:
-            kwargs['db_field'] = self.db_field
+        
         kwargs['nullable'] = ternary(self.null, '', ' NOT NULL')
         self.attributes.update(kwargs)
     
     def add_to_class(self, klass, name):
         self.name = name
+        self.model = klass
         setattr(klass, name, None)
     
     def render_field_template(self):
+        col_type = self.model._meta.database.column_for_field(self.db_field)
+        self.attributes['column_type'] = col_type
         return self.field_template % self.attributes
     
     def to_sql(self):
@@ -760,8 +842,8 @@ class Field(object):
 
 
 class CharField(Field):
-    db_field = 'VARCHAR'
-    field_template = '%(db_field)s(%(max_length)d)%(nullable)s'
+    db_field = 'string'
+    field_template = '%(column_type)s(%(max_length)d)%(nullable)s'
     
     def get_attributes(self):
         return {'max_length': 255}
@@ -782,7 +864,7 @@ class CharField(Field):
     
 
 class TextField(Field):
-    db_field = 'TEXT'
+    db_field = 'text'
     
     def db_value(self, value):
         return self.null_wrapper(value, '')
@@ -797,7 +879,7 @@ class TextField(Field):
 
 
 class DateTimeField(Field):
-    db_field = 'DATETIME'
+    db_field = 'datetime'
     
     def python_value(self, value):
         if value is not None:
@@ -806,7 +888,7 @@ class DateTimeField(Field):
 
 
 class IntegerField(Field):
-    db_field = 'INTEGER'
+    db_field = 'integer'
     
     def db_value(self, value):
         return self.null_wrapper(value, 0)
@@ -817,6 +899,8 @@ class IntegerField(Field):
 
 
 class BooleanField(IntegerField):
+    db_field = 'boolean'
+    
     def db_value(self, value):
         if value:
             return 1
@@ -827,7 +911,7 @@ class BooleanField(IntegerField):
 
 
 class FloatField(Field):
-    db_field = 'REAL'
+    db_field = 'float'
     
     def db_value(self, value):
         return self.null_wrapper(value, 0.0)
@@ -838,7 +922,8 @@ class FloatField(Field):
 
 
 class PrimaryKeyField(IntegerField):
-    field_template = "%(db_field)s NOT NULL PRIMARY KEY"
+    db_field = 'primary_key'
+    field_template = "%(column_type)s NOT NULL PRIMARY KEY"
 
 
 class ForeignRelatedObject(object):    
@@ -872,7 +957,8 @@ class ReverseForeignRelatedObject(object):
 
 
 class ForeignKeyField(IntegerField):
-    field_template = '%(db_field)s%(nullable)s REFERENCES "%(to_table)s" ("%(to_pk)s")'
+    db_field = 'foreign_key'
+    field_template = '%(column_type)s%(nullable)s REFERENCES "%(to_table)s" ("%(to_pk)s")'
     
     def __init__(self, to, null=False, related_name=None, *args, **kwargs):
         self.to = to
@@ -886,6 +972,8 @@ class ForeignKeyField(IntegerField):
     def add_to_class(self, klass, name):
         self.descriptor = name
         self.name = name + '_id'
+        self.model = klass
+        
         if self.related_name is None:
             self.related_name = klass._meta.db_table + '_set'
         

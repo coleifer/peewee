@@ -4,7 +4,7 @@ import unittest
 
 import peewee
 from peewee import (SelectQuery, InsertQuery, UpdateQuery, DeleteQuery, Node, 
-        Q, database, parseq)
+        Q, database, parseq, SqliteAdapter)
 
 
 class QueryLogHandler(logging.Handler):
@@ -1171,8 +1171,8 @@ class FieldTypeTests(BasePeeweeTestCase):
 
 class ModelOptionsTest(BasePeeweeTestCase):
     def test_option_inheritance(self):
-        test_db = peewee.Database('testing.db')
-        child2_db = peewee.Database('child2.db')
+        test_db = peewee.Database(SqliteAdapter(), 'testing.db')
+        child2_db = peewee.Database(SqliteAdapter(), 'child2.db')
 
         class ParentModel(peewee.Model):
             title = peewee.CharField()
