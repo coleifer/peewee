@@ -52,7 +52,7 @@ If you like UML, this is basically what it looks like:
 
 Here is the code::
 
-    database = peewee.Database(DATABASE)
+    database = peewee.Database(peewee.SqliteAdapter(), DATABASE)
 
     # model definitions
     class User(peewee.Model):
@@ -151,7 +151,7 @@ database and point your models at it::
 
     # ... more config here, omitted
 
-    database = peewee.Database(DATABASE) # tell our models to use "tweepee.db"
+    database = peewee.Database(peewee.SqliteAdapter(), DATABASE) # tell our models to use "tweepee.db"
 
 Because sqlite likes to have a separate connection per-thread, we will tell 
 flask that during the request/response cycle we need to create a connection to 

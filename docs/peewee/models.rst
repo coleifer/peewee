@@ -71,7 +71,7 @@ placed in a special class called ``Meta``::
 
     import peewee
     
-    custom_db = peewee.Database('custom.db')
+    custom_db = peewee.Database(peewee.SqliteAdapter(), 'custom.db')
     
     class CustomModel(peewee.Model):
         ... fields ...
