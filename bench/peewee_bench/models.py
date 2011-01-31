@@ -1,7 +1,7 @@
 import peewee
 
 
-test_db = peewee.Database('test_pw.db')
+test_db = peewee.Database(peewee.SqliteAdapter(), 'test_pw.db')
 
 class User(peewee.Model):
     username = peewee.CharField()
@@ -38,6 +38,6 @@ def create_tables():
 
 def drop_tables():
     test_db.connect()
-    Entry.drop_table()
-    Blog.drop_table()
-    User.drop_table()
+    Entry.drop_table(fail_silently=True)
+    Blog.drop_table(fail_silently=True)
+    User.drop_table(fail_silently=True)

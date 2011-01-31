@@ -194,8 +194,9 @@ class Database(object):
         
         self.execute(query, commit=True)
     
-    def drop_table(self, model_class):
-        self.execute('DROP TABLE %s;' % model_class._meta.db_table, commit=True)
+    def drop_table(self, model_class, fail_silently=False):
+        framing = fail_silently and 'DROP TABLE IF EXISTS %s;' or 'DROP TABLE %s;'
+        self.execute(framing % model_class._meta.db_table, commit=True)
 
 
 database = Database(SqliteAdapter(), DATABASE_NAME)
@@ -1143,8 +1144,8 @@ class Model(object):
                 cls._meta.database.create_index(cls, field_obj.name)
     
     @classmethod
-    def drop_table(cls):
-        cls._meta.database.drop_table(cls)
+    def drop_table(cls, fail_silently=False):
+        cls._meta.database.drop_table(cls, fail_silently)
     
     @classmethod
     def select(cls, query=None):

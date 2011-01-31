@@ -4,7 +4,10 @@ from models import create_tables, drop_tables, User, Blog, Entry
 
 
 def initialize():
-    create_tables()
+    try:
+        create_tables()
+    except:
+        pass
 
 def teardown():
     drop_tables()
