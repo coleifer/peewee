@@ -56,6 +56,9 @@ class User(TestModel):
     blog = peewee.ForeignKeyField(Blog, null=True)
     active = peewee.BooleanField(db_index=True)
 
+    class Meta:
+        db_table = 'users'
+
     def __unicode__(self):
         return self.username
 

@@ -1084,7 +1084,9 @@ class BaseModel(type):
                     attr_dict[k] = v
         
         _meta = BaseModelOptions(cls, attr_dict)
-        _meta.db_table = re.sub('[^a-z]+', '_', cls.__name__.lower())
+        
+        if not hasattr(_meta, 'db_table'):
+            _meta.db_table = re.sub('[^a-z]+', '_', cls.__name__.lower())
 
         setattr(cls, '_meta', _meta)
         
