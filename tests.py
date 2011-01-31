@@ -4,7 +4,7 @@ import unittest
 
 import peewee
 from peewee import (SelectQuery, InsertQuery, UpdateQuery, DeleteQuery, Node, 
-        Q, database, parseq, SqliteAdapter)
+        Q, database, parseq, SqliteAdapter, PostgresqlAdapter)
 
 
 class QueryLogHandler(logging.Handler):
@@ -16,15 +16,23 @@ class QueryLogHandler(logging.Handler):
         self.queries.append(record)
 
 
+test_db = peewee.Database(SqliteAdapter(), 'tmp.db')
+
+
+class TestModel(peewee.Model):
+    class Meta:
+        database = test_db
+
+
 # test models
-class Blog(peewee.Model):
+class Blog(TestModel):
     title = peewee.CharField()
     
     def __unicode__(self):
         return self.title
 
 
-class Entry(peewee.Model):
+class Entry(TestModel):
     pk = peewee.PrimaryKeyField()
     title = peewee.CharField(max_length=50)
     content = peewee.TextField()
@@ -35,7 +43,7 @@ class Entry(peewee.Model):
         return '%s: %s' % (self.blog.title, self.title)
 
 
-class EntryTag(peewee.Model):
+class EntryTag(TestModel):
     tag = peewee.CharField(max_length=50)
     entry = peewee.ForeignKeyField(Entry)
     
@@ -43,7 +51,7 @@ class EntryTag(peewee.Model):
         return self.tag
 
 
-class User(peewee.Model):
+class User(TestModel):
     username = peewee.CharField(max_length=50)
     blog = peewee.ForeignKeyField(Blog, null=True)
     active = peewee.BooleanField(db_index=True)
@@ -52,32 +60,32 @@ class User(peewee.Model):
         return self.username
 
 
-class Relationship(peewee.Model):
+class Relationship(TestModel):
     from_user = peewee.ForeignKeyField(User, related_name='relationships')
     to_user = peewee.ForeignKeyField(User, related_name='related_to')
 
 
-class NullModel(peewee.Model):
+class NullModel(TestModel):
     char_field = peewee.CharField(null=True)
     text_field = peewee.TextField(null=True)
     datetime_field = peewee.DateTimeField(null=True)
     int_field = peewee.IntegerField(null=True)
     float_field = peewee.FloatField(null=True)
 
-class Team(peewee.Model):
+class Team(TestModel):
     name = peewee.CharField()
 
-class Member(peewee.Model):
+class Member(TestModel):
     username = peewee.CharField()
 
-class Membership(peewee.Model):
+class Membership(TestModel):
     team = peewee.ForeignKeyField(Team)
     member = peewee.ForeignKeyField(Member)
 
 
 class BasePeeweeTestCase(unittest.TestCase):
     def setUp(self):
-        database.connect()
+        test_db.connect()
         Blog.create_table()
         Entry.create_table()
         EntryTag.create_table()
@@ -104,7 +112,7 @@ class BasePeeweeTestCase(unittest.TestCase):
         EntryTag.drop_table()
         Entry.drop_table()
         Blog.drop_table()
-        database.close()
+        test_db.close()
     
     def queries(self):
         return [x.msg for x in self.qh.queries]
@@ -1150,7 +1158,7 @@ class FieldTypeTests(BasePeeweeTestCase):
         self.assertEqual(nm_from_db.float_field, 0.0)
     
     def get_sorted_indexes(self, model):
-        res = database.execute('PRAGMA index_list(%s);' % model._meta.db_table)
+        res = test_db.execute('PRAGMA index_list(%s);' % model._meta.db_table)
         rows = sorted([r[1:] for r in res.fetchall()])
         return rows
     
