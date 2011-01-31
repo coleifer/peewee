@@ -10,6 +10,7 @@
 from datetime import datetime
 import logging
 import os
+import psycopg2
 import re
 import sqlite3
 import time
@@ -92,6 +93,44 @@ class SqliteAdapter(BaseAdapter):
         return value
 
 
+class PostgresqlAdapter(BaseAdapter):
+    operations = {
+        'lt': '< %s',
+        'lte': '<= %s',
+        'gt': '> %s',
+        'gte': '>= %s',
+        'eq': '= %s',
+        'ne': '!= %s', # watch yourself with this one
+        'in': 'IN (%s)', # special-case to list q-marks
+        'is': 'IS %s',
+        'icontains': 'ILIKE %s', # surround param with %'s
+        'contains': 'LIKE %s', # surround param with *'s
+        'istartswith': 'ILIKE %s',
+        'startswith': 'LIKE %s',
+    }
+        
+    def connect(self, database, **kwargs):
+        return psycopg2.connect(database=database, **kwargs)
+    
+    def get_field_overrides(self):
+        return {
+            'primary_key': 'SERIAL',
+            'datetime': 'TIMESTAMP WITH TIME ZONE'
+        }
+    
+    def last_insert_id(self, cursor, model):
+        cursor.execute("SELECT CURRVAL('\"%s_%s_seq\"')" % (
+            model._meta.db_table, model._meta.pk_name))
+        return cursor.fetchone()[0]
+    
+    def lookup_cast(self, lookup, value):
+        if lookup in ('contains', 'icontains'):
+            return '%%%s%%' % value
+        elif lookup in ('startswith', 'istartswith'):
+            return '%s%%' % value
+        return value
+
+
 class Database(object):
     def __init__(self, adapter, database, **connect_kwargs):
         self.adapter = adapter
@@ -127,7 +166,7 @@ class Database(object):
             )
     
     def create_table(self, model_class):
-        framing = "CREATE TABLE IF NOT EXISTS %s (%s);"
+        framing = "CREATE TABLE %s (%s);"
         columns = []
 
         for field in model_class._meta.fields.values():
