@@ -303,8 +303,8 @@ class BaseQuery(object):
 				lookup_value = field.lookup_value(op, rhs)
 				operation = self.operations[op]
 				
-			# if callable(operation):
-			# 	operation, lookup_value = operation(lookup_value)
+			if callable(operation):
+				operation, lookup_value = operation(lookup_value)
 			 
 			col_name = field.attributes.get('real_name', field.name)
 			
@@ -768,9 +768,12 @@ class CharField(Field):
 	field_template = "%(db_field)s(%(max_length)d) NOT NULL"
 	
 	def get_attributes(self):
-		return {'max_length': 255}
+		return {'max_length': 255, 'nullable': False}
 	
 	def db_value(self, value):
+		if not value and self.attributes['nullable']:
+			value = 'NULL'
+		
 		value = value or ''
 		return value[:self.attributes['max_length']]
 	
