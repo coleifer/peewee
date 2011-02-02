@@ -1,21 +1,24 @@
-peewee (now with experimental MySQL support via the OurSQL library!)
+.. image:: http://charlesleifer.com/media/images/peewee-transparent.png
+
+peewee
 ======
 
-a small orm
+* a small orm
+* written in python
+* provides a lightweight querying interface over sql
+* uses sql concepts when querying, like joins and where clauses
 
-written to provide a lightweight querying interface over sql
-
-uses sql concepts when querying, like joins, group by, having, etc.
-
-pagination is handled for you automatically
 
 Examples::
 
     # a simple query selecting a user
-    User.select().where(username='charles')
+    User.get(username='charles')
     
-    # get the tweets by a user named charles and order the newest to oldest
-    Tweet.select().order_by(('pub_date', 'desc')).join(User).where(username='charles')
+    # get the staff and super users
+    editors = User.select().where(Q(is_staff=True) | Q(is_superuser=True))
+    
+    # get tweets by editors
+    Tweet.select().where(user__in=editors)
     
     # how many active users are there?
     User.select().where(active=True).count()
@@ -30,10 +33,22 @@ Examples::
     }).group_by('id').join(Tweet).order_by(('num_tweets', 'desc'))
 
 
-what it doesn't do (yet?)
--------------------------
+check the `documentation <http://charlesleifer.com/docs/peewee/>`_ for more
+examples.
 
-NOT queries
+specific question?  come hang out in the #peewee channel on freenode.irc.net
+
+
+Why?
+----
+
+peewee began when I was working on a small app in flask and found myself writing
+lots of queries and wanting a very simple abstraction on top of the sql.  I had
+so much fun working on it that I kept adding features.  My goal has always been,
+though, to keep the implementation incredibly simple.  I've made a couple dives
+into django's orm but have never come away with a deep understanding of its
+implementation.  peewee is small enough that its my hope anyone with an interest
+in orms will be able to understand the code without too much trouble.
 
 
 model definitions and schema creation
