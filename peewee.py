@@ -173,8 +173,7 @@ class MysqlAdapter(BaseAdapter):
 		return oursql.connect(db=database, **kwargs)
 	
 	def last_insert_id(self, cursor, model):
-		cursor.execute("SELECT last_insert_rowid();")
-		return cursor.fetchone()[0]
+		return cursor.lastrowid
 	
 	def lookup_cast(self, lookup, value):
 		if lookup in ('contains', 'icontains'):
@@ -199,8 +198,7 @@ class Database(object):
 	def execute(self, sql, params=(), commit=False, **kwargs):
 		if not hasattr(self, 'conn'):
 			self.connect()
-		print 'EXECUTE', sql, params
-		# self.conn.ping()
+		
 		cursor = self.conn.cursor()
 		res = cursor.execute(sql, params or (), **kwargs)
 		if commit:
@@ -244,6 +242,8 @@ class Database(object):
 		return None
 	
 	def last_insert_id(self, cursor, model):
+		result, cursor = cursor
+		
 		return self.adapter.last_insert_id(cursor, model)
 	
 	def rows_affected(self, cursor):
@@ -754,15 +754,21 @@ class SelectQuery(BaseQuery):
 		return self
 	
 	@mark_query_dirty
-	def order_by(self, field_or_string):
-		if isinstance(field_or_string, tuple):
-			field_or_string, ordering = field_or_string
-		else:
-			ordering = 'ASC'
+	def order_by(self, field_or_string=None, **kwargs):
+		if field_or_string is not None:
+			if isinstance(field_or_string, tuple):
+				field_or_string, ordering = field_or_string
+			else:
+				ordering = 'ASC'
 		
-		self._order_by.append(
-			(self.query_context, field_or_string, ordering)
-		)
+			self._order_by.append(
+				(self.query_context, field_or_string, ordering)
+			)
+		elif len(kwargs) > 0:
+			for field, ordering in kwargs.iteritems():
+				self._order_by.append(
+					(self.query_context, field, ordering)
+				)
 		
 		return self
 	
@@ -1208,7 +1214,12 @@ class ForeignKeyField(IntegerField):
 		return value or None
 	
 	def db_value(self, value):
-		return value.get_pk()
+		if isinstance(value, int):
+			return value
+		elif hasattr(value, '__class__'):
+			return value.get_pk()
+		else:
+			return None
 
 
 class BaseModelOptions(object):
@@ -1272,7 +1283,7 @@ class BaseModel(type):
 				_meta.db_table = attr_dict['db_table']
 			else:
 				_meta.db_table = re.sub('[^a-z]+', '_', cls.__name__.lower())
-		print cls.__name__, _meta.db_table
+		
 		setattr(cls, '_meta', _meta)
 		
 		_meta.pk_name = None
