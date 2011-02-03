@@ -10,10 +10,23 @@
 from datetime import datetime
 import logging
 import os
-import psycopg2
 import re
-import oursql
 import time
+
+try:
+	import sqlite3
+except ImportError:
+	sqlite3 = None
+
+try:
+	import psycopg2
+except ImportError:
+	pyscopg2 = None
+
+try:
+	import oursql
+except ImportError:
+	oursql = None
 
 
 DATABASE_NAME = os.environ.get('PEEWEE_DATABASE', 'peewee.db')
@@ -133,19 +146,28 @@ class PostgresqlAdapter(BaseAdapter):
 
 class MysqlAdapter(BaseAdapter):
 	operations = {
-		'lt': '< %s',
-		'lte': '<= %s',
-		'gt': '> %s',
-		'gte': '>= %s',
-		'eq': '= %s',
-		'ne': '<> %s', # watch yourself with this one
-		'in': 'IN (%s)', # special-case to list q-marks
-		'is': 'IS %s',
-		'icontains': 'ILIKE %s', # surround param with %'s
-		'contains': 'LIKE %s', # surround param with *'s
-		'istartswith': 'ILIKE %s',
-		'startswith': 'LIKE %s',
+		'lt': '< ?',
+		'lte': '<= ?',
+		'gt': '> ?',
+		'gte': '>= ?',
+		'eq': '= ?',
+		'ne': '<> ?', # watch yourself with this one
+		'in': 'IN (?)', # special-case to list q-marks
+		'is': 'IS ?',
+		'icontains': 'ILIKE ?', # surround param with %'s
+		'contains': 'LIKE ?', # surround param with *'s
+		'istartswith': 'ILIKE ?',
+		'startswith': 'LIKE ?',
 	}
+	
+	interpolation = '?'
+	
+	
+	def get_field_overrides(self):
+		return {
+			'boolean': 'TINYINT',
+			'enum': 'ENUM'
+		}
 	
 	def connect(self, database, **kwargs):
 		return oursql.connect(db=database, **kwargs)
@@ -174,60 +196,17 @@ class Database(object):
 	def close(self):
 		self.adapter.close(self.conn)
 	
-	def reconnect(self):
-		if not self._conn_info:
-			raise Exception, "Cannot find connection info for MySQL."
-		
-		if self._conn:
-			try:
-				self._conn.close()
-			except:
-				pass
-			finally:
-				self._conn = None
-		
-		self._conn = oursql.connect(**self._conn_info)
-	
-	def ensure_connected(self):
-		if not self._conn:
-			self.reconnect()
-		
-		try:
-			self._conn.ping()
-		except:
-			self.reconnect()
-	
-	def execute(self, sql, sql_params=(), commit=False, plain_query=False):
-		self.ensure_connected()
-		
-		if isinstance(sql_params, list):
-			sql_params = tuple(sql_params)
-		
-		if plain_query:
-			sql_params = None
-		
-		try:
-			cursor = self._conn.cursor()
-			# fix params
-			params = []
-			for param in sql_params:
-				if isinstance(param, (list,tuple)):
-					params.extend(param)
-				else: params.append(param)
-			res = cursor.execute(sql, params=params, plain_query=plain_query)
-			if commit:
-				self._conn.commit()
-			
-			return res, cursor
-		except oursql.OperationalError, ex:
-			if ex.errno == 2006:
-				self.reconnect()
-			else:
-				raise ex
-		
-		logger.debug(sql, sql_params)
-		
-		return False
+	def execute(self, sql, params=(), commit=False, **kwargs):
+		if not hasattr(self, 'conn'):
+			self.connect()
+		print 'EXECUTE', sql, params
+		# self.conn.ping()
+		cursor = self.conn.cursor()
+		res = cursor.execute(sql, params or (), **kwargs)
+		if commit:
+			self.conn.commit()
+		logger.debug((sql, params))
+		return res, cursor
 	
 	def fetchrows(self, *args, **kwargs):
 		result, cursor = self.execute(*args, **kwargs)
@@ -384,12 +363,9 @@ class QueryResultWrapper(object):
 		row = self.cursor.fetchone()
 		if row:
 			row_dict = self._row_to_dict(row, self.cursor)
-			if self.model:
-				instance = self.model_from_rowset(self.model, row_dict)
-				self._result_cache.append(instance)
-				return instance
-			else:
-				return row_dict
+			instance = self.model_from_rowset(self.model, row_dict)
+			self._result_cache.append(instance)
+			return instance
 		else:
 			self._populated = True
 			raise StopIteration
@@ -726,944 +702,6 @@ class BaseQuery(object):
 
 
 class SelectQuery(BaseQuery):
-	"""
-	Model.select('*').where(field=val).join(RelModel).where(rel_field=val)
-	"""
-	requires_commit = False
-	
-	def __init__(self, model, query=None):
-		"""
-		Allow a string or a dictionary keyed by model->fields
-		
-		.select('t1.*, COUNT(t2.id) AS count') or
-		.select({Blog: '*', Entry: Count('id')})
-		"""
-		self.query = query or '*'
-		self._group_by = []
-		self._having = []
-		self._order_by = []
-		self._pagination = None # return all by default
-		self._distinct = False
-		self._qr = None
-		super(SelectQuery, self).__init__(model)
-	
-	@mark_query_dirty
-	def paginate(self, page_num, paginate_by=20):
-		self._pagination = (page_num, paginate_by)
-		return self
-	
-	def count(self):
-		tmp_pagination = self._pagination
-		self._pagination = None
-		
-		tmp_query = self.query
-		
-		if self.use_aliases():
-			self.query = 'COUNT(`t1`.`id`)'
-		else:
-			self.query = 'COUNT(`%s`)' %	(self.model._meta.primary_key.real_name,)
-		
-		db = self.model._meta.get_database()
-		query, sql_params = self.sql()
-		res, cursor = db.execute(query, sql_params)
-		
-		self.query = tmp_query
-		self._pagination = tmp_pagination
-		
-		return cursor.fetchone()[0]
-	
-	@mark_query_dirty
-	def group_by(self, clause):
-		self._group_by.append((self.query_context, clause))
-		return self
-	
-	@mark_query_dirty
-	def having(self, clause):
-		self._having.append(clause)
-		return self
-	
-	@mark_query_dirty
-	def distinct(self):
-		self._distinct = True
-		return self
-	
-	@mark_query_dirty
-	def order_by(self, field_or_string=None, **kwargs):
-		if field_or_string is not None:
-			if isinstance(field_or_string, tuple):
-				field_or_string, ordering = field_or_string
-			else:
-				ordering = 'ASC'
-			
-			self._order_by.append(
-				(self.query_context, field_or_string, ordering)
-			)
-		
-		for field_name, ordering in kwargs.iteritems():
-			self._order_by.append(
-				(self.query_context, field_name, ordering)
-			)
-		
-		return self
-	
-	def parse_select_query(self, alias_map):
-		if isinstance(self.query, basestring):
-			if self.query == '*' and self.use_aliases():
-				return '`%s`.*' % alias_map[self.model]
-			return self.query
-		elif isinstance(self.query, dict):
-			qparts = []
-			for model, cols in self.query.iteritems():
-				alias = alias_map.get(model, '')
-				for col in cols:
-					if isinstance(col, tuple):
-						func, col, col_alias = col
-						qparts.append('%s(%s) AS %s' % \
-							(func, self.combine_field(alias, col), col_alias)
-						)
-					else:
-						qparts.append(self.combine_field(alias, col))
-			return ', '.join(qparts)
-		else:
-			raise TypeError('Unknown type encountered parsing select query')
-	
-	def sql(self):
-		joins, where, where_values, alias_map = self.compile_where()
-		
-		table = self.model._meta.db_table
-		
-		sql_params = []
-		group_by = []
-		
-		if self.use_aliases():
-			table = '%s AS %s' % (table, alias_map[self.model])
-			for model, clause in self._group_by:
-				alias = alias_map[model]
-				group_by.append(self.combine_field(alias, clause))
-		else:
-			group_by = list(self._group_by)
-		
-		parsed_query = self.parse_select_query(alias_map)
-		
-		if self._distinct:
-			sel = 'SELECT DISTINCT'
-		else:
-			sel = 'SELECT'
-		
-		select = '%s %s FROM `%s`' % (sel, parsed_query, table)
-		joins = '\n'.join(joins)
-		where = ' AND '.join(where)
-		group_by = ', '.join(group_by)
-		having = ' AND '.join(self._having)
-		
-		order_by = []
-		for piece in self._order_by:
-			model, field, ordering = piece
-			if self.use_aliases() and field in model._meta.fields:
-				field = '`%s`.`%s`' % (alias_map[model], field)
-			order_by.append('%s %s' % (field, ordering))
-		
-		pieces = [select]
-		
-		if joins:
-			pieces.append(joins)
-		if where:
-			pieces.append('WHERE %s' % where)
-			sql_params.extend(where_values)
-		if group_by:
-			pieces.append('GROUP BY %s' % group_by)
-		if having:
-			pieces.append('HAVING %s' % having)
-		if order_by:
-			pieces.append('ORDER BY %s' % ', '.join(order_by))
-		if self._pagination:
-			page, paginate_by = self._pagination
-			if page > 0:
-				page -= 1
-			pieces.append('LIMIT %d OFFSET %d' % (paginate_by, page * paginate_by))
-		
-		return ' '.join(pieces), sql_params
-	
-	def execute(self):
-		if self._dirty:
-			result, cursor = self.raw_execute()
-			self._qr = QueryResultWrapper(self.model, cursor)
-			self._dirty = False
-			return self._qr
-		else:
-			# call the __iter__ method directly
-			return iter(self._qr)
-	
-	def first(self):
-		try:
-			return self.execute().next()
-		except StopIteration:
-			return None
-	
-	def __iter__(self):
-		return self.execute()
-
-
-class UpdateQuery(BaseQuery):
-	"""
-	Model.update(field=val, field2=val2).where(some_field=some_val)
-	"""
-	def __init__(self, model, **kwargs):
-		self.update_query = kwargs
-		super(UpdateQuery, self).__init__(model)
-	
-	def parse_update(self):
-		sets = {}
-		for k, v in self.update_query.iteritems():
-			field = self.model._meta.get_field_by_name(k)
-			column_name = field.attributes.get('real_name', field.name)
-			
-			found_value = str(field.lookup_value(None, v))
-			if found_value in ('NULL', 'None'):
-				found_value = None
-			
-			sets['`%s`' % column_name] = found_value
-		
-		return sets
-	
-	def sql(self):
-		joins, where, where_values, alias_map = self.compile_where()
-		set_statement = self.parse_update()
-		
-		sql_params = []
-		sql_update = []
-		for f, v in set_statement.iteritems():
-			sql_params.append(v)
-			sql_update.append('%s=?' % (f,))
-		
-		update = 'UPDATE %s SET %s' % (self.model._meta.db_table, ', '.join(sql_update))
-		where = ' AND '.join(where)
-		
-		pieces = [update]
-		
-		if where:
-			pieces.append('WHERE %s' % where)
-			sql_params.extend(where_values)
-		
-		return ' '.join(pieces), sql_params
-	
-	def join(self, *args, **kwargs):
-		raise AttributeError('Update queries do not support JOINs in sqlite')
-	
-	def execute(self):
-		result, cursor = self.raw_execute()
-		return cursor.rowcount
-
-
-class DeleteQuery(BaseQuery):
-	"""
-	Model.delete().where(some_field=some_val)
-	"""
-	def sql(self):
-		joins, where, where_values, alias_map = self.compile_where()
-		
-		sql_params = []
-		
-		delete = 'DELETE FROM %s' % (self.model._meta.db_table)
-		where = ' AND '.join(where)
-		
-		pieces = [delete]
-		
-		if where:
-			pieces.append('WHERE %s' % where)
-			sql_params.extend(where_values)
-		
-		return ' '.join(pieces), sql_params
-	
-	def join(self, *args, **kwargs):
-		raise AttributeError('Update queries do not support JOINs in sqlite')
-	
-	def execute(self):
-		result, cursor = self.raw_execute()
-		return cursor.rowcount
-
-
-class InsertQuery(BaseQuery):
-	"""
-	Model.insert(field=val, field2=val2)
-	"""
-	def __init__(self, model, **kwargs):
-		self.insert_query = kwargs
-		super(InsertQuery, self).__init__(model)
-	
-	def parse_insert(self):
-		cols = []
-		vals = []
-		for k, v in self.insert_query.iteritems():
-			field = self.model._meta.get_field_by_name(k)
-			column_name = '`%s`' % field.attributes.get('real_name', field.name)
-			
-			cols.append(column_name)
-			
-			found_value = str(field.lookup_value(None, v))
-			if found_value in ('NULL', 'None'):
-				found_value = None
-			
-			vals.append(found_value)
-		
-		return cols, vals
-	
-	def sql(self):
-		cols, vals = self.parse_insert()
-		
-		insert = 'INSERT INTO %s (%s) VALUES(%s)' % (
-			self.model._meta.db_table, ', '.join(cols), ', '.join('?' for v in vals))
-		
-		return insert, vals
-	
-	def where(self, *args, **kwargs):
-		raise AttributeError('Insert queries do not support WHERE clauses')
-	
-	def join(self, *args, **kwargs):
-		raise AttributeError('Insert queries do not support JOINs')
-	
-	def execute(self):
-		result, cursor = self.raw_execute()
-		return cursor.lastrowid
-
-
-class Field(object):
-	db_field = ''
-	default = None
-	blank = False
-	max_length = None
-	choices = None
-	label = None
-	help_text = None
-	# real_name = None
-	field_template = "%(db_field)s"
-	
-	@property
-	def real_name(self):
-		if 'real_name' in self.attributes:
-			return self.attributes['real_name']
-		
-		return self.name
-	
-	def get_attributes(self):
-		return {'default': None,}
-	
-	def __init__(self, *args, **kwargs):
-		self.attributes = self.get_attributes()
-		if 'db_field' not in kwargs:
-			kwargs['db_field'] = self.db_field
-		
-		self.attributes.update(kwargs)
-	
-	def add_to_class(self, klass, name):
-		self.name = name
-		
-		setattr(klass, name, None)
-	
-	def render_field_template(self):
-		return self.field_template % self.attributes
-	
-	def to_sql(self):
-		rendered = self.render_field_template()
-		return '"%s" %s' % (self.name, rendered)
-	
-	def db_value(self, value):
-		return value or "NULL"
-	
-	def python_value(self, value):
-		return value
-	
-	def lookup_value(self, lookup_type, value):
-		return self.db_value(value)
-
-
-class CharField(Field):
-	db_field = 'VARCHAR'
-	field_template = "%(db_field)s(%(max_length)d) NOT NULL"
-	
-	def get_attributes(self):
-		return {'max_length': 255, 'nullable': False}
-	
-	def db_value(self, value):
-		if not value and self.attributes['nullable']:
-			value = 'NULL'
-		
-		value = value or ''
-		return value[:self.attributes['max_length']]
-	
-	def lookup_value(self, lookup_type, value):
-		if lookup_type in ('contains', 'icontains', 'startswith'):
-			return self.db_value(value)
-		else:
-			return self.db_value(value)
-
-
-class EnumField(Field):
-	db_field = 'ENUM'
-	field_template = "%(db_field)s(%(max_length)d) NOT NULL"
-	
-	def get_attributes(self):
-		return {'choices': ()}
-	
-	def db_value(self, value):
-		value = value or ''
-		if value not in self.attributes['choices']:
-			raise ValueError('%s not an allowed choice!' % (value,))
-		
-		return value
-	
-	def lookup_value(self, lookup_type, value):
-		if lookup_type in ('contains', 'icontains', 'startswith'):
-			return self.db_value(value)
-		else:
-			return self.db_value(value)
-
-
-class URLField(Field):
-	db_field = 'VARCHAR'
-	field_template = "%(db_field)s(%(max_length)d) NOT NULL"
-	
-	def get_attributes(self):
-		return {'max_length': 2048}
-	
-	def db_value(self, value):
-		value = value or ''
-		return value[:self.attributes['max_length']]
-	
-	def lookup_value(self, lookup_type, value):
-		if lookup_type in ('contains', 'icontains', 'startswith'):
-			return self.db_value(value)
-		else:
-			return self.db_value(value)
-
-
-class TextField(Field):
-	db_field = 'TEXT'
-	
-	def db_value(self, value):
-		return value or ''
-	
-	def lookup_value(self, lookup_type, value):
-		if lookup_type in ('contains', 'icontains', 'startswith'):
-			return self.db_value(value)
-		else:
-			return self.db_value(value)
-
-
-class DateTimeField(Field):
-	db_field = 'DATETIME'
-	field_template = "%(db_field)s"
-	
-	def python_value(self, value):
-		if value is not None:
-			value = value.rsplit('.', 1)[0]
-			return datetime(*time.strptime(value, '%Y-%m-%d %H:%M:%S')[:6])
-	
-	def db_value(self, value):
-		if value is not None:
-			return value.strftime('%Y-%m-%d %H:%M:%S')
-		return "NULL"
-
-
-class EpochTimestampField(Field):
-	db_field = 'INTEGER'
-	field_template = "%(db_field)s NOT NULL"
-	
-	def db_value(self, value):
-		if isinstance(value, datetime):
-			return int(time.mktime(value.timetuple()))
-		
-		return value or 0
-	
-	def python_value(self, value):
-		return datetime.fromtimestamp(int(value or 0))
-
-
-class BooleanField(Field):
-	db_field = 'TINYINT'
-	field_template = "%(db_field)s NOT NULL"
-	
-	def db_value(self, value):
-		return int(value)
-	
-	def python_value(self, value):
-		return bool(value or 0)
-
-
-class IntegerField(Field):
-	db_field = 'INTEGER'
-	field_template = "%(db_field)s NOT NULL"
-	
-	def db_value(self, value):
-		return value or 0
-	
-	def python_value(self, value):
-		return int(value or 0)
-
-
-class FloatField(Field):
-	db_field = 'REAL'
-	field_template = "%(db_field)s NOT NULL"
-	
-	def db_value(self, value):
-		return value or 0.0
-	
-	def python_value(self, value):
-		return float(value or 0)
-
-
-class PrimaryKeyField(IntegerField):
-	field_template = "%(db_field)s NOT NULL PRIMARY KEY"
-
-
-class ForeignRelatedObject(object):
-	def __init__(self, to, name):
-		self.field_name = name
-		self.to = to
-		self.cache_name = '_cache_%s' % name
-	
-	def __get__(self, instance, instance_type=None):
-		if not getattr(instance, self.cache_name, None):
-			id = getattr(instance, self.field_name, 0)
-			if id > 0:
-				qr = self.to.select().where(id=id).execute()
-				setattr(instance, self.cache_name, qr.next())
-		
-		return hasattr(instance, self.cache_name) and getattr(instance, self.cache_name) or None
-	
-	def __set__(self, instance, obj):
-		if obj is None:
-			setattr(instance, self.field_name, None)
-			return
-		
-		assert isinstance(obj, self.to), "Cannot assign %s, invalid type" % obj
-		setattr(instance, self.field_name, obj.id)
-		setattr(instance, self.cache_name, obj)
-
-
-class ReverseForeignRelatedObject(object):
-	def __init__(self, related_model, name):
-		self.field_name = name
-		self.related_model = related_model
-	
-	def __get__(self, instance, instance_type=None):
-		query = {self.field_name: instance.id}
-		qr = self.related_model.select().where(**query)
-		return qr
-
-
-class ForeignKeyField(IntegerField):
-	field_template = '%(db_field)s %(nullable)s REFERENCES "%(to_table)s" ("id")'
-	
-	def __init__(self, to, null=False, relation_name=None, *args, **kwargs):
-		self.to = to
-		self.null = null
-		self.relation_name = relation_name
-		kwargs['to_table'] = to._meta.db_table
-		if null:
-			kwargs['nullable'] = ''
-		else:
-			kwargs['nullable'] = 'NOT NULL'
-		super(ForeignKeyField, self).__init__(*args, **kwargs)
-	
-	def add_to_class(self, klass, name):
-		self.descriptor = name
-		
-		self.name = self.relation_name or name + '_id'
-		self.related_name = klass._meta.db_table + '_set'
-		setattr(klass, self.descriptor, ForeignRelatedObject(self.to, self.name))
-		setattr(klass, self.name, None)
-		
-		reverse_rel = ReverseForeignRelatedObject(klass, self.name)
-		setattr(self.to, self.related_name, reverse_rel)
-	
-	def lookup_value(self, lookup_type, value):
-		if isinstance(value, Model):
-			return value.id
-		return value or "NULL"
-
-
-class BaseModel(type):
-	def __new__(cls, name, bases, attrs):
-		cls = super(BaseModel, cls).__new__(cls, name, bases, attrs)
-		
-		class Meta(object):
-			fields = {}
-			primary_key = None
-			
-			def __init__(self, model_class):
-				self.model_class = model_class
-			
-			def get_database(self):
-				return self.model_class.database
-			
-			def get_field_by_name(self, name):
-				if name in self.fields:
-					return self.fields[name]
-				
-				for fname, field in self.fields.iteritems():
-					if isinstance(field, ForeignKeyField) and field.descriptor == name:
-						return field
-				
-				raise AttributeError('Field named %s not found' % name)
-			
-			def get_related_field_for_model(self, model):
-				for field in self.fields.values():
-					if isinstance(field, ForeignKeyField) and field.to == model:
-						return field
-			
-			def get_reverse_related_field_for_model(self, model):
-				for field in model._meta.fields.values():
-					if isinstance(field, ForeignKeyField) and field.to == self.model_class:
-						return field
-			
-			def rel_exists(self, model):
-				return self.get_related_field_for_model(model) or \
-					   self.get_reverse_related_field_for_model(model)
-		
-		
-		_meta = Meta(cls)
-		setattr(cls, '_meta', _meta)
-		
-		_meta.db_table = re.sub('[^a-z]+', '_', cls.__name__.lower())
-		_meta.object_name = cls.__name__
-		
-		has_primary_key = False
-		
-		for name, attr in cls.__dict__.items():
-			if name.lower() == 'db_table':
-				_meta.db_table = attr
-			elif isinstance(attr, Field):
-				attr.add_to_class(cls, name)
-				_meta.fields[attr.name] = attr
-				if isinstance(attr, PrimaryKeyField):
-					has_primary_key = True
-					_meta.primary_key = attr
-		
-		
-		if not has_primary_key:
-			pk = PrimaryKeyField()
-			pk.add_to_class(cls, 'id')
-			_meta.fields['id'] = pk
-			_meta.primary_key = pk
-		
-		if hasattr(cls, '__unicode__'):
-			setattr(cls, '__repr__', lambda self: '<%s: %s>' % (
-				self.__class__.__name__, self.__unicode__()))
-		
-		return cls
-
-
-class Model(object):
-	__metaclass__ = BaseModel
-	database = database
-	
-	def __init__(self, *args, **kwargs):
-		for k, v in kwargs.items():
-			setattr(self, k, v)
-	
-	def __eq__(self, other):
-		return other.__class__ == self.__class__ and self.id and other.id == self.id
-	
-	def __iter__(self):
-		for field_name in self._meta.fields:
-			if hasattr(self, field_name):
-				yield (field_name, getattr(self, field_name))
-	
-	@property
-	def primary_key(self):
-		return getattr(self, self._meta.primary_key.name)
-	
-	def fields(self):
-		for field_name in self._meta.fields:
-			yield field_name
-	
-	def get_field_dict(self):
-		def get_field_pair(f):
-			val = getattr(self, f.name)
-			
-			if val is None and 'default' in f.attributes:
-				try:
-					val = f.attributes['default']()
-				except TypeError:
-					val = f.attributes['default']
-				
-				setattr(self, f.name, val)
-			
-			return (f.name, val)
-		
-		pairs = map(get_field_pair, self._meta.fields.values())
-		
-		return dict(pairs)
-	
-	@classmethod
-	def get_field_def(cls, field_name):
-		if field_name in cls._meta.fields:
-			return cls._meta.fields[field_name]
-		
-		return False
-	
-	def to_dict(self):
-		obj = {}
-		
-		for field_name in self._meta.fields:
-			if hasattr(self, field_name):
-				obj[field_name] = getattr(self, field_name)
-		
-		return obj
-	
-	@classmethod
-	def create_table(cls):
-		cls.database.create_table(cls)
-	
-	@classmethod
-	def drop_table(cls):
-		cls.database.drop_table(cls)
-	
-	@classmethod
-	def count(cls, query=None):
-		return SelectQuery(cls, query).count()
-	
-	@classmethod
-	def select(cls, query=None):
-		return SelectQuery(cls, query)
-	
-	@classmethod
-	def update(cls, **query):
-		return UpdateQuery(cls, **query)
-	
-	@classmethod
-	def insert(cls, **query):
-		return InsertQuery(cls, **query)
-	
-	@classmethod
-	def delete(cls, **query):
-		return DeleteQuery(cls, **query)
-	
-	@classmethod
-	def get(cls, **query):
-		return cls.select().where(**query).paginate(1, 1).execute().next()
-	
-	def save(self):
-		field_dict = self.get_field_dict()
-		if self.primary_key:
-			field_dict.pop(self._meta.primary_key.name)
-			
-			update = self.update(**field_dict).where(id=self.id)
-			update.execute()
-			return update
-		else:
-			insert = self.insert(**field_dict)
-			self.id = insert.execute()
-			return insert
-=======
-	query_separator = '__'
-	requires_commit = True
-	force_alias = False
-	
-	def __init__(self, model):
-		self.model = model
-		self.query_context = model
-		self.database = self.model._meta.database
-		self.operations = self.database.adapter.operations
-		self.interpolation = self.database.adapter.interpolation
-		
-		self._where = {}
-		self._joins = []
-		self._dirty = True
-	
-	def lookup_cast(self, lookup, value):
-		return self.database.adapter.lookup_cast(lookup, value)
-	
-	def parse_query_args(self, model, **query):
-		parsed = {}
-		for lhs, rhs in query.iteritems():
-			if self.query_separator in lhs:
-				lhs, op = lhs.rsplit(self.query_separator, 1)
-			else:
-				op = 'eq'
-			
-			try:
-				field = model._meta.get_field_by_name(lhs)
-			except AttributeError:
-				field = model._meta.get_related_field_by_name(lhs)
-				if field is None:
-					raise
-				if isinstance(rhs, Model):
-					rhs = rhs.get_pk()
-			
-			if op == 'in':
-				if isinstance(rhs, SelectQuery):
-					lookup_value = rhs
-					operation = 'IN (%s)'
-				else:
-					lookup_value = [field.db_value(o) for o in rhs]
-					operation = self.operations[op] % \
-						(','.join([self.interpolation for v in lookup_value]))
-			elif op == 'is':
-				if rhs is not None:
-					raise ValueError('__is lookups only accept None')
-				operation = 'IS NULL'
-				lookup_value = []
-			else:
-				lookup_value = field.db_value(rhs)
-				operation = self.operations[op]
-			
-			parsed[field.name] = (operation, self.lookup_cast(op, lookup_value))
-		
-		return parsed
-	
-	@mark_query_dirty
-	def where(self, *args, **kwargs):
-		self._where.setdefault(self.query_context, [])
-		self._where[self.query_context].append(parseq(*args, **kwargs))
-		return self
-	
-	@mark_query_dirty
-	def join(self, model, join_type=None, on=None):
-		if self.query_context._meta.rel_exists(model):
-			self._joins.append((model, join_type, on))
-			self.query_context = model
-		else:
-			raise AttributeError('No foreign key found between %s and %s' % \
-				(self.query_context.__name__, model.__name__))
-		return self
-	
-	def switch(self, model):
-		if model == self.model:
-			self.query_context = model
-			return self
-		
-		for klass, join_type, on in self._joins:
-			if model == klass:
-				self.query_context = model
-				return self
-		raise AttributeError('You must JOIN on %s' % model.__name__)
-	
-	def use_aliases(self):
-		return len(self._joins) > 0 or self.force_alias
-	
-	def combine_field(self, alias, field_name):
-		if alias:
-			return '%s.%s' % (alias, field_name)
-		return field_name
-	
-	def compile_where(self):
-		alias_count = 0
-		alias_map = {}
-		
-		alias_required = self.use_aliases()
-		
-		joins = list(self._joins)
-		if self._where or len(joins):
-			joins.insert(0, (self.model, None, None))
-		
-		where_with_alias = []
-		where_data = []
-		computed_joins = []
-		
-		for i, (model, join_type, on) in enumerate(joins):
-			if alias_required:
-				alias_count += 1
-				alias_map[model] = 't%d' % alias_count
-			else:
-				alias_map[model] = ''
-			
-			if i > 0:
-				from_model = joins[i-1][0]
-				field = from_model._meta.get_related_field_for_model(model, on)
-				if field:
-					left_field = field.name
-					right_field = model._meta.pk_name
-				else:
-					field = from_model._meta.get_reverse_related_field_for_model(model, on)
-					left_field = from_model._meta.pk_name
-					right_field = field.name
-				
-				if join_type is None:
-					if field.null and model not in self._where:
-						join_type = 'LEFT OUTER'
-					else:
-						join_type = 'INNER'
-				
-				computed_joins.append(
-					'%s JOIN %s AS %s ON %s = %s' % (
-						join_type,
-						model._meta.db_table,
-						alias_map[model],
-						self.combine_field(alias_map[from_model], left_field),
-						self.combine_field(alias_map[model], right_field),
-					)
-				)
-		
-		for (model, join_type, on) in joins:
-			if model in self._where:
-				for node in self._where[model]:
-					query, data = self.parse_node(node, model, alias_map)
-					where_with_alias.append(query)
-					where_data.extend(data)
-		
-		return computed_joins, where_with_alias, where_data, alias_map
-	
-	def parse_node(self, node, model, alias_map):
-		query = []
-		query_data = []
-		nodes = []
-		for child in node.children:
-			if isinstance(child, Q):
-				parsed, data = self.parse_q(child, model, alias_map)
-				query.append(parsed)
-				query_data.extend(data)
-			elif isinstance(child, Node):
-				parsed, data = self.parse_node(child, model, alias_map)
-				query.append('(%s)' % parsed)
-				query_data.extend(data)
-		query.extend(nodes)
-		connector = ' %s ' % node.connector
-		query = connector.join(query)
-		if node.negated:
-			query = 'NOT (%s)' % query
-		return query, query_data
-	
-	def parse_q(self, q, model, alias_map):
-		query = []
-		query_data = []
-		parsed = self.parse_query_args(model, **q.query)
-		for (name, lookup) in parsed.iteritems():
-			operation, value = lookup
-			if isinstance(value, SelectQuery):
-				sql, value = self.convert_subquery(value)
-				operation = operation % sql
-			
-			query_data.append(value)
-			
-			combined = self.combine_field(alias_map[model], name)
-			query.append('%s %s' % (combined, operation))
-		
-		if len(query) > 1:
-			query = '(%s)' % (' AND '.join(query))
-		else:
-			query = query[0]
-		
-		if q.negated:
-			query = 'NOT %s' % query
-		
-		return query, query_data
-	
-	def convert_subquery(self, subquery):
-		subquery.query, orig_query = subquery.model._meta.pk_name, subquery.query
-		subquery.force_alias, orig_alias = True, subquery.force_alias
-		sql, data = subquery.sql()
-		subquery.query = orig_query
-		subquery.force_alias = orig_alias
-		return sql, data
-	
-	def raw_execute(self):
-		query, params = self.sql()
-		return self.database.execute(query, params, self.requires_commit)
-
-
-class SelectQuery(BaseQuery):
 	requires_commit = False
 	
 	def __init__(self, model, query=None):
@@ -1693,7 +731,7 @@ class SelectQuery(BaseQuery):
 			self.query = 'COUNT(%s)' % (self.model._meta.pk_name)
 		
 		db = self.model._meta.database
-		res = db.execute(*self.sql())
+		cursor, res = db.execute(*self.sql())
 		
 		self.query = tmp_query
 		self._pagination = tmp_pagination
@@ -1813,7 +851,8 @@ class SelectQuery(BaseQuery):
 	
 	def execute(self):
 		if self._dirty:
-			self._qr = QueryResultWrapper(self.model, self.raw_execute())
+			result, cursor = self.raw_execute()
+			self._qr = QueryResultWrapper(self.model, cursor)
 			self._dirty = False
 			return self._qr
 		else:
@@ -1822,6 +861,13 @@ class SelectQuery(BaseQuery):
 	
 	def __iter__(self):
 		return self.execute()
+	
+	def first(self):
+		try:
+			return self.execute().next()
+		except StopIteration:
+			return None
+	
 
 
 class UpdateQuery(BaseQuery):
@@ -1864,8 +910,8 @@ class UpdateQuery(BaseQuery):
 		raise AttributeError('Update queries do not support JOINs in sqlite')
 	
 	def execute(self):
-		result = self.raw_execute()
-		return self.database.rows_affected(result)
+		result, cursor = self.raw_execute()
+		return self.database.rows_affected(cursor)
 
 
 class DeleteQuery(BaseQuery):
@@ -1889,8 +935,8 @@ class DeleteQuery(BaseQuery):
 		raise AttributeError('Update queries do not support JOINs in sqlite')
 	
 	def execute(self):
-		result = self.raw_execute()
-		return self.database.rows_affected(result)
+		result, cursor = self.raw_execute()
+		return self.database.rows_affected(cursor)
 
 
 class InsertQuery(BaseQuery):
@@ -1937,9 +983,10 @@ class Field(object):
 	def get_attributes(self):
 		return {}
 	
-	def __init__(self, null=False, db_index=False, *args, **kwargs):
+	def __init__(self, null=False, db_index=False, default=None, *args, **kwargs):
 		self.null = null
 		self.db_index = db_index
+		self.default = default
 		self.attributes = self.get_attributes()
 		
 		kwargs['nullable'] = ternary(self.null, '', ' NOT NULL')
@@ -2059,6 +1106,44 @@ class PrimaryKeyField(IntegerField):
 	field_template = "%(column_type)s NOT NULL PRIMARY KEY"
 
 
+class EnumField(Field):
+	db_field = 'enum'
+	field_template = '%(column_type)s%(nullable)s'
+	
+	def get_attributes(self):
+		return {'choices': ()}
+	
+	def db_value(self, value):
+		value = value or ''
+		if value not in self.attributes['choices']:
+			raise ValueError('%s not an allowed choice!' % (value,))
+		
+		return value
+	
+	def lookup_value(self, lookup_type, value):
+		if lookup_type in ('contains', 'icontains', 'startswith'):
+			return self.db_value(value)
+		else:
+			return self.db_value(value)
+
+
+class URLField(CharField):
+	pass
+
+
+class EpochTimestampField(IntegerField):
+	db_field = 'integer'
+	
+	def db_value(self, value):
+		if isinstance(value, datetime):
+			return int(time.mktime(value.timetuple()))
+		
+		self.null_wrapper(value, 0)
+	
+	def python_value(self, value):
+		return datetime.fromtimestamp(int(value or 0))
+
+
 class ForeignRelatedObject(object):
 	def __init__(self, to, name):
 		self.field_name = name
@@ -2121,6 +1206,9 @@ class ForeignKeyField(IntegerField):
 		if isinstance(value, Model):
 			return value.get_pk()
 		return value or None
+	
+	def db_value(self, value):
+		return value.get_pk()
 
 
 class BaseModelOptions(object):
@@ -2180,8 +1268,11 @@ class BaseModel(type):
 		_meta = BaseModelOptions(cls, attr_dict)
 		
 		if not hasattr(_meta, 'db_table'):
-			_meta.db_table = re.sub('[^a-z]+', '_', cls.__name__.lower())
-		
+			if 'db_table' in attr_dict:
+				_meta.db_table = attr_dict['db_table']
+			else:
+				_meta.db_table = re.sub('[^a-z]+', '_', cls.__name__.lower())
+		print cls.__name__, _meta.db_table
 		setattr(cls, '_meta', _meta)
 		
 		_meta.pk_name = None
@@ -2207,6 +1298,7 @@ class BaseModel(type):
 		return cls
 
 
+
 class Model(object):
 	__metaclass__ = BaseModel
 	
@@ -2220,8 +1312,21 @@ class Model(object):
 			   other.get_pk() == self.get_pk()
 	
 	def get_field_dict(self):
-		field_val = lambda f: (f.name, getattr(self, f.name))
-		pairs = map(field_val, self._meta.fields.values())
+		def get_field_pair(f):
+					val = getattr(self, f.name)
+					
+					if val is None and f.default is not None:
+						try:
+							val = f.default()
+						except TypeError:
+							val = f.default
+						
+						setattr(self, f.name, val)
+					
+					return (f.name, val)
+		
+		pairs = map(get_field_pair, self._meta.fields.values())
+		
 		return dict(pairs)
 	
 	@classmethod
@@ -2289,4 +1394,3 @@ class Model(object):
 			insert = self.insert(**field_dict)
 			new_pk = insert.execute()
 			setattr(self, self._meta.pk_name, new_pk)
->>>>>>> ec34a9a7d18057e115deef2f9703ed1a741de004
