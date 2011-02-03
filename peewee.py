@@ -339,6 +339,7 @@ class QueryResultWrapper(object):
 		self._populated = False
 	
 	def model_from_rowset(self, model_class, row_dict):
+		
 		instance = model_class()
 		field_name_map = dict([(field.attributes.get('real_name', field.name), field) for field_name, field in instance._meta.fields.items()])
 		
@@ -363,9 +364,12 @@ class QueryResultWrapper(object):
 		row = self.cursor.fetchone()
 		if row:
 			row_dict = self._row_to_dict(row, self.cursor)
-			instance = self.model_from_rowset(self.model, row_dict)
-			self._result_cache.append(instance)
-			return instance
+			if self.model:
+				instance = self.model_from_rowset(self.model, row_dict)
+				self._result_cache.append(instance)
+				return instance
+			else:
+				return row_dict
 		else:
 			self._populated = True
 			raise StopIteration
@@ -1160,7 +1164,11 @@ class ForeignRelatedObject(object):
 		if not getattr(instance, self.cache_name, None):
 			id = getattr(instance, self.field_name, 0)
 			qr = self.to.select().where(**{self.to._meta.pk_name: id}).execute()
-			setattr(instance, self.cache_name, qr.next())
+			try:
+				setattr(instance, self.cache_name, qr.next())
+			except StopIteration:
+				setattr(instance, self.cache_name, None)
+			
 		return getattr(instance, self.cache_name)
 	
 	def __set__(self, instance, obj):
@@ -1339,6 +1347,15 @@ class Model(object):
 		pairs = map(get_field_pair, self._meta.fields.values())
 		
 		return dict(pairs)
+	
+	def to_dict(self):
+		obj = {}
+		
+		for field_name in self._meta.fields:
+			if hasattr(self, field_name):
+				obj[field_name] = getattr(self, field_name)
+		
+		return obj
 	
 	@classmethod
 	def create_table(cls):
