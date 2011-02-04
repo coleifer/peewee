@@ -299,6 +299,9 @@ class DictObj(dict):
 	def __init__(self, entries=None, **kwargs):
 		self.__dict__.update(entries)
 	
+	def __nonzero__(self):
+		return len(self.__dict__) > 0
+	
 	def __getitem__(self, name):
 		return self.__getattr__(name)
 	
@@ -764,7 +767,7 @@ class SelectQuery(BaseQuery):
 				field_or_string, ordering = field_or_string
 			else:
 				ordering = 'ASC'
-		
+			
 			self._order_by.append(
 				(self.query_context, field_or_string, ordering)
 			)
@@ -877,7 +880,7 @@ class SelectQuery(BaseQuery):
 			return self.execute().next()
 		except StopIteration:
 			return None
-	
+
 
 
 class UpdateQuery(BaseQuery):
@@ -1168,7 +1171,7 @@ class ForeignRelatedObject(object):
 				setattr(instance, self.cache_name, qr.next())
 			except StopIteration:
 				setattr(instance, self.cache_name, None)
-			
+		
 		return getattr(instance, self.cache_name)
 	
 	def __set__(self, instance, obj):
