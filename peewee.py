@@ -33,6 +33,18 @@ DATABASE_NAME = os.environ.get('PEEWEE_DATABASE', 'peewee.db')
 logger = logging.getLogger('peewee.logger')
 
 
+def escape_field_name(name):
+	if not isinstance(name, basestring):
+		name = unicode(name)
+	
+	if name[0] == '`' and name[-1] == '`':
+		return name
+	
+	parts = name.replace('`', '').split('.')
+	
+	return '.'.join(['`%s`' % k for k in parts])
+
+
 class BaseAdapter(object):
 	operations = {'eq': '= %s'}
 	interpolation = '%s'
@@ -475,7 +487,7 @@ class Q(object):
 		return self
 	
 	def __unicode__(self):
-		bits = ['%s = %s' % (k, v) for k, v in self.query.items()]
+		bits = ['%s = %s' % (escape_field_name(k), v) for k, v in self.query.items()]
 		if len(self.query.items()) > 1:
 			connector = ' AND '
 			expr = '(%s)' % connector.join(bits)
@@ -590,8 +602,9 @@ class BaseQuery(object):
 	
 	def combine_field(self, alias, field_name):
 		if alias:
-			return '`%s`.`%s`' % (alias, field_name)
-		return field_name
+			field_name = '%s.%s' % (alias, field_name)
+		
+		return escape_field_name(field_name)
 	
 	def compile_where(self):
 		alias_count = 0
@@ -733,9 +746,9 @@ class SelectQuery(BaseQuery):
 		tmp_query = self.query
 		
 		if self.use_aliases():
-			self.query = 'COUNT(`t1`.`%s`)' % (self.model._meta.pk_name)
+			self.query = 'COUNT(t1.%s)' % escape_field_name(self.model._meta.pk_name)
 		else:
-			self.query = 'COUNT(`%s`)' % (self.model._meta.pk_name)
+			self.query = 'COUNT(%s)' % escape_field_name(self.model._meta.pk_name)
 		
 		db = self.model._meta.database
 		cursor, res = db.execute(*self.sql())
@@ -782,7 +795,7 @@ class SelectQuery(BaseQuery):
 	def parse_select_query(self, alias_map):
 		if isinstance(self.query, basestring):
 			if self.query in ('*', self.model._meta.pk_name) and self.use_aliases():
-				return '`%s`.`%s`' % (alias_map[self.model], self.query)
+				return escape_field_name('%s.%s' % (alias_map[self.model], self.query))
 			return self.query
 		elif isinstance(self.query, dict):
 			qparts = []
@@ -834,8 +847,9 @@ class SelectQuery(BaseQuery):
 		for piece in self._order_by:
 			model, field, ordering = piece
 			if self.use_aliases() and field in model._meta.fields:
-				field = '`%s`.`%s`' % (alias_map[model], field)
-			order_by.append('%s %s' % (field, ordering))
+				field = '%s.%s' % (alias_map[model], field)
+			
+			order_by.append('%s %s' % (escape_field_name(field), ordering))
 		
 		pieces = [select]
 		
@@ -905,7 +919,7 @@ class UpdateQuery(BaseQuery):
 		
 		for k, v in set_statement.iteritems():
 			params.append(v)
-			update_params.append('`%s`=%s' % (k, self.interpolation))
+			update_params.append('%s=%s' % (escape_field_name(k), self.interpolation))
 		
 		update = 'UPDATE %s SET %s' % (
 			self.model._meta.db_table, ', '.join(update_params))
@@ -962,7 +976,7 @@ class InsertQuery(BaseQuery):
 		vals = []
 		for k, v in self.insert_query.iteritems():
 			field = self.model._meta.get_field_by_name(k)
-			cols.append('`%s`' % k)
+			cols.append(escape_field_name(k))
 			vals.append(field.db_value(v))
 		
 		return cols, vals
