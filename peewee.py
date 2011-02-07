@@ -590,7 +590,7 @@ class BaseQuery(object):
 	
 	def combine_field(self, alias, field_name):
 		if alias:
-			return '%s.%s' % (alias, field_name)
+			return '`%s`.`%s`' % (alias, field_name)
 		return field_name
 	
 	def compile_where(self):
@@ -733,9 +733,9 @@ class SelectQuery(BaseQuery):
 		tmp_query = self.query
 		
 		if self.use_aliases():
-			self.query = 'COUNT(t1.%s)' % (self.model._meta.pk_name)
+			self.query = 'COUNT(`t1`.`%s`)' % (self.model._meta.pk_name)
 		else:
-			self.query = 'COUNT(%s)' % (self.model._meta.pk_name)
+			self.query = 'COUNT(`%s`)' % (self.model._meta.pk_name)
 		
 		db = self.model._meta.database
 		cursor, res = db.execute(*self.sql())
@@ -782,7 +782,7 @@ class SelectQuery(BaseQuery):
 	def parse_select_query(self, alias_map):
 		if isinstance(self.query, basestring):
 			if self.query in ('*', self.model._meta.pk_name) and self.use_aliases():
-				return '%s.%s' % (alias_map[self.model], self.query)
+				return '`%s`.`%s`' % (alias_map[self.model], self.query)
 			return self.query
 		elif isinstance(self.query, dict):
 			qparts = []
@@ -834,7 +834,7 @@ class SelectQuery(BaseQuery):
 		for piece in self._order_by:
 			model, field, ordering = piece
 			if self.use_aliases() and field in model._meta.fields:
-				field = '%s.%s' % (alias_map[model], field)
+				field = '`%s`.`%s`' % (alias_map[model], field)
 			order_by.append('%s %s' % (field, ordering))
 		
 		pieces = [select]
@@ -905,7 +905,7 @@ class UpdateQuery(BaseQuery):
 		
 		for k, v in set_statement.iteritems():
 			params.append(v)
-			update_params.append('%s=%s' % (k, self.interpolation))
+			update_params.append('`%s`=%s' % (k, self.interpolation))
 		
 		update = 'UPDATE %s SET %s' % (
 			self.model._meta.db_table, ', '.join(update_params))
@@ -962,7 +962,7 @@ class InsertQuery(BaseQuery):
 		vals = []
 		for k, v in self.insert_query.iteritems():
 			field = self.model._meta.get_field_by_name(k)
-			cols.append(k)
+			cols.append('`%s`' % k)
 			vals.append(field.db_value(v))
 		
 		return cols, vals
