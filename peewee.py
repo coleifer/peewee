@@ -10,10 +10,21 @@
 from datetime import datetime
 import logging
 import os
-import psycopg2
 import re
-import sqlite3
 import time
+
+try:
+    import sqlite3
+except ImportError:
+    sqlite3 = None
+
+try:
+    import psycopg2
+except ImportError:
+    psycopg2 = None
+
+if sqlite3 is None and psycopg2 is None:
+    raise ImproperlyConfigured('Either sqlite3 or psycopg2 must be installed')
 
 
 DATABASE_NAME = os.environ.get('PEEWEE_DATABASE', 'peewee.db')
