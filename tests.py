@@ -1181,6 +1181,9 @@ class FieldTypeTests(BasePeeweeTestCase):
 
 
 class ModelOptionsTest(BasePeeweeTestCase):
+    def test_db_table(self):
+        self.assertEqual(User._meta.db_table, 'users')
+    
     def test_option_inheritance(self):
         test_db = peewee.Database(SqliteAdapter(), 'testing.db')
         child2_db = peewee.Database(SqliteAdapter(), 'child2.db')
