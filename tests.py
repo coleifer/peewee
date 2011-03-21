@@ -405,10 +405,10 @@ class QueryTests(BasePeeweeTestCase):
 
     def test_outer_joins(self):
         sql = SelectQuery(User).join(Blog).sql()
-        self.assertEqual(sql, ('SELECT t1.* FROM user AS t1 LEFT OUTER JOIN blog AS t2 ON t1.blog_id = t2.id', []))
+        self.assertEqual(sql, ('SELECT t1.* FROM users AS t1 LEFT OUTER JOIN blog AS t2 ON t1.blog_id = t2.id', []))
         
         sql = SelectQuery(Blog).join(User).sql()
-        self.assertEqual(sql, ('SELECT t1.* FROM blog AS t1 LEFT OUTER JOIN user AS t2 ON t1.id = t2.blog_id', []))
+        self.assertEqual(sql, ('SELECT t1.* FROM blog AS t1 LEFT OUTER JOIN users AS t2 ON t1.id = t2.blog_id', []))
 
 
 class ModelTests(BasePeeweeTestCase):
@@ -564,7 +564,7 @@ class ModelTests(BasePeeweeTestCase):
         u = User.create(username='a')
         self.assertEqual(u.username, 'a')
         self.assertQueriesEqual([
-            ('INSERT INTO user (username,active,blog_id) VALUES (?,?,?)', ['a', 0, None]),
+            ('INSERT INTO users (username,active,blog_id) VALUES (?,?,?)', ['a', 0, None]),
         ])
 
         b = Blog.create(title='b blog')
@@ -572,17 +572,17 @@ class ModelTests(BasePeeweeTestCase):
         self.assertEqual(u2.blog, b)
 
         self.assertQueriesEqual([
-            ('INSERT INTO user (username,active,blog_id) VALUES (?,?,?)', ['a', 0, None]),
+            ('INSERT INTO users (username,active,blog_id) VALUES (?,?,?)', ['a', 0, None]),
             ('INSERT INTO blog (title) VALUES (?)', ['b blog']),
-            ('INSERT INTO user (username,active,blog_id) VALUES (?,?,?)', ['b', 0, b.id]),
+            ('INSERT INTO users (username,active,blog_id) VALUES (?,?,?)', ['b', 0, b.id]),
         ])
 
     def test_get_or_create(self):
         u = User.get_or_create(username='a')
         self.assertEqual(u.username, 'a')
         self.assertQueriesEqual([
-            ('SELECT * FROM user WHERE username = ? LIMIT 1 OFFSET 0', ['a']),
-            ('INSERT INTO user (username,active,blog_id) VALUES (?,?,?)', ['a', 0, None]),
+            ('SELECT * FROM users WHERE username = ? LIMIT 1 OFFSET 0', ['a']),
+            ('INSERT INTO users (username,active,blog_id) VALUES (?,?,?)', ['a', 0, None]),
         ])
 
         other_u = User.get_or_create(username='a')
@@ -1174,9 +1174,9 @@ class FieldTypeTests(BasePeeweeTestCase):
         
         user_indexes = self.get_sorted_indexes(User)
         self.assertEqual(user_indexes, [
-            ('user_active', 0),
-            ('user_blog_id', 0),
-            ('user_id', 1),
+            ('users_active', 0),
+            ('users_blog_id', 0),
+            ('users_id', 1),
         ])
 
 

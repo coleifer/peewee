@@ -1043,13 +1043,14 @@ class ForeignKeyField(IntegerField):
 
 class BaseModelOptions(object):
     def __init__(self, model_class, options=None):
+        # configurable options
+        options = options or {'database': database}
+        for k, v in options.items():
+            setattr(self, k, v)
+        
         self.rel_fields = {}
         self.fields = {}
         self.model_class = model_class
-        
-        # configurable options
-        options = options or {}
-        self.database = options.get('database', database)
     
     def get_field_by_name(self, name):
         if name in self.fields:
@@ -1078,6 +1079,8 @@ class BaseModelOptions(object):
 
 
 class BaseModel(type):
+    inheritable_options = ['database']
+    
     def __new__(cls, name, bases, attrs):
         cls = super(BaseModel, cls).__new__(cls, name, bases, attrs)
 
@@ -1092,7 +1095,7 @@ class BaseModel(type):
                 continue
             
             for (k, v) in base_meta.__dict__.items():
-                if not k.startswith('_') and k not in attr_dict:
+                if k in cls.inheritable_options and k not in attr_dict:
                     attr_dict[k] = v
         
         _meta = BaseModelOptions(cls, attr_dict)
