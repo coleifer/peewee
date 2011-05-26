@@ -165,6 +165,8 @@ Rather complex lookups are possible::
 This query selects all staff or super users who joined after 2009 or before
 2005.
 
+.. note:: if you need more power, check out ``RawQuery`` below.
+
 
 Query evaluation
 ----------------
@@ -430,3 +432,25 @@ InsertQuery
 .. py:method:: execute(self)
 
     performs the query, returning the primary key of the row that was added
+
+
+RawQuery
+--------
+
+``RawQuery`` allows execution of an arbitrary SELECT query and returns instances
+of the model via a ``QueryResultsWrapper``.
+
+.. py:method:: __init__(self, model, query, *params)
+
+    creates a ``RawQuery`` instance for the given model which, when executed,
+    will run the given query with the given parameters and return model instances::
+    
+        >>> rq = RawQuery(User, 'SELECT * FROM users WHERE username = ?', 'admin')
+        >>> for obj in rq.execute():
+        ...     print obj
+        <User: admin>
+
+.. py:method:: execute(self)
+
+    executes the query and returns a ``QueryResultWrapper`` for iterating over
+    the result set.  the results are instances of the given model.
