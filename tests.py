@@ -3,8 +3,8 @@ import logging
 import unittest
 
 import peewee
-from peewee import (SelectQuery, InsertQuery, UpdateQuery, DeleteQuery, Node, 
-        Q, database, parseq, SqliteAdapter, PostgresqlAdapter)
+from peewee import (RawQuery, SelectQuery, InsertQuery, UpdateQuery, DeleteQuery,
+        Node, Q, database, parseq, SqliteAdapter, PostgresqlAdapter)
 
 
 class QueryLogHandler(logging.Handler):
@@ -151,6 +151,16 @@ class BasePeeweeTestCase(unittest.TestCase):
 
 
 class QueryTests(BasePeeweeTestCase):
+    def test_raw(self):
+        rq = RawQuery(Blog, 'SELECT * FROM blog')
+        self.assertEqual(rq.sql(), ('SELECT * FROM blog', []))
+        
+        rq = RawQuery(Blog, 'SELECT * FROM blog WHERE title = ?', 'a')
+        self.assertEqual(rq.sql(), ('SELECT * FROM blog WHERE title = ?', ['a']))
+        
+        rq = RawQuery(Blog, 'SELECT * FROM blog WHERE title = ? OR title = ?', 'a', 'b')
+        self.assertEqual(rq.sql(), ('SELECT * FROM blog WHERE title = ? OR title = ?', ['a', 'b']))
+    
     def test_select(self):
         sq = SelectQuery(Blog, '*')
         self.assertEqual(sq.sql(), ('SELECT * FROM blog', []))
@@ -457,6 +467,47 @@ class ModelTests(BasePeeweeTestCase):
             ('INSERT INTO blog (title) VALUES (?)', ['b']),
             ('SELECT * FROM blog WHERE (title = ? OR title = ?) LIMIT 1 OFFSET 0', ['b', 'c']),
         ])
+    
+    def test_model_raw(self):
+        a = self.create_blog(title='a')
+        b = self.create_blog(title='b')
+        c = self.create_blog(title='c')
+        
+        qr = Blog.raw('SELECT * FROM blog ORDER BY title ASC')
+        self.assertEqual(list(qr), [a, b, c])
+        
+        qr = Blog.raw('SELECT * FROM blog WHERE title IN (?, ?) ORDER BY title DESC', 'a', 'c')
+        self.assertEqual(list(qr), [c, a])
+        
+        # create a couple entires for blog a
+        a1 = self.create_entry(title='a1', blog=a)
+        a2 = self.create_entry(title='a2', blog=a)
+        
+        # create a couple entries for blog c
+        c1 = self.create_entry(title='c1', blog=c)
+        c2 = self.create_entry(title='c2', blog=c)
+        c3 = self.create_entry(title='c3', blog=c)
+        
+        qr = Blog.raw("""
+            SELECT b.*, COUNT(e.pk) AS count 
+            FROM blog AS b 
+            LEFT OUTER JOIN entry AS e
+                ON e.blog_id = b.id
+            GROUP BY b.id
+            ORDER BY count DESC
+        """)
+        results = list(qr)
+        
+        self.assertEqual(results, [c, a, b])
+        
+        self.assertEqual(results[0].count, 3)
+        self.assertEqual(results[0].title, 'c')
+        
+        self.assertEqual(results[1].count, 2)
+        self.assertEqual(results[1].title, 'a')
+        
+        self.assertEqual(results[2].count, 0)
+        self.assertEqual(results[2].title, 'b')
     
     def test_model_select(self):
         a = self.create_blog(title='a')

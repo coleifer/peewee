@@ -581,6 +581,22 @@ class BaseQuery(object):
         return self.database.execute(query, params, self.requires_commit)
 
 
+class RawQuery(BaseQuery):
+    def __init__(self, model, query, *params):
+        self._sql = query
+        self._params = list(params)
+        super(RawQuery, self).__init__(model)
+    
+    def sql(self):
+        return self._sql, self._params
+    
+    def execute(self):
+        return QueryResultWrapper(self.model, self.raw_execute())
+    
+    def __iter__(self):
+        return self.execute()
+
+
 class SelectQuery(BaseQuery):
     requires_commit = False
     
@@ -1176,6 +1192,10 @@ class Model(object):
     @classmethod
     def delete(cls, **query):
         return DeleteQuery(cls, **query)
+    
+    @classmethod
+    def raw(cls, sql, *params):
+        return RawQuery(cls, sql, *params)
 
     @classmethod
     def create(cls, **query):
