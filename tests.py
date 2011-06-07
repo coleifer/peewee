@@ -1119,7 +1119,42 @@ class RelatedFieldTests(BasePeeweeTestCase):
         
         ab_member_teams = Team.select().join(Membership).where(member=ab_member)
         self.assertEqual(list(ab_member_teams), [a_team, b_team])
-
+    
+    def test_updating_fks(self):
+        blog = self.create_blog(title='dummy')
+        blog2 = self.create_blog(title='dummy2')
+        
+        e1 = self.create_entry(title='e1', content='e1', blog=blog)
+        e2 = self.create_entry(title='e2', content='e2', blog=blog)
+        e3 = self.create_entry(title='e3', content='e3', blog=blog)
+        
+        for entry in Entry.select():
+            self.assertEqual(entry.blog, blog)
+        
+        uq = Entry.update(blog=blog2)
+        uq.execute()
+        
+        for entry in Entry.select():
+            self.assertEqual(entry.blog, blog2)
+    
+    def test_non_select_with_list_in_where(self):
+        blog = self.create_blog(title='dummy')
+        blog2 = self.create_blog(title='dummy2')
+        
+        e1 = self.create_entry(title='e1', content='e1', blog=blog)
+        e2 = self.create_entry(title='e2', content='e2', blog=blog)
+        e3 = self.create_entry(title='e3', content='e3', blog=blog)
+        
+        uq = Entry.update(blog=blog2).where(title__in=['e1', 'e3'])
+        self.assertEqual(uq.execute(), 2)
+        
+        e1_db = Entry.get(pk=e1.pk)
+        e2_db = Entry.get(pk=e2.pk)
+        e3_db = Entry.get(pk=e3.pk)
+        
+        self.assertEqual(list(blog.entry_set), [e2])
+        self.assertEqual(list(blog2.entry_set.order_by('title')), [e1, e3])
+        
 
 class FieldTypeTests(BasePeeweeTestCase):
     def jd(self, d):

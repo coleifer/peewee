@@ -561,6 +561,15 @@ class BaseQuery(object):
         
         return computed_joins, where_with_alias, where_data, alias_map
     
+    def convert_where_to_params(self, where_data):
+        flattened = []
+        for clause in where_data:
+            if isinstance(clause, (tuple, list)):
+                flattened.extend(clause)
+            else:
+                flattened.append(clause)
+        return flattened
+    
     def parse_node(self, node, model, alias_map):
         query = []
         query_data = []
@@ -763,11 +772,8 @@ class SelectQuery(BaseQuery):
             pieces.append(joins)
         if where:
             pieces.append('WHERE %s' % where)
-            for clause in where_data:
-                if isinstance(clause, (tuple, list)):
-                    params.extend(clause)
-                else:
-                    params.append(clause)
+            params.extend(self.convert_where_to_params(where_data))
+        
         if group_by:
             pieces.append('GROUP BY %s' % group_by)
         if having:
@@ -803,7 +809,13 @@ class UpdateQuery(BaseQuery):
     def parse_update(self):
         sets = {}
         for k, v in self.update_query.iteritems():
-            field = self.model._meta.get_field_by_name(k)
+            try:
+                field = self.model._meta.get_field_by_name(k)
+            except AttributeError:
+                field = self.model._meta.get_related_field_by_name(k)
+                if field is None:
+                    raise
+            
             sets[field.name] = field.db_value(v)
         
         return sets
@@ -827,7 +839,7 @@ class UpdateQuery(BaseQuery):
         
         if where:
             pieces.append('WHERE %s' % where)
-            params.extend(where_data)
+            params.extend(self.convert_where_to_params(where_data))
         
         return ' '.join(pieces), params
     
@@ -852,7 +864,7 @@ class DeleteQuery(BaseQuery):
         
         if where:
             pieces.append('WHERE %s' % where)
-            params.extend(where_data)
+            params.extend(self.convert_where_to_params(where_data))
         
         return ' '.join(pieces), params
     
@@ -1094,6 +1106,11 @@ class ForeignKeyField(IntegerField):
         if isinstance(value, Model):
             return value.get_pk()
         return value or None
+    
+    def db_value(self, value):
+        if isinstance(value, Model):
+            return value.get_pk()
+        return value
 
 
 # define a default database object in the module scope
