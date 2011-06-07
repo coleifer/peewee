@@ -444,6 +444,10 @@ def parseq(*args, **kwargs):
     return node
 
 
+class EmptyResultException(Exception):
+    pass
+
+
 class BaseQuery(object):
     query_separator = '__'
     requires_commit = True
@@ -485,6 +489,8 @@ class BaseQuery(object):
                     lookup_value = rhs
                     operation = 'IN (%s)'
                 else:
+                    if not rhs:
+                        raise EmptyResultException
                     lookup_value = [field.db_value(o) for o in rhs]
                     operation = self.operations[op] % \
                         (','.join([self.interpolation for v in lookup_value]))
@@ -822,9 +828,12 @@ class SelectQuery(BaseQuery):
     
     def execute(self):
         if self._dirty:
-            self._qr = QueryResultWrapper(self.model, self.raw_execute())
-            self._dirty = False
-            return self._qr
+            try:
+                self._qr = QueryResultWrapper(self.model, self.raw_execute())
+                self._dirty = False
+                return self._qr
+            except EmptyResultException:
+                return iter([])
         else:
             # call the __iter__ method directly
             return iter(self._qr)
