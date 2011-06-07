@@ -32,6 +32,20 @@ logger = logging.getLogger('peewee.logger')
 
 
 class BaseAdapter(object):
+    """
+    The various subclasses of `BaseAdapter` provide a bridge between the high-
+    level `Database` abstraction and the underlying python libraries like
+    psycopg2.  It also provides a way to unify the pythonic field types with
+    the underlying column types used by the database engine.
+    
+    The `BaseAdapter` provides two types of mappings:    
+    - mapping between filter operations and their database equivalents
+    - mapping between basic field types and their database column types
+    
+    The `BaseAdapter` also is the mechanism used by the `Database` class to:
+    - handle connections with the database
+    - extract information from the database cursor
+    """
     operations = {'eq': '= %s'}
     interpolation = '%s'
     
@@ -70,6 +84,7 @@ class BaseAdapter(object):
 
 
 class SqliteAdapter(BaseAdapter):
+    # note the sqlite library uses a non-standard interpolation string
     operations = {
         'lt': '< ?',
         'lte': '<= ?',
@@ -143,6 +158,13 @@ class PostgresqlAdapter(BaseAdapter):
 
 
 class Database(object):
+    """
+    A high-level api for working with the supported database engines.  `Database`
+    provides a wrapper around some of the functions performed by the `Adapter`,
+    in addition providing support for:
+    - execution of SQL queries
+    - creating and dropping tables and indexes
+    """
     def __init__(self, adapter, database, **connect_kwargs):
         self.adapter = adapter
         self.database = database
@@ -210,10 +232,23 @@ class Database(object):
         self.execute(framing % model_class._meta.db_table, commit=True)
 
 
-database = Database(SqliteAdapter(), DATABASE_NAME)
+class SqliteDatabase(Database):
+    def __init__(self, database, **connect_kwargs):
+        super(SqliteDatabase, self).__init__(SqliteAdapter(), database, **connect_kwargs)
+
+
+class PostgresqlDatabase(Database):
+    def __init__(self, database, **connect_kwargs):
+        super(SqliteDatabase, self).__init__(PostgresqlAdapater(), database, **connect_kwargs)
 
 
 class QueryResultWrapper(object):
+    """
+    Provides an iterator over the results of a raw Query, additionally doing
+    two things:
+    - converts rows from the database into model instances
+    - ensures that multiple iterations do not result in multiple queries
+    """
     def __init__(self, model, cursor):
         self.model = model
         self.cursor = cursor
@@ -252,13 +287,14 @@ class QueryResultWrapper(object):
             raise StopIteration
 
 
+# semantic wrappers for ordering the results of a `SelectQuery`
 def asc(f):
     return (f, 'ASC')
 
 def desc(f):
     return (f, 'DESC')
 
-# select wrappers
+# wrappers for performing aggregation in a `SelectQuery`
 def Count(f, alias='count'):
     return ('COUNT', f, alias)
 
@@ -268,6 +304,8 @@ def Max(f, alias='max'):
 def Min(f, alias='min'):
     return ('MIN', f, alias)
 
+# decorator for query methods to indicate that they change the state of the
+# underlying data structures
 def mark_query_dirty(func):
     def inner(self, *args, **kwargs):
         self._dirty = True
@@ -626,8 +664,7 @@ class SelectQuery(BaseQuery):
         else:
             self.query = 'COUNT(%s)' % (self.model._meta.pk_name)
         
-        db = self.model._meta.database
-        res = db.execute(*self.sql())
+        res = self.database.execute(*self.sql())
         
         self.query = tmp_query
         self._pagination = tmp_pagination
@@ -1055,6 +1092,10 @@ class ForeignKeyField(IntegerField):
         if isinstance(value, Model):
             return value.get_pk()
         return value or None
+
+
+# define a default database object in the module scope
+database = SqliteDatabase(DATABASE_NAME)
 
 
 class BaseModelOptions(object):
