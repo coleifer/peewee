@@ -85,6 +85,10 @@ class Membership(TestModel):
     team = peewee.ForeignKeyField(Team)
     member = peewee.ForeignKeyField(Member)
 
+class DefaultVals(TestModel):
+    published = peewee.BooleanField(default=True)
+    pub_date = peewee.DateTimeField(default=datetime.datetime.now, null=True)
+
 
 class BasePeeweeTestCase(unittest.TestCase):
     def setUp(self):
@@ -98,6 +102,7 @@ class BasePeeweeTestCase(unittest.TestCase):
         Team.create_table()
         Member.create_table()
         Membership.create_table()
+        DefaultVals.create_table()
         
         self.qh = QueryLogHandler()
         peewee.logger.setLevel(logging.DEBUG)
@@ -106,6 +111,7 @@ class BasePeeweeTestCase(unittest.TestCase):
     def tearDown(self):
         peewee.logger.removeHandler(self.qh)
         
+        DefaultVals.drop_table()
         Membership.drop_table()
         Member.drop_table()
         Team.drop_table()
@@ -1229,7 +1235,48 @@ class FieldTypeTests(BasePeeweeTestCase):
             ('users_blog_id', 0),
             ('users_id', 1),
         ])
-
+    
+    def test_default_values(self):
+        now = datetime.datetime.now() - datetime.timedelta(seconds=1)
+        
+        default_model = DefaultVals()
+        
+        # nothing is set until the model is saved
+        self.assertEqual(default_model.published, None)
+        self.assertEqual(default_model.pub_date, None)
+        
+        # saving the model will apply the defaults
+        default_model.save()
+        self.assertTrue(default_model.published)
+        self.assertTrue(default_model.pub_date is not None)
+        self.assertTrue(default_model.pub_date >= now)
+        
+        # overriding the defaults after initial save is fine
+        default_model.pub_date = None
+        default_model.save()
+        self.assertEqual(default_model.pub_date, None)
+        
+        # ensure that the overridden default was propagated to the db
+        from_db = DefaultVals.get(id=default_model.id)
+        self.assertTrue(default_model.published)
+        self.assertEqual(default_model.pub_date, None)
+        
+        # test via the create method
+        default_model2 = DefaultVals.create()
+        self.assertTrue(default_model2.published)
+        self.assertTrue(default_model2.pub_date is not None)
+        self.assertTrue(default_model2.pub_date >= now)
+        
+        # pull it out of the database
+        from_db = DefaultVals.get(id=default_model2.id)
+        self.assertTrue(from_db.published)
+        self.assertTrue(from_db.pub_date is not None)
+        self.assertTrue(from_db.pub_date >= now)
+        
+        # check that manually specifying a zero but not-none value works
+        default_model3 = DefaultVals.create(published=False)
+        self.assertFalse(default_model3.published)
+        self.assertTrue(default_model3.pub_date >= now)
 
 class ModelOptionsTest(BasePeeweeTestCase):
     def test_db_table(self):

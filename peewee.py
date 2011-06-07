@@ -903,6 +903,7 @@ class InsertQuery(BaseQuery):
 
 class Field(object):
     db_field = ''
+    default = None
     field_template = "%(column_type)s%(nullable)s"
 
     def get_attributes(self):
@@ -912,6 +913,7 @@ class Field(object):
         self.null = null
         self.db_index = db_index
         self.attributes = self.get_attributes()
+        self.default = kwargs.get('default', None)
         
         kwargs['nullable'] = ternary(self.null, '', ' NOT NULL')
         self.attributes.update(kwargs)
@@ -1198,8 +1200,17 @@ class Model(object):
                other.get_pk() == self.get_pk()
     
     def get_field_dict(self):
-        field_val = lambda f: (f.name, getattr(self, f.name))
-        pairs = map(field_val, self._meta.fields.values())
+        def get_field_val(field):
+            field_value = getattr(self, field.name)
+            if not self.get_pk() and field_value is None and field.default is not None:
+                if callable(field.default):
+                    field_value = field.default()
+                else:
+                    field_value = field.default
+                setattr(self, field.name, field_value)
+            return (field.name, field_value)
+        
+        pairs = map(get_field_val, self._meta.fields.values())
         return dict(pairs)
     
     @classmethod
