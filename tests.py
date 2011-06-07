@@ -18,7 +18,7 @@ class QueryLogHandler(logging.Handler):
 
 
 if os.environ.get('PEEWEE_TEST_BACKEND') == 'postgresql':
-    test_db = peewee.PostgreslDatabase('peewee_test')
+    test_db = peewee.PostgresqlDatabase('peewee_test')
 elif os.environ.get('PEEWEE_TEST_BACKEND') == 'mysql':
     test_db = peewee.MySQLDatabase('peewee_test')
 else:
