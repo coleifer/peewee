@@ -23,8 +23,13 @@ try:
 except ImportError:
     psycopg2 = None
 
-if sqlite3 is None and psycopg2 is None:
-    raise ImproperlyConfigured('Either sqlite3 or psycopg2 must be installed')
+try:
+    import MySQLdb as mysql
+except ImportError:
+    mysql = None
+
+if sqlite3 is None and psycopg2 is None and mysql is None:
+    raise ImproperlyConfigured('Either sqlite3, psycopg2 or MySQLdb must be installed')
 
 
 DATABASE_NAME = os.environ.get('PEEWEE_DATABASE', 'peewee.db')
@@ -74,10 +79,14 @@ class BaseAdapter(object):
         conn.close()
     
     def lookup_cast(self, lookup, value):
+        if lookup in ('contains', 'icontains'):
+            return '%%%s%%' % value
+        elif lookup in ('startswith', 'istartswith'):
+            return '%s%%' % value
         return value
     
     def last_insert_id(self, cursor, model):
-        raise NotImplementedError
+        return cursor.lastrowid
     
     def rows_affected(self, cursor):
         return cursor.rowcount
@@ -103,9 +112,6 @@ class SqliteAdapter(BaseAdapter):
     
     def connect(self, database, **kwargs):
         return sqlite3.connect(database, **kwargs)
-    
-    def last_insert_id(self, cursor, model):
-        return cursor.lastrowid
     
     def lookup_cast(self, lookup, value):
         if lookup == 'contains':
@@ -149,12 +155,33 @@ class PostgresqlAdapter(BaseAdapter):
             model._meta.db_table, model._meta.pk_name))
         return cursor.fetchone()[0]
     
-    def lookup_cast(self, lookup, value):
-        if lookup in ('contains', 'icontains'):
-            return '%%%s%%' % value
-        elif lookup in ('startswith', 'istartswith'):
-            return '%s%%' % value
-        return value
+
+class MySQLAdapter(BaseAdapter):
+    operations = {
+        'lt': '< %s',
+        'lte': '<= %s',
+        'gt': '> %s',
+        'gte': '>= %s',
+        'eq': '= %s',
+        'ne': '!= %s', # watch yourself with this one
+        'in': 'IN (%s)', # special-case to list q-marks
+        'is': 'IS %s',
+        'icontains': 'LIKE %s', # surround param with %'s
+        'contains': 'LIKE BINARY %s', # surround param with *'s
+        'istartswith': 'LIKE %s',
+        'startswith': 'LIKE BINARY %s',
+    }
+
+    def connect(self, database, **kwargs):
+        return mysql.connect(db=database, **kwargs)
+
+    def get_field_overrides(self):
+        return {
+            'primary_key': 'integer AUTO_INCREMENT',
+            'boolean': 'bool',
+            'float': 'double precision',
+            'text': 'longtext',
+        }
 
 
 class Database(object):
@@ -239,7 +266,12 @@ class SqliteDatabase(Database):
 
 class PostgresqlDatabase(Database):
     def __init__(self, database, **connect_kwargs):
-        super(SqliteDatabase, self).__init__(PostgresqlAdapater(), database, **connect_kwargs)
+        super(PostgresqlDatabase, self).__init__(PostgresqlAdapter(), database, **connect_kwargs)
+
+
+class MySQLDatabase(Database):
+    def __init__(self, database, **connect_kwargs):
+        super(MySQLDatabase, self).__init__(MySQLAdapter(), database, **connect_kwargs)
 
 
 class QueryResultWrapper(object):
@@ -942,7 +974,7 @@ class Field(object):
     
     def to_sql(self):
         rendered = self.render_field_template()
-        return '"%s" %s' % (self.name, rendered)
+        return '%s %s' % (self.name, rendered)
     
     def null_wrapper(self, value, default=None):
         if (self.null and value is None) or default is None:
@@ -1000,9 +1032,10 @@ class DateTimeField(Field):
     db_field = 'datetime'
     
     def python_value(self, value):
-        if value is not None:
+        if isinstance(value, basestring):
             value = value.rsplit('.', 1)[0]
             return datetime(*time.strptime(value, '%Y-%m-%d %H:%M:%S')[:6])
+        return value
 
 
 class IntegerField(Field):
@@ -1076,7 +1109,7 @@ class ReverseForeignRelatedObject(object):
 
 class ForeignKeyField(IntegerField):
     db_field = 'foreign_key'
-    field_template = '%(column_type)s%(nullable)s REFERENCES "%(to_table)s" ("%(to_pk)s")'
+    field_template = '%(column_type)s%(nullable)s REFERENCES %(to_table)s (%(to_pk)s)'
     
     def __init__(self, to, null=False, related_name=None, *args, **kwargs):
         self.to = to
