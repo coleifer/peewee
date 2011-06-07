@@ -7,6 +7,7 @@ peewee
 * written in python
 * provides a lightweight querying interface over sql
 * uses sql concepts when querying, like joins and where clauses
+* supports sqlite and mysql
 
 
 Examples::
@@ -146,3 +147,41 @@ query nesting using similar notation::
     # generates something like:
     # SELECT * FROM some_obj 
     # WHERE ((a = "A" OR b = "B") AND (c = "C" OR d = "D"))
+
+
+using sqlite
+------------
+
+::
+
+    import peewee
+
+    database = peewee.SqliteDatabase('my.db')
+
+    class BaseModel(peewee.Models):
+        class Meta:
+            database = database
+
+    class Blog(BaseModel):
+        creator = peewee.CharField()
+        name = peewee.CharField()
+        
+    class Entry(BaseModel):
+        creator = peewee.CharField()
+        name = peewee.CharField()
+
+
+using mysql
+-----------
+
+you can now use MySQL::
+
+    import peewee
+
+    database = peewee.MySQLDatabase('my_db', user='root')
+
+    class BaseModel(peewee.Models):
+        class Meta:
+            database = database
+
+    # ... same as above sqlite example ...
