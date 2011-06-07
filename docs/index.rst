@@ -58,6 +58,7 @@ Contents:
    :glob:
    
    peewee/installation
+   peewee/uses
    peewee/example
    peewee/models
    peewee/querying

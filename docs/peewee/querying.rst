@@ -64,7 +64,9 @@ Another way to write the above query would be::
 
 The above bears a little bit of explanation.  First off the SQL generated will
 not perform any explicit JOINs - it will rather use a subquery in the WHERE 
-clause::
+clause:
+
+.. code-block:: sql
 
     # using subqueries
     SELECT * FROM blog 
@@ -128,7 +130,7 @@ combine multiple clauses with "AND".  Taking another page from Django's ORM,
 peewee allows the creation of arbitrarily complex queries using a special
 notation called **Q objects**.
 
-::
+.. code-block:: python
 
     >>> sq = User.select().where(Q(is_staff=True) | Q(is_superuser=True))
     >>> print sq.sql()[0]
