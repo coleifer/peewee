@@ -158,7 +158,7 @@ using sqlite
 
     database = peewee.SqliteDatabase('my.db')
 
-    class BaseModel(peewee.Models):
+    class BaseModel(peewee.Model):
         class Meta:
             database = database
 
@@ -180,7 +180,7 @@ you can now use MySQL::
 
     database = peewee.MySQLDatabase('my_db', user='root')
 
-    class BaseModel(peewee.Models):
+    class BaseModel(peewee.Model):
         class Meta:
             database = database
 
