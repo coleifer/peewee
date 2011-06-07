@@ -14,7 +14,7 @@ SECRET_KEY = 'hin6bab8ge25*r=x&amp;+5$0kn=-#log$pt^#@vrqjld!^2ci@g*b'
 app = Flask(__name__)
 app.config.from_object(__name__)
 
-database = peewee.Database(peewee.SqliteAdapter(), DATABASE)
+database = peewee.SqliteDatabase(DATABASE)
 
 # model definitions
 class User(peewee.Model):
