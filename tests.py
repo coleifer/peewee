@@ -1281,7 +1281,7 @@ class FieldTypeTests(BasePeeweeTestCase):
         
         user_indexes = self.get_sorted_indexes(User)
         if BACKEND == 'mysql':
-            entry_indexes.pop(0)
+            user_indexes.pop(0)
         
         self.assertEqual(user_indexes, [
             ('users_active', False),
