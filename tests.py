@@ -17,9 +17,11 @@ class QueryLogHandler(logging.Handler):
         self.queries.append(record)
 
 
-if os.environ.get('PEEWEE_TEST_BACKEND') == 'postgresql':
+BACKEND = os.environ.get('PEEWEE_TEST_BACKEND', 'sqlite')
+
+if BACKEND == 'postgresql':
     test_db = peewee.PostgresqlDatabase('peewee_test')
-elif os.environ.get('PEEWEE_TEST_BACKEND') == 'mysql':
+elif BACKEND == 'mysql':
     test_db = peewee.MySQLDatabase('peewee_test')
 else:
     test_db = peewee.SqliteDatabase('tmp.db')
@@ -1269,12 +1271,18 @@ class FieldTypeTests(BasePeeweeTestCase):
     
     def test_primary_key_index(self):
         entry_indexes = self.get_sorted_indexes(Entry)
+        if BACKEND == 'mysql':
+            entry_indexes.pop(0)
+        
         self.assertEqual(entry_indexes, [
             ('entry_blog_id', False),
             ('entry_pk', True),
         ])
         
         user_indexes = self.get_sorted_indexes(User)
+        if BACKEND == 'mysql':
+            entry_indexes.pop(0)
+        
         self.assertEqual(user_indexes, [
             ('users_active', False),
             ('users_blog_id', False),
