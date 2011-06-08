@@ -73,6 +73,28 @@ database, and then all your models will extend it:
         # etc, etc
 
 
+Using with MySQL
+----------------
+
+.. code-block:: python
+
+    mysql_db = peewee.MySQLDatabase('my_database', user='code')
+    
+
+    class MySQLModel(peewee.Model):
+        """A base model that will use our MySQL database"""
+        class Meta:
+            database = mysql_db
+
+    class Blog(MySQLModel):
+        author = peewee.CharField()
+        # etc, etc
+    
+
+    # when you're ready to start querying, remember to connect
+    mysql_db.connect()
+
+
 Creating a new record
 ---------------------
 
