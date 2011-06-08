@@ -257,11 +257,19 @@ class Database(object):
     def drop_table(self, model_class, fail_silently=False):
         framing = fail_silently and 'DROP TABLE IF EXISTS %s;' or 'DROP TABLE %s;'
         self.execute(framing % model_class._meta.db_table, commit=True)
+    
+    def get_indexes_for_table(self, table):
+        raise NotImplementedError
 
 
 class SqliteDatabase(Database):
     def __init__(self, database, **connect_kwargs):
         super(SqliteDatabase, self).__init__(SqliteAdapter(), database, **connect_kwargs)
+    
+    def get_indexes_for_table(self, table):
+        res = self.execute('PRAGMA index_list(%s);' % table)
+        rows = sorted([(r[1], r[2] == 1) for r in res.fetchall()])
+        return rows
 
 
 class PostgresqlDatabase(Database):
@@ -272,6 +280,11 @@ class PostgresqlDatabase(Database):
 class MySQLDatabase(Database):
     def __init__(self, database, **connect_kwargs):
         super(MySQLDatabase, self).__init__(MySQLAdapter(), database, **connect_kwargs)
+    
+    def get_indexes_for_table(self, table):
+        res = self.execute('SHOW INDEXES IN %s;' % table)
+        rows = sorted([(r[2], r[1] == 0) for r in res.fetchall()])
+        return rows
 
 
 class QueryResultWrapper(object):

@@ -1265,22 +1265,20 @@ class FieldTypeTests(BasePeeweeTestCase):
         self.assertEqual(nm_from_db.float_field, 0.0)
     
     def get_sorted_indexes(self, model):
-        res = test_db.execute('PRAGMA index_list(%s);' % model._meta.db_table)
-        rows = sorted([r[1:] for r in res.fetchall()])
-        return rows
+        return test_db.get_indexes_for_table(model._meta.db_table)
     
     def test_primary_key_index(self):
         entry_indexes = self.get_sorted_indexes(Entry)
         self.assertEqual(entry_indexes, [
-            ('entry_blog_id', 0),
-            ('entry_pk', 1),
+            ('entry_blog_id', False),
+            ('entry_pk', True),
         ])
         
         user_indexes = self.get_sorted_indexes(User)
         self.assertEqual(user_indexes, [
-            ('users_active', 0),
-            ('users_blog_id', 0),
-            ('users_id', 1),
+            ('users_active', False),
+            ('users_blog_id', False),
+            ('users_id', True),
         ])
     
     def test_default_values(self):
