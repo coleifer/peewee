@@ -102,6 +102,18 @@ class DefaultVals(TestModel):
 class BasePeeweeTestCase(unittest.TestCase):
     def setUp(self):
         test_db.connect()
+        
+        DefaultVals.drop_table(True)
+        Membership.drop_table(True)
+        Member.drop_table(True)
+        Team.drop_table(True)
+        NullModel.drop_table(True)
+        Relationship.drop_table(True)
+        User.drop_table(True)
+        EntryTag.drop_table(True)
+        Entry.drop_table(True)
+        Blog.drop_table(True)
+        
         Blog.create_table()
         Entry.create_table()
         EntryTag.create_table()
@@ -119,17 +131,6 @@ class BasePeeweeTestCase(unittest.TestCase):
     
     def tearDown(self):
         peewee.logger.removeHandler(self.qh)
-        
-        DefaultVals.drop_table()
-        Membership.drop_table()
-        Member.drop_table()
-        Team.drop_table()
-        NullModel.drop_table()
-        Relationship.drop_table()
-        User.drop_table()
-        EntryTag.drop_table()
-        Entry.drop_table()
-        Blog.drop_table()
         test_db.close()
     
     def queries(self):
