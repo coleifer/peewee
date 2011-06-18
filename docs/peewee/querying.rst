@@ -306,10 +306,10 @@ results.  All methods are chain-able.
     adds field_name to the GROUP BY clause where field_name is a field on the
     current "query context"::
     
-    >>> sq = Blog.select({
-    ...     Blog: ['*'], 
-    ...     Entry: [Count('id')]
-    ... }).group_by('id').join(Entry)
+        >>> sq = Blog.select({
+        ...     Blog: ['*'], 
+        ...     Entry: [Count('id')]
+        ... }).group_by('id').join(Entry)
 
 .. py:method:: having(self, clause)
 
