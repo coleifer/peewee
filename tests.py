@@ -421,10 +421,12 @@ class QueryTests(BasePeeweeTestCase):
         self.assertEqual(count, 2)
     
     def test_pagination(self):
-        sq = SelectQuery(Blog).paginate(1, 20)
+        base_sq = SelectQuery(Blog)
+        
+        sq = base_sq.paginate(1, 20)
         self.assertSQLEqual(sq.sql(), ('SELECT * FROM blog LIMIT 20 OFFSET 0', []))
         
-        sq = SelectQuery(Blog).paginate(3, 30)
+        sq = base_sq.paginate(3, 30)
         self.assertSQLEqual(sq.sql(), ('SELECT * FROM blog LIMIT 30 OFFSET 60', []))
     
     def test_inner_joins(self):
@@ -440,6 +442,45 @@ class QueryTests(BasePeeweeTestCase):
         
         sql = SelectQuery(Blog).join(User).sql()
         self.assertSQLEqual(sql, ('SELECT t1.* FROM blog AS t1 LEFT OUTER JOIN users AS t2 ON t1.id = t2.blog_id', []))
+    
+    def test_cloning(self):
+        base_sq = SelectQuery(Blog)
+        
+        q1 = base_sq.where(title='a')
+        q2 = base_sq.where(title='b')
+        
+        q1_sql = ('SELECT * FROM blog WHERE title = ?', ['a'])
+        q2_sql = ('SELECT * FROM blog WHERE title = ?', ['b'])
+        
+        # where causes cloning
+        self.assertEqual(base_sq.sql(), ('SELECT * FROM blog', []))
+        self.assertEqual(q1.sql(), q1_sql)
+        self.assertEqual(q2.sql(), q2_sql)
+        
+        q3 = q1.join(Entry)
+        q3_sql = ('SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id WHERE t1.title = ?', ['a'])
+        
+        # join causes cloning
+        self.assertEqual(q3.sql(), q3_sql)
+        self.assertEqual(q1.sql(), q1_sql)
+        
+        q4 = q1.order_by('title')
+        q5 = q3.order_by('title')
+        
+        q4_sql = ('SELECT * FROM blog WHERE title = ? ORDER BY title ASC', ['a'])
+        q5_sql = ('SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id WHERE t1.title = ? ORDER BY t2.title ASC', ['a'])
+        
+        # order_by causes cloning
+        self.assertEqual(q3.sql(), q3_sql)
+        self.assertEqual(q1.sql(), q1_sql)
+        self.assertEqual(q4.sql(), q4_sql)
+        self.assertEqual(q5.sql(), q5_sql)
+        
+        q6 = q1.paginate(10, 1)
+        q7 = q4.paginate(10, 2)
+        
+        q6_sql = ('SELECT * FROM blog WHERE title = ? LIMIT 10 OFFSET 0', ['a'])
+        q7_sql = ('SELECT * FROM blog WHERE title = ? ORDER BY title ASC LIMIT 10 OFFSET 10', ['a'])
 
 
 class ModelTests(BasePeeweeTestCase):
