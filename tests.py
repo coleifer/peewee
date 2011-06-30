@@ -549,6 +549,23 @@ class ModelTests(BasePeeweeTestCase):
             ('SELECT * FROM blog WHERE title IN (?,?) ORDER BY title DESC', ['a', 'c']),
         ])
     
+    def test_query_cloning(self):
+        a = self.create_blog(title='a')
+        b = self.create_blog(title='b')
+        c = self.create_blog(title='c')
+        
+        blog_qr = Blog.select()
+        rev_ordered = blog_qr.order_by(peewee.desc('title'))
+        ordered = blog_qr.order_by('title')
+        rev_filtered = rev_ordered.where(title__in=['a', 'b'])
+        filtered = ordered.where(title__in=['b', 'c'])
+        
+        self.assertEqual(list(rev_filtered), [b, a])
+        self.assertEqual(list(filtered), [b, c])
+        
+        more_filtered = filtered.where(title='b')
+        self.assertEqual(list(more_filtered), [b])
+    
     def test_model_select_with_q(self):
         a = self.create_blog(title='a')
         b = self.create_blog(title='b')
@@ -869,22 +886,28 @@ class RelatedFieldTests(BasePeeweeTestCase):
     def test_querying_across_joins(self):
         a, a1, a2, b, b1, b2, t1, t2 = self.get_common_objects()
         
-        sq = Blog.select().join(Entry).join(EntryTag).where(tag='t1')
-        self.assertEqual(list(sq), [a])
+        sq = Blog.select().join(Entry).join(EntryTag)
         
-        sq = Blog.select().join(Entry).join(EntryTag).where(tag='t2')
-        self.assertEqual(list(sq), [b])
+        t1_sq = sq.where(tag='t1')
+        self.assertEqual(list(t1_sq), [a])
         
-        sq = Blog.select().join(Entry).where(title='a1').join(EntryTag).where(tag='t1')
+        t2_sq = sq.where(tag='t2')
+        self.assertEqual(list(t2_sq), [b])
+        
+        joined_sq = Blog.select().join(Entry)
+        
+        sq = joined_sq.where(title='a1').join(EntryTag).where(tag='t1')
         self.assertEqual(list(sq), [])
         
-        sq = Blog.select().join(Entry).where(title='a2').join(EntryTag).where(tag='t1')
+        sq = joined_sq.where(title='a2').join(EntryTag).where(tag='t1')
         self.assertEqual(list(sq), [a])
         
-        sq = EntryTag.select().join(Entry).join(Blog).where(title='a')
+        et_sq = EntryTag.select().join(Entry).join(Blog)
+        
+        sq = et_sq.where(title='a')
         self.assertEqual(list(sq), [t1])
         
-        sq = EntryTag.select().join(Entry).join(Blog).where(title='b')
+        sq = et_sq.where(title='b')
         self.assertEqual(list(sq), [t2])
         
         sq = EntryTag.select().join(Entry).where(title='a1').join(Blog).where(title='a')
