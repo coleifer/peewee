@@ -351,10 +351,11 @@ def Min(f, alias='min'):
 
 # decorator for query methods to indicate that they change the state of the
 # underlying data structures
-def mark_query_dirty(func):
+def returns_clone(func):
     def inner(self, *args, **kwargs):
-        self._dirty = True
-        return func(self, *args, **kwargs)
+        clone = self.clone()
+        res = func(clone, *args, **kwargs)
+        return clone
     return inner
 
 # helpers
@@ -473,9 +474,12 @@ class BaseQuery(object):
         self.operations = self.database.adapter.operations
         self.interpolation = self.database.adapter.interpolation
         
+        self._dirty = True
         self._where = {}
         self._joins = []
-        self._dirty = True
+    
+    def clone(self):
+        raise NotImplementedError
     
     def lookup_cast(self, lookup, value):
         return self.database.adapter.lookup_cast(lookup, value)
@@ -520,13 +524,12 @@ class BaseQuery(object):
         
         return parsed
     
-    @mark_query_dirty
+    @returns_clone
     def where(self, *args, **kwargs):
         self._where.setdefault(self.query_context, [])
         self._where[self.query_context].append(parseq(*args, **kwargs))
-        return self
 
-    @mark_query_dirty
+    @returns_clone
     def join(self, model, join_type=None, on=None):
         if self.query_context._meta.rel_exists(model):
             self._joins.append((model, join_type, on))
@@ -534,17 +537,17 @@ class BaseQuery(object):
         else:
             raise AttributeError('No foreign key found between %s and %s' % \
                 (self.query_context.__name__, model.__name__))
-        return self
 
+    @returns_clone
     def switch(self, model):
         if model == self.model:
             self.query_context = model
-            return self
+            return
 
         for klass, join_type, on in self._joins:
             if model == klass:
                 self.query_context = model
-                return self
+                return
         raise AttributeError('You must JOIN on %s' % model.__name__)
     
     def use_aliases(self):
@@ -691,6 +694,15 @@ class RawQuery(BaseQuery):
     def execute(self):
         return QueryResultWrapper(self.model, self.raw_execute())
     
+    def join(self):
+        raise AttributeError('Raw queries do not support joining programmatically')
+    
+    def where(self):
+        raise AttributeError('Raw queries do not support querying programmatically')
+    
+    def switch(self):
+        raise AttributeError('Raw queries do not support switching contexts')
+    
     def __iter__(self):
         return self.execute()
 
@@ -708,10 +720,22 @@ class SelectQuery(BaseQuery):
         self._qr = None
         super(SelectQuery, self).__init__(model)
     
-    @mark_query_dirty
+    def clone(self):
+        query = SelectQuery(self.model, self.query)
+        query.query_context = self.query_context
+        query._group_by = list(self._group_by)
+        query._having = list(self._having)
+        query._order_by = list(self._order_by)
+        query._pagination = self._pagination and tuple(self._pagination) or None
+        query._distinct = self._distinct
+        query._qr = self._qr
+        query._where = dict(self._where)
+        query._joins = list(self._joins)
+        return query
+    
+    @returns_clone
     def paginate(self, page_num, paginate_by=20):
         self._pagination = (page_num, paginate_by)
-        return self
     
     def count(self):
         tmp_pagination = self._pagination
@@ -731,22 +755,19 @@ class SelectQuery(BaseQuery):
         
         return res.fetchone()[0]
     
-    @mark_query_dirty
+    @returns_clone
     def group_by(self, clause):
         self._group_by.append((self.query_context, clause))
-        return self
     
-    @mark_query_dirty
+    @returns_clone
     def having(self, clause):
         self._having.append(clause)
-        return self
     
-    @mark_query_dirty
+    @returns_clone
     def distinct(self):
         self._distinct = True
-        return self
     
-    @mark_query_dirty
+    @returns_clone
     def order_by(self, field_or_string):
         if isinstance(field_or_string, tuple):
             field_or_string, ordering = field_or_string
@@ -756,8 +777,6 @@ class SelectQuery(BaseQuery):
         self._order_by.append(
             (self.query_context, field_or_string, ordering)
         )
-        
-        return self
 
     def parse_select_query(self, alias_map):
         if isinstance(self.query, basestring):
@@ -840,7 +859,7 @@ class SelectQuery(BaseQuery):
         return ' '.join(pieces), params
     
     def execute(self):
-        if self._dirty:
+        if self._dirty or not self._qr:
             try:
                 self._qr = QueryResultWrapper(self.model, self.raw_execute())
                 self._dirty = False
@@ -859,6 +878,12 @@ class UpdateQuery(BaseQuery):
     def __init__(self, model, **kwargs):
         self.update_query = kwargs
         super(UpdateQuery, self).__init__(model)
+    
+    def clone(self):
+        query = UpdateQuery(self.model, **self.update_query)
+        query._where = dict(self._where)
+        query._joins = list(self._joins)
+        return query
     
     def parse_update(self):
         sets = {}
@@ -906,6 +931,12 @@ class UpdateQuery(BaseQuery):
 
 
 class DeleteQuery(BaseQuery):
+    def clone(self):
+        query = DeleteQuery(self.model)
+        query._where = dict(self._where)
+        query._joins = list(self._joins)
+        return query
+    
     def sql(self):
         joins, where, where_data, alias_map = self.compile_where()
 

@@ -606,29 +606,29 @@ class ModelTests(BasePeeweeTestCase):
             ('INSERT INTO blog (title) VALUES (?)', ['b']),
             ('SELECT * FROM blog ORDER BY title ASC', []),
         ])
-        
-        self.assertFalse(sq._dirty)
 
+        # iterating again does not cause evaluation
         blogs = [b for b in sq]
         self.assertEqual(blogs, [a, b])
         self.assertEqual(len(self.queries()), 3)
         
-        # mark dirty
-        sq = sq.where(title='a')
-        self.assertTrue(sq._dirty)
+        # clone the query
+        clone = sq.clone()
         
-        blogs = [b for b in sq]
-        self.assertEqual(blogs, [a])
+        # the query will be marked dirty and re-evaluated
+        blogs = [b for b in clone]
+        self.assertEqual(blogs, [a, b])
         
         self.assertQueriesEqual([
             ('INSERT INTO blog (title) VALUES (?)', ['a']),
             ('INSERT INTO blog (title) VALUES (?)', ['b']),
             ('SELECT * FROM blog ORDER BY title ASC', []),
-            ('SELECT * FROM blog WHERE title = ? ORDER BY title ASC', ['a']),
+            ('SELECT * FROM blog ORDER BY title ASC', []),
         ])
         
+        # iterate over the original query - it will use the cached results
         blogs = [b for b in sq]
-        self.assertEqual(blogs, [a])
+        self.assertEqual(blogs, [a, b])
         
         self.assertEqual(len(self.queries()), 4)
     
