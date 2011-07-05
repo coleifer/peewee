@@ -453,16 +453,16 @@ class QueryTests(BasePeeweeTestCase):
         q2_sql = ('SELECT * FROM blog WHERE title = ?', ['b'])
         
         # where causes cloning
-        self.assertEqual(base_sq.sql(), ('SELECT * FROM blog', []))
-        self.assertEqual(q1.sql(), q1_sql)
-        self.assertEqual(q2.sql(), q2_sql)
+        self.assertSQLEqual(base_sq.sql(), ('SELECT * FROM blog', []))
+        self.assertSQLEqual(q1.sql(), q1_sql)
+        self.assertSQLEqual(q2.sql(), q2_sql)
         
         q3 = q1.join(Entry)
         q3_sql = ('SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id WHERE t1.title = ?', ['a'])
         
         # join causes cloning
-        self.assertEqual(q3.sql(), q3_sql)
-        self.assertEqual(q1.sql(), q1_sql)
+        self.assertSQLEqual(q3.sql(), q3_sql)
+        self.assertSQLEqual(q1.sql(), q1_sql)
         
         q4 = q1.order_by('title')
         q5 = q3.order_by('title')
@@ -471,16 +471,19 @@ class QueryTests(BasePeeweeTestCase):
         q5_sql = ('SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id WHERE t1.title = ? ORDER BY t2.title ASC', ['a'])
         
         # order_by causes cloning
-        self.assertEqual(q3.sql(), q3_sql)
-        self.assertEqual(q1.sql(), q1_sql)
-        self.assertEqual(q4.sql(), q4_sql)
-        self.assertEqual(q5.sql(), q5_sql)
+        self.assertSQLEqual(q3.sql(), q3_sql)
+        self.assertSQLEqual(q1.sql(), q1_sql)
+        self.assertSQLEqual(q4.sql(), q4_sql)
+        self.assertSQLEqual(q5.sql(), q5_sql)
         
-        q6 = q1.paginate(10, 1)
-        q7 = q4.paginate(10, 2)
+        q6 = q1.paginate(1, 10)
+        q7 = q4.paginate(2, 10)
         
         q6_sql = ('SELECT * FROM blog WHERE title = ? LIMIT 10 OFFSET 0', ['a'])
         q7_sql = ('SELECT * FROM blog WHERE title = ? ORDER BY title ASC LIMIT 10 OFFSET 10', ['a'])
+
+        self.assertSQLEqual(q6.sql(), q6_sql)
+        self.assertSQLEqual(q7.sql(), q7_sql)
 
 
 class ModelTests(BasePeeweeTestCase):
