@@ -147,7 +147,7 @@ class PostgresqlAdapter(BaseAdapter):
     def get_field_overrides(self):
         return {
             'primary_key': 'SERIAL',
-            'datetime': 'TIMESTAMP WITH TIME ZONE'
+            'datetime': 'TIMESTAMP'
         }
     
     def last_insert_id(self, cursor, model):
