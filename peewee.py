@@ -757,7 +757,12 @@ class SelectQuery(BaseQuery):
     
     @returns_clone
     def group_by(self, clause):
-        self._group_by.append((self.query_context, clause))
+        if isinstance(clause, basestring):
+            fields = (clause,)
+        elif isinstance(clause, Model):
+            fields = clause._meta.get_field_names()
+        
+        self._group_by.append((self.query_context, fields))
     
     @returns_clone
     def having(self, clause):
@@ -812,9 +817,10 @@ class SelectQuery(BaseQuery):
             table = '%s AS %s' % (table, alias_map[self.model])
             for model, clause in self._group_by:
                 alias = alias_map[model]
-                group_by.append(self.combine_field(alias, clause))
+                for field in clause:
+                    group_by.append(self.combine_field(alias, field))
         else:
-            group_by = list(self._group_by)
+            group_by = [c[1] for c in self._group_by]
 
         parsed_query = self.parse_select_query(alias_map)
         
@@ -1213,6 +1219,11 @@ class BaseModelOptions(object):
         self.rel_fields = {}
         self.fields = {}
         self.model_class = model_class
+    
+    def get_field_names(self):
+        fields = [self.pk_name]
+        fields.extend([f for f in sorted(self.fields.keys()) if f != self.pk_name])
+        return fields
     
     def get_field_by_name(self, name):
         if name in self.fields:
