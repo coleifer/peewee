@@ -487,6 +487,10 @@ class QueryTests(BasePeeweeTestCase):
 
 
 class ModelTests(BasePeeweeTestCase):
+    def test_model_meta(self):
+        self.assertEqual(Blog._meta.get_field_names(), ['id', 'title'])
+        self.assertEqual(Entry._meta.get_field_names(), ['pk', 'blog_id', 'content', 'pub_date', 'title'])
+    
     def test_model_save(self):
         a = self.create_blog(title='a')
         self.assertEqual(a.id, 1)
