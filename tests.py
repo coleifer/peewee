@@ -558,7 +558,7 @@ class ModelTests(BasePeeweeTestCase):
             FROM blog AS b 
             LEFT OUTER JOIN entry AS e
                 ON e.blog_id = b.id
-            GROUP BY b.id
+            GROUP BY b.id, b.title
             ORDER BY count DESC
         """)
         results = list(qr)
