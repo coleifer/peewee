@@ -710,6 +710,9 @@ class ModelTests(BasePeeweeTestCase):
             ('INSERT INTO users (username,active,blog_id) VALUES (?,?,?)', ['b', 0, b.id]),
         ])
 
+    def test_get_raises_does_not_exist(self):
+        self.assertRaises(User.DoesNotExist, User.get, username='a')
+
     def test_get_or_create(self):
         u = User.get_or_create(username='a')
         self.assertEqual(u.username, 'a')

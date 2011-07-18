@@ -339,6 +339,11 @@ class QueryResultWrapper(object):
             raise StopIteration
 
 
+# create
+class DoesNotExist(Exception):
+    pass
+
+
 # semantic wrappers for ordering the results of a `SelectQuery`
 def asc(f):
     return (f, 'ASC')
@@ -1304,11 +1309,15 @@ class BaseModel(type):
             pk = PrimaryKeyField()
             pk.add_to_class(cls, _meta.pk_name)
             _meta.fields[_meta.pk_name] = pk
-            
+
+        _meta.model_name = cls.__name__
                 
         if hasattr(cls, '__unicode__'):
             setattr(cls, '__repr__', lambda self: '<%s: %s>' % (
-                self.__class__.__name__, self.__unicode__()))
+                _meta.model_name, self.__unicode__()))
+
+        exception_class = type('%sDoesNotExist' % _meta.model_name, (DoesNotExist,), {})
+        cls.DoesNotExist = exception_class
         
         return cls
 
@@ -1385,13 +1394,19 @@ class Model(object):
     def get_or_create(cls, **query):
         try:
             inst = cls.get(**query)
-        except StopIteration:
+        except cls.DoesNotExist:
             inst = cls.create(**query)
         return inst
     
     @classmethod            
     def get(cls, *args, **kwargs):
-        return cls.select().where(*args, **kwargs).paginate(1, 1).execute().next()
+        query = cls.select().where(*args, **kwargs).paginate(1, 1)
+        try:
+            return query.execute().next()
+        except StopIteration:
+            raise cls.DoesNotExist('instance matching query does not exist:\nSQL: %s\nPARAMS: %s' % (
+                query.sql()
+            ))
     
     def get_pk(self):
         return getattr(self, self._meta.pk_name, None)
