@@ -757,12 +757,17 @@ class SelectQuery(BaseQuery):
     
     @returns_clone
     def group_by(self, clause):
+        model = self.query_context
+        
         if isinstance(clause, basestring):
             fields = (clause,)
-        elif isinstance(clause, Model):
+        elif isinstance(clause, (list, tuple)):
+            fields = clause
+        elif issubclass(clause, Model):
+            model = clause
             fields = clause._meta.get_field_names()
         
-        self._group_by.append((self.query_context, fields))
+        self._group_by.append((model, fields))
     
     @returns_clone
     def having(self, clause):
