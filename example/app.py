@@ -136,7 +136,7 @@ def join():
         try:
             user = User.get(username=request.form['username'])
             flash('That username is already taken')
-        except StopIteration:
+        except User.DoesNotExist:
             user = User.create(
                 username=request.form['username'],
                 password=md5(request.form['password']).hexdigest(),
@@ -156,7 +156,7 @@ def login():
                 username=request.form['username'],
                 password=md5(request.form['password']).hexdigest()
             )
-        except StopIteration:
+        except User.DoesNotExist:
             flash('The password entered is incorrect')
         else:
             auth_user(user)
@@ -191,7 +191,7 @@ def user_list():
 def user_detail(username):
     try:
         user = User.get(username=username)
-    except StopIteration:
+    except User.DoesNotExist:
         abort(404)
     messages = user.message_set.order_by(('pub_date', 'desc'))
     return object_list('user_detail.html', messages, 'message_list', user=user)
@@ -201,7 +201,7 @@ def user_detail(username):
 def user_follow(username):
     try:
         user = User.get(username=username)
-    except StopIteration:
+    except User.DoesNotExist:
         abort(404)
     Relationship.get_or_create(
         from_user=session['user'],
@@ -215,7 +215,7 @@ def user_follow(username):
 def user_unfollow(username):
     try:
         user = User.get(username=username)
-    except StopIteration:
+    except User.DoesNotExist:
         abort(404)
     Relationship.delete().where(
         from_user=session['user'],
