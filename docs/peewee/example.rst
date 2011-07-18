@@ -230,7 +230,7 @@ if the username is taken, and if not executes a ``.create()``::
     try:
         user = User.get(username=request.form['username'])
         flash('That username is already taken')
-    except StopIteration:
+    except User.DoesNotExist:
         user = User.create(
             username=request.form['username'],
             password=md5(request.form['password']).hexdigest(),

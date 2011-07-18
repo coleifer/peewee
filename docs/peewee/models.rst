@@ -125,7 +125,14 @@ Model methods
 .. py:method:: get(cls, **attributes)
 
     get an instance of ``cls`` with the given attributes set.  if the instance
-    does not exist, a ``StopIteration`` exception will be raised.
+    does not exist, a ``DoesNotExist`` exception will be raised, a-la django.
+
+    ::
+
+        try:
+            user = User.get(username='admin')
+        except User.DoesNotExist:
+            print 'No admin user!'
     
     :param attributes: key/value pairs of model attributes
     
