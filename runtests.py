@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import os
 import sys
 import unittest
 
@@ -7,6 +8,9 @@ from os.path import dirname, abspath
 import tests
 
 def runtests(*test_args):
+    backend = os.environ.get('PEEWEE_TEST_BACKEND') or 'sqlite'
+    print 'RUNNING PEEWEE TESTS WITH [%s]' % backend
+    print '=============================================='
     suite = unittest.TestLoader().loadTestsFromModule(tests)
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     if result.failures:
