@@ -1009,19 +1009,25 @@ class RelatedFieldTests(BasePeeweeTestCase):
         c = self.create_blog(title='c')
         c1 = self.create_entry(title='c1', blog=c)
 
-        sq = Blog.select().join(Entry).order_by(peewee.desc('title')).group_by('blog_id')
-        self.assertEqual(list(sq), [c, b, a])
+        sq = Blog.select({
+            Blog: ['*'],
+            Entry: [peewee.Max('title', 'max_title')],
+        }).join(Entry).order_by(peewee.desc('max_title')).group_by('blog_id').group_by(Blog)
+        results = list(sq)
+        self.assertEqual(results, [c, b, a])
+        self.assertEqual([r.max_title for r in results], ['c1', 'b3', 'a2'])
         
-        sq = Blog.select().join(Entry).order_by(peewee.desc('title')).distinct()
-        self.assertEqual(list(sq), [c, b, a])
+        sq = Blog.select({
+            Blog: ['*'],
+            Entry: [peewee.Max('title', 'max_title')],
+        }).where(
+            title__in=['a', 'b']
+        ).join(Entry).order_by(peewee.desc('max_title')).group_by('blog_id').group_by(Blog)
+        results = list(sq)
+        self.assertEqual(results, [b, a])
+        self.assertEqual([r.max_title for r in results], ['b3', 'a2'])
 
-        sq = Blog.select().where(title__in=['a', 'b']).join(Entry).order_by(peewee.desc('title')).group_by('blog_id')
-        self.assertEqual(list(sq), [b, a])
-        
-        sq = Blog.select().where(title__in=['a', 'b']).join(Entry).order_by(peewee.desc('title')).distinct()
-        self.assertEqual(list(sq), [b, a])
-
-        sq = Blog.select('t1.*, COUNT(t2.pk) AS count').join(Entry).order_by(peewee.desc('count')).group_by('blog_id')
+        sq = Blog.select('t1.*, COUNT(t2.pk) AS count').join(Entry).order_by(peewee.desc('count')).group_by('blog_id').group_by(Blog)
         qr = list(sq)
 
         self.assertEqual(qr, [b, a, c])
@@ -1032,13 +1038,23 @@ class RelatedFieldTests(BasePeeweeTestCase):
         sq = Blog.select({
             Blog: ['*'],
             Entry: [peewee.Count('pk', 'count')]
-        }).join(Entry).group_by('blog_id').order_by(peewee.desc('count'))
+        }).join(Entry).group_by('blog_id').group_by(Blog).order_by(peewee.desc('count'))
         qr = list(sq)
         
         self.assertEqual(qr, [b, a, c])
         self.assertEqual(qr[0].count, 3)
         self.assertEqual(qr[1].count, 2)
         self.assertEqual(qr[2].count, 1)
+        
+        # perform a couple checks that break in the postgres backend -- this is
+        # due to the way postgresql does aggregation - it wants all the fields
+        # used to be included in the DISTINCT query
+        if BACKEND != 'postgresql':
+            sq = Blog.select().join(Entry).order_by(peewee.desc('title')).distinct()
+            self.assertEqual(list(sq), [c, b, a])
+
+            sq = Blog.select().where(title__in=['a', 'b']).join(Entry).order_by(peewee.desc('title')).distinct()
+            self.assertEqual(list(sq), [b, a])
     
     def test_nullable_fks(self):
         a = self.create_blog(title='a')
