@@ -301,15 +301,30 @@ results.  All methods are chain-able.
     >>> sq.count()
     3 # <-- number of blogs that are marked as deleted
 
-.. py:method:: group_by(self, field_name)
+.. py:method:: group_by(self, clause)
 
-    adds field_name to the GROUP BY clause where field_name is a field on the
-    current "query context"::
+    clause can be either a single field name or a list of field names, in 
+    which case it takes its context from the current query_context.  it can
+    *also* be a model class, in which case all that models fields will be
+    included in the GROUP BY clause
     
+    ::
+    
+        >>> # get a list of blogs with the count of entries each has
         >>> sq = Blog.select({
         ...     Blog: ['*'], 
         ...     Entry: [Count('id')]
         ... }).group_by('id').join(Entry)
+
+        >>> # slightly more complex, get a list of blogs ordered by most recent pub_date
+        >>> sq = Blog.select({
+        ...     Blog: ['*'],
+        ...     Entry: [Max('pub_date', 'max_pub_date')],
+        ... }).join(Entry)
+        >>> # now, group by the entry's blog id, followed by all the blog fields
+        >>> sq = sq.group_by('blog_id').group_by(Blog)
+        >>> # finally, order our results by max pub date
+        >>> sq = sq.order_by(peewee.desc('max_pub_date'))
 
 .. py:method:: having(self, clause)
 
