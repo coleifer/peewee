@@ -7,7 +7,7 @@ peewee
 * written in python
 * provides a lightweight querying interface over sql
 * uses sql concepts when querying, like joins and where clauses
-* supports sqlite and mysql
+* supports sqlite, mysql and postgresql
 
 
 Examples::
@@ -169,6 +169,22 @@ using sqlite
     class Entry(BaseModel):
         creator = peewee.CharField()
         name = peewee.CharField()
+
+
+using postgresql
+----------------
+
+you can now use postgresql::
+
+    import peewee
+
+    database = peewee.PostgresqlDatabase('my_db', user='root')
+
+    class BaseModel(peewee.Model):
+        class Meta:
+            database = database
+
+    # ... same as above sqlite example ...
 
 
 using mysql
