@@ -275,7 +275,14 @@ class SqliteDatabase(Database):
 class PostgresqlDatabase(Database):
     def __init__(self, database, **connect_kwargs):
         super(PostgresqlDatabase, self).__init__(PostgresqlAdapter(), database, **connect_kwargs)
-
+    
+    def get_indexes_for_table(self, table):
+        res = self.execute("""
+            SELECT c2.relname, i.indisprimary, i.indisunique
+            FROM pg_catalog.pg_class c, pg_catalog.pg_class c2, pg_catalog.pg_index i
+            WHERE c.relname = %s AND c.oid = i.indrelid AND i.indexrelid = c2.oid
+            ORDER BY i.indisprimary DESC, i.indisunique DESC, c2.relname""", (table,))
+        return sorted([(r[0], r[1]) for r in res.fetchall()])
 
 class MySQLDatabase(Database):
     def __init__(self, database, **connect_kwargs):

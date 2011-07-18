@@ -487,10 +487,6 @@ class QueryTests(BasePeeweeTestCase):
 
 
 class ModelTests(BasePeeweeTestCase):
-    def test_model_meta(self):
-        self.assertEqual(Blog._meta.get_field_names(), ['id', 'title'])
-        self.assertEqual(Entry._meta.get_field_names(), ['pk', 'blog_id', 'content', 'pub_date', 'title'])
-    
     def test_model_save(self):
         a = self.create_blog(title='a')
         self.assertEqual(a.id, 1)
@@ -1354,29 +1350,6 @@ class FieldTypeTests(BasePeeweeTestCase):
         self.assertEqual(nm_from_db.int_field, 0)
         self.assertEqual(nm_from_db.float_field, 0.0)
     
-    def get_sorted_indexes(self, model):
-        return test_db.get_indexes_for_table(model._meta.db_table)
-    
-    def test_primary_key_index(self):
-        entry_indexes = self.get_sorted_indexes(Entry)
-        if BACKEND == 'mysql':
-            entry_indexes.pop(0)
-        
-        self.assertEqual(entry_indexes, [
-            ('entry_blog_id', False),
-            ('entry_pk', True),
-        ])
-        
-        user_indexes = self.get_sorted_indexes(User)
-        if BACKEND == 'mysql':
-            user_indexes.pop(0)
-        
-        self.assertEqual(user_indexes, [
-            ('users_active', False),
-            ('users_blog_id', False),
-            ('users_id', True),
-        ])
-    
     def test_default_values(self):
         now = datetime.datetime.now() - datetime.timedelta(seconds=1)
         
@@ -1419,7 +1392,69 @@ class FieldTypeTests(BasePeeweeTestCase):
         self.assertFalse(default_model3.published)
         self.assertTrue(default_model3.pub_date >= now)
 
+class ModelIndexTestCase(BasePeeweeTestCase):
+    def get_sorted_indexes(self, model):
+        return test_db.get_indexes_for_table(model._meta.db_table)
+    
+    def check_postgresql_indexes(self, e, u):
+        self.assertEqual(e, [
+            ('entry_blog_id', False),
+            ('entry_pk', False),
+            ('entry_pkey', True),
+        ])
+        
+        self.assertEqual(u, [
+            ('users_active', False),
+            ('users_blog_id', False),
+            ('users_id', False),
+            ('users_pkey', True),
+        ])
+    
+    def check_sqlite_indexes(self, e, u):
+        self.assertEqual(e, [
+            ('entry_blog_id', False),
+            ('entry_pk', True),
+        ])
+        
+        self.assertEqual(u, [
+            ('users_active', False),
+            ('users_blog_id', False),
+            ('users_id', True),
+        ])
+    
+    def check_mysql_indexes(self, e, u):
+        self.assertEqual(e, [
+            ('PRIMARY', True),
+            ('entry_blog_id', False),
+            ('entry_pk', True),
+        ])
+        
+        self.assertEqual(u, [
+            ('PRIMARY', True),
+            ('users_active', False),
+            ('users_blog_id', False),
+            ('users_id', True),
+        ])
+    
+    def test_primary_key_index(self):
+        # this feels pretty dirty to me but until I grok the details of index
+        # naming and creation i'm going to check each backend
+        if BACKEND == 'postgresql':
+            method = self.check_postgresql_indexes
+        elif BACKEND == 'mysql':
+            method = self.check_mysql_indexes
+        else:
+            method = self.check_sqlite_indexes
+        
+        entry_indexes = self.get_sorted_indexes(Entry)
+        user_indexes = self.get_sorted_indexes(User)
+        method(entry_indexes, user_indexes)
+
 class ModelOptionsTest(BasePeeweeTestCase):
+    def test_model_meta(self):
+        self.assertEqual(Blog._meta.get_field_names(), ['id', 'title'])
+        self.assertEqual(Entry._meta.get_field_names(), ['pk', 'blog_id', 'content', 'pub_date', 'title'])
+    
     def test_db_table(self):
         self.assertEqual(User._meta.db_table, 'users')
     
