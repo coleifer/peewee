@@ -1057,7 +1057,7 @@ class RelatedFieldTests(BasePeeweeTestCase):
         sq = Blog.select({
             Blog: ['*'],
             User: [peewee.Count('id', 'count')]
-        }).join(User).group_by('blog_id').order_by(peewee.desc('count'))
+        }).join(User).group_by('blog_id').group_by(Blog).order_by(peewee.desc('count'))
         qr = list(sq)
         
         self.assertEqual(qr, [a, b, c])
