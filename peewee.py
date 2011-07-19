@@ -225,8 +225,8 @@ class Database(object):
                 db_field, ', '.join(self.adapter.get_field_types().keys())
             )
     
-    def create_table(self, model_class):
-        framing = "CREATE TABLE %s (%s);"
+    def create_table(self, model_class, safe=False):
+        framing = safe and "CREATE TABLE IF NOT EXISTS %s (%s);" or "CREATE TABLE %s (%s);"
         columns = []
 
         for field in model_class._meta.fields.values():
