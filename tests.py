@@ -1191,6 +1191,7 @@ class RelatedFieldTests(BasePeeweeTestCase):
     def test_many_to_many(self):
         a_team = Team.create(name='a-team')
         b_team = Team.create(name='b-team')
+        x_team = Team.create(name='x-team')
         
         a_member1 = Member.create(username='a1')
         a_member2 = Member.create(username='a2')
@@ -1199,6 +1200,7 @@ class RelatedFieldTests(BasePeeweeTestCase):
         b_member2 = Member.create(username='b2')
         
         ab_member = Member.create(username='ab')
+        x_member = Member.create(username='x')
         
         Membership.create(team=a_team, member=a_member1)
         Membership.create(team=a_team, member=a_member2)
@@ -1209,6 +1211,7 @@ class RelatedFieldTests(BasePeeweeTestCase):
         Membership.create(team=a_team, member=ab_member)
         Membership.create(team=b_team, member=ab_member)
         
+        # query the FK in the rel table
         a_team_members = Member.select().join(Membership).where(team=a_team)
         self.assertEqual(list(a_team_members), [a_member1, a_member2, ab_member])
         
@@ -1220,6 +1223,13 @@ class RelatedFieldTests(BasePeeweeTestCase):
         
         ab_member_teams = Team.select().join(Membership).where(member=ab_member)
         self.assertEqual(list(ab_member_teams), [a_team, b_team])
+
+        # query across the rel table
+        across = Member.select().join(Membership).join(Team).where(name='a-team')
+        self.assertEqual(list(across), [a_member1, a_member2, ab_member])
+
+        across = Member.select().join(Membership).join(Team).where(name='b-team')
+        self.assertEqual(list(across), [b_member1, b_member2, ab_member])
     
     def test_updating_fks(self):
         blog = self.create_blog(title='dummy')
