@@ -30,6 +30,9 @@ try:
 except ImportError:
     mysql = None
 
+class ImproperlyConfigured(Exception):
+    pass
+
 if sqlite3 is None and psycopg2 is None and mysql is None:
     raise ImproperlyConfigured('Either sqlite3, psycopg2 or MySQLdb must be installed')
 
