@@ -1,6 +1,8 @@
 import datetime
 import logging
 import os
+import Queue
+import threading
 import unittest
 
 import peewee
@@ -20,12 +22,16 @@ class QueryLogHandler(logging.Handler):
 BACKEND = os.environ.get('PEEWEE_TEST_BACKEND', 'sqlite')
 
 if BACKEND == 'postgresql':
-    test_db = peewee.PostgresqlDatabase('peewee_test')
+    database_class = peewee.PostgresqlDatabase
+    database_name = 'peewee_test'
 elif BACKEND == 'mysql':
-    test_db = peewee.MySQLDatabase('peewee_test')
+    database_class = peewee.MySQLDatabase
+    database_name = 'peewee_test'
 else:
-    test_db = peewee.SqliteDatabase('tmp.db')
+    database_class = peewee.SqliteDatabase
+    database_name = 'tmp.db'
 
+test_db = database_class(database_name)
 interpolation = test_db.adapter.interpolation
 
 class TestModel(peewee.Model):
@@ -101,8 +107,6 @@ class DefaultVals(TestModel):
 
 class BasePeeweeTestCase(unittest.TestCase):
     def setUp(self):
-        test_db.connect()
-        
         DefaultVals.drop_table(True)
         Membership.drop_table(True)
         Member.drop_table(True)
@@ -131,7 +135,6 @@ class BasePeeweeTestCase(unittest.TestCase):
     
     def tearDown(self):
         peewee.logger.removeHandler(self.qh)
-        test_db.close()
     
     def queries(self):
         return [x.msg for x in self.qh.queries]
@@ -1508,3 +1511,47 @@ class ModelOptionsTest(BasePeeweeTestCase):
 
         self.assertEqual(GrandChildModel2._meta.database.database, 'child2.db')
         self.assertEqual(GrandChildModel2._meta.model_class, GrandChildModel2)
+
+
+class ConcurrencyTestCase(BasePeeweeTestCase):
+    def setUp(self):
+        self._orig_db = test_db
+        Blog._meta.database = database_class(database_name, threadlocals=True)
+        BasePeeweeTestCase.setUp(self)
+    
+    def tearDown(self):
+        Blog._meta.database = self._orig_db
+        BasePeeweeTestCase.tearDown(self)
+        
+    def test_multiple_writers(self):
+        def create_blog_thread(low, hi):
+            for i in range(low, hi):
+                Blog.create(title='test-%d' % i)
+            Blog._meta.database.close()
+        
+        threads = []
+        
+        for i in range(5):
+            threads.append(threading.Thread(target=create_blog_thread, args=(i*10, i * 10 + 10)))
+        
+        [t.start() for t in threads]
+        [t.join() for t in threads]
+
+        self.assertEqual(Blog.select().count(), 50)
+    
+    def test_multiple_readers(self):
+        data_queue = Queue.Queue()
+        
+        def reader_thread(q, num):
+            for i in range(num):
+                data_queue.put(Blog.select().count())
+        
+        threads = []
+        
+        for i in range(5):
+            threads.append(threading.Thread(target=reader_thread, args=(data_queue, 20)))
+        
+        [t.start() for t in threads]
+        [t.join() for t in threads]
+        
+        self.assertEqual(data_queue.qsize(), 100)

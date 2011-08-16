@@ -11,6 +11,7 @@ from datetime import datetime
 import logging
 import os
 import re
+import threading
 import time
 
 try:
@@ -192,24 +193,49 @@ class Database(object):
     - execution of SQL queries
     - creating and dropping tables and indexes
     """
-    def __init__(self, adapter, database, **connect_kwargs):
+    def __init__(self, adapter, database, threadlocals=False, **connect_kwargs):
         self.adapter = adapter
         self.database = database
         self.connect_kwargs = connect_kwargs
+        
+        if threadlocals:
+            self.__local = threading.local()
+        else:
+            self.__local = type('DummyLocal', (object,), {})
+        
+        self._conn_lock = threading.Lock()
     
     def connect(self):
-        self.conn = self.adapter.connect(self.database, **self.connect_kwargs)
+        with self._conn_lock:
+            self.__local.conn = self.adapter.connect(self.database, **self.connect_kwargs)
+            self.__local.closed = False
     
     def close(self):
-        self.adapter.close(self.conn)
+        with self._conn_lock:
+            self.adapter.close(self.__local.conn)
+            self.__local.closed = True
+    
+    def get_conn(self):
+        if not hasattr(self.__local, 'closed') or self.__local.closed:
+            self.connect()
+        return self.__local.conn
+    
+    def get_cursor(self):
+        return self.get_conn().cursor()
     
     def execute(self, sql, params=None, commit=False):
-        cursor = self.conn.cursor()
+        cursor = self.get_cursor()
         res = cursor.execute(sql, params or ())
         if commit:
-            self.conn.commit()
+            self.commit()
         logger.debug((sql, params))
         return cursor
+    
+    def commit(self):
+        self.get_conn().commit()
+    
+    def rollback(self):
+        self.get_conn().rollback()
     
     def last_insert_id(self, cursor, model):
         return self.adapter.last_insert_id(cursor, model)
