@@ -1483,23 +1483,23 @@ class ModelTablesTestCase(BasePeeweeTestCase):
         ])
     
     def test_create_and_drop_table(self):
-        self.assertTrue(Blog._meta.db_table in test_db.get_tables())
+        self.assertTrue(EntryTag._meta.db_table in test_db.get_tables())
         
-        self.assertRaises(ValueError, Blog.create_table)
-        
-        # no exception should be raised here
-        Blog.create_table(fail_silently=True)
-        
-        Blog.drop_table()
-        self.assertFalse(Blog._meta.db_table in test_db.get_tables())
-        
-        self.assertRaises(ValueError, Blog.drop_table)
+        self.assertRaises(ValueError, EntryTag.create_table)
         
         # no exception should be raised here
-        Blog.drop_table(fail_silently=True)
+        EntryTag.create_table(fail_silently=True)
         
-        Blog.create_table()
-        self.assertTrue(Blog._meta.db_table in test_db.get_tables())        
+        EntryTag.drop_table()
+        self.assertFalse(EntryTag._meta.db_table in test_db.get_tables())
+        
+        self.assertRaises(ValueError, EntryTag.drop_table)
+        
+        # no exception should be raised here
+        EntryTag.drop_table(fail_silently=True)
+        
+        EntryTag.create_table()
+        self.assertTrue(EntryTag._meta.db_table in test_db.get_tables())        
 
 
 class ModelOptionsTest(BasePeeweeTestCase):
