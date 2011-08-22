@@ -1485,15 +1485,11 @@ class ModelTablesTestCase(BasePeeweeTestCase):
     def test_create_and_drop_table(self):
         self.assertTrue(EntryTag._meta.db_table in test_db.get_tables())
         
-        self.assertRaises(ValueError, EntryTag.create_table)
-        
         # no exception should be raised here
         EntryTag.create_table(fail_silently=True)
         
         EntryTag.drop_table()
         self.assertFalse(EntryTag._meta.db_table in test_db.get_tables())
-        
-        self.assertRaises(ValueError, EntryTag.drop_table)
         
         # no exception should be raised here
         EntryTag.drop_table(fail_silently=True)

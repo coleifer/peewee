@@ -1407,27 +1407,22 @@ class Model(object):
     
     @classmethod
     def create_table(cls, fail_silently=False):
-        if cls.table_exists():
-            if not fail_silently:
-                raise ValueError('Error creating table, "%s" already exists' % cls._meta.db_table)
-        else:
-            cls._meta.database.create_table(cls)
-            
-            for field_name, field_obj in cls._meta.fields.items():
-                if isinstance(field_obj, PrimaryKeyField):
-                    cls._meta.database.create_index(cls, field_obj.name, True)
-                elif isinstance(field_obj, ForeignKeyField):
-                    cls._meta.database.create_index(cls, field_obj.name)
-                elif field_obj.db_index:
-                    cls._meta.database.create_index(cls, field_obj.name)
+        if fail_silently and cls.table_exists():
+            return
+
+        cls._meta.database.create_table(cls)
+        
+        for field_name, field_obj in cls._meta.fields.items():
+            if isinstance(field_obj, PrimaryKeyField):
+                cls._meta.database.create_index(cls, field_obj.name, True)
+            elif isinstance(field_obj, ForeignKeyField):
+                cls._meta.database.create_index(cls, field_obj.name)
+            elif field_obj.db_index:
+                cls._meta.database.create_index(cls, field_obj.name)
     
     @classmethod
     def drop_table(cls, fail_silently=False):
-        if not cls.table_exists():
-            if not fail_silently:
-                raise ValueError('Error dropping table, "%s" does not exist' % cls._meta.db_table)
-        else:
-            cls._meta.database.drop_table(cls)
+        cls._meta.database.drop_table(cls, fail_silently)
     
     @classmethod
     def select(cls, query=None):
