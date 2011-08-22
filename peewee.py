@@ -290,6 +290,9 @@ class Database(object):
     
     def get_indexes_for_table(self, table):
         raise NotImplementedError
+    
+    def get_tables(self):
+        raise NotImplementedError
 
 
 class SqliteDatabase(Database):
@@ -300,6 +303,10 @@ class SqliteDatabase(Database):
         res = self.execute('PRAGMA index_list(%s);' % table)
         rows = sorted([(r[1], r[2] == 1) for r in res.fetchall()])
         return rows
+    
+    def get_tables(self):
+        res = self.execute('select name from sqlite_master where type="table" order by name')
+        return [r[0] for r in res.fetchall()]
 
 
 class PostgresqlDatabase(Database):
@@ -313,6 +320,18 @@ class PostgresqlDatabase(Database):
             WHERE c.relname = %s AND c.oid = i.indrelid AND i.indexrelid = c2.oid
             ORDER BY i.indisprimary DESC, i.indisunique DESC, c2.relname""", (table,))
         return sorted([(r[0], r[1]) for r in res.fetchall()])
+    
+    def get_tables(self):
+        res = self.execute("""
+            SELECT c.relname
+            FROM pg_catalog.pg_class c
+            LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+            WHERE c.relkind IN ('r', 'v', '')
+                AND n.nspname NOT IN ('pg_catalog', 'pg_toast')
+                AND pg_catalog.pg_table_is_visible(c.oid)
+            ORDER BY c.relname""")
+        return [row[0] for row in res.fetchall()]
+
 
 class MySQLDatabase(Database):
     def __init__(self, database, **connect_kwargs):
@@ -322,6 +341,10 @@ class MySQLDatabase(Database):
         res = self.execute('SHOW INDEXES IN %s;' % table)
         rows = sorted([(r[2], r[1] == 0) for r in res.fetchall()])
         return rows
+    
+    def get_tables(self):
+        res = self.execute('SHOW TABLES;')
+        return [r[0] for r in res.fetchall()]
 
 
 class QueryResultWrapper(object):
@@ -1379,20 +1402,32 @@ class Model(object):
         return dict(pairs)
     
     @classmethod
-    def create_table(cls):
-        cls._meta.database.create_table(cls)
-        
-        for field_name, field_obj in cls._meta.fields.items():
-            if isinstance(field_obj, PrimaryKeyField):
-                cls._meta.database.create_index(cls, field_obj.name, True)
-            elif isinstance(field_obj, ForeignKeyField):
-                cls._meta.database.create_index(cls, field_obj.name)
-            elif field_obj.db_index:
-                cls._meta.database.create_index(cls, field_obj.name)
+    def table_exists(cls):
+        return cls._meta.db_table in cls._meta.database.get_tables()
+    
+    @classmethod
+    def create_table(cls, fail_silently=False):
+        if cls.table_exists():
+            if not fail_silently:
+                raise ValueError('Error creating table, "%s" already exists' % cls._meta.db_table)
+        else:
+            cls._meta.database.create_table(cls)
+            
+            for field_name, field_obj in cls._meta.fields.items():
+                if isinstance(field_obj, PrimaryKeyField):
+                    cls._meta.database.create_index(cls, field_obj.name, True)
+                elif isinstance(field_obj, ForeignKeyField):
+                    cls._meta.database.create_index(cls, field_obj.name)
+                elif field_obj.db_index:
+                    cls._meta.database.create_index(cls, field_obj.name)
     
     @classmethod
     def drop_table(cls, fail_silently=False):
-        cls._meta.database.drop_table(cls, fail_silently)
+        if not cls.table_exists():
+            if not fail_silently:
+                raise ValueError('Error dropping table, "%s" does not exist' % cls._meta.db_table)
+        else:
+            cls._meta.database.drop_table(cls)
     
     @classmethod
     def select(cls, query=None):

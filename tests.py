@@ -1466,6 +1466,42 @@ class ModelIndexTestCase(BasePeeweeTestCase):
         user_indexes = self.get_sorted_indexes(User)
         method(entry_indexes, user_indexes)
 
+
+class ModelTablesTestCase(BasePeeweeTestCase):
+    def test_tables_created(self):
+        self.assertEqual(test_db.get_tables(), [
+            'blog',
+            'defaultvals',
+            'entry',
+            'entrytag',
+            'member',
+            'membership',
+            'nullmodel',
+            'relationship',
+            'team',
+            'users'
+        ])
+    
+    def test_create_and_drop_table(self):
+        self.assertTrue(Blog._meta.db_table in test_db.get_tables())
+        
+        self.assertRaises(ValueError, Blog.create_table)
+        
+        # no exception should be raised here
+        Blog.create_table(fail_silently=True)
+        
+        Blog.drop_table()
+        self.assertFalse(Blog._meta.db_table in test_db.get_tables())
+        
+        self.assertRaises(ValueError, Blog.drop_table)
+        
+        # no exception should be raised here
+        Blog.drop_table(fail_silently=True)
+        
+        Blog.create_table()
+        self.assertTrue(Blog._meta.db_table in test_db.get_tables())        
+
+
 class ModelOptionsTest(BasePeeweeTestCase):
     def test_model_meta(self):
         self.assertEqual(Blog._meta.get_field_names(), ['id', 'title'])
