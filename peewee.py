@@ -1307,23 +1307,13 @@ class BaseModelOptions(object):
         self.model_class = model_class
     
     def get_sorted_fields(self):
-        return sorted(self.fields.items(), key=lambda (k,v): v._order)
+        return sorted(self.fields.items(), key=lambda (k,v): (k == self.pk_name and 1 or 2, v._order))
     
     def get_field_names(self):
-        fields = [self.pk_name]
-        fields.extend([
-            field_name for field_name, field_obj in self.get_sorted_fields() \
-                if field_name != self.pk_name
-        ])
-        return fields
+        return [f[0] for f in self.get_sorted_fields()]
     
     def get_fields(self):
-        fields = [self.fields[self.pk_name]]
-        fields.extend([
-            field_obj for field_name, field_obj in self.get_sorted_fields() \
-                if field_name != self.pk_name
-        ])
-        return fields
+        return [f[1] for f in self.get_sorted_fields()]
     
     def get_field_by_name(self, name):
         if name in self.fields:
