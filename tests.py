@@ -630,6 +630,39 @@ class ModelTests(BasePeeweeTestCase):
             ('SELECT * FROM blog WHERE (title IN (?) OR title IN (?,?))', ['a', 'c', 'd']),
         ])
     
+    def test_model_select_with_get(self):
+        a = self.create_blog(title='a')
+        b = self.create_blog(title='b')
+        c = self.create_blog(title='c')
+        
+        obj = Blog.select().get(title='a')
+        self.assertEqual(obj, a)
+        
+        obj = Blog.select().where(title__in=['a', 'b']).get(title='b')
+        self.assertEqual(obj, b)
+        
+        self.assertRaises(Blog.DoesNotExist, Blog.select().where(title__in=['a', 'b']).get, title='c')
+    
+    def test_model_select_with_get_and_joins(self):
+        a = self.create_blog(title='a')
+        b = self.create_blog(title='b')
+        
+        e1 = self.create_entry(blog=a, title='t1')
+        e2 = self.create_entry(blog=a, title='t2')
+        e3 = self.create_entry(blog=b, title='t3')
+        
+        a_entries = Entry.select().join(Blog).where(title='a')
+        obj = a_entries.get(title='t1')
+        self.assertEqual(obj, e1)
+        self.assertEqual(a_entries.query_context, Blog)
+        
+        obj = a_entries.get(title='t2')
+        self.assertEqual(obj, e2)
+        self.assertEqual(a_entries.query_context, Blog)
+        
+        self.assertRaises(Entry.DoesNotExist, a_entries.get, title='t3')
+        self.assertEqual(a_entries.query_context, Blog)
+    
     def test_query_results_wrapper(self):
         a = self.create_blog(title='a')
         b = self.create_blog(title='b')

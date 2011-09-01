@@ -859,6 +859,25 @@ class SelectQuery(BaseQuery):
         self._order_by.append(
             (self.query_context, field_or_string, ordering)
         )
+    
+    def exists(self):
+        clone = self.paginate(1, 1)
+        clone.query = '(1) AS a'
+        curs = self.database.execute(*clone.sql())
+        return bool(curs.fetchone())
+    
+    def get(self, *args, **kwargs):
+        try:
+            orig_ctx = self.query_context
+            self.query_context = self.model
+            obj = self.where(*args, **kwargs).paginate(1, 1).execute().next()
+            return obj
+        except StopIteration:
+            raise self.model.DoesNotExist('instance matching query does not exist:\nSQL: %s\nPARAMS: %s' % (
+                self.sql()
+            ))
+        finally:
+            self.query_context = orig_ctx
 
     def parse_select_query(self, alias_map):
         if isinstance(self.query, basestring):
@@ -1480,13 +1499,7 @@ class Model(object):
     
     @classmethod            
     def get(cls, *args, **kwargs):
-        query = cls.select().where(*args, **kwargs).paginate(1, 1)
-        try:
-            return query.execute().next()
-        except StopIteration:
-            raise cls.DoesNotExist('instance matching query does not exist:\nSQL: %s\nPARAMS: %s' % (
-                query.sql()
-            ))
+        return cls.select().get(*args, **kwargs)
     
     def get_pk(self):
         return getattr(self, self._meta.pk_name, None)
