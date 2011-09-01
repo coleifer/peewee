@@ -663,6 +663,34 @@ class ModelTests(BasePeeweeTestCase):
         self.assertRaises(Entry.DoesNotExist, a_entries.get, title='t3')
         self.assertEqual(a_entries.query_context, Blog)
     
+    def test_exists(self):
+        self.assertFalse(Blog.select().exists())
+        
+        a = self.create_blog(title='a')
+        b = self.create_blog(title='b')
+        
+        self.assertTrue(Blog.select().exists())
+        self.assertTrue(Blog.select().where(title='a').exists())
+        self.assertFalse(Blog.select().where(title='c').exists())
+    
+    def test_exists_with_join(self):
+        self.assertFalse(Blog.select().join(Entry).exists())
+        
+        a = self.create_blog(title='a')
+        b = self.create_blog(title='b')
+        
+        e1 = self.create_entry(blog=a, title='t1')
+        e2 = self.create_entry(blog=a, title='t2')
+        
+        a_entries = Entry.select().join(Blog).where(title='a')
+        b_entries = Entry.select().join(Blog).where(title='b')
+        
+        self.assertTrue(a_entries.exists())
+        self.assertFalse(b_entries.exists())
+        
+        self.assertTrue(a_entries.switch(Entry).where(title='t1').exists())
+        self.assertFalse(a_entries.switch(Entry).where(title='t3').exists())
+    
     def test_query_results_wrapper(self):
         a = self.create_blog(title='a')
         b = self.create_blog(title='b')
