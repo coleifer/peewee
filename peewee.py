@@ -30,6 +30,13 @@ try:
 except ImportError:
     mysql = None
 
+__all__ = [
+    'ImproperlyConfigured', 'SqliteDatabase', 'MySQLDatabase', 'PostgresqlDatabase',
+    'asc', 'desc', 'Count', 'Max', 'Min', 'Q', 'Field', 'CharField', 'TextField',
+    'DateTimeField', 'BooleanField', 'FloatField', 'IntegerField', 'PrimaryKeyField',
+    'ForeignKeyField', 'Model',
+]
+
 class ImproperlyConfigured(Exception):
     pass
 
