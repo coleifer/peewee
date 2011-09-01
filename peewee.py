@@ -1091,11 +1091,12 @@ class Field(object):
     def get_attributes(self):
         return {}
     
-    def __init__(self, null=False, db_index=False, *args, **kwargs):
+    def __init__(self, null=False, db_index=False, verbose_name=None, *args, **kwargs):
         self.null = null
         self.db_index = db_index
         self.attributes = self.get_attributes()
         self.default = kwargs.get('default', None)
+        self.verbose_name = verbose_name
         
         kwargs['nullable'] = ternary(self.null, '', ' NOT NULL')
         self.attributes.update(kwargs)
@@ -1106,6 +1107,7 @@ class Field(object):
     def add_to_class(self, klass, name):
         self.name = name
         self.model = klass
+        self.verbose_name = self.verbose_name or re.sub('_+', ' ', name).title()
         setattr(klass, name, None)
     
     def render_field_template(self):
@@ -1265,6 +1267,8 @@ class ForeignKeyField(IntegerField):
         self.descriptor = name
         self.name = name + '_id'
         self.model = klass
+        
+        self.verbose_name = self.verbose_name or re.sub('_', ' ', name).title()
         
         if self.related_name is None:
             self.related_name = klass._meta.db_table + '_set'

@@ -49,7 +49,7 @@ class Blog(TestModel):
 
 class Entry(TestModel):
     pk = peewee.PrimaryKeyField()
-    title = peewee.CharField(max_length=50)
+    title = peewee.CharField(max_length=50, verbose_name='Wacky title')
     content = peewee.TextField()
     pub_date = peewee.DateTimeField(null=True)
     blog = peewee.ForeignKeyField(Blog)
@@ -1407,6 +1407,10 @@ class FieldTypeTests(BasePeeweeTestCase):
         default_model3 = DefaultVals.create(published=False)
         self.assertFalse(default_model3.published)
         self.assertTrue(default_model3.pub_date >= now)
+    
+    def test_naming(self):
+        self.assertEqual(Entry._meta.fields['blog_id'].verbose_name, 'Blog')
+        self.assertEqual(Entry._meta.fields['title'].verbose_name, 'Wacky title')
 
 class ModelIndexTestCase(BasePeeweeTestCase):
     def get_sorted_indexes(self, model):
