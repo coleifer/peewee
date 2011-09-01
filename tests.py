@@ -1501,7 +1501,16 @@ class ModelTablesTestCase(BasePeeweeTestCase):
 class ModelOptionsTest(BasePeeweeTestCase):
     def test_model_meta(self):
         self.assertEqual(Blog._meta.get_field_names(), ['id', 'title'])
-        self.assertEqual(Entry._meta.get_field_names(), ['pk', 'blog_id', 'content', 'pub_date', 'title'])
+        self.assertEqual(Entry._meta.get_field_names(), ['pk', 'title', 'content', 'pub_date', 'blog_id'])
+
+        sorted_fields = list(Entry._meta.get_sorted_fields())
+        self.assertEqual(sorted_fields, [
+            ('pk', Entry._meta.fields['pk']),
+            ('title', Entry._meta.fields['title']),
+            ('content', Entry._meta.fields['content']),
+            ('pub_date', Entry._meta.fields['pub_date']),
+            ('blog_id', Entry._meta.fields['blog_id']),
+        ])
     
     def test_db_table(self):
         self.assertEqual(User._meta.db_table, 'users')

@@ -1085,6 +1085,8 @@ class Field(object):
     db_field = ''
     default = None
     field_template = "%(column_type)s%(nullable)s"
+    _field_counter = 0
+    _order = 0
 
     def get_attributes(self):
         return {}
@@ -1097,6 +1099,9 @@ class Field(object):
         
         kwargs['nullable'] = ternary(self.null, '', ' NOT NULL')
         self.attributes.update(kwargs)
+        
+        Field._field_counter += 1
+        self._order = Field._field_counter
     
     def add_to_class(self, klass, name):
         self.name = name
@@ -1297,9 +1302,23 @@ class BaseModelOptions(object):
         self.fields = {}
         self.model_class = model_class
     
+    def get_sorted_fields(self):
+        return sorted(self.fields.items(), key=lambda (k,v): v._order)
+    
     def get_field_names(self):
         fields = [self.pk_name]
-        fields.extend([f for f in sorted(self.fields.keys()) if f != self.pk_name])
+        fields.extend([
+            field_name for field_name, field_obj in self.get_sorted_fields() \
+                if field_name != self.pk_name
+        ])
+        return fields
+    
+    def get_fields(self):
+        fields = [self.fields[self.pk_name]]
+        fields.extend([
+            field_obj for field_name, field_obj in self.get_sorted_fields() \
+                if field_name != self.pk_name
+        ])
         return fields
     
     def get_field_by_name(self, name):
