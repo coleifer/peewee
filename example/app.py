@@ -93,6 +93,12 @@ def object_list(template_name, qr, var_name='object_list', **kwargs):
     kwargs[var_name] = qr.paginate(kwargs['page'])
     return render_template(template_name, **kwargs)
 
+def get_object_or_404(model, **kwargs):
+    try:
+        return model.get(**kwargs)
+    except model.DoesNotExist:
+        abort(404)
+
 # custom filters
 @app.template_filter('is_following')
 def is_following(from_user, to_user):
@@ -189,20 +195,14 @@ def user_list():
 
 @app.route('/users/<username>/')
 def user_detail(username):
-    try:
-        user = User.get(username=username)
-    except User.DoesNotExist:
-        abort(404)
+    user = get_object_or_404(User, username=username)
     messages = user.message_set.order_by(('pub_date', 'desc'))
     return object_list('user_detail.html', messages, 'message_list', user=user)
 
 @app.route('/users/<username>/follow/', methods=['POST'])
 @login_required
 def user_follow(username):
-    try:
-        user = User.get(username=username)
-    except User.DoesNotExist:
-        abort(404)
+    user = get_object_or_404(User, username=username)
     Relationship.get_or_create(
         from_user=session['user'],
         to_user=user,
@@ -213,10 +213,7 @@ def user_follow(username):
 @app.route('/users/<username>/unfollow/', methods=['POST'])
 @login_required
 def user_unfollow(username):
-    try:
-        user = User.get(username=username)
-    except User.DoesNotExist:
-        abort(404)
+    user = get_object_or_404(User, username=username)
     Relationship.delete().where(
         from_user=session['user'],
         to_user=user,
