@@ -1110,9 +1110,10 @@ class Field(object):
     def get_attributes(self):
         return {}
     
-    def __init__(self, null=False, db_index=False, verbose_name=None, *args, **kwargs):
+    def __init__(self, null=False, db_index=False, unique=False, verbose_name=None, *args, **kwargs):
         self.null = null
         self.db_index = db_index
+        self.unique = unique
         self.attributes = self.get_attributes()
         self.default = kwargs.get('default', None)
         self.verbose_name = verbose_name
@@ -1455,9 +1456,9 @@ class Model(object):
             if isinstance(field_obj, PrimaryKeyField):
                 cls._meta.database.create_index(cls, field_obj.name, True)
             elif isinstance(field_obj, ForeignKeyField):
-                cls._meta.database.create_index(cls, field_obj.name)
-            elif field_obj.db_index:
-                cls._meta.database.create_index(cls, field_obj.name)
+                cls._meta.database.create_index(cls, field_obj.name, field_obj.unique)
+            elif field_obj.db_index or field_obj.unique:
+                cls._meta.database.create_index(cls, field_obj.name, field_obj.unique)
     
     @classmethod
     def drop_table(cls, fail_silently=False):

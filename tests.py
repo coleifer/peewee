@@ -104,14 +104,15 @@ class DefaultVals(TestModel):
     published = peewee.BooleanField(default=True)
     pub_date = peewee.DateTimeField(default=datetime.datetime.now, null=True)
 
+class UniqueModel(TestModel):
+    name = peewee.CharField(unique=True)
+
 
 class BasePeeweeTestCase(unittest.TestCase):
     def setUp(self):
-        DefaultVals.drop_table(True)
         Membership.drop_table(True)
         Member.drop_table(True)
         Team.drop_table(True)
-        NullModel.drop_table(True)
         Relationship.drop_table(True)
         User.drop_table(True)
         EntryTag.drop_table(True)
@@ -123,11 +124,9 @@ class BasePeeweeTestCase(unittest.TestCase):
         EntryTag.create_table()
         User.create_table()
         Relationship.create_table()
-        NullModel.create_table()
         Team.create_table()
         Member.create_table()
         Membership.create_table()
-        DefaultVals.create_table()
         
         self.qh = QueryLogHandler()
         peewee.logger.setLevel(logging.DEBUG)
@@ -1332,6 +1331,13 @@ class RelatedFieldTests(BasePeeweeTestCase):
         
 
 class FieldTypeTests(BasePeeweeTestCase):
+    def setUp(self):
+        super(FieldTypeTests, self).setUp()
+        NullModel.drop_table(True)
+        DefaultVals.drop_table(True)
+        NullModel.create_table()
+        DefaultVals.create_table()
+    
     def jd(self, d):
         return datetime.datetime(2010, 1, d)
     
@@ -1474,6 +1480,11 @@ class FieldTypeTests(BasePeeweeTestCase):
         self.assertEqual(Entry._meta.fields['title'].verbose_name, 'Wacky title')
 
 class ModelIndexTestCase(BasePeeweeTestCase):
+    def setUp(self):
+        super(ModelIndexTestCase, self).setUp()
+        UniqueModel.drop_table(True)
+        UniqueModel.create_table()
+    
     def get_sorted_indexes(self, model):
         return test_db.get_indexes_for_table(model._meta.db_table)
     
@@ -1530,18 +1541,28 @@ class ModelIndexTestCase(BasePeeweeTestCase):
         entry_indexes = self.get_sorted_indexes(Entry)
         user_indexes = self.get_sorted_indexes(User)
         method(entry_indexes, user_indexes)
+    
+    def test_unique_index(self):
+        uniq1 = UniqueModel.create(name='a')
+        uniq2 = UniqueModel.create(name='b')
+        self.assertRaises(Exception, UniqueModel.create, name='a')
+        test_db.rollback()
 
 
 class ModelTablesTestCase(BasePeeweeTestCase):
+    tables_might_not_be_there = ['defaultvals', 'nullmodel', 'uniquemodel']
+    
     def test_tables_created(self):
-        self.assertEqual(test_db.get_tables(), [
+        tables = test_db.get_tables()
+        
+        tables = [t for t in tables if t not in self.tables_might_not_be_there]
+        
+        self.assertEqual(tables, [
             'blog',
-            'defaultvals',
             'entry',
             'entrytag',
             'member',
             'membership',
-            'nullmodel',
             'relationship',
             'team',
             'users'
