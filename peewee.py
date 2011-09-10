@@ -1110,13 +1110,15 @@ class Field(object):
     def get_attributes(self):
         return {}
     
-    def __init__(self, null=False, db_index=False, unique=False, verbose_name=None, *args, **kwargs):
+    def __init__(self, null=False, db_index=False, unique=False, verbose_name=None,
+                 help_text=None, *args, **kwargs):
         self.null = null
         self.db_index = db_index
         self.unique = unique
         self.attributes = self.get_attributes()
         self.default = kwargs.get('default', None)
         self.verbose_name = verbose_name
+        self.help_text = help_text
         
         kwargs['nullable'] = ternary(self.null, '', ' NOT NULL')
         self.attributes.update(kwargs)
