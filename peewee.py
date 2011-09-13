@@ -1100,6 +1100,74 @@ class InsertQuery(BaseQuery):
         return self.database.last_insert_id(result, self.model)
 
 
+def filter_query(model, *args, **kwargs):
+    """
+    Provide a django-like interface for executing queries
+    """
+    operations = model._meta.database.adapter.operations.keys()
+    
+    query = {} # mapping of models to queries
+    joins = {} # a graph of joins needed
+    
+    for lookup, value in kwargs.items():
+        pieces = lookup.split('__')
+        operation = None
+        
+        if len(pieces) == 1:
+            query_model = model
+        else:
+            if pieces[-1] in operations:
+                operation = pieces.pop()
+            
+            lookup = pieces.pop()
+            
+            # we have some joins
+            if len(pieces):
+                query_model = model
+                
+                for piece in pieces:
+                    # piece is something like 'blog' or 'entry_set'
+                    joined_model = None
+                    for field in query_model._meta.get_fields():
+                        if not isinstance(field, ForeignKeyField):
+                            continue
+                        
+                        if piece in (field.descriptor, field.related_name):
+                            joined_model = field.to
+                    
+                    if not joined_model:
+                        try:
+                            joined_model = query_model._meta.reverse_relations[piece]
+                        except KeyError:
+                            raise ValueError('Unknown relation: "%s" of "%s"' % (
+                                piece,
+                                query_model,
+                            ))
+                    
+                    joins.setdefault(query_model, set())
+                    joins[query_model].add(joined_model)
+                    query_model = joined_model
+        
+        if operation:
+            lookup = '%s__%s' % (lookup, operation)
+        
+        query.setdefault(query_model, [])
+        query[query_model].append((lookup, value))
+    
+    def follow_joins(current, query):
+        if current in joins:
+            for joined_model in joins[current]:
+                query = query.join(joined_model)
+                query = follow_joins(joined_model, query)
+        return query
+    select_query = follow_joins(model, model.select())
+    
+    for model, lookups in query.items():
+        select_query = select_query.switch(model).where(**dict(lookups))
+
+    return select_query
+
+
 class Field(object):
     db_field = ''
     default = None
@@ -1301,6 +1369,7 @@ class ForeignKeyField(IntegerField):
         
         reverse_rel = ReverseForeignRelatedObject(klass, self.name)
         setattr(self.to, self.related_name, reverse_rel)
+        self.to._meta.reverse_relations[self.related_name] = klass
     
     def lookup_value(self, lookup_type, value):
         if isinstance(value, Model):
@@ -1325,6 +1394,7 @@ class BaseModelOptions(object):
             setattr(self, k, v)
         
         self.rel_fields = {}
+        self.reverse_relations = {}
         self.fields = {}
         self.model_class = model_class
     
