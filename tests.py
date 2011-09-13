@@ -1379,6 +1379,16 @@ class FilterQueryTests(BasePeeweeTestCase):
         
         query = Blog.filter(entry_set__entrytag_set__tag__in=['t1', 't2'], entry_set__title='e1', title='b1')
         self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id\nINNER JOIN entrytag AS t3 ON t2.pk = t3.entry_id WHERE t1.title = ? AND t2.title = ? AND t3.tag IN (?,?)', ['b1', 'e1', 't1', 't2']))
+    
+    def test_filter_multiple_lookups(self):
+        query = Entry.filter(title='e1', pk=1)
+        self.assertSQLEqual(query.sql(), ('SELECT * FROM entry WHERE (pk = ? AND title = ?)', [1, 'e1']))
+        
+        query = Entry.filter(title='e1', pk=1, blog__title='b1')
+        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE (t1.pk = ? AND t1.title = ?) AND t2.title = ?', [1, 'e1', 'b1']))
+        
+        query = Entry.filter(blog__id=2, title='e1', pk=1, blog__title='b1')
+        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE (t1.pk = ? AND t1.title = ?) AND (t2.id = ? AND t2.title = ?)', [1, 'e1', 2, 'b1']))
 
 
 class FieldTypeTests(BasePeeweeTestCase):
