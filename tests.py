@@ -1328,7 +1328,33 @@ class RelatedFieldTests(BasePeeweeTestCase):
         
         self.assertEqual(list(blog.entry_set), [e2])
         self.assertEqual(list(blog2.entry_set.order_by('title')), [e1, e3])
+
+
+class FilterQueryTests(BasePeeweeTestCase):
+    def test_filter_no_joins(self):
+        query = Entry.filter(title='e1')
+        self.assertSQLEqual(query.sql(), ('SELECT * FROM entry WHERE title = ?', ['e1']))
         
+        query = Entry.filter(title__in=['e1', 'e2'])
+        self.assertSQLEqual(query.sql(), ('SELECT * FROM entry WHERE title IN (?,?)', ['e1', 'e2']))
+    
+    def test_filter_missing_field(self):
+        self.assertRaises(AttributeError, Entry.filter(missing='missing').sql)
+        self.assertRaises(AttributeError, Entry.filter(blog__missing='missing').sql)
+    
+    def test_filter_joins(self):
+        query = EntryTag.filter(entry__title='e1')
+        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM entrytag AS t1 INNER JOIN entry AS t2 ON t1.entry_id = t2.pk WHERE t2.title = ?', ['e1']))
+        
+        query = EntryTag.filter(entry__title__in=['e1', 'e2'])
+        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM entrytag AS t1 INNER JOIN entry AS t2 ON t1.entry_id = t2.pk WHERE t2.title IN (?,?)', ['e1', 'e2']))
+        
+        query = EntryTag.filter(entry__blog__title='b1')
+        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM entrytag AS t1 INNER JOIN entry AS t2 ON t1.entry_id = t2.pk\nINNER JOIN blog AS t3 ON t2.blog_id = t3.id WHERE t3.title = ?', ['b1']))
+        
+        query = EntryTag.filter(entry__blog__title__in=['b1', 'b2'])
+        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM entrytag AS t1 INNER JOIN entry AS t2 ON t1.entry_id = t2.pk\nINNER JOIN blog AS t3 ON t2.blog_id = t3.id WHERE t3.title IN (?,?)', ['b1', 'b2']))
+
 
 class FieldTypeTests(BasePeeweeTestCase):
     def setUp(self):

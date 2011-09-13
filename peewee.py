@@ -1113,9 +1113,9 @@ def filter_query(model, *args, **kwargs):
         pieces = lookup.split('__')
         operation = None
         
-        if len(pieces) == 1:
-            query_model = model
-        else:
+        query_model = model
+        
+        if len(pieces) > 1:
             if pieces[-1] in operations:
                 operation = pieces.pop()
             
