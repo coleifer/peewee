@@ -1537,6 +1537,10 @@ class Model(object):
         cls._meta.database.drop_table(cls, fail_silently)
     
     @classmethod
+    def filter(cls, *args, **kwargs):
+        return filter_query(cls, *args, **kwargs)
+    
+    @classmethod
     def select(cls, query=None):
         return SelectQuery(cls, query)
     
