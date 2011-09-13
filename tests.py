@@ -1061,6 +1061,35 @@ class RelatedFieldTests(BasePeeweeTestCase):
         sq = EntryTag.select().join(Entry).where(Q(title='a2') | Q(title='b2')).join(Blog).where(Q(title='b'))
         self.assertEqual(list(sq), [t2])
     
+    def test_filtering_across_joins(self):
+        a, a1, a2, b, b1, b2, t1, t2 = self.get_common_objects()
+        
+        t1_sq = Blog.filter(entry_set__entrytag_set__tag='t1')
+        self.assertEqual(list(t1_sq), [a])
+        
+        t2_sq = Blog.filter(entry_set__entrytag_set__tag='t2')
+        self.assertEqual(list(t2_sq), [b])
+        
+        sq = Blog.filter(entry_set__title='a1', entry_set__entrytag_set__tag='t1')
+        self.assertEqual(list(sq), [])
+        
+        sq = Blog.filter(entry_set__title='a2', entry_set__entrytag_set__tag='t1')
+        self.assertEqual(list(sq), [a])
+        
+        et_sq = EntryTag.select().join(Entry).join(Blog)
+        
+        sq = EntryTag.filter(entry__blog__title='a')
+        self.assertEqual(list(sq), [t1])
+        
+        sq = EntryTag.filter(entry__blog__title='b')
+        self.assertEqual(list(sq), [t2])
+        
+        sq = EntryTag.filter(entry__blog__title='a', entry__title='a1')
+        self.assertEqual(list(sq), [])
+        
+        sq = EntryTag.filter(entry__blog__title='a', entry__title='a2')
+        self.assertEqual(list(sq), [t1])
+    
     def test_multiple_in(self):
         sq = Blog.select().where(title__in=['a', 'b']).join(Entry).where(title__in=['c', 'd'], content='foo')
         self.assertSQLEqual(sq.sql(), ('SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id WHERE t1.title IN (?,?) AND (t2.content = ? AND t2.title IN (?,?))', ['a', 'b', 'foo', 'c', 'd']))
