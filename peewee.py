@@ -123,6 +123,8 @@ class SqliteAdapter(BaseAdapter):
     interpolation = '?'
     
     def connect(self, database, **kwargs):
+        if not sqlite3:
+            raise ImproperlyConfigured('sqlite3 must be installed on the system')
         return sqlite3.connect(database, **kwargs)
     
     def lookup_cast(self, lookup, value):
@@ -154,6 +156,8 @@ class PostgresqlAdapter(BaseAdapter):
     }
         
     def connect(self, database, **kwargs):
+        if not psycopg2:
+            raise ImproperlyConfigured('psycopg2 must be installed on the system')
         return psycopg2.connect(database=database, **kwargs)
     
     def get_field_overrides(self):
@@ -185,6 +189,8 @@ class MySQLAdapter(BaseAdapter):
     }
 
     def connect(self, database, **kwargs):
+        if not mysql:
+            raise ImproperlyConfigured('MySQLdb must be installed on the system')
         return mysql.connect(db=database, **kwargs)
 
     def get_field_overrides(self):
