@@ -1453,6 +1453,32 @@ class FilterQueryTests(BasePeeweeTestCase):
         
         query = Entry.filter(blog__id=2, title='e1', pk=1, blog__title='b1')
         self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE (t1.pk = ? AND t1.title = ?) AND (t2.id = ? AND t2.title = ?)', [1, 'e1', 2, 'b1']))
+    
+    def test_filter_with_q(self):
+        query = Entry.filter(Q(title='e1') | Q(title='e2'))
+        self.assertSQLEqual(query.sql(), ('SELECT * FROM entry WHERE (title = ? OR title = ?)', ['e1', 'e2']))
+        
+        query = Entry.filter(Q(title='e1') | Q(title='e2') | Q(title='e3'), Q(pk=1) | Q(pk=2))
+        self.assertSQLEqual(query.sql(), ('SELECT * FROM entry WHERE (title = ? OR title = ? OR title = ?) AND (pk = ? OR pk = ?)', ['e1', 'e2', 'e3', 1, 2]))
+        
+        query = Entry.filter(Q(title='e1') | Q(title='e2'), pk=1)
+        self.assertSQLEqual(query.sql(), ('SELECT * FROM entry WHERE (title = ? OR title = ?) AND pk = ?', ['e1', 'e2', 1]))
+        
+        # try with joins now
+        query = Entry.filter(Q(blog__id=1) | Q(blog__id=2))
+        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE (t2.id = ? OR t2.id = ?)', [1, 2]))
+        
+        query = Entry.filter(Q(blog__id=1) | Q(blog__id=2) | Q(blog__id=3), Q(blog__title='b1') | Q(blog__title='b2'))
+        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE (t2.id = ? OR t2.id = ? OR t2.id = ?) AND (t2.title = ? OR t2.title = ?)', [1, 2, 3, 'b1', 'b2']))
+        
+        query = Entry.filter(Q(blog__id=1) | Q(blog__id=2) | Q(blog__id=3), Q(blog__title='b1') | Q(blog__title='b2'), title='foo')
+        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t1.title = ? AND (t2.id = ? OR t2.id = ? OR t2.id = ?) AND (t2.title = ? OR t2.title = ?)', ['foo', 1, 2, 3, 'b1', 'b2']))
+        
+        query = Entry.filter(Q(blog__id=1) | Q(blog__id=2) | Q(blog__id=3), Q(blog__title='b1') | Q(blog__title='b2'), title='foo', blog__title='baz')
+        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t1.title = ? AND (t2.id = ? OR t2.id = ? OR t2.id = ?) AND (t2.title = ? OR t2.title = ?) AND t2.title = ?', ['foo', 1, 2, 3, 'b1', 'b2', 'baz']))
+        
+        query = EntryTag.filter(Q(entry__blog__title='b1') | Q(entry__blog__title='b2'), Q(entry__pk=1) | Q(entry__pk=2), tag='baz', entry__title='e1')
+        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM entrytag AS t1 INNER JOIN entry AS t2 ON t1.entry_id = t2.pk\nINNER JOIN blog AS t3 ON t2.blog_id = t3.id WHERE t1.tag = ? AND (t2.pk = ? OR t2.pk = ?) AND t2.title = ? AND (t3.title = ? OR t3.title = ?)', ['baz', 1, 2, 'e1', 'b1', 'b2']))
 
 
 class FieldTypeTests(BasePeeweeTestCase):
