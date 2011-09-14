@@ -1100,59 +1100,65 @@ class InsertQuery(BaseQuery):
         return self.database.last_insert_id(result, self.model)
 
 
+def convert_lookup(model, joins, lookup):
+    operations = model._meta.database.adapter.operations
+    
+    pieces = lookup.split('__')
+    operation = None
+    
+    query_model = model
+    
+    if len(pieces) > 1:
+        if pieces[-1] in operations:
+            operation = pieces.pop()
+        
+        lookup = pieces.pop()
+        
+        # we have some joins
+        if len(pieces):
+            query_model = model
+            
+            for piece in pieces:
+                # piece is something like 'blog' or 'entry_set'
+                joined_model = None
+                for field in query_model._meta.get_fields():
+                    if not isinstance(field, ForeignKeyField):
+                        continue
+                    
+                    if piece in (field.descriptor, field.related_name):
+                        joined_model = field.to
+                
+                if not joined_model:
+                    try:
+                        joined_model = query_model._meta.reverse_relations[piece]
+                    except KeyError:
+                        raise ValueError('Unknown relation: "%s" of "%s"' % (
+                            piece,
+                            query_model,
+                        ))
+                
+                joins.setdefault(query_model, set())
+                joins[query_model].add(joined_model)
+                query_model = joined_model
+    
+    if operation:
+        lookup = '%s__%s' % (lookup, operation)
+    
+    return query_model, joins, lookup
+
+
 def filter_query(model, *args, **kwargs):
     """
     Provide a django-like interface for executing queries
     """
-    operations = model._meta.database.adapter.operations.keys()
-    
     query = {} # mapping of models to queries
-    joins = {} # a graph of joins needed
+    joins = {} # a graph of joins needed, passed into the convert_lookup function
     
-    for lookup, value in kwargs.items():
-        pieces = lookup.split('__')
-        operation = None
-        
-        query_model = model
-        
-        if len(pieces) > 1:
-            if pieces[-1] in operations:
-                operation = pieces.pop()
-            
-            lookup = pieces.pop()
-            
-            # we have some joins
-            if len(pieces):
-                query_model = model
-                
-                for piece in pieces:
-                    # piece is something like 'blog' or 'entry_set'
-                    joined_model = None
-                    for field in query_model._meta.get_fields():
-                        if not isinstance(field, ForeignKeyField):
-                            continue
-                        
-                        if piece in (field.descriptor, field.related_name):
-                            joined_model = field.to
-                    
-                    if not joined_model:
-                        try:
-                            joined_model = query_model._meta.reverse_relations[piece]
-                        except KeyError:
-                            raise ValueError('Unknown relation: "%s" of "%s"' % (
-                                piece,
-                                query_model,
-                            ))
-                    
-                    joins.setdefault(query_model, set())
-                    joins[query_model].add(joined_model)
-                    query_model = joined_model
-        
-        if operation:
-            lookup = '%s__%s' % (lookup, operation)
-        
-        query.setdefault(query_model, [])
-        query[query_model].append((lookup, value))
+    # iterate over keyword lookups and determine lookups and necessary joins
+    for raw_lookup, value in kwargs.items():
+        queried_model, joins, lookup = convert_lookup(model, joins, raw_lookup)
+        query.setdefault(queried_model, [])
+        query[queried_model].append((lookup, value))
     
     def follow_joins(current, query):
         if current in joins:
