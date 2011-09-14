@@ -34,6 +34,18 @@ Examples::
     }).group_by('id').join(Tweet).order_by(('num_tweets', 'desc'))
 
 
+You can use django-style syntax to create select queries::
+
+    # how many active users are there?
+    User.filter(active=True).count()
+    
+    # get tweets by a specific user
+    Tweet.filter(user__username='charlie')
+    
+    # get tweets by editors
+    Tweet.filter(Q(user__is_staff=True) | Q(user__is_superuser=True))
+
+
 check the `documentation <http://charlesleifer.com/docs/peewee/>`_ for more
 examples.
 
