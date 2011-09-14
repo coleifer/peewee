@@ -1154,6 +1154,27 @@ def filter_query(model, *args, **kwargs):
     query = {} # mapping of models to queries
     joins = {} # a graph of joins needed, passed into the convert_lookup function
     
+    # due to quirks in the way where clauses are defined, Q() queries can only
+    # work on a single table -- this will need to be redesigned so Q() objects
+    # can work on multiple models
+    def fix_q(node_or_q, joins):
+        if isinstance(node_or_q, Node):
+            for child in node_or_q.children:
+                query_model = fix_q(child, joins)
+        elif isinstance(node_or_q, Q):
+            new_query = {}
+            for raw_lookup, value in node_or_q.query.items():
+                # do we have a query model at this point?
+                query_model, joins, lookup = convert_lookup(model, joins, raw_lookup)
+                new_query[lookup] = value
+            node_or_q.query = new_query
+        return query_model
+    
+    for node_or_q in args:
+        queried_model = fix_q(node_or_q, joins)
+        query.setdefault(queried_model, [])
+        query[queried_model].append(node_or_q)
+    
     # iterate over keyword lookups and determine lookups and necessary joins
     for raw_lookup, value in kwargs.items():
         queried_model, joins, lookup = convert_lookup(model, joins, raw_lookup)
@@ -1169,7 +1190,13 @@ def filter_query(model, *args, **kwargs):
     select_query = follow_joins(model, model.select())
     
     for model, lookups in query.items():
-        select_query = select_query.switch(model).where(**dict(lookups))
+        qargs, qkwargs = [], {}
+        for lookup in lookups:
+            if isinstance(lookup, tuple):
+                qkwargs[lookup[0]] = lookup[1]
+            else:
+                qargs.append(lookup)
+        select_query = select_query.switch(model).where(*qargs, **qkwargs)
 
     return select_query
 

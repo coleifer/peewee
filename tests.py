@@ -1090,6 +1090,41 @@ class RelatedFieldTests(BasePeeweeTestCase):
         sq = EntryTag.filter(entry__blog__title='a', entry__title='a2')
         self.assertEqual(list(sq), [t1])
     
+    def test_filtering_across_joins_with_q(self):
+        a, a1, a2, b, b1, b2, t1, t2 = self.get_common_objects()
+        
+        sq = Blog.filter(Q(entry_set__entrytag_set__tag='t1')|Q(entry_set__entrytag_set__tag='t2'))
+        self.assertEqual(list(sq), [a, b])
+        
+        # permutations
+        sq = Blog.filter(Q(entry_set__title='a2'), Q(entry_set__entrytag_set__tag='t1')|Q(entry_set__entrytag_set__tag='t2'))
+        self.assertEqual(list(sq), [a])
+        
+        sq = Blog.filter(Q(entry_set__title='b2'), Q(entry_set__entrytag_set__tag='t1')|Q(entry_set__entrytag_set__tag='t2'))
+        self.assertEqual(list(sq), [b])
+        
+        sq = Blog.filter(Q(entry_set__title='a2')|Q(entry_set__title='b2'), Q(entry_set__entrytag_set__tag='t1'))
+        self.assertEqual(list(sq), [a])
+        
+        sq = Blog.filter(Q(entry_set__title='a2')|Q(entry_set__title='b2'), Q(entry_set__entrytag_set__tag='t2'))
+        self.assertEqual(list(sq), [b])
+        
+        # work the other way
+        sq = EntryTag.filter(Q(entry__blog__title='a')|Q(entry__blog__title='b'))
+        self.assertEqual(list(sq), [t1, t2])
+        
+        sq = EntryTag.filter(Q(entry__title='a2'), Q(entry__blog__title='a')|Q(entry__blog__title='b'))
+        self.assertEqual(list(sq), [t1])
+        
+        sq = EntryTag.filter(Q(entry__title='b2'), Q(entry__blog__title='a')|Q(entry__blog__title='b'))
+        self.assertEqual(list(sq), [t2])
+        
+        sq = EntryTag.filter(Q(entry__title='a2')|Q(entry__title='b2'), Q(entry__blog__title='a'))
+        self.assertEqual(list(sq), [t1])
+        
+        sq = EntryTag.filter(Q(entry__title='a2')|Q(entry__title='b2'), Q(entry__blog__title='b'))
+        self.assertEqual(list(sq), [t2])
+    
     def test_multiple_in(self):
         sq = Blog.select().where(title__in=['a', 'b']).join(Entry).where(title__in=['c', 'd'], content='foo')
         self.assertSQLEqual(sq.sql(), ('SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id WHERE t1.title IN (?,?) AND (t2.content = ? AND t2.title IN (?,?))', ['a', 'b', 'foo', 'c', 'd']))
