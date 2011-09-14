@@ -34,7 +34,7 @@ __all__ = [
     'ImproperlyConfigured', 'SqliteDatabase', 'MySQLDatabase', 'PostgresqlDatabase',
     'asc', 'desc', 'Count', 'Max', 'Min', 'Q', 'Field', 'CharField', 'TextField',
     'DateTimeField', 'BooleanField', 'FloatField', 'IntegerField', 'PrimaryKeyField',
-    'ForeignKeyField', 'Model',
+    'ForeignKeyField', 'Model', 'filter_query',
 ]
 
 class ImproperlyConfigured(Exception):
