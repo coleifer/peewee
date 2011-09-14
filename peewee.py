@@ -555,6 +555,13 @@ class BaseQuery(object):
         self._dirty = True
         self._where = {}
         self._joins = []
+        self._joined_models = set()
+    
+    def clone_where(self):
+        cloned = {}
+        for model, clauses in self._where.items():
+            cloned[model] = list(clauses)
+        return cloned
     
     def clone(self):
         raise NotImplementedError
@@ -610,6 +617,7 @@ class BaseQuery(object):
     @returns_clone
     def join(self, model, join_type=None, on=None):
         if self.query_context._meta.rel_exists(model):
+            self._joined_models.add(model)
             self._joins.append((model, join_type, on))
             self.query_context = model
         else:
@@ -807,7 +815,8 @@ class SelectQuery(BaseQuery):
         query._pagination = self._pagination and tuple(self._pagination) or None
         query._distinct = self._distinct
         query._qr = self._qr
-        query._where = dict(self._where)
+        query._where = self.clone_where()
+        query._joined_models = self._joined_models.copy()
         query._joins = list(self._joins)
         return query
     
@@ -884,6 +893,9 @@ class SelectQuery(BaseQuery):
             ))
         finally:
             self.query_context = orig_ctx
+    
+    def filter(self, *args, **kwargs):
+        return filter_query(self, *args, **kwargs)
 
     def parse_select_query(self, alias_map):
         if isinstance(self.query, basestring):
@@ -989,7 +1001,8 @@ class UpdateQuery(BaseQuery):
     
     def clone(self):
         query = UpdateQuery(self.model, **self.update_query)
-        query._where = dict(self._where)
+        query._where = self.clone_where()
+        query._joined_models = self._joined_models.copy()
         query._joins = list(self._joins)
         return query
     
@@ -1041,7 +1054,8 @@ class UpdateQuery(BaseQuery):
 class DeleteQuery(BaseQuery):
     def clone(self):
         query = DeleteQuery(self.model)
-        query._where = dict(self._where)
+        query._where = self.clone_where()
+        query._joined_models = self._joined_models.copy()
         query._joins = list(self._joins)
         return query
     
@@ -1198,7 +1212,8 @@ def filter_query(model_or_query, *args, **kwargs):
     def follow_joins(current, query):
         if current in joins:
             for joined_model in joins[current]:
-                query = query.join(joined_model)
+                if joined_model not in query._joined_models:
+                    query = query.join(joined_model)
                 query = follow_joins(joined_model, query)
         return query
     select_query = follow_joins(model, select_query)

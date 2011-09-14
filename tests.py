@@ -7,7 +7,7 @@ import unittest
 
 import peewee
 from peewee import (RawQuery, SelectQuery, InsertQuery, UpdateQuery, DeleteQuery,
-        Node, Q, database, parseq, SqliteAdapter, PostgresqlAdapter)
+        Node, Q, database, parseq, SqliteAdapter, PostgresqlAdapter, filter_query)
 
 
 class QueryLogHandler(logging.Handler):
@@ -1479,7 +1479,44 @@ class FilterQueryTests(BasePeeweeTestCase):
         
         query = EntryTag.filter(Q(entry__blog__title='b1') | Q(entry__blog__title='b2'), Q(entry__pk=1) | Q(entry__pk=2), tag='baz', entry__title='e1')
         self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM entrytag AS t1 INNER JOIN entry AS t2 ON t1.entry_id = t2.pk\nINNER JOIN blog AS t3 ON t2.blog_id = t3.id WHERE t1.tag = ? AND (t2.pk = ? OR t2.pk = ?) AND t2.title = ? AND (t3.title = ? OR t3.title = ?)', ['baz', 1, 2, 'e1', 'b1', 'b2']))
-
+    
+    def test_filter_with_query(self):
+        simple_query = User.select().where(active=True)
+        
+        query = filter_query(simple_query, username='bamples')
+        self.assertSQLEqual(query.sql(), ('SELECT * FROM users WHERE active = ? AND username = ?', [1, 'bamples']))
+        
+        query = filter_query(simple_query, blog__title='b1')
+        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM users AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t1.active = ? AND t2.title = ?', [1, 'b1']))
+        
+        join_query = User.select().join(Blog).where(title='b1')
+        
+        query = filter_query(join_query, username='bamples')
+        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM users AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t1.username = ? AND t2.title = ?', ['bamples', 'b1']))
+        
+        # join should be recycled here
+        query = filter_query(join_query, blog__id=1)
+        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM users AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t2.title = ? AND t2.id = ?', ['b1', 1]))
+        
+        complex_query = User.select().join(Blog).where(Q(id=1)|Q(id=2))
+        
+        query = filter_query(complex_query, username='bamples', blog__title='b1')
+        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM users AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t1.username = ? AND (t2.id = ? OR t2.id = ?) AND t2.title = ?', ['bamples', 1, 2, 'b1']))
+        
+        query = filter_query(complex_query, Q(blog__title='b1')|Q(blog__title='b2'), username='bamples')
+        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM users AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t1.username = ? AND (t2.id = ? OR t2.id = ?) AND (t2.title = ? OR t2.title = ?)', ['bamples', 1, 2, 'b1', 'b2']))
+        
+        # zomg
+        query = filter_query(complex_query, Q(blog__entry_set__title='e1')|Q(blog__entry_set__title='e2'), blog__title='b1', username='bamples')
+        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM users AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id\nINNER JOIN entry AS t3 ON t2.id = t3.blog_id WHERE t1.username = ? AND (t2.id = ? OR t2.id = ?) AND t2.title = ? AND (t3.title = ? OR t3.title = ?)', ['bamples', 1, 2, 'b1', 'e1', 'e2']))
+    
+    def test_filter_chaining(self):
+        simple_filter = Entry.filter(blog__id=1)
+        self.assertSQLEqual(simple_filter.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t2.id = ?', [1]))
+        
+        f2 = simple_filter.filter(Q(blog__title='b1') | Q(blog__title='b2'), title='e1')
+        self.assertSQLEqual(f2.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t1.title = ? AND t2.id = ? AND (t2.title = ? OR t2.title = ?)', ['e1', 1, 'b1', 'b2']))
+        
 
 class FieldTypeTests(BasePeeweeTestCase):
     def setUp(self):
