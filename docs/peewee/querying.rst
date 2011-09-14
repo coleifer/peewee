@@ -26,6 +26,30 @@ We can build up the query by adding some clauses to it::
     [u'editor', u'admin']
 
 
+Django-style queries
+^^^^^^^^^^^^^^^^^^^^
+
+If you are already familiar with the Django ORM, you can construct select queries
+using the familiar "double-underscore" syntax.
+
+::
+
+    # get the active users
+    active_users = User.filter(active=True)
+
+    # how many active users are there?
+    active_users.count()
+    
+    # query users who are either staffers or superusers
+    editors = User.filter(Q(is_staff=True) | Q(is_superuser=True))
+    
+    # get tweets by a specific user
+    Tweet.filter(user__username='charlie')
+    
+    # get tweets by editors
+    Tweet.filter(Q(user__is_staff=True) | Q(user__is_superuser=True))
+
+
 Where clause
 ------------
 

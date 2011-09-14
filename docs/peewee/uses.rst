@@ -222,6 +222,17 @@ You can also filter across joins:
     Some Entry
     Another Entry
 
+If you are already familiar with Django's ORM, you can use the "double underscore"
+syntax:
+
+.. code-block:: python
+
+    >>> for entry in Entry.filter(blog__name='My Blog'):
+    ...     print entry.title
+    Old entry
+    Some Entry
+    Another Entry
+
 
 Sorting records
 ---------------
