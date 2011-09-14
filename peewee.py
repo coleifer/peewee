@@ -1106,6 +1106,12 @@ class InsertQuery(BaseQuery):
         return self.database.last_insert_id(result, self.model)
 
 
+def model_or_select(m_or_q):
+    if isinstance(m_or_q, BaseQuery):
+        return (m_or_q.model, m_or_q)
+    else:
+        return (m_or_q, m_or_q.select())
+
 def convert_lookup(model, joins, lookup):
     operations = model._meta.database.adapter.operations
     
@@ -1153,10 +1159,12 @@ def convert_lookup(model, joins, lookup):
     return query_model, joins, lookup
 
 
-def filter_query(model, *args, **kwargs):
+def filter_query(model_or_query, *args, **kwargs):
     """
     Provide a django-like interface for executing queries
     """
+    model, select_query = model_or_select(model_or_query)
+    
     query = {} # mapping of models to queries
     joins = {} # a graph of joins needed, passed into the convert_lookup function
     
@@ -1193,7 +1201,7 @@ def filter_query(model, *args, **kwargs):
                 query = query.join(joined_model)
                 query = follow_joins(joined_model, query)
         return query
-    select_query = follow_joins(model, model.select())
+    select_query = follow_joins(model, select_query)
     
     for model, lookups in query.items():
         qargs, qkwargs = [], {}
