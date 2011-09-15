@@ -1146,7 +1146,7 @@ class RelatedFieldTests(BasePeeweeTestCase):
         sq = Blog.select({
             Blog: ['*'],
             Entry: [peewee.Max('title', 'max_title')],
-        }).join(Entry).order_by(peewee.desc('max_title')).group_by('blog_id').group_by(Blog)
+        }).join(Entry).order_by(peewee.desc('max_title')).group_by(Blog)
         results = list(sq)
         self.assertEqual(results, [c, b, a])
         self.assertEqual([r.max_title for r in results], ['c1', 'b3', 'a2'])
@@ -1156,12 +1156,12 @@ class RelatedFieldTests(BasePeeweeTestCase):
             Entry: [peewee.Max('title', 'max_title')],
         }).where(
             title__in=['a', 'b']
-        ).join(Entry).order_by(peewee.desc('max_title')).group_by('blog_id').group_by(Blog)
+        ).join(Entry).order_by(peewee.desc('max_title')).group_by(Blog)
         results = list(sq)
         self.assertEqual(results, [b, a])
         self.assertEqual([r.max_title for r in results], ['b3', 'a2'])
 
-        sq = Blog.select('t1.*, COUNT(t2.pk) AS count').join(Entry).order_by(peewee.desc('count')).group_by('blog_id').group_by(Blog)
+        sq = Blog.select('t1.*, COUNT(t2.pk) AS count').join(Entry).order_by(peewee.desc('count')).group_by(Blog)
         qr = list(sq)
 
         self.assertEqual(qr, [b, a, c])
@@ -1172,7 +1172,7 @@ class RelatedFieldTests(BasePeeweeTestCase):
         sq = Blog.select({
             Blog: ['*'],
             Entry: [peewee.Count('pk', 'count')]
-        }).join(Entry).group_by('blog_id').group_by(Blog).order_by(peewee.desc('count'))
+        }).join(Entry).group_by(Blog).order_by(peewee.desc('count'))
         qr = list(sq)
         
         self.assertEqual(qr, [b, a, c])
@@ -1207,7 +1207,7 @@ class RelatedFieldTests(BasePeeweeTestCase):
         sq = Blog.select({
             Blog: ['*'],
             User: [peewee.Count('id', 'count')]
-        }).join(User).group_by('blog_id').group_by(Blog).order_by(peewee.desc('count'))
+        }).join(User).group_by(Blog).order_by(peewee.desc('count'))
         qr = list(sq)
         
         self.assertEqual(qr, [a, b, c])
