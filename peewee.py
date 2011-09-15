@@ -554,14 +554,20 @@ class BaseQuery(object):
         
         self._dirty = True
         self._where = {}
-        self._joins = []
+        self._joins = {}
         self._joined_models = set()
     
-    def clone_where(self):
+    def _clone_dict_graph(self, dg):
         cloned = {}
-        for model, clauses in self._where.items():
-            cloned[model] = list(clauses)
+        for node, edges in dg.items():
+            cloned[node] = list(edges)
         return cloned
+    
+    def clone_where(self):
+        return self._clone_dict_graph(self._where)
+    
+    def clone_joins(self):
+        return self._clone_dict_graph(self._joins)
     
     def clone(self):
         raise NotImplementedError
@@ -618,7 +624,8 @@ class BaseQuery(object):
     def join(self, model, join_type=None, on=None):
         if self.query_context._meta.rel_exists(model):
             self._joined_models.add(model)
-            self._joins.append((model, join_type, on))
+            self._joins.setdefault(self.query_context, [])
+            self._joins[self.query_context].append((model, join_type, on))
             self.query_context = model
         else:
             raise AttributeError('No foreign key found between %s and %s' % \
@@ -630,14 +637,13 @@ class BaseQuery(object):
             self.query_context = model
             return
 
-        for klass, join_type, on in self._joins:
-            if model == klass:
-                self.query_context = model
-                return
+        if model in self._joined_models:
+            self.query_context = model
+            return
         raise AttributeError('You must JOIN on %s' % model.__name__)
     
     def use_aliases(self):
-        return len(self._joins) > 0 or self.force_alias
+        return len(self._joined_models) > 0 or self.force_alias
 
     def combine_field(self, alias, field_name):
         if alias:
@@ -650,23 +656,30 @@ class BaseQuery(object):
 
         alias_required = self.use_aliases()
 
-        joins = list(self._joins)
-        if self._where or len(joins):
-            joins.insert(0, (self.model, None, None))
-        
+        #joins = list(self._joins)
+        #if self._where or len(joins):
+        #    joins.insert(0, (self.model, None, None))
         where_with_alias = []
         where_data = []
         computed_joins = []
-
-        for i, (model, join_type, on) in enumerate(joins):
-            if alias_required:
-                alias_count += 1
-                alias_map[model] = 't%d' % alias_count
-            else:
-                alias_map[model] = ''
+        
+        def follow_joins(current, alias_map, alias_required, alias_count, seen=None):
+            computed = []
+            seen = seen or set()
             
-            if i > 0:
-                from_model = joins[i-1][0]
+            if current not in self._joins:
+                return computed
+            
+            for i, (model, join_type, on) in enumerate(self._joins[current]):
+                seen.add(model)
+                
+                if alias_required:
+                    alias_count += 1
+                    alias_map[model] = 't%d' % alias_count
+                else:
+                    alias_map[model] = ''
+                
+                from_model = current
                 field = from_model._meta.get_related_field_for_model(model, on)
                 if field:
                     left_field = field.name
@@ -682,7 +695,7 @@ class BaseQuery(object):
                     else:
                         join_type = 'INNER'
                 
-                computed_joins.append(
+                computed.append(
                     '%s JOIN %s AS %s ON %s = %s' % (
                         join_type,
                         model._meta.db_table,
@@ -691,13 +704,26 @@ class BaseQuery(object):
                         self.combine_field(alias_map[model], right_field),
                     )
                 )
+                
+                computed.extend(follow_joins(model, alias_map, alias_required, alias_count, seen))
+            
+            return computed
         
-        for (model, join_type, on) in joins:
-            if model in self._where:
-                for node in self._where[model]:
-                    query, data = self.parse_node(node, model, alias_map)
-                    where_with_alias.append(query)
-                    where_data.extend(data)
+        if alias_required:
+            alias_count += 1
+            alias_map[self.model] = 't%d' % alias_count
+        else:
+            alias_map[self.model] = ''
+        
+        computed_joins = follow_joins(self.model, alias_map, alias_required, alias_count)
+        
+        
+        
+        for model in self._where:
+            for node in self._where[model]:
+                query, data = self.parse_node(node, model, alias_map)
+                where_with_alias.append(query)
+                where_data.extend(data)
         
         return computed_joins, where_with_alias, where_data, alias_map
     
@@ -817,7 +843,7 @@ class SelectQuery(BaseQuery):
         query._qr = self._qr
         query._where = self.clone_where()
         query._joined_models = self._joined_models.copy()
-        query._joins = list(self._joins)
+        query._joins = self.clone_joins()
         return query
     
     @returns_clone
@@ -1003,7 +1029,7 @@ class UpdateQuery(BaseQuery):
         query = UpdateQuery(self.model, **self.update_query)
         query._where = self.clone_where()
         query._joined_models = self._joined_models.copy()
-        query._joins = list(self._joins)
+        query._joins = self.clone_joins()
         return query
     
     def parse_update(self):
@@ -1056,7 +1082,7 @@ class DeleteQuery(BaseQuery):
         query = DeleteQuery(self.model)
         query._where = self.clone_where()
         query._joined_models = self._joined_models.copy()
-        query._joins = list(self._joins)
+        query._joins = self.clone_joins()
         return query
     
     def sql(self):
