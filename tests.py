@@ -491,6 +491,9 @@ class QueryTests(BasePeeweeTestCase):
     def test_multi_joins(self):
         sq = Entry.select().join(Blog).where(title='b1').switch(Entry).join(EntryTag).where(tag='t1')
         self.assertSQLEqual(sq.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id\nINNER JOIN entrytag AS t3 ON t1.pk = t3.entry_id WHERE t2.title = ? AND t3.tag = ?', ['b1', 't1']))
+        
+        sq = Entry.select().join(EntryTag).where(tag='t1').switch(Entry).join(Blog).where(title='b1')
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN entrytag AS t2 ON t1.pk = t2.entry_id\nINNER JOIN blog AS t3 ON t1.blog_id = t3.id WHERE t2.tag = ? AND t3.title = ?', ['t1', 'b1']))
 
 
 class ModelTests(BasePeeweeTestCase):
