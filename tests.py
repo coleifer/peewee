@@ -263,6 +263,7 @@ class QueryTests(BasePeeweeTestCase):
 
     def test_selecting_across_joins(self):
         sq = SelectQuery(Entry, '*').where(title='a1').join(Blog).where(title='a')
+
         self.assertEqual(sq._joins, {Entry: [(Blog, None, None)]})
         self.assertSQLEqual(sq.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t1.title = ? AND t2.title = ?', ['a1', 'a']))
         

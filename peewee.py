@@ -650,64 +650,60 @@ class BaseQuery(object):
             return '%s.%s' % (alias, field_name)
         return field_name
     
+    def follow_joins(self, current, alias_map, alias_required, alias_count, seen=None):
+        computed = []
+        seen = seen or set()
+        
+        if current not in self._joins:
+            return computed
+        
+        for i, (model, join_type, on) in enumerate(self._joins[current]):
+            seen.add(model)
+            
+            if alias_required:
+                alias_count += 1
+                alias_map[model] = 't%d' % alias_count
+            else:
+                alias_map[model] = ''
+            
+            from_model = current
+            field = from_model._meta.get_related_field_for_model(model, on)
+            if field:
+                left_field = field.name
+                right_field = model._meta.pk_name
+            else:
+                field = from_model._meta.get_reverse_related_field_for_model(model, on)
+                left_field = from_model._meta.pk_name
+                right_field = field.name
+            
+            if join_type is None:
+                if field.null and model not in self._where:
+                    join_type = 'LEFT OUTER'
+                else:
+                    join_type = 'INNER'
+            
+            computed.append(
+                '%s JOIN %s AS %s ON %s = %s' % (
+                    join_type,
+                    model._meta.db_table,
+                    alias_map[model],
+                    self.combine_field(alias_map[from_model], left_field),
+                    self.combine_field(alias_map[model], right_field),
+                )
+            )
+            
+            computed.extend(self.follow_joins(model, alias_map, alias_required, alias_count, seen))
+        
+        return computed
+    
     def compile_where(self):
         alias_count = 0
         alias_map = {}
 
         alias_required = self.use_aliases()
 
-        #joins = list(self._joins)
-        #if self._where or len(joins):
-        #    joins.insert(0, (self.model, None, None))
         where_with_alias = []
         where_data = []
-        computed_joins = []
-        
-        def follow_joins(current, alias_map, alias_required, alias_count, seen=None):
-            computed = []
-            seen = seen or set()
-            
-            if current not in self._joins:
-                return computed
-            
-            for i, (model, join_type, on) in enumerate(self._joins[current]):
-                seen.add(model)
-                
-                if alias_required:
-                    alias_count += 1
-                    alias_map[model] = 't%d' % alias_count
-                else:
-                    alias_map[model] = ''
-                
-                from_model = current
-                field = from_model._meta.get_related_field_for_model(model, on)
-                if field:
-                    left_field = field.name
-                    right_field = model._meta.pk_name
-                else:
-                    field = from_model._meta.get_reverse_related_field_for_model(model, on)
-                    left_field = from_model._meta.pk_name
-                    right_field = field.name
-                
-                if join_type is None:
-                    if field.null and model not in self._where:
-                        join_type = 'LEFT OUTER'
-                    else:
-                        join_type = 'INNER'
-                
-                computed.append(
-                    '%s JOIN %s AS %s ON %s = %s' % (
-                        join_type,
-                        model._meta.db_table,
-                        alias_map[model],
-                        self.combine_field(alias_map[from_model], left_field),
-                        self.combine_field(alias_map[model], right_field),
-                    )
-                )
-                
-                computed.extend(follow_joins(model, alias_map, alias_required, alias_count, seen))
-            
-            return computed
         
         if alias_required:
             alias_count += 1
@@ -715,11 +711,9 @@ class BaseQuery(object):
         else:
             alias_map[self.model] = ''
         
-        computed_joins = follow_joins(self.model, alias_map, alias_required, alias_count)
+        computed_joins = self.follow_joins(self.model, alias_map, alias_required, alias_count)
         
-        
-        
-        for model in self._where:
+        for model in sorted(self._where, key=lambda m: alias_map[m]):
             for node in self._where[model]:
                 query, data = self.parse_node(node, model, alias_map)
                 where_with_alias.append(query)
