@@ -7,7 +7,8 @@ import unittest
 
 import peewee
 from peewee import (RawQuery, SelectQuery, InsertQuery, UpdateQuery, DeleteQuery,
-        Node, Q, database, parseq, SqliteAdapter, PostgresqlAdapter, filter_query)
+        Node, Q, database, parseq, SqliteAdapter, PostgresqlAdapter, filter_query,
+        annotate_query,)
 
 
 class QueryLogHandler(logging.Handler):
@@ -1528,6 +1529,72 @@ class FilterQueryTests(BasePeeweeTestCase):
     def test_filter_both_directions(self):
         f = Entry.filter(blog__title='b1', entrytag_set__tag='t1')
         self.assertSQLEqual(f.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN entrytag AS t2 ON t1.pk = t2.entry_id\nINNER JOIN blog AS t3 ON t1.blog_id = t3.id WHERE t2.tag = ? AND t3.title = ?', ['t1', 'b1']))
+
+
+class AnnotateQueryTests(BasePeeweeTestCase):
+    def get_some_blogs(self):
+        blogs = [Blog.create(title='b%d' % i) for i in range(3)]
+        entries = []
+        
+        for i, b in enumerate(blogs):
+            for j in range(3 + i):
+                entries.append(Entry.create(blog=b, title='e-%d-%d' % (i,j)))
+        
+        users = [
+            User.create(username='u1a', blog=blogs[0]),
+            User.create(username='u1b', blog=blogs[0]),
+            User.create(username='u2', blog=blogs[1]),
+            User.create(username='u3'),
+        ]
+        
+        return blogs, entries, users
+    
+    def test_simple_annotation(self):
+        blogs, entries, _ = self.get_some_blogs()
+        
+        annotated = Blog.select().annotate(Entry).order_by(('count', 'desc'))
+        self.assertSQLEqual(annotated.sql(), (
+            'SELECT t1.*, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id, t1.title ORDER BY count desc', []
+        ))
+        
+        self.assertEqual([(b, b.count) for b in annotated], [
+            (blogs[2], 5),
+            (blogs[1], 4),
+            (blogs[0], 3),
+        ])
+        
+        Entry.delete().where(blog=blogs[1]).execute()
+        
+        self.assertEqual([(b, b.count) for b in annotated.clone()], [
+            (blogs[2], 5),
+            (blogs[0], 3),
+        ])
+        
+        alt = Blog.select().join(Entry, 'left outer')
+        annotated = alt.annotate(Entry).order_by(('count', 'desc'))
+        self.assertSQLEqual(annotated.sql(), (
+            'SELECT t1.*, COUNT(t2.pk) AS count FROM blog AS t1 left outer JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id, t1.title ORDER BY count desc', []
+        ))
+        
+        self.assertEqual([(b, b.count) for b in annotated], [
+            (blogs[2], 5),
+            (blogs[0], 3),
+            (blogs[1], 0),
+        ])
+    
+    def test_nullable_annotate(self):
+        blogs, entries, users = self.get_some_blogs()
+        
+        annotated = Blog.select().annotate(User).order_by(('count', 'desc'))
+        self.assertSQLEqual(annotated.sql(), (
+            ('SELECT t1.*, COUNT(t2.id) AS count FROM blog AS t1 LEFT OUTER JOIN users AS t2 ON t1.id = t2.blog_id GROUP BY t1.id, t1.title ORDER BY count desc', [])
+        ))
+        
+        self.assertEqual([(b, b.count) for b in annotated], [
+            (blogs[0], 2),
+            (blogs[1], 1),
+            (blogs[2], 0),
+        ])
         
 
 class FieldTypeTests(BasePeeweeTestCase):

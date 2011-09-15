@@ -34,7 +34,7 @@ __all__ = [
     'ImproperlyConfigured', 'SqliteDatabase', 'MySQLDatabase', 'PostgresqlDatabase',
     'asc', 'desc', 'Count', 'Max', 'Min', 'Q', 'Field', 'CharField', 'TextField',
     'DateTimeField', 'BooleanField', 'FloatField', 'IntegerField', 'PrimaryKeyField',
-    'ForeignKeyField', 'Model', 'filter_query',
+    'ForeignKeyField', 'Model', 'filter_query', 'annotate_query',
 ]
 
 class ImproperlyConfigured(Exception):
@@ -916,6 +916,9 @@ class SelectQuery(BaseQuery):
     
     def filter(self, *args, **kwargs):
         return filter_query(self, *args, **kwargs)
+    
+    def annotate(self, related_model, aggregation=None):
+        return annotate_query(self, related_model, aggregation)
 
     def parse_select_query(self, alias_map):
         if isinstance(self.query, basestring):
@@ -1248,6 +1251,30 @@ def filter_query(model_or_query, *args, **kwargs):
                 qargs.append(lookup)
         select_query = select_query.switch(model).where(*qargs, **qkwargs)
 
+    return select_query
+
+def annotate_query(select_query, related_model, aggregation):
+    aggregation = aggregation or Count(related_model._meta.pk_name)
+    model = select_query.model
+    
+    select_query = select_query.switch(model).group_by(model)
+    
+    # ensure the join is there
+    if related_model not in select_query._joined_models:
+        select_query = select_query.join(related_model)
+    
+    query_dict = {}
+    
+    # query for it
+    if isinstance(select_query.query, basestring):
+        query_dict[model] = ['*']
+    else:
+        query_dict = select_query.query
+    
+    # query for the related object
+    query_dict[related_model] = [aggregation]
+    
+    select_query.query = query_dict
     return select_query
 
 
