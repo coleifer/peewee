@@ -1524,6 +1524,10 @@ class FilterQueryTests(BasePeeweeTestCase):
         
         f2 = simple_filter.filter(Q(blog__title='b1') | Q(blog__title='b2'), title='e1')
         self.assertSQLEqual(f2.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t1.title = ? AND t2.id = ? AND (t2.title = ? OR t2.title = ?)', ['e1', 1, 'b1', 'b2']))
+    
+    def test_filter_both_directions(self):
+        f = Entry.filter(blog__title='b1', entrytag_set__tag='t1')
+        self.assertSQLEqual(f.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN entrytag AS t2 ON t1.pk = t2.entry_id\nINNER JOIN blog AS t3 ON t1.blog_id = t3.id WHERE t2.tag = ? AND t3.title = ?', ['t1', 'b1']))
         
 
 class FieldTypeTests(BasePeeweeTestCase):

@@ -1232,6 +1232,7 @@ def filter_query(model_or_query, *args, **kwargs):
     def follow_joins(current, query):
         if current in joins:
             for joined_model in joins[current]:
+                query = query.switch(current)
                 if joined_model not in query._joined_models:
                     query = query.join(joined_model)
                 query = follow_joins(joined_model, query)
