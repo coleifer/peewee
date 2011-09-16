@@ -320,25 +320,65 @@ results.  All methods are chain-able.
         >>> print sq.sql()[0]
         SELECT id, title FROM blog
 
+.. py:method:: filter(self, *args, **kwargs)
+
+    :param args: a list of ``Q`` or ``Node`` objects
+    :param kwargs: a mapping of column + lookup to value, e.g. "age__gt=55"
+
+    provides a django-like syntax for building a query.
+    The key difference between ``filter`` and ``where`` is that ``filter``
+    supports traversing joins using django's "double-underscore" syntax::
+    
+        >>> sq = SelectQuery(Entry).filter(blog__title='Some Blog')
+    
+    This method is chainable::
+    
+        >>> base_q = User.filter(active=True)
+        >>> some_user = base_q.filter(username='charlie')
+
+.. py:method:: get(self, *args, **kwargs)
+
+    :param args: a list of ``Q`` or ``Node`` objects
+    :param kwargs: a mapping of column + lookup to value, e.g. "age__gt=55"
+
+    get a single row from the database that matches the given query.  raises a
+    ``<model-class>.DoesNotExist`` if no rows are returned::
+    
+        >>> active = User.select().where(active=True)
+        >>> try:
+        ...     user = active.get(username=username, password=password)
+        ... except User.DoesNotExist:
+        ...     user = None
+    
+    this method is also expose via the model api::
+    
+        >>> user = User.get(username=username, password=password)
+
 .. py:method:: where(self, *args, **kwargs)
 
-    generate a WHERE clause for the current "query context".  *args is either
-    a list of ``Q`` or ``Node`` objects, and **kwargs is a mapping of 
-    column + lookup to value::
+    :param args: a list of ``Q`` or ``Node`` objects
+    :param kwargs: a mapping of column + lookup to value, e.g. "age__gt=55"
+
+    calling ``where()`` will act on the model that is currently the ``query context``.
+    Unlike ``filter()``, only columns from the current query context are exposed::
     
         >>> sq = SelectQuery(Blog).where(title='some title', author=some_user)
         >>> sq = SelectQuery(Blog).where(Q(title='some title') | Q(title='other title'))
+        
+    .. note::
+    
+        ``where()`` is chainable
 
 .. py:method:: join(self, model, join_type=None, on=None)
 
-    generate a JOIN clause from the current "query context" to the ``model`` passed
-    in, and establishes ``model`` as the new "query context".
-    
     :param model: the model to join on.  there must be a ``ForeignKeyField`` between
         the current "query context" and the model passed in.
     :param join_type: allows the type of JOIN used to be specified explicitly
     :param on: if multiple foreign keys exist between two models, this parameter
         is a string containing the name of the ForeignKeyField to join on.
+
+    generate a JOIN clause from the current "query context" to the ``model`` passed
+    in, and establishes ``model`` as the new "query context".
     
     >>> sq = SelectQuery(Blog).join(Entry).where(title='Some Entry')
     >>> sq = SelectQuery(User).join(Relationship, on='to_user_id').where(from_user=self)
@@ -360,6 +400,36 @@ results.  All methods are chain-able.
     >>> sq.where(status=DELETED)
     >>> sq.count()
     3 # <-- number of blogs that are marked as deleted
+
+.. py:method:: exists(self)
+
+    returns a boolean whether the current query will return any rows.  uses an
+    optimized lookup, so use this rather than ``get``::
+    
+    >>> sq = User.select().where(active=True)
+    >>> if sq.where(username=username, password=password).exists():
+    ...     authenticated = True
+
+.. py:method:: annotate(self, related_model, aggregation=None)
+
+    annotate a query with an aggregation performed on a related model, for example,
+    "get a list of blogs with the number of entries on each"::
+    
+        >>> Blog.select().annotate(Entry)
+    
+    if ``aggregation`` is None, it will default to ``Count(related_model, 'count')``,
+    but can be anything::
+    
+        >>> blog_with_latest = Blog.select().annotate(Entry, Max('pub_date', 'max_pub'))
+    
+    .. note::
+    
+        if the ``ForeignKeyField`` is ``nullable``, then a ``LEFT OUTER`` join
+        will be used, otherwise the join is an ``INNER`` join.  if an ``INNER``
+        join is used, in the above example blogs with no entries would not be
+        returned.  to avoid this, you can explicitly join before calling ``annotate()``::
+        
+            >>> Blog.select().join(Entry, 'left outer').annotate(Entry)
 
 .. py:method:: group_by(self, clause)
 
