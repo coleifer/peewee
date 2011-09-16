@@ -98,20 +98,6 @@ Model methods
         >>> some_obj.title = 'new title' # <-- does not touch the database
         >>> some_obj.save() # <-- change is persisted to the db
 
-.. py:method:: create_table(cls)
-
-    create the table for the given model.  executes a ``CREATE TABLE IF NOT EXISTS``
-    so it won't throw an error if the table already exists.
-    
-    example::
-    
-        >>> database.connect()
-        >>> SomeModel.create_table() # <-- creates the table for SomeModel
-
-.. py:method:: drop_table(cls)
-
-    drops the table for the given model.  will fail if the table does not exist.
-
 .. py:method:: create(cls, **attributes)
 
     create an instance of ``cls`` with the given attributes set.
@@ -122,23 +108,39 @@ Model methods
         
         >>> user = User.create(username='admin', password='test')
 
-.. py:method:: get(cls, **attributes)
+.. py:method:: filter(self, *args, **kwargs)
 
-    get an instance of ``cls`` with the given attributes set.  if the instance
-    does not exist, a ``DoesNotExist`` exception will be raised, a-la django.
+    :param args: a list of ``Q`` or ``Node`` objects
+    :param kwargs: a mapping of column + lookup to value, e.g. "age__gt=55"
 
-    ::
+    provides a django-like syntax for building a query.
+    The key difference between ``filter`` and ``where`` is that ``filter``
+    supports traversing joins using django's "double-underscore" syntax::
+    
+        >>> sq = Entry.filter(blog__title='Some Blog')
+    
+    This method is chainable::
+    
+        >>> base_q = User.filter(active=True)
+        >>> some_user = base_q.filter(username='charlie')
 
-        try:
-            user = User.get(username='admin')
-        except User.DoesNotExist:
-            print 'No admin user!'
+.. py:method:: get(self, *args, **kwargs)
+
+    :param args: a list of ``Q`` or ``Node`` objects
+    :param kwargs: a mapping of column + lookup to value, e.g. "age__gt=55"
+
+    get a single row from the database that matches the given query.  raises a
+    ``<model-class>.DoesNotExist`` if no rows are returned::
     
-    :param attributes: key/value pairs of model attributes
+        >>> active = User.select().where(active=True)
+        >>> try:
+        ...     user = active.get(username=username, password=password)
+        ... except User.DoesNotExist:
+        ...     user = None
     
-    example::
+    this method is also expose via the model api::
     
-        >>> admin_user = User.get(username='admin')
+        >>> user = User.get(username=username, password=password)
 
 .. py:method:: get_or_create(cls, **attributes)
 
@@ -192,3 +194,16 @@ Model methods
         ('INSERT INTO user (username,active,registration_expired) VALUES (?,?,?)', ['admin', 1, 0])
         >>> q.execute()
         1
+
+.. py:method:: create_table(cls, fail_silently=False)
+
+    create the table for the given model.
+    
+    example::
+    
+        >>> database.connect()
+        >>> SomeModel.create_table() # <-- creates the table for SomeModel
+
+.. py:method:: drop_table(cls, fail_silently=False)
+
+    drops the table for the given model.  will fail if the table does not exist.
