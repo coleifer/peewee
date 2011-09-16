@@ -28,10 +28,13 @@ Examples::
     User.select().order_by(('username', 'asc')).paginate(3, 20)
     
     # order users by number of tweets
+    User.select().annotate(Tweet).order_by(('count', 'desc'))
+    
+    # another way of expressing the same
     User.select({
         User: ['*'],
-        Tweet: [Count('id', 'num_tweets')]
-    }).group_by('id').join(Tweet).order_by(('num_tweets', 'desc'))
+        Tweet: [Count('id', 'count')]
+    }).group_by('id').join(Tweet).order_by(('count', 'desc'))
 
 
 You can use django-style syntax to create select queries::

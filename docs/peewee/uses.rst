@@ -300,3 +300,39 @@ You can count the number of rows in any select query:
     100
     >>> Entry.select().where(id__gt=50).count()
     50
+
+
+Aggregating records
+-------------------
+
+Suppose you have some blogs and want to get a list of them along with the count
+of entries in each.  First I will show you the shortcut:
+
+.. code-block:: python
+
+    query = Blog.select().annotate(Entry)
+
+This is equivalent to the following:
+
+.. code-block:: python
+
+    query = Blog.select({
+        Blog: ['*'],
+        Entry: [Count('id')],
+    }).group_by(Blog).join(Entry)
+
+The resulting query will return Blog objects with all their normal attributes
+plus an additional attribute 'count' which will contain the number of entries.
+By default it uses an inner join if the foreign key is not nullable, which means
+blogs without entries won't appear in the list.  To remedy this, manually specify
+the type of join to include blogs with 0 entries:
+
+.. code-block:: python
+
+    query = Blog.select().join(Entry, 'left outer').annotate(Entry)
+
+You can also specify a custom aggregator:
+
+.. code-block:: python
+
+    query = Blog.select().annotate(Entry, peewee.Max('pub_date', 'max_pub_date'))
