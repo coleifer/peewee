@@ -1148,6 +1148,7 @@ class RelatedFieldTests(BasePeeweeTestCase):
             Blog: ['*'],
             Entry: [peewee.Max('title', 'max_title')],
         }).join(Entry).order_by(peewee.desc('max_title')).group_by(Blog)
+        import ipdb; ipdb.set_trace()
         results = list(sq)
         self.assertEqual(results, [c, b, a])
         self.assertEqual([r.max_title for r in results], ['c1', 'b3', 'a2'])
@@ -1633,6 +1634,12 @@ class AnnotateQueryTests(BasePeeweeTestCase):
         self.assertEqual([(b, b.count) for b in annotated], [
             (blogs[1], 4),
         ])
+    
+    def test_annotate_custom_aggregate(self):
+        annotated = Blog.select().annotate(Entry, peewee.Max('pub_date', 'max_pub'))
+        self.assertSQLEqual(annotated.sql(), (
+            'SELECT t1.*, MAX(t2.pub_date) AS max_pub FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id, t1.title', []
+        ))
         
 
 class FieldTypeTests(BasePeeweeTestCase):
