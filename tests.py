@@ -1609,8 +1609,30 @@ class AnnotateQueryTests(BasePeeweeTestCase):
         
         annotated = Blog.select({Blog: ['id']}).annotate(Entry)
         self.assertSQLEqual(annotated.sql(), (
-            ('SELECT t1.id, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id', [])
+            'SELECT t1.id, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id', []
         ))
+    
+    def test_annotate_with_where(self):
+        blogs, entries, users = self.get_some_blogs()
+        
+        annotated = Blog.select().where(title='b2').annotate(Entry)
+        self.assertSQLEqual(annotated.sql(), (
+            'SELECT t1.*, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id WHERE t1.title = ? GROUP BY t1.id, t1.title', ['b2']
+        ))
+        
+        self.assertEqual([(b, b.count) for b in annotated], [
+            (blogs[2], 5),
+        ])
+        
+        # try with a join
+        annotated = Blog.select().join(User).where(username='u2').annotate(Entry)
+        self.assertSQLEqual(annotated.sql(), (
+            'SELECT t1.*, COUNT(t3.pk) AS count FROM blog AS t1 INNER JOIN users AS t2 ON t1.id = t2.blog_id\nINNER JOIN entry AS t3 ON t1.id = t3.blog_id WHERE t2.username = ? GROUP BY t1.id, t1.title', ['u2']
+        ))
+        
+        self.assertEqual([(b, b.count) for b in annotated], [
+            (blogs[1], 4),
+        ])
         
 
 class FieldTypeTests(BasePeeweeTestCase):
