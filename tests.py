@@ -1595,6 +1595,22 @@ class AnnotateQueryTests(BasePeeweeTestCase):
             (blogs[1], 1),
             (blogs[2], 0),
         ])
+    
+    def test_limited_annotate(self):
+        annotated = Blog.select('id').annotate(Entry)
+        self.assertSQLEqual(annotated.sql(), (
+            ('SELECT t1.id, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id', [])
+        ))
+        
+        annotated = Blog.select(['id', 'xxx']).annotate(Entry)
+        self.assertSQLEqual(annotated.sql(), (
+            ('SELECT t1.id, t1.xxx, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id, t1.xxx', [])
+        ))
+        
+        annotated = Blog.select({Blog: ['id']}).annotate(Entry)
+        self.assertSQLEqual(annotated.sql(), (
+            ('SELECT t1.id, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id', [])
+        ))
         
 
 class FieldTypeTests(BasePeeweeTestCase):

@@ -921,14 +921,19 @@ class SelectQuery(BaseQuery):
         return annotate_query(self, related_model, aggregation)
 
     def parse_select_query(self, alias_map):
-        if isinstance(self.query, basestring):
-            if self.query in ('*', self.model._meta.pk_name) and self.use_aliases():
-                return '%s.%s' % (alias_map[self.model], self.query)
-            return self.query
-        elif isinstance(self.query, dict):
+        if isinstance(self.query, (list, tuple)):
+            query = {self.model: self.query}
+        else:
+            query = self.query
+        
+        if isinstance(query, basestring):
+            if query in ('*', self.model._meta.pk_name) and self.use_aliases():
+                return '%s.%s' % (alias_map[self.model], query)
+            return query
+        elif isinstance(query, dict):
             qparts = []
             aggregates = []
-            for model, cols in self.query.iteritems():
+            for model, cols in query.iteritems():
                 alias = alias_map.get(model, '')
                 for col in cols:
                     if isinstance(col, tuple):
@@ -1257,25 +1262,34 @@ def annotate_query(select_query, related_model, aggregation):
     aggregation = aggregation or Count(related_model._meta.pk_name)
     model = select_query.model
     
-    select_query = select_query.switch(model).group_by(model)
+    select_query = select_query.switch(model)
+    cols = select_query.query
     
     # ensure the join is there
     if related_model not in select_query._joined_models:
-        select_query = select_query.join(related_model)
-    
-    query_dict = {}
+        select_query = select_query.join(related_model).switch(model)
     
     # query for it
-    if isinstance(select_query.query, basestring):
-        query_dict[model] = ['*']
+    if isinstance(cols, dict):
+        selection = cols
+        group_by = cols[model]
+    elif isinstance(cols, basestring):
+        selection = {model: [cols]}
+        if cols == '*':
+            group_by = model
+        else:
+            group_by = [col.strip() for col in cols.split(',')]
+    elif isinstance(cols, (list, tuple)):
+        selection = {model: cols}
+        group_by = cols
     else:
-        query_dict = select_query.query
+        raise ValueError('Unknown type passed in to select query: "%s"' % type(cols))
     
     # query for the related object
-    query_dict[related_model] = [aggregation]
+    selection[related_model] = [aggregation]
     
-    select_query.query = query_dict
-    return select_query
+    select_query.query = selection
+    return select_query.group_by(group_by)
 
 
 class Field(object):
