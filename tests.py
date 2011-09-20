@@ -1148,7 +1148,6 @@ class RelatedFieldTests(BasePeeweeTestCase):
             Blog: ['*'],
             Entry: [peewee.Max('title', 'max_title')],
         }).join(Entry).order_by(peewee.desc('max_title')).group_by(Blog)
-        import ipdb; ipdb.set_trace()
         results = list(sq)
         self.assertEqual(results, [c, b, a])
         self.assertEqual([r.max_title for r in results], ['c1', 'b3', 'a2'])
