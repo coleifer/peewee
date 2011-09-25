@@ -1,10 +1,10 @@
 import datetime
-import peewee
 
 from flask import Flask, request, session, g, redirect, url_for, \
         abort, render_template, flash
 from functools import wraps
 from hashlib import md5
+from peewee import *
 
 # config
 DATABASE = 'tweepee.db'
@@ -14,17 +14,18 @@ SECRET_KEY = 'hin6bab8ge25*r=x&amp;+5$0kn=-#log$pt^#@vrqjld!^2ci@g*b'
 app = Flask(__name__)
 app.config.from_object(__name__)
 
-database = peewee.SqliteDatabase(DATABASE)
+database = SqliteDatabase(DATABASE)
 
 # model definitions
-class User(peewee.Model):
-    username = peewee.CharField()
-    password = peewee.CharField()
-    email = peewee.CharField()
-    join_date = peewee.DateTimeField()
-
+class BaseModel(Model):
     class Meta:
         database = database
+    
+class User(BaseModel):
+    username = CharField()
+    password = CharField()
+    email = CharField()
+    join_date = DateTimeField()
 
     def following(self):
         return User.select().join(
@@ -47,21 +48,15 @@ class User(peewee.Model):
             (md5(self.email.strip().lower().encode('utf-8')).hexdigest(), size)
 
 
-class Relationship(peewee.Model):
-    from_user = peewee.ForeignKeyField(User, related_name='relationships')
-    to_user = peewee.ForeignKeyField(User, related_name='related_to')
-
-    class Meta:
-        database = database
+class Relationship(BaseModel):
+    from_user = ForeignKeyField(User, related_name='relationships')
+    to_user = ForeignKeyField(User, related_name='related_to')
 
 
-class Message(peewee.Model):
-    user = peewee.ForeignKeyField(User)
-    content = peewee.TextField()
-    pub_date = peewee.DateTimeField()
-
-    class Meta:
-        database = database
+class Message(BaseModel):
+    user = ForeignKeyField(User)
+    content = TextField()
+    pub_date = DateTimeField()
 
 
 # utils

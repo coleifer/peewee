@@ -1,16 +1,29 @@
+.. _installation:
+
 Installing peewee
 =================
 
-First you need to grab a checkout of the code.  There are a couple ways::
+.. code-block:: console
 
     pip install peewee
 
 
+Installing with git
+-------------------
+
 To get the latest development version::
 
-    git clone http://github.com/coleifer/peewee.git
+.. code-block:: console
 
-
-If you grabbed the checkout, to install system-wide, use::
-
+    git clone https://github.com/coleifer/peewee.git
+    cd peewee
     python setup.py install
+
+
+You can test your installation by running the test suite.
+
+.. code-block:: console
+
+    python setup.py test
+
+Feel free to check out the :ref:`example-app` which ships with the project.
