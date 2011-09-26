@@ -11,7 +11,14 @@ Installing peewee
 Installing with git
 -------------------
 
-To get the latest development version::
+You can pip install the git clone:
+
+.. code-block:: console
+
+    pip install -e git+https://github.com/coleifer/peewee.git
+
+
+If you don't want to use pip:
 
 .. code-block:: console
 

@@ -31,6 +31,45 @@ the following:
         blog = peewee.ForeignKeyField() # <-- INTEGER referencing the Blog table
 
 
+This is a typical example of how to specify models with peewee.  There are several
+things going on:
+
+1. Create an instance of a :py:class:`Database`
+
+    .. code-block:: python
+
+        db = SqliteDatabase('test.db')
+
+    This establishes an object, ``db``, which is used by the models to connect to and
+    query the database.  There can be multiple database instances per application, but,
+    as I hope is obvious, :py:class:`ForeignKeyField` related models must be on the same
+    database.
+
+2. Create a base model class which specifies our database
+
+    .. code-block:: python
+
+        class BaseModel(Model):
+            class Meta:
+                database = db
+
+    Model configuration is kept namespaced in a special class called ``Meta`` -- this
+    convention is borrowed from Django, which does the same thing.  ``Meta`` configuration
+    is passed on to subclasses, so this code basically allows all our project's models
+    to connect to our database.
+
+3. Declare a model or two
+
+    .. code-block:: python
+
+        class Blog(BaseModel):
+            name = peewee.CharField()
+
+    Model definition is pretty similar to django or sqlalchemy -- you basically define
+    a class which represents a single table in the database, then its attributes (which
+    are subclasses of :py:class:`Field`) represent columns.
+
+
 Creating tables
 ---------------
 
@@ -58,24 +97,43 @@ Model instances
 Assuming you've created the tables and connected to the database, you are now 
 free to create models and execute queries.
 
-Creating models in the interactive interpreter is a snap:
+Creating models in the interactive interpreter is a snap.
+
+1. Use the :py:meth:`Model.create` classmethod:
+
+    .. code-block:: python
+
+        >>> blog = Blog.create(name='Funny pictures of animals blog')
+        >>> entry = Entry.create(
+        ...     headline='maru the kitty',
+        ...     content='http://www.youtube.com/watch?v=xdhLQCYQ-nQ',
+        ...     pub_date=datetime.datetime.now(),
+        ...     blog=blog
+        ... )
+    
+        >>> entry.blog.name
+        'Funny pictures of animals blog'
+
+2. Build up the instance programmatically:
+
+    .. code-block:: python
+    
+        >>> blog = Blog()
+        >>> blog.name = 'Another sweet blog'
+        >>> blog.save()
+
+Traversing foriegn keys
+^^^^^^^^^^^^^^^^^^^^^^^
+
+As you can see from above, the foreign key from ``Entry`` to ``Blog`` can be
+traversed automatically:
 
 .. code-block:: python
 
-    >>> blog = Blog.create(name='Funny pictures of animals blog')
-    >>> cat_entry = Entry.create(
-    ...     headline='maru the kitty',
-    ...     content='http://www.youtube.com/watch?v=xdhLQCYQ-nQ',
-    ...     pub_date=datetime.datetime.now(),
-    ...     blog=blog
-    ... )
-    >>> entry.blog
-    <__main__.Blog object at 0x151f4d0>
     >>> entry.blog.name
     'Funny pictures of animals blog'
 
-As you can see from above, the foreign key from ``Entry`` to ``Blog`` can be
-traversed automatically.  The reverse is also true:
+The reverse is also true, we can iterate a ``Blog`` objects associated ``Entries``:
 
 .. code-block:: python
 
@@ -90,6 +148,7 @@ Under the hood, the ``entry_set`` attribute is just a :py:class:`SelectQuery`:
 
     >>> blog.entry_set
     <peewee.SelectQuery object at 0x151f510>
+    
     >>> blog.entry_set.sql()
     ('SELECT * FROM entry WHERE blog_id = ?', [1])
 
@@ -98,7 +157,8 @@ Model options
 -------------
 
 In order not to pollute the model namespace, model-specific configuration is
-placed in a special class called ``Meta``:
+placed in a special class called ``Meta``, which is a convention borrowed from
+the django framework:
 
 .. code-block:: python
 
@@ -107,8 +167,6 @@ placed in a special class called ``Meta``:
     custom_db = SqliteDatabase('custom.db')
     
     class CustomModel(Model):
-        ... fields ...
-        
         class Meta:
             database = custom_db
 
@@ -145,7 +203,9 @@ Model methods
 
         Create an instance of the ``Model`` with the given attributes set.
         
-        example::
+        example:
+        
+        .. code-block:: python
             
             >>> user = User.create(username='admin', password='test')
 

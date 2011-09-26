@@ -143,7 +143,7 @@ statement in the database.  Usually this is something you'll only do once,
 whenever a new model is added.
 
 .. note::
-    adding fields after the table has been created will required you to
+    Adding fields after the table has been created will required you to
     either drop the table and re-create it or manually add the columns using ``ALTER TABLE``.
 
 
@@ -204,7 +204,7 @@ difference:
 
     def following(self):
         return User.select().join(
-            Relationship, on='to_user_id' # <-- explicitly declaring join column
+            Relationship, on='to_user_id'
         ).where(from_user=self).order_by('username')
 
     def followers(self):
