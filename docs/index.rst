@@ -23,6 +23,7 @@ Contents:
    peewee/uses
    peewee/example
    peewee/models
+   peewee/fields
    peewee/querying
 
 Indices and tables
