@@ -1,3 +1,5 @@
+.. _querying:
+
 Querying API
 ============
 
@@ -10,7 +12,7 @@ The "pieces" of a peewee query are generally representative of clauses you might
 find in a SQL query.  All pieces are chainable so rather complex queries are
 possible.
 
-::
+.. code-block:: python
 
     >>> user_q = User.select() # <-- query is not executed
     >>> user_q
@@ -19,7 +21,9 @@ possible.
     [u'admin', u'staff', u'editor']
 
 
-We can build up the query by adding some clauses to it::
+We can build up the query by adding some clauses to it:
+
+.. code-block:: python
 
     >>> user_q = user_q.where(username__in=['admin', 'editor']).order_by(('username', 'desc'))
     >>> [u.username for u in user_q] # <-- query is re-evaluated here
@@ -29,10 +33,10 @@ We can build up the query by adding some clauses to it::
 Django-style queries
 ^^^^^^^^^^^^^^^^^^^^
 
-If you are already familiar with the Django ORM, you can construct select queries
+If you are already familiar with the Django ORM, you can construct :py:class:`SelectQuery` instances
 using the familiar "double-underscore" syntax.
 
-::
+.. code-block:: python
 
     # get the active users
     active_users = User.filter(active=True)
@@ -53,10 +57,10 @@ using the familiar "double-underscore" syntax.
 Where clause
 ------------
 
-All queries except ``InsertQuery`` support the ``where()`` method.  If you are
+All queries except :py:class:`InsertQuery` support the ``where()`` method.  If you are
 familiar with Django's ORM, it is analagous to the ``filter()`` method.
 
-::
+.. code-block:: python
 
     >>> User.select().where(is_staff=True).sql()
     ('SELECT * FROM user WHERE is_staff = ?', [1])
@@ -64,30 +68,39 @@ familiar with Django's ORM, it is analagous to the ``filter()`` method.
 
 .. note:: ``User.select()`` is equivalent to ``SelectQuery(User)``.
 
-The ``where()`` method acts on the ``Model`` that is the current "context".
+The ``where()`` method acts on the :py:class:`Model` that is the current "query context".
 This is either:
 
 * the model the query class was initialized with
 * the model most recently JOINed on
 
-Here is an example using JOINs::
+Here is an example using JOINs:
+
+.. code-block:: python
 
     >>> User.select().where(is_staff=True).join(Blog).where(status=LIVE)
 
 This query grabs all staff users who have a blog that is "LIVE".  This does the
-opposite, grabs all the blogs that are live whose author is a staffer::
+opposite, grabs all the blogs that are live whose author is a staffer:
+
+.. code-block:: python
 
     >>> Blog.select().where(status=LIVE).join(User).where(is_staff=True)
 
-.. note:: to ``join()`` from one model to another there must be a 
-    ``ForeignKeyField`` linking the two.
+.. note:: to :py:meth:`~SelectQuery.join` from one model to another there must be a 
+    :py:class:`ForeignKeyField` linking the two.
 
-Another way to write the above query would be::
+Another way to write the above query would be:
 
-    >>> Blog.select().where(status=LIVE, user__in=User.select().where(is_staff=True))
+.. code-block:: python
+
+    >>> Blog.select().where(
+    ...     status=LIVE,
+    ...     user__in=User.select().where(is_staff=True)
+    ... )
 
 The above bears a little bit of explanation.  First off the SQL generated will
-not perform any explicit JOINs - it will rather use a subquery in the WHERE 
+not perform any explicit ``JOIN`` - it will rather use a subquery in the ``WHERE``
 clause:
 
 .. code-block:: sql
@@ -100,6 +113,10 @@ clause:
             SELECT t1.id FROM user AS t1 WHERE t1.is_staff = ?
         )
     )
+
+And here it is using joins:
+
+.. code-block:: sql
     
     # using joins
     SELECT t1.* FROM blog AS t1 
@@ -110,7 +127,10 @@ clause:
         t2.is_staff = ?
 
 
-The other bit that's unique about the query is that it specifies "user__in".
+Column lookups
+^^^^^^^^^^^^^^
+
+The other bit that's unique about the query is that it specifies ``"user__in"``.
 Users familiar with Django will recognize this syntax - lookups other than "="
 are signified by a double-underscore followed by the lookup type.  The following
 lookup types are available in peewee:
@@ -143,7 +163,7 @@ lookup types are available in peewee:
     case-insensitive check for substring
 
 ``__in``:
-    x IN y, where y is either a list of values or a ``SelectQuery``
+    x IN y, where y is either a list of values or a :py:class:`SelectQuery`
 
 
 Performing advanced queries
@@ -152,7 +172,7 @@ Performing advanced queries
 As you may have noticed, all the examples up to now have shown queries that
 combine multiple clauses with "AND".  Taking another page from Django's ORM,
 peewee allows the creation of arbitrarily complex queries using a special
-notation called **Q objects**.
+notation called :py:class:`Q` objects.
 
 .. code-block:: python
 
@@ -161,13 +181,17 @@ notation called **Q objects**.
     SELECT * FROM user WHERE (is_staff = ? OR is_superuser = ?)
 
 
-Q objects can be combined using the bitwise "or" and "and" operators.  In order
-to negate a Q object, use the bitwise "invert" operator::
+:py:class:`Q` objects can be combined using the bitwise "or" and "and" operators.  In order
+to negate a :py:class:`Q` object, use the bitwise "invert" operator:
+
+.. code-block:: python
 
     >>> staff_users = User.select().where(is_staff=True)
     >>> Blog.select().where(~Q(user__in=staff_users))
 
-This query generates the following SQL::
+This query generates the following SQL:
+
+.. code-block:: sql
 
     SELECT * FROM blog 
     WHERE 
@@ -175,7 +199,9 @@ This query generates the following SQL::
             SELECT t1.id FROM user AS t1 WHERE t1.is_staff = ?
         )
 
-Rather complex lookups are possible::
+Rather complex lookups are possible:
+
+.. code-block:: python
 
     >>> sq = User.select().where(
     ...     (Q(is_staff=True) | Q(is_superuser=True)) &
@@ -191,7 +217,7 @@ Rather complex lookups are possible::
 This query selects all staff or super users who joined after 2009 or before
 2005.
 
-.. note:: if you need more power, check out ``RawQuery`` below.
+.. note:: If you need more power, check out :py:class:`RawQuery`
 
 
 Aggregating records
@@ -213,7 +239,7 @@ This is equivalent to the following:
         Entry: [Count('id')],
     }).group_by(Blog).join(Entry)
 
-The resulting query will return Blog objects with all their normal attributes
+The resulting query will return ``Blog`` objects with all their normal attributes
 plus an additional attribute 'count' which will contain the number of entries.
 By default it uses an inner join if the foreign key is not nullable, which means
 blogs without entries won't appear in the list.  To remedy this, manually specify
@@ -237,7 +263,9 @@ In order to execute a query, it is *always* necessary to call the ``execute()``
 method.
 
 To get a better idea of how querying works let's look at some example queries
-and their return values::
+and their return values:
+
+.. code-block:: python
 
     >>> dq = User.delete().where(active=False) # <-- returns a DeleteQuery
     >>> dq
@@ -274,330 +302,425 @@ and their return values::
     [1, 2, 3, 4, 7, 8]
 
 
-.. note:: iterating over a SelectQuery will cause it to be evaluated, but iterating
+.. note::
+    Iterating over a :py:class:`SelectQuery` will cause it to be evaluated, but iterating
     over it multiple times will not result in the query being executed again.
 
 
 QueryResultWrapper
 ------------------
 
-As I hope the previous bit showed, Delete, Insert and Update queries are all
-pretty straightforward.  Select queries are a little bit tricky in that they
-return a special object called a ``QueryResultWrapper``.  The sole purpose of this
+As I hope the previous bit showed, ``Delete``, ``Insert`` and ``Update`` queries are all
+pretty straightforward.  ``Select`` queries are a little bit tricky in that they
+return a special object called a :py:class:`QueryResultWrapper`.  The sole purpose of this
 class is to allow the results of a query to be iterated over efficiently.  In
 general it should not need to be dealt with explicitly.
 
 The preferred method of iterating over a result set is to iterate directly over
-the ``SelectQuery``, allowing it to manage the ``QueryResultWrapper`` internally.
+the :py:class:`SelectQuery`, allowing it to manage the :py:class:`QueryResultWrapper` internally.
 
 
 SelectQuery
 -----------
 
-``SelectQuery`` is by far the most complex of the 4 query classes available in
-peewee.  It supports JOINing on other tables, aggregation via GROUP BY and HAVING
-clauses, ordering via ORDER BY, and can be sliced to return only a subset of
-results.  All methods are chain-able.
+.. py:class:: SelectQuery
 
-.. py:method:: __init__(self, model, query=None)
+    By far the most complex of the 4 query classes available in
+    peewee.  It supports ``JOIN`` operations on other tables, aggregation via ``GROUP BY`` and ``HAVING``
+    clauses, ordering via ``ORDER BY``, and can be iterated and sliced to return only a subset of
+    results.
 
-    if no query is provided, it will default to '*'.  this parameter can be 
-    either a dictionary or a string::
-    
-        >>> sq = SelectQuery(Blog, {Blog: ['id', 'title']})
-        >>> sq = SelectQuery(Blog, {
-        ...     Blog: ['*'], 
-        ...     Entry: [peewee.Count('id')]
-        ... }).group_by('id').join(Entry)
-        >>> print sq.sql()[0] # formatted
-        SELECT t1.*, COUNT(t2.id) AS count 
-        FROM blog AS t1 
-        INNER JOIN entry AS t2 
-            ON t1.id = t2.blog_id
-        GROUP BY t1.id
-    
-        >>> sq = SelectQuery(Blog, 'id, title')
-        >>> print sq.sql()[0]
-        SELECT id, title FROM blog
-
-.. py:method:: filter(self, *args, **kwargs)
-
-    :param args: a list of ``Q`` or ``Node`` objects
-    :param kwargs: a mapping of column + lookup to value, e.g. "age__gt=55"
-
-    provides a django-like syntax for building a query.
-    The key difference between ``filter`` and ``where`` is that ``filter``
-    supports traversing joins using django's "double-underscore" syntax::
-    
-        >>> sq = SelectQuery(Entry).filter(blog__title='Some Blog')
-    
-    This method is chainable::
-    
-        >>> base_q = User.filter(active=True)
-        >>> some_user = base_q.filter(username='charlie')
-
-.. py:method:: get(self, *args, **kwargs)
-
-    :param args: a list of ``Q`` or ``Node`` objects
-    :param kwargs: a mapping of column + lookup to value, e.g. "age__gt=55"
-
-    get a single row from the database that matches the given query.  raises a
-    ``<model-class>.DoesNotExist`` if no rows are returned::
-    
-        >>> active = User.select().where(active=True)
-        >>> try:
-        ...     user = active.get(username=username, password=password)
-        ... except User.DoesNotExist:
-        ...     user = None
-    
-    this method is also expose via the model api::
-    
-        >>> user = User.get(username=username, password=password)
-
-.. py:method:: where(self, *args, **kwargs)
-
-    :param args: a list of ``Q`` or ``Node`` objects
-    :param kwargs: a mapping of column + lookup to value, e.g. "age__gt=55"
-
-    calling ``where()`` will act on the model that is currently the ``query context``.
-    Unlike ``filter()``, only columns from the current query context are exposed::
-    
-        >>> sq = SelectQuery(Blog).where(title='some title', author=some_user)
-        >>> sq = SelectQuery(Blog).where(Q(title='some title') | Q(title='other title'))
+    .. py:method:: __init__(model, query=None)
         
-    .. note::
-    
-        ``where()`` is chainable
+        :param model: a :py:class:`Model` class to perform query on
+        :param query: either a dictionary, keyed by model with a list of columns, or a string of columns
 
-.. py:method:: join(self, model, join_type=None, on=None)
-
-    :param model: the model to join on.  there must be a ``ForeignKeyField`` between
-        the current "query context" and the model passed in.
-    :param join_type: allows the type of JOIN used to be specified explicitly
-    :param on: if multiple foreign keys exist between two models, this parameter
-        is a string containing the name of the ForeignKeyField to join on.
-
-    generate a JOIN clause from the current "query context" to the ``model`` passed
-    in, and establishes ``model`` as the new "query context".
-    
-    >>> sq = SelectQuery(Blog).join(Entry).where(title='Some Entry')
-    >>> sq = SelectQuery(User).join(Relationship, on='to_user_id').where(from_user=self)
-
-.. py:method:: switch(self, model)
-
-    switches the "query context" to the given model.  raises an exception if the
-    model has not been selected or joined on previously.
-    
-    >>> sq = SelectQuery(Blog).join(Entry).switch(Blog).where(title='Some Blog')
-
-.. py:method:: count(self)
-
-    returns an integer representing the number of rows in the current query
-    
-    >>> sq = SelectQuery(Blog)
-    >>> sq.count()
-    45 # <-- number of blogs
-    >>> sq.where(status=DELETED)
-    >>> sq.count()
-    3 # <-- number of blogs that are marked as deleted
-
-.. py:method:: exists(self)
-
-    returns a boolean whether the current query will return any rows.  uses an
-    optimized lookup, so use this rather than ``get``::
-    
-    >>> sq = User.select().where(active=True)
-    >>> if sq.where(username=username, password=password).exists():
-    ...     authenticated = True
-
-.. py:method:: annotate(self, related_model, aggregation=None)
-
-    annotate a query with an aggregation performed on a related model, for example,
-    "get a list of blogs with the number of entries on each"::
-    
-        >>> Blog.select().annotate(Entry)
-    
-    if ``aggregation`` is None, it will default to ``Count(related_model, 'count')``,
-    but can be anything::
-    
-        >>> blog_with_latest = Blog.select().annotate(Entry, Max('pub_date', 'max_pub'))
-    
-    .. note::
-    
-        if the ``ForeignKeyField`` is ``nullable``, then a ``LEFT OUTER`` join
-        will be used, otherwise the join is an ``INNER`` join.  if an ``INNER``
-        join is used, in the above example blogs with no entries would not be
-        returned.  to avoid this, you can explicitly join before calling ``annotate()``::
+        If no query is provided, it will default to ``'*'``.  this parameter can be 
+        either a dictionary or a string:
         
-            >>> Blog.select().join(Entry, 'left outer').annotate(Entry)
-
-.. py:method:: group_by(self, clause)
-
-    clause can be either a single field name or a list of field names, in 
-    which case it takes its context from the current query_context.  it can
-    *also* be a model class, in which case all that models fields will be
-    included in the GROUP BY clause
-    
-    ::
-    
-        >>> # get a list of blogs with the count of entries each has
-        >>> sq = Blog.select({
-        ...     Blog: ['*'], 
-        ...     Entry: [Count('id')]
-        ... }).group_by('id').join(Entry)
-
-        >>> # slightly more complex, get a list of blogs ordered by most recent pub_date
-        >>> sq = Blog.select({
-        ...     Blog: ['*'],
-        ...     Entry: [Max('pub_date', 'max_pub_date')],
-        ... }).join(Entry)
-        >>> # now, group by the entry's blog id, followed by all the blog fields
-        >>> sq = sq.group_by('blog_id').group_by(Blog)
-        >>> # finally, order our results by max pub date
-        >>> sq = sq.order_by(peewee.desc('max_pub_date'))
-
-.. py:method:: having(self, clause)
-
-    adds the clause to the HAVING clause
-    
-    >>> sq = Blog.select({
-    ...     Blog: ['*'], 
-    ...     Entry: [Count('id', 'num_entries')]
-    ... }).group_by('id').join(Entry).having('num_entries > 10')
-
-.. py:method:: order_by(self, clause)
-    
-    adds the provided clause (a field name or alias) to the query's 
-    ORDER BY clause.  if a field name is passed in, it must be a field on the
-    current "query context", otherwise it is treated as an alias.  peewee also
-    provides two convenience methods to allow ordering ascending or descending,
-    called ``asc()`` and ``desc()``.
-    
-    example::
-    
-        >>> sq = Blog.select().order_by('title')
-        >>> sq = Blog.select({
-        ...     Blog: ['*'],
-        ...     Entry: [Max('pub_date', 'max_pub')]
-        ... }).join(Entry).order_by(desc('max_pub'))
-    
-    check out how the query context applies to ordering::
-    
-        >>> blog_title = Blog.select().order_by('title').join(Entry)
-        >>> print blog_title.sql()[0]
-        SELECT t1.* FROM blog AS t1
-        INNER JOIN entry AS t2
-            ON t1.id = t2.blog_id
-        ORDER BY t1.title
+        .. code-block:: python
         
-        >>> entry_title = Blog.select().join(Entry).order_by('title')
-        >>> print entry_title.sql()[0]
-        SELECT t1.* FROM blog AS t1
-        INNER JOIN entry AS t2
-            ON t1.id = t2.blog_id
-        ORDER BY t2.title # <-- note that it's using the title on Entry this time
+            >>> sq = SelectQuery(Blog, {Blog: ['id', 'title']})
+            >>> sq = SelectQuery(Blog, {
+            ...     Blog: ['*'], 
+            ...     Entry: [peewee.Count('id')]
+            ... }).group_by('id').join(Entry)
+            >>> print sq.sql()[0] # formatted
+            SELECT t1.*, COUNT(t2.id) AS count 
+            FROM blog AS t1 
+            INNER JOIN entry AS t2 
+                ON t1.id = t2.blog_id
+            GROUP BY t1.id
+        
+            >>> sq = SelectQuery(Blog, 'id, title')
+            >>> print sq.sql()[0]
+            SELECT id, title FROM blog
 
-.. py:method:: paginate(self, page_num, paginate_by=20)
+    .. py:method:: filter(*args, **kwargs)
 
-    applies a LIMIT and OFFSET to the query.
+        :param args: a list of :py:class:`Q` or :py:class:`Node` objects
+        :param kwargs: a mapping of column + lookup to value, e.g. "age__gt=55"
+        :rtype: a :py:class:`SelectQuery` instance
+
+        Provides a django-like syntax for building a query.
+        The key difference between :py:meth:`~SelectQuery.filter` and :py:meth:`~SelectQuery.where` is that ``filter``
+        supports traversing joins using django's "double-underscore" syntax:
+        
+        .. code-block:: python
+        
+            >>> sq = SelectQuery(Entry).filter(blog__title='Some Blog')
+        
+        This method is chainable:
+        
+        .. code-block:: python
+        
+            >>> base_q = User.filter(active=True)
+            >>> some_user = base_q.filter(username='charlie')
+
+    .. py:method:: get(*args, **kwargs)
+
+        :param args: a list of :py:class:`Q` or :py:class:`Node` objects
+        :param kwargs: a mapping of column + lookup to value, e.g. "age__gt=55"
+        :rtype: :py:class:`Model` instance or raises ``DoesNotExist`` exception
+
+        Get a single row from the database that matches the given query.  Raises a
+        ``<model-class>.DoesNotExist`` if no rows are returned:
+        
+        .. code-block:: python
+        
+            >>> active = User.select().where(active=True)
+            >>> try:
+            ...     user = active.get(username=username, password=password)
+            ... except User.DoesNotExist:
+            ...     user = None
+        
+        This method is also exposed via the :py:class:`Model` api:
+        
+            >>> user = User.get(username=username, password=password)
+
+    .. py:method:: where(*args, **kwargs)
+
+        :param args: a list of :py:class:`Q` or :py:class:`Node` objects
+        :param kwargs: a mapping of column + lookup to value, e.g. "age__gt=55"
+        :rtype: a :py:class:`SelectQuery` instance
+
+        Calling ``where()`` will act on the model that is currently the ``query context``.
+        Unlike :py:meth:`~SelectQuery.filter`, only columns from the current query context are exposed::
+        
+            >>> sq = SelectQuery(Blog).where(title='some title', author=some_user)
+            >>> sq = SelectQuery(Blog).where(Q(title='some title') | Q(title='other title'))
+        
+        .. note::
+        
+            :py:meth:`~SelectQuery.where` calls are chainable
+
+    .. py:method:: join(model, join_type=None, on=None)
+
+        :param model: the model to join on.  there must be a :py:class:`ForeignKeyField` between
+            the current ``query context`` and the model passed in.
+        :param join_type: allows the type of ``JOIN`` used to be specified explicitly
+        :param on: if multiple foreign keys exist between two models, this parameter
+            is a string containing the name of the ForeignKeyField to join on.
+        :rtype: a :py:class:`SelectQuery` instance
+
+        Generate a ``JOIN`` clause from the current ``query context`` to the ``model`` passed
+        in, and establishes ``model`` as the new ``query context``.
+        
+        >>> sq = SelectQuery(Blog).join(Entry).where(title='Some Entry')
+        >>> sq = SelectQuery(User).join(Relationship, on='to_user_id').where(from_user=self)
+
+    .. py:method:: switch(model)
     
-    >>> Blog.select().order_by('username').paginate(3, 20) # <-- get blogs 41-60
+        :param model: model to switch the ``query context`` to.
+        :rtype: a :py:class:`SelectQuery` instance
 
-.. py:method:: distinct(self)
+        Switches the ``query context`` to the given model.  Raises an exception if the
+        model has not been selected or joined on previously.
+        
+        >>> sq = SelectQuery(Blog).join(Entry).switch(Blog).where(title='Some Blog')
 
-    indicates that this query should only return distinct rows.  results in a
-    SELECT DISTINCT query.
+    .. py:method:: count()
 
-.. py:method:: execute(self)
+        :rtype: an integer representing the number of rows in the current query
+        
+        >>> sq = SelectQuery(Blog)
+        >>> sq.count()
+        45 # <-- number of blogs
+        >>> sq.where(status=DELETED)
+        >>> sq.count()
+        3 # <-- number of blogs that are marked as deleted
 
-    executes the query and returns a ``QueryResultWrapper`` for iterating over
-    the result set.  the results are managed internally by the query and whenever
-    a clause is added that would possibly alter the result set, the query is
-    marked for re-execution.
+    .. py:method:: exists()
 
-.. py:method:: __iter__(self)
+        :rtype: boolean whether the current query will return any rows.  uses an
+            optimized lookup, so use this rather than :py:meth:`~SelectQuery.get`.
+        
+        .. code-block:: python
+        
+            >>> sq = User.select().where(active=True)
+            >>> if sq.where(username=username, password=password).exists():
+            ...     authenticated = True
 
-    executes the query::
+    .. py:method:: annotate(related_model, aggregation=None)
     
-        >>> for user in User.select().where(active=True):
-        ...     print user.username
+        :param related_model: related :py:class:`Model` on which to perform aggregation,
+            must be linked by :py:class:`ForeignKeyField`.
+        :param aggregation: the type of aggregation to use, e.g. ``Max('pub_date', 'max_pub')``
+        :rtype: :py:class:`SelectQuery`
+
+        Annotate a query with an aggregation performed on a related model, for example,
+        "get a list of blogs with the number of entries on each"::
+        
+            >>> Blog.select().annotate(Entry)
+        
+        if ``aggregation`` is None, it will default to ``Count(related_model, 'count')``,
+        but can be anything::
+        
+            >>> blog_with_latest = Blog.select().annotate(Entry, Max('pub_date', 'max_pub'))
+        
+        .. note::
+        
+            If the ``ForeignKeyField`` is ``nullable``, then a ``LEFT OUTER`` join
+            will be used, otherwise the join is an ``INNER`` join.  If an ``INNER``
+            join is used, in the above example blogs with no entries would not be
+            returned.  To avoid this, you can explicitly join before calling ``annotate()``::
+            
+                >>> Blog.select().join(Entry, 'left outer').annotate(Entry)
+
+    .. py:method:: group_by(clause)
+
+        :param clause: either a single field name or a list of field names, in 
+            which case it takes its context from the current query_context.  it can
+            *also* be a model class, in which case all that models fields will be
+            included in the ``GROUP BY`` clause
+        :rtype: :py:class:`SelectQuery`
+        
+        .. code-block:: python
+        
+            >>> # get a list of blogs with the count of entries each has
+            >>> sq = Blog.select({
+            ...     Blog: ['*'], 
+            ...     Entry: [Count('id')]
+            ... }).group_by('id').join(Entry)
+
+            >>> # slightly more complex, get a list of blogs ordered by most recent pub_date
+            >>> sq = Blog.select({
+            ...     Blog: ['*'],
+            ...     Entry: [Max('pub_date', 'max_pub_date')],
+            ... }).join(Entry)
+            >>> # now, group by the entry's blog id, followed by all the blog fields
+            >>> sq = sq.group_by('blog_id').group_by(Blog)
+            >>> # finally, order our results by max pub date
+            >>> sq = sq.order_by(peewee.desc('max_pub_date'))
+
+    .. py:method:: having(clause)
+    
+        :param clause: Expression to use as the ``HAVING`` clause
+        :rtype: :py:class:`SelectQuery`
+        
+        .. code-block:: python
+            
+            >>> sq = Blog.select({
+            ...     Blog: ['*'], 
+            ...     Entry: [Count('id', 'num_entries')]
+            ... }).group_by('id').join(Entry).having('num_entries > 10')
+
+    .. py:method:: order_by(clause)
+    
+        :param clause: Expression to use as the ``ORDER BY`` clause, see notes below
+        :rtype: :py:class:`SelectQuery`
+        
+        
+        .. note::
+            Adds the provided clause (a field name or alias) to the query's 
+            ``ORDER BY`` clause.  If a field name is passed in, it must be a field on the
+            current ``query context``, otherwise it is treated as an alias.  peewee also
+            provides two convenience methods to allow ordering ascending or descending,
+            called ``asc()`` and ``desc()``.
+        
+        example:
+        
+        .. code-block:: python
+        
+            >>> sq = Blog.select().order_by('title')
+            >>> sq = Blog.select({
+            ...     Blog: ['*'],
+            ...     Entry: [Max('pub_date', 'max_pub')]
+            ... }).join(Entry).order_by(desc('max_pub'))
+        
+        check out how the ``query context`` applies to ordering:
+        
+        .. code-block:: python
+        
+            >>> blog_title = Blog.select().order_by('title').join(Entry)
+            >>> print blog_title.sql()[0]
+            SELECT t1.* FROM blog AS t1
+            INNER JOIN entry AS t2
+                ON t1.id = t2.blog_id
+            ORDER BY t1.title
+            
+            >>> entry_title = Blog.select().join(Entry).order_by('title')
+            >>> print entry_title.sql()[0]
+            SELECT t1.* FROM blog AS t1
+            INNER JOIN entry AS t2
+                ON t1.id = t2.blog_id
+            ORDER BY t2.title # <-- note that it's using the title on Entry this time
+
+    .. py:method:: paginate(page_num, paginate_by=20)
+    
+        :param page_num: a 1-based page number to use for paginating results
+        :param paginate_by: number of results to return per-page
+        :rtype: :py:class:`SelectQuery`
+
+        applies a ``LIMIT`` and ``OFFSET`` to the query.
+        
+        .. code-block:: python
+        
+            >>> Blog.select().order_by('username').paginate(3, 20) # <-- get blogs 41-60
+
+    .. py:method:: distinct()
+
+        :rtype: :py:class:`SelectQuery`
+
+        indicates that this query should only return distinct rows.  results in a
+        ``SELECT DISTINCT`` query.
+
+    .. py:method:: execute()
+    
+        :rtype: :py:class:`QueryResultWrapper`
+
+        Executes the query and returns a :py:class:`QueryResultWrapper` for iterating over
+        the result set.  The results are managed internally by the query and whenever
+        a clause is added that would possibly alter the result set, the query is
+        marked for re-execution.
+
+    .. py:method:: __iter__()
+
+        Executes the query:
+        
+        .. code-block:: python
+        
+            >>> for user in User.select().where(active=True):
+            ...     print user.username
 
 
 UpdateQuery
 -----------
 
-``UpdateQuery`` is fairly straightforward and is used for updating rows in the
-database.
+.. py:class:: UpdateQuery
 
-.. py:method:: __init__(self, model, **kwargs)
+    Used for updating rows in the database.
 
-    creates an ``UpdateQuery`` instance for the given model.  "kwargs" is a dictionary
-    of field: value pairs::
+    .. py:method:: __init__(model, **kwargs)
     
-        >>> uq = UpdateQuery(User, active=False).where(registration_expired=True)
-        >>> print uq.sql()
-        ('UPDATE user SET active=? WHERE registration_expired = ?', [0, 1])
+        :param model: :py:class:`Model` class on which to perform update
+        :param kwargs: mapping of field/value pairs containing columns and values to update
+        
+        .. code-block:: python
+        
+            >>> uq = UpdateQuery(User, active=False).where(registration_expired=True)
+            >>> print uq.sql()
+            ('UPDATE user SET active=? WHERE registration_expired = ?', [0, 1])
+    
+    .. py:method:: where(*args, **kwargs)
 
-.. py:method:: execute(self)
+        :param args: a list of :py:class:`Q` or :py:class:`Node` objects
+        :param kwargs: a mapping of column + lookup to value, e.g. "age__gt=55"
+        :rtype: a :py:class:`UpdateQuery` instance
 
-    performs the query, returning the number of rows that were updated
+        .. note::
+        
+            :py:meth:`~UpdateQuery.where` calls are chainable
+
+    .. py:method:: execute()
+    
+        :rtype: Number of rows updated
+
+        Performs the query
 
 
 DeleteQuery
 -----------
 
-``DeleteQuery`` deletes rows of the given model.  It will *not* traverse 
-foreign keys or ensure that constraints are obeyed, so use it with care.
+.. py:class:: DeleteQuery
 
-.. py:method:: __init__(self, model)
-
-    creates a ``DeleteQuery`` instance for the given model::
+    Deletes rows of the given model.
     
-        >>> dq = DeleteQuery(User).where(active=False)
-        >>> print dq.sql()
-        ('DELETE FROM user WHERE active = ?', [0])
+    .. note::
+        It will *not* traverse foreign keys or ensure that constraints are obeyed, so use it with care.
 
-.. py:method:: execute(self)
+    .. py:method:: __init__(model)
 
-    performs the query, returning the number of rows that were deleted
+        creates a ``DeleteQuery`` instance for the given model:
+        
+        .. code-block:: python
+        
+            >>> dq = DeleteQuery(User).where(active=False)
+            >>> print dq.sql()
+            ('DELETE FROM user WHERE active = ?', [0])
+    
+    .. py:method:: where(*args, **kwargs)
+
+        :param args: a list of :py:class:`Q` or :py:class:`Node` objects
+        :param kwargs: a mapping of column + lookup to value, e.g. "age__gt=55"
+        :rtype: a :py:class:`DeleteQuery` instance
+
+        .. note::
+        
+            :py:meth:`~DeleteQuery.where` calls are chainable
+
+    .. py:method:: execute()
+    
+        :rtype: Number of rows deleted
+
+        Performs the query
 
 
 InsertQuery
 -----------
 
-``InsertQuery`` creates a new row for the given model.
+.. py:class:: InsertQuery
 
-.. py:method:: __init__(self, model, **kwargs)
+    Creates a new row for the given model.
 
-    creates an ``InsertQuery`` instance for the given model where kwargs is a
-    dictionary of field name to value::
+    .. py:method:: __init__(model, **kwargs)
+
+        creates an ``InsertQuery`` instance for the given model where kwargs is a
+        dictionary of field name to value:
+        
+        .. code-block:: python
+        
+            >>> iq = InsertQuery(User, username='admin', password='test', active=True)
+            >>> print iq.sql()
+            ('INSERT INTO user (username, password, active) VALUES (?, ?, ?)', ['admin', 'test', 1])
+
+    .. py:method:: execute()
     
-        >>> iq = InsertQuery(User, username='admin', password='test', active=True)
-        >>> print iq.sql()
-        ('INSERT INTO user (username, password, active) VALUES (?, ?, ?)', ['admin', 'test', 1])
+        :rtype: primary key of the new row
 
-.. py:method:: execute(self)
-
-    performs the query, returning the primary key of the row that was added
+        Performs the query
 
 
 RawQuery
 --------
 
-``RawQuery`` allows execution of an arbitrary SELECT query and returns instances
-of the model via a ``QueryResultsWrapper``.
+.. py:class:: RawQuery
 
-.. py:method:: __init__(self, model, query, *params)
+    Allows execution of an arbitrary ``SELECT`` query and returns instances
+    of the model via a :py:class:`QueryResultsWrapper`.
 
-    creates a ``RawQuery`` instance for the given model which, when executed,
-    will run the given query with the given parameters and return model instances::
+    .. py:method:: __init__(model, query, *params)
+
+        creates a ``RawQuery`` instance for the given model which, when executed,
+        will run the given query with the given parameters and return model instances::
+        
+            >>> rq = RawQuery(User, 'SELECT * FROM users WHERE username = ?', 'admin')
+            >>> for obj in rq.execute():
+            ...     print obj
+            <User: admin>
+
+    .. py:method:: execute()
     
-        >>> rq = RawQuery(User, 'SELECT * FROM users WHERE username = ?', 'admin')
-        >>> for obj in rq.execute():
-        ...     print obj
-        <User: admin>
+        :rtype: a :py:class:`QueryResultWrapper` for iterating over the result set.  The results are instances of the given model.
 
-.. py:method:: execute(self)
-
-    executes the query and returns a ``QueryResultWrapper`` for iterating over
-    the result set.  the results are instances of the given model.
+        Performs the query

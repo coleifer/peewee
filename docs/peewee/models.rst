@@ -175,7 +175,7 @@ Model methods
         :param kwargs: a mapping of column + lookup to value, e.g. "age__gt=55"
         :rtype: :py:class:`Model` instance or raises ``DoesNotExist`` exception
 
-        Get a single row from the database that matches the given query.  raises a
+        Get a single row from the database that matches the given query.  Raises a
         ``<model-class>.DoesNotExist`` if no rows are returned:
         
         .. code-block:: python
@@ -274,7 +274,7 @@ Model methods
             >>> database.connect()
             >>> SomeModel.create_table() # <-- creates the table for SomeModel
 
-    .. py:method:: drop_table([fail_silently=False])
+    .. py:classmethod:: drop_table([fail_silently=False])
     
         :param fail_silently: If set to ``True``, the query will check for the existence of
             the table before attempting to remove.
@@ -285,6 +285,6 @@ Model methods
             Cascading deletes are not handled by this method, nor is the removal
             of any constraints.
     
-    .. py:method:: table_exists()
+    .. py:classmethod:: table_exists()
     
         :rtype: Boolean whether the table for this model exists in the database
