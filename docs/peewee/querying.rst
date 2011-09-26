@@ -9,23 +9,26 @@ Constructing queries
 Queries in peewee are constructed one piece at a time.
 
 The "pieces" of a peewee query are generally representative of clauses you might
-find in a SQL query.  All pieces are chainable so rather complex queries are
-possible.
+find in a SQL query.  Most methods are chainable, so you build your query up
+one clause at a time.  This way, rather complex queries are possible.
+
+Here is a barebones select query:
 
 .. code-block:: python
 
     >>> user_q = User.select() # <-- query is not executed
     >>> user_q
     <peewee.SelectQuery object at 0x7f6b0810c610>
+    
     >>> [u.username for u in user_q] # <-- query is evaluated here
     [u'admin', u'staff', u'editor']
-
 
 We can build up the query by adding some clauses to it:
 
 .. code-block:: python
 
-    >>> user_q = user_q.where(username__in=['admin', 'editor']).order_by(('username', 'desc'))
+    >>> user_q = user_q.where(username__in=['admin', 'editor'])
+    >>> user_q = user_q.order_by(('username', 'desc'))
     >>> [u.username for u in user_q] # <-- query is re-evaluated here
     [u'editor', u'admin']
 
@@ -34,24 +37,42 @@ Django-style queries
 ^^^^^^^^^^^^^^^^^^^^
 
 If you are already familiar with the Django ORM, you can construct :py:class:`SelectQuery` instances
-using the familiar "double-underscore" syntax.
+using the familiar "double-underscore" syntax to generate the proper ``JOINs`` and
+``WHERE`` clauses.
 
-.. code-block:: python
 
-    # get the active users
-    active_users = User.filter(active=True)
+Comparing the two methods of querying
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-    # how many active users are there?
-    active_users.count()
+Get active users:
+    .. code-block:: python
     
-    # query users who are either staffers or superusers
-    editors = User.filter(Q(is_staff=True) | Q(is_superuser=True))
+        User.select().where(active=True)
     
-    # get tweets by a specific user
-    Tweet.filter(user__username='charlie')
+        User.filter(active=True)
+
+Get users who are either staff or superusers:
+    .. code-block:: python
     
-    # get tweets by editors
-    Tweet.filter(Q(user__is_staff=True) | Q(user__is_superuser=True))
+        User.select().where(Q(is_staff=True) | Q(is_superuser=True))
+    
+        User.filter(Q(is_staff=True) | Q(is_superuser=True))
+
+Get tweets by user named "charlie":
+    .. code-block:: python
+    
+        Tweet.select().join(User).where(username='charlie')
+    
+        Tweet.filter(user__username='charlie')
+
+Get tweets by staff or superusers (assumes FK relationship):
+    .. code-block:: python
+    
+        Tweet.select().join(User).where(
+            Q(is_staff=True) | Q(is_superuser=True)
+        )
+    
+        Tweet.filter(Q(user__is_staff=True) | Q(user__is_superuser=True))
 
 
 Where clause
