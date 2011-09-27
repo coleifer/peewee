@@ -25,6 +25,7 @@ Contents:
    peewee/models
    peewee/fields
    peewee/querying
+   peewee/database
 
 Indices and tables
 ==================
