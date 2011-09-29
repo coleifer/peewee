@@ -1402,6 +1402,25 @@ class RelatedFieldTests(BasePeeweeTestCase):
         self.assertEqual(list(blog.entry_set), [e2])
         self.assertEqual(list(blog2.entry_set.order_by('title')), [e1, e3])
 
+    def test_delete_instance(self):
+        b1 = self.create_blog(title='b1')
+        b2 = self.create_blog(title='b2')
+        b3 = self.create_blog(title='b3')
+
+        self.assertEqual(list(Blog.select().order_by('title')), [
+            b1, b2, b3
+        ])
+
+        b1.delete_instance()
+        self.assertEqual(list(Blog.select().order_by('title')), [
+            b2, b3
+        ])
+
+        b3.delete_instance()
+        self.assertEqual(list(Blog.select().order_by('title')), [
+            b2
+        ])
+
 
 class FilterQueryTests(BasePeeweeTestCase):
     def test_filter_no_joins(self):

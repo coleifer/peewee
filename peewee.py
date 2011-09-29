@@ -1717,3 +1717,8 @@ class Model(object):
             insert = self.insert(**field_dict)
             new_pk = insert.execute()
             setattr(self, self._meta.pk_name, new_pk)
+
+    def delete_instance(self):
+        return self.delete().where(**{
+            self._meta.pk_name: self.get_pk()
+        }).execute()
