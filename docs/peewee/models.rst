@@ -209,6 +209,16 @@ Model methods
             
             >>> user = User.create(username='admin', password='test')
 
+    .. py:method:: delete_instance()
+
+        Delete the given instance
+
+        example:
+
+        .. code-block:: python
+        
+            >>> some_obj.delete_instance() # <-- it is gone forever
+
     .. py:classmethod:: filter(*args, **kwargs)
 
         :param args: a list of :py:class:`Q` or :py:class:`Node` objects
