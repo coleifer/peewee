@@ -1,4 +1,5 @@
 import datetime
+import decimal
 import logging
 import os
 import Queue
@@ -90,6 +91,8 @@ class NullModel(TestModel):
     datetime_field = peewee.DateTimeField(null=True)
     int_field = peewee.IntegerField(null=True)
     float_field = peewee.FloatField(null=True)
+    decimal_field1 = peewee.DecimalField(null=True)
+    decimal_field2 = peewee.DecimalField(decimal_places=2, null=True)
 
 class Team(TestModel):
     name = peewee.CharField()
@@ -1775,6 +1778,8 @@ class FieldTypeTests(BasePeeweeTestCase):
         self.assertEqual(nm.datetime_field, None)
         self.assertEqual(nm.int_field, None)
         self.assertEqual(nm.float_field, None)
+        self.assertEqual(nm.decimal_field1, None)
+        self.assertEqual(nm.decimal_field2, None)
         
         null_lookup = NullModel.select().where(char_field__is=None)
         self.assertSQLEqual(null_lookup.sql(), ('SELECT * FROM nullmodel WHERE char_field IS NULL', []))
@@ -1792,11 +1797,15 @@ class FieldTypeTests(BasePeeweeTestCase):
         self.assertEqual(nm_from_db.datetime_field, None)
         self.assertEqual(nm_from_db.int_field, None)
         self.assertEqual(nm_from_db.float_field, None)
+        self.assertEqual(nm_from_db.decimal_field1, None)
+        self.assertEqual(nm_from_db.decimal_field2, None)
         
         nm.char_field = ''
         nm.text_field = ''
         nm.int_field = 0
         nm.float_field = 0.0
+        nm.decimal_field1 = 0
+        nm.decimal_field2 = decimal.Decimal(0)
         nm.save()
         
         nm_from_db = NullModel.get(id=nm.id)
@@ -1805,6 +1814,19 @@ class FieldTypeTests(BasePeeweeTestCase):
         self.assertEqual(nm_from_db.datetime_field, None)
         self.assertEqual(nm_from_db.int_field, 0)
         self.assertEqual(nm_from_db.float_field, 0.0)
+        self.assertEqual(nm_from_db.decimal_field1, decimal.Decimal(0))
+        self.assertEqual(nm_from_db.decimal_field2, decimal.Decimal(0))
+
+    def test_decimal_precision(self):
+        nm = NullModel()
+        nm.decimal_field1 = decimal.Decimal("3.14159265358979323")
+        nm.decimal_field2 = decimal.Decimal("100.33")
+        nm.save()
+
+        nm_from_db = NullModel.get(id=nm.id)
+        # sqlite doesn't enforce these constraints properly
+        #self.assertEqual(nm_from_db.decimal_field1, decimal.Decimal("3.14159"))
+        self.assertEqual(nm_from_db.decimal_field2, decimal.Decimal("100.33"))
     
     def test_default_values(self):
         now = datetime.datetime.now() - datetime.timedelta(seconds=1)

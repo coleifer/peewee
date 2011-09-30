@@ -9,6 +9,7 @@
 #    '
 from __future__ import with_statement
 from datetime import datetime
+import decimal
 import logging
 import os
 import re
@@ -33,8 +34,8 @@ except ImportError:
 __all__ = [
     'ImproperlyConfigured', 'SqliteDatabase', 'MySQLDatabase', 'PostgresqlDatabase',
     'asc', 'desc', 'Count', 'Max', 'Min', 'Q', 'Field', 'CharField', 'TextField',
-    'DateTimeField', 'BooleanField', 'FloatField', 'IntegerField', 'PrimaryKeyField',
-    'ForeignKeyField', 'Model', 'filter_query', 'annotate_query',
+    'DateTimeField', 'BooleanField', 'DecimalField', 'FloatField', 'IntegerField',
+    'PrimaryKeyField', 'ForeignKeyField', 'Model', 'filter_query', 'annotate_query',
 ]
 
 class ImproperlyConfigured(Exception):
@@ -42,6 +43,10 @@ class ImproperlyConfigured(Exception):
 
 if sqlite3 is None and psycopg2 is None and mysql is None:
     raise ImproperlyConfigured('Either sqlite3, psycopg2 or MySQLdb must be installed')
+
+if sqlite3:
+    sqlite3.register_adapter(decimal.Decimal, lambda v: str(v))
+    sqlite3.register_converter('decimal', lambda v: decimal.Decimal(v))
 
 
 DATABASE_NAME = os.environ.get('PEEWEE_DATABASE', 'peewee.db')
@@ -70,7 +75,7 @@ class BaseAdapter(object):
         field_types = {
             'integer': 'INTEGER',
             'float': 'REAL',
-            'decimal': 'NUMERIC',
+            'decimal': 'DECIMAL',
             'string': 'VARCHAR',
             'text': 'TEXT',
             'datetime': 'DATETIME',
@@ -163,7 +168,8 @@ class PostgresqlAdapter(BaseAdapter):
     def get_field_overrides(self):
         return {
             'primary_key': 'SERIAL',
-            'datetime': 'TIMESTAMP'
+            'datetime': 'TIMESTAMP',
+            'decimal': 'NUMERIC',
         }
     
     def last_insert_id(self, cursor, model):
@@ -199,6 +205,7 @@ class MySQLAdapter(BaseAdapter):
             'boolean': 'bool',
             'float': 'double precision',
             'text': 'longtext',
+            'decimal': 'numeric',
         }
 
 
@@ -1444,6 +1451,26 @@ class FloatField(Field):
     def python_value(self, value):
         if value is not None:
             return float(value)
+
+
+class DecimalField(Field):
+    db_field = 'decimal'
+    field_template = '%(column_type)s(%(max_digits)d, %(decimal_places)d)%(nullable)s'
+    
+    def get_attributes(self):
+        return {
+            'max_digits': 10,
+            'decimal_places': 5,
+        }
+    
+    def db_value(self, value):
+        return self.null_wrapper(value, decimal.Decimal(0))
+    
+    def python_value(self, value):
+        if value is not None:
+            if isinstance(value, decimal.Decimal):
+                return value
+            return decimal.Decimal(str(value))
 
 
 class PrimaryKeyField(IntegerField):
