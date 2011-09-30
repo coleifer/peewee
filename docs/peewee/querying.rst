@@ -546,18 +546,22 @@ SelectQuery
             ...     Entry: [Count('id', 'num_entries')]
             ... }).group_by('id').join(Entry).having('num_entries > 10')
 
-    .. py:method:: order_by(clause)
+    .. py:method:: order_by(*clauses)
     
-        :param clause: Expression to use as the ``ORDER BY`` clause, see notes below
+        :param clauses: Expression(s) to use as the ``ORDER BY`` clause, see notes below
         :rtype: :py:class:`SelectQuery`
-        
         
         .. note::
             Adds the provided clause (a field name or alias) to the query's 
-            ``ORDER BY`` clause.  If a field name is passed in, it must be a field on the
-            current ``query context``, otherwise it is treated as an alias.  peewee also
-            provides two convenience methods to allow ordering ascending or descending,
-            called ``asc()`` and ``desc()``.
+            ``ORDER BY`` clause.  It can be either a single field name, in which
+            case it will apply to the current query context, or a 2- or 3-tuple.
+            
+            The 2-tuple can be either ``(Model, 'field_name')`` or ``('field_name', 'ASC'/'DESC')``.
+            
+            The 3-tuple is ``(Model, 'field_name', 'ASC'/'DESC')``.
+            
+            If the field is not found on the model evaluated against, it will be
+            treated as an alias.
         
         example:
         
@@ -568,6 +572,15 @@ SelectQuery
             ...     Blog: ['*'],
             ...     Entry: [Max('pub_date', 'max_pub')]
             ... }).join(Entry).order_by(desc('max_pub'))
+        
+        slightly more complex example:
+        
+        .. code-block:: python
+        
+            >>> sq = Entry.select().join(Blog).order_by(
+            ...     (Blog, 'title'), # order by blog title ascending
+            ...     (Entry, 'pub_date', 'DESC'), # then order by entry pub date desc
+            ... )
         
         check out how the ``query context`` applies to ordering:
         

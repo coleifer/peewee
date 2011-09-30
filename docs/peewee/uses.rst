@@ -253,17 +253,18 @@ Sorting records
     2011-06-07 14:08:48
     2010-01-01 00:00:00
 
-You can also order across joins although its a little trickier.  Assuming you want
-to order entries by the name of the blog, then by pubdate:
+You can also order across joins.  Assuming you want
+to order entries by the name of the blog, then by pubdate desc:
 
 .. code-block:: python
 
-    >>> qry = Entry.select().join(Blog).order_by('name').switch(Entry).order_by('pub_date')
+    >>> qry = Entry.select().join(Blog).order_by(
+    ...     (Blog, 'name'),
+    ...     (Entry, 'pub_date', 'DESC'),
+    ... )
+    
     >>> qry.sql()
-    ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id ORDER BY t2.name ASC, t1.pub_date ASC', [])
-
-The strangeness there is that you need to join on Blog first so that it can be ordered on,
-then after specifying the ordering for Blog, switch back to Entry and order on it.
+    ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id ORDER BY t2.name ASC, t1.pub_date DESC', [])
 
 
 Paginating records
