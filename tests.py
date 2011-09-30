@@ -327,18 +327,61 @@ class QueryTests(BasePeeweeTestCase):
         sq = sq.order_by(('count', 'desc'))
         self.assertSQLEqual(sq.sql(), ('SELECT t1.*, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id HAVING count > 2 ORDER BY count desc', []))
     
-    def test_selecting_with_ordering(self):        
+    def test_selecting_with_ordering(self): 
         sq = SelectQuery(Blog).order_by('title')
         self.assertSQLEqual(sq.sql(), ('SELECT * FROM blog ORDER BY title ASC', []))
         
         sq = SelectQuery(Blog).order_by(peewee.desc('title'))
         self.assertSQLEqual(sq.sql(), ('SELECT * FROM blog ORDER BY title DESC', []))
         
+        sq = SelectQuery(Blog).order_by((Blog, 'title'))
+        self.assertSQLEqual(sq.sql(), ('SELECT * FROM blog ORDER BY title ASC', []))
+        
+        sq = SelectQuery(Blog).order_by((Blog, 'title', 'desc'))
+        self.assertSQLEqual(sq.sql(), ('SELECT * FROM blog ORDER BY title desc', []))
+    
+    def test_selecting_with_ordering_joins(self):
+        sq = SelectQuery(Entry).order_by('title').join(Blog).where(title='a')
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t2.title = ? ORDER BY t1.title ASC', ['a']))
+        
         sq = SelectQuery(Entry).order_by(peewee.desc('title')).join(Blog).where(title='a')
         self.assertSQLEqual(sq.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t2.title = ? ORDER BY t1.title DESC', ['a']))
         
+        sq = SelectQuery(Entry).join(Blog).where(title='a').order_by((Entry, 'title'))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t2.title = ? ORDER BY t1.title ASC', ['a']))
+        
+        sq = SelectQuery(Entry).join(Blog).where(title='a').order_by((Entry, 'title', 'desc'))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t2.title = ? ORDER BY t1.title desc', ['a']))
+        
+        
+        sq = SelectQuery(Entry).join(Blog).order_by('title')
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id ORDER BY t2.title ASC', []))
+        
         sq = SelectQuery(Entry).join(Blog).order_by(peewee.desc('title'))
         self.assertSQLEqual(sq.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id ORDER BY t2.title DESC', []))
+        
+        sq = SelectQuery(Entry).order_by((Blog, 'title')).join(Blog)
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id ORDER BY t2.title ASC', []))
+        
+        sq = SelectQuery(Entry).order_by((Blog, 'title', 'desc')).join(Blog)
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id ORDER BY t2.title desc', []))
+        
+        
+        sq = SelectQuery(Entry).join(Blog).order_by(
+            (Blog, 'title'),
+            (Entry, 'pub_date', 'desc'),
+        )
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id ORDER BY t2.title ASC, t1.pub_date desc', []))
+        
+        sq = SelectQuery(Entry).join(Blog).order_by(
+            (Entry, 'pub_date', 'desc'),
+            (Blog, 'title'),
+            'id',
+        )
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id ORDER BY t1.pub_date desc, t2.title ASC, t2.id ASC', []))
+        
+        sq = SelectQuery(Entry).order_by((Blog, 'title')).join(Blog).order_by()
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id', []))
 
     def test_ordering_on_aggregates(self):
         sq = SelectQuery(

@@ -885,15 +885,32 @@ class SelectQuery(BaseQuery):
         self._distinct = True
     
     @returns_clone
-    def order_by(self, field_or_string):
-        if isinstance(field_or_string, tuple):
-            field_or_string, ordering = field_or_string
-        else:
-            ordering = 'ASC'
+    def order_by(self, *clauses):
+        order_by = []
         
-        self._order_by.append(
-            (self.query_context, field_or_string, ordering)
-        )
+        for clause in clauses:
+            if isinstance(clause, tuple):
+                if len(clause) == 3:
+                    model, field, ordering = clause
+                elif len(clause) == 2:
+                    if isinstance(clause[0], basestring):
+                        model = self.query_context
+                        field, ordering = clause
+                    else:
+                        model, field = clause
+                        ordering = 'ASC'
+                else:
+                    raise ValueError('Incorrect arguments passed in order_by clause')
+            else:
+                model = self.query_context
+                field = clause
+                ordering = 'ASC'
+        
+            order_by.append(
+                (model, field, ordering)
+            )
+        
+        self._order_by = order_by
     
     def exists(self):
         clone = self.paginate(1, 1)
