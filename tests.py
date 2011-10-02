@@ -111,6 +111,13 @@ class DefaultVals(TestModel):
 class UniqueModel(TestModel):
     name = peewee.CharField(unique=True)
 
+class OrderedModel(TestModel):
+    title = peewee.CharField()
+    created = peewee.DateTimeField(default=datetime.datetime.now)
+
+    class Meta:
+        ordering = (('created', 'desc'),)
+
 
 class BasePeeweeTestCase(unittest.TestCase):
     def setUp(self):
@@ -391,6 +398,32 @@ class QueryTests(BasePeeweeTestCase):
             Blog, 't1.*, COUNT(t2.pk) as count'
         ).join(Entry).order_by(peewee.desc('count'))
         self.assertSQLEqual(sq.sql(), ('SELECT t1.*, COUNT(t2.pk) as count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id ORDER BY count DESC', []))
+
+    def test_default_ordering(self):
+        sq = OrderedModel.select()
+        self.assertSQLEqual(sq.sql(), ('SELECT * FROM orderedmodel ORDER BY created desc', []))
+
+        sq = OrderedModel.select().order_by()
+        self.assertSQLEqual(sq.sql(), ('SELECT * FROM orderedmodel', []))
+
+        class OtherOrderedModel(OrderedModel):
+            pass
+
+        sq = OtherOrderedModel.select()
+        self.assertSQLEqual(sq.sql(), ('SELECT * FROM otherorderedmodel ORDER BY created desc', []))
+
+        sq = OtherOrderedModel.select().order_by()
+        self.assertSQLEqual(sq.sql(), ('SELECT * FROM otherorderedmodel', []))
+
+        class MoreModel(OrderedModel):
+            class Meta:
+                ordering = (('created', 'desc'), 'title')
+
+        sq = MoreModel.select()
+        self.assertSQLEqual(sq.sql(), ('SELECT * FROM moremodel ORDER BY created desc, title ASC', []))
+
+        sq = MoreModel.select().order_by()
+        self.assertSQLEqual(sq.sql(), ('SELECT * FROM moremodel', []))
 
     def test_insert(self):
         iq = InsertQuery(Blog, title='a')
@@ -2001,6 +2034,10 @@ class ModelOptionsTest(BasePeeweeTestCase):
     
     def test_db_table(self):
         self.assertEqual(User._meta.db_table, 'users')
+
+    def test_ordering(self):
+        self.assertEqual(User._meta.ordering, None)
+        self.assertEqual(OrderedModel._meta.ordering, (('created', 'desc'),))
     
     def test_option_inheritance(self):
         test_db = peewee.Database(SqliteAdapter(), 'testing.db')

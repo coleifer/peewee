@@ -1555,6 +1555,8 @@ database = SqliteDatabase(DATABASE_NAME)
 
 
 class BaseModelOptions(object):
+    ordering = None
+
     def __init__(self, model_class, options=None):
         # configurable options
         options = options or {'database': database}
@@ -1602,7 +1604,7 @@ class BaseModelOptions(object):
 
 
 class BaseModel(type):
-    inheritable_options = ['database']
+    inheritable_options = ['database', 'ordering']
     
     def __new__(cls, name, bases, attrs):
         cls = super(BaseModel, cls).__new__(cls, name, bases, attrs)
@@ -1710,7 +1712,10 @@ class Model(object):
     
     @classmethod
     def select(cls, query=None):
-        return SelectQuery(cls, query)
+        select_query = SelectQuery(cls, query)
+        if cls._meta.ordering:
+            select_query = select_query.order_by(*cls._meta.ordering)
+        return select_query
     
     @classmethod
     def update(cls, **query):
