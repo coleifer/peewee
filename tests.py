@@ -610,6 +610,14 @@ class ModelTests(BasePeeweeTestCase):
             ('SELECT * FROM blog WHERE title = ? LIMIT 1 OFFSET 0', ['b']),
         ])
     
+    def test_select_with_get(self):
+        a = self.create_blog(title='a')
+        b = self.create_blog(title='b')
+
+        blogs = Blog.filter(title='a')
+        blog = blogs.get()
+        self.assertEqual(blog, a)
+
     def test_model_get_with_q(self):
         a = self.create_blog(title='a')
         b = self.create_blog(title='b')

@@ -476,6 +476,9 @@ class Node(object):
     def __invert__(self):
         self.negated = not self.negated
         return self
+
+    def __nonzero__(self):
+        return bool(self.children)
     
     def __unicode__(self):
         query = []
@@ -625,7 +628,9 @@ class BaseQuery(object):
     @returns_clone
     def where(self, *args, **kwargs):
         self._where.setdefault(self.query_context, [])
-        self._where[self.query_context].append(parseq(*args, **kwargs))
+        parsed = parseq(*args, **kwargs)
+        if parsed:
+            self._where[self.query_context].append(parsed)
 
     @returns_clone
     def join(self, model, join_type=None, on=None):
