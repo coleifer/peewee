@@ -179,6 +179,25 @@ the custom database.
     we created a ``BaseModel`` that defined the database, and then extended.  This
     is the preferred way to define a database and create models.
 
+There are several options you can specify as ``Meta`` attributes:
+
+* database: specifies a :py:class:`Database` instance to use with this model
+* db_table: the name of the database table this model maps to
+* ordering: a sequence of columns to use as the default ordering for this model
+
+Example of ordering:
+
+.. code-block:: python
+
+    class Entry(Model):
+        title = CharField()
+        body = TextField()
+        created = DateTimeField()
+
+        class Meta:
+            # order by created date descending, then title ascending
+            ordering = (('created', 'desc'), 'title')
+
 
 Model methods
 -------------
