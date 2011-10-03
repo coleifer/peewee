@@ -175,7 +175,10 @@ lookup types are available in peewee:
     x != y
 
 ``__is``:
-    x IS y, used for testing against NULL values
+    x IS y, only used for testing against NULL values
+
+``__is_not``:
+    x IS NOT y, only used for testing against NULL values
 
 ``__contains``:
     case-sensitive check for substring
