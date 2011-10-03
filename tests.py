@@ -1830,6 +1830,11 @@ class FieldTypeTests(BasePeeweeTestCase):
         null_lookup = NullModel.select().where(~Q(char_field__is=None))
         self.assertSQLEqual(null_lookup.sql(), ('SELECT * FROM nullmodel WHERE NOT char_field IS NULL', []))
         
+        not_null_lookup = NullModel.select().where(char_field__is_not=None)
+        self.assertSQLEqual(not_null_lookup.sql(), ('SELECT * FROM nullmodel WHERE char_field IS NOT NULL', []))
+
+        self.assertEqual(list(not_null_lookup), [])
+
         non_null_lookup = NullModel.select().where(char_field='')
         self.assertSQLEqual(non_null_lookup.sql(), ('SELECT * FROM nullmodel WHERE char_field = ?', ['']))
         

@@ -617,6 +617,11 @@ class BaseQuery(object):
                     raise ValueError('__is lookups only accept None')
                 operation = 'IS NULL'
                 lookup_value = []
+            elif op == 'is_not':
+                if rhs is not None:
+                    raise ValueError('__is_not lookups only accept None')
+                operation = 'IS NOT NULL'
+                lookup_value = []
             else:
                 lookup_value = field.db_value(rhs)
                 operation = self.operations[op]
