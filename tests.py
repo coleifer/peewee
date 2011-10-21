@@ -507,7 +507,7 @@ class QueryTests(BasePeeweeTestCase):
         base_sq = SelectQuery(Blog)
         
         sq = base_sq.paginate(1, 20)
-        self.assertSQLEqual(sq.sql(), ('SELECT * FROM blog LIMIT 20 OFFSET 0', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT * FROM blog LIMIT 20', []))
         
         sq = base_sq.paginate(3, 30)
         self.assertSQLEqual(sq.sql(), ('SELECT * FROM blog LIMIT 30 OFFSET 60', []))
@@ -562,7 +562,7 @@ class QueryTests(BasePeeweeTestCase):
         q6 = q1.paginate(1, 10)
         q7 = q4.paginate(2, 10)
         
-        q6_sql = ('SELECT * FROM blog WHERE title = ? LIMIT 10 OFFSET 0', ['a'])
+        q6_sql = ('SELECT * FROM blog WHERE title = ? LIMIT 10', ['a'])
         q7_sql = ('SELECT * FROM blog WHERE title = ? ORDER BY title ASC LIMIT 10 OFFSET 10', ['a'])
 
         self.assertSQLEqual(q6.sql(), q6_sql)
@@ -607,7 +607,7 @@ class ModelTests(BasePeeweeTestCase):
         self.assertQueriesEqual([
             ('INSERT INTO blog (title) VALUES (?)', ['a']),
             ('INSERT INTO blog (title) VALUES (?)', ['b']),
-            ('SELECT * FROM blog WHERE title = ? LIMIT 1 OFFSET 0', ['b']),
+            ('SELECT * FROM blog WHERE title = ? LIMIT 1', ['b']),
         ])
     
     def test_select_with_get(self):
@@ -628,7 +628,7 @@ class ModelTests(BasePeeweeTestCase):
         self.assertQueriesEqual([
             ('INSERT INTO blog (title) VALUES (?)', ['a']),
             ('INSERT INTO blog (title) VALUES (?)', ['b']),
-            ('SELECT * FROM blog WHERE (title = ? OR title = ?) LIMIT 1 OFFSET 0', ['b', 'c']),
+            ('SELECT * FROM blog WHERE (title = ? OR title = ?) LIMIT 1', ['b', 'c']),
         ])
     
     def test_model_raw(self):
@@ -876,7 +876,7 @@ class ModelTests(BasePeeweeTestCase):
         u = User.get_or_create(username='a')
         self.assertEqual(u.username, 'a')
         self.assertQueriesEqual([
-            ('SELECT * FROM users WHERE username = ? LIMIT 1 OFFSET 0', ['a']),
+            ('SELECT * FROM users WHERE username = ? LIMIT 1', ['a']),
             ('INSERT INTO users (username,active,blog_id) VALUES (?,?,?)', ['a', 0, None]),
         ])
 
@@ -1024,7 +1024,7 @@ class RelatedFieldTests(BasePeeweeTestCase):
         self.assertQueriesEqual([
             ('INSERT INTO blog (title) VALUES (?)', ['a']),
             ('INSERT INTO entry (content,blog_id,pub_date,title) VALUES (?,?,?,?)', ['', a.id, None, 'e']),
-            ('SELECT * FROM entry WHERE pk = ? LIMIT 1 OFFSET 0', [e.pk]),
+            ('SELECT * FROM entry WHERE pk = ? LIMIT 1', [e.pk]),
             ('SELECT * FROM blog WHERE id = ?', [a.id]),
         ])
     

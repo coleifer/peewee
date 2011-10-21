@@ -833,7 +833,8 @@ class SelectQuery(BaseQuery):
         self._group_by = []
         self._having = []
         self._order_by = []
-        self._pagination = None # return all by default
+        self._limit = None
+        self._offset = None
         self._distinct = False
         self._qr = None
         super(SelectQuery, self).__init__(model)
@@ -844,7 +845,8 @@ class SelectQuery(BaseQuery):
         query._group_by = list(self._group_by)
         query._having = list(self._having)
         query._order_by = list(self._order_by)
-        query._pagination = self._pagination and tuple(self._pagination) or None
+        query._limit = self._limit
+        query._offset = self._offset
         query._distinct = self._distinct
         query._qr = self._qr
         query._where = self.clone_where()
@@ -853,12 +855,23 @@ class SelectQuery(BaseQuery):
         return query
     
     @returns_clone
-    def paginate(self, page_num, paginate_by=20):
-        self._pagination = (page_num, paginate_by)
+    def paginate(self, page, paginate_by=20):
+        if page > 0:
+            page -= 1
+        self._limit = paginate_by
+        self._offset = page * paginate_by
+    
+    @returns_clone
+    def limit(self, num_rows):
+        self._limit = num_rows
+    
+    @returns_clone
+    def offset(self, num_rows):
+        self._offset = num_rows
     
     def count(self):
-        tmp_pagination = self._pagination
-        self._pagination = None
+        tmp_lim, tmp_off = self._limit, self._offset
+        self._limit = self._offset = None
         
         tmp_query = self.query
         
@@ -869,8 +882,10 @@ class SelectQuery(BaseQuery):
         
         res = self.database.execute(*self.sql())
         
+        # restore
         self.query = tmp_query
-        self._pagination = tmp_pagination
+        self._limit = tmp_lim
+        self._offset = tmp_off
         
         return res.fetchone()[0]
     
@@ -1027,11 +1042,10 @@ class SelectQuery(BaseQuery):
             pieces.append('HAVING %s' % having)
         if order_by:
             pieces.append('ORDER BY %s' % ', '.join(order_by))
-        if self._pagination:
-            page, paginate_by = self._pagination
-            if page > 0:
-                page -= 1
-            pieces.append('LIMIT %d OFFSET %d' % (paginate_by, page * paginate_by))
+        if self._limit:
+            pieces.append('LIMIT %d' % self._limit)
+        if self._offset:
+            pieces.append('OFFSET %d' % self._offset)
         
         return ' '.join(pieces), params
     
