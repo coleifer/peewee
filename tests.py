@@ -54,7 +54,7 @@ class Entry(TestModel):
     title = peewee.CharField(max_length=50, verbose_name='Wacky title')
     content = peewee.TextField()
     pub_date = peewee.DateTimeField(null=True)
-    blog = peewee.ForeignKeyField(Blog)
+    blog = peewee.ForeignKeyField(Blog, cascade=True)
     
     def __unicode__(self):
         return '%s: %s' % (self.blog.title, self.title)
@@ -2021,6 +2021,24 @@ class ModelTablesTestCase(BasePeeweeTestCase):
         
         EntryTag.create_table()
         self.assertTrue(EntryTag._meta.db_table in test_db.get_tables())        
+
+    def test_cascade_on_delete(self):
+        if BACKEND == 'sqlite':
+            test_db.execute('pragma foreign_keys = ON;')
+
+        b1 = Blog.create(title='b1')
+        b2 = Blog.create(title='b2')
+
+        for b in [b1, b2]:
+            for i in range(3):
+                Entry.create(blog=b, title='e')
+
+        self.assertEqual(Entry.select().count(), 6)
+        b1.delete_instance()
+
+        self.assertEqual(Entry.select().count(), 3)
+        self.assertEqual(Entry.filter(blog=b1).count(), 0)
+        self.assertEqual(Entry.filter(blog=b2).count(), 3)
 
 
 class ModelOptionsTest(BasePeeweeTestCase):
