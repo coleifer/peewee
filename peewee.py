@@ -1393,6 +1393,9 @@ class Field(object):
     def lookup_value(self, lookup_type, value):
         return self.db_value(value)
 
+    def class_prepared(self):
+        pass
+
 
 class CharField(Field):
     db_field = 'string'
@@ -1501,17 +1504,22 @@ class PrimaryKeyField(IntegerField):
 
 
 class ForeignRelatedObject(object):    
-    def __init__(self, to, name):
-        self.field_name = name
+    def __init__(self, to, field):
         self.to = to
-        self.cache_name = '_cache_%s' % name
+        self.field = field
+        self.field_name = self.field.name
+        self.cache_name = '_cache_%s' % self.field_name
     
     def __get__(self, instance, instance_type=None):
         if not getattr(instance, self.cache_name, None):
             id = getattr(instance, self.field_name, 0)
-            qr = self.to.select().where(**{self.to._meta.pk_name: id}).execute()
-            setattr(instance, self.cache_name, qr.next())
-        return getattr(instance, self.cache_name)
+            qr = self.to.select().where(**{self.to._meta.pk_name: id})
+            try:
+                setattr(instance, self.cache_name, qr.get())
+            except self.to.DoesNotExist:
+                if not self.field.null:
+                    raise
+        return getattr(instance, self.cache_name, None)
     
     def __set__(self, instance, obj):
         assert isinstance(obj, self.to), "Cannot assign %s, invalid type" % obj
@@ -1541,10 +1549,8 @@ class ForeignKeyField(IntegerField):
         self.extra = extra
 
         kwargs.update({
-            'to_table': to._meta.db_table,
-            'to_pk': to._meta.pk_name,
-            'cascade': ' ON DELETE CASCADE' if cascade else '',
-            'extra': extra or '',
+            'cascade': ' ON DELETE CASCADE' if self.cascade else '',
+            'extra': self.extra or '',
         })
         super(ForeignKeyField, self).__init__(null=null, *args, **kwargs)
     
@@ -1552,14 +1558,17 @@ class ForeignKeyField(IntegerField):
         self.descriptor = name
         self.name = name + '_id'
         self.model = klass
-        
+
+        if self.to == 'self':
+            self.to = self.model
+
         self.verbose_name = self.verbose_name or re.sub('_', ' ', name).title()
         
         if self.related_name is None:
             self.related_name = klass._meta.db_table + '_set'
         
         klass._meta.rel_fields[name] = self.name
-        setattr(klass, self.descriptor, ForeignRelatedObject(self.to, self.name))
+        setattr(klass, self.descriptor, ForeignRelatedObject(self.to, self))
         setattr(klass, self.name, None)
         
         reverse_rel = ReverseForeignRelatedObject(klass, self.name)
@@ -1575,6 +1584,15 @@ class ForeignKeyField(IntegerField):
         if isinstance(value, Model):
             return value.get_pk()
         return value
+
+    def class_prepared(self):
+        # unfortunately because we may not know the primary key field
+        # at the time this field's add_to_class() method is called, we
+        # need to update the attributes after the class has been built
+        self.attributes.update({
+            'to_table': self.to._meta.db_table,
+            'to_pk': self.to._meta.pk_name,
+        })
 
 
 # define a default database object in the module scope
@@ -1673,6 +1691,9 @@ class BaseModel(type):
             _meta.fields[_meta.pk_name] = pk
 
         _meta.model_name = cls.__name__
+
+        for field in _meta.fields.values():
+            field.class_prepared()
                 
         if hasattr(cls, '__unicode__'):
             setattr(cls, '__repr__', lambda self: '<%s: %s>' % (

@@ -118,6 +118,10 @@ class OrderedModel(TestModel):
     class Meta:
         ordering = (('created', 'desc'),)
 
+class Category(TestModel):
+    parent = peewee.ForeignKeyField('self', related_name='children', null=True)
+    name = peewee.CharField()
+
 
 class BasePeeweeTestCase(unittest.TestCase):
     def setUp(self):
@@ -1025,8 +1029,12 @@ class RelatedFieldTests(BasePeeweeTestCase):
             ('INSERT INTO blog (title) VALUES (?)', ['a']),
             ('INSERT INTO entry (content,blog_id,pub_date,title) VALUES (?,?,?,?)', ['', a.id, None, 'e']),
             ('SELECT * FROM entry WHERE pk = ? LIMIT 1', [e.pk]),
-            ('SELECT * FROM blog WHERE id = ?', [a.id]),
+            ('SELECT * FROM blog WHERE id = ? LIMIT 1', [a.id]),
         ])
+
+    def test_fk_exception(self):
+        e = Entry(title='e')
+        self.assertRaises(Blog.DoesNotExist, getattr, e, 'blog')
     
     def test_foreign_keys(self):
         a, a1, a2, b, b1, b2, t1, t2 = self.get_common_objects()
@@ -1746,6 +1754,34 @@ class AnnotateQueryTests(BasePeeweeTestCase):
             'SELECT t1.*, MAX(t2.pub_date) AS max_pub FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id, t1.title', []
         ))
         
+
+class SelfReferentialFKTestCase(BasePeeweeTestCase):
+    def setUp(self):
+        super(SelfReferentialFKTestCase, self).setUp()
+        Category.drop_table(True)
+        Category.create_table()
+
+    def tearDown(self):
+        super(SelfReferentialFKTestCase, self).tearDown()
+        Category.drop_table(True)
+
+    def test_self_referential_fk(self):
+        # let's make a small tree
+        python = Category.create(name='python')
+        django = Category.create(name='django', parent=python)
+        flask = Category.create(name='flask', parent=python)
+        flask_peewee = Category.create(name='flask-peewee', parent=flask)
+
+        self.assertEqual(flask_peewee.parent.name, 'flask')
+        self.assertEqual(flask_peewee.parent.parent.name, 'python')
+
+        self.assertEqual(list(python.children.order_by('name')), [
+            django, flask
+        ])
+
+        self.assertEqual(list(flask.children), [flask_peewee])
+        self.assertEqual(list(flask_peewee.children), [])
+
 
 class FieldTypeTests(BasePeeweeTestCase):
     def setUp(self):
