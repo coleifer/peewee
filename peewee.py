@@ -1532,15 +1532,19 @@ class ReverseForeignRelatedObject(object):
 
 class ForeignKeyField(IntegerField):
     db_field = 'foreign_key'
-    field_template = '%(column_type)s%(nullable)s REFERENCES %(to_table)s (%(to_pk)s)%(cascade)s'
+    field_template = '%(column_type)s%(nullable)s REFERENCES %(to_table)s (%(to_pk)s)%(cascade)s%(extra)s'
     
-    def __init__(self, to, null=False, related_name=None, cascade=False, *args, **kwargs):
+    def __init__(self, to, null=False, related_name=None, cascade=False, extra=None, *args, **kwargs):
         self.to = to
         self.related_name = related_name
+        self.cascade = cascade
+        self.extra = extra
+
         kwargs.update({
             'to_table': to._meta.db_table,
             'to_pk': to._meta.pk_name,
             'cascade': ' ON DELETE CASCADE' if cascade else '',
+            'extra': extra or '',
         })
         super(ForeignKeyField, self).__init__(null=null, *args, **kwargs)
     
