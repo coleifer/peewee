@@ -80,8 +80,23 @@ Parameters accepted by all field types and their default values:
 |                               | * ``integer auto_increment``,  |                               |
 |                               |   mysql                        |                               |
 +-------------------------------+--------------------------------+-------------------------------+
-| :py:class:`ForeignKeyField`   | ``integer``                    | ``to``, ``related_name``      |
+| :py:class:`ForeignKeyField`   | ``integer``                    | ``to``, ``related_name``,     |
+|                               |                                | ``cascade``, ``extra``        |
 +-------------------------------+--------------------------------+-------------------------------+
+
+
+Self-referential Foreign Keys
+-----------------------------
+
+Since the class is not available at the time the field is declared,
+when creating a self-referential foreign key pass in 'self' as the "to"
+relation:
+
+.. code-block:: python
+
+    class Category(Model):
+        name = CharField()
+        parent = ForeignKeyField('self', related_name='children', null=True)
 
 
 Field class API
@@ -149,7 +164,8 @@ Field class API
     
     .. py:method:: __init__(to[, related_name=None[, ...]])
     
-        :param to: related :py:class:`Model` class
+        :param to: related :py:class:`Model` class or the string 'self' if declaring
+                   a self-referential foreign key
         :param related_name: attribute to expose on related model
         
         .. code-block:: python
