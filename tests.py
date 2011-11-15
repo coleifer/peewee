@@ -1913,9 +1913,9 @@ class FieldTypeTests(BasePeeweeTestCase):
         
         default_model = DefaultVals()
         
-        # nothing is set until the model is saved
-        self.assertEqual(default_model.published, None)
-        self.assertEqual(default_model.pub_date, None)
+        # defaults are applied at initialization
+        self.assertEqual(default_model.published, True)
+        self.assertTrue(default_model.pub_date is not None)
         
         # saving the model will apply the defaults
         default_model.save()
@@ -1927,10 +1927,17 @@ class FieldTypeTests(BasePeeweeTestCase):
         default_model.pub_date = None
         default_model.save()
         self.assertEqual(default_model.pub_date, None)
+        self.assertEqual(default_model.published, True)
+
+        # overriding the defaults after initial save is fine
+        default_model.published = False
+        default_model.save()
+        self.assertEqual(default_model.published, False)
+        self.assertEqual(default_model.pub_date, None)
         
         # ensure that the overridden default was propagated to the db
         from_db = DefaultVals.get(id=default_model.id)
-        self.assertTrue(default_model.published)
+        self.assertFalse(default_model.published)
         self.assertEqual(default_model.pub_date, None)
         
         # test via the create method

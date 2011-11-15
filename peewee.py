@@ -1709,6 +1709,7 @@ class Model(object):
     __metaclass__ = BaseModel
     
     def __init__(self, *args, **kwargs):
+        self.get_field_dict()
         for k, v in kwargs.items():
             setattr(self, k, v)
     
