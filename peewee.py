@@ -736,9 +736,6 @@ class BaseQuery(object):
         alias_map = {}
 
         alias_required = self.use_aliases()
-
-        where_with_alias = []
-        where_data = []
         
         if alias_required:
             alias_count += 1
@@ -748,12 +745,17 @@ class BaseQuery(object):
         
         computed_joins = self.follow_joins(self.model, alias_map, alias_required, alias_count)
         
-        for node in self._where:
-            query, data = self.parse_node(node, alias_map)
+        clauses = [self.parse_node(node, alias_map) for node in self._where]
+        
+        return computed_joins, clauses, alias_map
+    
+    def flatten_clauses(self, clauses):
+        where_with_alias = []
+        where_data = []
+        for query, data in clauses:
             where_with_alias.append(query)
             where_data.extend(data)
-        
-        return computed_joins, where_with_alias, where_data, alias_map
+        return where_with_alias, where_data
     
     def convert_where_to_params(self, where_data):
         flattened = []
@@ -1016,7 +1018,8 @@ class SelectQuery(BaseQuery):
             raise TypeError('Unknown type encountered parsing select query')
     
     def sql(self):
-        joins, where, where_data, alias_map = self.compile_where()
+        joins, clauses, alias_map = self.compile_where()
+        where, where_data = self.flatten_clauses(clauses)
         
         table = self.model._meta.db_table
 
@@ -1117,7 +1120,8 @@ class UpdateQuery(BaseQuery):
         return sets
     
     def sql(self):
-        joins, where, where_data, alias_map = self.compile_where()
+        joins, clauses, alias_map = self.compile_where()
+        where, where_data = self.flatten_clauses(clauses)
         set_statement = self.parse_update()
 
         params = []
@@ -1157,7 +1161,8 @@ class DeleteQuery(BaseQuery):
         return query
     
     def sql(self):
-        joins, where, where_data, alias_map = self.compile_where()
+        joins, clauses, alias_map = self.compile_where()
+        where, where_data = self.flatten_clauses(clauses)
 
         params = []
         

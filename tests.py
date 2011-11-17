@@ -1518,12 +1518,17 @@ class RelatedFieldTests(BasePeeweeTestCase):
 
 
 class FilterQueryTests(BasePeeweeTestCase):
+    def assertSQL(self, query, expected_clauses):
+        computed_joins, clauses, alias_map = query.compile_where()
+        clauses = [(x.replace('?', interpolation), y) for (x, y) in clauses]
+        self.assertEqual(sorted(clauses), sorted(expected_clauses))
+    
     def test_filter_no_joins(self):
         query = Entry.filter(title='e1')
-        self.assertSQLEqual(query.sql(), ('SELECT * FROM entry WHERE title = ?', ['e1']))
+        self.assertSQL(query, [('title = ?', ['e1'])])
         
         query = Entry.filter(title__in=['e1', 'e2'])
-        self.assertSQLEqual(query.sql(), ('SELECT * FROM entry WHERE title IN (?,?)', ['e1', 'e2']))
+        self.assertSQL(query, [('title IN (?,?)', [['e1', 'e2']])])
     
     def test_filter_missing_field(self):
         self.assertRaises(AttributeError, Entry.filter(missing='missing').sql)
@@ -1531,118 +1536,201 @@ class FilterQueryTests(BasePeeweeTestCase):
     
     def test_filter_joins(self):
         query = EntryTag.filter(entry__title='e1')
-        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM entrytag AS t1 INNER JOIN entry AS t2 ON t1.entry_id = t2.pk WHERE t2.title = ?', ['e1']))
+        self.assertSQL(query, [('t2.title = ?', ['e1'])])
         
         query = EntryTag.filter(entry__title__in=['e1', 'e2'])
-        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM entrytag AS t1 INNER JOIN entry AS t2 ON t1.entry_id = t2.pk WHERE t2.title IN (?,?)', ['e1', 'e2']))
+        self.assertSQL(query, [('t2.title IN (?,?)', [['e1', 'e2']])])
         
         query = EntryTag.filter(entry__blog__title='b1')
-        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM entrytag AS t1 INNER JOIN entry AS t2 ON t1.entry_id = t2.pk\nINNER JOIN blog AS t3 ON t2.blog_id = t3.id WHERE t3.title = ?', ['b1']))
+        self.assertSQL(query, [('t3.title = ?', ['b1'])])
         
         query = EntryTag.filter(entry__blog__title__in=['b1', 'b2'])
-        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM entrytag AS t1 INNER JOIN entry AS t2 ON t1.entry_id = t2.pk\nINNER JOIN blog AS t3 ON t2.blog_id = t3.id WHERE t3.title IN (?,?)', ['b1', 'b2']))
+        self.assertSQL(query, [('t3.title IN (?,?)', [['b1', 'b2']])])
 
         query = EntryTag.filter(entry__blog__title__in=['b1', 'b2'], entry__title='e1')
-        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM entrytag AS t1 INNER JOIN entry AS t2 ON t1.entry_id = t2.pk\nINNER JOIN blog AS t3 ON t2.blog_id = t3.id WHERE t2.title = ? AND t3.title IN (?,?)', ['e1', 'b1', 'b2']))
+        self.assertSQL(query, [
+            ('t3.title IN (?,?)', [['b1', 'b2']]),
+            ('t2.title = ?', ['e1']),
+        ])
     
         query = EntryTag.filter(entry__blog__title__in=['b1', 'b2'], entry__title='e1', tag='t1')
-        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM entrytag AS t1 INNER JOIN entry AS t2 ON t1.entry_id = t2.pk\nINNER JOIN blog AS t3 ON t2.blog_id = t3.id WHERE t1.tag = ? AND t2.title = ? AND t3.title IN (?,?)', ['t1', 'e1', 'b1', 'b2']))
+        self.assertSQL(query, [
+            ('t3.title IN (?,?)', [['b1', 'b2']]),
+            ('t2.title = ?', ['e1']),
+            ('t1.tag = ?', ['t1']),
+        ])
     
     def test_filter_reverse_joins(self):
         query = Blog.filter(entry_set__title='e1')
-        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id WHERE t2.title = ?', ['e1']))
+        self.assertSQL(query, [('t2.title = ?', ['e1'])])
         
         query = Blog.filter(entry_set__title__in=['e1', 'e2'])
-        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id WHERE t2.title IN (?,?)', ['e1', 'e2']))
+        self.assertSQL(query, [('t2.title IN (?,?)', [['e1', 'e2']])])
         
         query = Blog.filter(entry_set__entrytag_set__tag='t1')
-        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id\nINNER JOIN entrytag AS t3 ON t2.pk = t3.entry_id WHERE t3.tag = ?', ['t1']))
+        self.assertSQL(query, [('t3.tag = ?', ['t1'])])
         
         query = Blog.filter(entry_set__entrytag_set__tag__in=['t1', 't2'])
-        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id\nINNER JOIN entrytag AS t3 ON t2.pk = t3.entry_id WHERE t3.tag IN (?,?)', ['t1', 't2']))
+        self.assertSQL(query, [('t3.tag IN (?,?)', [['t1', 't2']])])
         
         query = Blog.filter(entry_set__entrytag_set__tag__in=['t1', 't2'], entry_set__title='e1')
-        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id\nINNER JOIN entrytag AS t3 ON t2.pk = t3.entry_id WHERE t2.title = ? AND t3.tag IN (?,?)', ['e1', 't1', 't2']))
+        self.assertSQL(query, [
+            ('t3.tag IN (?,?)', [['t1', 't2']]),
+            ('t2.title = ?', ['e1']),
+        ])
         
         query = Blog.filter(entry_set__entrytag_set__tag__in=['t1', 't2'], entry_set__title='e1', title='b1')
-        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id\nINNER JOIN entrytag AS t3 ON t2.pk = t3.entry_id WHERE t1.title = ? AND t2.title = ? AND t3.tag IN (?,?)', ['b1', 'e1', 't1', 't2']))
+        self.assertSQL(query, [
+            ('t3.tag IN (?,?)', [['t1', 't2']]),
+            ('t2.title = ?', ['e1']),
+            ('t1.title = ?', ['b1']),
+        ])
     
     def test_filter_multiple_lookups(self):
         query = Entry.filter(title='e1', pk=1)
-        self.assertSQLEqual(query.sql(), ('SELECT * FROM entry WHERE (pk = ? AND title = ?)', [1, 'e1']))
+        self.assertSQL(query, [
+            ('(pk = ? AND title = ?)', [1, 'e1']),
+        ])
         
         query = Entry.filter(title='e1', pk=1, blog__title='b1')
-        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE (t1.pk = ? AND t1.title = ?) AND t2.title = ?', [1, 'e1', 'b1']))
+        self.assertSQL(query, [
+            ('(t1.pk = ? AND t1.title = ?)', [1, 'e1']),
+            ('t2.title = ?', ['b1'])
+        ])
         
         query = Entry.filter(blog__id=2, title='e1', pk=1, blog__title='b1')
-        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE (t1.pk = ? AND t1.title = ?) AND (t2.id = ? AND t2.title = ?)', [1, 'e1', 2, 'b1']))
+        self.assertSQL(query, [
+            ('(t1.pk = ? AND t1.title = ?)', [1, 'e1']),
+            ('(t2.id = ? AND t2.title = ?)', [2, 'b1']),
+        ])
     
     def test_filter_with_q(self):
         query = Entry.filter(Q(title='e1') | Q(title='e2'))
-        self.assertSQLEqual(query.sql(), ('SELECT * FROM entry WHERE (title = ? OR title = ?)', ['e1', 'e2']))
+        self.assertSQL(query, [
+            ('(title = ? OR title = ?)', ['e1', 'e2'])
+        ])
         
         query = Entry.filter(Q(title='e1') | Q(title='e2') | Q(title='e3'), Q(pk=1) | Q(pk=2))
-        self.assertSQLEqual(query.sql(), ('SELECT * FROM entry WHERE (title = ? OR title = ? OR title = ?) AND (pk = ? OR pk = ?)', ['e1', 'e2', 'e3', 1, 2]))
+        self.assertSQL(query, [
+            ('(title = ? OR title = ? OR title = ?)', ['e1', 'e2', 'e3']),
+            ('(pk = ? OR pk = ?)', [1, 2])
+        ])
         
         query = Entry.filter(Q(title='e1') | Q(title='e2'), pk=1)
-        self.assertSQLEqual(query.sql(), ('SELECT * FROM entry WHERE (title = ? OR title = ?) AND pk = ?', ['e1', 'e2', 1]))
+        self.assertSQL(query, [
+            ('(title = ? OR title = ?)', ['e1', 'e2']),
+            ('pk = ?', [1])
+        ])
         
         # try with joins now
         query = Entry.filter(Q(blog__id=1) | Q(blog__id=2))
-        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE (t2.id = ? OR t2.id = ?)', [1, 2]))
+        self.assertSQL(query, [
+            ('(t2.id = ? OR t2.id = ?)', [1, 2])
+        ])
         
         query = Entry.filter(Q(blog__id=1) | Q(blog__id=2) | Q(blog__id=3), Q(blog__title='b1') | Q(blog__title='b2'))
-        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE (t2.id = ? OR t2.id = ? OR t2.id = ?) AND (t2.title = ? OR t2.title = ?)', [1, 2, 3, 'b1', 'b2']))
+        self.assertSQL(query, [
+            ('(t2.id = ? OR t2.id = ? OR t2.id = ?)', [1, 2, 3]),
+            ('(t2.title = ? OR t2.title = ?)', ['b1', 'b2'])
+        ])
         
         query = Entry.filter(Q(blog__id=1) | Q(blog__id=2) | Q(blog__id=3), Q(blog__title='b1') | Q(blog__title='b2'), title='foo')
-        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t1.title = ? AND (t2.id = ? OR t2.id = ? OR t2.id = ?) AND (t2.title = ? OR t2.title = ?)', ['foo', 1, 2, 3, 'b1', 'b2']))
+        self.assertSQL(query, [
+            ('(t2.id = ? OR t2.id = ? OR t2.id = ?)', [1, 2, 3]),
+            ('(t2.title = ? OR t2.title = ?)', ['b1', 'b2']),
+            ('t1.title = ?', ['foo']),
+        ])
         
         query = Entry.filter(Q(blog__id=1) | Q(blog__id=2) | Q(blog__id=3), Q(blog__title='b1') | Q(blog__title='b2'), title='foo', blog__title='baz')
-        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t1.title = ? AND (t2.id = ? OR t2.id = ? OR t2.id = ?) AND (t2.title = ? OR t2.title = ?) AND t2.title = ?', ['foo', 1, 2, 3, 'b1', 'b2', 'baz']))
+        self.assertSQL(query, [
+            ('(t2.id = ? OR t2.id = ? OR t2.id = ?)', [1, 2, 3]),
+            ('(t2.title = ? OR t2.title = ?)', ['b1', 'b2']),
+            ('t1.title = ?', ['foo']),
+            ('t2.title = ?', ['baz']),
+        ])
         
         query = EntryTag.filter(Q(entry__blog__title='b1') | Q(entry__blog__title='b2'), Q(entry__pk=1) | Q(entry__pk=2), tag='baz', entry__title='e1')
-        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM entrytag AS t1 INNER JOIN entry AS t2 ON t1.entry_id = t2.pk\nINNER JOIN blog AS t3 ON t2.blog_id = t3.id WHERE t1.tag = ? AND (t2.pk = ? OR t2.pk = ?) AND t2.title = ? AND (t3.title = ? OR t3.title = ?)', ['baz', 1, 2, 'e1', 'b1', 'b2']))
+        self.assertSQL(query, [
+            ('(t3.title = ? OR t3.title = ?)', ['b1', 'b2']),
+            ('(t2.pk = ? OR t2.pk = ?)', [1, 2]),
+            ('t1.tag = ?', ['baz']),
+            ('t2.title = ?', ['e1']),
+        ])
     
     def test_filter_with_query(self):
         simple_query = User.select().where(active=True)
         
         query = filter_query(simple_query, username='bamples')
-        self.assertSQLEqual(query.sql(), ('SELECT * FROM users WHERE active = ? AND username = ?', [1, 'bamples']))
+        self.assertSQL(query, [
+            ('active = ?', [1]),
+            ('username = ?', ['bamples']),
+        ])
         
         query = filter_query(simple_query, blog__title='b1')
-        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM users AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t1.active = ? AND t2.title = ?', [1, 'b1']))
+        self.assertSQL(query, [
+            ('t1.active = ?', [1]),
+            ('t2.title = ?', ['b1']),
+        ])
         
         join_query = User.select().join(Blog).where(title='b1')
         
         query = filter_query(join_query, username='bamples')
-        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM users AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t1.username = ? AND t2.title = ?', ['bamples', 'b1']))
+        self.assertSQL(query, [
+            ('t1.username = ?', ['bamples']),
+            ('t2.title = ?', ['b1']),
+        ])
         
         # join should be recycled here
         query = filter_query(join_query, blog__id=1)
-        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM users AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t2.title = ? AND t2.id = ?', ['b1', 1]))
+        self.assertSQL(query, [
+            ('t2.id = ?', [1]),
+            ('t2.title = ?', ['b1']),
+        ])
         
         complex_query = User.select().join(Blog).where(Q(id=1)|Q(id=2))
         
         query = filter_query(complex_query, username='bamples', blog__title='b1')
-        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM users AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t1.username = ? AND (t2.id = ? OR t2.id = ?) AND t2.title = ?', ['bamples', 1, 2, 'b1']))
+        self.assertSQL(query, [
+            ('(t2.id = ? OR t2.id = ?)', [1, 2]),
+            ('t1.username = ?', ['bamples']),
+            ('t2.title = ?', ['b1']),
+        ])
         
         query = filter_query(complex_query, Q(blog__title='b1')|Q(blog__title='b2'), username='bamples')
-        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM users AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t1.username = ? AND (t2.id = ? OR t2.id = ?) AND (t2.title = ? OR t2.title = ?)', ['bamples', 1, 2, 'b1', 'b2']))
+        self.assertSQL(query, [
+            ('(t2.id = ? OR t2.id = ?)', [1, 2]),
+            ('t1.username = ?', ['bamples']),
+            ('(t2.title = ? OR t2.title = ?)', ['b1', 'b2']),
+        ])
         
         # zomg
         query = filter_query(complex_query, Q(blog__entry_set__title='e1')|Q(blog__entry_set__title='e2'), blog__title='b1', username='bamples')
-        self.assertSQLEqual(query.sql(), ('SELECT t1.* FROM users AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id\nINNER JOIN entry AS t3 ON t2.id = t3.blog_id WHERE t1.username = ? AND (t2.id = ? OR t2.id = ?) AND t2.title = ? AND (t3.title = ? OR t3.title = ?)', ['bamples', 1, 2, 'b1', 'e1', 'e2']))
+        self.assertSQL(query, [
+            ('(t2.id = ? OR t2.id = ?)', [1, 2]),
+            ('(t3.title = ? OR t3.title = ?)', ['e1', 'e2']),
+            ('t2.title = ?', ['b1']),
+            ('t1.username = ?', ['bamples']),
+        ])
     
     def test_filter_chaining(self):
         simple_filter = Entry.filter(blog__id=1)
-        self.assertSQLEqual(simple_filter.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t2.id = ?', [1]))
+        self.assertSQL(simple_filter, [
+            ('t2.id = ?', [1])
+        ])
         
         f2 = simple_filter.filter(Q(blog__title='b1') | Q(blog__title='b2'), title='e1')
-        self.assertSQLEqual(f2.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t1.title = ? AND t2.id = ? AND (t2.title = ? OR t2.title = ?)', ['e1', 1, 'b1', 'b2']))
+        self.assertSQL(f2, [
+            ('t2.id = ?', [1]),
+            ('(t2.title = ? OR t2.title = ?)', ['b1', 'b2']),
+            ('t1.title = ?', ['e1'])
+        ])
     
     def test_filter_both_directions(self):
         f = Entry.filter(blog__title='b1', entrytag_set__tag='t1')
-        self.assertSQLEqual(f.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN entrytag AS t2 ON t1.pk = t2.entry_id\nINNER JOIN blog AS t3 ON t1.blog_id = t3.id WHERE t2.tag = ? AND t3.title = ?', ['t1', 'b1']))
+        self.assertSQL(f, [
+            ('t2.title = ?', ['b1']),
+            ('t3.tag = ?', ['t1']),
+        ])
 
 
 class AnnotateQueryTests(BasePeeweeTestCase):
