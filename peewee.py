@@ -451,9 +451,9 @@ ternary = lambda cond, t, f: (cond and [t] or [f])[0]
 
 
 class Node(object):
-    def __init__(self, connector='AND'):
+    def __init__(self, connector='AND', children=None):
         self.connector = connector
-        self.children = []
+        self.children = children or []
         self.negated = False
     
     def connect(self, rhs, connector):
@@ -1239,8 +1239,6 @@ def convert_lookup(model, joins, lookup):
         
         # we have some joins
         if len(pieces):
-            query_model = model
-            
             for piece in pieces:
                 # piece is something like 'blog' or 'entry_set'
                 joined_model = None
@@ -1279,26 +1277,23 @@ def filter_query(model_or_query, *args, **kwargs):
     query = {} # mapping of models to queries
     joins = {} # a graph of joins needed, passed into the convert_lookup function
     
-    # due to quirks in the way where clauses are defined, Q() queries can only
-    # work on a single table -- this will need to be redesigned so Q() objects
-    # can work on multiple models
+    # traverse Q() objects, find any joins that may be lurking -- clean up the
+    # lookups and assign the correct model
     def fix_q(node_or_q, joins):
         if isinstance(node_or_q, Node):
             for child in node_or_q.children:
-                query_model = fix_q(child, joins)
+                fix_q(child, joins)
         elif isinstance(node_or_q, Q):
             new_query = {}
+            curr_model = node_or_q.model or model
             for raw_lookup, value in node_or_q.query.items():
-                # do we have a query model at this point?
-                query_model, joins, lookup = convert_lookup(model, joins, raw_lookup)
+                query_model, joins, lookup = convert_lookup(curr_model, joins, raw_lookup)
                 new_query[lookup] = value
+            node_or_q.model = query_model
             node_or_q.query = new_query
-        return query_model
     
     for node_or_q in args:
-        queried_model = fix_q(node_or_q, joins)
-        query.setdefault(queried_model, [])
-        query[queried_model].append(node_or_q)
+        fix_q(node_or_q, joins)
     
     # iterate over keyword lookups and determine lookups and necessary joins
     for raw_lookup, value in kwargs.items():
@@ -1315,6 +1310,9 @@ def filter_query(model_or_query, *args, **kwargs):
                 query = follow_joins(joined_model, query)
         return query
     select_query = follow_joins(model, select_query)
+    
+    for node in args:
+        select_query = select_query.where(node)
     
     for model, lookups in query.items():
         qargs, qkwargs = [], {}
