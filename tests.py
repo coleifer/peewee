@@ -161,6 +161,11 @@ class BasePeeweeTestCase(unittest.TestCase):
         self.assertEqual(lhs[0].replace('?', interpolation), rhs[0].replace('?', interpolation))
         self.assertEqual(lhs[1], rhs[1])
     
+    def assertSQL(self, query, expected_clauses):
+        computed_joins, clauses, alias_map = query.compile_where()
+        clauses = [(x.replace('?', interpolation), y) for (x, y) in clauses]
+        self.assertEqual(sorted(clauses), sorted(expected_clauses))
+    
     def assertNodeEqual(self, lhs, rhs):
         for i, lchild in enumerate(lhs.children):
             rchild = rhs.children[i]
@@ -1229,6 +1234,33 @@ class RelatedFieldTests(BasePeeweeTestCase):
         sq = EntryTag.filter(Q(entry__title='a2')|Q(entry__title='b2'), Q(entry__blog__title='b'))
         self.assertEqual(list(sq), [t2])
     
+    def test_mixing_models_filter_q(self):
+        a, a1, a2, b, b1, b2, t1, t2 = self.get_common_objects()
+        
+        sq = EntryTag.filter(Q(entry__title='a2') | Q(entry__blog__title='b'))
+        self.assertSQL(sq, [
+            ('(t2.title = ? OR t3.title = ?)', ['a2', 'b']),
+        ])
+        self.assertEqual(list(sq), [t1, t2])
+        
+        sq = EntryTag.filter(Q(entry__title='a2') | Q(entry__blog__title='b'), tag='t1')
+        self.assertSQL(sq, [
+            ('(t2.title = ? OR t3.title = ?)', ['a2', 'b']),
+            ('t1.tag = ?', ['t1']),
+        ])
+        self.assertEqual(list(sq), [t1])
+        
+        sq = Blog.filter(Q(entry_set__entrytag_set__tag='t1') | Q(entry_set__title='b1'))
+        self.assertSQL(sq, [
+            ('(t3.tag = ? OR t2.title = ?)', ['t1', 'b1']),
+        ])
+        
+        sq = Blog.filter(Q(entry_set__entrytag_set__tag='t1') | Q(entry_set__title='b1'), title='b')
+        self.assertSQL(sq, [
+            ('(t3.tag = ? OR t2.title = ?)', ['t1', 'b1']),
+            ('t1.title = ?', ['b']),
+        ])
+    
     def test_multiple_in(self):
         sq = Blog.select().where(title__in=['a', 'b']).join(Entry).where(title__in=['c', 'd'], content='foo')
         self.assertSQLEqual(sq.sql(), ('SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id WHERE t1.title IN (?,?) AND (t2.content = ? AND t2.title IN (?,?))', ['a', 'b', 'foo', 'c', 'd']))
@@ -1518,11 +1550,6 @@ class RelatedFieldTests(BasePeeweeTestCase):
 
 
 class FilterQueryTests(BasePeeweeTestCase):
-    def assertSQL(self, query, expected_clauses):
-        computed_joins, clauses, alias_map = query.compile_where()
-        clauses = [(x.replace('?', interpolation), y) for (x, y) in clauses]
-        self.assertEqual(sorted(clauses), sorted(expected_clauses))
-    
     def test_filter_no_joins(self):
         query = Entry.filter(title='e1')
         self.assertSQL(query, [('title = ?', ['e1'])])
