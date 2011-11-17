@@ -1170,6 +1170,28 @@ class RelatedFieldTests(BasePeeweeTestCase):
         sq = EntryTag.select().join(Entry).where(Q(title='a2') | Q(title='b2')).join(Blog).where(Q(title='b'))
         self.assertEqual(list(sq), [t2])
     
+    def test_querying_joins_mixed_q(self):
+        a, a1, a2, b, b1, b2, t1, t2 = self.get_common_objects()
+        
+        sq = Blog.select().join(Entry).join(EntryTag).where(Q(Blog, title='a') | Q(tag='t2'))
+        self.assertSQL(sq, [
+            ('(t1.title = ? OR t3.tag = ?)', ['a', 't2'])
+        ])
+        self.assertEqual(list(sq), [a, b])
+        
+        sq = Blog.select().join(Entry).join(EntryTag).where(Q(Entry, title='a2') | Q(tag='t1') | Q(tag='t2'))
+        self.assertSQL(sq, [
+            ('(t2.title = ? OR t3.tag = ? OR t3.tag = ?)', ['a2', 't1', 't2'])
+        ])
+        
+        sq = Blog.select().join(Entry).join(EntryTag).where(
+            Q(Blog, title='b') | Q(Entry, title='a2'),
+            Q(Entry, pk=1) | Q(EntryTag, tag='t1') | Q(tag='t2'),
+        )
+        self.assertSQL(sq, [
+            ('(t1.title = ? OR t2.title = ?) AND (t2.pk = ? OR t3.tag = ? OR t3.tag = ?)', ['b', 'a2', 1, 't1', 't2']),
+        ])
+    
     def test_filtering_across_joins(self):
         a, a1, a2, b, b1, b2, t1, t2 = self.get_common_objects()
         
@@ -1259,6 +1281,13 @@ class RelatedFieldTests(BasePeeweeTestCase):
         self.assertSQL(sq, [
             ('(t3.tag = ? OR t2.title = ?)', ['t1', 'b1']),
             ('t1.title = ?', ['b']),
+        ])
+        
+        sq = Blog.filter(Q(entry_set__entrytag_set__tag='t1') | Q(entry_set__title='b1'), Q(title='b') | Q(entry_set__title='b2'), entry_set__entrytag_set__id=1)
+        self.assertSQL(sq, [
+            ('(t3.tag = ? OR t2.title = ?)', ['t1', 'b1']),
+            ('(t1.title = ? OR t2.title = ?)', ['b', 'b2']),
+            ('t3.id = ?', [1]),
         ])
     
     def test_multiple_in(self):
