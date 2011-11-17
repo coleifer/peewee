@@ -769,7 +769,6 @@ class BaseQuery(object):
     def parse_node(self, node, alias_map):
         query = []
         query_data = []
-        nodes = []
         for child in node.children:
             if isinstance(child, Q):
                 parsed, data = self.parse_q(child, alias_map)
@@ -779,7 +778,6 @@ class BaseQuery(object):
                 parsed, data = self.parse_node(child, alias_map)
                 query.append('(%s)' % parsed)
                 query_data.extend(data)
-        query.extend(nodes)
         connector = ' %s ' % node.connector
         query = connector.join(query)
         if node.negated:
