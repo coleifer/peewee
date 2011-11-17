@@ -322,7 +322,7 @@ class QueryTests(BasePeeweeTestCase):
     
     def test_selecting_with_aggregation(self):
         sq = SelectQuery(Blog, 't1.*, COUNT(t2.pk) AS count').group_by('id').join(Entry)
-        self.assertEqual(sq._where, {})
+        self.assertEqual(sq._where, [])
         self.assertEqual(sq._joins, {Blog: [(Entry, None, None)]})
         self.assertSQLEqual(sq.sql(), ('SELECT t1.*, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id', []))
         
@@ -909,50 +909,50 @@ class NodeTests(BasePeeweeTestCase):
         node = Q(a='A') | Q(b='B')
         self.assertEqual(unicode(node), 'a = A OR b = B')
         
-        node = parseq(Q(a='A') | Q(b='B'))
+        node = parseq(None, Q(a='A') | Q(b='B'))
         self.assertEqual(unicode(node), '(a = A OR b = B)')
         
         node = Q(a='A') & Q(b='B')
         self.assertEqual(unicode(node), 'a = A AND b = B')
         
-        node = parseq(Q(a='A') & Q(b='B'))
+        node = parseq(None, Q(a='A') & Q(b='B'))
         self.assertEqual(unicode(node), '(a = A AND b = B)')
     
     def test_kwargs(self):
-        node = parseq(a='A', b='B')
+        node = parseq(None, a='A', b='B')
         self.assertEqual(unicode(node), '(a = A AND b = B)')
     
     def test_mixed(self):
-        node = parseq(Q(a='A'), Q(b='B'), c='C', d='D')
+        node = parseq(None, Q(a='A'), Q(b='B'), c='C', d='D')
         self.assertEqual(unicode(node), 'a = A AND b = B AND (c = C AND d = D)')
         
-        node = parseq((Q(a='A') & Q(b='B')), c='C', d='D')
+        node = parseq(None, (Q(a='A') & Q(b='B')), c='C', d='D')
         self.assertEqual(unicode(node), '(c = C AND d = D) AND (a = A AND b = B)')
         
-        node = parseq((Q(a='A') | Q(b='B')), c='C', d='D')
+        node = parseq(None, (Q(a='A') | Q(b='B')), c='C', d='D')
         self.assertEqual(unicode(node), '(c = C AND d = D) AND (a = A OR b = B)')
     
     def test_nesting(self):
-        node = parseq(
+        node = parseq(None,
             (Q(a='A') | Q(b='B')),
             (Q(c='C') | Q(d='D'))
         )
         self.assertEqual(unicode(node), '(a = A OR b = B) AND (c = C OR d = D)')
         
-        node = parseq(
+        node = parseq(None,
             (Q(a='A') | Q(b='B')) &
             (Q(c='C') | Q(d='D'))
         )
         self.assertEqual(unicode(node), '((a = A OR b = B) AND (c = C OR d = D))')
 
-        node = parseq(
+        node = parseq(None,
             (Q(a='A') | Q(b='B')) |
             (Q(c='C') | Q(d='D'))
         )
         self.assertEqual(unicode(node), '((a = A OR b = B) OR (c = C OR d = D))')
     
     def test_weird_nesting(self):
-        node = parseq(
+        node = parseq(None,
             Q(a='A', b='B'),
             (
                 Q(c='C') |
@@ -961,7 +961,7 @@ class NodeTests(BasePeeweeTestCase):
         )
         self.assertEqual(unicode(node), '(a = A AND b = B) AND (c = C OR d = D)')
         
-        node = parseq((
+        node = parseq(None,(
             (
                 Q(c='C') |
                 Q(d='D')
@@ -972,7 +972,7 @@ class NodeTests(BasePeeweeTestCase):
         ), a='A', b='B')
         self.assertEqual(unicode(node), '(a = A AND b = B) AND (c = C OR d = D OR (e = E AND f = F))')
         
-        node = parseq((
+        node = parseq(None,(
             (
                 Q(c='C') |
                 Q(d='D')
@@ -985,13 +985,13 @@ class NodeTests(BasePeeweeTestCase):
         self.assertEqual(unicode(node), '(a = A AND b = B) AND ((c = C OR d = D) OR ((e = E AND f = F) OR (h = H AND g = G)))')
     
     def test_node_and_q(self):
-        node = parseq(
+        node = parseq(None,
             (Q(a='A') & Q(b='B')) |
             (Q(c='C'))
         )
         self.assertEqual(unicode(node), '(c = C OR (a = A AND b = B))')
         
-        node = parseq(Q(c='C') & (Q(a='A') | Q(b='B')))
+        node = parseq(None, Q(c='C') & (Q(a='A') | Q(b='B')))
         self.assertEqual(unicode(node), '((c = C) AND (a = A OR b = B))')
 
 

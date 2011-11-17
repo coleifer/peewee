@@ -500,7 +500,8 @@ class Node(object):
     
 
 class Q(object):
-    def __init__(self, **kwargs):
+    def __init__(self, _model=None, **kwargs):
+        self.model = _model
         self.query = kwargs
         self.parent = None
         self.negated = False
@@ -534,19 +535,37 @@ class Q(object):
         return expr
 
 
-def parseq(*args, **kwargs):
+def apply_model(model, item):
+    if isinstance(item, Node):
+        for child in item.children:
+            apply_model(model, child)
+    elif isinstance(item, Q):
+        if item.model is None:
+            item.model = model
+
+def parseq(model, *args, **kwargs):
     node = Node()
     
     for piece in args:
+        apply_model(model, piece)
         if isinstance(piece, (Q, Node)):
             node.children.append(piece)
         else:
             raise TypeError('Unknown object: %s', piece)
 
     if kwargs:
-        node.children.append(Q(**kwargs))
+        node.children.append(Q(model, **kwargs))
 
     return node
+
+def find_models(item):
+    seen = set()
+    if isinstance(item, Node):
+        for child in item.children:
+            seen.update(find_models(child))
+    elif isinstance(item, Q):
+        seen.add(item.model)
+    return seen
 
 
 class EmptyResultException(Exception):
@@ -566,7 +585,8 @@ class BaseQuery(object):
         self.interpolation = self.database.adapter.interpolation
         
         self._dirty = True
-        self._where = {}
+        self._where = []
+        self._where_models = set()
         self._joins = {}
         self._joined_models = set()
     
@@ -577,7 +597,7 @@ class BaseQuery(object):
         return cloned
     
     def clone_where(self):
-        return self._clone_dict_graph(self._where)
+        return list(self._where)
     
     def clone_joins(self):
         return self._clone_dict_graph(self._joins)
@@ -630,10 +650,10 @@ class BaseQuery(object):
     
     @returns_clone
     def where(self, *args, **kwargs):
-        self._where.setdefault(self.query_context, [])
-        parsed = parseq(*args, **kwargs)
+        parsed = parseq(self.query_context, *args, **kwargs)
         if parsed:
-            self._where[self.query_context].append(parsed)
+            self._where.append(parsed)
+            self._where_models.update(find_models(parsed))
 
     @returns_clone
     def join(self, model, join_type=None, on=None):
@@ -692,7 +712,7 @@ class BaseQuery(object):
                 right_field = field.name
             
             if join_type is None:
-                if field.null and model not in self._where:
+                if field.null and model not in self._where_models:
                     join_type = 'LEFT OUTER'
                 else:
                     join_type = 'INNER'
@@ -728,11 +748,10 @@ class BaseQuery(object):
         
         computed_joins = self.follow_joins(self.model, alias_map, alias_required, alias_count)
         
-        for model in sorted(self._where, key=lambda m: alias_map[m]):
-            for node in self._where[model]:
-                query, data = self.parse_node(node, model, alias_map)
-                where_with_alias.append(query)
-                where_data.extend(data)
+        for node in self._where:
+            query, data = self.parse_node(node, alias_map)
+            where_with_alias.append(query)
+            where_data.extend(data)
         
         return computed_joins, where_with_alias, where_data, alias_map
     
@@ -745,17 +764,17 @@ class BaseQuery(object):
                 flattened.append(clause)
         return flattened
     
-    def parse_node(self, node, model, alias_map):
+    def parse_node(self, node, alias_map):
         query = []
         query_data = []
         nodes = []
         for child in node.children:
             if isinstance(child, Q):
-                parsed, data = self.parse_q(child, model, alias_map)
+                parsed, data = self.parse_q(child, alias_map)
                 query.append(parsed)
                 query_data.extend(data)
             elif isinstance(child, Node):
-                parsed, data = self.parse_node(child, model, alias_map)
+                parsed, data = self.parse_node(child, alias_map)
                 query.append('(%s)' % parsed)
                 query_data.extend(data)
         query.extend(nodes)
@@ -765,7 +784,8 @@ class BaseQuery(object):
             query = 'NOT (%s)' % query
         return query, query_data
     
-    def parse_q(self, q, model, alias_map):
+    def parse_q(self, q, alias_map):
+        model = q.model or self.model
         query = []
         query_data = []
         parsed = self.parse_query_args(model, **q.query)
@@ -853,6 +873,7 @@ class SelectQuery(BaseQuery):
         query._distinct = self._distinct
         query._qr = self._qr
         query._where = self.clone_where()
+        query._where_models = set(self._where_models)
         query._joined_models = self._joined_models.copy()
         query._joins = self.clone_joins()
         return query
@@ -1076,6 +1097,7 @@ class UpdateQuery(BaseQuery):
     def clone(self):
         query = UpdateQuery(self.model, **self.update_query)
         query._where = self.clone_where()
+        query._where_models = set(self._where_models)
         query._joined_models = self._joined_models.copy()
         query._joins = self.clone_joins()
         return query
@@ -1129,6 +1151,7 @@ class DeleteQuery(BaseQuery):
     def clone(self):
         query = DeleteQuery(self.model)
         query._where = self.clone_where()
+        query._where_models = set(self._where_models)
         query._joined_models = self._joined_models.copy()
         query._joins = self.clone_joins()
         return query
