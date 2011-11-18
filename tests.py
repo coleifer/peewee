@@ -164,6 +164,7 @@ class BasePeeweeTestCase(unittest.TestCase):
     def assertSQL(self, query, expected_clauses):
         computed_joins, clauses, alias_map = query.compile_where()
         clauses = [(x.replace('?', interpolation), y) for (x, y) in clauses]
+        expected_clauses = [(x.replace('?', interpolation), y) for (x, y) in expected_clauses]
         self.assertEqual(sorted(clauses), sorted(expected_clauses))
     
     def assertNodeEqual(self, lhs, rhs):
