@@ -203,7 +203,7 @@ class MySQLAdapter(BaseAdapter):
         return {
             'primary_key': 'integer AUTO_INCREMENT',
             'boolean': 'bool',
-            'float': 'double precision',
+            'float': 'float',
             'text': 'longtext',
             'decimal': 'numeric',
         }
