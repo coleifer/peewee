@@ -374,8 +374,9 @@ class QueryResultWrapper(object):
     - converts rows from the database into model instances
     - ensures that multiple iterations do not result in multiple queries
     """
-    def __init__(self, model, cursor):
-        self.model = model
+    def __init__(self, query, cursor):
+        self.query = query
+        self.model = query.model
         self.cursor = cursor
         self._result_cache = []
         self._populated = False
@@ -835,7 +836,7 @@ class RawQuery(BaseQuery):
         return self._sql, self._params
     
     def execute(self):
-        return QueryResultWrapper(self.model, self.raw_execute())
+        return QueryResultWrapper(self, self.raw_execute())
     
     def join(self):
         raise AttributeError('Raw queries do not support joining programmatically')
@@ -1079,7 +1080,7 @@ class SelectQuery(BaseQuery):
     def execute(self):
         if self._dirty or not self._qr:
             try:
-                self._qr = QueryResultWrapper(self.model, self.raw_execute())
+                self._qr = QueryResultWrapper(self, self.raw_execute())
                 self._dirty = False
                 return self._qr
             except EmptyResultException:
