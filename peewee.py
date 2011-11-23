@@ -1008,10 +1008,16 @@ class SelectQuery(BaseQuery):
                 alias = alias_map.get(model, '')
                 for col in cols:
                     if isinstance(col, tuple):
-                        func, col, col_alias = col
-                        aggregates.append('%s(%s) AS %s' % \
-                            (func, self.combine_field(alias, col), col_alias)
-                        )
+                        if len(col) == 3:
+                            func, col, col_alias = col
+                            aggregates.append('%s(%s) AS %s' % \
+                                (func, self.combine_field(alias, col), col_alias)
+                            )
+                        elif len(col) == 2:
+                            col, col_alias = col
+                            qparts.append('%s AS %s' % \
+                                (self.combine_field(alias, col), col_alias)
+                            )
                     else:
                         qparts.append(self.combine_field(alias, col))
             return ', '.join(qparts + aggregates)
