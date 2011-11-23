@@ -1249,7 +1249,7 @@ def convert_lookup(model, joins, lookup):
                     if not isinstance(field, ForeignKeyField):
                         continue
                     
-                    if piece in (field.descriptor, field.related_name):
+                    if piece in (field.name, field.descriptor, field.related_name):
                         joined_model = field.to
                 
                 if not joined_model:
