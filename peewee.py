@@ -609,7 +609,7 @@ class BaseQuery(object):
         return self.database.adapter.lookup_cast(lookup, value)
     
     def parse_query_args(self, model, **query):
-        parsed = {}
+        parsed = []
         for lhs, rhs in query.iteritems():
             if self.query_separator in lhs:
                 lhs, op = lhs.rsplit(self.query_separator, 1)
@@ -644,7 +644,9 @@ class BaseQuery(object):
                 lookup_value = field.db_value(rhs)
                 operation = self.operations[op]
             
-            parsed[field.name] = (operation, self.lookup_cast(op, lookup_value))
+            parsed.append(
+                (field.name, (operation, self.lookup_cast(op, lookup_value)))
+            )
         
         return parsed
     
@@ -789,7 +791,7 @@ class BaseQuery(object):
         query = []
         query_data = []
         parsed = self.parse_query_args(model, **q.query)
-        for (name, lookup) in parsed.iteritems():
+        for (name, lookup) in parsed:
             operation, value = lookup
             if isinstance(value, SelectQuery):
                 sql, value = self.convert_subquery(value)
