@@ -9,6 +9,7 @@
 #    '
 from __future__ import with_statement
 from datetime import datetime
+import copy
 import decimal
 import logging
 import os
@@ -1698,6 +1699,14 @@ class BaseModel(type):
             for (k, v) in base_meta.__dict__.items():
                 if k in cls.inheritable_options and k not in attr_dict:
                     attr_dict[k] = v
+                elif k == 'fields':
+                    for field_name, field_obj in v.items():
+                        if isinstance(field_obj, PrimaryKeyField):
+                            continue
+                        if isinstance(field_obj, ForeignKeyField):
+                            field_name = field_obj.descriptor
+                        field_copy = copy.deepcopy(field_obj)
+                        setattr(cls, field_name, field_copy)
         
         _meta = BaseModelOptions(cls, attr_dict)
         

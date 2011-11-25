@@ -2262,6 +2262,7 @@ class ModelOptionsTest(BasePeeweeTestCase):
 
         class ParentModel(peewee.Model):
             title = peewee.CharField()
+            user = peewee.ForeignKeyField(User)
 
             class Meta:
                 database = test_db
@@ -2270,6 +2271,8 @@ class ModelOptionsTest(BasePeeweeTestCase):
             pass
 
         class ChildModel2(ParentModel):
+            special_field = peewee.CharField()
+            
             class Meta:
                 database = child2_db
 
@@ -2277,22 +2280,57 @@ class ModelOptionsTest(BasePeeweeTestCase):
             pass
 
         class GrandChildModel2(ChildModel2):
-            pass
+            special_field = peewee.TextField()
 
         self.assertEqual(ParentModel._meta.database.database, 'testing.db')
         self.assertEqual(ParentModel._meta.model_class, ParentModel)
 
         self.assertEqual(ChildModel._meta.database.database, 'testing.db')
         self.assertEqual(ChildModel._meta.model_class, ChildModel)
+        self.assertEqual(sorted(ChildModel._meta.fields.keys()), [
+            'id', 'title', 'user_id'
+        ])
 
         self.assertEqual(ChildModel2._meta.database.database, 'child2.db')
         self.assertEqual(ChildModel2._meta.model_class, ChildModel2)
+        self.assertEqual(sorted(ChildModel2._meta.fields.keys()), [
+            'id', 'special_field', 'title', 'user_id'
+        ])
 
         self.assertEqual(GrandChildModel._meta.database.database, 'testing.db')
         self.assertEqual(GrandChildModel._meta.model_class, GrandChildModel)
+        self.assertEqual(sorted(GrandChildModel._meta.fields.keys()), [
+            'id', 'title', 'user_id'
+        ])
 
         self.assertEqual(GrandChildModel2._meta.database.database, 'child2.db')
         self.assertEqual(GrandChildModel2._meta.model_class, GrandChildModel2)
+        self.assertEqual(sorted(GrandChildModel2._meta.fields.keys()), [
+            'id', 'special_field', 'title', 'user_id'
+        ])
+        self.assertTrue(isinstance(GrandChildModel2._meta.fields['special_field'], TextField))
+
+
+class EntryTwo(Entry):
+    title = peewee.TextField()
+
+
+class ModelInheritanceTestCase(BasePeeweeTestCase):
+    def setUp(self):
+        super(BasePeeweeTestCase, self).setUp()
+        EntryTwo.drop_table(True)
+        EntryTwo.create_table()
+    
+    def test_model_inheritance(self):
+        self.assertFalse(EntryTwo._meta.db_table == Entry._meta.db_table)
+        
+        b = Blog.create(title='b')
+        
+        e = Entry.create(title='e', blog=b)
+        e2 = EntryTwo.create(title='e2', blog=b)
+        
+        # this works fine but blows up other tests, thinking b/c the descriptors
+        # are stomping on eachother
 
 
 class ConcurrencyTestCase(BasePeeweeTestCase):
