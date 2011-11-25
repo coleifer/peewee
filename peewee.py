@@ -170,6 +170,7 @@ class PostgresqlAdapter(BaseAdapter):
             'primary_key': 'SERIAL',
             'datetime': 'TIMESTAMP',
             'decimal': 'NUMERIC',
+            'boolean': 'BOOLEAN',
         }
     
     def last_insert_id(self, cursor, model):
@@ -1491,9 +1492,7 @@ class BooleanField(IntegerField):
     db_field = 'boolean'
     
     def db_value(self, value):
-        if value:
-            return 1
-        return 0
+        return bool(value)
     
     def python_value(self, value):
         return bool(value)
