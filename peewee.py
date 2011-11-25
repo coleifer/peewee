@@ -1372,6 +1372,20 @@ def annotate_query(select_query, related_model, aggregation):
     return select_query.group_by(group_by)
 
 
+class FieldDescriptor(object):
+    def __init__(self, field):
+        self.field = field
+        self._cache_name = '__%s' % self.field.name
+    
+    def __get__(self, instance, instance_type=None):
+        if instance:
+            return getattr(instance, self._cache_name, None)
+        return self.field
+    
+    def __set__(self, instance, value):
+        setattr(instance, self._cache_name, value)
+
+
 class Field(object):
     db_field = ''
     default = None
@@ -1402,7 +1416,7 @@ class Field(object):
         self.name = name
         self.model = klass
         self.verbose_name = self.verbose_name or re.sub('_+', ' ', name).title()
-        setattr(klass, name, None)
+        setattr(klass, name, FieldDescriptor(self))
     
     def render_field_template(self):
         col_type = self.model._meta.database.column_for_field(self.db_field)
@@ -1543,6 +1557,9 @@ class ForeignRelatedObject(object):
         self.cache_name = '_cache_%s' % self.field_name
     
     def __get__(self, instance, instance_type=None):
+        if not instance:
+            return self
+        
         if not getattr(instance, self.cache_name, None):
             id = getattr(instance, self.field_name, 0)
             qr = self.to.select().where(**{self.to._meta.pk_name: id})
@@ -1703,9 +1720,9 @@ class BaseModel(type):
                     attr_dict[k] = v
                 elif k == 'fields':
                     for field_name, field_obj in v.items():
-                        if field_name in cls.__dict__:
-                            continue
                         if isinstance(field_obj, PrimaryKeyField):
+                            continue
+                        if field_name in cls.__dict__:
                             continue
                         if isinstance(field_obj, ForeignKeyField):
                             field_name = field_obj.descriptor
