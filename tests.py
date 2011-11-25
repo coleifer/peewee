@@ -2308,18 +2308,22 @@ class ModelOptionsTest(BasePeeweeTestCase):
         self.assertEqual(sorted(GrandChildModel2._meta.fields.keys()), [
             'id', 'special_field', 'title', 'user_id'
         ])
-        self.assertTrue(isinstance(GrandChildModel2._meta.fields['special_field'], TextField))
+        self.assertTrue(isinstance(GrandChildModel2._meta.fields['special_field'], peewee.TextField))
 
 
 class EntryTwo(Entry):
     title = peewee.TextField()
+    extra_field = peewee.CharField()
 
 
 class ModelInheritanceTestCase(BasePeeweeTestCase):
     def setUp(self):
-        super(BasePeeweeTestCase, self).setUp()
+        super(ModelInheritanceTestCase, self).setUp()
         EntryTwo.drop_table(True)
         EntryTwo.create_table()
+    
+    def tearDown(self):
+        EntryTwo.drop_table(True)
     
     def test_model_inheritance(self):
         self.assertFalse(EntryTwo._meta.db_table == Entry._meta.db_table)
@@ -2327,10 +2331,20 @@ class ModelInheritanceTestCase(BasePeeweeTestCase):
         b = Blog.create(title='b')
         
         e = Entry.create(title='e', blog=b)
-        e2 = EntryTwo.create(title='e2', blog=b)
+        e2 = EntryTwo.create(title='e2', extra_field='foo', blog=b)
         
-        # this works fine but blows up other tests, thinking b/c the descriptors
-        # are stomping on eachother
+        self.assertEqual(list(b.entry_set), [e])
+        self.assertEqual(list(b.entrytwo_set), [e2])
+        
+        self.assertEqual(Entry.select().count(), 1)
+        self.assertEqual(EntryTwo.select().count(), 1)
+        
+        e_from_db = Entry.get(pk=e.pk)
+        e2_from_db = EntryTwo.get(id=e2.id)
+        
+        self.assertEqual(e_from_db.blog, b)
+        self.assertEqual(e2_from_db.blog, b)
+        self.assertEqual(e2_from_db.extra_field, 'foo')
 
 
 class ConcurrencyTestCase(BasePeeweeTestCase):

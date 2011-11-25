@@ -1576,7 +1576,7 @@ class ForeignKeyField(IntegerField):
     
     def __init__(self, to, null=False, related_name=None, cascade=False, extra=None, *args, **kwargs):
         self.to = to
-        self.related_name = related_name
+        self._related_name = related_name
         self.cascade = cascade
         self.extra = extra
 
@@ -1596,7 +1596,9 @@ class ForeignKeyField(IntegerField):
 
         self.verbose_name = self.verbose_name or re.sub('_', ' ', name).title()
         
-        if self.related_name is None:
+        if self._related_name is not None:
+            self.related_name = self._related_name
+        else:
             self.related_name = klass._meta.db_table + '_set'
         
         klass._meta.rel_fields[name] = self.name
@@ -1701,13 +1703,15 @@ class BaseModel(type):
                     attr_dict[k] = v
                 elif k == 'fields':
                     for field_name, field_obj in v.items():
+                        if field_name in cls.__dict__:
+                            continue
                         if isinstance(field_obj, PrimaryKeyField):
                             continue
                         if isinstance(field_obj, ForeignKeyField):
                             field_name = field_obj.descriptor
                         field_copy = copy.deepcopy(field_obj)
                         setattr(cls, field_name, field_copy)
-        
+
         _meta = BaseModelOptions(cls, attr_dict)
         
         if not hasattr(_meta, 'db_table'):
