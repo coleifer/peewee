@@ -1558,7 +1558,7 @@ class ForeignRelatedObject(object):
     
     def __get__(self, instance, instance_type=None):
         if not instance:
-            return self
+            return self.field
         
         if not getattr(instance, self.cache_name, None):
             id = getattr(instance, self.field_name, 0)
