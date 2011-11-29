@@ -1705,6 +1705,9 @@ class BaseModel(type):
     def __new__(cls, name, bases, attrs):
         cls = super(BaseModel, cls).__new__(cls, name, bases, attrs)
 
+        if not bases:
+            return cls
+
         attr_dict = {}
         meta = attrs.pop('Meta', None)
         if meta:
