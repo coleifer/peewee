@@ -898,22 +898,15 @@ class SelectQuery(BaseQuery):
         self._offset = num_rows
     
     def count(self):
-        tmp_lim, tmp_off = self._limit, self._offset
-        self._limit = self._offset = None
+        clone = self.order_by()
+        clone._limit = clone._offset = None
         
-        tmp_query = self.query
-        
-        if self.use_aliases():
-            self.query = 'COUNT(t1.%s)' % (self.model._meta.pk_name)
+        if clone.use_aliases():
+            clone.query = 'COUNT(t1.%s)' % (clone.model._meta.pk_name)
         else:
-            self.query = 'COUNT(%s)' % (self.model._meta.pk_name)
+            clone.query = 'COUNT(%s)' % (clone.model._meta.pk_name)
         
-        res = self.database.execute(*self.sql())
-        
-        # restore
-        self.query = tmp_query
-        self._limit = tmp_lim
-        self._offset = tmp_off
+        res = clone.database.execute(*clone.sql())
         
         return res.fetchone()[0]
     
