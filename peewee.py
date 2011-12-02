@@ -832,6 +832,9 @@ class RawQuery(BaseQuery):
         self._sql = query
         self._params = list(params)
         super(RawQuery, self).__init__(model)
+
+    def clone(self):
+        return RawQuery(self.model, self._sql, *self._params)
     
     def sql(self):
         return self._sql, self._params
