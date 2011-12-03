@@ -175,8 +175,12 @@ class PostgresqlAdapter(BaseAdapter):
         }
     
     def last_insert_id(self, cursor, model):
-        cursor.execute("SELECT CURRVAL('\"%s_%s_seq\"')" % (
-            model._meta.db_table, model._meta.pk_name))
+        if model._meta.pk_sequence:
+            cursor.execute("SELECT CURRVAL('\"%s\"')" % (
+                model._meta.pk_sequence))
+        else:
+            cursor.execute("SELECT CURRVAL('\"%s_%s_seq\"')" % (
+                model._meta.db_table, model._meta.pk_name))
         return cursor.fetchone()[0]
     
 
@@ -269,12 +273,15 @@ class Database(object):
     def rows_affected(self, cursor):
         return self.adapter.rows_affected(cursor)
     
-    def column_for_field(self, db_field):
+    def column_for_field(self, field):
+        return self.column_for_field_type(field.db_field)
+    
+    def column_for_field_type(self, db_field_type):
         try:
-            return self.adapter.get_field_types()[db_field]
+            return self.adapter.get_field_types()[db_field_type]
         except KeyError:
             raise AttributeError('Unknown field type: "%s", valid types are: %s' % \
-                db_field, ', '.join(self.adapter.get_field_types().keys())
+                db_field_type, ', '.join(self.adapter.get_field_types().keys())
             )
     
     def create_table(self, model_class, safe=False):
@@ -353,6 +360,15 @@ class PostgresqlDatabase(Database):
                 AND pg_catalog.pg_table_is_visible(c.oid)
             ORDER BY c.relname""")
         return [row[0] for row in res.fetchall()]
+    
+    def sequence_exists(self, sequence):
+        res = self.execute("""
+            SELECT COUNT(*)
+            FROM pg_class, pg_namespace
+            WHERE relkind='S'
+                AND pg_class.relnamespace = pg_namespace.oid
+                AND relname=%s""", (sequence,))
+        return bool(res.fetchone()[0])
 
 
 class MySQLDatabase(Database):
@@ -1415,7 +1431,7 @@ class Field(object):
         setattr(klass, name, FieldDescriptor(self))
     
     def render_field_template(self):
-        col_type = self.model._meta.database.column_for_field(self.db_field)
+        col_type = self.model._meta.database.column_for_field(self)
         self.attributes['column_type'] = col_type
         return self.field_template % self.attributes
     
@@ -1648,6 +1664,7 @@ database = SqliteDatabase(DATABASE_NAME)
 
 class BaseModelOptions(object):
     ordering = None
+    pk_sequence = None
 
     def __init__(self, model_class, options=None):
         # configurable options
@@ -1696,7 +1713,7 @@ class BaseModelOptions(object):
 
 
 class BaseModel(type):
-    inheritable_options = ['database', 'ordering']
+    inheritable_options = ['database', 'ordering', 'pk_sequence']
     
     def __new__(cls, name, bases, attrs):
         cls = super(BaseModel, cls).__new__(cls, name, bases, attrs)
