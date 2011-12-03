@@ -175,8 +175,12 @@ class PostgresqlAdapter(BaseAdapter):
         }
     
     def last_insert_id(self, cursor, model):
-        cursor.execute("SELECT CURRVAL('\"%s_%s_seq\"')" % (
-            model._meta.db_table, model._meta.pk_name))
+        if model._meta.pk_sequence:
+            cursor.execute("SELECT CURRVAL('\"%s\"')" % (
+                model._meta.pk_sequence))
+        else:
+            cursor.execute("SELECT CURRVAL('\"%s_%s_seq\"')" % (
+                model._meta.db_table, model._meta.pk_name))
         return cursor.fetchone()[0]
     
 
