@@ -584,6 +584,12 @@ class Q(object):
 
 
 def apply_model(model, item):
+    """
+    Q() objects take a model, which provides context for the keyword arguments.
+    In this way Q() objects can be mixed across models.  The purpose of this
+    function is to recurse into a query datastructure and apply the given model
+    to all Q() objects that do not have a model explicitly set.
+    """
     if isinstance(item, Node):
         for child in item.children:
             apply_model(model, child)
@@ -592,6 +598,10 @@ def apply_model(model, item):
             item.model = model
 
 def parseq(model, *args, **kwargs):
+    """
+    Convert any query into a single Node() object -- used to build up the list
+    of where clauses when querying.
+    """
     node = Node()
     
     for piece in args:
@@ -607,6 +617,11 @@ def parseq(model, *args, **kwargs):
     return node
 
 def find_models(item):
+    """
+    Utility function to find models referenced in a query and return a set()
+    containing them.  This function is used to generate the list of models that
+    are part of a where clause.
+    """
     seen = set()
     if isinstance(item, Node):
         for child in item.children:
@@ -657,6 +672,12 @@ class BaseQuery(object):
         return self.database.adapter.lookup_cast(lookup, value)
     
     def parse_query_args(self, model, **query):
+        """
+        Parse out and normalize clauses in a query.  The query is composed of
+        various column+lookup-type/value pairs.  Validates that the lookups
+        are valid and returns a list of lookup tuples that have the form:
+        (field name, (operation, value))
+        """
         parsed = []
         for lhs, rhs in query.iteritems():
             if self.query_separator in lhs:
@@ -1273,12 +1294,22 @@ class InsertQuery(BaseQuery):
 
 
 def model_or_select(m_or_q):
+    """
+    Return both a model and a select query for the provided model *OR* select
+    query.
+    """
     if isinstance(m_or_q, BaseQuery):
         return (m_or_q.model, m_or_q)
     else:
         return (m_or_q, m_or_q.select())
 
 def convert_lookup(model, joins, lookup):
+    """
+    Given a model, a graph of joins, and a lookup, return a tuple containing
+    a normalized lookup:
+    
+    (model actually being queried, updated graph of joins, normalized lookup)
+    """
     operations = model._meta.database.adapter.operations
     
     pieces = lookup.split('__')
@@ -1381,6 +1412,9 @@ def filter_query(model_or_query, *args, **kwargs):
     return select_query
 
 def annotate_query(select_query, related_model, aggregation):
+    """
+    Perform an aggregation against a related model
+    """
     aggregation = aggregation or Count(related_model._meta.pk_name)
     model = select_query.model
     
