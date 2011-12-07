@@ -71,6 +71,7 @@ class BaseAdapter(object):
     """
     operations = {'eq': '= %s'}
     interpolation = '%s'
+    sequence_support = False
     
     def get_field_types(self):
         field_types = {
@@ -81,6 +82,7 @@ class BaseAdapter(object):
             'text': 'TEXT',
             'datetime': 'DATETIME',
             'primary_key': 'INTEGER',
+            'primary_key_with_sequence': 'INTEGER',
             'foreign_key': 'INTEGER',
             'boolean': 'SMALLINT',
         }
@@ -97,6 +99,11 @@ class BaseAdapter(object):
         conn.close()
     
     def lookup_cast(self, lookup, value):
+        """
+        When a lookup is being performed as a part of a WHERE clause, provides
+        a way to alter the incoming value that is passed to the database driver
+        as part of the list of parameters
+        """
         if lookup in ('contains', 'icontains'):
             return '%%%s%%' % value
         elif lookup in ('startswith', 'istartswith'):
@@ -160,6 +167,7 @@ class PostgresqlAdapter(BaseAdapter):
         'istartswith': 'ILIKE %s',
         'startswith': 'LIKE %s',
     }
+    sequence_support = True
         
     def connect(self, database, **kwargs):
         if not psycopg2:
@@ -169,6 +177,7 @@ class PostgresqlAdapter(BaseAdapter):
     def get_field_overrides(self):
         return {
             'primary_key': 'SERIAL',
+            'primary_key_with_sequence': 'INTEGER',
             'datetime': 'TIMESTAMP',
             'decimal': 'NUMERIC',
             'boolean': 'BOOLEAN',
@@ -223,6 +232,13 @@ class Database(object):
     - execution of SQL queries
     - creating and dropping tables and indexes
     """
+    def require_sequence_support(func):
+        def inner(self, *args, **kwargs):
+            if not self.adapter.sequence_support:
+                raise ValueError('%s adapter does not support sequences' % (self.adapter))
+            return func(self, *args, **kwargs)
+        return inner
+        
     def __init__(self, adapter, database, threadlocals=False, **connect_kwargs):
         self.adapter = adapter
         self.database = database
@@ -273,31 +289,37 @@ class Database(object):
     def rows_affected(self, cursor):
         return self.adapter.rows_affected(cursor)
     
-    def column_for_field(self, db_field):
+    def column_for_field(self, field):
+        return self.column_for_field_type(field.get_db_field())
+    
+    def column_for_field_type(self, db_field_type):
         try:
-            return self.adapter.get_field_types()[db_field]
+            return self.adapter.get_field_types()[db_field_type]
         except KeyError:
             raise AttributeError('Unknown field type: "%s", valid types are: %s' % \
-                db_field, ', '.join(self.adapter.get_field_types().keys())
+                db_field_type, ', '.join(self.adapter.get_field_types().keys())
             )
     
     def create_table(self, model_class, safe=False):
+        if model_class._meta.pk_sequence and self.adapter.sequence_support:
+            if not self.sequence_exists(model_class._meta.pk_sequence):
+                self.create_sequence(model_class._meta.pk_sequence)
         framing = safe and "CREATE TABLE IF NOT EXISTS %s (%s);" or "CREATE TABLE %s (%s);"
         columns = []
 
-        for field in model_class._meta.fields.values():
+        for field in model_class._meta.get_fields():
             columns.append(field.to_sql())
 
         query = framing % (model_class._meta.db_table, ', '.join(columns))
         
         self.execute(query, commit=True)
     
-    def create_index(self, model_class, field, unique=False):
+    def create_index(self, model_class, field_name, unique=False):
         framing = 'CREATE %(unique)s INDEX %(model)s_%(field)s ON %(model)s(%(field)s);'
         
-        if field not in model_class._meta.fields:
+        if field_name not in model_class._meta.fields:
             raise AttributeError(
-                'Field %s not on model %s' % (field, model_class)
+                'Field %s not on model %s' % (field_name, model_class)
             )
         
         unique_expr = ternary(unique, 'UNIQUE', '')
@@ -305,7 +327,7 @@ class Database(object):
         query = framing % {
             'unique': unique_expr,
             'model': model_class._meta.db_table,
-            'field': field
+            'field': field_name
         }
         
         self.execute(query, commit=True)
@@ -314,10 +336,21 @@ class Database(object):
         framing = fail_silently and 'DROP TABLE IF EXISTS %s;' or 'DROP TABLE %s;'
         self.execute(framing % model_class._meta.db_table, commit=True)
     
+    @require_sequence_support
+    def create_sequence(self, sequence_name):
+        return self.execute('CREATE SEQUENCE %s;' % sequence_name)
+    
+    @require_sequence_support
+    def drop_sequence(self, sequence_name):
+        return self.execute('DROP SEQUENCE %s;' % sequence_name)
+    
     def get_indexes_for_table(self, table):
         raise NotImplementedError
     
     def get_tables(self):
+        raise NotImplementedError
+    
+    def sequence_exists(self):
         raise NotImplementedError
 
 
@@ -357,6 +390,15 @@ class PostgresqlDatabase(Database):
                 AND pg_catalog.pg_table_is_visible(c.oid)
             ORDER BY c.relname""")
         return [row[0] for row in res.fetchall()]
+    
+    def sequence_exists(self, sequence):
+        res = self.execute("""
+            SELECT COUNT(*)
+            FROM pg_class, pg_namespace
+            WHERE relkind='S'
+                AND pg_class.relnamespace = pg_namespace.oid
+                AND relname=%s""", (sequence,))
+        return bool(res.fetchone()[0])
 
 
 class MySQLDatabase(Database):
@@ -542,6 +584,12 @@ class Q(object):
 
 
 def apply_model(model, item):
+    """
+    Q() objects take a model, which provides context for the keyword arguments.
+    In this way Q() objects can be mixed across models.  The purpose of this
+    function is to recurse into a query datastructure and apply the given model
+    to all Q() objects that do not have a model explicitly set.
+    """
     if isinstance(item, Node):
         for child in item.children:
             apply_model(model, child)
@@ -550,6 +598,10 @@ def apply_model(model, item):
             item.model = model
 
 def parseq(model, *args, **kwargs):
+    """
+    Convert any query into a single Node() object -- used to build up the list
+    of where clauses when querying.
+    """
     node = Node()
     
     for piece in args:
@@ -565,6 +617,11 @@ def parseq(model, *args, **kwargs):
     return node
 
 def find_models(item):
+    """
+    Utility function to find models referenced in a query and return a set()
+    containing them.  This function is used to generate the list of models that
+    are part of a where clause.
+    """
     seen = set()
     if isinstance(item, Node):
         for child in item.children:
@@ -615,6 +672,12 @@ class BaseQuery(object):
         return self.database.adapter.lookup_cast(lookup, value)
     
     def parse_query_args(self, model, **query):
+        """
+        Parse out and normalize clauses in a query.  The query is composed of
+        various column+lookup-type/value pairs.  Validates that the lookups
+        are valid and returns a list of lookup tuples that have the form:
+        (field name, (operation, value))
+        """
         parsed = []
         for lhs, rhs in query.iteritems():
             if self.query_separator in lhs:
@@ -1231,12 +1294,22 @@ class InsertQuery(BaseQuery):
 
 
 def model_or_select(m_or_q):
+    """
+    Return both a model and a select query for the provided model *OR* select
+    query.
+    """
     if isinstance(m_or_q, BaseQuery):
         return (m_or_q.model, m_or_q)
     else:
         return (m_or_q, m_or_q.select())
 
 def convert_lookup(model, joins, lookup):
+    """
+    Given a model, a graph of joins, and a lookup, return a tuple containing
+    a normalized lookup:
+    
+    (model actually being queried, updated graph of joins, normalized lookup)
+    """
     operations = model._meta.database.adapter.operations
     
     pieces = lookup.split('__')
@@ -1339,6 +1412,9 @@ def filter_query(model_or_query, *args, **kwargs):
     return select_query
 
 def annotate_query(select_query, related_model, aggregation):
+    """
+    Perform an aggregation against a related model
+    """
     aggregation = aggregation or Count(related_model._meta.pk_name)
     model = select_query.model
     
@@ -1418,8 +1494,11 @@ class Field(object):
         self.verbose_name = self.verbose_name or re.sub('_+', ' ', name).title()
         setattr(klass, name, FieldDescriptor(self))
     
+    def get_db_field(self):
+        return self.db_field
+    
     def render_field_template(self):
-        col_type = self.model._meta.database.column_for_field(self.db_field)
+        col_type = self.model._meta.database.column_for_field(self)
         self.attributes['column_type'] = col_type
         return self.field_template % self.attributes
     
@@ -1546,7 +1625,16 @@ class DecimalField(Field):
 
 class PrimaryKeyField(IntegerField):
     db_field = 'primary_key'
-    field_template = "%(column_type)s NOT NULL PRIMARY KEY"
+    field_template = "%(column_type)s NOT NULL PRIMARY KEY%(nextval)s"
+    sequence = None
+    
+    def get_attributes(self):
+        return {'nextval': ''}
+    
+    def get_db_field(self):
+        if self.model._meta.pk_sequence != None and self.model._meta.database.adapter.sequence_support:
+            return 'primary_key_with_sequence'
+        return self.db_field
 
 
 class ForeignRelatedObject(object):    
@@ -1652,6 +1740,7 @@ database = SqliteDatabase(DATABASE_NAME)
 
 class BaseModelOptions(object):
     ordering = None
+    pk_sequence = None
 
     def __init__(self, model_class, options=None):
         # configurable options
@@ -1700,7 +1789,7 @@ class BaseModelOptions(object):
 
 
 class BaseModel(type):
-    inheritable_options = ['database', 'ordering']
+    inheritable_options = ['database', 'ordering', 'pk_sequence']
     
     def __new__(cls, name, bases, attrs):
         cls = super(BaseModel, cls).__new__(cls, name, bases, attrs)
@@ -1738,7 +1827,7 @@ class BaseModel(type):
             _meta.db_table = re.sub('[^a-z]+', '_', cls.__name__.lower())
 
         setattr(cls, '_meta', _meta)
-        
+
         _meta.pk_name = None
 
         for name, attr in cls.__dict__.items():
@@ -1755,10 +1844,14 @@ class BaseModel(type):
             _meta.fields[_meta.pk_name] = pk
 
         _meta.model_name = cls.__name__
+        
+        if _meta.pk_sequence and _meta.database.adapter.sequence_support:
+            pk_field = _meta.fields[_meta.pk_name]
+            pk_field.attributes['nextval'] = " default nextval('%s')" % _meta.pk_sequence
 
         for field in _meta.fields.values():
             field.class_prepared()
-                
+        
         if hasattr(cls, '__unicode__'):
             setattr(cls, '__repr__', lambda self: '<%s: %s>' % (
                 _meta.model_name, self.__unicode__()))

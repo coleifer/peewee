@@ -122,6 +122,16 @@ class Category(TestModel):
     parent = peewee.ForeignKeyField('self', related_name='children', null=True)
     name = peewee.CharField()
 
+class SeqModelBase(TestModel):
+    class Meta:
+        pk_sequence = 'just_testing_seq'
+
+class SeqModelA(SeqModelBase):
+    num = peewee.IntegerField()
+
+class SeqModelB(SeqModelBase):
+    other_num = peewee.IntegerField() 
+
 
 class BasePeeweeTestCase(unittest.TestCase):
     def setUp(self):
@@ -2389,3 +2399,39 @@ class ConcurrencyTestCase(BasePeeweeTestCase):
         [t.join() for t in threads]
         
         self.assertEqual(data_queue.qsize(), 100)
+
+
+if test_db.adapter.sequence_support:
+    class SequenceTestCase(BasePeeweeTestCase):
+        def setUp(self):
+            super(SequenceTestCase, self).setUp()
+            self.safe_drop()
+            SeqModelA.create_table()
+            SeqModelB.create_table()
+        
+        def safe_drop(self):
+            SeqModelA.drop_table(True)
+            SeqModelB.drop_table(True)
+            
+            self.sequence = SeqModelBase._meta.pk_sequence
+            if test_db.sequence_exists(self.sequence):
+                test_db.drop_sequence(self.sequence)
+        
+        def tearDown(self):
+            super(SequenceTestCase, self).tearDown()
+            self.safe_drop()
+        
+        def test_sequence_shared(self):
+            a1 = SeqModelA.create(num=1)
+            a2 = SeqModelA.create(num=2)
+            b1 = SeqModelB.create(other_num=101)
+            b2 = SeqModelB.create(other_num=102)
+            a3 = SeqModelA.create(num=3)
+            
+            self.assertEqual(a1.id, a2.id - 1)
+            self.assertEqual(a2.id, b1.id - 1)
+            self.assertEqual(b1.id, b2.id - 1)
+            self.assertEqual(b2.id, a3.id - 1)
+
+else:
+    print 'Skipping sequence tests because backend does not support'
