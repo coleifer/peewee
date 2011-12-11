@@ -1967,7 +1967,7 @@ class Model(object):
             update = self.update(
                 **field_dict
             ).where(**{self._meta.pk_name: self.get_pk()})
-            insert.requires_commit = commit
+            update.requires_commit = commit
             update.execute()
         else:
             insert = self.insert(**field_dict)
