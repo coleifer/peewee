@@ -1982,16 +1982,18 @@ class Model(object):
     def get_pk(self):
         return getattr(self, self._meta.pk_name, None)
     
-    def save(self):
+    def save(self, commit=False):
         field_dict = self.get_field_dict()
         field_dict.pop(self._meta.pk_name)
         if self.get_pk():
             update = self.update(
                 **field_dict
             ).where(**{self._meta.pk_name: self.get_pk()})
+            update.requires_commit = commit
             update.execute()
         else:
             insert = self.insert(**field_dict)
+            insert.requires_commit = commit
             new_pk = insert.execute()
             setattr(self, self._meta.pk_name, new_pk)
 
