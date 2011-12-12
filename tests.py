@@ -2401,6 +2401,54 @@ class ConcurrencyTestCase(BasePeeweeTestCase):
         self.assertEqual(data_queue.qsize(), 100)
 
 
+class TransactionTestCase(BasePeeweeTestCase):
+    def tearDown(self):
+        super(TransactionTestCase, self).tearDown()
+        test_db.set_autocommit(True)
+    
+    def test_autocommit(self):
+        test_db.set_autocommit(False)
+        
+        b = Blog.create(title='b1')
+        b2 = Blog.create(title='b2')
+        
+        # open up a new connection to the database, it won't register any blogs
+        # as being created
+        new_db = database_class(database_name)
+        res = new_db.execute('select count(*) from blog;')
+        self.assertEqual(res.fetchone()[0], 0)
+
+        # commit our blog inserts
+        test_db.commit()
+        
+        # now the blogs are query-able from another connection
+        res = new_db.execute('select count(*) from blog;')
+        self.assertEqual(res.fetchone()[0], 2)
+    
+    def test_commit_on_success(self):
+        self.assertTrue(test_db.get_autocommit())
+        
+        @test_db.commit_on_success
+        def will_fail():
+            b = Blog.create(title='b1')
+            e = Entry.create() # no blog, will raise an error
+            return b, e
+        
+        self.assertRaises(Exception, will_fail)
+        self.assertEqual(Blog.select().count(), 0)
+        self.assertEqual(Entry.select().count(), 0)
+        
+        @test_db.commit_on_success
+        def will_succeed():
+            b = Blog.create(title='b1')
+            e = Entry.create(title='e1', content='e1', blog=b)
+            return b, e
+        
+        b, e = will_succeed()
+        self.assertEqual(Blog.select().count(), 1)
+        self.assertEqual(Entry.select().count(), 1)
+
+
 if test_db.adapter.sequence_support:
     class SequenceTestCase(BasePeeweeTestCase):
         def setUp(self):

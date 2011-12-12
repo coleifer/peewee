@@ -239,7 +239,7 @@ class Database(object):
             return func(self, *args, **kwargs)
         return inner
         
-    def __init__(self, adapter, database, threadlocals=False, **connect_kwargs):
+    def __init__(self, adapter, database, threadlocals=False, autocommit=True, **connect_kwargs):
         self.adapter = adapter
         self.database = database
         self.connect_kwargs = connect_kwargs
@@ -250,6 +250,7 @@ class Database(object):
             self.__local = type('DummyLocal', (object,), {})
         
         self._conn_lock = threading.Lock()
+        self.autocommit = autocommit
     
     def connect(self):
         with self._conn_lock:
@@ -269,10 +270,10 @@ class Database(object):
     def get_cursor(self):
         return self.get_conn().cursor()
     
-    def execute(self, sql, params=None, commit=False):
+    def execute(self, sql, params=None):
         cursor = self.get_cursor()
         res = cursor.execute(sql, params or ())
-        if commit:
+        if self.get_autocommit():
             self.commit()
         logger.debug((sql, params))
         return cursor
@@ -282,6 +283,30 @@ class Database(object):
     
     def rollback(self):
         self.get_conn().rollback()
+    
+    def set_autocommit(self, autocommit):
+        self.__local.autocommit = autocommit
+    
+    def get_autocommit(self):
+        if not hasattr(self.__local, 'autocommit'):
+            self.set_autocommit(self.autocommit)
+        return self.__local.autocommit
+    
+    def commit_on_success(self, func):
+        def inner(*args, **kwargs):
+            orig = self.get_autocommit()
+            self.set_autocommit(False)
+            try:
+                res = func(*args, **kwargs)
+                self.commit()
+            except:
+                self.rollback()
+                raise
+            else:
+                return res
+            finally:
+                self.set_autocommit(orig)
+        return inner
     
     def last_insert_id(self, cursor, model):
         return self.adapter.last_insert_id(cursor, model)
@@ -312,7 +337,7 @@ class Database(object):
 
         query = framing % (model_class._meta.db_table, ', '.join(columns))
         
-        self.execute(query, commit=True)
+        self.execute(query)
     
     def create_index(self, model_class, field_name, unique=False):
         framing = 'CREATE %(unique)s INDEX %(model)s_%(field)s ON %(model)s(%(field)s);'
@@ -330,11 +355,11 @@ class Database(object):
             'field': field_name
         }
         
-        self.execute(query, commit=True)
+        self.execute(query)
     
     def drop_table(self, model_class, fail_silently=False):
         framing = fail_silently and 'DROP TABLE IF EXISTS %s;' or 'DROP TABLE %s;'
-        self.execute(framing % model_class._meta.db_table, commit=True)
+        self.execute(framing % model_class._meta.db_table)
     
     @require_sequence_support
     def create_sequence(self, sequence_name):
@@ -637,7 +662,6 @@ class EmptyResultException(Exception):
 
 class BaseQuery(object):
     query_separator = '__'
-    requires_commit = True
     force_alias = False
     
     def __init__(self, model):
@@ -891,7 +915,7 @@ class BaseQuery(object):
     
     def raw_execute(self):
         query, params = self.sql()
-        return self.database.execute(query, params, self.requires_commit)
+        return self.database.execute(query, params)
 
 
 class RawQuery(BaseQuery):
@@ -923,8 +947,6 @@ class RawQuery(BaseQuery):
 
 
 class SelectQuery(BaseQuery):
-    requires_commit = False
-    
     def __init__(self, model, query=None):
         self.query = query or '*'
         self._group_by = []
