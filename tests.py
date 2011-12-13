@@ -1796,8 +1796,8 @@ class FilterQueryTests(BasePeeweeTestCase):
     def test_filter_both_directions(self):
         f = Entry.filter(blog__title='b1', entrytag_set__tag='t1')
         self.assertSQL(f, [
-            ('t2.title = ?', ['b1']),
-            ('t3.tag = ?', ['t1']),
+            ('t3.title = ?', ['b1']),
+            ('t2.tag = ?', ['t1']),
         ])
 
 
