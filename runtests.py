@@ -1,20 +1,16 @@
 #!/usr/bin/env python
 import os
-import sys
 import unittest
-import tests
 
-def runtests(*test_args):
+
+def collect():
+    start_dir = os.path.abspath(os.path.dirname(__file__))
+    return unittest.defaultTestLoader.discover(start_dir)
+
+
+if __name__ == '__main__':
     backend = os.environ.get('PEEWEE_TEST_BACKEND') or 'sqlite'
     print 'RUNNING PEEWEE TESTS WITH [%s]' % backend
     print '=============================================='
-    suite = unittest.TestLoader().loadTestsFromModule(tests)
-    result = unittest.TextTestRunner(verbosity=2).run(suite)
-    if result.failures:
-        sys.exit(1)
-    elif result.errors:
-        sys.exit(2)
-    sys.exit(0)
+    unittest.main(module='tests')
 
-if __name__ == '__main__':
-    runtests(*sys.argv[1:])
