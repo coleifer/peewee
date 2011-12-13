@@ -7,9 +7,9 @@ import threading
 import unittest
 
 import peewee
-from peewee import (RawQuery, SelectQuery, InsertQuery, UpdateQuery, DeleteQuery,
-        Node, Q, database, parseq, SqliteAdapter, PostgresqlAdapter, filter_query,
-        annotate_query,)
+from peewee import (RawQuery, SelectQuery, InsertQuery, UpdateQuery,
+        DeleteQuery, Node, Q, parseq, SqliteAdapter,
+        filter_query)
 
 
 class QueryLogHandler(logging.Handler):

@@ -2,9 +2,6 @@
 import os
 import sys
 import unittest
-
-from os.path import dirname, abspath
-
 import tests
 
 def runtests(*test_args):
