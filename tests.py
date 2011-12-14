@@ -7,9 +7,9 @@ import threading
 import unittest
 
 import peewee
-from peewee import (RawQuery, SelectQuery, InsertQuery, UpdateQuery, DeleteQuery,
-        Node, Q, database, parseq, SqliteAdapter, PostgresqlAdapter, filter_query,
-        annotate_query,)
+from peewee import (RawQuery, SelectQuery, InsertQuery, UpdateQuery,
+        DeleteQuery, Node, Q, parseq, SqliteAdapter,
+        filter_query)
 
 
 class QueryLogHandler(logging.Handler):
@@ -1303,7 +1303,8 @@ class RelatedFieldTests(BasePeeweeTestCase):
     
     def test_multiple_in(self):
         sq = Blog.select().where(title__in=['a', 'b']).join(Entry).where(title__in=['c', 'd'], content='foo')
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id WHERE t1.title IN (?,?) AND (t2.content = ? AND t2.title IN (?,?))', ['a', 'b', 'foo', 'c', 'd']))
+        #self.assertSQLEqual(sq.sql(), ('SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id WHERE t1.title IN (?,?) AND (t2.content = ? AND t2.title IN (?,?))', ['a', 'b', 'foo', 'c', 'd']))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.* FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id WHERE t1.title IN (?,?) AND (t2.title IN (?,?) AND t2.content = ?)', ['a', 'b', 'c', 'd', 'foo']))
 
     def test_ordering_across_joins(self):
         a, a1, a2, b, b1, b2, t1, t2 = self.get_common_objects()
@@ -1795,8 +1796,8 @@ class FilterQueryTests(BasePeeweeTestCase):
     def test_filter_both_directions(self):
         f = Entry.filter(blog__title='b1', entrytag_set__tag='t1')
         self.assertSQL(f, [
-            ('t2.title = ?', ['b1']),
-            ('t3.tag = ?', ['t1']),
+            ('t3.title = ?', ['b1']),
+            ('t2.tag = ?', ['t1']),
         ])
 
 
