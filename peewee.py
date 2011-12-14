@@ -356,6 +356,9 @@ class Database(object):
         }
         
         self.execute(query)
+
+    def create_foreign_key(self, model_class, field):
+        return self.create_index(model_class, field.name, field.unique)
     
     def drop_table(self, model_class, fail_silently=False):
         framing = fail_silently and 'DROP TABLE IF EXISTS %s;' or 'DROP TABLE %s;'
@@ -430,6 +433,28 @@ class MySQLDatabase(Database):
     def __init__(self, database, **connect_kwargs):
         super(MySQLDatabase, self).__init__(MySQLAdapter(), database, **connect_kwargs)
     
+    def create_foreign_key(self, model_class, field):
+        framing = """ 
+            ALTER TABLE %(model)s ADD CONSTRAINT fk_%(model)s_%(to)s_%(field)s
+            FOREIGN KEY (%(field)s) REFERENCES %(to)s(%(to_field)s)%(cascade)s;
+        """
+
+        if field.name not in model_class._meta.fields:
+            raise AttributeError(
+                'Field %s not on model %s' % (field_name, model_class)
+            )
+ 
+        query = framing % {
+            'model': model_class._meta.db_table,
+            'field': field.name,
+            'to': field.to._meta.db_table,
+            'to_field': field.to._meta.pk_name,
+            'cascade': ' ON DELETE CASCADE' if field.cascade else '',
+        }
+ 
+        self.execute(query)
+        return super(MySQLDatabase, self).create_foreign_key(model_class, field)
+
     def get_indexes_for_table(self, table):
         res = self.execute('SHOW INDEXES IN %s;' % table)
         rows = sorted([(r[2], r[1] == 0) for r in res.fetchall()])
@@ -1926,7 +1951,7 @@ class Model(object):
             if isinstance(field_obj, PrimaryKeyField):
                 cls._meta.database.create_index(cls, field_obj.name, True)
             elif isinstance(field_obj, ForeignKeyField):
-                cls._meta.database.create_index(cls, field_obj.name, field_obj.unique)
+                cls._meta.database.create_foreign_key(cls, field_obj)
             elif field_obj.db_index or field_obj.unique:
                 cls._meta.database.create_index(cls, field_obj.name, field_obj.unique)
     
