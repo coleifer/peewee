@@ -1025,7 +1025,7 @@ class SelectQuery(BaseQuery):
         
         res = clone.database.execute(*clone.sql())
         
-        return res.fetchone()[0]
+        return (res.fetchone() or [0])[0]
     
     @returns_clone
     def group_by(self, clause):
