@@ -85,6 +85,7 @@ class BaseAdapter(object):
             'primary_key_with_sequence': 'INTEGER',
             'foreign_key': 'INTEGER',
             'boolean': 'SMALLINT',
+            'blob': 'BLOB',
         }
         field_types.update(self.get_field_overrides())
         return field_types
@@ -181,6 +182,7 @@ class PostgresqlAdapter(BaseAdapter):
             'datetime': 'TIMESTAMP',
             'decimal': 'NUMERIC',
             'boolean': 'BOOLEAN',
+            'blob': 'BYTEA',
         }
     
     def last_insert_id(self, cursor, model):
