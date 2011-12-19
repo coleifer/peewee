@@ -523,6 +523,20 @@ class QueryTests(BasePeeweeTestCase):
         ).count()
         self.assertEqual(count, 2)
     
+    def test_count_with_joins_issue27(self):
+        b1 = Blog.create(title='b1')
+        b2 = Blog.create(title='b2')
+        
+        for b in [b1, b2]:
+            for i in range(5):
+                self.create_entry(title='e-%s-%s' % (b, i), blog=b)
+        
+        bc = Blog.select().where(title='b1').join(Entry).count()
+        self.assertEqual(bc, 5)
+        
+        bc_dist = Blog.select().where(title='b1').join(Entry).distinct().count()
+        self.assertEqual(bc_dist, 1)
+    
     def test_pagination(self):
         base_sq = SelectQuery(Blog)
         
