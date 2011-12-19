@@ -533,7 +533,7 @@ class QueryTests(BasePeeweeTestCase):
         
         bc = Blog.select().where(title='b1').join(Entry).count()
         self.assertEqual(bc, 5)
-        
+
         bc_dist = Blog.select().where(title='b1').join(Entry).distinct().count()
         self.assertEqual(bc_dist, 1)
     

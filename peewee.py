@@ -1017,6 +1017,9 @@ class SelectQuery(BaseQuery):
         self._offset = num_rows
     
     def count(self):
+        if self._distinct:
+            return self.wrapped_count()
+        
         clone = self.order_by()
         clone._limit = clone._offset = None
         
@@ -1028,6 +1031,17 @@ class SelectQuery(BaseQuery):
         res = clone.database.execute(*clone.sql())
         
         return (res.fetchone() or [0])[0]
+    
+    def wrapped_count(self):
+        clone = self.order_by()
+        clone._limit = clone._offset = None
+        
+        sql, params = clone.sql()
+        query = 'SELECT COUNT(1) FROM (%s) AS wrapped_select' % sql
+        
+        res = clone.database.execute(query, params)
+        
+        return res.fetchone()[0]
     
     @returns_clone
     def group_by(self, clause):
