@@ -9,7 +9,7 @@ import unittest
 import peewee
 from peewee import (RawQuery, SelectQuery, InsertQuery, UpdateQuery, DeleteQuery,
         Node, Q, database, parseq, SqliteAdapter, PostgresqlAdapter, filter_query,
-        annotate_query,)
+        annotate_query, F)
 
 
 class QueryLogHandler(logging.Handler):
@@ -476,6 +476,13 @@ class QueryTests(BasePeeweeTestCase):
         
         uq = UpdateQuery(Blog, title='A').where(Q(id=1) | Q(id=3))
         self.assertSQLEqual(uq.sql(), ('UPDATE blog SET title=? WHERE (id = ? OR id = ?)', ['A', 1, 3]))
+    
+    def test_update_with_f(self):
+        uq = UpdateQuery(Entry, blog_id=F('blog_id') + 1).where(pk=1)
+        self.assertSQLEqual(uq.sql(), ('UPDATE entry SET blog_id=blog_id + 1 WHERE pk = ?', [1]))
+        
+        uq = UpdateQuery(Entry, blog_id=F('blog_id') - 10, title='updated').where(pk=2)
+        self.assertSQLEqual(uq.sql(), ('UPDATE entry SET blog_id=blog_id - 10, title=? WHERE pk = ?', ['updated', 2]))
     
     def test_delete(self):
         InsertQuery(Blog, title='a').execute()

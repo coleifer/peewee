@@ -638,6 +638,28 @@ class Q(object):
         return expr
 
 
+class F(object):
+    def __init__(self, field):
+        self.field = field
+        self._op = None
+    
+    def sql(self):
+        if self._op is None:
+            return self.field
+        
+        return '%s %s %s' % (self.field, self._op, self.val)
+
+    def __add__(self, rhs):
+        self._op = '+'
+        self.val = rhs
+        return self
+
+    def __sub__(self, rhs):
+        self._op = '-'
+        self.val = rhs
+        return self
+
+
 def apply_model(model, item):
     """
     Q() objects take a model, which provides context for the keyword arguments.
@@ -1252,7 +1274,10 @@ class UpdateQuery(BaseQuery):
                 if field is None:
                     raise
             
-            sets[field.name] = field.db_value(v)
+            if not isinstance(v, F):
+                v = field.db_value(v)
+            
+            sets[field.name] = v
         
         return sets
     
@@ -1263,10 +1288,17 @@ class UpdateQuery(BaseQuery):
 
         params = []
         update_params = []
+        
+        alias = alias_map.get(self.model)
 
         for k, v in set_statement.iteritems():
-            params.append(v)
-            update_params.append('%s=%s' % (k, self.interpolation))
+            if isinstance(v, F):
+                value = self.combine_field(alias, v.sql())
+            else:
+                params.append(v)
+                value = self.interpolation
+            
+            update_params.append('%s=%s' % (self.combine_field(alias, k), value))
         
         update = 'UPDATE %s SET %s' % (
             self.model._meta.db_table, ', '.join(update_params))
