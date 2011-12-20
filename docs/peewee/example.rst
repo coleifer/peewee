@@ -146,6 +146,9 @@ whenever a new model is added.
     Adding fields after the table has been created will required you to
     either drop the table and re-create it or manually add the columns using ``ALTER TABLE``.
 
+.. note::
+    If you want, you can use instead write ``User.create_table(True)`` and it will
+    fail silently if the table already exists.
 
 Connecting to the database
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -154,7 +157,7 @@ You may have noticed in the above model code that there is a class defined on th
 base model named ``Meta`` that sets the ``database`` attribute.  peewee
 allows every model to specify which database it uses, defaulting to "peewee.db".
 Since you probably want a bit more control, you can instantiate your own
-database and point your models at it:
+database and point your models at it.  This is a peewee idiom:
 
 .. code-block:: python
 
@@ -299,3 +302,61 @@ Results in the following SQL query:
     )
 
 peewee supports doing subqueries on any :py:class:`ForeignKeyField` or :py:class:`PrimaryKeyField`.
+
+What else is of interest here?
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+There are a couple other neat things going on in the example app that are worth
+mentioning briefly.
+
+* Support for paginating lists of results is implemented in a simple function called
+  ``object_list`` (after it's corollary in Django).  This function is used by all
+  the views that return lists of objects.
+
+  .. code-block:: python
+      
+      def object_list(template_name, qr, var_name='object_list', **kwargs):
+          kwargs.update(
+              page=int(request.args.get('page', 1)),
+              pages=qr.count() / 20 + 1
+          )
+          kwargs[var_name] = qr.paginate(kwargs['page'])
+          return render_template(template_name, **kwargs)
+
+* Simple authentication system with a ``login_required`` decorator.  The first
+  function simply adds user data into the current session when a user successfully
+  logs in.  The decorator ``login_required`` can be used to wrap view functions,
+  checking for whether the session is authenticated and if not redirecting to the
+  login page.
+
+  .. code-block:: python
+  
+      def auth_user(user):
+          session['logged_in'] = True
+          session['user'] = user
+          session['username'] = user.username
+          flash('You are logged in as %s' % (user.username))
+
+      def login_required(f):
+          @wraps(f)
+          def inner(*args, **kwargs):
+              if not session.get('logged_in'):
+                  return redirect(url_for('login'))
+              return f(*args, **kwargs)
+          return inner
+
+* Return a 404 response instead of throwing exceptions when an object is not
+  found in the database.
+  
+  .. code-block:: python
+  
+      def get_object_or_404(model, **kwargs):
+          try:
+              return model.get(**kwargs)
+          except model.DoesNotExist:
+              abort(404)
+
+.. note::
+    Like these snippets and interested in more?  Check out `flask-peewee <https://github.com/coleifer/flask-peewee>`_ -
+    a flask plugin that provides a django-like Admin interface, RESTful API, Authentication and
+    more for your peewee models.

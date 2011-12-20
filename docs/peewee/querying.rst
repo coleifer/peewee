@@ -241,6 +241,50 @@ This query selects all staff or super users who joined after 2009 or before
 .. note:: If you need more power, check out :py:class:`RawQuery`
 
 
+Comparing against column data
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Suppose you have a model that looks like the following:
+
+.. code-block:: python
+
+    class WorkerProfiles(Model):
+        salary = IntegerField()
+        desired = IntegerField()
+
+What if we want to query ``WorkerProfiles`` to find all the rows where "salary" is greater
+than "desired" (maybe you want to find out who may be looking for a raise)?
+
+To solve this problem, peewee borrows the notion of :py:class:`F` objects from the django
+orm.  An :py:class:`F` object allows you to query against arbitrary data present in
+another column:
+
+.. code-block:: python
+
+    WorkerProfile.select().where(salary__gt=F('desired'))
+
+That's it.  If the other column exists on a model that is accessed via a JOIN,
+you will need to specify that model as the second argument to the :py:class:`F`
+object.  Let's supposed that the "desired" salary exists on a separate model:
+
+.. code-block:: python
+
+    WorkerProfile.select().join(Desired).where(desired_salary__lt=F('salary', WorkerProfile))
+
+Atomic updates
+^^^^^^^^^^^^^^
+
+The :py:class:`F` object also works for updating data.  Suppose you cache counts of tweets for
+every user in a special table to avoid an expensive COUNT() query.  You want to
+update the cache table every time a user tweets, but do so atomically:
+
+.. code-block:: python
+
+    cache_row = CacheCount.get(user=some_user)
+    update_query = cache_row.update(tweet_count=F('tweet_count') + 1)
+    update_query.execute()
+
+
 Aggregating records
 ^^^^^^^^^^^^^^^^^^^
 
@@ -654,7 +698,13 @@ UpdateQuery
         
             >>> uq = UpdateQuery(User, active=False).where(registration_expired=True)
             >>> print uq.sql()
-            ('UPDATE user SET active=? WHERE registration_expired = ?', [0, 1])
+            ('UPDATE user SET active=? WHERE registration_expired = ?', [0, True])
+        
+        .. code-block:: python
+        
+            >>> atomic_update = UpdateQuery(User, message_count=F('message_count') + 1).where(id=3)
+            >>> print atomic_update.sql()
+            ('UPDATE user SET message_count=(message_count + 1) WHERE id = ?', [3])
     
     .. py:method:: where(*args, **kwargs)
 

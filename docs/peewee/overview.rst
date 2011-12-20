@@ -33,6 +33,9 @@ Examples:
         User: ['*'],
         Tweet: [Count('id', 'count')]
     }).group_by('id').join(Tweet).order_by(('count', 'desc'))
+    
+    # do an atomic update
+    TweetCount.update(count=F('count') + 1).where(user=charlie)
 
 
 You can use django-style syntax to create select queries:

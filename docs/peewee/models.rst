@@ -68,6 +68,9 @@ things going on:
     Model definition is pretty similar to django or sqlalchemy -- you basically define
     a class which represents a single table in the database, then its attributes (which
     are subclasses of :py:class:`Field`) represent columns.
+    
+    Models provide methods for creating/reading/updating/deleting rows in the
+    database.
 
 
 Creating tables
@@ -184,6 +187,8 @@ There are several options you can specify as ``Meta`` attributes:
 * database: specifies a :py:class:`Database` instance to use with this model
 * db_table: the name of the database table this model maps to
 * ordering: a sequence of columns to use as the default ordering for this model
+* pk_sequence: name of sequence to create for the primary key (peewee will autogenerate one
+    if not provided and the backend supports sequences).
 
 Example of ordering:
 
@@ -197,6 +202,27 @@ Example of ordering:
         class Meta:
             # order by created date descending, then title ascending
             ordering = (('created', 'desc'), 'title')
+
+.. note:: 
+    These options are "inheritable", which means that you can define a database
+    adapter on one model, then subclass that model and the child models will use
+    that database.
+    
+    .. code-block:: python
+    
+        my_db = PostgresqlDatabase('my_db')
+        
+        class BaseModel(Model):
+            class Meta:
+                database = my_db
+        
+        class SomeModel(BaseModel):
+            field1 = CharField()
+            
+            class Meta:
+                ordering = ('field1',)
+                # no need to define database again since it will be inherited from
+                # the BaseModel
 
 
 Model methods

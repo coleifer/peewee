@@ -303,6 +303,16 @@ You can count the number of rows in any select query:
     50
 
 
+Performing atomic updates
+-------------------------
+
+Use the special :py:class:`F` object to perform an atomic update:
+
+.. code-block:: python
+
+    >>> MessageCount.update(count=F('count') + 1).where(user=some_user)
+
+
 Aggregating records
 -------------------
 

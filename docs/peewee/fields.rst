@@ -19,7 +19,9 @@ This should look familiar to users of the django framework.  Here's an example:
         username = CharField()
         join_date = DateTimeField()
         about_me = TextField()
-
++-------------------------------+--------------------------------+-------------------------------+
+| :py:class:`FloatField`        | * ``real``, sqlite, psql       | none                          |
+|                               | * ``double precision``, mysql  |                               |
 There is one special type of field, :py:class:`ForeignKeyField`, which allows you
 to expose foreign-key relationships between models in an intuitive way:
 
@@ -49,11 +51,11 @@ Field types table
 
 Parameters accepted by all field types and their default values:
 
-* ``null = False``
-* ``db_index = False``
-* ``unique = False``
-* ``verbose_name = None``
-* ``help_text = None``
+* ``null = False`` -- boolean indicating whether null values are allowed to be stored
+* ``db_index = False`` -- boolean indicating whether to create an index on this column
+* ``unique = False`` -- boolean indicating whether to create a unique index on this column
+* ``verbose_name = None`` -- string representing the "user-friendly" name of this field
+* ``help_text = None`` -- string representing any helpful text for this field
 
 +-------------------------------+--------------------------------+-------------------------------+
 | Field type                    | Underlying storage             | Special Parameters            |
@@ -75,12 +77,15 @@ Parameters accepted by all field types and their default values:
 | :py:class:`FloatField`        | * ``real``, sqlite, psql       | none                          |
 |                               | * ``double precision``, mysql  |                               |
 +-------------------------------+--------------------------------+-------------------------------+
+| :py:class:`DecimalField`      | * ``numeric``, psql, mysql     | ``max_digits``, ``places``    |
+|                               | * ``decimal``, sqlite          |                               |
++-------------------------------+--------------------------------+-------------------------------+
 | :py:class:`PrimaryKeyField`   | * ``integer``, sqlite          | none                          |
 |                               | * ``serial``, psql             |                               |
 |                               | * ``integer auto_increment``,  |                               |
 |                               |   mysql                        |                               |
 +-------------------------------+--------------------------------+-------------------------------+
-| :py:class:`ForeignKeyField`   | ``integer``                    | ``to``, ``related_name``,     |
+| :py:class:`ForeignKeyField`   | ``foreign key``                | ``to``, ``related_name``,     |
 |                               |                                | ``cascade``, ``extra``        |
 +-------------------------------+--------------------------------+-------------------------------+
 
@@ -129,6 +134,11 @@ Field class API
         :param lookup_type: a peewee lookup type, such as 'eq' or 'contains'
         :param value: a python data type
         :rtype: data type converted for use when querying
+    
+    .. py:method:: class_prepared()
+    
+        Simple hook for :py:class:`Field` classes to indicate when the :py:class:`Model`
+        class the field exists on has been created.
 
 .. py:class:: CharField
 
@@ -153,6 +163,10 @@ Field class API
 .. py:class:: FloatField
 
     Stores: floating-point numbers
+
+.. py:class:: DecimalField
+
+    Stores: decimal numbers
 
 .. py:class:: PrimaryKeyField
 
