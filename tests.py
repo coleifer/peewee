@@ -94,6 +94,10 @@ class NullModel(TestModel):
     decimal_field1 = peewee.DecimalField(null=True)
     decimal_field2 = peewee.DecimalField(decimal_places=2, null=True)
 
+class NumberModel(TestModel):
+    num1 = peewee.IntegerField()
+    num2 = peewee.IntegerField()
+
 class Team(TestModel):
     name = peewee.CharField()
 
@@ -135,33 +139,12 @@ class SeqModelB(SeqModelBase):
 
 class BasePeeweeTestCase(unittest.TestCase):
     def setUp(self):
-        Membership.drop_table(True)
-        Member.drop_table(True)
-        Team.drop_table(True)
-        Relationship.drop_table(True)
-        User.drop_table(True)
-        EntryTag.drop_table(True)
-        Entry.drop_table(True)
-        Blog.drop_table(True)
-        
-        Blog.create_table()
-        Entry.create_table()
-        EntryTag.create_table()
-        User.create_table()
-        Relationship.create_table()
-        Team.create_table()
-        Member.create_table()
-        Membership.create_table()
-        
         self.qh = QueryLogHandler()
         peewee.logger.setLevel(logging.DEBUG)
         peewee.logger.addHandler(self.qh)
     
     def tearDown(self):
         peewee.logger.removeHandler(self.qh)
-    
-    def queries(self):
-        return [x.msg for x in self.qh.queries]
     
     def assertQueriesEqual(self, queries):
         queries = [(q.replace('?', interpolation),p) for q,p in queries]
@@ -187,6 +170,30 @@ class BasePeeweeTestCase(unittest.TestCase):
                 self.assertNodeEqual(lchild, rchild)
             else:
                 raise TypeError("Invalid type passed to assertNodeEqual")
+
+class BaseModelTestCase(BasePeeweeTestCase):
+    def setUp(self):
+        Membership.drop_table(True)
+        Member.drop_table(True)
+        Team.drop_table(True)
+        Relationship.drop_table(True)
+        User.drop_table(True)
+        EntryTag.drop_table(True)
+        Entry.drop_table(True)
+        Blog.drop_table(True)
+        
+        Blog.create_table()
+        Entry.create_table()
+        EntryTag.create_table()
+        User.create_table()
+        Relationship.create_table()
+        Team.create_table()
+        Member.create_table()
+        Membership.create_table()
+        super(BaseModelTestCase, self).setUp()
+    
+    def queries(self):
+        return [x.msg for x in self.qh.queries]
     
     def create_blog(self, **kwargs):
         blog = Blog(**kwargs)
@@ -444,7 +451,34 @@ class QueryTests(BasePeeweeTestCase):
 
         sq = MoreModel.select().order_by()
         self.assertSQLEqual(sq.sql(), ('SELECT * FROM moremodel', []))
+    
+    def test_insert(self):
+        iq = InsertQuery(Blog, title='a')
+        self.assertSQLEqual(iq.sql(), ('INSERT INTO blog (title) VALUES (?)', ['a']))
+    
+    def test_update_with_q(self):
+        uq = UpdateQuery(Blog, title='A').where(Q(id=1))
+        self.assertSQLEqual(uq.sql(), ('UPDATE blog SET title=? WHERE id = ?', ['A', 1]))
+        
+        uq = UpdateQuery(Blog, title='A').where(Q(id=1) | Q(id=3))
+        self.assertSQLEqual(uq.sql(), ('UPDATE blog SET title=? WHERE (id = ? OR id = ?)', ['A', 1, 3]))
+    
+    def test_update_with_f(self):
+        uq = UpdateQuery(Entry, blog_id=F('blog_id') + 1).where(pk=1)
+        self.assertSQLEqual(uq.sql(), ('UPDATE entry SET blog_id=blog_id + 1 WHERE pk = ?', [1]))
+        
+        uq = UpdateQuery(Entry, blog_id=F('blog_id') - 10, title='updated').where(pk=2)
+        self.assertSQLEqual(uq.sql(), ('UPDATE entry SET blog_id=blog_id - 10, title=? WHERE pk = ?', ['updated', 2]))
+    
+    def test_delete(self):
+        dq = DeleteQuery(Blog).where(title='b')
+        self.assertSQLEqual(dq.sql(), ('DELETE FROM blog WHERE title = ?', ['b']))
+        
+        dq = DeleteQuery(Blog).where(Q(title='b') | Q(title='a'))
+        self.assertSQLEqual(dq.sql(), ('DELETE FROM blog WHERE (title = ? OR title = ?)', ['b', 'a']))
+    
 
+class ModelTestCase(BaseModelTestCase):
     def test_insert(self):
         iq = InsertQuery(Blog, title='a')
         self.assertSQLEqual(iq.sql(), ('INSERT INTO blog (title) VALUES (?)', ['a']))
@@ -469,20 +503,6 @@ class QueryTests(BasePeeweeTestCase):
         
         sq = SelectQuery(Blog).order_by('id')
         self.assertEqual([x.title for x in sq], ['A', 'B'])
-    
-    def test_update_with_q(self):
-        uq = UpdateQuery(Blog, title='A').where(Q(id=1))
-        self.assertSQLEqual(uq.sql(), ('UPDATE blog SET title=? WHERE id = ?', ['A', 1]))
-        
-        uq = UpdateQuery(Blog, title='A').where(Q(id=1) | Q(id=3))
-        self.assertSQLEqual(uq.sql(), ('UPDATE blog SET title=? WHERE (id = ? OR id = ?)', ['A', 1, 3]))
-    
-    def test_update_with_f(self):
-        uq = UpdateQuery(Entry, blog_id=F('blog_id') + 1).where(pk=1)
-        self.assertSQLEqual(uq.sql(), ('UPDATE entry SET blog_id=blog_id + 1 WHERE pk = ?', [1]))
-        
-        uq = UpdateQuery(Entry, blog_id=F('blog_id') - 10, title='updated').where(pk=2)
-        self.assertSQLEqual(uq.sql(), ('UPDATE entry SET blog_id=blog_id - 10, title=? WHERE pk = ?', ['updated', 2]))
     
     def test_delete(self):
         InsertQuery(Blog, title='a').execute()
@@ -617,7 +637,7 @@ class QueryTests(BasePeeweeTestCase):
         self.assertSQLEqual(sq.sql(), ('SELECT t1.* FROM entry AS t1 INNER JOIN entrytag AS t2 ON t1.pk = t2.entry_id\nINNER JOIN blog AS t3 ON t1.blog_id = t3.id WHERE t2.tag = ? AND t3.title = ?', ['t1', 'b1']))
 
 
-class ModelTests(BasePeeweeTestCase):
+class ModelTests(BaseModelTestCase):
     def test_model_save(self):
         a = self.create_blog(title='a')
         self.assertEqual(a.id, 1)
@@ -941,7 +961,7 @@ class ModelTests(BasePeeweeTestCase):
         self.assertEqual(User.select().count(), 2)
 
 
-class NodeTests(BasePeeweeTestCase):
+class NodeTests(BaseModelTestCase):
     def test_simple(self):
         node = Q(a='A') | Q(b='B')
         self.assertEqual(unicode(node), 'a = A OR b = B')
@@ -1032,7 +1052,7 @@ class NodeTests(BasePeeweeTestCase):
         self.assertEqual(unicode(node), '((c = C) AND (a = A OR b = B))')
 
 
-class RelatedFieldTests(BasePeeweeTestCase):
+class RelatedFieldTests(BaseModelTestCase):
     def get_common_objects(self):
         a = self.create_blog(title='a')
         a1 = self.create_entry(title='a1', content='a1', blog=a)
@@ -1610,7 +1630,7 @@ class RelatedFieldTests(BasePeeweeTestCase):
         ])
 
 
-class FilterQueryTests(BasePeeweeTestCase):
+class FilterQueryTests(BaseModelTestCase):
     def test_filter_no_joins(self):
         query = Entry.filter(title='e1')
         self.assertSQL(query, [('title = ?', ['e1'])])
@@ -1821,7 +1841,7 @@ class FilterQueryTests(BasePeeweeTestCase):
         ])
 
 
-class AnnotateQueryTests(BasePeeweeTestCase):
+class AnnotateQueryTests(BaseModelTestCase):
     def get_some_blogs(self):
         blogs = [Blog.create(title='b%d' % i) for i in range(3)]
         entries = []
@@ -1929,9 +1949,27 @@ class AnnotateQueryTests(BasePeeweeTestCase):
         self.assertSQLEqual(annotated.sql(), (
             'SELECT t1.*, MAX(t2.pub_date) AS max_pub FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id, t1.title', []
         ))
-        
 
-class SelfReferentialFKTestCase(BasePeeweeTestCase):
+
+class FQueryTestCase(BaseModelTestCase):
+    def setUp(self):
+        super(FQueryTestCase, self).setUp()
+        NumberModel.drop_table(True)
+        NumberModel.create_table()
+    
+    def test_f_object(self):
+        nm1 = NumberModel.create(num1=1, num2=1)
+        nm2 = NumberModel.create(num1=2, num2=2)
+        nm12 = NumberModel.create(num1=1, num2=2)
+        nm21 = NumberModel.create(num1=2, num2=1)
+        
+        sq = NumberModel.select().where(num1=F('num2'))
+        self.assertSQLEqual(sq.sql(), ('SELECT * FROM numbermodel WHERE num1 = num2', []))
+        
+        sq = NumberModel.select().where(num1__lt=F('num2'))
+        self.assertSQLEqual(sq.sql(), ('SELECT * FROM numbermodel WHERE num1 < num2', []))
+
+class SelfReferentialFKTestCase(BaseModelTestCase):
     def setUp(self):
         super(SelfReferentialFKTestCase, self).setUp()
         Category.drop_table(True)
@@ -1959,7 +1997,7 @@ class SelfReferentialFKTestCase(BasePeeweeTestCase):
         self.assertEqual(list(flask_peewee.children), [])
 
 
-class FieldTypeTests(BasePeeweeTestCase):
+class FieldTypeTests(BaseModelTestCase):
     def setUp(self):
         super(FieldTypeTests, self).setUp()
         NullModel.drop_table(True)
@@ -2137,7 +2175,7 @@ class FieldTypeTests(BasePeeweeTestCase):
         self.assertEqual(Entry._meta.fields['blog_id'].verbose_name, 'Blog')
         self.assertEqual(Entry._meta.fields['title'].verbose_name, 'Wacky title')
 
-class ModelIndexTestCase(BasePeeweeTestCase):
+class ModelIndexTestCase(BaseModelTestCase):
     def setUp(self):
         super(ModelIndexTestCase, self).setUp()
         UniqueModel.drop_table(True)
@@ -2207,8 +2245,8 @@ class ModelIndexTestCase(BasePeeweeTestCase):
         test_db.rollback()
 
 
-class ModelTablesTestCase(BasePeeweeTestCase):
-    tables_might_not_be_there = ['defaultvals', 'nullmodel', 'uniquemodel']
+class ModelTablesTestCase(BaseModelTestCase):
+    tables_might_not_be_there = ['defaultvals', 'nullmodel', 'uniquemodel', 'numbermodel']
     
     def test_tables_created(self):
         tables = test_db.get_tables()
@@ -2260,7 +2298,7 @@ class ModelTablesTestCase(BasePeeweeTestCase):
         self.assertEqual(Entry.filter(blog=b2).count(), 3)
 
 
-class ModelOptionsTest(BasePeeweeTestCase):
+class ModelOptionsTest(BaseModelTestCase):
     def test_model_meta(self):
         self.assertEqual(Blog._meta.get_field_names(), ['id', 'title'])
         self.assertEqual(Entry._meta.get_field_names(), ['pk', 'title', 'content', 'pub_date', 'blog_id'])
@@ -2347,7 +2385,7 @@ class EntryTwo(Entry):
     extra_field = peewee.CharField()
 
 
-class ModelInheritanceTestCase(BasePeeweeTestCase):
+class ModelInheritanceTestCase(BaseModelTestCase):
     def setUp(self):
         super(ModelInheritanceTestCase, self).setUp()
         EntryTwo.drop_table(True)
@@ -2378,15 +2416,15 @@ class ModelInheritanceTestCase(BasePeeweeTestCase):
         self.assertEqual(e2_from_db.extra_field, 'foo')
 
 
-class ConcurrencyTestCase(BasePeeweeTestCase):
+class ConcurrencyTestCase(BaseModelTestCase):
     def setUp(self):
         self._orig_db = test_db
         Blog._meta.database = database_class(database_name, threadlocals=True)
-        BasePeeweeTestCase.setUp(self)
+        BaseModelTestCase.setUp(self)
     
     def tearDown(self):
         Blog._meta.database = self._orig_db
-        BasePeeweeTestCase.tearDown(self)
+        BaseModelTestCase.tearDown(self)
         
     def test_multiple_writers(self):
         def create_blog_thread(low, hi):
@@ -2422,7 +2460,7 @@ class ConcurrencyTestCase(BasePeeweeTestCase):
         self.assertEqual(data_queue.qsize(), 100)
 
 
-class TransactionTestCase(BasePeeweeTestCase):
+class TransactionTestCase(BaseModelTestCase):
     def tearDown(self):
         super(TransactionTestCase, self).tearDown()
         test_db.set_autocommit(True)
@@ -2471,7 +2509,7 @@ class TransactionTestCase(BasePeeweeTestCase):
 
 
 if test_db.adapter.sequence_support:
-    class SequenceTestCase(BasePeeweeTestCase):
+    class SequenceTestCase(BaseModelTestCase):
         def setUp(self):
             super(SequenceTestCase, self).setUp()
             self.safe_drop()

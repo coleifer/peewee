@@ -123,18 +123,18 @@ class BaseAdapter(object):
 class SqliteAdapter(BaseAdapter):
     # note the sqlite library uses a non-standard interpolation string
     operations = {
-        'lt': '< ?',
-        'lte': '<= ?',
-        'gt': '> ?',
-        'gte': '>= ?',
-        'eq': '= ?',
-        'ne': '!= ?', # watch yourself with this one
+        'lt': '< %s',
+        'lte': '<= %s',
+        'gt': '> %s',
+        'gte': '>= %s',
+        'eq': '= %s',
+        'ne': '!= %s', # watch yourself with this one
         'in': 'IN (%s)', # special-case to list q-marks
-        'is': 'IS ?',
-        'icontains': "LIKE ? ESCAPE '\\'", # surround param with %'s
-        'contains': "GLOB ?", # surround param with *'s
-        'istartswith': "LIKE ? ESCAPE '\\'",
-        'startswith': "GLOB ?",
+        'is': 'IS %s',
+        'icontains': "LIKE %s ESCAPE '\\'", # surround param with %'s
+        'contains': "GLOB %s", # surround param with *'s
+        'istartswith': "LIKE %s ESCAPE '\\'",
+        'startswith': "GLOB %s",
     }
     interpolation = '?'
     
@@ -639,8 +639,9 @@ class Q(object):
 
 
 class F(object):
-    def __init__(self, field):
+    def __init__(self, field, model=None):
         self.field = field
+        self.model = model
         self._op = None
     
     def sql(self):
@@ -785,9 +786,12 @@ class BaseQuery(object):
                     raise ValueError('__is lookups only accept None')
                 operation = 'IS NULL'
                 lookup_value = []
+            elif isinstance(rhs, F):
+                lookup_value = rhs
+                operation = self.operations[op] # leave as "%s"
             else:
                 lookup_value = field.db_value(rhs)
-                operation = self.operations[op]
+                operation = self.operations[op] % self.interpolation
             
             parsed.append(
                 (field.name, (operation, self.lookup_cast(op, lookup_value)))
@@ -942,7 +946,12 @@ class BaseQuery(object):
                 sql, value = self.convert_subquery(value)
                 operation = operation % sql
 
-            query_data.append(value)
+            if isinstance(value, F):
+                f_model = value.model or model
+                combined_value = self.combine_field(alias_map[f_model], value.sql())
+                operation = operation % combined_value
+            else:
+                query_data.append(value)
             
             combined = self.combine_field(alias_map[model], name)
             query.append('%s %s' % (combined, operation))
