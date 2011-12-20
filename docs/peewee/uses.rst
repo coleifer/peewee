@@ -233,6 +233,13 @@ syntax:
     Some Entry
     Another Entry
 
+To perform OR lookups, use the special :py:class:`Q` object.  These work in
+both calls to ``filter()`` and ``where()``:
+
+.. code-block:: python
+
+    >>> User.filter(Q(staff=True) | Q(superuser=True)) # get staff or superusers
+
 
 Sorting records
 ---------------
