@@ -16,6 +16,7 @@ import os
 import re
 import threading
 import time
+import warnings
 
 try:
     import sqlite3
@@ -72,6 +73,7 @@ class BaseAdapter(object):
     operations = {'eq': '= %s'}
     interpolation = '%s'
     sequence_support = False
+    reserved_tables = []
     
     def get_field_types(self):
         field_types = {
@@ -168,8 +170,9 @@ class PostgresqlAdapter(BaseAdapter):
         'istartswith': 'ILIKE %s',
         'startswith': 'LIKE %s',
     }
+    reserved_tables = ['user']
     sequence_support = True
-        
+
     def connect(self, database, **kwargs):
         if not psycopg2:
             raise ImproperlyConfigured('psycopg2 must be installed on the system')
@@ -1888,6 +1891,11 @@ class BaseModel(type):
         
         if not hasattr(_meta, 'db_table'):
             _meta.db_table = re.sub('[^a-z]+', '_', cls.__name__.lower())
+
+        if _meta.db_table in _meta.database.adapter.reserved_tables:
+            warnings.warn('Table for %s ("%s") is reserved, please override using Meta.db_table' % (
+                cls, _meta.db_table,
+            ))
 
         setattr(cls, '_meta', _meta)
 
