@@ -648,7 +648,7 @@ class F(object):
         if self._op is None:
             return self.field
         
-        return '%s %s %s' % (self.field, self._op, self.val)
+        return '(%s %s %s)' % (self.field, self._op, self.val)
 
     def __add__(self, rhs):
         self._op = '+'

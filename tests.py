@@ -98,6 +98,10 @@ class NumberModel(TestModel):
     num1 = peewee.IntegerField()
     num2 = peewee.IntegerField()
 
+class RelNumberModel(TestModel):
+    rel_num = peewee.IntegerField()
+    num = peewee.ForeignKeyField(NumberModel)
+
 class Team(TestModel):
     name = peewee.CharField()
 
@@ -465,10 +469,10 @@ class QueryTests(BasePeeweeTestCase):
     
     def test_update_with_f(self):
         uq = UpdateQuery(Entry, blog_id=F('blog_id') + 1).where(pk=1)
-        self.assertSQLEqual(uq.sql(), ('UPDATE entry SET blog_id=blog_id + 1 WHERE pk = ?', [1]))
+        self.assertSQLEqual(uq.sql(), ('UPDATE entry SET blog_id=(blog_id + 1) WHERE pk = ?', [1]))
         
         uq = UpdateQuery(Entry, blog_id=F('blog_id') - 10, title='updated').where(pk=2)
-        self.assertSQLEqual(uq.sql(), ('UPDATE entry SET blog_id=blog_id - 10, title=? WHERE pk = ?', ['updated', 2]))
+        self.assertSQLEqual(uq.sql(), ('UPDATE entry SET blog_id=(blog_id - 10), title=? WHERE pk = ?', ['updated', 2]))
     
     def test_delete(self):
         dq = DeleteQuery(Blog).where(title='b')
@@ -1954,10 +1958,13 @@ class AnnotateQueryTests(BaseModelTestCase):
 class FQueryTestCase(BaseModelTestCase):
     def setUp(self):
         super(FQueryTestCase, self).setUp()
+
+        RelNumberModel.drop_table(True)
         NumberModel.drop_table(True)
         NumberModel.create_table()
+        RelNumberModel.create_table()
     
-    def test_f_object(self):
+    def test_f_object_simple(self):
         nm1 = NumberModel.create(num1=1, num2=1)
         nm2 = NumberModel.create(num1=2, num2=2)
         nm12 = NumberModel.create(num1=1, num2=2)
@@ -1965,9 +1972,38 @@ class FQueryTestCase(BaseModelTestCase):
         
         sq = NumberModel.select().where(num1=F('num2'))
         self.assertSQLEqual(sq.sql(), ('SELECT * FROM numbermodel WHERE num1 = num2', []))
+        self.assertEqual(list(sq.order_by('id')), [nm1, nm2])
         
         sq = NumberModel.select().where(num1__lt=F('num2'))
         self.assertSQLEqual(sq.sql(), ('SELECT * FROM numbermodel WHERE num1 < num2', []))
+        self.assertEqual(list(sq.order_by('id')), [nm12])
+
+        sq = NumberModel.select().where(num1=F('num2') - 1)
+        self.assertSQLEqual(sq.sql(), ('SELECT * FROM numbermodel WHERE num1 = (num2 - 1)', []))
+        self.assertEqual(list(sq.order_by('id')), [nm12])
+
+    def test_f_object_joins(self):
+        nm1 = NumberModel.create(num1=1, num2=1)
+        nm2 = NumberModel.create(num1=2, num2=2)
+        nm12 = NumberModel.create(num1=1, num2=2)
+        nm21 = NumberModel.create(num1=2, num2=1)
+
+        rnm1 = RelNumberModel.create(rel_num=1, num=nm1)
+        rnm2 = RelNumberModel.create(rel_num=1, num=nm2)
+        rnm12 = RelNumberModel.create(rel_num=1, num=nm12)
+        rnm21 = RelNumberModel.create(rel_num=1, num=nm21)
+
+        sq = RelNumberModel.select().join(NumberModel).where(num1=F('rel_num', RelNumberModel))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.* FROM relnumbermodel AS t1 INNER JOIN numbermodel AS t2 ON t1.num_id = t2.id WHERE t2.num1 = t1.rel_num', []))
+        self.assertEqual(list(sq.order_by('id')), [rnm1, rnm12])
+
+        sq = RelNumberModel.select().join(NumberModel).where(
+            Q(num1=F('rel_num', RelNumberModel)) |
+            Q(num2=F('rel_num', RelNumberModel))
+        )
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.* FROM relnumbermodel AS t1 INNER JOIN numbermodel AS t2 ON t1.num_id = t2.id WHERE (t2.num1 = t1.rel_num OR t2.num2 = t1.rel_num)', []))
+        self.assertEqual(list(sq.order_by('id')), [rnm1, rnm12, rnm21])
+
 
 class SelfReferentialFKTestCase(BaseModelTestCase):
     def setUp(self):
@@ -2246,7 +2282,7 @@ class ModelIndexTestCase(BaseModelTestCase):
 
 
 class ModelTablesTestCase(BaseModelTestCase):
-    tables_might_not_be_there = ['defaultvals', 'nullmodel', 'uniquemodel', 'numbermodel']
+    tables_might_not_be_there = ['defaultvals', 'nullmodel', 'uniquemodel', 'numbermodel', 'relnumbermodel']
     
     def test_tables_created(self):
         tables = test_db.get_tables()
