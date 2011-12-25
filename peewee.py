@@ -477,9 +477,11 @@ class QueryResultWrapper(object):
     - converts rows from the database into model instances
     - ensures that multiple iterations do not result in multiple queries
     """
-    def __init__(self, model, cursor):
+    def __init__(self, model, cursor, query=None):
         self.model = model
         self.cursor = cursor
+        self.query = query
+        
         self._result_cache = []
         self._populated = False
     
@@ -974,6 +976,12 @@ class BaseQuery(object):
         subquery.force_alias = orig_alias
         return sql, data
     
+    def sorted_models(self, alias_map):
+        return [
+            (model, alias) \
+                for (model, alias) in sorted(alias_map.items(), key=lambda i: i[1])
+        ]
+    
     def raw_execute(self):
         query, params = self.sql()
         return self.database.execute(query, params)
@@ -1153,37 +1161,57 @@ class SelectQuery(BaseQuery):
         return annotate_query(self, related_model, aggregation)
 
     def parse_select_query(self, alias_map):
-        if isinstance(self.query, (list, tuple)):
-            query = {self.model: self.query}
-        else:
-            query = self.query
+        q = self.query
         
-        if isinstance(query, basestring):
-            if query in ('*', self.model._meta.pk_name) and self.use_aliases():
-                return '%s.%s' % (alias_map[self.model], query)
-            return query
-        elif isinstance(query, dict):
-            qparts = []
-            aggregates = []
-            for model, cols in query.iteritems():
-                alias = alias_map.get(model, '')
-                for col in cols:
-                    if isinstance(col, tuple):
-                        if len(col) == 3:
-                            func, col, col_alias = col
-                            aggregates.append('%s(%s) AS %s' % \
-                                (func, self.combine_field(alias, col), col_alias)
-                            )
-                        elif len(col) == 2:
-                            col, col_alias = col
-                            qparts.append('%s AS %s' % \
-                                (self.combine_field(alias, col), col_alias)
-                            )
-                    else:
-                        qparts.append(self.combine_field(alias, col))
-            return ', '.join(qparts + aggregates)
-        else:
+        if isinstance(q, (list, tuple)):
+            q = {self.model: self.query}
+        elif isinstance(q, basestring):
+            # convert '*' and primary key lookups
+            if q == '*':
+                q = {self.model: self.model._meta.get_field_names()}
+            elif q == self.model._meta.pk_name:
+                q = {self.model: [self.model._meta.pk_name]}
+            else:
+                return q, []
+        
+        # by now we should have a dictionary if a valid type was passed in
+        if not isinstance(q, dict):
             raise TypeError('Unknown type encountered parsing select query')
+        
+        # gather aliases and models
+        sorted_models = self.sorted_models(alias_map)
+        
+        # normalize if we are working with a dictionary
+        columns = []
+        aggregates = []
+        model_cols = []
+        
+        for model, alias in sorted_models:
+            if model not in q:
+                continue
+            
+            if q[model] == ['*']:
+                q[model] = model._meta.get_field_names()
+            
+            for col in q[model]:
+                model_cols.append((model, col))
+                
+                if isinstance(col, tuple):
+                    if len(col) == 3:
+                        func, col, col_alias = col
+                        aggregates.append('%s(%s) AS %s' % \
+                            (func, self.combine_field(alias, col), col_alias)
+                        )
+                    elif len(col) == 2:
+                        col, col_alias = col
+                        columns.append('%s AS %s' % \
+                            (self.combine_field(alias, col), col_alias)
+                        )
+                else:
+                    columns.append(self.combine_field(alias, col))
+        
+        return ', '.join(columns + aggregates), model_cols
+
     
     def sql(self):
         joins, clauses, alias_map = self.compile_where()
@@ -1203,7 +1231,7 @@ class SelectQuery(BaseQuery):
         else:
             group_by = [c[1] for c in self._group_by]
 
-        parsed_query = self.parse_select_query(alias_map)
+        parsed_query, model_cols = self.parse_select_query(alias_map)
         
         if self._distinct:
             sel = 'SELECT DISTINCT'
