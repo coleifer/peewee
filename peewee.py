@@ -477,10 +477,10 @@ class QueryResultWrapper(object):
     - converts rows from the database into model instances
     - ensures that multiple iterations do not result in multiple queries
     """
-    def __init__(self, model, cursor, query=None):
+    def __init__(self, model, cursor, meta=None):
         self.model = model
         self.cursor = cursor
-        self.query = query
+        self.query_meta = meta
         
         self._result_cache = []
         self._populated = False
@@ -713,6 +713,17 @@ def find_models(item):
 
 class EmptyResultException(Exception):
     pass
+
+
+class QueryMeta(object):
+    def __init__(self, model, sql, params, meta=None):
+        self.model = model
+        self.sql = sql
+        self.params = params
+        self.meta = meta
+    
+    def sql(self):
+        return (self.sql, self.params)
 
 
 class BaseQuery(object):
@@ -982,8 +993,13 @@ class BaseQuery(object):
                 for (model, alias) in sorted(alias_map.items(), key=lambda i: i[1])
         ]
     
-    def raw_execute(self):
-        query, params = self.sql()
+    def sql(self):
+        raise NotImplementedError
+    
+    def execute(self):
+        raise NotImplementedError
+    
+    def raw_execute(self, query, params):
         return self.database.execute(query, params)
 
 
@@ -1000,7 +1016,7 @@ class RawQuery(BaseQuery):
         return self._sql, self._params
     
     def execute(self):
-        return QueryResultWrapper(self.model, self.raw_execute())
+        return QueryResultWrapper(self.model, self.raw_execute(*self.sql()))
     
     def join(self):
         raise AttributeError('Raw queries do not support joining programmatically')
@@ -1213,7 +1229,7 @@ class SelectQuery(BaseQuery):
         return ', '.join(columns + aggregates), model_cols
 
     
-    def sql(self):
+    def sql_meta(self):
         joins, clauses, alias_map = self.compile_where()
         where, where_data = self.flatten_clauses(clauses)
         
@@ -1270,16 +1286,22 @@ class SelectQuery(BaseQuery):
         if self._offset:
             pieces.append('OFFSET %d' % self._offset)
         
-        return ' '.join(pieces), params
+        return ' '.join(pieces), params, model_cols
+    
+    def sql(self):
+        query, params, meta = self.sql_meta()
+        return query, params
     
     def execute(self):
         if self._dirty or not self._qr:
             try:
-                self._qr = QueryResultWrapper(self.model, self.raw_execute())
-                self._dirty = False
-                return self._qr
+                sql, params, meta = self.sql_meta()
             except EmptyResultException:
                 return iter([])
+            else:
+                self._qr = QueryResultWrapper(self.model, self.raw_execute(sql, params), meta)
+                self._dirty = False
+                return self._qr
         else:
             # call the __iter__ method directly
             return iter(self._qr)
@@ -1353,7 +1375,7 @@ class UpdateQuery(BaseQuery):
         raise AttributeError('Update queries do not support JOINs in sqlite')
     
     def execute(self):
-        result = self.raw_execute()
+        result = self.raw_execute(*self.sql())
         return self.database.rows_affected(result)
 
 
@@ -1387,7 +1409,7 @@ class DeleteQuery(BaseQuery):
         raise AttributeError('Update queries do not support JOINs in sqlite')
     
     def execute(self):
-        result = self.raw_execute()
+        result = self.raw_execute(*self.sql())
         return self.database.rows_affected(result)
 
 
@@ -1424,7 +1446,7 @@ class InsertQuery(BaseQuery):
         raise AttributeError('Insert queries do not support JOINs')
     
     def execute(self):
-        result = self.raw_execute()
+        result = self.raw_execute(*self.sql())
         return self.database.last_insert_id(result, self.model)
 
 
