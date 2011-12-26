@@ -895,6 +895,11 @@ class ModelTests(BaseModelTestCase):
         # iterating again does not cause evaluation
         blogs = [b for b in sq]
         self.assertEqual(blogs, [a, b])
+
+        blogs = [b for b in sq]
+        self.assertEqual(blogs, [a, b])
+        
+        # still only 3 queries
         self.assertEqual(len(self.queries()), 3)
         
         # clone the query

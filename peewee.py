@@ -1311,10 +1311,10 @@ class SelectQuery(BaseQuery):
                 return self._qr
         else:
             # call the __iter__ method directly
-            return iter(self._qr)
+            return self._qr
     
     def __iter__(self):
-        return self.execute()
+        return iter(self.execute())
 
 
 class UpdateQuery(BaseQuery):
