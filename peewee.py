@@ -131,6 +131,7 @@ class SqliteAdapter(BaseAdapter):
         'ne': '!= %s', # watch yourself with this one
         'in': 'IN (%s)', # special-case to list q-marks
         'is': 'IS %s',
+        'between': 'BETWEEN %s AND %s',
         'icontains': "LIKE %s ESCAPE '\\'", # surround param with %'s
         'contains': "GLOB %s", # surround param with *'s
         'istartswith': "LIKE %s ESCAPE '\\'",
@@ -165,6 +166,7 @@ class PostgresqlAdapter(BaseAdapter):
         'ne': '!= %s', # watch yourself with this one
         'in': 'IN (%s)', # special-case to list q-marks
         'is': 'IS %s',
+        'between': 'BETWEEN %s AND %s',
         'icontains': 'ILIKE %s', # surround param with %'s
         'contains': 'LIKE %s', # surround param with *'s
         'istartswith': 'ILIKE %s',
@@ -208,6 +210,7 @@ class MySQLAdapter(BaseAdapter):
         'ne': '!= %s', # watch yourself with this one
         'in': 'IN (%s)', # special-case to list q-marks
         'is': 'IS %s',
+        'between': 'BETWEEN %s AND %s',
         'icontains': 'LIKE %s', # surround param with %'s
         'contains': 'LIKE BINARY %s', # surround param with *'s
         'istartswith': 'LIKE %s',
@@ -802,6 +805,10 @@ class BaseQuery(object):
             elif isinstance(rhs, F):
                 lookup_value = rhs
                 operation = self.operations[op] # leave as "%s"
+            elif isinstance(rhs, (list, tuple)):
+                lookup_value = [field.db_value(o) for o in rhs]
+                operation = self.operations[op] % \
+                    tuple(self.interpolation for v in lookup_value)
             else:
                 lookup_value = field.db_value(rhs)
                 operation = self.operations[op] % self.interpolation

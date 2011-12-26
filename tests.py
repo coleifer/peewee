@@ -2052,7 +2052,7 @@ class FieldTypeTests(BaseModelTestCase):
     
     def assertSQEqual(self, sq, lst):
         self.assertEqual(sorted([x.title for x in sq]), sorted(lst))
-        
+    
     def test_lookups_charfield(self):
         self.create_common()
         
@@ -2210,6 +2210,17 @@ class FieldTypeTests(BaseModelTestCase):
     def test_naming(self):
         self.assertEqual(Entry._meta.fields['blog_id'].verbose_name, 'Blog')
         self.assertEqual(Entry._meta.fields['title'].verbose_name, 'Wacky title')
+    
+    def test_between_lookup(self):
+        nm1 = NullModel.create(int_field=1)
+        nm2 = NullModel.create(int_field=2)
+        nm3 = NullModel.create(int_field=3)
+        nm4 = NullModel.create(int_field=4)
+        
+        sq = NullModel.select().where(int_field__between=[2, 3])
+        self.assertSQLEqual(sq.sql(), ('SELECT id, char_field, text_field, datetime_field, int_field, float_field, decimal_field1, decimal_field2 FROM nullmodel WHERE int_field BETWEEN ? AND ?', [2, 3]))
+        
+        self.assertEqual(list(sq.order_by('id')), [nm2, nm3])
 
 class ModelIndexTestCase(BaseModelTestCase):
     def setUp(self):
