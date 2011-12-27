@@ -483,24 +483,82 @@ class QueryResultWrapper(object):
     def __init__(self, model, cursor, meta=None):
         self.model = model
         self.cursor = cursor
-        self.query_meta = meta
+        self.query_meta = meta or {}
+        self.column_meta = self.query_meta.get('columns')
+        self.join_meta = self.query_meta.get('graph')
         
         self._result_cache = []
         self._populated = False
     
-    def model_from_rowset(self, model_class, row_dict):
+    def model_from_rowset(self, model_class, attr_dict):
         instance = model_class()
-        for attr, value in row_dict.iteritems():
+        for attr, value in attr_dict.iteritems():
             if attr in instance._meta.fields:
                 field = instance._meta.fields[attr]
                 setattr(instance, attr, field.python_value(value))
             else:
                 setattr(instance, attr, value)
-        return instance    
+        return instance
     
-    def _row_to_dict(self, row, result_cursor):
-        return dict((result_cursor.description[i][0], value)
+    def _row_to_dict(self, row):
+        return dict((self.cursor.description[i][0], value)
             for i, value in enumerate(row))
+    
+    def construct_instance(self, row):
+        if not self.column_meta:
+            # use attribute names pulled from the result cursor description,
+            # and do not attempt to follow joined models
+            row_dict = self._row_to_dict(row)
+            return self.model_from_rowset(self.model, row_dict)
+        else:
+            # we have columns, models, and a graph of joins to reconstruct
+            collected_models = {}
+            for i, (model, col) in enumerate(self.column_meta):
+                value = row[i]
+                
+                if isinstance(col, tuple):
+                    if len(col) == 3:
+                        model = self.model # special-case aggregates
+                        field_name = attr = col[2]
+                    else:
+                        field_name, attr = col
+                else:
+                    field_name = attr = col
+                
+                if model not in collected_models:
+                    collected_models[model] = model()
+                
+                instance = collected_models[model]
+                
+                if field_name in instance._meta.fields:
+                    field = instance._meta.fields[attr]
+                    setattr(instance, attr, field.python_value(value))
+                else:
+                    setattr(instance, attr, value)
+            
+            return self.follow_joins(self.join_meta, collected_models, self.model)
+    
+    def follow_joins(self, joins, collected_models, current):
+        inst = collected_models[current]
+        
+        if current not in joins:
+            return inst
+    
+        for joined_model, _, _ in joins[current]:
+            if joined_model in collected_models:
+                joined_inst = self.follow_joins(joins, collected_models, joined_model)
+                fk_field = current._meta.get_related_field_for_model(joined_model)
+                
+                if not fk_field:
+                    continue
+                
+                if not joined_inst.get_pk():
+                    joined_inst.set_pk(getattr(inst, fk_field.name))
+                
+                setattr(inst, fk_field.descriptor, joined_inst)
+                setattr(inst, fk_field.name, joined_inst.get_pk())
+        
+        return inst
     
     def __iter__(self):
         if not self._populated:
@@ -511,8 +569,7 @@ class QueryResultWrapper(object):
     def next(self):
         row = self.cursor.fetchone()
         if row:
-            row_dict = self._row_to_dict(row, self.cursor)
-            instance = self.model_from_rowset(self.model, row_dict)
+            instance = self.construct_instance(row)
             self._result_cache.append(instance)
             return instance
         else:
@@ -2121,6 +2178,10 @@ class Model(object):
     
     def get_pk(self):
         return getattr(self, self._meta.pk_name, None)
+    
+    def set_pk(self, pk):
+        pk_field = self._meta.fields[self._meta.pk_name]
+        setattr(self, self._meta.pk_name, pk_field.python_value(pk))
     
     def save(self):
         field_dict = self.get_field_dict()

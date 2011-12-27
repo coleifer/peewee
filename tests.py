@@ -1639,6 +1639,81 @@ class RelatedFieldTests(BaseModelTestCase):
         ])
 
 
+class SelectRelatedTestCase(BaseModelTestCase):
+    def setUp(self):
+        super(SelectRelatedTestCase, self).setUp()
+        self.b1 = self.create_blog(title='b1')
+        self.b2 = self.create_blog(title='b2')
+        
+        for b in [self.b1, self.b2]:
+            for i in range(3):
+                e = self.create_entry(title='e%d' % i, blog=b)
+                t = self.create_entry_tag(tag='e%dt%d' % (i, i), entry=e)
+    
+    def test_select_related(self):
+        qc1 = len(self.queries())
+        
+        sq = Entry.select({
+            Entry: ['*'],
+            Blog: ['*'],
+        }).join(Blog).where(title='b1')
+        
+        results = list(sq)
+        blog_titles = [r.blog.title for r in results]
+        blog_ids = [r.blog.id for r in results]
+        
+        qc2 = len(self.queries())
+        self.assertEqual(qc2 - qc1, 1)
+        
+        self.assertEqual(blog_titles, ['b1', 'b1', 'b1'])
+        self.assertEqual(blog_ids, [self.b1.id, self.b1.id, self.b1.id])
+    
+    def test_select_related_with_missing_pk(self):
+        qc1 = len(self.queries())
+        
+        sq = Entry.select({
+            Entry: ['*'],
+            Blog: ['title'],
+        }).join(Blog).where(title='b1')
+        
+        results = list(sq)
+        blog_titles = [r.blog.title for r in results]
+        blog_ids = [r.blog.id for r in results]
+        
+        qc2 = len(self.queries())
+        self.assertEqual(qc2 - qc1, 1)
+        
+        self.assertEqual(blog_titles, ['b1', 'b1', 'b1'])
+        self.assertEqual(blog_ids, [self.b1.id, self.b1.id, self.b1.id])
+    
+    def test_select_related_multiple(self):
+        qc1 = len(self.queries())
+        
+        sq = EntryTag.select({
+            EntryTag: ['*'],
+            Entry: ['pk', 'blog_id'],
+            Blog: ['title'],
+        }).join(Entry).join(Blog).where(title='b1')
+        
+        results = list(sq)
+        blog_titles = [r.entry.blog.title for r in results]
+        blog_ids = [r.entry.blog.id for r in results]
+        
+        self.assertEqual(blog_titles, ['b1', 'b1', 'b1'])
+        self.assertEqual(blog_ids, [self.b1.id, self.b1.id, self.b1.id])
+
+        qc2 = len(self.queries())
+        
+        self.assertEqual(qc2 - qc1, 1)
+        
+        # didn't select title/content/pub_date on entries, so make sure they're none
+        for r in results:
+            self.assertEqual(r.entry.title, None)
+            self.assertEqual(r.entry.content, None)
+            self.assertEqual(r.entry.pub_date, None)
+            self.assertFalse(r.entry.pk == None)
+
+
 class FilterQueryTests(BaseModelTestCase):
     def test_filter_no_joins(self):
         query = Entry.filter(title='e1')
