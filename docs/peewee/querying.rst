@@ -321,6 +321,59 @@ You can also specify a custom aggregator:
     query = Blog.select().annotate(Entry, peewee.Max('pub_date', 'max_pub_date'))
 
 
+Saving Queries by Selecting Related Models
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Returning to my favorite models, ``Blog`` and ``Entry``, between which there is a
+:py:class:`ForeignKeyField`, a common pattern might be to display a list of the
+latest 10 entries with some info about the blog they're on as well.  We can do
+this pretty easily:
+
+.. code-block:: python
+
+    for entry in Entry.select().order_by(('pub_date', 'desc')).limit(10):
+        print '%s, posted on %s' % (entry.title, entry.blog.title)
+
+Looking at the query log, though, this will cause 11 queries:
+
+* 1 query for the entries
+* 1 query for every related blog (10 total)
+
+This can be optimized into one query very easily, though:
+
+.. code-block:: python
+
+    entries = Entry.select({
+        Entry: ['*'],
+        Blog: ['*'],
+    }).order_by(('pub_date', 'desc')).join(Blog)
+    
+    for entry in entries.limit(10):
+        print '%s, posted on %s' % (entry.title, entry.blog.title)
+
+Will cause only one query that looks something like this:
+
+.. code-block:: sql
+
+    SELECT t1.pk, t1.title, t1.content, t1.pub_date, t1.blog_id, t2.id, t2.title 
+    FROM entry AS t1 
+    INNER JOIN blog AS t2 
+        ON t1.blog_id = t2.id
+    ORDER BY t1.pub_date desc
+    LIMIT 10
+
+peewee will handle constructing the objects and you can access them as you would
+normally.
+
+.. note:: Note in the above example the call to ``.join(Blog)``
+
+This works for following objects "up" the chain, i.e. following foreign key relationships.
+The reverse is not true, however -- you cannot issue a single query and get all related
+sub-objects, i.e. list blogs and prefetch all related entries.  This *can* be done by
+fetching all entries (with related blog data), then reconstructing the blogs in python, but
+is not provided as part of peewee.
+
+
 Query evaluation
 ----------------
 
