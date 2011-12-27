@@ -718,17 +718,6 @@ class EmptyResultException(Exception):
     pass
 
 
-class QueryMeta(object):
-    def __init__(self, model, sql, params, meta=None):
-        self.model = model
-        self.sql = sql
-        self.params = params
-        self.meta = meta
-    
-    def sql(self):
-        return (self.sql, self.params)
-
-
 class BaseQuery(object):
     query_separator = '__'
     force_alias = False
@@ -1255,6 +1244,10 @@ class SelectQuery(BaseQuery):
             group_by = [c[1] for c in self._group_by]
 
         parsed_query, model_cols = self.parse_select_query(alias_map)
+        query_meta = {
+            'columns': model_cols,
+            'graph': self._joins,
+        }
         
         if self._distinct:
             sel = 'SELECT DISTINCT'
@@ -1293,7 +1286,7 @@ class SelectQuery(BaseQuery):
         if self._offset:
             pieces.append('OFFSET %d' % self._offset)
         
-        return ' '.join(pieces), params, model_cols
+        return ' '.join(pieces), params, query_meta
     
     def sql(self):
         query, params, meta = self.sql_meta()
