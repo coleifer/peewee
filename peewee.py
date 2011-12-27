@@ -1922,7 +1922,7 @@ class ForeignKeyField(IntegerField):
         
         klass._meta.rel_fields[name] = self.name
         setattr(klass, self.descriptor, ForeignRelatedObject(self.to, self))
-        setattr(klass, self.name, None)
+        setattr(klass, self.name, FieldDescriptor(self))
         
         reverse_rel = ReverseForeignRelatedObject(klass, self.name)
         setattr(self.to, self.related_name, reverse_rel)
@@ -2200,3 +2200,10 @@ class Model(object):
         return self.delete().where(**{
             self._meta.pk_name: self.get_pk()
         }).execute()
+    
+    def refresh(self, *fields):
+        fields = fields or self._meta.get_field_names()
+        obj = self.select(fields).get(**{self._meta.pk_name: self.get_pk()})
+        
+        for field_name in fields:
+            setattr(self, field_name, getattr(obj, field_name))

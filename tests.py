@@ -1637,6 +1637,30 @@ class RelatedFieldTests(BaseModelTestCase):
         self.assertEqual(list(Blog.select().order_by('title')), [
             b2
         ])
+    
+    def test_refresh(self):
+        b1 = self.create_blog(title='b1')
+        b2 = self.create_blog(title='b2')
+        e1 = self.create_entry(title='e1', content='e1', blog=b1)
+        e2 = self.create_entry(title='e2', content='e2', blog=b2)
+        
+        e1.title = '<edited>'
+        e1.content = '<edited>'
+        e1.refresh('title')
+        
+        self.assertEqual(e1.title, 'e1')
+        self.assertEqual(e1.content, '<edited>')
+        
+        self.assertSQLEqual(self.queries()[-1], ('SELECT title FROM entry WHERE pk = ? LIMIT 1', [e1.pk]))
+        
+        e1.refresh()
+        self.assertEqual(e1.content, 'e1')
+        
+        e2.title = 'foo'
+        e2.content = 'xxx'
+        e2.refresh('title')
+        self.assertEqual(e2.title, 'e2')
+        self.assertEqual(e2.content, 'xxx')
 
 
 class SelectRelatedTestCase(BaseModelTestCase):
