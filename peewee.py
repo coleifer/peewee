@@ -1035,7 +1035,7 @@ class RawQuery(BaseQuery):
         raise AttributeError('Raw queries do not support switching contexts')
     
     def __iter__(self):
-        return self.execute()
+        return iter(self.execute())
 
 
 class SelectQuery(BaseQuery):
@@ -1304,7 +1304,7 @@ class SelectQuery(BaseQuery):
             try:
                 sql, params, meta = self.sql_meta()
             except EmptyResultException:
-                return iter([])
+                return []
             else:
                 self._qr = QueryResultWrapper(self.model, self.raw_execute(sql, params), meta)
                 self._dirty = False
