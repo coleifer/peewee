@@ -1661,6 +1661,52 @@ class RelatedFieldTests(BaseModelTestCase):
         e2.refresh('title')
         self.assertEqual(e2.title, 'e2')
         self.assertEqual(e2.content, 'xxx')
+    
+    def test_first_and_iteration(self):
+        b1 = Blog.create(title='b1')
+        b2 = Blog.create(title='b2')
+        b3 = Blog.create(title='b3')
+        
+        qc = len(self.queries())
+        
+        blog_qr = Blog.select().order_by('id').execute()
+        self.assertEqual(blog_qr.first(), b1)
+        self.assertEqual(blog_qr.first(), b1)
+        
+        all_blogs = list(blog_qr)
+        self.assertEqual(all_blogs, [b1, b2, b3])
+        
+        self.assertEqual(blog_qr.first(), b1)
+        
+        another_iter = [b for b in blog_qr]
+        self.assertEqual(another_iter, all_blogs)
+        
+        partial_iter = [b for i, b in enumerate(blog_qr) if i < 2]
+        self.assertEqual(partial_iter, [b1, b2])
+        
+        subsequent_iter = [b for b in blog_qr]
+        self.assertEqual(subsequent_iter, all_blogs)
+        
+        qc2 = len(self.queries())
+        self.assertEqual(qc2 - qc, 1)
+    
+    def test_first_with_no_results(self):
+        qc = len(self.queries())
+        
+        blog_qr = Blog.select().execute()
+        self.assertEqual(blog_qr.first(), None)
+        
+        self.assertEqual(blog_qr.first(), None)
+        
+        all_blogs = list(blog_qr)
+        self.assertEqual(all_blogs, [])
+        
+        self.assertEqual(blog_qr.first(), None)
+        
+        self.assertEqual([b for b in blog_qr], [])
+        
+        qc2 = len(self.queries())
+        self.assertEqual(qc2 - qc, 1)
 
 
 class SelectRelatedTestCase(BaseModelTestCase):

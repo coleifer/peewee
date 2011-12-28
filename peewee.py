@@ -487,6 +487,9 @@ class QueryResultWrapper(object):
         self.column_meta = self.query_meta.get('columns')
         self.join_meta = self.query_meta.get('graph')
         
+        self.__ct = 0
+        self.__idx = 0
+        
         self._result_cache = []
         self._populated = False
     
@@ -561,23 +564,35 @@ class QueryResultWrapper(object):
         return inst
     
     def __iter__(self):
-        #self.__idx = 0
-        #self.__ct = len(self._result_cache)
+        self.__idx = 0
+
         if not self._populated:
             return self
         else:
             return iter(self._result_cache)
     
+    def first(self):
+        try:
+            self.__idx = 0 # move to beginning of the list
+            inst = self.next()
+        except StopIteration:
+            inst = None
+        
+        self.__idx = 0
+        return inst
+    
     def next(self):
-        #if self.__idx < self.__ct:
-        #    inst = self._result_cache[self.__idx]
-        #    self.__idx += 1
-        #    return inst
-        #
+        if self.__idx < self.__ct:
+            inst = self._result_cache[self.__idx]
+            self.__idx += 1
+            return inst
+        
         row = self.cursor.fetchone()
         if row:
             instance = self.construct_instance(row)
             self._result_cache.append(instance)
+            self.__ct += 1
+            self.__idx += 1
             return instance
         else:
             self._populated = True
