@@ -561,12 +561,19 @@ class QueryResultWrapper(object):
         return inst
     
     def __iter__(self):
+        #self.__idx = 0
+        #self.__ct = len(self._result_cache)
         if not self._populated:
             return self
         else:
             return iter(self._result_cache)
     
     def next(self):
+        #if self.__idx < self.__ct:
+        #    inst = self._result_cache[self.__idx]
+        #    self.__idx += 1
+        #    return inst
+        #
         row = self.cursor.fetchone()
         if row:
             instance = self.construct_instance(row)
@@ -1277,7 +1284,9 @@ class SelectQuery(BaseQuery):
                             (self.combine_field(alias, col), col_alias)
                         )
                 else:
-                    columns.append(self.combine_field(alias, col))
+                    if col in model._meta.fields:
+                        col = self.combine_field(alias, col)
+                    columns.append(col)
         
         return ', '.join(columns + aggregates), model_cols
 

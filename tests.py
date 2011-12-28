@@ -2020,9 +2020,9 @@ class AnnotateQueryTests(BaseModelTestCase):
             ('SELECT t1.id, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id', [])
         ))
         
-        annotated = Blog.select(['id', 'xxx']).annotate(Entry)
+        annotated = Blog.select(['id', 'title']).annotate(Entry)
         self.assertSQLEqual(annotated.sql(), (
-            ('SELECT t1.id, t1.xxx, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id, t1.xxx', [])
+            ('SELECT t1.id, t1.title, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id, t1.title', [])
         ))
         
         annotated = Blog.select({Blog: ['id']}).annotate(Entry)
