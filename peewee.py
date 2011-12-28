@@ -1266,8 +1266,9 @@ class SelectQuery(BaseQuery):
             if model not in q:
                 continue
             
-            if q[model] == ['*']:
-                q[model] = model._meta.get_field_names()
+            if '*' in q[model]:
+                idx = q[model].index('*')
+                q[model] =  q[model][:idx] + model._meta.get_field_names() + q[model][idx+1:]
             
             for col in q[model]:
                 model_cols.append((model, col))
