@@ -1262,6 +1262,11 @@ class SelectQuery(BaseQuery):
         aggregates = []
         model_cols = []
         
+        def safe_combine(model, alias, col):
+            if col in model._meta.fields:
+                return self.combine_field(alias, col)
+            return col
+        
         for model, alias in sorted_models:
             if model not in q:
                 continue
@@ -1277,17 +1282,15 @@ class SelectQuery(BaseQuery):
                     if len(col) == 3:
                         func, col, col_alias = col
                         aggregates.append('%s(%s) AS %s' % \
-                            (func, self.combine_field(alias, col), col_alias)
+                            (func, safe_combine(model, alias, col), col_alias)
                         )
                     elif len(col) == 2:
                         col, col_alias = col
                         columns.append('%s AS %s' % \
-                            (self.combine_field(alias, col), col_alias)
+                            (safe_combine(model, alias, col), col_alias)
                         )
                 else:
-                    if col in model._meta.fields:
-                        col = self.combine_field(alias, col)
-                    columns.append(col)
+                    columns.append(safe_combine(model, alias, col))
         
         return ', '.join(columns + aggregates), model_cols
 
