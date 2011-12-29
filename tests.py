@@ -1708,6 +1708,32 @@ class RelatedFieldTests(BaseModelTestCase):
         qc2 = len(self.queries())
         self.assertEqual(qc2 - qc, 1)
 
+    def test_fill_cache(self):
+        for i in range(10):
+            Blog.create(title='b%d' % i)
+
+        qc = len(self.queries())
+
+        blog_qr = Blog.select().order_by('id').execute()
+        first = blog_qr.first()
+        self.assertEqual(first.title, 'b0')
+        self.assertEqual(len(blog_qr._result_cache), 1)
+        self.assertFalse(blog_qr._populated)
+
+        blog_qr.fill_cache()
+        self.assertEqual(first.title, 'b0')
+        self.assertEqual(len(blog_qr._result_cache), 10)
+        self.assertTrue(blog_qr._populated)
+
+        qc2 = len(self.queries())
+        self.assertEqual(qc2 - qc, 1)
+
+        expected = ['b%d' % i for i in range(10)]
+        self.assertEqual([x.title for x in blog_qr], expected)
+
+        qc3 = len(self.queries())
+        self.assertEqual(qc3 - qc, 1)
+
 
 class SelectRelatedTestCase(BaseModelTestCase):
     def setUp(self):

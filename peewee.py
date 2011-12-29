@@ -580,6 +580,14 @@ class QueryResultWrapper(object):
         
         self.__idx = 0
         return inst
+
+    def fill_cache(self):
+        if not self._populated:
+            idx = self.__idx
+            self.__idx = self.__ct
+            for x in self:
+                pass
+            self.__idx = idx
     
     def next(self):
         if self.__idx < self.__ct:
