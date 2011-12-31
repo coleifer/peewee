@@ -1241,14 +1241,15 @@ class SelectQuery(BaseQuery):
         return bool(curs.fetchone())
     
     def get(self, *args, **kwargs):
+        orig_ctx = self.query_context
+        self.query_context = self.model
+        query = self.where(*args, **kwargs).paginate(1, 1)
         try:
-            orig_ctx = self.query_context
-            self.query_context = self.model
-            obj = self.where(*args, **kwargs).paginate(1, 1).execute().next()
+            obj = query.execute().next()
             return obj
         except StopIteration:
             raise self.model.DoesNotExist('instance matching query does not exist:\nSQL: %s\nPARAMS: %s' % (
-                self.sql()
+                query.sql()
             ))
         finally:
             self.query_context = orig_ctx
