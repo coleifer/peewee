@@ -131,6 +131,7 @@ class SqliteAdapter(BaseAdapter):
         'ne': '!= %s', # watch yourself with this one
         'in': 'IN (%s)', # special-case to list q-marks
         'is': 'IS %s',
+        'isnull': 'IS NULL',
         'between': 'BETWEEN %s AND %s',
         'icontains': "LIKE %s ESCAPE '\\'", # surround param with %'s
         'contains': "GLOB %s", # surround param with *'s
@@ -166,6 +167,7 @@ class PostgresqlAdapter(BaseAdapter):
         'ne': '!= %s', # watch yourself with this one
         'in': 'IN (%s)', # special-case to list q-marks
         'is': 'IS %s',
+        'isnull': 'IS NULL',
         'between': 'BETWEEN %s AND %s',
         'icontains': 'ILIKE %s', # surround param with %'s
         'contains': 'LIKE %s', # surround param with *'s
@@ -210,6 +212,7 @@ class MySQLAdapter(BaseAdapter):
         'ne': '!= %s', # watch yourself with this one
         'in': 'IN (%s)', # special-case to list q-marks
         'is': 'IS %s',
+        'isnull': 'IS NULL',
         'between': 'BETWEEN %s AND %s',
         'icontains': 'LIKE %s', # surround param with %'s
         'contains': 'LIKE BINARY %s', # surround param with *'s
@@ -877,6 +880,9 @@ class BaseQuery(object):
                 if rhs is not None:
                     raise ValueError('__is lookups only accept None')
                 operation = 'IS NULL'
+                lookup_value = []
+            elif op == 'isnull':
+                operation = 'IS NULL' if rhs else 'IS NOT NULL'
                 lookup_value = []
             elif isinstance(rhs, F):
                 lookup_value = rhs
