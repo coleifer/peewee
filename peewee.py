@@ -931,6 +931,12 @@ class BaseQuery(object):
         if alias:
             return '%s.%s' % (alias, field_name)
         return field_name
+
+    def safe_combine(self, model, alias, col):
+        if col in model._meta.fields:
+            return self.combine_field(alias, col)
+        return col
+        
     
     def follow_joins(self, current, alias_map, alias_required, alias_count, seen=None):
         computed = []
@@ -1286,11 +1292,6 @@ class SelectQuery(BaseQuery):
         aggregates = []
         model_cols = []
         
-        def safe_combine(model, alias, col):
-            if col in model._meta.fields:
-                return self.combine_field(alias, col)
-            return col
-        
         for model, alias in sorted_models:
             if model not in q:
                 continue
@@ -1306,15 +1307,15 @@ class SelectQuery(BaseQuery):
                     if len(col) == 3:
                         func, col, col_alias = col
                         aggregates.append('%s(%s) AS %s' % \
-                            (func, safe_combine(model, alias, col), col_alias)
+                            (func, self.safe_combine(model, alias, col), col_alias)
                         )
                     elif len(col) == 2:
                         col, col_alias = col
                         columns.append('%s AS %s' % \
-                            (safe_combine(model, alias, col), col_alias)
+                            (self.safe_combine(model, alias, col), col_alias)
                         )
                 else:
-                    columns.append(safe_combine(model, alias, col))
+                    columns.append(self.safe_combine(model, alias, col))
         
         return ', '.join(columns + aggregates), model_cols
 
@@ -1327,15 +1328,19 @@ class SelectQuery(BaseQuery):
 
         params = []
         group_by = []
+        use_aliases = self.use_aliases()
         
-        if self.use_aliases():
+        if use_aliases:
             table = '%s AS %s' % (table, alias_map[self.model])
-            for model, clause in self._group_by:
+
+        for model, clause in self._group_by:
+            if use_aliases:
                 alias = alias_map[model]
-                for field in clause:
-                    group_by.append(self.combine_field(alias, field))
-        else:
-            group_by = [c[1] for c in self._group_by]
+            else:
+                alias = ''
+
+            for field in clause:
+                group_by.append(self.combine_field(alias, field))
 
         parsed_query, model_cols = self.parse_select_query(alias_map)
         query_meta = {
