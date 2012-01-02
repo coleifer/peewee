@@ -2320,6 +2320,18 @@ class FieldTypeTests(BaseModelTestCase):
         
         self.assertEqual(list(non_null_lookup), [])
         
+        isnull_lookup = NullModel.select().where(char_field__isnull=True)
+        self.assertSQLEqual(isnull_lookup.sql(), ('SELECT id, char_field, text_field, datetime_field, int_field, float_field, decimal_field1, decimal_field2 FROM nullmodel WHERE char_field IS NULL', []))
+        
+        isnull_lookup = NullModel.select().where(char_field__isnull=False)
+        self.assertSQLEqual(isnull_lookup.sql(), ('SELECT id, char_field, text_field, datetime_field, int_field, float_field, decimal_field1, decimal_field2 FROM nullmodel WHERE char_field IS NOT NULL', []))        
+
+        isnull_lookup = NullModel.select().where(~Q(char_field__isnull=True))
+        self.assertSQLEqual(isnull_lookup.sql(), ('SELECT id, char_field, text_field, datetime_field, int_field, float_field, decimal_field1, decimal_field2 FROM nullmodel WHERE NOT char_field IS NULL', []))
+        
+        isnull_lookup = NullModel.select().where(~Q(char_field__isnull=False))
+        self.assertSQLEqual(isnull_lookup.sql(), ('SELECT id, char_field, text_field, datetime_field, int_field, float_field, decimal_field1, decimal_field2 FROM nullmodel WHERE NOT char_field IS NOT NULL', []))        
+        
         nm_from_db = NullModel.get(id=nm.id)
         self.assertEqual(nm_from_db.char_field, None)
         self.assertEqual(nm_from_db.text_field, None)
