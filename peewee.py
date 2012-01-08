@@ -375,6 +375,25 @@ class Database(object):
         framing = fail_silently and 'DROP TABLE IF EXISTS %s;' or 'DROP TABLE %s;'
         self.execute(framing % model_class._meta.db_table)
     
+    def add_column_sql(self, model_class, field_name):
+        field = model_class._meta.fields[field_name]
+        field_sql = field.to_sql()
+        return 'ALTER TABLE %s ADD COLUMN %s' % (model_class._meta.db_table, field_sql)
+    
+    def rename_column_sql(self, model_class, field_name, new_name):
+        # this assumes that the field on the model points to the *old* fieldname
+        field = model_class._meta.fields[field_name]
+        return 'ALTER TABLE %s RENAME COLUMN %s TO %s' % (
+            model_class._meta.db_table,
+            field_name,
+            new_name,
+        )
+    
+    def drop_column_sql(self, model_class, field_name):
+        field = model_class._meta.fields[field_name]
+        field_sql = field.to_sql()
+        return 'ALTER TABLE %s DROP COLUMN %s' % (model_class._meta.db_table, field_sql)
+    
     @require_sequence_support
     def create_sequence(self, sequence_name):
         return self.execute('CREATE SEQUENCE %s;' % sequence_name)
@@ -405,6 +424,12 @@ class SqliteDatabase(Database):
     def get_tables(self):
         res = self.execute('select name from sqlite_master where type="table" order by name')
         return [r[0] for r in res.fetchall()]
+    
+    def drop_column_sql(self, model_class, field_name):
+        raise NotImplementedError('Sqlite3 does not have direct support for dropping columns')
+    
+    def rename_column_sql(self, model_class, field_name, new_name):
+        raise NotImplementedError('Sqlite3 does not have direct support for renaming columns')
 
 
 class PostgresqlDatabase(Database):
@@ -465,7 +490,16 @@ class MySQLDatabase(Database):
  
         self.execute(query)
         return super(MySQLDatabase, self).create_foreign_key(model_class, field)
-
+    
+    def rename_column_sql(self, model_class, field_name, new_name):
+        field = model_class._meta.fields[field_name]
+        return 'ALTER TABLE %s CHANGE COLUMN %s %s %s' % (
+            model_class._meta.db_table,
+            field_name,
+            new_name,
+            field.render_field_template(),
+        )
+    
     def get_indexes_for_table(self, table):
         res = self.execute('SHOW INDEXES IN %s;' % table)
         rows = sorted([(r[2], r[1] == 0) for r in res.fetchall()])
