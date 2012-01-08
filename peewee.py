@@ -74,6 +74,7 @@ class BaseAdapter(object):
     interpolation = '%s'
     sequence_support = False
     reserved_tables = []
+    quote_char = '"'
     
     def get_field_types(self):
         field_types = {
@@ -219,6 +220,7 @@ class MySQLAdapter(BaseAdapter):
         'istartswith': 'LIKE %s',
         'startswith': 'LIKE BINARY %s',
     }
+    quote_char = '`'
 
     def connect(self, database, **kwargs):
         if not mysql:
@@ -324,6 +326,9 @@ class Database(object):
     
     def rows_affected(self, cursor):
         return self.adapter.rows_affected(cursor)
+
+    def quote_name(self, name):
+        return ''.join((self.adapter.quote_char, name, self.adapter.quote_char))
     
     def column_for_field(self, field):
         return self.column_for_field_type(field.get_db_field())
@@ -335,7 +340,10 @@ class Database(object):
             raise AttributeError('Unknown field type: "%s", valid types are: %s' % \
                 db_field_type, ', '.join(self.adapter.get_field_types().keys())
             )
-    
+
+    def field_sql(self, field):
+        return '%s %s' % (self.quote_name(field.name), field.render_field_template())
+
     def create_table(self, model_class, safe=False):
         if model_class._meta.pk_sequence and self.adapter.sequence_support:
             if not self.sequence_exists(model_class._meta.pk_sequence):
@@ -344,14 +352,18 @@ class Database(object):
         columns = []
 
         for field in model_class._meta.get_fields():
-            columns.append(field.to_sql())
+            columns.append(self.field_sql(field))
 
-        query = framing % (model_class._meta.db_table, ', '.join(columns))
+        table = self.quote_name(model_class._meta.db_table)
+        query = framing % (table, ', '.join(columns))
         
         self.execute(query)
     
     def create_index(self, model_class, field_name, unique=False):
-        framing = 'CREATE %(unique)s INDEX %(model)s_%(field)s ON %(model)s(%(field)s);'
+        framing = 'CREATE %(unique)s INDEX %(index)s ON %(table)s(%(field)s);'
+
+        db_table = model_class._meta.db_table
+        index_name = self.quote_name('%s_%s' % (db_table, field_name))
         
         if field_name not in model_class._meta.fields:
             raise AttributeError(
@@ -362,8 +374,9 @@ class Database(object):
         
         query = framing % {
             'unique': unique_expr,
-            'model': model_class._meta.db_table,
-            'field': field_name
+            'index': index_name,
+            'table': self.quote_name(db_table),
+            'field': self.quote_name(field_name),
         }
         
         self.execute(query)
@@ -373,34 +386,37 @@ class Database(object):
     
     def drop_table(self, model_class, fail_silently=False):
         framing = fail_silently and 'DROP TABLE IF EXISTS %s;' or 'DROP TABLE %s;'
-        self.execute(framing % model_class._meta.db_table)
+        self.execute(framing % self.quote_name(model_class._meta.db_table))
     
     def add_column_sql(self, model_class, field_name):
         field = model_class._meta.fields[field_name]
-        field_sql = field.to_sql()
-        return 'ALTER TABLE %s ADD COLUMN %s' % (model_class._meta.db_table, field_sql)
+        return 'ALTER TABLE %s ADD COLUMN %s' % (
+            self.quote_name(model_class._meta.db_table),
+            self.field_sql(field),
+        )
     
     def rename_column_sql(self, model_class, field_name, new_name):
         # this assumes that the field on the model points to the *old* fieldname
         field = model_class._meta.fields[field_name]
         return 'ALTER TABLE %s RENAME COLUMN %s TO %s' % (
-            model_class._meta.db_table,
-            field_name,
-            new_name,
+            self.quote_name(model_class._meta.db_table),
+            self.quote_name(field_name),
+            self.quote_name(new_name),
         )
     
     def drop_column_sql(self, model_class, field_name):
-        field = model_class._meta.fields[field_name]
-        field_sql = field.to_sql()
-        return 'ALTER TABLE %s DROP COLUMN %s' % (model_class._meta.db_table, field_sql)
+        return 'ALTER TABLE %s DROP COLUMN %s' % (
+            self.quote_name(model_class._meta.db_table),
+            self.quote_name(field_name),
+        )
     
     @require_sequence_support
     def create_sequence(self, sequence_name):
-        return self.execute('CREATE SEQUENCE %s;' % sequence_name)
+        return self.execute('CREATE SEQUENCE %s;' % self.quote_name(sequence_name))
     
     @require_sequence_support
     def drop_sequence(self, sequence_name):
-        return self.execute('DROP SEQUENCE %s;' % sequence_name)
+        return self.execute('DROP SEQUENCE %s;' % self.quote_name(sequence_name))
     
     def get_indexes_for_table(self, table):
         raise NotImplementedError
@@ -417,7 +433,7 @@ class SqliteDatabase(Database):
         super(SqliteDatabase, self).__init__(SqliteAdapter(), database, **connect_kwargs)
     
     def get_indexes_for_table(self, table):
-        res = self.execute('PRAGMA index_list(%s);' % table)
+        res = self.execute('PRAGMA index_list(%s);' % self.quote_name(table))
         rows = sorted([(r[1], r[2] == 1) for r in res.fetchall()])
         return rows
     
@@ -471,9 +487,15 @@ class MySQLDatabase(Database):
     
     def create_foreign_key(self, model_class, field):
         framing = """ 
-            ALTER TABLE %(model)s ADD CONSTRAINT fk_%(model)s_%(to)s_%(field)s
+            ALTER TABLE %(table)s ADD CONSTRAINT %(constraint)s
             FOREIGN KEY (%(field)s) REFERENCES %(to)s(%(to_field)s)%(cascade)s;
         """
+        db_table = model_class._meta.db_table
+        constraint = 'fk_%s_%s_%s' % (
+            db_table,
+            field.to._meta.db_table,
+            field.name,
+        )
 
         if field.name not in model_class._meta.fields:
             raise AttributeError(
@@ -481,10 +503,11 @@ class MySQLDatabase(Database):
             )
  
         query = framing % {
-            'model': model_class._meta.db_table,
-            'field': field.name,
-            'to': field.to._meta.db_table,
-            'to_field': field.to._meta.pk_name,
+            'table': self.quote_name(db_table),
+            'constraint': self.quote_name(constraint),
+            'field': self.quote_name(field.name),
+            'to': self.quote_name(field.to._meta.db_table),
+            'to_field': self.quote_name(field.to._meta.pk_name),
             'cascade': ' ON DELETE CASCADE' if field.cascade else '',
         }
  
@@ -494,14 +517,14 @@ class MySQLDatabase(Database):
     def rename_column_sql(self, model_class, field_name, new_name):
         field = model_class._meta.fields[field_name]
         return 'ALTER TABLE %s CHANGE COLUMN %s %s %s' % (
-            model_class._meta.db_table,
-            field_name,
-            new_name,
+            self.quote_name(model_class._meta.db_table),
+            self.quote_name(field_name),
+            self.quote_name(new_name),
             field.render_field_template(),
         )
     
     def get_indexes_for_table(self, table):
-        res = self.execute('SHOW INDEXES IN %s;' % table)
+        res = self.execute('SHOW INDEXES IN %s;' % self.quote_name(table))
         rows = sorted([(r[2], r[1] == 0) for r in res.fetchall()])
         return rows
     
@@ -873,6 +896,9 @@ class BaseQuery(object):
     
     def clone(self):
         raise NotImplementedError
+
+    def qn(self, name):
+        return self.database.quote_name(name)
     
     def lookup_cast(self, lookup, value):
         return self.database.adapter.lookup_cast(lookup, value)
@@ -1797,10 +1823,6 @@ class Field(object):
         col_type = self.model._meta.database.column_for_field(self)
         self.attributes['column_type'] = col_type
         return self.field_template % self.attributes
-    
-    def to_sql(self):
-        rendered = self.render_field_template()
-        return '%s %s' % (self.name, rendered)
     
     def null_wrapper(self, value, default=None):
         if (self.null and value is None) or default is None:
