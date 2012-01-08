@@ -35,6 +35,7 @@ else:
 
 test_db = database_class(database_name)
 interpolation = test_db.adapter.interpolation
+quote_char = test_db.adapter.quote_char
 
 class TestModel(peewee.Model):
     class Meta:
@@ -150,18 +151,28 @@ class BasePeeweeTestCase(unittest.TestCase):
     def tearDown(self):
         peewee.logger.removeHandler(self.qh)
     
+    def normalize(self, s):
+        if interpolation != '?':
+            s = s.replace('?', interpolation)
+        if quote_char != "`":
+            s = s.replace("`", quote_char)
+        return s
+    
     def assertQueriesEqual(self, queries):
-        queries = [(q.replace('?', interpolation),p) for q,p in queries]
+        queries = [(self.normalize(q), p) for q,p in queries]
         self.assertEqual(queries, self.queries())
 
     def assertSQLEqual(self, lhs, rhs):
-        self.assertEqual(lhs[0].replace('?', interpolation), rhs[0].replace('?', interpolation))
+        self.assertEqual(
+            self.normalize(lhs[0]),
+            self.normalize(rhs[0])
+        )
         self.assertEqual(lhs[1], rhs[1])
     
     def assertSQL(self, query, expected_clauses):
         computed_joins, clauses, alias_map = query.compile_where()
-        clauses = [(x.replace('?', interpolation), y) for (x, y) in clauses]
-        expected_clauses = [(x.replace('?', interpolation), y) for (x, y) in expected_clauses]
+        clauses = [(self.normalize(x), y) for (x, y) in clauses]
+        expected_clauses = [(self.normalize(x), y) for (x, y) in expected_clauses]
         self.assertEqual(sorted(clauses), sorted(expected_clauses))
     
     def assertNodeEqual(self, lhs, rhs):
@@ -228,288 +239,288 @@ class QueryTests(BasePeeweeTestCase):
     
     def test_select(self):
         sq = SelectQuery(Blog, '*')
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title FROM blog', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog`', []))
 
         sq = SelectQuery(Blog, '*').where(title='a')
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title FROM blog WHERE title = ?', ['a']))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE `title` = ?', ['a']))
         
         sq = SelectQuery(Blog, '*').where(title='a', id=1)
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title FROM blog WHERE (id = ? AND title = ?)', [1, 'a']))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE (`id` = ? AND `title` = ?)', [1, 'a']))
         
         # check that chaining works as expected
         sq = SelectQuery(Blog, '*').where(title='a').where(id=1)
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title FROM blog WHERE title = ? AND id = ?', ['a', 1]))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE `title` = ? AND `id` = ?', ['a', 1]))
         
         # check that IN query special-case works
         sq = SelectQuery(Blog, '*').where(title__in=['a', 'b'])
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title FROM blog WHERE title IN (?,?)', ['a', 'b']))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE `title` IN (?,?)', ['a', 'b']))
     
     def test_select_with_q(self):
         sq = SelectQuery(Blog, '*').where(Q(title='a') | Q(id=1))
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title FROM blog WHERE (title = ? OR id = ?)', ['a', 1]))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE (`title` = ? OR `id` = ?)', ['a', 1]))
         
         sq = SelectQuery(Blog, '*').where(Q(title='a') | Q(id=1) | Q(id=3))
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title FROM blog WHERE (title = ? OR id = ? OR id = ?)', ['a', 1, 3]))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE (`title` = ? OR `id` = ? OR `id` = ?)', ['a', 1, 3]))
         
         # test simple chaining
         sq = SelectQuery(Blog, '*').where(Q(title='a') | Q(id=1)).where(Q(id=3))
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title FROM blog WHERE (title = ? OR id = ?) AND id = ?', ['a', 1, 3]))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE (`title` = ? OR `id` = ?) AND `id` = ?', ['a', 1, 3]))
         
         sq = SelectQuery(Blog, '*').where(Q(title='a') | Q(id=1)).where(id=3)
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title FROM blog WHERE (title = ? OR id = ?) AND id = ?', ['a', 1, 3]))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE (`title` = ? OR `id` = ?) AND `id` = ?', ['a', 1, 3]))
         
         # test chaining with Q objects
         sq = SelectQuery(Blog, '*').where(Q(title='a') | Q(id=1)).where((Q(title='c') | Q(id=3)))
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title FROM blog WHERE (title = ? OR id = ?) AND (title = ? OR id = ?)', ['a', 1, 'c', 3]))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE (`title` = ? OR `id` = ?) AND (`title` = ? OR `id` = ?)', ['a', 1, 'c', 3]))
 
         # test mixing it all up
         sq = SelectQuery(Blog, '*').where(Q(title='a') | Q(id=1)).where((Q(title='c') | Q(id=3)), title='b')
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title FROM blog WHERE (title = ? OR id = ?) AND (title = ? OR id = ?) AND title = ?', ['a', 1, 'c', 3, 'b']))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE (`title` = ? OR `id` = ?) AND (`title` = ? OR `id` = ?) AND `title` = ?', ['a', 1, 'c', 3, 'b']))
 
     def test_select_with_negation(self):
         sq = SelectQuery(Blog, '*').where(~Q(title='a'))
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title FROM blog WHERE NOT title = ?', ['a']))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE NOT `title` = ?', ['a']))
         
         sq = SelectQuery(Blog, '*').where(~Q(title='a') | Q(title='b'))
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title FROM blog WHERE (NOT title = ? OR title = ?)', ['a', 'b']))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE (NOT `title` = ? OR `title` = ?)', ['a', 'b']))
         
         sq = SelectQuery(Blog, '*').where(~Q(title='a') | ~Q(title='b'))
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title FROM blog WHERE (NOT title = ? OR NOT title = ?)', ['a', 'b']))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE (NOT `title` = ? OR NOT `title` = ?)', ['a', 'b']))
         
         sq = SelectQuery(Blog, '*').where(~(Q(title='a') | Q(title='b')))
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title FROM blog WHERE (NOT (title = ? OR title = ?))', ['a', 'b']))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE (NOT (`title` = ? OR `title` = ?))', ['a', 'b']))
         
         # chaining?
         sq = SelectQuery(Blog, '*').where(~(Q(title='a') | Q(id=1))).where(Q(id=3))
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title FROM blog WHERE (NOT (title = ? OR id = ?)) AND id = ?', ['a', 1, 3]))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE (NOT (`title` = ? OR `id` = ?)) AND `id` = ?', ['a', 1, 3]))
         
         # mix n'match?
         sq = SelectQuery(Blog, '*').where(Q(title='a') | Q(id=1)).where(~(Q(title='c') | Q(id=3)), title='b')
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title FROM blog WHERE (title = ? OR id = ?) AND (NOT (title = ? OR id = ?)) AND title = ?', ['a', 1, 'c', 3, 'b']))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE (`title` = ? OR `id` = ?) AND (NOT (`title` = ? OR `id` = ?)) AND `title` = ?', ['a', 1, 'c', 3, 'b']))
 
     def test_select_with_models(self):
         sq = SelectQuery(Blog, {Blog: ['*']})
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title FROM blog', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog`', []))
 
         sq = SelectQuery(Blog, {Blog: ['title', 'id']})
-        self.assertSQLEqual(sq.sql(), ('SELECT title, id FROM blog', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT `title`, `id` FROM `blog`', []))
     
         sq = SelectQuery(Blog, {Blog: ['title', 'id']}).join(Entry)
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.title, t1.id FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`title`, t1.`id` FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id`', []))
 
         sq = SelectQuery(Blog, {Blog: ['title', 'id'], Entry: [peewee.Count('pk')]}).join(Entry)
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.title, t1.id, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`title`, t1.`id`, COUNT(t2.`pk`) AS count FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id`', []))
 
         sq = SelectQuery(Blog, {Blog: ['title', 'id'], Entry: [peewee.Max('pk')]}).join(Entry)
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.title, t1.id, MAX(t2.pk) AS max FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`title`, t1.`id`, MAX(t2.`pk`) AS max FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id`', []))
 
     def test_selecting_across_joins(self):
         sq = SelectQuery(Entry, '*').where(title='a1').join(Blog).where(title='a')
 
         self.assertEqual(sq._joins, {Entry: [(Blog, None, None)]})
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.pk, t1.title, t1.content, t1.pub_date, t1.blog_id FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t1.title = ? AND t2.title = ?', ['a1', 'a']))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id` WHERE t1.`title` = ? AND t2.`title` = ?', ['a1', 'a']))
         
         sq = SelectQuery(Blog, '*').join(Entry).where(title='a1')        
         self.assertEqual(sq._joins, {Blog: [(Entry, None, None)]})
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.id, t1.title FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id WHERE t2.title = ?', ['a1']))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`id`, t1.`title` FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id` WHERE t2.`title` = ?', ['a1']))
 
         sq = SelectQuery(EntryTag, '*').join(Entry).join(Blog).where(title='a')        
         self.assertEqual(sq._joins, {EntryTag: [(Entry, None, None)], Entry: [(Blog, None, None)]})
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.id, t1.tag, t1.entry_id FROM entrytag AS t1 INNER JOIN entry AS t2 ON t1.entry_id = t2.pk\nINNER JOIN blog AS t3 ON t2.blog_id = t3.id WHERE t3.title = ?', ['a']))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`id`, t1.`tag`, t1.`entry_id` FROM `entrytag` AS t1 INNER JOIN `entry` AS t2 ON t1.`entry_id` = t2.`pk`\nINNER JOIN `blog` AS t3 ON t2.`blog_id` = t3.`id` WHERE t3.`title` = ?', ['a']))
         
         sq = SelectQuery(Blog, '*').join(Entry).join(EntryTag).where(tag='t2')
         self.assertEqual(sq._joins, {Blog: [(Entry, None, None)], Entry: [(EntryTag, None, None)]})
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.id, t1.title FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id\nINNER JOIN entrytag AS t3 ON t2.pk = t3.entry_id WHERE t3.tag = ?', ['t2']))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`id`, t1.`title` FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id`\nINNER JOIN `entrytag` AS t3 ON t2.`pk` = t3.`entry_id` WHERE t3.`tag` = ?', ['t2']))
     
     def test_selecting_across_joins_with_q(self):
         sq = SelectQuery(Entry, '*').where(Q(title='a') | Q(pk=1)).join(Blog).where(title='e')
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.pk, t1.title, t1.content, t1.pub_date, t1.blog_id FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE (t1.title = ? OR t1.pk = ?) AND t2.title = ?', ['a', 1, 'e']))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id` WHERE (t1.`title` = ? OR t1.`pk` = ?) AND t2.`title` = ?', ['a', 1, 'e']))
         
         sq = SelectQuery(Entry, '*').where(Q(title='a') | Q(pk=1) | Q(title='b')).join(Blog).where(title='e')
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.pk, t1.title, t1.content, t1.pub_date, t1.blog_id FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE (t1.title = ? OR t1.pk = ? OR t1.title = ?) AND t2.title = ?', ['a', 1, 'b', 'e']))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id` WHERE (t1.`title` = ? OR t1.`pk` = ? OR t1.`title` = ?) AND t2.`title` = ?', ['a', 1, 'b', 'e']))
 
         # test simple chaining
         sq = SelectQuery(Entry, '*').where(Q(title='a') | Q(pk=1)).where(Q(title='b')).join(Blog).where(title='e')
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.pk, t1.title, t1.content, t1.pub_date, t1.blog_id FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE (t1.title = ? OR t1.pk = ?) AND t1.title = ? AND t2.title = ?', ['a', 1, 'b', 'e']))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id` WHERE (t1.`title` = ? OR t1.`pk` = ?) AND t1.`title` = ? AND t2.`title` = ?', ['a', 1, 'b', 'e']))
         
         sq = SelectQuery(Entry, '*').where(Q(title='a') | Q(pk=1)).where(title='b').join(Blog).where(title='e')
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.pk, t1.title, t1.content, t1.pub_date, t1.blog_id FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE (t1.title = ? OR t1.pk = ?) AND t1.title = ? AND t2.title = ?', ['a', 1, 'b', 'e']))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id` WHERE (t1.`title` = ? OR t1.`pk` = ?) AND t1.`title` = ? AND t2.`title` = ?', ['a', 1, 'b', 'e']))
 
         # test q on both models
         sq = SelectQuery(Entry, '*').where(Q(title='a') | Q(pk=1)).join(Blog).where(Q(title='e') | Q(id=2))
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.pk, t1.title, t1.content, t1.pub_date, t1.blog_id FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE (t1.title = ? OR t1.pk = ?) AND (t2.title = ? OR t2.id = ?)', ['a', 1, 'e', 2]))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id` WHERE (t1.`title` = ? OR t1.`pk` = ?) AND (t2.`title` = ? OR t2.`id` = ?)', ['a', 1, 'e', 2]))
     
         # test q on both with nesting
         sq = SelectQuery(Entry, '*').where(Q(title='a') | Q(pk=1)).join(Blog).where((Q(title='e') | Q(id=2)) & (Q(title='f') | Q(id=3)))
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.pk, t1.title, t1.content, t1.pub_date, t1.blog_id FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE (t1.title = ? OR t1.pk = ?) AND ((t2.title = ? OR t2.id = ?) AND (t2.title = ? OR t2.id = ?))', ['a', 1, 'e', 2, 'f', 3]))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id` WHERE (t1.`title` = ? OR t1.`pk` = ?) AND ((t2.`title` = ? OR t2.`id` = ?) AND (t2.`title` = ? OR t2.`id` = ?))', ['a', 1, 'e', 2, 'f', 3]))
 
     def test_selecting_with_switching(self):
         sq = SelectQuery(Blog, '*').join(Entry).switch(Blog).where(title='a')
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.id, t1.title FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id WHERE t1.title = ?', ['a']))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`id`, t1.`title` FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id` WHERE t1.`title` = ?', ['a']))
     
     def test_selecting_with_aggregation(self):
         sq = SelectQuery(Blog, 't1.*, COUNT(t2.pk) AS count').group_by('id').join(Entry)
         self.assertEqual(sq._where, [])
         self.assertEqual(sq._joins, {Blog: [(Entry, None, None)]})
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.*, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.*, COUNT(t2.pk) AS count FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id` GROUP BY t1.`id`', []))
         
         sq = sq.having('count > 2')
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.*, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id HAVING count > 2', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.*, COUNT(t2.pk) AS count FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id` GROUP BY t1.`id` HAVING count > 2', []))
         
         sq = SelectQuery(Blog, {
             Blog: ['*'],
             Entry: [peewee.Count('pk')]
         }).group_by('id').join(Entry)
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.id, t1.title, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`id`, t1.`title`, COUNT(t2.`pk`) AS count FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id` GROUP BY t1.`id`', []))
         
         sq = sq.having('count > 2')
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.id, t1.title, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id HAVING count > 2', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`id`, t1.`title`, COUNT(t2.`pk`) AS count FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id` GROUP BY t1.`id` HAVING count > 2', []))
         
         sq = sq.order_by(('count', 'desc'))
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.id, t1.title, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id HAVING count > 2 ORDER BY count desc', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`id`, t1.`title`, COUNT(t2.`pk`) AS count FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id` GROUP BY t1.`id` HAVING count > 2 ORDER BY count desc', []))
 
     def test_select_with_group_by(self):
         sq = Blog.select().group_by('title')
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title FROM blog GROUP BY title', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` GROUP BY `title`', []))
 
         sq = Entry.select().join(Blog).group_by(Blog)
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.pk, t1.title, t1.content, t1.pub_date, t1.blog_id FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id GROUP BY t2.id, t2.title', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id` GROUP BY t2.`id`, t2.`title`', []))
     
-    def test_selecting_with_ordering(self): 
+    def test_selecting_with_ordering(self):
         sq = SelectQuery(Blog).order_by('title')
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title FROM blog ORDER BY title ASC', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` ORDER BY `title` ASC', []))
         
         sq = SelectQuery(Blog).order_by(peewee.desc('title'))
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title FROM blog ORDER BY title DESC', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` ORDER BY `title` DESC', []))
         
         sq = SelectQuery(Blog).order_by((Blog, 'title'))
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title FROM blog ORDER BY title ASC', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` ORDER BY `title` ASC', []))
         
         sq = SelectQuery(Blog).order_by((Blog, 'title', 'desc'))
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title FROM blog ORDER BY title desc', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` ORDER BY `title` desc', []))
     
     def test_selecting_with_ordering_joins(self):
         sq = SelectQuery(Entry).order_by('title').join(Blog).where(title='a')
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.pk, t1.title, t1.content, t1.pub_date, t1.blog_id FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t2.title = ? ORDER BY t1.title ASC', ['a']))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id` WHERE t2.`title` = ? ORDER BY t1.`title` ASC', ['a']))
         
         sq = SelectQuery(Entry).order_by(peewee.desc('title')).join(Blog).where(title='a')
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.pk, t1.title, t1.content, t1.pub_date, t1.blog_id FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t2.title = ? ORDER BY t1.title DESC', ['a']))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id` WHERE t2.`title` = ? ORDER BY t1.`title` DESC', ['a']))
         
         sq = SelectQuery(Entry).join(Blog).where(title='a').order_by((Entry, 'title'))
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.pk, t1.title, t1.content, t1.pub_date, t1.blog_id FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t2.title = ? ORDER BY t1.title ASC', ['a']))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id` WHERE t2.`title` = ? ORDER BY t1.`title` ASC', ['a']))
         
         sq = SelectQuery(Entry).join(Blog).where(title='a').order_by((Entry, 'title', 'desc'))
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.pk, t1.title, t1.content, t1.pub_date, t1.blog_id FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id WHERE t2.title = ? ORDER BY t1.title desc', ['a']))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id` WHERE t2.`title` = ? ORDER BY t1.`title` desc', ['a']))
         
         
         sq = SelectQuery(Entry).join(Blog).order_by('title')
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.pk, t1.title, t1.content, t1.pub_date, t1.blog_id FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id ORDER BY t2.title ASC', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id` ORDER BY t2.`title` ASC', []))
         
         sq = SelectQuery(Entry).join(Blog).order_by(peewee.desc('title'))
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.pk, t1.title, t1.content, t1.pub_date, t1.blog_id FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id ORDER BY t2.title DESC', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id` ORDER BY t2.`title` DESC', []))
         
         sq = SelectQuery(Entry).order_by((Blog, 'title')).join(Blog)
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.pk, t1.title, t1.content, t1.pub_date, t1.blog_id FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id ORDER BY t2.title ASC', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id` ORDER BY t2.`title` ASC', []))
         
         sq = SelectQuery(Entry).order_by((Blog, 'title', 'desc')).join(Blog)
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.pk, t1.title, t1.content, t1.pub_date, t1.blog_id FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id ORDER BY t2.title desc', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id` ORDER BY t2.`title` desc', []))
         
         
         sq = SelectQuery(Entry).join(Blog).order_by(
             (Blog, 'title'),
             (Entry, 'pub_date', 'desc'),
         )
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.pk, t1.title, t1.content, t1.pub_date, t1.blog_id FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id ORDER BY t2.title ASC, t1.pub_date desc', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id` ORDER BY t2.`title` ASC, t1.`pub_date` desc', []))
         
         sq = SelectQuery(Entry).join(Blog).order_by(
             (Entry, 'pub_date', 'desc'),
             (Blog, 'title'),
             'id',
         )
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.pk, t1.title, t1.content, t1.pub_date, t1.blog_id FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id ORDER BY t1.pub_date desc, t2.title ASC, t2.id ASC', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id` ORDER BY t1.`pub_date` desc, t2.`title` ASC, t2.`id` ASC', []))
         
         sq = SelectQuery(Entry).order_by((Blog, 'title')).join(Blog).order_by()
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.pk, t1.title, t1.content, t1.pub_date, t1.blog_id FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id`', []))
 
     def test_ordering_on_aggregates(self):
         sq = SelectQuery(
             Blog, 't1.*, COUNT(t2.pk) as count'
         ).join(Entry).order_by(peewee.desc('count'))
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.*, COUNT(t2.pk) as count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id ORDER BY count DESC', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.*, COUNT(t2.pk) as count FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id` ORDER BY count DESC', []))
 
     def test_default_ordering(self):
         sq = OrderedModel.select()
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title, created FROM orderedmodel ORDER BY created desc', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title`, `created` FROM `orderedmodel` ORDER BY `created` desc', []))
 
         sq = OrderedModel.select().order_by()
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title, created FROM orderedmodel', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title`, `created` FROM `orderedmodel`', []))
 
         class OtherOrderedModel(OrderedModel):
             pass
 
         sq = OtherOrderedModel.select()
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title, created FROM otherorderedmodel ORDER BY created desc', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title`, `created` FROM `otherorderedmodel` ORDER BY `created` desc', []))
 
         sq = OtherOrderedModel.select().order_by()
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title, created FROM otherorderedmodel', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title`, `created` FROM `otherorderedmodel`', []))
 
         class MoreModel(OrderedModel):
             class Meta:
                 ordering = (('created', 'desc'), 'title')
 
         sq = MoreModel.select()
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title, created FROM moremodel ORDER BY created desc, title ASC', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title`, `created` FROM `moremodel` ORDER BY `created` desc, `title` ASC', []))
 
         sq = MoreModel.select().order_by()
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title, created FROM moremodel', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title`, `created` FROM `moremodel`', []))
     
     def test_insert(self):
         iq = InsertQuery(Blog, title='a')
-        self.assertSQLEqual(iq.sql(), ('INSERT INTO blog (title) VALUES (?)', ['a']))
+        self.assertSQLEqual(iq.sql(), ('INSERT INTO `blog` (`title`) VALUES (?)', ['a']))
     
     def test_update_with_q(self):
         uq = UpdateQuery(Blog, title='A').where(Q(id=1))
-        self.assertSQLEqual(uq.sql(), ('UPDATE blog SET title=? WHERE id = ?', ['A', 1]))
+        self.assertSQLEqual(uq.sql(), ('UPDATE `blog` SET `title`=? WHERE `id` = ?', ['A', 1]))
         
         uq = UpdateQuery(Blog, title='A').where(Q(id=1) | Q(id=3))
-        self.assertSQLEqual(uq.sql(), ('UPDATE blog SET title=? WHERE (id = ? OR id = ?)', ['A', 1, 3]))
+        self.assertSQLEqual(uq.sql(), ('UPDATE `blog` SET `title`=? WHERE (`id` = ? OR `id` = ?)', ['A', 1, 3]))
     
     def test_update_with_f(self):
         uq = UpdateQuery(Entry, blog_id=F('blog_id') + 1).where(pk=1)
-        self.assertSQLEqual(uq.sql(), ('UPDATE entry SET blog_id=(blog_id + 1) WHERE pk = ?', [1]))
+        self.assertSQLEqual(uq.sql(), ('UPDATE `entry` SET `blog_id`=(`blog_id` + 1) WHERE `pk` = ?', [1]))
         
         uq = UpdateQuery(Entry, blog_id=F('blog_id') - 10, title='updated').where(pk=2)
-        self.assertSQLEqual(uq.sql(), ('UPDATE entry SET blog_id=(blog_id - 10), title=? WHERE pk = ?', ['updated', 2]))
+        self.assertSQLEqual(uq.sql(), ('UPDATE `entry` SET `blog_id`=(`blog_id` - 10), `title`=? WHERE `pk` = ?', ['updated', 2]))
     
     def test_delete(self):
         dq = DeleteQuery(Blog).where(title='b')
-        self.assertSQLEqual(dq.sql(), ('DELETE FROM blog WHERE title = ?', ['b']))
+        self.assertSQLEqual(dq.sql(), ('DELETE FROM `blog` WHERE `title` = ?', ['b']))
         
         dq = DeleteQuery(Blog).where(Q(title='b') | Q(title='a'))
-        self.assertSQLEqual(dq.sql(), ('DELETE FROM blog WHERE (title = ? OR title = ?)', ['b', 'a']))
+        self.assertSQLEqual(dq.sql(), ('DELETE FROM `blog` WHERE (`title` = ? OR `title` = ?)', ['b', 'a']))
     
 
 class ModelTestCase(BaseModelTestCase):
     def test_insert(self):
         iq = InsertQuery(Blog, title='a')
-        self.assertSQLEqual(iq.sql(), ('INSERT INTO blog (title) VALUES (?)', ['a']))
+        self.assertSQLEqual(iq.sql(), ('INSERT INTO `blog` (`title`) VALUES (?)', ['a']))
         self.assertEqual(iq.execute(), 1)
         
         iq = InsertQuery(Blog, title='b')
-        self.assertSQLEqual(iq.sql(), ('INSERT INTO blog (title) VALUES (?)', ['b']))
+        self.assertSQLEqual(iq.sql(), ('INSERT INTO `blog` (`title`) VALUES (?)', ['b']))
         self.assertEqual(iq.execute(), 2)
     
     def test_update(self):
         iq = InsertQuery(Blog, title='a').execute()
         
         uq = UpdateQuery(Blog, title='A').where(id=1)
-        self.assertSQLEqual(uq.sql(), ('UPDATE blog SET title=? WHERE id = ?', ['A', 1]))
+        self.assertSQLEqual(uq.sql(), ('UPDATE `blog` SET `title`=? WHERE `id` = ?', ['A', 1]))
         self.assertEqual(uq.execute(), 1)
         
         iq2 = InsertQuery(Blog, title='b').execute()
         
         uq = UpdateQuery(Blog, title='B').where(id=2)
-        self.assertSQLEqual(uq.sql(), ('UPDATE blog SET title=? WHERE id = ?', ['B', 2]))
+        self.assertSQLEqual(uq.sql(), ('UPDATE `blog` SET `title`=? WHERE `id` = ?', ['B', 2]))
         self.assertEqual(uq.execute(), 1)
         
         sq = SelectQuery(Blog).order_by('id')
@@ -521,14 +532,14 @@ class ModelTestCase(BaseModelTestCase):
         InsertQuery(Blog, title='c').execute()
         
         dq = DeleteQuery(Blog).where(title='b')
-        self.assertSQLEqual(dq.sql(), ('DELETE FROM blog WHERE title = ?', ['b']))
+        self.assertSQLEqual(dq.sql(), ('DELETE FROM `blog` WHERE `title` = ?', ['b']))
         self.assertEqual(dq.execute(), 1)
         
         sq = SelectQuery(Blog).order_by('id')
         self.assertEqual([x.title for x in sq], ['a', 'c'])
         
         dq = DeleteQuery(Blog)
-        self.assertSQLEqual(dq.sql(), ('DELETE FROM blog', []))
+        self.assertSQLEqual(dq.sql(), ('DELETE FROM `blog`', []))
         self.assertEqual(dq.execute(), 2)
         
         sq = SelectQuery(Blog).order_by('id')
@@ -579,24 +590,24 @@ class ModelTestCase(BaseModelTestCase):
         base_sq = SelectQuery(Blog)
         
         sq = base_sq.paginate(1, 20)
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title FROM blog LIMIT 20', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` LIMIT 20', []))
         
         sq = base_sq.paginate(3, 30)
-        self.assertSQLEqual(sq.sql(), ('SELECT id, title FROM blog LIMIT 30 OFFSET 60', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` LIMIT 30 OFFSET 60', []))
     
     def test_inner_joins(self):
         sql = SelectQuery(Blog).join(Entry).sql()
-        self.assertSQLEqual(sql, ('SELECT t1.id, t1.title FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id', []))
+        self.assertSQLEqual(sql, ('SELECT t1.`id`, t1.`title` FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id`', []))
         
         sql = SelectQuery(Entry).join(Blog).sql()
-        self.assertSQLEqual(sql, ('SELECT t1.pk, t1.title, t1.content, t1.pub_date, t1.blog_id FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id', []))
+        self.assertSQLEqual(sql, ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id`', []))
 
     def test_outer_joins(self):
         sql = SelectQuery(User).join(Blog).sql()
-        self.assertSQLEqual(sql, ('SELECT t1.id, t1.username, t1.blog_id, t1.active FROM users AS t1 LEFT OUTER JOIN blog AS t2 ON t1.blog_id = t2.id', []))
+        self.assertSQLEqual(sql, ('SELECT t1.`id`, t1.`username`, t1.`blog_id`, t1.`active` FROM `users` AS t1 LEFT OUTER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id`', []))
         
         sql = SelectQuery(Blog).join(User).sql()
-        self.assertSQLEqual(sql, ('SELECT t1.id, t1.title FROM blog AS t1 LEFT OUTER JOIN users AS t2 ON t1.id = t2.blog_id', []))
+        self.assertSQLEqual(sql, ('SELECT t1.`id`, t1.`title` FROM `blog` AS t1 LEFT OUTER JOIN `users` AS t2 ON t1.`id` = t2.`blog_id`', []))
     
     def test_cloning(self):
         base_sq = SelectQuery(Blog)
@@ -604,16 +615,16 @@ class ModelTestCase(BaseModelTestCase):
         q1 = base_sq.where(title='a')
         q2 = base_sq.where(title='b')
         
-        q1_sql = ('SELECT id, title FROM blog WHERE title = ?', ['a'])
-        q2_sql = ('SELECT id, title FROM blog WHERE title = ?', ['b'])
+        q1_sql = ('SELECT `id`, `title` FROM `blog` WHERE `title` = ?', ['a'])
+        q2_sql = ('SELECT `id`, `title` FROM `blog` WHERE `title` = ?', ['b'])
         
         # where causes cloning
-        self.assertSQLEqual(base_sq.sql(), ('SELECT id, title FROM blog', []))
+        self.assertSQLEqual(base_sq.sql(), ('SELECT `id`, `title` FROM `blog`', []))
         self.assertSQLEqual(q1.sql(), q1_sql)
         self.assertSQLEqual(q2.sql(), q2_sql)
         
         q3 = q1.join(Entry)
-        q3_sql = ('SELECT t1.id, t1.title FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id WHERE t1.title = ?', ['a'])
+        q3_sql = ('SELECT t1.`id`, t1.`title` FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id` WHERE t1.`title` = ?', ['a'])
         
         # join causes cloning
         self.assertSQLEqual(q3.sql(), q3_sql)
@@ -622,8 +633,8 @@ class ModelTestCase(BaseModelTestCase):
         q4 = q1.order_by('title')
         q5 = q3.order_by('title')
         
-        q4_sql = ('SELECT id, title FROM blog WHERE title = ? ORDER BY title ASC', ['a'])
-        q5_sql = ('SELECT t1.id, t1.title FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id WHERE t1.title = ? ORDER BY t2.title ASC', ['a'])
+        q4_sql = ('SELECT `id`, `title` FROM `blog` WHERE `title` = ? ORDER BY `title` ASC', ['a'])
+        q5_sql = ('SELECT t1.`id`, t1.`title` FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id` WHERE t1.`title` = ? ORDER BY t2.`title` ASC', ['a'])
         
         # order_by causes cloning
         self.assertSQLEqual(q3.sql(), q3_sql)
@@ -634,18 +645,18 @@ class ModelTestCase(BaseModelTestCase):
         q6 = q1.paginate(1, 10)
         q7 = q4.paginate(2, 10)
         
-        q6_sql = ('SELECT id, title FROM blog WHERE title = ? LIMIT 10', ['a'])
-        q7_sql = ('SELECT id, title FROM blog WHERE title = ? ORDER BY title ASC LIMIT 10 OFFSET 10', ['a'])
+        q6_sql = ('SELECT `id`, `title` FROM `blog` WHERE `title` = ? LIMIT 10', ['a'])
+        q7_sql = ('SELECT `id`, `title` FROM `blog` WHERE `title` = ? ORDER BY `title` ASC LIMIT 10 OFFSET 10', ['a'])
 
         self.assertSQLEqual(q6.sql(), q6_sql)
         self.assertSQLEqual(q7.sql(), q7_sql)
     
     def test_multi_joins(self):
         sq = Entry.select().join(Blog).where(title='b1').switch(Entry).join(EntryTag).where(tag='t1')
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.pk, t1.title, t1.content, t1.pub_date, t1.blog_id FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id\nINNER JOIN entrytag AS t3 ON t1.pk = t3.entry_id WHERE t2.title = ? AND t3.tag = ?', ['b1', 't1']))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id`\nINNER JOIN `entrytag` AS t3 ON t1.`pk` = t3.`entry_id` WHERE t2.`title` = ? AND t3.`tag` = ?', ['b1', 't1']))
         
         sq = Entry.select().join(EntryTag).where(tag='t1').switch(Entry).join(Blog).where(title='b1')
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.pk, t1.title, t1.content, t1.pub_date, t1.blog_id FROM entry AS t1 INNER JOIN entrytag AS t2 ON t1.pk = t2.entry_id\nINNER JOIN blog AS t3 ON t1.blog_id = t3.id WHERE t2.tag = ? AND t3.title = ?', ['t1', 'b1']))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `entrytag` AS t2 ON t1.`pk` = t2.`entry_id`\nINNER JOIN `blog` AS t3 ON t1.`blog_id` = t3.`id` WHERE t2.`tag` = ? AND t3.`title` = ?', ['t1', 'b1']))
 
 
 class ModelTests(BaseModelTestCase):
@@ -660,10 +671,10 @@ class ModelTests(BaseModelTestCase):
         b.save()
         
         self.assertQueriesEqual([
-            ('INSERT INTO blog (title) VALUES (?)', ['a']),
-            ('INSERT INTO blog (title) VALUES (?)', ['b']),
-            ('UPDATE blog SET title=? WHERE id = ?', ['a', 1]),
-            ('UPDATE blog SET title=? WHERE id = ?', ['b', 2]),
+            ('INSERT INTO `blog` (`title`) VALUES (?)', ['a']),
+            ('INSERT INTO `blog` (`title`) VALUES (?)', ['b']),
+            ('UPDATE `blog` SET `title`=? WHERE `id` = ?', ['a', 1]),
+            ('UPDATE `blog` SET `title`=? WHERE `id` = ?', ['b', 2]),
         ])
 
         all_blogs = list(Blog.select().order_by('id'))
@@ -677,9 +688,9 @@ class ModelTests(BaseModelTestCase):
         self.assertEqual(b2.id, b.id)
         
         self.assertQueriesEqual([
-            ('INSERT INTO blog (title) VALUES (?)', ['a']),
-            ('INSERT INTO blog (title) VALUES (?)', ['b']),
-            ('SELECT id, title FROM blog WHERE title = ? LIMIT 1', ['b']),
+            ('INSERT INTO `blog` (`title`) VALUES (?)', ['a']),
+            ('INSERT INTO `blog` (`title`) VALUES (?)', ['b']),
+            ('SELECT `id`, `title` FROM `blog` WHERE `title` = ? LIMIT 1', ['b']),
         ])
     
     def test_select_with_get(self):
@@ -698,9 +709,9 @@ class ModelTests(BaseModelTestCase):
         self.assertEqual(b2.id, b.id)
         
         self.assertQueriesEqual([
-            ('INSERT INTO blog (title) VALUES (?)', ['a']),
-            ('INSERT INTO blog (title) VALUES (?)', ['b']),
-            ('SELECT id, title FROM blog WHERE (title = ? OR title = ?) LIMIT 1', ['b', 'c']),
+            ('INSERT INTO `blog` (`title`) VALUES (?)', ['a']),
+            ('INSERT INTO `blog` (`title`) VALUES (?)', ['b']),
+            ('SELECT `id`, `title` FROM `blog` WHERE (`title` = ? OR `title` = ?) LIMIT 1', ['b', 'c']),
         ])
     
     def test_model_raw(self):
@@ -708,10 +719,10 @@ class ModelTests(BaseModelTestCase):
         b = self.create_blog(title='b')
         c = self.create_blog(title='c')
         
-        qr = Blog.raw('SELECT id, title FROM blog ORDER BY title ASC')
+        qr = Blog.raw('SELECT `id`, `title` FROM `blog` ORDER BY `title` ASC')
         self.assertEqual(list(qr), [a, b, c])
         
-        qr = Blog.raw('SELECT id, title FROM blog WHERE title IN (%s, %s) ORDER BY title DESC' % (interpolation, interpolation), 'a', 'c')
+        qr = Blog.raw('SELECT `id`, `title` FROM `blog` WHERE `title` IN (%s, %s) ORDER BY `title` DESC' % (interpolation, interpolation), 'a', 'c')
         self.assertEqual(list(qr), [c, a])
         
         # create a couple entires for blog a
@@ -756,11 +767,11 @@ class ModelTests(BaseModelTestCase):
         self.assertEqual(list(qr), [c, a])
         
         self.assertQueriesEqual([
-            ('INSERT INTO blog (title) VALUES (?)', ['a']),
-            ('INSERT INTO blog (title) VALUES (?)', ['b']),
-            ('INSERT INTO blog (title) VALUES (?)', ['c']),
-            ('SELECT id, title FROM blog ORDER BY title ASC', []),
-            ('SELECT id, title FROM blog WHERE title IN (?,?) ORDER BY title DESC', ['a', 'c']),
+            ('INSERT INTO `blog` (`title`) VALUES (?)', ['a']),
+            ('INSERT INTO `blog` (`title`) VALUES (?)', ['b']),
+            ('INSERT INTO `blog` (`title`) VALUES (?)', ['c']),
+            ('SELECT `id`, `title` FROM `blog` ORDER BY `title` ASC', []),
+            ('SELECT `id`, `title` FROM `blog` WHERE `title` IN (?,?) ORDER BY `title` DESC', ['a', 'c']),
         ])
     
     def test_query_cloning(self):
@@ -791,10 +802,10 @@ class ModelTests(BaseModelTestCase):
         self.assertEqual(list(qr), [a])
         
         self.assertQueriesEqual([
-            ('INSERT INTO blog (title) VALUES (?)', ['a']),
-            ('INSERT INTO blog (title) VALUES (?)', ['b']),
-            ('SELECT id, title FROM blog WHERE (title = ? OR title = ?)', ['a', 'b']),
-            ('SELECT id, title FROM blog WHERE (title IN (?) OR title IN (?,?))', ['a', 'c', 'd']),
+            ('INSERT INTO `blog` (`title`) VALUES (?)', ['a']),
+            ('INSERT INTO `blog` (`title`) VALUES (?)', ['b']),
+            ('SELECT `id`, `title` FROM `blog` WHERE (`title` = ? OR `title` = ?)', ['a', 'b']),
+            ('SELECT `id`, `title` FROM `blog` WHERE (`title` IN (?) OR `title` IN (?,?))', ['a', 'c', 'd']),
         ])
     
     def test_model_select_with_get(self):
@@ -870,9 +881,9 @@ class ModelTests(BaseModelTestCase):
         self.assertTrue(qr._populated)
         
         self.assertQueriesEqual([
-            ('INSERT INTO blog (title) VALUES (?)', ['a']),
-            ('INSERT INTO blog (title) VALUES (?)', ['b']),
-            ('SELECT id, title FROM blog ORDER BY title ASC', []),
+            ('INSERT INTO `blog` (`title`) VALUES (?)', ['a']),
+            ('INSERT INTO `blog` (`title`) VALUES (?)', ['b']),
+            ('SELECT `id`, `title` FROM `blog` ORDER BY `title` ASC', []),
         ])
         
         blogs = [b for b in qr]
@@ -894,9 +905,9 @@ class ModelTests(BaseModelTestCase):
         self.assertEqual(blogs, [a, b])
         
         self.assertQueriesEqual([
-            ('INSERT INTO blog (title) VALUES (?)', ['a']),
-            ('INSERT INTO blog (title) VALUES (?)', ['b']),
-            ('SELECT id, title FROM blog ORDER BY title ASC', []),
+            ('INSERT INTO `blog` (`title`) VALUES (?)', ['a']),
+            ('INSERT INTO `blog` (`title`) VALUES (?)', ['b']),
+            ('SELECT `id`, `title` FROM `blog` ORDER BY `title` ASC', []),
         ])
 
         # iterating again does not cause evaluation
@@ -917,10 +928,10 @@ class ModelTests(BaseModelTestCase):
         self.assertEqual(blogs, [a, b])
         
         self.assertQueriesEqual([
-            ('INSERT INTO blog (title) VALUES (?)', ['a']),
-            ('INSERT INTO blog (title) VALUES (?)', ['b']),
-            ('SELECT id, title FROM blog ORDER BY title ASC', []),
-            ('SELECT id, title FROM blog ORDER BY title ASC', []),
+            ('INSERT INTO `blog` (`title`) VALUES (?)', ['a']),
+            ('INSERT INTO `blog` (`title`) VALUES (?)', ['b']),
+            ('SELECT `id`, `title` FROM `blog` ORDER BY `title` ASC', []),
+            ('SELECT `id`, `title` FROM `blog` ORDER BY `title` ASC', []),
         ])
         
         # iterate over the original query - it will use the cached results
@@ -933,7 +944,7 @@ class ModelTests(BaseModelTestCase):
         u = User.create(username='a')
         self.assertEqual(u.username, 'a')
         self.assertQueriesEqual([
-            ('INSERT INTO users (username,active,blog_id) VALUES (?,?,?)', ['a', 0, None]),
+            ('INSERT INTO `users` (`username`,`active`,`blog_id`) VALUES (?,?,?)', ['a', 0, None]),
         ])
 
         b = Blog.create(title='b blog')
@@ -941,9 +952,9 @@ class ModelTests(BaseModelTestCase):
         self.assertEqual(u2.blog, b)
 
         self.assertQueriesEqual([
-            ('INSERT INTO users (username,active,blog_id) VALUES (?,?,?)', ['a', 0, None]),
-            ('INSERT INTO blog (title) VALUES (?)', ['b blog']),
-            ('INSERT INTO users (username,active,blog_id) VALUES (?,?,?)', ['b', 0, b.id]),
+            ('INSERT INTO `users` (`username`,`active`,`blog_id`) VALUES (?,?,?)', ['a', 0, None]),
+            ('INSERT INTO `blog` (`title`) VALUES (?)', ['b blog']),
+            ('INSERT INTO `users` (`username`,`active`,`blog_id`) VALUES (?,?,?)', ['b', 0, b.id]),
         ])
 
     def test_get_raises_does_not_exist(self):
@@ -953,8 +964,8 @@ class ModelTests(BaseModelTestCase):
         u = User.get_or_create(username='a')
         self.assertEqual(u.username, 'a')
         self.assertQueriesEqual([
-            ('SELECT id, username, blog_id, active FROM users WHERE username = ? LIMIT 1', ['a']),
-            ('INSERT INTO users (username,active,blog_id) VALUES (?,?,?)', ['a', 0, None]),
+            ('SELECT `id`, `username`, `blog_id`, `active` FROM `users` WHERE `username` = ? LIMIT 1', ['a']),
+            ('INSERT INTO `users` (`username`,`active`,`blog_id`) VALUES (?,?,?)', ['a', 0, None]),
         ])
 
         other_u = User.get_or_create(username='a')
@@ -1090,8 +1101,8 @@ class RelatedFieldTests(BaseModelTestCase):
         self.assertEqual(e.blog, a)
         
         self.assertQueriesEqual([
-            ('INSERT INTO blog (title) VALUES (?)', ['a']),
-            ('INSERT INTO entry (content,blog_id,pub_date,title) VALUES (?,?,?,?)', ['', a.id, None, 'e']),
+            ('INSERT INTO `blog` (`title`) VALUES (?)', ['a']),
+            ('INSERT INTO `entry` (`content`,`blog_id`,`pub_date`,`title`) VALUES (?,?,?,?)', ['', a.id, None, 'e']),
         ])
         
         e2 = Entry.get(pk=e.pk)
@@ -1099,10 +1110,10 @@ class RelatedFieldTests(BaseModelTestCase):
         self.assertEqual(e2.blog, a)
         
         self.assertQueriesEqual([
-            ('INSERT INTO blog (title) VALUES (?)', ['a']),
-            ('INSERT INTO entry (content,blog_id,pub_date,title) VALUES (?,?,?,?)', ['', a.id, None, 'e']),
-            ('SELECT pk, title, content, pub_date, blog_id FROM entry WHERE pk = ? LIMIT 1', [e.pk]),
-            ('SELECT id, title FROM blog WHERE id = ? LIMIT 1', [a.id]),
+            ('INSERT INTO `blog` (`title`) VALUES (?)', ['a']),
+            ('INSERT INTO `entry` (`content`,`blog_id`,`pub_date`,`title`) VALUES (?,?,?,?)', ['', a.id, None, 'e']),
+            ('SELECT `pk`, `title`, `content`, `pub_date`, `blog_id` FROM `entry` WHERE `pk` = ? LIMIT 1', [e.pk]),
+            ('SELECT `id`, `title` FROM `blog` WHERE `id` = ? LIMIT 1', [a.id]),
         ])
 
     def test_fk_exception(self):
@@ -1243,13 +1254,13 @@ class RelatedFieldTests(BaseModelTestCase):
         
         sq = Blog.select().join(Entry).join(EntryTag).where(Q(Blog, title='a') | Q(tag='t2'))
         self.assertSQL(sq, [
-            ('(t1.title = ? OR t3.tag = ?)', ['a', 't2'])
+            ('(t1.`title` = ? OR t3.`tag` = ?)', ['a', 't2'])
         ])
         self.assertEqual(list(sq), [a, b])
         
         sq = Blog.select().join(Entry).join(EntryTag).where(Q(Entry, title='a2') | Q(tag='t1') | Q(tag='t2'))
         self.assertSQL(sq, [
-            ('(t2.title = ? OR t3.tag = ? OR t3.tag = ?)', ['a2', 't1', 't2'])
+            ('(t2.`title` = ? OR t3.`tag` = ? OR t3.`tag` = ?)', ['a2', 't1', 't2'])
         ])
         
         sq = Blog.select().join(Entry).join(EntryTag).where(
@@ -1257,7 +1268,7 @@ class RelatedFieldTests(BaseModelTestCase):
             Q(Entry, pk=1) | Q(EntryTag, tag='t1') | Q(tag='t2'),
         )
         self.assertSQL(sq, [
-            ('(t1.title = ? OR t2.title = ?) AND (t2.pk = ? OR t3.tag = ? OR t3.tag = ?)', ['b', 'a2', 1, 't1', 't2']),
+            ('(t1.`title` = ? OR t2.`title` = ?) AND (t2.`pk` = ? OR t3.`tag` = ? OR t3.`tag` = ?)', ['b', 'a2', 1, 't1', 't2']),
         ])
     
     def test_filtering_across_joins(self):
@@ -1329,38 +1340,38 @@ class RelatedFieldTests(BaseModelTestCase):
         
         sq = EntryTag.filter(Q(entry__title='a2') | Q(entry__blog__title='b'))
         self.assertSQL(sq, [
-            ('(t2.title = ? OR t3.title = ?)', ['a2', 'b']),
+            ('(t2.`title` = ? OR t3.`title` = ?)', ['a2', 'b']),
         ])
         self.assertEqual(list(sq), [t1, t2])
         
         sq = EntryTag.filter(Q(entry__title='a2') | Q(entry__blog__title='b'), tag='t1')
         self.assertSQL(sq, [
-            ('(t2.title = ? OR t3.title = ?)', ['a2', 'b']),
-            ('t1.tag = ?', ['t1']),
+            ('(t2.`title` = ? OR t3.`title` = ?)', ['a2', 'b']),
+            ('t1.`tag` = ?', ['t1']),
         ])
         self.assertEqual(list(sq), [t1])
         
         sq = Blog.filter(Q(entry_set__entrytag_set__tag='t1') | Q(entry_set__title='b1'))
         self.assertSQL(sq, [
-            ('(t3.tag = ? OR t2.title = ?)', ['t1', 'b1']),
+            ('(t3.`tag` = ? OR t2.`title` = ?)', ['t1', 'b1']),
         ])
         
         sq = Blog.filter(Q(entry_set__entrytag_set__tag='t1') | Q(entry_set__title='b1'), title='b')
         self.assertSQL(sq, [
-            ('(t3.tag = ? OR t2.title = ?)', ['t1', 'b1']),
-            ('t1.title = ?', ['b']),
+            ('(t3.`tag` = ? OR t2.`title` = ?)', ['t1', 'b1']),
+            ('t1.`title` = ?', ['b']),
         ])
         
         sq = Blog.filter(Q(entry_set__entrytag_set__tag='t1') | Q(entry_set__title='b1'), Q(title='b') | Q(entry_set__title='b2'), entry_set__entrytag_set__id=1)
         self.assertSQL(sq, [
-            ('(t3.tag = ? OR t2.title = ?)', ['t1', 'b1']),
-            ('(t1.title = ? OR t2.title = ?)', ['b', 'b2']),
-            ('t3.id = ?', [1]),
+            ('(t3.`tag` = ? OR t2.`title` = ?)', ['t1', 'b1']),
+            ('(t1.`title` = ? OR t2.`title` = ?)', ['b', 'b2']),
+            ('t3.`id` = ?', [1]),
         ])
     
     def test_multiple_in(self):
         sq = Blog.select().where(title__in=['a', 'b']).join(Entry).where(title__in=['c', 'd'], content='foo')
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.id, t1.title FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id WHERE t1.title IN (?,?) AND (t2.content = ? AND t2.title IN (?,?))', ['a', 'b', 'foo', 'c', 'd']))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`id`, t1.`title` FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id` WHERE t1.`title` IN (?,?) AND (t2.`content` = ? AND t2.`title` IN (?,?))', ['a', 'b', 'foo', 'c', 'd']))
 
     def test_ordering_across_joins(self):
         a, a1, a2, b, b1, b2, t1, t2 = self.get_common_objects()
@@ -1658,7 +1669,7 @@ class RelatedFieldTests(BaseModelTestCase):
         self.assertEqual(e1.title, 'e1')
         self.assertEqual(e1.content, '<edited>')
         
-        self.assertSQLEqual(self.queries()[-1], ('SELECT title FROM entry WHERE pk = ? LIMIT 1', [e1.pk]))
+        self.assertSQLEqual(self.queries()[-1], ('SELECT `title` FROM `entry` WHERE `pk` = ? LIMIT 1', [e1.pk]))
         
         e1.refresh()
         self.assertEqual(e1.content, 'e1')
@@ -1836,10 +1847,10 @@ class SelectRelatedTestCase(BaseModelTestCase):
 class FilterQueryTests(BaseModelTestCase):
     def test_filter_no_joins(self):
         query = Entry.filter(title='e1')
-        self.assertSQL(query, [('title = ?', ['e1'])])
+        self.assertSQL(query, [('`title` = ?', ['e1'])])
         
         query = Entry.filter(title__in=['e1', 'e2'])
-        self.assertSQL(query, [('title IN (?,?)', [['e1', 'e2']])])
+        self.assertSQL(query, [('`title` IN (?,?)', [['e1', 'e2']])])
     
     def test_filter_missing_field(self):
         self.assertRaises(AttributeError, Entry.filter(missing='missing').sql)
@@ -1847,125 +1858,125 @@ class FilterQueryTests(BaseModelTestCase):
     
     def test_filter_joins(self):
         query = EntryTag.filter(entry__title='e1')
-        self.assertSQL(query, [('t2.title = ?', ['e1'])])
+        self.assertSQL(query, [('t2.`title` = ?', ['e1'])])
         
         query = EntryTag.filter(entry__title__in=['e1', 'e2'])
-        self.assertSQL(query, [('t2.title IN (?,?)', [['e1', 'e2']])])
+        self.assertSQL(query, [('t2.`title` IN (?,?)', [['e1', 'e2']])])
         
         query = EntryTag.filter(entry__blog__title='b1')
-        self.assertSQL(query, [('t3.title = ?', ['b1'])])
+        self.assertSQL(query, [('t3.`title` = ?', ['b1'])])
         
         query = EntryTag.filter(entry__blog__title__in=['b1', 'b2'])
-        self.assertSQL(query, [('t3.title IN (?,?)', [['b1', 'b2']])])
+        self.assertSQL(query, [('t3.`title` IN (?,?)', [['b1', 'b2']])])
 
         query = EntryTag.filter(entry__blog__title__in=['b1', 'b2'], entry__title='e1')
         self.assertSQL(query, [
-            ('t3.title IN (?,?)', [['b1', 'b2']]),
-            ('t2.title = ?', ['e1']),
+            ('t3.`title` IN (?,?)', [['b1', 'b2']]),
+            ('t2.`title` = ?', ['e1']),
         ])
     
         query = EntryTag.filter(entry__blog__title__in=['b1', 'b2'], entry__title='e1', tag='t1')
         self.assertSQL(query, [
-            ('t3.title IN (?,?)', [['b1', 'b2']]),
-            ('t2.title = ?', ['e1']),
-            ('t1.tag = ?', ['t1']),
+            ('t3.`title` IN (?,?)', [['b1', 'b2']]),
+            ('t2.`title` = ?', ['e1']),
+            ('t1.`tag` = ?', ['t1']),
         ])
     
     def test_filter_reverse_joins(self):
         query = Blog.filter(entry_set__title='e1')
-        self.assertSQL(query, [('t2.title = ?', ['e1'])])
+        self.assertSQL(query, [('t2.`title` = ?', ['e1'])])
         
         query = Blog.filter(entry_set__title__in=['e1', 'e2'])
-        self.assertSQL(query, [('t2.title IN (?,?)', [['e1', 'e2']])])
+        self.assertSQL(query, [('t2.`title` IN (?,?)', [['e1', 'e2']])])
         
         query = Blog.filter(entry_set__entrytag_set__tag='t1')
-        self.assertSQL(query, [('t3.tag = ?', ['t1'])])
+        self.assertSQL(query, [('t3.`tag` = ?', ['t1'])])
         
         query = Blog.filter(entry_set__entrytag_set__tag__in=['t1', 't2'])
-        self.assertSQL(query, [('t3.tag IN (?,?)', [['t1', 't2']])])
+        self.assertSQL(query, [('t3.`tag` IN (?,?)', [['t1', 't2']])])
         
         query = Blog.filter(entry_set__entrytag_set__tag__in=['t1', 't2'], entry_set__title='e1')
         self.assertSQL(query, [
-            ('t3.tag IN (?,?)', [['t1', 't2']]),
-            ('t2.title = ?', ['e1']),
+            ('t3.`tag` IN (?,?)', [['t1', 't2']]),
+            ('t2.`title` = ?', ['e1']),
         ])
         
         query = Blog.filter(entry_set__entrytag_set__tag__in=['t1', 't2'], entry_set__title='e1', title='b1')
         self.assertSQL(query, [
-            ('t3.tag IN (?,?)', [['t1', 't2']]),
-            ('t2.title = ?', ['e1']),
-            ('t1.title = ?', ['b1']),
+            ('t3.`tag` IN (?,?)', [['t1', 't2']]),
+            ('t2.`title` = ?', ['e1']),
+            ('t1.`title` = ?', ['b1']),
         ])
     
     def test_filter_multiple_lookups(self):
         query = Entry.filter(title='e1', pk=1)
         self.assertSQL(query, [
-            ('(pk = ? AND title = ?)', [1, 'e1']),
+            ('(`pk` = ? AND `title` = ?)', [1, 'e1']),
         ])
         
         query = Entry.filter(title='e1', pk=1, blog__title='b1')
         self.assertSQL(query, [
-            ('(t1.pk = ? AND t1.title = ?)', [1, 'e1']),
-            ('t2.title = ?', ['b1'])
+            ('(t1.`pk` = ? AND t1.`title` = ?)', [1, 'e1']),
+            ('t2.`title` = ?', ['b1'])
         ])
         
         query = Entry.filter(blog__id=2, title='e1', pk=1, blog__title='b1')
         self.assertSQL(query, [
-            ('(t1.pk = ? AND t1.title = ?)', [1, 'e1']),
-            ('(t2.id = ? AND t2.title = ?)', [2, 'b1']),
+            ('(t1.`pk` = ? AND t1.`title` = ?)', [1, 'e1']),
+            ('(t2.`id` = ? AND t2.`title` = ?)', [2, 'b1']),
         ])
     
     def test_filter_with_q(self):
         query = Entry.filter(Q(title='e1') | Q(title='e2'))
         self.assertSQL(query, [
-            ('(title = ? OR title = ?)', ['e1', 'e2'])
+            ('(`title` = ? OR `title` = ?)', ['e1', 'e2'])
         ])
         
         query = Entry.filter(Q(title='e1') | Q(title='e2') | Q(title='e3'), Q(pk=1) | Q(pk=2))
         self.assertSQL(query, [
-            ('(title = ? OR title = ? OR title = ?)', ['e1', 'e2', 'e3']),
-            ('(pk = ? OR pk = ?)', [1, 2])
+            ('(`title` = ? OR `title` = ? OR `title` = ?)', ['e1', 'e2', 'e3']),
+            ('(`pk` = ? OR `pk` = ?)', [1, 2])
         ])
         
         query = Entry.filter(Q(title='e1') | Q(title='e2'), pk=1)
         self.assertSQL(query, [
-            ('(title = ? OR title = ?)', ['e1', 'e2']),
-            ('pk = ?', [1])
+            ('(`title` = ? OR `title` = ?)', ['e1', 'e2']),
+            ('`pk` = ?', [1])
         ])
         
         # try with joins now
         query = Entry.filter(Q(blog__id=1) | Q(blog__id=2))
         self.assertSQL(query, [
-            ('(t2.id = ? OR t2.id = ?)', [1, 2])
+            ('(t2.`id` = ? OR t2.`id` = ?)', [1, 2])
         ])
         
         query = Entry.filter(Q(blog__id=1) | Q(blog__id=2) | Q(blog__id=3), Q(blog__title='b1') | Q(blog__title='b2'))
         self.assertSQL(query, [
-            ('(t2.id = ? OR t2.id = ? OR t2.id = ?)', [1, 2, 3]),
-            ('(t2.title = ? OR t2.title = ?)', ['b1', 'b2'])
+            ('(t2.`id` = ? OR t2.`id` = ? OR t2.`id` = ?)', [1, 2, 3]),
+            ('(t2.`title` = ? OR t2.`title` = ?)', ['b1', 'b2'])
         ])
         
         query = Entry.filter(Q(blog__id=1) | Q(blog__id=2) | Q(blog__id=3), Q(blog__title='b1') | Q(blog__title='b2'), title='foo')
         self.assertSQL(query, [
-            ('(t2.id = ? OR t2.id = ? OR t2.id = ?)', [1, 2, 3]),
-            ('(t2.title = ? OR t2.title = ?)', ['b1', 'b2']),
-            ('t1.title = ?', ['foo']),
+            ('(t2.`id` = ? OR t2.`id` = ? OR t2.`id` = ?)', [1, 2, 3]),
+            ('(t2.`title` = ? OR t2.`title` = ?)', ['b1', 'b2']),
+            ('t1.`title` = ?', ['foo']),
         ])
         
         query = Entry.filter(Q(blog__id=1) | Q(blog__id=2) | Q(blog__id=3), Q(blog__title='b1') | Q(blog__title='b2'), title='foo', blog__title='baz')
         self.assertSQL(query, [
-            ('(t2.id = ? OR t2.id = ? OR t2.id = ?)', [1, 2, 3]),
-            ('(t2.title = ? OR t2.title = ?)', ['b1', 'b2']),
-            ('t1.title = ?', ['foo']),
-            ('t2.title = ?', ['baz']),
+            ('(t2.`id` = ? OR t2.`id` = ? OR t2.`id` = ?)', [1, 2, 3]),
+            ('(t2.`title` = ? OR t2.`title` = ?)', ['b1', 'b2']),
+            ('t1.`title` = ?', ['foo']),
+            ('t2.`title` = ?', ['baz']),
         ])
         
         query = EntryTag.filter(Q(entry__blog__title='b1') | Q(entry__blog__title='b2'), Q(entry__pk=1) | Q(entry__pk=2), tag='baz', entry__title='e1')
         self.assertSQL(query, [
-            ('(t3.title = ? OR t3.title = ?)', ['b1', 'b2']),
-            ('(t2.pk = ? OR t2.pk = ?)', [1, 2]),
-            ('t1.tag = ?', ['baz']),
-            ('t2.title = ?', ['e1']),
+            ('(t3.`title` = ? OR t3.`title` = ?)', ['b1', 'b2']),
+            ('(t2.`pk` = ? OR t2.`pk` = ?)', [1, 2]),
+            ('t1.`tag` = ?', ['baz']),
+            ('t2.`title` = ?', ['e1']),
         ])
     
     def test_filter_with_query(self):
@@ -1973,74 +1984,74 @@ class FilterQueryTests(BaseModelTestCase):
         
         query = filter_query(simple_query, username='bamples')
         self.assertSQL(query, [
-            ('active = ?', [1]),
-            ('username = ?', ['bamples']),
+            ('`active` = ?', [1]),
+            ('`username` = ?', ['bamples']),
         ])
         
         query = filter_query(simple_query, blog__title='b1')
         self.assertSQL(query, [
-            ('t1.active = ?', [1]),
-            ('t2.title = ?', ['b1']),
+            ('t1.`active` = ?', [1]),
+            ('t2.`title` = ?', ['b1']),
         ])
         
         join_query = User.select().join(Blog).where(title='b1')
         
         query = filter_query(join_query, username='bamples')
         self.assertSQL(query, [
-            ('t1.username = ?', ['bamples']),
-            ('t2.title = ?', ['b1']),
+            ('t1.`username` = ?', ['bamples']),
+            ('t2.`title` = ?', ['b1']),
         ])
         
         # join should be recycled here
         query = filter_query(join_query, blog__id=1)
         self.assertSQL(query, [
-            ('t2.id = ?', [1]),
-            ('t2.title = ?', ['b1']),
+            ('t2.`id` = ?', [1]),
+            ('t2.`title` = ?', ['b1']),
         ])
         
         complex_query = User.select().join(Blog).where(Q(id=1)|Q(id=2))
         
         query = filter_query(complex_query, username='bamples', blog__title='b1')
         self.assertSQL(query, [
-            ('(t2.id = ? OR t2.id = ?)', [1, 2]),
-            ('t1.username = ?', ['bamples']),
-            ('t2.title = ?', ['b1']),
+            ('(t2.`id` = ? OR t2.`id` = ?)', [1, 2]),
+            ('t1.`username` = ?', ['bamples']),
+            ('t2.`title` = ?', ['b1']),
         ])
         
         query = filter_query(complex_query, Q(blog__title='b1')|Q(blog__title='b2'), username='bamples')
         self.assertSQL(query, [
-            ('(t2.id = ? OR t2.id = ?)', [1, 2]),
-            ('t1.username = ?', ['bamples']),
-            ('(t2.title = ? OR t2.title = ?)', ['b1', 'b2']),
+            ('(t2.`id` = ? OR t2.`id` = ?)', [1, 2]),
+            ('t1.`username` = ?', ['bamples']),
+            ('(t2.`title` = ? OR t2.`title` = ?)', ['b1', 'b2']),
         ])
         
         # zomg
         query = filter_query(complex_query, Q(blog__entry_set__title='e1')|Q(blog__entry_set__title='e2'), blog__title='b1', username='bamples')
         self.assertSQL(query, [
-            ('(t2.id = ? OR t2.id = ?)', [1, 2]),
-            ('(t3.title = ? OR t3.title = ?)', ['e1', 'e2']),
-            ('t2.title = ?', ['b1']),
-            ('t1.username = ?', ['bamples']),
+            ('(t2.`id` = ? OR t2.`id` = ?)', [1, 2]),
+            ('(t3.`title` = ? OR t3.`title` = ?)', ['e1', 'e2']),
+            ('t2.`title` = ?', ['b1']),
+            ('t1.`username` = ?', ['bamples']),
         ])
     
     def test_filter_chaining(self):
         simple_filter = Entry.filter(blog__id=1)
         self.assertSQL(simple_filter, [
-            ('t2.id = ?', [1])
+            ('t2.`id` = ?', [1])
         ])
         
         f2 = simple_filter.filter(Q(blog__title='b1') | Q(blog__title='b2'), title='e1')
         self.assertSQL(f2, [
-            ('t2.id = ?', [1]),
-            ('(t2.title = ? OR t2.title = ?)', ['b1', 'b2']),
-            ('t1.title = ?', ['e1'])
+            ('t2.`id` = ?', [1]),
+            ('(t2.`title` = ? OR t2.`title` = ?)', ['b1', 'b2']),
+            ('t1.`title` = ?', ['e1'])
         ])
     
     def test_filter_both_directions(self):
         f = Entry.filter(blog__title='b1', entrytag_set__tag='t1')
         self.assertSQL(f, [
-            ('t2.title = ?', ['b1']),
-            ('t3.tag = ?', ['t1']),
+            ('t2.`title` = ?', ['b1']),
+            ('t3.`tag` = ?', ['t1']),
         ])
 
 
@@ -2067,7 +2078,7 @@ class AnnotateQueryTests(BaseModelTestCase):
         
         annotated = Blog.select().annotate(Entry).order_by(('count', 'desc'))
         self.assertSQLEqual(annotated.sql(), (
-            'SELECT t1.id, t1.title, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id, t1.title ORDER BY count desc', []
+            'SELECT t1.`id`, t1.`title`, COUNT(t2.`pk`) AS count FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id` GROUP BY t1.`id`, t1.`title` ORDER BY count desc', []
         ))
         
         self.assertEqual([(b, b.count) for b in annotated], [
@@ -2086,7 +2097,7 @@ class AnnotateQueryTests(BaseModelTestCase):
         alt = Blog.select().join(Entry, 'left outer')
         annotated = alt.annotate(Entry).order_by(('count', 'desc'))
         self.assertSQLEqual(annotated.sql(), (
-            'SELECT t1.id, t1.title, COUNT(t2.pk) AS count FROM blog AS t1 left outer JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id, t1.title ORDER BY count desc', []
+            'SELECT t1.`id`, t1.`title`, COUNT(t2.`pk`) AS count FROM `blog` AS t1 left outer JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id` GROUP BY t1.`id`, t1.`title` ORDER BY count desc', []
         ))
         
         self.assertEqual([(b, b.count) for b in annotated], [
@@ -2100,7 +2111,7 @@ class AnnotateQueryTests(BaseModelTestCase):
         
         annotated = Blog.select().annotate(User).order_by(('count', 'desc'))
         self.assertSQLEqual(annotated.sql(), (
-            ('SELECT t1.id, t1.title, COUNT(t2.id) AS count FROM blog AS t1 LEFT OUTER JOIN users AS t2 ON t1.id = t2.blog_id GROUP BY t1.id, t1.title ORDER BY count desc', [])
+            ('SELECT t1.`id`, t1.`title`, COUNT(t2.`id`) AS count FROM `blog` AS t1 LEFT OUTER JOIN `users` AS t2 ON t1.`id` = t2.`blog_id` GROUP BY t1.`id`, t1.`title` ORDER BY count desc', [])
         ))
         
         self.assertEqual([(b, b.count) for b in annotated], [
@@ -2112,17 +2123,17 @@ class AnnotateQueryTests(BaseModelTestCase):
     def test_limited_annotate(self):
         annotated = Blog.select('id').annotate(Entry)
         self.assertSQLEqual(annotated.sql(), (
-            ('SELECT t1.id, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id', [])
+            ('SELECT t1.`id`, COUNT(t2.`pk`) AS count FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id` GROUP BY t1.`id`', [])
         ))
         
         annotated = Blog.select(['id', 'title']).annotate(Entry)
         self.assertSQLEqual(annotated.sql(), (
-            ('SELECT t1.id, t1.title, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id, t1.title', [])
+            ('SELECT t1.`id`, t1.`title`, COUNT(t2.`pk`) AS count FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id` GROUP BY t1.`id`, t1.`title`', [])
         ))
         
         annotated = Blog.select({Blog: ['id']}).annotate(Entry)
         self.assertSQLEqual(annotated.sql(), (
-            'SELECT t1.id, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id', []
+            ('SELECT t1.`id`, COUNT(t2.`pk`) AS count FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id` GROUP BY t1.`id`', [])
         ))
     
     def test_annotate_with_where(self):
@@ -2130,7 +2141,7 @@ class AnnotateQueryTests(BaseModelTestCase):
         
         annotated = Blog.select().where(title='b2').annotate(Entry)
         self.assertSQLEqual(annotated.sql(), (
-            'SELECT t1.id, t1.title, COUNT(t2.pk) AS count FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id WHERE t1.title = ? GROUP BY t1.id, t1.title', ['b2']
+            'SELECT t1.`id`, t1.`title`, COUNT(t2.`pk`) AS count FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id` WHERE t1.`title` = ? GROUP BY t1.`id`, t1.`title`', ['b2']
         ))
         
         self.assertEqual([(b, b.count) for b in annotated], [
@@ -2140,7 +2151,7 @@ class AnnotateQueryTests(BaseModelTestCase):
         # try with a join
         annotated = Blog.select().join(User).where(username='u2').annotate(Entry)
         self.assertSQLEqual(annotated.sql(), (
-            'SELECT t1.id, t1.title, COUNT(t3.pk) AS count FROM blog AS t1 INNER JOIN users AS t2 ON t1.id = t2.blog_id\nINNER JOIN entry AS t3 ON t1.id = t3.blog_id WHERE t2.username = ? GROUP BY t1.id, t1.title', ['u2']
+            'SELECT t1.`id`, t1.`title`, COUNT(t3.`pk`) AS count FROM `blog` AS t1 INNER JOIN `users` AS t2 ON t1.`id` = t2.`blog_id`\nINNER JOIN `entry` AS t3 ON t1.`id` = t3.`blog_id` WHERE t2.`username` = ? GROUP BY t1.`id`, t1.`title`', ['u2']
         ))
         
         self.assertEqual([(b, b.count) for b in annotated], [
@@ -2150,7 +2161,7 @@ class AnnotateQueryTests(BaseModelTestCase):
     def test_annotate_custom_aggregate(self):
         annotated = Blog.select().annotate(Entry, peewee.Max('pub_date', 'max_pub'))
         self.assertSQLEqual(annotated.sql(), (
-            'SELECT t1.id, t1.title, MAX(t2.pub_date) AS max_pub FROM blog AS t1 INNER JOIN entry AS t2 ON t1.id = t2.blog_id GROUP BY t1.id, t1.title', []
+            'SELECT t1.`id`, t1.`title`, MAX(t2.`pub_date`) AS max_pub FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id` GROUP BY t1.`id`, t1.`title`', []
         ))
 
 
@@ -2170,15 +2181,15 @@ class FQueryTestCase(BaseModelTestCase):
         nm21 = NumberModel.create(num1=2, num2=1)
         
         sq = NumberModel.select().where(num1=F('num2'))
-        self.assertSQLEqual(sq.sql(), ('SELECT id, num1, num2 FROM numbermodel WHERE num1 = num2', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `num1`, `num2` FROM `numbermodel` WHERE `num1` = `num2`', []))
         self.assertEqual(list(sq.order_by('id')), [nm1, nm2])
         
         sq = NumberModel.select().where(num1__lt=F('num2'))
-        self.assertSQLEqual(sq.sql(), ('SELECT id, num1, num2 FROM numbermodel WHERE num1 < num2', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `num1`, `num2` FROM `numbermodel` WHERE `num1` < `num2`', []))
         self.assertEqual(list(sq.order_by('id')), [nm12])
 
         sq = NumberModel.select().where(num1=F('num2') - 1)
-        self.assertSQLEqual(sq.sql(), ('SELECT id, num1, num2 FROM numbermodel WHERE num1 = (num2 - 1)', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `num1`, `num2` FROM `numbermodel` WHERE `num1` = (`num2` - 1)', []))
         self.assertEqual(list(sq.order_by('id')), [nm12])
 
     def test_f_object_joins(self):
@@ -2193,14 +2204,14 @@ class FQueryTestCase(BaseModelTestCase):
         rnm21 = RelNumberModel.create(rel_num=1, num=nm21)
 
         sq = RelNumberModel.select().join(NumberModel).where(num1=F('rel_num', RelNumberModel))
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.id, t1.rel_num, t1.num_id FROM relnumbermodel AS t1 INNER JOIN numbermodel AS t2 ON t1.num_id = t2.id WHERE t2.num1 = t1.rel_num', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`id`, t1.`rel_num`, t1.`num_id` FROM `relnumbermodel` AS t1 INNER JOIN `numbermodel` AS t2 ON t1.`num_id` = t2.`id` WHERE t2.`num1` = t1.`rel_num`', []))
         self.assertEqual(list(sq.order_by('id')), [rnm1, rnm12])
 
         sq = RelNumberModel.select().join(NumberModel).where(
             Q(num1=F('rel_num', RelNumberModel)) |
             Q(num2=F('rel_num', RelNumberModel))
         )
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.id, t1.rel_num, t1.num_id FROM relnumbermodel AS t1 INNER JOIN numbermodel AS t2 ON t1.num_id = t2.id WHERE (t2.num1 = t1.rel_num OR t2.num2 = t1.rel_num)', []))
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`id`, t1.`rel_num`, t1.`num_id` FROM `relnumbermodel` AS t1 INNER JOIN `numbermodel` AS t2 ON t1.`num_id` = t2.`id` WHERE (t2.`num1` = t1.`rel_num` OR t2.`num2` = t1.`rel_num`)', []))
         self.assertEqual(list(sq.order_by('id')), [rnm1, rnm12, rnm21])
 
 
@@ -2308,29 +2319,29 @@ class FieldTypeTests(BaseModelTestCase):
         self.assertEqual(nm.decimal_field2, None)
         
         null_lookup = NullModel.select().where(char_field__is=None)
-        self.assertSQLEqual(null_lookup.sql(), ('SELECT id, char_field, text_field, datetime_field, int_field, float_field, decimal_field1, decimal_field2 FROM nullmodel WHERE char_field IS NULL', []))
+        self.assertSQLEqual(null_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2` FROM `nullmodel` WHERE `char_field` IS NULL', []))
         
         self.assertEqual(list(null_lookup), [nm])
 
         null_lookup = NullModel.select().where(~Q(char_field__is=None))
-        self.assertSQLEqual(null_lookup.sql(), ('SELECT id, char_field, text_field, datetime_field, int_field, float_field, decimal_field1, decimal_field2 FROM nullmodel WHERE NOT char_field IS NULL', []))
+        self.assertSQLEqual(null_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2` FROM `nullmodel` WHERE NOT `char_field` IS NULL', []))
         
         non_null_lookup = NullModel.select().where(char_field='')
-        self.assertSQLEqual(non_null_lookup.sql(), ('SELECT id, char_field, text_field, datetime_field, int_field, float_field, decimal_field1, decimal_field2 FROM nullmodel WHERE char_field = ?', ['']))
+        self.assertSQLEqual(non_null_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2` FROM `nullmodel` WHERE `char_field` = ?', ['']))
         
         self.assertEqual(list(non_null_lookup), [])
         
         isnull_lookup = NullModel.select().where(char_field__isnull=True)
-        self.assertSQLEqual(isnull_lookup.sql(), ('SELECT id, char_field, text_field, datetime_field, int_field, float_field, decimal_field1, decimal_field2 FROM nullmodel WHERE char_field IS NULL', []))
+        self.assertSQLEqual(isnull_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2` FROM `nullmodel` WHERE `char_field` IS NULL', []))
         
         isnull_lookup = NullModel.select().where(char_field__isnull=False)
-        self.assertSQLEqual(isnull_lookup.sql(), ('SELECT id, char_field, text_field, datetime_field, int_field, float_field, decimal_field1, decimal_field2 FROM nullmodel WHERE char_field IS NOT NULL', []))        
+        self.assertSQLEqual(isnull_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2` FROM `nullmodel` WHERE `char_field` IS NOT NULL', []))        
 
         isnull_lookup = NullModel.select().where(~Q(char_field__isnull=True))
-        self.assertSQLEqual(isnull_lookup.sql(), ('SELECT id, char_field, text_field, datetime_field, int_field, float_field, decimal_field1, decimal_field2 FROM nullmodel WHERE NOT char_field IS NULL', []))
+        self.assertSQLEqual(isnull_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2` FROM `nullmodel` WHERE NOT `char_field` IS NULL', []))
         
         isnull_lookup = NullModel.select().where(~Q(char_field__isnull=False))
-        self.assertSQLEqual(isnull_lookup.sql(), ('SELECT id, char_field, text_field, datetime_field, int_field, float_field, decimal_field1, decimal_field2 FROM nullmodel WHERE NOT char_field IS NOT NULL', []))        
+        self.assertSQLEqual(isnull_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2` FROM `nullmodel` WHERE NOT `char_field` IS NOT NULL', []))        
         
         nm_from_db = NullModel.get(id=nm.id)
         self.assertEqual(nm_from_db.char_field, None)
@@ -2429,7 +2440,7 @@ class FieldTypeTests(BaseModelTestCase):
         nm4 = NullModel.create(int_field=4)
         
         sq = NullModel.select().where(int_field__between=[2, 3])
-        self.assertSQLEqual(sq.sql(), ('SELECT id, char_field, text_field, datetime_field, int_field, float_field, decimal_field1, decimal_field2 FROM nullmodel WHERE int_field BETWEEN ? AND ?', [2, 3]))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2` FROM `nullmodel` WHERE `int_field` BETWEEN ? AND ?', [2, 3]))
         
         self.assertEqual(list(sq.order_by('id')), [nm2, nm3])
 
