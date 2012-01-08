@@ -1429,8 +1429,10 @@ class SelectQuery(BaseQuery):
         order_by = []
         for piece in self._order_by:
             model, field, ordering = piece
-            if self.use_aliases() and field in model._meta.fields:
-                field = '%s.%s' % (alias_map[model], field)
+            if field in model._meta.fields:
+                field = self.qn(field)
+                if self.use_aliases():
+                    field = '%s.%s' % (alias_map[model], field)
             order_by.append('%s %s' % (field, ordering))
         
         pieces = [select]
@@ -1526,7 +1528,7 @@ class UpdateQuery(BaseQuery):
             update_params.append('%s=%s' % (self.combine_field(alias, k), value))
         
         update = 'UPDATE %s SET %s' % (
-            self.model._meta.db_table, ', '.join(update_params))
+            self.qn(self.model._meta.db_table), ', '.join(update_params))
         where = ' AND '.join(where)
         
         pieces = [update]
@@ -1560,7 +1562,7 @@ class DeleteQuery(BaseQuery):
 
         params = []
         
-        delete = 'DELETE FROM %s' % (self.model._meta.db_table)
+        delete = 'DELETE FROM %s' % (self.qn(self.model._meta.db_table))
         where = ' AND '.join(where)
         
         pieces = [delete]
@@ -1589,7 +1591,7 @@ class InsertQuery(BaseQuery):
         vals = []
         for k, v in self.insert_query.iteritems():
             field = self.model._meta.get_field_by_name(k)
-            cols.append(k)
+            cols.append(self.qn(k))
             vals.append(field.db_value(v))
         
         return cols, vals
@@ -1598,7 +1600,7 @@ class InsertQuery(BaseQuery):
         cols, vals = self.parse_insert()
         
         insert = 'INSERT INTO %s (%s) VALUES (%s)' % (
-            self.model._meta.db_table,
+            self.qn(self.model._meta.db_table),
             ','.join(cols),
             ','.join(self.interpolation for v in vals)
         )
