@@ -1800,7 +1800,7 @@ class Field(object):
     
     def to_sql(self):
         rendered = self.render_field_template()
-        return '%s %s' % (self.name, rendered)
+        return '"%s" %s' % (self.name, rendered)
     
     def null_wrapper(self, value, default=None):
         if (self.null and value is None) or default is None:
