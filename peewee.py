@@ -794,22 +794,17 @@ class F(object):
     def __init__(self, field, model=None):
         self.field = field
         self.model = model
-        self._op = None
-    
-    def sql(self):
-        if self._op is None:
-            return self.field
-        
-        return '(%s %s %s)' % (self.field, self._op, self.val)
+        self.op = None
+        self.value = None
 
     def __add__(self, rhs):
-        self._op = '+'
-        self.val = rhs
+        self.op = '+'
+        self.value = rhs
         return self
 
     def __sub__(self, rhs):
-        self._op = '-'
-        self.val = rhs
+        self.op = '-'
+        self.value = rhs
         return self
 
 
@@ -994,15 +989,15 @@ class BaseQuery(object):
         return len(self._joined_models) > 0 or self.force_alias
 
     def combine_field(self, alias, field_name):
+        quoted = self.qn(field_name)
         if alias:
-            return '%s.%s' % (alias, field_name)
-        return field_name
+            return '%s.%s' % (alias, quoted)
+        return quoted
 
     def safe_combine(self, model, alias, col):
         if col in model._meta.fields:
             return self.combine_field(alias, col)
         return col
-        
     
     def follow_joins(self, current, alias_map, alias_required, alias_count, seen=None):
         computed = []
@@ -1039,7 +1034,7 @@ class BaseQuery(object):
             computed.append(
                 '%s JOIN %s AS %s ON %s = %s' % (
                     join_type,
-                    model._meta.db_table,
+                    self.qn(model._meta.db_table),
                     alias_map[model],
                     self.combine_field(alias_map[from_model], left_field),
                     self.combine_field(alias_map[model], right_field),
@@ -1116,8 +1111,7 @@ class BaseQuery(object):
 
             if isinstance(value, F):
                 f_model = value.model or model
-                combined_value = self.combine_field(alias_map[f_model], value.sql())
-                operation = operation % combined_value
+                operation = operation % self.parse_f(value, f_model, alias_map)
             else:
                 query_data.append(value)
             
@@ -1133,6 +1127,13 @@ class BaseQuery(object):
             query = 'NOT %s' % query
         
         return query, query_data
+    
+    def parse_f(self, f_object, model, alias_map):
+        combined = self.combine_field(alias_map[model], f_object.field)
+        if f_object.op is not None:
+            combined = '(%s %s %s)' % (combined, f_object.op, f_object.value)
+
+        return combined
 
     def convert_subquery(self, subquery):
         subquery.query, orig_query = subquery.model._meta.pk_name, subquery.query
@@ -1390,7 +1391,7 @@ class SelectQuery(BaseQuery):
         joins, clauses, alias_map = self.compile_where()
         where, where_data = self.flatten_clauses(clauses)
         
-        table = self.model._meta.db_table
+        table = self.qn(self.model._meta.db_table)
 
         params = []
         group_by = []
@@ -1517,7 +1518,7 @@ class UpdateQuery(BaseQuery):
 
         for k, v in set_statement.iteritems():
             if isinstance(v, F):
-                value = self.combine_field(alias, v.sql())
+                value = self.parse_f(v, v.model or self.model, alias_map)
             else:
                 params.append(v)
                 value = self.interpolation
