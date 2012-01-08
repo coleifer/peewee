@@ -719,10 +719,10 @@ class ModelTests(BaseModelTestCase):
         b = self.create_blog(title='b')
         c = self.create_blog(title='c')
         
-        qr = Blog.raw('SELECT `id`, `title` FROM `blog` ORDER BY `title` ASC')
+        qr = Blog.raw('SELECT id, title FROM blog ORDER BY title ASC')
         self.assertEqual(list(qr), [a, b, c])
         
-        qr = Blog.raw('SELECT `id`, `title` FROM `blog` WHERE `title` IN (%s, %s) ORDER BY `title` DESC' % (interpolation, interpolation), 'a', 'c')
+        qr = Blog.raw('SELECT id, title FROM blog WHERE title IN (%s, %s) ORDER BY title DESC' % (interpolation, interpolation), 'a', 'c')
         self.assertEqual(list(qr), [c, a])
         
         # create a couple entires for blog a
