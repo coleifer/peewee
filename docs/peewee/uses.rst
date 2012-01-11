@@ -66,7 +66,7 @@ database, and then all your models will extend it:
             database = custom_db
     
     class Blog(CustomModel):
-        author = peewee.CharField()
+        creator = peewee.CharField()
         name = peewee.TextField()
     
     class Entry(CustomModel):
@@ -87,7 +87,7 @@ Using with Postgresql
             database = psql_db
 
     class Blog(PostgresqlModel):
-        author = peewee.CharField()
+        creator = peewee.CharField()
         # etc, etc
     
 
@@ -109,7 +109,7 @@ Using with MySQL
             database = mysql_db
 
     class Blog(MySQLModel):
-        author = peewee.CharField()
+        creator = peewee.CharField()
         # etc, etc
     
 
