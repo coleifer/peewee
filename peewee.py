@@ -1258,22 +1258,22 @@ class SelectQuery(BaseQuery):
         return res.fetchone()[0]
     
     @returns_clone
-    def group_by(self, clause):
+    def group_by(self, *clauses):
         model = self.query_context
-        
-        if isinstance(clause, basestring):
-            fields = (clause,)
-        elif isinstance(clause, (list, tuple)):
-            fields = clause
-        elif issubclass(clause, Model):
-            model = clause
-            fields = clause._meta.get_field_names()
-        
-        self._group_by.append((model, fields))
+        for clause in clauses:
+            if isinstance(clause, basestring):
+                fields = (clause,)
+            elif isinstance(clause, (list, tuple)):
+                fields = clause
+            elif issubclass(clause, Model):
+                model = clause
+                fields = clause._meta.get_field_names()
+            
+            self._group_by.append((model, fields))
     
     @returns_clone
-    def having(self, clause):
-        self._having.append(clause)
+    def having(self, *clauses):
+        self._having = clauses
     
     @returns_clone
     def distinct(self):
