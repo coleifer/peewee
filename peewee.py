@@ -649,22 +649,25 @@ class QueryResultWrapper(object):
                 pass
             self.__idx = idx
     
+    def iterate(self):
+        row = self.cursor.fetchone()
+        if row:
+            return self.construct_instance(row)
+        else:
+            self._populated = True
+            raise StopIteration
+    
     def next(self):
         if self.__idx < self.__ct:
             inst = self._result_cache[self.__idx]
             self.__idx += 1
             return inst
         
-        row = self.cursor.fetchone()
-        if row:
-            instance = self.construct_instance(row)
-            self._result_cache.append(instance)
-            self.__ct += 1
-            self.__idx += 1
-            return instance
-        else:
-            self._populated = True
-            raise StopIteration
+        instance = self.iterate()
+        self._result_cache.append(instance)
+        self.__ct += 1
+        self.__idx += 1
+        return instance
 
 
 # create
