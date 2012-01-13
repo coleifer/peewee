@@ -657,6 +657,10 @@ class QueryResultWrapper(object):
             self._populated = True
             raise StopIteration
     
+    def iterator(self):
+        while 1:
+            yield self.iterate()
+    
     def next(self):
         if self.__idx < self.__ct:
             inst = self._result_cache[self.__idx]
