@@ -1136,7 +1136,10 @@ class BaseQuery(object):
         return combined
 
     def convert_subquery(self, subquery):
-        subquery.query, orig_query = subquery.model._meta.pk_name, subquery.query
+        orig_query = subquery.query
+        if subquery.query == '*':
+            subquery.query = subquery.model._meta.pk_name
+        
         subquery.force_alias, orig_alias = True, subquery.force_alias
         sql, data = subquery.sql()
         subquery.query = orig_query
