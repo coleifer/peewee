@@ -1768,6 +1768,32 @@ class RelatedFieldTests(BaseModelTestCase):
         qc4 = len(self.queries())
         self.assertEqual(qc4 - qc3, 1)
 
+    def test_iterator(self):
+        expected = ['b%d' % i for i in range(10)]
+        for i in range(10):
+            Blog.create(title='b%d' % i)
+
+        qc = len(self.queries())
+
+        qr = Blog.select().execute()
+        titles = [b.title for b in qr.iterator()]
+        
+        self.assertEqual(titles, expected)
+        qc1 = len(self.queries())
+        self.assertEqual(qc1 - qc, 1)
+        self.assertTrue(qr._populated)
+        self.assertEqual(qr._result_cache, [])
+
+        # just try to iterate
+        again = [b.title for b in qr]
+        self.assertEqual(again, [])
+        qc2 = len(self.queries())
+        self.assertEqual(qc2 - qc1, 0)
+
+        qr = Blog.select().where(title='xxxx').execute()
+        titles = [b.title for b in qr.iterator()]
+        self.assertEqual(titles, [])
+
 
 class SelectRelatedTestCase(BaseModelTestCase):
     def setUp(self):
