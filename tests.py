@@ -94,6 +94,8 @@ class NullModel(TestModel):
     float_field = peewee.FloatField(null=True)
     decimal_field1 = peewee.DecimalField(null=True)
     decimal_field2 = peewee.DecimalField(decimal_places=2, null=True)
+    double_field = peewee.DoubleField(null=True)
+    bigint_field = peewee.BigIntegerField(null=True)
 
 class NumberModel(TestModel):
     num1 = peewee.IntegerField()
@@ -2345,29 +2347,29 @@ class FieldTypeTests(BaseModelTestCase):
         self.assertEqual(nm.decimal_field2, None)
         
         null_lookup = NullModel.select().where(char_field__is=None)
-        self.assertSQLEqual(null_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2` FROM `nullmodel` WHERE `char_field` IS NULL', []))
+        self.assertSQLEqual(null_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2`, `double_field`, `bigint_field` FROM `nullmodel` WHERE `char_field` IS NULL', []))
         
         self.assertEqual(list(null_lookup), [nm])
 
         null_lookup = NullModel.select().where(~Q(char_field__is=None))
-        self.assertSQLEqual(null_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2` FROM `nullmodel` WHERE NOT `char_field` IS NULL', []))
+        self.assertSQLEqual(null_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2`, `double_field`, `bigint_field` FROM `nullmodel` WHERE NOT `char_field` IS NULL', []))
         
         non_null_lookup = NullModel.select().where(char_field='')
-        self.assertSQLEqual(non_null_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2` FROM `nullmodel` WHERE `char_field` = ?', ['']))
+        self.assertSQLEqual(non_null_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2`, `double_field`, `bigint_field` FROM `nullmodel` WHERE `char_field` = ?', ['']))
         
         self.assertEqual(list(non_null_lookup), [])
         
         isnull_lookup = NullModel.select().where(char_field__isnull=True)
-        self.assertSQLEqual(isnull_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2` FROM `nullmodel` WHERE `char_field` IS NULL', []))
+        self.assertSQLEqual(isnull_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2`, `double_field`, `bigint_field` FROM `nullmodel` WHERE `char_field` IS NULL', []))
         
         isnull_lookup = NullModel.select().where(char_field__isnull=False)
-        self.assertSQLEqual(isnull_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2` FROM `nullmodel` WHERE `char_field` IS NOT NULL', []))        
+        self.assertSQLEqual(isnull_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2`, `double_field`, `bigint_field` FROM `nullmodel` WHERE `char_field` IS NOT NULL', []))        
 
         isnull_lookup = NullModel.select().where(~Q(char_field__isnull=True))
-        self.assertSQLEqual(isnull_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2` FROM `nullmodel` WHERE NOT `char_field` IS NULL', []))
+        self.assertSQLEqual(isnull_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2`, `double_field`, `bigint_field` FROM `nullmodel` WHERE NOT `char_field` IS NULL', []))
         
         isnull_lookup = NullModel.select().where(~Q(char_field__isnull=False))
-        self.assertSQLEqual(isnull_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2` FROM `nullmodel` WHERE NOT `char_field` IS NOT NULL', []))        
+        self.assertSQLEqual(isnull_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2`, `double_field`, `bigint_field` FROM `nullmodel` WHERE NOT `char_field` IS NOT NULL', []))        
         
         nm_from_db = NullModel.get(id=nm.id)
         self.assertEqual(nm_from_db.char_field, None)
@@ -2466,9 +2468,19 @@ class FieldTypeTests(BaseModelTestCase):
         nm4 = NullModel.create(int_field=4)
         
         sq = NullModel.select().where(int_field__between=[2, 3])
-        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2` FROM `nullmodel` WHERE `int_field` BETWEEN ? AND ?', [2, 3]))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2`, `double_field`, `bigint_field` FROM `nullmodel` WHERE `int_field` BETWEEN ? AND ?', [2, 3]))
         
         self.assertEqual(list(sq.order_by('id')), [nm2, nm3])
+    
+    def test_double_field(self):
+        nm1 = NullModel.create(double_field=3.14159265358979)
+        from_db = NullModel.get(id=nm1.id)
+        self.assertEqual(from_db.double_field, 3.14159265358979)
+    
+    def test_bigint_field(self):
+        nm1 = NullModel.create(bigint_field=1000000000000)
+        from_db = NullModel.get(id=nm1.id)
+        self.assertEqual(from_db.bigint_field, 1000000000000)
 
 class ModelIndexTestCase(BaseModelTestCase):
     def setUp(self):

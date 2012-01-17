@@ -19,9 +19,7 @@ This should look familiar to users of the django framework.  Here's an example:
         username = CharField()
         join_date = DateTimeField()
         about_me = TextField()
-+-------------------------------+--------------------------------+-------------------------------+
-| :py:class:`FloatField`        | * ``real``, sqlite, psql       | none                          |
-|                               | * ``double precision``, mysql  |                               |
+
 There is one special type of field, :py:class:`ForeignKeyField`, which allows you
 to expose foreign-key relationships between models in an intuitive way:
 
@@ -57,37 +55,33 @@ Parameters accepted by all field types and their default values:
 * ``verbose_name = None`` -- string representing the "user-friendly" name of this field
 * ``help_text = None`` -- string representing any helpful text for this field
 
-+-------------------------------+--------------------------------+-------------------------------+
-| Field type                    | Underlying storage             | Special Parameters            |
-+===============================+================================+===============================+
-| :py:class:`CharField`         | ``varchar``                    | ``max_length``                |
-+-------------------------------+--------------------------------+-------------------------------+
-| :py:class:`TextField`         | * ``text``, sqlite, psql       | none                          |
-|                               | * ``longtext``, mysql          |                               |
-+-------------------------------+--------------------------------+-------------------------------+
-| :py:class:`DateTimeField`     | * ``datetime``, sqlite         | none                          |
-|                               | * ``datetime``, mysql          |                               |
-|                               | * ``timestamp``, psql          |                               |
-+-------------------------------+--------------------------------+-------------------------------+
-| :py:class:`IntegerField`      | ``integer``                    | none                          |
-+-------------------------------+--------------------------------+-------------------------------+
-| :py:class:`BooleanField`      | * ``smallint``, sqlite, psql   | none                          |
-|                               | * ``bool``, mysql              |                               |
-+-------------------------------+--------------------------------+-------------------------------+
-| :py:class:`FloatField`        | * ``real``, sqlite, psql       | none                          |
-|                               | * ``double precision``, mysql  |                               |
-+-------------------------------+--------------------------------+-------------------------------+
-| :py:class:`DecimalField`      | * ``numeric``, psql, mysql     | ``max_digits``, ``places``    |
-|                               | * ``decimal``, sqlite          |                               |
-+-------------------------------+--------------------------------+-------------------------------+
-| :py:class:`PrimaryKeyField`   | * ``integer``, sqlite          | none                          |
-|                               | * ``serial``, psql             |                               |
-|                               | * ``integer auto_increment``,  |                               |
-|                               |   mysql                        |                               |
-+-------------------------------+--------------------------------+-------------------------------+
-| :py:class:`ForeignKeyField`   | ``foreign key``                | ``to``, ``related_name``,     |
-|                               |                                | ``cascade``, ``extra``        |
-+-------------------------------+--------------------------------+-------------------------------+
+
+===================   =================   =================   =================
+Field Type            Sqlite              Postgresql          MySQL
+===================   =================   =================   =================
+``CharField``         varchar             varchar             varchar
+``TextField``         text                text                longtext
+``DateTimeField``     datetime            timestamp           datetime
+``IntegerField``      integer             integer             integer
+``BooleanField``      smallint            boolean             bool
+``FloatField``        real                real                real
+``DoubleField``       real                double precision    double precision
+``BigIntegerField``   integer             bigint              bigint
+``DecimalField``      decimal             numeric             numeric
+``PrimaryKeyField``   integer             serial              integer
+``ForeignKeyField``   integer             integer             integer
+
+
++-------------------------------+----------------------------------------------+
+| Field type                    | Special Parameters                           |
++===============================+==============================================+
+| :py:class:`CharField`         | ``max_length``                               |
++-------------------------------+----------------------------------------------+
+| :py:class:`DecimalField`      | ``max_digits``, ``places``                   |
++-------------------------------+----------------------------------------------+
+| :py:class:`ForeignKeyField`   | ``to``, ``related_name``,                    |
+|                               | ``cascade``, ``extra``                       |
++-------------------------------+----------------------------------------------+
 
 
 Self-referential Foreign Keys

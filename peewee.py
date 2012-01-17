@@ -79,8 +79,10 @@ class BaseAdapter(object):
     def get_field_types(self):
         field_types = {
             'integer': 'INTEGER',
+            'bigint': 'INTEGER',
             'float': 'REAL',
             'decimal': 'DECIMAL',
+            'double': 'REAL',
             'string': 'VARCHAR',
             'text': 'TEXT',
             'datetime': 'DATETIME',
@@ -189,6 +191,8 @@ class PostgresqlAdapter(BaseAdapter):
             'primary_key_with_sequence': 'INTEGER',
             'datetime': 'TIMESTAMP',
             'decimal': 'NUMERIC',
+            'double': 'DOUBLE PRECISION',
+            'bigint': 'BIGINT',
             'boolean': 'BOOLEAN',
             'blob': 'BYTEA',
         }
@@ -232,6 +236,8 @@ class MySQLAdapter(BaseAdapter):
             'primary_key': 'integer AUTO_INCREMENT',
             'boolean': 'bool',
             'float': 'float',
+            'double': 'double precision',
+            'bigint': 'bigint',
             'text': 'longtext',
             'decimal': 'numeric',
         }
@@ -1913,6 +1919,10 @@ class IntegerField(Field):
             return int(value)
 
 
+class BigIntegerField(IntegerField):
+    db_field = 'bigint'
+
+
 class BooleanField(IntegerField):
     db_field = 'boolean'
     
@@ -1932,6 +1942,10 @@ class FloatField(Field):
     def python_value(self, value):
         if value is not None:
             return float(value)
+
+
+class DoubleField(FloatField):
+    db_field = 'double'
 
 
 class DecimalField(Field):
