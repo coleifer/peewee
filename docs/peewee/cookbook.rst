@@ -409,6 +409,27 @@ You can count the number of rows in any select query:
     50
 
 
+Iterating over lots of rows
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+To limit the amount of memory used by peewee when iterating over a lot of rows (i.e.
+you may be dumping data to csv), use the ``iterator()`` method on the :py:class:`QueryResultWrapper`.
+This method allows you to iterate without caching each model returned, using much less
+memory when iterating over large result sets:
+
+.. code-block:: python
+
+    # let's assume we've got 1M stat objects to dump to csv
+    stats_qr = Stat.select().execute()
+    
+    # our imaginary serializer class
+    serializer = CSVSerializer()
+    
+    # loop over all the stats and serialize
+    for stat in stats_qr.iterator():
+        serializer.serialize_object(stat)
+
+
 Performing atomic updates
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
