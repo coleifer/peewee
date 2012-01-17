@@ -108,8 +108,8 @@ opposite, grabs all the blogs that are live whose author is a staffer:
 
     >>> Blog.select().where(status=LIVE).join(User).where(is_staff=True)
 
-.. note:: to :py:meth:`~SelectQuery.join` from one model to another there must be a 
-    :py:class:`ForeignKeyField` linking the two.
+.. note::
+    to :py:meth:`~SelectQuery.join` from one model to another there must be a :py:class:`ForeignKeyField` linking the two.
 
 Another way to write the above query would be:
 
