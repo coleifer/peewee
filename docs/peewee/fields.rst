@@ -70,6 +70,7 @@ Field Type            Sqlite              Postgresql          MySQL
 ``DecimalField``      decimal             numeric             numeric
 ``PrimaryKeyField``   integer             serial              integer
 ``ForeignKeyField``   integer             integer             integer
+===================   =================   =================   =================
 
 
 +-------------------------------+----------------------------------------------+
