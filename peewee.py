@@ -1882,6 +1882,9 @@ class CharField(Field):
         else:
             return self.db_value(value)
     
+    def python_value(self, value):
+        return value.decode('utf-8')
+    
 
 class TextField(Field):
     db_field = 'text'
