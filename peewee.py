@@ -50,6 +50,11 @@ if sqlite3:
     sqlite3.register_adapter(decimal.Decimal, lambda v: str(v))
     sqlite3.register_converter('decimal', lambda v: decimal.Decimal(v))
 
+if psycopg2:
+    import psycopg2.extensions
+    psycopg2.extensions.register_type(psycopg2.extensions.UNICODE)
+    psycopg2.extensions.register_type(psycopg2.extensions.UNICODEARRAY)
+
 
 DATABASE_NAME = os.environ.get('PEEWEE_DATABASE', 'peewee.db')
 logger = logging.getLogger('peewee.logger')

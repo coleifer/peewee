@@ -1,3 +1,5 @@
+# encoding=utf-8
+
 import datetime
 import decimal
 import logging
@@ -1000,7 +1002,6 @@ class UnicodeFieldTests(BaseModelTestCase):
         a, e = self.get_common_objects()
         a.refresh('title')
         e1 = Entry.get(pk=e.pk)
-        print type(e1.title), type(e1.content)
         self.assertEqual(a.title, u'Lýðveldið Ísland')
         self.assertEqual(e1.content, u'Jökull')
     
