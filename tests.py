@@ -1,3 +1,5 @@
+# encoding=utf-8
+
 import datetime
 import decimal
 import logging
@@ -988,6 +990,26 @@ class ModelTests(BaseModelTestCase):
         self.assertEqual(len(self.queries()), 8)
 
         self.assertEqual(User.select().count(), 2)
+
+
+class UnicodeFieldTests(BaseModelTestCase):
+    def get_common_objects(self):
+        a = self.create_blog(title=u'Lýðveldið Ísland')
+        e = self.create_entry(title=u'Hergé', content=u'Jökull', blog=a)
+        return a, e
+        
+    def test_unicode_value(self):
+        a, e = self.get_common_objects()
+        a.refresh('title')
+        e1 = Entry.get(pk=e.pk)
+        self.assertEqual(a.title, u'Lýðveldið Ísland')
+        self.assertEqual(e1.content, u'Jökull')
+    
+    def test_unicode_lookup(self):
+        a, e = self.get_common_objects()
+        
+        a1 = Blog.get(title=u'Lýðveldið Ísland')
+        self.assertEqual(a1.title, a.title)
 
 
 class NodeTests(BaseModelTestCase):
