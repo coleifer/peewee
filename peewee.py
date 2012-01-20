@@ -234,7 +234,12 @@ class MySQLAdapter(BaseAdapter):
     def connect(self, database, **kwargs):
         if not mysql:
             raise ImproperlyConfigured('MySQLdb must be installed on the system')
-        return mysql.connect(db=database, **kwargs)
+        conn_kwargs = {
+            'charset': 'utf8',
+            'use_unicode': True,
+        }
+        conn_kwargs.update(kwargs)
+        return mysql.connect(db=database, **conn_kwargs)
 
     def get_field_overrides(self):
         return {
