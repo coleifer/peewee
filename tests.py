@@ -152,6 +152,10 @@ class LegacyEntry(TestModel):
     name = peewee.CharField(db_column='old_name')
     blog = peewee.ForeignKeyField(LegacyBlog, db_column='old_blog')
 
+class ExplicitEntry(TestModel):
+    name = peewee.CharField()
+    blog = peewee.ForeignKeyField(LegacyBlog, db_column='blog')
+
 
 class BasePeeweeTestCase(unittest.TestCase):
     def setUp(self):
@@ -2303,19 +2307,74 @@ class SelfReferentialFKTestCase(BaseModelTestCase):
 class ExplicitColumnNameTestCase(BasePeeweeTestCase):
     def setUp(self):
         super(ExplicitColumnNameTestCase, self).setUp()
+        ExplicitEntry.drop_table(True)
         LegacyEntry.drop_table(True)
         LegacyBlog.drop_table(True)
         LegacyBlog.create_table()
         LegacyEntry.create_table()
+        ExplicitEntry.create_table()
     
     def test_alternate_model_creation(self):
         lb = LegacyBlog.create(name='b1')
         self.assertEqual(lb.name, 'b1')
         self.assertTrue(lb.id >= 1)
 
-        from_db = LegacyBlog.get(id=lb.id)
-        self.assertEqual(from_db.name, 'b1')
-
+        lb_db = LegacyBlog.get(id=lb.id)
+        self.assertEqual(lb_db.name, 'b1')
+        
+        le = LegacyEntry.create(name='e1', blog=lb)
+        self.assertEqual(le.name, 'e1')
+        self.assertEqual(le.blog, lb)
+        self.assertEqual(le.old_blog, lb.id)
+        
+        le_db = LegacyEntry.get(id=le.id)
+        self.assertEqual(le_db.name, 'e1')
+        self.assertEqual(le_db.blog, lb)
+        self.assertEqual(le.old_blog, lb.id)
+        
+        ee = ExplicitEntry.create(name='e2', blog=lb)
+        self.assertEqual(ee.name, 'e2')
+        self.assertEqual(ee.blog, lb)
+        self.assertEqual(ee.blog_id, lb.id)
+        
+        ee_db = ExplicitEntry.get(id=ee.id)
+        self.assertEqual(ee_db.name, 'e2')
+        self.assertEqual(ee_db.blog, lb)
+        self.assertEqual(ee_db.blog_id, lb.id)
+    
+    def test_querying(self):
+        lb1 = LegacyBlog.create(name='b1')
+        lb2 = LegacyBlog.create(name='b2')
+        le11 = LegacyEntry.create(name='e11', blog=lb1)
+        le12 = LegacyEntry.create(name='e12', blog=lb1)
+        le21 = LegacyEntry.create(name='e21', blog=lb2)
+        ee = ExplicitEntry.create(name='ee1', blog=lb1)
+        
+        self.assertEqual(list(LegacyBlog.select().join(LegacyEntry).where(name='e11')), [lb1])
+        self.assertEqual(list(LegacyEntry.select().join(LegacyBlog).where(name='b1')), [le11, le12])
+        self.assertEqual(list(ExplicitEntry.select().join(LegacyBlog).where(name='b1')), [ee])
+        
+        self.assertEqual(list(LegacyBlog.filter(legacyentry_set__name='e21')), [lb2])
+        self.assertEqual(list(LegacyEntry.filter(blog__name='b2')), [le21])
+        self.assertEqual(list(ExplicitEntry.filter(blog__name='b1')), [ee])
+        
+        aq = LegacyBlog.select().annotate(LegacyEntry)
+        ab1, ab2 = list(aq)
+        self.assertEqual(ab1.name, 'b1')
+        self.assertEqual(ab1.count, 2)
+        self.assertEqual(ab2.name, 'b2')
+        self.assertEqual(ab2.count, 1)
+        
+        aq2 = LegacyBlog.select().annotate(ExplicitEntry)
+        res = list(aq2)
+        self.assertEqual(len(res), 1)
+        self.assertEqual(res[0].count, 1)
+        
+        blogs = LegacyBlog.select().order_by(('name', 'desc'))
+        self.assertEqual(list(blogs), [lb2, lb1])
+        
+        entries = LegacyEntry.select().join(LegacyBlog).order_by(('name', 'desc'), (LegacyEntry, 'id', 'asc'))
+        self.assertEqual(list(entries), [le21, le11, le12])
 
 class FieldTypeTests(BaseModelTestCase):
     def setUp(self):
@@ -2601,7 +2660,7 @@ class ModelIndexTestCase(BaseModelTestCase):
 class ModelTablesTestCase(BaseModelTestCase):
     tables_might_not_be_there = [
         'defaultvals', 'nullmodel', 'uniquemodel', 'numbermodel', 'relnumbermodel',
-        'legacyblog', 'legacyentry',
+        'legacyblog', 'legacyentry', 'explicitentry',
     ]
     
     def test_tables_created(self):
