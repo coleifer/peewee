@@ -143,7 +143,14 @@ class SeqModelA(SeqModelBase):
     num = peewee.IntegerField()
 
 class SeqModelB(SeqModelBase):
-    other_num = peewee.IntegerField() 
+    other_num = peewee.IntegerField()
+
+class LegacyBlog(TestModel):
+    name = peewee.CharField(db_column='old_name')
+
+class LegacyEntry(TestModel):
+    name = peewee.CharField(db_column='old_name')
+    blog = peewee.ForeignKeyField(LegacyBlog, db_column='old_blog')
 
 
 class BasePeeweeTestCase(unittest.TestCase):
@@ -2293,6 +2300,23 @@ class SelfReferentialFKTestCase(BaseModelTestCase):
         self.assertEqual(list(flask_peewee.children), [])
 
 
+class ExplicitColumnNameTestCase(BasePeeweeTestCase):
+    def setUp(self):
+        super(ExplicitColumnNameTestCase, self).setUp()
+        LegacyEntry.drop_table(True)
+        LegacyBlog.drop_table(True)
+        LegacyBlog.create_table()
+        LegacyEntry.create_table()
+    
+    def test_alternate_model_creation(self):
+        lb = LegacyBlog.create(name='b1')
+        self.assertEqual(lb.name, 'b1')
+        self.assertTrue(lb.id >= 1)
+
+        from_db = LegacyBlog.get(id=lb.id)
+        self.assertEqual(from_db.name, 'b1')
+
+
 class FieldTypeTests(BaseModelTestCase):
     def setUp(self):
         super(FieldTypeTests, self).setUp()
@@ -2480,7 +2504,7 @@ class FieldTypeTests(BaseModelTestCase):
         self.assertTrue(default_model3.pub_date >= now)
     
     def test_naming(self):
-        self.assertEqual(Entry._meta.fields['blog_id'].verbose_name, 'Blog')
+        self.assertEqual(Entry._meta.fields['blog'].verbose_name, 'Blog')
         self.assertEqual(Entry._meta.fields['title'].verbose_name, 'Wacky title')
     
     def test_between_lookup(self):
@@ -2575,7 +2599,10 @@ class ModelIndexTestCase(BaseModelTestCase):
 
 
 class ModelTablesTestCase(BaseModelTestCase):
-    tables_might_not_be_there = ['defaultvals', 'nullmodel', 'uniquemodel', 'numbermodel', 'relnumbermodel']
+    tables_might_not_be_there = [
+        'defaultvals', 'nullmodel', 'uniquemodel', 'numbermodel', 'relnumbermodel',
+        'legacyblog', 'legacyentry',
+    ]
     
     def test_tables_created(self):
         tables = test_db.get_tables()
@@ -2630,7 +2657,7 @@ class ModelTablesTestCase(BaseModelTestCase):
 class ModelOptionsTest(BaseModelTestCase):
     def test_model_meta(self):
         self.assertEqual(Blog._meta.get_field_names(), ['id', 'title'])
-        self.assertEqual(Entry._meta.get_field_names(), ['pk', 'title', 'content', 'pub_date', 'blog_id'])
+        self.assertEqual(Entry._meta.get_field_names(), ['pk', 'title', 'content', 'pub_date', 'blog'])
 
         sorted_fields = list(Entry._meta.get_sorted_fields())
         self.assertEqual(sorted_fields, [
@@ -2638,7 +2665,7 @@ class ModelOptionsTest(BaseModelTestCase):
             ('title', Entry._meta.fields['title']),
             ('content', Entry._meta.fields['content']),
             ('pub_date', Entry._meta.fields['pub_date']),
-            ('blog_id', Entry._meta.fields['blog_id']),
+            ('blog', Entry._meta.fields['blog']),
         ])
         
         sorted_fields = list(Blog._meta.get_sorted_fields())

@@ -358,7 +358,7 @@ class Database(object):
             )
 
     def field_sql(self, field):
-        return '%s %s' % (self.quote_name(field.name), field.render_field_template())
+        return '%s %s' % (self.quote_name(field.db_column), field.render_field_template())
 
     def create_table(self, model_class, safe=False):
         if model_class._meta.pk_sequence and self.adapter.sequence_support:
@@ -377,14 +377,16 @@ class Database(object):
     
     def create_index(self, model_class, field_name, unique=False):
         framing = 'CREATE %(unique)s INDEX %(index)s ON %(table)s(%(field)s);'
-
-        db_table = model_class._meta.db_table
-        index_name = self.quote_name('%s_%s' % (db_table, field_name))
         
         if field_name not in model_class._meta.fields:
             raise AttributeError(
                 'Field %s not on model %s' % (field_name, model_class)
             )
+        
+        field_obj = model_class._meta.fields[field_name]
+
+        db_table = model_class._meta.db_table
+        index_name = self.quote_name('%s_%s' % (db_table, field_obj.db_column))
         
         unique_expr = ternary(unique, 'UNIQUE', '')
         
@@ -392,7 +394,7 @@ class Database(object):
             'unique': unique_expr,
             'index': index_name,
             'table': self.quote_name(db_table),
-            'field': self.quote_name(field_name),
+            'field': self.quote_name(field_obj.db_column),
         }
         
         self.execute(query)
@@ -416,14 +418,15 @@ class Database(object):
         field = model_class._meta.fields[field_name]
         return 'ALTER TABLE %s RENAME COLUMN %s TO %s' % (
             self.quote_name(model_class._meta.db_table),
-            self.quote_name(field_name),
+            self.quote_name(field.db_column),
             self.quote_name(new_name),
         )
     
     def drop_column_sql(self, model_class, field_name):
+        field = model_class._meta.fields[field_name]
         return 'ALTER TABLE %s DROP COLUMN %s' % (
             self.quote_name(model_class._meta.db_table),
-            self.quote_name(field_name),
+            self.quote_name(field.db_column),
         )
     
     @require_sequence_support
@@ -510,18 +513,13 @@ class MySQLDatabase(Database):
         constraint = 'fk_%s_%s_%s' % (
             db_table,
             field.to._meta.db_table,
-            field.name,
+            field.db_column,
         )
-
-        if field.name not in model_class._meta.fields:
-            raise AttributeError(
-                'Field %s not on model %s' % (field_name, model_class)
-            )
  
         query = framing % {
             'table': self.quote_name(db_table),
             'constraint': self.quote_name(constraint),
-            'field': self.quote_name(field.name),
+            'field': self.quote_name(field.db_column),
             'to': self.quote_name(field.to._meta.db_table),
             'to_field': self.quote_name(field.to._meta.pk_name),
             'cascade': ' ON DELETE CASCADE' if field.cascade else '',
@@ -534,7 +532,7 @@ class MySQLDatabase(Database):
         field = model_class._meta.fields[field_name]
         return 'ALTER TABLE %s CHANGE COLUMN %s %s %s' % (
             self.quote_name(model_class._meta.db_table),
-            self.quote_name(field_name),
+            self.quote_name(field.db_column),
             self.quote_name(new_name),
             field.render_field_template(),
         )
@@ -572,8 +570,8 @@ class QueryResultWrapper(object):
     def model_from_rowset(self, model_class, attr_dict):
         instance = model_class()
         for attr, value in attr_dict.iteritems():
-            if attr in instance._meta.fields:
-                field = instance._meta.fields[attr]
+            if attr in instance._meta.columns:
+                field = instance._meta.columns[attr]
                 setattr(instance, attr, field.python_value(value))
             else:
                 setattr(instance, attr, value)
@@ -598,20 +596,20 @@ class QueryResultWrapper(object):
                 if isinstance(col, tuple):
                     if len(col) == 3:
                         model = self.model # special-case aggregates
-                        field_name = attr = col[2]
+                        col_name = attr = col[2]
                     else:
-                        field_name, attr = col
+                        col_name, attr = col
                 else:
-                    field_name = attr = col
+                    col_name = attr = col
                 
                 if model not in collected_models:
                     collected_models[model] = model()
                 
                 instance = collected_models[model]
                 
-                if field_name in instance._meta.fields:
-                    field = instance._meta.fields[attr]
-                    setattr(instance, attr, field.python_value(value))
+                if col_name in instance._meta.columns:
+                    field = instance._meta.columns[attr]
+                    setattr(instance, field.name, field.python_value(value))
                 else:
                     setattr(instance, attr, value)
             
@@ -632,10 +630,10 @@ class QueryResultWrapper(object):
                     continue
                 
                 if not joined_inst.get_pk():
-                    joined_inst.set_pk(getattr(inst, fk_field.name))
+                    joined_inst.set_pk(getattr(inst, fk_field.db_column))
                 
-                setattr(inst, fk_field.descriptor, joined_inst)
-                setattr(inst, fk_field.name, joined_inst.get_pk())
+                setattr(inst, fk_field.name, joined_inst)
+                setattr(inst, fk_field.db_column, joined_inst.get_pk())
         
         return inst
     
@@ -935,15 +933,16 @@ class BaseQuery(object):
             else:
                 op = 'eq'
             
+            if lhs in model._meta.columns:
+                lhs = model._meta.columns[lhs].name
+            
             try:
                 field = model._meta.get_field_by_name(lhs)
             except AttributeError:
                 field = model._meta.get_related_field_by_name(lhs)
                 if field is None:
                     raise
-                if isinstance(rhs, Model):
-                    rhs = rhs.get_pk()
-            
+                    
             if op == 'in':
                 if isinstance(rhs, SelectQuery):
                     lookup_value = rhs
@@ -974,7 +973,7 @@ class BaseQuery(object):
                 operation = self.operations[op] % self.interpolation
             
             parsed.append(
-                (field.name, (operation, self.lookup_cast(op, lookup_value)))
+                (field.db_column, (operation, self.lookup_cast(op, lookup_value)))
             )
         
         return parsed
@@ -1011,15 +1010,17 @@ class BaseQuery(object):
     def use_aliases(self):
         return len(self._joined_models) > 0 or self.force_alias
 
-    def combine_field(self, alias, field_name):
-        quoted = self.qn(field_name)
+    def combine_field(self, alias, field_col):
+        quoted = self.qn(field_col)
         if alias:
             return '%s.%s' % (alias, quoted)
         return quoted
 
     def safe_combine(self, model, alias, col):
-        if col in model._meta.fields:
+        if col in model._meta.columns:
             return self.combine_field(alias, col)
+        elif col in model._meta.fields:
+            return self.combine_field(alias, model._meta.fields[col].db_column)
         return col
     
     def follow_joins(self, current, alias_map, alias_required, alias_count, seen=None):
@@ -1041,12 +1042,12 @@ class BaseQuery(object):
             from_model = current
             field = from_model._meta.get_related_field_for_model(model, on)
             if field:
-                left_field = field.name
+                left_field = field.db_column
                 right_field = model._meta.pk_name
             else:
                 field = from_model._meta.get_reverse_related_field_for_model(model, on)
                 left_field = from_model._meta.pk_name
-                right_field = field.name
+                right_field = field.db_column
             
             if join_type is None:
                 if field.null and model not in self._where_models:
@@ -1073,7 +1074,6 @@ class BaseQuery(object):
         alias_map = {}
 
         alias_required = self.use_aliases()
-        
         if alias_required:
             alias_count += 1
             alias_map[self.model] = 't%d' % alias_count
@@ -1393,22 +1393,28 @@ class SelectQuery(BaseQuery):
                 idx = q[model].index('*')
                 q[model] =  q[model][:idx] + model._meta.get_field_names() + q[model][idx+1:]
             
-            for col in q[model]:
-                model_cols.append((model, col))
-                
-                if isinstance(col, tuple):
-                    if len(col) == 3:
-                        func, col, col_alias = col
+            for clause in q[model]:
+                if isinstance(clause, tuple):
+                    if len(clause) == 3:
+                        func, col_name, col_alias = clause
+                        column = model._meta.get_column(col_name)
                         aggregates.append('%s(%s) AS %s' % \
-                            (func, self.safe_combine(model, alias, col), col_alias)
+                            (func, self.safe_combine(model, alias, column), col_alias)
                         )
+                        model_cols.append((model, (func, column, col_alias)))
                     elif len(col) == 2:
-                        col, col_alias = col
+                        col_name, col_alias = clause
+                        column = model._meta.get_column(col_name)
                         columns.append('%s AS %s' % \
-                            (self.safe_combine(model, alias, col), col_alias)
+                            (self.safe_combine(model, alias, column), col_alias)
                         )
+                        model_cols.append((model, (column, col_alias)))
+                    else:
+                        raise ValueError('Clause must be either a 2- or 3-tuple')
                 else:
-                    columns.append(self.safe_combine(model, alias, col))
+                    column = model._meta.get_column(clause)
+                    columns.append(self.safe_combine(model, alias, column))
+                    model_cols.append((model, column))
         
         return ', '.join(columns + aggregates), model_cols
 
@@ -1433,7 +1439,7 @@ class SelectQuery(BaseQuery):
                 alias = ''
 
             for field in clause:
-                group_by.append(self.combine_field(alias, field))
+                group_by.append(self.safe_combine(model, alias, field))
 
         parsed_query, model_cols = self.parse_select_query(alias_map)
         query_meta = {
@@ -1455,11 +1461,12 @@ class SelectQuery(BaseQuery):
         order_by = []
         for piece in self._order_by:
             model, field, ordering = piece
-            if field in model._meta.fields:
-                field = self.qn(field)
-                if self.use_aliases():
-                    field = '%s.%s' % (alias_map[model], field)
-            order_by.append('%s %s' % (field, ordering))
+            if use_aliases:
+                alias = alias_map[model]
+            else:
+                alias = ''
+            
+            order_by.append('%s %s' % (self.safe_combine(model, alias, field), ordering))
         
         pieces = [select]
         
@@ -1520,6 +1527,9 @@ class UpdateQuery(BaseQuery):
     def parse_update(self):
         sets = {}
         for k, v in self.update_query.iteritems():
+            if k in self.model._meta.columns:
+                k = self.model._meta.columns[k].name
+            
             try:
                 field = self.model._meta.get_field_by_name(k)
             except AttributeError:
@@ -1530,7 +1540,7 @@ class UpdateQuery(BaseQuery):
             if not isinstance(v, F):
                 v = field.db_value(v)
             
-            sets[field.name] = v
+            sets[field.db_column] = v
         
         return sets
     
@@ -1616,8 +1626,17 @@ class InsertQuery(BaseQuery):
         cols = []
         vals = []
         for k, v in self.insert_query.iteritems():
-            field = self.model._meta.get_field_by_name(k)
-            cols.append(self.qn(k))
+            if k in self.model._meta.columns:
+                k = self.model._meta.columns[k].name
+            
+            try:
+                field = self.model._meta.get_field_by_name(k)
+            except AttributeError:
+                field = self.model._meta.get_related_field_by_name(k)
+                if field is None:
+                    raise
+            
+            cols.append(self.qn(field.db_column))
             vals.append(field.db_value(v))
         
         return cols, vals
@@ -1683,7 +1702,7 @@ def convert_lookup(model, joins, lookup):
                     if not isinstance(field, ForeignKeyField):
                         continue
                     
-                    if piece in (field.name, field.descriptor, field.related_name):
+                    if piece in (field.name, field.db_column, field.related_name):
                         joined_model = field.to
                 
                 if not joined_model:
@@ -1824,7 +1843,7 @@ class Field(object):
         return {}
     
     def __init__(self, null=False, db_index=False, unique=False, verbose_name=None,
-                 help_text=None, *args, **kwargs):
+                 help_text=None, db_column=None, *args, **kwargs):
         self.null = null
         self.db_index = db_index
         self.unique = unique
@@ -1832,6 +1851,7 @@ class Field(object):
         self.default = kwargs.get('default', None)
         self.verbose_name = verbose_name
         self.help_text = help_text
+        self.db_column = db_column
         
         kwargs['nullable'] = ternary(self.null, '', ' NOT NULL')
         self.attributes.update(kwargs)
@@ -1843,6 +1863,7 @@ class Field(object):
         self.name = name
         self.model = klass
         self.verbose_name = self.verbose_name or re.sub('_+', ' ', name).title()
+        self.db_column = self.db_column or self.name
         setattr(klass, name, FieldDescriptor(self))
     
     def get_db_field(self):
@@ -1997,6 +2018,7 @@ class ForeignRelatedObject(object):
         self.to = to
         self.field = field
         self.field_name = self.field.name
+        self.field_column = self.field.db_column
         self.cache_name = '_cache_%s' % self.field_name
     
     def __get__(self, instance, instance_type=None):
@@ -2004,7 +2026,7 @@ class ForeignRelatedObject(object):
             return self.field
         
         if not getattr(instance, self.cache_name, None):
-            id = getattr(instance, self.field_name, 0)
+            id = getattr(instance, self.field_column, 0)
             qr = self.to.select().where(**{self.to._meta.pk_name: id})
             try:
                 setattr(instance, self.cache_name, qr.get())
@@ -2015,12 +2037,15 @@ class ForeignRelatedObject(object):
     
     def __set__(self, instance, obj):
         if self.field.null and obj is None:
-            setattr(instance, self.field_name, None)
+            setattr(instance, self.field_column, None)
             setattr(instance, self.cache_name, None)
         else:
-            assert isinstance(obj, self.to), "Cannot assign %s, invalid type" % obj
-            setattr(instance, self.field_name, obj.get_pk())
-            setattr(instance, self.cache_name, obj)
+            if isinstance(obj, int):
+                setattr(instance, self.field_column, obj)
+            else:
+                assert isinstance(obj, self.to), "Cannot assign %s, invalid type" % obj
+                setattr(instance, self.field_column, obj.get_pk())
+                setattr(instance, self.cache_name, obj)
 
 
 class ReverseForeignRelatedObject(object):
@@ -2051,9 +2076,9 @@ class ForeignKeyField(IntegerField):
         super(ForeignKeyField, self).__init__(null=null, *args, **kwargs)
     
     def add_to_class(self, klass, name):
-        self.descriptor = name
-        self.name = name + '_id'
+        self.name = name
         self.model = klass
+        self.db_column = self.db_column or self.name + '_id'
 
         if self.to == 'self':
             self.to = self.model
@@ -2066,8 +2091,8 @@ class ForeignKeyField(IntegerField):
             self.related_name = klass._meta.db_table + '_set'
         
         klass._meta.rel_fields[name] = self.name
-        setattr(klass, self.descriptor, ForeignRelatedObject(self.to, self))
-        setattr(klass, self.name, FieldDescriptor(self))
+        setattr(klass, self.name, ForeignRelatedObject(self.to, self))
+        setattr(klass, self.db_column, FieldDescriptor(self))
         
         reverse_rel = ReverseForeignRelatedObject(klass, self.name)
         setattr(self.to, self.related_name, reverse_rel)
@@ -2110,6 +2135,7 @@ class BaseModelOptions(object):
         self.rel_fields = {}
         self.reverse_relations = {}
         self.fields = {}
+        self.columns = {}
         self.model_class = model_class
     
     def get_sorted_fields(self):
@@ -2126,6 +2152,14 @@ class BaseModelOptions(object):
             return self.fields[name]
         raise AttributeError('Field named %s not found' % name)
     
+    def get_column_names(self):
+        return self.columns.keys()
+    
+    def get_column(self, field_or_col):
+        if field_or_col in self.fields:
+            return self.fields[field_or_col].db_column
+        return field_or_col
+    
     def get_related_field_by_name(self, name):
         if name in self.rel_fields:
             return self.fields[self.rel_fields[name]]
@@ -2133,13 +2167,13 @@ class BaseModelOptions(object):
     def get_related_field_for_model(self, model, name=None):
         for field in self.fields.values():
             if isinstance(field, ForeignKeyField) and field.to == model:
-                if name is None or name == field.name or name == field.descriptor:
+                if name is None or name == field.name or name == field.db_column:
                     return field
     
     def get_reverse_related_field_for_model(self, model, name=None):
         for field in model._meta.fields.values():
             if isinstance(field, ForeignKeyField) and field.to == self.model_class:
-                if name is None or name == field.name or name == field.descriptor:
+                if name is None or name == field.name or name == field.db_column:
                     return field
     
     def rel_exists(self, model):
@@ -2176,7 +2210,7 @@ class BaseModel(type):
                         if field_name in cls.__dict__:
                             continue
                         if isinstance(field_obj, ForeignKeyField):
-                            field_name = field_obj.descriptor
+                            field_name = field_obj.db_column
                         field_copy = copy.deepcopy(field_obj)
                         setattr(cls, field_name, field_copy)
 
@@ -2198,6 +2232,7 @@ class BaseModel(type):
             if isinstance(attr, Field):
                 attr.add_to_class(cls, name)
                 _meta.fields[attr.name] = attr
+                _meta.columns[attr.db_column] = attr
                 if isinstance(attr, PrimaryKeyField):
                     _meta.pk_name = attr.name
         
@@ -2230,9 +2265,19 @@ class Model(object):
     __metaclass__ = BaseModel
     
     def __init__(self, *args, **kwargs):
-        self.get_field_dict()
+        self.initialize_defaults()
+        
         for k, v in kwargs.items():
             setattr(self, k, v)
+    
+    def initialize_defaults(self):
+        for field in self._meta.fields.values():
+            if field.default is not None:
+                if callable(field.default):
+                    field_value = field.default()
+                else:
+                    field_value = field.default
+                setattr(self, field.name, field_value)
     
     def __eq__(self, other):
         return other.__class__ == self.__class__ and \
@@ -2240,18 +2285,15 @@ class Model(object):
                other.get_pk() == self.get_pk()
     
     def get_field_dict(self):
-        def get_field_val(field):
-            field_value = getattr(self, field.name)
-            if not self.get_pk() and field_value is None and field.default is not None:
-                if callable(field.default):
-                    field_value = field.default()
-                else:
-                    field_value = field.default
-                setattr(self, field.name, field_value)
-            return (field.name, field_value)
+        field_dict = {}
         
-        pairs = map(get_field_val, self._meta.fields.values())
-        return dict(pairs)
+        for field in self._meta.fields.values():
+            if isinstance(field, ForeignKeyField):
+                field_dict[field.db_column] = getattr(self, field.db_column)
+            else:
+                field_dict[field.name] = getattr(self, field.name)
+        
+        return field_dict
     
     @classmethod
     def table_exists(cls):
