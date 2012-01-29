@@ -1402,7 +1402,7 @@ class SelectQuery(BaseQuery):
                             (func, self.safe_combine(model, alias, column), col_alias)
                         )
                         model_cols.append((model, (func, column, col_alias)))
-                    elif len(col) == 2:
+                    elif len(clause) == 2:
                         col_name, col_alias = clause
                         column = model._meta.get_column(col_name)
                         columns.append('%s AS %s' % \
