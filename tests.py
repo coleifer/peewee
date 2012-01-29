@@ -2375,6 +2375,26 @@ class ExplicitColumnNameTestCase(BasePeeweeTestCase):
         
         entries = LegacyEntry.select().join(LegacyBlog).order_by(('name', 'desc'), (LegacyEntry, 'id', 'asc'))
         self.assertEqual(list(entries), [le21, le11, le12])
+        
+        entries = LegacyEntry.select().where(old_blog=lb2.id)
+        self.assertEqual(list(entries), [le21])
+        
+        entries = ExplicitEntry.select().where(blog=lb1.id)
+        self.assertEqual(list(entries), [ee])
+        
+        blogs = LegacyBlog.select(['id', 'old_name'])
+        b1, b2 = list(blogs)
+        self.assertEqual(b1.name, 'b1')
+        self.assertEqual(b1.id, lb1.id)
+        self.assertEqual(b2.name, 'b2')
+        self.assertEqual(b2.id, lb2.id)
+        
+        entries = LegacyEntry.select(['id', 'old_blog', 'name']).where(name='e21')
+        e, = list(entries)
+        self.assertEqual(e.id, le21.id)
+        self.assertEqual(e.name, 'e21')
+        self.assertEqual(e.blog, lb2)
+
 
 class FieldTypeTests(BaseModelTestCase):
     def setUp(self):
