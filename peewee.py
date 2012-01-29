@@ -630,10 +630,10 @@ class QueryResultWrapper(object):
                     continue
                 
                 if not joined_inst.get_pk():
-                    joined_inst.set_pk(getattr(inst, fk_field.db_column))
+                    joined_inst.set_pk(getattr(inst, fk_field.id_storage))
                 
                 setattr(inst, fk_field.name, joined_inst)
-                setattr(inst, fk_field.db_column, joined_inst.get_pk())
+                setattr(inst, fk_field.id_storage, joined_inst.get_pk())
         
         return inst
     
@@ -2018,7 +2018,7 @@ class ForeignRelatedObject(object):
         self.to = to
         self.field = field
         self.field_name = self.field.name
-        self.field_column = self.field.db_column
+        self.field_column = self.field.id_storage
         self.cache_name = '_cache_%s' % self.field_name
     
     def __get__(self, instance, instance_type=None):
@@ -2079,6 +2079,11 @@ class ForeignKeyField(IntegerField):
         self.name = name
         self.model = klass
         self.db_column = self.db_column or self.name + '_id'
+        
+        if self.name == self.db_column:
+            self.id_storage = self.db_column + '_id'
+        else:
+            self.id_storage = self.db_column
 
         if self.to == 'self':
             self.to = self.model
@@ -2092,7 +2097,7 @@ class ForeignKeyField(IntegerField):
         
         klass._meta.rel_fields[name] = self.name
         setattr(klass, self.name, ForeignRelatedObject(self.to, self))
-        setattr(klass, self.db_column, FieldDescriptor(self))
+        setattr(klass, self.id_storage, None)
         
         reverse_rel = ReverseForeignRelatedObject(klass, self.name)
         setattr(self.to, self.related_name, reverse_rel)
@@ -2209,8 +2214,6 @@ class BaseModel(type):
                             continue
                         if field_name in cls.__dict__:
                             continue
-                        if isinstance(field_obj, ForeignKeyField):
-                            field_name = field_obj.db_column
                         field_copy = copy.deepcopy(field_obj)
                         setattr(cls, field_name, field_copy)
 
@@ -2289,7 +2292,7 @@ class Model(object):
         
         for field in self._meta.fields.values():
             if isinstance(field, ForeignKeyField):
-                field_dict[field.db_column] = getattr(self, field.db_column)
+                field_dict[field.name] = getattr(self, field.id_storage)
             else:
                 field_dict[field.name] = getattr(self, field.name)
         

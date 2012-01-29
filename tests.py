@@ -955,7 +955,7 @@ class ModelTests(BaseModelTestCase):
         u = User.create(username='a')
         self.assertEqual(u.username, 'a')
         self.assertQueriesEqual([
-            ('INSERT INTO `users` (`username`,`active`,`blog_id`) VALUES (?,?,?)', ['a', 0, None]),
+            ('INSERT INTO `users` (`username`,`blog_id`,`active`) VALUES (?,?,?)', ['a', None, False]),
         ])
 
         b = Blog.create(title='b blog')
@@ -963,9 +963,9 @@ class ModelTests(BaseModelTestCase):
         self.assertEqual(u2.blog, b)
 
         self.assertQueriesEqual([
-            ('INSERT INTO `users` (`username`,`active`,`blog_id`) VALUES (?,?,?)', ['a', 0, None]),
+            ('INSERT INTO `users` (`username`,`blog_id`,`active`) VALUES (?,?,?)', ['a', None, False]),
             ('INSERT INTO `blog` (`title`) VALUES (?)', ['b blog']),
-            ('INSERT INTO `users` (`username`,`active`,`blog_id`) VALUES (?,?,?)', ['b', 0, b.id]),
+            ('INSERT INTO `users` (`username`,`blog_id`,`active`) VALUES (?,?,?)', ['b', b.id, False]),
         ])
 
     def test_get_raises_does_not_exist(self):
@@ -976,7 +976,7 @@ class ModelTests(BaseModelTestCase):
         self.assertEqual(u.username, 'a')
         self.assertQueriesEqual([
             ('SELECT `id`, `username`, `blog_id`, `active` FROM `users` WHERE `username` = ? LIMIT 1', ['a']),
-            ('INSERT INTO `users` (`username`,`active`,`blog_id`) VALUES (?,?,?)', ['a', 0, None]),
+            ('INSERT INTO `users` (`username`,`blog_id`,`active`) VALUES (?,?,?)', ['a', None, False]),
         ])
 
         other_u = User.get_or_create(username='a')
@@ -1133,7 +1133,7 @@ class RelatedFieldTests(BaseModelTestCase):
         
         self.assertQueriesEqual([
             ('INSERT INTO `blog` (`title`) VALUES (?)', ['a']),
-            ('INSERT INTO `entry` (`content`,`blog_id`,`pub_date`,`title`) VALUES (?,?,?,?)', ['', a.id, None, 'e']),
+            ('INSERT INTO `entry` (`blog_id`,`content`,`pub_date`,`title`) VALUES (?,?,?,?)', [a.id, '', None, 'e']),
         ])
         
         e2 = Entry.get(pk=e.pk)
@@ -1142,7 +1142,7 @@ class RelatedFieldTests(BaseModelTestCase):
         
         self.assertQueriesEqual([
             ('INSERT INTO `blog` (`title`) VALUES (?)', ['a']),
-            ('INSERT INTO `entry` (`content`,`blog_id`,`pub_date`,`title`) VALUES (?,?,?,?)', ['', a.id, None, 'e']),
+            ('INSERT INTO `entry` (`blog_id`,`content`,`pub_date`,`title`) VALUES (?,?,?,?)', [a.id, '', None, 'e']),
             ('SELECT `pk`, `title`, `content`, `pub_date`, `blog_id` FROM `entry` WHERE `pk` = ? LIMIT 1', [e.pk]),
             ('SELECT `id`, `title` FROM `blog` WHERE `id` = ? LIMIT 1', [a.id]),
         ])
@@ -2713,25 +2713,25 @@ class ModelOptionsTest(BaseModelTestCase):
         self.assertEqual(ChildModel._meta.database.database, 'testing.db')
         self.assertEqual(ChildModel._meta.model_class, ChildModel)
         self.assertEqual(sorted(ChildModel._meta.fields.keys()), [
-            'id', 'title', 'user_id'
+            'id', 'title', 'user'
         ])
 
         self.assertEqual(ChildModel2._meta.database.database, 'child2.db')
         self.assertEqual(ChildModel2._meta.model_class, ChildModel2)
         self.assertEqual(sorted(ChildModel2._meta.fields.keys()), [
-            'id', 'special_field', 'title', 'user_id'
+            'id', 'special_field', 'title', 'user'
         ])
 
         self.assertEqual(GrandChildModel._meta.database.database, 'testing.db')
         self.assertEqual(GrandChildModel._meta.model_class, GrandChildModel)
         self.assertEqual(sorted(GrandChildModel._meta.fields.keys()), [
-            'id', 'title', 'user_id'
+            'id', 'title', 'user'
         ])
 
         self.assertEqual(GrandChildModel2._meta.database.database, 'child2.db')
         self.assertEqual(GrandChildModel2._meta.model_class, GrandChildModel2)
         self.assertEqual(sorted(GrandChildModel2._meta.fields.keys()), [
-            'id', 'special_field', 'title', 'user_id'
+            'id', 'special_field', 'title', 'user'
         ])
         self.assertTrue(isinstance(GrandChildModel2._meta.fields['special_field'], peewee.TextField))
 
