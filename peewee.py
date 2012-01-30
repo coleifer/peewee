@@ -2043,7 +2043,7 @@ class ForeignRelatedObject(object):
             if isinstance(obj, int):
                 setattr(instance, self.field_column, obj)
             else:
-                assert isinstance(obj, self.to), "Cannot assign %s to %s, invalid type" % (obj, sel.field.name)
+                assert isinstance(obj, self.to), "Cannot assign %s to %s, invalid type" % (obj, self.field.name)
                 setattr(instance, self.field_column, obj.get_pk())
                 setattr(instance, self.cache_name, obj)
 
