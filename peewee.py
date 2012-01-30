@@ -1910,7 +1910,8 @@ class ForeignRelatedObject(object):
         return getattr(instance, self.cache_name, None)
     
     def __set__(self, instance, obj):
-        assert isinstance(obj, self.to), "Cannot assign %s, invalid type" % obj
+        assert isinstance(obj, self.to), \
+                "Cannot assign %s to field %s, invalid type" % (obj, self. field_name)
         setattr(instance, self.field_name, obj.get_pk())
         setattr(instance, self.cache_name, obj)
 
