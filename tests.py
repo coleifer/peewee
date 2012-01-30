@@ -2756,6 +2756,18 @@ class ModelOptionsTest(BaseModelTestCase):
     def test_db_table(self):
         self.assertEqual(User._meta.db_table, 'users')
 
+        class Foo(TestModel):
+            pass
+        self.assertEqual(Foo._meta.db_table, 'foo')
+
+        class Foo2(TestModel):
+            pass
+        self.assertEqual(Foo2._meta.db_table, 'foo2')
+
+        class Foo_3(TestModel):
+            pass
+        self.assertEqual(Foo_3._meta.db_table, 'foo_3')
+
     def test_ordering(self):
         self.assertEqual(User._meta.ordering, None)
         self.assertEqual(OrderedModel._meta.ordering, (('created', 'desc'),))

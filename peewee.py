@@ -608,7 +608,7 @@ class QueryResultWrapper(object):
                 instance = collected_models[model]
                 
                 if col_name in instance._meta.columns:
-                    field = instance._meta.columns[attr]
+                    field = instance._meta.columns[col_name]
                     setattr(instance, field.name, field.python_value(value))
                 else:
                     setattr(instance, attr, value)
@@ -2220,7 +2220,7 @@ class BaseModel(type):
         _meta = BaseModelOptions(cls, attr_dict)
         
         if not hasattr(_meta, 'db_table'):
-            _meta.db_table = re.sub('[^a-z]+', '_', cls.__name__.lower())
+            _meta.db_table = re.sub('[^\w]+', '_', cls.__name__.lower())
 
         if _meta.db_table in _meta.database.adapter.reserved_tables:
             warnings.warn('Table for %s ("%s") is reserved, please override using Meta.db_table' % (
