@@ -54,6 +54,7 @@ Parameters accepted by all field types and their default values:
 * ``unique = False`` -- boolean indicating whether to create a unique index on this column
 * ``verbose_name = None`` -- string representing the "user-friendly" name of this field
 * ``help_text = None`` -- string representing any helpful text for this field
+* ``db_column = None`` -- string representing the underlying column to use if different, useful for legacy databases
 
 
 ===================   =================   =================   =================
@@ -72,6 +73,8 @@ Field Type            Sqlite              Postgresql          MySQL
 ``ForeignKeyField``   integer             integer             integer
 ===================   =================   =================   =================
 
+Some fields take special parameters...
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 +-------------------------------+----------------------------------------------+
 | Field type                    | Special Parameters                           |
@@ -97,6 +100,52 @@ relation:
     class Category(Model):
         name = CharField()
         parent = ForeignKeyField('self', related_name='children', null=True)
+
+
+Implementing Many to Many
+-------------------------
+
+Peewee does not provide a "field" for many to many relationships the way that
+django does -- this is because the "field" really is hiding an intermediary
+table.  To implement many-to-many with peewee, you will therefore create the
+intermediary table yourself and query through it:
+
+.. code-block:: python
+
+    class Student(Model):
+        name = CharField()
+
+    class Course(Model):
+        name = CharField()
+
+    class StudentCourse(Model):
+        student = ForeignKeyField(Student)
+        course = ForeignKeyField(Course)
+
+To query, let's say we want to find students who are enrolled in math class:
+
+.. code-block:: python
+
+    for student in Student.select().join(StudentCourse).join(Course).where(name='math'):
+        print student.name
+
+You could also express this as:
+
+.. code-block:: python
+
+    for student in Student.filter(studentcourse_set__course__name='math'):
+        print student.name
+
+To query what classes a given student is enrolled in:
+
+.. code-block:: python
+
+    for course in Course.select().join(StudentCourse).join(Student).where(name='da vinci'):
+        print course.name
+
+    # or, similarly
+    for course in Course.filter(studentcourse_set__student__name='da vinci'):
+        print course.name
 
 
 Field class API
