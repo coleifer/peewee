@@ -525,3 +525,53 @@ Suppose we want to grab the associated count and store it on the tag:
     GROUP BY 
         t1."id", t1."name"
     HAVING count(*) > 5
+
+
+SQL Functions, Subqueries and "Raw expressions"
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Suppose you need to want to get a list of all users whose username begins with "a".
+There are a couple ways to do this, but one method might be to use some SQL functions
+like ``LOWER`` and ``SUBSTR``.  To use arbitrary SQL functions, use the special :py:class:`R`
+object to construct queries:
+
+.. code-block:: python
+
+    # select the users' id, username and the first letter of their username, lower-cased
+    query = User.select(['id', 'username', R('LOWER(SUBSTR(username, 1, 1))', 'first_letter')])
+    
+    # now filter this list to include only users whose username begins with "a"
+    a_users = query.where(R('first_letter=%s', 'a'))
+    
+    >>> for user in a_users:
+    ...    print user.first_letter, user.username
+
+This same functionality could be easily exposed as part of the where clause, the
+only difference being that the first letter is not selected and therefore not an
+attribute of the model instance:
+
+.. code-block:: python
+
+    a_users = User.filter(R('LOWER(SUBSTR(username, 1, 1)) = %s', 'a'))
+
+We can write subqueries as part of a :py:class:`SelectQuery`, for example counting
+the number of entries on a blog:
+
+.. code-block:: python
+
+    entry_query = R('(SELECT COUNT(*) FROM entry WHERE entry.blog_id=blog.id)', 'entry_count')
+    blogs = Blog.select(['id', 'name', entry_query]).order_by(('entry_count', 'desc'))
+    
+    for blog in blogs:
+        print blog.title, blog.entry_count
+
+It is also possible to use subqueries as part of a where clause, for example finding
+blogs that have no entries:
+
+.. code-block:: python
+
+    no_entry_query = R('NOT EXISTS (SELECT * FROM entry WHERE entry.blog_id=blog.id)')
+    blogs = Blog.filter(no_entry_query)
+    
+    for blog in blogs:
+        print blog.name, ' has no entries'
