@@ -853,7 +853,7 @@ class R(object):
         if len(self.params) == 2:
             return self.params
         else:
-            return ', '.join(self.params)
+            raise ValueError('Incorrect number of argument provided for R() expression')
     
     def sql_where(self):
         return self.params[0], self.params[1:]
@@ -978,7 +978,7 @@ class BaseQuery(object):
                 lookup_value = [field.db_value(o) for o in params]
                 
                 combined_expr = self.operations[op] % expr
-                operation = operation % tuple(self.interpolation for p in params)
+                operation = combined_expr % tuple(self.interpolation for p in params)
             elif isinstance(rhs, F):
                 lookup_value = rhs
                 operation = self.operations[op] # leave as "%s"
