@@ -38,6 +38,7 @@ __all__ = [
     'asc', 'desc', 'Count', 'Max', 'Min', 'Sum', 'Q', 'Field', 'CharField', 'TextField',
     'DateTimeField', 'BooleanField', 'DecimalField', 'FloatField', 'IntegerField',
     'PrimaryKeyField', 'ForeignKeyField', 'Model', 'filter_query', 'annotate_query',
+    'F', 'R',
 ]
 
 class ImproperlyConfigured(Exception):
@@ -829,6 +830,35 @@ class F(object):
         return self
 
 
+class R(object):
+    """
+    Used to express arbitrary bits in queries, here are some examples...
+    
+    User.select(['id', R('LOWER(username)', 'lower_name')])
+    -> SELECT id, LOWER(username) AS lower_name FROM user
+    
+    User.select(['id', R('COUNT(select * from blog where blog.user_id = user.id)', 'blog_count')])
+    -> SELECT id, count(select * from blog where blog.user_id = user.id) AS blog_count FROM user
+    
+    User.select().where(R('NOT EXISTS (SELECT * FROM blog WHERE blog.user_id = user.id)'))
+    -> SELECT * FROM user WHERE NOT EXISTS (SELECT * FROM blog WHERE blog.user_id = user.id)
+    
+    User.select().where(id__in=R('SELECT foo FROM baz'))
+    -> SELECT * FROM user WHERE id IN (SELECT foo FROM baz)
+    """
+    def __init__(self, *params):
+        self.params = params
+    
+    def sql_select(self):
+        if len(self.params) == 2:
+            return self.params
+        else:
+            return ', '.join(self.params)
+    
+    def sql_where(self):
+        return self.params[0], self.params[1:]
+
+
 def apply_model(model, item):
     """
     Q() objects take a model, which provides context for the keyword arguments.
@@ -852,7 +882,7 @@ def parseq(model, *args, **kwargs):
     
     for piece in args:
         apply_model(model, piece)
-        if isinstance(piece, (Q, Node)):
+        if isinstance(piece, (Q, R, Node)):
             node.children.append(piece)
         else:
             raise TypeError('Unknown object: %s', piece)
@@ -942,35 +972,44 @@ class BaseQuery(object):
                 field = model._meta.get_related_field_by_name(lhs)
                 if field is None:
                     raise
-                    
-            if op == 'in':
-                if isinstance(rhs, SelectQuery):
-                    lookup_value = rhs
-                    operation = 'IN (%s)'
-                else:
-                    if not rhs:
-                        raise EmptyResultException
-                    lookup_value = [field.db_value(o) for o in rhs]
-                    operation = self.operations[op] % \
-                        (','.join([self.interpolation for v in lookup_value]))
-            elif op == 'is':
-                if rhs is not None:
-                    raise ValueError('__is lookups only accept None')
-                operation = 'IS NULL'
-                lookup_value = []
-            elif op == 'isnull':
-                operation = 'IS NULL' if rhs else 'IS NOT NULL'
-                lookup_value = []
+             
+            if isinstance(rhs, R):
+                expr, params = rhs.sql_where()
+                lookup_value = [field.db_value(o) for o in params]
+                
+                combined_expr = self.operations[op] % expr
+                operation = operation % tuple(self.interpolation for p in params)
             elif isinstance(rhs, F):
                 lookup_value = rhs
                 operation = self.operations[op] # leave as "%s"
-            elif isinstance(rhs, (list, tuple)):
-                lookup_value = [field.db_value(o) for o in rhs]
-                operation = self.operations[op] % \
-                    tuple(self.interpolation for v in lookup_value)
             else:
-                lookup_value = field.db_value(rhs)
-                operation = self.operations[op] % self.interpolation
+                if op == 'in':
+                    if isinstance(rhs, SelectQuery):
+                        lookup_value = rhs
+                        operation = 'IN (%s)'
+                    else:
+                        if not rhs:
+                            raise EmptyResultException
+                        lookup_value = [field.db_value(o) for o in rhs]
+                        operation = self.operations[op] % \
+                            (','.join([self.interpolation for v in lookup_value]))
+                elif op == 'is':
+                    if rhs is not None:
+                        raise ValueError('__is lookups only accept None')
+                    operation = 'IS NULL'
+                    lookup_value = []
+                elif op == 'isnull':
+                    operation = 'IS NULL' if rhs else 'IS NOT NULL'
+                    lookup_value = []
+                elif isinstance(rhs, (list, tuple)):
+                    # currently this only happens on 'between' lookups, but leave
+                    # it general to lists and tuples
+                    lookup_value = [field.db_value(o) for o in rhs]
+                    operation = self.operations[op] % \
+                        tuple(self.interpolation for v in lookup_value)
+                else:
+                    lookup_value = field.db_value(rhs)
+                    operation = self.operations[op] % self.interpolation
             
             parsed.append(
                 (field.db_column, (operation, self.lookup_cast(op, lookup_value)))
@@ -1111,6 +1150,10 @@ class BaseQuery(object):
                 parsed, data = self.parse_q(child, alias_map)
                 query.append(parsed)
                 query_data.extend(data)
+            elif isinstance(child, R):
+                parsed, data = self.parse_r(child, alias_map)
+                query.append(parsed % tuple(self.interpolation for o in data))
+                query_data.extend(data)
             elif isinstance(child, Node):
                 parsed, data = self.parse_node(child, alias_map)
                 query.append('(%s)' % parsed)
@@ -1157,6 +1200,9 @@ class BaseQuery(object):
             combined = '(%s %s %s)' % (combined, f_object.op, f_object.value)
 
         return combined
+    
+    def parse_r(self, r_object, alias_map):
+        return r_object.sql_where()
 
     def convert_subquery(self, subquery):
         orig_query = subquery.query
@@ -1394,6 +1440,9 @@ class SelectQuery(BaseQuery):
                 q[model] =  q[model][:idx] + model._meta.get_field_names() + q[model][idx+1:]
             
             for clause in q[model]:
+                if isinstance(clause, R):
+                    clause = clause.sql_select()
+                
                 if isinstance(clause, tuple):
                     if len(clause) == 3:
                         func, col_name, col_alias = clause
