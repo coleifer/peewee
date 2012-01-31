@@ -11,7 +11,7 @@ import unittest
 import peewee
 from peewee import (RawQuery, SelectQuery, InsertQuery, UpdateQuery, DeleteQuery,
         Node, Q, database, parseq, SqliteAdapter, PostgresqlAdapter, filter_query,
-        annotate_query, F)
+        annotate_query, F, R)
 
 
 class QueryLogHandler(logging.Handler):
@@ -147,10 +147,16 @@ class SeqModelB(SeqModelBase):
 
 class LegacyBlog(TestModel):
     name = peewee.CharField(db_column='old_name')
+    
+    class Meta:
+        ordering = ('id',)
 
 class LegacyEntry(TestModel):
     name = peewee.CharField(db_column='old_name')
     blog = peewee.ForeignKeyField(LegacyBlog, db_column='old_blog')
+    
+    class Meta:
+        ordering = ('id',)
 
 class ExplicitEntry(TestModel):
     name = peewee.CharField()
@@ -2274,6 +2280,67 @@ class FQueryTestCase(BaseModelTestCase):
         )
         self.assertSQLEqual(sq.sql(), ('SELECT t1.`id`, t1.`rel_num`, t1.`num_id` FROM `relnumbermodel` AS t1 INNER JOIN `numbermodel` AS t2 ON t1.`num_id` = t2.`id` WHERE (t2.`num1` = t1.`rel_num` OR t2.`num2` = t1.`rel_num`)', []))
         self.assertEqual(list(sq.order_by('id')), [rnm1, rnm12, rnm21])
+
+
+class RQueryTestCase(BaseModelTestCase):
+    def test_simple(self):
+        user_a = User.create(username='user a')
+        user_b = User.create(username='user b')
+        user_c = User.create(username='user c')
+        
+        # test selecting with an alias
+        users = User.select(['id', R('UPPER(username)', 'upper_name')]).order_by('id')
+        self.assertEqual([u.upper_name for u in users], ['USER A', 'USER B', 'USER C'])
+        
+        users = User.select(['id', R('UPPER(username)', 'upper_name'), R('LOWER(username)', 'lower_name')]).order_by('id')
+        self.assertEqual([u.upper_name for u in users], ['USER A', 'USER B', 'USER C'])
+        self.assertEqual([u.lower_name for u in users], ['user a', 'user b', 'user c'])
+        
+        if BACKEND != 'postgresql':
+            # test selecting with matching where clause as a node
+            users = User.select(['id', R('UPPER(username)', 'upper_name')]).where(R('upper_name = %s', 'USER B'))
+            self.assertEqual([(u.id, u.upper_name) for u in users], [(user_b.id, 'USER B')])
+        
+        # test node multiple clauses
+        users = User.select().where(R('username IN (%s, %s)', 'user a', 'user c'))
+        self.assertEqual([u for u in users], [user_a, user_c])
+        
+        # test selecting with where clause as a keyword
+        users = User.select(['id', R('UPPER(username)', 'upper_name')]).where(username=R('LOWER(%s)', 'USER B'))
+        self.assertEqual([(u.id, u.upper_name) for u in users], [(user_b.id, 'USER B')])
+        
+        # test keyword multiple clauses
+        users = User.select().where(username__in=R('LOWER(%s), LOWER(%s)', 'uSer A', 'uSeR c'))
+        self.assertEqual([u for u in users], [user_a, user_c])
+    
+    def test_subquery(self):
+        b1 = self.create_blog(title='b1')
+        b2 = self.create_blog(title='b2')
+        
+        for i in range(3):
+            self.create_entry(blog=b1, title='e%d' % (i+1))
+            if i < 2:
+                self.create_entry(blog=b2, title='e%d' % (i+1))
+        
+        # test subquery in select
+        blogs = Blog.select(['id', 'title', R('(SELECT COUNT(*) FROM entry WHERE entry.blog_id=blog.id)', 'ct')]).order_by('ct')
+        self.assertEqual([(b.id, b.title, b.ct) for b in blogs], [
+            (b2.id, 'b2', 2),
+            (b1.id, 'b1', 3),
+        ])
+        
+        b3 = self.create_blog(title='b3')
+        
+        # test subquery in where clause as a node
+        blogs = Blog.select().where(R('NOT EXISTS (SELECT * FROM entry WHERE entry.blog_id = blog.id)'))
+        self.assertEqual([b.id for b in blogs], [b3.id])
+        
+        # test subquery in where clause as a keyword
+        blogs = Blog.select().where(id__in=R('SELECT blog_id FROM entry WHERE entry.title = %s', 'e3'))
+        self.assertEqual([b.id for b in blogs], [b1.id])
+        
+        blogs = Blog.select().where(id__in=R('SELECT blog_id FROM entry WHERE entry.title IN (LOWER(%s), LOWER(%s))', 'E2', 'e3'))
+        self.assertEqual([b.id for b in blogs], [b1.id, b2.id])
 
 
 class SelfReferentialFKTestCase(BaseModelTestCase):
