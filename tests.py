@@ -3022,6 +3022,43 @@ class TransactionTestCase(BaseModelTestCase):
         self.assertEqual(Entry.select().count(), 1)
 
 
+if test_db.adapter.for_update_support:
+    class ForUpdateTestCase(BaseModelTestCase):
+        def tearDown(self):
+            test_db.set_autocommit(True)
+        
+        def test_for_update(self):
+            # create 3 blogs
+            b1 = Blog.create(title='b1')
+            b2 = Blog.create(title='b2')
+            b3 = Blog.create(title='b3')
+            
+            test_db.set_autocommit(False)
+            
+            # select a blog for update
+            blogs = Blog.select().where(title='b1').for_update()
+            updated = Blog.update(title='b1_edited').where(title='b1').execute()
+            self.assertEqual(updated, 1)
+            
+            # open up a new connection to the database
+            new_db = database_class(database_name)
+            
+            # select the title, it will not register as being updated
+            res = new_db.execute('select title from blog where id = %s;' % b1.id)
+            blog_title = res.fetchone()[0]
+            self.assertEqual(blog_title, 'b1')
+            
+            # committing will cause the lock to be released
+            test_db.commit()
+            
+            # now we get the update
+            res = new_db.execute('select title from blog where id = %s;' % b1.id)
+            blog_title = res.fetchone()[0]
+            self.assertEqual(blog_title, 'b1_edited')
+            
+else:
+    print 'Skipping for update tests because backend does not support'
+
 if test_db.adapter.sequence_support:
     class SequenceTestCase(BaseModelTestCase):
         def setUp(self):

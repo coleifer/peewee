@@ -79,6 +79,7 @@ class BaseAdapter(object):
     operations = {'eq': '= %s'}
     interpolation = '%s'
     sequence_support = False
+    for_update_support = False
     reserved_tables = []
     quote_char = '"'
     
@@ -185,6 +186,7 @@ class PostgresqlAdapter(BaseAdapter):
     }
     reserved_tables = ['user']
     sequence_support = True
+    for_update_support = True
 
     def connect(self, database, **kwargs):
         if not psycopg2:
@@ -231,6 +233,7 @@ class MySQLAdapter(BaseAdapter):
         'startswith': 'LIKE BINARY %s',
     }
     quote_char = '`'
+    for_update_support = True
 
     def connect(self, database, **kwargs):
         if not mysql:
@@ -1269,6 +1272,7 @@ class SelectQuery(BaseQuery):
         self._offset = None
         self._distinct = False
         self._qr = None
+        self._for_update = False
         super(SelectQuery, self).__init__(model)
     
     def clone(self):
@@ -1281,6 +1285,7 @@ class SelectQuery(BaseQuery):
         query._offset = self._offset
         query._distinct = self._distinct
         query._qr = self._qr
+        query._for_update = self._for_update
         query._where = self.clone_where()
         query._where_models = set(self._where_models)
         query._joined_models = self._joined_models.copy()
@@ -1301,6 +1306,10 @@ class SelectQuery(BaseQuery):
     @returns_clone
     def offset(self, num_rows):
         self._offset = num_rows
+    
+    @returns_clone
+    def for_update(self, for_update=True):
+        self._for_update = for_update
     
     def count(self):
         if self._distinct:
@@ -1535,6 +1544,9 @@ class SelectQuery(BaseQuery):
             pieces.append('LIMIT %d' % self._limit)
         if self._offset:
             pieces.append('OFFSET %d' % self._offset)
+        
+        if self._for_update and self.database.adapter.for_update_support:
+            pieces.append('FOR UPDATE')
         
         return ' '.join(pieces), params, query_meta
     
