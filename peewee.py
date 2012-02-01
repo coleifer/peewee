@@ -834,21 +834,6 @@ class F(object):
 
 
 class R(object):
-    """
-    Used to express arbitrary bits in queries, here are some examples...
-    
-    User.select(['id', R('LOWER(username)', 'lower_name')])
-    -> SELECT id, LOWER(username) AS lower_name FROM user
-    
-    User.select(['id', R('COUNT(select * from blog where blog.user_id = user.id)', 'blog_count')])
-    -> SELECT id, count(select * from blog where blog.user_id = user.id) AS blog_count FROM user
-    
-    User.select().where(R('NOT EXISTS (SELECT * FROM blog WHERE blog.user_id = user.id)'))
-    -> SELECT * FROM user WHERE NOT EXISTS (SELECT * FROM blog WHERE blog.user_id = user.id)
-    
-    User.select().where(id__in=R('SELECT foo FROM baz'))
-    -> SELECT * FROM user WHERE id IN (SELECT foo FROM baz)
-    """
     def __init__(self, *params):
         self.params = params
     
