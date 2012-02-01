@@ -1312,7 +1312,7 @@ class SelectQuery(BaseQuery):
         self._for_update = for_update
     
     def count(self):
-        if self._distinct:
+        if self._distinct or self._group_by:
             return self.wrapped_count()
         
         clone = self.order_by()
