@@ -2242,6 +2242,12 @@ class BaseModelOptions(object):
                 if name is None or name == field.name or name == field.db_column:
                     return field
     
+    def get_field_for_related_name(self, model, related_name):
+        for field in model._meta.fields.values():
+            if isinstance(field, ForeignKeyField) and field.to == self.model_class:
+                if field.related_name == related_name:
+                    return field
+    
     def rel_exists(self, model):
         return self.get_related_field_for_model(model) or \
                self.get_reverse_related_field_for_model(model)
@@ -2447,7 +2453,59 @@ class Model(object):
             new_pk = insert.execute()
             setattr(self, self._meta.pk_name, new_pk)
 
-    def delete_instance(self):
+    @classmethod
+    def collect_models(cls, accum=None):
+        # dfs to grab any affected models, then from the bottom up issue
+        # proper deletes using subqueries to obtain objects to remove
+        accum = accum or []
+        models = []
+        
+        for related_name, rel_model in cls._meta.reverse_relations.items():
+            rel_field = cls._meta.get_field_for_related_name(rel_model, related_name)
+            coll = [(rel_model, rel_field.name, rel_field.null)] + accum
+            if not rel_field.null:
+                models.extend(rel_model.collect_models(coll))
+            
+            models.append(coll)
+        return models
+    
+    def collect_queries(self):
+        select_queries = []
+        nullable_queries = []
+        collected_models = self.collect_models()
+        if collected_models:
+            for model_joins in collected_models:
+                base, last, nullable = model_joins[0]
+                query = base.select([base._meta.pk_name])
+                for model, join, _ in model_joins[1:]:
+                    query = query.join(model, on=last)
+                    last = join
+                
+                query = query.where(**{last: self.get_pk()})
+                if nullable:
+                    nullable_queries.append((query, last))
+                else:
+                    select_queries.append((query, last))
+        return select_queries, nullable_queries
+
+    def delete_instance(self, recursive=False):
+        # XXX: it is strongly recommended you run this in a transaction if using
+        # the recursive delete
+        if recursive:
+            # reverse relations, i.e. anything that would be orphaned, delete.
+            select_queries, nullable_queries = self.collect_queries()
+
+            for query, fk_field in select_queries:
+                model = query.model
+                model.delete().where(**{
+                    '%s__in' % model._meta.pk_name: query,
+                }).execute()
+            for query, fk_field in nullable_queries:
+                model = query.model
+                model.update(**{fk_field: None}).where(**{
+                    '%s__in' % model._meta.pk_name: query,
+                }).execute()
+        
         return self.delete().where(**{
             self._meta.pk_name: self.get_pk()
         }).execute()

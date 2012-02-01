@@ -71,6 +71,11 @@ class EntryTag(TestModel):
         return self.tag
 
 
+class EntryTwo(Entry):
+    title = peewee.TextField()
+    extra_field = peewee.CharField()
+
+
 class User(TestModel):
     username = peewee.CharField(max_length=50)
     blog = peewee.ForeignKeyField(Blog, null=True)
@@ -1836,6 +1841,71 @@ class RelatedFieldTests(BaseModelTestCase):
         self.assertEqual(titles, [])
 
 
+class RecursiveDeleteTestCase(BaseModelTestCase):
+    def setUp(self):
+        super(RecursiveDeleteTestCase, self).setUp()
+        EntryTwo.drop_table(True)
+        Category.drop_table(True)
+        EntryTwo.create_table()
+        Category.create_table()
+    
+    def ro(self, o):
+        return type(o).get(**{o._meta.pk_name: o.get_pk()})
+    
+    def test_recursive_delete(self):
+        b1 = Blog.create(title='b1')
+        b2 = Blog.create(title='b2')
+        e11 = Entry.create(blog=b1, title='e11')
+        e12 = Entry.create(blog=b1, title='e12')
+        e21 = Entry.create(blog=b2, title='e21')
+        e22 = Entry.create(blog=b2, title='e22')
+        et11 = EntryTag.create(entry=e11, tag='et11')
+        et12 = EntryTag.create(entry=e12, tag='et12')
+        et21 = EntryTag.create(entry=e21, tag='et21')
+        et22 = EntryTag.create(entry=e22, tag='et22')
+        u1 = User.create(username='u1', blog=b1)
+        u2 = User.create(username='u2', blog=b2)
+        u3 = User.create(username='u3')
+        r1 = Relationship.create(from_user=u1, to_user=u2)
+        r2 = Relationship.create(from_user=u2, to_user=u3)
+        c1 = Category.create(name='top')
+        c2 = Category.create(name='l11', parent=c1)
+        c3 = Category.create(name='l12', parent=c1)
+        c4 = Category.create(name='l21', parent=c2)
+
+        b1.delete_instance(recursive=True)
+        self.assertEqual(Blog.select().count(), 1)
+        self.assertEqual(Entry.select().count(), 2)
+        self.assertEqual(EntryTag.select().count(), 2)
+        self.assertEqual(User.select().count(), 3) # <-- user not affected since nullable
+        self.assertEqual(Relationship.select().count(), 2)
+        
+        # check that the affected user had their blog set to null
+        u1 = self.ro(u1)
+        self.assertEqual(u1.blog, None)
+        u2 = self.ro(u2)
+        self.assertEqual(u2.blog, b2)
+        
+        # check that b2's entries are intact
+        self.assertEqual(list(b2.entry_set.order_by('pk')), [e21, e22])
+        
+        # delete a self-referential FK model, should update to Null
+        c2.delete_instance(recursive=True)
+        self.assertEqual(list(c1.children.order_by('id')), [c3])
+        c4 = self.ro(c4)
+        self.assertEqual(c4.parent, None)
+        
+        # deleting a user deletes by joining on the proper keys
+        u3.delete_instance(recursive=True)
+        self.assertEqual(Relationship.select().count(), 1)
+        r1 = self.ro(r1)
+        self.assertEqual(r1.from_user, u1)
+        self.assertEqual(r1.to_user, u2)
+        
+        u1.delete_instance(True)
+        self.assertEqual(Relationship.select().count(), 0)
+
+
 class SelectRelatedTestCase(BaseModelTestCase):
     def setUp(self):
         super(SelectRelatedTestCase, self).setUp()
@@ -2745,17 +2815,10 @@ class ModelIndexTestCase(BaseModelTestCase):
 
 
 class ModelTablesTestCase(BaseModelTestCase):
-    tables_might_not_be_there = [
-        'defaultvals', 'nullmodel', 'uniquemodel', 'numbermodel', 'relnumbermodel',
-        'legacyblog', 'legacyentry', 'explicitentry',
-    ]
-    
     def test_tables_created(self):
         tables = test_db.get_tables()
         
-        tables = [t for t in tables if t not in self.tables_might_not_be_there]
-        
-        self.assertEqual(tables, [
+        should_be = [
             'blog',
             'entry',
             'entrytag',
@@ -2764,7 +2827,9 @@ class ModelTablesTestCase(BaseModelTestCase):
             'relationship',
             'team',
             'users'
-        ])
+        ]
+        for table in should_be:
+            self.assertTrue(table in tables)
     
     def test_create_and_drop_table(self):
         self.assertTrue(EntryTag._meta.db_table in test_db.get_tables())
@@ -2843,9 +2908,12 @@ class ModelOptionsTest(BaseModelTestCase):
         test_db = peewee.Database(SqliteAdapter(), 'testing.db')
         child2_db = peewee.Database(SqliteAdapter(), 'child2.db')
 
+        class FakeUser(peewee.Model):
+            pass
+
         class ParentModel(peewee.Model):
             title = peewee.CharField()
-            user = peewee.ForeignKeyField(User)
+            user = peewee.ForeignKeyField(FakeUser)
 
             class Meta:
                 database = test_db
@@ -2892,11 +2960,6 @@ class ModelOptionsTest(BaseModelTestCase):
             'id', 'special_field', 'title', 'user'
         ])
         self.assertTrue(isinstance(GrandChildModel2._meta.fields['special_field'], peewee.TextField))
-
-
-class EntryTwo(Entry):
-    title = peewee.TextField()
-    extra_field = peewee.CharField()
 
 
 class ModelInheritanceTestCase(BaseModelTestCase):
