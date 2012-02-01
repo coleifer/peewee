@@ -2475,6 +2475,7 @@ class Model(object):
         collected_models = self.collect_models()
         if collected_models:
             for model_joins in collected_models:
+                depth = len(model_joins)
                 base, last, nullable = model_joins[0]
                 query = base.select([base._meta.pk_name])
                 for model, join, _ in model_joins[1:]:
@@ -2483,9 +2484,9 @@ class Model(object):
                 
                 query = query.where(**{last: self.get_pk()})
                 if nullable:
-                    nullable_queries.append((query, last))
+                    nullable_queries.append((query, last, depth))
                 else:
-                    select_queries.append((query, last))
+                    select_queries.append((query, last, depth))
         return select_queries, nullable_queries
 
     def delete_instance(self, recursive=False):
@@ -2495,12 +2496,12 @@ class Model(object):
             # reverse relations, i.e. anything that would be orphaned, delete.
             select_queries, nullable_queries = self.collect_queries()
 
-            for query, fk_field in select_queries:
+            for query, fk_field, depth in select_queries:
                 model = query.model
                 model.delete().where(**{
                     '%s__in' % model._meta.pk_name: query,
                 }).execute()
-            for query, fk_field in nullable_queries:
+            for query, fk_field, depth in nullable_queries:
                 model = query.model
                 model.update(**{fk_field: None}).where(**{
                     '%s__in' % model._meta.pk_name: query,
