@@ -1848,6 +1848,11 @@ class RecursiveDeleteTestCase(BaseModelTestCase):
         Category.drop_table(True)
         EntryTwo.create_table()
         Category.create_table()
+
+    def tearDown(self):
+        super(RecursiveDeleteTestCase, self).tearDown()
+        EntryTwo.drop_table(True)
+        Category.drop_table(True)
     
     def ro(self, o):
         return type(o).get(**{o._meta.pk_name: o.get_pk()})
@@ -2756,41 +2761,40 @@ class ModelIndexTestCase(BaseModelTestCase):
     def check_postgresql_indexes(self, e, u):
         self.assertEqual(e, [
             ('entry_blog_id', False),
-            ('entry_pk', False),
             ('entry_pkey', True),
         ])
         
         self.assertEqual(u, [
             ('users_active', False),
             ('users_blog_id', False),
-            ('users_id', False),
             ('users_pkey', True),
         ])
     
     def check_sqlite_indexes(self, e, u):
+        # when using an integer not null primary key, sqlite makes
+        # the column an alias for the internally-used ``rowid``,
+        # which is not visible to applications
         self.assertEqual(e, [
             ('entry_blog_id', False),
-            ('entry_pk', True),
+            #('entry_pk', True),
         ])
         
         self.assertEqual(u, [
             ('users_active', False),
             ('users_blog_id', False),
-            ('users_id', True),
+            #('users_id', True),
         ])
     
     def check_mysql_indexes(self, e, u):
         self.assertEqual(e, [
             ('PRIMARY', True),
             ('entry_blog_id', False),
-            ('entry_pk', True),
         ])
         
         self.assertEqual(u, [
             ('PRIMARY', True),
             ('users_active', False),
             ('users_blog_id', False),
-            ('users_id', True),
         ])
     
     def test_primary_key_index(self):

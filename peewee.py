@@ -2362,9 +2362,7 @@ class Model(object):
         cls._meta.database.create_table(cls)
         
         for field_name, field_obj in cls._meta.fields.items():
-            if isinstance(field_obj, PrimaryKeyField):
-                cls._meta.database.create_index(cls, field_obj.name, True)
-            elif isinstance(field_obj, ForeignKeyField):
+            if isinstance(field_obj, ForeignKeyField):
                 cls._meta.database.create_foreign_key(cls, field_obj)
             elif field_obj.db_index or field_obj.unique:
                 cls._meta.database.create_index(cls, field_obj.name, field_obj.unique)
