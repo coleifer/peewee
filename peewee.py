@@ -1422,7 +1422,6 @@ class SelectQuery(BaseQuery):
         
         # normalize if we are working with a dictionary
         columns = []
-        aggregates = []
         model_cols = []
         
         for model, alias in sorted_models:
@@ -1441,7 +1440,7 @@ class SelectQuery(BaseQuery):
                     if len(clause) == 3:
                         func, col_name, col_alias = clause
                         column = model._meta.get_column(col_name)
-                        aggregates.append('%s(%s) AS %s' % \
+                        columns.append('%s(%s) AS %s' % \
                             (func, self.safe_combine(model, alias, column), col_alias)
                         )
                         model_cols.append((model, (func, column, col_alias)))
@@ -1459,7 +1458,7 @@ class SelectQuery(BaseQuery):
                     columns.append(self.safe_combine(model, alias, column))
                     model_cols.append((model, column))
         
-        return ', '.join(columns + aggregates), model_cols
+        return ', '.join(columns), model_cols
 
     
     def sql_meta(self):
