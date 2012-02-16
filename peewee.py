@@ -447,7 +447,7 @@ class Database(object):
     def get_tables(self):
         raise NotImplementedError
     
-    def sequence_exists(self):
+    def sequence_exists(self, sequence):
         raise NotImplementedError
 
 
