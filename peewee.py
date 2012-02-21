@@ -2071,12 +2071,12 @@ class ForeignRelatedObject(object):
             return self.field
 
         if not getattr(instance, self.cache_name, None):
+            id = getattr(instance, self.field_column, 0)
             if hasattr(self.to._meta, 'fk_select'):
                 select = self.to._meta.fk_select
             else:
-                select = ['*',]
-            id = getattr(instance, self.field_column, 0)
-            qr = self.to.select().where(**{self.to._meta.pk_name: id})
+                select = None
+            qr = self.to.select(select).where(**{self.to._meta.pk_name: id})
             try:
                 setattr(instance, self.cache_name, qr.get())
             except self.to.DoesNotExist:
