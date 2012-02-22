@@ -737,7 +737,7 @@ class Node(object):
         self.negated = False
     
     def connect(self, rhs, connector):
-        if isinstance(rhs, Q):
+        if isinstance(rhs, Leaf):
             if connector == self.connector:
                 self.children.append(rhs)
                 return self
@@ -777,14 +777,11 @@ class Node(object):
         if self.negated:
             query = 'NOT %s' % query
         return query
-    
 
-class Q(object):
-    def __init__(self, _model=None, **kwargs):
-        self.model = _model
-        self.query = kwargs
+
+class Leaf(object):
+    def __init__(self):
         self.parent = None
-        self.negated = False
     
     def connect(self, connector):
         if self.parent is None:
@@ -802,6 +799,14 @@ class Q(object):
     def __invert__(self):
         self.negated = not self.negated
         return self
+
+
+class Q(Leaf):
+    def __init__(self, _model=None, **kwargs):
+        self.model = _model
+        self.query = kwargs
+        self.negated = False
+        super(Q, self).__init__()
     
     def __unicode__(self):
         bits = ['%s = %s' % (k, v) for k, v in self.query.items()]
@@ -833,9 +838,10 @@ class F(object):
         return self
 
 
-class R(object):
+class R(Leaf):
     def __init__(self, *params):
         self.params = params
+        super(R, self).__init__()
     
     def sql_select(self):
         if len(self.params) == 2:

@@ -2416,6 +2416,18 @@ class RQueryTestCase(BaseModelTestCase):
         
         blogs = Blog.select().where(id__in=R('SELECT blog_id FROM entry WHERE entry.title IN (LOWER(%s), LOWER(%s))', 'E2', 'e3'))
         self.assertEqual([b.id for b in blogs], [b1.id, b2.id])
+    
+    def test_combining(self):
+        b1 = self.create_blog(title='b1')
+        b2 = self.create_blog(title='b2')
+
+        blogs = Blog.select().where(R('title = %s', 'b1') | R('title = %s', 'b2')).order_by('id')
+        self.assertSQLEqual(blogs.sql(), ('SELECT `id`, `title` FROM `blog` WHERE (title = ? OR title = ?) ORDER BY `id` ASC', ['b1', 'b2']))
+
+        self.assertEqual(list(blogs), [b1, b2])
+        
+        blogs = Blog.select().where(R('title = %s', 'b1') & (R('id = %s', 2) | R('id = %s', 3)))
+        self.assertSQLEqual(blogs.sql(), ('SELECT `id`, `title` FROM `blog` WHERE ((title = ?) AND (id = ? OR id = ?))', ['b1', 2, 3]))
 
 
 class SelfReferentialFKTestCase(BaseModelTestCase):
