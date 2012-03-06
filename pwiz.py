@@ -69,18 +69,20 @@ def introspect(database, **connect):
 
     models = {}
     table_to_model = {}
+    table_fks = {}
 
     # first pass, just raw column names and peewee type
     for table in tables:
         models[table] = get_columns(conn, table)
         table_to_model[table] = tn(table)
+        table_fks[table] = get_foreign_keys(conn, table)
 
     # second pass, convert foreign keys, assign primary keys, and mark
     # explicit column names where they don't match the "pythonic" ones
     col_meta = {}
     for table in tables:
         col_meta[table] = {}
-        for column, rel_table, rel_pk in get_foreign_keys(conn, table):
+        for column, rel_table, rel_pk in table_fks[table]:
             models[table][column] = 'ForeignKeyField'
             models[rel_table][rel_pk] = 'PrimaryKeyField'
             col_meta[table][column] = {'to': table_to_model[rel_table]}
@@ -95,7 +97,7 @@ def introspect(database, **connect):
 
     # print the models
     def print_model(model, seen):
-        for _, rel_table, _ in get_foreign_keys(conn, model):
+        for _, rel_table, _ in table_fks[model]:
             if rel_table not in seen:
                 seen.add(rel_table)
                 print_model(rel_table, seen)
