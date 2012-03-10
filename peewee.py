@@ -364,7 +364,7 @@ class Database(object):
     def field_sql(self, field):
         return '%s %s' % (self.quote_name(field.db_column), field.render_field_template())
 
-    def create_table(self, model_class, safe=False):
+    def create_table_query(self, model_class, safe):
         if model_class._meta.pk_sequence and self.adapter.sequence_support:
             if not self.sequence_exists(model_class._meta.pk_sequence):
                 self.create_sequence(model_class._meta.pk_sequence)
@@ -375,11 +375,12 @@ class Database(object):
             columns.append(self.field_sql(field))
 
         table = self.quote_name(model_class._meta.db_table)
-        query = framing % (table, ', '.join(columns))
-        
-        self.execute(query)
+        return framing % (table, ', '.join(columns))
+
+    def create_table(self, model_class, safe=False):
+        self.execute(self.create_table_query(model_class, safe))
     
-    def create_index(self, model_class, field_name, unique=False):
+    def create_index_query(self, model_class, field_name, unique):
         framing = 'CREATE %(unique)s INDEX %(index)s ON %(table)s(%(field)s);'
         
         if field_name not in model_class._meta.fields:
@@ -394,14 +395,15 @@ class Database(object):
         
         unique_expr = ternary(unique, 'UNIQUE', '')
         
-        query = framing % {
+        return framing % {
             'unique': unique_expr,
             'index': index_name,
             'table': self.quote_name(db_table),
             'field': self.quote_name(field_obj.db_column),
         }
-        
-        self.execute(query)
+
+    def create_index(self, model_class, field_name, unique=False):
+        self.execute(self.create_index_query(model_class, field_name, unique))
 
     def create_foreign_key(self, model_class, field):
         return self.create_index(model_class, field.name, field.unique)
