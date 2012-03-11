@@ -21,14 +21,14 @@ the following:
 
     
     class Blog(BaseModel):
-        name = peewee.CharField() # <-- VARCHAR
+        name = CharField() # <-- VARCHAR
     
     
     class Entry(BaseModel):
-        headline = peewee.CharField()
-        content = peewee.TextField() # <-- TEXT
-        pub_date = peewee.DateTimeField() # <-- DATETIME
-        blog = peewee.ForeignKeyField() # <-- INTEGER referencing the Blog table
+        headline = CharField()
+        content = TextField() # <-- TEXT
+        pub_date = DateTimeField() # <-- DATETIME
+        blog = ForeignKeyField() # <-- INTEGER referencing the Blog table
 
 
 This is a typical example of how to specify models with peewee.  There are several
@@ -63,7 +63,7 @@ things going on:
     .. code-block:: python
 
         class Blog(BaseModel):
-            name = peewee.CharField()
+            name = CharField()
 
     Model definition is pretty similar to django or sqlalchemy -- you basically define
     a class which represents a single table in the database, then its attributes (which
