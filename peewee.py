@@ -1986,9 +1986,6 @@ class DecimalColumn(Column):
 class PrimaryKeyColumn(Column):
     db_field = 'primary_key'
 
-    def get_attributes(self):
-        return {'nextval': ''}
-
 class PrimaryKeySequenceColumn(PrimaryKeyColumn):
     db_field = 'primary_key_with_sequence'
 
@@ -2044,8 +2041,9 @@ class Field(object):
     def render_field_template(self):
         params = {
             'column': self.column.render(self.model._meta.database),
-            'nullable': self.null and '' or ' NOT NULL',
+            'nullable': ternary(self.null, '', ' NOT NULL'),
         }
+        params.update(self.column.attributes)
         return self.field_template % params
     
     def db_value(self, value):
@@ -2108,6 +2106,8 @@ class PrimaryKeyField(IntegerField):
             raise ValueError('Primary keys cannot be nullable')
         if column_class:
             self.column_class = column_class
+        if 'nextval' not in kwargs:
+            kwargs['nextval'] = ''
         super(PrimaryKeyField, self).__init__(*args, **kwargs)
 
     def get_column_class(self):
@@ -2171,7 +2171,6 @@ class ReverseForeignRelatedObject(object):
 
 class ForeignKeyField(IntegerField):
     field_template = '%(column)s%(nullable)s REFERENCES %(to_table)s (%(to_pk)s)%(cascade)s%(extra)s'
-    column_class = None
     
     def __init__(self, to, null=False, related_name=None, cascade=False, extra=None, *args, **kwargs):
         self.to = to
@@ -2221,11 +2220,14 @@ class ForeignKeyField(IntegerField):
     def db_value(self, value):
         if isinstance(value, Model):
             return value.get_pk()
+        if self.null and value is None:
+            return None
         return self.column.db_value(value)
     
     def get_column(self):
-        if not self.column_class:
-            to_pk = self.to._meta.get_field_by_name(self.to._meta.pk_name)
+        to_pk = self.to._meta.get_field_by_name(self.to._meta.pk_name)
+        to_col_class = to_pk.get_column_class()
+        if to_col_class not in (PrimaryKeyColumn, PrimaryKeySequenceColumn):
             self.column_class = to_pk.get_column_class()
         return self.column_class(**self.attributes)
 
@@ -2237,6 +2239,7 @@ class ForeignKeyField(IntegerField):
             'to_table': self.to._meta.db_table,
             'to_pk': self.to._meta.pk_name,
         })
+        self.column = self.get_column()
 
 
 # define a default database object in the module scope
@@ -2371,7 +2374,7 @@ class BaseModel(type):
         
         if _meta.pk_sequence and _meta.database.adapter.sequence_support:
             pk_field = _meta.fields[_meta.pk_name]
-            pk_field.attributes['nextval'] = " default nextval('%s')" % _meta.pk_sequence
+            pk_field.column.attributes['nextval'] = " default nextval('%s')" % _meta.pk_sequence
 
         for field in _meta.fields.values():
             field.class_prepared()

@@ -167,6 +167,14 @@ class ExplicitEntry(TestModel):
     name = peewee.CharField()
     blog = peewee.ForeignKeyField(LegacyBlog, db_column='blog')
 
+class NonIntPK(TestModel):
+    id = peewee.PrimaryKeyField(column_class=peewee.VarCharColumn)
+    name = peewee.CharField(max_length=10)
+
+class RelNonIntPK(TestModel):
+    non_int_pk = peewee.ForeignKeyField(NonIntPK)
+    name = peewee.CharField()
+
 
 class BasePeeweeTestCase(unittest.TestCase):
     def setUp(self):
