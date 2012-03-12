@@ -342,7 +342,8 @@ class Database(object):
         return inner
     
     def last_insert_id(self, cursor, model):
-        return self.adapter.last_insert_id(cursor, model)
+        if model._meta.auto_increment:
+            return self.adapter.last_insert_id(cursor, model)
     
     def rows_affected(self, cursor):
         return self.adapter.rows_affected(cursor)
@@ -2150,7 +2151,7 @@ class ForeignRelatedObject(object):
             setattr(instance, self.field_column, None)
             setattr(instance, self.cache_name, None)
         else:
-            if isinstance(obj, int):
+            if not isinstance(obj, Model):
                 setattr(instance, self.field_column, obj)
             else:
                 assert isinstance(obj, self.to), "Cannot assign %s to %s, invalid type" % (obj, self.field.name)
@@ -2512,7 +2513,8 @@ class Model(object):
                 field_dict.pop(self._meta.pk_name)
             insert = self.insert(**field_dict)
             new_pk = insert.execute()
-            setattr(self, self._meta.pk_name, new_pk)
+            if self._meta.auto_increment:
+                setattr(self, self._meta.pk_name, new_pk)
 
     @classmethod
     def collect_models(cls, accum=None):
