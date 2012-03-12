@@ -2372,9 +2372,12 @@ class BaseModel(type):
 
         _meta.model_name = cls.__name__
         
+        pk_field = _meta.fields[_meta.pk_name]
+        pk_col = pk_field.column
         if _meta.pk_sequence and _meta.database.adapter.sequence_support:
-            pk_field = _meta.fields[_meta.pk_name]
-            pk_field.column.attributes['nextval'] = " default nextval('%s')" % _meta.pk_sequence
+            pk_col.attributes['nextval'] = " default nextval('%s')" % _meta.pk_sequence
+
+        _meta.auto_increment = isinstance(pk_col, PrimaryKeyColumn)
 
         for field in _meta.fields.values():
             field.class_prepared()
@@ -2474,7 +2477,7 @@ class Model(object):
     @classmethod
     def create(cls, **query):
         inst = cls(**query)
-        inst.save()
+        inst.save(force_insert=True)
         return inst
 
     @classmethod
@@ -2496,15 +2499,17 @@ class Model(object):
         pk_field = self._meta.fields[self._meta.pk_name]
         setattr(self, self._meta.pk_name, pk_field.python_value(pk))
     
-    def save(self):
+    def save(self, force_insert=False):
         field_dict = self.get_field_dict()
-        field_dict.pop(self._meta.pk_name)
-        if self.get_pk():
+        if self.get_pk() and not force_insert:
+            field_dict.pop(self._meta.pk_name)
             update = self.update(
                 **field_dict
             ).where(**{self._meta.pk_name: self.get_pk()})
             update.execute()
         else:
+            if self._meta.auto_increment:
+                field_dict.pop(self._meta.pk_name)
             insert = self.insert(**field_dict)
             new_pk = insert.execute()
             setattr(self, self._meta.pk_name, new_pk)
