@@ -1876,6 +1876,13 @@ class Column(object):
     db_field = ''
     template = '%(column_type)s'
 
+    def __init__(self, **attributes):
+        self.attributes = self.get_attributes()
+        self.attributes.update(**attributes)
+
+    def get_attributes(self):
+        return {}
+
     def python_value(self, value):
         return value
 
@@ -1884,14 +1891,20 @@ class Column(object):
 
     def render(self, db):
         params = {'column_type': db.column_for_field_type(self.db_field)}
+        params.update(self.attributes)
         return self.template % params
 
 
 class VarCharColumn(Column):
     db_field = 'string'
+    template = '%(column_type)s(%(max_length)d)'
+    
+    def get_attributes(self):
+        return {'max_length': 255}
     
     def db_value(self, value):
-        return value or ''
+        value = value or ''
+        return value[:self.attributes['max_length']]
 
 
 class TextColumn(Column):
@@ -1953,6 +1966,13 @@ class DoubleColumn(FloatColumn):
 
 class DecimalColumn(Column):
     db_field = 'decimal'
+    field_template = '%(column_type)s(%(max_digits)d, %(decimal_places)d)'
+    
+    def get_attributes(self):
+        return {
+            'max_digits': 10,
+            'decimal_places': 5,
+        }
     
     def db_value(self, value):
         return value or decimal.Decimal(0)
@@ -2002,14 +2022,10 @@ class Field(object):
         self.db_column = db_column
         self.default = default
 
-        self.attributes = self.get_attributes()
-        self.attributes.update(kwargs)
+        self.attributes = kwargs
         
         Field._field_counter += 1
         self._order = Field._field_counter
-
-    def get_attributes(self):
-        return {}
     
     def add_to_class(self, klass, name):
         self.name = name
@@ -2019,19 +2035,16 @@ class Field(object):
         self.column = self.get_column()
 
         setattr(klass, name, FieldDescriptor(self))
-
-    def get_column_class(self):
-        return self.column_class
     
     def get_column(self):
-        return self.get_column_class()()
+        return self.column_class(**self.attributes)
     
     def render_field_template(self):
         params = {
             'column': self.column.render(self.model._meta.database),
             'nullable': ternary(self.null, '', ' NOT NULL'),
         }
-        params.update(self.attributes)
+        params.update(self.column.attributes)
         return self.field_template % params
     
     def db_value(self, value):
@@ -2050,11 +2063,7 @@ class Field(object):
 
 
 class CharField(Field):
-    field_template = "%(column)s(%(max_length)s)%(nullable)s"
     column_class = VarCharColumn
-
-    def get_attributes(self):
-        return {'max_length': 255}
     
 
 class TextField(Field):
@@ -2086,14 +2095,7 @@ class DoubleField(Field):
 
 
 class DecimalField(Field):
-    field_template = '%(column)s(%(max_digits)d, %(decimal_places)d)%(nullable)s'
     column_class = DecimalColumn
-
-    def get_attributes(self):
-        return {
-            'max_digits': 10,
-            'decimal_places': 5,
-        }
 
 
 class PrimaryKeyField(IntegerField):
@@ -2117,6 +2119,9 @@ class PrimaryKeyField(IntegerField):
             if self.model._meta.pk_sequence != None and self.model._meta.database.adapter.sequence_support:
                 self.column_class = PrimaryKeySequenceColumn
         return self.column_class
+    
+    def get_column(self):
+        return self.get_column_class()(**self.attributes)
 
 
 class ForeignRelatedObject(object):    
@@ -2225,7 +2230,7 @@ class ForeignKeyField(IntegerField):
         to_col_class = to_pk.get_column_class()
         if to_col_class not in (PrimaryKeyColumn, PrimaryKeySequenceColumn):
             self.column_class = to_pk.get_column_class()
-        return self.column_class()
+        return self.column_class(**self.attributes)
 
     def class_prepared(self):
         # unfortunately because we may not know the primary key field
@@ -2371,7 +2376,7 @@ class BaseModel(type):
         pk_field = _meta.fields[_meta.pk_name]
         pk_col = pk_field.column
         if _meta.pk_sequence and _meta.database.adapter.sequence_support:
-            pk_field.attributes['nextval'] = " default nextval('%s')" % _meta.pk_sequence
+            pk_col.attributes['nextval'] = " default nextval('%s')" % _meta.pk_sequence
 
         _meta.auto_increment = isinstance(pk_col, PrimaryKeyColumn)
 
