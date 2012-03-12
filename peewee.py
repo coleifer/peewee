@@ -37,8 +37,8 @@ __all__ = [
     'ImproperlyConfigured', 'SqliteDatabase', 'MySQLDatabase', 'PostgresqlDatabase',
     'asc', 'desc', 'Count', 'Max', 'Min', 'Sum', 'Q', 'Field', 'CharField', 'TextField',
     'DateTimeField', 'BooleanField', 'DecimalField', 'FloatField', 'IntegerField',
-    'PrimaryKeyField', 'ForeignKeyField', 'Model', 'filter_query', 'annotate_query',
-    'F', 'R',
+    'PrimaryKeyField', 'ForeignKeyField', 'DoubleField', 'BigIntegerField', 'Model', 
+    'filter_query', 'annotate_query', 'F', 'R',
 ]
 
 class ImproperlyConfigured(Exception):
@@ -80,6 +80,7 @@ class BaseAdapter(object):
     interpolation = '%s'
     sequence_support = False
     for_update_support = False
+    subquery_delete_same_table = True
     reserved_tables = []
     quote_char = '"'
     
@@ -234,6 +235,7 @@ class MySQLAdapter(BaseAdapter):
     }
     quote_char = '`'
     for_update_support = True
+    subquery_delete_same_table = False
 
     def connect(self, database, **kwargs):
         if not mysql:
@@ -2486,13 +2488,19 @@ class Model(object):
             # reverse relations, i.e. anything that would be orphaned, delete.
             select_queries, nullable_queries = self.collect_queries()
 
+            # currently doesn't work with mysql: 
+            # http://dev.mysql.com/doc/refman/5.1/en/subquery-restrictions.html
             for query, fk_field, depth in select_queries:
                 model = query.model
+                if not self._meta.database.adapter.subquery_delete_same_table:
+                    query = list(query)
                 model.delete().where(**{
                     '%s__in' % model._meta.pk_name: query,
                 }).execute()
             for query, fk_field, depth in nullable_queries:
                 model = query.model
+                if not self._meta.database.adapter.subquery_delete_same_table:
+                    query = list(query)
                 model.update(**{fk_field: None}).where(**{
                     '%s__in' % model._meta.pk_name: query,
                 }).execute()
