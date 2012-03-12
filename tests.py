@@ -2371,7 +2371,7 @@ class RQueryTestCase(BaseModelTestCase):
         self.assertEqual([u.upper_name for u in users], ['USER A', 'USER B', 'USER C'])
         self.assertEqual([u.lower_name for u in users], ['user a', 'user b', 'user c'])
         
-        if BACKEND != 'postgresql':
+        if BACKEND not in ('postgresql', 'mysql'):
             # test selecting with matching where clause as a node
             users = User.select(['id', R('UPPER(username)', 'upper_name')]).where(R('upper_name = %s', 'USER B'))
             self.assertEqual([(u.id, u.upper_name) for u in users], [(user_b.id, 'USER B')])
