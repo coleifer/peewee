@@ -2493,14 +2493,18 @@ class Model(object):
             for query, fk_field, depth in select_queries:
                 model = query.model
                 if not self._meta.database.adapter.subquery_delete_same_table:
-                    query = list(query)
+                    query = [obj.get_pk() for obj in query]
+                    if not query:
+                        continue
                 model.delete().where(**{
                     '%s__in' % model._meta.pk_name: query,
                 }).execute()
             for query, fk_field, depth in nullable_queries:
                 model = query.model
                 if not self._meta.database.adapter.subquery_delete_same_table:
-                    query = list(query)
+                    query = [obj.get_pk() for obj in query]
+                    if not query:
+                        continue
                 model.update(**{fk_field: None}).where(**{
                     '%s__in' % model._meta.pk_name: query,
                 }).execute()
