@@ -344,7 +344,8 @@ class Database(object):
         return inner
     
     def last_insert_id(self, cursor, model):
-        return self.adapter.last_insert_id(cursor, model)
+        if model._meta.auto_increment:
+            return self.adapter.last_insert_id(cursor, model)
     
     def rows_affected(self, cursor):
         return self.adapter.rows_affected(cursor)
@@ -1873,6 +1874,125 @@ def annotate_query(select_query, related_model, aggregation):
     return select_query.group_by(group_by)
 
 
+class Column(object):
+    db_field = ''
+    template = '%(column_type)s'
+
+    def __init__(self, **attributes):
+        self.attributes = self.get_attributes()
+        self.attributes.update(**attributes)
+
+    def get_attributes(self):
+        return {}
+
+    def python_value(self, value):
+        return value
+
+    def db_value(self, value):
+        return value
+
+    def render(self, db):
+        params = {'column_type': db.column_for_field_type(self.db_field)}
+        params.update(self.attributes)
+        return self.template % params
+
+
+class VarCharColumn(Column):
+    db_field = 'string'
+    template = '%(column_type)s(%(max_length)d)'
+    
+    def get_attributes(self):
+        return {'max_length': 255}
+    
+    def db_value(self, value):
+        value = value or ''
+        return value[:self.attributes['max_length']]
+
+
+class TextColumn(Column):
+    db_field = 'text'
+    
+    def db_value(self, value):
+        return value or ''
+
+
+class DateTimeColumn(Column):
+    db_field = 'datetime'
+    
+    def python_value(self, value):
+        if isinstance(value, basestring):
+            value = value.rsplit('.', 1)[0]
+            return datetime(*time.strptime(value, '%Y-%m-%d %H:%M:%S')[:6])
+        return value
+
+
+class IntegerColumn(Column):
+    db_field = 'integer'
+    
+    def db_value(self, value):
+        return value or 0
+    
+    def python_value(self, value):
+        if value is not None:
+            return int(value)
+
+
+class BigIntegerColumn(IntegerColumn):
+    db_field = 'bigint'
+
+
+class BooleanColumn(Column):
+    db_field = 'boolean'
+    
+    def db_value(self, value):
+        return bool(value)
+    
+    def python_value(self, value):
+        return bool(value)
+
+
+class FloatColumn(Column):
+    db_field = 'float'
+    
+    def db_value(self, value):
+        return value or 0.0
+    
+    def python_value(self, value):
+        if value is not None:
+            return float(value)
+
+
+class DoubleColumn(FloatColumn):
+    db_field = 'double'
+
+
+class DecimalColumn(Column):
+    db_field = 'decimal'
+    field_template = '%(column_type)s(%(max_digits)d, %(decimal_places)d)'
+    
+    def get_attributes(self):
+        return {
+            'max_digits': 10,
+            'decimal_places': 5,
+        }
+    
+    def db_value(self, value):
+        return value or decimal.Decimal(0)
+    
+    def python_value(self, value):
+        if value is not None:
+            if isinstance(value, decimal.Decimal):
+                return value
+            return decimal.Decimal(str(value))
+
+
+class PrimaryKeyColumn(Column):
+    db_field = 'primary_key'
+
+class PrimaryKeySequenceColumn(PrimaryKeyColumn):
+    db_field = 'primary_key_with_sequence'
+
+
 class FieldDescriptor(object):
     def __init__(self, field):
         self.field = field
@@ -1888,28 +2008,23 @@ class FieldDescriptor(object):
 
 
 class Field(object):
-    db_field = ''
+    column_class = None
     default = None
-    field_template = "%(column_type)s%(nullable)s"
+    field_template = "%(column)s%(nullable)s"
     _field_counter = 0
     _order = 0
 
-    def get_attributes(self):
-        return {}
-    
     def __init__(self, null=False, db_index=False, unique=False, verbose_name=None,
-                 help_text=None, db_column=None, *args, **kwargs):
+                 help_text=None, db_column=None, default=None, *args, **kwargs):
         self.null = null
         self.db_index = db_index
         self.unique = unique
-        self.attributes = self.get_attributes()
-        self.default = kwargs.get('default', None)
         self.verbose_name = verbose_name
         self.help_text = help_text
         self.db_column = db_column
-        
-        kwargs['nullable'] = ternary(self.null, '', ' NOT NULL')
-        self.attributes.update(kwargs)
+        self.default = default
+
+        self.attributes = kwargs
         
         Field._field_counter += 1
         self._order = Field._field_counter
@@ -1919,26 +2034,28 @@ class Field(object):
         self.model = klass
         self.verbose_name = self.verbose_name or re.sub('_+', ' ', name).title()
         self.db_column = self.db_column or self.name
+        self.column = self.get_column()
+
         setattr(klass, name, FieldDescriptor(self))
     
-    def get_db_field(self):
-        return self.db_field
+    def get_column(self):
+        return self.column_class(**self.attributes)
     
     def render_field_template(self):
-        col_type = self.model._meta.database.column_for_field(self)
-        self.attributes['column_type'] = col_type
-        return self.field_template % self.attributes
-    
-    def null_wrapper(self, value, default=None):
-        if (self.null and value is None) or default is None:
-            return value
-        return value or default
+        params = {
+            'column': self.column.render(self.model._meta.database),
+            'nullable': ternary(self.null, '', ' NOT NULL'),
+        }
+        params.update(self.column.attributes)
+        return self.field_template % params
     
     def db_value(self, value):
-        return value
+        if (self.null and value is None):
+            return None
+        return self.column.db_value(value)
     
     def python_value(self, value):
-        return value
+        return self.column.python_value(value)
     
     def lookup_value(self, lookup_type, value):
         return self.db_value(value)
@@ -1948,124 +2065,65 @@ class Field(object):
 
 
 class CharField(Field):
-    db_field = 'string'
-    field_template = '%(column_type)s(%(max_length)d)%(nullable)s'
-    
-    def get_attributes(self):
-        return {'max_length': 255}
-    
-    def db_value(self, value):
-        if self.null and value is None:
-            return value
-        value = value or ''
-        return value[:self.attributes['max_length']]
-    
-    def lookup_value(self, lookup_type, value):
-        if lookup_type == 'contains':
-            return '*%s*' % self.db_value(value)
-        elif lookup_type == 'icontains':
-            return '%%%s%%' % self.db_value(value)
-        else:
-            return self.db_value(value)
+    column_class = VarCharColumn
     
 
 class TextField(Field):
-    db_field = 'text'
-    
-    def db_value(self, value):
-        return self.null_wrapper(value, '')
-    
-    def lookup_value(self, lookup_type, value):
-        if lookup_type == 'contains':
-            return '*%s*' % self.db_value(value)
-        elif lookup_type == 'icontains':
-            return '%%%s%%' % self.db_value(value)
-        else:
-            return self.db_value(value)
+    column_class = TextColumn
 
 
 class DateTimeField(Field):
-    db_field = 'datetime'
-    
-    def python_value(self, value):
-        if isinstance(value, basestring):
-            value = value.rsplit('.', 1)[0]
-            return datetime(*time.strptime(value, '%Y-%m-%d %H:%M:%S')[:6])
-        return value
+    column_class = DateTimeColumn
 
 
 class IntegerField(Field):
-    db_field = 'integer'
-    
-    def db_value(self, value):
-        return self.null_wrapper(value, 0)
-    
-    def python_value(self, value):
-        if value is not None:
-            return int(value)
+    column_class = IntegerColumn
 
 
 class BigIntegerField(IntegerField):
-    db_field = 'bigint'
+    column_class = BigIntegerColumn
 
 
 class BooleanField(IntegerField):
-    db_field = 'boolean'
-    
-    def db_value(self, value):
-        return bool(value)
-    
-    def python_value(self, value):
-        return bool(value)
+    column_class = BooleanColumn
 
 
 class FloatField(Field):
-    db_field = 'float'
-    
-    def db_value(self, value):
-        return self.null_wrapper(value, 0.0)
-    
-    def python_value(self, value):
-        if value is not None:
-            return float(value)
+    column_class = FloatColumn
 
 
-class DoubleField(FloatField):
-    db_field = 'double'
+class DoubleField(Field):
+    column_class = DoubleColumn
 
 
 class DecimalField(Field):
-    db_field = 'decimal'
-    field_template = '%(column_type)s(%(max_digits)d, %(decimal_places)d)%(nullable)s'
-    
-    def get_attributes(self):
-        return {
-            'max_digits': 10,
-            'decimal_places': 5,
-        }
-    
-    def db_value(self, value):
-        return self.null_wrapper(value, decimal.Decimal(0))
-    
-    def python_value(self, value):
-        if value is not None:
-            if isinstance(value, decimal.Decimal):
-                return value
-            return decimal.Decimal(str(value))
+    column_class = DecimalColumn
 
 
 class PrimaryKeyField(IntegerField):
-    db_field = 'primary_key'
-    field_template = "%(column_type)s NOT NULL PRIMARY KEY%(nextval)s"
-    sequence = None
+    column_class = PrimaryKeyColumn
+    field_template = "%(column)s NOT NULL PRIMARY KEY%(nextval)s"
+
+    def __init__(self, column_class=None, *args, **kwargs):
+        if kwargs.get('null'):
+            raise ValueError('Primary keys cannot be nullable')
+        if column_class:
+            self.column_class = column_class
+        if 'nextval' not in kwargs:
+            kwargs['nextval'] = ''
+        super(PrimaryKeyField, self).__init__(*args, **kwargs)
+
+    def get_column_class(self):
+        # check to see if we're using the default pk column
+        if self.column_class == PrimaryKeyColumn:
+            # if we have a sequence and can support them, then use the special
+            # column class that supports sequences
+            if self.model._meta.pk_sequence != None and self.model._meta.database.adapter.sequence_support:
+                self.column_class = PrimaryKeySequenceColumn
+        return self.column_class
     
-    def get_attributes(self):
-        return {'nextval': ''}
-    
-    def get_db_field(self):
-        if self.model._meta.pk_sequence != None and self.model._meta.database.adapter.sequence_support:
-            return 'primary_key_with_sequence'
-        return self.db_field
+    def get_column(self):
+        return self.get_column_class()(**self.attributes)
 
 
 class ForeignRelatedObject(object):    
@@ -2095,7 +2153,7 @@ class ForeignRelatedObject(object):
             setattr(instance, self.field_column, None)
             setattr(instance, self.cache_name, None)
         else:
-            if isinstance(obj, int):
+            if not isinstance(obj, Model):
                 setattr(instance, self.field_column, obj)
             else:
                 assert isinstance(obj, self.to), "Cannot assign %s to %s, invalid type" % (obj, self.field.name)
@@ -2115,8 +2173,7 @@ class ReverseForeignRelatedObject(object):
 
 
 class ForeignKeyField(IntegerField):
-    db_field = 'foreign_key'
-    field_template = '%(column_type)s%(nullable)s REFERENCES %(to_table)s (%(to_pk)s)%(cascade)s%(extra)s'
+    field_template = '%(column)s%(nullable)s REFERENCES %(to_table)s (%(to_pk)s)%(cascade)s%(extra)s'
     
     def __init__(self, to, null=False, related_name=None, cascade=False, extra=None, *args, **kwargs):
         self.to = to
@@ -2166,7 +2223,16 @@ class ForeignKeyField(IntegerField):
     def db_value(self, value):
         if isinstance(value, Model):
             return value.get_pk()
-        return value
+        if self.null and value is None:
+            return None
+        return self.column.db_value(value)
+    
+    def get_column(self):
+        to_pk = self.to._meta.get_field_by_name(self.to._meta.pk_name)
+        to_col_class = to_pk.get_column_class()
+        if to_col_class not in (PrimaryKeyColumn, PrimaryKeySequenceColumn):
+            self.column_class = to_pk.get_column_class()
+        return self.column_class(**self.attributes)
 
     def class_prepared(self):
         # unfortunately because we may not know the primary key field
@@ -2176,6 +2242,7 @@ class ForeignKeyField(IntegerField):
             'to_table': self.to._meta.db_table,
             'to_pk': self.to._meta.pk_name,
         })
+        self.column = self.get_column()
 
 
 # define a default database object in the module scope
@@ -2308,9 +2375,12 @@ class BaseModel(type):
 
         _meta.model_name = cls.__name__
         
+        pk_field = _meta.fields[_meta.pk_name]
+        pk_col = pk_field.column
         if _meta.pk_sequence and _meta.database.adapter.sequence_support:
-            pk_field = _meta.fields[_meta.pk_name]
-            pk_field.attributes['nextval'] = " default nextval('%s')" % _meta.pk_sequence
+            pk_col.attributes['nextval'] = " default nextval('%s')" % _meta.pk_sequence
+
+        _meta.auto_increment = isinstance(pk_col, PrimaryKeyColumn)
 
         for field in _meta.fields.values():
             field.class_prepared()
@@ -2410,7 +2480,7 @@ class Model(object):
     @classmethod
     def create(cls, **query):
         inst = cls(**query)
-        inst.save()
+        inst.save(force_insert=True)
         return inst
 
     @classmethod
@@ -2432,18 +2502,21 @@ class Model(object):
         pk_field = self._meta.fields[self._meta.pk_name]
         setattr(self, self._meta.pk_name, pk_field.python_value(pk))
     
-    def save(self):
+    def save(self, force_insert=False):
         field_dict = self.get_field_dict()
-        field_dict.pop(self._meta.pk_name)
-        if self.get_pk():
+        if self.get_pk() and not force_insert:
+            field_dict.pop(self._meta.pk_name)
             update = self.update(
                 **field_dict
             ).where(**{self._meta.pk_name: self.get_pk()})
             update.execute()
         else:
+            if self._meta.auto_increment:
+                field_dict.pop(self._meta.pk_name)
             insert = self.insert(**field_dict)
             new_pk = insert.execute()
-            setattr(self, self._meta.pk_name, new_pk)
+            if self._meta.auto_increment:
+                setattr(self, self._meta.pk_name, new_pk)
 
     @classmethod
     def collect_models(cls, accum=None):

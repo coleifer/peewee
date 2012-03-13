@@ -167,6 +167,14 @@ class ExplicitEntry(TestModel):
     name = peewee.CharField()
     blog = peewee.ForeignKeyField(LegacyBlog, db_column='blog')
 
+class NonIntPK(TestModel):
+    id = peewee.PrimaryKeyField(column_class=peewee.VarCharColumn)
+    name = peewee.CharField(max_length=10)
+
+class RelNonIntPK(TestModel):
+    non_int_pk = peewee.ForeignKeyField(NonIntPK)
+    name = peewee.CharField()
+
 
 class BasePeeweeTestCase(unittest.TestCase):
     def setUp(self):
@@ -2760,6 +2768,56 @@ class FieldTypeTests(BaseModelTestCase):
         nm1 = NullModel.create(bigint_field=1000000000000)
         from_db = NullModel.get(id=nm1.id)
         self.assertEqual(from_db.bigint_field, 1000000000000)
+
+class NonIntegerPKTestCase(BasePeeweeTestCase):
+    def setUp(self):
+        super(NonIntegerPKTestCase, self).setUp()
+        RelNonIntPK.drop_table(True)
+        NonIntPK.drop_table(True)
+        NonIntPK.create_table()
+        RelNonIntPK.create_table()
+
+    def test_creation(self):
+        # create using the .create() API
+        ni1 = NonIntPK.create(id='a1', name='ni1')
+        self.assertEqual(ni1.id, 'a1')
+
+        # explicitly use force_insert w/.save()
+        ni2 = NonIntPK(id='a2', name='ni2')
+        ni2.save(force_insert=True)
+        self.assertEqual(ni2.id, 'a2')
+
+        # saving again triggers in update
+        ni2.save()
+        self.assertEqual(ni2.id, 'a2')
+
+        # check that we only have 2 instances
+        self.assertEqual(NonIntPK.select().count(), 2)
+
+        # check that can get from the db
+        ni1_db = NonIntPK.get(id='a1')
+        self.assertEqual(ni1_db, ni1)
+
+        # check that can iterate them
+        self.assertEqual(list(NonIntPK.select().order_by('id')), [
+            ni1, ni2,
+        ])
+
+    def test_foreign_keys(self):
+        ni1 = NonIntPK.create(id='a1', name='ni1')
+        ni2 = NonIntPK.create(id='a2', name='ni2')
+
+        rni11 = RelNonIntPK(non_int_pk=ni1, name='rni11')
+        rni12 = RelNonIntPK(non_int_pk=ni1, name='rni12')
+        rni11.save()
+        rni12.save()
+
+        self.assertEqual(list(ni1.relnonintpk_set.order_by('id')), [
+            rni11, rni12,
+        ])
+        self.assertEqual(list(ni2.relnonintpk_set.order_by('id')), [])
+
+        rni21 = RelNonIntPK.create(non_int_pk=ni2, name='rni21')
 
 class ModelIndexTestCase(BaseModelTestCase):
     def setUp(self):
