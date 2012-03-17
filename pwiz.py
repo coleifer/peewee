@@ -1,59 +1,180 @@
+#            .----.
+#           ===(_)==   THIS WONT HURT A BIT...
+#          // 6  6 \\  /
+#          (    7   )
+#           \ '--' /
+#            \_ ._/
+#           __)  (__
+#        /"`/`\`V/`\`\
+#       /   \  `Y _/_ \
+#      / [DR]\_ |/ / /\
+#      |     ( \/ / / /
+#       \  \  \      /
+#        \  `-/`  _.`
+#         `=. `=./
+#            `"`
 from optparse import OptionParser
-from psycopg2 import OperationalError
 import re
 import sys
 
 from peewee import *
 
-# thanks, django
-reverse_mapping = {
-    16: 'BooleanField',
-    20: 'IntegerField',
-    21: 'IntegerField',
-    23: 'IntegerField',
-    25: 'TextField',
-    700: 'FloatField',
-    701: 'FloatField',
-    1043: 'CharField',
-    1114: 'DateTimeField',
-    1184: 'DateTimeField',
-    1700: 'DecimalField',
-}
 
-def get_conn(database, **connect):
-    db = PostgresqlDatabase(database, **connect)
-    try:
-        db.connect()
-    except OperationalError:
-        err('error connecting to %s' % database)
-        raise
-    return db
+class DB(object):
+    conn = None
 
-def get_columns(conn, table):
-    curs = conn.execute('select * from %s limit 1' % table)
-    return dict((c.name, reverse_mapping.get(c.type_code, 'UnknownFieldType')) for c in curs.description)
+    def get_conn_class(self):
+        raise NotImplementedError
 
-def get_foreign_keys(conn, table):
-    framing = '''
-        SELECT
-            kcu.column_name, ccu.table_name, ccu.column_name
-        FROM information_schema.table_constraints AS tc 
-        JOIN information_schema.key_column_usage AS kcu 
-            ON tc.constraint_name = kcu.constraint_name
-        JOIN information_schema.constraint_column_usage AS ccu 
-            ON ccu.constraint_name = tc.constraint_name
-        WHERE 
-            tc.constraint_type = 'FOREIGN KEY' AND 
-            tc.table_name = %s
-    '''
-    fks = []
-    for row in conn.execute(framing, (table,)):
-        fks.append(row)
-    return fks
+    def get_columns(self, table):
+        """
+        get_columns('some_table')
+        
+        {
+            'name': 'CharField',
+            'age': 'IntegerField',
+        }
+        """
+        raise NotImplementedError
+
+    def get_foreign_keys(self, table):
+        """
+        get_foreign_keys('some_table')
+        
+        [
+            # column,   rel table,  rel pk
+            ('blog_id', 'blog',     'id'),
+            ('user_id', 'users',    'id'),
+        ]
+        """
+        raise NotImplementedError
+
+    def get_tables(self):
+        return self.conn.get_tables()
+
+    def connect(self, database, **connect):
+        conn_class = self.get_conn_class()
+        self.conn = conn_class(database, **connect)
+        try:
+            self.conn.connect()
+        except:
+            err('error connecting to %s' % database)
+            raise
+
+
+class PgDB(DB):
+    # thanks, django
+    reverse_mapping = {
+        16: 'BooleanField',
+        20: 'IntegerField',
+        21: 'IntegerField',
+        23: 'IntegerField',
+        25: 'TextField',
+        700: 'FloatField',
+        701: 'FloatField',
+        1043: 'CharField',
+        1114: 'DateTimeField',
+        1184: 'DateTimeField',
+        1700: 'DecimalField',
+    }
+
+    def get_conn_class(self):
+        return PostgresqlDatabase
+
+    def get_columns(self, table):
+        curs = self.conn.execute('select * from %s limit 1' % table)
+        return dict((c.name, self.reverse_mapping.get(c.type_code, 'UnknownFieldType')) for c in curs.description)
+
+    def get_foreign_keys(self, table):
+        framing = '''
+            SELECT
+                kcu.column_name, ccu.table_name, ccu.column_name
+            FROM information_schema.table_constraints AS tc 
+            JOIN information_schema.key_column_usage AS kcu 
+                ON tc.constraint_name = kcu.constraint_name
+            JOIN information_schema.constraint_column_usage AS ccu 
+                ON ccu.constraint_name = tc.constraint_name
+            WHERE 
+                tc.constraint_type = 'FOREIGN KEY' AND 
+                tc.table_name = %s
+        '''
+        fks = []
+        for row in self.conn.execute(framing, (table,)):
+            fks.append(row)
+        return fks
+
+
+class SqDB(DB):
+    # thanks, django
+    reverse_mapping = {
+        'bool': 'BooleanField',
+        'boolean': 'BooleanField',
+        'smallint': 'IntegerField',
+        'smallint unsigned': 'IntegerField',
+        'smallinteger': 'IntegerField',
+        'int': 'IntegerField',
+        'integer': 'IntegerField',
+        'bigint': 'BigIntegerField',
+        'integer unsigned': 'IntegerField',
+        'decimal': 'DecimalField',
+        'real': 'FloatField',
+        'text': 'TextField',
+        'char': 'CharField',
+        'date': 'DateTimeField',
+        'datetime': 'DateTimeField',
+    }
+    
+    def get_conn_class(self):
+        return SqliteDatabase
+    
+    def map_col(self, col):
+        col = col.lower()
+        if col in self.reverse_mapping:
+            return self.reverse_mapping[col]
+        elif re.search(r'^\s*(?:var)?char\s*\(\s*(\d+)\s*\)\s*$', col):
+            return 'CharField'
+        else:
+            return 'UnknownFieldType'
+
+    def get_columns(self, table):
+        curs = self.conn.execute('pragma table_info(%s)' % table)
+        col_dict = {}
+        for (_, name, col, not_null, _, is_pk) in curs.fetchall():
+            # cid, name, type, notnull, dflt_value, pk
+            if is_pk:
+                col_type = 'PrimaryKeyField'
+            else:
+                col_type = self.map_col(col)
+            col_dict[name] = col_type
+        return col_dict
+
+    def get_foreign_keys(self, table):
+        fks = []
+
+        curs = self.conn.execute("SELECT sql FROM sqlite_master WHERE tbl_name = ? AND type = ?", [table, "table"])
+        table_def = curs.fetchone()[0].strip()
+        
+        try:
+            columns = re.search('\((.+)\)', table_def).groups()[0]
+        except AttributeError:
+            err('Unable to read table definition for "%s"' % table)
+            sys.exit(1)
+
+        for col_def in columns.split(','):
+            col_def = col_def.strip()
+            m = re.search('"?(.+?)"?\s+.+\s+references (.*) \(["|]?(.*)["|]?\)', col_def, re.I)
+            if not m:
+                continue
+
+            fk_column, rel_table, rel_pk = [s.strip('"') for s in m.groups()]
+            fks.append((fk_column, rel_table, rel_pk))
+        
+        return fks
+
 
 frame = '''from peewee import *
 
-database = PostgresqlDatabase('%s', **%s)
+database = %s('%s', **%s)
 
 class UnknownFieldType(object):
     pass
@@ -63,9 +184,24 @@ class BaseModel(Model):
         database = database
 '''
 
-def introspect(database, **connect):
-    conn = get_conn(database, **connect)
-    tables = conn.get_tables()
+engine_mapping = {
+    'postgresql': PgDB,
+    'sqlite': SqDB,
+}
+
+def get_db(engine):
+    if engine not in engine_mapping:
+        err('Unsupported engine: "%s"' % engine)
+        sys.exit(1)
+
+    db_class = engine_mapping[engine]
+    return db_class()
+
+def introspect(engine, database, **connect):
+    db = get_db(engine)
+    db.connect(database, **connect)
+    
+    tables = db.get_tables()
 
     models = {}
     table_to_model = {}
@@ -73,9 +209,9 @@ def introspect(database, **connect):
 
     # first pass, just raw column names and peewee type
     for table in tables:
-        models[table] = get_columns(conn, table)
+        models[table] = db.get_columns(table)
         table_to_model[table] = tn(table)
-        table_fks[table] = get_foreign_keys(conn, table)
+        table_fks[table] = db.get_foreign_keys(table)
 
     # second pass, convert foreign keys, assign primary keys, and mark
     # explicit column names where they don't match the "pythonic" ones
@@ -93,7 +229,7 @@ def introspect(database, **connect):
                 col_meta[table][column]['db_column'] = "'%s'" % column
 
     # write generated code to standard out
-    print frame % (database, repr(connect))
+    print frame % (db.get_conn_class().__name__, database, repr(connect))
 
     # print the models
     def print_model(model, seen):
@@ -141,6 +277,7 @@ if __name__ == '__main__':
     ao('-p', '--port', dest='port', type='int')
     ao('-u', '--user', dest='user')
     ao('-P', '--password', dest='password')
+    ao('-e', '--engine', dest='engine', default='postgresql')
 
     options, args = parser.parse_args()
     ops = ('host', 'port', 'user', 'password')
@@ -153,4 +290,4 @@ if __name__ == '__main__':
 
     database = args[-1]
 
-    introspect(database, **connect)
+    introspect(options.engine, database, **connect)
