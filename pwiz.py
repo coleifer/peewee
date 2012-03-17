@@ -17,6 +17,32 @@ from optparse import OptionParser
 import re
 import sys
 
+try:
+    from MySQLdb.constants import FIELD_TYPE
+    MYSQL_MAP = {
+        FIELD_TYPE.BLOB: 'TextField',
+        FIELD_TYPE.CHAR: 'CharField',
+        FIELD_TYPE.DECIMAL: 'DecimalField',
+        FIELD_TYPE.NEWDECIMAL: 'DecimalField',
+        FIELD_TYPE.DATE: 'DateTimeField',
+        FIELD_TYPE.DATETIME: 'DateTimeField',
+        FIELD_TYPE.DOUBLE: 'FloatField',
+        FIELD_TYPE.FLOAT: 'FloatField',
+        FIELD_TYPE.INT24: 'IntegerField',
+        FIELD_TYPE.LONG: 'IntegerField',
+        FIELD_TYPE.LONGLONG: 'BigIntegerField',
+        FIELD_TYPE.SHORT: 'IntegerField',
+        FIELD_TYPE.STRING: 'CharField',
+        FIELD_TYPE.TIMESTAMP: 'DateTimeField',
+        FIELD_TYPE.TINY: 'IntegerField',
+        FIELD_TYPE.TINY_BLOB: 'TextField',
+        FIELD_TYPE.MEDIUM_BLOB: 'TextField',
+        FIELD_TYPE.LONG_BLOB: 'TextField',
+        FIELD_TYPE.VAR_STRING: 'CharField',
+    }
+except ImportError
+    MYSQL_MAP = {}
+
 from peewee import *
 
 
@@ -102,6 +128,29 @@ class PgDB(DB):
         for row in self.conn.execute(framing, (table,)):
             fks.append(row)
         return fks
+
+
+class MySQLDB(DB):
+    # thanks, django
+    reverse_mapping = MYSQL_MAP
+    
+    def get_conn_class(self):
+        return MySQLDatabase
+    
+    def get_columns(self, table):
+        curs = self.conn.execute('select * from %s limit 1' % table)
+        return dict((r[0], self.reverse_mapping.get(r[1], 'UnknownFieldType')) for r in curs.description)
+    
+    def get_foreign_keys(self, table):
+        framing = '''
+            SELECT column_name, referenced_table_name, referenced_column_name
+            FROM information_schema.key_column_usage
+            WHERE table_name = %s
+                AND table_schema = DATABASE()
+                AND referenced_table_name IS NOT NULL
+                AND referenced_column_name IS NOT NULL
+        '''
+        return [row for row in self.conn.execute(framing, (table,))]
 
 
 class SqDB(DB):
