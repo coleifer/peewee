@@ -40,7 +40,7 @@ try:
         FIELD_TYPE.LONG_BLOB: 'TextField',
         FIELD_TYPE.VAR_STRING: 'CharField',
     }
-except ImportError
+except ImportError:
     MYSQL_MAP = {}
 
 from peewee import *
@@ -236,6 +236,7 @@ class BaseModel(Model):
 engine_mapping = {
     'postgresql': PgDB,
     'sqlite': SqDB,
+    'mysql': MySQLDB,
 }
 
 def get_db(engine):
