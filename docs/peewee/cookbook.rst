@@ -575,3 +575,30 @@ blogs that have no entries:
     
     for blog in blogs:
         print blog.name, ' has no entries'
+
+
+Introspecting databases
+-----------------------
+
+If you'd like to generate some models for an existing database, you can try
+out the database introspection tool "pwiz" that comes with peewee.
+
+Usage:
+
+.. code-block:: console
+
+    python pwiz.py my_postgresql_database
+
+It works with postgresql, mysql and sqlite:
+
+.. code-block:: console
+
+    python pwiz.py test.db --engine=sqlite
+
+pwiz will generate code for:
+
+* database connection object
+* a base model class to use this connection
+* models that were introspected from the database tables
+
+The generated code is written to stdout.
