@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 #            .----.
 #           ===(_)==   THIS WONT HURT A BIT...
 #          // 6  6 \\  /
