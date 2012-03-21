@@ -186,7 +186,7 @@ def join():
                 email=request.form['email'],
                 join_date=datetime.datetime.now()
             )
-            
+
             # mark the user as being 'authenticated' by setting the session vars
             auth_user(user)
             return redirect(url_for('homepage'))
@@ -237,7 +237,7 @@ def user_detail(username):
     # using the "get_object_or_404" shortcut here to get a user with a valid
     # username or short-circuit and display a 404 if no user exists in the db
     user = get_object_or_404(User, username=username)
-    
+
     # get all the users messages ordered newest-first -- note how we're accessing
     # the messages -- user.message_set.  could also have written it as:
     # Message.select().where(user=user).order_by(('pub_date', 'desc'))

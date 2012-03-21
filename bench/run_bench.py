@@ -76,7 +76,7 @@ def test_list_entries_for_user(m):
         b = m.create_blog(u, 'blog%d' % i)
         for j in xrange(10):
             e = m.create_entry(b, 'entry%d' % i, '')
-            
+
     for user in m.list_users():
         for i in xrange(100):
             entries = m.list_entries_by_user(user)
