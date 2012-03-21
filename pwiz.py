@@ -56,7 +56,7 @@ class DB(object):
     def get_columns(self, table):
         """
         get_columns('some_table')
-        
+
         {
             'name': 'CharField',
             'age': 'IntegerField',
@@ -67,7 +67,7 @@ class DB(object):
     def get_foreign_keys(self, table):
         """
         get_foreign_keys('some_table')
-        
+
         [
             # column,   rel table,  rel pk
             ('blog_id', 'blog',     'id'),
@@ -116,13 +116,13 @@ class PgDB(DB):
         framing = '''
             SELECT
                 kcu.column_name, ccu.table_name, ccu.column_name
-            FROM information_schema.table_constraints AS tc 
-            JOIN information_schema.key_column_usage AS kcu 
+            FROM information_schema.table_constraints AS tc
+            JOIN information_schema.key_column_usage AS kcu
                 ON tc.constraint_name = kcu.constraint_name
-            JOIN information_schema.constraint_column_usage AS ccu 
+            JOIN information_schema.constraint_column_usage AS ccu
                 ON ccu.constraint_name = tc.constraint_name
-            WHERE 
-                tc.constraint_type = 'FOREIGN KEY' AND 
+            WHERE
+                tc.constraint_type = 'FOREIGN KEY' AND
                 tc.table_name = %s
         '''
         fks = []
@@ -134,14 +134,14 @@ class PgDB(DB):
 class MySQLDB(DB):
     # thanks, django
     reverse_mapping = MYSQL_MAP
-    
+
     def get_conn_class(self):
         return MySQLDatabase
-    
+
     def get_columns(self, table):
         curs = self.conn.execute('select * from %s limit 1' % table)
         return dict((r[0], self.reverse_mapping.get(r[1], 'UnknownFieldType')) for r in curs.description)
-    
+
     def get_foreign_keys(self, table):
         framing = '''
             SELECT column_name, referenced_table_name, referenced_column_name
@@ -173,10 +173,10 @@ class SqDB(DB):
         'date': 'DateTimeField',
         'datetime': 'DateTimeField',
     }
-    
+
     def get_conn_class(self):
         return SqliteDatabase
-    
+
     def map_col(self, col):
         col = col.lower()
         if col in self.reverse_mapping:
@@ -203,7 +203,7 @@ class SqDB(DB):
 
         curs = self.conn.execute("SELECT sql FROM sqlite_master WHERE tbl_name = ? AND type = ?", [table, "table"])
         table_def = curs.fetchone()[0].strip()
-        
+
         try:
             columns = re.search('\((.+)\)', table_def).groups()[0]
         except AttributeError:
@@ -218,7 +218,7 @@ class SqDB(DB):
 
             fk_column, rel_table, rel_pk = [s.strip('"') for s in m.groups()]
             fks.append((fk_column, rel_table, rel_pk))
-        
+
         return fks
 
 
@@ -251,7 +251,7 @@ def get_db(engine):
 def introspect(engine, database, **connect):
     db = get_db(engine)
     db.connect(database, **connect)
-    
+
     tables = db.get_tables()
 
     models = {}
@@ -301,7 +301,7 @@ def introspect(engine, database, **connect):
             ])
             print '    %s = %s(%s)' % (cn(column), field_class, field_params)
         print
-        
+
         print '    class Meta:'
         print '        db_table = \'%s\'' % model
         print
