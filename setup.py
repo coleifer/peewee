@@ -7,13 +7,13 @@ f.close()
 
 setup(
     name='peewee',
-    version="0.7.5",
+    version="0.9.2",
     description='a little orm',
     long_description=readme,
     author='Charles Leifer',
     author_email='coleifer@gmail.com',
     url='http://github.com/coleifer/peewee/',
-    py_modules=['peewee'],
+    py_modules=['peewee', 'pwiz'],
     classifiers=[
         'Development Status :: 4 - Beta',
         'Environment :: Web Environment',
@@ -22,5 +22,6 @@ setup(
         'Operating System :: OS Independent',
         'Programming Language :: Python',
     ],
-    test_suite='runtests.collect'
+    test_suite='runtests.collect',
+    scripts = ['pwiz.py'],
 )

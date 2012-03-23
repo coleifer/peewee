@@ -20,7 +20,7 @@ Contents:
    
    peewee/overview
    peewee/installation
-   peewee/uses
+   peewee/cookbook
    peewee/example
    peewee/models
    peewee/fields

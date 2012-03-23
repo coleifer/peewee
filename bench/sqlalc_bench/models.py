@@ -10,7 +10,7 @@ Base = declarative_base()
 
 class User(Base):
     __tablename__ = 'sqlalc_users'
-    
+
     id = Column(Integer, primary_key=True)
     username = Column(String)
     active = Column(Boolean)

@@ -108,8 +108,8 @@ opposite, grabs all the blogs that are live whose author is a staffer:
 
     >>> Blog.select().where(status=LIVE).join(User).where(is_staff=True)
 
-.. note:: to :py:meth:`~SelectQuery.join` from one model to another there must be a 
-    :py:class:`ForeignKeyField` linking the two.
+.. note::
+    to :py:meth:`~SelectQuery.join` from one model to another there must be a :py:class:`ForeignKeyField` linking the two.
 
 Another way to write the above query would be:
 
@@ -319,6 +319,69 @@ You can also specify a custom aggregator:
 .. code-block:: python
 
     query = Blog.select().annotate(Entry, peewee.Max('pub_date', 'max_pub_date'))
+
+
+SQL Functions, "Raw expressions" and the R() object
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you've been reading in order, you will have already seen the :py:class:`Q` and
+:py:class:`F` objects.  The :py:class:`R` object is the final query helper and its
+purpose is to allow you to express arbitrary expressions as part of your structured
+query without having to result to using a :py:class:`RawQuery`.
+
+Selecting users whose username begins with "a":
+
+.. code-block:: python
+
+    # select the users' id, username and the first letter of their username, lower-cased
+    query = User.select(['id', 'username', R('LOWER(SUBSTR(username, 1, 1))', 'first_letter')])
+    
+    # now filter this list to include only users whose username begins with "a"
+    a_users = query.where(R('first_letter=%s', 'a'))
+    
+    >>> for user in a_users:
+    ...    print user.first_letter, user.username
+    
+    a alpha
+    A Alton
+
+This same functionality could be easily exposed as part of the where clause, the
+only difference being that the first letter is not selected and therefore not an
+attribute of the model instance:
+
+.. code-block:: python
+
+    a_users = User.filter(R('LOWER(SUBSTR(username, 1, 1)) = %s', 'a'))
+
+We can query for multiple values using :py:class:`R` objects, for example selecting
+users whose usernames begin with a range of letters "b" through "d":
+
+.. code-block:: python
+
+    letters =  ('b', 'c', 'd')
+    bcd_users = User.filter(R('LOWER(SUBSTR(username, 1, 1)) IN (%s, %s, %s)', *letters))
+
+We can write subqueries as part of a :py:class:`SelectQuery`, for example counting
+the number of entries on a blog:
+
+.. code-block:: python
+
+    entry_query = R('(SELECT COUNT(*) FROM entry WHERE entry.blog_id=blog.id)', 'entry_count')
+    blogs = Blog.select(['id', 'title', entry_query]).order_by(('entry_count', 'desc'))
+    
+    for blog in blogs:
+        print blog.title, blog.entry_count
+
+It is also possible to use subqueries as part of a where clause, for example finding
+blogs that have no entries:
+
+.. code-block:: python
+
+    no_entry_query = R('NOT EXISTS (SELECT * FROM entry WHERE entry.blog_id=blog.id)')
+    blogs = Blog.filter(no_entry_query)
+    
+    for blog in blogs:
+        print blog.title, ' has no entries'
 
 
 Saving Queries by Selecting Related Models
