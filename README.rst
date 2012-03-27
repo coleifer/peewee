@@ -55,6 +55,9 @@ examples.
 specific question?  come hang out in the #peewee channel on freenode.irc.net,
 or post to the mailing list, http://groups.google.com/group/peewee-orm
 
+lastly, peewee runs on python 2.5 or greater, though there is currently no
+support for python3
+
 
 Why?
 ----
