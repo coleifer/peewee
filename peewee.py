@@ -371,7 +371,7 @@ class Database(object):
         if model_class._meta.pk_sequence and self.adapter.sequence_support:
             if not self.sequence_exists(model_class._meta.pk_sequence):
                 self.create_sequence(model_class._meta.pk_sequence)
-        framing = safe and "CREATE TABLE IF NOT EXISTS %s (%s);" or "CREATE TABLE %s (%s);"
+        framing = "CREATE TABLE " + ("IF NOT EXISTS" if safe else "") + " %s (%s) DEFAULT CHARSET=utf8 COLLATE utf8_general_ci;" 
         columns = []
 
         for field in model_class._meta.get_fields():
