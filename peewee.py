@@ -367,21 +367,25 @@ class Database(object):
     def field_sql(self, field):
         return '%s %s' % (self.quote_name(field.db_column), field.render_field_template())
 
-    def create_table_query(self, model_class, safe):
+    def create_table_query(self, model_class, safe, extra=''):
         if model_class._meta.pk_sequence and self.adapter.sequence_support:
             if not self.sequence_exists(model_class._meta.pk_sequence):
                 self.create_sequence(model_class._meta.pk_sequence)
-        framing = safe and "CREATE TABLE IF NOT EXISTS %s (%s);" or "CREATE TABLE %s (%s);"
+        framing = safe and "CREATE TABLE IF NOT EXISTS %s (%s)%s;" or "CREATE TABLE %s (%s)%s;"
         columns = []
 
         for field in model_class._meta.get_fields():
             columns.append(self.field_sql(field))
 
-        table = self.quote_name(model_class._meta.db_table)
-        return framing % (table, ', '.join(columns))
+        if extra:
+            extra = ' ' + extra
 
-    def create_table(self, model_class, safe=False):
-        self.execute(self.create_table_query(model_class, safe))
+        table = self.quote_name(model_class._meta.db_table)
+
+        return framing % (table, ', '.join(columns), extra)
+
+    def create_table(self, model_class, safe=False, extra=''):
+        self.execute(self.create_table_query(model_class, safe, extra))
 
     def create_index_query(self, model_class, field_name, unique):
         framing = 'CREATE %(unique)s INDEX %(index)s ON %(table)s(%(field)s);'
@@ -2434,11 +2438,11 @@ class Model(object):
         return cls._meta.db_table in cls._meta.database.get_tables()
 
     @classmethod
-    def create_table(cls, fail_silently=False):
+    def create_table(cls, fail_silently=False, extra=''):
         if fail_silently and cls.table_exists():
             return
 
-        cls._meta.database.create_table(cls)
+        cls._meta.database.create_table(cls, extra=extra)
 
         for field_name, field_obj in cls._meta.fields.items():
             if isinstance(field_obj, ForeignKeyField):
