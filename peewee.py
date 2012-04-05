@@ -1922,11 +1922,17 @@ class TextColumn(Column):
 
 class DateTimeColumn(Column):
     db_field = 'datetime'
+    dt_re = re.compile('^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})(\..+)?')
+    dt_bare_re = re.compile('^\d{4}-\d{2}-\d{2}$')
 
     def python_value(self, value):
         if isinstance(value, basestring):
-            value = value.rsplit('.', 1)[0]
-            return datetime(*time.strptime(value, '%Y-%m-%d %H:%M:%S')[:6])
+            match = self.dt_re.match(value)
+            if match:
+                value = match.groups()[0]
+                return datetime(*time.strptime(value, '%Y-%m-%d %H:%M:%S')[:6])
+            elif self.dt_bare_re.match(value):
+                return datetime(*time.strptime(value, '%Y-%m-%d')[:3])
         return value
 
 
