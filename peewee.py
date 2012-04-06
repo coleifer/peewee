@@ -8,7 +8,7 @@
 #     //
 #    '
 from __future__ import with_statement
-from datetime import datetime
+import datetime
 import copy
 import decimal
 import logging
@@ -48,7 +48,9 @@ if sqlite3 is None and psycopg2 is None and mysql is None:
     raise ImproperlyConfigured('Either sqlite3, psycopg2 or MySQLdb must be installed')
 
 if sqlite3:
-    sqlite3.register_adapter(decimal.Decimal, lambda v: str(v))
+    sqlite3.register_adapter(decimal.Decimal, str)
+    sqlite3.register_adapter(datetime.date, str)
+    sqlite3.register_adapter(datetime.time, str)
     sqlite3.register_converter('decimal', lambda v: decimal.Decimal(v))
 
 if psycopg2:
@@ -94,6 +96,8 @@ class BaseAdapter(object):
             'string': 'VARCHAR',
             'text': 'TEXT',
             'datetime': 'DATETIME',
+            'time': 'TIME',
+            'date': 'DATE',
             'primary_key': 'INTEGER',
             'primary_key_with_sequence': 'INTEGER',
             'foreign_key': 'INTEGER',
@@ -1922,17 +1926,47 @@ class TextColumn(Column):
 
 class DateTimeColumn(Column):
     db_field = 'datetime'
-    dt_re = re.compile('^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})(\..+)?')
-    dt_bare_re = re.compile('^\d{4}-\d{2}-\d{2}$')
+    dt_re = re.compile('^(\d{4}-\d{1,2}-\d{1,2} \d{2}:\d{2}:\d{2})(?:\.(\d+))?')
+    dt_bare_re = re.compile('^\d{4}-\d{1,2}-\d{1,2}$')
 
     def python_value(self, value):
         if isinstance(value, basestring):
             match = self.dt_re.match(value)
             if match:
-                value = match.groups()[0]
-                return datetime(*time.strptime(value, '%Y-%m-%d %H:%M:%S')[:6])
+                value, usec = match.groups()
+                usec = usec and int(usec) or 0
+                return datetime.datetime(*time.strptime(value, '%Y-%m-%d %H:%M:%S')[:6], microsecond=usec)
             elif self.dt_bare_re.match(value):
-                return datetime(*time.strptime(value, '%Y-%m-%d')[:3])
+                return datetime.datetime(*time.strptime(value, '%Y-%m-%d')[:3])
+        return value
+
+
+class DateColumn(Column):
+    db_field = 'date'
+    dt_bare_re = re.compile('^\d{4}-\d{1,2}-\d{1,2}$')
+
+    def python_value(self, value):
+        if isinstance(value, basestring):
+            if self.dt_bare_re.match(value):
+                return datetime.date(*time.strptime(value, '%Y-%m-%d')[:3])
+        elif isinstance(value, datetime.datetime):
+            return value.date()
+        return value
+
+
+class TimeColumn(Column):
+    db_field = 'time'
+    time_re = re.compile('^(\d{2}:\d{2}:\d{2})(?:\.(\d+))?$')
+
+    def python_value(self, value):
+        if isinstance(value, basestring):
+            match = self.time_re.match(value)
+            if match:
+                value, usec = match.groups()
+                usec = usec and int(usec) or 0
+                return datetime.time(*time.strptime(value, '%H:%M:%S')[3:6], microsecond=usec)
+        elif isinstance(value, datetime.datetime):
+            return value.time()
         return value
 
 
@@ -2084,6 +2118,14 @@ class TextField(Field):
 
 class DateTimeField(Field):
     column_class = DateTimeColumn
+
+
+class DateField(Field):
+    column_class = DateColumn
+
+
+class TimeField(Field):
+    column_class = TimeColumn
 
 
 class IntegerField(Field):
