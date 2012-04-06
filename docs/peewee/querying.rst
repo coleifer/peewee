@@ -437,6 +437,46 @@ fetching all entries (with related blog data), then reconstructing the blogs in 
 is not provided as part of peewee.
 
 
+Speeding up simple select queries
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Simple select queries can get a performance boost (especially when iterating over large
+result sets) by calling :py:meth:`~SelectQuery.naive`.  This method simply patches all
+attributes directly from the cursor onto the model.  For simple queries this should have
+no noticeable impact.  The main difference is when multiple tables are queried, as in the
+previous example:
+
+.. code-block:: python
+
+    # above example
+    entries = Entry.select({
+        Entry: ['*'],
+        Blog: ['*'],
+    }).order_by(('pub_date', 'desc')).join(Blog)
+    
+    for entry in entries.limit(10):
+        print '%s, posted on %s' % (entry.title, entry.blog.title)
+
+And here is how you would do the same if using a naive query:
+
+.. code-block:: python
+
+    # very similar query to the above -- main difference is we're
+    # aliasing the blog title to "blog_title"
+    entries = Entry.select({
+        Entry: ['*'],
+        Blog: [('title', 'blog_title')],
+    }).order_by(('pub_date', 'desc')).join(Blog)
+
+    entries = entries.naive()
+    
+    # now instead of calling "entry.blog.title" the blog's title
+    # is exposed directly on the entry model as "blog_title" and
+    # no blog instance is created
+    for entry in entries.limit(10):
+        print '%s, posted on %s' % (entry.title, entry.blog_title)
+
+
 Query evaluation
 ----------------
 
@@ -778,6 +818,19 @@ SelectQuery
 
         indicates that this query should only return distinct rows.  results in a
         ``SELECT DISTINCT`` query.
+
+    .. py:method:: naive()
+
+        :rtype: :py:class:`SelectQuery`
+
+        indicates that this query should only attempt to reconstruct a single model
+        instance for every row returned by the cursor.  if multiple tables were queried,
+        the columns returned are patched directly onto the single model instance.
+
+        .. note:: 
+
+            this can provide a significant speed improvement when doing simple
+            iteration over a large result set.
 
     .. py:method:: execute()
     
