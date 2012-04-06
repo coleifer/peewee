@@ -589,7 +589,7 @@ class QueryResultWrapper(object):
         for attr, value in attr_dict.iteritems():
             if attr in instance._meta.columns:
                 field = instance._meta.columns[attr]
-                setattr(instance, attr, field.python_value(value))
+                setattr(instance, field.name, field.python_value(value))
             else:
                 setattr(instance, attr, value)
         return instance

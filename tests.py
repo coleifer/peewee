@@ -1885,6 +1885,15 @@ class RelatedFieldTests(BaseModelTestCase):
             e21.pk: ['e21', 'b2'],
             e22.pk: ['e22', 'b2'],
         })
+        
+        # check that it works right when you're using a different underlying col
+        lb1 = LegacyBlog.create(name='lb1')
+        lb2 = LegacyBlog.create(name='lb2')
+        sq = LegacyBlog.select(['id', 'name']).where(id__in=[lb1.id, lb2.id]).naive()
+        self.assertEqual(dict((lb.id, lb.name) for lb in sq), {
+            lb1.id: 'lb1',
+            lb2.id: 'lb2',
+        })
 
 
 class RecursiveDeleteTestCase(BaseModelTestCase):
