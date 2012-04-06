@@ -25,7 +25,7 @@ try:
         FIELD_TYPE.CHAR: 'CharField',
         FIELD_TYPE.DECIMAL: 'DecimalField',
         FIELD_TYPE.NEWDECIMAL: 'DecimalField',
-        FIELD_TYPE.DATE: 'DateTimeField',
+        FIELD_TYPE.DATE: 'DateField',
         FIELD_TYPE.DATETIME: 'DateTimeField',
         FIELD_TYPE.DOUBLE: 'FloatField',
         FIELD_TYPE.FLOAT: 'FloatField',
@@ -34,6 +34,7 @@ try:
         FIELD_TYPE.LONGLONG: 'BigIntegerField',
         FIELD_TYPE.SHORT: 'IntegerField',
         FIELD_TYPE.STRING: 'CharField',
+        FIELD_TYPE.TIME: 'TimeField',
         FIELD_TYPE.TIMESTAMP: 'DateTimeField',
         FIELD_TYPE.TINY: 'IntegerField',
         FIELD_TYPE.TINY_BLOB: 'TextField',
@@ -100,8 +101,11 @@ class PgDB(DB):
         700: 'FloatField',
         701: 'FloatField',
         1043: 'CharField',
+        1082: 'DateField',
         1114: 'DateTimeField',
         1184: 'DateTimeField',
+        1083: 'TimeField',
+        1266: 'TimeField',
         1700: 'DecimalField',
     }
 
@@ -170,8 +174,9 @@ class SqDB(DB):
         'real': 'FloatField',
         'text': 'TextField',
         'char': 'CharField',
-        'date': 'DateTimeField',
+        'date': 'DateField',
         'datetime': 'DateTimeField',
+        'time': 'TimeField',
     }
 
     def get_conn_class(self):
