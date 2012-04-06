@@ -49,6 +49,9 @@ You can use django-style syntax to create select queries::
     Tweet.filter(Q(user__is_staff=True) | Q(user__is_superuser=True))
 
 
+Learning more
+-------------
+
 check the `documentation <http://charlesleifer.com/docs/peewee/>`_ for more
 examples.
 
