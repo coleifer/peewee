@@ -2782,9 +2782,14 @@ class FieldTypeTests(BaseModelTestCase):
         nm2 = NullModel.create(datetime_field=dt2, time_field=t2)
         
         nmf1 = NullModel.get(id=nm1.id)
-        self.assertEqual(nmf1.datetime_field, dt1)
         self.assertEqual(nmf1.date_field, d1)
-        self.assertEqual(nmf1.time_field, t1)
+        if BACKEND == 'mysql':
+            # mysql doesn't store microseconds
+            self.assertEqual(nmf1.datetime_field, dt2)
+            self.assertEqual(nmf1.time_field, t2)
+        else:
+            self.assertEqual(nmf1.datetime_field, dt1)
+            self.assertEqual(nmf1.time_field, t1)
         
         nmf2 = NullModel.get(id=nm2.id)
         self.assertEqual(nmf2.datetime_field, dt2)
