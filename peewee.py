@@ -1277,6 +1277,7 @@ class SelectQuery(BaseQuery):
         self._distinct = False
         self._qr = None
         self._for_update = False
+        self._naive = False
         super(SelectQuery, self).__init__(model)
 
     def clone(self):
@@ -1290,6 +1291,7 @@ class SelectQuery(BaseQuery):
         query._distinct = self._distinct
         query._qr = self._qr
         query._for_update = self._for_update
+        query._naive = self._naive
         query._where = self.clone_where()
         query._where_models = set(self._where_models)
         query._joined_models = self._joined_models.copy()
@@ -1417,6 +1419,10 @@ class SelectQuery(BaseQuery):
 
     def annotate(self, related_model, aggregation=None):
         return annotate_query(self, related_model, aggregation)
+    
+    @returns_clone
+    def naive(self, make_naive=True):
+        self._naive = make_naive
 
     def parse_select_query(self, alias_map):
         q = self.query
@@ -1564,6 +1570,8 @@ class SelectQuery(BaseQuery):
             except EmptyResultException:
                 return []
             else:
+                if self._naive:
+                    meta = None
                 self._qr = QueryResultWrapper(self.model, self.raw_execute(sql, params), meta)
                 self._dirty = False
                 return self._qr

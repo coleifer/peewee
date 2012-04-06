@@ -1849,6 +1849,42 @@ class RelatedFieldTests(BaseModelTestCase):
         qr = Blog.select().where(title='xxxx').execute()
         titles = [b.title for b in qr.iterator()]
         self.assertEqual(titles, [])
+    
+    def test_naive_query(self):
+        b1 = Blog.create(title='b1')
+        b2 = Blog.create(title='b2')
+        
+        e11 = Entry.create(title='e11', blog=b1)
+        e21 = Entry.create(title='e21', blog=b2)
+        e22 = Entry.create(title='e22', blog=b2)
+        
+        # attr assignment works in the simple case
+        sq = Blog.select().order_by('id').naive()
+        self.assertEqual(dict((b.id, b.title) for b in sq), {
+            b1.id: 'b1',
+            b2.id: 'b2',
+        })
+        
+        # aggregate assignment works as expected
+        sq = Blog.select({
+            Blog: ['id', 'title'],
+            Entry: [peewee.Count('id', 'count')],
+        }).order_by('id').join(Entry).group_by(Blog).naive()
+        self.assertEqual(dict((b.id, [b.title, b.count]) for b in sq), {
+            b1.id: ['b1', 1],
+            b2.id: ['b2', 2],
+        })
+        
+        # select related gets flattened
+        sq = Entry.select({
+            Entry: ['pk', 'title'],
+            Blog: [('title', 'blog_title')],
+        }).join(Blog).order_by('id').naive()
+        self.assertEqual(dict((e.pk, [e.title, e.blog_title]) for e in sq), {
+            e11.pk: ['e11', 'b1'],
+            e21.pk: ['e21', 'b2'],
+            e22.pk: ['e22', 'b2'],
+        })
 
 
 class RecursiveDeleteTestCase(BaseModelTestCase):
