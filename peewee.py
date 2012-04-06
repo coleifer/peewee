@@ -2012,7 +2012,7 @@ class DoubleColumn(FloatColumn):
 
 class DecimalColumn(Column):
     db_field = 'decimal'
-    field_template = '%(column_type)s(%(max_digits)d, %(decimal_places)d)'
+    template = '%(column_type)s(%(max_digits)d, %(decimal_places)d)'
 
     def get_attributes(self):
         return {
