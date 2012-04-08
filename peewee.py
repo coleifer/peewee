@@ -1419,7 +1419,13 @@ class SelectQuery(BaseQuery):
 
     def annotate(self, related_model, aggregation=None):
         return annotate_query(self, related_model, aggregation)
-    
+
+    def aggregate(self, func):
+        clone = self.order_by()
+        clone.query = [func]
+        curs = self.database.execute(*clone.sql())
+        return curs.fetchone()[0]
+
     @returns_clone
     def naive(self, make_naive=True):
         self._naive = make_naive

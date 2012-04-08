@@ -2361,6 +2361,15 @@ class AnnotateQueryTests(BaseModelTestCase):
             'SELECT t1.`id`, t1.`title`, MAX(t2.`pub_date`) AS max_pub FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id` GROUP BY t1.`id`, t1.`title`', []
         ))
 
+    def test_aggregate(self):
+        blergs = [Blog.create(title='b%d' % i) for i in range(10)]
+
+        ct = Blog.select().aggregate(peewee.Count('id'))
+        self.assertEqual(ct, 10)
+
+        max_id = Blog.select().aggregate(peewee.Max('id'))
+        self.assertEqual(max_id, blergs[-1].id)
+
 
 class FQueryTestCase(BaseModelTestCase):
     def setUp(self):
