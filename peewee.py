@@ -1600,9 +1600,9 @@ class SelectQuery(BaseQuery):
 
 
 class UpdateQuery(BaseQuery):
-    def __init__(self, model, **kwargs):
+    def __init__(self, _model, **kwargs):
         self.update_query = kwargs
-        super(UpdateQuery, self).__init__(model)
+        super(UpdateQuery, self).__init__(_model)
 
     def clone(self):
         query = UpdateQuery(self.model, **self.update_query)
