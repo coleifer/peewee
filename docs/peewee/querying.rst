@@ -188,7 +188,7 @@ lookup types are available in peewee:
 
 
 Performing advanced queries
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+---------------------------
 
 As you may have noticed, all the examples up to now have shown queries that
 combine multiple clauses with "AND".  Taking another page from Django's ORM,
@@ -320,6 +320,14 @@ You can also specify a custom aggregator:
 
     query = Blog.select().annotate(Entry, peewee.Max('pub_date', 'max_pub_date'))
 
+Conversely, sometimes you want to perform an aggregate query that returns a
+scalar value, like the "max id".  Queries like this can be executed by using
+the :py:meth:`~SelectQuery.aggregate` method:
+
+.. code-block:: python
+
+    max_id = Blog.select().aggregate(Max('id'))
+
 
 SQL Functions, "Raw expressions" and the R() object
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -434,7 +442,8 @@ This works for following objects "up" the chain, i.e. following foreign key rela
 The reverse is not true, however -- you cannot issue a single query and get all related
 sub-objects, i.e. list blogs and prefetch all related entries.  This *can* be done by
 fetching all entries (with related blog data), then reconstructing the blogs in python, but
-is not provided as part of peewee.
+is not provided as part of peewee.  For a detailed discussion of working 
+around this, see the `discussion here <https://groups.google.com/forum/?fromgroups#!topic/peewee-orm/RLd2r-eKp7w>`_.
 
 
 Speeding up simple select queries
@@ -650,6 +659,19 @@ SelectQuery
         >>> sq = SelectQuery(Blog).join(Entry).where(title='Some Entry')
         >>> sq = SelectQuery(User).join(Relationship, on='to_user_id').where(from_user=self)
 
+    .. py:method:: naive()
+
+        :rtype: :py:class:`SelectQuery`
+
+        indicates that this query should only attempt to reconstruct a single model
+        instance for every row returned by the cursor.  if multiple tables were queried,
+        the columns returned are patched directly onto the single model instance.
+
+        .. note:: 
+
+            this can provide a significant speed improvement when doing simple
+            iteration over a large result set.
+
     .. py:method:: switch(model)
     
         :param model: model to switch the ``query context`` to.
@@ -707,6 +729,16 @@ SelectQuery
             returned.  To avoid this, you can explicitly join before calling ``annotate()``::
             
                 >>> Blog.select().join(Entry, 'left outer').annotate(Entry)
+
+    .. py:method:: aggregate(aggregation)
+        
+        :param aggregation: a function specifying what aggregation to perform, for
+          example ``Max('id')``.  This can be a 3-tuple if you would like to perform
+          a custom aggregation: ``("Max", "id", "max_id")``.
+
+        Method to look at an aggregate of rows using a given function and
+        return a scalar value, such as the count of all rows or the average
+        value of a particular column.
 
     .. py:method:: group_by(clause)
 
@@ -818,19 +850,6 @@ SelectQuery
 
         indicates that this query should only return distinct rows.  results in a
         ``SELECT DISTINCT`` query.
-
-    .. py:method:: naive()
-
-        :rtype: :py:class:`SelectQuery`
-
-        indicates that this query should only attempt to reconstruct a single model
-        instance for every row returned by the cursor.  if multiple tables were queried,
-        the columns returned are patched directly onto the single model instance.
-
-        .. note:: 
-
-            this can provide a significant speed improvement when doing simple
-            iteration over a large result set.
 
     .. py:method:: execute()
     
