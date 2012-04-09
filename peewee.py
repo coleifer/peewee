@@ -934,6 +934,7 @@ class BaseQuery(object):
         self._where_models = set()
         self._joins = {}
         self._joined_models = set()
+        self._table_alias = {}
 
     def _clone_dict_graph(self, dg):
         cloned = {}
@@ -1032,11 +1033,13 @@ class BaseQuery(object):
             self._where_models.update(find_models(parsed))
 
     @returns_clone
-    def join(self, model, join_type=None, on=None):
+    def join(self, model, join_type=None, on=None, alias=None):
         if self.query_context._meta.rel_exists(model):
             self._joined_models.add(model)
             self._joins.setdefault(self.query_context, [])
             self._joins[self.query_context].append((model, join_type, on))
+            if alias:
+                self._table_alias[model] = alias
             self.query_context = model
         else:
             raise AttributeError('No foreign key found between %s and %s' % \
@@ -1080,8 +1083,11 @@ class BaseQuery(object):
             seen.add(model)
 
             if alias_required:
-                alias_count += 1
-                alias_map[model] = 't%d' % alias_count
+                if model in self._table_alias:
+                    alias_map[model] = self._table_alias[model]
+                else:
+                    alias_count += 1
+                    alias_map[model] = 't%d' % alias_count
             else:
                 alias_map[model] = ''
 
@@ -1121,8 +1127,11 @@ class BaseQuery(object):
 
         alias_required = self.use_aliases()
         if alias_required:
-            alias_count += 1
-            alias_map[self.model] = 't%d' % alias_count
+            if self.model in self._table_alias:
+                alias_map[self.model] = self._table_alias[self.model]
+            else:
+                alias_count += 1
+                alias_map[self.model] = 't%d' % alias_count
         else:
             alias_map[self.model] = ''
 
@@ -1296,6 +1305,7 @@ class SelectQuery(BaseQuery):
         query._where_models = set(self._where_models)
         query._joined_models = self._joined_models.copy()
         query._joins = self.clone_joins()
+        query._table_alias = dict(self._table_alias)
         return query
 
     @returns_clone
@@ -1600,6 +1610,7 @@ class UpdateQuery(BaseQuery):
         query._where_models = set(self._where_models)
         query._joined_models = self._joined_models.copy()
         query._joins = self.clone_joins()
+        query._table_alias = dict(self._table_alias)
         return query
 
     def parse_update(self):
@@ -1668,6 +1679,7 @@ class DeleteQuery(BaseQuery):
         query._where_models = set(self._where_models)
         query._joined_models = self._joined_models.copy()
         query._joins = self.clone_joins()
+        query._table_alias = dict(self._table_alias)
         return query
 
     def sql(self):

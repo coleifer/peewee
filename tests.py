@@ -350,6 +350,12 @@ class QueryTests(BasePeeweeTestCase):
         sq = SelectQuery(Blog, {Blog: ['title', 'id'], Entry: [peewee.Max('pk')]}).join(Entry)
         self.assertSQLEqual(sq.sql(), ('SELECT t1.`title`, t1.`id`, MAX(t2.`pk`) AS max FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id`', []))
 
+        sq = SelectQuery(Blog, {Blog: ['title', 'id']}).join(Entry, alias='e').where(title='foo')
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`title`, t1.`id` FROM `blog` AS t1 INNER JOIN `entry` AS e ON t1.`id` = e.`blog_id` WHERE e.`title` = ?', ['foo']))
+
+        sq = SelectQuery(Entry, {Entry: ['pk', 'title'], Blog: ['title']}).join(Blog, alias='b').where(title='foo')
+        self.assertSQLEqual(sq.sql(), ('SELECT b.`title`, t1.`pk`, t1.`title` FROM `entry` AS t1 INNER JOIN `blog` AS b ON t1.`blog_id` = b.`id` WHERE b.`title` = ?', ['foo']))
+
     def test_selecting_across_joins(self):
         sq = SelectQuery(Entry, '*').where(title='a1').join(Blog).where(title='a')
 
