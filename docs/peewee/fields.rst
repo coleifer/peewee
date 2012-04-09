@@ -71,6 +71,8 @@ Field Type            Sqlite              Postgresql          MySQL
 ``DecimalField``      decimal             numeric             numeric
 ``PrimaryKeyField``   integer             serial              integer
 ``ForeignKeyField``   integer             integer             integer
+``DateField``         date                date                date
+``TimeField``         time                time                time
 ===================   =================   =================   =================
 
 Some fields take special parameters...
@@ -194,7 +196,15 @@ Field class API
     
 .. py:class:: DateTimeField
 
-    Stores: python ``datetime`` instances
+    Stores: python ``datetime.datetime`` instances
+
+.. py:class:: DateField
+
+    Stores: python ``datetime.date`` instances
+
+.. py:class:: TimeField
+
+    Stores: python ``datetime.time`` instances
 
 .. py:class:: IntegerField
 
