@@ -81,7 +81,7 @@ Some fields take special parameters...
 +===============================+==============================================+
 | :py:class:`CharField`         | ``max_length``                               |
 +-------------------------------+----------------------------------------------+
-| :py:class:`DecimalField`      | ``max_digits``, ``decimal_places``                   |
+| :py:class:`DecimalField`      | ``max_digits``, ``decimal_places``           |
 +-------------------------------+----------------------------------------------+
 | :py:class:`ForeignKeyField`   | ``to``, ``related_name``,                    |
 |                               | ``cascade``, ``extra``                       |
