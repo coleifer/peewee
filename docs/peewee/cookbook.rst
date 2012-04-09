@@ -430,6 +430,18 @@ memory when iterating over large result sets:
         serializer.serialize_object(stat)
 
 
+For simple queries you can see further speed improvements by using the :py:meth:`SelectQuery.naive`
+query method.  See the documentation for details on this optimization.
+
+.. code-block:: python
+
+    stats_query = Stat.select().naive() # note we are calling "naive()"
+    stats_qr = stats_query.execute()
+
+    for stat in stats_qr.iterator():
+        serializer.serialize_object(stat)
+
+
 Performing atomic updates
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
