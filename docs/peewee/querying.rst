@@ -644,13 +644,14 @@ SelectQuery
         
             :py:meth:`~SelectQuery.where` calls are chainable
 
-    .. py:method:: join(model, join_type=None, on=None)
+    .. py:method:: join(model, join_type=None, on=None, alias=None)
 
         :param model: the model to join on.  there must be a :py:class:`ForeignKeyField` between
             the current ``query context`` and the model passed in.
         :param join_type: allows the type of ``JOIN`` used to be specified explicitly
         :param on: if multiple foreign keys exist between two models, this parameter
             is a string containing the name of the ForeignKeyField to join on.
+        :param alias: if provided, will be the name used to alias columns from this table in query
         :rtype: a :py:class:`SelectQuery` instance
 
         Generate a ``JOIN`` clause from the current ``query context`` to the ``model`` passed
