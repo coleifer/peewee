@@ -957,13 +957,14 @@ class BaseQuery(object):
     def lookup_cast(self, lookup, value):
         return self.database.adapter.lookup_cast(lookup, value)
 
-    def parse_query_args(self, model, **query):
+    def parse_query_args(self, _model, **query):
         """
         Parse out and normalize clauses in a query.  The query is composed of
         various column+lookup-type/value pairs.  Validates that the lookups
         are valid and returns a list of lookup tuples that have the form:
         (field name, (operation, value))
         """
+        model = _model
         parsed = []
         for lhs, rhs in query.iteritems():
             if self.query_separator in lhs:
@@ -1600,9 +1601,9 @@ class SelectQuery(BaseQuery):
 
 
 class UpdateQuery(BaseQuery):
-    def __init__(self, model, **kwargs):
+    def __init__(self, _model, **kwargs):
         self.update_query = kwargs
-        super(UpdateQuery, self).__init__(model)
+        super(UpdateQuery, self).__init__(_model)
 
     def clone(self):
         query = UpdateQuery(self.model, **self.update_query)
@@ -1708,9 +1709,9 @@ class DeleteQuery(BaseQuery):
 
 
 class InsertQuery(BaseQuery):
-    def __init__(self, model, **kwargs):
+    def __init__(self, _model, **kwargs):
         self.insert_query = kwargs
-        super(InsertQuery, self).__init__(model)
+        super(InsertQuery, self).__init__(_model)
 
     def parse_insert(self):
         cols = []
