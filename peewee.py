@@ -216,7 +216,7 @@ class PostgresqlAdapter(BaseAdapter):
                 model._meta.pk_sequence))
         else:
             cursor.execute("SELECT CURRVAL('\"%s_%s_seq\"')" % (
-                model._meta.db_table, model._meta.pk_name))
+                model._meta.db_table, model._meta.pk_col))
         return cursor.fetchone()[0]
 
 
@@ -538,7 +538,7 @@ class MySQLDatabase(Database):
             'constraint': self.quote_name(constraint),
             'field': self.quote_name(field.db_column),
             'to': self.quote_name(field.to._meta.db_table),
-            'to_field': self.quote_name(field.to._meta.pk_name),
+            'to_field': self.quote_name(field.to._meta.pk_col),
             'cascade': ' ON DELETE CASCADE' if field.cascade else '',
         }
 
@@ -1096,10 +1096,10 @@ class BaseQuery(object):
             field = from_model._meta.get_related_field_for_model(model, on)
             if field:
                 left_field = field.db_column
-                right_field = model._meta.pk_name
+                right_field = model._meta.pk_col
             else:
                 field = from_model._meta.get_reverse_related_field_for_model(model, on)
-                left_field = from_model._meta.pk_name
+                left_field = from_model._meta.pk_col
                 right_field = field.db_column
 
             if join_type is None:
@@ -1336,9 +1336,9 @@ class SelectQuery(BaseQuery):
         clone._limit = clone._offset = None
 
         if clone.use_aliases():
-            clone.query = 'COUNT(t1.%s)' % (clone.model._meta.pk_name)
+            clone.query = 'COUNT(t1.%s)' % (clone.model._meta.pk_col)
         else:
-            clone.query = 'COUNT(%s)' % (clone.model._meta.pk_name)
+            clone.query = 'COUNT(%s)' % (clone.model._meta.pk_col)
 
         res = clone.database.execute(*clone.sql())
 
@@ -1450,7 +1450,7 @@ class SelectQuery(BaseQuery):
             # convert '*' and primary key lookups
             if q == '*':
                 q = {self.model: self.model._meta.get_field_names()}
-            elif q == self.model._meta.pk_name:
+            elif q in (self.model._meta.pk_col, self.model._meta.pk_name):
                 q = {self.model: [self.model._meta.pk_name]}
             else:
                 return q, []
@@ -2319,7 +2319,7 @@ class ForeignKeyField(IntegerField):
         # need to update the attributes after the class has been built
         self.attributes.update({
             'to_table': self.to._meta.db_table,
-            'to_pk': self.to._meta.pk_name,
+            'to_pk': self.to._meta.pk_col,
         })
         self.column = self.get_column()
 
@@ -2459,6 +2459,7 @@ class BaseModel(type):
         if _meta.pk_sequence and _meta.database.adapter.sequence_support:
             pk_col.attributes['nextval'] = " default nextval('%s')" % _meta.pk_sequence
 
+        _meta.pk_col = pk_field.db_column
         _meta.auto_increment = isinstance(pk_col, PrimaryKeyColumn)
 
         for field in _meta.fields.values():

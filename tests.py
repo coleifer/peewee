@@ -177,6 +177,12 @@ class RelNonIntPK(TestModel):
     non_int_pk = peewee.ForeignKeyField(NonIntPK)
     name = peewee.CharField()
 
+class CustomPKColumn(TestModel):
+    custom_pk = peewee.PrimaryKeyField(db_column='pk')
+    xxx = peewee.CharField(default='')
+    
+class CPKRel(TestModel):
+    custom = peewee.ForeignKeyField(CustomPKColumn)
 
 class BasePeeweeTestCase(unittest.TestCase):
     def setUp(self):
@@ -2904,6 +2910,94 @@ class NonIntegerPKTestCase(BasePeeweeTestCase):
         self.assertEqual(list(ni2.relnonintpk_set.order_by('id')), [])
 
         rni21 = RelNonIntPK.create(non_int_pk=ni2, name='rni21')
+
+class CustomPKColumnTestCase(BasePeeweeTestCase):
+    """
+    refs issue 70 -- need to test places where pk_name is used explicitly
+    * model collect_queries
+    """
+    def setUp(self):
+        super(CustomPKColumnTestCase, self).setUp()
+        CPKRel.drop_table(True)
+        CustomPKColumn.drop_table(True)
+        CustomPKColumn.create_table()
+        CPKRel.create_table()
+    
+    def tearDown(self):
+        super(CustomPKColumnTestCase, self).tearDown()
+        CPKRel.drop_table(True)
+        CustomPKColumn.drop_table(True)
+    
+    def get_last(self, n=1):
+        return [x.msg for x in self.qh.queries[-n:]]
+
+    def test_create_sql(self):
+        sq = test_db.create_table_query(CPKRel, False)
+        if BACKEND == 'sqlite':
+            self.assertEqual(sq, 'CREATE TABLE "cpkrel" ("id" INTEGER NOT NULL PRIMARY KEY, "custom_id" INTEGER NOT NULL REFERENCES custompkcolumn (pk));')
+        elif BACKEND == 'postgresql':
+            self.assertEqual(sq, 'CREATE TABLE "cpkrel" ("id" SERIAL NOT NULL PRIMARY KEY, "custom_id" INTEGER NOT NULL REFERENCES custompkcolumn (pk));')
+        elif BACKEND == 'mysql':
+            self.assertEqual(sq, 'CREATE TABLE `cpkrel` (`id` INTEGER NOT NULL PRIMARY KEY, `custom_id` INTEGER NOT NULL REFERENCES custompkcolumn (pk));')
+
+    def test_joining(self):
+        sq = CPKRel.select().join(CustomPKColumn)
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`id`, t1.`custom_id` FROM `cpkrel` AS t1 INNER JOIN `custompkcolumn` AS t2 ON t1.`custom_id` = t2.`pk`', []))
+        
+        sq = CustomPKColumn.select().join(CPKRel)
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`xxx` FROM `custompkcolumn` AS t1 INNER JOIN `cpkrel` AS t2 ON t1.`pk` = t2.`custom_id`', []))
+
+    def test_model_operations(self):
+        cpk = CustomPKColumn.create()
+        self.assertSQLEqual(self.get_last()[0], (
+            'INSERT INTO `custompkcolumn` (`xxx`) VALUES (?)', ['']
+        ))
+        
+        self.assertEqual(CustomPKColumn.select().count(), 1)
+        self.assertSQLEqual(self.get_last()[0], (
+            'SELECT COUNT(pk) FROM `custompkcolumn`', []
+        ))
+        
+        cpk.save()
+        self.assertSQLEqual(self.get_last()[0], (
+            'UPDATE `custompkcolumn` SET `xxx`=? WHERE `pk` = ?', ['', cpk.get_pk()]
+        ))
+        self.assertEqual(CustomPKColumn.select().count(), 1)
+        
+        sq = CustomPKColumn.select('custom_pk')
+        self.assertSQLEqual(sq.sql(), ('SELECT `pk` FROM `custompkcolumn`', []))
+        
+        res = sq.get()
+        self.assertEqual(res.custom_pk, cpk.get_pk())
+        
+        cpk_rel = CPKRel.create(custom=cpk)
+        self.assertSQLEqual(self.get_last()[0], (
+            'INSERT INTO `cpkrel` (`custom_id`) VALUES (?)', [cpk.get_pk()]
+        ))
+        
+        from_db = CPKRel.get(id=cpk_rel.id)
+        self.assertEqual(from_db.custom, cpk)
+        self.assertSQLEqual(self.get_last()[0], (
+            'SELECT `pk`, `xxx` FROM `custompkcolumn` WHERE `pk` = ? LIMIT 1', [cpk.get_pk()]
+        ))
+        self.assertTrue(from_db.custom.custom_pk == cpk.get_pk() == cpk.custom_pk)
+        
+        cpk = CustomPKColumn.create()
+        pk = cpk.get_pk()
+        
+        cpk.delete_instance()
+        self.assertSQLEqual(self.get_last()[0], (
+            'DELETE FROM `custompkcolumn` WHERE `pk` = ?', [pk]
+        ))
+    
+    def test_subquery(self):
+        cpk_q = CustomPKColumn.select().where(xxx='faps')
+        cpk_rel_q = CPKRel.select().where(custom__in=cpk_q)
+        self.assertSQLEqual(cpk_rel_q.sql(), ('SELECT `id`, `custom_id` FROM `cpkrel` WHERE `custom_id` IN (SELECT t1.`pk` FROM `custompkcolumn` AS t1 WHERE t1.`xxx` = ?)', ['faps']))
+    
+    def test_annotate(self):
+        sq = CPKRel.select().annotate(CustomPKColumn)
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`id`, t1.`custom_id`, COUNT(t2.`pk`) AS count FROM `cpkrel` AS t1 INNER JOIN `custompkcolumn` AS t2 ON t1.`custom_id` = t2.`pk` GROUP BY t1.`id`, t1.`custom_id`', []))
 
 class ModelIndexTestCase(BaseModelTestCase):
     def setUp(self):
