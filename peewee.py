@@ -38,7 +38,7 @@ __all__ = [
     'asc', 'desc', 'Count', 'Max', 'Min', 'Sum', 'Q', 'Field', 'CharField', 'TextField',
     'DateTimeField', 'BooleanField', 'DecimalField', 'FloatField', 'IntegerField',
     'PrimaryKeyField', 'ForeignKeyField', 'DoubleField', 'BigIntegerField', 'Model',
-    'filter_query', 'annotate_query', 'F', 'R',
+    'filter_query', 'annotate_query', 'F', 'R', 'DateField', 'TimeField',
 ]
 
 class ImproperlyConfigured(Exception):
