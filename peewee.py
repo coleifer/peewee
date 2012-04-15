@@ -1940,7 +1940,7 @@ class VarCharColumn(Column):
         return {'max_length': 255}
 
     def db_value(self, value):
-        value = value or ''
+        value = unicode(value or '')
         return value[:self.attributes['max_length']]
 
 
