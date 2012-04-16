@@ -2466,7 +2466,7 @@ class BaseModel(type):
             field.class_prepared()
 
         if hasattr(cls, '__unicode__'):
-            setattr(cls, '__repr__', lambda self: '<%s: %s>' % (
+            setattr(cls, '__repr__', lambda self: '<%s: %r>' % (
                 _meta.model_name, self.__unicode__()))
 
         exception_class = type('%sDoesNotExist' % _meta.model_name, (DoesNotExist,), {})
