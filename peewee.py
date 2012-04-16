@@ -8,7 +8,7 @@
 #     //
 #    '
 from __future__ import with_statement
-from datetime import datetime
+import datetime
 import copy
 import decimal
 import logging
@@ -38,7 +38,7 @@ __all__ = [
     'asc', 'desc', 'Count', 'Max', 'Min', 'Sum', 'Q', 'Field', 'CharField', 'TextField',
     'DateTimeField', 'BooleanField', 'DecimalField', 'FloatField', 'IntegerField',
     'PrimaryKeyField', 'ForeignKeyField', 'DoubleField', 'BigIntegerField', 'Model',
-    'filter_query', 'annotate_query', 'F', 'R',
+    'filter_query', 'annotate_query', 'F', 'R', 'DateField', 'TimeField',
 ]
 
 class ImproperlyConfigured(Exception):
@@ -48,7 +48,9 @@ if sqlite3 is None and psycopg2 is None and mysql is None:
     raise ImproperlyConfigured('Either sqlite3, psycopg2 or MySQLdb must be installed')
 
 if sqlite3:
-    sqlite3.register_adapter(decimal.Decimal, lambda v: str(v))
+    sqlite3.register_adapter(decimal.Decimal, str)
+    sqlite3.register_adapter(datetime.date, str)
+    sqlite3.register_adapter(datetime.time, str)
     sqlite3.register_converter('decimal', lambda v: decimal.Decimal(v))
 
 if psycopg2:
@@ -94,6 +96,8 @@ class BaseAdapter(object):
             'string': 'VARCHAR',
             'text': 'TEXT',
             'datetime': 'DATETIME',
+            'time': 'TIME',
+            'date': 'DATE',
             'primary_key': 'INTEGER',
             'primary_key_with_sequence': 'INTEGER',
             'foreign_key': 'INTEGER',
@@ -212,7 +216,7 @@ class PostgresqlAdapter(BaseAdapter):
                 model._meta.pk_sequence))
         else:
             cursor.execute("SELECT CURRVAL('\"%s_%s_seq\"')" % (
-                model._meta.db_table, model._meta.pk_name))
+                model._meta.db_table, model._meta.pk_col))
         return cursor.fetchone()[0]
 
 
@@ -367,21 +371,25 @@ class Database(object):
     def field_sql(self, field):
         return '%s %s' % (self.quote_name(field.db_column), field.render_field_template())
 
-    def create_table_query(self, model_class, safe):
+    def create_table_query(self, model_class, safe, extra=''):
         if model_class._meta.pk_sequence and self.adapter.sequence_support:
             if not self.sequence_exists(model_class._meta.pk_sequence):
                 self.create_sequence(model_class._meta.pk_sequence)
-        framing = safe and "CREATE TABLE IF NOT EXISTS %s (%s);" or "CREATE TABLE %s (%s);"
+        framing = safe and "CREATE TABLE IF NOT EXISTS %s (%s)%s;" or "CREATE TABLE %s (%s)%s;"
         columns = []
 
         for field in model_class._meta.get_fields():
             columns.append(self.field_sql(field))
 
-        table = self.quote_name(model_class._meta.db_table)
-        return framing % (table, ', '.join(columns))
+        if extra:
+            extra = ' ' + extra
 
-    def create_table(self, model_class, safe=False):
-        self.execute(self.create_table_query(model_class, safe))
+        table = self.quote_name(model_class._meta.db_table)
+
+        return framing % (table, ', '.join(columns), extra)
+
+    def create_table(self, model_class, safe=False, extra=''):
+        self.execute(self.create_table_query(model_class, safe, extra))
 
     def create_index_query(self, model_class, field_name, unique):
         framing = 'CREATE %(unique)s INDEX %(index)s ON %(table)s(%(field)s);'
@@ -530,7 +538,7 @@ class MySQLDatabase(Database):
             'constraint': self.quote_name(constraint),
             'field': self.quote_name(field.db_column),
             'to': self.quote_name(field.to._meta.db_table),
-            'to_field': self.quote_name(field.to._meta.pk_name),
+            'to_field': self.quote_name(field.to._meta.pk_col),
             'cascade': ' ON DELETE CASCADE' if field.cascade else '',
         }
 
@@ -581,7 +589,7 @@ class QueryResultWrapper(object):
         for attr, value in attr_dict.iteritems():
             if attr in instance._meta.columns:
                 field = instance._meta.columns[attr]
-                setattr(instance, attr, field.python_value(value))
+                setattr(instance, field.name, field.python_value(value))
             else:
                 setattr(instance, attr, value)
         return instance
@@ -926,6 +934,7 @@ class BaseQuery(object):
         self._where_models = set()
         self._joins = {}
         self._joined_models = set()
+        self._table_alias = {}
 
     def _clone_dict_graph(self, dg):
         cloned = {}
@@ -948,13 +957,14 @@ class BaseQuery(object):
     def lookup_cast(self, lookup, value):
         return self.database.adapter.lookup_cast(lookup, value)
 
-    def parse_query_args(self, model, **query):
+    def parse_query_args(self, _model, **query):
         """
         Parse out and normalize clauses in a query.  The query is composed of
         various column+lookup-type/value pairs.  Validates that the lookups
         are valid and returns a list of lookup tuples that have the form:
         (field name, (operation, value))
         """
+        model = _model
         parsed = []
         for lhs, rhs in query.iteritems():
             if self.query_separator in lhs:
@@ -1024,11 +1034,13 @@ class BaseQuery(object):
             self._where_models.update(find_models(parsed))
 
     @returns_clone
-    def join(self, model, join_type=None, on=None):
+    def join(self, model, join_type=None, on=None, alias=None):
         if self.query_context._meta.rel_exists(model):
             self._joined_models.add(model)
             self._joins.setdefault(self.query_context, [])
             self._joins[self.query_context].append((model, join_type, on))
+            if alias:
+                self._table_alias[model] = alias
             self.query_context = model
         else:
             raise AttributeError('No foreign key found between %s and %s' % \
@@ -1072,8 +1084,11 @@ class BaseQuery(object):
             seen.add(model)
 
             if alias_required:
-                alias_count += 1
-                alias_map[model] = 't%d' % alias_count
+                if model in self._table_alias:
+                    alias_map[model] = self._table_alias[model]
+                else:
+                    alias_count += 1
+                    alias_map[model] = 't%d' % alias_count
             else:
                 alias_map[model] = ''
 
@@ -1081,10 +1096,10 @@ class BaseQuery(object):
             field = from_model._meta.get_related_field_for_model(model, on)
             if field:
                 left_field = field.db_column
-                right_field = model._meta.pk_name
+                right_field = model._meta.pk_col
             else:
                 field = from_model._meta.get_reverse_related_field_for_model(model, on)
-                left_field = from_model._meta.pk_name
+                left_field = from_model._meta.pk_col
                 right_field = field.db_column
 
             if join_type is None:
@@ -1113,8 +1128,11 @@ class BaseQuery(object):
 
         alias_required = self.use_aliases()
         if alias_required:
-            alias_count += 1
-            alias_map[self.model] = 't%d' % alias_count
+            if self.model in self._table_alias:
+                alias_map[self.model] = self._table_alias[self.model]
+            else:
+                alias_count += 1
+                alias_map[self.model] = 't%d' % alias_count
         else:
             alias_map[self.model] = ''
 
@@ -1269,6 +1287,7 @@ class SelectQuery(BaseQuery):
         self._distinct = False
         self._qr = None
         self._for_update = False
+        self._naive = False
         super(SelectQuery, self).__init__(model)
 
     def clone(self):
@@ -1282,10 +1301,12 @@ class SelectQuery(BaseQuery):
         query._distinct = self._distinct
         query._qr = self._qr
         query._for_update = self._for_update
+        query._naive = self._naive
         query._where = self.clone_where()
         query._where_models = set(self._where_models)
         query._joined_models = self._joined_models.copy()
         query._joins = self.clone_joins()
+        query._table_alias = dict(self._table_alias)
         return query
 
     @returns_clone
@@ -1315,9 +1336,9 @@ class SelectQuery(BaseQuery):
         clone._limit = clone._offset = None
 
         if clone.use_aliases():
-            clone.query = 'COUNT(t1.%s)' % (clone.model._meta.pk_name)
+            clone.query = 'COUNT(t1.%s)' % (clone.model._meta.pk_col)
         else:
-            clone.query = 'COUNT(%s)' % (clone.model._meta.pk_name)
+            clone.query = 'COUNT(%s)' % (clone.model._meta.pk_col)
 
         res = clone.database.execute(*clone.sql())
 
@@ -1410,6 +1431,16 @@ class SelectQuery(BaseQuery):
     def annotate(self, related_model, aggregation=None):
         return annotate_query(self, related_model, aggregation)
 
+    def aggregate(self, func):
+        clone = self.order_by()
+        clone.query = [func]
+        curs = self.database.execute(*clone.sql())
+        return curs.fetchone()[0]
+
+    @returns_clone
+    def naive(self, make_naive=True):
+        self._naive = make_naive
+
     def parse_select_query(self, alias_map):
         q = self.query
 
@@ -1419,7 +1450,7 @@ class SelectQuery(BaseQuery):
             # convert '*' and primary key lookups
             if q == '*':
                 q = {self.model: self.model._meta.get_field_names()}
-            elif q == self.model._meta.pk_name:
+            elif q in (self.model._meta.pk_col, self.model._meta.pk_name):
                 q = {self.model: [self.model._meta.pk_name]}
             else:
                 return q, []
@@ -1556,6 +1587,8 @@ class SelectQuery(BaseQuery):
             except EmptyResultException:
                 return []
             else:
+                if self._naive:
+                    meta = None
                 self._qr = QueryResultWrapper(self.model, self.raw_execute(sql, params), meta)
                 self._dirty = False
                 return self._qr
@@ -1578,6 +1611,7 @@ class UpdateQuery(BaseQuery):
         query._where_models = set(self._where_models)
         query._joined_models = self._joined_models.copy()
         query._joins = self.clone_joins()
+        query._table_alias = dict(self._table_alias)
         return query
 
     def parse_update(self):
@@ -1646,6 +1680,7 @@ class DeleteQuery(BaseQuery):
         query._where_models = set(self._where_models)
         query._joined_models = self._joined_models.copy()
         query._joins = self.clone_joins()
+        query._table_alias = dict(self._table_alias)
         return query
 
     def sql(self):
@@ -1674,9 +1709,9 @@ class DeleteQuery(BaseQuery):
 
 
 class InsertQuery(BaseQuery):
-    def __init__(self, model, **kwargs):
+    def __init__(self, _model, **kwargs):
         self.insert_query = kwargs
-        super(InsertQuery, self).__init__(model)
+        super(InsertQuery, self).__init__(_model)
 
     def parse_insert(self):
         cols = []
@@ -1905,7 +1940,7 @@ class VarCharColumn(Column):
         return {'max_length': 255}
 
     def db_value(self, value):
-        value = value or ''
+        value = unicode(value or '')
         return value[:self.attributes['max_length']]
 
 
@@ -1918,11 +1953,47 @@ class TextColumn(Column):
 
 class DateTimeColumn(Column):
     db_field = 'datetime'
+    dt_re = re.compile('^(\d{4}-\d{1,2}-\d{1,2} \d{2}:\d{2}:\d{2})(?:\.(\d+))?')
+    dt_bare_re = re.compile('^\d{4}-\d{1,2}-\d{1,2}$')
 
     def python_value(self, value):
         if isinstance(value, basestring):
-            value = value.rsplit('.', 1)[0]
-            return datetime(*time.strptime(value, '%Y-%m-%d %H:%M:%S')[:6])
+            match = self.dt_re.match(value)
+            if match:
+                value, usec = match.groups()
+                usec = usec and int(usec) or 0
+                return datetime.datetime(*time.strptime(value, '%Y-%m-%d %H:%M:%S')[:6], microsecond=usec)
+            elif self.dt_bare_re.match(value):
+                return datetime.datetime(*time.strptime(value, '%Y-%m-%d')[:3])
+        return value
+
+
+class DateColumn(Column):
+    db_field = 'date'
+    dt_bare_re = re.compile('^\d{4}-\d{1,2}-\d{1,2}$')
+
+    def python_value(self, value):
+        if isinstance(value, basestring):
+            if self.dt_bare_re.match(value):
+                return datetime.date(*time.strptime(value, '%Y-%m-%d')[:3])
+        elif isinstance(value, datetime.datetime):
+            return value.date()
+        return value
+
+
+class TimeColumn(Column):
+    db_field = 'time'
+    time_re = re.compile('^(\d{2}:\d{2}:\d{2})(?:\.(\d+))?$')
+
+    def python_value(self, value):
+        if isinstance(value, basestring):
+            match = self.time_re.match(value)
+            if match:
+                value, usec = match.groups()
+                usec = usec and int(usec) or 0
+                return datetime.time(*time.strptime(value, '%H:%M:%S')[3:6], microsecond=usec)
+        elif isinstance(value, datetime.datetime):
+            return value.time()
         return value
 
 
@@ -1968,7 +2039,7 @@ class DoubleColumn(FloatColumn):
 
 class DecimalColumn(Column):
     db_field = 'decimal'
-    field_template = '%(column_type)s(%(max_digits)d, %(decimal_places)d)'
+    template = '%(column_type)s(%(max_digits)d, %(decimal_places)d)'
 
     def get_attributes(self):
         return {
@@ -2074,6 +2145,14 @@ class TextField(Field):
 
 class DateTimeField(Field):
     column_class = DateTimeColumn
+
+
+class DateField(Field):
+    column_class = DateColumn
+
+
+class TimeField(Field):
+    column_class = TimeColumn
 
 
 class IntegerField(Field):
@@ -2240,7 +2319,7 @@ class ForeignKeyField(IntegerField):
         # need to update the attributes after the class has been built
         self.attributes.update({
             'to_table': self.to._meta.db_table,
-            'to_pk': self.to._meta.pk_name,
+            'to_pk': self.to._meta.pk_col,
         })
         self.column = self.get_column()
 
@@ -2380,6 +2459,7 @@ class BaseModel(type):
         if _meta.pk_sequence and _meta.database.adapter.sequence_support:
             pk_col.attributes['nextval'] = " default nextval('%s')" % _meta.pk_sequence
 
+        _meta.pk_col = pk_field.db_column
         _meta.auto_increment = isinstance(pk_col, PrimaryKeyColumn)
 
         for field in _meta.fields.values():
@@ -2434,11 +2514,11 @@ class Model(object):
         return cls._meta.db_table in cls._meta.database.get_tables()
 
     @classmethod
-    def create_table(cls, fail_silently=False):
+    def create_table(cls, fail_silently=False, extra=''):
         if fail_silently and cls.table_exists():
             return
 
-        cls._meta.database.create_table(cls)
+        cls._meta.database.create_table(cls, extra=extra)
 
         for field_name, field_obj in cls._meta.fields.items():
             if isinstance(field_obj, ForeignKeyField):

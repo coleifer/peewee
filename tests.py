@@ -103,6 +103,8 @@ class NullModel(TestModel):
     decimal_field2 = peewee.DecimalField(decimal_places=2, null=True)
     double_field = peewee.DoubleField(null=True)
     bigint_field = peewee.BigIntegerField(null=True)
+    date_field = peewee.DateField(null=True)
+    time_field = peewee.TimeField(null=True)
 
 class NumberModel(TestModel):
     num1 = peewee.IntegerField()
@@ -175,6 +177,12 @@ class RelNonIntPK(TestModel):
     non_int_pk = peewee.ForeignKeyField(NonIntPK)
     name = peewee.CharField()
 
+class CustomPKColumn(TestModel):
+    custom_pk = peewee.PrimaryKeyField(db_column='pk')
+    xxx = peewee.CharField(default='')
+    
+class CPKRel(TestModel):
+    custom = peewee.ForeignKeyField(CustomPKColumn)
 
 class BasePeeweeTestCase(unittest.TestCase):
     def setUp(self):
@@ -347,6 +355,12 @@ class QueryTests(BasePeeweeTestCase):
 
         sq = SelectQuery(Blog, {Blog: ['title', 'id'], Entry: [peewee.Max('pk')]}).join(Entry)
         self.assertSQLEqual(sq.sql(), ('SELECT t1.`title`, t1.`id`, MAX(t2.`pk`) AS max FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id`', []))
+
+        sq = SelectQuery(Blog, {Blog: ['title', 'id']}).join(Entry, alias='e').where(title='foo')
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`title`, t1.`id` FROM `blog` AS t1 INNER JOIN `entry` AS e ON t1.`id` = e.`blog_id` WHERE e.`title` = ?', ['foo']))
+
+        sq = SelectQuery(Entry, {Entry: ['pk', 'title'], Blog: ['title']}).join(Blog, alias='b').where(title='foo')
+        self.assertSQLEqual(sq.sql(), ('SELECT b.`title`, t1.`pk`, t1.`title` FROM `entry` AS t1 INNER JOIN `blog` AS b ON t1.`blog_id` = b.`id` WHERE b.`title` = ?', ['foo']))
 
     def test_selecting_across_joins(self):
         sq = SelectQuery(Entry, '*').where(title='a1').join(Blog).where(title='a')
@@ -1847,6 +1861,51 @@ class RelatedFieldTests(BaseModelTestCase):
         qr = Blog.select().where(title='xxxx').execute()
         titles = [b.title for b in qr.iterator()]
         self.assertEqual(titles, [])
+    
+    def test_naive_query(self):
+        b1 = Blog.create(title='b1')
+        b2 = Blog.create(title='b2')
+        
+        e11 = Entry.create(title='e11', blog=b1)
+        e21 = Entry.create(title='e21', blog=b2)
+        e22 = Entry.create(title='e22', blog=b2)
+        
+        # attr assignment works in the simple case
+        sq = Blog.select().order_by('id').naive()
+        self.assertEqual(dict((b.id, b.title) for b in sq), {
+            b1.id: 'b1',
+            b2.id: 'b2',
+        })
+        
+        # aggregate assignment works as expected
+        sq = Blog.select({
+            Blog: ['id', 'title'],
+            Entry: [peewee.Count('id', 'count')],
+        }).order_by('id').join(Entry).group_by(Blog).naive()
+        self.assertEqual(dict((b.id, [b.title, b.count]) for b in sq), {
+            b1.id: ['b1', 1],
+            b2.id: ['b2', 2],
+        })
+        
+        # select related gets flattened
+        sq = Entry.select({
+            Entry: ['pk', 'title'],
+            Blog: [('title', 'blog_title')],
+        }).join(Blog).order_by('id').naive()
+        self.assertEqual(dict((e.pk, [e.title, e.blog_title]) for e in sq), {
+            e11.pk: ['e11', 'b1'],
+            e21.pk: ['e21', 'b2'],
+            e22.pk: ['e22', 'b2'],
+        })
+        
+        # check that it works right when you're using a different underlying col
+        lb1 = LegacyBlog.create(name='lb1')
+        lb2 = LegacyBlog.create(name='lb2')
+        sq = LegacyBlog.select(['id', 'name']).where(id__in=[lb1.id, lb2.id]).naive()
+        self.assertEqual(dict((lb.id, lb.name) for lb in sq), {
+            lb1.id: 'lb1',
+            lb2.id: 'lb2',
+        })
 
 
 class RecursiveDeleteTestCase(BaseModelTestCase):
@@ -2314,6 +2373,15 @@ class AnnotateQueryTests(BaseModelTestCase):
             'SELECT t1.`id`, t1.`title`, MAX(t2.`pub_date`) AS max_pub FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id` GROUP BY t1.`id`, t1.`title`', []
         ))
 
+    def test_aggregate(self):
+        blergs = [Blog.create(title='b%d' % i) for i in range(10)]
+
+        ct = Blog.select().aggregate(peewee.Count('id'))
+        self.assertEqual(ct, 10)
+
+        max_id = Blog.select().aggregate(peewee.Max('id'))
+        self.assertEqual(max_id, blergs[-1].id)
+
 
 class FQueryTestCase(BaseModelTestCase):
     def setUp(self):
@@ -2634,29 +2702,29 @@ class FieldTypeTests(BaseModelTestCase):
         self.assertEqual(nm.decimal_field2, None)
 
         null_lookup = NullModel.select().where(char_field__is=None)
-        self.assertSQLEqual(null_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2`, `double_field`, `bigint_field` FROM `nullmodel` WHERE `char_field` IS NULL', []))
+        self.assertSQLEqual(null_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2`, `double_field`, `bigint_field`, `date_field`, `time_field` FROM `nullmodel` WHERE `char_field` IS NULL', []))
 
         self.assertEqual(list(null_lookup), [nm])
 
         null_lookup = NullModel.select().where(~Q(char_field__is=None))
-        self.assertSQLEqual(null_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2`, `double_field`, `bigint_field` FROM `nullmodel` WHERE NOT `char_field` IS NULL', []))
+        self.assertSQLEqual(null_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2`, `double_field`, `bigint_field`, `date_field`, `time_field` FROM `nullmodel` WHERE NOT `char_field` IS NULL', []))
 
         non_null_lookup = NullModel.select().where(char_field='')
-        self.assertSQLEqual(non_null_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2`, `double_field`, `bigint_field` FROM `nullmodel` WHERE `char_field` = ?', ['']))
+        self.assertSQLEqual(non_null_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2`, `double_field`, `bigint_field`, `date_field`, `time_field` FROM `nullmodel` WHERE `char_field` = ?', ['']))
 
         self.assertEqual(list(non_null_lookup), [])
 
         isnull_lookup = NullModel.select().where(char_field__isnull=True)
-        self.assertSQLEqual(isnull_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2`, `double_field`, `bigint_field` FROM `nullmodel` WHERE `char_field` IS NULL', []))
+        self.assertSQLEqual(isnull_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2`, `double_field`, `bigint_field`, `date_field`, `time_field` FROM `nullmodel` WHERE `char_field` IS NULL', []))
 
         isnull_lookup = NullModel.select().where(char_field__isnull=False)
-        self.assertSQLEqual(isnull_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2`, `double_field`, `bigint_field` FROM `nullmodel` WHERE `char_field` IS NOT NULL', []))
+        self.assertSQLEqual(isnull_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2`, `double_field`, `bigint_field`, `date_field`, `time_field` FROM `nullmodel` WHERE `char_field` IS NOT NULL', []))
 
         isnull_lookup = NullModel.select().where(~Q(char_field__isnull=True))
-        self.assertSQLEqual(isnull_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2`, `double_field`, `bigint_field` FROM `nullmodel` WHERE NOT `char_field` IS NULL', []))
+        self.assertSQLEqual(isnull_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2`, `double_field`, `bigint_field`, `date_field`, `time_field` FROM `nullmodel` WHERE NOT `char_field` IS NULL', []))
 
         isnull_lookup = NullModel.select().where(~Q(char_field__isnull=False))
-        self.assertSQLEqual(isnull_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2`, `double_field`, `bigint_field` FROM `nullmodel` WHERE NOT `char_field` IS NOT NULL', []))
+        self.assertSQLEqual(isnull_lookup.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2`, `double_field`, `bigint_field`, `date_field`, `time_field` FROM `nullmodel` WHERE NOT `char_field` IS NOT NULL', []))
 
         nm_from_db = NullModel.get(id=nm.id)
         self.assertEqual(nm_from_db.char_field, None)
@@ -2755,7 +2823,7 @@ class FieldTypeTests(BaseModelTestCase):
         nm4 = NullModel.create(int_field=4)
 
         sq = NullModel.select().where(int_field__between=[2, 3])
-        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2`, `double_field`, `bigint_field` FROM `nullmodel` WHERE `int_field` BETWEEN ? AND ?', [2, 3]))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `char_field`, `text_field`, `datetime_field`, `int_field`, `float_field`, `decimal_field1`, `decimal_field2`, `double_field`, `bigint_field`, `date_field`, `time_field` FROM `nullmodel` WHERE `int_field` BETWEEN ? AND ?', [2, 3]))
 
         self.assertEqual(list(sq.order_by('id')), [nm2, nm3])
 
@@ -2768,6 +2836,30 @@ class FieldTypeTests(BaseModelTestCase):
         nm1 = NullModel.create(bigint_field=1000000000000)
         from_db = NullModel.get(id=nm1.id)
         self.assertEqual(from_db.bigint_field, 1000000000000)
+    
+    def test_date_and_time_fields(self):
+        dt1 = datetime.datetime(2011, 1, 2, 11, 12, 13, 54321)
+        dt2 = datetime.datetime(2011, 1, 2, 11, 12, 13)
+        d1 = datetime.date(2011, 1, 3)
+        t1 = datetime.time(11, 12, 13, 54321)
+        t2 = datetime.time(11, 12, 13)
+        
+        nm1 = NullModel.create(datetime_field=dt1, date_field=d1, time_field=t1)
+        nm2 = NullModel.create(datetime_field=dt2, time_field=t2)
+        
+        nmf1 = NullModel.get(id=nm1.id)
+        self.assertEqual(nmf1.date_field, d1)
+        if BACKEND == 'mysql':
+            # mysql doesn't store microseconds
+            self.assertEqual(nmf1.datetime_field, dt2)
+            self.assertEqual(nmf1.time_field, t2)
+        else:
+            self.assertEqual(nmf1.datetime_field, dt1)
+            self.assertEqual(nmf1.time_field, t1)
+        
+        nmf2 = NullModel.get(id=nm2.id)
+        self.assertEqual(nmf2.datetime_field, dt2)
+        self.assertEqual(nmf2.time_field, t2)
 
 class NonIntegerPKTestCase(BasePeeweeTestCase):
     def setUp(self):
@@ -2818,6 +2910,94 @@ class NonIntegerPKTestCase(BasePeeweeTestCase):
         self.assertEqual(list(ni2.relnonintpk_set.order_by('id')), [])
 
         rni21 = RelNonIntPK.create(non_int_pk=ni2, name='rni21')
+
+class CustomPKColumnTestCase(BasePeeweeTestCase):
+    """
+    refs issue 70 -- need to test places where pk_name is used explicitly
+    * model collect_queries
+    """
+    def setUp(self):
+        super(CustomPKColumnTestCase, self).setUp()
+        CPKRel.drop_table(True)
+        CustomPKColumn.drop_table(True)
+        CustomPKColumn.create_table()
+        CPKRel.create_table()
+    
+    def tearDown(self):
+        super(CustomPKColumnTestCase, self).tearDown()
+        CPKRel.drop_table(True)
+        CustomPKColumn.drop_table(True)
+    
+    def get_last(self, n=1):
+        return [x.msg for x in self.qh.queries[-n:]]
+
+    def test_create_sql(self):
+        sq = test_db.create_table_query(CPKRel, False)
+        if BACKEND == 'sqlite':
+            self.assertEqual(sq, 'CREATE TABLE "cpkrel" ("id" INTEGER NOT NULL PRIMARY KEY, "custom_id" INTEGER NOT NULL REFERENCES custompkcolumn (pk));')
+        elif BACKEND == 'postgresql':
+            self.assertEqual(sq, 'CREATE TABLE "cpkrel" ("id" SERIAL NOT NULL PRIMARY KEY, "custom_id" INTEGER NOT NULL REFERENCES custompkcolumn (pk));')
+        elif BACKEND == 'mysql':
+            self.assertEqual(sq, 'CREATE TABLE `cpkrel` (`id` INTEGER NOT NULL PRIMARY KEY, `custom_id` INTEGER NOT NULL REFERENCES custompkcolumn (pk));')
+
+    def test_joining(self):
+        sq = CPKRel.select().join(CustomPKColumn)
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`id`, t1.`custom_id` FROM `cpkrel` AS t1 INNER JOIN `custompkcolumn` AS t2 ON t1.`custom_id` = t2.`pk`', []))
+        
+        sq = CustomPKColumn.select().join(CPKRel)
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`xxx` FROM `custompkcolumn` AS t1 INNER JOIN `cpkrel` AS t2 ON t1.`pk` = t2.`custom_id`', []))
+
+    def test_model_operations(self):
+        cpk = CustomPKColumn.create()
+        self.assertSQLEqual(self.get_last()[0], (
+            'INSERT INTO `custompkcolumn` (`xxx`) VALUES (?)', ['']
+        ))
+        
+        self.assertEqual(CustomPKColumn.select().count(), 1)
+        self.assertSQLEqual(self.get_last()[0], (
+            'SELECT COUNT(pk) FROM `custompkcolumn`', []
+        ))
+        
+        cpk.save()
+        self.assertSQLEqual(self.get_last()[0], (
+            'UPDATE `custompkcolumn` SET `xxx`=? WHERE `pk` = ?', ['', cpk.get_pk()]
+        ))
+        self.assertEqual(CustomPKColumn.select().count(), 1)
+        
+        sq = CustomPKColumn.select('custom_pk')
+        self.assertSQLEqual(sq.sql(), ('SELECT `pk` FROM `custompkcolumn`', []))
+        
+        res = sq.get()
+        self.assertEqual(res.custom_pk, cpk.get_pk())
+        
+        cpk_rel = CPKRel.create(custom=cpk)
+        self.assertSQLEqual(self.get_last()[0], (
+            'INSERT INTO `cpkrel` (`custom_id`) VALUES (?)', [cpk.get_pk()]
+        ))
+        
+        from_db = CPKRel.get(id=cpk_rel.id)
+        self.assertEqual(from_db.custom, cpk)
+        self.assertSQLEqual(self.get_last()[0], (
+            'SELECT `pk`, `xxx` FROM `custompkcolumn` WHERE `pk` = ? LIMIT 1', [cpk.get_pk()]
+        ))
+        self.assertTrue(from_db.custom.custom_pk == cpk.get_pk() == cpk.custom_pk)
+        
+        cpk = CustomPKColumn.create()
+        pk = cpk.get_pk()
+        
+        cpk.delete_instance()
+        self.assertSQLEqual(self.get_last()[0], (
+            'DELETE FROM `custompkcolumn` WHERE `pk` = ?', [pk]
+        ))
+    
+    def test_subquery(self):
+        cpk_q = CustomPKColumn.select().where(xxx='faps')
+        cpk_rel_q = CPKRel.select().where(custom__in=cpk_q)
+        self.assertSQLEqual(cpk_rel_q.sql(), ('SELECT `id`, `custom_id` FROM `cpkrel` WHERE `custom_id` IN (SELECT t1.`pk` FROM `custompkcolumn` AS t1 WHERE t1.`xxx` = ?)', ['faps']))
+    
+    def test_annotate(self):
+        sq = CPKRel.select().annotate(CustomPKColumn)
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`id`, t1.`custom_id`, COUNT(t2.`pk`) AS count FROM `cpkrel` AS t1 INNER JOIN `custompkcolumn` AS t2 ON t1.`custom_id` = t2.`pk` GROUP BY t1.`id`, t1.`custom_id`', []))
 
 class ModelIndexTestCase(BaseModelTestCase):
     def setUp(self):

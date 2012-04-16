@@ -49,11 +49,17 @@ You can use django-style syntax to create select queries::
     Tweet.filter(Q(user__is_staff=True) | Q(user__is_superuser=True))
 
 
+Learning more
+-------------
+
 check the `documentation <http://charlesleifer.com/docs/peewee/>`_ for more
 examples.
 
 specific question?  come hang out in the #peewee channel on freenode.irc.net,
 or post to the mailing list, http://groups.google.com/group/peewee-orm
+
+lastly, peewee runs on python 2.5 or greater, though there is currently no
+support for python3
 
 
 Why?
