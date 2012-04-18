@@ -345,5 +345,8 @@ if __name__ == '__main__':
         sys.exit(1)
 
     database = args[-1]
+    
+    if options.engine == 'mysql':
+        connect['passwd'] = connect.pop('password')
 
     introspect(options.engine, database, **connect)
