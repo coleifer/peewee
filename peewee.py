@@ -1961,8 +1961,8 @@ class DateTimeColumn(Column):
             match = self.dt_re.match(value)
             if match:
                 value, usec = match.groups()
-                usec = usec and int(usec) or 0
-                return datetime.datetime(*time.strptime(value, '%Y-%m-%d %H:%M:%S')[:6], microsecond=usec)
+                kwargs = dict(microsecond=usec and int(usec) or 0)
+                return datetime.datetime(*time.strptime(value, '%Y-%m-%d %H:%M:%S')[:6], **kwargs)
             elif self.dt_bare_re.match(value):
                 return datetime.datetime(*time.strptime(value, '%Y-%m-%d')[:3])
         return value
@@ -1990,8 +1990,8 @@ class TimeColumn(Column):
             match = self.time_re.match(value)
             if match:
                 value, usec = match.groups()
-                usec = usec and int(usec) or 0
-                return datetime.time(*time.strptime(value, '%H:%M:%S')[3:6], microsecond=usec)
+                kwargs = dict(microsecond=usec and int(usec) or 0)
+                return datetime.time(*time.strptime(value, '%H:%M:%S')[3:6], **kwargs)
         elif isinstance(value, datetime.datetime):
             return value.time()
         return value
