@@ -52,7 +52,7 @@ You can use django-style syntax to create select queries::
 Learning more
 -------------
 
-check the `documentation <http://charlesleifer.com/docs/peewee/>`_ for more
+check the `documentation <http://peewee.readthedocs.org/>`_ for more
 examples.
 
 specific question?  come hang out in the #peewee channel on freenode.irc.net,
