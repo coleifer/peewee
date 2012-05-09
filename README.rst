@@ -1,4 +1,4 @@
-.. image:: http://charlesleifer.com/media/images/peewee-transparent.png
+.. image:: http://i.imgur.com/zhcoT.png
 
 peewee
 ======
