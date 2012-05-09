@@ -133,6 +133,38 @@ instantiate your database with ``threadlocals=True``:
     concurrent_db = SqliteDatabase('stats.db', threadlocals=True)
 
 
+Deferring initialization
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Sometimes the database information is not known until run-time, when it might
+be loaded from a configuration file/etc.  In this case, you can "defer" the initialization
+of the database by passing in ``None`` as the database_name.
+
+.. code-block:: python
+
+    deferred_db = peewee.SqliteDatabase(None)
+
+    class SomeModel(peewee.Model):
+        class Meta:
+            database = deferred_db
+
+If you try to connect or issue any queries while your database is uninitialized
+you will get an exception:
+
+.. code-block:: python
+
+    >>> deferred_db.connect()
+    Exception: Error, database not properly initialized before opening connection
+
+To initialize your database, you simply call the ``init`` method with the database_name
+and any additional kwargs:
+
+.. code-block:: python
+
+    database_name = raw_input('What is the name of the db? ')
+    deferred_db.init(database_name)
+
+
 Creating, Reading, Updating and Deleting
 ----------------------------------------
 
