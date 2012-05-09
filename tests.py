@@ -3215,6 +3215,30 @@ class ModelOptionsTest(BaseModelTestCase):
         ])
         self.assertTrue(isinstance(GrandChildModel2._meta.fields['special_field'], peewee.TextField))
 
+    def test_deferred_database(self):
+        deferred_db = peewee.SqliteDatabase(None)
+        self.assertTrue(deferred_db.deferred)
+
+        class DeferredModel(peewee.Model):
+            class Meta:
+                database = deferred_db
+
+        self.assertRaises(Exception, deferred_db.connect)
+        sq = DeferredModel.select()
+        self.assertRaises(Exception, sq.execute)
+
+        deferred_db.init(':memory:')
+        self.assertFalse(deferred_db.deferred)
+
+        # connecting works
+        conn = deferred_db.connect()
+        DeferredModel.create_table()
+        sq = DeferredModel.select()
+        self.assertEqual(list(sq), [])
+
+        deferred_db.init(None)
+        self.assertTrue(deferred_db.deferred)
+
 
 class ModelInheritanceTestCase(BaseModelTestCase):
     def setUp(self):

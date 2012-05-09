@@ -280,8 +280,7 @@ class Database(object):
 
     def __init__(self, adapter, database, threadlocals=False, autocommit=True, **connect_kwargs):
         self.adapter = adapter
-        self.database = database
-        self.connect_kwargs = connect_kwargs
+        self.init(database, **connect_kwargs)
 
         if threadlocals:
             self.__local = threading.local()
@@ -291,13 +290,22 @@ class Database(object):
         self._conn_lock = threading.Lock()
         self.autocommit = autocommit
 
+    def init(self, database, **connect_kwargs):
+        self.deferred = database is None
+        self.database = database
+        self.connect_kwargs = connect_kwargs
+
     def connect(self):
         with self._conn_lock:
+            if self.deferred:
+                raise Exception('Error, database not properly initialized before opening connection')
             self.__local.conn = self.adapter.connect(self.database, **self.connect_kwargs)
             self.__local.closed = False
 
     def close(self):
         with self._conn_lock:
+            if self.deferred:
+                raise Exception('Error, database not properly initialized before closing connection')
             self.adapter.close(self.__local.conn)
             self.__local.closed = True
 
