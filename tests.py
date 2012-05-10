@@ -3383,7 +3383,14 @@ class TransactionTestCase(BaseModelTestCase):
             with transaction(test_db):
                 will_fail()
 
+        def do_will_fail2():
+            with test_db.transaction():
+                will_fail()
+
         self.assertRaises(Exception, do_will_fail)
+        self.assertEqual(Blog.select().count(), 0)
+
+        self.assertRaises(Exception, do_will_fail2)
         self.assertEqual(Blog.select().count(), 0)
 
         def will_succeed():
@@ -3395,9 +3402,17 @@ class TransactionTestCase(BaseModelTestCase):
             with transaction(test_db):
                 will_succeed()
 
-        b, e = will_succeed()
+        def do_will_succeed2():
+            with test_db.transaction():
+                will_succeed()
+
+        do_will_succeed()
         self.assertEqual(Blog.select().count(), 1)
         self.assertEqual(Entry.select().count(), 1)
+
+        do_will_succeed2()
+        self.assertEqual(Blog.select().count(), 2)
+        self.assertEqual(Entry.select().count(), 2)
 
 
 if test_db.adapter.for_update_support:

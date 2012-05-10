@@ -472,6 +472,9 @@ class Database(object):
     def sequence_exists(self, sequence):
         raise NotImplementedError
 
+    def transaction(self):
+        return transaction(self)
+
 
 class SqliteDatabase(Database):
     def __init__(self, database, **connect_kwargs):
