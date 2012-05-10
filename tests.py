@@ -3373,6 +3373,32 @@ class TransactionTestCase(BaseModelTestCase):
         self.assertEqual(Blog.select().count(), 1)
         self.assertEqual(Entry.select().count(), 1)
 
+    def test_context_mgr(self):
+        def will_fail():
+            b = Blog.create(title='b1')
+            e = Entry.create() # no blog, will raise an error
+            return b, e
+
+        def do_will_fail():
+            with transaction(test_db):
+                will_fail()
+
+        self.assertRaises(Exception, do_will_fail)
+        self.assertEqual(Blog.select().count(), 0)
+
+        def will_succeed():
+            b = Blog.create(title='b1')
+            e = Entry.create(title='e1', content='e1', blog=b)
+            return b, e
+
+        def do_will_succeed():
+            with transaction(test_db):
+                will_succeed()
+
+        b, e = will_succeed()
+        self.assertEqual(Blog.select().count(), 1)
+        self.assertEqual(Entry.select().count(), 1)
+
 
 if test_db.adapter.for_update_support:
     class ForUpdateTestCase(BaseModelTestCase):
