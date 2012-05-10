@@ -179,7 +179,7 @@ class RelNonIntPK(TestModel):
 class CustomPKColumn(TestModel):
     custom_pk = PrimaryKeyField(db_column='pk')
     xxx = CharField(default='')
-    
+
 class CPKRel(TestModel):
     custom = ForeignKeyField(CustomPKColumn)
 
@@ -1872,22 +1872,22 @@ class RelatedFieldTests(BaseModelTestCase):
         qr = Blog.select().where(title='xxxx').execute()
         titles = [b.title for b in qr.iterator()]
         self.assertEqual(titles, [])
-    
+
     def test_naive_query(self):
         b1 = Blog.create(title='b1')
         b2 = Blog.create(title='b2')
-        
+
         e11 = Entry.create(title='e11', blog=b1)
         e21 = Entry.create(title='e21', blog=b2)
         e22 = Entry.create(title='e22', blog=b2)
-        
+
         # attr assignment works in the simple case
         sq = Blog.select().order_by('id').naive()
         self.assertEqual(dict((b.id, b.title) for b in sq), {
             b1.id: 'b1',
             b2.id: 'b2',
         })
-        
+
         # aggregate assignment works as expected
         sq = Blog.select({
             Blog: ['id', 'title'],
@@ -1897,7 +1897,7 @@ class RelatedFieldTests(BaseModelTestCase):
             b1.id: ['b1', 1],
             b2.id: ['b2', 2],
         })
-        
+
         # select related gets flattened
         sq = Entry.select({
             Entry: ['pk', 'title'],
@@ -1908,7 +1908,7 @@ class RelatedFieldTests(BaseModelTestCase):
             e21.pk: ['e21', 'b2'],
             e22.pk: ['e22', 'b2'],
         })
-        
+
         # check that it works right when you're using a different underlying col
         lb1 = LegacyBlog.create(name='lb1')
         lb2 = LegacyBlog.create(name='lb2')
@@ -2847,17 +2847,17 @@ class FieldTypeTests(BaseModelTestCase):
         nm1 = NullModel.create(bigint_field=1000000000000)
         from_db = NullModel.get(id=nm1.id)
         self.assertEqual(from_db.bigint_field, 1000000000000)
-    
+
     def test_date_and_time_fields(self):
         dt1 = datetime.datetime(2011, 1, 2, 11, 12, 13, 54321)
         dt2 = datetime.datetime(2011, 1, 2, 11, 12, 13)
         d1 = datetime.date(2011, 1, 3)
         t1 = datetime.time(11, 12, 13, 54321)
         t2 = datetime.time(11, 12, 13)
-        
+
         nm1 = NullModel.create(datetime_field=dt1, date_field=d1, time_field=t1)
         nm2 = NullModel.create(datetime_field=dt2, time_field=t2)
-        
+
         nmf1 = NullModel.get(id=nm1.id)
         self.assertEqual(nmf1.date_field, d1)
         if BACKEND == 'mysql':
@@ -2867,7 +2867,7 @@ class FieldTypeTests(BaseModelTestCase):
         else:
             self.assertEqual(nmf1.datetime_field, dt1)
             self.assertEqual(nmf1.time_field, t1)
-        
+
         nmf2 = NullModel.get(id=nm2.id)
         self.assertEqual(nmf2.datetime_field, dt2)
         self.assertEqual(nmf2.time_field, t2)
@@ -2933,12 +2933,12 @@ class CustomPKColumnTestCase(BasePeeweeTestCase):
         CustomPKColumn.drop_table(True)
         CustomPKColumn.create_table()
         CPKRel.create_table()
-    
+
     def tearDown(self):
         super(CustomPKColumnTestCase, self).tearDown()
         CPKRel.drop_table(True)
         CustomPKColumn.drop_table(True)
-    
+
     def get_last(self, n=1):
         return [x.msg for x in self.qh.queries[-n:]]
 
@@ -2954,7 +2954,7 @@ class CustomPKColumnTestCase(BasePeeweeTestCase):
     def test_joining(self):
         sq = CPKRel.select().join(CustomPKColumn)
         self.assertSQLEqual(sq.sql(), ('SELECT t1.`id`, t1.`custom_id` FROM `cpkrel` AS t1 INNER JOIN `custompkcolumn` AS t2 ON t1.`custom_id` = t2.`pk`', []))
-        
+
         sq = CustomPKColumn.select().join(CPKRel)
         self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`xxx` FROM `custompkcolumn` AS t1 INNER JOIN `cpkrel` AS t2 ON t1.`pk` = t2.`custom_id`', []))
 
@@ -2963,49 +2963,49 @@ class CustomPKColumnTestCase(BasePeeweeTestCase):
         self.assertSQLEqual(self.get_last()[0], (
             'INSERT INTO `custompkcolumn` (`xxx`) VALUES (?)', ['']
         ))
-        
+
         self.assertEqual(CustomPKColumn.select().count(), 1)
         self.assertSQLEqual(self.get_last()[0], (
             'SELECT COUNT(pk) FROM `custompkcolumn`', []
         ))
-        
+
         cpk.save()
         self.assertSQLEqual(self.get_last()[0], (
             'UPDATE `custompkcolumn` SET `xxx`=? WHERE `pk` = ?', ['', cpk.get_pk()]
         ))
         self.assertEqual(CustomPKColumn.select().count(), 1)
-        
+
         sq = CustomPKColumn.select('custom_pk')
         self.assertSQLEqual(sq.sql(), ('SELECT `pk` FROM `custompkcolumn`', []))
-        
+
         res = sq.get()
         self.assertEqual(res.custom_pk, cpk.get_pk())
-        
+
         cpk_rel = CPKRel.create(custom=cpk)
         self.assertSQLEqual(self.get_last()[0], (
             'INSERT INTO `cpkrel` (`custom_id`) VALUES (?)', [cpk.get_pk()]
         ))
-        
+
         from_db = CPKRel.get(id=cpk_rel.id)
         self.assertEqual(from_db.custom, cpk)
         self.assertSQLEqual(self.get_last()[0], (
             'SELECT `pk`, `xxx` FROM `custompkcolumn` WHERE `pk` = ? LIMIT 1', [cpk.get_pk()]
         ))
         self.assertTrue(from_db.custom.custom_pk == cpk.get_pk() == cpk.custom_pk)
-        
+
         cpk = CustomPKColumn.create()
         pk = cpk.get_pk()
-        
+
         cpk.delete_instance()
         self.assertSQLEqual(self.get_last()[0], (
             'DELETE FROM `custompkcolumn` WHERE `pk` = ?', [pk]
         ))
-    
+
     def test_subquery(self):
         cpk_q = CustomPKColumn.select().where(xxx='faps')
         cpk_rel_q = CPKRel.select().where(custom__in=cpk_q)
         self.assertSQLEqual(cpk_rel_q.sql(), ('SELECT `id`, `custom_id` FROM `cpkrel` WHERE `custom_id` IN (SELECT t1.`pk` FROM `custompkcolumn` AS t1 WHERE t1.`xxx` = ?)', ['faps']))
-    
+
     def test_annotate(self):
         sq = CPKRel.select().annotate(CustomPKColumn)
         self.assertSQLEqual(sq.sql(), ('SELECT t1.`id`, t1.`custom_id`, COUNT(t2.`pk`) AS count FROM `cpkrel` AS t1 INNER JOIN `custompkcolumn` AS t2 ON t1.`custom_id` = t2.`pk` GROUP BY t1.`id`, t1.`custom_id`', []))
