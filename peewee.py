@@ -39,6 +39,7 @@ __all__ = [
     'DateTimeField', 'BooleanField', 'DecimalField', 'FloatField', 'IntegerField',
     'PrimaryKeyField', 'ForeignKeyField', 'DoubleField', 'BigIntegerField', 'Model',
     'filter_query', 'annotate_query', 'F', 'R', 'DateField', 'TimeField',
+    'transaction',
 ]
 
 class ImproperlyConfigured(Exception):
@@ -570,6 +571,22 @@ class MySQLDatabase(Database):
     def get_tables(self):
         res = self.execute('SHOW TABLES;')
         return [r[0] for r in res.fetchall()]
+
+
+class transaction(object):
+    def __init__(self, db):
+        self.db = db
+
+    def __enter__(self):
+        self._orig = self.db.get_autocommit()
+        self.db.set_autocommit(False)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type:
+            self.db.rollback()
+        else:
+            self.db.commit()
+        self.db.set_autocommit(self._orig)
 
 
 class QueryResultWrapper(object):
