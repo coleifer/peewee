@@ -603,7 +603,7 @@ class ModelTestCase(BaseModelTestCase):
         count = Blog.select().count()
         self.assertEqual(count, 10)
 
-        for blog in SelectQuery(Blog):
+        for blog in list(SelectQuery(Blog)):
             for i in xrange(20):
                 self.create_entry(title='entry%d' % i, blog=blog)
 
