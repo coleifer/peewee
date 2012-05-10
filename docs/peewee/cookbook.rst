@@ -634,7 +634,7 @@ which will issue a commit if all goes well, or a rollback if an exception is rai
 
     db = SqliteDatabase(':memory:')
 
-    with transaction(db):
+    with db.transaction():
         blog.delete_instance(recursive=True) # delete blog and associated entries
 
 
