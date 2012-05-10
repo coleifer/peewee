@@ -8,10 +8,9 @@ import Queue
 import threading
 import unittest
 
-import peewee
-from peewee import (RawQuery, SelectQuery, InsertQuery, UpdateQuery, DeleteQuery,
-        Node, Q, database, parseq, SqliteAdapter, PostgresqlAdapter, filter_query,
-        annotate_query, F, R)
+from peewee import *
+from peewee import logger, VarCharColumn, SelectQuery, DeleteQuery, UpdateQuery, \
+        InsertQuery, RawQuery, parseq, Database, SqliteAdapter
 
 
 class QueryLogHandler(logging.Handler):
@@ -26,60 +25,60 @@ class QueryLogHandler(logging.Handler):
 BACKEND = os.environ.get('PEEWEE_TEST_BACKEND', 'sqlite')
 
 if BACKEND == 'postgresql':
-    database_class = peewee.PostgresqlDatabase
+    database_class = PostgresqlDatabase
     database_name = 'peewee_test'
 elif BACKEND == 'mysql':
-    database_class = peewee.MySQLDatabase
+    database_class = MySQLDatabase
     database_name = 'peewee_test'
 else:
-    database_class = peewee.SqliteDatabase
+    database_class = SqliteDatabase
     database_name = 'tmp.db'
 
 test_db = database_class(database_name)
 interpolation = test_db.adapter.interpolation
 quote_char = test_db.adapter.quote_char
 
-class TestModel(peewee.Model):
+class TestModel(Model):
     class Meta:
         database = test_db
 
 
 # test models
 class Blog(TestModel):
-    title = peewee.CharField()
+    title = CharField()
 
     def __unicode__(self):
         return self.title
 
 
 class Entry(TestModel):
-    pk = peewee.PrimaryKeyField()
-    title = peewee.CharField(max_length=50, verbose_name='Wacky title')
-    content = peewee.TextField()
-    pub_date = peewee.DateTimeField(null=True)
-    blog = peewee.ForeignKeyField(Blog, cascade=True)
+    pk = PrimaryKeyField()
+    title = CharField(max_length=50, verbose_name='Wacky title')
+    content = TextField()
+    pub_date = DateTimeField(null=True)
+    blog = ForeignKeyField(Blog, cascade=True)
 
     def __unicode__(self):
         return '%s: %s' % (self.blog.title, self.title)
 
 
 class EntryTag(TestModel):
-    tag = peewee.CharField(max_length=50)
-    entry = peewee.ForeignKeyField(Entry)
+    tag = CharField(max_length=50)
+    entry = ForeignKeyField(Entry)
 
     def __unicode__(self):
         return self.tag
 
 
 class EntryTwo(Entry):
-    title = peewee.TextField()
-    extra_field = peewee.CharField()
+    title = TextField()
+    extra_field = CharField()
 
 
 class User(TestModel):
-    username = peewee.CharField(max_length=50)
-    blog = peewee.ForeignKeyField(Blog, null=True)
-    active = peewee.BooleanField(db_index=True)
+    username = CharField(max_length=50)
+    blog = ForeignKeyField(Blog, null=True)
+    active = BooleanField(db_index=True)
 
     class Meta:
         db_table = 'users'
@@ -89,109 +88,109 @@ class User(TestModel):
 
 
 class Relationship(TestModel):
-    from_user = peewee.ForeignKeyField(User, related_name='relationships')
-    to_user = peewee.ForeignKeyField(User, related_name='related_to')
+    from_user = ForeignKeyField(User, related_name='relationships')
+    to_user = ForeignKeyField(User, related_name='related_to')
 
 
 class NullModel(TestModel):
-    char_field = peewee.CharField(null=True)
-    text_field = peewee.TextField(null=True)
-    datetime_field = peewee.DateTimeField(null=True)
-    int_field = peewee.IntegerField(null=True)
-    float_field = peewee.FloatField(null=True)
-    decimal_field1 = peewee.DecimalField(null=True)
-    decimal_field2 = peewee.DecimalField(decimal_places=2, null=True)
-    double_field = peewee.DoubleField(null=True)
-    bigint_field = peewee.BigIntegerField(null=True)
-    date_field = peewee.DateField(null=True)
-    time_field = peewee.TimeField(null=True)
+    char_field = CharField(null=True)
+    text_field = TextField(null=True)
+    datetime_field = DateTimeField(null=True)
+    int_field = IntegerField(null=True)
+    float_field = FloatField(null=True)
+    decimal_field1 = DecimalField(null=True)
+    decimal_field2 = DecimalField(decimal_places=2, null=True)
+    double_field = DoubleField(null=True)
+    bigint_field = BigIntegerField(null=True)
+    date_field = DateField(null=True)
+    time_field = TimeField(null=True)
 
 class NumberModel(TestModel):
-    num1 = peewee.IntegerField()
-    num2 = peewee.IntegerField()
+    num1 = IntegerField()
+    num2 = IntegerField()
 
 class RelNumberModel(TestModel):
-    rel_num = peewee.IntegerField()
-    num = peewee.ForeignKeyField(NumberModel)
+    rel_num = IntegerField()
+    num = ForeignKeyField(NumberModel)
 
 class Team(TestModel):
-    name = peewee.CharField()
+    name = CharField()
 
 class Member(TestModel):
-    username = peewee.CharField()
+    username = CharField()
 
 class Membership(TestModel):
-    team = peewee.ForeignKeyField(Team)
-    member = peewee.ForeignKeyField(Member)
+    team = ForeignKeyField(Team)
+    member = ForeignKeyField(Member)
 
 class DefaultVals(TestModel):
-    published = peewee.BooleanField(default=True)
-    pub_date = peewee.DateTimeField(default=datetime.datetime.now, null=True)
+    published = BooleanField(default=True)
+    pub_date = DateTimeField(default=datetime.datetime.now, null=True)
 
 class UniqueModel(TestModel):
-    name = peewee.CharField(unique=True)
+    name = CharField(unique=True)
 
 class OrderedModel(TestModel):
-    title = peewee.CharField()
-    created = peewee.DateTimeField(default=datetime.datetime.now)
+    title = CharField()
+    created = DateTimeField(default=datetime.datetime.now)
 
     class Meta:
         ordering = (('created', 'desc'),)
 
 class Category(TestModel):
-    parent = peewee.ForeignKeyField('self', related_name='children', null=True)
-    name = peewee.CharField()
+    parent = ForeignKeyField('self', related_name='children', null=True)
+    name = CharField()
 
 class SeqModelBase(TestModel):
     class Meta:
         pk_sequence = 'just_testing_seq'
 
 class SeqModelA(SeqModelBase):
-    num = peewee.IntegerField()
+    num = IntegerField()
 
 class SeqModelB(SeqModelBase):
-    other_num = peewee.IntegerField()
+    other_num = IntegerField()
 
 class LegacyBlog(TestModel):
-    name = peewee.CharField(db_column='old_name')
+    name = CharField(db_column='old_name')
 
     class Meta:
         ordering = ('id',)
 
 class LegacyEntry(TestModel):
-    name = peewee.CharField(db_column='old_name')
-    blog = peewee.ForeignKeyField(LegacyBlog, db_column='old_blog')
+    name = CharField(db_column='old_name')
+    blog = ForeignKeyField(LegacyBlog, db_column='old_blog')
 
     class Meta:
         ordering = ('id',)
 
 class ExplicitEntry(TestModel):
-    name = peewee.CharField()
-    blog = peewee.ForeignKeyField(LegacyBlog, db_column='blog')
+    name = CharField()
+    blog = ForeignKeyField(LegacyBlog, db_column='blog')
 
 class NonIntPK(TestModel):
-    id = peewee.PrimaryKeyField(column_class=peewee.VarCharColumn)
-    name = peewee.CharField(max_length=10)
+    id = PrimaryKeyField(column_class=VarCharColumn)
+    name = CharField(max_length=10)
 
 class RelNonIntPK(TestModel):
-    non_int_pk = peewee.ForeignKeyField(NonIntPK)
-    name = peewee.CharField()
+    non_int_pk = ForeignKeyField(NonIntPK)
+    name = CharField()
 
 class CustomPKColumn(TestModel):
-    custom_pk = peewee.PrimaryKeyField(db_column='pk')
-    xxx = peewee.CharField(default='')
+    custom_pk = PrimaryKeyField(db_column='pk')
+    xxx = CharField(default='')
     
 class CPKRel(TestModel):
-    custom = peewee.ForeignKeyField(CustomPKColumn)
+    custom = ForeignKeyField(CustomPKColumn)
 
 class BasePeeweeTestCase(unittest.TestCase):
     def setUp(self):
         self.qh = QueryLogHandler()
-        peewee.logger.setLevel(logging.DEBUG)
-        peewee.logger.addHandler(self.qh)
+        logger.setLevel(logging.DEBUG)
+        logger.addHandler(self.qh)
 
     def tearDown(self):
-        peewee.logger.removeHandler(self.qh)
+        logger.removeHandler(self.qh)
 
     def normalize(self, s):
         if interpolation != '?':
@@ -350,10 +349,10 @@ class QueryTests(BasePeeweeTestCase):
         sq = SelectQuery(Blog, {Blog: ['title', 'id']}).join(Entry)
         self.assertSQLEqual(sq.sql(), ('SELECT t1.`title`, t1.`id` FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id`', []))
 
-        sq = SelectQuery(Blog, {Blog: ['title', 'id'], Entry: [peewee.Count('pk')]}).join(Entry)
+        sq = SelectQuery(Blog, {Blog: ['title', 'id'], Entry: [Count('pk')]}).join(Entry)
         self.assertSQLEqual(sq.sql(), ('SELECT t1.`title`, t1.`id`, COUNT(t2.`pk`) AS count FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id`', []))
 
-        sq = SelectQuery(Blog, {Blog: ['title', 'id'], Entry: [peewee.Max('pk')]}).join(Entry)
+        sq = SelectQuery(Blog, {Blog: ['title', 'id'], Entry: [Max('pk')]}).join(Entry)
         self.assertSQLEqual(sq.sql(), ('SELECT t1.`title`, t1.`id`, MAX(t2.`pk`) AS max FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id`', []))
 
         sq = SelectQuery(Blog, {Blog: ['title', 'id']}).join(Entry, alias='e').where(title='foo')
@@ -417,7 +416,7 @@ class QueryTests(BasePeeweeTestCase):
 
         sq = SelectQuery(Blog, {
             Blog: ['*'],
-            Entry: [peewee.Count('pk')]
+            Entry: [Count('pk')]
         }).group_by('id').join(Entry)
         self.assertSQLEqual(sq.sql(), ('SELECT t1.`id`, t1.`title`, COUNT(t2.`pk`) AS count FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id` GROUP BY t1.`id`', []))
 
@@ -438,7 +437,7 @@ class QueryTests(BasePeeweeTestCase):
         sq = SelectQuery(Blog).order_by('title')
         self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` ORDER BY `title` ASC', []))
 
-        sq = SelectQuery(Blog).order_by(peewee.desc('title'))
+        sq = SelectQuery(Blog).order_by(desc('title'))
         self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` ORDER BY `title` DESC', []))
 
         sq = SelectQuery(Blog).order_by((Blog, 'title'))
@@ -451,7 +450,7 @@ class QueryTests(BasePeeweeTestCase):
         sq = SelectQuery(Entry).order_by('title').join(Blog).where(title='a')
         self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id` WHERE t2.`title` = ? ORDER BY t1.`title` ASC', ['a']))
 
-        sq = SelectQuery(Entry).order_by(peewee.desc('title')).join(Blog).where(title='a')
+        sq = SelectQuery(Entry).order_by(desc('title')).join(Blog).where(title='a')
         self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id` WHERE t2.`title` = ? ORDER BY t1.`title` DESC', ['a']))
 
         sq = SelectQuery(Entry).join(Blog).where(title='a').order_by((Entry, 'title'))
@@ -464,7 +463,7 @@ class QueryTests(BasePeeweeTestCase):
         sq = SelectQuery(Entry).join(Blog).order_by('title')
         self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id` ORDER BY t2.`title` ASC', []))
 
-        sq = SelectQuery(Entry).join(Blog).order_by(peewee.desc('title'))
+        sq = SelectQuery(Entry).join(Blog).order_by(desc('title'))
         self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id` ORDER BY t2.`title` DESC', []))
 
         sq = SelectQuery(Entry).order_by((Blog, 'title')).join(Blog)
@@ -493,7 +492,7 @@ class QueryTests(BasePeeweeTestCase):
     def test_ordering_on_aggregates(self):
         sq = SelectQuery(
             Blog, 't1.*, COUNT(t2.pk) as count'
-        ).join(Entry).order_by(peewee.desc('count'))
+        ).join(Entry).order_by(desc('count'))
         self.assertSQLEqual(sq.sql(), ('SELECT t1.*, COUNT(t2.pk) as count FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id` ORDER BY count DESC', []))
 
     def test_default_ordering(self):
@@ -619,6 +618,18 @@ class ModelTestCase(BaseModelTestCase):
             title="a5"
         ).count()
         self.assertEqual(count, 2)
+
+    def test_count_transaction(self):
+        for i in xrange(10):
+            self.create_blog(title='a%d' % i)
+
+        with transaction(test_db):
+            for blog in SelectQuery(Blog):
+                for i in xrange(20):
+                    self.create_entry(title='entry%d' % i, blog=blog)
+
+        count = SelectQuery(Entry).count()
+        self.assertEqual(count, 200)
 
     def test_count_with_joins_issue27(self):
         b1 = Blog.create(title='b1')
@@ -811,7 +822,7 @@ class ModelTests(BaseModelTestCase):
         qr = Blog.select().order_by('title')
         self.assertEqual(list(qr), [a, b, c])
 
-        qr = Blog.select().where(title__in=['a', 'c']).order_by(peewee.desc('title'))
+        qr = Blog.select().where(title__in=['a', 'c']).order_by(desc('title'))
         self.assertEqual(list(qr), [c, a])
 
         self.assertQueriesEqual([
@@ -828,7 +839,7 @@ class ModelTests(BaseModelTestCase):
         c = self.create_blog(title='c')
 
         blog_qr = Blog.select()
-        rev_ordered = blog_qr.order_by(peewee.desc('title'))
+        rev_ordered = blog_qr.order_by(desc('title'))
         ordered = blog_qr.order_by('title')
         rev_filtered = rev_ordered.where(title__in=['a', 'b'])
         filtered = ordered.where(title__in=['b', 'c'])
@@ -1449,23 +1460,23 @@ class RelatedFieldTests(BaseModelTestCase):
 
         sq = Blog.select({
             Blog: ['*'],
-            Entry: [peewee.Max('title', 'max_title')],
-        }).join(Entry).order_by(peewee.desc('max_title')).group_by(Blog)
+            Entry: [Max('title', 'max_title')],
+        }).join(Entry).order_by(desc('max_title')).group_by(Blog)
         results = list(sq)
         self.assertEqual(results, [c, b, a])
         self.assertEqual([r.max_title for r in results], ['c1', 'b3', 'a2'])
 
         sq = Blog.select({
             Blog: ['*'],
-            Entry: [peewee.Max('title', 'max_title')],
+            Entry: [Max('title', 'max_title')],
         }).where(
             title__in=['a', 'b']
-        ).join(Entry).order_by(peewee.desc('max_title')).group_by(Blog)
+        ).join(Entry).order_by(desc('max_title')).group_by(Blog)
         results = list(sq)
         self.assertEqual(results, [b, a])
         self.assertEqual([r.max_title for r in results], ['b3', 'a2'])
 
-        sq = Blog.select('t1.*, COUNT(t2.pk) AS count').join(Entry).order_by(peewee.desc('count')).group_by(Blog)
+        sq = Blog.select('t1.*, COUNT(t2.pk) AS count').join(Entry).order_by(desc('count')).group_by(Blog)
         qr = list(sq)
 
         self.assertEqual(qr, [b, a, c])
@@ -1475,8 +1486,8 @@ class RelatedFieldTests(BaseModelTestCase):
 
         sq = Blog.select({
             Blog: ['*'],
-            Entry: [peewee.Count('pk', 'count')]
-        }).join(Entry).group_by(Blog).order_by(peewee.desc('count'))
+            Entry: [Count('pk', 'count')]
+        }).join(Entry).group_by(Blog).order_by(desc('count'))
         qr = list(sq)
 
         self.assertEqual(qr, [b, a, c])
@@ -1488,10 +1499,10 @@ class RelatedFieldTests(BaseModelTestCase):
         # due to the way postgresql does aggregation - it wants all the fields
         # used to be included in the DISTINCT query
         if BACKEND != 'postgresql':
-            sq = Blog.select().join(Entry).order_by(peewee.desc('title')).distinct()
+            sq = Blog.select().join(Entry).order_by(desc('title')).distinct()
             self.assertEqual(list(sq), [c, b, a])
 
-            sq = Blog.select().where(title__in=['a', 'b']).join(Entry).order_by(peewee.desc('title')).distinct()
+            sq = Blog.select().where(title__in=['a', 'b']).join(Entry).order_by(desc('title')).distinct()
             self.assertEqual(list(sq), [b, a])
 
     def test_nullable_fks(self):
@@ -1510,8 +1521,8 @@ class RelatedFieldTests(BaseModelTestCase):
 
         sq = Blog.select({
             Blog: ['*'],
-            User: [peewee.Count('id', 'count')]
-        }).join(User).group_by(Blog).order_by(peewee.desc('count'))
+            User: [Count('id', 'count')]
+        }).join(User).group_by(Blog).order_by(desc('count'))
         qr = list(sq)
 
         self.assertEqual(qr, [a, b, c])
@@ -1880,7 +1891,7 @@ class RelatedFieldTests(BaseModelTestCase):
         # aggregate assignment works as expected
         sq = Blog.select({
             Blog: ['id', 'title'],
-            Entry: [peewee.Count('id', 'count')],
+            Entry: [Count('id', 'count')],
         }).order_by('id').join(Entry).group_by(Blog).naive()
         self.assertEqual(dict((b.id, [b.title, b.count]) for b in sq), {
             b1.id: ['b1', 1],
@@ -2368,7 +2379,7 @@ class AnnotateQueryTests(BaseModelTestCase):
         ])
 
     def test_annotate_custom_aggregate(self):
-        annotated = Blog.select().annotate(Entry, peewee.Max('pub_date', 'max_pub'))
+        annotated = Blog.select().annotate(Entry, Max('pub_date', 'max_pub'))
         self.assertSQLEqual(annotated.sql(), (
             'SELECT t1.`id`, t1.`title`, MAX(t2.`pub_date`) AS max_pub FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id` GROUP BY t1.`id`, t1.`title`', []
         ))
@@ -2376,10 +2387,10 @@ class AnnotateQueryTests(BaseModelTestCase):
     def test_aggregate(self):
         blergs = [Blog.create(title='b%d' % i) for i in range(10)]
 
-        ct = Blog.select().aggregate(peewee.Count('id'))
+        ct = Blog.select().aggregate(Count('id'))
         self.assertEqual(ct, 10)
 
-        max_id = Blog.select().aggregate(peewee.Max('id'))
+        max_id = Blog.select().aggregate(Max('id'))
         self.assertEqual(max_id, blergs[-1].id)
 
 
@@ -3159,15 +3170,15 @@ class ModelOptionsTest(BaseModelTestCase):
         self.assertEqual(OrderedModel._meta.ordering, (('created', 'desc'),))
 
     def test_option_inheritance(self):
-        test_db = peewee.Database(SqliteAdapter(), 'testing.db')
-        child2_db = peewee.Database(SqliteAdapter(), 'child2.db')
+        test_db = Database(SqliteAdapter(), 'testing.db')
+        child2_db = Database(SqliteAdapter(), 'child2.db')
 
-        class FakeUser(peewee.Model):
+        class FakeUser(Model):
             pass
 
-        class ParentModel(peewee.Model):
-            title = peewee.CharField()
-            user = peewee.ForeignKeyField(FakeUser)
+        class ParentModel(Model):
+            title = CharField()
+            user = ForeignKeyField(FakeUser)
 
             class Meta:
                 database = test_db
@@ -3176,7 +3187,7 @@ class ModelOptionsTest(BaseModelTestCase):
             pass
 
         class ChildModel2(ParentModel):
-            special_field = peewee.CharField()
+            special_field = CharField()
 
             class Meta:
                 database = child2_db
@@ -3185,7 +3196,7 @@ class ModelOptionsTest(BaseModelTestCase):
             pass
 
         class GrandChildModel2(ChildModel2):
-            special_field = peewee.TextField()
+            special_field = TextField()
 
         self.assertEqual(ParentModel._meta.database.database, 'testing.db')
         self.assertEqual(ParentModel._meta.model_class, ParentModel)
@@ -3213,13 +3224,13 @@ class ModelOptionsTest(BaseModelTestCase):
         self.assertEqual(sorted(GrandChildModel2._meta.fields.keys()), [
             'id', 'special_field', 'title', 'user'
         ])
-        self.assertTrue(isinstance(GrandChildModel2._meta.fields['special_field'], peewee.TextField))
+        self.assertTrue(isinstance(GrandChildModel2._meta.fields['special_field'], TextField))
 
     def test_deferred_database(self):
-        deferred_db = peewee.SqliteDatabase(None)
+        deferred_db = SqliteDatabase(None)
         self.assertTrue(deferred_db.deferred)
 
-        class DeferredModel(peewee.Model):
+        class DeferredModel(Model):
             class Meta:
                 database = deferred_db
 
