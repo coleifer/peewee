@@ -254,9 +254,12 @@ Model methods
             
             >>> user = User.create(username='admin', password='test')
 
-    .. py:method:: delete_instance()
+    .. py:method:: delete_instance([recursive=False])
 
-        Delete the given instance
+        Delete the given instance.  Any foreign keys set to cascade on
+        delete will be deleted automatically.  For more programmatic control,
+        you can call with recursive=True, which will delete any non-nullable
+        related models (those that *are* nullable will be set to NULL).
 
         example:
 
@@ -374,6 +377,18 @@ Model methods
             ('INSERT INTO user (username,active,registration_expired) VALUES (?,?,?)', ['admin', 1, 0])
             >>> q.execute()
             1
+
+    .. py:classmethod:: raw(sql, *params)
+
+        :rtype: a :py:class:`RawQuery` for the given ``Model``
+
+        example:
+
+        .. code-block:: python
+
+            >>> q = User.raw('select id, username from users')
+            >>> for user in q:
+            ...     print user.id, user.username
 
     .. py:classmethod:: create_table([fail_silently=False])
     

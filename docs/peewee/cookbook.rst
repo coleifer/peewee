@@ -133,6 +133,8 @@ instantiate your database with ``threadlocals=True``:
     concurrent_db = SqliteDatabase('stats.db', threadlocals=True)
 
 
+.. _deferring_initialization:
+
 Deferring initialization
 ^^^^^^^^^^^^^^^^^^^^^^^^
 

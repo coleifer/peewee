@@ -16,6 +16,9 @@ for parameter interpolation, while all the other backends use "%s".
 
 For a high-level overview of working with transactions, check out the :ref:`transactions cookbook <working_with_transactions>`.
 
+For notes on deferring instantiation of database, for example if loading configuration
+at run-time, see the notes on :ref:`deferring initialization <deferring_initialization>`.
+
 .. note::
     The internals of the :py:class:`Database` and :py:class:`BaseAdapter` will be
     of interest to anyone interested in adding support for another database driver.
@@ -38,6 +41,22 @@ Database and its subclasses
         :param database: the name of the database (or filename if using sqlite)
         :param threadlocals: whether to store connections in a threadlocal
         :param autocommit: automatically commit every query executed by calling :py:meth:`~Database.execute`
+        :param connect_kwargs: any arbitrary parameters to pass to the database driver when connecting
+
+        .. note:: 
+            if your database name is not known when the class is declared, you can pass
+            ``None`` in as the database name which will mark the database as "deferred"
+            and any attempt to connect while in this state will raise an exception.  To
+            initialize your database, call the :py:meth:`Database.init` method with
+            the database name
+          
+    .. py:method:: init(database[, **connect_kwargs])
+
+        If the database was instantiated with database=None, the database is said to be in
+        a 'deferred' state (see :ref:`notes <deferring_initialization>`) -- if this is the case,
+        you can initialize it at any time by calling the ``init`` method.
+
+        :param database: the name of the database (or filename if using sqlite)
         :param connect_kwargs: any arbitrary parameters to pass to the database driver when connecting
     
     .. py:method:: connect()
