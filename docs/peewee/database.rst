@@ -14,6 +14,8 @@ in the adapter.  The adapter is responsible for smoothing out the quirks of each
 driver to provide a consistent interface, for example sqlite uses the question-mark "?" character
 for parameter interpolation, while all the other backends use "%s".
 
+For a high-level overview of working with transactions, check out the :ref:`transactions cookbook <working_with_transactions>`.
+
 .. note::
     The internals of the :py:class:`Database` and :py:class:`BaseAdapter` will be
     of interest to anyone interested in adding support for another database driver.

@@ -620,6 +620,7 @@ blogs that have no entries:
     for blog in blogs:
         print blog.name, ' has no entries'
 
+.. _working_with_transactions:
 
 Working with transactions
 -------------------------
