@@ -105,6 +105,19 @@ Database and its subclasses
                 from_acct.charge(amt)
                 to_acct.pay(amt)
                 return amt
+
+    .. py:method:: transaction()
+
+        Return a context manager that executes statements in a transaction.  If an
+        error is raised inside the context manager, the transaction will be rolled
+        back, otherwise statements are committed when exiting.
+
+        .. code-block:: python
+
+            # delete a blog instance and all its associated entries, but
+            # do so within a transaction
+            with database.transaction():
+                blog.delete_instance(recursive=True)
     
     .. py:method:: last_insert_id(cursor, model)
     
