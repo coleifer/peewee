@@ -2872,6 +2872,86 @@ class FieldTypeTests(BaseModelTestCase):
         self.assertEqual(nmf2.datetime_field, dt2)
         self.assertEqual(nmf2.time_field, t2)
 
+    def test_various_formats(self):
+        class FormatModel(Model):
+            dtf = DateTimeField()
+            df = DateField()
+            tf = TimeField()
+        
+        dtf = FormatModel._meta.fields['dtf']
+        df = FormatModel._meta.fields['df']
+        tf = FormatModel._meta.fields['tf']
+        
+        d = datetime.datetime
+        self.assertEqual(dtf.python_value('2012-01-01 11:11:11.123456'), d(
+            2012, 1, 1, 11, 11, 11, 123456
+        ))
+        self.assertEqual(dtf.python_value('2012-01-01 11:11:11'), d(
+            2012, 1, 1, 11, 11, 11
+        ))
+        self.assertEqual(dtf.python_value('2012-01-01'), d(
+            2012, 1, 1,
+        ))
+        self.assertEqual(dtf.python_value('2012 01 01'), '2012 01 01')
+
+        d = datetime.date
+        self.assertEqual(df.python_value('2012-01-01 11:11:11.123456'), d(
+            2012, 1, 1,
+        ))
+        self.assertEqual(df.python_value('2012-01-01 11:11:11'), d(
+            2012, 1, 1,
+        ))
+        self.assertEqual(df.python_value('2012-01-01'), d(
+            2012, 1, 1,
+        ))
+        self.assertEqual(df.python_value('2012 01 01'), '2012 01 01')
+        
+        t = datetime.time
+        self.assertEqual(tf.python_value('2012-01-01 11:11:11.123456'), t(
+            11, 11, 11, 123456
+        ))
+        self.assertEqual(tf.python_value('2012-01-01 11:11:11'), t(
+            11, 11, 11
+        ))
+        self.assertEqual(tf.python_value('11:11:11.123456'), t(
+            11, 11, 11, 123456
+        ))
+        self.assertEqual(tf.python_value('11:11:11'), t(
+            11, 11, 11
+        ))
+        self.assertEqual(tf.python_value('11:11'), t(
+            11, 11,
+        ))
+        self.assertEqual(tf.python_value('11:11 AM'), '11:11 AM')
+        
+        class CustomFormatsModel(Model):
+            dtf = DateTimeField(formats=['%b %d, %Y %I:%M:%S %p'])
+            df = DateField(formats=['%b %d, %Y'])
+            tf = TimeField(formats=['%I:%M %p'])
+        
+        dtf = CustomFormatsModel._meta.fields['dtf']
+        df = CustomFormatsModel._meta.fields['df']
+        tf = CustomFormatsModel._meta.fields['tf']
+        
+        d = datetime.datetime
+        self.assertEqual(dtf.python_value('2012-01-01 11:11:11.123456'), '2012-01-01 11:11:11.123456')
+        self.assertEqual(dtf.python_value('Jan 1, 2012 11:11:11 PM'), d(
+            2012, 1, 1, 23, 11, 11,
+        ))
+        
+        d = datetime.date
+        self.assertEqual(df.python_value('2012-01-01'), '2012-01-01')
+        self.assertEqual(df.python_value('Jan 1, 2012'), d(
+            2012, 1, 1,
+        ))
+        
+        t = datetime.time
+        self.assertEqual(tf.python_value('11:11:11'), '11:11:11')
+        self.assertEqual(tf.python_value('11:11 PM'), t(
+            23, 11
+        ))
+
+
 class NonIntegerPKTestCase(BasePeeweeTestCase):
     def setUp(self):
         super(NonIntegerPKTestCase, self).setUp()

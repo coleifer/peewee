@@ -1978,32 +1978,50 @@ class TextColumn(Column):
     def db_value(self, value):
         return value or ''
 
+def format_date_time(value, formats, post_process=None):
+    post_process = post_process or (lambda x: x)
+    for fmt in formats:
+        try:
+            return post_process(datetime.datetime.strptime(value, fmt))
+        except ValueError:
+            pass
+    return value
+                
 
 class DateTimeColumn(Column):
     db_field = 'datetime'
-    dt_re = re.compile('^(\d{4}-\d{1,2}-\d{1,2} \d{2}:\d{2}:\d{2})(?:\.(\d+))?')
-    dt_bare_re = re.compile('^\d{4}-\d{1,2}-\d{1,2}$')
+
+    def get_attributes(self):
+        return {
+            'formats': [
+                '%Y-%m-%d %H:%M:%S.%f',
+                '%Y-%m-%d %H:%M:%S',
+                '%Y-%m-%d',
+            ]
+        }
 
     def python_value(self, value):
         if isinstance(value, basestring):
-            match = self.dt_re.match(value)
-            if match:
-                value, usec = match.groups()
-                kwargs = dict(microsecond=usec and int(usec) or 0)
-                return datetime.datetime(*time.strptime(value, '%Y-%m-%d %H:%M:%S')[:6], **kwargs)
-            elif self.dt_bare_re.match(value):
-                return datetime.datetime(*time.strptime(value, '%Y-%m-%d')[:3])
+            return format_date_time(value, self.attributes['formats'])
         return value
 
 
 class DateColumn(Column):
     db_field = 'date'
-    dt_bare_re = re.compile('^\d{4}-\d{1,2}-\d{1,2}$')
+    
+    def get_attributes(self):
+        return {
+            'formats': [
+                '%Y-%m-%d',
+                '%Y-%m-%d %H:%M:%S',
+                '%Y-%m-%d %H:%M:%S.%f',
+            ]
+        }
 
     def python_value(self, value):
         if isinstance(value, basestring):
-            if self.dt_bare_re.match(value):
-                return datetime.date(*time.strptime(value, '%Y-%m-%d')[:3])
+            pp = lambda x: x.date()
+            return format_date_time(value, self.attributes['formats'], pp)
         elif isinstance(value, datetime.datetime):
             return value.date()
         return value
@@ -2011,15 +2029,22 @@ class DateColumn(Column):
 
 class TimeColumn(Column):
     db_field = 'time'
-    time_re = re.compile('^(\d{2}:\d{2}:\d{2})(?:\.(\d+))?$')
+    
+    def get_attributes(self):
+        return {
+            'formats': [
+                '%H:%M:%S.%f',
+                '%H:%M:%S',
+                '%H:%M',
+                '%Y-%m-%d %H:%M:%S.%f',
+                '%Y-%m-%d %H:%M:%S',
+            ]
+        }
 
     def python_value(self, value):
         if isinstance(value, basestring):
-            match = self.time_re.match(value)
-            if match:
-                value, usec = match.groups()
-                kwargs = dict(microsecond=usec and int(usec) or 0)
-                return datetime.time(*time.strptime(value, '%H:%M:%S')[3:6], **kwargs)
+            pp = lambda x: x.time()
+            return format_date_time(value, self.attributes['formats'], pp)
         elif isinstance(value, datetime.datetime):
             return value.time()
         return value
