@@ -83,6 +83,12 @@ Some fields take special parameters...
 +===============================+==============================================+
 | :py:class:`CharField`         | ``max_length``                               |
 +-------------------------------+----------------------------------------------+
+| :py:class:`DateTimeField`     | ``formats``                                  |
++-------------------------------+----------------------------------------------+
+| :py:class:`DateField`         | ``formats``                                  |
++-------------------------------+----------------------------------------------+
+| :py:class:`TimeField`         | ``formats``                                  |
++-------------------------------+----------------------------------------------+
 | :py:class:`DecimalField`      | ``max_digits``, ``decimal_places``           |
 +-------------------------------+----------------------------------------------+
 | :py:class:`ForeignKeyField`   | ``to``, ``related_name``,                    |
@@ -197,14 +203,52 @@ Field class API
 .. py:class:: DateTimeField
 
     Stores: python ``datetime.datetime`` instances
+    
+    Accepts a special parameter ``formats``, which contains a list of formats
+    the datetime can be encoded with.  The default behavior is:
+    
+    .. code-block:: python
+    
+        '%Y-%m-%d %H:%M:%S.%f' # year-month-day hour-minute-second.microsecond
+        '%Y-%m-%d %H:%M:%S' # year-month-day hour-minute-second
+        '%Y-%m-%d' # year-month-day
+    
+    .. note::
+        If the incoming value does not match a format, it will be returned as-is
 
 .. py:class:: DateField
 
     Stores: python ``datetime.date`` instances
+    
+    Accepts a special parameter ``formats``, which contains a list of formats
+    the date can be encoded with.  The default behavior is:
+    
+    .. code-block:: python
+    
+        '%Y-%m-%d' # year-month-day
+        '%Y-%m-%d %H:%M:%S' # year-month-day hour-minute-second
+        '%Y-%m-%d %H:%M:%S.%f' # year-month-day hour-minute-second.microsecond
+    
+    .. note::
+        If the incoming value does not match a format, it will be returned as-is
 
 .. py:class:: TimeField
 
     Stores: python ``datetime.time`` instances
+    
+    Accepts a special parameter ``formats``, which contains a list of formats
+    the time can be encoded with.  The default behavior is:
+    
+    .. code-block:: python
+    
+        '%H:%M:%S.%f' # hour:minute:second.microsecond
+        '%H:%M:%S' # hour:minute:second
+        '%H:%M' # hour:minute
+        '%Y-%m-%d %H:%M:%S.%f' # year-month-day hour-minute-second.microsecond
+        '%Y-%m-%d %H:%M:%S' # year-month-day hour-minute-second
+    
+    .. note::
+        If the incoming value does not match a format, it will be returned as-is
 
 .. py:class:: IntegerField
 
