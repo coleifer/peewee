@@ -61,6 +61,13 @@ class Entry(TestModel):
     def __unicode__(self):
         return '%s: %s' % (self.blog.title, self.title)
 
+    def __init__(self, *args, **kwargs):
+        self._prepared = False
+        super(Entry, self).__init__(*args, **kwargs)
+
+    def prepared(self):
+        self._prepared = True    
+
 
 class EntryTag(TestModel):
     tag = CharField(max_length=50)
@@ -1003,7 +1010,7 @@ class ModelTests(BaseModelTestCase):
         u = User.create(username='a')
         self.assertEqual(u.username, 'a')
         self.assertQueriesEqual([
-            ('INSERT INTO `users` (`username`,`blog_id`,`active`) VALUES (?,?,?)', ['a', None, False]),
+            ('INSERT INTO `users` (`active`,`blog_id`,`username`) VALUES (?,?,?)', [False, None, 'a']),
         ])
 
         b = Blog.create(title='b blog')
@@ -1011,9 +1018,9 @@ class ModelTests(BaseModelTestCase):
         self.assertEqual(u2.blog, b)
 
         self.assertQueriesEqual([
-            ('INSERT INTO `users` (`username`,`blog_id`,`active`) VALUES (?,?,?)', ['a', None, False]),
+            ('INSERT INTO `users` (`active`,`blog_id`,`username`) VALUES (?,?,?)', [False, None, 'a']),
             ('INSERT INTO `blog` (`title`) VALUES (?)', ['b blog']),
-            ('INSERT INTO `users` (`username`,`blog_id`,`active`) VALUES (?,?,?)', ['b', b.id, False]),
+            ('INSERT INTO `users` (`active`,`blog_id`,`username`) VALUES (?,?,?)', [False, b.id, 'b']),
         ])
 
     def test_get_raises_does_not_exist(self):
@@ -1024,7 +1031,7 @@ class ModelTests(BaseModelTestCase):
         self.assertEqual(u.username, 'a')
         self.assertQueriesEqual([
             ('SELECT `id`, `username`, `blog_id`, `active` FROM `users` WHERE `username` = ? LIMIT 1', ['a']),
-            ('INSERT INTO `users` (`username`,`blog_id`,`active`) VALUES (?,?,?)', ['a', None, False]),
+            ('INSERT INTO `users` (`active`,`blog_id`,`username`) VALUES (?,?,?)', [False, None, 'a']),
         ])
 
         other_u = User.get_or_create(username='a')
@@ -1045,6 +1052,25 @@ class ModelTests(BaseModelTestCase):
         self.assertEqual(len(self.queries()), 8)
 
         self.assertEqual(User.select().count(), 2)
+
+    def test_prepared_hook(self):
+        b = self.create_blog(title='b1')
+        e1 = Entry.create(title='e1', blog=b)
+        e2 = Entry.create(title='e2', blog=b)
+        self.assertFalse(e1._prepared)
+        self.assertFalse(e2._prepared)
+
+        e = Entry.get(title='e1')
+        self.assertTrue(e._prepared)
+
+        for e in Entry.select():
+            self.assertTrue(e._prepared)
+
+        for e in Entry.filter():
+            self.assertTrue(e._prepared)
+
+        for e in Entry.raw('select * from entry'):
+            self.assertTrue(e._prepared)
 
 
 class UnicodeFieldTests(BaseModelTestCase):

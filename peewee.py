@@ -727,6 +727,7 @@ class QueryResultWrapper(object):
             return inst
 
         instance = self.iterate()
+        instance.prepared() # <-- model prepared hook
         self._result_cache.append(instance)
         self.__ct += 1
         self.__idx += 1
@@ -1672,7 +1673,7 @@ class UpdateQuery(BaseQuery):
 
         alias = alias_map.get(self.model)
 
-        for k, v in set_statement.iteritems():
+        for k, v in sorted(set_statement.items(), key=lambda (k, v): k):
             if isinstance(v, F):
                 value = self.parse_f(v, v.model or self.model, alias_map)
             else:
@@ -1744,7 +1745,7 @@ class InsertQuery(BaseQuery):
     def parse_insert(self):
         cols = []
         vals = []
-        for k, v in self.insert_query.iteritems():
+        for k, v in sorted(self.insert_query.items(), key=lambda (k, v): k):
             if k in self.model._meta.columns:
                 k = self.model._meta.columns[k].name
 
@@ -2545,6 +2546,10 @@ class Model(object):
                 else:
                     field_value = field.default
                 setattr(self, field.name, field_value)
+
+    def prepared(self):
+        # this hook is called when the model has been populated from a db cursor
+        pass
 
     def __eq__(self, other):
         return other.__class__ == self.__class__ and \
