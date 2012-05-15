@@ -1987,7 +1987,7 @@ def format_date_time(value, formats, post_process=None):
         except ValueError:
             pass
     return value
-                
+
 
 class DateTimeColumn(Column):
     db_field = 'datetime'
@@ -2009,7 +2009,7 @@ class DateTimeColumn(Column):
 
 class DateColumn(Column):
     db_field = 'date'
-    
+
     def get_attributes(self):
         return {
             'formats': [
@@ -2030,7 +2030,7 @@ class DateColumn(Column):
 
 class TimeColumn(Column):
     db_field = 'time'
-    
+
     def get_attributes(self):
         return {
             'formats': [
