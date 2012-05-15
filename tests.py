@@ -23,6 +23,7 @@ class QueryLogHandler(logging.Handler):
 
 
 BACKEND = os.environ.get('PEEWEE_TEST_BACKEND', 'sqlite')
+TEST_VERBOSITY = int(os.environ.get('PEEWEE_TEST_VERBOSITY') or 1)
 
 if BACKEND == 'postgresql':
     database_class = PostgresqlDatabase
@@ -3556,7 +3557,8 @@ if test_db.adapter.for_update_support:
             self.assertEqual(blog_title, 'b1_edited')
 
 else:
-    print 'Skipping for update tests because backend does not support'
+    if TEST_VERBOSITY > 0:
+        print 'Skipping for update tests because backend does not support'
 
 if test_db.adapter.sequence_support:
     class SequenceTestCase(BaseModelTestCase):
@@ -3591,4 +3593,5 @@ if test_db.adapter.sequence_support:
             self.assertEqual(b2.id, a3.id - 1)
 
 else:
-    print 'Skipping sequence tests because backend does not support'
+    if TEST_VERBOSITY > 0:
+        print 'Skipping sequence tests because backend does not support'
