@@ -2742,3 +2742,20 @@ def find_subclasses(klass, include_self=False):
     if include_self:
         accum.append(klass)
     return accum
+
+def sort_models_topologically(models):
+    """Sort models topologically so that parents will precede children."""
+    models = set(models)
+    seen = set()
+    ordering = []
+    def dfs(model):
+        if model in models and model not in seen:
+            seen.add(model)
+            for child_model in model._meta.reverse_relations.values():
+                dfs(child_model)
+            ordering.append(model)  # parent will follow descendants
+    # order models by name and table initially to guarantee a total ordering
+    names = lambda m: (m._meta.model_name, m._meta.db_table)
+    for m in sorted(models, key=names, reverse=True):
+        dfs(m)
+    return list(reversed(ordering))  # want parents first in output ordering
