@@ -11,7 +11,7 @@ import unittest
 from peewee import *
 from peewee import logger, VarCharColumn, SelectQuery, DeleteQuery, UpdateQuery, \
         InsertQuery, RawQuery, parseq, Database, SqliteAdapter, \
-        sort_models_topologically
+        create_model_tables, drop_model_tables, sort_models_topologically
 
 
 class QueryLogHandler(logging.Handler):
@@ -237,23 +237,12 @@ class BasePeeweeTestCase(unittest.TestCase):
 
 class BaseModelTestCase(BasePeeweeTestCase):
     def setUp(self):
-        Membership.drop_table(True)
-        Member.drop_table(True)
-        Team.drop_table(True)
-        Relationship.drop_table(True)
-        User.drop_table(True)
-        EntryTag.drop_table(True)
-        Entry.drop_table(True)
-        Blog.drop_table(True)
-
-        Blog.create_table()
-        Entry.create_table()
-        EntryTag.create_table()
-        User.create_table()
-        Relationship.create_table()
-        Team.create_table()
-        Member.create_table()
-        Membership.create_table()
+        models = [
+            Membership, Member, Team, Relationship,
+            User, EntryTag, Entry, Blog
+        ]
+        drop_model_tables(models, fail_silently=True)
+        create_model_tables(models)
         super(BaseModelTestCase, self).setUp()
 
     def queries(self):
