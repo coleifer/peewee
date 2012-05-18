@@ -2743,6 +2743,16 @@ def find_subclasses(klass, include_self=False):
         accum.append(klass)
     return accum
 
+def create_model_tables(models, **create_table_kwargs):
+    """Create tables for all given models (in the right order)."""
+    for m in sort_models_topologically(models):
+        m.create_table(**create_table_kwargs)
+
+def drop_model_tables(models, **drop_table_kwargs):
+    """Drop tables for all given models (in the right order)."""
+    for m in reversed(sort_models_topologically(models)):
+        m.drop_table(**drop_table_kwargs)
+
 def sort_models_topologically(models):
     """Sort models topologically so that parents will precede children."""
     models = set(models)
