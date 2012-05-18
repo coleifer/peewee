@@ -11,6 +11,7 @@ from __future__ import with_statement
 import datetime
 import copy
 import decimal
+import inspect
 import logging
 import os
 import re
@@ -2730,3 +2731,24 @@ class Model(object):
 
         for field_name in fields:
             setattr(self, field_name, getattr(obj, field_name))
+
+def discover_models(module=None, exclude=None):
+    """Find all models defined in a module (the calling module by default).
+
+    Excludes models in `exclude`, none by default.
+
+    """
+    exclude = set(exclude or [])
+    if module is None:
+        try:
+            stack_frame = inspect.stack()[1]
+            module = inspect.getmodule(stack_frame[0])
+        finally:
+            del stack_frame  # avoid long-lived refs
+    def search():
+        for attr_name in dir(module):
+            m = getattr(module, attr_name)
+            if isinstance(m, BaseModel) and module == inspect.getmodule(m):
+                if m not in exclude:
+                    yield m
+    return list(sorted(set(search())))  # guarantee uniqueness and single order

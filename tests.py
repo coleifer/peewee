@@ -3592,3 +3592,16 @@ if test_db.adapter.sequence_support:
 
 else:
     print 'Skipping sequence tests because backend does not support'
+
+
+class DiscoverModelsTestCase(unittest.TestCase):
+    def test_discover_models(self):
+        import peewee
+        peewee_models = peewee.discover_models(peewee)
+        self.assertListEqual(peewee_models, [Model])
+
+        test_models = peewee.discover_models(exclude=[TestModel])
+        self.assertIn(Blog, test_models)
+        self.assertIn(Entry, test_models)
+        self.assertNotIn(TestModel, test_models)
+        self.assertNotIn(Model, test_models)
