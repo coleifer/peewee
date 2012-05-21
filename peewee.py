@@ -197,6 +197,7 @@ class PostgresqlAdapter(BaseAdapter):
     def connect(self, database, **kwargs):
         if not psycopg2:
             raise ImproperlyConfigured('psycopg2 must be installed on the system')
+
         return psycopg2.connect(database=database, **kwargs)
 
     def get_field_overrides(self):
@@ -498,7 +499,13 @@ class SqliteDatabase(Database):
 
 class PostgresqlDatabase(Database):
     def __init__(self, database, **connect_kwargs):
+        self._schema = connect_kwargs.pop('schema', None)
         super(PostgresqlDatabase, self).__init__(PostgresqlAdapter(), database, **connect_kwargs)
+
+    def connect(self):
+        Database.connect(self)
+        if self._schema is not None:
+            self.execute("SET search_path TO %s", (self._schema,))
 
     def get_indexes_for_table(self, table):
         res = self.execute("""
