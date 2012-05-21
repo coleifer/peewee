@@ -503,9 +503,10 @@ class PostgresqlDatabase(Database):
         super(PostgresqlDatabase, self).__init__(PostgresqlAdapter(), database, **connect_kwargs)
 
     def connect(self):
-        Database.connect(self)
+        res = super(PostgresqlDatabase, self).connect()
         if self._schema is not None:
-            self.execute("SET search_path TO %s", (self._schema,))
+            self.execute('SET search_path TO %s', (self._schema,))
+        return res
 
     def get_indexes_for_table(self, table):
         res = self.execute("""

@@ -89,9 +89,6 @@ class DB(object):
             err('error connecting to %s' % database)
             raise
 
-    def set_schema(self, schema):
-        return
-
 
 class PgDB(DB):
     # thanks, django
@@ -104,7 +101,7 @@ class PgDB(DB):
         25: 'TextField',
         700: 'FloatField',
         701: 'FloatField',
-        1042: 'CharField',
+        1042: 'CharField',      # blank-padded CHAR
         1043: 'CharField',
         1082: 'DateField',
         1114: 'DateTimeField',
@@ -117,10 +114,6 @@ class PgDB(DB):
 
     def get_conn_class(self):
         return PostgresqlDatabase
-
-    def set_schema(self, schema):
-        self.conn.execute('SET search_path TO %s' % schema)
-        return
 
     def get_columns(self, table):
         curs = self.conn.execute('select * from %s limit 1' % table)
@@ -270,11 +263,7 @@ def get_db(engine):
 
 def introspect(engine, database, **connect):
     db = get_db(engine)
-
-    schema = connect.pop('schema')
     db.connect(database, **connect)
-    if schema is not None:
-        db.set_schema(options.schema)
     tables = db.get_tables()
 
     models = {}
