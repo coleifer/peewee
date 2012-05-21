@@ -92,6 +92,7 @@ class DB(object):
 
 class PgDB(DB):
     # thanks, django
+    # also, http://jdbc.postgresql.org/development/privateapi/constant-values.html
     reverse_mapping = {
         16: 'BooleanField',
         20: 'IntegerField',
@@ -100,6 +101,7 @@ class PgDB(DB):
         25: 'TextField',
         700: 'FloatField',
         701: 'FloatField',
+        1042: 'CharField',      # blank-padded CHAR
         1043: 'CharField',
         1082: 'DateField',
         1114: 'DateTimeField',
@@ -107,6 +109,7 @@ class PgDB(DB):
         1083: 'TimeField',
         1266: 'TimeField',
         1700: 'DecimalField',
+        2950: 'TextField',      # UUID
     }
 
     def get_conn_class(self):
@@ -114,7 +117,12 @@ class PgDB(DB):
 
     def get_columns(self, table):
         curs = self.conn.execute('select * from %s limit 1' % table)
-        return dict((c.name, self.reverse_mapping.get(c.type_code, 'UnknownFieldType')) for c in curs.description)
+        try:
+            # http://initd.org/psycopg/docs/cursor.html
+            # named tuple available from psycopg2 v 2.4
+            return dict((c.name, self.reverse_mapping.get(c.type_code, 'UnknownFieldType')) for c in curs.description)
+        except:
+            return dict((c[0], self.reverse_mapping.get(c[1], 'UnknownFieldType')) for c in curs.description)
 
     def get_foreign_keys(self, table):
         framing = '''
@@ -256,7 +264,6 @@ def get_db(engine):
 def introspect(engine, database, **connect):
     db = get_db(engine)
     db.connect(database, **connect)
-
     tables = db.get_tables()
 
     models = {}
@@ -334,6 +341,7 @@ if __name__ == '__main__':
     ao('-u', '--user', dest='user')
     ao('-P', '--password', dest='password')
     ao('-e', '--engine', dest='engine', default='postgresql')
+    ao('-s', '--schema', dest='schema')
 
     options, args = parser.parse_args()
     ops = ('host', 'port', 'user', 'password')
@@ -345,8 +353,9 @@ if __name__ == '__main__':
         sys.exit(1)
 
     database = args[-1]
-    
+
     if options.engine == 'mysql' and 'password' in connect:
         connect['passwd'] = connect.pop('password', None)
-
+    if options.schema:
+        connect['schema'] = options.schema
     introspect(options.engine, database, **connect)
