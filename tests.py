@@ -3601,11 +3601,11 @@ class TopologicalSortTestCase(unittest.TestCase):
         for input_ordering in permutations([A, B, C, D, E]):
             output_ordering = sort_models_topologically(input_ordering)
             repeatable_ordering = repeatable_ordering or output_ordering
-            self.assertListEqual(repeatable_ordering, output_ordering)
+            self.assertEqual(repeatable_ordering, output_ordering)
 
         # property 2: output ordering must have same models as input
         self.assertEqual(len(output_ordering), 5)
-        self.assertNotIn(Excluded, output_ordering)
+        self.assertFalse(Excluded in output_ordering)
 
         # property 3: parents must precede children
         def assert_precedes(X, Y):
