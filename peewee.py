@@ -11,6 +11,7 @@ from __future__ import with_statement
 import datetime
 import copy
 import decimal
+import inspect
 import logging
 import os
 import re
@@ -2730,3 +2731,60 @@ class Model(object):
 
         for field_name in fields:
             setattr(self, field_name, getattr(obj, field_name))
+
+def find_models_in_module(module, exclude=None):
+    """Find all models defined in a module.
+
+    Excludes models in `exclude`, none by default.
+
+    """
+    exclude = set(exclude or [])
+    def search():
+        for m in vars(module).itervalues():
+            if isinstance(m, BaseModel) and module == inspect.getmodule(m):
+                if m not in exclude:
+                    yield m
+    return list(sorted(set(search())))  # guarantee uniqueness and single order
+
+def find_submodels(base_model, exclude=None):
+    """Find all models derived from a base model.
+
+    Excludes models in `exclude` (none by default) and their subclasses.
+
+    """
+    exclude = set([base_model]) | set(exclude or [])
+    found = set()
+    def search(model):
+        for submodel in model.__subclasses__():
+            if submodel not in exclude:  # prune excluded models from search
+                found.add(submodel)
+                search(submodel)
+    search(base_model)
+    return found
+
+def create_model_tables(models, **create_table_kwargs):
+    """Create tables for all given models (in the right order)."""
+    for m in sort_models_topologically(models):
+        m.create_table(**create_table_kwargs)
+
+def drop_model_tables(models, **drop_table_kwargs):
+    """Drop tables for all given models (in the right order)."""
+    for m in reversed(sort_models_topologically(models)):
+        m.drop_table(**drop_table_kwargs)
+
+def sort_models_topologically(models):
+    """Sort models topologically so that parents will precede children."""
+    models = set(models)
+    seen = set()
+    ordering = []
+    def dfs(model):
+        if model in models and model not in seen:
+            seen.add(model)
+            for child_model in model._meta.reverse_relations.values():
+                dfs(child_model)
+            ordering.append(model)  # parent will follow descendants
+    # order models by name and table initially to guarantee a total ordering
+    names = lambda m: (m._meta.model_name, m._meta.db_table)
+    for m in sorted(models, key=names, reverse=True):
+        dfs(m)
+    return list(reversed(ordering))  # want parents first in output ordering

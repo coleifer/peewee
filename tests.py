@@ -10,7 +10,8 @@ import unittest
 
 from peewee import *
 from peewee import logger, VarCharColumn, SelectQuery, DeleteQuery, UpdateQuery, \
-        InsertQuery, RawQuery, parseq, Database, SqliteAdapter
+        InsertQuery, RawQuery, parseq, Database, SqliteAdapter, \
+        create_model_tables, drop_model_tables, sort_models_topologically
 
 
 class QueryLogHandler(logging.Handler):
@@ -236,23 +237,12 @@ class BasePeeweeTestCase(unittest.TestCase):
 
 class BaseModelTestCase(BasePeeweeTestCase):
     def setUp(self):
-        Membership.drop_table(True)
-        Member.drop_table(True)
-        Team.drop_table(True)
-        Relationship.drop_table(True)
-        User.drop_table(True)
-        EntryTag.drop_table(True)
-        Entry.drop_table(True)
-        Blog.drop_table(True)
-
-        Blog.create_table()
-        Entry.create_table()
-        EntryTag.create_table()
-        User.create_table()
-        Relationship.create_table()
-        Team.create_table()
-        Member.create_table()
-        Membership.create_table()
+        models = [
+            Membership, Member, Team, Relationship,
+            User, EntryTag, Entry, Blog
+        ]
+        drop_model_tables(models, fail_silently=True)
+        create_model_tables(models)
         super(BaseModelTestCase, self).setUp()
 
     def queries(self):
@@ -3592,3 +3582,69 @@ if test_db.adapter.sequence_support:
 
 else:
     print 'Skipping sequence tests because backend does not support'
+
+
+class DiscoverModelsTestCase(unittest.TestCase):
+    def test_discover_models(self):
+        import peewee
+        peewee_models = peewee.find_models_in_module(peewee)
+        self.assertListEqual(peewee_models, [Model])
+
+        test_models = peewee.find_submodels(TestModel)
+        self.assertIn(Blog, test_models)
+        self.assertIn(Entry, test_models)
+        self.assertIn(EntryTwo, test_models)
+        self.assertNotIn(TestModel, test_models)
+        self.assertNotIn(Model, test_models)
+
+        test_models = peewee.find_submodels(TestModel, exclude=[Entry])
+        self.assertIn(Blog, test_models)
+        self.assertNotIn(Entry, test_models)
+        self.assertNotIn(EntryTwo, test_models)  # descendant of excluded Entry
+        self.assertNotIn(TestModel, test_models)
+        self.assertNotIn(Model, test_models)
+
+class TopologicalSortTestCase(unittest.TestCase):
+    def test_topological_sort_fundamentals(self):
+        FKF = ForeignKeyField
+        # we will be topo-sorting the following models
+        class A(Model): pass
+        class B(Model): a = FKF(A)              # must follow A
+        class C(Model): a, b = FKF(A), FKF(B)   # must follow A and B
+        class D(Model): c = FKF(C)              # must follow A and B and C
+        class E(Model): e = FKF('self')
+        # but excluding this model, which is a child of E
+        class Excluded(Model): e = FKF(E)
+
+        # property 1: output ordering must not depend upon input order
+        repeatable_ordering = None
+        for input_ordering in permutations([A, B, C, D, E]):
+            output_ordering = sort_models_topologically(input_ordering)
+            repeatable_ordering = repeatable_ordering or output_ordering
+            self.assertListEqual(repeatable_ordering, output_ordering)
+
+        # property 2: output ordering must have same models as input
+        self.assertEqual(len(output_ordering), 5)
+        self.assertNotIn(Excluded, output_ordering)
+
+        # property 3: parents must precede children
+        def assert_precedes(X, Y):
+            self.assertLess(*map(output_ordering.index, [X, Y]))
+        assert_precedes(A, B)
+        assert_precedes(B, C)  # if true, C follows A by transitivity
+        assert_precedes(C, D)  # if true, D follows A and B by transitivity
+
+        # property 4: independent model hierarchies must be in name order
+        assert_precedes(A, E)
+
+def permutations(xs):
+    if not xs:
+        yield []
+    else:
+        for y, ys in selections(xs):
+            for pys in permutations(ys):
+                yield [y] + pys
+
+def selections(xs):
+    for i in xrange(len(xs)):
+        yield (xs[i], xs[:i] + xs[i + 1:])

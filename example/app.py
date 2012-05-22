@@ -79,10 +79,10 @@ class Message(BaseModel):
 
 # simple utility function to create tables
 def create_tables():
+    import peewee
     database.connect()
-    User.create_table()
-    Relationship.create_table()
-    Message.create_table()
+    models = peewee.find_submodels(BaseModel)
+    peewee.create_model_tables(models, fail_silently=False)
 
 # flask provides a "session" object, which allows us to store information across
 # requests (stored by default in a secure cookie).  this function allows us to
