@@ -3610,7 +3610,8 @@ class TopologicalSortTestCase(unittest.TestCase):
 
         # property 3: parents must precede children
         def assert_precedes(X, Y):
-            self.assertLess(*map(output_ordering.index, [X, Y]))
+            lhs, rhs = map(output_ordering.index, [X, Y])
+            self.assertTrue(lhs < rhs)
         assert_precedes(A, B)
         assert_precedes(B, C)  # if true, C follows A by transitivity
         assert_precedes(C, D)  # if true, D follows A and B by transitivity
