@@ -3593,6 +3593,14 @@ class DiscoverModelsTestCase(unittest.TestCase):
         test_models = peewee.find_submodels(TestModel)
         self.assertIn(Blog, test_models)
         self.assertIn(Entry, test_models)
+        self.assertIn(EntryTwo, test_models)
+        self.assertNotIn(TestModel, test_models)
+        self.assertNotIn(Model, test_models)
+
+        test_models = peewee.find_submodels(TestModel, exclude=[Entry])
+        self.assertIn(Blog, test_models)
+        self.assertNotIn(Entry, test_models)
+        self.assertNotIn(EntryTwo, test_models)  # descendant of excluded Entry
         self.assertNotIn(TestModel, test_models)
         self.assertNotIn(Model, test_models)
 

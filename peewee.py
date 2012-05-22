@@ -2749,17 +2749,18 @@ def find_models_in_module(module, exclude=None):
 def find_submodels(base_model, exclude=None):
     """Find all models derived from a base model.
 
-    Excludes models in `exclude`, none by default.
-
-    Limitation: doesn't find models defined outside of the module the
-    base model was defined in.
+    Excludes models in `exclude` (none by default) and their subclasses.
 
     """
-    exclude = set(exclude or [])
-    exclude.add(base_model)
-    module = inspect.getmodule(base_model)
-    candidates = find_models_in_module(module, exclude=exclude)
-    return [m for m in candidates if issubclass(m, base_model)]
+    exclude = set([base_model]) | set(exclude or [])
+    found = set()
+    def search(model):
+        for submodel in model.__subclasses__():
+            if submodel not in exclude:  # prune excluded models from search
+                found.add(submodel)
+                search(submodel)
+    search(base_model)
+    return found
 
 def create_model_tables(models, **create_table_kwargs):
     """Create tables for all given models (in the right order)."""
