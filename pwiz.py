@@ -257,7 +257,11 @@ def get_db(engine):
 
 def introspect(engine, database, **connect):
     db = get_db(engine)
+    schema = connect.pop('schema', None)
     db.connect(database, **connect)
+
+    if schema:
+        db.conn.set_search_path(*schema.split(','))
 
     tables = db.get_tables()
 
@@ -336,9 +340,10 @@ if __name__ == '__main__':
     ao('-u', '--user', dest='user')
     ao('-P', '--password', dest='password')
     ao('-e', '--engine', dest='engine', default='postgresql')
+    ao('-s', '--schema', dest='schema')
 
     options, args = parser.parse_args()
-    ops = ('host', 'port', 'user', 'password')
+    ops = ('host', 'port', 'user', 'password', 'schema')
     connect = dict((o, getattr(options, o)) for o in ops if getattr(options, o))
 
     if len(args) < 1:
