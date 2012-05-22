@@ -100,6 +100,7 @@ class PgDB(DB):
         25: 'TextField',
         700: 'FloatField',
         701: 'FloatField',
+        1042: 'CharField', # blank-padded CHAR
         1043: 'CharField',
         1082: 'DateField',
         1114: 'DateTimeField',
@@ -107,6 +108,7 @@ class PgDB(DB):
         1083: 'TimeField',
         1266: 'TimeField',
         1700: 'DecimalField',
+        2950: 'TextField', # UUID
     }
 
     def get_conn_class(self):
