@@ -528,6 +528,10 @@ class PostgresqlDatabase(Database):
                 AND relname=%s""", (sequence,))
         return bool(res.fetchone()[0])
 
+    def set_search_path(self, *search_path):
+        path_params = ','.join(['%s'] * len(search_path))
+        self.execute('SET search_path TO %s' % path_params, search_path)
+
 
 class MySQLDatabase(Database):
     def __init__(self, database, **connect_kwargs):
