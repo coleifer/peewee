@@ -81,7 +81,7 @@ class Message(BaseModel):
 def create_tables():
     import peewee
     database.connect()
-    models = peewee.discover_models(exclude=[BaseModel])
+    models = peewee.find_submodels(BaseModel)
     peewee.create_model_tables(models, fail_silently=False)
 
 # flask provides a "session" object, which allows us to store information across

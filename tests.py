@@ -3587,10 +3587,10 @@ else:
 class DiscoverModelsTestCase(unittest.TestCase):
     def test_discover_models(self):
         import peewee
-        peewee_models = peewee.discover_models(peewee)
+        peewee_models = peewee.find_models_in_module(peewee)
         self.assertListEqual(peewee_models, [Model])
 
-        test_models = peewee.discover_models(exclude=[TestModel])
+        test_models = peewee.find_submodels(TestModel)
         self.assertIn(Blog, test_models)
         self.assertIn(Entry, test_models)
         self.assertNotIn(TestModel, test_models)

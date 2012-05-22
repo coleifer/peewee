@@ -2732,26 +2732,34 @@ class Model(object):
         for field_name in fields:
             setattr(self, field_name, getattr(obj, field_name))
 
-def discover_models(module=None, exclude=None):
-    """Find all models defined in a module (the calling module by default).
+def find_models_in_module(module, exclude=None):
+    """Find all models defined in a module.
 
     Excludes models in `exclude`, none by default.
 
     """
     exclude = set(exclude or [])
-    if module is None:
-        try:
-            stack_frame = inspect.stack()[1]
-            module = inspect.getmodule(stack_frame[0])
-        finally:
-            del stack_frame  # avoid long-lived refs
     def search():
-        for attr_name in dir(module):
-            m = getattr(module, attr_name)
+        for m in vars(module).itervalues():
             if isinstance(m, BaseModel) and module == inspect.getmodule(m):
                 if m not in exclude:
                     yield m
     return list(sorted(set(search())))  # guarantee uniqueness and single order
+
+def find_submodels(base_model, exclude=None):
+    """Find all models derived from a base model.
+
+    Excludes models in `exclude`, none by default.
+
+    Limitation: doesn't find models defined outside of the module the
+    base model was defined in.
+
+    """
+    exclude = set(exclude or [])
+    exclude.add(base_model)
+    module = inspect.getmodule(base_model)
+    candidates = find_models_in_module(module, exclude=exclude)
+    return [m for m in candidates if issubclass(m, base_model)]
 
 def create_model_tables(models, **create_table_kwargs):
     """Create tables for all given models (in the right order)."""
