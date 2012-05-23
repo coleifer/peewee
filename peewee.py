@@ -2560,6 +2560,10 @@ class Model(object):
                self.get_pk() and \
                other.get_pk() == self.get_pk()
 
+    def __ne__(self, other):
+        return other.__class__ == self.__class__ and \
+               (self.get_pk() != other.get_pk() or self.get_pk() is None)
+
     def get_field_dict(self):
         field_dict = {}
 

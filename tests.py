@@ -1083,6 +1083,27 @@ class UnicodeFieldTests(BaseModelTestCase):
         a1 = Blog.get(title=u'Lýðveldið Ísland')
         self.assertEqual(a1.title, a.title)
 
+    def test_model_eq_ne(self):
+        b1 = Blog.create(title='b1')
+        b1_2 = Blog.get(id=b1.id)
+        b2 = Blog.create(title='b2')
+        b3 = Blog()
+        b4 = Blog()
+
+        self.assertTrue(b1 == b1)
+        self.assertTrue(b1 == b1_2)
+        self.assertFalse(b1 == b2)
+        self.assertFalse(b1 == b3)
+        self.assertFalse(b3 == b1)
+        self.assertFalse(b3 == b4)
+
+        self.assertFalse(b1 != b1)
+        self.assertFalse(b1 != b1_2)
+        self.assertTrue(b1 != b2)
+        self.assertTrue(b1 != b3)
+        self.assertTrue(b3 != b1)
+        self.assertTrue(b3 != b4)
+
 
 class NodeTests(BaseModelTestCase):
     def test_simple(self):
