@@ -2077,7 +2077,8 @@ class BooleanColumn(Column):
         return bool(value)
 
     def python_value(self, value):
-        return bool(value)
+        if value is not None:
+            return bool(value)
 
 
 class FloatColumn(Column):
