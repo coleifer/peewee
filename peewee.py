@@ -318,10 +318,10 @@ class Database(object):
     def get_cursor(self):
         return self.get_conn().cursor()
 
-    def execute(self, sql, params=None):
+    def execute(self, sql, params=None, require_commit=True):
         cursor = self.get_cursor()
         res = cursor.execute(sql, params or ())
-        if self.get_autocommit():
+        if require_commit and self.get_autocommit():
             self.commit()
         logger.debug((sql, params))
         return cursor
@@ -610,6 +610,10 @@ class QueryResultWrapper(object):
         self.column_meta = self.query_meta.get('columns')
         self.join_meta = self.query_meta.get('graph')
 
+        # a query will be considered "simple" if it pulls columns straight
+        # from the primary model being queried
+        self.simple = self.query_meta.get('simple') or not self.column_meta
+
         self.__ct = 0
         self.__idx = 0
 
@@ -631,7 +635,7 @@ class QueryResultWrapper(object):
             for i, value in enumerate(row))
 
     def construct_instance(self, row):
-        if not self.column_meta:
+        if self.simple:
             # use attribute names pulled from the result cursor description,
             # and do not attempt to follow joined models
             row_dict = self._row_to_dict(row)
@@ -954,6 +958,7 @@ class EmptyResultException(Exception):
 class BaseQuery(object):
     query_separator = '__'
     force_alias = False
+    require_commit = True
 
     def __init__(self, model):
         self.model = model
@@ -1278,7 +1283,7 @@ class BaseQuery(object):
         raise NotImplementedError
 
     def raw_execute(self, query, params):
-        return self.database.execute(query, params)
+        return self.database.execute(query, params, self.require_commit)
 
 
 class RawQuery(BaseQuery):
@@ -1310,6 +1315,8 @@ class RawQuery(BaseQuery):
 
 
 class SelectQuery(BaseQuery):
+    require_commit = False
+
     def __init__(self, model, query=None):
         self.query = query or '*'
         self._group_by = []
@@ -1476,6 +1483,8 @@ class SelectQuery(BaseQuery):
 
     def parse_select_query(self, alias_map):
         q = self.query
+        models_queried = 0
+        local_columns = True
 
         if isinstance(q, (list, tuple)):
             q = {self.model: self.query}
@@ -1486,7 +1495,7 @@ class SelectQuery(BaseQuery):
             elif q in (self.model._meta.pk_col, self.model._meta.pk_name):
                 q = {self.model: [self.model._meta.pk_name]}
             else:
-                return q, []
+                return q, [], False
 
         # by now we should have a dictionary if a valid type was passed in
         if not isinstance(q, dict):
@@ -1503,6 +1512,8 @@ class SelectQuery(BaseQuery):
             if model not in q:
                 continue
 
+            models_queried += 1
+
             if '*' in q[model]:
                 idx = q[model].index('*')
                 q[model] =  q[model][:idx] + model._meta.get_field_names() + q[model][idx+1:]
@@ -1512,6 +1523,7 @@ class SelectQuery(BaseQuery):
                     clause = clause.sql_select()
 
                 if isinstance(clause, tuple):
+                    local_columns = False
                     if len(clause) == 3:
                         func, col_name, col_alias = clause
                         column = model._meta.get_column(col_name)
@@ -1533,8 +1545,7 @@ class SelectQuery(BaseQuery):
                     columns.append(self.safe_combine(model, alias, column))
                     model_cols.append((model, column))
 
-        return ', '.join(columns), model_cols
-
+        return ', '.join(columns), model_cols, (models_queried == 1 and local_columns)
 
     def sql_meta(self):
         joins, clauses, alias_map = self.compile_where()
@@ -1558,10 +1569,11 @@ class SelectQuery(BaseQuery):
             for field in clause:
                 group_by.append(self.safe_combine(model, alias, field))
 
-        parsed_query, model_cols = self.parse_select_query(alias_map)
+        parsed_query, model_cols, simple = self.parse_select_query(alias_map)
         query_meta = {
             'columns': model_cols,
             'graph': self._joins,
+            'simple': simple,
         }
 
         if self._distinct:
