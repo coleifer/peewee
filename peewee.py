@@ -603,12 +603,13 @@ class QueryResultWrapper(object):
     - converts rows from the database into model instances
     - ensures that multiple iterations do not result in multiple queries
     """
-    def __init__(self, model, cursor, meta=None):
+    def __init__(self, model, cursor, meta=None, chunk_size=100):
         self.model = model
         self.cursor = cursor
         self.query_meta = meta or {}
         self.column_meta = self.query_meta.get('columns')
         self.join_meta = self.query_meta.get('graph')
+        self.chunk_size = chunk_size
 
         # a query will be considered "simple" if it pulls columns straight
         # from the primary model being queried
@@ -619,6 +620,10 @@ class QueryResultWrapper(object):
 
         self._result_cache = []
         self._populated = False
+
+        self.__read_cache = []
+        self.__read_idx = 0
+        self.__read_ct = 0
 
     def model_from_rowset(self, model_class, attr_dict):
         instance = model_class()
@@ -691,44 +696,34 @@ class QueryResultWrapper(object):
         return inst
 
     def __iter__(self):
-        self.__idx = 0
+        self.__idx = self.__read_idx = 0
 
         if not self._populated:
             return self
         else:
             return iter(self._result_cache)
 
-    def first(self):
-        try:
-            self.__idx = 0 # move to beginning of the list
-            inst = self.next()
-        except StopIteration:
-            inst = None
-
-        self.__idx = 0
-        return inst
-
-    def fill_cache(self):
-        if not self._populated:
-            idx = self.__idx
-            self.__idx = self.__ct
-            for x in self:
-                pass
-            self.__idx = idx
-
     def iterate(self):
-        row = self.cursor.fetchone()
-        if row:
-            return self.construct_instance(row)
-        else:
-            self._populated = True
-            raise StopIteration
+        if self.__read_idx >= self.__read_ct:
+            rows = self.cursor.fetchmany(self.chunk_size)
+            self.__read_ct = len(rows)
+            if self.__read_ct:
+                self.__read_cache = rows
+                self.__read_idx = 0
+            else:
+                self._populated = True
+                raise StopIteration
+
+        instance = self.construct_instance(self.__read_cache[self.__read_idx])
+        self.__read_idx += 1
+        return instance
 
     def iterator(self):
         while 1:
             yield self.iterate()
 
     def next(self):
+        # check to see if we have a row in our instance cache
         if self.__idx < self.__ct:
             inst = self._result_cache[self.__idx]
             self.__idx += 1
