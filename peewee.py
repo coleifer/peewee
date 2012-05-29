@@ -1116,7 +1116,7 @@ class BaseQuery(object):
         seen = seen or set()
 
         if current not in self._joins:
-            return computed
+            return computed, alias_count
 
         for i, (model, join_type, on) in enumerate(self._joins[current]):
             seen.add(model)
@@ -1156,9 +1156,10 @@ class BaseQuery(object):
                 )
             )
 
-            computed.extend(self.follow_joins(model, alias_map, alias_required, alias_count, seen))
+            joins, alias_count = self.follow_joins(model, alias_map, alias_required, alias_count, seen)
+            computed.extend(joins)
 
-        return computed
+        return computed, alias_count
 
     def compile_where(self):
         alias_count = 0
@@ -1174,7 +1175,7 @@ class BaseQuery(object):
         else:
             alias_map[self.model] = ''
 
-        computed_joins = self.follow_joins(self.model, alias_map, alias_required, alias_count)
+        computed_joins, _ = self.follow_joins(self.model, alias_map, alias_required, alias_count)
 
         clauses = [self.parse_node(node, alias_map) for node in self._where]
 

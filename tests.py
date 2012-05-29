@@ -404,6 +404,33 @@ class QueryTests(BasePeeweeTestCase):
         sq = SelectQuery(Blog, '*').join(Entry).switch(Blog).where(title='a')
         self.assertSQLEqual(sq.sql(), ('SELECT t1.`id`, t1.`title` FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id` WHERE t1.`title` = ?', ['a']))
 
+    def test_selecting_with_joins_switching_issue90(self):
+        class Artist(Model):
+            pass
+
+        class Track(Model):
+            artist = ForeignKeyField(Artist)
+
+        class Release(Model):
+            artist = ForeignKeyField(Artist)
+
+        class ReleaseTrack(Model):
+            track = ForeignKeyField(Track)
+            release = ForeignKeyField(Release)
+
+        class Genre(Model):
+            pass
+
+        class TrackGenre(Model):
+            genre = ForeignKeyField(Genre)
+            track = ForeignKeyField(Track)
+
+        multiple_first = Track.select().join(ReleaseTrack).join(Release).switch(Track).join(Artist).switch(Track).join(TrackGenre).join(Genre)
+        self.assertSQLEqual(multiple_first.sql(), ('SELECT t1.`id`, t1.`artist_id` FROM `track` AS t1 INNER JOIN `releasetrack` AS t2 ON t1.`id` = t2.`track_id`\nINNER JOIN `release` AS t3 ON t2.`release_id` = t3.`id`\nINNER JOIN `artist` AS t4 ON t1.`artist_id` = t4.`id`\nINNER JOIN `trackgenre` AS t5 ON t1.`id` = t5.`track_id`\nINNER JOIN `genre` AS t6 ON t5.`genre_id` = t6.`id`', []))
+
+        single_first = Track.select().join(Artist).switch(Track).join(ReleaseTrack).join(Release).switch(Track).join(TrackGenre).join(Genre)
+        self.assertSQLEqual(single_first.sql(), ('SELECT t1.`id`, t1.`artist_id` FROM `track` AS t1 INNER JOIN `artist` AS t2 ON t1.`artist_id` = t2.`id`\nINNER JOIN `releasetrack` AS t3 ON t1.`id` = t3.`track_id`\nINNER JOIN `release` AS t4 ON t3.`release_id` = t4.`id`\nINNER JOIN `trackgenre` AS t5 ON t1.`id` = t5.`track_id`\nINNER JOIN `genre` AS t6 ON t5.`genre_id` = t6.`id`', []))
+
     def test_selecting_with_aggregation(self):
         sq = SelectQuery(Blog, 't1.*, COUNT(t2.pk) AS count').group_by('id').join(Entry)
         self.assertEqual(sq._where, [])
