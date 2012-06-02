@@ -2117,16 +2117,28 @@ class DecimalColumn(Column):
         return {
             'max_digits': 10,
             'decimal_places': 5,
+            'auto_round': False,
+            'always_float': False,
         }
 
     def db_value(self, value):
-        return value or decimal.Decimal(0)
+        if not value:
+            decimal.Decimal(0)
+        if self.attributes['auto_round']:
+            return decimal.Decimal(str(value)).quantize(decimal.Decimal(10)** (-1 * self.attributes['decimal_places']))
+        else:
+            return value
 
     def python_value(self, value):
         if value is not None:
-            if isinstance(value, decimal.Decimal):
-                return value
-            return decimal.Decimal(str(value))
+            if self.attributes['always_float']:
+                if isinstance(value, float):
+                    return value
+                return float(str(value))
+            else:
+                if isinstance(value, decimal.Decimal):
+                    return value
+                return decimal.Decimal(str(value))
 
 
 class PrimaryKeyColumn(Column):

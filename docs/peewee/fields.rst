@@ -89,7 +89,8 @@ Some fields take special parameters...
 +-------------------------------+----------------------------------------------+
 | :py:class:`TimeField`         | ``formats``                                  |
 +-------------------------------+----------------------------------------------+
-| :py:class:`DecimalField`      | ``max_digits``, ``decimal_places``           |
+| :py:class:`DecimalField`      | ``max_digits``, ``decimal_places``,          |
+|                               |  ``auto_round``, ``always_float``            |
 +-------------------------------+----------------------------------------------+
 | :py:class:`ForeignKeyField`   | ``to``, ``related_name``,                    |
 |                               | ``cascade``, ``extra``                       |
@@ -265,6 +266,23 @@ Field class API
 .. py:class:: DecimalField
 
     Stores: decimal numbers
+
+    It's default behavior is to return ``decimal.Decimal`` Python object. This is can
+    store really large numbers so Python does not support seamless conversion from
+    Decimal to float.
+
+    If the only reason for you to use Decimal at database is to store amount where it
+    always has exactly two decimal places and you happen then it might be easier for you
+    to turn on ``auto_round`` and ``always_float`` flags.
+
+    The former will make sure that if the value has higher precision than the number of
+    ``decimal_places`` then it round it to that value before send that to database. This
+    will save from some unexpected "Data truncation" warnings from MySQL backend
+    (.. _ref: http://bit.ly/bWr1mn).
+
+    The latter will make sure that in Python code you always get the value as ``float``
+    instead of ``Decimal``. This way you can easily mix other float numbers without tracking
+    their types. Also ``float`` can be faster than ``Decimal``.
 
 .. py:class:: PrimaryKeyField
 
