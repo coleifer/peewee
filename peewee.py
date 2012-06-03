@@ -2123,9 +2123,12 @@ class DecimalColumn(Column):
 
     def db_value(self, value):
         if not value:
-            decimal.Decimal(0)
+            return decimal.Decimal(0)
+        
         if self.attributes['auto_round']:
-            return decimal.Decimal(str(value)).quantize(decimal.Decimal(10)** (-1 * self.attributes['decimal_places']))
+            return decimal.Decimal(str(value)) \
+                .quantize(decimal.Decimal(10)** \
+                    (-1 * self.attributes['decimal_places']))
         else:
             return value
 
