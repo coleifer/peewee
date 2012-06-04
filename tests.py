@@ -405,23 +405,23 @@ class QueryTests(BasePeeweeTestCase):
         self.assertSQLEqual(sq.sql(), ('SELECT t1.`id`, t1.`title` FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id` WHERE t1.`title` = ?', ['a']))
 
     def test_selecting_with_joins_switching_issue90(self):
-        class Artist(Model):
+        class Artist(TestModel):
             pass
 
-        class Track(Model):
+        class Track(TestModel):
             artist = ForeignKeyField(Artist)
 
-        class Release(Model):
+        class Release(TestModel):
             artist = ForeignKeyField(Artist)
 
-        class ReleaseTrack(Model):
+        class ReleaseTrack(TestModel):
             track = ForeignKeyField(Track)
             release = ForeignKeyField(Release)
 
-        class Genre(Model):
+        class Genre(TestModel):
             pass
 
-        class TrackGenre(Model):
+        class TrackGenre(TestModel):
             genre = ForeignKeyField(Genre)
             track = ForeignKeyField(Track)
 
