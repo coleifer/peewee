@@ -2416,6 +2416,13 @@ class BaseModelOptions(object):
         self.columns = {}
         self.model_class = model_class
 
+    def prepared(self):
+        # called when _meta is finished being initialized
+        self.defaults = {}
+        for field in self.fields.values():
+            if field.default is not None:
+                self.defaults[field.name] = field.default
+
     def get_sorted_fields(self):
         return sorted(self.fields.items(), key=lambda (k,v): (k == self.pk_name and 1 or 2, v._order))
 
@@ -2537,6 +2544,8 @@ class BaseModel(type):
         for field in _meta.fields.values():
             field.class_prepared()
 
+        _meta.prepared()
+
         if hasattr(cls, '__unicode__'):
             setattr(cls, '__repr__', lambda self: '<%s: %r>' % (
                 _meta.model_name, self.__unicode__()))
@@ -2557,13 +2566,12 @@ class Model(object):
             setattr(self, k, v)
 
     def initialize_defaults(self):
-        for field in self._meta.fields.values():
-            if field.default is not None:
-                if callable(field.default):
-                    field_value = field.default()
-                else:
-                    field_value = field.default
-                setattr(self, field.name, field_value)
+        for field_name, default in self._meta.defaults.items():
+            if callable(default):
+                val = default()
+            else:
+                val = default
+            setattr(self, field_name, val)
 
     def prepared(self):
         # this hook is called when the model has been populated from a db cursor
