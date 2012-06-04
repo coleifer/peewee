@@ -2,7 +2,7 @@ import datetime
 import os
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, joinedload
 
 from models import User, Blog, Entry
 
@@ -47,6 +47,9 @@ def list_users(ordered=False):
 
 def list_blogs_for_user(user):
     return list(user.blog_set)
+
+def list_blogs_select_related():
+    return list(session.query(Blog).options(joinedload(Blog.user)))
 
 def list_entries_by_user(user):
     return list(session.query(Entry).join(Blog).filter(Blog.user_id==user.id))

@@ -29,6 +29,10 @@ def list_users(ordered=False):
         sq = User.select()
     return list(sq)
 
+def list_blogs_select_related():
+    qs = Blog.select({Blog: ['*'], User: ['*']}).join(User)
+    return list(qs)
+
 def list_blogs_for_user(user):
     return list(user.blog_set)
 

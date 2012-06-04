@@ -32,6 +32,10 @@ def list_users(ordered=False):
         qs = User.objects.all()
     return list(qs)
 
+def list_blogs_select_related():
+    qs = Blog.objects.all().select_related('user')
+    return list(qs)
+
 def list_blogs_for_user(user):
     return list(user.blog_set.all())
 
