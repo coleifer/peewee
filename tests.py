@@ -3240,7 +3240,7 @@ class ModelOptionsTest(BaseModelTestCase):
         self.assertEqual(OrderedModel._meta.ordering, (('created', 'desc'),))
 
     def test_option_inheritance(self):
-        test_db = Database(SqliteAdapter(), 'testing.db')
+        x_test_db = Database(SqliteAdapter(), 'testing.db')
         child2_db = Database(SqliteAdapter(), 'child2.db')
 
         class FakeUser(Model):
@@ -3251,7 +3251,7 @@ class ModelOptionsTest(BaseModelTestCase):
             user = ForeignKeyField(FakeUser)
 
             class Meta:
-                database = test_db
+                database = x_test_db
 
         class ChildModel(ParentModel):
             pass
