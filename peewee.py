@@ -254,7 +254,7 @@ class MySQLAdapter(BaseAdapter):
 
     def get_field_overrides(self):
         return {
-            'primary_key': 'integer AUTO_INCREMENT',
+            'primary_key': 'INTEGER AUTO_INCREMENT',
             'boolean': 'bool',
             'float': 'float',
             'double': 'double precision',

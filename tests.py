@@ -3019,7 +3019,7 @@ class CustomPKColumnTestCase(BasePeeweeTestCase):
         elif BACKEND == 'postgresql':
             self.assertEqual(sq, 'CREATE TABLE "cpkrel" ("id" SERIAL NOT NULL PRIMARY KEY, "custom_id" INTEGER NOT NULL REFERENCES custompkcolumn (pk));')
         elif BACKEND == 'mysql':
-            self.assertEqual(sq, 'CREATE TABLE `cpkrel` (`id` INTEGER NOT NULL PRIMARY KEY, `custom_id` INTEGER NOT NULL REFERENCES custompkcolumn (pk));')
+            self.assertEqual(sq, 'CREATE TABLE `cpkrel` (`id` INTEGER AUTO_INCREMENT NOT NULL PRIMARY KEY, `custom_id` INTEGER NOT NULL REFERENCES custompkcolumn (pk));')
 
     def test_joining(self):
         sq = CPKRel.select().join(CustomPKColumn)
