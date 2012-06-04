@@ -615,6 +615,21 @@ class QueryResultWrapper(object):
         # from the primary model being queried
         self.simple = self.query_meta.get('simple') or not self.column_meta
 
+        if self.simple:
+            cols = []
+            non_cols = []
+            for i in range(len(self.cursor.description)):
+                col = self.cursor.description[i][0]
+                if col in model._meta.columns:
+                    cols.append((i, model._meta.columns[col]))
+                else:
+                    non_cols.append((i, col))
+            self._cols = cols
+            self._non_cols = non_cols
+            self._iter_fn = self.simple_iter
+        else:
+            self._iter_fn = self.construct_instance
+
         self.__ct = 0
         self.__idx = 0
 
@@ -625,53 +640,41 @@ class QueryResultWrapper(object):
         self.__read_idx = 0
         self.__read_ct = 0
 
-    def model_from_rowset(self, model_class, attr_dict):
-        instance = model_class()
-        for attr, value in attr_dict.iteritems():
-            if attr in instance._meta.columns:
-                field = instance._meta.columns[attr]
+    def simple_iter(self, row):
+        instance = self.model()
+        for i, f in self._cols:
+            setattr(instance, f.name, f.python_value(row[i]))
+        for i, f in self._non_cols:
+            setattr(instance, f, row[i])
+        return instance
+
+    def construct_instance(self, row):
+        # we have columns, models, and a graph of joins to reconstruct
+        collected_models = {}
+        for i, (model, col) in enumerate(self.column_meta):
+            value = row[i]
+
+            if isinstance(col, tuple):
+                if len(col) == 3:
+                    model = self.model # special-case aggregates
+                    col_name = attr = col[2]
+                else:
+                    col_name, attr = col
+            else:
+                col_name = attr = col
+
+            if model not in collected_models:
+                collected_models[model] = model()
+
+            instance = collected_models[model]
+
+            if col_name in instance._meta.columns:
+                field = instance._meta.columns[col_name]
                 setattr(instance, field.name, field.python_value(value))
             else:
                 setattr(instance, attr, value)
-        return instance
 
-    def _row_to_dict(self, row):
-        return dict((self.cursor.description[i][0], value)
-            for i, value in enumerate(row))
-
-    def construct_instance(self, row):
-        if self.simple:
-            # use attribute names pulled from the result cursor description,
-            # and do not attempt to follow joined models
-            row_dict = self._row_to_dict(row)
-            return self.model_from_rowset(self.model, row_dict)
-        else:
-            # we have columns, models, and a graph of joins to reconstruct
-            collected_models = {}
-            for i, (model, col) in enumerate(self.column_meta):
-                value = row[i]
-
-                if isinstance(col, tuple):
-                    if len(col) == 3:
-                        model = self.model # special-case aggregates
-                        col_name = attr = col[2]
-                    else:
-                        col_name, attr = col
-                else:
-                    col_name = attr = col
-
-                if model not in collected_models:
-                    collected_models[model] = model()
-
-                instance = collected_models[model]
-
-                if col_name in instance._meta.columns:
-                    field = instance._meta.columns[col_name]
-                    setattr(instance, field.name, field.python_value(value))
-                else:
-                    setattr(instance, attr, value)
-
-            return self.follow_joins(self.join_meta, collected_models, self.model)
+        return self.follow_joins(self.join_meta, collected_models, self.model)
 
     def follow_joins(self, joins, collected_models, current):
         inst = collected_models[current]
@@ -714,7 +717,7 @@ class QueryResultWrapper(object):
                 self._populated = True
                 raise StopIteration
 
-        instance = self.construct_instance(self.__read_cache[self.__read_idx])
+        instance = self._iter_fn(self.__read_cache[self.__read_idx])
         self.__read_idx += 1
         return instance
 
