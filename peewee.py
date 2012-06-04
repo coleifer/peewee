@@ -1111,7 +1111,7 @@ class BaseQuery(object):
         seen = seen or set()
 
         if current not in self._joins:
-            return computed
+            return computed, alias_count
 
         for i, (model, join_type, on) in enumerate(self._joins[current]):
             seen.add(model)
@@ -1151,9 +1151,10 @@ class BaseQuery(object):
                 )
             )
 
-            computed.extend(self.follow_joins(model, alias_map, alias_required, alias_count, seen))
+            joins, alias_count = self.follow_joins(model, alias_map, alias_required, alias_count, seen)
+            computed.extend(joins)
 
-        return computed
+        return computed, alias_count
 
     def compile_where(self):
         alias_count = 0
@@ -1169,7 +1170,7 @@ class BaseQuery(object):
         else:
             alias_map[self.model] = ''
 
-        computed_joins = self.follow_joins(self.model, alias_map, alias_required, alias_count)
+        computed_joins, _ = self.follow_joins(self.model, alias_map, alias_required, alias_count)
 
         clauses = [self.parse_node(node, alias_map) for node in self._where]
 
@@ -2410,6 +2411,13 @@ class BaseModelOptions(object):
         self.columns = {}
         self.model_class = model_class
 
+    def prepared(self):
+        # called when _meta is finished being initialized
+        self.defaults = {}
+        for field in self.fields.values():
+            if field.default is not None:
+                self.defaults[field.name] = field.default
+
     def get_sorted_fields(self):
         return sorted(self.fields.items(), key=lambda (k,v): (k == self.pk_name and 1 or 2, v._order))
 
@@ -2531,6 +2539,8 @@ class BaseModel(type):
         for field in _meta.fields.values():
             field.class_prepared()
 
+        _meta.prepared()
+
         if hasattr(cls, '__unicode__'):
             setattr(cls, '__repr__', lambda self: '<%s: %r>' % (
                 _meta.model_name, self.__unicode__()))
@@ -2551,13 +2561,12 @@ class Model(object):
             setattr(self, k, v)
 
     def initialize_defaults(self):
-        for field in self._meta.fields.values():
-            if field.default is not None:
-                if callable(field.default):
-                    field_value = field.default()
-                else:
-                    field_value = field.default
-                setattr(self, field.name, field_value)
+        for field_name, default in self._meta.defaults.items():
+            if callable(default):
+                val = default()
+            else:
+                val = default
+            setattr(self, field_name, val)
 
     def prepared(self):
         # this hook is called when the model has been populated from a db cursor
