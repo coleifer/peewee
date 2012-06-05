@@ -2754,15 +2754,26 @@ class FieldTypeTests(BaseModelTestCase):
         self.assertEqual(nm_from_db.decimal_field2, decimal.Decimal(0))
 
     def test_decimal_precision(self):
+        D = decimal.Decimal
         nm = NullModel()
-        nm.decimal_field1 = decimal.Decimal("3.14159265358979323")
-        nm.decimal_field2 = decimal.Decimal("100.33")
+        nm.decimal_field1 = D("3.14159265358979323")
+        nm.decimal_field2 = D("100.33")
         nm.save()
 
         nm_from_db = NullModel.get(id=nm.id)
         # sqlite doesn't enforce these constraints properly
         #self.assertEqual(nm_from_db.decimal_field1, decimal.Decimal("3.14159"))
-        self.assertEqual(nm_from_db.decimal_field2, decimal.Decimal("100.33"))
+        self.assertEqual(nm_from_db.decimal_field2, D("100.33"))
+
+        class TestDecimalModel(TestModel):
+            df1 = DecimalField(decimal_places=2, auto_round=True)
+            df2 = DecimalField(decimal_places=2, auto_round=True, rounding=decimal.ROUND_UP)
+
+        f1 = TestDecimalModel.df1.db_value
+        f2 = TestDecimalModel.df2.db_value
+
+        self.assertEqual(f1(D('1.2345')), D('1.23'))
+        self.assertEqual(f2(D('1.2345')), D('1.24'))
 
     def test_default_values(self):
         now = datetime.datetime.now() - datetime.timedelta(seconds=1)

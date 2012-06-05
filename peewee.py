@@ -2115,10 +2115,18 @@ class DecimalColumn(Column):
         return {
             'max_digits': 10,
             'decimal_places': 5,
+            'auto_round': False,
+            'rounding': decimal.DefaultContext.rounding,
         }
 
     def db_value(self, value):
-        return value or decimal.Decimal(0)
+        D = decimal.Decimal
+        if not value:
+            return D(0)
+        if self.attributes['auto_round']:
+            exp = D(10)**(-self.attributes['decimal_places'])
+            return D(str(value)).quantize(exp, rounding=self.attributes['rounding'])
+        return value
 
     def python_value(self, value):
         if value is not None:
