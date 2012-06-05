@@ -35,6 +35,8 @@ elif BACKEND == 'mysql':
 else:
     database_class = SqliteDatabase
     database_name = 'tmp.db'
+    import sqlite3
+    print 'SQLITE VERSION: %s' % sqlite3.version
 
 test_db = database_class(database_name)
 interpolation = test_db.adapter.interpolation
@@ -1515,8 +1517,27 @@ class RelatedFieldTests(BaseModelTestCase):
         ])
 
     def test_multiple_in(self):
-        sq = Blog.select().where(title__in=['a', 'b']).join(Entry).where(title__in=['c', 'd'], content='foo')
-        self.assertSQLEqual(sq.sql(), ('SELECT t1.`id`, t1.`title` FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id` WHERE t1.`title` IN (?,?) AND (t2.`content` = ? AND t2.`title` IN (?,?))', ['a', 'b', 'foo', 'c', 'd']))
+        sq = Entry.select().where(title__in=['c', 'd'], content='foo').join(Blog).where(title__in=['a', 'b'])
+        n1, n2 = sq._where
+        q1 = n1.children[0]
+        self.assertEqual(q1.model, Entry)
+        self.assertEqual(q1.query, {'content': 'foo', 'title__in': ['c', 'd']})
+        q2 = n2.children[0]
+        self.assertEqual(q2.model, Blog)
+        self.assertEqual(q2.query, {'title__in': ['a', 'b']})
+
+        ba = self.create_blog(title='a')
+        bb = self.create_blog(title='b')
+        bc = self.create_blog(title='c')
+
+        ea = self.create_entry(title='a', content='foo', blog=ba) # N
+        eb = self.create_entry(title='b', content='foo', blog=bb) # N
+        ec = self.create_entry(title='c', content='foo', blog=bc) # N
+        ed = self.create_entry(title='d', content='foo', blog=ba) # Y
+        ec2 = self.create_entry(title='c', content='foo', blog=bb) # Y
+        ed2 = self.create_entry(title='d', content='bar', blog=ba) # N
+
+        self.assertEqual(list(sq), [ed, ec2])
 
     def test_ordering_across_joins(self):
         a, a1, a2, b, b1, b2, t1, t2 = self.get_common_objects()
@@ -2247,10 +2268,25 @@ class FilterQueryTests(BaseModelTestCase):
 
     def test_filter_both_directions(self):
         f = Entry.filter(blog__title='b1', entrytag_set__tag='t1')
-        self.assertSQL(f, [
-            ('t2.`title` = ?', ['b1']),
-            ('t3.`tag` = ?', ['t1']),
-        ])
+        b1 = self.create_blog(title='b1')
+        b2 = self.create_blog(title='b2')
+        e11 = self.create_entry(title='e11', blog=b1)
+        e12 = self.create_entry(title='e12', blog=b1)
+        e21 = self.create_entry(title='e21', blog=b2)
+        e22 = self.create_entry(title='e22', blog=b2)
+        self.create_entry_tag(tag='t1', entry=e11)
+        self.create_entry_tag(tag='t2', entry=e12)
+        self.create_entry_tag(tag='t1', entry=e21)
+        self.create_entry_tag(tag='t2', entry=e22)
+
+        self.assertEqual(list(f), [e11])
+        n1, n2 = f._where
+        if n1.children[0].model == Blog:
+            pieces = [('t2.`title` = ?', ['b1']), ('t3.`tag` = ?', ['t1'])]
+        else:
+            pieces = [('t2.`tag` = ?', ['t1']), ('t3.`title` = ?', ['b1'])]
+
+        self.assertSQL(f, pieces)
 
 
 class AnnotateQueryTests(BaseModelTestCase):
