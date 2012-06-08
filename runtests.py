@@ -4,6 +4,9 @@ import os
 import sys
 import unittest
 
+def collect():
+    import tests
+    runtests(tests, 1)
 
 def runtests(module, verbosity):
     suite = unittest.TestLoader().loadTestsFromModule(module)
