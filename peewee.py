@@ -2164,7 +2164,7 @@ class Field(object):
     _order = 0
 
     def __init__(self, null=False, db_index=False, unique=False, verbose_name=None,
-                 help_text=None, db_column=None, default=None, *args, **kwargs):
+                 help_text=None, db_column=None, default=None, choices=None, *args, **kwargs):
         self.null = null
         self.db_index = db_index
         self.unique = unique
@@ -2172,6 +2172,7 @@ class Field(object):
         self.help_text = help_text
         self.db_column = db_column
         self.default = default
+        self.choices = choices
 
         self.attributes = kwargs
 

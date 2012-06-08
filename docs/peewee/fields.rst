@@ -55,6 +55,8 @@ Parameters accepted by all field types and their default values:
 * ``verbose_name = None`` -- string representing the "user-friendly" name of this field
 * ``help_text = None`` -- string representing any helpful text for this field
 * ``db_column = None`` -- string representing the underlying column to use if different, useful for legacy databases
+* ``default = None`` -- any value to use as a default for uninitialized models
+* ``choices = None`` -- an optional iterable containing 2-tuples of ``value``, ``display``
 
 
 ===================   =================   =================   =================
@@ -95,6 +97,15 @@ Some fields take special parameters...
 | :py:class:`ForeignKeyField`   | ``to``, ``related_name``,                    |
 |                               | ``cascade``, ``extra``                       |
 +-------------------------------+----------------------------------------------+
+
+
+A note on validation
+^^^^^^^^^^^^^^^^^^^^
+
+Both ``default`` and ``choices`` could be implemented at the database level as
+``DEFAULT`` and ``CHECK CONSTRAINT`` respectively, but any application change would
+require a schema change.  Because of this, ``default`` is implemented purely in
+python and ``choices`` are not validated but exist for metadata purposes only.
 
 
 Self-referential Foreign Keys
@@ -164,13 +175,16 @@ Field class API
 
     The base class from which all other field types extend.
     
-    .. py:method:: __init__(null=False, db_index=False, unique=False, verbose_name=None, help_text=None, *args, **kwargs)
+    .. py:method:: __init__(null=False, db_index=False, unique=False, verbose_name=None, help_text=None, db_column=None, default=None, choices=None, *args, **kwargs)
     
         :param null: this column can accept ``None`` or ``NULL`` values
         :param db_index: create an index for this column when creating the table
         :param unique: create a unique index for this column when creating the table
         :param verbose_name: specify a "verbose name" for this field, useful for metadata purposes
         :param help_text: specify some instruction text for the usage/meaning of this field
+        :param db_column: column class to use for underlying storage
+        :param default: a value to use as an uninitialized default
+        :param choices: an iterable of 2-tuples mapping ``value`` to ``display``
     
     .. py:method:: db_value(value)
     
