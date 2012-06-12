@@ -927,7 +927,7 @@ def parseq(model, *args, **kwargs):
         if isinstance(piece, (Q, R, Node)):
             node.children.append(piece)
         else:
-            raise TypeError('Unknown object: %s', piece)
+            raise TypeError('Unknown object: %s' % piece)
 
     if kwargs:
         node.children.append(Q(model, **kwargs))
@@ -2155,6 +2155,10 @@ class FieldDescriptor(object):
     def __set__(self, instance, value):
         setattr(instance, self._cache_name, value)
 
+def qdict(op):
+    def fn(self, rhs):
+        return Q(**{'%s__%s' % (self.name, op): rhs})
+    return fn
 
 class Field(object):
     column_class = None
@@ -2212,6 +2216,18 @@ class Field(object):
 
     def class_prepared(self):
         pass
+
+    __eq__ = qdict('eq')
+    __ne__ = qdict('ne')
+    __lt__ = qdict('lt')
+    __lte__ = qdict('lte')
+    __gt__ = qdict('gt')
+    __gte__ = qdict('gte')
+    __lshift__ = qdict('in')
+    __rshift__ = qdict('isnull')
+    __mul__ = qdict('contains')
+    __pow__ = qdict('icontains')
+    __xor__ = qdict('istartswith')
 
 
 class CharField(Field):

@@ -286,28 +286,42 @@ class QueryTests(BasePeeweeTestCase):
 
         sq = SelectQuery(Blog, '*').where(title='a')
         self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE `title` = ?', ['a']))
+        sq2 = SelectQuery(Blog, '*').where(Blog.title == 'a')
+        self.assertEqual(sq.sql(), sq2.sql())
 
         sq = SelectQuery(Blog, '*').where(title='a', id=1)
         self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE (`id` = ? AND `title` = ?)', [1, 'a']))
+        sq2 = SelectQuery(Blog, '*').where((Blog.id == 1) & (Blog.title == 'a'))
+        self.assertEqual(sq.sql(), sq2.sql())
 
         # check that chaining works as expected
         sq = SelectQuery(Blog, '*').where(title='a').where(id=1)
         self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE `title` = ? AND `id` = ?', ['a', 1]))
+        sq2 = SelectQuery(Blog, '*').where(Blog.title=='a').where(Blog.id==1)
+        self.assertEqual(sq.sql(), sq2.sql())
 
         # check that IN query special-case works
         sq = SelectQuery(Blog, '*').where(title__in=['a', 'b'])
         self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE `title` IN (?,?)', ['a', 'b']))
+        sq2 = SelectQuery(Blog, '*').where(Blog.title << ['a', 'b'])
+        self.assertEqual(sq.sql(), sq2.sql())
 
     def test_select_with_q(self):
         sq = SelectQuery(Blog, '*').where(Q(title='a') | Q(id=1))
         self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE (`title` = ? OR `id` = ?)', ['a', 1]))
+        sq2 = SelectQuery(Blog, '*').where((Blog.title == 'a') | (Blog.id == 1))
+        self.assertEqual(sq.sql(), sq2.sql())
 
         sq = SelectQuery(Blog, '*').where(Q(title='a') | Q(id=1) | Q(id=3))
         self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE (`title` = ? OR `id` = ? OR `id` = ?)', ['a', 1, 3]))
+        sq2 = SelectQuery(Blog, '*').where((Blog.title == 'a') | (Blog.id == 1) | (Blog.id == 3))
+        self.assertEqual(sq.sql(), sq2.sql())
 
         # test simple chaining
         sq = SelectQuery(Blog, '*').where(Q(title='a') | Q(id=1)).where(Q(id=3))
         self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE (`title` = ? OR `id` = ?) AND `id` = ?', ['a', 1, 3]))
+        sq2 = SelectQuery(Blog, '*').where((Blog.title == 'a') | (Blog.id == 1)).where(Blog.id==3)
+        self.assertEqual(sq.sql(), sq2.sql())
 
         sq = SelectQuery(Blog, '*').where(Q(title='a') | Q(id=1)).where(id=3)
         self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE (`title` = ? OR `id` = ?) AND `id` = ?', ['a', 1, 3]))
@@ -315,6 +329,8 @@ class QueryTests(BasePeeweeTestCase):
         # test chaining with Q objects
         sq = SelectQuery(Blog, '*').where(Q(title='a') | Q(id=1)).where((Q(title='c') | Q(id=3)))
         self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE (`title` = ? OR `id` = ?) AND (`title` = ? OR `id` = ?)', ['a', 1, 'c', 3]))
+        sq2 = SelectQuery(Blog, '*').where((Blog.title == 'a') | (Blog.id == 1)).where((Blog.title=='c')|(Blog.id==3))
+        self.assertEqual(sq.sql(), sq2.sql())
 
         # test mixing it all up
         sq = SelectQuery(Blog, '*').where(Q(title='a') | Q(id=1)).where((Q(title='c') | Q(id=3)), title='b')
@@ -323,12 +339,18 @@ class QueryTests(BasePeeweeTestCase):
     def test_select_with_negation(self):
         sq = SelectQuery(Blog, '*').where(~Q(title='a'))
         self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE NOT `title` = ?', ['a']))
+        sq2 = SelectQuery(Blog, '*').where(~(Blog.title == 'a'))
+        self.assertEqual(sq.sql(), sq2.sql())
 
         sq = SelectQuery(Blog, '*').where(~Q(title='a') | Q(title='b'))
         self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE (NOT `title` = ? OR `title` = ?)', ['a', 'b']))
+        sq2 = SelectQuery(Blog, '*').where(~(Blog.title == 'a') | (Blog.title=='b'))
+        self.assertEqual(sq.sql(), sq2.sql())
 
         sq = SelectQuery(Blog, '*').where(~Q(title='a') | ~Q(title='b'))
         self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE (NOT `title` = ? OR NOT `title` = ?)', ['a', 'b']))
+        sq2 = SelectQuery(Blog, '*').where(~(Blog.title == 'a') | ~(Blog.title=='b'))
+        self.assertEqual(sq.sql(), sq2.sql())
 
         sq = SelectQuery(Blog, '*').where(~(Q(title='a') | Q(title='b')))
         self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` WHERE (NOT (`title` = ? OR `title` = ?))', ['a', 'b']))
@@ -1136,7 +1158,7 @@ class UnicodeFieldTests(BaseModelTestCase):
         self.assertTrue(b3 != b4)
 
 
-class NodeTests(BaseModelTestCase):
+class NodeTests(BasePeeweeTestCase):
     def test_simple(self):
         node = Q(a='A') | Q(b='B')
         self.assertEqual(unicode(node), 'a = A OR b = B')
