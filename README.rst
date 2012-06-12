@@ -14,22 +14,22 @@ Examples::
 
     # a simple query selecting a user
     User.get(username='charles')
-    
+
     # get the staff and super users
     editors = User.select().where(Q(is_staff=True) | Q(is_superuser=True))
-    
+
     # get tweets by editors
     Tweet.select().where(user__in=editors)
-    
+
     # how many active users are there?
     User.select().where(active=True).count()
-    
+
     # paginate the user table and show me page 3 (users 41-60)
     User.select().order_by(('username', 'asc')).paginate(3, 20)
-    
+
     # order users by number of tweets
     User.select().annotate(Tweet).order_by(('count', 'desc'))
-    
+
     # another way of expressing the same
     User.select({
         User: ['*'],
@@ -41,12 +41,27 @@ You can use django-style syntax to create select queries::
 
     # how many active users are there?
     User.filter(active=True).count()
-    
+
     # get tweets by a specific user
     Tweet.filter(user__username='charlie')
-    
+
     # get tweets by editors
     Tweet.filter(Q(user__is_staff=True) | Q(user__is_superuser=True))
+
+
+You can use python operators to create select queries::
+
+    # how many active users are there?
+    User.select().where(User.active == True).count()
+
+    # get me all users in their thirties
+    User.select().where((User.age >= 30) & (User.age < 40))
+
+    # get me tweets from today by active users
+    Tweet.select().join(User).where(
+        (Tweet.pub_date >= today) &
+        (User.active == True)
+    )
 
 
 Learning more
@@ -81,13 +96,13 @@ smells like django::
 
 
     import peewee
-    
+
     class Blog(peewee.Model):
         title = peewee.CharField()
-        
+
         def __unicode__(self):
             return self.title
-    
+
     class Entry(peewee.Model):
         title = peewee.CharField(max_length=50)
         content = peewee.TextField()
@@ -120,7 +135,7 @@ foreign keys work like django's
     <Blog: Peewee's Big Adventure>
     >>> for e in b.entry_set:
     ...     print e.title
-    ... 
+    ...
     Greatest movie ever?
 
 
@@ -167,7 +182,7 @@ query nesting using similar notation::
     )
 
     # generates something like:
-    # SELECT * FROM some_obj 
+    # SELECT * FROM some_obj
     # WHERE ((a = "A" OR b = "B") AND (c = "C" OR d = "D"))
 
 
@@ -187,7 +202,7 @@ using sqlite
     class Blog(BaseModel):
         creator = peewee.CharField()
         name = peewee.CharField()
-        
+
     class Entry(BaseModel):
         creator = peewee.CharField()
         name = peewee.CharField()

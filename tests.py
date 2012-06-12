@@ -12,7 +12,7 @@ import unittest
 from peewee import *
 from peewee import logger, VarCharColumn, SelectQuery, DeleteQuery, UpdateQuery, \
         InsertQuery, RawQuery, parseq, Database, SqliteAdapter, \
-        create_model_tables, drop_model_tables, sort_models_topologically
+        create_model_tables, drop_model_tables, sort_models_topologically, Node
 
 
 class QueryLogHandler(logging.Handler):
@@ -230,10 +230,13 @@ class BasePeeweeTestCase(unittest.TestCase):
         self.assertEqual(sorted(clauses), sorted(expected_clauses))
 
     def assertNodeEqual(self, lhs, rhs):
+        self.assertEqual(lhs.connector, rhs.connector)
+        self.assertEqual(lhs.negated, rhs.negated)
         for i, lchild in enumerate(lhs.children):
             rchild = rhs.children[i]
             self.assertEqual(type(lchild), type(rchild))
             if isinstance(lchild, Q):
+                self.assertEqual(lchild.model, rchild.model)
                 self.assertEqual(lchild.query, rchild.query)
             elif isinstance(lchild, Node):
                 self.assertNodeEqual(lchild, rchild)
@@ -596,6 +599,23 @@ class QueryTests(BasePeeweeTestCase):
 
         dq = DeleteQuery(Blog).where(Q(title='b') | Q(title='a'))
         self.assertSQLEqual(dq.sql(), ('DELETE FROM `blog` WHERE (`title` = ? OR `title` = ?)', ['b', 'a']))
+
+    def test_readme_example(self):
+        class U(TestModel):
+            active = BooleanField()
+
+        class Tweet(TestModel):
+            pub_date = DateTimeField()
+            u = ForeignKeyField(U)
+
+        today = datetime.datetime.today()
+        sq = Tweet.select().join(U).where(
+            (Tweet.pub_date >= today) &
+            (U.active == True)
+        )
+        self.assertSQLEqual(sq.sql(), (
+            'SELECT t1.`id`, t1.`pub_date`, t1.`u_id` FROM `tweet` AS t1 INNER JOIN `u` AS t2 ON t1.`u_id` = t2.`id` WHERE (t1.`pub_date` >= ? AND t2.`active` = ?)', [today, True]
+        ))
 
 
 class ModelTestCase(BaseModelTestCase):
@@ -1248,6 +1268,23 @@ class NodeTests(BasePeeweeTestCase):
         node = parseq(None, Q(c='C') & (Q(a='A') | Q(b='B')))
         self.assertEqual(unicode(node), '((c = C) AND (a = A OR b = B))')
 
+    def test_field_q(self):
+        class FU(TestModel):
+            age = IntegerField()
+            username = CharField()
+
+        node = (FU.age >= 30) & (FU.age < 40)
+        self.assertNodeEqual(node, Node('AND', [Q(FU, age__gte=30), Q(FU, age__lt=40)]))
+
+        node = (FU.username != 'herp') | (FU.username << ['derp', 'fap'])
+        self.assertNodeEqual(node, Node('OR', [Q(FU, username__ne='herp'), Q(FU, username__in=['derp', 'fap'])]))
+
+        node = ((FU.username * 's') & (FU.username ** 'j')) | (FU.username ^ 'd')
+        self.assertNodeEqual(node, Node('OR', [
+            Node('AND', [Q(FU, username__contains='s'), Q(FU, username__icontains='j')]),
+            Q(FU, username__istartswith='d')
+        ]))
+
 
 class RelatedFieldTests(BaseModelTestCase):
     def get_common_objects(self):
@@ -1440,6 +1477,11 @@ class RelatedFieldTests(BaseModelTestCase):
         self.assertSQL(sq, [
             ('(t1.`title` = ? OR t2.`title` = ?) AND (t2.`pk` = ? OR t3.`tag` = ? OR t3.`tag` = ?)', ['b', 'a2', 1, 't1', 't2']),
         ])
+
+        sq = Blog.select().join(Entry).where((Entry.title=='e1') | (Blog.id==99))
+        self.assertSQLEqual(sq.sql(), (
+            'SELECT t1.`id`, t1.`title` FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id` WHERE (t2.`title` = ? OR t1.`id` = ?)', ['e1', 99]
+        ))
 
     def test_filtering_across_joins(self):
         a, a1, a2, b, b1, b2, t1, t2 = self.get_common_objects()

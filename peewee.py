@@ -2157,7 +2157,7 @@ class FieldDescriptor(object):
 
 def qdict(op):
     def fn(self, rhs):
-        return Q(**{'%s__%s' % (self.name, op): rhs})
+        return Q(self.model, **{'%s__%s' % (self.name, op): rhs})
     return fn
 
 class Field(object):
@@ -2220,9 +2220,9 @@ class Field(object):
     __eq__ = qdict('eq')
     __ne__ = qdict('ne')
     __lt__ = qdict('lt')
-    __lte__ = qdict('lte')
+    __le__ = qdict('lte')
     __gt__ = qdict('gt')
-    __gte__ = qdict('gte')
+    __ge__ = qdict('gte')
     __lshift__ = qdict('in')
     __rshift__ = qdict('isnull')
     __mul__ = qdict('contains')
