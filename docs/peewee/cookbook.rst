@@ -7,7 +7,7 @@ with peewee.
 Examples will use the following models:
 
 .. code-block:: python
-    
+
     import peewee
 
     class Blog(peewee.Model):
@@ -46,14 +46,14 @@ models from each):
 .. code-block:: python
 
     >>> custom_db = peewee.SqliteDatabase('custom.db')
-    
+
     >>> class CustomModel(peewee.Model):
     ...     whatev = peewee.CharField()
-    ...     
+    ...
     ...     class Meta:
     ...         database = custom_db
-    ... 
-    
+    ...
+
     >>> custom_db.connect()
     >>> CustomModel.create_table()
 
@@ -64,15 +64,15 @@ you wish to use, and then all your models will extend it:
 .. code-block:: python
 
     custom_db = peewee.SqliteDatabase('custom.db')
-    
+
     class CustomModel(peewee.Model):
         class Meta:
             database = custom_db
-    
+
     class Blog(CustomModel):
         creator = peewee.CharField()
         name = peewee.TextField()
-    
+
     class Entry(CustomModel):
         # etc, etc
 
@@ -85,7 +85,7 @@ Point models at an instance of :py:class:`PostgresqlDatabase`.
 .. code-block:: python
 
     psql_db = peewee.PostgresqlDatabase('my_database', user='code')
-    
+
 
     class PostgresqlModel(peewee.Model):
         """A base model that will use our MySQL database"""
@@ -105,7 +105,7 @@ Point models at an instance of :py:class:`MySQLDatabase`.
 .. code-block:: python
 
     mysql_db = peewee.MySQLDatabase('my_database', user='code')
-    
+
 
     class MySQLModel(peewee.Model):
         """A base model that will use our MySQL database"""
@@ -115,7 +115,7 @@ Point models at an instance of :py:class:`MySQLDatabase`.
     class Blog(MySQLModel):
         creator = peewee.CharField()
         # etc, etc
-    
+
 
     # when you're ready to start querying, remember to connect
     mysql_db.connect()
@@ -287,7 +287,7 @@ To simply get all instances in a table, call the :py:meth:`Model.select` method:
 
     >>> for blog in Blog.select():
     ...     print blog.name
-    ... 
+    ...
     My Blog
     Another blog
 
@@ -305,7 +305,7 @@ using a :py:class:`SelectQuery`, and can be iterated the same as any other Selec
 
     >>> for entry in blog.entry_set:
     ...     print entry.title
-    ... 
+    ...
     entry 1
     entry 2
     entry 3
@@ -330,13 +330,13 @@ Filtering records
 
     >>> for entry in Entry.select().where(blog=blog, published=True):
     ...     print '%s: %s (%s)' % (entry.blog.name, entry.title, entry.published)
-    ... 
+    ...
     My Blog: Some Entry (True)
     My Blog: Another Entry (True)
 
     >>> for entry in Entry.select().where(pub_date__lt=datetime.datetime(2011, 1, 1)):
     ...     print entry.title, entry.pub_date
-    ... 
+    ...
     Old entry 2010-01-01 00:00:00
 
 You can also filter across joins:
@@ -360,6 +360,13 @@ syntax:
     Some Entry
     Another Entry
 
+If you prefer, you can use python operators to query:
+
+.. code-block:: python
+
+    >>> for entry in Entry.select().join(Blog).where(Blog.name=='My Blog')
+    ...     print entry.title
+
 To perform OR lookups, use the special :py:class:`Q` object.  These work in
 both calls to ``filter()`` and ``where()``:
 
@@ -374,6 +381,9 @@ To perform lookups against *another column* in a given row, use the :py:class:`F
     >>> Employee.filter(salary__lt=F('desired_salary'))
 
 
+Check :ref:`the docs <query_compare>` for more examples of querying.
+
+
 Sorting records
 ^^^^^^^^^^^^^^^
 
@@ -381,14 +391,14 @@ Sorting records
 
     >>> for e in Entry.select().order_by('pub_date'):
     ...     print e.pub_date
-    ... 
+    ...
     2010-01-01 00:00:00
     2011-06-07 14:08:48
     2011-06-07 14:12:57
 
     >>> for e in Entry.select().order_by(peewee.desc('pub_date')):
     ...     print e.pub_date
-    ... 
+    ...
     2011-06-07 14:12:57
     2011-06-07 14:08:48
     2010-01-01 00:00:00
@@ -402,7 +412,7 @@ to order entries by the name of the blog, then by pubdate desc:
     ...     (Blog, 'name'),
     ...     (Entry, 'pub_date', 'DESC'),
     ... )
-    
+
     >>> qry.sql()
     ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id ORDER BY t2.name ASC, t1.pub_date DESC', [])
 
@@ -417,7 +427,7 @@ parameters, `page_number`, and `items_per_page`:
 
     >>> for entry in Entry.select().order_by('id').paginate(2, 10):
     ...     print entry.title
-    ... 
+    ...
     entry 10
     entry 11
     entry 12
@@ -455,10 +465,10 @@ memory when iterating over large result sets:
 
     # let's assume we've got 1M stat objects to dump to csv
     stats_qr = Stat.select().execute()
-    
+
     # our imaginary serializer class
     serializer = CSVSerializer()
-    
+
     # loop over all the stats and serialize
     for stat in stats_qr.iterator():
         serializer.serialize_object(stat)
@@ -529,27 +539,27 @@ models in a Many-To-Many configuration:
 
     class Photo(Model):
         image = CharField()
-    
+
     class Tag(Model):
         name = CharField()
-    
+
     class PhotoTag(Model):
         photo = ForeignKeyField(Photo)
         tag = ForeignKeyField(Tag)
-    
+
 Now say we want to find tags that have at least 5 photos associated with them:
 
 .. code-block:: python
 
     >>> Tag.select().join(PhotoTag).join(Photo).group_by(Tag).having('count(*) > 5').sql()
-    
+
     SELECT t1."id", t1."name"
-    FROM "tag" AS t1 
-    INNER JOIN "phototag" AS t2 
+    FROM "tag" AS t1
+    INNER JOIN "phototag" AS t2
         ON t1."id" = t2."tag_id"
     INNER JOIN "photo" AS t3
         ON t2."photo_id" = t3."id"
-    GROUP BY 
+    GROUP BY
         t1."id", t1."name"
     HAVING count(*) > 5
 
@@ -561,14 +571,14 @@ Suppose we want to grab the associated count and store it on the tag:
     ...     Tag: ['*'],
     ...     Photo: [Count('id', 'count')]
     ... }).join(PhotoTag).join(Photo).group_by(Tag).having('count(*) > 5').sql()
-    
+
     SELECT t1."id", t1."name", COUNT(t3."id") AS count
-    FROM "tag" AS t1 
-    INNER JOIN "phototag" AS t2 
+    FROM "tag" AS t1
+    INNER JOIN "phototag" AS t2
         ON t1."id" = t2."tag_id"
     INNER JOIN "photo" AS t3
         ON t2."photo_id" = t3."id"
-    GROUP BY 
+    GROUP BY
         t1."id", t1."name"
     HAVING count(*) > 5
 
@@ -585,10 +595,10 @@ object to construct queries:
 
     # select the users' id, username and the first letter of their username, lower-cased
     query = User.select(['id', 'username', R('LOWER(SUBSTR(username, 1, 1))', 'first_letter')])
-    
+
     # now filter this list to include only users whose username begins with "a"
     a_users = query.where(R('first_letter=%s', 'a'))
-    
+
     >>> for user in a_users:
     ...    print user.first_letter, user.username
 
@@ -607,7 +617,7 @@ the number of entries on a blog:
 
     entry_query = R('(SELECT COUNT(*) FROM entry WHERE entry.blog_id=blog.id)', 'entry_count')
     blogs = Blog.select(['id', 'name', entry_query]).order_by(('entry_count', 'desc'))
-    
+
     for blog in blogs:
         print blog.title, blog.entry_count
 
@@ -618,7 +628,7 @@ blogs that have no entries:
 
     no_entry_query = R('NOT EXISTS (SELECT * FROM entry WHERE entry.blog_id=blog.id)')
     blogs = Blog.filter(no_entry_query)
-    
+
     for blog in blogs:
         print blog.name, ' has no entries'
 

@@ -94,7 +94,7 @@ Some fields take special parameters...
 | :py:class:`DecimalField`      | ``max_digits``, ``decimal_places``,          |
 |                               | ``auto_round``, ``rounding``                 |
 +-------------------------------+----------------------------------------------+
-| :py:class:`PrimaryKeyField`   | ``column_class``
+| :py:class:`PrimaryKeyField`   | ``column_class``                             |
 +-------------------------------+----------------------------------------------+
 | :py:class:`ForeignKeyField`   | ``to``, ``related_name``,                    |
 |                               | ``cascade``, ``extra``                       |

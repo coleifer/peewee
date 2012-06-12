@@ -52,6 +52,23 @@ You can use django-style syntax to create select queries:
     Tweet.filter(Q(user__is_staff=True) | Q(user__is_superuser=True))
 
 
+You can use python operators to create select queries::
+
+    # how many active users are there?
+    User.select().where(User.active == True).count()
+
+    # get me all users in their thirties
+    User.select().where((User.age >= 30) & (User.age < 40))
+
+    # get me tweets from today by active users
+    Tweet.select().join(User).where(
+        (Tweet.pub_date >= today) &
+        (User.active == True)
+    )
+
+
+Check out :ref:`the docs <query_compare>` for notes on the methods of querying.
+
 
 Why?
 ----
