@@ -230,10 +230,11 @@ Model methods
 
 .. py:class:: Model
 
-    .. py:method:: save()
+    .. py:method:: save([force_insert=False])
 
         Save the given instance, creating or updating depending on whether it has a
-        primary key.
+        primary key.  If ``force_insert=True`` an ``INSERT`` will be issued regardless
+        of whether or not the primary key exists.
         
         example:
         
