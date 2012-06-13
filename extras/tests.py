@@ -2,6 +2,7 @@ import unittest
 
 from peewee import *
 import signals
+import sweepea
 
 
 db = SqliteDatabase(':memory:')
@@ -15,6 +16,19 @@ class ModelA(BaseSignalModel):
 
 class ModelB(BaseSignalModel):
     b = CharField()
+
+class SModelA(sweepea.Model):
+    a1 = CharField()
+    a2 = IntegerField()
+
+class SModelB(sweepea.Model):
+    a = ForeignKeyField(SModelA)
+    b1 = CharField()
+    b2 = BooleanField()
+
+class SModelC(sweepea.Model):
+    b = ForeignKeyField(SModelB)
+    c1 = CharField()
 
 
 class SignalsTestCase(unittest.TestCase):
@@ -137,3 +151,39 @@ class SignalsTestCase(unittest.TestCase):
         signals.post_save.disconnect(post_save)
         m2 = ModelA.create()
         self.assertEqual(state, [m])
+
+
+class SweepeaTestCase(unittest.TestCase):
+    def setUp(self):
+        SModelC.drop_table(True)
+        SModelB.drop_table(True)
+        SModelA.drop_table(True)
+        SModelA.create_table()
+        SModelB.create_table()
+        SModelC.create_table()
+
+        a1 = SModelA.create(a1='foo', a2=1)
+        a2 = SModelA.create(a1='bar', a2=2)
+        a3 = SModelA.create(a1='baz', a2=3)
+
+        b1 = SModelB.create(a=a1, b1='herp', b2=True)
+        b2 = SModelB.create(a=a2, b1='derp', b2=False)
+
+        c1 = SModelC.create(b=b1, c1='hurr', c2=0)
+        c2 = SModelC.create(b=b2, c1='durr', c2=1)
+
+    def test_queries(self):
+        sq = sweepea.T(SModelA).q().order_by('id')
+        self.assertEqual([x.a1 for x in sq], ['foo', 'bar', 'baz'])
+
+        t = (SModelB * SModelA) ** (SModelA.a1 == 'foo')
+        self.assertEqual([x.b1 for x in t], ['herp'])
+
+        t = (SModelA) ** (SModelA.a2 > 1) % SModelA.a1
+        self.assertEqual([x.a1 for x in t], ['bar', 'baz'])
+
+        t = (SModelA) ** (SModelA.a2 > 1) % (SModelA.a1) << (('id', 'desc'),)
+        self.assertEqual([x.a1 for x in t], ['baz', 'bar'])
+
+        t = (SModelC * SModelB * SModelA) ** (SModelB.b2 == True) % (SModelC.c1, SModelB.b1)
+        self.assertEqual([(x.c1, x.b1) for x in t], [('hurr', 'herp')])
