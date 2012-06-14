@@ -182,7 +182,7 @@ class SweepeaTestCase(unittest.TestCase):
         t = (SModelA) ** (SModelA.a2 > 1) % SModelA.a1
         self.assertEqual([x.a1 for x in t], ['bar', 'baz'])
 
-        t = (SModelA) ** (SModelA.a2 > 1) % (SModelA.a1) << (('id', 'desc'),)
+        t = (SModelA) ** (SModelA.a2 > 1) % (SModelA.a1) << -SModelA.id
         self.assertEqual([x.a1 for x in t], ['baz', 'bar'])
 
         t = (SModelC * SModelB * SModelA) ** (SModelB.b2 == True) % (SModelC.c1, SModelB.b1)

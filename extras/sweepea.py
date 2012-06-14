@@ -54,7 +54,7 @@ class T(object):
 
         sq = self.models[0].select(select)
         if self.ordering:
-            sq = sq.order_by(*self.ordering)
+            sq = sq.order_by(self.ordering)
 
         for model in self.models[1:]:
             sq = sq.join(model)
