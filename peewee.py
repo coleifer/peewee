@@ -1433,10 +1433,16 @@ class SelectQuery(BaseQuery):
                         ordering = 'ASC'
                 else:
                     raise ValueError('Incorrect arguments passed in order_by clause')
-            else:
+            elif isinstance(clause, basestring):
                 model = self.query_context
                 field = clause
                 ordering = 'ASC'
+            elif isinstance(clause, Field):
+                model = clause.model
+                field = clause.name
+                ordering = 'ASC'
+            else:
+                raise ValueError('Unknown value passed in to order_by')
 
             order_by.append(
                 (model, field, ordering)
@@ -2228,6 +2234,9 @@ class Field(object):
     __mul__ = qdict('contains')
     __pow__ = qdict('icontains')
     __xor__ = qdict('istartswith')
+
+    def __neg__(self):
+        return (self.model, self.name, 'DESC')
 
 
 class CharField(Field):

@@ -500,6 +500,12 @@ class QueryTests(BasePeeweeTestCase):
         sq = SelectQuery(Blog).order_by((Blog, 'title', 'desc'))
         self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` ORDER BY `title` desc', []))
 
+        sq = SelectQuery(Blog).order_by(-(Blog.title))
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` ORDER BY `title` DESC', []))
+
+        sq = SelectQuery(Blog).order_by(Blog.title)
+        self.assertSQLEqual(sq.sql(), ('SELECT `id`, `title` FROM `blog` ORDER BY `title` ASC', []))
+
     def test_selecting_with_ordering_joins(self):
         sq = SelectQuery(Entry).order_by('title').join(Blog).where(title='a')
         self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id` WHERE t2.`title` = ? ORDER BY t1.`title` ASC', ['a']))
@@ -513,6 +519,8 @@ class QueryTests(BasePeeweeTestCase):
         sq = SelectQuery(Entry).join(Blog).where(title='a').order_by((Entry, 'title', 'desc'))
         self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id` WHERE t2.`title` = ? ORDER BY t1.`title` desc', ['a']))
 
+        sq = SelectQuery(Entry).join(Blog).order_by(Blog.title, Entry.title)
+        self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id` ORDER BY t2.`title` ASC, t1.`title` ASC', []))
 
         sq = SelectQuery(Entry).join(Blog).order_by('title')
         self.assertSQLEqual(sq.sql(), ('SELECT t1.`pk`, t1.`title`, t1.`content`, t1.`pub_date`, t1.`blog_id` FROM `entry` AS t1 INNER JOIN `blog` AS t2 ON t1.`blog_id` = t2.`id` ORDER BY t2.`title` ASC', []))
