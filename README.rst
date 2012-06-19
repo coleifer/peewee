@@ -9,6 +9,8 @@ peewee
 * uses sql concepts when querying, like joins and where clauses
 * supports sqlite, mysql and postgresql
 
+For flask integration, including an admin interface and RESTful API, check
+out `flask-peewee <https://github.com/coleifer/flask-peewee/>`_.
 
 Examples::
 

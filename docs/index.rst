@@ -11,6 +11,9 @@ peewee
 * provides a lightweight querying interface over sql
 * uses sql concepts when querying, like joins and where clauses
 
+For flask integration, including an admin interface and RESTful API, check
+out `flask-peewee <https://github.com/coleifer/flask-peewee/>`_.
+
 Contents:
 ---------
 
