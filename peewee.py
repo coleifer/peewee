@@ -282,7 +282,7 @@ class Database(object):
     def __init__(self, adapter, database, threadlocals=False, autocommit=True, **connect_kwargs):
         self.adapter = adapter
         self.init(database, **connect_kwargs)
-        self.threadlocals = connect_kwargs.get('threadlocals', False)
+        threadlocals = connect_kwargs.get('threadlocals', False)
 
         if threadlocals:
             self.__local = threading.local()
