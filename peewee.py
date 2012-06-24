@@ -380,11 +380,12 @@ class Database(object):
     def field_sql(self, field):
         return '%s %s' % (self.quote_name(field.db_column), field.render_field_template())
 
-    def create_table_query(self, model_class, safe, extra=''):
+    def create_table_query(self, model_class, safe, extra='', framing=None):
         if model_class._meta.pk_sequence and self.adapter.sequence_support:
             if not self.sequence_exists(model_class._meta.pk_sequence):
                 self.create_sequence(model_class._meta.pk_sequence)
-        framing = safe and "CREATE TABLE IF NOT EXISTS %s (%s)%s;" or "CREATE TABLE %s (%s)%s;"
+        framing = framing or 'CREATE TABLE %s%s (%s)%s;'
+        safe_str = safe and 'IF NOT EXISTS ' or ''
         columns = []
 
         for field in model_class._meta.get_fields():
@@ -395,7 +396,7 @@ class Database(object):
 
         table = self.quote_name(model_class._meta.db_table)
 
-        return framing % (table, ', '.join(columns), extra)
+        return framing % (safe_str, table, ', '.join(columns), extra)
 
     def create_table(self, model_class, safe=False, extra=''):
         self.execute(self.create_table_query(model_class, safe, extra))
@@ -891,7 +892,7 @@ class R(Leaf):
         self.params = params
         super(R, self).__init__()
 
-    def sql_select(self):
+    def sql_select(self, model_class):
         if len(self.params) == 2:
             return self.params
         else:
@@ -1524,8 +1525,8 @@ class SelectQuery(BaseQuery):
                 q[model] =  q[model][:idx] + model._meta.get_field_names() + q[model][idx+1:]
 
             for clause in q[model]:
-                if isinstance(clause, R):
-                    clause = clause.sql_select()
+                if hasattr(clause, 'sql_select'):
+                    clause = clause.sql_select(model)
 
                 if isinstance(clause, tuple):
                     local_columns = False
