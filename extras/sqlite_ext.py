@@ -170,16 +170,6 @@ class SqliteExtDatabase(SqliteDatabase):
 
 
 # example aggregate
-class ScalarSum(object):
-    def __init__(self):
-        self.sum = 0
-
-    def step(self, value):
-        self.sum += value
-
-    def finalize(self):
-        return self.sum
-
 class WeightedAverage(object):
     def __init__(self):
         self.total_weight = 0.0
