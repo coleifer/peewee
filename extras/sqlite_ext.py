@@ -1,4 +1,3 @@
-import copy
 import hashlib
 import inspect
 import sqlite3
