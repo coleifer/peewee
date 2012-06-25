@@ -1,3 +1,5 @@
+.. _cookbook:
+
 Peewee Cookbook
 ===============
 
@@ -40,6 +42,17 @@ arbitrary time later when a query is executed.
     >>> database.connect()
 
 
+To use this database with your models, specify it in an inner "Meta" class:
+
+.. code-block:: python
+
+    class MyModel(Model):
+        some_field = CharField()
+
+        class Meta:
+            database = database
+
+
 It is possible to use multiple databases (provided that you don't try and mix
 models from each):
 
@@ -75,6 +88,9 @@ you wish to use, and then all your models will extend it:
 
     class Entry(CustomModel):
         # etc, etc
+
+.. note:: Remember to specify a database in a model class (or its parent class),
+    otherwise peewee will fall back to a default sqlite database named "peewee.db".
 
 
 Using with Postgresql
@@ -131,6 +147,14 @@ instantiate your database with ``threadlocals=True``:
 .. code-block:: python
 
     concurrent_db = SqliteDatabase('stats.db', threadlocals=True)
+
+The above implementation stores connection state in a thread local and will only
+use that connection for a given thread.  Sqlite can also share a connection across
+threads natively, so if you would prefer to use sqlite's native support:
+
+.. code-block:: python
+
+    native_concurrent_db = SqliteDatabase('stats.db', check_same_thread=False)
 
 
 .. _deferring_initialization:
