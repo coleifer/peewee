@@ -6,7 +6,13 @@ from peewee import *
 from peewee import SqliteAdapter, Database
 
 
-class FTSModel(Model):
+class VirtualModel(Model):
+    _extension_module = ''
+
+
+class FTSModel(VirtualModel):
+    _extension_module = sqlite3.sqlite_version_info[:3] >= (3, 7, 4) and 'FTS4' or 'FTS3'
+
     @classmethod
     def create_table(cls, fail_silently=False, extra='', **options):
         if fail_silently and cls.table_exists():
@@ -15,7 +21,7 @@ class FTSModel(Model):
         if 'content_model' in options:
             options['content'] = options.pop('content_model')._meta.db_table
 
-        cls._meta.database.create_table(cls, extra=extra, fts_options=options)
+        cls._meta.database.create_table(cls, extra=extra, vt_options=options)
 
         for field_name, field_obj in cls._meta.fields.items():
             if isinstance(field_obj, ForeignKeyField):
@@ -60,6 +66,7 @@ class SqliteExtAdapter(SqliteAdapter):
         self._collations = {}
         self._functions = {}
         self._row_factory = None
+        self.register_function(rank, 'rank', 1)
 
     def connect(self, database, **kwargs):
         conn = super(SqliteExtAdapter, self).connect(database, **kwargs)
@@ -124,18 +131,17 @@ class granular_transaction(object):
 class SqliteExtDatabase(SqliteDatabase):
     def __init__(self, database, **connect_kwargs):
         Database.__init__(self, SqliteExtAdapter(), database, **connect_kwargs)
-        self._ver = sqlite3.sqlite_version_info[:3]
-        self.fts = self._ver >= (3, 7, 4) and 'FTS4' or 'FTS3'
 
-    def create_table(self, model_class, safe=False, extra='', fts_options=None):
-        if issubclass(model_class, FTSModel):
-            if fts_options:
-                options = ', %s' % (', '.join('%s=%s' % (k, v) for k, v in fts_options.items()))
+    def create_table(self, model_class, safe=False, extra='', vt_options=None):
+        if issubclass(model_class, VirtualModel):
+            if vt_options:
+                options = ', %s' % (', '.join('%s=%s' % (k, v) for k, v in vt_options.items()))
             else:
                 options = ''
-            framing = 'CREATE VIRTUAL TABLE %%s%%s USING %s (%%s%s)%%s;' % (self.fts, options)
+            framing = 'CREATE VIRTUAL TABLE %%s%%s USING %s (%%s%s)%%s;' % (model_class._extension_module, options)
         else:
             framing = None
+
         self.execute(self.create_table_query(model_class, safe, extra, framing))
 
     def create_index(self, model_class, field_name, unique=False):

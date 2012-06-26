@@ -41,7 +41,7 @@ ext_db.adapter.register_aggregate(sqe.WeightedAverage, 1, 'weighted_avg')
 ext_db.adapter.register_aggregate(sqe.WeightedAverage, 2, 'weighted_avg2')
 ext_db.adapter.register_collation(sqe.collate_reverse)
 ext_db.adapter.register_function(sqe.sha1)
-ext_db.adapter.register_function(sqe.rank)
+#ext_db.adapter.register_function(sqerank) # < auto register
 
 
 class BaseExtModel(sqe.Model):
@@ -81,7 +81,7 @@ class SqliteExtTestCase(unittest.TestCase):
         Values.create_table()
         User.create_table()
         Post.create_table()
-        FTSPost.create_table(tokenize='porter', content='post')
+        FTSPost.create_table(tokenize='porter', content_model=Post)
 
     def test_fts(self):
         u = User.create(username='u')
@@ -114,7 +114,7 @@ class SqliteExtTestCase(unittest.TestCase):
             self.messages[2], self.messages[3],
         ])
 
-        pq = FTSPost.select(['message', sqe.Rank()]).where(message__match='things').order_by(('score', 'desc'))
+        pq = FTSPost.select(['*', sqe.Rank()]).where(message__match='things').order_by(('score', 'desc'))
         self.assertEqual([(x.message, x.score) for x in pq], [
             (self.messages[4], 2.0 / 3), (self.messages[2], 1.0 / 3),
         ])
