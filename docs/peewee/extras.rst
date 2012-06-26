@@ -290,7 +290,7 @@ at the bottom of the FTS docs:
 
     FTSPost.select(['*', Rank('msg_rank')]).where(message__match='python').order_by(('msg_rank', 'desc'))
 
-.. _granular-transactions
+.. _granular-transactions:
 
 Granular Transactions
 ^^^^^^^^^^^^^^^^^^^^^
