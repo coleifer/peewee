@@ -20,7 +20,7 @@ Contents:
 .. toctree::
    :maxdepth: 2
    :glob:
-   
+
    peewee/overview
    peewee/installation
    peewee/cookbook
@@ -29,6 +29,7 @@ Contents:
    peewee/fields
    peewee/querying
    peewee/database
+   peewee/extras
 
 Indices and tables
 ==================
@@ -36,4 +37,3 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
-
