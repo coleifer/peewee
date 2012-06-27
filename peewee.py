@@ -1380,7 +1380,7 @@ class SelectQuery(BaseQuery):
         else:
             clone.query = 'COUNT(%s)' % (clone.model._meta.pk_col)
 
-        res = clone.database.execute(*clone.sql())
+        res = clone.database.execute(*clone.sql(), require_commit=False)
 
         return (res.fetchone() or [0])[0]
 
@@ -1391,7 +1391,7 @@ class SelectQuery(BaseQuery):
         sql, params = clone.sql()
         query = 'SELECT COUNT(1) FROM (%s) AS wrapped_select' % sql
 
-        res = clone.database.execute(query, params)
+        res = clone.database.execute(query, params, require_commit=False)
 
         return res.fetchone()[0]
 
