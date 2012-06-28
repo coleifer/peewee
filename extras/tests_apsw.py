@@ -63,3 +63,41 @@ class APSWTestCase(unittest.TestCase):
 
         u1.delete_instance()
         self.assertEqual(User.select().count(), 1)
+
+    def test_transaction_handling(self):
+        dt = datetime.datetime(2012, 01, 01, 11, 11, 11)
+
+        def do_ctx_mgr_error():
+            with db.transaction():
+                User.create(username='u1')
+                raise ValueError
+
+        self.assertRaises(ValueError, do_ctx_mgr_error)
+        self.assertEqual(User.select().count(), 0)
+
+        def do_ctx_mgr_success():
+            with db.transaction():
+                u = User.create(username='test')
+                Message.create(message='testing', user=u, pub_date=dt, published=1)
+
+        do_ctx_mgr_success()
+        self.assertEqual(User.select().count(), 1)
+        self.assertEqual(Message.select().count(), 1)
+
+        @db.commit_on_success
+        def create_error():
+            u = User.create(username='test')
+            Message.create(message='testing', user=u, pub_date=dt, published=1)
+            raise ValueError
+
+        self.assertRaises(ValueError, create_error)
+        self.assertEqual(User.select().count(), 1)
+
+        @db.commit_on_success
+        def create_success():
+            u = User.create(username='test')
+            Message.create(message='testing', user=u, pub_date=dt, published=1)
+
+        create_success()
+        self.assertEqual(User.select().count(), 2)
+        self.assertEqual(Message.select().count(), 2)

@@ -2,7 +2,7 @@ import apsw
 from peewee import *
 from peewee import SqliteAdapter, SqliteDatabase, Database, logger
 from peewee import BooleanField as _BooleanField, DateField as _DateField, TimeField as _TimeField, \
-    DateTimeField as _DateTimeField
+    DateTimeField as _DateTimeField, DecimalField as _DecimalField, transaction as _transaction
 
 
 class ConnectionWrapper(apsw.Connection):
@@ -24,7 +24,7 @@ class CursorProxy(object):
     @property
     def description(self):
         try:
-            return self.cursor_obj.description
+            return self.cursor_obj.getdescription()
         except apsw.ExecutionCompleteError:
             return []
 
@@ -38,6 +38,17 @@ class CursorProxy(object):
             if i == n:
                 break
         return results
+
+
+class transaction(_transaction):
+    def __init__(self, db, lock_type='deferred'):
+        self.db = db
+        self.lock_type = lock_type
+
+    def __enter__(self):
+        self._orig = self.db.get_autocommit()
+        self.db.set_autocommit(False)
+        self.db.begin(self.lock_type)
 
 
 class APSWAdapter(SqliteAdapter):
@@ -66,6 +77,18 @@ class APSWDatabase(SqliteDatabase):
     def rows_affected(self, cursor):
         return cursor.getconnection().changes()
 
+    def begin(self, lock_type='deferred'):
+        self.get_cursor().execute('begin %s;' % lock_type)
+
+    def commit(self):
+        self.get_cursor().execute('commit;')
+
+    def rollback(self):
+        self.get_cursor().execute('rollback;')
+
+    def transaction(self, lock_type='deferred'):
+        return transaction(self, lock_type)
+
 
 def nh(s, v):
     if v is not None:
@@ -83,4 +106,7 @@ class TimeField(_TimeField):
     db_value = nh
 
 class DateTimeField(_DateTimeField):
+    db_value = nh
+
+class DecimalField(_DecimalField):
     db_value = nh

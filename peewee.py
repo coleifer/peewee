@@ -326,6 +326,9 @@ class Database(object):
         logger.debug((sql, params))
         return cursor
 
+    def begin(self):
+        pass
+
     def commit(self):
         self.get_conn().commit()
 
@@ -344,6 +347,7 @@ class Database(object):
         def inner(*args, **kwargs):
             orig = self.get_autocommit()
             self.set_autocommit(False)
+            self.begin()
             try:
                 res = func(*args, **kwargs)
                 self.commit()
@@ -588,6 +592,7 @@ class transaction(object):
     def __enter__(self):
         self._orig = self.db.get_autocommit()
         self.db.set_autocommit(False)
+        self.db.begin()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type:
