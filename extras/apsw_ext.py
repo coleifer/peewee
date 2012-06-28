@@ -52,13 +52,20 @@ class transaction(_transaction):
 
 
 class APSWAdapter(SqliteAdapter):
+    def __init__(self, timeout=None):
+        self.timeout = timeout
+
     def connect(self, database, **kwargs):
-        return ConnectionWrapper(database, **kwargs)
+        conn = ConnectionWrapper(database, **kwargs)
+        if self.timeout is not None:
+            conn.setbusytimeout(self.timeout)
+        return conn
 
 
 class APSWDatabase(SqliteDatabase):
     def __init__(self, database, **connect_kwargs):
-        Database.__init__(self, APSWAdapter(), database, **connect_kwargs)
+        adapter = APSWAdapter(connect_kwargs.pop('timeout', None))
+        Database.__init__(self, adapter, database, **connect_kwargs)
 
     def execute(self, sql, params=None, require_commit=True):
         cursor = self.get_cursor()
@@ -96,6 +103,7 @@ def nh(s, v):
 
 class BooleanField(_BooleanField):
     def db_value(self, v):
+        v = super(BooleanField, self).db_value(v)
         if v is not None:
             return v and 1 or 0
 

@@ -27,6 +27,8 @@ class QueryLogHandler(logging.Handler):
 BACKEND = os.environ.get('PEEWEE_TEST_BACKEND', 'sqlite')
 TEST_VERBOSITY = int(os.environ.get('PEEWEE_TEST_VERBOSITY') or 1)
 
+database_params = {}
+
 if BACKEND == 'postgresql':
     database_class = PostgresqlDatabase
     database_name = 'peewee_test'
@@ -34,16 +36,17 @@ elif BACKEND == 'mysql':
     database_class = MySQLDatabase
     database_name = 'peewee_test'
 elif BACKEND == 'apsw':
-    from extras.apsw_ext import APSWDatabase
+    from extras.apsw_ext import *
     database_class = APSWDatabase
     database_name = 'tmp.db'
+    database_params['timeout'] = 1
 else:
     database_class = SqliteDatabase
     database_name = 'tmp.db'
     import sqlite3
     print 'SQLITE VERSION: %s' % sqlite3.version
 
-test_db = database_class(database_name)
+test_db = database_class(database_name, **database_params)
 interpolation = test_db.adapter.interpolation
 quote_char = test_db.adapter.quote_char
 
