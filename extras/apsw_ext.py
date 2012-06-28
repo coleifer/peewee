@@ -29,7 +29,10 @@ class CursorProxy(object):
             return []
 
     def fetchone(self):
-        return self.cursor_obj.next()
+        try:
+            return self.cursor_obj.next()
+        except StopIteration:
+            pass
 
     def fetchmany(self, n):
         results = []

@@ -1459,7 +1459,7 @@ class SelectQuery(BaseQuery):
     def exists(self):
         clone = self.paginate(1, 1)
         clone.query = '(1) AS a'
-        curs = self.database.execute(*clone.sql())
+        curs = self.database.execute(*clone.sql(), require_commit=False)
         return bool(curs.fetchone())
 
     def get(self, *args, **kwargs):
@@ -1485,7 +1485,7 @@ class SelectQuery(BaseQuery):
     def aggregate(self, func):
         clone = self.order_by()
         clone.query = [func]
-        curs = self.database.execute(*clone.sql())
+        curs = self.database.execute(*clone.sql(), require_commit=False)
         return curs.fetchone()[0]
 
     @returns_clone

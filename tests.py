@@ -39,7 +39,7 @@ elif BACKEND == 'apsw':
     from extras.apsw_ext import *
     database_class = APSWDatabase
     database_name = 'tmp.db'
-    database_params['timeout'] = 1
+    database_params['timeout'] = 1000
 else:
     database_class = SqliteDatabase
     database_name = 'tmp.db'
