@@ -33,6 +33,10 @@ if BACKEND == 'postgresql':
 elif BACKEND == 'mysql':
     database_class = MySQLDatabase
     database_name = 'peewee_test'
+elif BACKEND == 'apsw':
+    from extras.apsw_ext import APSWDatabase
+    database_class = APSWDatabase
+    database_name = 'tmp.db'
 else:
     database_class = SqliteDatabase
     database_name = 'tmp.db'
