@@ -384,16 +384,16 @@ class Database(object):
     def field_sql(self, field):
         return '%s %s' % (self.quote_name(field.db_column), field.render_field_template())
 
+    def get_column_sql(self, model_class):
+        return map(self.field_sql, model_class._meta.get_fields())
+
     def create_table_query(self, model_class, safe, extra='', framing=None):
         if model_class._meta.pk_sequence and self.adapter.sequence_support:
             if not self.sequence_exists(model_class._meta.pk_sequence):
                 self.create_sequence(model_class._meta.pk_sequence)
         framing = framing or 'CREATE TABLE %s%s (%s)%s;'
         safe_str = safe and 'IF NOT EXISTS ' or ''
-        columns = []
-
-        for field in model_class._meta.get_fields():
-            columns.append(self.field_sql(field))
+        columns = self.get_column_sql(model_class)
 
         if extra:
             extra = ' ' + extra

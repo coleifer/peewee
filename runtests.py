@@ -29,7 +29,7 @@ if __name__ == '__main__':
     os.environ['PEEWEE_TEST_VERBOSITY'] = str(options.verbosity)
 
     import tests
-    from extras import tests as extras_tests, tests_apsw
+    from playhouse import tests as extras_tests, tests_apsw
 
     if options.all:
         modules = [tests, extras_tests, tests_apsw]
