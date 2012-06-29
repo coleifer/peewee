@@ -17,6 +17,27 @@ to use some of the more advanced features of sqlite.  It also offers better perf
 than pysqlite and finer-grained control over query execution.  For more information
 on the differences between apsw and pysqlite, check `the apsw docs <http://apidoc.apsw.googlecode.com/hg/pysqlite.html>`_.
 
+Example usage
+^^^^^^^^^^^^^
+
+.. code-block:: python
+
+    from apsw_ext import *
+
+    db = APSWDatabase(':memory:')
+
+    class BaseModel(Model):
+        class Meta:
+            database = db
+
+    class SomeModel(BaseModel):
+        col1 = CharField()
+        col2 = DateTimeField()
+        # etc, etc
+
+apsw_ext API notes
+^^^^^^^^^^^^^^^^^^
+
 .. py:class:: APSWDatabase(database, **connect_kwargs)
 
     :param string database: filename of sqlite database
