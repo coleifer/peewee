@@ -5,6 +5,10 @@ from peewee import BooleanField as _BooleanField, DateField as _DateField, TimeF
     DateTimeField as _DateTimeField, DecimalField as _DecimalField, transaction as _transaction
 
 
+class VirtualModel(Model):
+    _extension_module = ''
+
+
 class ConnectionWrapper(apsw.Connection):
     def cursor(self):
         base_cursor = super(ConnectionWrapper, self).cursor()
@@ -57,12 +61,21 @@ class transaction(_transaction):
 class APSWAdapter(SqliteAdapter):
     def __init__(self, timeout=None):
         self.timeout = timeout
+        self._modules = {}
 
     def connect(self, database, **kwargs):
         conn = ConnectionWrapper(database, **kwargs)
         if self.timeout is not None:
             conn.setbusytimeout(self.timeout)
+        for mod_name, mod_inst in self._modules.items():
+            conn.createmodule(mod_name, mod_inst)
         return conn
+
+    def register_module(self, mod_name, mod_inst):
+        self._modules[mod_name] = mod_inst
+
+    def unregister_module(self, mod_name):
+        del(self._modules[mod_name])
 
 
 class APSWDatabase(SqliteDatabase):
@@ -98,6 +111,18 @@ class APSWDatabase(SqliteDatabase):
 
     def transaction(self, lock_type='deferred'):
         return transaction(self, lock_type)
+
+    def create_table(self, model_class, safe=False, extra='', vt_options=None):
+        if issubclass(model_class, VirtualModel):
+            if vt_options:
+                options = ', %s' % (', '.join('%s=%s' % (k, v) for k, v in vt_options.items()))
+            else:
+                options = ''
+            framing = 'CREATE VIRTUAL TABLE %%s%%s USING %s (%%s%s)%%s;' % (model_class._extension_module, options)
+        else:
+            framing = None
+
+        self.execute(self.create_table_query(model_class, safe, extra, framing))
 
 
 def nh(s, v):

@@ -8,6 +8,57 @@ the main source module, but which might be interesting to implementers or fun
 to mess around with.
 
 
+apsw, an advanced sqlite driver
+-------------------------------
+
+The ``apsw_ext`` module contains a database class suitable for use with the
+`apsw <http://code.google.com/p/apsw/>`_ sqlite driver.  With apsw, it is possible
+to use some of the more advanced features of sqlite.  It also offers better performance
+than pysqlite and finer-grained control over query execution.  For more information
+on the differences between apsw and pysqlite, check `the apsw docs <http://apidoc.apsw.googlecode.com/hg/pysqlite.html>`_.
+
+.. py:class:: APSWDatabase(database, **connect_kwargs)
+
+    :param string database: filename of sqlite database
+    :param connect_kwargs: keyword arguments passed to apsw when opening a connection
+
+    .. py:method:: transaction([lock_type='deferred'])
+
+        Functions just like the :py:meth:`Database.transaction` context manager,
+        but accepts an additional parameter specifying the type of lock to use.
+
+        :param string lock_type: type of lock to use when opening a new transaction
+
+.. py:class:: APSWAdapter(timeout)
+
+    :param int timeout: sqlite busy timeout in seconds (`docs <http://apidoc.apsw.googlecode.com/hg/connection.html?highlight=busytimeout#apsw.Connection.setbusytimeout>`_)
+
+    .. py:method:: register_module(mod_name, mod_inst)
+
+        Provides a way of globally registering a module.  For more information,
+        see the `documentation on virtual tables <http://apidoc.apsw.googlecode.com/hg/vtable.html>`_.
+
+        :param string mod_name: name to use for module
+        :param object mod_inst: an object implementing the `Virtual Table <http://apidoc.apsw.googlecode.com/hg/vtable.html?highlight=virtual%20table#apsw.VTTable>`_ interface
+
+    .. py:method:: unregister_module(mod_name)
+
+        Unregister a module.
+
+        :param string mod_name: name to use for module
+
+.. py:class:: VirtualModel()
+
+    A model subclass suitable for creating virtual tables.
+
+    .. note:: You must specify the name for the extension module you wish to use
+
+    .. py:attribute:: _extension_module
+
+        The name of the extension module to use with this virtual table
+
+
+
 pwiz, a model generator
 -----------------------
 
