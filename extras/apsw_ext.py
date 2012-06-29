@@ -8,6 +8,19 @@ from peewee import BooleanField as _BooleanField, DateField as _DateField, TimeF
 class VirtualModel(Model):
     _extension_module = ''
 
+    @classmethod
+    def create_table(cls, fail_silently=False, extra='', **options):
+        if fail_silently and cls.table_exists():
+            return
+
+        cls._meta.database.create_table(cls, extra=extra, vt_options=options)
+
+        for field_name, field_obj in cls._meta.fields.items():
+            if isinstance(field_obj, ForeignKeyField):
+                cls._meta.database.create_foreign_key(cls, field_obj)
+            elif field_obj.db_index or field_obj.unique:
+                cls._meta.database.create_index(cls, field_obj.name, field_obj.unique)
+
 
 class ConnectionWrapper(apsw.Connection):
     def cursor(self):
@@ -123,6 +136,11 @@ class APSWDatabase(SqliteDatabase):
             framing = None
 
         self.execute(self.create_table_query(model_class, safe, extra, framing))
+
+    def create_index(self, model_class, field_name, unique=False):
+        if issubclass(model_class, VirtualModel):
+            return
+        return super(APSWDatabase, self).create_index(model_class, field_name, unique)
 
 
 def nh(s, v):
