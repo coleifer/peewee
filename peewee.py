@@ -405,8 +405,8 @@ class Database(object):
     def create_table(self, model_class, safe=False, extra=''):
         self.execute(self.create_table_query(model_class, safe, extra))
 
-    def create_index_query(self, model_class, field_name, unique):
-        framing = 'CREATE %(unique)s INDEX %(index)s ON %(table)s(%(field)s);'
+    def create_index_query(self, model_class, field_name, unique, framing=None):
+        framing = framing or 'CREATE %(unique)s INDEX %(index)s ON %(table)s(%(field)s);'
 
         if field_name not in model_class._meta.fields:
             raise AttributeError(
