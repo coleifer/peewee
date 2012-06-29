@@ -29,7 +29,7 @@ Contents:
    peewee/fields
    peewee/querying
    peewee/database
-   peewee/extras
+   peewee/playhouse
 
 Indices and tables
 ==================

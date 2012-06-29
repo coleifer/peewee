@@ -1,7 +1,7 @@
-.. _cookbook:
+.. _playhouse:
 
-Extras
-======
+Playhouse, a collection of addons
+=================================
 
 Peewee comes with numerous extras which I didn't really feel like including in
 the main source module, but which might be interesting to implementers or fun
