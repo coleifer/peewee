@@ -117,7 +117,10 @@ class BaseAdapter(object):
     def close(self, conn):
         conn.close()
 
-    def lookup_cast(self, lookup, value):
+    def op_override(self, field, op, value):
+        return op
+
+    def lookup_cast(self, field, lookup, value):
         """
         When a lookup is being performed as a part of a WHERE clause, provides
         a way to alter the incoming value that is passed to the database driver
@@ -161,7 +164,7 @@ class SqliteAdapter(BaseAdapter):
             raise ImproperlyConfigured('sqlite3 must be installed on the system')
         return sqlite3.connect(database, **kwargs)
 
-    def lookup_cast(self, lookup, value):
+    def lookup_cast(self, field, lookup, value):
         if lookup == 'contains':
             return '*%s*' % value
         elif lookup == 'icontains':
@@ -996,8 +999,8 @@ class BaseQuery(object):
     def qn(self, name):
         return self.database.quote_name(name)
 
-    def lookup_cast(self, lookup, value):
-        return self.database.adapter.lookup_cast(lookup, value)
+    def lookup_cast(self, field, lookup, value):
+        return self.database.adapter.lookup_cast(field, lookup, value)
 
     def parse_query_args(self, _model, **query):
         """
@@ -1023,6 +1026,8 @@ class BaseQuery(object):
                 field = model._meta.get_related_field_by_name(lhs)
                 if field is None:
                     raise
+
+            op = self.database.adapter.op_override(field, op, rhs)
 
             if isinstance(rhs, R):
                 expr, params = rhs.sql_where()
@@ -1052,18 +1057,19 @@ class BaseQuery(object):
                 elif op == 'isnull':
                     operation = 'IS NULL' if rhs else 'IS NOT NULL'
                     lookup_value = []
+                elif op == 'between':
+                    lookup_value = [field.db_value(o) for o in rhs]
+                    operation = self.operations[op] % (self.interpolation, self.interpolation)
                 elif isinstance(rhs, (list, tuple)):
-                    # currently this only happens on 'between' lookups, but leave
-                    # it general to lists and tuples
                     lookup_value = [field.db_value(o) for o in rhs]
                     operation = self.operations[op] % \
-                        tuple(self.interpolation for v in lookup_value)
+                        (','.join([self.interpolation for v in lookup_value]))
                 else:
                     lookup_value = field.db_value(rhs)
                     operation = self.operations[op] % self.interpolation
 
             parsed.append(
-                (field.db_column, (operation, self.lookup_cast(op, lookup_value)))
+                (field.db_column, (operation, self.lookup_cast(field, op, lookup_value)))
             )
 
         return parsed

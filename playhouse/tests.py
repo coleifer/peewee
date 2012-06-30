@@ -20,16 +20,20 @@ class ModelA(BaseSignalModel):
 class ModelB(BaseSignalModel):
     b = CharField()
 
-class SModelA(sweepea.Model):
+class BaseSweepeaModel(sweepea.Model):
+    class Meta:
+        database = db
+
+class SModelA(BaseSweepeaModel):
     a1 = CharField()
     a2 = IntegerField()
 
-class SModelB(sweepea.Model):
+class SModelB(BaseSweepeaModel):
     a = ForeignKeyField(SModelA)
     b1 = CharField()
     b2 = BooleanField()
 
-class SModelC(sweepea.Model):
+class SModelC(BaseSweepeaModel):
     b = ForeignKeyField(SModelB)
     c1 = CharField()
 
