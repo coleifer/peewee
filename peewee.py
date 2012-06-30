@@ -1512,7 +1512,7 @@ class SelectQuery(BaseQuery):
             elif q in (self.model._meta.pk_col, self.model._meta.pk_name):
                 q = {self.model: [self.model._meta.pk_name]}
             else:
-                return q, [], False
+                return q, [], [], False
 
         # by now we should have a dictionary if a valid type was passed in
         if not isinstance(q, dict):
@@ -1524,6 +1524,7 @@ class SelectQuery(BaseQuery):
         # normalize if we are working with a dictionary
         columns = []
         model_cols = []
+        sparams = []
 
         for model, alias in sorted_models:
             if model not in q:
@@ -1541,7 +1542,15 @@ class SelectQuery(BaseQuery):
 
                 if isinstance(clause, tuple):
                     local_columns = False
-                    if len(clause) == 3:
+                    if len(clause) == 4:
+                        template, col_name, col_alias, cparams = clause
+                        column = model._meta.get_column(col_name)
+                        columns.append(template % \
+                            (func, self.safe_combine(model, alias, column), col_alias)
+                        )
+                        sparams.extend(cparams)
+                        model_cols.append((model, (func, column, col_alias)))
+                    elif len(clause) == 3:
                         func, col_name, col_alias = clause
                         column = model._meta.get_column(col_name)
                         columns.append('%s(%s) AS %s' % \
@@ -1556,13 +1565,13 @@ class SelectQuery(BaseQuery):
                         )
                         model_cols.append((model, (column, col_alias)))
                     else:
-                        raise ValueError('Clause must be either a 2- or 3-tuple')
+                        raise ValueError('Clause must be either a 2-, 3- or 4-tuple')
                 else:
                     column = model._meta.get_column(clause)
                     columns.append(self.safe_combine(model, alias, column))
                     model_cols.append((model, column))
 
-        return ', '.join(columns), model_cols, (models_queried == 1 and local_columns)
+        return ', '.join(columns), model_cols, sparams, (models_queried == 1 and local_columns)
 
     def sql_meta(self):
         joins, clauses, alias_map = self.compile_where()
@@ -1586,7 +1595,8 @@ class SelectQuery(BaseQuery):
             for field in clause:
                 group_by.append(self.safe_combine(model, alias, field))
 
-        parsed_query, model_cols, simple = self.parse_select_query(alias_map)
+        parsed_query, model_cols, sparams, simple = self.parse_select_query(alias_map)
+        params.extend(sparams)
         query_meta = {
             'columns': model_cols,
             'graph': self._joins,
