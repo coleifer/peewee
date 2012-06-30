@@ -1546,10 +1546,10 @@ class SelectQuery(BaseQuery):
                         template, col_name, col_alias, cparams = clause
                         column = model._meta.get_column(col_name)
                         columns.append(template % \
-                            (func, self.safe_combine(model, alias, column), col_alias)
+                            (self.safe_combine(model, alias, column), col_alias)
                         )
-                        sparams.extend(cparams)
-                        model_cols.append((model, (func, column, col_alias)))
+                        sparams.append(cparams)
+                        model_cols.append((model, (template, column, col_alias)))
                     elif len(clause) == 3:
                         func, col_name, col_alias = clause
                         column = model._meta.get_column(col_name)
