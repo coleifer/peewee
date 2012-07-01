@@ -1544,13 +1544,14 @@ class SelectQuery(BaseQuery):
 
                 if isinstance(clause, tuple):
                     local_columns = False
-                    if len(clause) == 4:
-                        template, col_name, col_alias, cparams = clause
+                    if len(clause) > 3:
+                        template, col_name, col_alias = clause[:3]
+                        cparams = clause[3:]
                         column = model._meta.get_column(col_name)
                         columns.append(template % \
                             (self.safe_combine(model, alias, column), col_alias)
                         )
-                        sparams.append(cparams)
+                        sparams.extend(cparams)
                         model_cols.append((model, (template, column, col_alias)))
                     elif len(clause) == 3:
                         func, col_name, col_alias = clause
@@ -1567,7 +1568,7 @@ class SelectQuery(BaseQuery):
                         )
                         model_cols.append((model, (column, col_alias)))
                     else:
-                        raise ValueError('Clause must be either a 2-, 3- or 4-tuple')
+                        raise ValueError('Unknown type in select query')
                 else:
                     column = model._meta.get_column(clause)
                     columns.append(self.safe_combine(model, alias, column))
