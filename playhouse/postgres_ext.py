@@ -93,6 +93,11 @@ class PostgresqlExtAdapter(PostgresqlAdapter):
                     return 'hcontains_key'
         return op
 
+    def lookup_cast(self, field, op, value):
+        if op == 'hcontains_keys':
+            return [value]
+        return super(PostgresqlExtAdapter, self).lookup_cast(field, op, value)
+
 
 class PostgresqlExtDatabase(PostgresqlDatabase):
     def __init__(self, database, **connect_kwargs):

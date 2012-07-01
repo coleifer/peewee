@@ -1065,8 +1065,7 @@ class BaseQuery(object):
                     operation = self.operations[op] % (self.interpolation, self.interpolation)
                 elif isinstance(rhs, (list, tuple)):
                     lookup_value = [field.db_value(o) for o in rhs]
-                    operation = self.operations[op] % \
-                        (','.join([self.interpolation for v in lookup_value]))
+                    operation = self.operations[op] % self.interpolation
                 else:
                     lookup_value = field.db_value(rhs)
                     operation = self.operations[op] % self.interpolation

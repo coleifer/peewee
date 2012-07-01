@@ -79,6 +79,155 @@ apsw_ext API notes
         The name of the extension module to use with this virtual table
 
 
+Postgresql Extensions (hstore)
+------------------------------
+
+The postgresql extensions module provides a number of "postgres-only" functions, including:
+
+* :ref:`hstore support <hstore>`
+
+.. warning:: In order to start using the features described below, you will need to use the
+    extension :py:class:`PostgresqlExtDatabase` class instead of :py:class:`PostgresqlDatabase`.
+
+The code below will assume you are using the following database and base model:
+
+.. code-block:: python
+
+    from playhouse.postgres_ext import *
+
+    ext_db = PostgresqlExtDatabase('peewee_test', user='postgres')
+
+    class BaseExtModel(Model):
+        class Meta:
+            database = ext_db
+
+
+.. _hstore:
+
+hstore support
+^^^^^^^^^^^^^^
+
+`Postgresql hstore <http://www.postgresql.org/docs/current/static/hstore.html>`_ is
+an embedded key/value store.  With hstore, you can store arbitrary key/value pairs
+in your database alongside structured relational data.  hstore is great for storing
+JSON.
+
+Currently the ``postgres_ext`` module supports the following operations:
+
+* store and retrieve arbitrary dictionaries
+* filter by key(s) or partial dictionary
+* update/add one or more keys to an existing dictionary
+* delete one or more keys from an existing dictionary
+* select keys, values, or zip keys and values
+* retrieve a slice of keys/values
+* test for the existence of a key
+* test that a key has a non-NULL value
+
+
+using hstore
+^^^^^^^^^^^^
+
+To start with, you will need to import the custom database class and the hstore
+functions from ``playhouse.postgres_ext`` (see above code snippet).  Then, it is
+as simple as adding a :py:class:`HStoreField` to your model:
+
+.. code-block:: python
+
+    class House(BaseExtModel):
+        address = CharField()
+        features = HStoreField()
+
+
+You can now store arbitrary key/value pairs on ``House`` instances:
+
+.. code-block:: pycon
+
+    >>> h = House.create(address='123 Main St', features={'garage': '2 cars', 'bath': '2 bath'})
+    >>> h_from_db = House.get(id=h.id)
+    >>> h_from_db.features
+    {'bath': '2 bath', 'garage': '2 cars'}
+
+
+You can filter by keys or partial dictionary:
+
+.. code-block:: pycon
+
+    >>> House.select().where(features__contains='garage') # <-- all houses w/garage key
+    >>> House.select().where(features__contains=['garage', 'bath']) # <-- all houses w/garage & bath
+    >>> House.select().where(features__contains={'garage': '2 cars'}) # <-- houses w/2-car garage
+
+Suppose you want to do an atomic update to the house:
+
+.. code-block:: pycon
+
+    >>> query = House.update(features=hupdate('features', {'bath': '2.5 bath', 'sqft': '1100'}))
+    >>> query.where(id=h.id).execute()
+    1
+    >>> h = House.get(id=h.id)
+    >>> h.features
+    {'bath': '2.5 bath', 'garage': '2 cars', 'sqft': '1100'}
+
+
+Or, alternatively an atomic delete:
+
+.. code-block:: pycon
+
+    >>> query = House.update(features=hdelete('features', 'bath'))
+    >>> query.where(id=h.id).execute()
+    1
+    >>> h = House.get(id=h.id)
+    >>> h.features
+    {'garage': '2 cars', 'sqft': '1100'}
+
+
+Multiple keys can be deleted at the same time:
+
+.. code-block:: pycon
+
+    >>> query = House.update(features=hdelete('features', ['garage', 'sqft']))
+
+You can select just keys, just values, or zip the two:
+
+.. code-block:: pycon
+
+    >>> for h in House.select(['address', hkeys('features', 'keys')]):
+    ...     print h.address, h.keys
+
+    123 Main St [u'bath', u'garage']
+
+    >>> for h in House.select(['address', hvalues('features', 'vals')]):
+    ...     print h.address, h.vals
+
+    123 Main St [u'2 bath', u'2 cars']
+
+    >>> for h in House.select(['address', hmatrix('features', 'mtx')]):
+    ...     print h.address, h.mtx
+
+    123 Main St [[u'bath', u'2 bath'], [u'garage', u'2 cars']]
+
+You can retrieve a slice of data, for example, all the garage data:
+
+.. code-block:: pycon
+
+    >>> for h in House.select(['address', hslice('features', 'garage_data', ['garage'])]):
+    ...     print h.address, h.garage_data
+
+    123 Main St {'garage': '2 cars'}
+
+You can check for the existence of a key and filter rows accordingly:
+
+.. code-block:: pycon
+
+    >>> for h in House.select(['address', hexist('features', 'has_garage', 'garage')]):
+    ...     print h.address, h.has_garage
+
+    123 Main St True
+
+    >>> for h in House.select().where(hexist('features', ['garage'])):
+    ...     print h.address, h.features['garage'] # <-- just houses w/garage data
+
+    123 Main St 2 cars
+
 
 pwiz, a model generator
 -----------------------
@@ -133,15 +282,15 @@ The following are valid parameters for the engine:
 Signal support
 --------------
 
-Models with hooks for signals (a-la django) are provided in ``extras.signals``.
+Models with hooks for signals (a-la django) are provided in ``playhouse.signals``.
 To use the signals, you will need all of your project's models to be a subclass
-of ``extras.signals.Model``, which overrides the necessary methods to provide
+of ``playhouse.signals.Model``, which overrides the necessary methods to provide
 support for the various signals.
 
 .. highlight:: python
 .. code-block:: python
 
-    from extras.signals import Model, connect, post_save
+    from playhouse.signals import Model, connect, post_save
 
 
     class MyModel(Model):
@@ -191,7 +340,7 @@ Example usage:
 
 .. code-block:: python
 
-    from extras.signals import *
+    from playhouse.signals import *
 
     def post_save_handler(sender, instance, created):
         print '%s was just saved' % instance
@@ -234,7 +383,7 @@ Signal API
 
         .. code-block:: python
 
-            from extras.signals import post_save
+            from playhouse.signals import post_save
             from project.handlers import cache_buster
 
             post_save.connect(cache_buster, name='project.cache_buster')
@@ -267,7 +416,7 @@ Signal API
 
     .. code-block:: python
 
-        from extras.signals import connect, post_save
+        from playhouse.signals import connect, post_save
 
         @connect(post_save, name='project.cache_buster')
         def cache_bust_handler(sender, instance, *args, **kwargs):
@@ -291,7 +440,7 @@ The code below will assume you are using the following database and base model:
 
 .. code-block:: python
 
-    from extras.sqlite_ext import *
+    from playhouse.sqlite_ext import *
 
     ext_db = SqliteExtDatabase('tmp.db')
 
@@ -310,7 +459,7 @@ can be used to expose search on your peewee models with very little work.  A com
 overview of sqlite's FTS is beyond the scope of this section, so please `read their documentation <http://www.sqlite.org/fts3.html>`_ for
 the details.
 
-To use FTS with your peewee models, you must subclass the ``extras.sqlite_ext.FTSModel``.
+To use FTS with your peewee models, you must subclass the ``playhouse.sqlite_ext.FTSModel``.
 You can store data directly in this model or you can create a separate model that
 references an existing model.  Since virtual tables do not support column indexes, this decision
 will depend on how you intend to query the data stored in the full-text index.
@@ -496,12 +645,12 @@ a restriction:
     # tweets with the username of sender
     (Tweet * User) ** (User.active == True) % (Tweet.id, Tweet.message, User.username)
 
-To try out swee'pea, simply replace ``from peewee import *`` with ``from extras.sweepea import *``
+To try out swee'pea, simply replace ``from peewee import *`` with ``from playhouse.sweepea import *``
 and start writing wacky queries:
 
 .. code-block:: python
 
-    from extras.sweepea import *
+    from playhouse.sweepea import *
 
     class User(Model):
         username = CharField()

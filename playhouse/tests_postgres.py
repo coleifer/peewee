@@ -38,6 +38,9 @@ class PostgresExtTestCase(unittest.TestCase):
         self.t1.save()
         self.assertEqual(Testing.get(name='t1').data, {'k4': 'v4'})
 
+        t = Testing.create(name='t3', data={})
+        self.assertEqual(Testing.get(name='t3').data, {})
+
     def test_selecting(self):
         self.create()
 
@@ -95,10 +98,10 @@ class PostgresExtTestCase(unittest.TestCase):
         self.assertEqual([x.name for x in sq], ['t2'])
 
         # test list of keys
-        sq = Testing.select().where(data__contains=[['k2', 'k3']])
+        sq = Testing.select().where(data__contains=['k2', 'k3'])
         self.assertEqual([x.name for x in sq], ['t2'])
 
-        sq = Testing.select().where(data__contains=[['k2']])
+        sq = Testing.select().where(data__contains=['k2'])
         self.assertEqual([x.name for x in sq], ['t1', 't2'])
 
         # test dict
