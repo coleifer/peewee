@@ -17,8 +17,15 @@ class Testing(BaseModel):
     class Meta:
         ordering = ('name',)
 
+class Testing2(BaseModel):
+    name = CharField()
+    path = LTreeField()
 
-class PostgresExtTestCase(unittest.TestCase):
+    class Meta:
+        ordering = ('name',)
+
+
+class PostgresExtHStoreTestCase(unittest.TestCase):
     def setUp(self):
         Testing.drop_table(True)
         Testing.create_table()
@@ -164,3 +171,106 @@ class PostgresExtTestCase(unittest.TestCase):
             {},
             {'k3': 'v3', 'k6': 'v6'}
         ])
+
+
+class PostgresExtLTreeTestCase(unittest.TestCase):
+    def setUp(self):
+        Testing2.drop_table(True)
+        Testing2.create_table()
+        self.t1 = None
+        self.t2 = None
+
+    def create(self):
+        self.t1 = Testing2.create(name='t1', path='alpha.beta.delta')
+        self.t2 = Testing2.create(name='t2', path='alpha.beta.gamma.epsilon')
+
+    def test_storage(self):
+        self.create()
+        self.assertEqual(Testing2.get(name='t1').path, 'alpha.beta.delta')
+        self.assertEqual(Testing2.get(name='t2').path, 'alpha.beta.gamma.epsilon')
+
+        self.t1.path = 'alpha.beta.delta.gamma'
+        self.t1.save()
+        self.assertEqual(Testing2.get(name='t1').path, 'alpha.beta.delta.gamma')
+
+        t = Testing2.create(name='t3', path='')
+        self.assertEqual(Testing2.get(name='t3').path, '')
+
+    def test_selecting(self):
+        self.create()
+
+        sq = Testing2.select(['name', lsubtree('path', 1, 2, 'stree')])
+        self.assertEqual([(x.name, x.stree) for x in sq], [
+            ('t1', 'beta'), ('t2', 'beta'),
+        ])
+
+        sq = Testing2.select(['name', lsubpath('path', 0, 2, 'stree')])
+        self.assertEqual([(x.name, x.stree) for x in sq], [
+            ('t1', 'alpha.beta'), ('t2', 'alpha.beta'),
+        ])
+
+        sq = Testing2.select(['name', lsubpath('path', -1, 1, 'stree')])
+        self.assertEqual([(x.name, x.stree) for x in sq], [
+            ('t1', 'delta'), ('t2', 'epsilon'),
+        ])
+
+        sq = Testing2.select(['name', lsubpath('path', 1, 'stree')])
+        self.assertEqual([(x.name, x.stree) for x in sq], [
+            ('t1', 'beta.delta'), ('t2', 'beta.gamma.epsilon'),
+        ])
+
+        sq = Testing2.select(['name', nlevel('path', 'lvl')])
+        self.assertEqual([(x.name, x.lvl) for x in sq], [
+            ('t1', 3), ('t2', 4),
+        ])
+
+        sq = Testing2.select(['name', lindex('path', 'beta', 'idx')])
+        self.assertEqual([(x.name, x.idx) for x in sq], [
+            ('t1', 1), ('t2', 1),
+        ])
+
+        sq = Testing2.select(['name', lindex('path', 'delta', 'idx')])
+        self.assertEqual([(x.name, x.idx) for x in sq], [
+            ('t1', 2), ('t2', -1),
+        ])
+
+    def test_filtering(self):
+        t1 = Testing2.create(name='t1', path='a.b.c')
+        t2 = Testing2.create(name='t2', path='a.b.d.e')
+        t3 = Testing2.create(name='t3', path='a.b.d.f')
+        t4 = Testing2.create(name='t4', path='a.b.e')
+
+        def assertExpected(sq, res):
+            self.assertEqual([x.name for x in sq], res)
+
+        bq = Testing2.select()
+
+        sq = bq.where(path__lchildren='a.b.d')
+        assertExpected(sq, ['t2', 't3'])
+
+        sq = bq.where(path__lchildren='a.b.c')
+        assertExpected(sq, ['t1'])
+
+        sq = bq.where(path__lmatch='a.b.*{1}')
+        assertExpected(sq, ['t1', 't4'])
+
+        sq = bq.where(path__lmatch='*.b.*{2}')
+        assertExpected(sq, ['t2', 't3'])
+
+        sq = bq.where(path__lmatch='*.B@.!d|e')
+        assertExpected(sq, ['t1'])
+
+        sq = bq.where(path__lmatch_text='B@ & D@')
+        assertExpected(sq, ['t2', 't3'])
+
+        sq = bq.where(path__lmatch_text='a & d & !e')
+        assertExpected(sq, ['t3'])
+
+        sq = Testing2.select().where(path__contains='*.d.*')
+        assertExpected(sq, ['t2', 't3'])
+
+        sq = Testing2.select().where(path__startswith='a.b.d')
+        assertExpected(sq, ['t2', 't3'])
+
+        sq = Testing2.select().where(path__startswith='b.d')
+        assertExpected(sq, [])
