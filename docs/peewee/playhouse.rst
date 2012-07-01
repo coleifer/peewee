@@ -79,12 +79,13 @@ apsw_ext API notes
         The name of the extension module to use with this virtual table
 
 
-Postgresql Extensions (hstore)
-------------------------------
+Postgresql Extensions (hstore, ltree)
+-------------------------------------
 
 The postgresql extensions module provides a number of "postgres-only" functions, including:
 
 * :ref:`hstore support <hstore>`
+* :ref:`ltree support <ltree>`
 
 .. warning:: In order to start using the features described below, you will need to use the
     extension :py:class:`PostgresqlExtDatabase` class instead of :py:class:`PostgresqlDatabase`.
@@ -227,6 +228,95 @@ You can check for the existence of a key and filter rows accordingly:
     ...     print h.address, h.features['garage'] # <-- just houses w/garage data
 
     123 Main St 2 cars
+
+
+.. _ltree:
+
+ltree support
+^^^^^^^^^^^^^
+
+`Postgresql ltree <http://www.postgresql.org/docs/current/static/ltree.html>`_ is
+a hierarchical data store.  With ltree, you can store hierarchical structures as
+a series of labels separated by a delimiter (".").
+
+Currently the ``postgres_ext`` module supports the following operations:
+
+* store and retrieve label-trees
+* very complex filtering by labels
+* querying by prefix
+
+
+using ltree
+^^^^^^^^^^^
+
+As with :ref:`hstore <hstore>`, you will need to import the custom database class and the ltree
+functions from ``playhouse.postgres_ext`` (see above code snippet).  Then, it is
+as simple as adding a :py:class:`LTreeField` to your model:
+
+.. code-block:: python
+
+    class Category(BaseExtModel):
+        name = CharField()
+        path = LTreeField()
+
+
+You can now store hierarchy information on Category instances.  Let's use the following
+data-set:
+
+* languages
+    * dynamic
+        * python
+        * ruby
+    * static
+        * c
+        * c++
+        * java
+
+.. code-block:: pycon
+
+    >>> Category.create(name='java', path='languages.static.java') # last one...
+    >>> Category.get(name='python').path
+    'languages.dynamic.python'
+
+You can filter by path.  Complex queries are possible, so please refer to
+the `ltree documentation <http://www.postgresql.org/docs/current/static/ltree.html>`_ for details.
+
+.. code-block:: pycon
+
+    >>> show = lambda q: [l.name for l in q]
+    >>> show(Category.select().where(path__startswith='languages.dynamic'))
+    [u'dynamic', u'python', u'ruby']
+
+    >>> show(Category.select().where(path__lmatch='*.static.c*'))
+    [u'c', u'c++']
+
+    >>> show(Category.select().where(path__lmatch_text='(static | dynamic) & (p* | c*) & !cpp'))
+    [u'python', u'c']
+
+You can select subtrees, label indices, and more:
+
+.. code-block:: pycon
+
+    >>> q = Category.select(['name', lsubpath('path', -1, 1, 'leaf')])
+    >>> for cat in q:
+    ...     cat.leaf
+
+    languages
+    dynamic
+    static
+    python
+    ruby
+    c
+    cpp
+    java
+
+    >>> q = Category.select([lindex('path', 'static', 'static_pos')])
+    >>> [x.static_pos for x in q]
+    [-1, -1, 1, -1, -1, 1, 1, 1]
+
+    >>> q = Category.select([nlevel('path', 'depth')]).where(name='python')
+    >>> print q.get().depth
+    3
 
 
 pwiz, a model generator
