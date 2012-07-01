@@ -909,6 +909,9 @@ class R(Leaf):
     def sql_where(self):
         return self.params[0], self.params[1:]
 
+    def sql_update(self):
+        return self.params[0], self.params[1]
+
 
 def apply_model(model, item):
     """
@@ -1699,7 +1702,7 @@ class UpdateQuery(BaseQuery):
                 if field is None:
                     raise
 
-            if not isinstance(v, F):
+            if not isinstance(v, (F, R)):
                 v = field.db_value(v)
 
             sets[field.db_column] = v
@@ -1719,6 +1722,10 @@ class UpdateQuery(BaseQuery):
         for k, v in sorted(set_statement.items(), key=lambda (k, v): k):
             if isinstance(v, F):
                 value = self.parse_f(v, v.model or self.model, alias_map)
+            elif isinstance(v, R):
+                value, rparams = v.sql_update()
+                value = value % self.interpolation
+                params.append(rparams)
             else:
                 params.append(v)
                 value = self.interpolation
