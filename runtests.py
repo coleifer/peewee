@@ -29,14 +29,27 @@ if __name__ == '__main__':
     os.environ['PEEWEE_TEST_VERBOSITY'] = str(options.verbosity)
 
     import tests
-    from playhouse import tests as extras_tests, tests_apsw, tests_postgres
 
-    if options.all:
-        modules = [tests, extras_tests, tests_apsw, tests_postgres]
-    elif options.extra:
-        modules = [extras_tests, tests_apsw, tests_postgres]
+    if options.all or options.extra:
+        modules = [tests]
+        from playhouse import tests as extras_tests
+        modules.append(extras_tests)
+        try:
+            from playhouse import tests_apsw
+            modules.append(tests_apsw)
+        except ImportError:
+            print 'Unable to import apsw tests, skipping'
+
+        try:
+            from playhouse import tests_postgres
+            modules.append(tests_postgres)
+        except ImportError:
+            print 'Unable to import postgres_ext tests, skipping'
     else:
         modules = [tests]
+
+    if options.extra:
+        modules.remove(tests)
 
     results = []
     any_failures = False
