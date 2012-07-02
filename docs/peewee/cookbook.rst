@@ -104,7 +104,7 @@ Point models at an instance of :py:class:`PostgresqlDatabase`.
 
 
     class PostgresqlModel(peewee.Model):
-        """A base model that will use our MySQL database"""
+        """A base model that will use our Postgresql database"""
         class Meta:
             database = psql_db
 
