@@ -385,7 +385,8 @@ class Database(object):
             )
 
     def field_sql(self, field):
-        return '%s %s' % (self.quote_name(field.db_column), field.render_field_template())
+        rendered = field.render_field_template(self.adapter.quote_char)
+        return '%s %s' % (self.quote_name(field.db_column), rendered)
 
     def get_column_sql(self, model_class):
         return map(self.field_sql, model_class._meta.get_fields())
@@ -575,7 +576,7 @@ class MySQLDatabase(Database):
             self.quote_name(model_class._meta.db_table),
             self.quote_name(field.db_column),
             self.quote_name(new_name),
-            field.render_field_template(),
+            field.render_field_template(self.adapter.quote_char),
         )
 
     def get_indexes_for_table(self, table):
@@ -2230,10 +2231,11 @@ class Field(object):
     def get_column(self):
         return self.column_class(**self.attributes)
 
-    def render_field_template(self):
+    def render_field_template(self, quote_char=''):
         params = {
             'column': self.column.render(self.model._meta.database),
             'nullable': ternary(self.null, '', ' NOT NULL'),
+            'qc': quote_char,
         }
         params.update(self.column.attributes)
         return self.field_template % params
@@ -2385,7 +2387,7 @@ class ReverseForeignRelatedObject(object):
 
 
 class ForeignKeyField(IntegerField):
-    field_template = '%(column)s%(nullable)s REFERENCES %(to_table)s (%(to_pk)s)%(cascade)s%(extra)s'
+    field_template = '%(column)s%(nullable)s REFERENCES %(qc)s%(to_table)s%(qc)s (%(qc)s%(to_pk)s%(qc)s)%(cascade)s%(extra)s'
 
     def __init__(self, to, null=False, related_name=None, cascade=False, extra=None, *args, **kwargs):
         self.to = to
