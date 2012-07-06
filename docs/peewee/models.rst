@@ -28,7 +28,7 @@ the following:
         headline = CharField()
         content = TextField() # <-- TEXT
         pub_date = DateTimeField() # <-- DATETIME
-        blog = ForeignKeyField() # <-- INTEGER referencing the Blog table
+        blog = ForeignKeyField(Blog) # <-- INTEGER referencing the Blog table
 
 
 This is a typical example of how to specify models with peewee.  There are several
