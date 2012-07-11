@@ -2241,7 +2241,7 @@ class Field(object):
         return self.field_template % params
 
     def db_value(self, value):
-        if (self.null and value is None):
+        if value is None:
             return None
         return self.column.db_value(value)
 

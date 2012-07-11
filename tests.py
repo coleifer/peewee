@@ -66,7 +66,7 @@ class Blog(TestModel):
 class Entry(TestModel):
     pk = PrimaryKeyField()
     title = CharField(max_length=50, verbose_name='Wacky title')
-    content = TextField()
+    content = TextField(default='')
     pub_date = DateTimeField(null=True)
     blog = ForeignKeyField(Blog, cascade=True)
 
@@ -97,7 +97,7 @@ class EntryTwo(Entry):
 class User(TestModel):
     username = CharField(max_length=50)
     blog = ForeignKeyField(Blog, null=True)
-    active = BooleanField(db_index=True)
+    active = BooleanField(db_index=True, default=False)
 
     class Meta:
         db_table = 'users'
@@ -2138,7 +2138,7 @@ class SelectRelatedTestCase(BaseModelTestCase):
         # didn't select title/content/pub_date on entries, so make sure they're none
         for r in results:
             self.assertEqual(r.entry.title, None)
-            self.assertEqual(r.entry.content, None)
+            self.assertEqual(r.entry.content, '') # <-- default value
             self.assertEqual(r.entry.pub_date, None)
             self.assertFalse(r.entry.pk == None)
 
