@@ -1983,10 +1983,16 @@ def annotate_query(select_query, related_model, aggregation):
         raise ValueError('Unknown type passed in to select query: "%s"' % type(cols))
 
     # query for the related object
-    selection[related_model] = [aggregation]
+    if related_model in selection:
+        selection[related_model].append(aggregation)
+    else:
+        selection[related_model] = [aggregation]
 
     select_query.query = selection
-    return select_query.group_by(group_by)
+    if group_by == ['*']:
+        return select_query
+    else:
+        return select_query.group_by(group_by)
 
 
 class Column(object):
