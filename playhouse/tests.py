@@ -15,10 +15,10 @@ class BaseSignalModel(signals.Model):
         database = db
 
 class ModelA(BaseSignalModel):
-    a = CharField()
+    a = CharField(default='')
 
 class ModelB(BaseSignalModel):
-    b = CharField()
+    b = CharField(default='')
 
 class BaseSweepeaModel(sweepea.Model):
     class Meta:
@@ -54,7 +54,7 @@ class BaseExtModel(sqe.Model):
 
 class User(BaseExtModel):
     username = CharField()
-    password = CharField()
+    password = CharField(default='')
 
 class Post(BaseExtModel):
     user = ForeignKeyField(User)
@@ -309,7 +309,7 @@ class SignalsTestCase(unittest.TestCase):
             state.append((sender, instance.a))
 
         ModelA.get()
-        self.assertEqual(state, [(ModelA, None)])
+        self.assertEqual(state, [(ModelA, '')])
 
     def test_post_init(self):
         state = []
