@@ -5,7 +5,7 @@ test_db = peewee.Database(peewee.SqliteAdapter(), 'test_pw.db')
 
 class User(peewee.Model):
     username = peewee.CharField()
-    active = peewee.BooleanField()
+    active = peewee.BooleanField(default=False)
 
     class Meta:
         database = test_db
@@ -22,8 +22,8 @@ class Blog(peewee.Model):
 class Entry(peewee.Model):
     blog = peewee.ForeignKeyField(Blog)
     title = peewee.CharField()
-    content = peewee.TextField()
-    pub_date = peewee.DateTimeField()
+    content = peewee.TextField(default='')
+    pub_date = peewee.DateTimeField(null=True)
 
     class Meta:
         database = test_db
