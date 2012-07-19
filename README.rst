@@ -70,6 +70,9 @@ You can use python operators to create select queries::
 Learning more
 -------------
 
+the official `peewee cookbook <http://peewee.readthedocs.org/en/latest/peewee/cookbook.html>`_
+has recipes for common operations and is a good place to get started.
+
 check the `documentation <http://peewee.readthedocs.org/>`_ for more
 examples.
 
