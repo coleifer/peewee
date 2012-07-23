@@ -2387,6 +2387,9 @@ class ReverseForeignRelatedObject(object):
         self.related_model = related_model
 
     def __get__(self, instance, instance_type=None):
+        if not instance:
+            raise AttributeError('Reverse relations are only accessibly via instances of the class')
+
         query = {self.field_name: instance.get_pk()}
         qr = self.related_model.select().where(**query)
         return qr
