@@ -832,10 +832,14 @@ class ModelTests(BaseModelTestCase):
         b2 = Blog.get(title='b')
         self.assertEqual(b2.id, b.id)
 
+        b3 = Blog.get(a.id)
+        self.assertEqual(b3.id, a.id)
+
         self.assertQueriesEqual([
             ('INSERT INTO `blog` (`title`) VALUES (?)', ['a']),
             ('INSERT INTO `blog` (`title`) VALUES (?)', ['b']),
             ('SELECT `id`, `title` FROM `blog` WHERE `title` = ? LIMIT 1', ['b']),
+            ('SELECT `id`, `title` FROM `blog` WHERE `id` = ? LIMIT 1', [a.id]),
         ])
 
     def test_select_with_get(self):

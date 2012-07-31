@@ -939,6 +939,8 @@ def parseq(model, *args, **kwargs):
         apply_model(model, piece)
         if isinstance(piece, (Q, R, Node)):
             node.children.append(piece)
+        elif isinstance(piece, int):
+            kwargs[model._meta.pk_name] = piece
         else:
             raise TypeError('Unknown object: %s' % piece)
 
