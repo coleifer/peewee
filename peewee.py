@@ -2740,8 +2740,8 @@ class Model(object):
     def get(cls, *args, **kwargs):
         return cls.select().get(*args, **kwargs)
 
-    def get_pk_dict(self):
-        return {self._meta.pk_name: self.get_pk()}
+    def get_pk_name(self):
+        return self._meta.pk_name
 
     def get_pk(self):
         return getattr(self, self._meta.pk_name, None)
@@ -2749,6 +2749,9 @@ class Model(object):
     def set_pk(self, pk):
         pk_field = self._meta.fields[self._meta.pk_name]
         setattr(self, self._meta.pk_name, pk_field.python_value(pk))
+
+    def get_pk_dict(self):
+        return {self.get_pk_name(): self.get_pk()}
 
     def save(self, force_insert=False):
         field_dict = self.get_field_dict()
