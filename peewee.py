@@ -409,18 +409,21 @@ class Database(object):
     def create_table(self, model_class, safe=False, extra=''):
         self.execute(self.create_table_query(model_class, safe, extra))
 
-    def create_index_query(self, model_class, field_name, unique, framing=None):
+    def create_index_query(self, model_class, field_names, unique, framing=None):
         framing = framing or 'CREATE %(unique)s INDEX %(index)s ON %(table)s(%(field)s);'
 
-        if field_name not in model_class._meta.fields:
-            raise AttributeError(
-                'Field %s not on model %s' % (field_name, model_class)
-            )
-
-        field_obj = model_class._meta.fields[field_name]
+        columns = []
+        for field_name in field_names:
+            if field_name not in model_class._meta.fields:
+                raise AttributeError(
+                    'Field %s not on model %s' % (field_name, model_class)
+                )
+            else:
+                field_obj = model_class._meta.fields[field_name]
+                columns.append(field_obj.db_column)
 
         db_table = model_class._meta.db_table
-        index_name = self.quote_name('%s_%s' % (db_table, field_obj.db_column))
+        index_name = self.quote_name('%s_%s' % (db_table, '_'.join(columns)))
 
         unique_expr = ternary(unique, 'UNIQUE', '')
 
@@ -428,11 +431,13 @@ class Database(object):
             'unique': unique_expr,
             'index': index_name,
             'table': self.quote_name(db_table),
-            'field': self.quote_name(field_obj.db_column),
+            'field': ','.join(map(self.quote_name, columns)),
         }
 
-    def create_index(self, model_class, field_name, unique=False):
-        self.execute(self.create_index_query(model_class, field_name, unique))
+    def create_index(self, model_class, field_names, unique=False):
+        if isinstance(field_names, basestring):
+            field_names = (field_names,)
+        self.execute(self.create_index_query(model_class, field_names, unique))
 
     def create_foreign_key(self, model_class, field):
         return self.create_index(model_class, field.name, field.unique)
