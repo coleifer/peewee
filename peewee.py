@@ -2740,6 +2740,9 @@ class Model(object):
     def get(cls, *args, **kwargs):
         return cls.select().get(*args, **kwargs)
 
+    def get_pk_dict(self):
+        return {self._meta.pk_name: self.get_pk()}
+
     def get_pk(self):
         return getattr(self, self._meta.pk_name, None)
 

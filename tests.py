@@ -1151,6 +1151,11 @@ class ModelTests(BaseModelTestCase):
         for e in Entry.raw('select * from entry'):
             self.assertTrue(e._prepared)
 
+    def test_get_pks(self):
+        b = self.create_blog(title='b1')
+        self.assertEqual(b.get_pk_dict(), {'id': b.get_pk()})
+        self.assertFalse(b.get_pk_dict()['id'] == None)
+
 
 class UnicodeFieldTests(BaseModelTestCase):
     def get_common_objects(self):
