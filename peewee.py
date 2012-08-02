@@ -412,6 +412,9 @@ class Database(object):
     def create_index_query(self, model_class, field_names, unique, framing=None):
         framing = framing or 'CREATE %(unique)s INDEX %(index)s ON %(table)s(%(field)s);'
 
+        if isinstance(field_names, basestring):
+            field_names = (field_names,)
+
         columns = []
         for field_name in field_names:
             if field_name not in model_class._meta.fields:
@@ -435,8 +438,6 @@ class Database(object):
         }
 
     def create_index(self, model_class, field_names, unique=False):
-        if isinstance(field_names, basestring):
-            field_names = (field_names,)
         self.execute(self.create_index_query(model_class, field_names, unique))
 
     def create_foreign_key(self, model_class, field):
