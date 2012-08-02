@@ -2479,6 +2479,7 @@ database = SqliteDatabase(DATABASE_NAME)
 
 
 class BaseModelOptions(object):
+    indexes = None
     ordering = None
     pk_sequence = None
 
@@ -2551,7 +2552,7 @@ class BaseModelOptions(object):
 
 
 class BaseModel(type):
-    inheritable_options = ['database', 'ordering', 'pk_sequence']
+    inheritable_options = ['database', 'indexes', 'ordering', 'pk_sequence']
 
     def __new__(cls, name, bases, attrs):
         cls = super(BaseModel, cls).__new__(cls, name, bases, attrs)
@@ -2684,13 +2685,18 @@ class Model(object):
         if fail_silently and cls.table_exists():
             return
 
-        cls._meta.database.create_table(cls, extra=extra)
+        db = cls._meta.database
+        db.create_table(cls, extra=extra)
 
         for field_name, field_obj in cls._meta.fields.items():
             if isinstance(field_obj, ForeignKeyField):
-                cls._meta.database.create_foreign_key(cls, field_obj)
+                db.create_foreign_key(cls, field_obj)
             elif field_obj.db_index or field_obj.unique:
-                cls._meta.database.create_index(cls, field_obj.name, field_obj.unique)
+                db.create_index(cls, field_obj.name, field_obj.unique)
+
+        if cls._meta.indexes:
+            for fields, unique in cls._meta.indexes:
+                db.create_index(cls, fields, unique)
 
     @classmethod
     def drop_table(cls, fail_silently=False):
