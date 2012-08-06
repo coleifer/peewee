@@ -35,7 +35,7 @@ except ImportError:
 
 __all__ = [
     'ImproperlyConfigured', 'SqliteDatabase', 'MySQLDatabase', 'PostgresqlDatabase',
-    'asc', 'desc', 'Count', 'Max', 'Min', 'Sum', 'Q', 'Field', 'CharField', 'TextField',
+    'asc', 'desc', 'Count', 'Max', 'Min', 'Sum', 'Avg', 'Q', 'Field', 'CharField', 'TextField',
     'DateTimeField', 'BooleanField', 'DecimalField', 'FloatField', 'IntegerField',
     'PrimaryKeyField', 'ForeignKeyField', 'DoubleField', 'BigIntegerField', 'Model',
     'filter_query', 'annotate_query', 'F', 'R', 'DateField', 'TimeField',
@@ -780,6 +780,9 @@ def Min(f, alias='min'):
 
 def Sum(f, alias='sum'):
     return ('SUM', f, alias)
+
+def Avg(f, alias='avg'):
+    return ('AVG', f, alias)
 
 # decorator for query methods to indicate that they change the state of the
 # underlying data structures
