@@ -152,6 +152,7 @@ class SqliteAdapter(BaseAdapter):
         'is': 'IS %s',
         'isnull': 'IS NULL',
         'between': 'BETWEEN %s AND %s',
+        'ieq': "LIKE %s ESCAPE '\\'", # case-insensitive equality
         'icontains': "LIKE %s ESCAPE '\\'", # surround param with %'s
         'contains': "GLOB %s", # surround param with *'s
         'istartswith': "LIKE %s ESCAPE '\\'",
@@ -188,6 +189,7 @@ class PostgresqlAdapter(BaseAdapter):
         'is': 'IS %s',
         'isnull': 'IS NULL',
         'between': 'BETWEEN %s AND %s',
+        'ieq': 'ILIKE %s', # case-insensitive equality
         'icontains': 'ILIKE %s', # surround param with %'s
         'contains': 'LIKE %s', # surround param with *'s
         'istartswith': 'ILIKE %s',
@@ -236,6 +238,7 @@ class MySQLAdapter(BaseAdapter):
         'is': 'IS %s',
         'isnull': 'IS NULL',
         'between': 'BETWEEN %s AND %s',
+        'ieq': 'LIKE %s', # case-insensitive equality
         'icontains': 'LIKE %s', # surround param with %'s
         'contains': 'LIKE BINARY %s', # surround param with *'s
         'istartswith': 'LIKE %s',

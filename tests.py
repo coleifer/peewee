@@ -2792,6 +2792,10 @@ class FieldTypeTests(BaseModelTestCase):
         self.assertSQEqual(Entry.select().where(title__in=['b1', 'b3']), ['b1', 'b3'])
         self.assertSQEqual(Entry.select().where(title__in=[]), [])
 
+        self.assertSQEqual(Entry.select().where(title__ieq='B1'), ['b1'])
+        self.assertSQEqual(Entry.select().where(title__ieq='b3'), ['b3'])
+        self.assertSQEqual(Entry.select().where(title__ieq='B'), [])
+
     def test_lookups_datefield(self):
         self.create_common()
 
