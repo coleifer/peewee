@@ -321,6 +321,9 @@ class Database(object):
             self.connect()
         return self.__local.conn
 
+    def is_closed(self):
+        return getattr(self.__local, 'closed', True)
+
     def get_cursor(self):
         return self.get_conn().cursor()
 

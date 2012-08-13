@@ -3652,6 +3652,16 @@ class TransactionTestCase(BaseModelTestCase):
         self.assertEqual(Entry.select().count(), 2)
 
 
+class ConnectionStateTestCase(BasePeeweeTestCase):
+    def test_connection_state(self):
+        conn = test_db.get_conn()
+        self.assertFalse(test_db.is_closed())
+        test_db.close()
+        self.assertTrue(test_db.is_closed())
+        conn = test_db.get_conn()
+        self.assertFalse(test_db.is_closed())
+
+
 if test_db.adapter.for_update_support:
     class ForUpdateTestCase(BaseModelTestCase):
         def tearDown(self):
