@@ -186,9 +186,30 @@ There are several options you can specify as ``Meta`` attributes:
 
 * database: specifies a :py:class:`Database` instance to use with this model
 * db_table: the name of the database table this model maps to
+* indexes: a list of fields to index
 * ordering: a sequence of columns to use as the default ordering for this model
 * pk_sequence: name of sequence to create for the primary key (peewee will autogenerate one
     if not provided and the backend supports sequences).
+
+Specifying indexes:
+
+.. code-block:: python
+
+    class Transaction(Model):
+        from_acct = CharField()
+        to_acct = CharField()
+        amount = DecimalField()
+        date = DateTimeField()
+
+        class Meta:
+            indexes = (
+                # create a unique on from/to/date
+                (('from_acct', 'to_acct', 'date'), True),
+
+                # create a non-unique on from/to
+                (('from_acct', 'to_acct'), False),
+            )
+
 
 Example of ordering:
 
