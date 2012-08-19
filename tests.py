@@ -2497,7 +2497,7 @@ class AnnotateQueryTests(BaseModelTestCase):
     def test_annotate_multiple(self):
         annotated = Blog.select().annotate(Entry).annotate(Entry, Max('pub_date', 'max_pub'))
         self.assertSQLEqual(annotated.sql(), (
-            'SELECT t1."id", t1."title", COUNT(t2.`pk`) AS count, MAX(t2."pub_date") AS max_pub FROM "blog" AS t1 INNER JOIN "entry" AS t2 ON t1."id" = t2."blog_id" GROUP BY t1."id", t1."title"', []
+            'SELECT t1.`id`, t1.`title`, COUNT(t2.`pk`) AS count, MAX(t2.`pub_date`) AS max_pub FROM `blog` AS t1 INNER JOIN `entry` AS t2 ON t1.`id` = t2.`blog_id` GROUP BY t1.`id`, t1.`title`', []
         ))
         # No leftover asterisks
         self.assertEqual(annotated.sql()[0].count('*'), 0)
