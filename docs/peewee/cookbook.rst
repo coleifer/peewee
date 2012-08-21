@@ -747,3 +747,16 @@ pwiz will generate code for:
 * models that were introspected from the database tables
 
 The generated code is written to stdout.
+
+
+Schema migrations
+-----------------
+
+Currently peewee does not have support for automatic schema migrations. Peewee
+does, however, come with a few helper functions:
+
+* :py:meth:`Database.add_column_sql`
+* :py:meth:`Database.rename_column_sql`
+* :py:meth:`Database.drop_column_sql`
+
+Honestly, your best bet is to script any migrations and use plain ol' SQL.

@@ -316,10 +316,10 @@ Database and its subclasses
         :param model_class: :py:class:`Model` class to create table for
         :param safe: if ``True``, query will add a ``IF NOT EXISTS`` clause
 
-    .. py:method:: create_index(model_class, field_name[, unique=False])
+    .. py:method:: create_index(model_class, field_names[, unique=False])
 
         :param model_class: :py:class:`Model` table on which to create index
-        :param field_name: name of field to create index on
+        :param field_name: name of field(s) to create index on (a string or list)
         :param unique: whether the index should enforce uniqueness
 
     .. py:method:: create_foreign_key(model_class, field)
@@ -336,6 +336,37 @@ Database and its subclasses
             Cascading drop tables are not supported at this time, so if a constraint
             exists that prevents a table being dropped, you will need to handle
             that in application logic.
+
+    .. py:method:: add_column_sql(model_class, field_name)
+
+        :param model_class: :py:class:`Model` which we are adding a column to
+        :param string field_name: the name of the field we are adding
+
+        :rtype: SQL suitable for adding the column
+
+        .. note::
+            Adding a non-null column to a table with rows may cause an IntegrityError.
+
+    .. py:method:: rename_column_sql(model_class, field_name, new_name)
+
+        :param model_class: :py:class:`Model` instance
+        :param string field_name: the current name of the field
+        :param string new_name: new name for the field
+
+        :rtype: SQL suitable for renaming the column
+
+        .. note::
+            There must be a field instance named ``field_name`` at the time this SQL
+            is generated.
+
+        .. note:: SQLite does not support renaming columns
+
+    .. py:method:: drop_column_sql(model_class, field_name)
+
+        :param model_class: :py:class:`Model` instance
+        :param string field_name: the name of the field to drop
+
+        .. note:: SQLite does not support dropping columns
 
     .. py:method:: create_sequence(sequence_name)
 
