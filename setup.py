@@ -7,7 +7,7 @@ f.close()
 
 setup(
     name='peewee',
-    version="0.9.9",
+    version="1.0.0",
     description='a little orm',
     long_description=readme,
     author='Charles Leifer',
@@ -16,8 +16,7 @@ setup(
     packages=['playhouse'],
     py_modules=['peewee', 'pwiz'],
     classifiers=[
-        'Development Status :: 4 - Beta',
-        'Environment :: Web Environment',
+        'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
