@@ -169,6 +169,34 @@ To query what classes a given student is enrolled in:
     for course in Course.filter(studentcourse_set__student__name='da vinci'):
         print course.name
 
+To efficiently iterate over a many-to-many relation, i.e., list all students
+and their respective courses, we will query the "through" model ``StudentCourse``
+and "precompute" the Student and Course:
+
+.. code-block:: python
+
+    query = StudentCourse.select({
+        Student: ['*'],
+        StudentCourse: ['*'],
+        Course: ['*'],
+    }).join(Course).switch(StudentCourse).join(Student).order_by('name')
+
+To print a list of students and their courses you might do the following:
+
+.. code-block:: python
+
+    last = None
+    for student_course in query:
+        student = student_course.student
+        if student != last:
+            last = student
+            print 'Student: %s' % student.name
+        print '    - %s' % student_course.course.name
+
+Since we selected all fields from ``Student`` and ``Course`` in the ``select``
+clause of the query, these foreign key traversals are "free" and we've done the
+whole iteration with just 1 query.
+
 
 .. _non_int_pks:
 
