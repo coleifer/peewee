@@ -95,6 +95,7 @@ Get tweets by staff or superusers (assumes FK relationship):
             (User.is_staff==True) | (User.is_superuser==True)
         )
 
+.. _where_clause:
 
 Where clause
 ------------
@@ -198,6 +199,9 @@ lookup types are available in peewee:
 ``__is``:
     x IS y, used for testing against NULL values
 
+``__isnull``:
+    boolean indicating whether or not given column is NULL
+
 ``__contains``:
     case-sensitive check for substring
 
@@ -209,6 +213,9 @@ lookup types are available in peewee:
 
 ``__istartswith``:
     case-insensitive check for string prefix
+
+``__between``:
+    x is between two values (tuple or list)
 
 ``__in``:
     x IN y, where y is either a list of values or a :py:class:`SelectQuery`

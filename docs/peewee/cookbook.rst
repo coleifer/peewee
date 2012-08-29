@@ -142,15 +142,15 @@ Multi-threaded applications
 
 Some database engines may not allow a connection to be shared across threads, notably
 sqlite.  If you would like peewee to maintain a single connection per-thread,
-instantiate your database with ``threadlocals=True``:
+instantiate your database with ``threadlocals=True`` (*recommended*):
 
 .. code-block:: python
 
     concurrent_db = SqliteDatabase('stats.db', threadlocals=True)
 
 The above implementation stores connection state in a thread local and will only
-use that connection for a given thread.  Sqlite can also share a connection across
-threads natively, so if you would prefer to use sqlite's native support:
+use that connection for a given thread.  Pysqlite can share a connection across
+threads, so if you would prefer to reuse a connection in multiple threads:
 
 .. code-block:: python
 
@@ -218,6 +218,8 @@ save it:
     >>> blog.save()
     >>> blog.id
     2
+
+See also :py:meth:`Model.save`, :py:meth:`Model.insert` and :py:class:`InsertQuery`
 
 
 Updating existing records
@@ -720,6 +722,78 @@ off when instantiating your database:
 
     Blog.create(name='foo blog')
     db.commit()
+
+
+.. _non_integer_primary_keys:
+
+Non-integer Primary Keys and other Tricks
+-----------------------------------------
+
+Non-integer primary keys
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you would like use a non-integer primary key (which I generally don't recommend),
+you can override the default ``column_class`` of the :py:class:`PrimaryKeyField`:
+
+.. code-block:: python
+
+    from peewee import Model, PrimaryKeyField, VarCharColumn
+
+    class UUIDModel(Model):
+        # explicitly declare a primary key field, and specify the class to use
+        id = PrimaryKeyField(column_class=VarCharColumn)
+
+
+    inst = UUIDModel(id=str(uuid.uuid4()))
+    inst.save() # <-- WRONG!!  this will try to do an update
+
+    inst.save(force_insert=True) # <-- CORRECT
+
+    # to update the instance after it has been saved once
+    inst.save()
+
+.. note::
+    Any foreign keys to a model with a non-integer primary key will have the
+    ``ForeignKeyField`` use the same underlying column type as the primary key
+    they are related to.
+
+See full documentation on :ref:`non-integer primary keys <non_int_pks>`.
+
+
+Bulk loading data or manually specifying primary keys
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Sometimes you do not want the database to automatically generate a primary key,
+for instance when bulk loading relational data.  To handle this on a "one-off"
+basis, you can simply tell peewee to turn off ``auto_increment`` during the
+import:
+
+.. code-block:: python
+
+    data = load_user_csv() # load up a bunch of data
+
+    User._meta.auto_increment = False # turn off auto incrementing IDs
+    with db.transaction():
+        for row in data:
+            u = User(id=row[0], username=row[1], email=row[2])
+            u.save(force_insert=True) # <-- force peewee to insert row
+
+    User._meta.auto_increment = True
+
+If you *always* want to have control over the primary key, you can use a different
+``column_class`` with the :py:class:`PrimaryKeyField`:
+
+.. code-block:: python
+
+    class User(BaseModel):
+        id = PrimaryKeyField(column_class=IntegerColumn)
+        username = CharField()
+
+    >>> u = User.create(id=999, username='somebody')
+    >>> u.id
+    999
+    >>> User.get(username='somebody').id
+    999
 
 
 Introspecting databases
