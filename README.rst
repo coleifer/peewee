@@ -82,6 +82,12 @@ or post to the mailing list, http://groups.google.com/group/peewee-orm
 lastly, peewee runs on python 2.5 or greater, though there is currently no
 support for python3
 
+Still want more info?
+---------------------
+
+.. image:: http://media.charlesleifer.com/blog/photos/wat.jpg
+
+
 
 Why?
 ----
