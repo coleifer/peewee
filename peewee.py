@@ -1805,7 +1805,9 @@ class DeleteQuery(BaseQuery):
 
 class InsertQuery(BaseQuery):
     def __init__(self, _model, **kwargs):
-        self.insert_query = kwargs
+        query = _model._meta.get_default_dict()
+        query.update(kwargs)
+        self.insert_query = query
         super(InsertQuery, self).__init__(_model)
 
     def parse_insert(self):
@@ -2511,6 +2513,15 @@ class BaseModelOptions(object):
             if field.default is not None:
                 self.defaults[field.name] = field.default
 
+    def get_default_dict(self):
+        dd = {}
+        for field_name, default in self.defaults.items():
+            if callable(default):
+                dd[field_name] = default()
+            else:
+                dd[field_name] = default
+        return dd
+
     def get_sorted_fields(self):
         return sorted(self.fields.items(), key=lambda (k,v): (k == self.pk_name and 1 or 2, v._order))
 
@@ -2654,11 +2665,8 @@ class Model(object):
             setattr(self, k, v)
 
     def initialize_defaults(self):
-        for field_name, default in self._meta.defaults.items():
-            if callable(default):
-                val = default()
-            else:
-                val = default
+        dd = self._meta.get_default_dict()
+        for field_name, val in dd.items():
             setattr(self, field_name, val)
 
     def prepared(self):

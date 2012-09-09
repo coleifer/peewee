@@ -654,6 +654,13 @@ class ModelTestCase(BaseModelTestCase):
         self.assertSQLEqual(iq.sql(), ('INSERT INTO `blog` (`title`) VALUES (?)', ['b']))
         self.assertEqual(iq.execute(), 2)
 
+        # test inserting with defaults, references #107
+        iq = User.insert(username='foo')
+        self.assertSQLEqual(iq.sql(), ('INSERT INTO `users` (`active`,`username`) VALUES (?,?)', [False, 'foo']))
+
+        iq = InsertQuery(User, username='foo')
+        self.assertSQLEqual(iq.sql(), ('INSERT INTO `users` (`active`,`username`) VALUES (?,?)', [False, 'foo']))
+
     def test_update(self):
         iq = InsertQuery(Blog, title='a').execute()
 
