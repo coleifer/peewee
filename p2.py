@@ -6,10 +6,10 @@ from copy import deepcopy
 class Database(object):
     def __init__(self, name):
         self.name = name
-    
+
     def connect(self):
         pass
-    
+
     def close(self):
         pass
 
@@ -176,7 +176,7 @@ class FieldDescriptor(object):
 class Field(Expr):
     _field_counter = 0
     _order = 0
-    
+
     def __init__(self, null=False, index=False, unique=False, verbose_name=None,
                  help_text=None, db_column=None, default=None, choices=None, *args, **kwargs):
         self.null = null
@@ -198,10 +198,10 @@ class Field(Expr):
         self.name = name
         self.model_class = model_class
         setattr(model_class, name, FieldDescriptor(self))
-    
+
     def db_value(self, value):
         return value
-    
+
     def python_value(self, value):
         return value
 
@@ -231,7 +231,7 @@ class RelationDescriptor(FieldDescriptor):
                 instance._obj_cache[self.att_name] = rel_obj
             return instance._obj_cache[self.att_name]
         return rel_id
-    
+
     def __get__(self, instance, instance_type=None):
         if instance:
             return self.get_object_or_id(instance)
@@ -265,7 +265,7 @@ class ForeignKeyField(Field):
         self.extra = extra
 
         super(ForeignKeyField, self).__init__(null=null, *args, **kwargs)
-    
+
     def add_to_class(self, model_class, name):
         self.name = name
         self.model_class = model_class
@@ -279,7 +279,7 @@ class ForeignKeyField(Field):
 
         model_class._meta.rel[self.name] = self
         self.rel_model._meta.reverse_rel[self.name] = self
-    
+
     def db_value(self, value):
         if isinstance(value, self.rel_model):
             value = value.get_id()
@@ -633,7 +633,7 @@ class ModelOptions(object):
         self.reverse_rel = {}
 
         self.db_table = None
-    
+
     def get_sorted_fields(self):
         return sorted(self.fields.items(), key=lambda (k,v): (v == self.id_field and 1 or 2, v._order))
 
@@ -667,12 +667,12 @@ class BaseModel(type):
             for (k, v) in b.__dict__.items():
                 if isinstance(v, FieldDescriptor) and k not in attrs:
                     attrs[k] = deepcopy(v.field)
-        
+
         # initialize the new class and set the magic attributes
         cls = super(BaseModel, cls).__new__(cls, name, bases, attrs)
         cls._meta = ModelOptions(cls)
         cls._data = None
-        
+
         id_field = None
 
         # replace the fields with field descriptors
@@ -684,14 +684,14 @@ class BaseModel(type):
                     cls._meta.indexes.append(attr.name)
             if isinstance(attr, PrimaryKeyField):
                 id_field = attr
-        
+
         if not id_field:
             id_field = PrimaryKeyField()
             id_field.add_to_class(cls, 'id')
-        
-        cls._meta.id_field = id_field.name   
+
+        cls._meta.id_field = id_field.name
         cls._meta.db_table = re.sub('[^\w]+', '_', cls.__name__.lower())
-        
+
         return cls
 
 
