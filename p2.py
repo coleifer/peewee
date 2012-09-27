@@ -251,6 +251,9 @@ class QueryCompiler(object):
     def parse_where(self, q, alias_map):
         pass
 
+    def parse_joins(self, j, alias_map):
+        pass
+
     def parse_select(self, s, alias_map):
         parsed = []
         data = []
@@ -261,6 +264,9 @@ class QueryCompiler(object):
         return ', '.join(parsed), data
 
     def parse_update(self, u, alias_map):
+        pass
+
+    def calculate_alias_map(self, query):
         pass
 
 
@@ -289,9 +295,6 @@ class Query(object):
         if self._where is not None:
             query._where = self._where.clone()
         return query
-
-    def get_compiler(self):
-        return QueryCompiler()
 
     @returns_clone
     def where(self, q_or_node):
@@ -325,7 +328,14 @@ class SelectQuery(Query):
         super(SelectQuery, self).__init__(model_class)
 
     def sql(self):
-        compiler = self.get_compiler()
+        compiler = QueryCompiler()
+        """
+        - calculate alias map
+        - select/update
+        - joins
+        - where
+        - group by / having
+        """
         return ''
 
 
