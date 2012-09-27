@@ -384,9 +384,9 @@ class QueryCompiler(object):
             query = 'NOT (%s)' % query
         return query, data
 
-    def parse_where(self, q, alias_map):
-        if q._where is not None:
-            return self.parse_node(q._where, alias_map)
+    def parse_query_node(self, qnode, alias_map):
+        if qnode is not None:
+            return self.parse_node(qnode, alias_map)
         return '', []
 
     def parse_joins(self, joins, model_class, alias_map):
@@ -433,9 +433,6 @@ class QueryCompiler(object):
             data.extend(vars)
         return ', '.join(parsed), data
 
-    def parse_update(self, u, alias_map):
-        pass
-
     def calculate_alias_map(self, query, start=1):
         alias_map = {query.model_class: 't%s' % start}
         for model, joins in query._joins.items():
@@ -470,7 +467,7 @@ class QueryCompiler(object):
         if joins:
             parts.append(' '.join(joins))
 
-        where, w_params = self.parse_where(query, alias_map)
+        where, w_params = self.parse_query_node(query._where, alias_map)
         if where:
             parts.append('WHERE %s' % where)
             params.extend(w_params)
@@ -478,10 +475,10 @@ class QueryCompiler(object):
         if query._group_by:
             group_by, g_params = self.parse_expr_list(query._group_by, alias_map)
             parts.append('GROUP BY %s' % group_by)
-            params.extend(w_params)
+            params.extend(g_params)
 
         if query._having:
-            having, h_params = self.parse_where(query, alias_map)
+            having, h_params = self.parse_query_node(query._having, alias_map)
             parts.append('HAVING %s' % having)
             params.extend(h_params)
 
@@ -491,6 +488,40 @@ class QueryCompiler(object):
             parts.append('OFFSET %s' % query._offset)
 
         return ' '.join(parts), params
+
+    def parse_update_query(self, query):
+        '''
+        query is {
+            field1: 'val1',
+            field2: field2 + 1,
+            etc
+        }
+        '''
+        model = query.model_class
+
+        parts = ['UPDATE %s SET' % self.quote(model._meta.db_table)]
+        params = []
+        sets = []
+
+        for field, expr in query._update.items():
+            field_str, _ = self.parse_expr(field)
+            val_str, val_params = self.parse_expr(expr)
+            sets.append('%s=%s' % (field_str, val_str))
+            params.extend(val_params)
+
+        parts.append(', '.join(sets))
+
+        where, w_params = self.parse_query_node(query._where, None)
+        if where:
+            parts.append('WHERE %s' % where)
+            params.extend(w_params)
+        return ' '.join(parts), params
+
+    def parse_insert_query(self, query):
+        pass
+
+    def parse_delete_query(self, query):
+        pass
 
 
 def returns_clone(func):
@@ -575,10 +606,10 @@ class SelectQuery(Query):
     def group_by(self, *args):
         grouping = []
         for arg in args:
-            if isinstance(arg, Model):
-                grouping.extend(arg._meta.get_fields())
-            else:
+            if isinstance(arg, Field):
                 grouping.append(arg)
+            elif issubclass(arg, Model):
+                grouping.extend(arg._meta.get_fields())
         self._group_by = grouping
 
     @returns_clone
@@ -599,10 +630,52 @@ class SelectQuery(Query):
     def distinct(self, is_distinct=True):
         self._distinct = is_distinct
 
-    def sql(self):
-        compiler = QueryCompiler()
+    def sql(self, compiler):
         return compiler.parse_select_query(self)
 
+def not_allowed(fn):
+    def inner(self, *args, **kwargs):
+        raise NotImplementedError('%s is not allowed on %s instances' % (
+            fn, type(self).__name__,
+        ))
+    return inner
+
+class UpdateQuery(Query):
+    def __init__(self, model_class, update=None):
+        self._update = update
+        super(UpdateQuery, self).__init__(model_class)
+
+    def clone(self):
+        query = super(UpdateQuery, self).clone()
+        query._update = dict(self._update)
+        return query
+
+    join = not_allowed('joining')
+
+    def sql(self, compiler):
+        return compiler.parse_update_query(self)
+
+class InsertQuery(Query):
+    def __init__(self, model_class, insert=None):
+        self._insert = insert
+        super(InsertQuery, self).__init__(model_class)
+
+    def clone(self):
+        query = super(InsertQuery, self).clone()
+        query._insert = dict(self._insert)
+        return query
+
+    join = not_allowed('joining')
+    where = not_allowed('where clause')
+
+    def sql(self, compiler):
+        return compiler.parse_insert_query(self)
+
+class DeleteQuery(Query):
+    join = not_allowed('joining')
+
+    def sql(self, compiler):
+        return compiler.parse_delete_query(self)
 
 """
 WHERE examples:
@@ -721,12 +794,12 @@ if __name__ == '__main__':
     q = q.where((Blog.title == 'alpha') | (Blog.title == 'bravo'))
     q = q.where(Blog.votes - 10 == Blog.pub_date)
     print qc.parse_node(q._where)
-    print q.sql()
+    print q.sql(qc)
 
     q = SelectQuery(Entry)
     q = q.join(Blog)
     q = q.where((Entry.headline=='headline') | (Blog.title == 'titttle'))
-    print q.sql()
+    print q.sql(qc)
 
     class A(Model):
         a_field = Field()
@@ -743,7 +816,7 @@ if __name__ == '__main__':
     q = SelectQuery(C).join(B).join(A).join(B2).where(
         (A.a_field == 'a') | (B.b_field == 'b')
     )
-    print q.sql()
+    print q.sql(qc)
 
     q = SelectQuery(A).join(B).switch(A)
     q = q.join(B2)
@@ -751,7 +824,14 @@ if __name__ == '__main__':
     q = q.join(C).where(
         (A.a_field=='a') | (B2.b2_field=='bbb222')
     )
-    print q.sql()
+    q = q.limit(10).offset(100)
+    print q.sql(qc)
+
+    q = q.group_by(B).having((B.b_field > 'bfasd'))
+    print q.sql(qc)
+
+    q = UpdateQuery(B, {B.b_field: 'bz', B.a: 'a'}).where(B.id > 3)
+    print q.sql(qc)
     #q = SelectQuery(None)
     #q = q.where(fn.SUBSTR(fn.LOWER(f1), 0, 1) == 'b')
     #print qc.parse_node(q._where)
