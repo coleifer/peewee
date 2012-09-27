@@ -28,6 +28,13 @@ OP_ISTARTSWITH = 12
 
 SCALAR = 99
 
+JOIN_INNER = 1
+JOIN_LEFT_OUTER = 2
+JOIN_FULL = 3
+
+
+Join = namedtuple('Join', ('model_class', 'join_type', 'column'))
+
 
 class Node(object):
     def __init__(self, connector, children=None, negated=False):
@@ -144,7 +151,12 @@ class BinaryExpr(Expr):
 class Field(Expr):
     def __init__(self, name):
         self.name = name
+        self.model_class = None
         super(Field, self).__init__()
+
+    def add_to_class(self, model_class, name):
+        self.model_class = model_class
+        self.name = name
 
 
 class Func(Expr):
@@ -189,6 +201,12 @@ class QueryCompiler(object):
         OP_XOR: '^',
     }
 
+    join_map = {
+        JOIN_INNER: 'INNER',
+        JOIN_LEFT_OUTER: 'LEFT OUTER',
+        JOIN_FULL: 'FULL',
+    }
+
     def __init__(self, quote_char='"', interpolation='?'):
         self.quote_char = quote_char
         self.interpolation = interpolation
@@ -201,42 +219,44 @@ class QueryCompiler(object):
             expr_str = ' '.join((expr_str, 'as', expr.alias))
         return expr_str
 
-    def parse_expr(self, expr):
+    def parse_expr(self, expr, alias_map=None):
         if isinstance(expr, BinaryExpr):
-            lhs, lparams = self.parse_expr(expr.lhs)
-            rhs, rparams = self.parse_expr(expr.rhs)
+            lhs, lparams = self.parse_expr(expr.lhs, alias_map)
+            rhs, rparams = self.parse_expr(expr.rhs, alias_map)
             expr_str = '(%s %s %s)' % (lhs, self.expr_op_map[expr.op], rhs)
             return self._add_alias(expr_str, expr), lparams + rparams
         if isinstance(expr, Field):
             expr_str = self.quote(expr.name)
+            if alias_map and expr.model_class in alias_map:
+                expr_str = '.'.join((alias_map[expr.model_class], expr_str))
             return self._add_alias(expr_str, expr), []
         elif isinstance(expr, Func):
             scalars = []
             exprs = []
             for p in expr.params:
-                parsed, params = self.parse_expr(p)
+                parsed, params = self.parse_expr(p, alias_map)
                 exprs.append(parsed)
                 scalars.extend(params)
             expr_str = '%s(%s)' % (expr.fn_name, ', '.join(exprs))
             return self._add_alias(expr_str, expr), scalars
         return self.interpolation, [expr]
 
-    def parse_q(self, q):
-        lhs_expr, lparams = self.parse_expr(q.lhs)
-        rhs_expr, rparams = self.parse_expr(q.rhs)
+    def parse_q(self, q, alias_map=None):
+        lhs_expr, lparams = self.parse_expr(q.lhs, alias_map)
+        rhs_expr, rparams = self.parse_expr(q.rhs, alias_map)
         not_expr = q.negated and 'NOT ' or ''
         return '%s%s %s %s' % (not_expr, lhs_expr, self.q_op_map[q.op], rhs_expr), lparams + rparams
 
-    def parse_node(self, n):
+    def parse_node(self, n, alias_map=None):
         query = []
         data = []
         for child in n.children:
             if isinstance(child, Node):
-                parsed, child_data = self.parse_node(child)
+                parsed, child_data = self.parse_node(child, alias_map)
                 if parsed:
                     query.append('(%s)' % parsed)
             elif isinstance(child, Q):
-                parsed, child_data = self.parse_q(child)
+                parsed, child_data = self.parse_q(child, alias_map)
                 query.append(parsed)
             data.extend(child_data)
         if n.connector == OP_AND:
@@ -251,14 +271,47 @@ class QueryCompiler(object):
     def parse_where(self, q, alias_map):
         pass
 
-    def parse_joins(self, j, alias_map):
-        pass
+    def parse_joins(self, joins, model_class, alias_map):
+        parsed = []
+
+        def _traverse(curr):
+            if curr not in joins:
+                return
+            for i, join in enumerate(joins[curr]):
+                from_model = curr
+                to_model = join.model_class
+
+                # figure out relationship
+                #field = from_model._meta.get_related_field_for_model(model, on)
+                #if field:
+                #    left_field = field.db_column
+                #    right_field = model._meta.pk_col
+                #else:
+                #    field = from_model._meta.get_reverse_related_field_for_model(model, on)
+                #    left_field = from_model._meta.pk_col
+                #    right_field = field.db_column
+
+                join_type = join.join_type or JOIN_INNER
+                lhs = '%s.%s' % (alias_map[from_model], self.quote(left_field))
+                rhs = '%s.%s' % (alias_map[to_model], self.quote(right_field))
+
+                parsed.append('%s JOIN %s AS %s ON %s = %s' % (
+                    self.join_map[join_type],
+                    self.quote(to_model._meta.db_table),
+                    alias_map[to_model],
+                    lhs,
+                    rhs,
+                ))
+
+                _traverse(to_model)
+        _traverse(model_class)
+        return parsed
 
     def parse_select(self, s, alias_map):
         parsed = []
         data = []
         for expr in s:
-            expr_str, vars = self.parse_expr(expr)
+            expr_str, vars = self.parse_expr(expr, alias_map)
             parsed.append(expr_str)
             data.extend(vars)
         return ', '.join(parsed), data
@@ -266,8 +319,30 @@ class QueryCompiler(object):
     def parse_update(self, u, alias_map):
         pass
 
-    def calculate_alias_map(self, query):
-        pass
+    def calculate_alias_map(self, query, start=1):
+        alias_map = {query.model_class: 't%s' % start}
+        for model, joins in query._joins.items():
+            if model not in alias_map:
+                start += 1
+                alias_map[model] = 't%s' % start
+            for join in joins:
+                if join.model_class not in alias_map:
+                    start += 1
+                    alias_map[join.model_class] = 't%s' % start
+        return alias_map
+
+    def parse_select_query(self, query):
+        """
+        - calculate alias map
+        - select/update
+        - joins
+        - where
+        - group by / having
+        """
+        alias_map = self.calculate_alias_map(query)
+        select = self.parse_select(query._select, alias_map)
+        joins = self.parse_joins(query._joins, query.model_class, alias_map)
+        print select
 
 
 def returns_clone(func):
@@ -276,11 +351,6 @@ def returns_clone(func):
         func(clone, *args, **kwargs)
         return clone
     return inner
-
-JOIN_INNER = 0
-JOIN_LEFT_OUTER = 1
-JOIN_RIGHT_OUTER = 2
-JOIN_FULL = 3
 
 
 class Query(object):
@@ -291,10 +361,16 @@ class Query(object):
         self._where = None
 
     def clone(self):
-        query = Query(self.model_class)
+        query = type(self)(self.model_class)
         if self._where is not None:
             query._where = self._where.clone()
+        query._joins = self.clone_joins()
         return query
+
+    def clone_joins(self):
+        return dict(
+            (mc, list(j)) for mc, j in self._joins.items()
+        )
 
     @returns_clone
     def where(self, q_or_node):
@@ -305,7 +381,7 @@ class Query(object):
     @returns_clone
     def join(self, model_class, join_type=None, on=None):
         self._joins.setdefault(self._query_ctx, [])
-        self._joins[self._query_ctx].append((model_class, join_type, on))
+        self._joins[self._query_ctx].append(Join(model_class, join_type, on))
         self._query_ctx = model_class
 
     @returns_clone
@@ -327,8 +403,14 @@ class SelectQuery(Query):
         self._select = selection
         super(SelectQuery, self).__init__(model_class)
 
+    def clone(self):
+        query = super(SelectQuery, self).clone()
+        query._select = list(self._select)
+        return query
+
     def sql(self):
         compiler = QueryCompiler()
+        sql = compiler.parse_select_query(self)
         """
         - calculate alias map
         - select/update
@@ -370,3 +452,7 @@ if __name__ == '__main__':
     print qc.parse_node(q._where)
     q = SelectQuery(None, f1, f2, (f1+1).set_alias('baz'))
     print qc.parse_select(q._select, None)
+    sq = SelectQuery('a', f1, f2, (f1 + 10).set_alias('f1plusten'))
+    sq = sq.join('b').join('c').switch('a').join('b2')
+    print qc.calculate_alias_map(sq)
+    print sq.sql()
