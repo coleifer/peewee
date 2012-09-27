@@ -4,6 +4,9 @@ from copy import deepcopy
 
 
 class Database(object):
+    quote_char = '"'
+    interpolation = '?'
+
     def __init__(self, name):
         self.name = name
 
@@ -12,6 +15,13 @@ class Database(object):
 
     def close(self):
         pass
+
+    def get_compiler(self):
+        return QueryCompiler(self.quote_char, self.interpolation)
+
+    def execute(self, query):
+        sql, params = query.sql(self.get_compiler())
+        return sql, params
 
 
 OP_AND = 0
@@ -298,8 +308,8 @@ class QueryCompiler(object):
         OP_GT: '>',
         OP_GTE: '>=',
         OP_NE: '!=',
-        OP_IN: ' IN ',
-        OP_ISNULL: ' IS NULL',
+        OP_IN: 'IN',
+        OP_ISNULL: 'IS NULL',
         OP_IEQ: '=',
         OP_CONTAINS: '',
         OP_ICONTAINS: '',
@@ -335,6 +345,15 @@ class QueryCompiler(object):
             expr_str = ' '.join((expr_str, 'as', expr.alias))
         return expr_str
 
+    def _max_alias(self, am):
+        max_alias = 0
+        if am:
+            for a in am.values():
+                i = int(a.lstrip('t'))
+                if i > max_alias:
+                    max_alias = i
+        return max_alias + 1
+
     def parse_expr(self, expr, alias_map=None):
         if isinstance(expr, BinaryExpr):
             lhs, lparams = self.parse_expr(expr.lhs, alias_map)
@@ -355,6 +374,13 @@ class QueryCompiler(object):
                 scalars.extend(params)
             expr_str = '%s(%s)' % (expr.fn_name, ', '.join(exprs))
             return self._add_alias(expr_str, expr), scalars
+        elif isinstance(expr, SelectQuery):
+            max_alias = self._max_alias(alias_map)
+            subselect, params = self.parse_select_query(expr, max_alias)
+            return '(%s)' % subselect, params
+        elif isinstance(expr, (list, tuple)):
+            expr_str = '(%s)' % ','.join(self.interpolation for i in range(len(expr)))
+            return expr_str, expr
         return self.interpolation, [expr]
 
     def parse_q(self, q, alias_map=None):
@@ -445,9 +471,9 @@ class QueryCompiler(object):
                     alias_map[join.model_class] = 't%s' % start
         return alias_map
 
-    def parse_select_query(self, query):
+    def parse_select_query(self, query, start=1):
         model = query.model_class
-        alias_map = self.calculate_alias_map(query)
+        alias_map = self.calculate_alias_map(query, start)
 
         parts = ['SELECT']
         params = []
@@ -490,13 +516,6 @@ class QueryCompiler(object):
         return ' '.join(parts), params
 
     def parse_update_query(self, query):
-        '''
-        query is {
-            field1: 'val1',
-            field2: field2 + 1,
-            etc
-        }
-        '''
         model = query.model_class
 
         parts = ['UPDATE %s SET' % self.quote(model._meta.db_table)]
@@ -518,10 +537,37 @@ class QueryCompiler(object):
         return ' '.join(parts), params
 
     def parse_insert_query(self, query):
-        pass
+        model = query.model_class
+
+        parts = ['INSERT INTO %s' % self.quote(model._meta.db_table)]
+        cols = []
+        vals = []
+        params = []
+
+        for field, expr in query._insert.items():
+            field_str, _ = self.parse_expr(field)
+            val_str, val_params = self.parse_expr(expr)
+            cols.append(field_str)
+            vals.append(val_str)
+            params.extend(val_params)
+
+        parts.append('(%s)' % ', '.join(cols))
+        parts.append('VALUES (%s)' % ', '.join(vals))
+
+        return ' '.join(parts), params
 
     def parse_delete_query(self, query):
-        pass
+        model = query.model_class
+
+        parts = ['DELETE FROM %s' % self.quote(model._meta.db_table)]
+        params = []
+
+        where, w_params = self.parse_query_node(query._where, None)
+        if where:
+            parts.append('WHERE %s' % where)
+            params.extend(w_params)
+
+        return ' '.join(parts), params
 
 
 def returns_clone(func):
@@ -677,22 +723,6 @@ class DeleteQuery(Query):
     def sql(self, compiler):
         return compiler.parse_delete_query(self)
 
-"""
-WHERE examples:
-
-    (field1 == 'v1') | (field2 == 'v2')
-    (field1 < (field2 + 10)) & (field3 << ['a', 'b', 'c'])
-
-SELECT examples:
-
-    *
-    field1, field2, field2 + 5, field3.alias('bar'), fn.Count(field4)
-
-UPDATE example:
-
-    field1=v1, field2=v2
-    field1=field2 + 10
-"""
 
 class ModelOptions(object):
     def __init__(self, cls):
@@ -800,6 +830,7 @@ if __name__ == '__main__':
     q = q.join(Blog)
     q = q.where((Entry.headline=='headline') | (Blog.title == 'titttle'))
     print q.sql(qc)
+    print
 
     class A(Model):
         a_field = Field()
@@ -817,6 +848,7 @@ if __name__ == '__main__':
         (A.a_field == 'a') | (B.b_field == 'b')
     )
     print q.sql(qc)
+    print
 
     q = SelectQuery(A).join(B).switch(A)
     q = q.join(B2)
@@ -826,12 +858,34 @@ if __name__ == '__main__':
     )
     q = q.limit(10).offset(100)
     print q.sql(qc)
+    print
 
     q = q.group_by(B).having((B.b_field > 'bfasd'))
     print q.sql(qc)
+    print
 
     q = UpdateQuery(B, {B.b_field: 'bz', B.a: 'a'}).where(B.id > 3)
     print q.sql(qc)
+    print
+
+    q = InsertQuery(B, {B.b_field: 'bnew', B.a: 'anew'})
+    print q.sql(qc)
+    print
+
+    q = DeleteQuery(B).where((B.b_field < 'blt') & (B.a > 'agt'))
+    print q.sql(qc)
+    print
+
+    q = SelectQuery(A).where(A.id << [1, 2, 3]).where(A.a_field == 'af')
+    print q.sql(qc)
+    print
+
+    q = SelectQuery(A).join(B).where(B.id << SelectQuery(B).where(B.b_field=='hurb'))
+    print q.sql(qc)
+
+    db = Database('')
+    print
+    print db.execute(q)
     #q = SelectQuery(None)
     #q = q.where(fn.SUBSTR(fn.LOWER(f1), 0, 1) == 'b')
     #print qc.parse_node(q._where)
