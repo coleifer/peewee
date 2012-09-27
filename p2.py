@@ -34,7 +34,7 @@ class Node(object):
         self.connector = connector
         self.children = children or []
         self.negated = negated
-    
+
     def connect(self, rhs, connector):
         if isinstance(rhs, Leaf):
             if connector == self.connector:
@@ -188,7 +188,7 @@ class QueryCompiler(object):
         OP_OR: '|',
         OP_XOR: '^',
     }
-    
+
     def __init__(self, quote_char='"', interpolation='?'):
         self.quote_char = quote_char
         self.interpolation = interpolation
@@ -196,16 +196,20 @@ class QueryCompiler(object):
     def quote(self, s):
         return ''.join((self.quote_char, s, self.quote_char))
 
+    def _add_alias(self, expr_str, expr):
+        if expr.alias:
+            expr_str = ' '.join((expr_str, 'as', expr.alias))
+        return expr_str
+
     def parse_expr(self, expr):
         if isinstance(expr, BinaryExpr):
             lhs, lparams = self.parse_expr(expr.lhs)
             rhs, rparams = self.parse_expr(expr.rhs)
-            return '(%s %s %s)' % (lhs, self.expr_op_map[expr.op], rhs), lparams + rparams
+            expr_str = '(%s %s %s)' % (lhs, self.expr_op_map[expr.op], rhs)
+            return self._add_alias(expr_str, expr), lparams + rparams
         if isinstance(expr, Field):
             expr_str = self.quote(expr.name)
-            if expr.alias:
-                expr_str = ' '.join((expr_str, 'as', expr.alias))
-            return expr_str, []
+            return self._add_alias(expr_str, expr), []
         elif isinstance(expr, Func):
             scalars = []
             exprs = []
@@ -214,9 +218,7 @@ class QueryCompiler(object):
                 exprs.append(parsed)
                 scalars.extend(params)
             expr_str = '%s(%s)' % (expr.fn_name, ', '.join(exprs))
-            if expr.alias:
-                expr_str = ' '.join((expr_str, 'as', expr.alias))
-            return expr_str, scalars
+            return self._add_alias(expr_str, expr), scalars
         return self.interpolation, [expr]
 
     def parse_q(self, q):
@@ -231,7 +233,8 @@ class QueryCompiler(object):
         for child in n.children:
             if isinstance(child, Node):
                 parsed, child_data = self.parse_node(child)
-                query.append('(%s)' % parsed)
+                if parsed:
+                    query.append('(%s)' % parsed)
             elif isinstance(child, Q):
                 parsed, child_data = self.parse_q(child)
                 query.append(parsed)
@@ -283,7 +286,7 @@ class Query(object):
 
     def clone(self):
         query = Query(self.model_class)
-        if self._where:
+        if self._where is not None:
             query._where = self._where.clone()
         return query
 
