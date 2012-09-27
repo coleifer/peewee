@@ -1,4 +1,18 @@
+import re
 from collections import namedtuple
+from copy import deepcopy
+
+
+class Database(object):
+    def __init__(self, name):
+        self.name = name
+    
+    def connect(self):
+        pass
+    
+    def close(self):
+        pass
+
 
 OP_AND = 0
 OP_OR = 1
@@ -31,9 +45,6 @@ SCALAR = 99
 JOIN_INNER = 1
 JOIN_LEFT_OUTER = 2
 JOIN_FULL = 3
-
-
-Join = namedtuple('Join', ('model_class', 'join_type', 'column'))
 
 
 class Node(object):
@@ -148,15 +159,51 @@ class BinaryExpr(Expr):
         super(BinaryExpr, self).__init__()
 
 
+class FieldDescriptor(object):
+    def __init__(self, field):
+        self.field = field
+        self.att_name = self.field.name
+
+    def __get__(self, instance, instance_type=None):
+        if instance:
+            return instance._data.get(self.att_name)
+        return self.field
+
+    def __set__(self, instance, value):
+        instance._data[self.att_name] = value
+
+
 class Field(Expr):
-    def __init__(self, name):
-        self.name = name
-        self.model_class = None
+    _field_counter = 0
+    _order = 0
+    
+    def __init__(self, null=False, index=False, unique=False, verbose_name=None,
+                 help_text=None, db_column=None, default=None, choices=None, *args, **kwargs):
+        self.null = null
+        self.index = index
+        self.unique = unique
+        self.verbose_name = verbose_name
+        self.help_text = help_text
+        self.db_column = db_column
+        self.default = default
+        self.choices = choices
+        self.attributes = kwargs
+
+        Field._field_counter += 1
+        self._order = Field._field_counter
+
         super(Field, self).__init__()
 
     def add_to_class(self, model_class, name):
-        self.model_class = model_class
         self.name = name
+        self.model_class = model_class
+        setattr(model_class, name, FieldDescriptor(self))
+    
+    def db_value(self, value):
+        return value
+    
+    def python_value(self, value):
+        return value
 
 
 class Func(Expr):
@@ -172,6 +219,75 @@ class _FN(object):
             return Func(attr, *args, **kwargs)
         return dec
 fn = _FN()
+
+
+class RelationDescriptor(FieldDescriptor):
+    def get_object_or_id(self, instance):
+        rel_id = instance._data.get(self.att_name)
+        if rel_id:
+            if self.att_name not in instance._obj_cache:
+                # TODO: fk lookup code
+                #rel_obj = self.field.rel_model.get(...)
+                instance._obj_cache[self.att_name] = rel_obj
+            return instance._obj_cache[self.att_name]
+        return rel_id
+    
+    def __get__(self, instance, instance_type=None):
+        if instance:
+            return self.get_object_or_id(instance)
+        return self.field
+
+    def __set__(self, instance, value):
+        if isinstance(value, Model):
+            instance._data[self.att_name] = value.get_id()
+            instance._obj_cache[self.att_name] = value
+        else:
+            instance._data[self.att_name] = value
+
+
+class ReverseRelationDescriptor(object):
+    def __init__(self, field):
+        self.field = field
+        self.related_model = field.model_class
+
+    def __get__(self, instance, instance_type=None):
+        # TODO: lookup code
+        # this is blog.entry_set, so entry.select().where(blog=self)
+        #query = self.field.model_class.select().where(blog=instance.id)
+        return query
+
+
+class ForeignKeyField(Field):
+    def __init__(self, rel_model, null=False, related_name=None, cascade=False, extra=None, *args, **kwargs):
+        self.rel_model = rel_model
+        self.related_name = related_name
+        self.cascade = cascade
+        self.extra = extra
+
+        super(ForeignKeyField, self).__init__(null=null, *args, **kwargs)
+    
+    def add_to_class(self, model_class, name):
+        self.name = name
+        self.model_class = model_class
+        self.related_name = self.related_name or '%s_set' % (model_class._meta.name)
+
+        if self.rel_model == 'self':
+            self.rel_model = self.model_class
+
+        setattr(model_class, name, RelationDescriptor(self))
+        setattr(self.rel_model, self.related_name, ReverseRelationDescriptor(self))
+
+        model_class._meta.rel[self.name] = self
+        self.rel_model._meta.reverse_rel[self.name] = self
+    
+    def db_value(self, value):
+        if isinstance(value, self.rel_model):
+            value = value.get_id()
+        return super(ForeignKeyField, self).db_value(value)
+
+
+class PrimaryKeyField(Field):
+    pass
 
 
 class QueryCompiler(object):
@@ -269,7 +385,9 @@ class QueryCompiler(object):
         return query, data
 
     def parse_where(self, q, alias_map):
-        pass
+        if q._where is not None:
+            return self.parse_node(q._where, alias_map)
+        return '', []
 
     def parse_joins(self, joins, model_class, alias_map):
         parsed = []
@@ -277,19 +395,18 @@ class QueryCompiler(object):
         def _traverse(curr):
             if curr not in joins:
                 return
-            for i, join in enumerate(joins[curr]):
+            for join in joins[curr]:
                 from_model = curr
                 to_model = join.model_class
 
-                # figure out relationship
-                #field = from_model._meta.get_related_field_for_model(model, on)
-                #if field:
-                #    left_field = field.db_column
-                #    right_field = model._meta.pk_col
-                #else:
-                #    field = from_model._meta.get_reverse_related_field_for_model(model, on)
-                #    left_field = from_model._meta.pk_col
-                #    right_field = field.db_column
+                field = from_model._meta.rel_for_model(to_model, join.column)
+                if field:
+                    left_field = field.name
+                    right_field = to_model._meta.id_field
+                else:
+                    field = to_model._meta.rel_for_model(from_model, join.column)
+                    left_field = to_model._meta.id_field
+                    right_field = field.name
 
                 join_type = join.join_type or JOIN_INNER
                 lhs = '%s.%s' % (alias_map[from_model], self.quote(left_field))
@@ -307,7 +424,7 @@ class QueryCompiler(object):
         _traverse(model_class)
         return parsed
 
-    def parse_select(self, s, alias_map):
+    def parse_expr_list(self, s, alias_map):
         parsed = []
         data = []
         for expr in s:
@@ -332,17 +449,48 @@ class QueryCompiler(object):
         return alias_map
 
     def parse_select_query(self, query):
-        """
-        - calculate alias map
-        - select/update
-        - joins
-        - where
-        - group by / having
-        """
+        model = query.model_class
         alias_map = self.calculate_alias_map(query)
-        select = self.parse_select(query._select, alias_map)
+
+        parts = ['SELECT']
+        params = []
+
+        if query._distinct:
+            parts.append('DISTINCT')
+
+        selection = query._select or model._meta.get_fields()
+        select, s_params = self.parse_expr_list(selection, alias_map)
+
+        parts.append(select)
+        params.extend(s_params)
+
+        parts.append('FROM %s AS %s' % (self.quote(model._meta.db_table), alias_map[model]))
+
         joins = self.parse_joins(query._joins, query.model_class, alias_map)
-        print select
+        if joins:
+            parts.append(' '.join(joins))
+
+        where, w_params = self.parse_where(query, alias_map)
+        if where:
+            parts.append('WHERE %s' % where)
+            params.extend(w_params)
+
+        if query._group_by:
+            group_by, g_params = self.parse_expr_list(query._group_by, alias_map)
+            parts.append('GROUP BY %s' % group_by)
+            params.extend(w_params)
+
+        if query._having:
+            having, h_params = self.parse_where(query, alias_map)
+            parts.append('HAVING %s' % having)
+            params.extend(h_params)
+
+        if query._limit:
+            parts.append('LIMIT %s' % query._limit)
+        if query._offset:
+            parts.append('OFFSET %s' % query._offset)
+
+        return ' '.join(parts), params
 
 
 def returns_clone(func):
@@ -352,6 +500,8 @@ def returns_clone(func):
         return clone
     return inner
 
+
+Join = namedtuple('Join', ('model_class', 'join_type', 'column'))
 
 class Query(object):
     def __init__(self, model_class):
@@ -365,6 +515,7 @@ class Query(object):
         if self._where is not None:
             query._where = self._where.clone()
         query._joins = self.clone_joins()
+        query._query_ctx = self._query_ctx
         return query
 
     def clone_joins(self):
@@ -380,16 +531,17 @@ class Query(object):
 
     @returns_clone
     def join(self, model_class, join_type=None, on=None):
+        if not self._query_ctx._meta.rel_exists(model_class):
+            raise ValueError('No foreign key between %s and %s' % (
+                self._query_ctx, model_class,
+            ))
         self._joins.setdefault(self._query_ctx, [])
         self._joins[self._query_ctx].append(Join(model_class, join_type, on))
         self._query_ctx = model_class
 
     @returns_clone
     def switch(self, model_class):
-        if model_class in self._joins:
-            self._query_ctx = model_class
-        else:
-            raise AttributeError('You must JOIN on %s' % model_class.__name__)
+        self._query_ctx = model_class
 
     def sql(self):
         raise NotImplementedError()
@@ -401,24 +553,55 @@ class Query(object):
 class SelectQuery(Query):
     def __init__(self, model_class, *selection):
         self._select = selection
+        self._group_by = None
+        self._having = None
+        self._limit = None
+        self._offset = None
+        self._distinct = False
         super(SelectQuery, self).__init__(model_class)
 
     def clone(self):
         query = super(SelectQuery, self).clone()
         query._select = list(self._select)
+        query._limit = self._limit
+        query._offset = self._offset
+        if self._group_by:
+            query._group_by = list(self._group_by)
+        if self._having:
+            query._having = self._having.clone()
         return query
+
+    @returns_clone
+    def group_by(self, *args):
+        grouping = []
+        for arg in args:
+            if isinstance(arg, Model):
+                grouping.extend(arg._meta.get_fields())
+            else:
+                grouping.append(arg)
+        self._group_by = grouping
+
+    @returns_clone
+    def having(self, q_or_node):
+        if self._having is None:
+            self._having = Node(OP_AND)
+        self._having &= q_or_node
+
+    @returns_clone
+    def limit(self, lim):
+        self._limit = lim
+
+    @returns_clone
+    def offset(self, off):
+        self._offset = off
+
+    @returns_clone
+    def distinct(self, is_distinct=True):
+        self._distinct = is_distinct
 
     def sql(self):
         compiler = QueryCompiler()
-        sql = compiler.parse_select_query(self)
-        """
-        - calculate alias map
-        - select/update
-        - joins
-        - where
-        - group by / having
-        """
-        return ''
+        return compiler.parse_select_query(self)
 
 
 """
@@ -438,21 +621,143 @@ UPDATE example:
     field1=field2 + 10
 """
 
+class ModelOptions(object):
+    def __init__(self, cls):
+        self.model_class = cls
+        self.name = cls.__name__.lower()
+        self.fields = {}
+        self.indexes = []
+        self.id_field = None
+
+        self.rel = {}
+        self.reverse_rel = {}
+
+        self.db_table = None
+    
+    def get_sorted_fields(self):
+        return sorted(self.fields.items(), key=lambda (k,v): (v == self.id_field and 1 or 2, v._order))
+
+    def get_field_names(self):
+        return [f[0] for f in self.get_sorted_fields()]
+
+    def get_fields(self):
+        return [f[1] for f in self.get_sorted_fields()]
+
+    def rel_for_model(self, model, name=None):
+        for field in self.get_fields():
+            if isinstance(field, ForeignKeyField) and field.rel_model == model:
+                if name is None or name == field.name:
+                    return field
+
+    def reverse_rel_for_model(self, model):
+        return model._meta.rel_for_model(self.model_class)
+
+    def rel_exists(self, model):
+        return self.rel_for_model(model) or self.reverse_rel_for_model(model)
+
+
+class BaseModel(type):
+    def __new__(cls, name, bases, attrs):
+        if not bases:
+            return super(BaseModel, cls).__new__(cls, name, bases, attrs)
+
+        # inherit any field descriptors by deep copying the underlying field obj
+        # into the attrs of the new model
+        for b in bases:
+            for (k, v) in b.__dict__.items():
+                if isinstance(v, FieldDescriptor) and k not in attrs:
+                    attrs[k] = deepcopy(v.field)
+        
+        # initialize the new class and set the magic attributes
+        cls = super(BaseModel, cls).__new__(cls, name, bases, attrs)
+        cls._meta = ModelOptions(cls)
+        cls._data = None
+        
+        id_field = None
+
+        # replace the fields with field descriptors
+        for name, attr in cls.__dict__.items():
+            if isinstance(attr, Field):
+                attr.add_to_class(cls, name)
+                cls._meta.fields[attr.name] = attr
+                if attr.index:
+                    cls._meta.indexes.append(attr.name)
+            if isinstance(attr, PrimaryKeyField):
+                id_field = attr
+        
+        if not id_field:
+            id_field = PrimaryKeyField()
+            id_field.add_to_class(cls, 'id')
+        
+        cls._meta.id_field = id_field.name   
+        cls._meta.db_table = re.sub('[^\w]+', '_', cls.__name__.lower())
+        
+        return cls
+
+
+class Model(object):
+    __metaclass__ = BaseModel
+
+    def __init__(self, *args, **kwargs):
+        self._data = {} # attributes
+        self._obj_cache = {} # cache of related objects
+        for key, value in kwargs.iteritems():
+            setattr(self, key, value)
+
 
 if __name__ == '__main__':
-    f1 = Field('f1')
-    f2 = Field('f2')
-    q = SelectQuery(None)
+    class Blog(Model):
+        title = Field()
+        pub_date= Field()
+        votes = Field()
+
+    class Entry(Model):
+        blog = ForeignKeyField(Blog)
+        headline = Field()
+        content = Field()
+
+    q = SelectQuery(Blog)
     qc = QueryCompiler()
-    q = q.where((f1 == 'alpha') | (f2 == 'bravo'))
-    q = q.where(f1 - 10 == f2)
+    q = q.where((Blog.title == 'alpha') | (Blog.title == 'bravo'))
+    q = q.where(Blog.votes - 10 == Blog.pub_date)
     print qc.parse_node(q._where)
-    q = SelectQuery(None)
-    q = q.where(fn.SUBSTR(fn.LOWER(f1), 0, 1) == 'b')
-    print qc.parse_node(q._where)
-    q = SelectQuery(None, f1, f2, (f1+1).set_alias('baz'))
-    print qc.parse_select(q._select, None)
-    sq = SelectQuery('a', f1, f2, (f1 + 10).set_alias('f1plusten'))
-    sq = sq.join('b').join('c').switch('a').join('b2')
-    print qc.calculate_alias_map(sq)
-    print sq.sql()
+    print q.sql()
+
+    q = SelectQuery(Entry)
+    q = q.join(Blog)
+    q = q.where((Entry.headline=='headline') | (Blog.title == 'titttle'))
+    print q.sql()
+
+    class A(Model):
+        a_field = Field()
+    class B(Model):
+        a = ForeignKeyField(A)
+        b_field = Field()
+    class B2(Model):
+        a = ForeignKeyField(A)
+        b2_field = Field()
+    class C(Model):
+        b = ForeignKeyField(B)
+        c_field = Field()
+
+    q = SelectQuery(C).join(B).join(A).join(B2).where(
+        (A.a_field == 'a') | (B.b_field == 'b')
+    )
+    print q.sql()
+
+    q = SelectQuery(A).join(B).switch(A)
+    q = q.join(B2)
+    q = q.switch(B)
+    q = q.join(C).where(
+        (A.a_field=='a') | (B2.b2_field=='bbb222')
+    )
+    print q.sql()
+    #q = SelectQuery(None)
+    #q = q.where(fn.SUBSTR(fn.LOWER(f1), 0, 1) == 'b')
+    #print qc.parse_node(q._where)
+    #q = SelectQuery(None, f1, f2, (f1+1).set_alias('baz'))
+    #print qc.parse_select(q._select, None)
+    #sq = SelectQuery('a', f1, f2, (f1 + 10).set_alias('f1plusten'))
+    #sq = sq.join('b').join('c').switch('a').join('b2')
+    #sq = sq.where((f1 == 'b') | (f2 == 'c'))
+    #sq.sql()
