@@ -1,28 +1,47 @@
+from __future__ import with_statement
+import datetime
+import decimal
+import logging
+import os
 import re
+import threading
+import time
 from collections import namedtuple
 from copy import deepcopy
 
+try:
+    import sqlite3
+except ImportError:
+    sqlite3 = None
 
-class Database(object):
-    quote_char = '"'
-    interpolation = '?'
+try:
+    import psycopg2
+except ImportError:
+    psycopg2 = None
 
-    def __init__(self, name):
-        self.name = name
+try:
+    import MySQLdb as mysql
+except ImportError:
+    mysql = None
 
-    def connect(self):
-        pass
+class ImproperlyConfigured(Exception):
+    pass
 
-    def close(self):
-        pass
+if sqlite3 is None and psycopg2 is None and mysql is None:
+    raise ImproperlyConfigured('Either sqlite3, psycopg2 or MySQLdb must be installed')
 
-    def get_compiler(self):
-        return QueryCompiler(self.quote_char, self.interpolation)
+if sqlite3:
+    sqlite3.register_adapter(decimal.Decimal, str)
+    sqlite3.register_adapter(datetime.date, str)
+    sqlite3.register_adapter(datetime.time, str)
+    sqlite3.register_converter('decimal', lambda v: decimal.Decimal(v))
 
-    def execute(self, query):
-        sql, params = query.sql(self.get_compiler())
-        return sql, params
+if psycopg2:
+    import psycopg2.extensions
+    psycopg2.extensions.register_type(psycopg2.extensions.UNICODE)
+    psycopg2.extensions.register_type(psycopg2.extensions.UNICODEARRAY)
 
+logger = logging.getLogger('peewee.logger')
 
 OP_AND = 0
 OP_OR = 1
@@ -44,11 +63,7 @@ OP_GTE = 4
 OP_NE = 5
 OP_IN = 6
 OP_ISNULL = 7
-OP_IEQ = 8
-OP_CONTAINS = 9
-OP_ICONTAINS = 10
-OP_STARTSWITH = 11
-OP_ISTARTSWITH = 12
+OP_LIKE = 8
 
 SCALAR = 99
 
@@ -158,7 +173,7 @@ class Expr(object):
     __ne__ = _q(OP_NE)
     __lshift__ = _q(OP_IN)
     __rshift__ = _q(OP_ISNULL)
-    __mod__ = _q(OP_CONTAINS)
+    __mod__ = _q(OP_LIKE)
 
 
 class BinaryExpr(Expr):
@@ -167,6 +182,21 @@ class BinaryExpr(Expr):
         self.op = op
         self.rhs = rhs
         super(BinaryExpr, self).__init__()
+
+
+class Func(Expr):
+    def __init__(self, fn_name, *params):
+        self.fn_name = fn_name
+        self.params = params
+        super(Func, self).__init__()
+
+
+class _FN(object):
+    def __getattr__(self, attr):
+        def dec(*args, **kwargs):
+            return Func(attr, *args, **kwargs)
+        return dec
+fn = _FN()
 
 
 class FieldDescriptor(object):
@@ -186,9 +216,11 @@ class FieldDescriptor(object):
 class Field(Expr):
     _field_counter = 0
     _order = 0
+    db_field = 'unknown'
 
     def __init__(self, null=False, index=False, unique=False, verbose_name=None,
-                 help_text=None, db_column=None, default=None, choices=None, *args, **kwargs):
+                 help_text=None, db_column=None, default=None, choices=None, 
+                 primary_key=False, *args, **kwargs):
         self.null = null
         self.index = index
         self.unique = unique
@@ -197,7 +229,10 @@ class Field(Expr):
         self.db_column = db_column
         self.default = default
         self.choices = choices
-        self.attributes = kwargs
+        self.primary_key = primary_key
+
+        self.attributes = self.field_attributes()
+        self.attributes.update(kwargs)
 
         Field._field_counter += 1
         self._order = Field._field_counter
@@ -209,37 +244,180 @@ class Field(Expr):
         self.model_class = model_class
         setattr(model_class, name, FieldDescriptor(self))
 
+    def field_attributes(self):
+        return {}
+
+    def get_db_field(self):
+        return self.db_field
+
+    def coerce(self, value):
+        return value
+
     def db_value(self, value):
+        return value if value is None else self.coerce(value)
+
+    def python_value(self, value):
+        return value if value is None else self.coerce(value)
+
+
+class IntegerField(Field):
+    db_field = 'int'
+
+    def coerce(self, value):
+        return int(value)
+
+class BigIntegerField(IntegerField):
+    db_field = 'bigint'
+
+class PrimaryKeyField(IntegerField):
+    db_field = 'primary_key'
+
+    def __init__(self, *args, **kwargs):
+        kwargs['primary_key'] = True
+        super(PrimaryKeyField, self).__init__(*args, **kwargs)
+
+
+class FloatField(Field):
+    db_field = 'float'
+
+    def coerce(self, value):
+        return float(value)
+
+class DoubleField(FloatField):
+    db_field = 'double'
+
+class DecimalField(Field):
+    db_field = 'decimal'
+    #template = '%(column_type)s(%(max_digits)d, %(decimal_places)d)'
+
+    def field_attributes(self):
+        return {
+            'max_digits': 10,
+            'decimal_places': 5,
+            'auto_round': False,
+            'rounding': decimal.DefaultContext.rounding,
+        }
+
+    def db_value(self, value):
+        D = decimal.Decimal
+        if not value:
+            return value if value is None else D(0)
+        if self.attributes['auto_round']:
+            exp = D(10)**(-self.attributes['decimal_places'])
+            return D(str(value)).quantize(exp, rounding=self.attributes['rounding'])
         return value
 
     def python_value(self, value):
+        if value is not None:
+            if isinstance(value, decimal.Decimal):
+                return value
+            return decimal.Decimal(str(value))
+
+class CharField(Field):
+    db_field = 'string'
+
+    def field_attributes(self):
+        return {'max_length': 255}
+
+    def coerce(self, value):
+        value = unicode(value or '')
+        return value[:self.attributes['max_length']]
+
+class TextField(Field):
+    db_field = 'text'
+
+    def coerce(self, value):
+        return unicode(value or '')
+
+def format_date_time(value, formats, post_process=None):
+    post_process = post_process or (lambda x: x)
+    for fmt in formats:
+        try:
+            return post_process(datetime.datetime.strptime(value, fmt))
+        except ValueError:
+            pass
+    return value
+
+class DateTimeField(Field):
+    db_class = 'datetime'
+
+    def field_attributes(self):
+        return {
+            'formats': [
+                '%Y-%m-%d %H:%M:%S.%f',
+                '%Y-%m-%d %H:%M:%S',
+                '%Y-%m-%d',
+            ]
+        }
+
+    def python_value(self, value):
+        if value and isinstance(value, basestring):
+            return format_date_time(value, self.attributes['formats'])
         return value
 
+class DateField(Field):
+    db_field = 'date'
 
-class Func(Expr):
-    def __init__(self, fn_name, *params):
-        self.fn_name = fn_name
-        self.params = params
-        super(Func, self).__init__()
+    def field_attributes(self):
+        return {
+            'formats': [
+                '%Y-%m-%d',
+                '%Y-%m-%d %H:%M:%S',
+                '%Y-%m-%d %H:%M:%S.%f',
+            ]
+        }
 
+    def python_value(self, value):
+        if value and isinstance(value, basestring):
+            pp = lambda x: x.date()
+            return format_date_time(value, self.attributes['formats'], pp)
+        elif value and isinstance(value, datetime.datetime):
+            return value.date()
+        return value
 
-class _FN(object):
-    def __getattr__(self, attr):
-        def dec(*args, **kwargs):
-            return Func(attr, *args, **kwargs)
-        return dec
-fn = _FN()
+class TimeField(Field):
+    db_field = 'time'
+
+    def field_attributes(self):
+        return {
+            'formats': [
+                '%H:%M:%S.%f',
+                '%H:%M:%S',
+                '%H:%M',
+                '%Y-%m-%d %H:%M:%S.%f',
+                '%Y-%m-%d %H:%M:%S',
+            ]
+        }
+
+    def python_value(self, value):
+        if value and isinstance(value, basestring):
+            pp = lambda x: x.time()
+            return format_date_time(value, self.attributes['formats'], pp)
+        elif value and isinstance(value, datetime.datetime):
+            return value.time()
+        return value
+
+class BooleanField(Field):
+    db_field = 'bool'
+
+    def coerce(self, value):
+        return bool(value)
 
 
 class RelationDescriptor(FieldDescriptor):
+    def __init__(self, field, rel_model):
+        self.rel_model = rel_model
+        super(RelationDescriptor, self).__init__(field)
+
     def get_object_or_id(self, instance):
         rel_id = instance._data.get(self.att_name)
         if rel_id:
             if self.att_name not in instance._obj_cache:
-                # TODO: fk lookup code
-                #rel_obj = self.field.rel_model.get(...)
-                instance._obj_cache[self.att_name] = rel_obj
+                obj = self.rel_model.get(self.rel_model._meta.primary_key==rel_id)
+                instance._obj_cache[self.att_name] = obj
             return instance._obj_cache[self.att_name]
+        elif not self.field.null:
+            raise RelModel.DoesNotExist
         return rel_id
 
     def __get__(self, instance, instance_type=None):
@@ -248,7 +426,7 @@ class RelationDescriptor(FieldDescriptor):
         return self.field
 
     def __set__(self, instance, value):
-        if isinstance(value, Model):
+        if isinstance(value, self.rel_model):
             instance._data[self.att_name] = value.get_id()
             instance._obj_cache[self.att_name] = value
         else:
@@ -261,10 +439,7 @@ class ReverseRelationDescriptor(object):
         self.related_model = field.model_class
 
     def __get__(self, instance, instance_type=None):
-        # TODO: lookup code
-        # this is blog.entry_set, so entry.select().where(blog=self)
-        #query = self.field.model_class.select().where(blog=instance.id)
-        return query
+        return self.related_model.select().where(self.field==instance.get_id())
 
 
 class ForeignKeyField(Field):
@@ -273,6 +448,11 @@ class ForeignKeyField(Field):
         self.related_name = related_name
         self.cascade = cascade
         self.extra = extra
+        
+        kwargs.update(dict(
+            cascade='ON DELETE CASCADE' if self.cascade else '',
+            extra=extra or '',
+        ))
 
         super(ForeignKeyField, self).__init__(null=null, *args, **kwargs)
 
@@ -284,23 +464,37 @@ class ForeignKeyField(Field):
         if self.rel_model == 'self':
             self.rel_model = self.model_class
 
-        setattr(model_class, name, RelationDescriptor(self))
+        setattr(model_class, name, RelationDescriptor(self, self.rel_model))
         setattr(self.rel_model, self.related_name, ReverseRelationDescriptor(self))
 
         model_class._meta.rel[self.name] = self
         self.rel_model._meta.reverse_rel[self.name] = self
 
+    def get_db_field(self):
+        to_pk = self.rel_model._meta.primary_key
+        return to_pk.get_db_field()
+
     def db_value(self, value):
         if isinstance(value, self.rel_model):
             value = value.get_id()
-        return super(ForeignKeyField, self).db_value(value)
-
-
-class PrimaryKeyField(Field):
-    pass
+        return self.rel_model._meta.primary_key.db_value(value)
 
 
 class QueryCompiler(object):
+    field_map = {
+        'int': 'INTEGER',
+        'bigint': 'INTEGER',
+        'float': 'REAL',
+        'double': 'REAL',
+        'decimal': 'DECIMAL',
+        'string': 'VARCHAR',
+        'text': 'TEXT',
+        'datetime': 'DATETIME',
+        'date': 'DATE',
+        'time': 'TIME',
+        'bool': 'SMALLINT',
+    }
+
     q_op_map = {
         OP_EQ: '=',
         OP_LT: '<',
@@ -310,11 +504,7 @@ class QueryCompiler(object):
         OP_NE: '!=',
         OP_IN: 'IN',
         OP_ISNULL: 'IS NULL',
-        OP_IEQ: '=',
-        OP_CONTAINS: '',
-        OP_ICONTAINS: '',
-        OP_STARTSWITH: '',
-        OP_ISTARTSWITH: '',
+        OP_LIKE: 'LIKE',
     }
 
     expr_op_map = {
@@ -333,9 +523,15 @@ class QueryCompiler(object):
         JOIN_FULL: 'FULL',
     }
 
-    def __init__(self, quote_char='"', interpolation='?'):
+    def __init__(self, quote_char='"', interpolation='?', field_map_overrides=None):
         self.quote_char = quote_char
         self.interpolation = interpolation
+        self.field_map_overrides = field_map_overrides or {}
+
+    def get_field_type(self, field):
+        f_map = dict(self.field_map)
+        f_map.update(self.field_map_overrides)
+        return f_map[field.get_db_field()]
 
     def quote(self, s):
         return ''.join((self.quote_char, s, self.quote_char))
@@ -376,7 +572,9 @@ class QueryCompiler(object):
             return self._add_alias(expr_str, expr), scalars
         elif isinstance(expr, SelectQuery):
             max_alias = self._max_alias(alias_map)
-            subselect, params = self.parse_select_query(expr, max_alias)
+            clone = expr.clone()
+            clone._select = (clone.model_class._meta.primary_key,)
+            subselect, params = self.parse_select_query(clone, max_alias)
             return '(%s)' % subselect, params
         elif isinstance(expr, (list, tuple)):
             expr_str = '(%s)' % ','.join(self.interpolation for i in range(len(expr)))
@@ -428,10 +626,10 @@ class QueryCompiler(object):
                 field = from_model._meta.rel_for_model(to_model, join.column)
                 if field:
                     left_field = field.name
-                    right_field = to_model._meta.id_field
+                    right_field = to_model._meta.primary_key.name
                 else:
                     field = to_model._meta.rel_for_model(from_model, join.column)
-                    left_field = to_model._meta.id_field
+                    left_field = to_model._meta.primary_key.name
                     right_field = field.name
 
                 join_type = join.join_type or JOIN_INNER
@@ -583,6 +781,8 @@ Join = namedtuple('Join', ('model_class', 'join_type', 'column'))
 class Query(object):
     def __init__(self, model_class):
         self.model_class = model_class
+        self.database = model_class._meta.database
+
         self._query_ctx = model_class
         self._joins = {self.model_class: []} # adjacency graph
         self._where = None
@@ -620,11 +820,11 @@ class Query(object):
     def switch(self, model_class):
         self._query_ctx = model_class
 
-    def sql(self):
+    def sql(self, compiler):
         raise NotImplementedError()
 
     def execute(self):
-        pass
+        return self.database.execute(self)
 
 
 class SelectQuery(Query):
@@ -724,21 +924,184 @@ class DeleteQuery(Query):
         return compiler.parse_delete_query(self)
 
 
+class Database(object):
+    field_overrides = {}
+    for_update = False
+    interpolation = '?'
+    quote_char = '"'
+    reserved_tables = []
+    sequences = False
+    subquery_delete_same_table = True
+
+    def __init__(self, database, threadlocals=False, autocommit=True, **connect_kwargs):
+        self.init(database, **connect_kwargs)
+
+        if threadlocals:
+            self.__local = threading.local()
+        else:
+            self.__local = type('DummyLocal', (object,), {})
+
+        self._conn_lock = threading.Lock()
+        self.autocommit = autocommit
+
+    def init(self, database, **connect_kwargs):
+        self.deferred = database is None
+        self.database = database
+        self.connect_kwargs = connect_kwargs
+
+    def connect(self):
+        with self._conn_lock:
+            if self.deferred:
+                raise Exception('Error, database not properly initialized before opening connection')
+            self.__local.conn = self._connect(self.database, **self.connect_kwargs)
+            self.__local.closed = False
+
+    def close(self):
+        with self._conn_lock:
+            if self.deferred:
+                raise Exception('Error, database not properly initialized before closing connection')
+            self._close(self.__local.conn)
+            self.__local.closed = True
+
+    def get_conn(self):
+        if not hasattr(self.__local, 'closed') or self.__local.closed:
+            self.connect()
+        return self.__local.conn
+
+    def is_closed(self):
+        return getattr(self.__local, 'closed', True)
+
+    def get_cursor(self):
+        return self.get_conn().cursor()
+
+    def _connect(self, database, **kwargs):
+        raise NotImplementedError
+
+    def close(self, conn):
+        return conn.close()
+
+    def last_insert_id(self, cursor, model):
+        return cursor.lastrowid
+
+    def rows_affected(self, cursor):
+        return cursor.rowcount
+
+    def get_compiler(self):
+        return QueryCompiler(self.quote_char, self.interpolation, self.field_overrides)
+
+    def execute(self, query):
+        sql, params = query.sql(self.get_compiler())
+        return sql, params
+
+    def execute_sql(self, sql, params=None, require_commit=True):
+        cursor = self.get_cursor()
+        res = cursor.execute(sql, params or ())
+        if require_commit and self.get_autocommit():
+            self.commit()
+        logger.debug((sql, params))
+        return cursor
+
+    def begin(self):
+        pass
+
+    def commit(self):
+        self.get_conn().commit()
+
+    def rollback(self):
+        self.get_conn().rollback()
+
+    def set_autocommit(self, autocommit):
+        self.__local.autocommit = autocommit
+
+    def get_autocommit(self):
+        if not hasattr(self.__local, 'autocommit'):
+            self.set_autocommit(self.autocommit)
+        return self.__local.autocommit
+
+
+class SqliteDatabase(Database):
+    def _connect(self, database, **kwargs):
+        if not sqlite3:
+            raise ImproperlyConfigured('sqlite3 must be installed on the system')
+        return sqlite3.connect(database, **kwargs)
+
+
+class PostgresqlDatabase(Database):
+    field_overrides = {
+        #'primary_key': 'SERIAL',
+        'bigint': 'BIGINT',
+        'boolean': 'BOOLEAN',
+        'datetime': 'TIMESTAMP',
+        'decimal': 'NUMERIC',
+        'double': 'DOUBLE PRECISION',
+    }
+    for_update = True
+    reserved_tables = ['user']
+    sequences = True
+
+    def _connect(self, database, **kwargs):
+        if not psycopg2:
+            raise ImproperlyConfigured('psycopg2 must be installed on the system')
+        return psycopg2.connect(database=database, **kwargs)
+
+    def last_insert_id(self, cursor, model):
+        if model._meta.pk_sequence:
+            cursor.execute("SELECT CURRVAL('\"%s\"')" % (
+                model._meta.pk_sequence))
+        else:
+            cursor.execute("SELECT CURRVAL('\"%s_%s_seq\"')" % (
+                model._meta.db_table, model._meta.pk_col))
+        return cursor.fetchone()[0]
+
+
+class MySQLDatabase(Database):
+    field_overrides = {
+        #'primary_key': 'INTEGER AUTO_INCREMENT',
+        'bigint': 'bigint',
+        'boolean': 'bool',
+        'decimal': 'numeric',
+        'double': 'double precision',
+        'float': 'float',
+        'text': 'longtext',
+    }
+    for_update_support = True
+    quote_char = '`'
+    subquery_delete_same_table = False
+
+    def _connect(self, database, **kwargs):
+        if not mysql:
+            raise ImproperlyConfigured('MySQLdb must be installed on the system')
+        conn_kwargs = {
+            'charset': 'utf8',
+            'use_unicode': True,
+        }
+        conn_kwargs.update(kwargs)
+        return mysql.connect(db=database, **conn_kwargs)
+
+
+class DoesNotExist(Exception):
+    pass
+
+
 class ModelOptions(object):
-    def __init__(self, cls):
+    def __init__(self, cls, database=None, db_table=None, indexes=None,
+                 ordering=None, pk_sequence=None, primary_key=None):
         self.model_class = cls
         self.name = cls.__name__.lower()
         self.fields = {}
-        self.indexes = []
-        self.id_field = None
+
+        self.database = database
+        self.db_table = db_table
+        self.indexes = indexes or []
+        self.ordering = ordering
+        self.pk_sequence = pk_sequence
+        self.primary_key = primary_key
 
         self.rel = {}
         self.reverse_rel = {}
 
-        self.db_table = None
-
     def get_sorted_fields(self):
-        return sorted(self.fields.items(), key=lambda (k,v): (v == self.id_field and 1 or 2, v._order))
+        return sorted(self.fields.items(), key=lambda (k,v): (v == self.primary_key and 1 or 2, v._order))
 
     def get_field_names(self):
         return [f[0] for f in self.get_sorted_fields()]
@@ -760,40 +1123,65 @@ class ModelOptions(object):
 
 
 class BaseModel(type):
+    inheritable_options = ['database', 'indexes', 'ordering', 'primary_key', 'pk_sequence']
+
     def __new__(cls, name, bases, attrs):
         if not bases:
             return super(BaseModel, cls).__new__(cls, name, bases, attrs)
 
+        meta_options = {}
+        meta = attrs.pop('Meta', None)
+        if meta:
+            meta_options.update(meta.__dict__)
+
         # inherit any field descriptors by deep copying the underlying field obj
-        # into the attrs of the new model
+        # into the attrs of the new model, additionally see if the bases define
+        # inheritable model options and swipe them
         for b in bases:
+            if not hasattr(b, '_meta'):
+                continue
+
+            base_meta = getattr(b, '_meta')
+            for (k, v) in base_meta.__dict__.items():
+                if k in cls.inheritable_options and k not in meta_options:
+                    meta_options[k] = v
+
             for (k, v) in b.__dict__.items():
                 if isinstance(v, FieldDescriptor) and k not in attrs:
-                    attrs[k] = deepcopy(v.field)
+                    if not v.field.primary_key:
+                        attrs[k] = deepcopy(v.field)
 
         # initialize the new class and set the magic attributes
         cls = super(BaseModel, cls).__new__(cls, name, bases, attrs)
-        cls._meta = ModelOptions(cls)
+        cls._meta = ModelOptions(cls, **meta_options)
         cls._data = None
 
-        id_field = None
+        primary_key = None
 
-        # replace the fields with field descriptors
+        # replace the fields with field descriptors, calling the add_to_class hook
         for name, attr in cls.__dict__.items():
             if isinstance(attr, Field):
                 attr.add_to_class(cls, name)
                 cls._meta.fields[attr.name] = attr
                 if attr.index:
                     cls._meta.indexes.append(attr.name)
-            if isinstance(attr, PrimaryKeyField):
-                id_field = attr
+                if attr.primary_key:
+                    primary_key = attr
 
-        if not id_field:
-            id_field = PrimaryKeyField()
-            id_field.add_to_class(cls, 'id')
+        if not primary_key:
+            primary_key = IntegerField(primary_key=True)
+            primary_key.add_to_class(cls, 'id')
 
-        cls._meta.id_field = id_field.name
+        cls._meta.primary_key = primary_key
         cls._meta.db_table = re.sub('[^\w]+', '_', cls.__name__.lower())
+
+        # create a repr and error class before finalizing
+        if hasattr(cls, '__unicode__'):
+            setattr(cls, '__repr__', lambda self: '<%s: %r>' % (
+                cls.__name__, self.__unicode__()))
+
+        exception_class = type('%sDoesNotExist' % cls.__name__, (DoesNotExist,), {})
+        cls.DoesNotExist = exception_class
 
         return cls
 
@@ -806,6 +1194,28 @@ class Model(object):
         self._obj_cache = {} # cache of related objects
         for key, value in kwargs.iteritems():
             setattr(self, key, value)
+
+    @classmethod
+    def select(cls, *selection):
+        return SelectQuery(cls, *selection)
+
+    @classmethod
+    def update(cls, **update):
+        return UpdateQuery(cls, **update)
+
+    @classmethod
+    def insert(cls, **insert):
+        return InsertQuery(cls, **insert)
+
+    @classmethod
+    def delete(cls):
+        return DeleteQuery(cls)
+
+    def get_id(self):
+        return getattr(self, self._meta.id_field.name)
+
+    def set_id(self, id):
+        setattr(self, self._meta.id_field.name, id)
 
 
 if __name__ == '__main__':
