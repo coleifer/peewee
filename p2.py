@@ -217,9 +217,10 @@ class Field(Expr):
     _field_counter = 0
     _order = 0
     db_field = 'unknown'
+    template = '%(column_type)s'
 
     def __init__(self, null=False, index=False, unique=False, verbose_name=None,
-                 help_text=None, db_column=None, default=None, choices=None, 
+                 help_text=None, db_column=None, default=None, choices=None,
                  primary_key=False, *args, **kwargs):
         self.null = null
         self.index = index
@@ -242,6 +243,7 @@ class Field(Expr):
     def add_to_class(self, model_class, name):
         self.name = name
         self.model_class = model_class
+        self.db_column = self.db_column or self.name
         setattr(model_class, name, FieldDescriptor(self))
 
     def field_attributes(self):
@@ -288,7 +290,7 @@ class DoubleField(FloatField):
 
 class DecimalField(Field):
     db_field = 'decimal'
-    #template = '%(column_type)s(%(max_digits)d, %(decimal_places)d)'
+    template = '%(column_type)s(%(max_digits)d, %(decimal_places)d)'
 
     def field_attributes(self):
         return {
@@ -315,6 +317,7 @@ class DecimalField(Field):
 
 class CharField(Field):
     db_field = 'string'
+    template = '%(column_type)s(%(max_length)s)'
 
     def field_attributes(self):
         return {'max_length': 255}
@@ -339,7 +342,7 @@ def format_date_time(value, formats, post_process=None):
     return value
 
 class DateTimeField(Field):
-    db_class = 'datetime'
+    db_field = 'datetime'
 
     def field_attributes(self):
         return {
@@ -448,7 +451,7 @@ class ForeignKeyField(Field):
         self.related_name = related_name
         self.cascade = cascade
         self.extra = extra
-        
+
         kwargs.update(dict(
             cascade='ON DELETE CASCADE' if self.cascade else '',
             extra=extra or '',
@@ -459,6 +462,8 @@ class ForeignKeyField(Field):
     def add_to_class(self, model_class, name):
         self.name = name
         self.model_class = model_class
+        self.db_column = self.db_column or '%s_id' % self.name
+
         self.related_name = self.related_name or '%s_set' % (model_class._meta.name)
 
         if self.rel_model == 'self':
@@ -493,6 +498,7 @@ class QueryCompiler(object):
         'date': 'DATE',
         'time': 'TIME',
         'bool': 'SMALLINT',
+        'primary_key': 'INTEGER',
     }
 
     q_op_map = {
@@ -528,11 +534,6 @@ class QueryCompiler(object):
         self.interpolation = interpolation
         self.field_map_overrides = field_map_overrides or {}
 
-    def get_field_type(self, field):
-        f_map = dict(self.field_map)
-        f_map.update(self.field_map_overrides)
-        return f_map[field.get_db_field()]
-
     def quote(self, s):
         return ''.join((self.quote_char, s, self.quote_char))
 
@@ -557,7 +558,7 @@ class QueryCompiler(object):
             expr_str = '(%s %s %s)' % (lhs, self.expr_op_map[expr.op], rhs)
             return self._add_alias(expr_str, expr), lparams + rparams
         if isinstance(expr, Field):
-            expr_str = self.quote(expr.name)
+            expr_str = self.quote(expr.db_column)
             if alias_map and expr.model_class in alias_map:
                 expr_str = '.'.join((alias_map[expr.model_class], expr_str))
             return self._add_alias(expr_str, expr), []
@@ -625,12 +626,12 @@ class QueryCompiler(object):
 
                 field = from_model._meta.rel_for_model(to_model, join.column)
                 if field:
-                    left_field = field.name
-                    right_field = to_model._meta.primary_key.name
+                    left_field = field.db_column
+                    right_field = to_model._meta.primary_key.db_column
                 else:
                     field = to_model._meta.rel_for_model(from_model, join.column)
-                    left_field = to_model._meta.primary_key.name
-                    right_field = field.name
+                    left_field = to_model._meta.primary_key.db_column
+                    right_field = field.db_column
 
                 join_type = join.join_type or JOIN_INNER
                 lhs = '%s.%s' % (alias_map[from_model], self.quote(left_field))
@@ -713,20 +714,22 @@ class QueryCompiler(object):
 
         return ' '.join(parts), params
 
+    def _parse_field_dictionary(self, d):
+        sets, params = [], []
+        for field, expr in d.items():
+            field_str, _ = self.parse_expr(field)
+            val_str, val_params = self.parse_expr(expr)
+            sets.append((field_str, val_str))
+            params.extend(val_params)
+        return sets, params
+
     def parse_update_query(self, query):
         model = query.model_class
 
         parts = ['UPDATE %s SET' % self.quote(model._meta.db_table)]
-        params = []
-        sets = []
+        sets, params = self._parse_field_dictionary(query._update)
 
-        for field, expr in query._update.items():
-            field_str, _ = self.parse_expr(field)
-            val_str, val_params = self.parse_expr(expr)
-            sets.append('%s=%s' % (field_str, val_str))
-            params.extend(val_params)
-
-        parts.append(', '.join(sets))
+        parts.append(', '.join('%s=%s' % (f, v) for f, v in sets))
 
         where, w_params = self.parse_query_node(query._where, None)
         if where:
@@ -738,19 +741,10 @@ class QueryCompiler(object):
         model = query.model_class
 
         parts = ['INSERT INTO %s' % self.quote(model._meta.db_table)]
-        cols = []
-        vals = []
-        params = []
+        sets, params = self._parse_field_dictionary(query._insert)
 
-        for field, expr in query._insert.items():
-            field_str, _ = self.parse_expr(field)
-            val_str, val_params = self.parse_expr(expr)
-            cols.append(field_str)
-            vals.append(val_str)
-            params.extend(val_params)
-
-        parts.append('(%s)' % ', '.join(cols))
-        parts.append('VALUES (%s)' % ', '.join(vals))
+        parts.append('(%s)' % ', '.join(s[0] for s in sets))
+        parts.append('VALUES (%s)' % ', '.join(s[1] for s in sets))
 
         return ' '.join(parts), params
 
@@ -766,6 +760,37 @@ class QueryCompiler(object):
             params.extend(w_params)
 
         return ' '.join(parts), params
+
+    def get_field_type(self, field):
+        f_map = dict(self.field_map)
+        f_map.update(self.field_map_overrides)
+        return f_map[field.get_db_field()]
+
+    def field_sql(self, field):
+        attrs = field.attributes
+        attrs['column_type'] = self.get_field_type(field)
+        parts = [self.quote(field.db_column), field.template]
+        if not field.null:
+            parts.append('NOT NULL')
+        if field.primary_key:
+            parts.append('PRIMARY KEY')
+        if isinstance(field, ForeignKeyField):
+            ref_mc = (
+                self.quote(field.rel_model._meta.db_table),
+                self.quote(field.rel_model._meta.primary_key.db_column),
+            )
+            parts.append('REFERENCES %s (%s)' % ref_mc)
+            parts.append('%(cascade)s%(extra)s')
+        return ' '.join(p % attrs for p in parts)
+
+    def create_table(self, model_class, safe=False):
+        parts = ['CREATE TABLE']
+        if safe:
+            parts.append('IF NOT EXISTS')
+        parts.append(self.quote(model_class._meta.db_table))
+        columns = ', '.join(self.field_sql(f) for f in model_class._meta.get_fields())
+        parts.append('(%s)' % columns)
+        return ' '.join(parts)
 
 
 def returns_clone(func):
@@ -1028,12 +1053,12 @@ class SqliteDatabase(Database):
 
 class PostgresqlDatabase(Database):
     field_overrides = {
-        #'primary_key': 'SERIAL',
         'bigint': 'BIGINT',
         'boolean': 'BOOLEAN',
         'datetime': 'TIMESTAMP',
         'decimal': 'NUMERIC',
         'double': 'DOUBLE PRECISION',
+        'primary_key': 'SERIAL',
     }
     for_update = True
     reserved_tables = ['user']
@@ -1056,13 +1081,13 @@ class PostgresqlDatabase(Database):
 
 class MySQLDatabase(Database):
     field_overrides = {
-        #'primary_key': 'INTEGER AUTO_INCREMENT',
-        'bigint': 'bigint',
-        'boolean': 'bool',
-        'decimal': 'numeric',
-        'double': 'double precision',
-        'float': 'float',
-        'text': 'longtext',
+        'bigint': 'BIGINT',
+        'boolean': 'BOOL',
+        'decimal': 'NUMERIC',
+        'double': 'DOUBLE PRECISION',
+        'float': 'FLOAT',
+        'primary_key': 'INTEGER AUTO_INCREMENT',
+        'text': 'LONGTEXT',
     }
     for_update_support = True
     quote_char = '`'
@@ -1083,6 +1108,9 @@ class DoesNotExist(Exception):
     pass
 
 
+default_database = SqliteDatabase('peewee.db')
+
+
 class ModelOptions(object):
     def __init__(self, cls, database=None, db_table=None, indexes=None,
                  ordering=None, pk_sequence=None, primary_key=None):
@@ -1090,7 +1118,7 @@ class ModelOptions(object):
         self.name = cls.__name__.lower()
         self.fields = {}
 
-        self.database = database
+        self.database = database or default_database
         self.db_table = db_table
         self.indexes = indexes or []
         self.ordering = ordering
@@ -1132,7 +1160,7 @@ class BaseModel(type):
         meta_options = {}
         meta = attrs.pop('Meta', None)
         if meta:
-            meta_options.update(meta.__dict__)
+            meta_options.update((k, v) for k, v in meta.__dict__.items() if not k.startswith('_'))
 
         # inherit any field descriptors by deep copying the underlying field obj
         # into the attrs of the new model, additionally see if the bases define
@@ -1169,8 +1197,9 @@ class BaseModel(type):
                     primary_key = attr
 
         if not primary_key:
-            primary_key = IntegerField(primary_key=True)
+            primary_key = PrimaryKeyField(primary_key=True)
             primary_key.add_to_class(cls, 'id')
+            cls._meta.fields['id'] = primary_key
 
         cls._meta.primary_key = primary_key
         cls._meta.db_table = re.sub('[^\w]+', '_', cls.__name__.lower())
@@ -1220,14 +1249,14 @@ class Model(object):
 
 if __name__ == '__main__':
     class Blog(Model):
-        title = Field()
-        pub_date= Field()
-        votes = Field()
+        title = CharField()
+        pub_date= DateTimeField()
+        votes = IntegerField(null=True)
 
     class Entry(Model):
         blog = ForeignKeyField(Blog)
-        headline = Field()
-        content = Field()
+        headline = CharField()
+        content = TextField()
 
     q = SelectQuery(Blog)
     qc = QueryCompiler()
@@ -1243,16 +1272,16 @@ if __name__ == '__main__':
     print
 
     class A(Model):
-        a_field = Field()
+        a_field = CharField()
     class B(Model):
         a = ForeignKeyField(A)
-        b_field = Field()
+        b_field = CharField()
     class B2(Model):
         a = ForeignKeyField(A)
-        b2_field = Field()
+        b2_field = CharField()
     class C(Model):
         b = ForeignKeyField(B)
-        c_field = Field()
+        c_field = CharField()
 
     q = SelectQuery(C).join(B).join(A).join(B2).where(
         (A.a_field == 'a') | (B.b_field == 'b')
@@ -1296,6 +1325,10 @@ if __name__ == '__main__':
     db = Database('')
     print
     print db.execute(q)
+
+    print '--------------------------------'
+    print qc.create_table(Blog)
+    print qc.create_table(Entry)
     #q = SelectQuery(None)
     #q = q.where(fn.SUBSTR(fn.LOWER(f1), 0, 1) == 'b')
     #print qc.parse_node(q._where)
