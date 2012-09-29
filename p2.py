@@ -213,6 +213,9 @@ class FieldDescriptor(object):
         instance._data[self.att_name] = value
 
 
+Ordering = namedtuple('Ordering', ('field', 'asc'))
+
+
 class Field(Expr):
     _field_counter = 0
     _order = 0
@@ -261,6 +264,12 @@ class Field(Expr):
     def python_value(self, value):
         return value if value is None else self.coerce(value)
 
+    def asc(self):
+        return Ordering(self, True)
+
+    def desc(self):
+        return Ordering(self, False)
+
 
 class IntegerField(Field):
     db_field = 'int'
@@ -276,6 +285,7 @@ class PrimaryKeyField(IntegerField):
 
     def __init__(self, *args, **kwargs):
         kwargs['primary_key'] = True
+        # support fo "default nextval(<<sequence name>>)" ??
         super(PrimaryKeyField, self).__init__(*args, **kwargs)
 
 
@@ -551,6 +561,12 @@ class QueryCompiler(object):
                     max_alias = i
         return max_alias + 1
 
+    def _parse_field(self, field, alias_map):
+        expr_str = self.quote(field.db_column)
+        if alias_map and field.model_class in alias_map:
+            expr_str = '.'.join((alias_map[field.model_class], expr_str))
+        return self._add_alias(expr_str, field), []
+
     def parse_expr(self, expr, alias_map=None):
         if isinstance(expr, BinaryExpr):
             lhs, lparams = self.parse_expr(expr.lhs, alias_map)
@@ -558,10 +574,11 @@ class QueryCompiler(object):
             expr_str = '(%s %s %s)' % (lhs, self.expr_op_map[expr.op], rhs)
             return self._add_alias(expr_str, expr), lparams + rparams
         if isinstance(expr, Field):
-            expr_str = self.quote(expr.db_column)
-            if alias_map and expr.model_class in alias_map:
-                expr_str = '.'.join((alias_map[expr.model_class], expr_str))
-            return self._add_alias(expr_str, expr), []
+            return self._parse_field(expr, alias_map)
+        elif isinstance(expr, Ordering):
+            expr_str, params = self._parse_field(expr.field, alias_map)
+            expr_str += ' ASC' if expr.asc else ' DESC'
+            return expr_str, params
         elif isinstance(expr, Func):
             scalars = []
             exprs = []
@@ -708,8 +725,8 @@ class QueryCompiler(object):
             params.extend(h_params)
 
         if query._order_by:
-            # TODO: order_by
-            pass
+            order_by, _ = self.parse_expr_list(query._order_by, alias_map)
+            parts.append('ORDER BY %s' % order_by)
 
         if query._limit:
             parts.append('LIMIT %s' % query._limit)
@@ -797,6 +814,27 @@ class QueryCompiler(object):
         columns = ', '.join(self.field_sql(f) for f in model_class._meta.get_fields())
         parts.append('(%s)' % columns)
         return ' '.join(parts)
+
+    def drop_table(self, model_class, cascade=False):
+        parts = ['DROP TABLE %s' % self.quote(model_class._meta.db_table)]
+        if cascade:
+            parts.append('CASCADE')
+        return ' '.join(parts)
+
+    def create_index(self, model_class, fields, unique):
+        tbl_name = model_class._meta.db_table
+        colnames = [f.db_column for f in fields]
+        parts = ['CREATE %s' % ('UNIQUE INDEX' if unique else 'INDEX')]
+        parts.append(self.quote('%s_%s' % (tbl_name, '_'.join(colnames))))
+        parts.append('ON %s' % self.quote(tbl_name))
+        parts.append('(%s)' % ', '.join(map(self.quote, colnames)))
+        return ' '.join(parts)
+
+    def create_sequence(self, sequence_name):
+        return 'CREATE SEQUENCE %s;' % self.quote(sequence_name)
+
+    def drop_sequence(self, sequence_name):
+        return 'DROP SEQUENCE %s;' % self.quote(sequence_name)
 
 
 #class QueryResultWrapper(object):
@@ -949,6 +987,13 @@ def returns_clone(func):
         return clone
     return inner
 
+def not_allowed(fn):
+    def inner(self, *args, **kwargs):
+        raise NotImplementedError('%s is not allowed on %s instances' % (
+            fn, type(self).__name__,
+        ))
+    return inner
+
 
 Join = namedtuple('Join', ('model_class', 'join_type', 'column'))
 
@@ -1004,6 +1049,29 @@ class Query(object):
         return self.database.execute(self)
 
 
+class RawQuery(Query):
+    def __init__(self, model, query, *params):
+        self._sql = query
+        self._params = list(params)
+        super(RawQuery, self).__init__(model)
+
+    def clone(self):
+        return RawQuery(self.model, self._sql, *self._params)
+
+    def sql(self):
+        return self._sql, self._params
+
+    join = not_allowed('joining')
+    where = not_allowed('where')
+    switch = not_allowed('switch')
+
+    def execute(self):
+        return QueryResultWrapper(self.model, self.raw_execute(*self.sql()))
+
+    def __iter__(self):
+        return iter(self.execute())
+
+
 class SelectQuery(Query):
     require_commit = False
 
@@ -1023,11 +1091,12 @@ class SelectQuery(Query):
     def clone(self):
         query = super(SelectQuery, self).clone()
         query._select = list(self._select)
-        if self._group_by:
+        if self._group_by is not None:
             query._group_by = list(self._group_by)
         if self._having:
             query._having = self._having.clone()
-        query._order_by = list(self._order_by)
+        if self._order_by is not None:
+            query._order_by = list(self._order_by)
         query._limit = self._limit
         query._offset = self._offset
         query._distinct = self._distinct
@@ -1051,6 +1120,10 @@ class SelectQuery(Query):
         if self._having is None:
             self._having = Node(OP_AND)
         self._having &= q_or_node
+
+    @returns_clone
+    def order_by(self, *args):
+        self._order_by = list(args)
 
     @returns_clone
     def limit(self, lim):
@@ -1079,6 +1152,53 @@ class SelectQuery(Query):
     def naive(self, naive=True):
         self._naive = naive
 
+    #def count(self):
+    #    if self._distinct or self._group_by:
+    #        return self.wrapped_count()
+
+    #    clone = self.order_by()
+    #    clone._limit = clone._offset = None
+
+    #    if clone.use_aliases():
+    #        clone.query = 'COUNT(t1.%s)' % (clone.model._meta.pk_col)
+    #    else:
+    #        clone.query = 'COUNT(%s)' % (clone.model._meta.pk_col)
+
+    #    res = clone.database.execute(*clone.sql(), require_commit=False)
+
+    #    return (res.fetchone() or [0])[0]
+
+    #def wrapped_count(self):
+    #    clone = self.order_by()
+    #    clone._limit = clone._offset = None
+
+    #    sql, params = clone.sql()
+    #    query = 'SELECT COUNT(1) FROM (%s) AS wrapped_select' % sql
+
+    #    res = clone.database.execute(query, params, require_commit=False)
+
+    #    return res.fetchone()[0]
+
+    #def exists(self):
+    #    clone = self.paginate(1, 1)
+    #    clone.query = '(1) AS a'
+    #    curs = self.database.execute(*clone.sql(), require_commit=False)
+    #    return bool(curs.fetchone())
+
+    #def get(self, *args, **kwargs):
+    #    orig_ctx = self.query_context
+    #    self.query_context = self.model
+    #    query = self.where(*args, **kwargs).paginate(1, 1)
+    #    try:
+    #        obj = query.execute().next()
+    #        return obj
+    #    except StopIteration:
+    #        raise self.model.DoesNotExist('instance matching query does not exist:\nSQL: %s\nPARAMS: %s' % (
+    #            query.sql()
+    #        ))
+    #    finally:
+    #        self.query_context = orig_ctx
+
     def sql(self, compiler):
         return compiler.parse_select_query(self)
 
@@ -1102,13 +1222,6 @@ class SelectQuery(Query):
     #    return iter(self.execute())
 
 
-def not_allowed(fn):
-    def inner(self, *args, **kwargs):
-        raise NotImplementedError('%s is not allowed on %s instances' % (
-            fn, type(self).__name__,
-        ))
-    return inner
-
 class UpdateQuery(Query):
     def __init__(self, model_class, update=None):
         self._update = update
@@ -1123,6 +1236,10 @@ class UpdateQuery(Query):
 
     def sql(self, compiler):
         return compiler.parse_update_query(self)
+
+    def execute(self):
+        result = self.raw_execute(*self.sql())
+        return self.database.rows_affected(result)
 
 class InsertQuery(Query):
     def __init__(self, model_class, insert=None):
@@ -1140,11 +1257,19 @@ class InsertQuery(Query):
     def sql(self, compiler):
         return compiler.parse_insert_query(self)
 
+    def execute(self):
+        result = self.raw_execute(*self.sql())
+        return self.database.last_insert_id(result, self.model)
+
 class DeleteQuery(Query):
     join = not_allowed('joining')
 
     def sql(self, compiler):
         return compiler.parse_delete_query(self)
+
+    def execute(self):
+        result = self.raw_execute(*self.sql())
+        return self.database.rows_affected(result)
 
 
 class Database(object):
@@ -1214,7 +1339,7 @@ class Database(object):
 
     def execute(self, query):
         sql, params = query.sql(self.get_compiler())
-        return self.execute_sql(sql, params, query.requires_commit)
+        return self.execute_sql(sql, params, query.require_commit)
 
     def execute_sql(self, sql, params=None, require_commit=True):
         cursor = self.get_cursor()
@@ -1241,12 +1366,43 @@ class Database(object):
             self.set_autocommit(self.autocommit)
         return self.__local.autocommit
 
+    def get_tables(self):
+        raise NotImplementedError
+
+    def get_indexes_for_table(self, table):
+        raise NotImplementedError
+
+    def create_table(self, model_class, safe=False, extra=''):
+        pass
+
+    def create_index(self, model_class, field_names, unique=False):
+        pass
+
+    def create_foreign_key(self, model_class, field):
+        return self.create_index(model_class, field.name, field.unique)
+
+    def drop_table(self, model_class, fail_silently=False):
+        framing = fail_silently and 'DROP TABLE IF EXISTS %s;' or 'DROP TABLE %s;'
+        self.execute(framing % self.quote_name(model_class._meta.db_table))
+
+    def transaction(self):
+        return transaction(self)
+
 
 class SqliteDatabase(Database):
     def _connect(self, database, **kwargs):
         if not sqlite3:
             raise ImproperlyConfigured('sqlite3 must be installed on the system')
         return sqlite3.connect(database, **kwargs)
+
+    def get_indexes_for_table(self, table):
+        res = self.execute('PRAGMA index_list(%s);' % self.quote_name(table))
+        rows = sorted([(r[1], r[2] == 1) for r in res.fetchall()])
+        return rows
+
+    def get_tables(self):
+        res = self.execute('select name from sqlite_master where type="table" order by name')
+        return [r[0] for r in res.fetchall()]
 
 
 class PostgresqlDatabase(Database):
@@ -1276,6 +1432,38 @@ class PostgresqlDatabase(Database):
                 model._meta.db_table, model._meta.pk_col))
         return cursor.fetchone()[0]
 
+    def get_indexes_for_table(self, table):
+        res = self.execute("""
+            SELECT c2.relname, i.indisprimary, i.indisunique
+            FROM pg_catalog.pg_class c, pg_catalog.pg_class c2, pg_catalog.pg_index i
+            WHERE c.relname = %s AND c.oid = i.indrelid AND i.indexrelid = c2.oid
+            ORDER BY i.indisprimary DESC, i.indisunique DESC, c2.relname""", (table,))
+        return sorted([(r[0], r[1]) for r in res.fetchall()])
+
+    def get_tables(self):
+        res = self.execute("""
+            SELECT c.relname
+            FROM pg_catalog.pg_class c
+            LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+            WHERE c.relkind IN ('r', 'v', '')
+                AND n.nspname NOT IN ('pg_catalog', 'pg_toast')
+                AND pg_catalog.pg_table_is_visible(c.oid)
+            ORDER BY c.relname""")
+        return [row[0] for row in res.fetchall()]
+
+    def sequence_exists(self, sequence):
+        res = self.execute("""
+            SELECT COUNT(*)
+            FROM pg_class, pg_namespace
+            WHERE relkind='S'
+                AND pg_class.relnamespace = pg_namespace.oid
+                AND relname=%s""", (sequence,))
+        return bool(res.fetchone()[0])
+
+    def set_search_path(self, *search_path):
+        path_params = ','.join(['%s'] * len(search_path))
+        self.execute('SET search_path TO %s' % path_params, search_path)
+
 
 class MySQLDatabase(Database):
     field_overrides = {
@@ -1301,8 +1489,70 @@ class MySQLDatabase(Database):
         conn_kwargs.update(kwargs)
         return mysql.connect(db=database, **conn_kwargs)
 
+    def create_foreign_key(self, model_class, field):
+        framing = """
+            ALTER TABLE %(table)s ADD CONSTRAINT %(constraint)s
+            FOREIGN KEY (%(field)s) REFERENCES %(to)s(%(to_field)s)%(cascade)s;
+        """
+        db_table = model_class._meta.db_table
+        constraint = 'fk_%s_%s_%s' % (
+            db_table,
+            field.to._meta.db_table,
+            field.db_column,
+        )
+
+        query = framing % {
+            'table': self.quote_name(db_table),
+            'constraint': self.quote_name(constraint),
+            'field': self.quote_name(field.db_column),
+            'to': self.quote_name(field.to._meta.db_table),
+            'to_field': self.quote_name(field.to._meta.pk_col),
+            'cascade': ' ON DELETE CASCADE' if field.cascade else '',
+        }
+
+        self.execute(query)
+        return super(MySQLDatabase, self).create_foreign_key(model_class, field)
+
+    def rename_column_sql(self, model_class, field_name, new_name):
+        field = model_class._meta.fields[field_name]
+        return 'ALTER TABLE %s CHANGE COLUMN %s %s %s' % (
+            self.quote_name(model_class._meta.db_table),
+            self.quote_name(field.db_column),
+            self.quote_name(new_name),
+            field.render_field_template(self.adapter.quote_char),
+        )
+
+    def get_indexes_for_table(self, table):
+        res = self.execute('SHOW INDEXES IN %s;' % self.quote_name(table))
+        rows = sorted([(r[2], r[1] == 0) for r in res.fetchall()])
+        return rows
+
+    def get_tables(self):
+        res = self.execute('SHOW TABLES;')
+        return [r[0] for r in res.fetchall()]
+
+
+class transaction(object):
+    def __init__(self, db):
+        self.db = db
+
+    def __enter__(self):
+        self._orig = self.db.get_autocommit()
+        self.db.set_autocommit(False)
+        self.db.begin()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type:
+            self.db.rollback()
+        else:
+            self.db.commit()
+        self.db.set_autocommit(self._orig)
 
 class DoesNotExist(Exception):
+    pass
+
+# doing an IN on empty set
+class EmptyResultException(Exception):
     pass
 
 
@@ -1431,21 +1681,53 @@ class Model(object):
 
     @classmethod
     def update(cls, **update):
-        return UpdateQuery(cls, **update)
+        fdict = dict((cls._meta.fields[f], v) for f, v in update.items())
+        return UpdateQuery(cls, fdict)
 
     @classmethod
     def insert(cls, **insert):
-        return InsertQuery(cls, **insert)
+        fdict = dict((cls._meta.fields[f], v) for f, v in insert.items())
+        return InsertQuery(cls, fdict)
 
     @classmethod
     def delete(cls):
         return DeleteQuery(cls)
+
+    #@classmethod
+    #def create_table(cls, fail_silently=False, extra=''):
+    #    if fail_silently and cls.table_exists():
+    #        return
+
+    #    db = cls._meta.database
+    #    db.create_table(cls, extra=extra)
+
+    #    for field_name, field_obj in cls._meta.fields.items():
+    #        if isinstance(field_obj, ForeignKeyField):
+    #            db.create_foreign_key(cls, field_obj)
+    #        elif field_obj.db_index or field_obj.unique:
+    #            db.create_index(cls, field_obj.name, field_obj.unique)
+
+    #    if cls._meta.indexes:
+    #        for fields, unique in cls._meta.indexes:
+    #            db.create_index(cls, fields, unique)
+
+    #@classmethod
+    #def drop_table(cls, fail_silently=False):
+    #    cls._meta.database.drop_table(cls, fail_silently)
 
     def get_id(self):
         return getattr(self, self._meta.id_field.name)
 
     def set_id(self, id):
         setattr(self, self._meta.id_field.name, id)
+
+    def __eq__(self, other):
+        return other.__class__ == self.__class__ and \
+               self.get_pk() and \
+               other.get_pk() == self.get_pk()
+
+    def __ne__(self, other):
+        return not self == other
 
 
 if __name__ == '__main__':
@@ -1521,15 +1803,17 @@ if __name__ == '__main__':
     print
 
     q = SelectQuery(A).join(B).where(B.id << SelectQuery(B).where(B.b_field=='hurb'))
+    q = q.order_by(A.id, B.b_field.desc())
     print q.sql(qc)
 
-    db = Database('')
-    print
-    print db.execute(q)
+    #db = SqliteDatabase(':memory:')
+    #print
+    #print db.execute(q)
 
     print '--------------------------------'
     print qc.create_table(Blog)
     print qc.create_table(Entry)
+    print qc.create_index(Entry, (Entry.blog,), True)
     #q = SelectQuery(None)
     #q = q.where(fn.SUBSTR(fn.LOWER(f1), 0, 1) == 'b')
     #print qc.parse_node(q._where)
