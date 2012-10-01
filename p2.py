@@ -224,7 +224,7 @@ class Field(Expr):
 
     def __init__(self, null=False, index=False, unique=False, verbose_name=None,
                  help_text=None, db_column=None, default=None, choices=None,
-                 primary_key=False, *args, **kwargs):
+                 primary_key=False, sequence=None, *args, **kwargs):
         self.null = null
         self.index = index
         self.unique = unique
@@ -234,6 +234,7 @@ class Field(Expr):
         self.default = default
         self.choices = choices
         self.primary_key = primary_key
+        self.sequence = sequence
 
         self.attributes = self.field_attributes()
         self.attributes.update(kwargs)
@@ -290,7 +291,6 @@ class PrimaryKeyField(IntegerField):
         kwargs['primary_key'] = True
         # support fo "default nextval(<<sequence name>>)" ??
         super(PrimaryKeyField, self).__init__(*args, **kwargs)
-
 
 class FloatField(Field):
     db_field = 'float'
@@ -811,6 +811,8 @@ class QueryCompiler(object):
             )
             parts.append('REFERENCES %s (%s)' % ref_mc)
             parts.append('%(cascade)s%(extra)s')
+        elif field.sequence:
+            parts.append('DEFAULT NEXTVAL(%s)' % self.quote(field.sequence))
         return ' '.join(p % attrs for p in parts)
 
     def create_table(self, model_class, safe=False):
@@ -894,12 +896,13 @@ class QueryResultWrapper(object):
     def construct_instance(self, row):
         # we have columns, models, and a graph of joins to reconstruct
         collected_models = {}
+        cols = [c[0] for c in self.cursor.description]
         for i, expr in enumerate(self.column_meta):
             value = row[i]
             if isinstance(expr, Field):
                 model = expr.model_class
             else:
-                raise ValueError('unable to extract model for value: %s' % expr)
+                model = self.model
 
             if model not in collected_models:
                 collected_models[model] = model()
@@ -907,9 +910,10 @@ class QueryResultWrapper(object):
 
             if isinstance(expr, Field):
                 setattr(instance, expr.name, expr.python_value(value))
+            elif isinstance(expr, Expr) and expr.alias:
+                setattr(instance, expr.alias, value)
             else:
-                raise ValueError('unsure what to do with value: %s' % value)
-                #setattr(instance, attr, value)
+                setattr(instance, cols[i], value)
 
         return self.follow_joins(self.join_meta, collected_models, self.model)
 
@@ -1322,7 +1326,8 @@ class Database(object):
         return conn.close()
 
     def last_insert_id(self, cursor, model):
-        return cursor.lastrowid
+        if model._meta.auto_increment:
+            return cursor.lastrowid
 
     def rows_affected(self, cursor):
         return cursor.rowcount
@@ -1363,6 +1368,9 @@ class Database(object):
         raise NotImplementedError
 
     def get_indexes_for_table(self, table):
+        raise NotImplementedError
+
+    def sequence_exists(self, seq):
         raise NotImplementedError
 
     def create_table(self, model_class):
@@ -1420,13 +1428,14 @@ class PostgresqlDatabase(Database):
         return psycopg2.connect(database=database, **kwargs)
 
     def last_insert_id(self, cursor, model):
-        if model._meta.pk_sequence:
-            cursor.execute("SELECT CURRVAL('\"%s\"')" % (
-                model._meta.pk_sequence))
-        else:
+        seq = model._meta.primary_key.sequence
+        if seq:
+            cursor.execute("SELECT CURRVAL('\"%s\"')" % (seq))
+            return cursor.fetchone()[0]
+        elif model._meta.auto_increment:
             cursor.execute("SELECT CURRVAL('\"%s_%s_seq\"')" % (
-                model._meta.db_table, model._meta.pk_col))
-        return cursor.fetchone()[0]
+                model._meta.db_table, model._meta.primary_key.db_column))
+            return cursor.fetchone()[0]
 
     def get_indexes_for_table(self, table):
         res = self.execute("""
@@ -1548,7 +1557,7 @@ default_database = SqliteDatabase('peewee.db')
 
 class ModelOptions(object):
     def __init__(self, cls, database=None, db_table=None, indexes=None,
-                 ordering=None, pk_sequence=None, primary_key=None):
+                 ordering=None, primary_key=None):
         self.model_class = cls
         self.name = cls.__name__.lower()
         self.fields = {}
@@ -1558,7 +1567,6 @@ class ModelOptions(object):
         self.db_table = db_table
         self.indexes = indexes or []
         self.ordering = ordering
-        self.pk_sequence = pk_sequence
         self.primary_key = primary_key
 
         self.auto_increment = None
@@ -1588,7 +1596,7 @@ class ModelOptions(object):
 
 
 class BaseModel(type):
-    inheritable_options = ['database', 'indexes', 'ordering', 'primary_key', 'pk_sequence']
+    inheritable_options = ['database', 'indexes', 'ordering', 'primary_key']
 
     def __new__(cls, name, bases, attrs):
         if not bases:
@@ -1680,8 +1688,22 @@ class Model(object):
         return DeleteQuery(cls)
 
     @classmethod
+    def create(cls, **query):
+        inst = cls(**query)
+        inst.save(force_insert=True)
+        return inst
+
+    @classmethod
     def get(cls, query=None):
         return cls.select().get(query)
+
+    @classmethod
+    def get_or_create(cls, **query):
+        try:
+            inst = cls.get(**query)
+        except cls.DoesNotExist:
+            inst = cls.create(**query)
+        return inst
 
     @classmethod
     def table_exists(cls):
@@ -1717,6 +1739,23 @@ class Model(object):
 
     def prepared(self):
         pass
+
+    def save(self, force_insert=False):
+        field_dict = dict(self._data)
+        pk = self._meta.primary_key
+        if self.get_id() and not force_insert:
+            field_dict.pop(pk.name)
+            update = self.update(
+                **field_dict
+            ).where(pk == self.get_id())
+            update.execute()
+        else:
+            if self._meta.auto_increment:
+                field_dict.pop(pk.name, None)
+            insert = self.insert(**field_dict)
+            new_pk = insert.execute()
+            if self._meta.auto_increment:
+                self.set_id(new_pk)
 
     def __eq__(self, other):
         return other.__class__ == self.__class__ and \
