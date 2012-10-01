@@ -1,4 +1,5 @@
 todo
 ====
 
-* annotate/aggregate
+* tests
+* docs

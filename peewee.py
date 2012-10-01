@@ -1066,20 +1066,6 @@ class Query(object):
         if q_or_node is not None:
             self._where &= q_or_node
 
-    def filter(self, **query):
-        node, fields = self.convert_dict_to_node(query)
-        query = self.clone()
-        for field in fields:
-            lm, rm = field.model_class, field.rel_model
-            exists = False
-            for join in self._joins.get(lm, []):
-                if join.model_class == rm:
-                    exists = True
-                    break
-            if not exists:
-                query = query.switch(lm).join(rm, on=field.name)
-        return query.where(node)
-
     @returns_clone
     def join(self, model_class, join_type=None, on=None):
         if not self._query_ctx._meta.rel_exists(model_class):
@@ -1202,6 +1188,42 @@ class SelectQuery(Query):
     @returns_clone
     def naive(self, naive=True):
         self._naive = naive
+
+    def ensure_join(self, lm, rm, on=None):
+        ctx = self._query_ctx
+        exists = False
+        for join in self._joins.get(lm, []):
+            if join.model_class == rm:
+                exists = True
+                break
+        if not exists:
+            query = self.switch(lm).join(rm, on=on).switch(ctx)
+        return query
+
+    def filter(self, **query):
+        node, fields = self.convert_dict_to_node(query)
+        query = self.clone()
+        for field in fields:
+            lm, rm = field.model_class, field.rel_model
+            query = query.ensure_join(lm, rm, field.name)
+        return query.where(node)
+
+    def annotate(self, rel_model, annotation=None):
+        annotation = annotation or fn.Count(rel_model._meta.primary_key).set_alias('count')
+        query = self.clone()
+        query = query.ensure_join(query._query_ctx, rel_model)
+        query._group_by = list(query._select)
+        query._select = tuple(query._select) + (annotation,)
+        return query
+
+    def aggregate(self, aggregation=None):
+        aggregation = aggregation or fn.Count(self.model_class._meta.primary_key)
+        query = self.order_by()
+        query._select = (aggregation,)
+        compiler = self.database.get_compiler()
+        sql, params = query.sql(compiler)
+        curs = query.database.execute_sql(sql, params, require_commit=False)
+        return curs.fetchone()[0]
 
     def count(self):
         if self._distinct or self._group_by:
