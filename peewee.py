@@ -841,8 +841,11 @@ class QueryCompiler(object):
         parts.append('(%s)' % columns)
         return ' '.join(parts)
 
-    def drop_table(self, model_class, cascade=False):
-        parts = ['DROP TABLE %s' % self.quote(model_class._meta.db_table)]
+    def drop_table(self, model_class, fail_silently=False, cascade=False):
+        parts = ['DROP TABLE']
+        if fail_silently:
+            parts.append('IF EXISTS')
+        parts.append(self.quote(model_class._meta.db_table))
         if cascade:
             parts.append('CASCADE')
         return ' '.join(parts)
@@ -1333,6 +1336,7 @@ class DeleteQuery(Query):
 
 
 class Database(object):
+    compiler_class = QueryCompiler
     field_overrides = {}
     for_update = False
     interpolation = '?'
@@ -1397,7 +1401,7 @@ class Database(object):
         return cursor.rowcount
 
     def get_compiler(self):
-        return QueryCompiler(self.quote_char, self.interpolation, self.field_overrides, self.op_overrides)
+        return self.compiler_class(self.quote_char, self.interpolation, self.field_overrides, self.op_overrides)
 
     def execute(self, query):
         sql, params = query.sql(self.get_compiler())
@@ -1450,8 +1454,8 @@ class Database(object):
         return self.create_index(model_class, [field], field.unique)
 
     def drop_table(self, model_class, fail_silently=False):
-        framing = fail_silently and 'DROP TABLE IF EXISTS %s;' or 'DROP TABLE %s;'
-        self.execute_sql(framing % self.quote(model_class._meta.db_table))
+        qc = self.get_compiler()
+        return self.execute_sql(qc.drop_table(model_class, fail_silently))
 
     def transaction(self):
         return transaction(self)
@@ -1652,7 +1656,7 @@ class ModelOptions(object):
         return dict((f, dft if not callable(dft) else dft()) for f, dft in self.defaults.items())
 
     def get_sorted_fields(self):
-        return sorted(self.fields.items(), key=lambda (k,v): (v == self.primary_key and 1 or 2, v._order))
+        return sorted(self.fields.items(), key=lambda (k,v): (v is self.primary_key and 1 or 2, v._order))
 
     def get_field_names(self):
         return [f[0] for f in self.get_sorted_fields()]
