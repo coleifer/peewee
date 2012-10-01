@@ -1097,9 +1097,6 @@ class Query(object):
     def sql(self, compiler):
         raise NotImplementedError()
 
-    def db_execute(self):
-        return self.database.execute(se)
-
     def execute(self):
         raise NotImplementedError
 
@@ -1432,7 +1429,7 @@ class Database(object):
 
     def drop_table(self, model_class, fail_silently=False):
         framing = fail_silently and 'DROP TABLE IF EXISTS %s;' or 'DROP TABLE %s;'
-        self.execute(framing % self.quote_name(model_class._meta.db_table))
+        self.execute_sql(framing % self.quote(model_class._meta.db_table))
 
     def transaction(self):
         return transaction(self)
@@ -1449,12 +1446,12 @@ class SqliteDatabase(Database):
         return sqlite3.connect(database, **kwargs)
 
     def get_indexes_for_table(self, table):
-        res = self.execute('PRAGMA index_list(%s);' % self.quote_name(table))
+        res = self.execute_sql('PRAGMA index_list(%s);' % self.quote(table))
         rows = sorted([(r[1], r[2] == 1) for r in res.fetchall()])
         return rows
 
     def get_tables(self):
-        res = self.execute('select name from sqlite_master where type="table" order by name')
+        res = self.execute_sql('select name from sqlite_master where type="table" order by name')
         return [r[0] for r in res.fetchall()]
 
 
@@ -1479,15 +1476,15 @@ class PostgresqlDatabase(Database):
     def last_insert_id(self, cursor, model):
         seq = model._meta.primary_key.sequence
         if seq:
-            cursor.execute("SELECT CURRVAL('\"%s\"')" % (seq))
+            cursor.execute_sql("SELECT CURRVAL('\"%s\"')" % (seq))
             return cursor.fetchone()[0]
         elif model._meta.auto_increment:
-            cursor.execute("SELECT CURRVAL('\"%s_%s_seq\"')" % (
+            cursor.execute_sql("SELECT CURRVAL('\"%s_%s_seq\"')" % (
                 model._meta.db_table, model._meta.primary_key.db_column))
             return cursor.fetchone()[0]
 
     def get_indexes_for_table(self, table):
-        res = self.execute("""
+        res = self.execute_sql("""
             SELECT c2.relname, i.indisprimary, i.indisunique
             FROM pg_catalog.pg_class c, pg_catalog.pg_class c2, pg_catalog.pg_index i
             WHERE c.relname = %s AND c.oid = i.indrelid AND i.indexrelid = c2.oid
@@ -1495,7 +1492,7 @@ class PostgresqlDatabase(Database):
         return sorted([(r[0], r[1]) for r in res.fetchall()])
 
     def get_tables(self):
-        res = self.execute("""
+        res = self.execute_sql("""
             SELECT c.relname
             FROM pg_catalog.pg_class c
             LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
@@ -1506,7 +1503,7 @@ class PostgresqlDatabase(Database):
         return [row[0] for row in res.fetchall()]
 
     def sequence_exists(self, sequence):
-        res = self.execute("""
+        res = self.execute_sql("""
             SELECT COUNT(*)
             FROM pg_class, pg_namespace
             WHERE relkind='S'
@@ -1516,7 +1513,7 @@ class PostgresqlDatabase(Database):
 
     def set_search_path(self, *search_path):
         path_params = ','.join(['%s'] * len(search_path))
-        self.execute('SET search_path TO %s' % path_params, search_path)
+        self.execute_sql('SET search_path TO %s' % path_params, search_path)
 
 
 class MySQLDatabase(Database):
@@ -1530,7 +1527,7 @@ class MySQLDatabase(Database):
         'text': 'LONGTEXT',
     }
     for_update_support = True
-    op_overrides = {LIKE: 'LIKE BINARY'}
+    op_overrides = {OP_LIKE: 'LIKE BINARY'}
     quote_char = '`'
     subquery_delete_same_table = False
 
@@ -1569,12 +1566,12 @@ class MySQLDatabase(Database):
         return super(MySQLDatabase, self).create_foreign_key(model_class, field)
 
     def get_indexes_for_table(self, table):
-        res = self.execute('SHOW INDEXES IN %s;' % self.quote_name(table))
+        res = self.execute_sql('SHOW INDEXES IN %s;' % self.quote(table))
         rows = sorted([(r[2], r[1] == 0) for r in res.fetchall()])
         return rows
 
     def get_tables(self):
-        res = self.execute('SHOW TABLES;')
+        res = self.execute_sql('SHOW TABLES;')
         return [r[0] for r in res.fetchall()]
 
 
