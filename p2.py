@@ -247,6 +247,9 @@ class Field(Expr):
         self.name = name
         self.model_class = model_class
         self.db_column = self.db_column or self.name
+
+        model_class._meta.fields[self.name] = self
+        model_class._meta.columns[self.db_column] = self
         setattr(model_class, name, FieldDescriptor(self))
 
     def field_attributes(self):
@@ -474,6 +477,9 @@ class ForeignKeyField(Field):
         self.model_class = model_class
         self.db_column = self.db_column or '%s_id' % self.name
 
+        model_class._meta.fields[self.name] = self
+        model_class._meta.columns[self.db_column] = self
+
         self.related_name = self.related_name or '%s_set' % (model_class._meta.name)
 
         if self.rel_model == 'self':
@@ -697,7 +703,7 @@ class QueryCompiler(object):
         if query._distinct:
             parts.append('DISTINCT')
 
-        selection = query._select or model._meta.get_fields()
+        selection = query._select
         select, s_params = self.parse_expr_list(selection, alias_map)
 
         parts.append(select)
@@ -742,6 +748,7 @@ class QueryCompiler(object):
         for field, expr in d.items():
             field_str, _ = self.parse_expr(field)
             val_str, val_params = self.parse_expr(expr)
+            val_params = [field.db_value(vp) for vp in val_params]
             sets.append((field_str, val_str))
             params.extend(val_params)
         return sets, params
@@ -837,148 +844,137 @@ class QueryCompiler(object):
         return 'DROP SEQUENCE %s;' % self.quote(sequence_name)
 
 
-#class QueryResultWrapper(object):
-#    """
-#    Provides an iterator over the results of a raw Query, additionally doing
-#    two things:
-#    - converts rows from the database into model instances
-#    - ensures that multiple iterations do not result in multiple queries
-#    """
-#    def __init__(self, model, cursor, meta=None, chunk_size=100):
-#        self.model = model
-#        self.cursor = cursor
-#        self.query_meta = meta or {}
-#        self.column_meta = self.query_meta.get('columns')
-#        self.join_meta = self.query_meta.get('graph')
-#        self.chunk_size = chunk_size
-#
-#        # a query will be considered "simple" if it pulls columns straight
-#        # from the primary model being queried
-#        self.simple = self.query_meta.get('simple') or not self.column_meta
-#
-#        if self.simple:
-#            cols = []
-#            non_cols = []
-#            for i in range(len(self.cursor.description)):
-#                col = self.cursor.description[i][0]
-#                if col in model._meta.columns:
-#                    cols.append((i, model._meta.columns[col]))
-#                else:
-#                    non_cols.append((i, col))
-#            self._cols = cols
-#            self._non_cols = non_cols
-#            self._iter_fn = self.simple_iter
-#        else:
-#            self._iter_fn = self.construct_instance
-#
-#        self.__ct = 0
-#        self.__idx = 0
-#
-#        self._result_cache = []
-#        self._populated = False
-#
-#        self.__read_cache = []
-#        self.__read_idx = 0
-#        self.__read_ct = 0
-#
-#    def simple_iter(self, row):
-#        instance = self.model()
-#        for i, f in self._cols:
-#            setattr(instance, f.name, f.python_value(row[i]))
-#        for i, f in self._non_cols:
-#            setattr(instance, f, row[i])
-#        return instance
-#
-#    def construct_instance(self, row):
-#        # we have columns, models, and a graph of joins to reconstruct
-#        collected_models = {}
-#        for i, (model, col) in enumerate(self.column_meta):
-#            value = row[i]
-#
-#            if isinstance(col, tuple):
-#                if len(col) == 3:
-#                    model = self.model # special-case aggregates
-#                    col_name = attr = col[2]
-#                else:
-#                    col_name, attr = col
-#            else:
-#                col_name = attr = col
-#
-#            if model not in collected_models:
-#                collected_models[model] = model()
-#
-#            instance = collected_models[model]
-#
-#            if col_name in instance._meta.columns:
-#                field = instance._meta.columns[col_name]
-#                setattr(instance, field.name, field.python_value(value))
-#            else:
-#                setattr(instance, attr, value)
-#
-#        return self.follow_joins(self.join_meta, collected_models, self.model)
-#
-#    def follow_joins(self, joins, collected_models, current):
-#        inst = collected_models[current]
-#
-#        if current not in joins:
-#            return inst
-#
-#        for joined_model, _, _ in joins[current]:
-#            if joined_model in collected_models:
-#                joined_inst = self.follow_joins(joins, collected_models, joined_model)
-#                fk_field = current._meta.get_related_field_for_model(joined_model)
-#
-#                if not fk_field:
-#                    continue
-#
-#                if not joined_inst.get_pk():
-#                    joined_inst.set_pk(getattr(inst, fk_field.id_storage))
-#
-#                setattr(inst, fk_field.name, joined_inst)
-#                setattr(inst, fk_field.id_storage, joined_inst.get_pk())
-#
-#        return inst
-#
-#    def __iter__(self):
-#        self.__idx = self.__read_idx = 0
-#
-#        if not self._populated:
-#            return self
-#        else:
-#            return iter(self._result_cache)
-#
-#    def iterate(self):
-#        if self.__read_idx >= self.__read_ct:
-#            rows = self.cursor.fetchmany(self.chunk_size)
-#            self.__read_ct = len(rows)
-#            if self.__read_ct:
-#                self.__read_cache = rows
-#                self.__read_idx = 0
-#            else:
-#                self._populated = True
-#                raise StopIteration
-#
-#        instance = self._iter_fn(self.__read_cache[self.__read_idx])
-#        self.__read_idx += 1
-#        return instance
-#
-#    def iterator(self):
-#        while 1:
-#            yield self.iterate()
-#
-#    def next(self):
-#        # check to see if we have a row in our instance cache
-#        if self.__idx < self.__ct:
-#            inst = self._result_cache[self.__idx]
-#            self.__idx += 1
-#            return inst
-#
-#        instance = self.iterate()
-#        instance.prepared() # <-- model prepared hook
-#        self._result_cache.append(instance)
-#        self.__ct += 1
-#        self.__idx += 1
-#        return instance
+class QueryResultWrapper(object):
+    """
+    Provides an iterator over the results of a raw Query, additionally doing
+    two things:
+    - converts rows from the database into model instances
+    - ensures that multiple iterations do not result in multiple queries
+    """
+    def __init__(self, model, cursor, meta=None, chunk_size=100):
+        self.model = model
+        self.cursor = cursor
+        self.naive = not meta
+        self.chunk_size = chunk_size
+
+        if self.naive:
+            cols = []
+            non_cols = []
+            for i in range(len(self.cursor.description)):
+                col = self.cursor.description[i][0]
+                if col in model._meta.columns:
+                    cols.append((i, model._meta.columns[col]))
+                else:
+                    non_cols.append((i, col))
+            self._cols = cols
+            self._non_cols = non_cols
+            self._iter_fn = self.simple_iter
+        else:
+            self.column_meta, self.join_meta = meta
+            self._iter_fn = self.construct_instance
+
+        self.__ct = 0
+        self.__idx = 0
+
+        self._result_cache = []
+        self._populated = False
+
+        self.__read_cache = []
+        self.__read_idx = 0
+        self.__read_ct = 0
+
+    def simple_iter(self, row):
+        instance = self.model()
+        for i, f in self._cols:
+            setattr(instance, f.name, f.python_value(row[i]))
+        for i, f in self._non_cols:
+            setattr(instance, f, row[i])
+        return instance
+
+    def construct_instance(self, row):
+        # we have columns, models, and a graph of joins to reconstruct
+        collected_models = {}
+        for i, expr in enumerate(self.column_meta):
+            value = row[i]
+            if isinstance(expr, Field):
+                model = expr.model_class
+            else:
+                raise ValueError('unable to extract model for value: %s' % expr)
+
+            if model not in collected_models:
+                collected_models[model] = model()
+            instance = collected_models[model]
+
+            if isinstance(expr, Field):
+                setattr(instance, expr.name, expr.python_value(value))
+            else:
+                raise ValueError('unsure what to do with value: %s' % value)
+                #setattr(instance, attr, value)
+
+        return self.follow_joins(self.join_meta, collected_models, self.model)
+
+    def follow_joins(self, joins, collected_models, current):
+        inst = collected_models[current]
+
+        if current not in joins:
+            return inst
+
+        for joined_model, _, _ in joins[current]:
+            if joined_model in collected_models:
+                joined_inst = self.follow_joins(joins, collected_models, joined_model)
+                fk_field = current._meta.rel_for_model(joined_model)
+
+                if not fk_field:
+                    continue
+
+                if not joined_inst.get_id():
+                    rel_inst_id = inst._data[fk_field.name]
+                    joined_inst.set_id(rel_inst_id)
+
+                setattr(inst, fk_field.name, joined_inst)
+
+        return inst
+
+    def __iter__(self):
+        self.__idx = self.__read_idx = 0
+
+        if not self._populated:
+            return self
+        else:
+            return iter(self._result_cache)
+
+    def iterate(self):
+        if self.__read_idx >= self.__read_ct:
+            rows = self.cursor.fetchmany(self.chunk_size)
+            self.__read_ct = len(rows)
+            if self.__read_ct:
+                self.__read_cache = rows
+                self.__read_idx = 0
+            else:
+                self._populated = True
+                raise StopIteration
+
+        instance = self._iter_fn(self.__read_cache[self.__read_idx])
+        self.__read_idx += 1
+        return instance
+
+    def iterator(self):
+        while 1:
+            yield self.iterate()
+
+    def next(self):
+        # check to see if we have a row in our instance cache
+        if self.__idx < self.__ct:
+            inst = self._result_cache[self.__idx]
+            self.__idx += 1
+            return inst
+
+        instance = self.iterate()
+        instance.prepared() # <-- model prepared hook
+        self._result_cache.append(instance)
+        self.__ct += 1
+        self.__idx += 1
+        return instance
 
 def returns_clone(func):
     def inner(self, *args, **kwargs):
@@ -1026,7 +1022,8 @@ class Query(object):
     def where(self, q_or_node):
         if self._where is None:
             self._where = Node(OP_AND)
-        self._where &= q_or_node
+        if q_or_node is not None:
+            self._where &= q_or_node
 
     @returns_clone
     def join(self, model_class, join_type=None, on=None):
@@ -1045,8 +1042,11 @@ class Query(object):
     def sql(self, compiler):
         raise NotImplementedError()
 
+    def db_execute(self):
+        return self.database.execute(se)
+
     def execute(self):
-        return self.database.execute(self)
+        raise NotImplementedError
 
 
 class RawQuery(Query):
@@ -1056,7 +1056,7 @@ class RawQuery(Query):
         super(RawQuery, self).__init__(model)
 
     def clone(self):
-        return RawQuery(self.model, self._sql, *self._params)
+        return RawQuery(self.model_class, self._sql, *self._params)
 
     def sql(self):
         return self._sql, self._params
@@ -1066,7 +1066,7 @@ class RawQuery(Query):
     switch = not_allowed('switch')
 
     def execute(self):
-        return QueryResultWrapper(self.model, self.raw_execute(*self.sql()))
+        return QueryResultWrapper(self.model_class, self.database.execute(self), None)
 
     def __iter__(self):
         return iter(self.execute())
@@ -1076,7 +1076,7 @@ class SelectQuery(Query):
     require_commit = False
 
     def __init__(self, model_class, *selection):
-        self._select = selection
+        self._select = selection or model_class._meta.get_fields()
         self._group_by = None
         self._having = None
         self._order_by = None
@@ -1102,7 +1102,6 @@ class SelectQuery(Query):
         query._distinct = self._distinct
         query._for_update = self._for_update
         query._naive = self._naive
-        query._qr = None
         return query
 
     @returns_clone
@@ -1185,41 +1184,35 @@ class SelectQuery(Query):
     #    curs = self.database.execute(*clone.sql(), require_commit=False)
     #    return bool(curs.fetchone())
 
-    #def get(self, *args, **kwargs):
-    #    orig_ctx = self.query_context
-    #    self.query_context = self.model
-    #    query = self.where(*args, **kwargs).paginate(1, 1)
-    #    try:
-    #        obj = query.execute().next()
-    #        return obj
-    #    except StopIteration:
-    #        raise self.model.DoesNotExist('instance matching query does not exist:\nSQL: %s\nPARAMS: %s' % (
-    #            query.sql()
-    #        ))
-    #    finally:
-    #        self.query_context = orig_ctx
+    def get(self, query=None):
+        clone = self.clone()
+        clone.query_context = self.model_class
+        clone = clone.where(query).paginate(1, 1)
+        try:
+            obj = clone.execute().next()
+            return obj
+        except StopIteration:
+            raise self.model.DoesNotExist('instance matching query does not exist:\nSQL: %s\nPARAMS: %s' % (
+                query.sql()
+            ))
 
     def sql(self, compiler):
         return compiler.parse_select_query(self)
 
-    #def execute(self):
-    #    if self._dirty or not self._qr:
-    #        try:
-    #            sql, params, meta = self.sql_meta()
-    #        except EmptyResultException:
-    #            return []
-    #        else:
-    #            if self._naive:
-    #                meta = None
-    #            self._qr = QueryResultWrapper(self.model, self.raw_execute(sql, params), meta)
-    #            self._dirty = False
-    #            return self._qr
-    #    else:
-    #        # call the __iter__ method directly
-    #        return self._qr
+    def execute(self):
+        if self._dirty or not self._qr:
+            if self._naive:
+                query_meta = None
+            else:
+                query_meta = [self._select, self._joins]
+            self._qr = QueryResultWrapper(self.model_class, self.database.execute(self), query_meta)
+            self._dirty = False
+            return self._qr
+        else:
+            return self._qr
 
-    #def __iter__(self):
-    #    return iter(self.execute())
+    def __iter__(self):
+        return iter(self.execute())
 
 
 class UpdateQuery(Query):
@@ -1238,7 +1231,7 @@ class UpdateQuery(Query):
         return compiler.parse_update_query(self)
 
     def execute(self):
-        result = self.raw_execute(*self.sql())
+        result = self.database.execute(self)
         return self.database.rows_affected(result)
 
 class InsertQuery(Query):
@@ -1258,8 +1251,8 @@ class InsertQuery(Query):
         return compiler.parse_insert_query(self)
 
     def execute(self):
-        result = self.raw_execute(*self.sql())
-        return self.database.last_insert_id(result, self.model)
+        result = self.database.execute(self)
+        return self.database.last_insert_id(result, self.model_class)
 
 class DeleteQuery(Query):
     join = not_allowed('joining')
@@ -1268,7 +1261,7 @@ class DeleteQuery(Query):
         return compiler.parse_delete_query(self)
 
     def execute(self):
-        result = self.raw_execute(*self.sql())
+        result = self.database.execute(self)
         return self.database.rows_affected(result)
 
 
@@ -1513,15 +1506,6 @@ class MySQLDatabase(Database):
         self.execute(query)
         return super(MySQLDatabase, self).create_foreign_key(model_class, field)
 
-    def rename_column_sql(self, model_class, field_name, new_name):
-        field = model_class._meta.fields[field_name]
-        return 'ALTER TABLE %s CHANGE COLUMN %s %s %s' % (
-            self.quote_name(model_class._meta.db_table),
-            self.quote_name(field.db_column),
-            self.quote_name(new_name),
-            field.render_field_template(self.adapter.quote_char),
-        )
-
     def get_indexes_for_table(self, table):
         res = self.execute('SHOW INDEXES IN %s;' % self.quote_name(table))
         rows = sorted([(r[2], r[1] == 0) for r in res.fetchall()])
@@ -1565,6 +1549,7 @@ class ModelOptions(object):
         self.model_class = cls
         self.name = cls.__name__.lower()
         self.fields = {}
+        self.columns = {}
 
         self.database = database or default_database
         self.db_table = db_table
@@ -1639,7 +1624,6 @@ class BaseModel(type):
         for name, attr in cls.__dict__.items():
             if isinstance(attr, Field):
                 attr.add_to_class(cls, name)
-                cls._meta.fields[attr.name] = attr
                 if attr.index:
                     cls._meta.indexes.append(attr.name)
                 if attr.primary_key:
@@ -1648,7 +1632,6 @@ class BaseModel(type):
         if not primary_key:
             primary_key = PrimaryKeyField(primary_key=True)
             primary_key.add_to_class(cls, 'id')
-            cls._meta.fields['id'] = primary_key
 
         cls._meta.primary_key = primary_key
         cls._meta.auto_increment = isinstance(primary_key, PrimaryKeyField)
@@ -1693,6 +1676,10 @@ class Model(object):
     def delete(cls):
         return DeleteQuery(cls)
 
+    @classmethod
+    df get(cls, query=None):
+        return cls.select().get(query)
+
     #@classmethod
     #def create_table(cls, fail_silently=False, extra=''):
     #    if fail_silently and cls.table_exists():
@@ -1716,10 +1703,13 @@ class Model(object):
     #    cls._meta.database.drop_table(cls, fail_silently)
 
     def get_id(self):
-        return getattr(self, self._meta.id_field.name)
+        return getattr(self, self._meta.primary_key.name)
 
     def set_id(self, id):
-        setattr(self, self._meta.id_field.name, id)
+        setattr(self, self._meta.primary_key.name, id)
+
+    def prepared(self):
+        pass
 
     def __eq__(self, other):
         return other.__class__ == self.__class__ and \
