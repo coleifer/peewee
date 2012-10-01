@@ -128,7 +128,6 @@ class Leaf(object):
 
 
 class Q(Leaf):
-    # binary expression
     def __init__(self, lhs, op, rhs, negated=False):
         self.lhs = lhs
         self.op = op
@@ -289,7 +288,6 @@ class PrimaryKeyField(IntegerField):
 
     def __init__(self, *args, **kwargs):
         kwargs['primary_key'] = True
-        # support fo "default nextval(<<sequence name>>)" ??
         super(PrimaryKeyField, self).__init__(*args, **kwargs)
 
 class FloatField(Field):
@@ -967,7 +965,6 @@ class QueryResultWrapper(object):
             yield self.iterate()
 
     def next(self):
-        # check to see if we have a row in our instance cache
         if self.__idx < self.__ct:
             inst = self._result_cache[self.__idx]
             self.__idx += 1
@@ -1155,38 +1152,33 @@ class SelectQuery(Query):
     def naive(self, naive=True):
         self._naive = naive
 
-    #def count(self):
-    #    if self._distinct or self._group_by:
-    #        return self.wrapped_count()
+    def count(self):
+        if self._distinct or self._group_by:
+            return self.wrapped_count()
 
-    #    clone = self.order_by()
-    #    clone._limit = clone._offset = None
+        clone = self.order_by()
+        clone._limit = clone._offset = None
+        clone._select = [fn.Count(clone.model_class._meta.primary_key)]
 
-    #    if clone.use_aliases():
-    #        clone.query = 'COUNT(t1.%s)' % (clone.model._meta.pk_col)
-    #    else:
-    #        clone.query = 'COUNT(%s)' % (clone.model._meta.pk_col)
+        res = clone.database.execute(clone)
+        return (res.fetchone() or [0])[0]
 
-    #    res = clone.database.execute(*clone.sql(), require_commit=False)
+    def wrapped_count(self):
+        clone = self.order_by()
+        clone._limit = clone._offset = None
 
-    #    return (res.fetchone() or [0])[0]
+        compiler = self.database.get_compiler()
+        sql, params = clone.sql(compiler)
+        query = 'SELECT COUNT(1) FROM (%s) AS wrapped_select' % sql
 
-    #def wrapped_count(self):
-    #    clone = self.order_by()
-    #    clone._limit = clone._offset = None
+        res = clone.database.execute(query, params, require_commit=False)
+        return res.fetchone()[0]
 
-    #    sql, params = clone.sql()
-    #    query = 'SELECT COUNT(1) FROM (%s) AS wrapped_select' % sql
-
-    #    res = clone.database.execute(query, params, require_commit=False)
-
-    #    return res.fetchone()[0]
-
-    #def exists(self):
-    #    clone = self.paginate(1, 1)
-    #    clone.query = '(1) AS a'
-    #    curs = self.database.execute(*clone.sql(), require_commit=False)
-    #    return bool(curs.fetchone())
+    def exists(self):
+        clone = self.paginate(1, 1)
+        clone._select = [self.model_class._meta.primary_key]
+        res = self.database.execute(clone)
+        return bool(res.fetchone())
 
     def get(self, query=None):
         clone = self.clone()
@@ -1764,98 +1756,3 @@ class Model(object):
 
     def __ne__(self, other):
         return not self == other
-
-
-if __name__ == '__main__':
-    class Blog(Model):
-        title = CharField()
-        pub_date= DateTimeField()
-        votes = IntegerField(null=True)
-
-    class Entry(Model):
-        blog = ForeignKeyField(Blog)
-        headline = CharField()
-        content = TextField()
-
-    q = SelectQuery(Blog)
-    qc = QueryCompiler()
-    q = q.where((Blog.title == 'alpha') | (Blog.title == 'bravo'))
-    q = q.where(Blog.votes - 10 == Blog.pub_date)
-    print qc.parse_node(q._where)
-    print q.sql(qc)
-
-    q = SelectQuery(Entry)
-    q = q.join(Blog)
-    q = q.where((Entry.headline=='headline') | (Blog.title == 'titttle'))
-    print q.sql(qc)
-    print
-
-    class A(Model):
-        a_field = CharField()
-    class B(Model):
-        a = ForeignKeyField(A)
-        b_field = CharField()
-    class B2(Model):
-        a = ForeignKeyField(A)
-        b2_field = CharField()
-    class C(Model):
-        b = ForeignKeyField(B)
-        c_field = CharField()
-
-    q = SelectQuery(C).join(B).join(A).join(B2).where(
-        (A.a_field == 'a') | (B.b_field == 'b')
-    )
-    print q.sql(qc)
-    print
-
-    q = SelectQuery(A).join(B).switch(A)
-    q = q.join(B2)
-    q = q.switch(B)
-    q = q.join(C).where(
-        (A.a_field=='a') | (B2.b2_field=='bbb222')
-    )
-    q = q.limit(10).offset(100)
-    print q.sql(qc)
-    print
-
-    q = q.group_by(B).having((B.b_field > 'bfasd'))
-    print q.sql(qc)
-    print
-
-    q = UpdateQuery(B, {B.b_field: 'bz', B.a: 'a'}).where(B.id > 3)
-    print q.sql(qc)
-    print
-
-    q = InsertQuery(B, {B.b_field: 'bnew', B.a: 'anew'})
-    print q.sql(qc)
-    print
-
-    q = DeleteQuery(B).where((B.b_field < 'blt') & (B.a > 'agt'))
-    print q.sql(qc)
-    print
-
-    q = SelectQuery(A).where(A.id << [1, 2, 3]).where(A.a_field == 'af')
-    print q.sql(qc)
-    print
-
-    q = SelectQuery(A).join(B).where(B.id << SelectQuery(B).where(B.b_field=='hurb'))
-    q = q.order_by(A.id, B.b_field.desc())
-    print q.sql(qc)
-
-    #db = SqliteDatabase(':memory:')
-    #print
-    #print db.execute(q)
-
-    print '--------------------------------'
-    print qc.create_table(Blog)
-    print qc.create_table(Entry)
-    print qc.create_index(Entry, (Entry.blog,), True)
-    #q = SelectQuery(None)
-    #q = q.where(fn.SUBSTR(fn.LOWER(f1), 0, 1) == 'b')
-    #print qc.parse_node(q._where)
-    #q = SelectQuery(None, f1, f2, (f1+1).set_alias('baz'))
-    #print qc.parse_select(q._select, None)
-    #sq = SelectQuery('a', f1, f2, (f1 + 10).set_alias('f1plusten'))
-    #sq = sq.join('b').join('c').switch('a').join('b2')
-    #sq = sq.where((f1 == 'b') | (f2 == 'c'))
-    #sq.sql()
