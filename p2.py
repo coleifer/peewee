@@ -992,13 +992,11 @@ class QueryResultWrapper(object):
         return instance
 
 def returns_clone(func):
-    def call_local(self, *args, **kwargs):
-        return func(self, *args, **kwargs)
     def inner(self, *args, **kwargs):
         clone = self.clone()
         func(clone, *args, **kwargs)
         return clone
-    func.local = call_local
+    inner.call_local = func
     return inner
 
 def not_allowed(fn):
@@ -1037,21 +1035,22 @@ class Query(object):
         )
 
     def convert_dict_to_node(self, qdict):
-        ctx = self._query_ctx
         node = Node(OP_AND)
+        curr = self.model_class
+        fields = []
         for key, value in qdict.items():
             if '__' in key and key.rsplit('__', 1)[1] in DJANGO_MAP:
                 key, op = key.rsplit('__', 1)
                 op = DJANGO_MAP[op]
             else:
                 op = OP_EQ
-            curr = ctx
             for piece in key.split('__'):
                 field = getattr(curr, piece)
-                # TODO: chekc for join from curr -> new curr
-                curr = field.model_class
+                if isinstance(field, ForeignKeyField):
+                    curr = field.rel_model
+                    fields.append(field)
             node &= Q(field, op, value)
-        return node
+        return node, fields
 
     @returns_clone
     def where(self, q_or_node):
@@ -1061,7 +1060,18 @@ class Query(object):
             self._where &= q_or_node
 
     def filter(self, **query):
-        return self.where(self.convert_dict_to_node(query))
+        node, fields = self.convert_dict_to_node(query)
+        query = self.clone()
+        for field in fields:
+            lm, rm = field.model_class, field.rel_model
+            exists = False
+            for join in self._joins.get(lm, []):
+                if join.model_class == rm:
+                    exists = True
+                    break
+            if not exists:
+                query = query.switch(lm).join(rm, on=field.name)
+        return query.where(node)
 
     @returns_clone
     def join(self, model_class, join_type=None, on=None):
@@ -1074,8 +1084,8 @@ class Query(object):
         self._query_ctx = model_class
 
     @returns_clone
-    def switch(self, model_class):
-        self._query_ctx = model_class
+    def switch(self, model_class=None):
+        self._query_ctx = model_class or self.model_class
 
     def sql(self, compiler):
         raise NotImplementedError()
