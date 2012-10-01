@@ -65,6 +65,17 @@ OP_IN = 6
 OP_ISNULL = 7
 OP_LIKE = 8
 
+DJANGO_MAP = {
+    'eq': OP_EQ,
+    'lt': OP_LT,
+    'lte': OP_LTE,
+    'gt': OP_GT,
+    'gte': OP_GTE,
+    'ne': OP_NE,
+    'isnull': OP_ISNULL,
+    'like': OP_LIKE,
+}
+
 SCALAR = 99
 
 JOIN_INNER = 1
@@ -83,6 +94,9 @@ class Node(object):
             if connector == self.connector:
                 self.children.append(rhs)
                 return self
+        elif isinstance(rhs, Node) and connector == self.connector:
+            self.children.extend(rhs.children)
+            return self
         p = Node(connector)
         p.children = [self, rhs]
         return p
@@ -978,10 +992,13 @@ class QueryResultWrapper(object):
         return instance
 
 def returns_clone(func):
+    def call_local(self, *args, **kwargs):
+        return func(self, *args, **kwargs)
     def inner(self, *args, **kwargs):
         clone = self.clone()
         func(clone, *args, **kwargs)
         return clone
+    func.local = call_local
     return inner
 
 def not_allowed(fn):
@@ -1019,12 +1036,32 @@ class Query(object):
             (mc, list(j)) for mc, j in self._joins.items()
         )
 
+    def convert_dict_to_node(self, qdict):
+        ctx = self._query_ctx
+        node = Node(OP_AND)
+        for key, value in qdict.items():
+            if '__' in key and key.rsplit('__', 1)[1] in DJANGO_MAP:
+                key, op = key.rsplit('__', 1)
+                op = DJANGO_MAP[op]
+            else:
+                op = OP_EQ
+            curr = ctx
+            for piece in key.split('__'):
+                field = getattr(curr, piece)
+                # TODO: chekc for join from curr -> new curr
+                curr = field.model_class
+            node &= Q(field, op, value)
+        return node
+
     @returns_clone
     def where(self, q_or_node):
         if self._where is None:
             self._where = Node(OP_AND)
         if q_or_node is not None:
             self._where &= q_or_node
+
+    def filter(self, **query):
+        return self.where(self.convert_dict_to_node(query))
 
     @returns_clone
     def join(self, model_class, join_type=None, on=None):
@@ -1180,10 +1217,10 @@ class SelectQuery(Query):
         res = self.database.execute(clone)
         return bool(res.fetchone())
 
-    def get(self, query=None):
+    def get(self, query=None, **kwargs):
         clone = self.clone()
         clone.query_context = self.model_class
-        clone = clone.where(query).paginate(1, 1)
+        clone = clone.where(query, **kwargs).paginate(1, 1)
         try:
             obj = clone.execute().next()
             return obj
@@ -1686,16 +1723,8 @@ class Model(object):
         return inst
 
     @classmethod
-    def get(cls, query=None):
-        return cls.select().get(query)
-
-    @classmethod
-    def get_or_create(cls, **query):
-        try:
-            inst = cls.get(**query)
-        except cls.DoesNotExist:
-            inst = cls.create(**query)
-        return inst
+    def get(cls, query=None, **kwargs):
+        return cls.select().get(query, **kwargs)
 
     @classmethod
     def table_exists(cls):
@@ -1707,6 +1736,10 @@ class Model(object):
             return
 
         db = cls._meta.database
+        pk = cls._meta.primary_key
+        if db.sequences and pk.sequence and not db.sequence_exists(pk.sequence):
+            db.create_sequence(pk.sequence)
+
         db.create_table(cls)
 
         for field_name, field_obj in cls._meta.fields.items():
