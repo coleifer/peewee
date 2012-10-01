@@ -569,7 +569,7 @@ class QueryCompiler(object):
 
     def _add_alias(self, expr_str, expr):
         if expr.alias:
-            expr_str = ' '.join((expr_str, 'as', expr.alias))
+            expr_str = ' '.join((expr_str, 'AS', expr.alias))
         return expr_str
 
     def _max_alias(self, am):
@@ -612,7 +612,7 @@ class QueryCompiler(object):
             max_alias = self._max_alias(alias_map)
             clone = expr.clone()
             clone._select = (clone.model_class._meta.primary_key,)
-            subselect, params = self.parse_select_query(clone, max_alias)
+            subselect, params = self.parse_select_query(clone, max_alias, alias_map)
             return '(%s)' % subselect, params
         elif isinstance(expr, (list, tuple)):
             expr_str = '(%s)' % ','.join(self.interpolation for i in range(len(expr)))
@@ -710,9 +710,10 @@ class QueryCompiler(object):
                     alias_map[join.model_class] = 't%s' % start
         return alias_map
 
-    def parse_select_query(self, query, start=1):
+    def parse_select_query(self, query, start=1, alias_map=None):
         model = query.model_class
-        alias_map = self.calculate_alias_map(query, start)
+        alias_map = alias_map or {}
+        alias_map.update(self.calculate_alias_map(query, start))
 
         parts = ['SELECT']
         params = []
@@ -1284,7 +1285,7 @@ class SelectQuery(Query):
 
 
 class UpdateQuery(Query):
-    def __init__(self, model_class, update):
+    def __init__(self, model_class, update=None):
         self._update = update
         super(UpdateQuery, self).__init__(model_class)
 
@@ -1303,7 +1304,7 @@ class UpdateQuery(Query):
         return self.database.rows_affected(result)
 
 class InsertQuery(Query):
-    def __init__(self, model_class, insert):
+    def __init__(self, model_class, insert=None):
         query = model_class._meta.get_default_dict()
         query.update(insert)
         self._insert = query

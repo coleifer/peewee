@@ -43,7 +43,30 @@ else:
     print 'SQLITE VERSION: %s' % sqlite3.version
 
 
+class TestQueryCompiler(QueryCompiler):
+    def _max_alias(self, am):
+        return 0
+
+    def calculate_alias_map(self, query, start=1):
+        alias_map = {query.model_class: query.model_class._meta.db_table}
+        for model, joins in query._joins.items():
+            if model not in alias_map:
+                alias_map[model] = model._meta.db_table
+            for join in joins:
+                if join.model_class not in alias_map:
+                    alias_map[join.model_class] = join.model_class._meta.db_table
+        return alias_map
+
+class TestDatabase(database_class):
+    compiler_class = TestQueryCompiler
+    field_overrides = {}
+    interpolation = '?'
+    op_overrides = {}
+    quote_char = '"'
+
 test_db = database_class(database_name, **database_params)
+query_db = TestDatabase(database_name, **database_params)
+compiler = query_db.get_compiler()
 
 
 class TestModel(Model):
@@ -106,7 +129,7 @@ def drop_tables():
     Relationship.drop_table(True)
     Blog.drop_table(True)
     User.drop_table(True)
-    
+
 def create_tables():
     User.create_table()
     Blog.create_table()
@@ -129,26 +152,33 @@ class BasePeeweeTestCase(unittest.TestCase):
     def queries(self):
         return [x.msg for x in self.qh.queries]
 
+    def parse_expr(self, query, expr_list):
+        am = compiler.calculate_alias_map(query)
+        return compiler.parse_expr_list(expr_list, am)
+
+    def assertSelect(self, sq, exp_sel, exp_params):
+        exp, p = self.parse_expr(sq, sq._select)
+        self.assertEqual(exp, exp_sel)
+        self.assertEqual(p, exp_params)
+
+
+class SelectTestCase(BasePeeweeTestCase):
+    def test_selection(self):
+        sq = SelectQuery(User)
+        self.assertSelect(sq, 'users."id", users."username"', [])
+
+        sq = SelectQuery(Blog, Blog.pk, Blog.title, Blog.user, User.username).join(User)
+        self.assertSelect(sq, 'blog."pk", blog."title", blog."user_id", users."username"', [])
+
+        sq = SelectQuery(User, fn.Lower(fn.Substr(User.username, 0, 1)).set_alias('lu'), fn.Count(Blog.pk)).join(Blog)
+        self.assertSelect(sq, 'Lower(Substr(users."username", ?, ?)) AS lu, Count(blog."pk")', [0, 1])
+
+        sq = SelectQuery(User, User.username, fn.Count(Blog.select().where(Blog.user == User.id)))
+        self.assertSelect(sq, 'users."username", Count((SELECT blog."pk" FROM "blog" AS blog WHERE blog."user_id" = users."id"))', [])
+
 
 class ModelTestCase(BasePeeweeTestCase):
     def setUp(self):
         super(ModelTestCase, self).setUp()
         drop_tables()
         create_tables()
-
-
-class ModelAPITestCase(ModelTestCase):
-    def create_user(self, n):
-        return User.create(username=n)
-
-    def test_creation(self):
-        self.create_user('u1')
-        self.create_user('u2')
-        res = test_db.execute_sql('select username from users order by username;')
-        self.assertEqual([r[0] for r in res.fetchall()], ['u1', 'u2'])
-
-    def test_select(self):
-        self.create_user('u1')
-        self.create_user('u2')
-        self.assertEqual([u.username for u in User.select().order_by(User.username.asc())], ['u1', 'u2'])
-        self.assertEqual([u.username for u in User.select().order_by(User.username.desc())], ['u2', 'u1'])
