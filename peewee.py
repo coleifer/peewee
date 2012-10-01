@@ -670,7 +670,7 @@ class QueryCompiler(object):
                     right_field = to_model._meta.primary_key.db_column
                 else:
                     field = to_model._meta.rel_for_model(from_model, join.column)
-                    left_field = to_model._meta.primary_key.db_column
+                    left_field = from_model._meta.primary_key.db_column
                     right_field = field.db_column
 
                 join_type = join.join_type or JOIN_INNER
@@ -1074,6 +1074,8 @@ class Query(object):
             raise ValueError('No foreign key between %s and %s' % (
                 self._query_ctx, model_class,
             ))
+        if on and isinstance(on, basestring):
+            on = model_class._meta.fields[on]
         self._joins.setdefault(self._query_ctx, [])
         self._joins[self._query_ctx].append(Join(model_class, join_type, on))
         self._query_ctx = model_class
@@ -1665,10 +1667,10 @@ class ModelOptions(object):
     def get_fields(self):
         return [f[1] for f in self.get_sorted_fields()]
 
-    def rel_for_model(self, model, name=None):
+    def rel_for_model(self, model, field_obj=None):
         for field in self.get_fields():
             if isinstance(field, ForeignKeyField) and field.rel_model == model:
-                if name is None or name == field.name:
+                if field_obj is None or field_obj.name == field.name:
                     return field
 
     def reverse_rel_for_model(self, model):

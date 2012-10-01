@@ -156,10 +156,29 @@ class BasePeeweeTestCase(unittest.TestCase):
         am = compiler.calculate_alias_map(query)
         return compiler.parse_expr_list(expr_list, am)
 
-    def assertSelect(self, sq, exp_sel, exp_params):
-        exp, p = self.parse_expr(sq, sq._select)
-        self.assertEqual(exp, exp_sel)
-        self.assertEqual(p, exp_params)
+    def parse_node(self, query, node):
+        am = compiler.calculate_alias_map(query)
+        return compiler.parse_query_node(node, am)
+
+    def make_fn(fn_name, attr_name):
+        def inner(self, query, expected, expected_params):
+            fn = getattr(self, fn_name)
+            att = getattr(query, attr_name)
+            sql, params = fn(query, att)
+            self.assertEqual(sql, expected)
+            self.assertEqual(params, expected_params)
+        return inner
+
+    assertSelect = make_fn('parse_expr', '_select')
+    assertWhere = make_fn('parse_node', '_where')
+    assertGroupBy = make_fn('parse_expr', '_group_by')
+    assertHaving = make_fn('parse_node', '_having')
+    assertOrderBy = make_fn('parse_expr', '_order_by')
+
+    def assertJoins(self, sq, exp_joins):
+        am = compiler.calculate_alias_map(sq)
+        joins = compiler.parse_joins(sq._joins, sq.model_class, am)
+        self.assertEqual(sorted(joins), sorted(exp_joins))
 
 
 class SelectTestCase(BasePeeweeTestCase):
@@ -175,6 +194,26 @@ class SelectTestCase(BasePeeweeTestCase):
 
         sq = SelectQuery(User, User.username, fn.Count(Blog.select().where(Blog.user == User.id)))
         self.assertSelect(sq, 'users."username", Count((SELECT blog."pk" FROM "blog" AS blog WHERE blog."user_id" = users."id"))', [])
+
+    def test_joins(self):
+        sq = SelectQuery(Blog).join(User, JOIN_LEFT_OUTER)
+        self.assertJoins(sq, ['LEFT OUTER JOIN "users" AS users ON blog."user_id" = users."id"'])
+
+        sq = SelectQuery(User).join(Blog)
+        self.assertJoins(sq, ['INNER JOIN "blog" AS blog ON users."id" = blog."user_id"'])
+
+        sq = SelectQuery(User).join(Relationship)
+        self.assertJoins(sq, ['INNER JOIN "relationship" AS relationship ON users."id" = relationship."from_user_id"'])
+
+        sq = SelectQuery(User).join(Relationship, on=Relationship.to_user)
+        self.assertJoins(sq, ['INNER JOIN "relationship" AS relationship ON users."id" = relationship."to_user_id"'])
+
+    def test_grouping(self):
+        sq = SelectQuery(User).group_by(User.id)
+        self.assertGroupBy(sq, 'users."id"', [])
+
+        sq = SelectQuery(User).group_by(User)
+        self.assertGroupBy(sq, 'users."id", users."username"', [])
 
 
 class ModelTestCase(BasePeeweeTestCase):
