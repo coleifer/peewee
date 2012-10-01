@@ -1261,7 +1261,7 @@ class SelectQuery(Query):
 
 
 class UpdateQuery(Query):
-    def __init__(self, model_class, update=None):
+    def __init__(self, model_class, update):
         self._update = update
         super(UpdateQuery, self).__init__(model_class)
 
@@ -1280,8 +1280,10 @@ class UpdateQuery(Query):
         return self.database.rows_affected(result)
 
 class InsertQuery(Query):
-    def __init__(self, model_class, insert=None):
-        self._insert = insert
+    def __init__(self, model_class, insert):
+        query = model_class._meta.get_default_dict()
+        query.update(insert)
+        self._insert = query
         super(InsertQuery, self).__init__(model_class)
 
     def clone(self):
@@ -1609,6 +1611,7 @@ class ModelOptions(object):
         self.name = cls.__name__.lower()
         self.fields = {}
         self.columns = {}
+        self.defaults = {}
 
         self.database = database or default_database
         self.db_table = db_table
@@ -1619,6 +1622,14 @@ class ModelOptions(object):
         self.auto_increment = None
         self.rel = {}
         self.reverse_rel = {}
+
+    def prepared(self):
+        for field in self.fields.values():
+            if field.default is not None:
+                self.defaults[field] = field.default
+
+    def get_default_dict(self):
+        return dict((f, dft if not callable(dft) else dft()) for f, dft in self.defaults.items())
 
     def get_sorted_fields(self):
         return sorted(self.fields.items(), key=lambda (k,v): (v == self.primary_key and 1 or 2, v._order))
@@ -1703,6 +1714,7 @@ class BaseModel(type):
 
         exception_class = type('%sDoesNotExist' % cls.__name__, (DoesNotExist,), {})
         cls.DoesNotExist = exception_class
+        cls._meta.prepared()
 
         return cls
 
@@ -1711,8 +1723,9 @@ class Model(object):
     __metaclass__ = BaseModel
 
     def __init__(self, *args, **kwargs):
-        self._data = {} # attributes
+        self._data = self._meta.get_default_dict() # attributes
         self._obj_cache = {} # cache of related objects
+
         for key, value in kwargs.iteritems():
             setattr(self, key, value)
 
