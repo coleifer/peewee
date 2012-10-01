@@ -62,8 +62,9 @@ OP_GT = 3
 OP_GTE = 4
 OP_NE = 5
 OP_IN = 6
-OP_ISNULL = 7
+OP_IS = 7
 OP_LIKE = 8
+OP_ILIKE = 9
 
 DJANGO_MAP = {
     'eq': OP_EQ,
@@ -72,8 +73,9 @@ DJANGO_MAP = {
     'gt': OP_GT,
     'gte': OP_GTE,
     'ne': OP_NE,
-    'isnull': OP_ISNULL,
+    'is': OP_IS,
     'like': OP_LIKE,
+    'ilike': OP_ILIKE,
 }
 
 SCALAR = 99
@@ -185,7 +187,7 @@ class Expr(object):
     __gte__ = _q(OP_GTE)
     __ne__ = _q(OP_NE)
     __lshift__ = _q(OP_IN)
-    __rshift__ = _q(OP_ISNULL)
+    __rshift__ = _q(OP_IS)
     __mod__ = _q(OP_LIKE)
 
 
@@ -537,8 +539,9 @@ class QueryCompiler(object):
         OP_GTE: '>=',
         OP_NE: '!=',
         OP_IN: 'IN',
-        OP_ISNULL: 'IS NULL',
+        OP_IS: 'IS',
         OP_LIKE: 'LIKE',
+        OP_ILIKE: 'ILIKE',
     }
 
     expr_op_map = {
@@ -557,10 +560,11 @@ class QueryCompiler(object):
         JOIN_FULL: 'FULL',
     }
 
-    def __init__(self, quote_char='"', interpolation='?', field_map_overrides=None):
+    def __init__(self, quote_char='"', interpolation='?', field_map_overrides=None, op_map_overrides=None):
         self.quote_char = quote_char
         self.interpolation = interpolation
         self.field_map_overrides = field_map_overrides or {}
+        self.op_map_overrides = op_map_overrides or {}
 
     def quote(self, s):
         return ''.join((self.quote_char, s, self.quote_char))
@@ -617,11 +621,14 @@ class QueryCompiler(object):
             return expr_str, expr
         return self.interpolation, [expr]
 
+    def get_op(self, op):
+        return self.op_map_overrides.get(op, self.q_op_map[op])
+
     def parse_q(self, q, alias_map=None):
         lhs_expr, lparams = self.parse_expr(q.lhs, alias_map)
         rhs_expr, rparams = self.parse_expr(q.rhs, alias_map)
         not_expr = q.negated and 'NOT ' or ''
-        return '%s%s %s %s' % (not_expr, lhs_expr, self.q_op_map[q.op], rhs_expr), lparams + rparams
+        return '%s%s %s %s' % (not_expr, lhs_expr, self.get_op(q.op), rhs_expr), lparams + rparams
 
     def parse_node(self, n, alias_map=None):
         query = []
@@ -1227,10 +1234,8 @@ class SelectQuery(Query):
         res = self.database.execute(clone)
         return bool(res.fetchone())
 
-    def get(self, query=None, **kwargs):
-        clone = self.clone()
-        clone.query_context = self.model_class
-        clone = clone.where(query, **kwargs).paginate(1, 1)
+    def get(self):
+        clone = self.paginate(1, 1)
         try:
             obj = clone.execute().next()
             return obj
@@ -1312,6 +1317,7 @@ class Database(object):
     field_overrides = {}
     for_update = False
     interpolation = '?'
+    op_overrides = {}
     quote_char = '"'
     reserved_tables = []
     sequences = False
@@ -1372,7 +1378,7 @@ class Database(object):
         return cursor.rowcount
 
     def get_compiler(self):
-        return QueryCompiler(self.quote_char, self.interpolation, self.field_overrides)
+        return QueryCompiler(self.quote_char, self.interpolation, self.field_overrides, self.op_overrides)
 
     def execute(self, query):
         sql, params = query.sql(self.get_compiler())
@@ -1433,6 +1439,10 @@ class Database(object):
 
 
 class SqliteDatabase(Database):
+    op_overrides = {
+        OP_LIKE: 'GLOB',
+    }
+
     def _connect(self, database, **kwargs):
         if not sqlite3:
             raise ImproperlyConfigured('sqlite3 must be installed on the system')
@@ -1520,6 +1530,7 @@ class MySQLDatabase(Database):
         'text': 'LONGTEXT',
     }
     for_update_support = True
+    op_overrides = {LIKE: 'LIKE BINARY'}
     quote_char = '`'
     subquery_delete_same_table = False
 
@@ -1709,6 +1720,10 @@ class Model(object):
             setattr(self, key, value)
 
     @classmethod
+    def raw(cls, sql, *params):
+        return RawQuery(cls, sql, *params)
+
+    @classmethod
     def select(cls, *selection):
         return SelectQuery(cls, *selection)
 
@@ -1733,8 +1748,17 @@ class Model(object):
         return inst
 
     @classmethod
+    def filter(cls, **query):
+        return cls.select().filter(**query)
+
+    @classmethod
     def get(cls, query=None, **kwargs):
-        return cls.select().get(query, **kwargs)
+        sq = cls.select()
+        if query:
+            sq = sq.where(query)
+        if kwargs:
+            sq = sq.filter(**kwargs)
+        return sq.get()
 
     @classmethod
     def table_exists(cls):
@@ -1791,6 +1815,12 @@ class Model(object):
             new_pk = insert.execute()
             if self._meta.auto_increment:
                 self.set_id(new_pk)
+
+    def delete_instance(self, recursive=False):
+        if recursive:
+            pass
+        else:
+            return self.delete().where(self._meta.primary_key == self.get_pk()).execute()
 
     def __eq__(self, other):
         return other.__class__ == self.__class__ and \
