@@ -78,8 +78,6 @@ DJANGO_MAP = {
     'ilike': OP_ILIKE,
 }
 
-SCALAR = 99
-
 JOIN_INNER = 1
 JOIN_LEFT_OUTER = 2
 JOIN_FULL = 3
