@@ -1365,14 +1365,17 @@ class Database(object):
     def get_indexes_for_table(self, table):
         raise NotImplementedError
 
-    def create_table(self, model_class, safe=False, extra=''):
-        pass
+    def create_table(self, model_class):
+        qc = self.get_compiler()
+        return self.execute_sql(qc.create_table(model_class))
 
-    def create_index(self, model_class, field_names, unique=False):
-        pass
+    def create_index(self, model_class, fields, unique=False):
+        qc = self.get_compiler()
+        field_objs = [model_class._meta.fields[f] if isinstance(f, basestring) else f for f in fields]
+        return self.execute_sql(qc.create_index(model_class, field_objs, unique))
 
     def create_foreign_key(self, model_class, field):
-        return self.create_index(model_class, field.name, field.unique)
+        return self.create_index(model_class, [field], field.unique)
 
     def drop_table(self, model_class, fail_silently=False):
         framing = fail_silently and 'DROP TABLE IF EXISTS %s;' or 'DROP TABLE %s;'
@@ -1495,15 +1498,15 @@ class MySQLDatabase(Database):
         )
 
         query = framing % {
-            'table': self.quote_name(db_table),
-            'constraint': self.quote_name(constraint),
-            'field': self.quote_name(field.db_column),
-            'to': self.quote_name(field.to._meta.db_table),
-            'to_field': self.quote_name(field.to._meta.pk_col),
+            'table': self.quote(db_table),
+            'constraint': self.quote(constraint),
+            'field': self.quote(field.db_column),
+            'to': self.quote(field.to._meta.db_table),
+            'to_field': self.quote(field.to._meta.primary_key.db_column),
             'cascade': ' ON DELETE CASCADE' if field.cascade else '',
         }
 
-        self.execute(query)
+        self.execute_sql(query)
         return super(MySQLDatabase, self).create_foreign_key(model_class, field)
 
     def get_indexes_for_table(self, table):
@@ -1677,30 +1680,34 @@ class Model(object):
         return DeleteQuery(cls)
 
     @classmethod
-    df get(cls, query=None):
+    def get(cls, query=None):
         return cls.select().get(query)
 
-    #@classmethod
-    #def create_table(cls, fail_silently=False, extra=''):
-    #    if fail_silently and cls.table_exists():
-    #        return
+    @classmethod
+    def table_exists(cls):
+        return cls._meta.db_table in cls._meta.database.get_tables()
 
-    #    db = cls._meta.database
-    #    db.create_table(cls, extra=extra)
+    @classmethod
+    def create_table(cls, fail_silently=False):
+        if fail_silently and cls.table_exists():
+            return
 
-    #    for field_name, field_obj in cls._meta.fields.items():
-    #        if isinstance(field_obj, ForeignKeyField):
-    #            db.create_foreign_key(cls, field_obj)
-    #        elif field_obj.db_index or field_obj.unique:
-    #            db.create_index(cls, field_obj.name, field_obj.unique)
+        db = cls._meta.database
+        db.create_table(cls)
 
-    #    if cls._meta.indexes:
-    #        for fields, unique in cls._meta.indexes:
-    #            db.create_index(cls, fields, unique)
+        for field_name, field_obj in cls._meta.fields.items():
+            if isinstance(field_obj, ForeignKeyField):
+                db.create_foreign_key(cls, field_obj)
+            elif field_obj.index or field_obj.unique:
+                db.create_index(cls, [field_obj], field_obj.unique)
 
-    #@classmethod
-    #def drop_table(cls, fail_silently=False):
-    #    cls._meta.database.drop_table(cls, fail_silently)
+        if cls._meta.indexes:
+            for fields, unique in cls._meta.indexes:
+                db.create_index(cls, fields, unique)
+
+    @classmethod
+    def drop_table(cls, fail_silently=False):
+        cls._meta.database.drop_table(cls, fail_silently)
 
     def get_id(self):
         return getattr(self, self._meta.primary_key.name)
