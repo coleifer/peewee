@@ -196,11 +196,11 @@ class SelectTestCase(BasePeeweeTestCase):
         self.assertSelect(sq, 'users."username", Count((SELECT blog."pk" FROM "blog" AS blog WHERE blog."user_id" = users."id"))', [])
 
     def test_joins(self):
-        sq = SelectQuery(Blog).join(User, JOIN_LEFT_OUTER)
-        self.assertJoins(sq, ['LEFT OUTER JOIN "users" AS users ON blog."user_id" = users."id"'])
-
         sq = SelectQuery(User).join(Blog)
         self.assertJoins(sq, ['INNER JOIN "blog" AS blog ON users."id" = blog."user_id"'])
+
+        sq = SelectQuery(Blog).join(User, JOIN_LEFT_OUTER)
+        self.assertJoins(sq, ['LEFT OUTER JOIN "users" AS users ON blog."user_id" = users."id"'])
 
         sq = SelectQuery(User).join(Relationship)
         self.assertJoins(sq, ['INNER JOIN "relationship" AS relationship ON users."id" = relationship."from_user_id"'])
@@ -208,12 +208,66 @@ class SelectTestCase(BasePeeweeTestCase):
         sq = SelectQuery(User).join(Relationship, on=Relationship.to_user)
         self.assertJoins(sq, ['INNER JOIN "relationship" AS relationship ON users."id" = relationship."to_user_id"'])
 
+        sq = SelectQuery(User).join(Relationship, JOIN_LEFT_OUTER, Relationship.to_user)
+        self.assertJoins(sq, ['LEFT OUTER JOIN "relationship" AS relationship ON users."id" = relationship."to_user_id"'])
+
+    def test_where(self):
+        sq = SelectQuery(User).where(User.id < 5)
+        self.assertWhere(sq, 'users."id" < ?', [5])
+
+    def test_where_lists(self):
+        sq = SelectQuery(User).where(User.username << ['u1', 'u2'])
+        self.assertWhere(sq, 'users."username" IN (?,?)', ['u1', 'u2'])
+
+        sq = SelectQuery(User).where((User.username << ['u1', 'u2']) | (User.username << ['u3', 'u4']))
+        self.assertWhere(sq, '(users."username" IN (?,?) OR users."username" IN (?,?))', ['u1', 'u2', 'u3', 'u4'])
+
+    def test_where_joins(self):
+        sq = SelectQuery(User).where(
+            ((User.id == 1) | (User.id == 2)) &
+            ((Blog.pk == 3) | (Blog.pk == 4))
+        ).where(User.id == 5).join(Blog)
+        self.assertWhere(sq, '(users."id" = ? OR users."id" = ?) AND (blog."pk" = ? OR blog."pk" = ?) AND users."id" = ?', [1, 2, 3, 4, 5])
+
+    def test_where_functions(self):
+        sq = SelectQuery(User).where(fn.Lower(fn.Substr(User.username, 0, 1)) == 'a')
+        self.assertWhere(sq, 'Lower(Substr(users."username", ?, ?)) = ?', [0, 1, 'a'])
+
+    def test_where_subqueries(self):
+        sq = SelectQuery(User).where(User.id << User.select().where(User.username=='u1'))
+        self.assertWhere(sq, 'users."id" IN (SELECT users."id" FROM "users" AS users WHERE users."username" = ?)', ['u1'])
+
+        sq = SelectQuery(Blog).where((Blog.pk == 3) | (Blog.user << User.select().where(User.username << ['u1', 'u2'])))
+        self.assertWhere(sq, '(blog."pk" = ? OR blog."user_id" IN (SELECT users."id" FROM "users" AS users WHERE users."username" IN (?,?)))', [3, 'u1', 'u2'])
+
+    def test_where_chaining_collapsing(self):
+        sq = SelectQuery(User).where(User.id == 1).where(User.id == 2).where(User.id == 3)
+        self.assertWhere(sq, 'users."id" = ? AND users."id" = ? AND users."id" = ?', [1, 2, 3])
+
+        sq = SelectQuery(User).where((User.id == 1) & (User.id == 2)).where(User.id == 3)
+        self.assertWhere(sq, 'users."id" = ? AND users."id" = ? AND users."id" = ?', [1, 2, 3])
+
+        sq = SelectQuery(User).where((User.id == 1) | (User.id == 2)).where(User.id == 3)
+        self.assertWhere(sq, '(users."id" = ? OR users."id" = ?) AND users."id" = ?', [1, 2, 3])
+
+        sq = SelectQuery(User).where(User.id == 1).where((User.id == 2) & (User.id == 3))
+        self.assertWhere(sq, 'users."id" = ? AND users."id" = ? AND users."id" = ?', [1, 2, 3])
+
+        sq = SelectQuery(User).where(User.id == 1).where((User.id == 2) | (User.id == 3))
+        self.assertWhere(sq, '(users."id" = ?) AND (users."id" = ? OR users."id" = ?)', [1, 2, 3])
+
     def test_grouping(self):
         sq = SelectQuery(User).group_by(User.id)
         self.assertGroupBy(sq, 'users."id"', [])
 
         sq = SelectQuery(User).group_by(User)
         self.assertGroupBy(sq, 'users."id", users."username"', [])
+
+    def test_having(self):
+        sq = SelectQuery(User, fn.Count(Blog.id)).join(Blog).group_by(User).having(
+            fn.Count(Blog.pk) > 2
+        )
+        self.assertHaving(sq, 'Count(blog."pk") > ?', [2])
 
 
 class ModelTestCase(BasePeeweeTestCase):

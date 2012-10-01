@@ -94,9 +94,10 @@ class Node(object):
             if connector == self.connector:
                 self.children.append(rhs)
                 return self
-        elif isinstance(rhs, Node) and connector == self.connector:
-            self.children.extend(rhs.children)
-            return self
+        elif isinstance(rhs, Node):
+            if connector == self.connector and connector == rhs.connector:
+                self.children.extend(rhs.children)
+                return self
         p = Node(connector)
         p.children = [self, rhs]
         return p
