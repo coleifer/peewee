@@ -134,24 +134,17 @@ class Category(TestModel):
     parent = ForeignKeyField('self', related_name='children', null=True)
     name = CharField()
 
-def drop_tables():
-    Category.drop_table(True)
-    OrderedModel.drop_table(True)
-    UniqueModel.drop_table(True)
-    NullModel.drop_table(True)
-    Relationship.drop_table(True)
-    Blog.drop_table(True)
-    User.drop_table(True)
+MODELS = [User, Blog, Relationship, NullModel, UniqueModel, OrderedModel, Category]
 
-def create_tables():
-    User.create_table()
-    Blog.create_table()
-    Relationship.create_table()
-    NullModel.create_table()
-    UniqueModel.create_table()
-    OrderedModel.create_table()
-    Category.create_table()
+def drop_tables(only=None):
+    for model in reversed(MODELS):
+        if only is None or model in only:
+            model.drop_table(True)
 
+def create_tables(only=None):
+    for model in MODELS:
+        if only is None or model in only:
+            model.create_table()
 #
 # BASE TEST CASE USED BY ALL TESTS
 #
@@ -277,6 +270,19 @@ class SelectTestCase(BasePeeweeTestCase):
         sq = SelectQuery(Blog).where(Blog.user << [User(id=100), User(id=101)])
         self.assertWhere(sq, 'blog."user_id" IN (?,?)', [100, 101])
 
+    def test_where_negation(self):
+        sq = SelectQuery(Blog).where(~(Blog.title == 'foo'))
+        self.assertWhere(sq, 'NOT blog."title" = ?', ['foo'])
+
+        sq = SelectQuery(Blog).where(~((Blog.title == 'foo') | (Blog.title == 'bar')))
+        self.assertWhere(sq, '(NOT (blog."title" = ? OR blog."title" = ?))', ['foo', 'bar'])
+
+        sq = SelectQuery(Blog).where(~((Blog.title == 'foo') & (Blog.title == 'bar')) & (Blog.title == 'baz'))
+        self.assertWhere(sq, '(NOT (blog."title" = ? AND blog."title" = ?)) AND blog."title" = ?', ['foo', 'bar', 'baz'])
+
+        sq = SelectQuery(Blog).where(~((Blog.title == 'foo') & (Blog.title == 'bar')) & ((Blog.title == 'baz') & (Blog.title == 'fizz')))
+        self.assertWhere(sq, '(NOT (blog."title" = ? AND blog."title" = ?)) AND (blog."title" = ? AND blog."title" = ?)', ['foo', 'bar', 'baz', 'fizz'])
+
     def test_where_chaining_collapsing(self):
         sq = SelectQuery(User).where(User.id == 1).where(User.id == 2).where(User.id == 3)
         self.assertWhere(sq, 'users."id" = ? AND users."id" = ? AND users."id" = ?', [1, 2, 3])
@@ -292,6 +298,9 @@ class SelectTestCase(BasePeeweeTestCase):
 
         sq = SelectQuery(User).where(User.id == 1).where((User.id == 2) | (User.id == 3))
         self.assertWhere(sq, '(users."id" = ?) AND (users."id" = ? OR users."id" = ?)', [1, 2, 3])
+
+        sq = SelectQuery(User).where(~(User.id == 1)).where(User.id == 2).where(~(User.id == 3))
+        self.assertWhere(sq, '(users."id" = ? AND users."id" = ?) AND NOT users."id" = ?', [1, 2, 3])
 
     def test_grouping(self):
         sq = SelectQuery(User).group_by(User.id)
@@ -348,7 +357,90 @@ class RawTestCase(BasePeeweeTestCase):
 #
 
 class ModelTestCase(BasePeeweeTestCase):
+    requires = None
+
     def setUp(self):
         super(ModelTestCase, self).setUp()
-        drop_tables()
-        create_tables()
+        drop_tables(self.requires)
+        create_tables(self.requires)
+
+    def create_user(self, username):
+        return User.create(username=username)
+    
+    def create_users(self, n):
+        for i in range(n):
+            self.create_user('u%d' % (i + 1))
+
+
+class ModelAPITestCase(ModelTestCase):
+    requires = [User, Blog]
+
+    def test_creation(self):
+        self.create_users(10)
+        self.assertEqual(User.select().count(), 10)
+
+    def test_saving(self):
+        self.assertEqual(User.select().count(), 0)
+
+        u = User(username='u1')
+        u.save()
+        u.save()
+
+        self.assertEqual(User.select().count(), 1)
+    
+    def test_iteration(self):
+        self.create_users(10)
+        query_start = len(self.queries())
+        sq = User.select()
+        qr = sq.execute()
+
+        first_five = []
+        for i, u in enumerate(qr):
+            first_five.append(u.username)
+            if i == 4:
+                break
+        self.assertEqual(first_five, ['u1', 'u2', 'u3', 'u4', 'u5'])
+
+        another_iter = [u.username for u in qr]
+        self.assertEqual(another_iter, ['u%d' % i for i in range(1, 11)])
+
+        another_iter = [u.username for u in qr]
+        self.assertEqual(another_iter, ['u%d' % i for i in range(1, 11)])
+       
+        # only 1 query for these iterations
+        self.assertEqual(len(self.queries()) - query_start, 1)
+
+    def test_reading(self):
+        u1 = self.create_user('u1')
+        u2 = self.create_user('u2')
+
+        self.assertEqual(u1, User.get(username='u1'))
+        self.assertEqual(u2, User.get(username='u2'))
+        self.assertFalse(u1 == u2)
+
+        self.assertEqual(u1, User.get(User.username == 'u1'))
+        self.assertEqual(u2, User.get(User.username == 'u2'))
+
+    def test_deleting(self):
+        u1 = self.create_user('u1')
+        u2 = self.create_user('u2')
+
+        self.assertEqual(User.select().count(), 2)
+        u1.delete_instance()
+        self.assertEqual(User.select().count(), 1)
+
+        self.assertEqual(u2, User.get(username='u2'))
+
+    def test_counting(self):
+        u1 = User.create(username='u1')
+        u2 = User.create(username='u2')
+
+        for u in [u1, u2]:
+            for i in range(5):
+                Blog.create(title='b-%s-%s' % (u.username, i), user=u)
+
+        uc = User.select().where(User.username == 'u1').join(Blog).count()
+        self.assertEqual(uc, 5)
+
+        uc = User.select().where(User.username == 'u1').join(Blog).distinct().count()
+        self.assertEqual(uc, 1)

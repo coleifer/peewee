@@ -100,11 +100,11 @@ class Node(object):
 
     def connect(self, rhs, connector):
         if isinstance(rhs, Leaf):
-            if connector == self.connector:
+            if connector == self.connector and rhs.negated == self.negated:
                 self.children.append(rhs)
                 return self
         elif isinstance(rhs, Node):
-            if connector == self.connector and connector == rhs.connector:
+            if connector == self.connector and connector == rhs.connector and rhs.negated == self.negated:
                 self.children.extend(rhs.children)
                 return self
         p = Node(connector)
@@ -892,11 +892,10 @@ class QueryResultWrapper(object):
     - converts rows from the database into model instances
     - ensures that multiple iterations do not result in multiple queries
     """
-    def __init__(self, model, cursor, meta=None, chunk_size=100):
+    def __init__(self, model, cursor, meta=None):
         self.model = model
         self.cursor = cursor
         self.naive = not meta
-        self.chunk_size = chunk_size
 
         if self.naive:
             cols = []
@@ -919,10 +918,6 @@ class QueryResultWrapper(object):
 
         self._result_cache = []
         self._populated = False
-
-        self.__read_cache = []
-        self.__read_idx = 0
-        self.__read_ct = 0
 
     def simple_iter(self, row):
         instance = self.model()
@@ -979,7 +974,7 @@ class QueryResultWrapper(object):
         return inst
 
     def __iter__(self):
-        self.__idx = self.__read_idx = 0
+        self.__idx = 0
 
         if not self._populated:
             return self
@@ -987,19 +982,12 @@ class QueryResultWrapper(object):
             return iter(self._result_cache)
 
     def iterate(self):
-        if self.__read_idx >= self.__read_ct:
-            rows = self.cursor.fetchmany(self.chunk_size)
-            self.__read_ct = len(rows)
-            if self.__read_ct:
-                self.__read_cache = rows
-                self.__read_idx = 0
-            else:
-                self._populated = True
-                raise StopIteration
+        row = self.cursor.fetchone()
+        if not row:
+            self._populated = True
+            raise StopIteration
 
-        instance = self._iter_fn(self.__read_cache[self.__read_idx])
-        self.__read_idx += 1
-        return instance
+        return self._iter_fn(row)
 
     def iterator(self):
         while 1:
@@ -1266,7 +1254,7 @@ class SelectQuery(Query):
         sql, params = clone.sql(compiler)
         query = 'SELECT COUNT(1) FROM (%s) AS wrapped_select' % sql
 
-        res = clone.database.execute(query, params, require_commit=False)
+        res = clone.database.execute_sql(query, params, require_commit=False)
         return res.fetchone()[0]
 
     def exists(self):
@@ -1768,7 +1756,7 @@ class Model(object):
     __metaclass__ = BaseModel
 
     def __init__(self, *args, **kwargs):
-        self._data = self._meta.get_default_dict() # attributes
+        self._data = dict((f.name, v) for f, v in self._meta.get_default_dict().items())
         self._obj_cache = {} # cache of related objects
 
         for key, value in kwargs.iteritems():
@@ -1875,12 +1863,12 @@ class Model(object):
         if recursive:
             pass
         else:
-            return self.delete().where(self._meta.primary_key == self.get_pk()).execute()
+            return self.delete().where(self._meta.primary_key == self.get_id()).execute()
 
     def __eq__(self, other):
         return other.__class__ == self.__class__ and \
-               self.get_pk() and \
-               other.get_pk() == self.get_pk()
+               self.get_id() and \
+               other.get_id() == self.get_id()
 
     def __ne__(self, other):
         return not self == other
