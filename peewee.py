@@ -1,3 +1,12 @@
+#     (\
+#     (  \  /(o)\     caw!
+#     (   \/  ()/ /)
+#      (   `;.))'".)
+#       `(/////.-'
+#    =====))=))===()
+#      ///'
+#     //
+#    '
 from __future__ import with_statement
 import datetime
 import decimal
@@ -616,8 +625,16 @@ class QueryCompiler(object):
             subselect, params = self.parse_select_query(clone, max_alias, alias_map)
             return '(%s)' % subselect, params
         elif isinstance(expr, (list, tuple)):
-            expr_str = '(%s)' % ','.join(self.interpolation for i in range(len(expr)))
-            return expr_str, expr
+            exprs = []
+            vals = []
+            for i in expr:
+                e, v = self.parse_expr(i, alias_map)
+                exprs.append(e)
+                vals.extend(v)
+            expr_str = '(%s)' % ','.join(exprs)
+            return expr_str, vals
+        elif isinstance(expr, Model):
+            return self.interpolation, [expr.get_id()]
         return self.interpolation, [expr]
 
     def get_op(self, op):
@@ -1101,7 +1118,7 @@ class RawQuery(Query):
     def clone(self):
         return RawQuery(self.model_class, self._sql, *self._params)
 
-    def sql(self):
+    def sql(self, compiler):
         return self._sql, self._params
 
     join = not_allowed('joining')
