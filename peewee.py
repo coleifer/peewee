@@ -82,6 +82,7 @@ DJANGO_MAP = {
     'gt': OP_GT,
     'gte': OP_GTE,
     'ne': OP_NE,
+    'in': OP_IN,
     'is': OP_IS,
     'like': OP_LIKE,
     'ilike': OP_ILIKE,
@@ -476,10 +477,12 @@ class RelationDescriptor(FieldDescriptor):
 class ReverseRelationDescriptor(object):
     def __init__(self, field):
         self.field = field
-        self.related_model = field.model_class
+        self.rel_model = field.model_class
 
     def __get__(self, instance, instance_type=None):
-        return self.related_model.select().where(self.field==instance.get_id())
+        if instance:
+            return self.rel_model.select().where(self.field==instance.get_id())
+        return self
 
 
 class ForeignKeyField(Field):
@@ -1057,21 +1060,21 @@ class Query(object):
 
     def convert_dict_to_node(self, qdict):
         node = Node(OP_AND)
-        curr = self.model_class
-        fields = []
-        for key, value in qdict.items():
+        joins = []
+        for key, value in sorted(qdict.items()):
+            curr = self.model_class
             if '__' in key and key.rsplit('__', 1)[1] in DJANGO_MAP:
                 key, op = key.rsplit('__', 1)
                 op = DJANGO_MAP[op]
             else:
                 op = OP_EQ
             for piece in key.split('__'):
-                field = getattr(curr, piece)
-                if isinstance(field, ForeignKeyField):
-                    curr = field.rel_model
-                    fields.append(field)
-            node &= Q(field, op, value)
-        return node, fields
+                model_attr = getattr(curr, piece)
+                if isinstance(model_attr, (ForeignKeyField, ReverseRelationDescriptor)):
+                    curr = model_attr.rel_model
+                    joins.append(model_attr)
+            node &= Q(model_attr, op, value)
+        return node, joins
 
     @returns_clone
     def where(self, q_or_node):
@@ -1087,7 +1090,7 @@ class Query(object):
                 self._query_ctx, model_class,
             ))
         if on and isinstance(on, basestring):
-            on = model_class._meta.fields[on]
+            on = self._query_ctx._meta.fields[on]
         self._joins.setdefault(self._query_ctx, [])
         self._joins[self._query_ctx].append(Join(model_class, join_type, on))
         self._query_ctx = model_class
@@ -1217,11 +1220,16 @@ class SelectQuery(Query):
         return query
 
     def filter(self, **query):
-        node, fields = self.convert_dict_to_node(query)
+        node, joins = self.convert_dict_to_node(query)
         query = self.clone()
-        for field in fields:
-            lm, rm = field.model_class, field.rel_model
-            query = query.ensure_join(lm, rm, field.name)
+        for field in joins:
+            if isinstance(field, ForeignKeyField):
+                lm, rm = field.model_class, field.rel_model
+                field_obj = field
+            elif isinstance(field, ReverseRelationDescriptor):
+                lm, rm = field.field.rel_model, field.rel_model
+                field_obj = field.field
+            query = query.ensure_join(lm, rm, field_obj)
         return query.where(node)
 
     def annotate(self, rel_model, annotation=None):

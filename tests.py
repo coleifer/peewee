@@ -409,7 +409,28 @@ class RawTestCase(BasePeeweeTestCase):
 
 class SugarTestCase(BasePeeweeTestCase):
     # test things like filter, annotate, aggregate
-    pass
+    def test_filter(self):
+        sq = User.filter(username='u1')
+        self.assertJoins(sq, [])
+        self.assertWhere(sq, 'users."username" = ?', ['u1'])
+
+        sq = Blog.filter(user__username='u1')
+        self.assertJoins(sq, ['INNER JOIN "users" AS users ON blog."user_id" = users."id"'])
+        self.assertWhere(sq, 'users."username" = ?', ['u1'])
+
+        sq = Blog.filter(user__username__in=['u1', 'u2'], comments__comment='hurp')
+        self.assertJoins(sq, [
+            'INNER JOIN "comment" AS comment ON blog."pk" = comment."blog_id"',
+            'INNER JOIN "users" AS users ON blog."user_id" = users."id"',
+        ])
+        self.assertWhere(sq, 'comment."comment" = ? AND users."username" IN (?,?)', ['hurp', 'u1', 'u2'])
+
+        sq = Blog.filter(user__username__in=['u1', 'u2']).filter(comments__comment='hurp')
+        self.assertJoins(sq, [
+            'INNER JOIN "users" AS users ON blog."user_id" = users."id"',
+            'INNER JOIN "comment" AS comment ON blog."pk" = comment."blog_id"',
+        ])
+        self.assertWhere(sq, 'users."username" IN (?,?) AND comment."comment" = ?', ['u1', 'u2', 'hurp'])
 
 #
 # TEST CASE USED TO PROVIDE ACCESS TO DATABASE
@@ -654,3 +675,9 @@ class DatabaseFeatureTestCase(ModelTestCase):
 
         count = SelectQuery(Blog).count()
         self.assertEqual(count, 200)
+
+
+class FieldTypeTestCase(ModelTestCase):
+    requires = [NullModel]
+
+    pass
