@@ -636,7 +636,7 @@ class QueryResultWrapperTestCase(ModelTestCase):
 
 class ModelQueryTestCase(ModelTestCase):
     requires = [User, Blog]
-    
+
     def create_users_blogs(self, n=10, nb=5):
         for i in range(n):
             u = User.create(username='u%d' % i)
@@ -899,7 +899,7 @@ class ManyToManyTestCase(ModelTestCase):
 
         cats = Category.select().join(UserCategory).join(User).where(User.username == 'u2')
         aC(cats, ['c12', 'c2', 'c23'])
-        
+
         cats = Category.select().join(UserCategory).join(User).where(User.username == 'u3')
         aC(cats, [])
 
@@ -967,12 +967,12 @@ class FieldTypeTestCase(ModelTestCase):
         nm = NullModel.create(int_field='4')
         nm_db = NullModel.get(id=nm.id)
         self.assertEqual(nm_db.int_field, 4)
-    
+
     def test_floatfield(self):
         nm = NullModel.create(float_field='4.2')
         nm_db = NullModel.get(id=nm.id)
         self.assertEqual(nm_db.float_field, 4.2)
-    
+
     def test_decimalfield(self):
         D = Decimal
         nm = NullModel()
@@ -1142,7 +1142,7 @@ class NonIntPKTestCase(ModelTestCase):
         self.assertEqual([(x.pk, x.data) for x in NonIntModel.select().order_by(NonIntModel.pk)], [
             ('a1', 'ni1'), ('a2', 'ni2'),
         ])
-    
+
     def test_non_int_fk(self):
         """
         class NonIntModel(TestModel):
