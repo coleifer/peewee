@@ -142,7 +142,16 @@ class UserCategory(TestModel):
     user = ForeignKeyField(User)
     category = ForeignKeyField(Category)
 
-MODELS = [User, Blog, Comment, Relationship, NullModel, UniqueModel, OrderedModel, Category, UserCategory]
+class NonIntModel(TestModel):
+    pk = CharField(primary_key=True)
+    data = CharField()
+
+class NonIntRelModel(TestModel):
+    non_int_model = ForeignKeyField(NonIntModel, related_name='nr')
+
+
+MODELS = [User, Blog, Comment, Relationship, NullModel, UniqueModel, OrderedModel, Category, UserCategory,
+          NonIntModel, NonIntRelModel,]
 
 def drop_tables(only=None):
     for model in reversed(MODELS):
@@ -1112,8 +1121,53 @@ class UniqueTestCase(ModelTestCase):
 
 
 class NonIntPKTestCase(ModelTestCase):
-    requires = []
-    # TODO
+    requires = [NonIntModel, NonIntRelModel]
+
+    def test_non_int_pk(self):
+        ni1 = NonIntModel.create(pk='a1', data='ni1')
+        self.assertEqual(ni1.pk, 'a1')
+
+        ni2 = NonIntModel(pk='a2', data='ni2')
+        ni2.save(force_insert=True)
+        self.assertEqual(ni2.pk, 'a2')
+
+        ni2.save()
+        self.assertEqual(ni2.pk, 'a2')
+
+        self.assertEqual(NonIntModel.select().count(), 2)
+
+        ni1_db = NonIntModel.get(pk='a1')
+        self.assertEqual(ni1_db.data, ni1.data)
+
+        self.assertEqual([(x.pk, x.data) for x in NonIntModel.select().order_by(NonIntModel.pk)], [
+            ('a1', 'ni1'), ('a2', 'ni2'),
+        ])
+    
+    def test_non_int_fk(self):
+        """
+        class NonIntModel(TestModel):
+            pk = CharField(primary_key=True)
+            data = CharField()
+
+        class NonIntRelModel(TestModel):
+            non_int_model = ForeignKeyField(NonIntModel)
+        """
+        ni1 = NonIntModel.create(pk='a1', data='ni1')
+        ni2 = NonIntModel.create(pk='a2', data='ni2')
+
+        rni11 = NonIntRelModel(non_int_model=ni1)
+        rni12 = NonIntRelModel(non_int_model=ni1)
+        rni11.save()
+        rni12.save()
+
+        self.assertEqual([r.id for r in ni1.nr.order_by(NonIntRelModel.id)], [rni11.id, rni12.id])
+        self.assertEqual([r.id for r in ni2.nr.order_by(NonIntRelModel.id)], [])
+
+        rni21 = NonIntRelModel.create(non_int_model=ni2)
+        self.assertEqual([r.id for r in ni2.nr.order_by(NonIntRelModel.id)], [rni21.id])
+
+        sq = NonIntRelModel.select().join(NonIntModel).where(NonIntModel.data == 'ni2')
+        self.assertEqual([r.id for r in sq], [rni21.id])
 
 
 class DBColumnTestCase(ModelTestCase):
