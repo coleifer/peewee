@@ -529,7 +529,7 @@ class ModelTestCase(BasePeeweeTestCase):
 
 
 class QueryResultWrapperTestCase(ModelTestCase):
-    requires = [User, Blog]
+    requires = [User, Blog, Comment]
 
     def test_iteration(self):
         self.create_users(10)
@@ -577,12 +577,52 @@ class QueryResultWrapperTestCase(ModelTestCase):
         self.assertEqual(usernames, [])
 
     def test_select_related(self):
-        # TODO
-        pass
+        u1 = User.create(username='u1')
+        u2 = User.create(username='u2')
+        b1 = Blog.create(user=u1, title='b1')
+        b2 = Blog.create(user=u2, title='b2')
+        c11 = Comment.create(blog=b1, comment='c11')
+        c12 = Comment.create(blog=b1, comment='c12')
+        c21 = Comment.create(blog=b2, comment='c21')
+        c22 = Comment.create(blog=b2, comment='c22')
+
+        # missing comment.blog_id
+        qc = len(self.queries())
+        comments = Comment.select(Comment.id, Comment.comment, Blog.pk, Blog.title).join(Blog).where(Blog.title == 'b1').order_by(Comment.id)
+        self.assertEqual([c.blog.title for c in comments], ['b1', 'b1'])
+        self.assertEqual(len(self.queries()) - qc, 1)
+
+        # missing blog.pk
+        qc = len(self.queries())
+        comments = Comment.select(Comment.id, Comment.comment, Comment.blog, Blog.title).join(Blog).where(Blog.title == 'b2').order_by(Comment.id)
+        self.assertEqual([c.blog.title for c in comments], ['b2', 'b2'])
+        self.assertEqual(len(self.queries()) - qc, 1)
+
+        # both but going up 2 levels
+        qc = len(self.queries())
+        comments = Comment.select(Comment, Blog, User).join(Blog).join(User).where(User.username == 'u1').order_by(Comment.id)
+        self.assertEqual([c.comment for c in comments], ['c11', 'c12'])
+        self.assertEqual([c.blog.title for c in comments], ['b1', 'b1'])
+        self.assertEqual([c.blog.user.username for c in comments], ['u1', 'u1'])
+        self.assertEqual(len(self.queries()) - qc, 1)
+
+        qc = len(self.queries())
+        comments = Comment.select().join(Blog).join(User).where(User.username == 'u1').order_by(Comment.id)
+        self.assertEqual([c.blog.user.username for c in comments], ['u1', 'u1'])
+        self.assertEqual(len(self.queries()) - qc, 5)
 
     def test_naive(self):
-        # TODO
-        pass
+        u1 = User.create(username='u1')
+        u2 = User.create(username='u2')
+        b1 = Blog.create(user=u1, title='b1')
+        b2 = Blog.create(user=u2, title='b2')
+
+        users = User.select().naive()
+        self.assertEqual([u.username for u in users], ['u1', 'u2'])
+
+        users = User.select(User, Blog).join(Blog).naive()
+        self.assertEqual([u.username for u in users], ['u1', 'u2'])
+        self.assertEqual([u.title for u in users], ['b1', 'b2'])
 
 
 class ModelQueryTestCase(ModelTestCase):

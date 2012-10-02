@@ -1133,7 +1133,7 @@ class SelectQuery(Query):
     require_commit = False
 
     def __init__(self, model_class, *selection):
-        self._select = selection or model_class._meta.get_fields()
+        self._select = self._model_shorthand(selection or model_class._meta.get_fields())
         self._group_by = None
         self._having = None
         self._order_by = None
@@ -1161,15 +1161,18 @@ class SelectQuery(Query):
         query._naive = self._naive
         return query
 
+    def _model_shorthand(self, args):
+        accum = []
+        for arg in args:
+            if isinstance(arg, Expr):
+                accum.append(arg)
+            elif issubclass(arg, Model):
+                accum.extend(arg._meta.get_fields())
+        return accum
+
     @returns_clone
     def group_by(self, *args):
-        grouping = []
-        for arg in args:
-            if isinstance(arg, Field):
-                grouping.append(arg)
-            elif issubclass(arg, Model):
-                grouping.extend(arg._meta.get_fields())
-        self._group_by = grouping
+        self._group_by = self._model_shorthand(args)
 
     @returns_clone
     def having(self, q_or_node):
