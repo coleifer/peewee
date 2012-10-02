@@ -138,7 +138,11 @@ class Category(TestModel):
     parent = ForeignKeyField('self', related_name='children', null=True)
     name = CharField()
 
-MODELS = [User, Blog, Comment, Relationship, NullModel, UniqueModel, OrderedModel, Category]
+class UserCategory(TestModel):
+    user = ForeignKeyField(User)
+    category = ForeignKeyField(Category)
+
+MODELS = [User, Blog, Comment, Relationship, NullModel, UniqueModel, OrderedModel, Category, UserCategory]
 
 def drop_tables(only=None):
     for model in reversed(MODELS):
@@ -254,6 +258,48 @@ class SelectTestCase(BasePeeweeTestCase):
             'INNER JOIN "users" AS users ON blog."user_id" = users."id"',
             'INNER JOIN "comment" AS comment ON blog."pk" = comment."blog_id"',
         ])
+
+    def test_join_switching(self):
+        class Artist(TestModel):
+            pass
+
+        class Track(TestModel):
+            artist = ForeignKeyField(Artist)
+
+        class Release(TestModel):
+            artist = ForeignKeyField(Artist)
+
+        class ReleaseTrack(TestModel):
+            track = ForeignKeyField(Track)
+            release = ForeignKeyField(Release)
+
+        class Genre(TestModel):
+            pass
+
+        class TrackGenre(TestModel):
+            genre = ForeignKeyField(Genre)
+            track = ForeignKeyField(Track)
+
+        multiple_first = Track.select().join(ReleaseTrack).join(Release).switch(Track).join(Artist).switch(Track).join(TrackGenre).join(Genre)
+        self.assertSelect(multiple_first, 'track."id", track."artist_id"', [])
+        self.assertJoins(multiple_first, [
+            'INNER JOIN "artist" AS artist ON track."artist_id" = artist."id"',
+            'INNER JOIN "genre" AS genre ON trackgenre."genre_id" = genre."id"',
+            'INNER JOIN "release" AS release ON releasetrack."release_id" = release."id"',
+            'INNER JOIN "releasetrack" AS releasetrack ON track."id" = releasetrack."track_id"',
+            'INNER JOIN "trackgenre" AS trackgenre ON track."id" = trackgenre."track_id"',
+        ])
+
+        single_first = Track.select().join(Artist).switch(Track).join(ReleaseTrack).join(Release).switch(Track).join(TrackGenre).join(Genre)
+        self.assertSelect(single_first, 'track."id", track."artist_id"', [])
+        self.assertJoins(single_first, [
+            'INNER JOIN "artist" AS artist ON track."artist_id" = artist."id"',
+            'INNER JOIN "genre" AS genre ON trackgenre."genre_id" = genre."id"',
+            'INNER JOIN "release" AS release ON releasetrack."release_id" = release."id"',
+            'INNER JOIN "releasetrack" AS releasetrack ON track."id" = releasetrack."track_id"',
+            'INNER JOIN "trackgenre" AS trackgenre ON track."id" = trackgenre."track_id"',
+        ])
+
 
     def test_where(self):
         sq = SelectQuery(User).where(User.id < 5)
@@ -483,7 +529,7 @@ class ModelTestCase(BasePeeweeTestCase):
 
 
 class QueryResultWrapperTestCase(ModelTestCase):
-    requires = [User]
+    requires = [User, Blog]
 
     def test_iteration(self):
         self.create_users(10)
@@ -530,19 +576,50 @@ class QueryResultWrapperTestCase(ModelTestCase):
         usernames = [u.username for u in qr.iterator()]
         self.assertEqual(usernames, [])
 
+    def test_select_related(self):
+        # TODO
+        pass
+
+    def test_naive(self):
+        # TODO
+        pass
+
+
 class ModelQueryTestCase(ModelTestCase):
     requires = [User, Blog]
+    
+    def create_users_blogs(self, n=10, nb=5):
+        for i in range(n):
+            u = User.create(username='u%d' % i)
+            for j in range(nb):
+                b = Blog.create(title='b-%d-%d' % (i, j), content=str(j), user=u)
 
     def test_select(self):
-        pass
+        self.create_users_blogs()
+
+        users = User.select().where(User.username << ['u0', 'u5']).order_by(User.username)
+        self.assertEqual([u.username for u in users], ['u0', 'u5'])
+
+        blogs = Blog.select().join(User).where(
+            (User.username << ['u0', 'u3']) &
+            (Blog.content == '4')
+        ).order_by(Blog.title)
+        self.assertEqual([b.title for b in blogs], ['b-0-4', 'b-3-4'])
+
+        users = User.select().paginate(2, 3)
+        self.assertEqual([u.username for u in users], ['u3', 'u4', 'u5'])
+
     def test_update(self):
-        pass
+        pass # TODO
+
     def test_insert(self):
-        pass
+        pass # TODO
+
     def test_delete(self):
-        pass
+        pass # TODO
+
     def test_raw(self):
-        pass
+        pass # TODO
 
 
 class ModelAPITestCase(ModelTestCase):
@@ -628,6 +705,18 @@ class ModelAPITestCase(ModelTestCase):
         uc = User.select().where(User.username == 'u1').join(Blog).distinct().count()
         self.assertEqual(uc, 1)
 
+    def test_count_transaction(self):
+        for i in range(10):
+            self.create_user(username='u%d' % i)
+
+        with transaction(test_db):
+            for user in SelectQuery(User):
+                for i in range(20):
+                    Blog.create(user=user, title='b-%d-%d' % (user.id, i))
+
+        count = SelectQuery(Blog).count()
+        self.assertEqual(count, 200)
+
     def test_exists(self):
         u1 = User.create(username='u1')
         self.assertTrue(User.select().where(User.username == 'u1').exists())
@@ -690,23 +779,99 @@ class MultipleFKTestCase(ModelTestCase):
         self.assertEqual(list(followers), [b])
 
 
-class DatabaseFeatureTestCase(ModelTestCase):
-    requires = [User, Blog]
+class ManyToManyTestCase(ModelTestCase):
+    requires = [User, Category, UserCategory]
 
-    def test_count_transaction(self):
-        for i in range(10):
-            self.create_user(username='u%d' % i)
+    def test_m2m(self):
+        u1 = User.create(username='u1')
+        u2 = User.create(username='u2')
+        u3 = User.create(username='u3')
 
-        with transaction(test_db):
-            for user in SelectQuery(User):
-                for i in range(20):
-                    Blog.create(user=user, title='b-%d-%d' % (user.id, i))
+        c1 = Category.create(name='c1')
+        c2 = Category.create(name='c2')
+        c3 = Category.create(name='c3')
 
-        count = SelectQuery(Blog).count()
-        self.assertEqual(count, 200)
+        # extras
+        c12 = Category.create(name='c12')
+        c23 = Category.create(name='c23')
+
+        umap = (
+            (u1, c1),
+            (u2, c2),
+            (u1, c12),
+            (u2, c12),
+            (u2, c23),
+        )
+
+        for u, c in umap:
+            UserCategory.create(user=u, category=c)
+
+        def aU(q, exp):
+            self.assertEqual([u.username for u in q.order_by(User.username)], exp)
+        def aC(q, exp):
+            self.assertEqual([c.name for c in q.order_by(Category.name)], exp)
+
+        users = User.select().join(UserCategory).join(Category).where(Category.name == 'c1')
+        aU(users, ['u1'])
+
+        users = User.select().join(UserCategory).join(Category).where(Category.name == 'c3')
+        aU(users, [])
+
+        cats = Category.select().join(UserCategory).join(User).where(User.username == 'u1')
+        aC(cats, ['c1', 'c12'])
+
+        cats = Category.select().join(UserCategory).join(User).where(User.username == 'u2')
+        aC(cats, ['c12', 'c2', 'c23'])
+        
+        cats = Category.select().join(UserCategory).join(User).where(User.username == 'u3')
+        aC(cats, [])
+
+        cats = Category.select().join(UserCategory).join(User).where(
+            Category.name << ['c1', 'c2', 'c3']
+        )
+        aC(cats, ['c1', 'c2'])
+
+        cats = Category.select().join(UserCategory, JOIN_LEFT_OUTER).join(User, JOIN_LEFT_OUTER).where(
+            Category.name << ['c1', 'c2', 'c3']
+        )
+        aC(cats, ['c1', 'c2', 'c3'])
 
 
 class FieldTypeTestCase(ModelTestCase):
     requires = [NullModel]
 
+    # TODO
+
+
+class NonIntPKTestCase(ModelTestCase):
+    requires = []
+    # TODO
+
+
+class DBColumnTestCase(ModelTestCase):
+    requires = []
+    # TODO (test fields which specify a db_column)
+
+
+class TransactionTestCase(ModelTestCase):
+    requires = []
+    # TODO
+
+
+class ConcurrencyTestCase(ModelTestCase):
+    requires = []
+    # TODO
+
+
+class ModelInheritanceTestCase(BasePeeweeTestCase):
+    # TODO
     pass
+
+
+class ForUpdateTestCase(ModelTestCase):
+    requires = []
+    # TODO
+
+class SequenceTestCase(ModelTestCase):
+    requires = []
+    # TODO
