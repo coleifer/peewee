@@ -650,7 +650,12 @@ class ModelQueryTestCase(ModelTestCase):
         self.assertEqual([u.username for u in users], ['u3', 'u4', 'u5'])
 
     def test_update(self):
-        pass # TODO
+        self.create_users(5)
+        uq = User.update(username='u-edited').where(User.username << ['u1', 'u2', 'u3'])
+        self.assertEqual([u.username for u in User.select().order_by(User.id)], ['u1', 'u2', 'u3', 'u4', 'u5'])
+
+        uq.execute()
+        self.assertEqual([u.username for u in User.select().order_by(User.id)], ['u-edited', 'u-edited', 'u-edited', 'u4', 'u5'])
 
     def test_insert(self):
         pass # TODO
