@@ -457,7 +457,7 @@ class RelationDescriptor(FieldDescriptor):
                 instance._obj_cache[self.att_name] = obj
             return instance._obj_cache[self.att_name]
         elif not self.field.null:
-            raise RelModel.DoesNotExist
+            raise self.rel_model.DoesNotExist
         return rel_id
 
     def __get__(self, instance, instance_type=None):

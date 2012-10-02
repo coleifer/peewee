@@ -457,6 +457,28 @@ class QueryResultWrapperTestCase(ModelTestCase):
         # only 1 query for these iterations
         self.assertEqual(len(self.queries()) - query_start, 1)
 
+    def test_iterator(self):
+        self.create_users(10)
+        qc = len(self.queries())
+
+        qr = User.select().execute()
+        usernames = [u.username for u in qr.iterator()]
+        self.assertEqual(usernames, ['u%d' % i for i in range(1, 11)])
+
+        qc1 = len(self.queries())
+        self.assertEqual(qc1 - qc, 1)
+
+        self.assertTrue(qr._populated)
+        self.assertEqual(qr._result_cache, [])
+
+        again = [u.username for u in qr]
+        self.assertEqual(again, [])
+        qc2 = len(self.queries())
+        self.assertEqual(qc2 - qc1, 0)
+
+        qr = User.select().where(User.username == 'xxx').execute()
+        usernames = [u.username for u in qr.iterator()]
+        self.assertEqual(usernames, [])
 
 class ModelQueryTestCase(ModelTestCase):
     requires = [User, Blog]
@@ -474,7 +496,7 @@ class ModelQueryTestCase(ModelTestCase):
 
 
 class ModelAPITestCase(ModelTestCase):
-    requires = [User, Blog]
+    requires = [User, Blog, Category]
 
     def test_related_name(self):
         u1 = self.create_user('u1')
@@ -485,6 +507,28 @@ class ModelAPITestCase(ModelTestCase):
 
         self.assertEqual([b.title for b in u1.blogs], ['b11', 'b12'])
         self.assertEqual([b.title for b in u2.blogs], ['b2'])
+
+    def test_fk_exceptions(self):
+        c1 = Category.create(name='c1')
+        c2 = Category.create(parent=c1, name='c2')
+        self.assertEqual(c1.parent, None)
+        self.assertEqual(c2.parent, c1)
+
+        c2_db = Category.get(Category.id == c2.id)
+        self.assertEqual(c2_db.parent, c1)
+
+        u = self.create_user('u1')
+        b = Blog.create(user=u, title='b')
+        b2 = Blog(title='b2')
+
+        self.assertEqual(b.user, u)
+        self.assertRaises(User.DoesNotExist, getattr, b2, 'user')
+
+    def test_fk_ints(self):
+        c1 = Category.create(name='c1')
+        c2 = Category.create(name='c2', parent=c1.id)
+        c2_db = Category.get(Category.id == c2.id)
+        self.assertEqual(c2_db.parent, c1)
 
     def test_creation(self):
         self.create_users(10)
@@ -538,3 +582,75 @@ class ModelAPITestCase(ModelTestCase):
         u1 = User.create(username='u1')
         self.assertTrue(User.select().where(User.username == 'u1').exists())
         self.assertFalse(User.select().where(User.username == 'u2').exists())
+
+    def test_unicode(self):
+        ustr = u'Lýðveldið Ísland'
+        u = self.create_user(username=ustr)
+        u2 = User.get(User.username == ustr)
+        self.assertEqual(u2.username, ustr)
+
+
+class MultipleFKTestCase(ModelTestCase):
+    requires = [User, Relationship]
+
+    def test_multiple_fks(self):
+        a = User.create(username='a')
+        b = User.create(username='b')
+        c = User.create(username='c')
+
+        self.assertEqual(list(a.relationships), [])
+        self.assertEqual(list(a.related_to), [])
+
+        r_ab = Relationship.create(from_user=a, to_user=b)
+        self.assertEqual(list(a.relationships), [r_ab])
+        self.assertEqual(list(a.related_to), [])
+        self.assertEqual(list(b.relationships), [])
+        self.assertEqual(list(b.related_to), [r_ab])
+
+        r_bc = Relationship.create(from_user=b, to_user=c)
+
+        following = User.select().join(
+            Relationship, on=Relationship.to_user
+        ).where(Relationship.from_user == a)
+        self.assertEqual(list(following), [b])
+
+        followers = User.select().join(
+            Relationship, on=Relationship.from_user
+        ).where(Relationship.to_user == a.id)
+        self.assertEqual(list(followers), [])
+
+        following = User.select().join(
+            Relationship, on=Relationship.to_user
+        ).where(Relationship.from_user == b.id)
+        self.assertEqual(list(following), [c])
+
+        followers = User.select().join(
+            Relationship, on=Relationship.from_user
+        ).where(Relationship.to_user == b.id)
+        self.assertEqual(list(followers), [a])
+
+        following = User.select().join(
+            Relationship, on=Relationship.to_user
+        ).where(Relationship.from_user == c.id)
+        self.assertEqual(list(following), [])
+
+        followers = User.select().join(
+            Relationship, on=Relationship.from_user
+        ).where(Relationship.to_user == c.id)
+        self.assertEqual(list(followers), [b])
+
+
+class DatabaseFeatureTestCase(ModelTestCase):
+    requires = [User, Blog]
+
+    def test_count_transaction(self):
+        for i in range(10):
+            self.create_user(username='u%d' % i)
+
+        with transaction(test_db):
+            for user in SelectQuery(User):
+                for i in range(20):
+                    Blog.create(user=user, title='b-%d-%d' % (user.id, i))
+
+        count = SelectQuery(Blog).count()
+        self.assertEqual(count, 200)
