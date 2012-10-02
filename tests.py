@@ -658,13 +658,36 @@ class ModelQueryTestCase(ModelTestCase):
         self.assertEqual([u.username for u in User.select().order_by(User.id)], ['u-edited', 'u-edited', 'u-edited', 'u4', 'u5'])
 
     def test_insert(self):
-        pass # TODO
+        iq = User.insert(username='u1')
+        self.assertEqual(User.select().count(), 0)
+        uid = iq.execute()
+        self.assertTrue(uid > 0)
+        self.assertEqual(User.select().count(), 1)
+        u = User.get(id=uid)
+        self.assertEqual(u.username, 'u1')
 
     def test_delete(self):
-        pass # TODO
+        self.create_users(5)
+        dq = User.delete().where(User.username << ['u1', 'u2', 'u3'])
+        self.assertEqual(User.select().count(), 5)
+        nr = dq.execute()
+        self.assertEqual(nr, 3)
+        self.assertEqual([u.username for u in User.select()], ['u4', 'u5'])
 
     def test_raw(self):
-        pass # TODO
+        self.create_users(3)
+
+        qc = len(self.queries())
+        rq = User.raw('select * from users where username IN (?,?)', 'u1', 'u3')
+        self.assertEqual([u.username for u in rq], ['u1', 'u3'])
+
+        # iterate again
+        self.assertEqual([u.username for u in rq], ['u1', 'u3'])
+        self.assertEqual(len(self.queries()) - qc, 1)
+
+        rq = User.raw('select id, username, ? as secret from users where username = ?', 'sh', 'u2')
+        self.assertEqual([u.secret for u in rq], ['sh'])
+        self.assertEqual([u.username for u in rq], ['u2'])
 
 
 class ModelAPITestCase(ModelTestCase):

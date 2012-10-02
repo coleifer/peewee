@@ -1110,6 +1110,7 @@ class RawQuery(Query):
     def __init__(self, model, query, *params):
         self._sql = query
         self._params = list(params)
+        self._qr = None
         super(RawQuery, self).__init__(model)
 
     def clone(self):
@@ -1123,7 +1124,9 @@ class RawQuery(Query):
     switch = not_allowed('switch')
 
     def execute(self):
-        return QueryResultWrapper(self.model_class, self.database.execute(self), None)
+        if self._qr is None:
+            self._qr = QueryResultWrapper(self.model_class, self.database.execute(self), None)
+        return self._qr
 
     def __iter__(self):
         return iter(self.execute())
