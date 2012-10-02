@@ -198,9 +198,9 @@ class Expr(object):
 
     __eq__ = _q(OP_EQ)
     __lt__ = _q(OP_LT)
-    __lte__ = _q(OP_LTE)
+    __le__ = _q(OP_LTE)
     __gt__ = _q(OP_GT)
-    __gte__ = _q(OP_GTE)
+    __ge__ = _q(OP_GTE)
     __ne__ = _q(OP_NE)
     __lshift__ = _q(OP_IN)
     __rshift__ = _q(OP_IS)

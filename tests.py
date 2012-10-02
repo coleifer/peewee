@@ -908,7 +908,101 @@ class ManyToManyTestCase(ModelTestCase):
 class FieldTypeTestCase(ModelTestCase):
     requires = [NullModel]
 
-    # TODO
+    _dt = datetime.datetime
+    _d = datetime.date
+    _t = datetime.time
+
+    _data = (
+        ('char_field', 'text_field', 'int_field', 'float_field', 'decimal_field1', 'datetime_field', 'date_field', 'time_field'),
+        ('c1',         't1',         1,           1.0,           "1.0",            _dt(2010, 1, 1),  _d(2010, 1, 1), _t(1, 0)),
+        ('c2',         't2',         2,           2.0,           "2.0",            _dt(2010, 1, 2),  _d(2010, 1, 2), _t(2, 0)),
+        ('c3',         't3',         3,           3.0,           "3.0",            _dt(2010, 1, 3),  _d(2010, 1, 3), _t(3, 0)),
+    )
+
+    def setUp(self):
+        super(FieldTypeTestCase, self).setUp()
+        self.field_data = {}
+
+        headers = self._data[0]
+        for row in self._data[1:]:
+            nm = NullModel()
+            for i, col in enumerate(row):
+                attr = headers[i]
+                self.field_data.setdefault(attr, [])
+                self.field_data[attr].append(col)
+                setattr(nm, attr, col)
+            nm.save()
+
+    def assertNM(self, q, exp):
+        query = NullModel.select().where(q).order_by(NullModel.id)
+        self.assertEqual([nm.char_field for nm in query], exp)
+
+    def test_field_types(self):
+        for field, values in self.field_data.items():
+            field_obj = getattr(NullModel, field)
+            self.assertNM(field_obj < values[2], ['c1', 'c2'])
+            self.assertNM(field_obj <= values[1], ['c1', 'c2'])
+            self.assertNM(field_obj > values[0], ['c2', 'c3'])
+            self.assertNM(field_obj >= values[1], ['c2', 'c3'])
+            self.assertNM(field_obj == values[1], ['c2'])
+            self.assertNM(field_obj != values[1], ['c1', 'c3'])
+            self.assertNM(field_obj << [values[0], values[2]], ['c1', 'c3'])
+            self.assertNM(field_obj << [values[1]], ['c2'])
+
+    def test_charfield(self):
+        nm = NullModel.create(char_field=4)
+        nm_db = NullModel.get(id=nm.id)
+        self.assertEqual(nm_db.char_field, '4')
+
+    def test_intfield(self):
+        nm = NullModel.create(int_field='4')
+        nm_db = NullModel.get(id=nm.id)
+        self.assertEqual(nm_db.int_field, 4)
+    
+    def test_floatfield(self):
+        nm = NullModel.create(float_field='4.2')
+        nm_db = NullModel.get(id=nm.id)
+        self.assertEqual(nm_db.float_field, 4.2)
+    
+    def test_decimalfield(self):
+        D = Decimal
+        nm = NullModel()
+        nm.decimal_field1 = D("3.14159265358979323")
+        nm.decimal_field2 = D("100.33")
+        nm.save()
+
+        nm_from_db = NullModel.get(id=nm.id)
+        # sqlite doesn't enforce these constraints properly
+        #self.assertEqual(nm_from_db.decimal_field1, decimal.Decimal("3.14159"))
+        self.assertEqual(nm_from_db.decimal_field2, D("100.33"))
+
+        class TestDecimalModel(TestModel):
+            df1 = DecimalField(decimal_places=2, auto_round=True)
+            df2 = DecimalField(decimal_places=2, auto_round=True, rounding=decimal.ROUND_UP)
+
+        f1 = TestDecimalModel.df1.db_value
+        f2 = TestDecimalModel.df2.db_value
+
+        self.assertEqual(f1(D('1.2345')), D('1.23'))
+        self.assertEqual(f2(D('1.2345')), D('1.24'))
+
+    def test_datetimefield(self):
+        pass
+
+    def test_datefield(self):
+        pass
+
+    def test_timefield(self):
+        pass
+
+    def test_boolfield(self):
+        nmt = NullModel.create(boolean_field=True, char_field='t')
+        nmf = NullModel.create(boolean_field=False, char_field='f')
+        nmn = NullModel.create(boolean_field=None, char_field='n')
+
+        self.assertNM(NullModel.boolean_field == True, ['t'])
+        self.assertNM(NullModel.boolean_field == False, ['f'])
+        self.assertNM(NullModel.boolean_field >> None, ['c1', 'c2', 'c3', 'n'])
 
 
 class NonIntPKTestCase(ModelTestCase):
