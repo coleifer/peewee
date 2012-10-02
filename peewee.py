@@ -1210,13 +1210,10 @@ class SelectQuery(Query):
 
     def ensure_join(self, lm, rm, on=None):
         ctx = self._query_ctx
-        exists = False
         for join in self._joins.get(lm, []):
             if join.model_class == rm:
-                exists = True
-                break
-        if not exists:
-            query = self.switch(lm).join(rm, on=on).switch(ctx)
+                return self
+        query = self.switch(lm).join(rm, on=on).switch(ctx)
         return query
 
     def filter(self, **query):
@@ -1236,14 +1233,19 @@ class SelectQuery(Query):
         annotation = annotation or fn.Count(rel_model._meta.primary_key).set_alias('count')
         query = self.clone()
         query = query.ensure_join(query._query_ctx, rel_model)
-        query._group_by = list(query._select)
+        if not query._group_by:
+            query._group_by = list(query._select)
         query._select = tuple(query._select) + (annotation,)
         return query
 
-    def aggregate(self, aggregation=None):
+    def _aggregate(self, aggregation=None):
         aggregation = aggregation or fn.Count(self.model_class._meta.primary_key)
         query = self.order_by()
         query._select = (aggregation,)
+        return query
+
+    def aggregate(self, aggregation=None):
+        query = self._aggregate(aggregation)
         compiler = self.database.get_compiler()
         sql, params = query.sql(compiler)
         curs = query.database.execute_sql(sql, params, require_commit=False)

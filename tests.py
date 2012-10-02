@@ -432,6 +432,35 @@ class SugarTestCase(BasePeeweeTestCase):
         ])
         self.assertWhere(sq, 'users."username" IN (?,?) AND comment."comment" = ?', ['u1', 'u2', 'hurp'])
 
+    def test_annotate(self):
+        sq = User.select().annotate(Blog)
+        self.assertSelect(sq, 'users."id", users."username", Count(blog."pk") AS count', [])
+        self.assertJoins(sq, ['INNER JOIN "blog" AS blog ON users."id" = blog."user_id"'])
+        self.assertWhere(sq, '', [])
+        self.assertGroupBy(sq, 'users."id", users."username"', [])
+
+        sq = User.select(User.username).annotate(Blog, fn.Sum(Blog.pk).set_alias('sum')).where(User.username == 'foo')
+        self.assertSelect(sq, 'users."username", Sum(blog."pk") AS sum', [])
+        self.assertJoins(sq, ['INNER JOIN "blog" AS blog ON users."id" = blog."user_id"'])
+        self.assertWhere(sq, 'users."username" = ?', ['foo'])
+        self.assertGroupBy(sq, 'users."username"', [])
+
+        sq = User.select(User.username).annotate(Blog).annotate(Blog, fn.Max(Blog.pk).set_alias('mx'))
+        self.assertSelect(sq, 'users."username", Count(blog."pk") AS count, Max(blog."pk") AS mx', [])
+        self.assertJoins(sq, ['INNER JOIN "blog" AS blog ON users."id" = blog."user_id"'])
+        self.assertWhere(sq, '', [])
+        self.assertGroupBy(sq, 'users."username"', [])
+
+        sq = User.select().annotate(Blog).order_by(R('count DESC'))
+        self.assertSelect(sq, 'users."id", users."username", Count(blog."pk") AS count', [])
+        self.assertOrderBy(sq, 'count DESC', [])
+
+    def test_aggregate(self):
+        sq = User.select().where(User.id < 10)._aggregate()
+        self.assertSelect(sq, 'Count(users."id")', [])
+        self.assertWhere(sq, 'users."id" < ?', [10])
+
+
 #
 # TEST CASE USED TO PROVIDE ACCESS TO DATABASE
 # FOR EXECUTION OF "LIVE" QUERIES
