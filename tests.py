@@ -93,7 +93,7 @@ class User(TestModel):
         db_table = 'users'
 
 class Blog(TestModel):
-    user = ForeignKeyField(User)
+    user = ForeignKeyField(User, related_name='blogs')
     title = CharField(max_length=25)
     content = TextField(default='')
     pub_date = DateTimeField(null=True)
@@ -101,6 +101,10 @@ class Blog(TestModel):
 
     def __unicode__(self):
         return '%s: %s' % (self.user.username, self.title)
+
+class Comment(TestModel):
+    blog = ForeignKeyField(Blog, related_name='comments')
+    comment = CharField()
 
 class Relationship(TestModel):
     from_user = ForeignKeyField(User, related_name='relationships')
@@ -128,13 +132,13 @@ class OrderedModel(TestModel):
     created = DateTimeField(default=datetime.datetime.now)
 
     class Meta:
-        ordering = (('created', 'desc'),)
+        order_by = ('-created',)
 
 class Category(TestModel):
     parent = ForeignKeyField('self', related_name='children', null=True)
     name = CharField()
 
-MODELS = [User, Blog, Relationship, NullModel, UniqueModel, OrderedModel, Category]
+MODELS = [User, Blog, Comment, Relationship, NullModel, UniqueModel, OrderedModel, Category]
 
 def drop_tables(only=None):
     for model in reversed(MODELS):
@@ -234,6 +238,23 @@ class SelectTestCase(BasePeeweeTestCase):
         sq = SelectQuery(User).join(Relationship, JOIN_LEFT_OUTER, Relationship.to_user)
         self.assertJoins(sq, ['LEFT OUTER JOIN "relationship" AS relationship ON users."id" = relationship."to_user_id"'])
 
+    def test_join_self_referential(self):
+        sq = SelectQuery(Category).join(Category)
+        self.assertJoins(sq, ['INNER JOIN "category" AS category ON category."parent_id" = category."id"'])
+
+    def test_join_both_sides(self):
+        sq = SelectQuery(Blog).join(Comment).switch(Blog).join(User)
+        self.assertJoins(sq, [
+            'INNER JOIN "comment" AS comment ON blog."pk" = comment."blog_id"',
+            'INNER JOIN "users" AS users ON blog."user_id" = users."id"',
+        ])
+
+        sq = SelectQuery(Blog).join(User).switch(Blog).join(Comment)
+        self.assertJoins(sq, [
+            'INNER JOIN "users" AS users ON blog."user_id" = users."id"',
+            'INNER JOIN "comment" AS comment ON blog."pk" = comment."blog_id"',
+        ])
+
     def test_where(self):
         sq = SelectQuery(User).where(User.id < 5)
         self.assertWhere(sq, 'users."id" < ?', [5])
@@ -320,6 +341,41 @@ class SelectTestCase(BasePeeweeTestCase):
         )
         self.assertHaving(sq, '(Count(blog."pk") > ? OR Count(blog."pk") < ?)', [10, 2])
 
+    def test_ordering(self):
+        sq = SelectQuery(User).join(Blog).order_by(Blog.title)
+        self.assertOrderBy(sq, 'blog."title"', [])
+
+        sq = SelectQuery(User).join(Blog).order_by(Blog.title.asc())
+        self.assertOrderBy(sq, 'blog."title" ASC', [])
+
+        sq = SelectQuery(User).join(Blog).order_by(Blog.title.desc())
+        self.assertOrderBy(sq, 'blog."title" DESC', [])
+
+        sq = SelectQuery(User).join(Blog).order_by(User.username.desc(), Blog.title.asc())
+        self.assertOrderBy(sq, 'users."username" DESC, blog."title" ASC', [])
+
+        base_sq = SelectQuery(User, User.username, fn.Count(Blog.pk).set_alias('count')).join(Blog).group_by(User.username)
+        sq = base_sq.order_by(fn.Count(Blog.pk).desc())
+        self.assertOrderBy(sq, 'Count(blog."pk") DESC', [])
+
+        sq = base_sq.order_by(R('count'))
+        self.assertOrderBy(sq, 'count', [])
+
+        sq = OrderedModel.select()
+        self.assertOrderBy(sq, 'orderedmodel."created" DESC', [])
+
+        sq = OrderedModel.select().order_by(OrderedModel.id.asc())
+        self.assertOrderBy(sq, 'orderedmodel."id" ASC', [])
+
+    def test_paginate(self):
+        sq = SelectQuery(User).paginate(1, 20)
+        self.assertEqual(sq._limit, 20)
+        self.assertEqual(sq._offset, 0)
+
+        sq = SelectQuery(User).paginate(3, 30)
+        self.assertEqual(sq._limit, 30)
+        self.assertEqual(sq._offset, 60)
+
 class UpdateTestCase(BasePeeweeTestCase):
     def test_update(self):
         uq = UpdateQuery(User, {User.username: 'updated'})
@@ -351,6 +407,10 @@ class RawTestCase(BasePeeweeTestCase):
         rq = RawQuery(User, q, 100)
         self.assertEqual(rq.sql(compiler), (q, [100]))
 
+class SugarTestCase(BasePeeweeTestCase):
+    # test things like filter, annotate, aggregate
+    pass
+
 #
 # TEST CASE USED TO PROVIDE ACCESS TO DATABASE
 # FOR EXECUTION OF "LIVE" QUERIES
@@ -366,28 +426,15 @@ class ModelTestCase(BasePeeweeTestCase):
 
     def create_user(self, username):
         return User.create(username=username)
-    
+
     def create_users(self, n):
         for i in range(n):
             self.create_user('u%d' % (i + 1))
 
 
-class ModelAPITestCase(ModelTestCase):
-    requires = [User, Blog]
+class QueryResultWrapperTestCase(ModelTestCase):
+    requires = [User]
 
-    def test_creation(self):
-        self.create_users(10)
-        self.assertEqual(User.select().count(), 10)
-
-    def test_saving(self):
-        self.assertEqual(User.select().count(), 0)
-
-        u = User(username='u1')
-        u.save()
-        u.save()
-
-        self.assertEqual(User.select().count(), 1)
-    
     def test_iteration(self):
         self.create_users(10)
         query_start = len(self.queries())
@@ -406,9 +453,51 @@ class ModelAPITestCase(ModelTestCase):
 
         another_iter = [u.username for u in qr]
         self.assertEqual(another_iter, ['u%d' % i for i in range(1, 11)])
-       
+
         # only 1 query for these iterations
         self.assertEqual(len(self.queries()) - query_start, 1)
+
+
+class ModelQueryTestCase(ModelTestCase):
+    requires = [User, Blog]
+
+    def test_select(self):
+        pass
+    def test_update(self):
+        pass
+    def test_insert(self):
+        pass
+    def test_delete(self):
+        pass
+    def test_raw(self):
+        pass
+
+
+class ModelAPITestCase(ModelTestCase):
+    requires = [User, Blog]
+
+    def test_related_name(self):
+        u1 = self.create_user('u1')
+        u2 = self.create_user('u2')
+        b11 = Blog.create(user=u1, title='b11')
+        b12 = Blog.create(user=u1, title='b12')
+        b2 = Blog.create(user=u2, title='b2')
+
+        self.assertEqual([b.title for b in u1.blogs], ['b11', 'b12'])
+        self.assertEqual([b.title for b in u2.blogs], ['b2'])
+
+    def test_creation(self):
+        self.create_users(10)
+        self.assertEqual(User.select().count(), 10)
+
+    def test_saving(self):
+        self.assertEqual(User.select().count(), 0)
+
+        u = User(username='u1')
+        u.save()
+        u.save()
+
+        self.assertEqual(User.select().count(), 1)
 
     def test_reading(self):
         u1 = self.create_user('u1')
@@ -444,3 +533,8 @@ class ModelAPITestCase(ModelTestCase):
 
         uc = User.select().where(User.username == 'u1').join(Blog).distinct().count()
         self.assertEqual(uc, 1)
+
+    def test_exists(self):
+        u1 = User.create(username='u1')
+        self.assertTrue(User.select().where(User.username == 'u1').exists())
+        self.assertFalse(User.select().where(User.username == 'u2').exists())

@@ -171,10 +171,17 @@ class Expr(object):
         self.alias = a
         return self
 
+    def asc(self):
+        return Ordering(self, True)
+
+    def desc(self):
+        return Ordering(self, False)
+
     def _expr(op, n=False):
         def inner(self, value):
             return BinaryExpr(self, op, value)
         return inner
+
     __add__ = _expr(OP_ADD)
     __sub__ = _expr(OP_SUB)
     __mul__ = _expr(OP_MUL)
@@ -236,7 +243,8 @@ class FieldDescriptor(object):
         instance._data[self.att_name] = value
 
 
-Ordering = namedtuple('Ordering', ('field', 'asc'))
+Ordering = namedtuple('Ordering', ('param', 'asc'))
+R = namedtuple('R', ('value',))
 
 
 class Field(Expr):
@@ -290,12 +298,6 @@ class Field(Expr):
 
     def python_value(self, value):
         return value if value is None else self.coerce(value)
-
-    def asc(self):
-        return Ordering(self, True)
-
-    def desc(self):
-        return Ordering(self, False)
 
 
 class IntegerField(Field):
@@ -606,7 +608,7 @@ class QueryCompiler(object):
         if isinstance(expr, Field):
             return self._parse_field(expr, alias_map)
         elif isinstance(expr, Ordering):
-            expr_str, params = self._parse_field(expr.field, alias_map)
+            expr_str, params = self.parse_expr(expr.param, alias_map)
             expr_str += ' ASC' if expr.asc else ' DESC'
             return expr_str, params
         elif isinstance(expr, Func):
@@ -618,6 +620,8 @@ class QueryCompiler(object):
                 scalars.extend(params)
             expr_str = '%s(%s)' % (expr.fn_name, ', '.join(exprs))
             return self._add_alias(expr_str, expr), scalars
+        elif isinstance(expr, R):
+            return expr.value, []
         elif isinstance(expr, SelectQuery):
             max_alias = self._max_alias(alias_map)
             clone = expr.clone()
@@ -674,10 +678,12 @@ class QueryCompiler(object):
 
     def parse_joins(self, joins, model_class, alias_map):
         parsed = []
+        seen = set()
 
         def _traverse(curr):
-            if curr not in joins:
+            if curr not in joins or curr in seen:
                 return
+            seen.add(curr)
             for join in joins[curr]:
                 from_model = curr
                 to_model = join.model_class
@@ -1639,7 +1645,7 @@ default_database = SqliteDatabase('peewee.db')
 
 class ModelOptions(object):
     def __init__(self, cls, database=None, db_table=None, indexes=None,
-                 ordering=None, primary_key=None):
+                 order_by=None, primary_key=None):
         self.model_class = cls
         self.name = cls.__name__.lower()
         self.fields = {}
@@ -1649,7 +1655,7 @@ class ModelOptions(object):
         self.database = database or default_database
         self.db_table = db_table
         self.indexes = indexes or []
-        self.ordering = ordering
+        self.order_by = order_by
         self.primary_key = primary_key
 
         self.auto_increment = None
@@ -1660,6 +1666,16 @@ class ModelOptions(object):
         for field in self.fields.values():
             if field.default is not None:
                 self.defaults[field] = field.default
+
+        if self.order_by:
+            norm_order_by = []
+            for clause in self.order_by:
+                field = self.fields[clause.lstrip('-')]
+                if clause.startswith('-'):
+                    norm_order_by.append(field.desc())
+                else:
+                    norm_order_by.append(field.asc())
+            self.order_by = norm_order_by
 
     def get_default_dict(self):
         return dict((f, dft if not callable(dft) else dft()) for f, dft in self.defaults.items())
@@ -1687,7 +1703,7 @@ class ModelOptions(object):
 
 
 class BaseModel(type):
-    inheritable_options = ['database', 'indexes', 'ordering', 'primary_key']
+    inheritable_options = ['database', 'indexes', 'order_by', 'primary_key']
 
     def __new__(cls, name, bases, attrs):
         if not bases:
@@ -1768,7 +1784,10 @@ class Model(object):
 
     @classmethod
     def select(cls, *selection):
-        return SelectQuery(cls, *selection)
+        query = SelectQuery(cls, *selection)
+        if cls._meta.order_by:
+            query = query.order_by(*cls._meta.order_by)
+        return query
 
     @classmethod
     def update(cls, **update):
