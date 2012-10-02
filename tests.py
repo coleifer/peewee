@@ -1101,6 +1101,15 @@ class FieldTypeTestCase(ModelTestCase):
         ))
 
 
+class UniqueTestCase(ModelTestCase):
+    requires = [UniqueModel]
+
+    def test_unique(self):
+        uniq1 = UniqueModel.create(name='a')
+        uniq2 = UniqueModel.create(name='b')
+        self.assertRaises(Exception, UniqueModel.create, name='a')
+        test_db.rollback()
+
 
 class NonIntPKTestCase(ModelTestCase):
     requires = []
@@ -1125,6 +1134,33 @@ class ConcurrencyTestCase(ModelTestCase):
 class ModelInheritanceTestCase(BasePeeweeTestCase):
     # TODO
     pass
+
+
+class DatabaseTestCase(BasePeeweeTestCase):
+    def test_deferred_database(self):
+        deferred_db = SqliteDatabase(None)
+        self.assertTrue(deferred_db.deferred)
+
+        class DeferredModel(Model):
+            class Meta:
+                database = deferred_db
+
+        self.assertRaises(Exception, deferred_db.connect)
+        sq = DeferredModel.select()
+        self.assertRaises(Exception, sq.execute)
+
+        deferred_db.init(':memory:')
+        self.assertFalse(deferred_db.deferred)
+
+        # connecting works
+        conn = deferred_db.connect()
+        DeferredModel.create_table()
+        sq = DeferredModel.select()
+        self.assertEqual(list(sq), [])
+
+        deferred_db.init(None)
+        self.assertTrue(deferred_db.deferred)
+
 
 
 class ForUpdateTestCase(ModelTestCase):
