@@ -202,7 +202,6 @@ def join():
 @app.route('/login/', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST' and request.form['username']:
-        import ipdb; ipdb.set_trace()
         try:
             user = User.get(
                 username=request.form['username'],
