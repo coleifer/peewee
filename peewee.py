@@ -1291,8 +1291,8 @@ class SelectQuery(Query):
             obj = clone.execute().next()
             return obj
         except StopIteration:
-            raise self.model.DoesNotExist('instance matching query does not exist:\nSQL: %s\nPARAMS: %s' % (
-                query.sql()
+            raise self.model_class.DoesNotExist('instance matching query does not exist:\nSQL: %s\nPARAMS: %s' % (
+                self.sql(self.database.get_compiler())
             ))
 
     def sql(self, compiler):
@@ -1866,6 +1866,14 @@ class Model(object):
         if kwargs:
             sq = sq.filter(**kwargs)
         return sq.get()
+
+    @classmethod
+    def get_or_create(cls, **kwargs):
+        sq = cls.select().filter(**kwargs)
+        try:
+            return sq.get()
+        except cls.DoesNotExist:
+            return cls.create(**kwargs)
 
     @classmethod
     def table_exists(cls):

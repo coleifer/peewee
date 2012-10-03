@@ -803,6 +803,12 @@ class ModelAPITestCase(ModelTestCase):
         self.assertEqual(u1, User.get(User.username == 'u1'))
         self.assertEqual(u2, User.get(User.username == 'u2'))
 
+    def test_get_or_create(self):
+        u1 = User.get_or_create(username='u1')
+        u1_x = User.get_or_create(username='u1')
+        self.assertEqual(u1.id, u1_x.id)
+        self.assertEqual(User.select().count(), 1)
+
     def test_deleting(self):
         u1 = self.create_user('u1')
         u2 = self.create_user('u2')
