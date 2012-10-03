@@ -169,6 +169,9 @@ class DQ(Leaf):
         self.query = query
         super(DQ, self).__init__()
 
+    def clone(self):
+        return DQ(**self.query)
+
 
 class Expr(object):
     def __init__(self):
@@ -1064,24 +1067,6 @@ class Query(object):
             (mc, list(j)) for mc, j in self._joins.items()
         )
 
-    def convert_dict_to_node(self, qdict):
-        node = Node(OP_AND)
-        joins = []
-        for key, value in sorted(qdict.items()):
-            curr = self.model_class
-            if '__' in key and key.rsplit('__', 1)[1] in DJANGO_MAP:
-                key, op = key.rsplit('__', 1)
-                op = DJANGO_MAP[op]
-            else:
-                op = OP_EQ
-            for piece in key.split('__'):
-                model_attr = getattr(curr, piece)
-                if isinstance(model_attr, (ForeignKeyField, ReverseRelationDescriptor)):
-                    curr = model_attr.rel_model
-                    joins.append(model_attr)
-            node &= Q(model_attr, op, value)
-        return node, joins
-
     @returns_clone
     def where(self, q_or_node):
         if self._where is None:
@@ -1228,13 +1213,51 @@ class SelectQuery(Query):
         query = self.switch(lm).join(rm, on=on).switch(ctx)
         return query
 
-    def filter(self, *dq, **query):
-        # plan:
-        # convert **query to a Node w/DQ as leaves
-        # then combine with the *dq and parse that node
-        node, joins = self.convert_dict_to_node(query)
+    def convert_dict_to_node(self, qdict):
+        accum = []
+        joins = []
+        for key, value in sorted(qdict.items()):
+            curr = self.model_class
+            if '__' in key and key.rsplit('__', 1)[1] in DJANGO_MAP:
+                key, op = key.rsplit('__', 1)
+                op = DJANGO_MAP[op]
+            else:
+                op = OP_EQ
+            for piece in key.split('__'):
+                model_attr = getattr(curr, piece)
+                if isinstance(model_attr, (ForeignKeyField, ReverseRelationDescriptor)):
+                    curr = model_attr.rel_model
+                    joins.append(model_attr)
+            accum.append(Q(model_attr, op, value))
+        return accum, joins
+
+    def filter(self, *args, **kwargs):
+        # normalize args and kwargs into a new node
+        dq_node = Node(OP_AND)
+        if kwargs:
+            dq_node &= DQ(**kwargs)
+        for arg in args:
+            dq_node &= arg.clone()
+
+        def _recurse(curr):
+            joins = []
+            accum = []
+            for child in curr.children:
+                if isinstance(child, Node):
+                    joins.extend(_recurse(child))
+                    accum.append(child)
+                elif isinstance(child, DQ):
+                    _a, _j = self.convert_dict_to_node(child.query)
+                    accum.extend(_a)
+                    joins.extend(_j)
+                else:
+                    accum.append(child)
+            curr.children = accum
+            return joins
+        dq_joins = _recurse(dq_node)
+
         query = self.clone()
-        for field in joins:
+        for field in dq_joins:
             if isinstance(field, ForeignKeyField):
                 lm, rm = field.model_class, field.rel_model
                 field_obj = field
@@ -1242,7 +1265,7 @@ class SelectQuery(Query):
                 lm, rm = field.field.rel_model, field.rel_model
                 field_obj = field.field
             query = query.ensure_join(lm, rm, field_obj)
-        return query.where(node)
+        return query.where(dq_node)
 
     def annotate(self, rel_model, annotation=None):
         annotation = annotation or fn.Count(rel_model._meta.primary_key).set_alias('count')
