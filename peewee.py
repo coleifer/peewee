@@ -923,10 +923,8 @@ class QueryResultWrapper(object):
                     non_cols.append((i, col))
             self._cols = cols
             self._non_cols = non_cols
-            self._iter_fn = self.simple_iter
         else:
             self.column_meta, self.join_meta = meta
-            self._iter_fn = self.construct_instance
 
         self.__ct = 0
         self.__idx = 0
@@ -1002,7 +1000,10 @@ class QueryResultWrapper(object):
             self._populated = True
             raise StopIteration
 
-        return self._iter_fn(row)
+        if self.naive:
+            return self.simple_iter(row)
+        else:
+            return self.construct_instance(row)
 
     def iterator(self):
         while 1:
