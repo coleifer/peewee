@@ -164,6 +164,12 @@ class Q(Leaf):
         return Q(self.lhs, self.op, self.rhs, self.negated)
 
 
+class DQ(Leaf):
+    def __init__(self, **query):
+        self.query = query
+        super(DQ, self).__init__()
+
+
 class Expr(object):
     def __init__(self):
         self.alias = None
@@ -1222,7 +1228,10 @@ class SelectQuery(Query):
         query = self.switch(lm).join(rm, on=on).switch(ctx)
         return query
 
-    def filter(self, **query):
+    def filter(self, *dq, **query):
+        # plan:
+        # convert **query to a Node w/DQ as leaves
+        # then combine with the *dq and parse that node
         node, joins = self.convert_dict_to_node(query)
         query = self.clone()
         for field in joins:
