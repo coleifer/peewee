@@ -767,6 +767,18 @@ class ModelAPITestCase(ModelTestCase):
         c2_db = Category.get(Category.id == c2.id)
         self.assertEqual(c2_db.parent, c1)
 
+    def test_fk_caching(self):
+        c1 = Category.create(name='c1')
+        c2 = Category.create(name='c2', parent=c1)
+        c2_db = Category.get(Category.id == c2.id)
+        qc = len(self.queries())
+
+        parent = c2_db.parent
+        self.assertEqual(parent, c1)
+
+        parent = c2_db.parent
+        self.assertEqual(len(self.queries()) - qc, 1)
+
     def test_creation(self):
         self.create_users(10)
         self.assertEqual(User.select().count(), 10)
