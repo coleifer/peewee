@@ -857,7 +857,7 @@ class QueryCompiler(object):
             parts.append('REFERENCES %s (%s)' % ref_mc)
             parts.append('%(cascade)s%(extra)s')
         elif field.sequence:
-            parts.append('DEFAULT NEXTVAL(%s)' % self.quote(field.sequence))
+            parts.append("DEFAULT NEXTVAL('%s')" % self.quote(field.sequence))
         return ' '.join(p % attrs for p in parts)
 
     def create_table(self, model_class, safe=False):
@@ -1484,9 +1484,19 @@ class Database(object):
     def create_foreign_key(self, model_class, field):
         return self.create_index(model_class, [field], field.unique)
 
+    def create_sequence(self, seq):
+        if self.sequences:
+            qc = self.get_compiler()
+            return self.execute_sql(qc.create_sequence(seq))
+
     def drop_table(self, model_class, fail_silently=False):
         qc = self.get_compiler()
         return self.execute_sql(qc.drop_table(model_class, fail_silently))
+
+    def drop_sequence(self, seq):
+        if self.sequences:
+            qc = self.get_compiler()
+            return self.execute_sql(qc.drop_sequence(seq))
 
     def transaction(self):
         return transaction(self)
@@ -1532,13 +1542,14 @@ class SqliteDatabase(Database):
 class PostgresqlDatabase(Database):
     field_overrides = {
         'bigint': 'BIGINT',
-        'boolean': 'BOOLEAN',
+        'bool': 'BOOLEAN',
         'datetime': 'TIMESTAMP',
         'decimal': 'NUMERIC',
         'double': 'DOUBLE PRECISION',
         'primary_key': 'SERIAL',
     }
     for_update = True
+    interpolation = '%s'
     reserved_tables = ['user']
     sequences = True
 
@@ -1550,10 +1561,10 @@ class PostgresqlDatabase(Database):
     def last_insert_id(self, cursor, model):
         seq = model._meta.primary_key.sequence
         if seq:
-            cursor.execute_sql("SELECT CURRVAL('\"%s\"')" % (seq))
+            cursor.execute("SELECT CURRVAL('\"%s\"')" % (seq))
             return cursor.fetchone()[0]
         elif model._meta.auto_increment:
-            cursor.execute_sql("SELECT CURRVAL('\"%s_%s_seq\"')" % (
+            cursor.execute("SELECT CURRVAL('\"%s_%s_seq\"')" % (
                 model._meta.db_table, model._meta.primary_key.db_column))
             return cursor.fetchone()[0]
 
@@ -1601,6 +1612,7 @@ class MySQLDatabase(Database):
         'text': 'LONGTEXT',
     }
     for_update_support = True
+    interpolation = '%s'
     op_overrides = {OP_LIKE: 'LIKE BINARY'}
     quote_char = '`'
     subquery_delete_same_table = False
@@ -1785,7 +1797,7 @@ class BaseModel(type):
             primary_key.add_to_class(cls, 'id')
 
         cls._meta.primary_key = primary_key
-        cls._meta.auto_increment = isinstance(primary_key, PrimaryKeyField)
+        cls._meta.auto_increment = isinstance(primary_key, PrimaryKeyField) or primary_key.sequence
         if not cls._meta.db_table:
             cls._meta.db_table = re.sub('[^\w]+', '_', cls.__name__.lower())
 

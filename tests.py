@@ -159,9 +159,18 @@ class DBBlog(TestModel):
     title = CharField(db_column='db_title')
     user = ForeignKeyField(DBUser, db_column='db_user')
 
+class SeqModelA(TestModel):
+    id = IntegerField(primary_key=True, sequence='just_testing_seq')
+    num = IntegerField()
+
+class SeqModelB(TestModel):
+    id = IntegerField(primary_key=True, sequence='just_testing_seq')
+    other_num = IntegerField()
+
 
 MODELS = [User, Blog, Comment, Relationship, NullModel, UniqueModel, OrderedModel, Category, UserCategory,
-          NonIntModel, NonIntRelModel, DBUser, DBBlog]
+          NonIntModel, NonIntRelModel, DBUser, DBBlog, SeqModelA, SeqModelB]
+INT = test_db.interpolation
 
 def drop_tables(only=None):
     for model in reversed(MODELS):
@@ -539,6 +548,9 @@ class ModelTestCase(BasePeeweeTestCase):
         drop_tables(self.requires)
         create_tables(self.requires)
 
+    def tearDown(self):
+        drop_tables(self.requires)
+
     def create_user(self, username):
         return User.create(username=username)
 
@@ -697,20 +709,20 @@ class ModelQueryTestCase(ModelTestCase):
         self.create_users(3)
 
         qc = len(self.queries())
-        rq = User.raw('select * from users where username IN (?,?)', 'u1', 'u3')
+        rq = User.raw('select * from users where username IN (%s,%s)' % (INT,INT), 'u1', 'u3')
         self.assertEqual([u.username for u in rq], ['u1', 'u3'])
 
         # iterate again
         self.assertEqual([u.username for u in rq], ['u1', 'u3'])
         self.assertEqual(len(self.queries()) - qc, 1)
 
-        rq = User.raw('select id, username, ? as secret from users where username = ?', 'sh', 'u2')
+        rq = User.raw('select id, username, %s as secret from users where username = %s' % (INT,INT), 'sh', 'u2')
         self.assertEqual([u.secret for u in rq], ['sh'])
         self.assertEqual([u.username for u in rq], ['u2'])
 
 
 class ModelAPITestCase(ModelTestCase):
-    requires = [User, Blog, Category]
+    requires = [User, Blog, Category, UserCategory]
 
     def test_related_name(self):
         u1 = self.create_user('u1')
@@ -1378,10 +1390,59 @@ class ConnectionStateTestCase(BasePeeweeTestCase):
         self.assertFalse(test_db.is_closed())
 
 
-class ForUpdateTestCase(ModelTestCase):
-    requires = []
-    # TODO
+if test_db.for_update:
+    class ForUpdateTestCase(ModelTestCase):
+        requires = [User]
 
-class SequenceTestCase(ModelTestCase):
-    requires = []
-    # TODO
+        def tearDown(self):
+            test_db.set_autocommit(True)
+
+        def test_for_update(self):
+            u1 = self.create_user('u1')
+            u2 = self.create_user('u2')
+            u3 = self.create_user('u3')
+
+            test_db.set_autocommit(False)
+
+            # select a user for update
+            users = User.select().where(User.username == 'u1').for_update()
+            updated = User.update(username='u1_edited').where(User.username == 'u1').execute()
+            self.assertEqual(updated, 1)
+
+            # open up a new connection to the database
+            new_db = database_class(database_name)
+
+            # select the username, it will not register as being updated
+            res = new_db.execute_sql('select username from users where id = %s;' % u1.id)
+            username = res.fetchone()[0]
+            self.assertEqual(username, 'u1')
+
+            # committing will cause the lock to be released
+            test_db.commit()
+
+            # now we get the update
+            res = new_db.execute_sql('select username from users where id = %s;' % u1.id)
+            username = res.fetchone()[0]
+            self.assertEqual(username, 'u1_edited')
+
+elif TEST_VERBOSITY > 0:
+    print 'Skipping "for update" tests'
+
+if test_db.sequences:
+    class SequenceTestCase(ModelTestCase):
+        requires = [SeqModelA, SeqModelB]
+
+        def test_sequence_shared(self):
+            a1 = SeqModelA.create(num=1)
+            a2 = SeqModelA.create(num=2)
+            b1 = SeqModelB.create(other_num=101)
+            b2 = SeqModelB.create(other_num=102)
+            a3 = SeqModelA.create(num=3)
+
+            self.assertEqual(a1.id, a2.id - 1)
+            self.assertEqual(a2.id, b1.id - 1)
+            self.assertEqual(b1.id, b2.id - 1)
+            self.assertEqual(b2.id, a3.id - 1)
+
+elif TEST_VERBOSITY > 0:
+    print 'Skipping "sequence" tests'
