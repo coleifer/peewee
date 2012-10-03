@@ -517,6 +517,26 @@ class SugarTestCase(BasePeeweeTestCase):
         ])
         self.assertWhere(sq, 'users."username" IN (?,?) AND comment."comment" = ?', ['u1', 'u2', 'hurp'])
 
+    def test_filter_dq(self):
+        sq = User.filter(DQ(username='u1') | DQ(username='u2'))
+        self.assertJoins(sq, [])
+        self.assertWhere(sq, '(users."username" = ? OR users."username" = ?)', ['u1', 'u2'])
+
+        sq = Comment.filter(DQ(blog__user__username='u1') | DQ(blog__title='b1'), DQ(comment='c1'))
+        self.assertJoins(sq, [
+            'INNER JOIN "blog" AS blog ON comment."blog_id" = blog."pk"',
+            'INNER JOIN "users" AS users ON blog."user_id" = users."id"',
+        ])
+        self.assertWhere(sq, '(users."username" = ? OR blog."title" = ?) AND comment."comment" = ?', ['u1', 'b1', 'c1'])
+
+        sq = Blog.filter(DQ(user__username='u1') | DQ(comments__comment='c1'))
+        self.assertJoins(sq, [
+            'INNER JOIN "comment" AS comment ON blog."pk" = comment."blog_id"',
+            'INNER JOIN "users" AS users ON blog."user_id" = users."id"',
+        ])
+
+        self.assertWhere(sq, '(users."username" = ? OR comment."comment" = ?)', ['u1', 'c1'])
+
     def test_annotate(self):
         sq = User.select().annotate(Blog)
         self.assertSelect(sq, 'users."id", users."username", Count(blog."pk") AS count', [])

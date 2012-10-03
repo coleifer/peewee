@@ -15,7 +15,7 @@ import os
 import re
 import threading
 import time
-from collections import namedtuple
+from collections import deque, namedtuple
 from copy import deepcopy
 
 try:
@@ -1239,22 +1239,23 @@ class SelectQuery(Query):
         for arg in args:
             dq_node &= arg.clone()
 
-        def _recurse(curr):
-            joins = []
-            accum = []
+        # breadth-first search all nodes replacing DQ with Q
+        q = deque([dq_node])
+        dq_joins = set()
+        while q:
+            query = []
+            curr = q.popleft()
             for child in curr.children:
                 if isinstance(child, Node):
-                    joins.extend(_recurse(child))
-                    accum.append(child)
+                    q.append(child)
+                    query.append(child)
                 elif isinstance(child, DQ):
-                    _a, _j = self.convert_dict_to_node(child.query)
-                    accum.extend(_a)
-                    joins.extend(_j)
+                    accum, joins = self.convert_dict_to_node(child.query)
+                    dq_joins.update(joins)
+                    query.extend(accum)
                 else:
-                    accum.append(child)
-            curr.children = accum
-            return joins
-        dq_joins = _recurse(dq_node)
+                    query.append(child)
+            curr.children = query
 
         query = self.clone()
         for field in dq_joins:
@@ -1886,8 +1887,8 @@ class Model(object):
         return inst
 
     @classmethod
-    def filter(cls, **query):
-        return cls.select().filter(**query)
+    def filter(cls, *dq, **query):
+        return cls.select().filter(*dq, **query)
 
     @classmethod
     def get(cls, query=None, **kwargs):
