@@ -1397,6 +1397,7 @@ class DeleteQuery(Query):
 
 class Database(object):
     compiler_class = QueryCompiler
+    expr_overrides = {}
     field_overrides = {}
     for_update = False
     interpolation = '?'
@@ -1461,7 +1462,9 @@ class Database(object):
         return cursor.rowcount
 
     def get_compiler(self):
-        return self.compiler_class(self.quote_char, self.interpolation, self.field_overrides, self.op_overrides)
+        return self.compiler_class(
+            self.quote_char, self.interpolation, self.field_overrides,
+            self.op_overrides, self.expr_overrides)
 
     def execute(self, query):
         sql, params = query.sql(self.get_compiler())
