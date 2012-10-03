@@ -1288,8 +1288,7 @@ class SelectQuery(Query):
     def get(self):
         clone = self.paginate(1, 1)
         try:
-            obj = clone.execute().next()
-            return obj
+            return clone.execute().next()
         except StopIteration:
             raise self.model_class.DoesNotExist('instance matching query does not exist:\nSQL: %s\nPARAMS: %s' % (
                 self.sql(self.database.get_compiler())
