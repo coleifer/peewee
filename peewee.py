@@ -582,11 +582,16 @@ class QueryCompiler(object):
         JOIN_FULL: 'FULL',
     }
 
-    def __init__(self, quote_char='"', interpolation='?', field_map_overrides=None, op_map_overrides=None):
+    def __init__(self, quote_char='"', interpolation='?', field_overrides=None,
+                 q_overrides=None, expr_overrides=None):
         self.quote_char = quote_char
         self.interpolation = interpolation
-        self.field_map_overrides = field_map_overrides or {}
-        self.op_map_overrides = op_map_overrides or {}
+        self._field_map = dict(self.field_map)
+        self._field_map.update(field_overrides or {})
+        self._op_map = dict(self.q_op_map)
+        self._op_map.update(q_overrides or {})
+        self._expr_map = dict(self.expr_op_map)
+        self._expr_map.update(field_overrides or {})
 
     def quote(self, s):
         return ''.join((self.quote_char, s, self.quote_char))
@@ -615,7 +620,7 @@ class QueryCompiler(object):
         if isinstance(expr, BinaryExpr):
             lhs, lparams = self.parse_expr(expr.lhs, alias_map)
             rhs, rparams = self.parse_expr(expr.rhs, alias_map)
-            expr_str = '(%s %s %s)' % (lhs, self.expr_op_map[expr.op], rhs)
+            expr_str = '(%s %s %s)' % (lhs, self._expr_map[expr.op], rhs)
             return self._add_alias(expr_str, expr), lparams + rparams
         if isinstance(expr, Field):
             return self._parse_field(expr, alias_map)
@@ -653,14 +658,11 @@ class QueryCompiler(object):
             return self.interpolation, [expr.get_id()]
         return self.interpolation, [expr]
 
-    def get_op(self, op):
-        return self.op_map_overrides.get(op, self.q_op_map[op])
-
     def parse_q(self, q, alias_map=None):
         lhs_expr, lparams = self.parse_expr(q.lhs, alias_map)
         rhs_expr, rparams = self.parse_expr(q.rhs, alias_map)
         not_expr = q.negated and 'NOT ' or ''
-        return '%s%s %s %s' % (not_expr, lhs_expr, self.get_op(q.op), rhs_expr), lparams + rparams
+        return '%s%s %s %s' % (not_expr, lhs_expr, self._op_map[q.op], rhs_expr), lparams + rparams
 
     def parse_node(self, n, alias_map=None):
         query = []
@@ -845,14 +847,9 @@ class QueryCompiler(object):
 
         return ' '.join(parts), params
 
-    def get_field_type(self, field):
-        f_map = dict(self.field_map)
-        f_map.update(self.field_map_overrides)
-        return f_map[field.get_db_field()]
-
     def field_sql(self, field):
         attrs = field.attributes
-        attrs['column_type'] = self.get_field_type(field)
+        attrs['column_type'] = self._field_map[field.get_db_field()]
         parts = [self.quote(field.db_column), field.template]
         if not field.null:
             parts.append('NOT NULL')
