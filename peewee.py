@@ -497,7 +497,7 @@ class ReverseRelationDescriptor(object):
 class ForeignKeyField(Field):
     def __init__(self, rel_model, null=False, related_name=None, cascade=False, extra=None, *args, **kwargs):
         self.rel_model = rel_model
-        self.related_name = related_name
+        self._related_name = related_name
         self.cascade = cascade
         self.extra = extra
 
@@ -516,7 +516,7 @@ class ForeignKeyField(Field):
         model_class._meta.fields[self.name] = self
         model_class._meta.columns[self.db_column] = self
 
-        self.related_name = self.related_name or '%s_set' % (model_class._meta.name)
+        self.related_name = self._related_name or '%s_set' % (model_class._meta.name)
 
         if self.rel_model == 'self':
             self.rel_model = self.model_class
@@ -1976,3 +1976,31 @@ class Model(object):
 
     def __ne__(self, other):
         return not self == other
+
+
+def create_model_tables(models, **create_table_kwargs):
+    """Create tables for all given models (in the right order)."""
+    for m in sort_models_topologically(models):
+        m.create_table(**create_table_kwargs)
+
+def drop_model_tables(models, **drop_table_kwargs):
+    """Drop tables for all given models (in the right order)."""
+    for m in reversed(sort_models_topologically(models)):
+        m.drop_table(**drop_table_kwargs)
+
+def sort_models_topologically(models):
+    """Sort models topologically so that parents will precede children."""
+    models = set(models)
+    seen = set()
+    ordering = []
+    def dfs(model):
+        if model in models and model not in seen:
+            seen.add(model)
+            for child_model in model._meta.reverse_rel.values():
+                dfs(child_model)
+            ordering.append(model)  # parent will follow descendants
+    # order models by name and table initially to guarantee a total ordering
+    names = lambda m: (m._meta.name, m._meta.db_table)
+    for m in sorted(models, key=names, reverse=True):
+        dfs(m)
+    return list(reversed(ordering))  # want parents first in output ordering
