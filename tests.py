@@ -1200,8 +1200,94 @@ class DBColumnTestCase(ModelTestCase):
 
 
 class TransactionTestCase(ModelTestCase):
-    requires = []
-    # TODO
+    requires = [User, Blog]
+
+    def tearDown(self):
+        super(TransactionTestCase, self).tearDown()
+        test_db.set_autocommit(True)
+
+    def test_autocommit(self):
+        test_db.set_autocommit(False)
+
+        u1 = User.create(username='u1')
+        u2 = User.create(username='u2')
+
+        # open up a new connection to the database, it won't register any blogs
+        # as being created
+        new_db = database_class(database_name)
+        res = new_db.execute_sql('select count(*) from users;')
+        self.assertEqual(res.fetchone()[0], 0)
+
+        # commit our blog inserts
+        test_db.commit()
+
+        # now the blogs are query-able from another connection
+        res = new_db.execute_sql('select count(*) from users;')
+        self.assertEqual(res.fetchone()[0], 2)
+
+    def test_commit_on_success(self):
+        self.assertTrue(test_db.get_autocommit())
+
+        @test_db.commit_on_success
+        def will_fail():
+            u = User.create(username='u1')
+            b = Blog.create() # no blog, will raise an error
+            return u, b
+
+        self.assertRaises(Exception, will_fail)
+        self.assertEqual(User.select().count(), 0)
+        self.assertEqual(Blog.select().count(), 0)
+
+        @test_db.commit_on_success
+        def will_succeed():
+            u = User.create(username='u1')
+            b = Blog.create(title='b1', user=u)
+            return u, b
+
+        u, b = will_succeed()
+        self.assertEqual(User.select().count(), 1)
+        self.assertEqual(Blog.select().count(), 1)
+
+    def test_context_mgr(self):
+        def will_fail():
+            u = User.create(username='u1')
+            b = Blog.create() # no blog, will raise an error
+            return u, b
+
+        def do_will_fail():
+            with transaction(test_db):
+                will_fail()
+
+        def do_will_fail2():
+            with test_db.transaction():
+                will_fail()
+
+        self.assertRaises(Exception, do_will_fail)
+        self.assertEqual(Blog.select().count(), 0)
+
+        self.assertRaises(Exception, do_will_fail2)
+        self.assertEqual(Blog.select().count(), 0)
+
+        def will_succeed():
+            u = User.create(username='u1')
+            b = Blog.create(title='b1', user=u)
+            return u, b
+
+        def do_will_succeed():
+            with transaction(test_db):
+                will_succeed()
+
+        def do_will_succeed2():
+            with test_db.transaction():
+                will_succeed()
+
+        do_will_succeed()
+        self.assertEqual(User.select().count(), 1)
+        self.assertEqual(Blog.select().count(), 1)
+
+        do_will_succeed2()
+        self.assertEqual(User.select().count(), 2)
+        self.assertEqual(Blog.select().count(), 2)
 
 
 class ConcurrencyTestCase(ModelTestCase):
@@ -1239,6 +1325,15 @@ class DatabaseTestCase(BasePeeweeTestCase):
         deferred_db.init(None)
         self.assertTrue(deferred_db.deferred)
 
+
+class ConnectionStateTestCase(BasePeeweeTestCase):
+    def test_connection_state(self):
+        conn = test_db.get_conn()
+        self.assertFalse(test_db.is_closed())
+        test_db.close()
+        self.assertTrue(test_db.is_closed())
+        conn = test_db.get_conn()
+        self.assertFalse(test_db.is_closed())
 
 
 class ForUpdateTestCase(ModelTestCase):

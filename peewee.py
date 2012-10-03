@@ -1418,11 +1418,11 @@ class Database(object):
     def get_cursor(self):
         return self.get_conn().cursor()
 
+    def _close(self, conn):
+        conn.close()
+
     def _connect(self, database, **kwargs):
         raise NotImplementedError
-
-    def close(self, conn):
-        return conn.close()
 
     def last_insert_id(self, cursor, model):
         if model._meta.auto_increment:
@@ -1490,6 +1490,23 @@ class Database(object):
 
     def transaction(self):
         return transaction(self)
+
+    def commit_on_success(self, func):
+        def inner(*args, **kwargs):
+            orig = self.get_autocommit()
+            self.set_autocommit(False)
+            self.begin()
+            try:
+                res = func(*args, **kwargs)
+                self.commit()
+            except:
+                self.rollback()
+                raise
+            else:
+                return res
+            finally:
+                self.set_autocommit(orig)
+        return inner
 
 
 class SqliteDatabase(Database):
