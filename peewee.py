@@ -1065,11 +1065,11 @@ class Query(object):
         )
 
     @returns_clone
-    def where(self, q_or_node):
+    def where(self, *q_or_node):
         if self._where is None:
             self._where = Node(OP_AND)
-        if q_or_node is not None:
-            self._where &= q_or_node
+        for piece in q_or_node:
+            self._where &= piece
 
     @returns_clone
     def join(self, model_class, join_type=None, on=None):
