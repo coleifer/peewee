@@ -149,9 +149,18 @@ class NonIntModel(TestModel):
 class NonIntRelModel(TestModel):
     non_int_model = ForeignKeyField(NonIntModel, related_name='nr')
 
+class DBUser(TestModel):
+    user_id = PrimaryKeyField(db_column='db_user_id')
+    username = CharField(db_column='db_username')
+
+class DBBlog(TestModel):
+    blog_id = PrimaryKeyField(db_column='db_blog_id')
+    title = CharField(db_column='db_title')
+    user = ForeignKeyField(DBUser, db_column='db_user')
+
 
 MODELS = [User, Blog, Comment, Relationship, NullModel, UniqueModel, OrderedModel, Category, UserCategory,
-          NonIntModel, NonIntRelModel,]
+          NonIntModel, NonIntRelModel, DBUser, DBBlog]
 
 def drop_tables(only=None):
     for model in reversed(MODELS):
@@ -1144,14 +1153,6 @@ class NonIntPKTestCase(ModelTestCase):
         ])
 
     def test_non_int_fk(self):
-        """
-        class NonIntModel(TestModel):
-            pk = CharField(primary_key=True)
-            data = CharField()
-
-        class NonIntRelModel(TestModel):
-            non_int_model = ForeignKeyField(NonIntModel)
-        """
         ni1 = NonIntModel.create(pk='a1', data='ni1')
         ni2 = NonIntModel.create(pk='a2', data='ni2')
 
@@ -1171,8 +1172,31 @@ class NonIntPKTestCase(ModelTestCase):
 
 
 class DBColumnTestCase(ModelTestCase):
-    requires = []
-    # TODO (test fields which specify a db_column)
+    requires = [DBUser, DBBlog]
+
+    def test_select(self):
+        sq = DBUser.select().where(DBUser.username == 'u1')
+        self.assertSelect(sq, 'dbuser."db_user_id", dbuser."db_username"', [])
+        self.assertWhere(sq, 'dbuser."db_username" = ?', ['u1'])
+
+        sq = DBUser.select(DBUser.user_id).join(DBBlog).where(DBBlog.title == 'b1')
+        self.assertSelect(sq, 'dbuser."db_user_id"', [])
+        self.assertJoins(sq, ['INNER JOIN "dbblog" AS dbblog ON dbuser."db_user_id" = dbblog."db_user"'])
+        self.assertWhere(sq, 'dbblog."db_title" = ?', ['b1'])
+
+    def test_db_column(self):
+        u1 = DBUser.create(username='u1')
+        u2 = DBUser.create(username='u2')
+        u2_db = DBUser.get(user_id=u2.get_id())
+        self.assertEqual(u2_db.username, 'u2')
+
+        b1 = DBBlog.create(user=u1, title='b1')
+        b2 = DBBlog.create(user=u2, title='b2')
+        b2_db = DBBlog.get(blog_id=b2.get_id())
+        self.assertEqual(b2_db.user.user_id, u2.user_id)
+        self.assertEqual(b2_db.title, 'b2')
+        
+        self.assertEqual([b.title for b in u2.dbblog_set], ['b2'])
 
 
 class TransactionTestCase(ModelTestCase):
