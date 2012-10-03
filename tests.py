@@ -167,9 +167,20 @@ class SeqModelB(TestModel):
     id = IntegerField(primary_key=True, sequence='just_testing_seq')
     other_num = IntegerField()
 
+class MultiIndexModel(TestModel):
+    f1 = CharField()
+    f2 = CharField()
+    f3 = CharField()
+
+    class Meta:
+        indexes = (
+            (('f1', 'f2'), True),
+            (('f2', 'f3'), False),
+        )
+
 
 MODELS = [User, Blog, Comment, Relationship, NullModel, UniqueModel, OrderedModel, Category, UserCategory,
-          NonIntModel, NonIntRelModel, DBUser, DBBlog, SeqModelA, SeqModelB]
+          NonIntModel, NonIntRelModel, DBUser, DBBlog, SeqModelA, SeqModelB, MultiIndexModel]
 INT = test_db.interpolation
 
 def drop_tables(only=None):
@@ -1133,13 +1144,23 @@ class FieldTypeTestCase(ModelTestCase):
 
 
 class UniqueTestCase(ModelTestCase):
-    requires = [UniqueModel]
+    requires = [UniqueModel, MultiIndexModel]
 
     def test_unique(self):
         uniq1 = UniqueModel.create(name='a')
         uniq2 = UniqueModel.create(name='b')
         self.assertRaises(Exception, UniqueModel.create, name='a')
         test_db.rollback()
+
+    def test_multi_index(self):
+        mi1 = MultiIndexModel.create(f1='a', f2='a', f3='a')
+        mi2 = MultiIndexModel.create(f1='b', f2='b', f3='b')
+        self.assertRaises(Exception, MultiIndexModel.create, f1='a', f2='a', f3='b')
+        test_db.rollback()
+        self.assertRaises(Exception, MultiIndexModel.create, f1='b', f2='b', f3='a')
+        test_db.rollback()
+
+        mi3 = MultiIndexModel.create(f1='a', f2='b', f3='b')
 
 
 class NonIntPKTestCase(ModelTestCase):
