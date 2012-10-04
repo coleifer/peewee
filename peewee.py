@@ -535,7 +535,7 @@ class ForeignKeyField(IntegerField):
 
     def coerce(self, value):
         return self.rel_model._meta.primary_key.coerce(value)
-    
+
     def db_value(self, value):
         if isinstance(value, self.rel_model):
             value = value.get_id()
