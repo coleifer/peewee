@@ -183,6 +183,22 @@ class BlogTwo(Blog):
     extra_field = CharField()
 
 
+class Parent(TestModel):
+    data = CharField()
+
+class Child(TestModel):
+    parent = ForeignKeyField(Parent)
+
+class Orphan(TestModel):
+    parent = ForeignKeyField(Parent, null=True)
+
+class ChildPet(TestModel):
+    child = ForeignKeyField(Child)
+
+class OrphanPet(TestModel):
+    orphan = ForeignKeyField(Orphan)
+
+
 MODELS = [User, Blog, Comment, Relationship, NullModel, UniqueModel, OrderedModel, Category, UserCategory,
           NonIntModel, NonIntRelModel, DBUser, DBBlog, SeqModelA, SeqModelB, MultiIndexModel, BlogTwo]
 INT = test_db.interpolation
@@ -879,6 +895,74 @@ class ModelAPITestCase(ModelTestCase):
         u = self.create_user(username=ustr)
         u2 = User.get(User.username == ustr)
         self.assertEqual(u2.username, ustr)
+
+
+class RecursiveDeleteTestCase(BasePeeweeTestCase):
+    def setUp(self):
+        super(RecursiveDeleteTestCase, self).setUp()
+        Parent.create_table(True)
+        Child.create_table(True)
+        Orphan.create_table(True)
+        ChildPet.create_table(True)
+        OrphanPet.create_table(True)
+        p1 = Parent.create(data='p1')
+        p2 = Parent.create(data='p2')
+        c11 = Child.create(parent=p1)
+        c12 = Child.create(parent=p1)
+        c21 = Child.create(parent=p2)
+        c22 = Child.create(parent=p2)
+        o11 = Orphan.create(parent=p1)
+        o12 = Orphan.create(parent=p1)
+        o21 = Orphan.create(parent=p2)
+        o22 = Orphan.create(parent=p2)
+        ChildPet.create(child=c11)
+        ChildPet.create(child=c12)
+        ChildPet.create(child=c21)
+        ChildPet.create(child=c22)
+        OrphanPet.create(orphan=o11)
+        OrphanPet.create(orphan=o12)
+        OrphanPet.create(orphan=o21)
+        OrphanPet.create(orphan=o22)
+        self.p1 = p1
+        self.p2 = p2
+
+    def tearDown(self):
+        super(RecursiveDeleteTestCase, self).tearDown()
+        OrphanPet.drop_table()
+        ChildPet.drop_table()
+        Orphan.drop_table()
+        Child.drop_table()
+        Parent.drop_table()
+
+    def test_recursive_update(self):
+        self.p1.delete_instance(recursive=True)
+        counts = (
+            #query,fk,p1,p2,tot
+            (Child.select(), Child.parent, 0, 2, 2),
+            (Orphan.select(), Orphan.parent, 0, 2, 4),
+            (ChildPet.select().join(Child), Child.parent, 0, 2, 2),
+            (OrphanPet.select().join(Orphan), Orphan.parent, 0, 2, 4),
+        )
+
+        for query, fk, p1_ct, p2_ct, tot in counts:
+            self.assertEqual(query.where(fk == self.p1).count(), p1_ct)
+            self.assertEqual(query.where(fk == self.p2).count(), p2_ct)
+            self.assertEqual(query.count(), tot)
+
+    def test_recursive_delete(self):
+        self.p1.delete_instance(recursive=True, delete_nullable=True)
+        counts = (
+            #query,fk,p1,p2,tot
+            (Child.select(), Child.parent, 0, 2, 2),
+            (Orphan.select(), Orphan.parent, 0, 2, 2),
+            (ChildPet.select().join(Child), Child.parent, 0, 2, 2),
+            (OrphanPet.select().join(Orphan), Orphan.parent, 0, 2, 2),
+        )
+
+        for query, fk, p1_ct, p2_ct, tot in counts:
+            self.assertEqual(query.where(fk == self.p1).count(), p1_ct)
+            self.assertEqual(query.where(fk == self.p2).count(), p2_ct)
+            self.assertEqual(query.count(), tot)
 
 
 class MultipleFKTestCase(ModelTestCase):

@@ -494,7 +494,7 @@ class ReverseRelationDescriptor(object):
         return self
 
 
-class ForeignKeyField(Field):
+class ForeignKeyField(IntegerField):
     def __init__(self, rel_model, null=False, related_name=None, cascade=False, extra=None, *args, **kwargs):
         self.rel_model = rel_model
         self._related_name = related_name
@@ -525,12 +525,17 @@ class ForeignKeyField(Field):
         setattr(self.rel_model, self.related_name, ReverseRelationDescriptor(self))
 
         model_class._meta.rel[self.name] = self
-        self.rel_model._meta.reverse_rel[self.name] = self
+        self.rel_model._meta.reverse_rel[self.related_name] = self
 
     def get_db_field(self):
         to_pk = self.rel_model._meta.primary_key
-        return to_pk.get_db_field()
+        if not isinstance(to_pk, PrimaryKeyField):
+            return to_pk.get_db_field()
+        return super(ForeignKeyField, self).get_db_field()
 
+    def coerce(self, value):
+        return self.rel_model._meta.primary_key.coerce(value)
+    
     def db_value(self, value):
         if isinstance(value, self.rel_model):
             value = value.get_id()
@@ -1966,11 +1971,30 @@ class Model(object):
             if self._meta.auto_increment:
                 self.set_id(new_pk)
 
-    def delete_instance(self, recursive=False):
+    def dependencies(self, search_nullable=False):
+        stack = [(type(self), self.select().where(self._meta.primary_key == self.get_id()))]
+        seen = set()
+
+        while stack:
+            klass, query = stack.pop()
+            if klass in seen:
+                continue
+            seen.add(klass)
+            for rel_name, fk in klass._meta.reverse_rel.items():
+                rel_model = fk.model_class
+                expr = fk << query
+                if not fk.null or search_nullable:
+                    stack.append((rel_model, rel_model.select().where(expr)))
+                yield (expr, fk)
+
+    def delete_instance(self, recursive=False, delete_nullable=False):
         if recursive:
-            pass
-        else:
-            return self.delete().where(self._meta.primary_key == self.get_id()).execute()
+            for query, fk in reversed(list(self.dependencies(delete_nullable))):
+                if fk.null and not delete_nullable:
+                    fk.model_class.update(**{fk.name: None}).where(query).execute()
+                else:
+                    fk.model_class.delete().where(query).execute()
+        return self.delete().where(self._meta.primary_key == self.get_id()).execute()
 
     def __eq__(self, other):
         return other.__class__ == self.__class__ and \
