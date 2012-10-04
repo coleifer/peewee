@@ -11,6 +11,7 @@ benchmarks = [dirname for dirname in os.listdir('.') if not os.path.isfile(dirna
 results = {}
 
 bench_modules = map(__import__, ('%s.bench' % b for b in benchmarks))
+bench_modules = map(__import__, ('peewee_bench.bench'))# % b for b in benchmarks))
 
 def run(func, do_cleanup=False, no_time=False):
     if not no_time:

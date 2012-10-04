@@ -1354,9 +1354,15 @@ class SelectQuery(Query):
     def sql(self, compiler):
         return compiler.parse_select_query(self)
 
+    def verify_naive(self):
+        for expr in self._select:
+            if isinstance(expr, Field) and expr.model_class != self.model_class:
+                return False
+        return True
+
     def execute(self):
         if self._dirty or not self._qr:
-            if self._naive:
+            if self._naive or not self._joins or self.verify_naive():
                 query_meta = None
             else:
                 query_meta = [self._select, self._joins]
@@ -1919,7 +1925,7 @@ class Model(object):
 
     @classmethod
     def get(cls, query=None, **kwargs):
-        sq = cls.select()
+        sq = cls.select().naive()
         if query:
             sq = sq.where(query)
         if kwargs:
