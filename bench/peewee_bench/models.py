@@ -1,7 +1,7 @@
 import peewee
 
 
-test_db = peewee.Database(peewee.SqliteAdapter(), 'test_pw.db')
+test_db = peewee.SqliteDatabase('test_pw.db')
 
 class User(peewee.Model):
     username = peewee.CharField()

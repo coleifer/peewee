@@ -24,26 +24,26 @@ def create_entry(blog, title, content, pub_date=None):
 
 def list_users(ordered=False):
     if ordered:
-        sq = User.select().order_by('username')
+        sq = User.select().order_by(User.username.asc())
     else:
         sq = User.select()
     return list(sq)
 
 def list_blogs_select_related():
-    qs = Blog.select({Blog: ['*'], User: ['*']}).join(User)
+    qs = Blog.select(Blog, User).join(User)
     return list(qs)
 
 def list_blogs_for_user(user):
     return list(user.blog_set)
 
 def list_entries_by_user(user):
-    return list(Entry.select().join(Blog).where(user=user))
+    return list(Entry.select().join(Blog).where(Blog.user == user))
 
 def get_user_count():
     return User.select().count()
 
 def list_entries_subquery(user):
-    return list(Entry.select().where(blog__in=Blog.select().where(user=user)))
+    return list(Entry.select().where(Entry.blog << Blog.select().where(Blog.user == user)))
 
 def get_user(username):
     return User.get(username=username)
