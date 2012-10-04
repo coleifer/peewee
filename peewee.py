@@ -1088,6 +1088,69 @@ class Query(object):
     def switch(self, model_class=None):
         self._query_ctx = model_class or self.model_class
 
+    def ensure_join(self, lm, rm, on=None):
+        ctx = self._query_ctx
+        for join in self._joins.get(lm, []):
+            if join.model_class == rm:
+                return self
+        query = self.switch(lm).join(rm, on=on).switch(ctx)
+        return query
+
+    def convert_dict_to_node(self, qdict):
+        accum = []
+        joins = []
+        for key, value in sorted(qdict.items()):
+            curr = self.model_class
+            if '__' in key and key.rsplit('__', 1)[1] in DJANGO_MAP:
+                key, op = key.rsplit('__', 1)
+                op = DJANGO_MAP[op]
+            else:
+                op = OP_EQ
+            for piece in key.split('__'):
+                model_attr = getattr(curr, piece)
+                if isinstance(model_attr, (ForeignKeyField, ReverseRelationDescriptor)):
+                    curr = model_attr.rel_model
+                    joins.append(model_attr)
+            accum.append(Q(model_attr, op, value))
+        return accum, joins
+
+    def filter(self, *args, **kwargs):
+        # normalize args and kwargs into a new node
+        dq_node = Node(OP_AND)
+        if kwargs:
+            dq_node &= DQ(**kwargs)
+        for arg in args:
+            dq_node &= arg.clone()
+
+        # breadth-first search all nodes replacing DQ with Q
+        q = deque([dq_node])
+        dq_joins = set()
+        while q:
+            query = []
+            curr = q.popleft()
+            for child in curr.children:
+                if isinstance(child, Node):
+                    q.append(child)
+                    query.append(child)
+                elif isinstance(child, DQ):
+                    accum, joins = self.convert_dict_to_node(child.query)
+                    dq_joins.update(joins)
+                    query.extend(accum)
+                else:
+                    query.append(child)
+            curr.children = query
+
+        query = self.clone()
+        for field in dq_joins:
+            if isinstance(field, ForeignKeyField):
+                lm, rm = field.model_class, field.rel_model
+                field_obj = field
+            elif isinstance(field, ReverseRelationDescriptor):
+                lm, rm = field.field.rel_model, field.rel_model
+                field_obj = field.field
+            query = query.ensure_join(lm, rm, field_obj)
+        return query.where(dq_node)
+
     def sql(self, compiler):
         raise NotImplementedError()
 
@@ -1202,69 +1265,6 @@ class SelectQuery(Query):
     @returns_clone
     def naive(self, naive=True):
         self._naive = naive
-
-    def ensure_join(self, lm, rm, on=None):
-        ctx = self._query_ctx
-        for join in self._joins.get(lm, []):
-            if join.model_class == rm:
-                return self
-        query = self.switch(lm).join(rm, on=on).switch(ctx)
-        return query
-
-    def convert_dict_to_node(self, qdict):
-        accum = []
-        joins = []
-        for key, value in sorted(qdict.items()):
-            curr = self.model_class
-            if '__' in key and key.rsplit('__', 1)[1] in DJANGO_MAP:
-                key, op = key.rsplit('__', 1)
-                op = DJANGO_MAP[op]
-            else:
-                op = OP_EQ
-            for piece in key.split('__'):
-                model_attr = getattr(curr, piece)
-                if isinstance(model_attr, (ForeignKeyField, ReverseRelationDescriptor)):
-                    curr = model_attr.rel_model
-                    joins.append(model_attr)
-            accum.append(Q(model_attr, op, value))
-        return accum, joins
-
-    def filter(self, *args, **kwargs):
-        # normalize args and kwargs into a new node
-        dq_node = Node(OP_AND)
-        if kwargs:
-            dq_node &= DQ(**kwargs)
-        for arg in args:
-            dq_node &= arg.clone()
-
-        # breadth-first search all nodes replacing DQ with Q
-        q = deque([dq_node])
-        dq_joins = set()
-        while q:
-            query = []
-            curr = q.popleft()
-            for child in curr.children:
-                if isinstance(child, Node):
-                    q.append(child)
-                    query.append(child)
-                elif isinstance(child, DQ):
-                    accum, joins = self.convert_dict_to_node(child.query)
-                    dq_joins.update(joins)
-                    query.extend(accum)
-                else:
-                    query.append(child)
-            curr.children = query
-
-        query = self.clone()
-        for field in dq_joins:
-            if isinstance(field, ForeignKeyField):
-                lm, rm = field.model_class, field.rel_model
-                field_obj = field
-            elif isinstance(field, ReverseRelationDescriptor):
-                lm, rm = field.field.rel_model, field.rel_model
-                field_obj = field.field
-            query = query.ensure_join(lm, rm, field_obj)
-        return query.where(dq_node)
 
     def annotate(self, rel_model, annotation=None):
         annotation = annotation or fn.Count(rel_model._meta.primary_key).set_alias('count')
