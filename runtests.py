@@ -34,11 +34,11 @@ if __name__ == '__main__':
         modules = [tests]
         #from playhouse import tests as extras_tests
         #modules.append(extras_tests)
-        #try:
-        #    from playhouse import tests_apsw
-        #    modules.append(tests_apsw)
-        #except ImportError:
-        #    print 'Unable to import apsw tests, skipping'
+        try:
+            from playhouse import tests_apsw
+            modules.append(tests_apsw)
+        except ImportError:
+            print 'Unable to import apsw tests, skipping'
 
         try:
             from playhouse import tests_postgres

@@ -1,25 +1,8 @@
 import apsw
 from peewee import *
-from peewee import SqliteAdapter, SqliteDatabase, Database, logger
+from peewee import SqliteDatabase, Database, logger
 from peewee import BooleanField as _BooleanField, DateField as _DateField, TimeField as _TimeField, \
     DateTimeField as _DateTimeField, DecimalField as _DecimalField, transaction as _transaction
-
-
-class VirtualModel(Model):
-    _extension_module = ''
-
-    @classmethod
-    def create_table(cls, fail_silently=False, extra='', **options):
-        if fail_silently and cls.table_exists():
-            return
-
-        cls._meta.database.create_table(cls, extra=extra, vt_options=options)
-
-        for field_name, field_obj in cls._meta.fields.items():
-            if isinstance(field_obj, ForeignKeyField):
-                cls._meta.database.create_foreign_key(cls, field_obj)
-            elif field_obj.db_index or field_obj.unique:
-                cls._meta.database.create_index(cls, field_obj.name, field_obj.unique)
 
 
 class ConnectionWrapper(apsw.Connection):
@@ -31,7 +14,7 @@ class ConnectionWrapper(apsw.Connection):
 class CursorProxy(object):
     def __init__(self, cursor_obj):
         self.cursor_obj = cursor_obj
-        self.implements = set(['description', 'fetchone', 'fetchmany'])
+        self.implements = set(['description', 'fetchone'])
 
     def __getattr__(self, attr):
         if attr in self.implements:
@@ -51,14 +34,6 @@ class CursorProxy(object):
         except StopIteration:
             pass
 
-    def fetchmany(self, n):
-        results = []
-        for i, res in enumerate(self.cursor_obj):
-            results.append(res)
-            if i == n:
-                break
-        return results
-
 
 class transaction(_transaction):
     def __init__(self, db, lock_type='deferred'):
@@ -71,18 +46,11 @@ class transaction(_transaction):
         self.db.begin(self.lock_type)
 
 
-class APSWAdapter(SqliteAdapter):
-    def __init__(self, timeout=None):
+class APSWDatabase(SqliteDatabase):
+    def __init__(self, database, timeout=None, **kwargs):
         self.timeout = timeout
         self._modules = {}
-
-    def connect(self, database, **kwargs):
-        conn = ConnectionWrapper(database, **kwargs)
-        if self.timeout is not None:
-            conn.setbusytimeout(self.timeout)
-        for mod_name, mod_inst in self._modules.items():
-            conn.createmodule(mod_name, mod_inst)
-        return conn
+        super(APSWDatabase, self).__init__(database, **kwargs)
 
     def register_module(self, mod_name, mod_inst):
         self._modules[mod_name] = mod_inst
@@ -90,13 +58,15 @@ class APSWAdapter(SqliteAdapter):
     def unregister_module(self, mod_name):
         del(self._modules[mod_name])
 
+    def _connect(self, database, **kwargs):
+        conn = ConnectionWrapper(database, **kwargs)
+        if self.timeout is not None:
+            conn.setbusytimeout(self.timeout)
+        for mod_name, mod_inst in self._modules.items():
+            conn.createmodule(mod_name, mod_inst)
+        return conn
 
-class APSWDatabase(SqliteDatabase):
-    def __init__(self, database, **connect_kwargs):
-        adapter = APSWAdapter(connect_kwargs.pop('timeout', None))
-        Database.__init__(self, adapter, database, **connect_kwargs)
-
-    def execute(self, sql, params=None, require_commit=True):
+    def execute_sql(self, sql, params=None, require_commit=True):
         cursor = self.get_cursor()
         wrap_transaction = require_commit and self.get_autocommit()
         if wrap_transaction:
@@ -124,23 +94,6 @@ class APSWDatabase(SqliteDatabase):
 
     def transaction(self, lock_type='deferred'):
         return transaction(self, lock_type)
-
-    def create_table(self, model_class, safe=False, extra='', vt_options=None):
-        if issubclass(model_class, VirtualModel):
-            if vt_options:
-                options = ', %s' % (', '.join('%s=%s' % (k, v) for k, v in vt_options.items()))
-            else:
-                options = ''
-            framing = 'CREATE VIRTUAL TABLE %%s%%s USING %s (%%s%s)%%s;' % (model_class._extension_module, options)
-        else:
-            framing = None
-
-        self.execute(self.create_table_query(model_class, safe, extra, framing))
-
-    def create_index(self, model_class, field_name, unique=False):
-        if issubclass(model_class, VirtualModel):
-            return
-        return super(APSWDatabase, self).create_index(model_class, field_name, unique)
 
 
 def nh(s, v):
