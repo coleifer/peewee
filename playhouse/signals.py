@@ -54,7 +54,7 @@ class Model(_Model):
         post_init.send(self)
 
     def save(self, *args, **kwargs):
-        created = not bool(self.get_pk())
+        created = not bool(self.get_id())
         pre_save.send(self, created=created)
         super(Model, self).save(*args, **kwargs)
         post_save.send(self, created=created)

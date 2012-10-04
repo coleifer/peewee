@@ -835,6 +835,13 @@ class ModelAPITestCase(ModelTestCase):
 
         self.assertEqual(User.select().count(), 1)
 
+    def test_saving_via_create_gh111(self):
+        u = User.create(username='u')
+        b = Blog.create(title='foo', user=u)
+        last_sql, _ = self.queries()[-1]
+        self.assertFalse('pub_date' in last_sql)
+        self.assertEqual(b.pub_date, None)
+
     def test_reading(self):
         u1 = self.create_user('u1')
         u2 = self.create_user('u2')
