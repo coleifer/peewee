@@ -2,14 +2,17 @@
 
 from __future__ import with_statement
 import datetime
+import decimal
 import logging
 import os
 import Queue
+import threading
 import unittest
-from decimal import Decimal
 
 from peewee import *
-from peewee import logger
+from peewee import QueryCompiler, R, SelectQuery, RawQuery, InsertQuery,\
+    UpdateQuery, DeleteQuery, logger, transaction, sort_models_topologically
+
 
 
 class QueryLogHandler(logging.Handler):
@@ -1133,7 +1136,7 @@ class FieldTypeTestCase(ModelTestCase):
         self.assertEqual(nm_db.float_field, 4.2)
 
     def test_decimalfield(self):
-        D = Decimal
+        D = decimal.Decimal
         nm = NullModel()
         nm.decimal_field1 = D("3.14159265358979323")
         nm.decimal_field2 = D("100.33")
