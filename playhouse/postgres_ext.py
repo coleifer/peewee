@@ -1,4 +1,5 @@
 from peewee import *
+from peewee import QueryCompiler, Param, BinaryExpr
 
 from psycopg2 import extensions
 from psycopg2.extras import register_hstore

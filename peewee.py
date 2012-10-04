@@ -21,8 +21,8 @@ from copy import deepcopy
 __all__ = [
     'IntegerField', 'BigIntegerField', 'PrimaryKeyField', 'FloatField', 'DoubleField',
     'DecimalField', 'CharField', 'TextField', 'DateTimeField', 'DateField', 'TimeField',
-    'BooleanField', 'ForeignKeyField', 'Model', 'DoesNotExist', 'ImproperlyConfigured', 
-    'Q', 'DQ', 'fn', 'SqliteDatabase', 'MySQLDatabase', 'PostgresqlDatabase',
+    'BooleanField', 'ForeignKeyField', 'Model', 'DoesNotExist', 'ImproperlyConfigured',
+    'Q', 'DQ', 'fn', 'SqliteDatabase', 'MySQLDatabase', 'PostgresqlDatabase', 'Field',
     'JOIN_LEFT_OUTER', 'JOIN_INNER', 'JOIN_FULL',
 ]
 
