@@ -1107,7 +1107,7 @@ class ModelTests(BaseModelTestCase):
         u = User.create(username='a')
         self.assertEqual(u.username, 'a')
         self.assertQueriesEqual([
-            ('INSERT INTO `users` (`active`,`blog_id`,`username`) VALUES (?,?,?)', [False, None, 'a']),
+            ('INSERT INTO `users` (`active`,`username`) VALUES (?,?)', [False, 'a']),
         ])
 
         b = Blog.create(title='b blog')
@@ -1115,7 +1115,7 @@ class ModelTests(BaseModelTestCase):
         self.assertEqual(u2.blog, b)
 
         self.assertQueriesEqual([
-            ('INSERT INTO `users` (`active`,`blog_id`,`username`) VALUES (?,?,?)', [False, None, 'a']),
+            ('INSERT INTO `users` (`active`,`username`) VALUES (?,?)', [False, 'a']),
             ('INSERT INTO `blog` (`title`) VALUES (?)', ['b blog']),
             ('INSERT INTO `users` (`active`,`blog_id`,`username`) VALUES (?,?,?)', [False, b.id, 'b']),
         ])
@@ -1128,7 +1128,7 @@ class ModelTests(BaseModelTestCase):
         self.assertEqual(u.username, 'a')
         self.assertQueriesEqual([
             ('SELECT `id`, `username`, `blog_id`, `active` FROM `users` WHERE `username` = ? LIMIT 1', ['a']),
-            ('INSERT INTO `users` (`active`,`blog_id`,`username`) VALUES (?,?,?)', [False, None, 'a']),
+            ('INSERT INTO `users` (`active`,`username`) VALUES (?,?)', [False, 'a']),
         ])
 
         other_u = User.get_or_create(username='a')
@@ -2831,7 +2831,7 @@ class FieldTypeTests(BaseModelTestCase):
         from_db_b = User.get(username='b')
         self.assertFalse(from_db_b.active)
 
-        nm = NullModel.create()
+        nm = NullModel.create(char_field='')
         self.assertTrue(nm.boolean_field is None)
 
         from_db = NullModel.get(id=nm.id)
@@ -2844,7 +2844,7 @@ class FieldTypeTests(BaseModelTestCase):
         self.assertTrue(nm.boolean_field is False)
 
     def test_null_models_and_lookups(self):
-        nm = NullModel.create()
+        nm = NullModel.create(bigint_field=0)
         self.assertEqual(nm.char_field, None)
         self.assertEqual(nm.text_field, None)
         self.assertEqual(nm.datetime_field, None)
