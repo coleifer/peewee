@@ -601,7 +601,7 @@ class QueryCompiler(object):
         self._op_map = dict(self.q_op_map)
         self._op_map.update(q_overrides or {})
         self._expr_map = dict(self.expr_op_map)
-        self._expr_map.update(field_overrides or {})
+        self._expr_map.update(expr_overrides or {})
 
     def quote(self, s):
         return ''.join((self.quote_char, s, self.quote_char))
