@@ -1883,9 +1883,11 @@ class Model(object):
 
     @classmethod
     def create(cls, **query):
-        inst = cls(**query)
-        inst.save(force_insert=True)
-        return inst
+        insert = cls.insert(**query)
+        new_pk = insert.execute()
+        if cls._meta.auto_increment:
+            query[cls._meta.primary_key.name] = new_pk
+        return cls(**query)
 
     @classmethod
     def filter(cls, *dq, **query):
