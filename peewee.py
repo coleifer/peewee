@@ -224,6 +224,11 @@ class BinaryExpr(Expr):
         super(BinaryExpr, self).__init__()
 
 
+class Param(Expr):
+    def __init__(self, data):
+        self.data = data
+
+
 class Func(Expr):
     def __init__(self, fn_name, *params):
         self.fn_name = fn_name
@@ -644,6 +649,8 @@ class QueryCompiler(object):
             return self._add_alias(expr_str, expr), scalars
         elif isinstance(expr, R):
             return expr.value, []
+        elif isinstance(expr, Param):
+            return self.interpolation, [expr.data]
         elif isinstance(expr, SelectQuery):
             max_alias = self._max_alias(alias_map)
             clone = expr.clone()
@@ -871,14 +878,17 @@ class QueryCompiler(object):
             parts.append("DEFAULT NEXTVAL('%s')" % self.quote(field.sequence))
         return ' '.join(p % attrs for p in parts)
 
-    def create_table(self, model_class, safe=False):
+    def parse_create_table(self, model_class, safe=False):
         parts = ['CREATE TABLE']
         if safe:
             parts.append('IF NOT EXISTS')
         parts.append(self.quote(model_class._meta.db_table))
         columns = ', '.join(self.field_sql(f) for f in model_class._meta.get_fields())
         parts.append('(%s)' % columns)
-        return ' '.join(parts)
+        return parts
+
+    def create_table(self, model_class, safe=False):
+        return ' '.join(self.parse_create_table(model_class, safe))
 
     def drop_table(self, model_class, fail_silently=False, cascade=False):
         parts = ['DROP TABLE']
@@ -889,14 +899,17 @@ class QueryCompiler(object):
             parts.append('CASCADE')
         return ' '.join(parts)
 
-    def create_index(self, model_class, fields, unique):
+    def parse_create_index(self, model_class, fields, unique):
         tbl_name = model_class._meta.db_table
         colnames = [f.db_column for f in fields]
         parts = ['CREATE %s' % ('UNIQUE INDEX' if unique else 'INDEX')]
         parts.append(self.quote('%s_%s' % (tbl_name, '_'.join(colnames))))
         parts.append('ON %s' % self.quote(tbl_name))
         parts.append('(%s)' % ', '.join(map(self.quote, colnames)))
-        return ' '.join(parts)
+        return parts
+
+    def create_index(self, model_class, fields, unique):
+        return ' '.join(self.parse_create_index(model_class, fields, unique))
 
     def create_sequence(self, sequence_name):
         return 'CREATE SEQUENCE %s;' % self.quote(sequence_name)
