@@ -5,9 +5,9 @@ Databases
 
 Below the :py:class:`Model` level, peewee uses an abstraction for representing the database.  The
 :py:class:`Database` is responsible for establishing and closing connections, making queries,
-and gathering information from the database.  The :py:class:`Database` encapsulates functionality 
-specific to a given db driver.  For example difference in column types across database engines, 
-or support for certain features like sequences.  The database is responsible for smoothing out 
+and gathering information from the database.  The :py:class:`Database` encapsulates functionality
+specific to a given db driver.  For example difference in column types across database engines,
+or support for certain features like sequences.  The database is responsible for smoothing out
 the quirks of each backend driver to provide a consistent interface.
 
 The :py:class:`Database` also uses a subclass of :py:class:`QueryCompiler` to generate
@@ -103,7 +103,7 @@ Refer to the documentation below or the `source code <https://github.com/coleife
 
 .. note:: If your driver conforms to the db-api 2.0 spec, there shouldn't be
     much work needed to get up and running.
-  
+
 
 Using our new database
 ^^^^^^^^^^^^^^^^^^^^^^

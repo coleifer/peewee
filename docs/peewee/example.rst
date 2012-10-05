@@ -60,33 +60,45 @@ Here is what the code looks like:
 
 .. code-block:: python
 
+    # create a peewee database instance -- our models will use this database to
+    # persist information
     database = SqliteDatabase(DATABASE)
 
-    # model definitions
+    # model definitions -- the standard "pattern" is to define a base model class
+    # that specifies which database to use.  then, any subclasses will automatically
+    # use the correct storage. for more information, see:
+    # http://charlesleifer.com/docs/peewee/peewee/models.html#model-api-smells-like-django
     class BaseModel(Model):
         class Meta:
             database = database
-        
+
+    # the user model specifies its fields (or columns) declaratively, like django
     class User(BaseModel):
         username = CharField()
         password = CharField()
         email = CharField()
         join_date = DateTimeField()
 
+        class Meta:
+            order_by = ('username',)
+
+        # it often makes sense to put convenience methods on model instances, for
+        # example, "give me all the users this user is following":
         def following(self):
+            # query other users through the "relationship" table
             return User.select().join(
-                Relationship, on='to_user_id'
-            ).where(from_user=self).order_by('username')
+                Relationship, on=Relationship.to_user,
+            ).where(Relationship.from_user == self)
 
         def followers(self):
             return User.select().join(
-                Relationship
-            ).where(to_user=self).order_by('username')
+                Relationship, on=Relationship.from_user,
+            ).where(Relationship.to_user == self)
 
         def is_following(self, user):
             return Relationship.select().where(
-                from_user=self,
-                to_user=user
+                (Relationship.from_user == self) &
+                (Relationship.to_user == user)
             ).count() > 0
 
         def gravatar_url(self, size=80):
@@ -94,15 +106,25 @@ Here is what the code looks like:
                 (md5(self.email.strip().lower().encode('utf-8')).hexdigest(), size)
 
 
+    # this model contains two foreign keys to user -- it essentially allows us to
+    # model a "many-to-many" relationship between users.  by querying and joining
+    # on different columns we can expose who a user is "related to" and who is
+    # "related to" a given user
     class Relationship(BaseModel):
         from_user = ForeignKeyField(User, related_name='relationships')
         to_user = ForeignKeyField(User, related_name='related_to')
 
 
+    # a dead simple one-to-many relationship: one user has 0..n messages, exposed by
+    # the foreign key.  because we didn't specify, a users messages will be accessible
+    # as a special attribute, User.message_set
     class Message(BaseModel):
         user = ForeignKeyField(User)
         content = TextField()
         pub_date = DateTimeField()
+
+        class Meta:
+            order_by = ('-pub_date',)
 
 
 peewee supports a handful of field types which map to different column types in
@@ -206,41 +228,40 @@ difference:
 .. code-block:: python
 
     def following(self):
+        # query other users through the "relationship" table
         return User.select().join(
-            Relationship, on='to_user_id'
-        ).where(from_user=self).order_by('username')
+            Relationship, on=Relationship.to_user,
+        ).where(Relationship.from_user == self)
 
     def followers(self):
         return User.select().join(
-            Relationship
-        ).where(to_user=self).order_by('username')
+            Relationship, on=Relationship.from_user,
+        ).where(Relationship.to_user == self)
 
 .. note:
-    The ``following()`` method specifies an extra bit of metadata,
-    ``on='to_user_id'``.  Because there are two foreign keys to ``User``, peewee
+    ``on=Relationship.to_user``.  Because there are two foreign keys to ``User``, peewee
     will automatically assume the first one, which happens to be ``from_user``.
 
 
-Specifying the foreign key manually instructs peewee to join on the ``to_user_id`` field.
 The queries end up looking like:
 
 .. code-block:: sql
 
     # following:
-    SELECT t1.* 
-    FROM user AS t1 
-    INNER JOIN relationship AS t2 
-        ON t1.id = t2.to_user_id  # <-- joining on to_user_id
-    WHERE t2.from_user_id = ? 
-    ORDER BY username ASC
+    SELECT t1."id", t1."username", t1."password", t1."email", t1."join_date"
+    FROM "user" AS t1 
+    INNER JOIN "relationship" AS t2 
+        ON t1."id" = t2."to_user_id"  # <-- joining on to_user_id
+    WHERE t2."from_user_id" = ?
+    ORDER BY t1."username" ASC
     
     # followers
-    SELECT t1.* 
+    SELECT t1."id", t1."username", t1."password", t1."email", t1."join_date"
     FROM user AS t1 
     INNER JOIN relationship AS t2 
-        ON t1.id = t2.from_user_id # <-- joining on from_user_id
-    WHERE t2.to_user_id = ? 
-    ORDER BY username ASC
+        ON t1."id" = t2."from_user_id"  # <-- joining on from_user_id
+    WHERE t2."to_user_id" = ?
+    ORDER BY t1."username" ASC
 
 
 Creating new objects
@@ -251,17 +272,22 @@ business end of the ``join()`` view, we can that it does a quick check to see
 if the username is taken, and if not executes a :py:meth:`~Model.create`.
 
 .. code-block:: python
-
     try:
+        # use the .get() method to quickly see if a user with that name exists
         user = User.get(username=request.form['username'])
         flash('That username is already taken')
     except User.DoesNotExist:
+        # if not, create the user and store the form data on the new model
         user = User.create(
             username=request.form['username'],
             password=md5(request.form['password']).hexdigest(),
             email=request.form['email'],
             join_date=datetime.datetime.now()
         )
+
+        # mark the user as being 'authenticated' by setting the session vars
+        auth_user(user)
+        return redirect(url_for('homepage'))
 
 Much like the :py:meth:`~Model.create` method, all models come with a built-in method called
 :py:meth:`~Model.get_or_create` which is used when one user follows another:
@@ -284,21 +310,23 @@ a subquery:
 .. code-block:: python
 
     # python code
-    qr = Message.select().where(user__in=some_user.following())
+    messages = Message.select().where(
+        Message.user << user.following()
+    )
 
 Results in the following SQL query:
 
 .. code-block:: sql
 
-    SELECT * 
-    FROM message 
-    WHERE user_id IN (
-        SELECT t1.id 
-        FROM user AS t1 
-        INNER JOIN relationship AS t2 
-            ON t1.id = t2.to_user_id 
-        WHERE t2.from_user_id = ? 
-        ORDER BY username ASC
+    SELECT t1."id", t1."user_id", t1."content", t1."pub_date"
+    FROM "message" AS t1
+    WHERE t1."user_id" IN (
+        SELECT t2."id"
+        FROM "user" AS t2
+        INNER JOIN "relationship" AS t3
+            ON t2."id" = t3."to_user_id"
+        WHERE t3."from_user_id" = ? 
+        ORDER BY t1."username" ASC
     )
 
 peewee supports doing subqueries on any :py:class:`ForeignKeyField` or :py:class:`PrimaryKeyField`.
