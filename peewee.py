@@ -183,10 +183,10 @@ class DQ(Leaf):
 
 class Expr(object):
     def __init__(self):
-        self.alias = None
+        self._alias = None
 
-    def set_alias(self, a=None):
-        self.alias = a
+    def alias(self, a=None):
+        self._alias = a
         return self
 
     def asc(self):
@@ -616,8 +616,8 @@ class QueryCompiler(object):
         return ''.join((self.quote_char, s, self.quote_char))
 
     def _add_alias(self, expr_str, expr):
-        if expr.alias:
-            expr_str = ' '.join((expr_str, 'AS', expr.alias))
+        if expr._alias:
+            expr_str = ' '.join((expr_str, 'AS', expr._alias))
         return expr_str
 
     def _max_alias(self, am):
@@ -984,8 +984,8 @@ class QueryResultWrapper(object):
 
             if isinstance(expr, Field):
                 setattr(instance, expr.name, expr.python_value(value))
-            elif isinstance(expr, Expr) and expr.alias:
-                setattr(instance, expr.alias, value)
+            elif isinstance(expr, Expr) and expr._alias:
+                setattr(instance, expr._alias, value)
             else:
                 setattr(instance, cols[i], value)
 
@@ -1295,7 +1295,7 @@ class SelectQuery(Query):
         self._naive = naive
 
     def annotate(self, rel_model, annotation=None):
-        annotation = annotation or fn.Count(rel_model._meta.primary_key).set_alias('count')
+        annotation = annotation or fn.Count(rel_model._meta.primary_key).alias('count')
         query = self.clone()
         query = query.ensure_join(query._query_ctx, rel_model)
         if not query._group_by:

@@ -44,41 +44,41 @@ class PostgresExtHStoreTestCase(unittest.TestCase):
     def test_selecting(self):
         self.create()
 
-        sq = Testing.select(Testing.name, Testing.data.keys().set_alias('keys'))
+        sq = Testing.select(Testing.name, Testing.data.keys().alias('keys'))
         self.assertEqual([(x.name, sorted(x.keys)) for x in sq], [
             ('t1', ['k1', 'k2']), ('t2', ['k2', 'k3'])
         ])
 
-        sq = Testing.select(Testing.name, Testing.data.values().set_alias('vals'))
+        sq = Testing.select(Testing.name, Testing.data.values().alias('vals'))
         self.assertEqual([(x.name, sorted(x.vals)) for x in sq], [
             ('t1', ['v1', 'v2']), ('t2', ['v2', 'v3'])
         ])
 
-        sq = Testing.select(Testing.name, Testing.data.items().set_alias('mtx'))
+        sq = Testing.select(Testing.name, Testing.data.items().alias('mtx'))
         self.assertEqual([(x.name, sorted(x.mtx)) for x in sq], [
             ('t1', [['k1', 'v1'], ['k2', 'v2']]),
             ('t2', [['k2', 'v2'], ['k3', 'v3']]),
         ])
 
-        sq = Testing.select(Testing.name, Testing.data.slice('k2', 'k3').set_alias('kz'))
+        sq = Testing.select(Testing.name, Testing.data.slice('k2', 'k3').alias('kz'))
         self.assertEqual([(x.name, x.kz) for x in sq], [
             ('t1', {'k2': 'v2'}),
             ('t2', {'k2': 'v2', 'k3': 'v3'}),
         ])
 
-        sq = Testing.select(Testing.name, Testing.data.slice('k4').set_alias('kz'))
+        sq = Testing.select(Testing.name, Testing.data.slice('k4').alias('kz'))
         self.assertEqual([(x.name, x.kz) for x in sq], [
             ('t1', {}),
             ('t2', {}),
         ])
 
-        sq = Testing.select(Testing.name, Testing.data.exists('k3').set_alias('ke'))
+        sq = Testing.select(Testing.name, Testing.data.exists('k3').alias('ke'))
         self.assertEqual([(x.name, x.ke) for x in sq], [
             ('t1', False),
             ('t2', True),
         ])
 
-        sq = Testing.select(Testing.name, Testing.data.defined('k3').set_alias('ke'))
+        sq = Testing.select(Testing.name, Testing.data.defined('k3').alias('ke'))
         self.assertEqual([(x.name, x.ke) for x in sq], [
             ('t1', False),
             ('t2', True),

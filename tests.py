@@ -282,7 +282,7 @@ class SelectTestCase(BasePeeweeTestCase):
         sq = SelectQuery(Blog, Blog.pk, Blog.title, Blog.user, User.username).join(User)
         self.assertSelect(sq, 'blog."pk", blog."title", blog."user_id", users."username"', [])
 
-        sq = SelectQuery(User, fn.Lower(fn.Substr(User.username, 0, 1)).set_alias('lu'), fn.Count(Blog.pk)).join(Blog)
+        sq = SelectQuery(User, fn.Lower(fn.Substr(User.username, 0, 1)).alias('lu'), fn.Count(Blog.pk)).join(Blog)
         self.assertSelect(sq, 'Lower(Substr(users."username", ?, ?)) AS lu, Count(blog."pk")', [0, 1])
 
         sq = SelectQuery(User, User.username, fn.Count(Blog.select().where(Blog.user == User.id)))
@@ -462,7 +462,7 @@ class SelectTestCase(BasePeeweeTestCase):
         sq = SelectQuery(User).join(Blog).order_by(User.username.desc(), Blog.title.asc())
         self.assertOrderBy(sq, 'users."username" DESC, blog."title" ASC', [])
 
-        base_sq = SelectQuery(User, User.username, fn.Count(Blog.pk).set_alias('count')).join(Blog).group_by(User.username)
+        base_sq = SelectQuery(User, User.username, fn.Count(Blog.pk).alias('count')).join(Blog).group_by(User.username)
         sq = base_sq.order_by(fn.Count(Blog.pk).desc())
         self.assertOrderBy(sq, 'Count(blog."pk") DESC', [])
 
@@ -567,13 +567,13 @@ class SugarTestCase(BasePeeweeTestCase):
         self.assertWhere(sq, '', [])
         self.assertGroupBy(sq, 'users."id", users."username"', [])
 
-        sq = User.select(User.username).annotate(Blog, fn.Sum(Blog.pk).set_alias('sum')).where(User.username == 'foo')
+        sq = User.select(User.username).annotate(Blog, fn.Sum(Blog.pk).alias('sum')).where(User.username == 'foo')
         self.assertSelect(sq, 'users."username", Sum(blog."pk") AS sum', [])
         self.assertJoins(sq, ['INNER JOIN "blog" AS blog ON users."id" = blog."user_id"'])
         self.assertWhere(sq, 'users."username" = ?', ['foo'])
         self.assertGroupBy(sq, 'users."username"', [])
 
-        sq = User.select(User.username).annotate(Blog).annotate(Blog, fn.Max(Blog.pk).set_alias('mx'))
+        sq = User.select(User.username).annotate(Blog).annotate(Blog, fn.Max(Blog.pk).alias('mx'))
         self.assertSelect(sq, 'users."username", Count(blog."pk") AS count, Max(blog."pk") AS mx', [])
         self.assertJoins(sq, ['INNER JOIN "blog" AS blog ON users."id" = blog."user_id"'])
         self.assertWhere(sq, '', [])
