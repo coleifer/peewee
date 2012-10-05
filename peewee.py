@@ -222,6 +222,7 @@ class Expr(object):
     __lshift__ = _q(OP_IN)
     __rshift__ = _q(OP_IS)
     __mod__ = _q(OP_LIKE)
+    __pow__ = _q(OP_ILIKE)
 
 
 class BinaryExpr(Expr):
@@ -1256,10 +1257,11 @@ class SelectQuery(Query):
         self._group_by = self._model_shorthand(args)
 
     @returns_clone
-    def having(self, q_or_node):
+    def having(self, *q_or_node):
         if self._having is None:
             self._having = Node(OP_AND)
-        self._having &= q_or_node
+        for piece in q_or_node:
+            self._having &= piece
 
     @returns_clone
     def order_by(self, *args):
