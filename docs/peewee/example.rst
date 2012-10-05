@@ -5,7 +5,7 @@ Example app
 
 .. image:: tweepee.jpg
 
-peewee ships with an example web app that runs on the 
+peewee ships with an example web app that runs on the
 `Flask <http://flask.pocoo.org/>`_ microframework.  If you already have flask
 and its dependencies installed you should be good to go, otherwise install from
 the included requirements file.
@@ -33,14 +33,14 @@ Diving into the code
 Models
 ^^^^^^
 
-In the spirit of the ur-python framework, django, peewee uses declarative model 
+In the spirit of the ur-python framework, django, peewee uses declarative model
 definitions.  If you're not familiar with django, the idea is that you declare
-a class with some members which map directly to the database schema.  For the 
+a class with some members which map directly to the database schema.  For the
 twitter clone, there are just three models:
 
 ``User``:
     represents a user account and stores the username and password, an email
-    address for generating avatars using *gravatar*, and a datetime field 
+    address for generating avatars using *gravatar*, and a datetime field
     indicating when that account was created
 
 ``Relationship``:
@@ -190,8 +190,8 @@ database and point your models at it.  This is a peewee idiom:
 
     database = SqliteDatabase(DATABASE) # tell our models to use "tweepee.db"
 
-Because sqlite likes to have a separate connection per-thread, we will tell 
-flask that during the request/response cycle we need to create a connection to 
+Because sqlite likes to have a separate connection per-thread, we will tell
+flask that during the request/response cycle we need to create a connection to
 the database.  Flask provides some handy decorators to make this a snap:
 
 .. code-block:: python
@@ -207,7 +207,7 @@ the database.  Flask provides some handy decorators to make this a snap:
         return response
 
 .. note::
-    We're storing the db on the magical variable ``g`` - that's a 
+    We're storing the db on the magical variable ``g`` - that's a
     flask-ism and can be ignored as an implementation detail.  The meat of this code
     is in the idea that we connect to our db every request and close that connection
     every response.  Django does the `exact same thing <http://code.djangoproject.com/browser/django/tags/releases/1.2.3/django/db/__init__.py#L80>`_.
@@ -216,13 +216,13 @@ the database.  Flask provides some handy decorators to make this a snap:
 Doing queries
 ^^^^^^^^^^^^^
 
-In the ``User`` model there are a few instance methods that encapsulate some 
+In the ``User`` model there are a few instance methods that encapsulate some
 user-specific functionality, i.e.
 
 * ``following()``: who is this user following?
 * ``followers()``: who is following this user?
 
-These methods are rather similar in their implementation but with one key 
+These methods are rather similar in their implementation but with one key
 difference:
 
 .. code-block:: python
@@ -249,16 +249,16 @@ The queries end up looking like:
 
     # following:
     SELECT t1."id", t1."username", t1."password", t1."email", t1."join_date"
-    FROM "user" AS t1 
-    INNER JOIN "relationship" AS t2 
+    FROM "user" AS t1
+    INNER JOIN "relationship" AS t2
         ON t1."id" = t2."to_user_id"  # <-- joining on to_user_id
     WHERE t2."from_user_id" = ?
     ORDER BY t1."username" ASC
-    
+
     # followers
     SELECT t1."id", t1."username", t1."password", t1."email", t1."join_date"
-    FROM user AS t1 
-    INNER JOIN relationship AS t2 
+    FROM user AS t1
+    INNER JOIN relationship AS t2
         ON t1."id" = t2."from_user_id"  # <-- joining on from_user_id
     WHERE t2."to_user_id" = ?
     ORDER BY t1."username" ASC
@@ -267,7 +267,7 @@ The queries end up looking like:
 Creating new objects
 ^^^^^^^^^^^^^^^^^^^^
 
-So what happens when a new user wants to join the site?  Looking at the 
+So what happens when a new user wants to join the site?  Looking at the
 business end of the ``join()`` view, we can that it does a quick check to see
 if the username is taken, and if not executes a :py:meth:`~Model.create`.
 
@@ -303,7 +303,7 @@ Much like the :py:meth:`~Model.create` method, all models come with a built-in m
 Doing subqueries
 ^^^^^^^^^^^^^^^^
 
-If you are logged-in and visit the twitter homepage, you will see tweets from 
+If you are logged-in and visit the twitter homepage, you will see tweets from
 the users that you follow.  In order to implement this, it is necessary to do
 a subquery:
 
@@ -325,7 +325,7 @@ Results in the following SQL query:
         FROM "user" AS t2
         INNER JOIN "relationship" AS t3
             ON t2."id" = t3."to_user_id"
-        WHERE t3."from_user_id" = ? 
+        WHERE t3."from_user_id" = ?
         ORDER BY t1."username" ASC
     )
 
@@ -342,7 +342,7 @@ mentioning briefly.
   the views that return lists of objects.
 
   .. code-block:: python
-      
+
       def object_list(template_name, qr, var_name='object_list', **kwargs):
           kwargs.update(
               page=int(request.args.get('page', 1)),
@@ -358,7 +358,7 @@ mentioning briefly.
   login page.
 
   .. code-block:: python
-  
+
       def auth_user(user):
           session['logged_in'] = True
           session['user'] = user
@@ -375,9 +375,9 @@ mentioning briefly.
 
 * Return a 404 response instead of throwing exceptions when an object is not
   found in the database.
-  
+
   .. code-block:: python
-  
+
       def get_object_or_404(model, **kwargs):
           try:
               return model.get(**kwargs)
