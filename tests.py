@@ -842,6 +842,12 @@ class ModelAPITestCase(ModelTestCase):
         self.assertFalse('pub_date' in last_sql)
         self.assertEqual(b.pub_date, None)
 
+        b2 = Blog(title='foo2', user=u)
+        b2.save()
+        last_sql, _ = self.queries()[-1]
+        self.assertFalse('pub_date' in last_sql)
+        self.assertEqual(b2.pub_date, None)
+
     def test_reading(self):
         u1 = self.create_user('u1')
         u2 = self.create_user('u2')
