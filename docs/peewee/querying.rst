@@ -277,7 +277,7 @@ This is equivalent to the following:
 .. code-block:: python
 
     query = User.select(
-        User, fn.Count(Tweet.id).set_alias('count')
+        User, fn.Count(Tweet.id).alias('count')
     ).join(Tweet).group_by(User)
 
 The resulting query will return ``User`` objects with all their normal attributes
@@ -295,7 +295,7 @@ the users with the date of their most recent tweet:
 
 .. code-block:: python
 
-    query = User.select().annotate(Tweet, fn.Max(Tweet.created_date).set_alias('latest'))
+    query = User.select().annotate(Tweet, fn.Max(Tweet.created_date).alias('latest'))
 
 Conversely, sometimes you want to perform an aggregate query that returns a
 scalar value, like the "max id".  Queries like this can be executed by using
@@ -315,7 +315,7 @@ Selecting users and counts of tweets:
 
 .. code-block:: python
 
-    >>> users = User.select(User, fn.Count(Tweet.id).set_alias('count')).join(Tweet).group_by(User)
+    >>> users = User.select(User, fn.Count(Tweet.id).alias('count')).join(Tweet).group_by(User)
     >>> for user in users:
     ...     print user.username, 'posted', user.count, 'tweets'
 
@@ -495,7 +495,7 @@ SelectQuery
 
             >>> sq = SelectQuery(User, User.id, User.username)
             >>> sq = SelectQuery(User,
-            ...     User, fn.Count(Tweet.id).set_alias('count')
+            ...     User, fn.Count(Tweet.id).alias('count')
             ... ).join(Tweet).group_by(User)
 
     .. py:method:: where(*q_or_node)
@@ -540,7 +540,7 @@ SelectQuery
 
             >>> # get a list of blogs with the count of entries each has
             >>> sq = User.select(
-            ...     User, fn.Count(Tweet.id).set_alias('count')
+            ...     User, fn.Count(Tweet.id).alias('count')
             ... ).join(Tweet).group_by(User)
 
     .. py:method:: having(*q_or_node)
@@ -551,7 +551,7 @@ SelectQuery
         .. code-block:: python
 
             >>> sq = User.select(
-            ...     User, fn.Count(Tweet.id).set_alias('count')
+            ...     User, fn.Count(Tweet.id).alias('count')
             ... ).join(Tweet).group_by(User).having(fn.Count(Tweet.id) > 10)
 
     .. py:method:: order_by(*clauses)
@@ -635,7 +635,7 @@ SelectQuery
 
         :param related_model: related :py:class:`Model` on which to perform aggregation,
             must be linked by :py:class:`ForeignKeyField`.
-        :param aggregation: the type of aggregation to use, e.g. ``fn.Count(Tweet.id).set_alias('count')``
+        :param aggregation: the type of aggregation to use, e.g. ``fn.Count(Tweet.id).alias('count')``
         :rtype: :py:class:`SelectQuery`
 
         Annotate a query with an aggregation performed on a related model, for example,
@@ -643,10 +643,10 @@ SelectQuery
 
             >>> User.select().annotate(Tweet)
 
-        if ``aggregation`` is None, it will default to ``fn.Count(related_model.id).set_alias('count')``
+        if ``aggregation`` is None, it will default to ``fn.Count(related_model.id).alias('count')``
         but can be anything::
 
-            >>> user_latest = User.select().annotate(Tweet, fn.Max(Tweet.created_date).set_alias('latest'))
+            >>> user_latest = User.select().annotate(Tweet, fn.Max(Tweet.created_date).alias('latest'))
 
         .. note::
 

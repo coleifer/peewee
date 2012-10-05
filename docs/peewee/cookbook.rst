@@ -545,7 +545,7 @@ This is equivalent to the following:
 .. code-block:: python
 
     query = User.select(
-        User, fn.Count(Tweet.id).set_alias('count')
+        User, fn.Count(Tweet.id).alias('count')
     ).join(Tweet).group_by(User)
 
 
@@ -563,7 +563,7 @@ You can also specify a custom aggregator:
 
 .. code-block:: python
 
-    query = User.select().annotate(Tweet, fn.Max(Tweet.created_date).set_alias('latest'))
+    query = User.select().annotate(Tweet, fn.Max(Tweet.created_date).alias('latest'))
 
 Let's assume you have a tagging application and want to find tags that have a
 certain number of related objects.  For this example we'll use some different
@@ -603,7 +603,7 @@ Suppose we want to grab the associated count and store it on the tag:
 .. code-block:: python
 
     >>> Tag.select(
-    ...     Tag, fn.Count(Photo.id).set_alias('count')
+    ...     Tag, fn.Count(Photo.id).alias('count')
     ... ).join(PhotoTag).join(Photo).group_by(Tag).having(fn.Count(Photo.id) > 5)
 
 
@@ -618,7 +618,7 @@ function to construct queries:
 .. code-block:: python
 
     # select the users' id, username and the first letter of their username, lower-cased
-    query = User.select(User, fn.Lower(fn.Substr(User.username, 1, 1)).set_alias('first_letter'))
+    query = User.select(User, fn.Lower(fn.Substr(User.username, 1, 1)).alias('first_letter'))
 
     # alternatively we could select only users whose username begins with 'a'
     a_users = User.select().where(fn.Lower(fn.Substr(User.username, 1, 1)) == 'a')

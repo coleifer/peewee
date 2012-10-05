@@ -179,17 +179,17 @@ You can select just keys, just values, or zip the two:
 .. code-block:: pycon
 
     >>> f = House.features
-    >>> for h in House.select(House.address, f.keys().set_alias('keys')):
+    >>> for h in House.select(House.address, f.keys().alias('keys')):
     ...     print h.address, h.keys
 
     123 Main St [u'bath', u'garage']
 
-    >>> for h in House.select(House.address, f.values().set_alias('vals')):
+    >>> for h in House.select(House.address, f.values().alias('vals')):
     ...     print h.address, h.vals
 
     123 Main St [u'2 bath', u'2 cars']
 
-    >>> for h in House.select(House.address, f.items().set_alias('mtx')):
+    >>> for h in House.select(House.address, f.items().alias('mtx')):
     ...     print h.address, h.mtx
 
     123 Main St [[u'bath', u'2 bath'], [u'garage', u'2 cars']]
@@ -199,7 +199,7 @@ You can retrieve a slice of data, for example, all the garage data:
 .. code-block:: pycon
 
     >>> f = House.features
-    >>> for h in House.select(House.address, f.slice('garage').set_alias('garage_data')):
+    >>> for h in House.select(House.address, f.slice('garage').alias('garage_data')):
     ...     print h.address, h.garage_data
 
     123 Main St {'garage': '2 cars'}
@@ -208,7 +208,7 @@ You can check for the existence of a key and filter rows accordingly:
 
 .. code-block:: pycon
 
-    >>> for h in House.select(House.address, f.exists('garage').set_alias('has_garage')):
+    >>> for h in House.select(House.address, f.exists('garage').alias('has_garage')):
     ...     print h.address, h.has_garage
 
     123 Main St True

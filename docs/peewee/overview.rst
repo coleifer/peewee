@@ -35,7 +35,7 @@ Examples:
 
     # a similar way of expressing the same
     User.select(
-        User, fn.Count(Tweet.id).set_alias('ct')
+        User, fn.Count(Tweet.id).alias('ct')
     ).join(Tweet).group_by(User).order_by(R('ct desc'))
     
     # do an atomic update
