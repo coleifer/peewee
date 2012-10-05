@@ -377,13 +377,22 @@ operators:
     ...     (User.username == 'Peewee Herman')
     ... )
 
-A lot of fun things can go in the where clause of a query, such as:
+.. note::
 
-* a field expression, e.g. ``User.username == 'Charlie'``
-* a function expression, e.g. ``fn.Lower(fn.Substr(User.username, 1, 1)) == 'a'``
-* a subquery, e.g. tweets by users whose username starts with "a" ("<<" signifies "IN"):
-  ``Tweet.user << User.select().where(fn.Lower(fn.Substr(User.username, 1, 1)) == 'a')``
-* a comparison of one column to another, e.g. ``Employee.salary < (Employee.tenure * 1000) + 40000``
+    A lot of fun things can go in the where clause of a query, such as:
+
+    * a field expression, e.g. ``User.username == 'Charlie'``
+    * a function expression, e.g. ``fn.Lower(fn.Substr(User.username, 1, 1)) == 'a'``
+    * a comparison of one column to another, e.g. ``Employee.salary < (Employee.tenure * 1000) + 40000``
+
+    You can also nest queries, for example tweets by users whose username starts with "a":
+
+    .. code-block:: python
+
+        # the "<<" operator signifies an "IN" query
+        Tweet.select().where(
+            Tweet.user << User.select().where(fn.Lower(fn.Substr(User.username, 1, 1)) == 'a')
+        )
 
 .. note::
     If you are already familiar with Django's ORM, you can use the "double underscore"
@@ -403,6 +412,10 @@ A lot of fun things can go in the where clause of a query, such as:
 
         >>> User.filter(DQ(username='Charlie') | DQ(username='Peewee Herman'))
 
+.. warning::
+    The *Zen of Python* says "There should be one-- and preferably only one --obvious way to do it."
+    The django-style filtering is supported for backwards compatibility with 1.0, so if you can, its
+    probably best not to use it.
 
 Check :ref:`the docs <query_compare>` for more examples of querying.
 
@@ -435,8 +448,8 @@ to order tweets by the username of the author, then by created_date:
 
 .. code-block:: sql
     -- generates --
-    SELECT t1."id", t1."user_id", t1."message", t1."is_published", t1."created_date" 
-    FROM "tweet" AS t1 INNER JOIN "user" AS t2 ON t1."user_id" = t2."id" 
+    SELECT t1."id", t1."user_id", t1."message", t1."is_published", t1."created_date"
+    FROM "tweet" AS t1 INNER JOIN "user" AS t2 ON t1."user_id" = t2."id"
     ORDER BY t2."username", t1."created_date" DESC
 
 
@@ -578,11 +591,11 @@ Yields the following:
 
 .. code-block:: sql
 
-    SELECT t1."id", t1."name" 
-    FROM "tag" AS t1 
-    INNER JOIN "phototag" AS t2 ON t1."id" = t2."tag_id" 
-    INNER JOIN "photo" AS t3 ON t2."photo_id" = t3."id" 
-    GROUP BY t1."id", t1."name" 
+    SELECT t1."id", t1."name"
+    FROM "tag" AS t1
+    INNER JOIN "phototag" AS t2 ON t1."id" = t2."tag_id"
+    INNER JOIN "photo" AS t3 ON t2."photo_id" = t3."id"
+    GROUP BY t1."id", t1."name"
     HAVING Count(t3."id") > 5
 
 Suppose we want to grab the associated count and store it on the tag:
