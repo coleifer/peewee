@@ -140,9 +140,9 @@ are signified by a double-underscore followed by the lookup type.  The following
 lookup types are available in peewee:
 
 
---------         ---------------------------------------
+================ =======================================
 Lookup           Meaning
---------         ---------------------------------------
+================ =======================================
 ``==``           x equals y
 ``<``            x is less than y
 ``<=``           x is less than or equal to y
@@ -153,7 +153,7 @@ Lookup           Meaning
 ``>>``           x IS y, where y is None/NULL
 ``%``            x LIKE y where y may contain wildcards
 ``**``           x ILIKE y where y may contain wildcards
---------         ---------------------------------------
+================ =======================================
 
 
 Performing advanced queries
