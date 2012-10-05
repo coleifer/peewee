@@ -5,14 +5,14 @@ Databases
 
 Below the :py:class:`Model` level, peewee uses an abstraction for representing the database.  The
 :py:class:`Database` is responsible for establishing and closing connections, making queries,
-and gathering information from the database.
+and gathering information from the database.  The :py:class:`Database` encapsulates functionality 
+specific to a given db driver.  For example difference in column types across database engines, 
+or support for certain features like sequences.  The database is responsible for smoothing out 
+the quirks of each backend driver to provide a consistent interface.
 
-The :py:class:`Database` in turn uses another abstraction called an :py:class:`BaseAdapter`, which
-is backend-specific and encapsulates functionality specific to a given db driver.  Since there
-is some difference in column types across database engines, this information also resides
-in the adapter.  The adapter is responsible for smoothing out the quirks of each database
-driver to provide a consistent interface, for example sqlite uses the question-mark "?" character
-for parameter interpolation, while all the other backends use "%s".
+The :py:class:`Database` also uses a subclass of :py:class:`QueryCompiler` to generate
+valid SQL.  The QueryCompiler maps the internal data structures used by peewee to
+SQL statements.
 
 For a high-level overview of working with transactions, check out the :ref:`transactions cookbook <working_with_transactions>`.
 
@@ -20,7 +20,7 @@ For notes on deferring instantiation of database, for example if loading configu
 at run-time, see the notes on :ref:`deferring initialization <deferring_initialization>`.
 
 .. note::
-    The internals of the :py:class:`Database` and :py:class:`BaseAdapter` will be
+    The internals of the :py:class:`Database` and :py:class:`QueryCompiler` will be
     of interest to anyone interested in adding support for another database driver.
 
 
@@ -41,101 +41,37 @@ sqlite3 driver, psycopg2 or the like.  Peewee currently relies on a handful of p
 * `Connection.rollback`
 * `Cursor.description`
 * `Cursor.fetchone`
-* `Cursor.fetchmany`
 
 These methods are generally wrapped up in higher-level abstractions and exposed
-by the :py:class:`Database` and :py:class:`BaseAdapter`, so even if your driver doesn't
+by the :py:class:`Database`, so even if your driver doesn't
 do these exactly you can still get a lot of mileage out of peewee.  An example
-is the `apsw sqlite driver <http://code.google.com/p/apsw/>`_ which I'm tinkering with
-adding support for.
-
-.. note:: In later versions of peewee, the db-api 2.0 methods may be further abstracted
-    out to add support for drivers that don't conform to the spec.
-
-Getting down to it, writing some classes
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-There are two classes you will want to implement at the very least:
-
-* :py:class:`BaseAdapter` - handles low-level functionality like opening and closing
-    connections to the database, as well as describing the features provided by
-    the database engine
-* :py:class:`Database` - higher-level interface that executes queries, manage
-    transactions, and can introspect the underlying db.
-
-Let's say we want to add support for a fictitious "FooDB" which has an open-source
-python driver that uses the DB-API 2.0.
-
-The Adapter
-^^^^^^^^^^^
-
-The adapter provides a bridge between the driver and peewee's higher-level database
-class which is responsible for executing queries.
-
-.. code-block:: python
-
-    from peewee import BaseAdapter
-    import foodb # our fictional driver
+is the `apsw sqlite driver <http://code.google.com/p/apsw/>`_ in the "playhouse"
+module.
 
 
-    class FooAdapter(BaseAdapter):
-        def connect(self, database, **kwargs):
-            return foodb.connect(database, **kwargs)
+Starting out
+^^^^^^^^^^^^
 
-
-Now we want to create a mapping that exposes the operations our database engine
-supports.  These are the operations that a user perform when building out the
-``WHERE`` clause of a given query.
-
-.. code-block:: python
-
-    class FooAdapter(BaseAdapter):
-        operations = {
-            'lt': '< %s',
-            'lte': '<= %s',
-            'gt': '> %s',
-            'gte': '>= %s',
-            'eq': '= %s',
-            'ne': '!= %s',
-            'in': 'IN (%s)',
-            'is': 'IS %s',
-            'isnull': 'IS NULL',
-            'between': 'BETWEEN %s AND %s',
-            'icontains': 'ILIKE %s',
-            'contains': 'LIKE %s',
-            'istartswith': 'ILIKE %s',
-            'startswith': 'LIKE %s',
-        }
-
-        def connect(self, database, **kwargs):
-            return foodb.connect(database, **kwargs)
-
-Other things the adapter handles that are not covered here include:
-
-* last insert id and number of rows modified
-* specifying characters used for string interpolation and quoting identifiers,
-  for instance, sqlite uses "?" for interpolation and MySQL uses a backtick for quoting
-* modifying user input for various lookup types, for instance a "LIKE" query will
-  surround the incoming phrase with "%" characters.
-
-The database class
-^^^^^^^^^^^^^^^^^^
-
-The :py:class:`Database` provides a higher-level API and is responsible for executing queries,
-creating tables and indexes, and introspecting the database to get lists of tables.
-Each database must specify a :py:class:`BaseAdapter` subclass, so our database will
-need to specify the ``FooAdapter`` we just defined:
+The first thing is to provide a subclass of :py:class:`Database` that will open
+a connection.
 
 .. code-block:: python
 
     from peewee import Database
+    import foodb # our fictional driver
+
 
     class FooDatabase(Database):
-        def __init__(self, database, **connect_kwargs):
-            super(FooDatabase, self).__init__(FooAdapter(), database, **connect_kwargs)
+        def _connect(self, database, **kwargs):
+            return foodb.connect(database, **kwargs)
 
 
-This is the absolute minimum needed, though some features will not work -- for best
+Essential methods to override
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The :py:class:`Database` provides a higher-level API and is responsible for executing queries,
+creating tables and indexes, and introspecting the database to get lists of tables. The above
+implementation is the absolute minimum needed, though some features will not work -- for best
 results you will want to additionally add a method for extracting a list of tables
 and indexes for a table from the database.  We'll pretend that ``FooDB`` is a lot like
 MySQL and has special "SHOW" statements:
@@ -143,8 +79,8 @@ MySQL and has special "SHOW" statements:
 .. code-block:: python
 
     class FooDatabase(Database):
-        def __init__(self, database, **connect_kwargs):
-            super(FooDatabase, self).__init__(FooAdapter(), database, **connect_kwargs)
+        def _connect(self, database, **kwargs):
+            return foodb.connect(database, **kwargs)
 
         def get_tables(self):
             res = self.execute('SHOW TABLES;')
@@ -155,12 +91,19 @@ MySQL and has special "SHOW" statements:
             rows = sorted([(r[2], r[1] == 0) for r in res.fetchall()])
             return rows
 
-There is a good deal of functionality provided by the Database class that is not
-covered here.  Refer to the documentation below or the `source code <https://github.com/coleifer/peewee/blob/master/peewee.py>`_. for details.
+
+Other things the database handles that are not covered here include:
+
+* last insert id and number of rows modified
+* specifying characters used for string interpolation and quoting identifiers,
+  for instance, sqlite uses "?" for interpolation and MySQL uses a backtick for quoting
+* mapping operations such as "LIKE/ILIKE" to their database equivalent
+
+Refer to the documentation below or the `source code <https://github.com/coleifer/peewee/blob/master/peewee.py>`_. for details.
 
 .. note:: If your driver conforms to the db-api 2.0 spec, there shouldn't be
     much work needed to get up and running.
-
+  
 
 Using our new database
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -196,9 +139,50 @@ Database and its subclasses
     - execution of SQL queries
     - creating and dropping tables and indexes
 
-    .. py:method:: __init__(adapter, database[, threadlocals=False[, autocommit=True[, **connect_kwargs]]])
+    .. py:attribute:: compiler_class = QueryCompiler
 
-        :param adapter: an instance of a :py:class:`BaseAdapter` subclass
+        A class suitable for compiling queries
+
+    .. py:attribute:: expr_overrides = {}
+
+        A mapping of expression codes to string operators
+
+    .. py:attribute:: field_overrides = {}
+
+        A mapping of field types to database column types, e.g. ``{'primary_key': 'SERIAL'}``
+
+    .. py:attribute:: for_update = False
+
+        Whether the given backend supports selecting rows for update
+
+    .. py:attribute:: interpolation = '%s'
+
+        The string used by the driver to interpolate query parameters
+
+    .. py:attribute:: op_overrides = {}
+
+        A mapping of operation codes to string operations, e.g. ``{OP_LIKE: 'LIKE BINARY'}``
+
+    .. py:attribute:: quote_char = '"'
+
+        The string used by the driver to quote names
+
+    .. py:attribute:: reserved_tables = []
+
+        Table names that are reserved by the backend -- if encountered in the
+        application a warning will be issued.
+
+    .. py:attribute:: sequences = False
+
+        Whether the given backend supports sequences
+
+    .. py:attribute:: subquery_delete_same_table = True
+
+        Whether the given backend supports deleting rows using a subquery
+        that selects from the same table
+
+    .. py:method:: __init__(database[, threadlocals=False[, autocommit=True[, **connect_kwargs]]])
+
         :param database: the name of the database (or filename if using sqlite)
         :param threadlocals: whether to store connections in a threadlocal
         :param autocommit: automatically commit every query executed by calling :py:meth:`~Database.execute`
@@ -245,6 +229,10 @@ Database and its subclasses
 
         :rtype: a cursor for executing queries
 
+    .. py:method:: get_compiler()
+
+        :rtype: an instance of :py:class:`QueryCompiler`
+
     .. py:method:: set_autocommit(autocommit)
 
         :param autocommit: a boolean value indicating whether to turn on/off autocommit
@@ -254,7 +242,12 @@ Database and its subclasses
 
         :rtype: a boolean value indicating whether autocommit is on **for the current connection**
 
-    .. py:method:: execute(sql[, params=None])
+    .. py:method:: execute(query)
+
+        :param: a query instance, such as a :py:class:`SelectQuery`
+        :rtype: the resulting cursor
+
+    .. py:method:: execute_sql(sql[, params=None[, require_commit=True]])
 
         :param sql: a string sql query
         :param params: a list or tuple of parameters to interpolate
@@ -311,15 +304,14 @@ Database and its subclasses
 
         :rtype: number of rows affected by the last query
 
-    .. py:method:: create_table(model_class[, safe=False])
+    .. py:method:: create_table(model_class)
 
         :param model_class: :py:class:`Model` class to create table for
-        :param safe: if ``True``, query will add a ``IF NOT EXISTS`` clause
 
-    .. py:method:: create_index(model_class, field_names[, unique=False])
+    .. py:method:: create_index(model_class, fields[, unique=False])
 
         :param model_class: :py:class:`Model` table on which to create index
-        :param field_name: name of field(s) to create index on (a string or list)
+        :param fields: field(s) to create index on (either field instances or field names)
         :param unique: whether the index should enforce uniqueness
 
     .. py:method:: create_foreign_key(model_class, field)
@@ -336,37 +328,6 @@ Database and its subclasses
             Cascading drop tables are not supported at this time, so if a constraint
             exists that prevents a table being dropped, you will need to handle
             that in application logic.
-
-    .. py:method:: add_column_sql(model_class, field_name)
-
-        :param model_class: :py:class:`Model` which we are adding a column to
-        :param string field_name: the name of the field we are adding
-
-        :rtype: SQL suitable for adding the column
-
-        .. note::
-            Adding a non-null column to a table with rows may cause an IntegrityError.
-
-    .. py:method:: rename_column_sql(model_class, field_name, new_name)
-
-        :param model_class: :py:class:`Model` instance
-        :param string field_name: the current name of the field
-        :param string new_name: new name for the field
-
-        :rtype: SQL suitable for renaming the column
-
-        .. note::
-            There must be a field instance named ``field_name`` at the time this SQL
-            is generated.
-
-        .. note:: SQLite does not support renaming columns
-
-    .. py:method:: drop_column_sql(model_class, field_name)
-
-        :param model_class: :py:class:`Model` instance
-        :param string field_name: the name of the field to drop
-
-        .. note:: SQLite does not support dropping columns
 
     .. py:method:: create_sequence(sequence_name)
 
@@ -411,93 +372,3 @@ Database and its subclasses
 .. py:class:: PostgresqlDatabase(Database)
 
     :py:class:`Database` subclass that communicates to the "psycopg2" driver
-
-
-BaseAdapter and its subclasses
-------------------------------
-
-.. py:class:: BaseAdapter
-
-    The various subclasses of `BaseAdapter` provide a bridge between the high-
-    level :py:class:`Database` abstraction and the underlying python libraries like
-    psycopg2.  It also provides a way to unify the pythonic field types with
-    the underlying column types used by the database engine.
-
-    The `BaseAdapter` provides two types of mappings:
-    - mapping between filter operations and their database equivalents
-    - mapping between basic field types and their database column types
-
-    The `BaseAdapter` also is the mechanism used by the :py:class:`Database` class to:
-    - handle connections with the database
-    - extract information from the database cursor
-
-    .. py:attribute:: operations = {'eq': '= %s'}
-
-        A mapping of query operation to SQL
-
-    .. py:attribute:: interpolation = '%s'
-
-        The string used by the driver to interpolate query parameters
-
-    .. py:attribute:: sequence_support = False
-
-        Whether the given backend supports sequences
-
-    .. py:attribute:: reserved_tables = []
-
-        Table names that are reserved by the backend -- if encountered in the
-        application a warning will be issued.
-
-    .. py:method:: get_field_types()
-
-        :rtype: a dictionary mapping "user-friendly field type" to specific column type,
-            e.g. ``{'string': 'VARCHAR', 'float': 'REAL', ... }``
-
-    .. py:method:: get_field_type_overrides()
-
-        :rtype: a dictionary similar to that returned by ``get_field_types()``.
-
-        Provides a mechanism to override any number of field types without having
-        to override all of them.
-
-    .. py:method:: connect(database, **kwargs)
-
-        :param database: string representing database name (or filename if using sqlite)
-        :param kwargs: any keyword arguments to pass along to the database driver when connecting
-        :rtype: a database connection
-
-    .. py:method:: close(conn)
-
-        :param conn: a database connection
-
-        Close the given database connection
-
-    .. py:method:: lookup_cast(lookup, value)
-
-        :param lookup: a string representing the lookup type
-        :param value: a python value that will be passed in to the lookup
-        :rtype: a converted value appropriate for the given lookup
-
-        Used as a hook when a specific lookup requires altering the given value,
-        like for example when performing a LIKE query you may need to insert wildcards.
-
-    .. py:method:: last_insert_id(cursor, model)
-
-        :rtype: most recently inserted primary key
-
-    .. py:method:: rows_affected(cursor)
-
-        :rtype: number of rows affected by most recent query
-
-
-.. py:class:: SqliteAdapter(BaseAdapter)
-
-    Subclass of :py:class:`BaseAdapter` that works with the "sqlite3" driver
-
-.. py:class:: MySQLAdapter(BaseAdapter)
-
-    Subclass of :py:class:`BaseAdapter` that works with the "MySQLdb" driver
-
-.. py:class:: PostgresqlAdapter(BaseAdapter)
-
-    Subclass of :py:class:`BaseAdapter` that works with the "psycopg2" driver
