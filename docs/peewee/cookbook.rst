@@ -10,19 +10,16 @@ Examples will use the following models:
 
 .. code-block:: python
 
-    import peewee
+    from peewee import *
 
-    class Blog(peewee.Model):
-        creator = peewee.CharField()
-        name = peewee.CharField()
+    class User(Model):
+        username = CharField()
 
-
-    class Entry(peewee.Model):
-        blog = peewee.ForeignKeyField(Blog)
-        title = peewee.CharField()
-        body = peewee.TextField()
-        pub_date = peewee.DateTimeField()
-        published = peewee.BooleanField(default=True)
+    class Tweet(Model):
+        user = ForeignKeyField(User, related_name='tweets')
+        message = TextField()
+        created_date = DateTimeField(default=datetime.datetime.now)
+        is_published = BooleanField(default=True)
 
 
 Database and Connection Recipes
@@ -58,10 +55,10 @@ models from each):
 
 .. code-block:: python
 
-    >>> custom_db = peewee.SqliteDatabase('custom.db')
+    >>> custom_db = SqliteDatabase('custom.db')
 
-    >>> class CustomModel(peewee.Model):
-    ...     whatev = peewee.CharField()
+    >>> class CustomModel(Model):
+    ...     whatev = CharField()
     ...
     ...     class Meta:
     ...         database = custom_db
@@ -76,17 +73,16 @@ you wish to use, and then all your models will extend it:
 
 .. code-block:: python
 
-    custom_db = peewee.SqliteDatabase('custom.db')
+    custom_db = SqliteDatabase('custom.db')
 
-    class CustomModel(peewee.Model):
+    class CustomModel(Model):
         class Meta:
             database = custom_db
 
-    class Blog(CustomModel):
-        creator = peewee.CharField()
-        name = peewee.TextField()
+    class User(CustomModel):
+        username = CharField()
 
-    class Entry(CustomModel):
+    class Tweet(CustomModel):
         # etc, etc
 
 .. note:: Remember to specify a database in a model class (or its parent class),
@@ -100,16 +96,16 @@ Point models at an instance of :py:class:`PostgresqlDatabase`.
 
 .. code-block:: python
 
-    psql_db = peewee.PostgresqlDatabase('my_database', user='code')
+    psql_db = PostgresqlDatabase('my_database', user='code')
 
 
-    class PostgresqlModel(peewee.Model):
+    class PostgresqlModel(Model):
         """A base model that will use our Postgresql database"""
         class Meta:
             database = psql_db
 
-    class Blog(PostgresqlModel):
-        creator = peewee.CharField()
+    class User(PostgresqlModel):
+        username = CharField()
         # etc, etc
 
 
@@ -120,16 +116,16 @@ Point models at an instance of :py:class:`MySQLDatabase`.
 
 .. code-block:: python
 
-    mysql_db = peewee.MySQLDatabase('my_database', user='code')
+    mysql_db = MySQLDatabase('my_database', user='code')
 
 
-    class MySQLModel(peewee.Model):
+    class MySQLModel(Model):
         """A base model that will use our MySQL database"""
         class Meta:
             database = mysql_db
 
-    class Blog(MySQLModel):
-        creator = peewee.CharField()
+    class User(MySQLModel):
+        username = CharField()
         # etc, etc
 
 
@@ -168,9 +164,9 @@ of the database by passing in ``None`` as the database_name.
 
 .. code-block:: python
 
-    deferred_db = peewee.SqliteDatabase(None)
+    deferred_db = SqliteDatabase(None)
 
-    class SomeModel(peewee.Model):
+    class SomeModel(Model):
         class Meta:
             database = deferred_db
 
@@ -201,8 +197,8 @@ You can use the :py:meth:`Model.create` method on the model:
 
 .. code-block:: python
 
-    >>> Blog.create(creator='Charlie', name='My Blog')
-    <__main__.Blog object at 0x2529350>
+    >>> User.create(username='Charlie')
+    <__main__.User object at 0x2529350>
 
 This will ``INSERT`` a new row into the database.  The primary key will automatically
 be retrieved and stored on the model instance.
@@ -212,12 +208,11 @@ save it:
 
 .. code-block:: python
 
-    >>> blog = Blog()
-    >>> blog.creator = 'Chuck'
-    >>> blog.name = 'Another blog'
-    >>> blog.save()
-    >>> blog.id
-    2
+    >>> user = User()
+    >>> user.username = 'Charlie'
+    >>> user.save()
+    >>> user.id
+    1
 
 See also :py:meth:`Model.save`, :py:meth:`Model.insert` and :py:class:`InsertQuery`
 
@@ -230,12 +225,12 @@ in an ``UPDATE`` rather than another ``INSERT``:
 
 .. code-block:: python
 
-    >>> blog.save()
-    >>> blog.id
-    2
-    >>> blog.save()
-    >>> blog.id
-    2
+    >>> user.save()
+    >>> user.id
+    1
+    >>> user.save()
+    >>> user.id
+    1
 
 If you want to update multiple records, issue an ``UPDATE`` query.  The following
 example will update all ``Entry`` objects, marking them as "published", if their
@@ -243,7 +238,7 @@ pub_date is less than today's date.
 
 .. code-block:: python
 
-    >>> update_query = Entry.update(published=True).where(pub_date__lt=datetime.today())
+    >>> update_query = Tweet.update(is_published=True).where(Tweet.creation_date < datetime.today())
     >>> update_query.execute()
     4 # <--- number of rows updated
 
@@ -256,21 +251,21 @@ Deleting a record
 To delete a single model instance, you can use the :py:meth:`Model.delete_instance`
 shortcut:
 
-    >>> blog = Blog.get(id=1)
-    >>> blog.delete_instance()
+    >>> user = User.get(User.id == 1)
+    >>> user.delete_instance()
     1 # <--- number of rows deleted
 
-    >>> Blog.get(id=1)
-    BlogDoesNotExist: instance matching query does not exist:
-    SQL: SELECT "id", "creator", "name" FROM "blog" WHERE "id" = ? LIMIT 1
+    >>> User.get(User.id == 1)
+    UserDoesNotExist: instance matching query does not exist:
+    SQL: SELECT t1."id", t1."username" FROM "user" AS t1 WHERE t1."id" = ?
     PARAMS: [1]
 
 To delete an arbitrary group of records, you can issue a ``DELETE`` query.  The
-following will delete all ``Entry`` objects that are a year old.
+following will delete all ``Tweet`` objects that are a year old.
 
-    >>> delete_query = Entry.delete().where(pub_date__lt=one_year_ago)
+    >>> delete_query = Tweet.delete().where(Tweet.pub_date < one_year_ago)
     >>> delete_query.execute()
-    7 # <--- number of entries deleted
+    7 # <--- number of rows deleted
 
 For more information, see the documentation on :py:class:`DeleteQuery`.
 
@@ -279,7 +274,7 @@ Selecting a single record
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
 You can use the :py:meth:`Model.get` method to retrieve a single instance matching
-the given query (passed in as a mix of :py:class:`Q` objects and keyword arguments).
+the given query.
 
 This method is a shortcut that calls :py:meth:`Model.select` with the given query,
 but limits the result set to 1.  Additionally, if no model matches the given query,
@@ -287,19 +282,19 @@ a ``DoesNotExist`` exception will be raised.
 
 .. code-block:: python
 
-    >>> Blog.get(id=1)
+    >>> User.get(User.id == 1)
     <__main__.Blog object at 0x25294d0>
 
-    >>> Blog.get(id=1).name
-    u'My Blog'
+    >>> User.get(User.id == 1).username
+    u'Charlie'
 
-    >>> Blog.get(creator='Chuck')
+    >>> User.get(User.username == 'Charlie')
     <__main__.Blog object at 0x2529410>
 
-    >>> Blog.get(id=1000)
-    BlogDoesNotExist: instance matching query does not exist:
-    SQL: SELECT "id", "creator", "name" FROM "blog" WHERE "id" = ? LIMIT 1
-    PARAMS: [1000]
+    >>> User.get(User.username == 'nobody')
+    UserDoesNotExist: instance matching query does not exist:
+    SQL: SELECT t1."id", t1."username" FROM "user" AS t1 WHERE t1."username" = ?
+    PARAMS: ['nobody']
 
 For more information see notes on :py:class:`SelectQuery` and :ref:`querying` in general.
 
@@ -311,11 +306,11 @@ To simply get all instances in a table, call the :py:meth:`Model.select` method:
 
 .. code-block:: python
 
-    >>> for blog in Blog.select():
-    ...     print blog.name
+    >>> for user in User.select():
+    ...     print user.username
     ...
-    My Blog
-    Another blog
+    Charlie
+    Peewee Herman
 
 When you iterate over a :py:class:`SelectQuery`, it will automatically execute
 it and start returning results from the database cursor.  Subsequent iterations
@@ -323,30 +318,28 @@ of the same query will not hit the database as the results are cached.
 
 Another useful note is that you can retrieve instances related by :py:class:`ForeignKeyField`
 by iterating.  To get all the related instances for an object, you can query the related name.
-Looking at the example models, we have Blogs and Entries.  Entry has a foreign key to Blog,
-meaning that any given blog may have 0..n entries.  A blog's related entries are exposed
+Looking at the example models, we have Users and Tweets.  Tweet has a foreign key to User,
+meaning that any given user may have 0..n tweets.  A user's related tweets are exposed
 using a :py:class:`SelectQuery`, and can be iterated the same as any other SelectQuery:
 
 .. code-block:: python
 
-    >>> for entry in blog.entry_set:
-    ...     print entry.title
+    >>> for tweet in user.tweets:
+    ...     print tweet.message
     ...
-    entry 1
-    entry 2
-    entry 3
-    entry 4
+    hello world
+    this is fun
+    look at this picture of my food
 
-The ``entry_set`` attribute is just another select query and any methods available
+The ``tweets`` attribute is just another select query and any methods available
 to :py:class:`SelectQuery` are available:
 
-    >>> for entry in blog.entry_set.order_by(('pub_date', 'desc')):
-    ...     print entry.title
+    >>> for tweet in user.tweets.order_by(Tweet.created_date.desc()):
+    ...     print tweet.message
     ...
-    entry 4
-    entry 3
-    entry 2
-    entry 1
+    look at this picture of my food
+    this is fun
+    hello world
 
 
 Filtering records
@@ -354,57 +347,61 @@ Filtering records
 
 .. code-block:: python
 
-    >>> for entry in Entry.select().where(blog=blog, published=True):
-    ...     print '%s: %s (%s)' % (entry.blog.name, entry.title, entry.published)
+    >>> user = User.get(User.username == 'Charlie')
+    >>> for tweet in Tweet.select().where(Tweet.user == user, Tweet.is_published == True):
+    ...     print '%s: %s (%s)' % (tweet.user.username, tweet.message)
     ...
-    My Blog: Some Entry (True)
-    My Blog: Another Entry (True)
+    Charlie: hello world
+    Charlie: this is fun
 
-    >>> for entry in Entry.select().where(pub_date__lt=datetime.datetime(2011, 1, 1)):
-    ...     print entry.title, entry.pub_date
+    >>> for tweet in Tweet.select().where(Tweet.created_date < datetime.datetime(2011, 1, 1)):
+    ...     print tweet.message, tweet.created_date
     ...
-    Old entry 2010-01-01 00:00:00
+    Really old tweet 2010-01-01 00:00:00
 
 You can also filter across joins:
 
 .. code-block:: python
 
-    >>> for entry in Entry.select().join(Blog).where(name='My Blog'):
-    ...     print entry.title
-    Old entry
-    Some Entry
-    Another Entry
+    >>> for tweet in Tweet.select().join(User).where(User.username == 'Charlie'):
+    ...     print tweet.message
+    hello world
+    this is fun
+    look at this picture of my food
 
-If you are already familiar with Django's ORM, you can use the "double underscore"
-syntax:
+If you want to express a complex query, use parentheses and python's "or" and "and"
+operators:
 
-.. code-block:: python
+    >>> Tweet.select().join(User).where(
+    ...     (User.username == 'Charlie') |
+    ...     (User.username == 'Peewee Herman')
+    ... )
 
-    >>> for entry in Entry.filter(blog__name='My Blog'):
-    ...     print entry.title
-    Old entry
-    Some Entry
-    Another Entry
+A lot of fun things can go in the where clause of a query, such as:
 
-If you prefer, you can use python operators to query:
+* a field expression, e.g. ``User.username == 'Charlie'``
+* a function expression, e.g. ``fn.Lower(fn.Substr(User.username, 1, 1)) == 'a'``
+* a subquery, e.g. tweets by users whose username starts with "a" ("<<" signifies "IN"):
+  ``Tweet.user << User.select().where(fn.Lower(fn.Substr(User.username, 1, 1)) == 'a')``
+* a comparison of one column to another, e.g. ``Employee.salary < (Employee.tenure * 1000) + 40000``
 
-.. code-block:: python
+.. note::
+    If you are already familiar with Django's ORM, you can use the "double underscore"
+    syntax using the :py:meth:`SelectQuery.filter` method:
 
-    >>> for entry in Entry.select().join(Blog).where(Blog.name=='My Blog')
-    ...     print entry.title
+    .. code-block:: python
 
-To perform OR lookups, use the special :py:class:`Q` object.  These work in
-both calls to ``filter()`` and ``where()``:
+        >>> for tweet in Tweet.filter(user__username='Charlie'):
+        ...     print tweet.message
+        hello world
+        this is fun
+        look at this picture of my food
 
-.. code-block:: python
+    To perform OR lookups, use the special :py:class:`DQ` object:
 
-    >>> User.filter(Q(staff=True) | Q(superuser=True)) # get staff or superusers
+    .. code-block:: python
 
-To perform lookups against *another column* in a given row, use the :py:class:`F` object:
-
-.. code-block:: python
-
-    >>> Employee.filter(salary__lt=F('desired_salary'))
+        >>> User.filter(DQ(username='Charlie') | DQ(username='Peewee Herman'))
 
 
 Check :ref:`the docs <query_compare>` for more examples of querying.
@@ -415,32 +412,32 @@ Sorting records
 
 .. code-block:: python
 
-    >>> for e in Entry.select().order_by('pub_date'):
-    ...     print e.pub_date
+    >>> for t in Tweet.select().order_by(Tweet.created_date):
+    ...     print t.pub_date
     ...
     2010-01-01 00:00:00
     2011-06-07 14:08:48
     2011-06-07 14:12:57
 
-    >>> for e in Entry.select().order_by(peewee.desc('pub_date')):
-    ...     print e.pub_date
+    >>> for t in Tweet.select().order_by(Tweet.created_date.desc()):
+    ...     print t.pub_date
     ...
     2011-06-07 14:12:57
     2011-06-07 14:08:48
     2010-01-01 00:00:00
 
 You can also order across joins.  Assuming you want
-to order entries by the name of the blog, then by pubdate desc:
+to order tweets by the username of the author, then by created_date:
 
 .. code-block:: python
 
-    >>> qry = Entry.select().join(Blog).order_by(
-    ...     (Blog, 'name'),
-    ...     (Entry, 'pub_date', 'DESC'),
-    ... )
+    >>> qry = Tweet.select().join(User).order_by(User.username, Tweet.created_date.desc())
 
-    >>> qry.sql()
-    ('SELECT t1.* FROM entry AS t1 INNER JOIN blog AS t2 ON t1.blog_id = t2.id ORDER BY t2.name ASC, t1.pub_date DESC', [])
+.. code-block:: sql
+    -- generates --
+    SELECT t1."id", t1."user_id", t1."message", t1."is_published", t1."created_date" 
+    FROM "tweet" AS t1 INNER JOIN "user" AS t2 ON t1."user_id" = t2."id" 
+    ORDER BY t2."username", t1."created_date" DESC
 
 
 Paginating records
@@ -451,19 +448,19 @@ parameters, `page_number`, and `items_per_page`:
 
 .. code-block:: python
 
-    >>> for entry in Entry.select().order_by('id').paginate(2, 10):
-    ...     print entry.title
+    >>> for tweet in Tweet.select().order_by(Tweet.id).paginate(2, 10):
+    ...     print tweet.message
     ...
-    entry 10
-    entry 11
-    entry 12
-    entry 13
-    entry 14
-    entry 15
-    entry 16
-    entry 17
-    entry 18
-    entry 19
+    tweet 10
+    tweet 11
+    tweet 12
+    tweet 13
+    tweet 14
+    tweet 15
+    tweet 16
+    tweet 17
+    tweet 18
+    tweet 19
 
 
 Counting records
@@ -473,9 +470,9 @@ You can count the number of rows in any select query:
 
 .. code-block:: python
 
-    >>> Entry.select().count()
+    >>> Tweet.select().count()
     100
-    >>> Entry.select().where(id__gt=50).count()
+    >>> Tweet.select().where(Tweet.id > 50).count()
     50
 
 
@@ -515,47 +512,45 @@ query method.  See the documentation for details on this optimization.
 Performing atomic updates
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Use the special :py:class:`F` object to perform an atomic update:
-
 .. code-block:: python
 
-    >>> MessageCount.update(count=F('count') + 1).where(user=some_user)
+    >>> Stat.update(counter=Stat.counter + 1).where(Stat.url == request.url)
 
 
 Aggregating records
 ^^^^^^^^^^^^^^^^^^^
 
-Suppose you have some blogs and want to get a list of them along with the count
-of entries in each.  First I will show you the shortcut:
+Suppose you have some users and want to get a list of them along with the count
+of tweets in each.  First I will show you the shortcut:
 
 .. code-block:: python
 
-    query = Blog.select().annotate(Entry)
+    query = User.select().annotate(Tweet)
 
 This is equivalent to the following:
 
 .. code-block:: python
 
-    query = Blog.select({
-        Blog: ['*'],
-        Entry: [Count('id')],
-    }).group_by(Blog).join(Entry)
+    query = User.select(
+        User, fn.Count(Tweet.id).set_alias('count')
+    ).join(Tweet).group_by(User)
 
-The resulting query will return Blog objects with all their normal attributes
-plus an additional attribute 'count' which will contain the number of entries.
+
+The resulting query will return User objects with all their normal attributes
+plus an additional attribute 'count' which will contain the number of tweets.
 By default it uses an inner join if the foreign key is not nullable, which means
 blogs without entries won't appear in the list.  To remedy this, manually specify
-the type of join to include blogs with 0 entries:
+the type of join to include users with 0 tweets:
 
 .. code-block:: python
 
-    query = Blog.select().join(Entry, 'left outer').annotate(Entry)
+    query = User.select().join(Tweet, JOIN_LEFT_OUTER).annotate(Tweet)
 
 You can also specify a custom aggregator:
 
 .. code-block:: python
 
-    query = Blog.select().annotate(Entry, peewee.Max('pub_date', 'max_pub_date'))
+    query = User.select().annotate(Tweet, fn.Max(Tweet.created_date).set_alias('latest'))
 
 Let's assume you have a tagging application and want to find tags that have a
 certain number of related objects.  For this example we'll use some different
@@ -577,36 +572,26 @@ Now say we want to find tags that have at least 5 photos associated with them:
 
 .. code-block:: python
 
-    >>> Tag.select().join(PhotoTag).join(Photo).group_by(Tag).having('count(*) > 5').sql()
+    >>> Tag.select().join(PhotoTag).join(Photo).group_by(Tag).having(fn.Count(Photo.id) > 5)
 
-    SELECT t1."id", t1."name"
-    FROM "tag" AS t1
-    INNER JOIN "phototag" AS t2
-        ON t1."id" = t2."tag_id"
-    INNER JOIN "photo" AS t3
-        ON t2."photo_id" = t3."id"
-    GROUP BY
-        t1."id", t1."name"
-    HAVING count(*) > 5
+Yields the following:
+
+.. code-block:: sql
+
+    SELECT t1."id", t1."name" 
+    FROM "tag" AS t1 
+    INNER JOIN "phototag" AS t2 ON t1."id" = t2."tag_id" 
+    INNER JOIN "photo" AS t3 ON t2."photo_id" = t3."id" 
+    GROUP BY t1."id", t1."name" 
+    HAVING Count(t3."id") > 5
 
 Suppose we want to grab the associated count and store it on the tag:
 
 .. code-block:: python
 
-    >>> Tag.select({
-    ...     Tag: ['*'],
-    ...     Photo: [Count('id', 'count')]
-    ... }).join(PhotoTag).join(Photo).group_by(Tag).having('count(*) > 5').sql()
-
-    SELECT t1."id", t1."name", COUNT(t3."id") AS count
-    FROM "tag" AS t1
-    INNER JOIN "phototag" AS t2
-        ON t1."id" = t2."tag_id"
-    INNER JOIN "photo" AS t3
-        ON t2."photo_id" = t3."id"
-    GROUP BY
-        t1."id", t1."name"
-    HAVING count(*) > 5
+    >>> Tag.select(
+    ...     Tag, fn.Count(Photo.id).set_alias('count')
+    ... ).join(PhotoTag).join(Photo).group_by(Tag).having(fn.Count(Photo.id) > 5)
 
 
 SQL Functions, Subqueries and "Raw expressions"
@@ -614,49 +599,20 @@ SQL Functions, Subqueries and "Raw expressions"
 
 Suppose you need to want to get a list of all users whose username begins with "a".
 There are a couple ways to do this, but one method might be to use some SQL functions
-like ``LOWER`` and ``SUBSTR``.  To use arbitrary SQL functions, use the special :py:class:`R`
-object to construct queries:
+like ``LOWER`` and ``SUBSTR``.  To use arbitrary SQL functions, use the special :py:func:`fn`
+function to construct queries:
 
 .. code-block:: python
 
     # select the users' id, username and the first letter of their username, lower-cased
-    query = User.select(['id', 'username', R('LOWER(SUBSTR(username, 1, 1))', 'first_letter')])
+    query = User.select(User, fn.Lower(fn.Substr(User.username, 1, 1)).set_alias('first_letter'))
 
-    # now filter this list to include only users whose username begins with "a"
-    a_users = query.where(R('first_letter=%s', 'a'))
+    # alternatively we could select only users whose username begins with 'a'
+    a_users = User.select().where(fn.Lower(fn.Substr(User.username, 1, 1)) == 'a')
 
     >>> for user in a_users:
-    ...    print user.first_letter, user.username
+    ...    print user.username
 
-This same functionality could be easily exposed as part of the where clause, the
-only difference being that the first letter is not selected and therefore not an
-attribute of the model instance:
-
-.. code-block:: python
-
-    a_users = User.filter(R('LOWER(SUBSTR(username, 1, 1)) = %s', 'a'))
-
-We can write subqueries as part of a :py:class:`SelectQuery`, for example counting
-the number of entries on a blog:
-
-.. code-block:: python
-
-    entry_query = R('(SELECT COUNT(*) FROM entry WHERE entry.blog_id=blog.id)', 'entry_count')
-    blogs = Blog.select(['id', 'name', entry_query]).order_by(('entry_count', 'desc'))
-
-    for blog in blogs:
-        print blog.title, blog.entry_count
-
-It is also possible to use subqueries as part of a where clause, for example finding
-blogs that have no entries:
-
-.. code-block:: python
-
-    no_entry_query = R('NOT EXISTS (SELECT * FROM entry WHERE entry.blog_id=blog.id)')
-    blogs = Blog.filter(no_entry_query)
-
-    for blog in blogs:
-        print blog.name, ' has no entries'
 
 .. _working_with_transactions:
 
@@ -674,7 +630,7 @@ which will issue a commit if all goes well, or a rollback if an exception is rai
     db = SqliteDatabase(':memory:')
 
     with db.transaction():
-        blog.delete_instance(recursive=True) # delete blog and associated entries
+        user.delete_instance(recursive=True) # delete user and associated tweets
 
 
 Decorator
@@ -688,8 +644,8 @@ decorator:
     db = SqliteDatabase(':memory:')
 
     @db.commit_on_success
-    def delete_blog(blog):
-        blog.delete_instance(recursive=True)
+    def delete_user(user):
+        user.delete_instance(recursive=True)
 
 
 Changing autocommit behavior
@@ -703,7 +659,7 @@ context manager and decorator:
 
     db.set_autocommit(False)
     try:
-        blog.delete_instance(recursive=True)
+        user.delete_instance(recursive=True)
     except:
         db.rollback()
         raise
@@ -720,7 +676,7 @@ off when instantiating your database:
 
     db = SqliteDatabase(':memory:', autocommit=False)
 
-    Blog.create(name='foo blog')
+    User.create(username='somebody')
     db.commit()
 
 
@@ -737,11 +693,10 @@ you can override the default ``column_class`` of the :py:class:`PrimaryKeyField`
 
 .. code-block:: python
 
-    from peewee import Model, PrimaryKeyField, VarCharColumn
+    from peewee import *
 
     class UUIDModel(Model):
-        # explicitly declare a primary key field, and specify the class to use
-        id = PrimaryKeyField(column_class=VarCharColumn)
+        id = CharField(primary_key=True)
 
 
     inst = UUIDModel(id=str(uuid.uuid4()))
@@ -754,7 +709,7 @@ you can override the default ``column_class`` of the :py:class:`PrimaryKeyField`
 
 .. note::
     Any foreign keys to a model with a non-integer primary key will have the
-    ``ForeignKeyField`` use the same underlying column type as the primary key
+    ``ForeignKeyField`` use the same underlying storage type as the primary key
     they are related to.
 
 See full documentation on :ref:`non-integer primary keys <non_int_pks>`.
@@ -775,24 +730,24 @@ import:
     User._meta.auto_increment = False # turn off auto incrementing IDs
     with db.transaction():
         for row in data:
-            u = User(id=row[0], username=row[1], email=row[2])
+            u = User(id=row[0], username=row[1])
             u.save(force_insert=True) # <-- force peewee to insert row
 
     User._meta.auto_increment = True
 
-If you *always* want to have control over the primary key, you can use a different
-``column_class`` with the :py:class:`PrimaryKeyField`:
+If you *always* want to have control over the primary key, simply do not use
+the ``PrimaryKeyField`` type:
 
 .. code-block:: python
 
     class User(BaseModel):
-        id = PrimaryKeyField(column_class=IntegerColumn)
+        id = IntegerField(primary_key=True)
         username = CharField()
 
     >>> u = User.create(id=999, username='somebody')
     >>> u.id
     999
-    >>> User.get(username='somebody').id
+    >>> User.get(User.username == 'somebody').id
     999
 
 
@@ -826,11 +781,4 @@ The generated code is written to stdout.
 Schema migrations
 -----------------
 
-Currently peewee does not have support for automatic schema migrations. Peewee
-does, however, come with a few helper functions:
-
-* :py:meth:`Database.add_column_sql`
-* :py:meth:`Database.rename_column_sql`
-* :py:meth:`Database.drop_column_sql`
-
-Honestly, your best bet is to script any migrations and use plain ol' SQL.
+Currently peewee does not have support for automatic schema migrations.
