@@ -130,7 +130,7 @@ to even write.
 
 The 2.0 API is hopefully more consistent.  Selections, groupings, functions, joins
 and orderings all pretty much conform to the same API.  Likewise, where and having
-clauses are handled the same way (in 1.0 the where clause is simply a raw string).
+clauses are handled the same way (in 1.0 the having clause is simply a raw string).
 
 
 Changes in fields and columns
@@ -185,7 +185,7 @@ How the SQL gets made
 
 The first thing I started with is the QueryCompiler and the data structures it
 uses.  You can see it start to take shape in my `first commit <https://github.com/coleifer/peewee/blob/3cc1799b707e41183e2afb237b9e61c6e760d3a7/p2.py>`_.
-It takes the data structures from peewee and spits out SQL.  It works recursively and knows 
+It takes the data structures from peewee and spits out SQL.  It works recursively and knows
 about a few types of expressions:
 
 * the query tree
