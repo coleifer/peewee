@@ -184,8 +184,9 @@ How the SQL gets made
 ---------------------
 
 The first thing I started with is the QueryCompiler and the data structures it
-uses.  It takes the data structures from peewee and spits out SQL.  It works
-recursively and knows about a few types of expressions:
+uses.  You can see it start to take shape in my `first commit <https://github.com/coleifer/peewee/blob/3cc1799b707e41183e2afb237b9e61c6e760d3a7/p2.py>`_.
+It takes the data structures from peewee and spits out SQL.  It works recursively and knows 
+about a few types of expressions:
 
 * the query tree
 * comparison statements like '==', 'IN', 'LIKE' which comprise the leaves of the tree
