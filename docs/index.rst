@@ -15,6 +15,8 @@ peewee
 For flask integration, including an admin interface and RESTful API, check
 out `flask-peewee <https://github.com/coleifer/flask-peewee/>`_.
 
+See notes on :ref:`notes on upgrading and changes from 1.0 <upgrading>`
+
 Contents:
 ---------
 
@@ -24,6 +26,7 @@ Contents:
 
    peewee/overview
    peewee/installation
+   peewee/upgrading
    peewee/cookbook
    peewee/example
    peewee/models
