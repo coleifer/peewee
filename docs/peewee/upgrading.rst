@@ -98,7 +98,7 @@ Get me a list of users and when they last tweeted (if ever):
         User, fn.Max(Tweet.created_date).alias('last_date')
     ).join(Tweet, JOIN_LEFT_OUTER).group_by(User)
 
-Lets do an atomic update on a counter model (you'll have to user your imagination):
+Let's do an atomic update on a counter model (you'll have to use your imagination):
 
 .. code-block:: python
 
