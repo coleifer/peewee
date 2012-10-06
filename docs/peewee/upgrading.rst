@@ -28,7 +28,7 @@ I learned a valuable lesson:  keep data in datastructures until the
 *absolute* last second.
 
 With the benefit of hindsight and experience, I decided to rewrite and unify
-the API a bit.  The result is a tradeoff.  The newer syntax may be a bit more 
+the API a bit.  The result is a tradeoff.  The newer syntax may be a bit more
 verbose at times, but at least it will be consistent.
 
 Since seeing is believing, I will show some side-by-side comparisons.  Let's
@@ -51,7 +51,7 @@ Get me a list of all tweets by a user named "charlie":
 .. code-block:: python
 
     # 1.0
-    Tweet.select().join(User).where(username='charlie') 
+    Tweet.select().join(User).where(username='charlie')
 
     # 2.0
     Tweet.select().join(User).where(User.username == 'charlie')
@@ -60,8 +60,8 @@ Get me a list of tweets ordered by the authors username, then newest to oldest:
 
 .. code-block:: python
 
-    # 1.0
-    Tweet.select().order_by(('created_date', 'desc')).join(User).order_by('username')
+    # 1.0 -- this is one where there are like 10 ways to express it
+    Tweet.select().join(User).order_by('username', (Tweet, 'created_date', 'desc'))
 
     # 2.0
     Tweet.select().join(User).order_by(User.username, Tweet.created_date.desc())
@@ -89,7 +89,7 @@ Get me a list of users and when they last tweeted (if ever):
 
     # 1.0
     User.select({
-        User: ['*'], 
+        User: ['*'],
         Tweet: [Max('created_date', 'last_date')]
     }).join(Tweet, 'LEFT OUTER').group_by(User)
 
@@ -120,12 +120,12 @@ Let's find all the users whose username starts with 'a' or 'A':
 
 
 I hope a couple things jump out at you from these examples.  What I see is
-that the 1.0 API is sometimes a bit less verbose, but it relies on strings in 
-many places (which may be fields, aliases, selections, join types, functions, etc).  In the 
-where clause stuff gets crazy as there are args being combined with bitwise 
-operators ("Q" expressions) and also kwargs being used with django-style "double-underscore" 
+that the 1.0 API is sometimes a bit less verbose, but it relies on strings in
+many places (which may be fields, aliases, selections, join types, functions, etc).  In the
+where clause stuff gets crazy as there are args being combined with bitwise
+operators ("Q" expressions) and also kwargs being used with django-style "double-underscore"
 lookups. The crazy thing is, there are so many different ways I could have expressed
-some of the above queries using peewee 1.0 that I had a hard time deciding which 
+some of the above queries using peewee 1.0 that I had a hard time deciding which
 to even write.
 
 The 2.0 API is hopefully more consistent.  Selections, groupings, functions, joins
@@ -184,7 +184,7 @@ How the SQL gets made
 ---------------------
 
 The first thing I started with is the QueryCompiler and the data structures it
-uses.  It takes the data structures from peewee and spits out SQL.  It works 
+uses.  It takes the data structures from peewee and spits out SQL.  It works
 recursively and knows about a few types of expressions:
 
 * the query tree
