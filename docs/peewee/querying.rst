@@ -262,6 +262,41 @@ are counting pageviews in a special table:
     )
 
 
+The "fn" helper
+^^^^^^^^^^^^^^^
+
+.. py:class:: fn
+
+SQL provides a number of helper functions as a part of the language.  These functions
+can be used to calculate counts and sums over rows, perform string manipulations,
+do complex math, and more.  There are a lot of functions.
+
+To express functions in peewee, use the :py:class:`fn` object.  The way it works is
+anything to the right of the "dot" operator will be treated as a function.  You can
+pass that function arbitrary parameters which can be other valid expressions.
+
+For example:
+
+============================================ ============================================
+Peewee expression                            Equivalent SQL
+============================================ ============================================
+``fn.Count(Tweet.id).alias('count')``        ``Count(t1."id") AS count``
+``fn.Lower(fn.Substr(User.username, 1, 1))`` ``Lower(Substr(t1."username", 1, 1))``
+``fn.Rand().alias('random')``                ``Rand() AS random``
+``fn.Stddev(Employee.salary).alias('sdv')``  ``Stddev(t1."salary") AS sdv``
+============================================ ============================================
+
+Functions can be used as any part of a query:
+
+* select
+* where
+* group_by
+* order_by
+* having
+* update query
+* insert query
+
+
 Aggregating records
 ^^^^^^^^^^^^^^^^^^^
 
