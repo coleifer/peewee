@@ -132,7 +132,7 @@ The 2.0 API is hopefully more consistent.  Selections, groupings, functions, joi
 and orderings all pretty much conform to the same API.  Likewise, where and having
 clauses are handled the same way (in 1.0 the having clause is simply a raw string).
 The new ``fn`` object actually is a wrapper -- whatever appears to the right of the
-dot (i.e. "fn.**Lower**") -- is treated as a function that can take any arbitrary
+dot (i.e. fn.*Lower*) -- is treated as a function that can take any arbitrary
 parameters.
 
 If you're feeling froggy and want to get coding, you might want to check out:
