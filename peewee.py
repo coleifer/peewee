@@ -195,9 +195,10 @@ class Expr(object):
     def desc(self):
         return Ordering(self, False)
 
-    def _expr(op, n=False):
+    def _expr(op, n=False, inv=False):
         def inner(self, value):
-            return BinaryExpr(self, op, value)
+            lhs, rhs = (self, value) if not inv else (value, self)
+            return BinaryExpr(lhs, op, rhs)
         return inner
 
     __add__ = _expr(OP_ADD)
@@ -207,6 +208,13 @@ class Expr(object):
     __and__ = _expr(OP_AND)
     __or__ = _expr(OP_OR)
     __xor__ = _expr(OP_XOR)
+    __radd__ = _expr(OP_ADD, inv=True)
+    __rsub__ = _expr(OP_SUB, inv=True)
+    __rmul__ = _expr(OP_MUL, inv=True)
+    __rdiv__ = _expr(OP_DIV, inv=True)
+    __rand__ = _expr(OP_AND, inv=True)
+    __ror__ = _expr(OP_OR, inv=True)
+    __rxor__ = _expr(OP_XOR, inv=True)
 
     def _q(op):
         def inner(self, value):

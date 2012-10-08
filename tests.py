@@ -495,6 +495,9 @@ class UpdateTestCase(BasePeeweeTestCase):
         uq = UpdateQuery(User, {User.id: User.id + 5})
         self.assertUpdate(uq, [('"id"', '("id" + ?)')], [5])
 
+        uq = UpdateQuery(User, {User.id: 5 * (3 + User.id)})
+        self.assertUpdate(uq, [('"id"', '(? * (? + "id"))')], [5, 3])
+
     def test_where(self):
         uq = UpdateQuery(User, {User.username: 'updated'}).where(User.id == 2)
         self.assertWhere(uq, 'users."id" = ?', [2])
