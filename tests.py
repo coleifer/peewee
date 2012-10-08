@@ -1763,3 +1763,39 @@ if test_db.sequences:
 
 elif TEST_VERBOSITY > 0:
     print 'Skipping "sequence" tests'
+
+
+class Job(TestModel):
+    """A job that can be queued for later execution."""
+    name = CharField()
+
+class JobExecutionRecord(TestModel):
+    """Record of a job having been executed."""
+    # the foreign key is also the primary key to enforce the
+    # constraint that a job can be executed once and only once
+    job = ForeignKeyField(Job, primary_key=True)
+    status = CharField()
+
+class PrimaryForeignKeyTestCase(unittest.TestCase):
+    def setUp(self):
+        Job.create_table()
+        JobExecutionRecord.create_table()
+
+    def tearDown(self):
+        JobExecutionRecord.drop_table()
+        Job.drop_table()
+
+    def test_primary_foreign_key(self):
+        # we have one job, unexecuted, and therefore no executed jobs
+        job = Job.create(name='Job One')
+        executed_jobs = Job.select().join(JobExecutionRecord)
+        self.assertEqual([], list(executed_jobs))
+
+        # after execution, we must have one executed job
+        exec_record = JobExecutionRecord.create(job=job, status='success')
+        executed_jobs = Job.select().join(JobExecutionRecord)
+        self.assertEqual([job], list(executed_jobs))
+
+        # we must not be able to create another execution record for the job
+        with self.assertRaises(sqlite3.IntegrityError):
+            JobExecutionRecord.create(job=job, status='success')

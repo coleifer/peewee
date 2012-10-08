@@ -1549,7 +1549,8 @@ class Database(object):
         return self.execute_sql(qc.create_index(model_class, field_objs, unique))
 
     def create_foreign_key(self, model_class, field):
-        return self.create_index(model_class, [field], field.unique)
+        if not field.primary_key:
+            return self.create_index(model_class, [field], field.unique)
 
     def create_sequence(self, seq):
         if self.sequences:
