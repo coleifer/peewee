@@ -79,7 +79,7 @@ which were created in the last week.
     )
 
     # 2.0
-    Tweet.select().join(User).where(Tweet.created_date > last_week & (
+    Tweet.select().join(User).where((Tweet.created_date > last_week) & (
         (User.username == 'charlie') | (User.username == 'peewee herman')
     ))
 
