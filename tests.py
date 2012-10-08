@@ -1797,5 +1797,6 @@ class PrimaryForeignKeyTestCase(unittest.TestCase):
         self.assertEqual([job], list(executed_jobs))
 
         # we must not be able to create another execution record for the job
-        with self.assertRaises(sqlite3.IntegrityError):
+        with self.assertRaises(Exception):
             JobExecutionRecord.create(job=job, status='success')
+        test_db.rollback()
