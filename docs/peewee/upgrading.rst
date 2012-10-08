@@ -139,6 +139,7 @@ If you're feeling froggy and want to get coding, you might want to check out:
 
 * :ref:`the cookbook <cookbook>`, which contains many practical examples
 * :ref:`the example app documentation <example-app>`, which shows how to build a simple twitter-like site
+* :ref:`using "fn" <fn_examples>`
 * :ref:`the querying docs <querying>`, which contain an in-depth overview of the query apis
 
 

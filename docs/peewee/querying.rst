@@ -271,7 +271,9 @@ are counting pageviews in a special table:
 The "fn" helper
 ^^^^^^^^^^^^^^^
 
-.. py:class:: fn
+.. py:class:: fn()
+
+    A helper class that will convert arbitrary function calls to SQL function calls.
 
 SQL provides a number of helper functions as a part of the language.  These functions
 can be used to calculate counts and sums over rows, perform string manipulations,
@@ -282,6 +284,8 @@ anything to the right of the "dot" operator will be treated as a function.  You 
 pass that function arbitrary parameters which can be other valid expressions.
 
 For example:
+
+.. _fn_examples:
 
 ============================================ ============================================
 Peewee expression                            Equivalent SQL
