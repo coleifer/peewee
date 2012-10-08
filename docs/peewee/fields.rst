@@ -50,13 +50,15 @@ Field types table
 Parameters accepted by all field types and their default values:
 
 * ``null = False`` -- boolean indicating whether null values are allowed to be stored
-* ``db_index = False`` -- boolean indicating whether to create an index on this column
+* ``index = False`` -- boolean indicating whether to create an index on this column
 * ``unique = False`` -- boolean indicating whether to create a unique index on this column
 * ``verbose_name = None`` -- string representing the "user-friendly" name of this field
 * ``help_text = None`` -- string representing any helpful text for this field
 * ``db_column = None`` -- string representing the underlying column to use if different, useful for legacy databases
 * ``default = None`` -- any value to use as a default for uninitialized models
 * ``choices = None`` -- an optional iterable containing 2-tuples of ``value``, ``display``
+* ``primary_key = False`` -- whether this field is the primary key for the table
+* ``sequence = None`` -- sequence to populate field (if backend supports it)
 
 
 ===================   =================   =================   =================
@@ -94,9 +96,7 @@ Some fields take special parameters...
 | :py:class:`DecimalField`      | ``max_digits``, ``decimal_places``,          |
 |                               | ``auto_round``, ``rounding``                 |
 +-------------------------------+----------------------------------------------+
-| :py:class:`PrimaryKeyField`   | ``column_class``                             |
-+-------------------------------+----------------------------------------------+
-| :py:class:`ForeignKeyField`   | ``to``, ``related_name``,                    |
+| :py:class:`ForeignKeyField`   | ``rel_model``, ``related_name``,             |
 |                               | ``cascade``, ``extra``                       |
 +-------------------------------+----------------------------------------------+
 
@@ -148,25 +148,14 @@ To query, let's say we want to find students who are enrolled in math class:
 
 .. code-block:: python
 
-    for student in Student.select().join(StudentCourse).join(Course).where(name='math'):
-        print student.name
-
-You could also express this as:
-
-.. code-block:: python
-
-    for student in Student.filter(studentcourse_set__course__name='math'):
+    for student in Student.select().join(StudentCourse).join(Course).where(Course.name == 'math'):
         print student.name
 
 To query what classes a given student is enrolled in:
 
 .. code-block:: python
 
-    for course in Course.select().join(StudentCourse).join(Student).where(name='da vinci'):
-        print course.name
-
-    # or, similarly
-    for course in Course.filter(studentcourse_set__student__name='da vinci'):
+    for course in Course.select().join(StudentCourse).join(Student).where(Student.name == 'da vinci'):
         print course.name
 
 To efficiently iterate over a many-to-many relation, i.e., list all students
@@ -175,11 +164,9 @@ and "precompute" the Student and Course:
 
 .. code-block:: python
 
-    query = StudentCourse.select({
-        Student: ['*'],
-        StudentCourse: ['*'],
-        Course: ['*'],
-    }).join(Course).switch(StudentCourse).join(Student).order_by('name')
+    query = StudentCourse.select(
+        StudentCourse, Student, Course)
+    ).join(Course).switch(StudentCourse).join(Student)
 
 To print a list of students and their courses you might do the following:
 
@@ -214,13 +201,13 @@ use non-integer pks in peewee.
 
     class UUIDModel(Model):
         # explicitly declare a primary key field, and specify the class to use
-        id = PrimaryKeyField(column_class=VarCharColumn)
+        id = CharField(primary_key=True)
 
 
 Auto-increment IDs are, as their name says, automatically generated for you when
 you insert a new row into the database.  The way peewee determines whether to
 do an ``INSERT`` versus an ``UPDATE`` comes down to checking whether the primary
-key field is ``None``.  If ``None``, it will do an insert, otherwise it does an
+key value is ``None``.  If ``None``, it will do an insert, otherwise it does an
 update on the existing value.  Since, with our uuid example, the database driver
 won't generate a new ID, we need to specify it manually.  When we call save()
 for the first time, pass in ``force_insert = True``:
@@ -237,7 +224,7 @@ for the first time, pass in ``force_insert = True``:
 
 .. note::
     Any foreign keys to a model with a non-integer primary key will have the
-    ``ForeignKeyField`` use the same underlying column type as the primary key
+    ``ForeignKeyField`` use the same underlying storage type as the primary key
     they are related to.
 
 
@@ -248,16 +235,26 @@ Field class API
 
     The base class from which all other field types extend.
 
-    .. py:method:: __init__(null=False, db_index=False, unique=False, verbose_name=None, help_text=None, db_column=None, default=None, choices=None, *args, **kwargs)
+    .. py:attribute:: db_field = '<some field type>'
+
+        Attribute used to map this field to a column type, e.g. "string" or "datetime"
+
+    .. py:attribute:: template = '%(column_type)s'
+
+        A template for generating the SQL for this field
+
+    .. py:method:: __init__(null=False, index=False, unique=False, verbose_name=None, help_text=None, db_column=None, default=None, choices=None, *args, **kwargs)
 
         :param null: this column can accept ``None`` or ``NULL`` values
-        :param db_index: create an index for this column when creating the table
+        :param index: create an index for this column when creating the table
         :param unique: create a unique index for this column when creating the table
         :param verbose_name: specify a "verbose name" for this field, useful for metadata purposes
         :param help_text: specify some instruction text for the usage/meaning of this field
         :param db_column: column class to use for underlying storage
         :param default: a value to use as an uninitialized default
         :param choices: an iterable of 2-tuples mapping ``value`` to ``display``
+        :param boolean primary_key: whether to use this as the primary key for the table
+        :param sequence: name of sequence (if backend supports it)
 
     .. py:method:: db_value(value)
 
@@ -269,11 +266,20 @@ Field class API
         :param value: data coming from the backend storage
         :rtype: python data type
 
-    .. py:method:: lookup_value(lookup_type, value)
+    .. py:method:: coerce(value)
 
-        :param lookup_type: a peewee lookup type, such as 'eq' or 'contains'
-        :param value: a python data type
-        :rtype: data type converted for use when querying
+        This method is a shorthand that is used, by default, by both ``db_value`` and
+        ``python_value``.  You can usually get away with just implementing this.
+
+        :param value: arbitrary data from app or backend
+        :rtype: python data type
+
+    .. py:method:: field_attributes()
+
+        This method is responsible for return a dictionary containing the default
+        field attributes for the column, e.g. ``{'max_length': 255}``
+
+        :rtype: a python dictionary
 
     .. py:method:: class_prepared()
 
@@ -356,14 +362,7 @@ Field class API
 
 .. py:class:: PrimaryKeyField
 
-    Stores: auto-incrementing integer fields suitable for use as primary key by
-    default, though other types of data can be stored by specifying a column_class.
-    See :ref:`notes on non-integer primary keys <non_int_pks>`.
-
-    .. py:method:: __init__(column_class[, ...])
-
-        :param column_class: a reference to a subclass of ``Column`` to use for
-            the underlying storage, defaults to ``PrimaryKeyColumn``.
+    Stores: auto-incrementing integer fields suitable for use as primary key.
 
 .. py:class:: ForeignKeyField
 
@@ -371,27 +370,26 @@ Field class API
 
     .. py:method:: __init__(to[, related_name=None[, ...]])
 
-        :param to: related :py:class:`Model` class or the string 'self' if declaring
+        :param rel_model: related :py:class:`Model` class or the string 'self' if declaring
                    a self-referential foreign key
         :param related_name: attribute to expose on related model
 
         .. code-block:: python
 
-            class Blog(Model):
+            class User(Model):
                 name = CharField()
 
-            class Entry(Model):
-                blog = ForeignKeyField(Blog, related_name='entries')
-                title = CharField()
+            class Tweet(Model):
+                user = ForeignKeyField(User, related_name='tweets')
                 content = TextField()
 
-            # "blog" attribute
-            >>> some_entry.blog
-            <Blog: My Awesome Blog>
+            # "user" attribute
+            >>> some_tweet.user
+            <User: charlie>
 
-            # "entries" related name attribute
-            >>> for entry in my_awesome_blog.entries:
-            ...     print entry.title
-            Some entry
-            Another entry
-            Yet another entry
+            # "tweets" related name attribute
+            >>> for tweet in charlie.tweets:
+            ...     print tweet.content
+            Some tweet
+            Another tweet
+            Yet another tweet

@@ -10,10 +10,12 @@ peewee
 * written in python
 * provides a lightweight querying interface over sql
 * uses sql concepts when querying, like joins and where clauses
-* support for special extensions like `hstore <http://peewee.readthedocs.org/en/latest/peewee/playhouse.html#postgresql-extensions-hstore-ltree>`_ and `full-text search <http://peewee.readthedocs.org/en/latest/peewee/playhouse.html#full-text-search>`_
+* support for some extensions, like hstore
 
 For flask integration, including an admin interface and RESTful API, check
 out `flask-peewee <https://github.com/coleifer/flask-peewee/>`_.
+
+See notes on :ref:`notes on upgrading and changes from 1.0 <upgrading>`
 
 Contents:
 ---------
@@ -24,6 +26,7 @@ Contents:
 
    peewee/overview
    peewee/installation
+   peewee/upgrading
    peewee/cookbook
    peewee/example
    peewee/models

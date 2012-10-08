@@ -32,8 +32,11 @@ if __name__ == '__main__':
 
     if options.all or options.extra:
         modules = [tests]
-        from playhouse import tests as extras_tests
-        modules.append(extras_tests)
+        from playhouse import tests_signals
+        modules.append(tests_signals)
+
+        #from playhouse import tests as extras_tests
+        #modules.append(extras_tests)
         try:
             from playhouse import tests_apsw
             modules.append(tests_apsw)

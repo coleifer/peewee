@@ -35,23 +35,26 @@ class User(BaseModel):
     email = CharField()
     join_date = DateTimeField()
 
+    class Meta:
+        order_by = ('username',)
+
     # it often makes sense to put convenience methods on model instances, for
     # example, "give me all the users this user is following":
     def following(self):
         # query other users through the "relationship" table
         return User.select().join(
-            Relationship, on='to_user_id'
-        ).where(from_user=self).order_by('username')
+            Relationship, on=Relationship.to_user,
+        ).where(Relationship.from_user == self)
 
     def followers(self):
         return User.select().join(
-            Relationship
-        ).where(to_user=self).order_by('username')
+            Relationship, on=Relationship.from_user,
+        ).where(Relationship.to_user == self)
 
     def is_following(self, user):
         return Relationship.select().where(
-            from_user=self,
-            to_user=user
+            (Relationship.from_user == self) &
+            (Relationship.to_user == user)
         ).count() > 0
 
     def gravatar_url(self, size=80):
@@ -75,6 +78,9 @@ class Message(BaseModel):
     user = ForeignKeyField(User)
     content = TextField()
     pub_date = DateTimeField()
+
+    class Meta:
+        order_by = ('-pub_date',)
 
 
 # simple utility function to create tables
@@ -161,14 +167,14 @@ def private_timeline():
     # user is following.  these messages are then ordered newest-first.
     user = session['user']
     messages = Message.select().where(
-        user__in=user.following()
-    ).order_by(('pub_date', 'desc'))
+        Message.user << user.following()
+    )
     return object_list('private_messages.html', messages, 'message_list')
 
 @app.route('/public/')
 def public_timeline():
     # simply display all messages, newest first
-    messages = Message.select().order_by(('pub_date', 'desc'))
+    messages = Message.select()
     return object_list('public_messages.html', messages, 'message_list')
 
 @app.route('/join/', methods=['GET', 'POST'])
@@ -229,7 +235,7 @@ def followers():
 
 @app.route('/users/')
 def user_list():
-    users = User.select().order_by('username')
+    users = User.select()
     return object_list('user_list.html', users, 'user_list')
 
 @app.route('/users/<username>/')
@@ -241,7 +247,7 @@ def user_detail(username):
     # get all the users messages ordered newest-first -- note how we're accessing
     # the messages -- user.message_set.  could also have written it as:
     # Message.select().where(user=user).order_by(('pub_date', 'desc'))
-    messages = user.message_set.order_by(('pub_date', 'desc'))
+    messages = user.message_set
     return object_list('user_detail.html', messages, 'message_list', user=user)
 
 @app.route('/users/<username>/follow/', methods=['POST'])
@@ -260,8 +266,8 @@ def user_follow(username):
 def user_unfollow(username):
     user = get_object_or_404(User, username=username)
     Relationship.delete().where(
-        from_user=session['user'],
-        to_user=user,
+        (Relationship.from_user == session['user']) &
+        (Relationship.to_user == user)
     ).execute()
     flash('You are no longer following %s' % user.username)
     return redirect(url_for('user_detail', username=user.username))

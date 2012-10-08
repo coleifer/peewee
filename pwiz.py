@@ -115,7 +115,7 @@ class PgDB(DB):
         return PostgresqlDatabase
 
     def get_columns(self, table):
-        curs = self.conn.execute('select * from %s limit 1' % table)
+        curs = self.conn.execute_sql('select * from %s limit 1' % table)
         return dict((c.name, self.reverse_mapping.get(c.type_code, 'UnknownFieldType')) for c in curs.description)
 
     def get_foreign_keys(self, table):
@@ -132,7 +132,7 @@ class PgDB(DB):
                 tc.table_name = %s
         '''
         fks = []
-        for row in self.conn.execute(framing, (table,)):
+        for row in self.conn.execute_sql(framing, (table,)):
             fks.append(row)
         return fks
 
@@ -145,7 +145,7 @@ class MySQLDB(DB):
         return MySQLDatabase
 
     def get_columns(self, table):
-        curs = self.conn.execute('select * from %s limit 1' % table)
+        curs = self.conn.execute_sql('select * from %s limit 1' % table)
         return dict((r[0], self.reverse_mapping.get(r[1], 'UnknownFieldType')) for r in curs.description)
 
     def get_foreign_keys(self, table):
@@ -157,7 +157,7 @@ class MySQLDB(DB):
                 AND referenced_table_name IS NOT NULL
                 AND referenced_column_name IS NOT NULL
         '''
-        return [row for row in self.conn.execute(framing, (table,))]
+        return [row for row in self.conn.execute_sql(framing, (table,))]
 
 
 class SqDB(DB):
@@ -194,7 +194,7 @@ class SqDB(DB):
             return 'UnknownFieldType'
 
     def get_columns(self, table):
-        curs = self.conn.execute('pragma table_info(%s)' % table)
+        curs = self.conn.execute_sql('pragma table_info(%s)' % table)
         col_dict = {}
         for (_, name, col, not_null, _, is_pk) in curs.fetchall():
             # cid, name, type, notnull, dflt_value, pk
@@ -208,7 +208,7 @@ class SqDB(DB):
     def get_foreign_keys(self, table):
         fks = []
 
-        curs = self.conn.execute("SELECT sql FROM sqlite_master WHERE tbl_name = ? AND type = ?", [table, "table"])
+        curs = self.conn.execute_sql("SELECT sql FROM sqlite_master WHERE tbl_name = ? AND type = ?", [table, "table"])
         table_def = curs.fetchone()[0].strip()
 
         try:
@@ -283,7 +283,7 @@ def introspect(engine, database, **connect):
         for column, rel_table, rel_pk in table_fks[table]:
             models[table][column] = 'ForeignKeyField'
             models[rel_table][rel_pk] = 'PrimaryKeyField'
-            col_meta[table][column] = {'to': table_to_model[rel_table]}
+            col_meta[table][column] = {'rel_model': table_to_model[rel_table]}
 
         for column in models[table]:
             col_meta[table].setdefault(column, {})

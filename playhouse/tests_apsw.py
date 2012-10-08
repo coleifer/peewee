@@ -34,8 +34,8 @@ class APSWTestCase(unittest.TestCase):
             User.create(username=user)
 
         self.assertEqual([x.username for x in User.select()], ['u1', 'u2', 'u3'])
-        self.assertEqual([x.username for x in User.select().where(username='x')], [])
-        self.assertEqual([x.username for x in User.select().where(username__in=['u1', 'u3'])], ['u1', 'u3'])
+        self.assertEqual([x.username for x in User.select().filter(username='x')], [])
+        self.assertEqual([x.username for x in User.select().filter(username__in=['u1', 'u3'])], ['u1', 'u3'])
 
         dt = datetime.datetime(2012, 1, 1, 11, 11, 11)
         Message.create(user=User.get(username='u1'), message='herps', pub_date=dt, published=True)

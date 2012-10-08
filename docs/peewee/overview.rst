@@ -11,59 +11,36 @@ Examples:
 .. code-block:: python
 
     # a simple query selecting a user
-    User.get(username='charles')
+    User.get(User.username == 'charles')
     
     # get the staff and super users
-    editors = User.select().where(Q(is_staff=True) | Q(is_superuser=True))
+    editors = User.select().where(
+        (User.is_staff == True) |
+        (User.is_superuser == True)
+    )
     
-    # get tweets by editors
-    Tweet.select().where(user__in=editors)
+    # get tweets by editors ("<<" maps to IN)
+    Tweet.select().where(Tweet.user << editors)
     
-    # how many active users are there?
-    User.select().where(active=True).count()
-    
-    # paginate the user table and show me page 3 (users 41-60)
-    User.select().order_by(('username', 'asc')).paginate(3, 20)
-    
-    # order users by number of tweets
-    User.select().annotate(Tweet).order_by(('count', 'desc'))
-
-    # another way of expressing the same
-    User.select({
-        User: ['*'],
-        Tweet: [Count('id', 'count')]
-    }).group_by('id').join(Tweet).order_by(('count', 'desc'))
-    
-    # do an atomic update
-    TweetCount.update(count=F('count') + 1).where(user=charlie)
-
-
-You can use django-style syntax to create select queries:
-
-.. code-block:: python
-
-    # how many active users are there?
-    User.filter(active=True).count()
-
-    # get tweets by a specific user
-    Tweet.filter(user__username='charlie')
-
-    # get tweets by editors
-    Tweet.filter(Q(user__is_staff=True) | Q(user__is_superuser=True))
-
-
-You can use python operators to create select queries::
-
     # how many active users are there?
     User.select().where(User.active == True).count()
+    
+    # paginate the user table and show me page 3 (users 41-60)
+    User.select().order_by(User.username).paginate(3, 20)
+    
+    # order users by number of tweets
+    User.select().annotate(Tweet).order_by(
+        fn.Count(Tweet.id).desc()
+    )
 
-    # get me all users in their thirties
-    User.select().where((User.age >= 30) & (User.age < 40))
-
-    # get me tweets from today by active users
-    Tweet.select().join(User).where(
-        (Tweet.pub_date >= today) &
-        (User.active == True)
+    # a similar way of expressing the same
+    User.select(
+        User, fn.Count(Tweet.id).alias('ct')
+    ).join(Tweet).group_by(User).order_by(R('ct desc'))
+    
+    # do an atomic update
+    Counter.update(count=Counter.count + 1).where(
+        Counter.url == request.url
     )
 
 
