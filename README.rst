@@ -19,22 +19,22 @@ Examples::
 
     # a simple query selecting a user
     User.get(User.username == 'charles')
-    
+
     # get the staff and super users
     editors = User.select().where(
         (User.is_staff == True) |
         (User.is_superuser == True)
     )
-    
+
     # get tweets by editors ("<<" maps to IN)
     Tweet.select().where(Tweet.user << editors)
-    
+
     # how many active users are there?
     User.select().where(User.active == True).count()
-    
+
     # paginate the user table and show me page 3 (users 41-60)
     User.select().order_by(User.username).paginate(3, 20)
-    
+
     # order users by number of tweets
     User.select().annotate(Tweet).order_by(
         fn.Count(Tweet.id).desc()
@@ -44,7 +44,7 @@ Examples::
     User.select(
         User, fn.Count(Tweet.id).alias('ct')
     ).join(Tweet).group_by(User).order_by(R('ct desc'))
-    
+
     # do an atomic update
     Counter.update(count=Counter.count + 1).where(
         Counter.url == request.url
