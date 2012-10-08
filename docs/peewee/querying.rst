@@ -76,12 +76,18 @@ familiar with Django's ORM, it is analagous to the ``filter()`` method.
 Joining
 ^^^^^^^
 
-You can join on tables related to one another by :py:class:`ForeignKeyField`.  The ``join``
+You can join on tables related to one another by :py:class:`ForeignKeyField`.  The :py:meth:`~SelectQuery.join`
 method acts on the :py:class:`Model` that is the current "query context".
 This is either:
 
 * the model the query class was initialized with
 * the model most recently JOINed on
+
+There are three types of joins by default:
+
+* JOIN_INNER (default)
+* JOIN_LEFT_OUTER
+* JOIN_FULL
 
 Here is an example using JOINs:
 
