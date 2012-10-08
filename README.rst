@@ -13,57 +13,41 @@ peewee
 For flask integration, including an admin interface and RESTful API, check
 out `flask-peewee <https://github.com/coleifer/flask-peewee/>`_.
 
+For notes on the upgrade from 1.0 to 2.0, check out `the upgrade docs <http://peewee.readthedocs.org/en/latest/peewee/upgrading.html>`_.
+
 Examples::
 
     # a simple query selecting a user
-    User.get(username='charles')
-
+    User.get(User.username == 'charles')
+    
     # get the staff and super users
-    editors = User.select().where(Q(is_staff=True) | Q(is_superuser=True))
-
-    # get tweets by editors
-    Tweet.select().where(user__in=editors)
-
-    # how many active users are there?
-    User.select().where(active=True).count()
-
-    # paginate the user table and show me page 3 (users 41-60)
-    User.select().order_by(('username', 'asc')).paginate(3, 20)
-
-    # order users by number of tweets
-    User.select().annotate(Tweet).order_by(('count', 'desc'))
-
-    # another way of expressing the same
-    User.select({
-        User: ['*'],
-        Tweet: [Count('id', 'count')]
-    }).group_by('id').join(Tweet).order_by(('count', 'desc'))
-
-
-You can use django-style syntax to create select queries::
-
-    # how many active users are there?
-    User.filter(active=True).count()
-
-    # get tweets by a specific user
-    Tweet.filter(user__username='charlie')
-
-    # get tweets by editors
-    Tweet.filter(Q(user__is_staff=True) | Q(user__is_superuser=True))
-
-
-You can use python operators to create select queries::
-
+    editors = User.select().where(
+        (User.is_staff == True) |
+        (User.is_superuser == True)
+    )
+    
+    # get tweets by editors ("<<" maps to IN)
+    Tweet.select().where(Tweet.user << editors)
+    
     # how many active users are there?
     User.select().where(User.active == True).count()
+    
+    # paginate the user table and show me page 3 (users 41-60)
+    User.select().order_by(User.username).paginate(3, 20)
+    
+    # order users by number of tweets
+    User.select().annotate(Tweet).order_by(
+        fn.Count(Tweet.id).desc()
+    )
 
-    # get me all users in their thirties
-    User.select().where((User.age >= 30) & (User.age < 40))
-
-    # get me tweets from today by active users
-    Tweet.select().join(User).where(
-        (Tweet.pub_date >= today) &
-        (User.active == True)
+    # a similar way of expressing the same
+    User.select(
+        User, fn.Count(Tweet.id).alias('ct')
+    ).join(Tweet).group_by(User).order_by(R('ct desc'))
+    
+    # do an atomic update
+    Counter.update(count=Counter.count + 1).where(
+        Counter.url == request.url
     )
 
 
@@ -159,7 +143,7 @@ queries come in 4 flavors (select/update/insert/delete).
 there's the notion of a *query context* which is the model being selected
 or joined on::
 
-    User.select().where(active=True).order_by(('username', 'asc'))
+    User.select().where(User.active == True).order_by(User.username)
 
 since User is the model being selected, the where clause and the order_by will
 pertain to attributes on the User model.  User is the current query context
@@ -167,35 +151,11 @@ when the .where() and .order_by() are evaluated.
 
 an example using joins::
 
-    Tweet.select().where(deleted=False).order_by(('pub_date', 'desc')).join(
-        User
-    ).where(active=True)
+    Tweet.select().join(User).where(
+        (Tweet.deleted == False) & (User.active == True)
+    ).order_by(Tweet.pub_date.desc())
 
-this will select non-deleted tweets from active users.  the first .where() and
-.order_by() occur when Tweet is the current *query context*.  As soon as the
-join is evaluated, User becomes the *query context* and so the following
-where() pertains to the User model.
-
-
-now with q objects
-------------------
-
-for users familiar with django's orm, I've implemented OR queries and complex
-query nesting using similar notation::
-
-    User.select().where(
-        Q(is_superuser = True) |
-        Q(is_staff = True)
-    )
-
-    SomeModel.select().where(
-        (Q(a='A') | Q(b='B')) &
-        (Q(c='C') | Q(d='D'))
-    )
-
-    # generates something like:
-    # SELECT * FROM some_obj
-    # WHERE ((a = "A" OR b = "B") AND (c = "C" OR d = "D"))
+this will select non-deleted tweets from active users.
 
 
 using sqlite
