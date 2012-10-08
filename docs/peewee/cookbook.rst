@@ -195,7 +195,7 @@ Creating a new record
 
 You can use the :py:meth:`Model.create` method on the model:
 
-.. code-block:: python
+.. code-block:: pycon
 
     >>> User.create(username='Charlie')
     <__main__.User object at 0x2529350>
@@ -206,7 +206,7 @@ be retrieved and stored on the model instance.
 Alternatively, you can build up a model instance programmatically and then
 save it:
 
-.. code-block:: python
+.. code-block:: pycon
 
     >>> user = User()
     >>> user.username = 'Charlie'
@@ -223,7 +223,7 @@ Updating existing records
 Once a model instance has a primary key, any attempt to re-save it will result
 in an ``UPDATE`` rather than another ``INSERT``:
 
-.. code-block:: python
+.. code-block:: pycon
 
     >>> user.save()
     >>> user.id
@@ -236,7 +236,7 @@ If you want to update multiple records, issue an ``UPDATE`` query.  The followin
 example will update all ``Entry`` objects, marking them as "published", if their
 pub_date is less than today's date.
 
-.. code-block:: python
+.. code-block:: pycon
 
     >>> update_query = Tweet.update(is_published=True).where(Tweet.creation_date < datetime.today())
     >>> update_query.execute()
@@ -251,6 +251,8 @@ Deleting a record
 To delete a single model instance, you can use the :py:meth:`Model.delete_instance`
 shortcut:
 
+.. code-block:: pycon
+
     >>> user = User.get(User.id == 1)
     >>> user.delete_instance()
     1 # <--- number of rows deleted
@@ -262,6 +264,8 @@ shortcut:
 
 To delete an arbitrary group of records, you can issue a ``DELETE`` query.  The
 following will delete all ``Tweet`` objects that are a year old.
+
+.. code-block:: pycon
 
     >>> delete_query = Tweet.delete().where(Tweet.pub_date < one_year_ago)
     >>> delete_query.execute()
@@ -280,7 +284,7 @@ This method is a shortcut that calls :py:meth:`Model.select` with the given quer
 but limits the result set to 1.  Additionally, if no model matches the given query,
 a ``DoesNotExist`` exception will be raised.
 
-.. code-block:: python
+.. code-block:: pycon
 
     >>> User.get(User.id == 1)
     <__main__.Blog object at 0x25294d0>
@@ -304,7 +308,7 @@ Selecting multiple records
 
 To simply get all instances in a table, call the :py:meth:`Model.select` method:
 
-.. code-block:: python
+.. code-block:: pycon
 
     >>> for user in User.select():
     ...     print user.username
@@ -322,7 +326,7 @@ Looking at the example models, we have Users and Tweets.  Tweet has a foreign ke
 meaning that any given user may have 0..n tweets.  A user's related tweets are exposed
 using a :py:class:`SelectQuery`, and can be iterated the same as any other SelectQuery:
 
-.. code-block:: python
+.. code-block:: pycon
 
     >>> for tweet in user.tweets:
     ...     print tweet.message
@@ -333,6 +337,8 @@ using a :py:class:`SelectQuery`, and can be iterated the same as any other Selec
 
 The ``tweets`` attribute is just another select query and any methods available
 to :py:class:`SelectQuery` are available:
+
+.. code-block:: pycon
 
     >>> for tweet in user.tweets.order_by(Tweet.created_date.desc()):
     ...     print tweet.message
@@ -345,7 +351,9 @@ to :py:class:`SelectQuery` are available:
 Filtering records
 ^^^^^^^^^^^^^^^^^
 
-.. code-block:: python
+You can filter for particular records using normal python operators.
+
+.. code-block:: pycon
 
     >>> user = User.get(User.username == 'Charlie')
     >>> for tweet in Tweet.select().where(Tweet.user == user, Tweet.is_published == True):
@@ -361,7 +369,7 @@ Filtering records
 
 You can also filter across joins:
 
-.. code-block:: python
+.. code-block:: pycon
 
     >>> for tweet in Tweet.select().join(User).where(User.username == 'Charlie'):
     ...     print tweet.message
@@ -372,10 +380,15 @@ You can also filter across joins:
 If you want to express a complex query, use parentheses and python's "or" and "and"
 operators:
 
+.. code-block:: pycon
+
     >>> Tweet.select().join(User).where(
     ...     (User.username == 'Charlie') |
     ...     (User.username == 'Peewee Herman')
     ... )
+
+Check out :ref:`the table of query operations <column-lookups>` to see what types of
+queries are possible.
 
 .. note::
 
@@ -417,13 +430,13 @@ operators:
     The django-style filtering is supported for backwards compatibility with 1.0, so if you can, its
     probably best not to use it.
 
-Check :ref:`the docs <query_compare>` for more examples of querying.
+Check :ref:`the docs <query_compare>` for some more example queries.
 
 
 Sorting records
 ^^^^^^^^^^^^^^^
 
-.. code-block:: python
+.. code-block:: pycon
 
     >>> for t in Tweet.select().order_by(Tweet.created_date):
     ...     print t.pub_date
@@ -442,7 +455,7 @@ Sorting records
 You can also order across joins.  Assuming you want
 to order tweets by the username of the author, then by created_date:
 
-.. code-block:: python
+.. code-block:: pycon
 
     >>> qry = Tweet.select().join(User).order_by(User.username, Tweet.created_date.desc())
 
@@ -459,7 +472,7 @@ Paginating records
 The paginate method makes it easy to grab a "page" or records -- it takes two
 parameters, `page_number`, and `items_per_page`:
 
-.. code-block:: python
+.. code-block:: pycon
 
     >>> for tweet in Tweet.select().order_by(Tweet.id).paginate(2, 10):
     ...     print tweet.message
@@ -625,6 +638,19 @@ function to construct queries:
 
     >>> for user in a_users:
     ...    print user.username
+
+There are times when you may want to simply pass in some arbitrary sql.  You can do
+this using the special :py:class:`R` class.  One use-case is when referencing an
+alias:
+
+.. code-block:: python
+
+    # we'll query the user table and annotate it with a count of tweets for
+    # the given user
+    query = User.select(User, fn.Count(Tweet.id).alias('ct')).join(Tweet).group_by(User)
+
+    # now we will order by the count, which was aliased to "ct"
+    query = query.order_by(R('ct'))
 
 
 .. _working_with_transactions:

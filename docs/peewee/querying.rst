@@ -136,6 +136,7 @@ And here it is using joins:
         t1.status = ? AND
         t2.is_staff = ?
 
+.. _column-lookups:
 
 Column lookups
 ^^^^^^^^^^^^^^
