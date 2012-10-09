@@ -317,6 +317,7 @@ class Field(Expr):
         self.name = name
         self.model_class = model_class
         self.db_column = self.db_column or self.name
+        self.verbose_name = self.verbose_name or re.sub('_+', ' ', name).title()
 
         model_class._meta.fields[self.name] = self
         model_class._meta.columns[self.db_column] = self
@@ -489,7 +490,7 @@ class RelationDescriptor(FieldDescriptor):
 
     def get_object_or_id(self, instance):
         rel_id = instance._data.get(self.att_name)
-        if rel_id:
+        if rel_id or self.att_name in instance._obj_cache:
             if self.att_name not in instance._obj_cache:
                 obj = self.rel_model.get(self.rel_model._meta.primary_key==rel_id)
                 instance._obj_cache[self.att_name] = obj
@@ -540,6 +541,7 @@ class ForeignKeyField(IntegerField):
         self.name = name
         self.model_class = model_class
         self.db_column = self.db_column or '%s_id' % self.name
+        self.verbose_name = self.verbose_name or re.sub('_+', ' ', name).title()
 
         model_class._meta.fields[self.name] = self
         model_class._meta.columns[self.db_column] = self
