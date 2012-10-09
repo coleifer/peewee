@@ -1,5 +1,5 @@
 from peewee import *
-from peewee import QueryCompiler, Param, BinaryExpr
+from peewee import QueryCompiler, Param, BinaryExpr, dict_update
 
 from psycopg2 import extensions
 from psycopg2.extras import register_hstore
@@ -40,23 +40,11 @@ class HStoreField(Field):
         return Q(self, OP_HCONTAINS_KEY, value)
 
 
-OP_HUPDATE = 20
-OP_HCONTAINS_DICT = 21
-OP_HCONTAINS_KEYS = 22
-OP_HCONTAINS_KEY = 23
+OP_HUPDATE = 120
+OP_HCONTAINS_DICT = 121
+OP_HCONTAINS_KEYS = 122
+OP_HCONTAINS_KEY = 123
 
-_expr_overrides = dict(PostgresqlDatabase.expr_overrides)
-_expr_overrides.update({
-    OP_HUPDATE: '||',
-})
-_field_overrides = dict(PostgresqlDatabase.field_overrides)
-_field_overrides.update({'hash': 'hstore'})
-_op_overrides = dict(PostgresqlDatabase.op_overrides)
-_op_overrides.update({
-    OP_HCONTAINS_DICT: '@>',
-    OP_HCONTAINS_KEYS: '?&',
-    OP_HCONTAINS_KEY: '?',
-})
 
 class PostgresqlExtCompiler(QueryCompiler):
     def parse_create_index(self, model_class, fields, unique=False):
@@ -69,9 +57,17 @@ class PostgresqlExtCompiler(QueryCompiler):
 
 class PostgresqlExtDatabase(PostgresqlDatabase):
     compiler_class = PostgresqlExtCompiler
-    expr_overrides = _expr_overrides
-    field_overrides = _field_overrides
-    op_overrides = _op_overrides
+    expr_overrides = dict_update(PostgresqlDatabase.expr_overrides, {
+        OP_HUPDATE: '||',
+    })
+    field_overrides = dict_update(PostgresqlDatabase.field_overrides, {
+        'hash': 'hstore',
+    })
+    op_overrides = dict_update(PostgresqlDatabase.op_overrides, {
+        OP_HCONTAINS_DICT: '@>',
+        OP_HCONTAINS_KEYS: '?&',
+        OP_HCONTAINS_KEY: '?',
+    })
 
     def _connect(self, database, **kwargs):
         conn = super(PostgresqlExtDatabase, self)._connect(database, **kwargs)
