@@ -1613,6 +1613,7 @@ class Database(object):
 class SqliteDatabase(Database):
     op_overrides = {
         OP_LIKE: 'GLOB',
+        OP_ILIKE: 'LIKE',
     }
 
     def _connect(self, database, **kwargs):
