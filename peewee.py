@@ -1419,7 +1419,8 @@ class UpdateQuery(Query):
 
 class InsertQuery(Query):
     def __init__(self, model_class, insert=None):
-        query = model_class._meta.get_default_dict()
+        mm = model_class._meta
+        query = dict((mm.fields[f], v) for f, v in mm.get_default_dict().items())
         query.update(insert)
         self._insert = query
         super(InsertQuery, self).__init__(model_class)
@@ -1811,7 +1812,13 @@ class ModelOptions(object):
             self.order_by = norm_order_by
 
     def get_default_dict(self):
-        return dict((f, dft if not callable(dft) else dft()) for f, dft in self.defaults.items())
+        dd = {}
+        for field, default in self.defaults.items():
+            if callable(default):
+                dd[field.name] = default()
+            else:
+                dd[field.name] = default
+        return dd
 
     def get_sorted_fields(self):
         return sorted(self.fields.items(), key=lambda (k,v): (v is self.primary_key and 1 or 2, v._order))
@@ -1905,11 +1912,11 @@ class Model(object):
     __metaclass__ = BaseModel
 
     def __init__(self, *args, **kwargs):
-        self._data = dict((f.name, v) for f, v in self._meta.get_default_dict().items())
+        self._data = self._meta.get_default_dict()
         self._obj_cache = {} # cache of related objects
 
-        for key, value in kwargs.iteritems():
-            setattr(self, key, value)
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
     @classmethod
     def raw(cls, sql, *params):
