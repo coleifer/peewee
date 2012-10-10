@@ -586,6 +586,12 @@ class SugarTestCase(BasePeeweeTestCase):
         self.assertSelect(sq, 'users."id", users."username", Count(blog."pk") AS count', [])
         self.assertOrderBy(sq, 'count DESC', [])
 
+        sq = User.select().join(Blog, JOIN_LEFT_OUTER).switch(User).annotate(Blog)
+        self.assertSelect(sq, 'users."id", users."username", Count(blog."pk") AS count', [])
+        self.assertJoins(sq, ['LEFT OUTER JOIN "blog" AS blog ON users."id" = blog."user_id"'])
+        self.assertWhere(sq, '', [])
+        self.assertGroupBy(sq, 'users."id", users."username"', [])
+
     def test_aggregate(self):
         sq = User.select().where(User.id < 10)._aggregate()
         self.assertSelect(sq, 'Count(users."id")', [])

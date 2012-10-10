@@ -745,12 +745,12 @@ class QueryCompiler(object):
                 from_model = curr
                 to_model = join.model_class
 
-                field = from_model._meta.rel_for_model(to_model, join.column)
+                field = from_model._meta.rel_for_model(to_model, join.on)
                 if field:
                     left_field = field.db_column
                     right_field = to_model._meta.primary_key.db_column
                 else:
-                    field = to_model._meta.rel_for_model(from_model, join.column)
+                    field = to_model._meta.rel_for_model(from_model, join.on)
                     left_field = from_model._meta.primary_key.db_column
                     right_field = field.db_column
 
@@ -1087,7 +1087,7 @@ def not_allowed(fn):
     return inner
 
 
-Join = namedtuple('Join', ('model_class', 'join_type', 'column'))
+Join = namedtuple('Join', ('model_class', 'join_type', 'on'))
 
 class Query(object):
     require_commit = True
