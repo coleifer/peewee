@@ -2089,3 +2089,7 @@ def sort_models_topologically(models):
     for m in sorted(models, key=names, reverse=True):
         dfs(m)
     return list(reversed(ordering))  # want parents first in output ordering
+
+def raw_sql(query):
+    db = query.model_class._meta.database
+    return query.sql(db.get_compiler())
