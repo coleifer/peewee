@@ -1454,6 +1454,7 @@ class DeleteQuery(Query):
 
 
 class Database(object):
+    commit_select = False
     compiler_class = QueryCompiler
     expr_overrides = {}
     field_overrides = {}
@@ -1526,7 +1527,11 @@ class Database(object):
 
     def execute(self, query):
         sql, params = query.sql(self.get_compiler())
-        return self.execute_sql(sql, params, query.require_commit)
+        if isinstance(query, (SelectQuery, RawQuery)):
+            commit = self.commit_select
+        else:
+            commit = query.require_commit
+        return self.execute_sql(sql, params, commit)
 
     def execute_sql(self, sql, params=None, require_commit=True):
         cursor = self.get_cursor()
@@ -1632,6 +1637,7 @@ class SqliteDatabase(Database):
 
 
 class PostgresqlDatabase(Database):
+    commit_select = True
     field_overrides = {
         'bigint': 'BIGINT',
         'bool': 'BOOLEAN',
