@@ -1027,7 +1027,7 @@ class QueryResultWrapper(object):
                 if not fk_field:
                     continue
 
-                if not joined_inst.get_id():
+                if not joined_inst.get_id() and fk_field.name in inst._data:
                     rel_inst_id = inst._data[fk_field.name]
                     joined_inst.set_id(rel_inst_id)
 
