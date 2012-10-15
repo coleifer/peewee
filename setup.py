@@ -7,7 +7,7 @@ f.close()
 
 setup(
     name='peewee',
-    version="2.0.1",
+    version="2.0.2",
     description='a little orm',
     long_description=readme,
     author='Charles Leifer',
