@@ -1966,10 +1966,10 @@ class Model(object):
         return cls.select().filter(*dq, **query)
 
     @classmethod
-    def get(cls, query=None, **kwargs):
+    def get(cls, *query, **kwargs):
         sq = cls.select().naive()
         if query:
-            sq = sq.where(query)
+            sq = sq.where(*query)
         if kwargs:
             sq = sq.filter(**kwargs)
         return sq.get()
