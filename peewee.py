@@ -258,6 +258,9 @@ class Func(Expr):
         self.params = params
         super(Func, self).__init__()
 
+    def clone(self):
+        return Func(self.fn_name, *self.params)
+
 
 class _FN(object):
     def __getattr__(self, attr):
