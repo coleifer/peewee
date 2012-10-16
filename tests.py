@@ -401,7 +401,7 @@ class SelectTestCase(BasePeeweeTestCase):
 
     def test_where_negation(self):
         sq = SelectQuery(Blog).where(~(Blog.title == 'foo'))
-        self.assertWhere(sq, 'NOT blog."title" = ?', ['foo'])
+        self.assertWhere(sq, '(NOT blog."title" = ?)', ['foo'])
 
         sq = SelectQuery(Blog).where(~((Blog.title == 'foo') | (Blog.title == 'bar')))
         self.assertWhere(sq, '(NOT (blog."title" = ? OR blog."title" = ?))', ['foo', 'bar'])
@@ -429,7 +429,7 @@ class SelectTestCase(BasePeeweeTestCase):
         self.assertWhere(sq, '(users."id" = ?) AND (users."id" = ? OR users."id" = ?)', [1, 2, 3])
 
         sq = SelectQuery(User).where(~(User.id == 1)).where(User.id == 2).where(~(User.id == 3))
-        self.assertWhere(sq, '(users."id" = ? AND users."id" = ?) AND NOT users."id" = ?', [1, 2, 3])
+        self.assertWhere(sq, '((NOT users."id" = ?) AND users."id" = ?) AND (NOT users."id" = ?)', [1, 2, 3])
 
     def test_grouping(self):
         sq = SelectQuery(User).group_by(User.id)
@@ -1129,6 +1129,15 @@ class FieldTypeTestCase(ModelTestCase):
     def assertNM(self, q, exp):
         query = NullModel.select().where(q).order_by(NullModel.id)
         self.assertEqual([nm.char_field for nm in query], exp)
+
+    def test_null_query(self):
+        NullModel.delete().execute()
+        nm1 = NullModel.create(char_field='nm1')
+        nm2 = NullModel.create(char_field='nm2', int_field=1)
+        nm3 = NullModel.create(char_field='nm3', int_field=2, float_field=3.0)
+
+        q = ~(NullModel.int_field >> None)
+        self.assertNM(q, ['nm2', 'nm3'])
 
     def test_field_types(self):
         for field, values in self.field_data.items():

@@ -168,11 +168,11 @@ class Leaf(object):
 
 class Q(Leaf):
     def __init__(self, lhs, op, rhs, negated=False):
+        super(Q, self).__init__()
         self.lhs = lhs
         self.op = op
         self.rhs = rhs
         self.negated = negated
-        super(Q, self).__init__()
 
     def clone(self):
         return Q(self.lhs, self.op, self.rhs, self.negated)
@@ -180,8 +180,8 @@ class Q(Leaf):
 
 class DQ(Leaf):
     def __init__(self, **query):
-        self.query = query
         super(DQ, self).__init__()
+        self.query = query
 
     def clone(self):
         return DQ(**self.query)
@@ -707,8 +707,10 @@ class QueryCompiler(object):
     def parse_q(self, q, alias_map=None):
         lhs_expr, lparams = self.parse_expr(q.lhs, alias_map)
         rhs_expr, rparams = self.parse_expr(q.rhs, alias_map)
-        not_expr = q.negated and 'NOT ' or ''
-        return '%s%s %s %s' % (not_expr, lhs_expr, self.get_op(q.op), rhs_expr), lparams + rparams
+        parsed = '%s %s %s' % (lhs_expr, self.get_op(q.op), rhs_expr)
+        if q.negated:
+            parsed = '(NOT %s)' % parsed
+        return parsed, lparams + rparams
 
     def parse_node(self, n, alias_map=None):
         query = []
