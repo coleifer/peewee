@@ -1738,7 +1738,7 @@ class MySQLDatabase(Database):
         db_table = model_class._meta.db_table
         constraint = 'fk_%s_%s_%s' % (
             db_table,
-            field.to._meta.db_table,
+            field.rel_model._meta.db_table,
             field.db_column,
         )
 
@@ -1746,8 +1746,8 @@ class MySQLDatabase(Database):
             'table': self.quote(db_table),
             'constraint': self.quote(constraint),
             'field': self.quote(field.db_column),
-            'to': self.quote(field.to._meta.db_table),
-            'to_field': self.quote(field.to._meta.primary_key.db_column),
+            'to': self.quote(field.rel_model._meta.db_table),
+            'to_field': self.quote(field.rel_model._meta.primary_key.db_column),
             'cascade': ' ON DELETE CASCADE' if field.cascade else '',
         }
 
