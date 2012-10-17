@@ -1764,7 +1764,7 @@ class MySQLDatabase(Database):
         return super(MySQLDatabase, self).create_foreign_key(model_class, field)
 
     def get_indexes_for_table(self, table):
-        res = self.execute_sql('SHOW INDEXES IN %s;' % self.quote(table))
+        res = self.execute_sql('SHOW INDEXES IN `%s`;' % table)
         rows = sorted([(r[2], r[1] == 0) for r in res.fetchall()])
         return rows
 
