@@ -898,7 +898,15 @@ class QueryCompiler(object):
     def field_sql(self, field):
         attrs = field.attributes
         attrs['column_type'] = self.get_field(field.get_db_field())
-        parts = [self.quote(field.db_column), field.template]
+        template = field.template
+
+        if isinstance(field, ForeignKeyField):
+            to_pk = field.rel_model._meta.primary_key
+            if not isinstance(to_pk, PrimaryKeyField):
+                template = to_pk.template
+                attrs.update(to_pk.attributes)
+
+        parts = [self.quote(field.db_column), template]
         if not field.null:
             parts.append('NOT NULL')
         if field.primary_key:
