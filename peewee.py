@@ -1731,6 +1731,7 @@ class MySQLDatabase(Database):
         return mysql.connect(db=database, **conn_kwargs)
 
     def create_foreign_key(self, model_class, field):
+        compiler = self.get_compiler()
         framing = """
             ALTER TABLE %(table)s ADD CONSTRAINT %(constraint)s
             FOREIGN KEY (%(field)s) REFERENCES %(to)s(%(to_field)s)%(cascade)s;
@@ -1743,11 +1744,11 @@ class MySQLDatabase(Database):
         )
 
         query = framing % {
-            'table': self.quote(db_table),
-            'constraint': self.quote(constraint),
-            'field': self.quote(field.db_column),
-            'to': self.quote(field.rel_model._meta.db_table),
-            'to_field': self.quote(field.rel_model._meta.primary_key.db_column),
+            'table': compiler.quote(db_table),
+            'constraint': compiler.quote(constraint),
+            'field': compiler.quote(field.db_column),
+            'to': compiler.quote(field.rel_model._meta.db_table),
+            'to_field': compiler.quote(field.rel_model._meta.primary_key.db_column),
             'cascade': ' ON DELETE CASCADE' if field.cascade else '',
         }
 
