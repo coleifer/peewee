@@ -1586,6 +1586,8 @@ class Database(object):
 
     def create_index(self, model_class, fields, unique=False):
         qc = self.get_compiler()
+        if not isinstance(fields, (list, tuple)):
+            raise ValueError('fields passed to "create_index" must be a list or tuple: "%s"' % fields)
         field_objs = [model_class._meta.fields[f] if isinstance(f, basestring) else f for f in fields]
         return self.execute_sql(qc.create_index(model_class, field_objs, unique))
 
