@@ -1908,8 +1908,6 @@ class BaseModel(type):
             cls._meta.indexes = list(cls._meta.indexes)
             if isinstance(attr, Field):
                 attr.add_to_class(cls, name)
-                if attr.index:
-                    cls._meta.indexes.append(attr.name)
                 if attr.primary_key:
                     primary_key = attr
 
