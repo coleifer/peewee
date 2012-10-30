@@ -58,7 +58,7 @@ if psycopg2:
     psycopg2.extensions.register_type(psycopg2.extensions.UNICODE)
     psycopg2.extensions.register_type(psycopg2.extensions.UNICODEARRAY)
 
-logger = logging.getLogger('peewee.logger')
+logger = logging.getLogger('peewee')
 
 OP_AND = 0
 OP_OR = 1
