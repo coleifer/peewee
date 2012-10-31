@@ -286,7 +286,7 @@ class SelectTestCase(BasePeeweeTestCase):
         self.assertSelect(sq, 'Lower(Substr(users."username", ?, ?)) AS lu, Count(blog."pk")', [0, 1])
 
         sq = SelectQuery(User, User.username, fn.Count(Blog.select().where(Blog.user == User.id)))
-        self.assertSelect(sq, 'users."username", Count((SELECT blog."pk" FROM "blog" AS blog WHERE blog."user_id" = users."id"))', [])
+        self.assertSelect(sq, 'users."username", Count((SELECT blog."pk" FROM "blog" AS blog WHERE (blog."user_id" = users."id")))', [])
 
     def test_joins(self):
         sq = SelectQuery(User).join(Blog)
@@ -365,71 +365,71 @@ class SelectTestCase(BasePeeweeTestCase):
 
     def test_where(self):
         sq = SelectQuery(User).where(User.id < 5)
-        self.assertWhere(sq, 'users."id" < ?', [5])
+        self.assertWhere(sq, '(users."id" < ?)', [5])
 
     def test_where_lists(self):
         sq = SelectQuery(User).where(User.username << ['u1', 'u2'])
-        self.assertWhere(sq, 'users."username" IN (?,?)', ['u1', 'u2'])
+        self.assertWhere(sq, '(users."username" IN (?,?))', ['u1', 'u2'])
 
         sq = SelectQuery(User).where((User.username << ['u1', 'u2']) | (User.username << ['u3', 'u4']))
-        self.assertWhere(sq, '(users."username" IN (?,?) OR users."username" IN (?,?))', ['u1', 'u2', 'u3', 'u4'])
+        self.assertWhere(sq, '((users."username" IN (?,?)) OR (users."username" IN (?,?)))', ['u1', 'u2', 'u3', 'u4'])
 
     def test_where_joins(self):
         sq = SelectQuery(User).where(
             ((User.id == 1) | (User.id == 2)) &
             ((Blog.pk == 3) | (Blog.pk == 4))
         ).where(User.id == 5).join(Blog)
-        self.assertWhere(sq, '(users."id" = ? OR users."id" = ?) AND (blog."pk" = ? OR blog."pk" = ?) AND users."id" = ?', [1, 2, 3, 4, 5])
+        self.assertWhere(sq, '((((users."id" = ?) OR (users."id" = ?)) AND ((blog."pk" = ?) OR (blog."pk" = ?))) AND (users."id" = ?))', [1, 2, 3, 4, 5])
 
     def test_where_functions(self):
         sq = SelectQuery(User).where(fn.Lower(fn.Substr(User.username, 0, 1)) == 'a')
-        self.assertWhere(sq, 'Lower(Substr(users."username", ?, ?)) = ?', [0, 1, 'a'])
+        self.assertWhere(sq, '(Lower(Substr(users."username", ?, ?)) = ?)', [0, 1, 'a'])
 
     def test_where_subqueries(self):
         sq = SelectQuery(User).where(User.id << User.select().where(User.username=='u1'))
-        self.assertWhere(sq, 'users."id" IN (SELECT users."id" FROM "users" AS users WHERE users."username" = ?)', ['u1'])
+        self.assertWhere(sq, '(users."id" IN (SELECT users."id" FROM "users" AS users WHERE (users."username" = ?)))', ['u1'])
 
         sq = SelectQuery(Blog).where((Blog.pk == 3) | (Blog.user << User.select().where(User.username << ['u1', 'u2'])))
-        self.assertWhere(sq, '(blog."pk" = ? OR blog."user_id" IN (SELECT users."id" FROM "users" AS users WHERE users."username" IN (?,?)))', [3, 'u1', 'u2'])
+        self.assertWhere(sq, '((blog."pk" = ?) OR (blog."user_id" IN (SELECT users."id" FROM "users" AS users WHERE (users."username" IN (?,?)))))', [3, 'u1', 'u2'])
 
     def test_where_fk(self):
         sq = SelectQuery(Blog).where(Blog.user == User(id=100))
-        self.assertWhere(sq, 'blog."user_id" = ?', [100])
+        self.assertWhere(sq, '(blog."user_id" = ?)', [100])
 
         sq = SelectQuery(Blog).where(Blog.user << [User(id=100), User(id=101)])
-        self.assertWhere(sq, 'blog."user_id" IN (?,?)', [100, 101])
+        self.assertWhere(sq, '(blog."user_id" IN (?,?))', [100, 101])
 
     def test_where_negation(self):
         sq = SelectQuery(Blog).where(~(Blog.title == 'foo'))
-        self.assertWhere(sq, '(NOT blog."title" = ?)', ['foo'])
+        self.assertWhere(sq, 'NOT (blog."title" = ?)', ['foo'])
 
         sq = SelectQuery(Blog).where(~((Blog.title == 'foo') | (Blog.title == 'bar')))
-        self.assertWhere(sq, '(NOT (blog."title" = ? OR blog."title" = ?))', ['foo', 'bar'])
+        self.assertWhere(sq, 'NOT ((blog."title" = ?) OR (blog."title" = ?))', ['foo', 'bar'])
 
         sq = SelectQuery(Blog).where(~((Blog.title == 'foo') & (Blog.title == 'bar')) & (Blog.title == 'baz'))
-        self.assertWhere(sq, '(NOT (blog."title" = ? AND blog."title" = ?)) AND blog."title" = ?', ['foo', 'bar', 'baz'])
+        self.assertWhere(sq, '(NOT ((blog."title" = ?) AND (blog."title" = ?)) AND (blog."title" = ?))', ['foo', 'bar', 'baz'])
 
         sq = SelectQuery(Blog).where(~((Blog.title == 'foo') & (Blog.title == 'bar')) & ((Blog.title == 'baz') & (Blog.title == 'fizz')))
-        self.assertWhere(sq, '(NOT (blog."title" = ? AND blog."title" = ?)) AND (blog."title" = ? AND blog."title" = ?)', ['foo', 'bar', 'baz', 'fizz'])
+        self.assertWhere(sq, '(NOT ((blog."title" = ?) AND (blog."title" = ?)) AND ((blog."title" = ?) AND (blog."title" = ?)))', ['foo', 'bar', 'baz', 'fizz'])
 
     def test_where_chaining_collapsing(self):
         sq = SelectQuery(User).where(User.id == 1).where(User.id == 2).where(User.id == 3)
-        self.assertWhere(sq, 'users."id" = ? AND users."id" = ? AND users."id" = ?', [1, 2, 3])
+        self.assertWhere(sq, '(((users."id" = ?) AND (users."id" = ?)) AND (users."id" = ?))', [1, 2, 3])
 
         sq = SelectQuery(User).where((User.id == 1) & (User.id == 2)).where(User.id == 3)
-        self.assertWhere(sq, 'users."id" = ? AND users."id" = ? AND users."id" = ?', [1, 2, 3])
+        self.assertWhere(sq, '(((users."id" = ?) AND (users."id" = ?)) AND (users."id" = ?))', [1, 2, 3])
 
         sq = SelectQuery(User).where((User.id == 1) | (User.id == 2)).where(User.id == 3)
-        self.assertWhere(sq, '(users."id" = ? OR users."id" = ?) AND users."id" = ?', [1, 2, 3])
+        self.assertWhere(sq, '(((users."id" = ?) OR (users."id" = ?)) AND (users."id" = ?))', [1, 2, 3])
 
         sq = SelectQuery(User).where(User.id == 1).where((User.id == 2) & (User.id == 3))
-        self.assertWhere(sq, 'users."id" = ? AND users."id" = ? AND users."id" = ?', [1, 2, 3])
+        self.assertWhere(sq, '((users."id" = ?) AND ((users."id" = ?) AND (users."id" = ?)))', [1, 2, 3])
 
         sq = SelectQuery(User).where(User.id == 1).where((User.id == 2) | (User.id == 3))
-        self.assertWhere(sq, '(users."id" = ?) AND (users."id" = ? OR users."id" = ?)', [1, 2, 3])
+        self.assertWhere(sq, '((users."id" = ?) AND ((users."id" = ?) OR (users."id" = ?)))', [1, 2, 3])
 
         sq = SelectQuery(User).where(~(User.id == 1)).where(User.id == 2).where(~(User.id == 3))
-        self.assertWhere(sq, '((NOT users."id" = ?) AND users."id" = ?) AND (NOT users."id" = ?)', [1, 2, 3])
+        self.assertWhere(sq, '((NOT (users."id" = ?) AND (users."id" = ?)) AND NOT (users."id" = ?))', [1, 2, 3])
 
     def test_grouping(self):
         sq = SelectQuery(User).group_by(User.id)
@@ -442,12 +442,12 @@ class SelectTestCase(BasePeeweeTestCase):
         sq = SelectQuery(User, fn.Count(Blog.pk)).join(Blog).group_by(User).having(
             fn.Count(Blog.pk) > 2
         )
-        self.assertHaving(sq, 'Count(blog."pk") > ?', [2])
+        self.assertHaving(sq, '(Count(blog."pk") > ?)', [2])
 
         sq = SelectQuery(User, fn.Count(Blog.pk)).join(Blog).group_by(User).having(
             (fn.Count(Blog.pk) > 10) | (fn.Count(Blog.pk) < 2)
         )
-        self.assertHaving(sq, '(Count(blog."pk") > ? OR Count(blog."pk") < ?)', [10, 2])
+        self.assertHaving(sq, '((Count(blog."pk") > ?) OR (Count(blog."pk") < ?))', [10, 2])
 
     def test_ordering(self):
         sq = SelectQuery(User).join(Blog).order_by(Blog.title)
@@ -500,7 +500,7 @@ class UpdateTestCase(BasePeeweeTestCase):
 
     def test_where(self):
         uq = UpdateQuery(User, {User.username: 'updated'}).where(User.id == 2)
-        self.assertWhere(uq, 'users."id" = ?', [2])
+        self.assertWhere(uq, '(users."id" = ?)', [2])
 
 class InsertTestCase(BasePeeweeTestCase):
     def test_insert(self):
@@ -510,7 +510,7 @@ class InsertTestCase(BasePeeweeTestCase):
 class DeleteTestCase(BasePeeweeTestCase):
     def test_where(self):
         dq = DeleteQuery(User).where(User.id == 2)
-        self.assertWhere(dq, 'users."id" = ?', [2])
+        self.assertWhere(dq, '(users."id" = ?)', [2])
 
 class RawTestCase(BasePeeweeTestCase):
     def test_raw(self):
@@ -573,7 +573,7 @@ class SugarTestCase(BasePeeweeTestCase):
         sq = User.select(User.username).annotate(Blog, fn.Sum(Blog.pk).alias('sum')).where(User.username == 'foo')
         self.assertSelect(sq, 'users."username", Sum(blog."pk") AS sum', [])
         self.assertJoins(sq, ['INNER JOIN "blog" AS blog ON users."id" = blog."user_id"'])
-        self.assertWhere(sq, 'users."username" = ?', ['foo'])
+        self.assertWhere(sq, '(users."username" = ?)', ['foo'])
         self.assertGroupBy(sq, 'users."username"', [])
 
         sq = User.select(User.username).annotate(Blog).annotate(Blog, fn.Max(Blog.pk).alias('mx'))
@@ -595,7 +595,7 @@ class SugarTestCase(BasePeeweeTestCase):
     def test_aggregate(self):
         sq = User.select().where(User.id < 10)._aggregate()
         self.assertSelect(sq, 'Count(users."id")', [])
-        self.assertWhere(sq, 'users."id" < ?', [10])
+        self.assertWhere(sq, '(users."id" < ?)', [10])
 
 
 #
@@ -757,7 +757,7 @@ class ModelQueryTestCase(ModelTestCase):
         uid = iq.execute()
         self.assertTrue(uid > 0)
         self.assertEqual(User.select().count(), 1)
-        u = User.get(id=uid)
+        u = User.get(User.id==uid)
         self.assertEqual(u.username, 'u1')
 
     def test_delete(self):
@@ -882,7 +882,7 @@ class ModelAPITestCase(ModelTestCase):
         u1.delete_instance()
         self.assertEqual(User.select().count(), 1)
 
-        self.assertEqual(u2, User.get(username='u2'))
+        self.assertEqual(u2, User.get(User.username=='u2'))
 
     def test_counting(self):
         u1 = User.create(username='u1')
@@ -1153,17 +1153,17 @@ class FieldTypeTestCase(ModelTestCase):
 
     def test_charfield(self):
         nm = NullModel.create(char_field=4)
-        nm_db = NullModel.get(id=nm.id)
+        nm_db = NullModel.get(NullModel.id==nm.id)
         self.assertEqual(nm_db.char_field, '4')
 
     def test_intfield(self):
         nm = NullModel.create(int_field='4')
-        nm_db = NullModel.get(id=nm.id)
+        nm_db = NullModel.get(NullModel.id==nm.id)
         self.assertEqual(nm_db.int_field, 4)
 
     def test_floatfield(self):
         nm = NullModel.create(float_field='4.2')
-        nm_db = NullModel.get(id=nm.id)
+        nm_db = NullModel.get(NullModel.id==nm.id)
         self.assertEqual(nm_db.float_field, 4.2)
 
     def test_decimalfield(self):
@@ -1173,7 +1173,7 @@ class FieldTypeTestCase(ModelTestCase):
         nm.decimal_field2 = D("100.33")
         nm.save()
 
-        nm_from_db = NullModel.get(id=nm.id)
+        nm_from_db = NullModel.get(NullModel.id==nm.id)
         # sqlite doesn't enforce these constraints properly
         #self.assertEqual(nm_from_db.decimal_field1, decimal.Decimal("3.14159"))
         self.assertEqual(nm_from_db.decimal_field2, D("100.33"))
@@ -1209,7 +1209,7 @@ class FieldTypeTestCase(ModelTestCase):
         nm1 = NullModel.create(datetime_field=dt1, date_field=d1, time_field=t1)
         nm2 = NullModel.create(datetime_field=dt2, time_field=t2)
 
-        nmf1 = NullModel.get(id=nm1.id)
+        nmf1 = NullModel.get(NullModel.id==nm1.id)
         self.assertEqual(nmf1.date_field, d1)
         if BACKEND == 'mysql':
             # mysql doesn't store microseconds
@@ -1219,7 +1219,7 @@ class FieldTypeTestCase(ModelTestCase):
             self.assertEqual(nmf1.datetime_field, dt1)
             self.assertEqual(nmf1.time_field, t1)
 
-        nmf2 = NullModel.get(id=nm2.id)
+        nmf2 = NullModel.get(NullModel.id==nm2.id)
         self.assertEqual(nmf2.datetime_field, dt2)
         self.assertEqual(nmf2.time_field, t2)
 
@@ -1339,7 +1339,7 @@ class NonIntPKTestCase(ModelTestCase):
 
         self.assertEqual(NonIntModel.select().count(), 2)
 
-        ni1_db = NonIntModel.get(pk='a1')
+        ni1_db = NonIntModel.get(NonIntModel.pk=='a1')
         self.assertEqual(ni1_db.data, ni1.data)
 
         self.assertEqual([(x.pk, x.data) for x in NonIntModel.select().order_by(NonIntModel.pk)], [
@@ -1371,22 +1371,22 @@ class DBColumnTestCase(ModelTestCase):
     def test_select(self):
         sq = DBUser.select().where(DBUser.username == 'u1')
         self.assertSelect(sq, 'dbuser."db_user_id", dbuser."db_username"', [])
-        self.assertWhere(sq, 'dbuser."db_username" = ?', ['u1'])
+        self.assertWhere(sq, '(dbuser."db_username" = ?)', ['u1'])
 
         sq = DBUser.select(DBUser.user_id).join(DBBlog).where(DBBlog.title == 'b1')
         self.assertSelect(sq, 'dbuser."db_user_id"', [])
         self.assertJoins(sq, ['INNER JOIN "dbblog" AS dbblog ON dbuser."db_user_id" = dbblog."db_user"'])
-        self.assertWhere(sq, 'dbblog."db_title" = ?', ['b1'])
+        self.assertWhere(sq, '(dbblog."db_title" = ?)', ['b1'])
 
     def test_db_column(self):
         u1 = DBUser.create(username='u1')
         u2 = DBUser.create(username='u2')
-        u2_db = DBUser.get(user_id=u2.get_id())
+        u2_db = DBUser.get(DBUser.user_id==u2.get_id())
         self.assertEqual(u2_db.username, 'u2')
 
         b1 = DBBlog.create(user=u1, title='b1')
         b2 = DBBlog.create(user=u2, title='b2')
-        b2_db = DBBlog.get(blog_id=b2.get_id())
+        b2_db = DBBlog.get(DBBlog.blog_id==b2.get_id())
         self.assertEqual(b2_db.user.user_id, u2.user_id)
         self.assertEqual(b2_db.title, 'b2')
         
@@ -1634,8 +1634,8 @@ class ModelInheritanceTestCase(ModelTestCase):
         self.assertEqual(Blog.select().count(), 1)
         self.assertEqual(BlogTwo.select().count(), 1)
 
-        b_from_db = Blog.get(pk=b.pk)
-        b2_from_db = BlogTwo.get(id=b2.id)
+        b_from_db = Blog.get(Blog.pk==b.pk)
+        b2_from_db = BlogTwo.get(BlogTwo.id==b2.id)
 
         self.assertEqual(b_from_db.user, u)
         self.assertEqual(b2_from_db.user, u)

@@ -11,6 +11,7 @@ from __future__ import with_statement
 import datetime
 import decimal
 import logging
+import operator
 import os
 import re
 import threading
@@ -22,7 +23,7 @@ __all__ = [
     'IntegerField', 'BigIntegerField', 'PrimaryKeyField', 'FloatField', 'DoubleField',
     'DecimalField', 'CharField', 'TextField', 'DateTimeField', 'DateField', 'TimeField',
     'BooleanField', 'ForeignKeyField', 'Model', 'DoesNotExist', 'ImproperlyConfigured',
-    'Q', 'DQ', 'fn', 'SqliteDatabase', 'MySQLDatabase', 'PostgresqlDatabase', 'Field',
+    'DQ', 'fn', 'SqliteDatabase', 'MySQLDatabase', 'PostgresqlDatabase', 'Field',
     'JOIN_LEFT_OUTER', 'JOIN_INNER', 'JOIN_FULL',
 ]
 
@@ -63,25 +64,25 @@ logger = logging.getLogger('peewee')
 OP_AND = 0
 OP_OR = 1
 
-OP_ADD = 0
-OP_SUB = 1
-OP_MUL = 2
-OP_DIV = 3
-OP_AND = 4
-OP_OR = 5
-OP_XOR = 6
-OP_USER = 9
+OP_ADD = 10
+OP_SUB = 11
+OP_MUL = 12
+OP_DIV = 13
+OP_AND = 14
+OP_OR = 15
+OP_XOR = 16
+OP_USER = 19
 
-OP_EQ = 0
-OP_LT = 1
-OP_LTE = 2
-OP_GT = 3
-OP_GTE = 4
-OP_NE = 5
-OP_IN = 6
-OP_IS = 7
-OP_LIKE = 8
-OP_ILIKE = 9
+OP_EQ = 20
+OP_LT = 21
+OP_LTE = 22
+OP_GT = 23
+OP_GTE = 24
+OP_NE = 25
+OP_IN = 26
+OP_IS = 27
+OP_LIKE = 28
+OP_ILIKE = 29
 
 DJANGO_MAP = {
     'eq': OP_EQ,
@@ -107,91 +108,16 @@ def dict_update(orig, extra):
     return new
 
 
-class Node(object):
-    def __init__(self, connector, children=None, negated=False):
-        self.connector = connector
-        self.children = children or []
-        self.negated = negated
-
-    def connect(self, rhs, connector):
-        if isinstance(rhs, Leaf):
-            if connector == self.connector and rhs.negated == self.negated:
-                self.children.append(rhs)
-                return self
-        elif isinstance(rhs, Node):
-            if connector == self.connector and connector == rhs.connector and rhs.negated == self.negated:
-                self.children.extend(rhs.children)
-                return self
-        p = Node(connector)
-        p.children = [self, rhs]
-        return p
-
-    def __and__(self, rhs):
-        return self.connect(rhs, OP_AND)
-
-    def __or__(self, rhs):
-        return self.connect(rhs, OP_OR)
-
-    def __invert__(self):
-        self.negated = not self.negated
-        return self
-
-    def __nonzero__(self):
-        return bool(self.children)
-
-    def clone(self):
-        return Node(self.connector, [c.clone() for c in self.children], self.negated)
-
-
 class Leaf(object):
     def __init__(self):
-        self.parent = None
         self.negated = False
-
-    def connect(self, connector):
-        if self.parent is None:
-            self.parent = Node(connector)
-            self.parent.children.append(self)
-
-    def __and__(self, rhs):
-        self.connect(OP_AND)
-        return self.parent & rhs
-
-    def __or__(self, rhs):
-        self.connect(OP_OR)
-        return self.parent | rhs
+        self._alias = None
 
     def __invert__(self):
         self.negated = not self.negated
         return self
 
-
-class Q(Leaf):
-    def __init__(self, lhs, op, rhs, negated=False):
-        super(Q, self).__init__()
-        self.lhs = lhs
-        self.op = op
-        self.rhs = rhs
-        self.negated = negated
-
-    def clone(self):
-        return Q(self.lhs, self.op, self.rhs, self.negated)
-
-
-class DQ(Leaf):
-    def __init__(self, **query):
-        super(DQ, self).__init__()
-        self.query = query
-
-    def clone(self):
-        return DQ(**self.query)
-
-
-class Expr(object):
-    def __init__(self):
-        self._alias = None
-
-    def alias(self, a=None):
+    def alias(self, a):
         self._alias = a
         return self
 
@@ -201,73 +127,76 @@ class Expr(object):
     def desc(self):
         return Ordering(self, False)
 
-    def _expr(op, n=False, inv=False):
-        def inner(self, value):
-            lhs, rhs = (self, value) if not inv else (value, self)
-            return BinaryExpr(lhs, op, rhs)
+    def _e(op, inv=False):
+        def inner(self, rhs):
+            if inv:
+                return Expr(rhs, op, self)
+            return Expr(self, op, rhs)
         return inner
+    __and__ = _e(OP_AND)
+    __or__ = _e(OP_OR)
 
-    __add__ = _expr(OP_ADD)
-    __sub__ = _expr(OP_SUB)
-    __mul__ = _expr(OP_MUL)
-    __div__ = _expr(OP_DIV)
-    __and__ = _expr(OP_AND)
-    __or__ = _expr(OP_OR)
-    __xor__ = _expr(OP_XOR)
-    __radd__ = _expr(OP_ADD, inv=True)
-    __rsub__ = _expr(OP_SUB, inv=True)
-    __rmul__ = _expr(OP_MUL, inv=True)
-    __rdiv__ = _expr(OP_DIV, inv=True)
-    __rand__ = _expr(OP_AND, inv=True)
-    __ror__ = _expr(OP_OR, inv=True)
-    __rxor__ = _expr(OP_XOR, inv=True)
+    __add__ = _e(OP_ADD)
+    __sub__ = _e(OP_SUB)
+    __mul__ = _e(OP_MUL)
+    __div__ = _e(OP_DIV)
+    __xor__ = _e(OP_XOR)
+    __radd__ = _e(OP_ADD, inv=True)
+    __rsub__ = _e(OP_SUB, inv=True)
+    __rmul__ = _e(OP_MUL, inv=True)
+    __rdiv__ = _e(OP_DIV, inv=True)
+    __rand__ = _e(OP_AND, inv=True)
+    __ror__ = _e(OP_OR, inv=True)
+    __rxor__ = _e(OP_XOR, inv=True)
 
-    def _q(op):
-        def inner(self, value):
-            return Q(self, op, value)
-        return inner
-
-    __eq__ = _q(OP_EQ)
-    __lt__ = _q(OP_LT)
-    __le__ = _q(OP_LTE)
-    __gt__ = _q(OP_GT)
-    __ge__ = _q(OP_GTE)
-    __ne__ = _q(OP_NE)
-    __lshift__ = _q(OP_IN)
-    __rshift__ = _q(OP_IS)
-    __mod__ = _q(OP_LIKE)
-    __pow__ = _q(OP_ILIKE)
+    __eq__ = _e(OP_EQ)
+    __lt__ = _e(OP_LT)
+    __le__ = _e(OP_LTE)
+    __gt__ = _e(OP_GT)
+    __ge__ = _e(OP_GTE)
+    __ne__ = _e(OP_NE)
+    __lshift__ = _e(OP_IN)
+    __rshift__ = _e(OP_IS)
+    __mod__ = _e(OP_LIKE)
+    __pow__ = _e(OP_ILIKE)
 
 
-class BinaryExpr(Expr):
-    def __init__(self, lhs, op, rhs):
+class Expr(Leaf):
+    def __init__(self, lhs, op, rhs, negated=False):
+        super(Expr, self).__init__()
         self.lhs = lhs
         self.op = op
         self.rhs = rhs
-        super(BinaryExpr, self).__init__()
+        self.negated = negated
+
+    def clone(self):
+        return Expr(self.lhs, self.op, self.rhs, self.negated)
 
 
-class Param(Expr):
+class DQ(Leaf):
+    pass
+
+
+class Param(Leaf):
     def __init__(self, data):
         self.data = data
 
 
-class Func(Expr):
-    def __init__(self, fn_name, *params):
-        self.fn_name = fn_name
+class Func(Leaf):
+    def __init__(self, name, *params):
+        self.name = name
         self.params = params
         super(Func, self).__init__()
 
     def clone(self):
-        return Func(self.fn_name, *self.params)
+        return Func(self.name, *self.params)
 
-
-class _FN(object):
     def __getattr__(self, attr):
         def dec(*args, **kwargs):
             return Func(attr, *args, **kwargs)
         return dec
-fn = _FN()
+
+fn = Func(None)
 
 
 class FieldDescriptor(object):
@@ -288,7 +217,7 @@ Ordering = namedtuple('Ordering', ('param', 'asc'))
 R = namedtuple('R', ('value',))
 
 
-class Field(Expr):
+class Field(Leaf):
     _field_counter = 0
     _order = 0
     db_field = 'unknown'
@@ -591,7 +520,7 @@ class QueryCompiler(object):
         'primary_key': 'INTEGER',
     }
 
-    q_op_map = {
+    op_map = {
         OP_EQ: '=',
         OP_LT: '<',
         OP_LTE: '<=',
@@ -602,16 +531,13 @@ class QueryCompiler(object):
         OP_IS: 'IS',
         OP_LIKE: 'LIKE',
         OP_ILIKE: 'ILIKE',
-    }
-
-    expr_op_map = {
         OP_ADD: '+',
         OP_SUB: '-',
         OP_MUL: '*',
         OP_DIV: '/',
-        OP_AND: '&',
-        OP_OR: '|',
         OP_XOR: '^',
+        OP_AND: 'AND',
+        OP_OR: 'OR',
     }
 
     join_map = {
@@ -621,12 +547,11 @@ class QueryCompiler(object):
     }
 
     def __init__(self, quote_char='"', interpolation='?', field_overrides=None,
-                 q_overrides=None, expr_overrides=None):
+                 op_overrides=None):
         self.quote_char = quote_char
         self.interpolation = interpolation
         self._field_map = dict_update(self.field_map, field_overrides or {})
-        self._op_map = dict_update(self.q_op_map, q_overrides or {})
-        self._expr_map = dict_update(self.expr_op_map, expr_overrides or {})
+        self._op_map = dict_update(self.op_map, op_overrides or {})
 
     def quote(self, s):
         return ''.join((self.quote_char, s, self.quote_char))
@@ -637,14 +562,6 @@ class QueryCompiler(object):
     def get_op(self, q):
         return self._op_map[q]
 
-    def get_expr(self, expr):
-        return self._expr_map[expr]
-
-    def _add_alias(self, expr_str, expr):
-        if expr._alias:
-            expr_str = ' '.join((expr_str, 'AS', expr._alias))
-        return expr_str
-
     def _max_alias(self, am):
         max_alias = 0
         if am:
@@ -654,88 +571,65 @@ class QueryCompiler(object):
                     max_alias = i
         return max_alias + 1
 
-    def _parse_field(self, field, alias_map):
-        expr_str = self.quote(field.db_column)
-        if alias_map and field.model_class in alias_map:
-            expr_str = '.'.join((alias_map[field.model_class], expr_str))
-        return self._add_alias(expr_str, field), []
-
     def parse_expr(self, expr, alias_map=None):
-        if isinstance(expr, BinaryExpr):
+        s = self.interpolation
+        p = [expr]
+        if isinstance(expr, Expr):
             lhs, lparams = self.parse_expr(expr.lhs, alias_map)
             rhs, rparams = self.parse_expr(expr.rhs, alias_map)
-            expr_str = '(%s %s %s)' % (lhs, self.get_expr(expr.op), rhs)
-            return self._add_alias(expr_str, expr), lparams + rparams
-        if isinstance(expr, Field):
-            return self._parse_field(expr, alias_map)
-        elif isinstance(expr, Ordering):
-            expr_str, params = self.parse_expr(expr.param, alias_map)
-            expr_str += ' ASC' if expr.asc else ' DESC'
-            return expr_str, params
+            s = '(%s %s %s)' % (lhs, self.get_op(expr.op), rhs)
+            p = lparams + rparams
+        elif isinstance(expr, Field):
+            s = self.quote(expr.db_column)
+            if alias_map and expr.model_class in alias_map:
+                s = '.'.join((alias_map[expr.model_class], s))
+            p = []
         elif isinstance(expr, Func):
-            scalars = []
+            p = []
             exprs = []
-            for p in expr.params:
-                parsed, params = self.parse_expr(p, alias_map)
+            for param in expr.params:
+                parsed, params = self.parse_expr(param, alias_map)
                 exprs.append(parsed)
-                scalars.extend(params)
-            expr_str = '%s(%s)' % (expr.fn_name, ', '.join(exprs))
-            return self._add_alias(expr_str, expr), scalars
-        elif isinstance(expr, R):
-            return expr.value, []
+                p.extend(params)
+            s = '%s(%s)' % (expr.name, ', '.join(exprs))
         elif isinstance(expr, Param):
-            return self.interpolation, [expr.data]
+            s = self.interpolation
+            p = [expr.data]
+        elif isinstance(expr, Ordering):
+            s, p = self.parse_expr(expr.param, alias_map)
+            s += ' ASC' if expr.asc else ' DESC'
+        elif isinstance(expr, R):
+            s = expr.value
+            p = []
         elif isinstance(expr, SelectQuery):
             max_alias = self._max_alias(alias_map)
             clone = expr.clone()
             clone._select = (clone.model_class._meta.primary_key,)
-            subselect, params = self.parse_select_query(clone, max_alias, alias_map)
-            return '(%s)' % subselect, params
+            subselect, p = self.parse_select_query(clone, max_alias, alias_map)
+            s = '(%s)' % subselect
         elif isinstance(expr, (list, tuple)):
             exprs = []
-            vals = []
+            p = []
             for i in expr:
                 e, v = self.parse_expr(i, alias_map)
                 exprs.append(e)
-                vals.extend(v)
-            expr_str = '(%s)' % ','.join(exprs)
-            return expr_str, vals
+                p.extend(v)
+            s = '(%s)' % ','.join(exprs)
         elif isinstance(expr, Model):
-            return self.interpolation, [expr.get_id()]
-        return self.interpolation, [expr]
+            s = self.interpolation
+            p = [expr.get_id()]
 
-    def parse_q(self, q, alias_map=None):
-        lhs_expr, lparams = self.parse_expr(q.lhs, alias_map)
-        rhs_expr, rparams = self.parse_expr(q.rhs, alias_map)
-        parsed = '%s %s %s' % (lhs_expr, self.get_op(q.op), rhs_expr)
-        if q.negated:
-            parsed = '(NOT %s)' % parsed
-        return parsed, lparams + rparams
+        if isinstance(expr, Leaf):
+            if expr.negated:
+                s = 'NOT %s' % s
+            if expr._alias:
+                s = ' '.join((s, 'AS', expr._alias))
 
-    def parse_node(self, n, alias_map=None):
-        query = []
-        data = []
-        for child in n.children:
-            if isinstance(child, Node):
-                parsed, child_data = self.parse_node(child, alias_map)
-                if parsed:
-                    query.append('(%s)' % parsed)
-            elif isinstance(child, Q):
-                parsed, child_data = self.parse_q(child, alias_map)
-                query.append(parsed)
-            data.extend(child_data)
-        if n.connector == OP_AND:
-            connector = ' AND '
-        else:
-            connector = ' OR '
-        query = connector.join(query)
-        if n.negated:
-            query = 'NOT (%s)' % query
-        return query, data
+        return s, p
 
     def parse_query_node(self, qnode, alias_map):
         if qnode is not None:
-            return self.parse_node(qnode, alias_map)
+            return self.parse_expr(qnode, alias_map)
         return '', []
 
     def parse_joins(self, joins, model_class, alias_map):
@@ -1130,9 +1024,10 @@ class Query(object):
     @returns_clone
     def where(self, *q_or_node):
         if self._where is None:
-            self._where = Node(OP_AND)
-        for piece in q_or_node:
-            self._where &= piece
+            self._where = reduce(operator.and_, q_or_node)
+        else:
+            for piece in q_or_node:
+                self._where &= piece
 
     @returns_clone
     def join(self, model_class, join_type=None, on=None):
@@ -1281,7 +1176,7 @@ class SelectQuery(Query):
     def _model_shorthand(self, args):
         accum = []
         for arg in args:
-            if isinstance(arg, Expr):
+            if isinstance(arg, Leaf):
                 accum.append(arg)
             elif issubclass(arg, Model):
                 accum.extend(arg._meta.get_fields())
@@ -1294,9 +1189,10 @@ class SelectQuery(Query):
     @returns_clone
     def having(self, *q_or_node):
         if self._having is None:
-            self._having = Node(OP_AND)
-        for piece in q_or_node:
-            self._having &= piece
+            self._having = reduce(operator.and_, q_or_node)
+        else:
+            for piece in q_or_node:
+                self._having &= piece
 
     @returns_clone
     def order_by(self, *args):
@@ -1469,7 +1365,6 @@ class DeleteQuery(Query):
 class Database(object):
     commit_select = False
     compiler_class = QueryCompiler
-    expr_overrides = {}
     field_overrides = {}
     for_update = False
     interpolation = '?'
@@ -1536,7 +1431,7 @@ class Database(object):
     def get_compiler(self):
         return self.compiler_class(
             self.quote_char, self.interpolation, self.field_overrides,
-            self.op_overrides, self.expr_overrides)
+            self.op_overrides)
 
     def execute(self, query):
         sql, params = query.sql(self.get_compiler())
