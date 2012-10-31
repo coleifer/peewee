@@ -1614,6 +1614,7 @@ class PostgresqlDatabase(Database):
 
 
 class MySQLDatabase(Database):
+    commit_select = True
     field_overrides = {
         'bigint': 'BIGINT',
         'boolean': 'BOOL',
