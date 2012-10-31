@@ -174,7 +174,12 @@ class Expr(Leaf):
 
 
 class DQ(Leaf):
-    pass
+    def __init__(self, **query):
+        super(DQ, self).__init__()
+        self.query = query
+
+    def clone(self):
+        return DQ(**self.query)
 
 
 class Param(Leaf):
@@ -1068,34 +1073,33 @@ class Query(object):
                 if isinstance(model_attr, (ForeignKeyField, ReverseRelationDescriptor)):
                     curr = model_attr.rel_model
                     joins.append(model_attr)
-            accum.append(Q(model_attr, op, value))
+            accum.append(Expr(model_attr, op, value))
         return accum, joins
 
     def filter(self, *args, **kwargs):
-        # normalize args and kwargs into a new node
-        dq_node = Node(OP_AND)
+        # normalize args and kwargs into a new expression
+        dq_node = Leaf()
+        if args:
+            dq_node &= reduce(operator.and_, [a.clone() for a in args])
         if kwargs:
             dq_node &= DQ(**kwargs)
-        for arg in args:
-            dq_node &= arg.clone()
 
-        # breadth-first search all nodes replacing DQ with Q
+        # dq_node should now be an Expr, lhs = Leaf(), rhs = ...
         q = deque([dq_node])
         dq_joins = set()
         while q:
-            query = []
             curr = q.popleft()
-            for child in curr.children:
-                if isinstance(child, Node):
-                    q.append(child)
-                    query.append(child)
-                elif isinstance(child, DQ):
-                    accum, joins = self.convert_dict_to_node(child.query)
+            if not isinstance(curr, Expr):
+                continue
+            for side, piece in (('lhs', curr.lhs), ('rhs', curr.rhs)):
+                if isinstance(piece, DQ):
+                    query, joins = self.convert_dict_to_node(piece.query)
                     dq_joins.update(joins)
-                    query.extend(accum)
+                    setattr(curr, side, reduce(operator.and_, query))
                 else:
-                    query.append(child)
-            curr.children = query
+                    q.append(piece)
+
+        dq_node = dq_node.rhs
 
         query = self.clone()
         for field in dq_joins:

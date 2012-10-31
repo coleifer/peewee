@@ -57,9 +57,6 @@ class PostgresqlExtCompiler(QueryCompiler):
 
 class PostgresqlExtDatabase(PostgresqlDatabase):
     compiler_class = PostgresqlExtCompiler
-    expr_overrides = dict_update(PostgresqlDatabase.expr_overrides, {
-        OP_HUPDATE: '||',
-    })
     field_overrides = dict_update(PostgresqlDatabase.field_overrides, {
         'hash': 'hstore',
     })
@@ -67,6 +64,7 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
         OP_HCONTAINS_DICT: '@>',
         OP_HCONTAINS_KEYS: '?&',
         OP_HCONTAINS_KEY: '?',
+        OP_HUPDATE: '||',
     })
 
     def _connect(self, database, **kwargs):
