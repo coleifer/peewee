@@ -48,9 +48,9 @@ OP_HCONTAINS_KEY = 123
 
 class PostgresqlExtCompiler(QueryCompiler):
     def parse_create_index(self, model_class, fields, unique=False):
-        parts = super(PostgresqlExtDatabase, self).parse_create_index(
+        parts = super(PostgresqlExtCompiler, self).parse_create_index(
             model_class, fields, unique)
-        if any(lambda f: isinstance(f, HStore), fields):
+        if any(map(lambda f: isinstance(f, HStore), fields)):
             parts.insert(-1, 'USING GIST')
         return parts
 
