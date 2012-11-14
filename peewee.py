@@ -1626,7 +1626,7 @@ class MySQLDatabase(Database):
     }
     for_update_support = True
     interpolation = '%s'
-    op_overrides = {OP_LIKE: 'LIKE BINARY'}
+    op_overrides = {OP_LIKE: 'LIKE BINARY', OP_ILIKE: 'LIKE'}
     quote_char = '`'
     subquery_delete_same_table = False
 
