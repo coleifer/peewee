@@ -2002,8 +2002,8 @@ def sort_models_topologically(models):
     def dfs(model):
         if model in models and model not in seen:
             seen.add(model)
-            for child_model in model._meta.reverse_rel.values():
-                dfs(child_model)
+            for foreign_key in model._meta.reverse_rel.values():
+                dfs(foreign_key.model_class)
             ordering.append(model)  # parent will follow descendants
     # order models by name and table initially to guarantee a total ordering
     names = lambda m: (m._meta.name, m._meta.db_table)
