@@ -213,7 +213,7 @@ Example of ordering:
 
         class Meta:
             # order by created date descending
-            ordering = ('-created',)
+            order_by = ('-created',)
 
 .. note::
     These options are "inheritable", which means that you can define a database
@@ -232,7 +232,7 @@ Example of ordering:
             field1 = CharField()
 
             class Meta:
-                ordering = ('field1',)
+                order_by = ('field1',)
                 # no need to define database again since it will be inherited from
                 # the BaseModel
 

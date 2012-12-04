@@ -175,6 +175,24 @@ The kwargs for the Field constructor changed slightly, the biggest probably
 being that ``db_index`` was renamed to ``index``.
 
 
+Changes in model definitions
+----------------------------
+
+When specifying a default ordering for a model:
+
+.. code-block:: python
+
+    # 1.0
+    class Old(Model):
+        class Meta:
+            ordering = (('field1', 'desc'), ('field2', 'asc'))
+
+    # 2.0
+    class New(Model):
+        class Meta:
+            order_by = ('-field1', 'field2') # note it is "order_by"
+
+
 Changes in database and adapter
 -------------------------------
 
