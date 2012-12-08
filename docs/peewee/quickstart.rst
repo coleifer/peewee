@@ -282,6 +282,14 @@ All the other SQL clauses are available as well, such as:
 
 Check the documentation on :ref:`querying` for more info.
 
+
+Do you have a legacy database?
+------------------------------
+
+If you already have a database, you can autogenerate peewee models using :ref:`pwiz`
+which is part of the "playhouse".
+
+
 What next?
 ----------
 

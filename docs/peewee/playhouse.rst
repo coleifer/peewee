@@ -219,6 +219,8 @@ You can check for the existence of a key and filter rows accordingly:
     123 Main St 2 cars
 
 
+.. _pwiz:
+
 pwiz, a model generator
 -----------------------
 
