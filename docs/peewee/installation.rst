@@ -3,22 +3,18 @@
 Installing peewee
 =================
 
+Most users will want to simply install the latest version, hosted on PyPI:
+
 .. code-block:: console
 
     pip install peewee
 
 
-Installing with git
+Installing Manually
 -------------------
 
-You can pip install the git clone:
-
-.. code-block:: console
-
-    pip install -e git+https://github.com/coleifer/peewee.git
-
-
-If you don't want to use pip:
+The project is hosted at https://github.com/coleifer/peewee and can be installed
+manually:
 
 .. code-block:: console
 
@@ -27,10 +23,11 @@ If you don't want to use pip:
     python setup.py install
 
 
+Running tests
+-------------
+
 You can test your installation by running the test suite.
 
 .. code-block:: console
 
     python setup.py test
-
-Feel free to check out the :ref:`example-app` which ships with the project.

@@ -1,5 +1,2 @@
 flask
-werkzeug
-jinja2
-gunicorn
--e git+git@github.com:coleifer/peewee.git#egg=peewee
+peewee

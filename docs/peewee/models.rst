@@ -1,7 +1,15 @@
 .. _models:
 
-Model API (smells like django)
-==============================
+Model and Fields
+================
+
+Also of possible interest:
+
+* :ref:`Models API reference <model-api>`
+* :ref:`Fields API reference <fields-api>`
+
+Models
+------
 
 Models and their fields map directly to database tables and columns.  Consider
 the following:
@@ -121,6 +129,7 @@ Creating models in the interactive interpreter is a snap.
         >>> user.username = 'charlie'
         >>> user.save()
 
+
 Traversing foriegn keys
 ^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -150,8 +159,8 @@ the where clause prepopulated to point at the right ``User`` instance:
     <peewee.SelectQuery object at 0x151f510>
 
 
-Model options
--------------
+Model options and table metadata
+--------------------------------
 
 In order not to pollute the model namespace, model-specific configuration is
 placed in a special class called ``Meta``, which is a convention borrowed from
@@ -178,12 +187,18 @@ the custom database.
 
 There are several options you can specify as ``Meta`` attributes:
 
-* database: specifies a :py:class:`Database` instance to use with this model
-* db_table: the name of the database table this model maps to
-* indexes: a list of fields to index
-* order_by: a sequence of columns to use as the default ordering for this model
+===================   ==============================================   ============
+Option                Meaning                                          Inheritable?
+===================   ==============================================   ============
+``database``          database for model                               yes
+``db_table``          name of the table to store data                  no
+``indexes``           a list of fields to index                        yes
+``order_by``          a list of fields to use for default ordering     yes
+===================   ==============================================   ============
 
-Specifying indexes:
+
+Specifying indexes for a model
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code-block:: python
 
@@ -203,7 +218,8 @@ Specifying indexes:
             )
 
 
-Example of ordering:
+Specifying a default ordering
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code-block:: python
 
@@ -215,229 +231,256 @@ Example of ordering:
             # order by created date descending
             order_by = ('-created',)
 
+
+Inheriting model metadata
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Some options are "inheritable" (see table above), which means that you can define a
+database on one model, then subclass that model and the child models will use
+the same database.
+
+.. code-block:: python
+
+    my_db = PostgresqlDatabase('my_db')
+
+    class BaseModel(Model):
+        class Meta:
+            database = my_db
+
+    class SomeModel(BaseModel):
+        field1 = CharField()
+
+        class Meta:
+            order_by = ('field1',)
+            # no need to define database again since it will be inherited from
+            # the BaseModel
+
+
+.. _fields:
+
+Fields
+------
+
+The :py:class:`Field` class is used to describe the mapping of :py:class:`Model`
+attributes to database columns.  Each field type has a corresponding SQL storage
+class (i.e. varchar, int), and conversion between python data types and underlying
+storage is handled transparently.
+
+When creating a :py:class:`Model` class, fields are defined as class-level attributes.
+This should look familiar to users of the django framework.  Here's an example:
+
+.. code-block:: python
+
+    from peewee import *
+
+    class User(Model):
+        username = CharField()
+        join_date = DateTimeField()
+        about_me = TextField()
+
+There is one special type of field, :py:class:`ForeignKeyField`, which allows you
+to expose foreign-key relationships between models in an intuitive way:
+
+.. code-block:: python
+
+    class Message(Model):
+        user = ForeignKeyField(User, related_name='messages')
+        body = TextField()
+        send_date = DateTimeField()
+
+This allows you to write code like the following:
+
+.. code-block:: python
+
+    >>> print some_message.user.username
+    Some User
+
+    >>> for message in some_user.messages:
+    ...     print message.body
+    some message
+    another message
+    yet another message
+
+
+Field types table
+-----------------
+
+Parameters accepted by all field types and their default values:
+
+* ``null = False`` -- boolean indicating whether null values are allowed to be stored
+* ``index = False`` -- boolean indicating whether to create an index on this column
+* ``unique = False`` -- boolean indicating whether to create a unique index on this column
+* ``verbose_name = None`` -- string representing the "user-friendly" name of this field
+* ``help_text = None`` -- string representing any helpful text for this field
+* ``db_column = None`` -- string representing the underlying column to use if different, useful for legacy databases
+* ``default = None`` -- any value to use as a default for uninitialized models
+* ``choices = None`` -- an optional iterable containing 2-tuples of ``value``, ``display``
+* ``primary_key = False`` -- whether this field is the primary key for the table
+* ``sequence = None`` -- sequence to populate field (if backend supports it)
+
+
+===================   =================   =================   =================
+Field Type            Sqlite              Postgresql          MySQL
+===================   =================   =================   =================
+``CharField``         varchar             varchar             varchar
+``TextField``         text                text                longtext
+``DateTimeField``     datetime            timestamp           datetime
+``IntegerField``      integer             integer             integer
+``BooleanField``      smallint            boolean             bool
+``FloatField``        real                real                real
+``DoubleField``       real                double precision    double precision
+``BigIntegerField``   integer             bigint              bigint
+``DecimalField``      decimal             numeric             numeric
+``PrimaryKeyField``   integer             serial              integer
+``ForeignKeyField``   integer             integer             integer
+``DateField``         date                date                date
+``TimeField``         time                time                time
+===================   =================   =================   =================
+
+Some fields take special parameters...
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
++-------------------------------+----------------------------------------------+
+| Field type                    | Special Parameters                           |
++===============================+==============================================+
+| :py:class:`CharField`         | ``max_length``                               |
++-------------------------------+----------------------------------------------+
+| :py:class:`DateTimeField`     | ``formats``                                  |
++-------------------------------+----------------------------------------------+
+| :py:class:`DateField`         | ``formats``                                  |
++-------------------------------+----------------------------------------------+
+| :py:class:`TimeField`         | ``formats``                                  |
++-------------------------------+----------------------------------------------+
+| :py:class:`DecimalField`      | ``max_digits``, ``decimal_places``,          |
+|                               | ``auto_round``, ``rounding``                 |
++-------------------------------+----------------------------------------------+
+| :py:class:`ForeignKeyField`   | ``rel_model``, ``related_name``,             |
+|                               | ``cascade``, ``extra``                       |
++-------------------------------+----------------------------------------------+
+
+
+A note on validation
+^^^^^^^^^^^^^^^^^^^^
+
+Both ``default`` and ``choices`` could be implemented at the database level as
+``DEFAULT`` and ``CHECK CONSTRAINT`` respectively, but any application change would
+require a schema change.  Because of this, ``default`` is implemented purely in
+python and ``choices`` are not validated but exist for metadata purposes only.
+
+
+Self-referential Foreign Keys
+-----------------------------
+
+Since the class is not available at the time the field is declared,
+when creating a self-referential foreign key pass in 'self' as the "to"
+relation:
+
+.. code-block:: python
+
+    class Category(Model):
+        name = CharField()
+        parent = ForeignKeyField('self', related_name='children', null=True)
+
+
+Implementing Many to Many
+-------------------------
+
+Peewee does not provide a "field" for many to many relationships the way that
+django does -- this is because the "field" really is hiding an intermediary
+table.  To implement many-to-many with peewee, you will therefore create the
+intermediary table yourself and query through it:
+
+.. code-block:: python
+
+    class Student(Model):
+        name = CharField()
+
+    class Course(Model):
+        name = CharField()
+
+    class StudentCourse(Model):
+        student = ForeignKeyField(Student)
+        course = ForeignKeyField(Course)
+
+To query, let's say we want to find students who are enrolled in math class:
+
+.. code-block:: python
+
+    for student in Student.select().join(StudentCourse).join(Course).where(Course.name == 'math'):
+        print student.name
+
+To query what classes a given student is enrolled in:
+
+.. code-block:: python
+
+    for course in Course.select().join(StudentCourse).join(Student).where(Student.name == 'da vinci'):
+        print course.name
+
+To efficiently iterate over a many-to-many relation, i.e., list all students
+and their respective courses, we will query the "through" model ``StudentCourse``
+and "precompute" the Student and Course:
+
+.. code-block:: python
+
+    query = StudentCourse.select(
+        StudentCourse, Student, Course)
+    ).join(Course).switch(StudentCourse).join(Student)
+
+To print a list of students and their courses you might do the following:
+
+.. code-block:: python
+
+    last = None
+    for student_course in query:
+        student = student_course.student
+        if student != last:
+            last = student
+            print 'Student: %s' % student.name
+        print '    - %s' % student_course.course.name
+
+Since we selected all fields from ``Student`` and ``Course`` in the ``select``
+clause of the query, these foreign key traversals are "free" and we've done the
+whole iteration with just 1 query.
+
+
+.. _non_int_pks:
+
+Non-integer Primary Keys
+------------------------
+
+First of all, let me say that I do not think using non-integer primary keys is a
+good idea.  The cost in storage is higher, the index lookups will be slower, and
+foreign key joins will be more expensive.  That being said, here is how you can
+use non-integer pks in peewee.
+
+.. code-block:: python
+
+    from peewee import Model, PrimaryKeyField, VarCharColumn
+
+    class UUIDModel(Model):
+        # explicitly declare a primary key field, and specify the class to use
+        id = CharField(primary_key=True)
+
+
+Auto-increment IDs are, as their name says, automatically generated for you when
+you insert a new row into the database.  The way peewee determines whether to
+do an ``INSERT`` versus an ``UPDATE`` comes down to checking whether the primary
+key value is ``None``.  If ``None``, it will do an insert, otherwise it does an
+update on the existing value.  Since, with our uuid example, the database driver
+won't generate a new ID, we need to specify it manually.  When we call save()
+for the first time, pass in ``force_insert = True``:
+
+.. code-block:: python
+
+    inst = UUIDModel(id=str(uuid.uuid4()))
+    inst.save() # <-- WRONG!!  this will try to do an update
+
+    inst.save(force_insert=True) # <-- CORRECT
+
+    # to update the instance after it has been saved once
+    inst.save()
+
 .. note::
-    These options are "inheritable", which means that you can define a database
-    adapter on one model, then subclass that model and the child models will use
-    that database.
-
-    .. code-block:: python
-
-        my_db = PostgresqlDatabase('my_db')
-
-        class BaseModel(Model):
-            class Meta:
-                database = my_db
-
-        class SomeModel(BaseModel):
-            field1 = CharField()
-
-            class Meta:
-                order_by = ('field1',)
-                # no need to define database again since it will be inherited from
-                # the BaseModel
-
-
-Model methods
--------------
-
-.. py:class:: Model
-
-    .. py:method:: save([force_insert=False])
-
-        Save the given instance, creating or updating depending on whether it has a
-        primary key.  If ``force_insert=True`` an ``INSERT`` will be issued regardless
-        of whether or not the primary key exists.
-
-        example:
-
-        .. code-block:: python
-
-            >>> some_obj.title = 'new title' # <-- does not touch the database
-            >>> some_obj.save() # <-- change is persisted to the db
-
-    .. py:classmethod:: create(**attributes)
-
-        :param attributes: key/value pairs of model attributes
-
-        Create an instance of the ``Model`` with the given attributes set.
-
-        example:
-
-        .. code-block:: python
-
-            >>> user = User.create(username='admin', password='test')
-
-    .. py:method:: delete_instance([recursive=False[, delete_nullable=False]])
-
-        :param recursive: Delete this instance and anything that depends on it,
-            optionally updating those that have nullable dependencies
-        :param delete_nullable: If doing a recursive delete, delete all dependent
-            objects regardless of whether it could be updated to NULL
-
-        Delete the given instance.  Any foreign keys set to cascade on
-        delete will be deleted automatically.  For more programmatic control,
-        you can call with recursive=True, which will delete any non-nullable
-        related models (those that *are* nullable will be set to NULL).  If you
-        wish to delete all dependencies regardless of whether they are nullable,
-        set ``delete_nullable=True``.
-
-        example:
-
-        .. code-block:: python
-
-            >>> some_obj.delete_instance() # <-- it is gone forever
-
-    .. py:classmethod:: get(*args, **kwargs)
-
-        :param args: a list of query expressions, e.g. ``Usre.username == 'foo'``
-        :param kwargs: a mapping of column + lookup to value, e.g. "age__gt=55"
-        :rtype: :py:class:`Model` instance or raises ``DoesNotExist`` exception
-
-        Get a single row from the database that matches the given query.  Raises a
-        ``<model-class>.DoesNotExist`` if no rows are returned:
-
-        .. code-block:: python
-
-            >>> user = User.get(User.username == username, User.password == password)
-
-        This method is also expose via the :py:class:`SelectQuery`, though it takes
-        no parameters:
-
-        .. code-block:: python
-
-            >>> active = User.select().where(User.active == True)
-            >>> try:
-            ...     users = active.where(User.username == username, User.password == password)
-            ...     user = users.get()
-            ... except User.DoesNotExist:
-            ...     user = None
-
-        .. note:: the "kwargs" style syntax is provided for compatibility with
-            version 1.0.  The expression-style syntax is preferable.
-
-    .. py:classmethod:: get_or_create(**attributes)
-
-        :param attributes: key/value pairs of model attributes
-        :rtype: a :py:class:`Model` instance
-
-        Get the instance with the given attributes set.  If the instance
-        does not exist it will be created.
-
-        example:
-
-        .. code-block:: python
-
-            >>> CachedObj.get_or_create(key=key, val=some_val)
-
-    .. py:classmethod:: select(*selection)
-
-        :param selection: a list of model classes, field instances, functions or expressions
-        :rtype: a :py:class:`SelectQuery` for the given ``Model``
-
-        example:
-
-        .. code-block:: python
-
-            >>> User.select().where(User.active == True).order_by(User.username)
-            >>> Tweet.select(Tweet, User).join(User).order_by(Tweet.created_date.desc())
-
-    .. py:classmethod:: update(**query)
-
-        :rtype: an :py:class:`UpdateQuery` for the given ``Model``
-
-        example:
-
-        .. code-block:: python
-
-            >>> q = User.update(active=False).where(User.registration_expired == True)
-            >>> q.execute() # <-- execute it
-
-    .. py:classmethod:: delete()
-
-        :rtype: a :py:class:`DeleteQuery` for the given ``Model``
-
-        example:
-
-        .. code-block:: python
-
-            >>> q = User.delete().where(User.active == False)
-            >>> q.execute() # <-- execute it
-
-        .. warning::
-            Assume you have a model instance -- calling ``model_instance.delete()``
-            does **not** delete it.
-
-    .. py:classmethod:: insert(**query)
-
-        :rtype: an :py:class:`InsertQuery` for the given ``Model``
-
-        example:
-
-        .. code-block:: python
-
-            >>> q = User.insert(username='admin', active=True, registration_expired=False)
-            >>> q.execute()
-            1
-
-    .. py:classmethod:: raw(sql, *params)
-
-        :rtype: a :py:class:`RawQuery` for the given ``Model``
-
-        example:
-
-        .. code-block:: python
-
-            >>> q = User.raw('select id, username from users')
-            >>> for user in q:
-            ...     print user.id, user.username
-
-    .. py:classmethod:: filter(*args, **kwargs)
-
-        :param args: a list of :py:class:`DQ` or :py:class:`Node` objects
-        :param kwargs: a mapping of column + lookup to value, e.g. "age__gt=55"
-        :rtype: :py:class:`SelectQuery` with appropriate ``WHERE`` clauses
-
-        Provides a django-like syntax for building a query. The key difference
-        between :py:meth:`~Model.filter` and :py:meth:`SelectQuery.where`
-        is that :py:meth:`~Model.filter` supports traversing joins using
-        django's "double-underscore" syntax:
-
-        .. code-block:: python
-
-            >>> sq = Entry.filter(blog__title='Some Blog')
-
-        This method is chainable::
-
-            >>> base_q = User.filter(active=True)
-            >>> some_user = base_q.filter(username='charlie')
-
-        .. note:: this method is provided for compatibility with peewee 1.0
-
-    .. py:classmethod:: create_table([fail_silently=False])
-
-        :param fail_silently: If set to ``True``, the method will check for the existence of the table
-            before attempting to create.
-
-        Create the table for the given model.
-
-        example:
-
-        .. code-block:: python
-
-            >>> database.connect()
-            >>> SomeModel.create_table() # <-- creates the table for SomeModel
-
-    .. py:classmethod:: drop_table([fail_silently=False])
-
-        :param fail_silently: If set to ``True``, the query will check for the existence of
-            the table before attempting to remove.
-
-        Drop the table for the given model.
-
-        .. note::
-            Cascading deletes are not handled by this method, nor is the removal
-            of any constraints.
-
-    .. py:classmethod:: table_exists()
-
-        :rtype: Boolean whether the table for this model exists in the database
+    Any foreign keys to a model with a non-integer primary key will have the
+    ``ForeignKeyField`` use the same underlying storage type as the primary key
+    they are related to.

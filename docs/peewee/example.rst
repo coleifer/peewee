@@ -3,37 +3,43 @@
 Example app
 ===========
 
-.. image:: tweepee.jpg
+We'll be building a simple "twitter"-like site.  The source code for the example
+can be found in the ``example/`` directory.  You can also `browse the source-code <https://github.com/coleifer/peewee/tree/master/example>`_
+on github.
 
-peewee ships with an example web app that runs on the
-`Flask <http://flask.pocoo.org/>`_ microframework.  If you already have flask
-and its dependencies installed you should be good to go, otherwise install from
-the included requirements file.
+The example app uses the `flask <http://flask.pocoo.org/>`_ web framework which is
+very easy to get started with.  If you don't have flask already, you will need to
+install it to run the example:
 
 .. code-block:: console
 
-    cd example/
-    pip install -r requirements.txt
+    pip install flask
 
 
 Running the example
 -------------------
 
-After ensuring that flask, jinja2, werkzeug and sqlite3 are all installed,
-switch to the example directory and execute the *run_example.py* script:
+.. image:: tweepee.jpg
+
+After ensuring that flask is installed, ``cd`` into the example directory and
+execute the ``run_example.py`` script:
 
 .. code-block:: console
 
     python run_example.py
 
+The example app will be accessible at http://localhost:5000/
+
 
 Diving into the code
 --------------------
 
+For simplicity all example code is contained within a single module, ``example/app.py``.
+
 Models
 ^^^^^^
 
-In the spirit of the ur-python framework, django, peewee uses declarative model
+In the spirit of the ur-python web framework, django, peewee uses declarative model
 definitions.  If you're not familiar with django, the idea is that you declare
 a class with some members which map directly to the database schema.  For the
 twitter clone, there are just three models:
@@ -56,7 +62,7 @@ If you like UML, this is basically what it looks like:
 .. image:: schema.jpg
 
 
-Here is what the code looks like:
+Here is what the "bare-bones" model definitions look like:
 
 .. code-block:: python
 
@@ -66,8 +72,7 @@ Here is what the code looks like:
 
     # model definitions -- the standard "pattern" is to define a base model class
     # that specifies which database to use.  then, any subclasses will automatically
-    # use the correct storage. for more information, see:
-    # http://charlesleifer.com/docs/peewee/peewee/models.html#model-api-smells-like-django
+    # use the correct storage.
     class BaseModel(Model):
         class Meta:
             database = database
@@ -81,30 +86,6 @@ Here is what the code looks like:
 
         class Meta:
             order_by = ('username',)
-
-        # it often makes sense to put convenience methods on model instances, for
-        # example, "give me all the users this user is following":
-        def following(self):
-            # query other users through the "relationship" table
-            return User.select().join(
-                Relationship, on=Relationship.to_user,
-            ).where(Relationship.from_user == self)
-
-        def followers(self):
-            return User.select().join(
-                Relationship, on=Relationship.from_user,
-            ).where(Relationship.to_user == self)
-
-        def is_following(self, user):
-            return Relationship.select().where(
-                (Relationship.from_user == self) &
-                (Relationship.to_user == user)
-            ).count() > 0
-
-        def gravatar_url(self, size=80):
-            return 'http://www.gravatar.com/avatar/%s?d=identicon&s=%d' % \
-                (md5(self.email.strip().lower().encode('utf-8')).hexdigest(), size)
-
 
     # this model contains two foreign keys to user -- it essentially allows us to
     # model a "many-to-many" relationship between users.  by querying and joining
@@ -126,15 +107,20 @@ Here is what the code looks like:
         class Meta:
             order_by = ('-pub_date',)
 
-
-peewee supports a handful of field types which map to different column types in
-sqlite.  Conversion between python and the database is handled transparently,
-including the proper handling of ``None``/``NULL``.
-
 .. note::
-    You might have noticed that we created a ``BaseModel`` which sets the
-    database, and then all the other models extend the ``BaseModel``.  This is
-    a good way to make sure all your models are talking to the right database.
+    Note that we create a "BaseModel" class that simply defines what database
+    we would like to use.  All other models then extend this class and will also
+    use the correct database connection.
+
+
+peewee supports :ref:`a number of field types <fields>` which map to different
+column types commonly supported by database engines.  Conversion between python
+types and those used in the database is handled transparently, including things like:
+
+* boolean values
+* datetimes
+* decimal values
+* ``NULL`` and ``None``
 
 
 Creating the initial tables
@@ -142,16 +128,8 @@ Creating the initial tables
 
 In order to start using the models, its necessary to create the tables.  This is
 a one-time operation and can be done quickly using the interactive interpreter.
-
-Open a python shell in the directory alongside the example app and execute the
-following:
-
-.. code-block:: python
-
-    >>> from app import *
-    >>> create_tables()
-
-The ``create_tables()`` method is defined in the app module and looks like this:
+I created a small function in the app module to create the tables.  It looks like
+this:
 
 .. code-block:: python
 
@@ -160,9 +138,26 @@ The ``create_tables()`` method is defined in the app module and looks like this:
         Relationship.create_table()
         Message.create_table()
 
+
+Open a python shell in the directory alongside the example app and execute the
+following:
+
+
+.. code-block:: python
+
+    >>> from app import *
+    >>> create_tables()
+
+.. note::
+    If you encounter an ``ImportError`` it means that either "flask" or "peewee"
+    was not found on your pythonpath and may not be installed correctly.  Check
+    the :ref:`installation` docs on how to install peewee.
+
+
 Every model has a :py:meth:`~Model.create_table` classmethod which runs a ``CREATE TABLE``
-statement in the database.  Usually this is something you'll only do once,
-whenever a new model is added.
+statement in the database.  It will create the table, including all columns, foreign-key
+constaints, and indexes.  Usually this is something you'll only do once, whenever a new
+model is added.
 
 .. note::
     Adding fields after the table has been created will required you to
@@ -172,22 +167,22 @@ whenever a new model is added.
     If you want, you can use instead write ``User.create_table(True)`` and it will
     fail silently if the table already exists.
 
-Connecting to the database
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Establishing a database connection
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 You may have noticed in the above model code that there is a class defined on the
 base model named ``Meta`` that sets the ``database`` attribute.  peewee
-allows every model to specify which database it uses, defaulting to "peewee.db".
-Since you probably want a bit more control, you can instantiate your own
-database and point your models at it.  This is a peewee idiom:
+allows every model to specify which database it uses.
+
+This is a peewee idiom:
 
 .. code-block:: python
 
     # config
     DATABASE = 'tweepee.db'
 
-    # ... more config here, omitted
-
+    # create a database instance that will manage the connection and execute queries
     database = SqliteDatabase(DATABASE) # tell our models to use "tweepee.db"
 
 Because sqlite likes to have a separate connection per-thread, we will tell
@@ -213,8 +208,8 @@ the database.  Flask provides some handy decorators to make this a snap:
     every response.  Django does the `exact same thing <http://code.djangoproject.com/browser/django/tags/releases/1.2.3/django/db/__init__.py#L80>`_.
 
 
-Doing queries
-^^^^^^^^^^^^^
+Making queries
+^^^^^^^^^^^^^^
 
 In the ``User`` model there are a few instance methods that encapsulate some
 user-specific functionality, i.e.
@@ -272,9 +267,10 @@ business end of the ``join()`` view, we can that it does a quick check to see
 if the username is taken, and if not executes a :py:meth:`~Model.create`.
 
 .. code-block:: python
+
     try:
         # use the .get() method to quickly see if a user with that name exists
-        user = User.get(username=request.form['username'])
+        user = User.get(User.username == request.form['username'])
         flash('That username is already taken')
     except User.DoesNotExist:
         # if not, create the user and store the form data on the new model

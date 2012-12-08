@@ -8,12 +8,6 @@ peewee
 
 * a small orm
 * written in python
-* provides a lightweight querying interface over sql
-* uses sql concepts when querying, like joins and where clauses
-* support for some extensions, like hstore
-
-For flask integration, including an admin interface and RESTful API, check
-out `flask-peewee <https://github.com/coleifer/flask-peewee/>`_.
 
 See notes on :ref:`notes on upgrading and changes from 1.0 <upgrading>`
 
@@ -24,16 +18,15 @@ Contents:
    :maxdepth: 2
    :glob:
 
-   peewee/overview
    peewee/installation
-   peewee/upgrading
-   peewee/cookbook
+   peewee/quickstart
    peewee/example
+   peewee/cookbook
    peewee/models
-   peewee/fields
    peewee/querying
-   peewee/database
+   peewee/api
    peewee/playhouse
+   peewee/upgrading
 
 Indices and tables
 ==================

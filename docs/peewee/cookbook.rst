@@ -238,7 +238,8 @@ pub_date is less than today's date.
 
 .. code-block:: pycon
 
-    >>> update_query = Tweet.update(is_published=True).where(Tweet.creation_date < datetime.today())
+    >>> today = datetime.today()
+    >>> update_query = Tweet.update(is_published=True).where(Tweet.creation_date < today)
     >>> update_query.execute()
     4 # <--- number of rows updated
 
@@ -402,10 +403,11 @@ queries are possible.
 
     .. code-block:: python
 
+        # get users whose username starts with "a"
+        a_users = User.select().where(fn.Lower(fn.Substr(User.username, 1, 1)) == 'a')
+
         # the "<<" operator signifies an "IN" query
-        Tweet.select().where(
-            Tweet.user << User.select().where(fn.Lower(fn.Substr(User.username, 1, 1)) == 'a')
-        )
+        a_user_tweets = Tweet.select().where(Tweet.user << a_users)
 
 .. note::
     If you are already familiar with Django's ORM, you can use the "double underscore"
@@ -427,8 +429,8 @@ queries are possible.
 
 .. warning::
     The *Zen of Python* says "There should be one-- and preferably only one --obvious way to do it."
-    The django-style filtering is supported for backwards compatibility with 1.0, so if you can, its
-    probably best not to use it.
+    The django-style filtering is supported for backwards compatibility with 1.0, so don't use it
+    any more :)
 
 Check :ref:`the docs <query_compare>` for some more example queries.
 
