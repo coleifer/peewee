@@ -462,6 +462,7 @@ to order tweets by the username of the author, then by created_date:
     >>> qry = Tweet.select().join(User).order_by(User.username, Tweet.created_date.desc())
 
 .. code-block:: sql
+
     -- generates --
     SELECT t1."id", t1."user_id", t1."message", t1."is_published", t1."created_date"
     FROM "tweet" AS t1 INNER JOIN "user" AS t2 ON t1."user_id" = t2."id"
