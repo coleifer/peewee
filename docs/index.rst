@@ -24,6 +24,7 @@ Contents:
    peewee/cookbook
    peewee/models
    peewee/querying
+   peewee/database
    peewee/api
    peewee/playhouse
    peewee/upgrading
