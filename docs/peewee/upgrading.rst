@@ -3,7 +3,7 @@
 Upgrading peewee
 ================
 
-Peewee went from 2319 SLOC to 1666.
+Peewee went from 2319 source lines of code to ~1600 between 1.0 and 2.0.
 
 Goals for the new API
 ---------------------

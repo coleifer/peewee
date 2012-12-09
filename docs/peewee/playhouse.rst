@@ -7,6 +7,7 @@ Peewee comes with numerous extras which I didn't really feel like including in
 the main source module, but which might be interesting to implementers or fun
 to mess around with.
 
+.. _apsw:
 
 apsw, an advanced sqlite driver
 -------------------------------

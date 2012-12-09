@@ -89,6 +89,8 @@ you wish to use, and then all your models will extend it:
     otherwise peewee will fall back to a default sqlite database named "peewee.db".
 
 
+.. _postgresql:
+
 Using with Postgresql
 ^^^^^^^^^^^^^^^^^^^^^
 
@@ -108,6 +110,8 @@ Point models at an instance of :py:class:`PostgresqlDatabase`.
         username = CharField()
         # etc, etc
 
+
+.. _mysql:
 
 Using with MySQL
 ^^^^^^^^^^^^^^^^
@@ -131,6 +135,34 @@ Point models at an instance of :py:class:`MySQLDatabase`.
 
     # when you're ready to start querying, remember to connect
     mysql_db.connect()
+
+
+.. _sqlite:
+
+Using with SQLite
+^^^^^^^^^^^^^^^^^
+
+Point models at an instance of :py:class:`SqliteDatabase`.  See also :ref:`Alternate Python SQLite Driver <apsw>`_,
+it's really neat.
+
+
+.. code-block:: python
+
+    sqlite_db = SqliteDatabase('sq.db')
+
+
+    class SqliteModel(Model):
+        """A base model that will use our Sqlite database"""
+        class Meta:
+            database = sqlite_db
+
+    class User(SqliteModel):
+        username = CharField()
+        # etc, etc
+
+
+    # when you're ready to start querying, remember to connect
+    sqlite_db.connect()
 
 
 Multi-threaded applications

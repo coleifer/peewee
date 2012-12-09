@@ -6,8 +6,21 @@
 peewee
 ======
 
-* a small orm
+* a small, expressive orm
 * written in python
+
+.. image:: postgresql.png
+    :target: peewee/cookbook.html#using-with-postgresql
+    :alt: postgresql
+
+.. image:: mysql.png
+    :target: peewee/cookbook.html#using-with-mysql
+    :alt: mysql
+
+.. image:: sqlite.png
+    :target: peewee/cookbook.html#using-with-sqlite
+    :alt: sqlite
+
 
 See notes on :ref:`notes on upgrading and changes from 1.0 <upgrading>`
 
