@@ -105,7 +105,7 @@ Models
 
     .. py:classmethod:: select(*selection)
 
-        :param selection: a list of model classes, field instances, functions or expressions
+        :param selection: a list of model classes, field instances, functions or :ref:`expressions <expressions>`
         :rtype: a :py:class:`SelectQuery` for the given ``Model``
 
         Examples of selecting all columns (default):
@@ -577,7 +577,7 @@ Query Types
     .. py:method:: where(*expressions)
 
         :param expressions: a list of one or more :ref:`expressions <expressions>`
-        :rtype: a :py:class:`SelectQuery` instance
+        :rtype: a :py:class:`Query` instance
 
         Example selection users where the username is equal to 'somebody':
 
@@ -594,6 +594,15 @@ Query Types
             ...     (User.is_admin == True)
             ... )
 
+        Example of deleting tweets by users who are no longer active:
+
+        .. code-block:: python
+
+            >>> dq = DeleteQuery(Tweet).where(
+            ...     Tweet.user << User.select().where(User.active == False)
+            ... )
+            >>> dq.execute()
+
         .. note::
 
             :py:meth:`~SelectQuery.where` calls are chainable.  Multiple calls will
@@ -607,7 +616,7 @@ Query Types
             one of ``JOIN_INNER``, ``JOIN_LEFT_OUTER``, ``JOIN_FULL``
         :param on: if multiple foreign keys exist between two models, this parameter
             is the ForeignKeyField to join on.
-        :rtype: a :py:class:`SelectQuery` instance
+        :rtype: a :py:class:`Query` instance
 
         Generate a ``JOIN`` clause from the current ``query context`` to the ``model`` passed
         in, and establishes ``model`` as the new ``query context``.

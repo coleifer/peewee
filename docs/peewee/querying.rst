@@ -76,7 +76,7 @@ familiar with Django's ORM, it is analagous to the ``filter()`` method.
 Joining
 ^^^^^^^
 
-You can join on tables related to one another by :py:class:`ForeignKeyField`.  The :py:meth:`~SelectQuery.join`
+You can join on tables related to one another by :py:class:`ForeignKeyField`.  The :py:meth:`~Query.join`
 method acts on the :py:class:`Model` that is the current "query context".
 This is either:
 
@@ -141,14 +141,10 @@ And here it is using joins:
 Column lookups
 ^^^^^^^^^^^^^^
 
-The other bit that's unique about the query is that it specifies ``"user__in"``.
-Users familiar with Django will recognize this syntax - lookups other than "="
-are signified by a double-underscore followed by the lookup type.  The following
-lookup types are available in peewee:
-
+The following types of comparisons are supported by peewee:
 
 ================ =======================================
-Lookup           Meaning
+Comparison       Meaning
 ================ =======================================
 ``==``           x equals y
 ``<``            x is less than y
@@ -221,11 +217,9 @@ This generates roughly the following SQL:
         (join_date >= ?)
     )
 
-.. note:: If you need more power, check out :py:class:`RawQuery`
 
-
-Comparing against column data
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Other types of comparisons
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Suppose you have a model that looks like the following:
 
@@ -272,8 +266,6 @@ are counting pageviews in a special table:
 The "fn" helper
 ^^^^^^^^^^^^^^^
 
-View API documentation on :py:class:`fn`
-
 SQL provides a number of helper functions as a part of the language.  These functions
 can be used to calculate counts and sums over rows, perform string manipulations,
 do complex math, and more.  There are a lot of functions.
@@ -305,6 +297,8 @@ Functions can be used as any part of a query:
 * update query
 * insert query
 
+View API documentation on :py:class:`fn`
+
 
 Aggregating records
 ^^^^^^^^^^^^^^^^^^^
@@ -326,9 +320,9 @@ This is equivalent to the following:
 
 The resulting query will return ``User`` objects with all their normal attributes
 plus an additional attribute 'count' which will contain the number of tweets.
-By default it uses an inner join if the foreign key is not nullable, which means
-users without tweets won't appear in the list.  To remedy this, manually specify
-the type of join to include users with 0 tweets:
+By default it uses an inner join, which means users without tweets won't appear
+in the list.  To remedy this, manually specify the type of join to include users
+with 0 tweets:
 
 .. code-block:: python
 
@@ -353,7 +347,7 @@ the :py:meth:`~SelectQuery.aggregate` method:
 SQL Functions
 ^^^^^^^^^^^^^
 
-Arbitrary SQL functions can be expressed using the ``fn`` function.
+Arbitrary SQL functions can be expressed using the :py:class:`fn` helper.
 
 Selecting users and counts of tweets:
 

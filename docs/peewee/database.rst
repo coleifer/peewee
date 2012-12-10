@@ -94,12 +94,11 @@ MySQL and has special "SHOW" statements:
 
 Other things the database handles that are not covered here include:
 
-* last insert id and number of rows modified
-* specifying characters used for string interpolation and quoting identifiers,
-  for instance, sqlite uses "?" for interpolation and MySQL uses a backtick for quoting
-* mapping operations such as "LIKE/ILIKE" to their database equivalent
+* :py:meth:`~Database.last_insert_id` and :py:meth:`~Database.rows_affected`
+* :py:attr:`~Database.interpolation` and :py:attr:`~Database.quote_char`
+* :py:attr:`~Database.op_overrides` for mapping operations such as "LIKE/ILIKE" to their database equivalent
 
-Refer to the documentation below or the `source code <https://github.com/coleifer/peewee/blob/master/peewee.py>`_. for details.
+Refer to the :py:class:`Database` API reference or the `source code <https://github.com/coleifer/peewee/blob/master/peewee.py>`_. for details.
 
 .. note:: If your driver conforms to the db-api 2.0 spec, there shouldn't be
     much work needed to get up and running.

@@ -47,9 +47,7 @@ things going on:
         db = SqliteDatabase('test.db')
 
     This establishes an object, ``db``, which is used by the models to connect to and
-    query the database.  There can be multiple database instances per application, but,
-    as I hope is obvious, :py:class:`ForeignKeyField` related models must be on the same
-    database.
+    query the database.
 
 2. Create a base model class which specifies our database
 
@@ -60,20 +58,18 @@ things going on:
                 database = db
 
     Model configuration is kept namespaced in a special class called ``Meta`` -- this
-    convention is borrowed from Django, which does the same thing.  ``Meta`` configuration
-    is passed on to subclasses, so this code basically allows all our project's models
-    to connect to our database.
+    convention is borrowed from Django.  ``Meta`` configuration
+    is passed on to subclasses, so our project's models will all subclass ``BaseModel``.
 
-3. Declare a model or two
+3. Create a model
 
     .. code-block:: python
 
         class User(BaseModel):
             username = CharField()
 
-    Model definition is pretty similar to django or sqlalchemy -- you basically define
-    a class which represents a single table in the database, then its attributes (which
-    are subclasses of :py:class:`Field`) represent columns.
+    Model definition is pretty similar to django or sqlalchemy -- you subclass :py:class:`Model`
+    and add :py:class:`Field` instances as class attributes.
 
     Models provide methods for creating/reading/updating/deleting rows in the
     database.
@@ -95,20 +91,17 @@ database and create the tables first:
     Tweet.create_table()
 
 .. note::
-    Strictly speaking, the explicit call to :py:meth:`~Database.connect` is not
-    necessary, but it is good practice to be explicit about when you are opening
-    and closing connections.
+    Strictly speaking, it is not necessary to call :py:meth:`~Database.connect` but
+    it is good practice to be explicit.  That way if something goes wrong, the error
+    occurs at the connect step, rather than some arbitrary time later.
 
 
 Model instances
 ---------------
 
-Assuming you've created the tables and connected to the database, you are now
-free to create models and execute queries.
-
 Creating models in the interactive interpreter is a snap.
 
-1. Use the :py:meth:`Model.create` classmethod:
+You can use the :py:meth:`Model.create` classmethod:
 
     .. code-block:: python
 
@@ -121,7 +114,7 @@ Creating models in the interactive interpreter is a snap.
         >>> tweet.user.username
         'charlie'
 
-2. Build up the instance programmatically:
+Or you can build up the instance programmatically:
 
     .. code-block:: python
 
@@ -170,15 +163,17 @@ the django framework:
 
     from peewee import *
 
-    custom_db = SqliteDatabase('custom.db')
+    contacts_db = SqliteDatabase('contacts.db')
 
-    class CustomModel(Model):
+    class Person(Model):
+        name = CharField()
+
         class Meta:
-            database = custom_db
+            database = contacts_db
 
 
-This instructs peewee that whenever a query is executed on ``CustomModel`` to use
-the custom database.
+This instructs peewee that whenever a query is executed on ``Person`` to use
+the contacts database.
 
 .. note::
     Take a look at :ref:`the sample models <blog-models>` - you will notice that
@@ -199,6 +194,10 @@ Option                Meaning                                          Inheritab
 
 Specifying indexes for a model
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Indexes are stored in a nested tuple.  Each index is a 2-tuple, the first part
+of which is another tuple of the names of the fields, the second part a boolean
+indicating whether the index should be unique.
 
 .. code-block:: python
 
@@ -221,6 +220,9 @@ Specifying indexes for a model
 Specifying a default ordering
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+You can specify a default ordering for your models.  It is simply a tuple of
+field names. If a field should be ordered descending, prefix it with a dash ("-").
+
 .. code-block:: python
 
     class Tweet(Model):
@@ -230,6 +232,8 @@ Specifying a default ordering
         class Meta:
             # order by created date descending
             order_by = ('-created',)
+
+.. note:: This can be overridden at any time by calling :py:meth:`SelectQuery.order_by`.
 
 
 Inheriting model metadata
