@@ -441,29 +441,6 @@ queries are possible.
         # the "<<" operator signifies an "IN" query
         a_user_tweets = Tweet.select().where(Tweet.user << a_users)
 
-.. note::
-    If you are already familiar with Django's ORM, you can use the "double underscore"
-    syntax using the :py:meth:`SelectQuery.filter` method:
-
-    .. code-block:: python
-
-        >>> for tweet in Tweet.filter(user__username='Charlie'):
-        ...     print tweet.message
-        hello world
-        this is fun
-        look at this picture of my food
-
-    To perform OR lookups, use the special :py:class:`DQ` object:
-
-    .. code-block:: python
-
-        >>> User.filter(DQ(username='Charlie') | DQ(username='Peewee Herman'))
-
-.. warning::
-    The *Zen of Python* says "There should be one-- and preferably only one --obvious way to do it."
-    The django-style filtering is supported for backwards compatibility with 1.0, so don't use it
-    any more :)
-
 Check :ref:`the docs <query_compare>` for some more example queries.
 
 
