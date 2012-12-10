@@ -272,9 +272,7 @@ are counting pageviews in a special table:
 The "fn" helper
 ^^^^^^^^^^^^^^^
 
-.. py:class:: fn()
-
-    A helper class that will convert arbitrary function calls to SQL function calls.
+View API documentation on :py:class:`fn`
 
 SQL provides a number of helper functions as a part of the language.  These functions
 can be used to calculate counts and sums over rows, perform string manipulations,

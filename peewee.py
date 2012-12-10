@@ -1843,10 +1843,6 @@ class Model(object):
             setattr(self, k, v)
 
     @classmethod
-    def raw(cls, sql, *params):
-        return RawQuery(cls, sql, *params)
-
-    @classmethod
     def select(cls, *selection):
         query = SelectQuery(cls, *selection)
         if cls._meta.order_by:
@@ -1868,14 +1864,14 @@ class Model(object):
         return DeleteQuery(cls)
 
     @classmethod
+    def raw(cls, sql, *params):
+        return RawQuery(cls, sql, *params)
+
+    @classmethod
     def create(cls, **query):
         inst = cls(**query)
         inst.save(force_insert=True)
         return inst
-
-    @classmethod
-    def filter(cls, *dq, **query):
-        return cls.select().filter(*dq, **query)
 
     @classmethod
     def get(cls, *query, **kwargs):
@@ -1893,6 +1889,10 @@ class Model(object):
             return sq.get()
         except cls.DoesNotExist:
             return cls.create(**kwargs)
+
+    @classmethod
+    def filter(cls, *dq, **query):
+        return cls.select().filter(*dq, **query)
 
     @classmethod
     def table_exists(cls):
