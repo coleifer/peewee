@@ -916,10 +916,30 @@ class ModelAPITestCase(ModelTestCase):
         self.assertFalse(User.select().where(User.username == 'u2').exists())
 
     def test_unicode(self):
+        # create a unicode literal
         ustr = u'Lýðveldið Ísland'
         u = self.create_user(username=ustr)
-        u2 = User.get(User.username == ustr)
-        self.assertEqual(u2.username, ustr)
+
+        # query using the unicode literal
+        u_db = User.get(User.username == ustr)
+
+        # the db returns a unicode literal
+        self.assertEqual(u_db.username, ustr)
+
+        # delete the user
+        self.assertEqual(u.delete_instance(), 1)
+
+        # convert the unicode to a utf8 string
+        utf8_str = ustr.encode('utf-8')
+
+        # create using the utf8 string
+        u2 = self.create_user(username=utf8_str)
+
+        # query using unicode literal
+        u2_db = User.get(User.username == ustr)
+
+        # we get unicode back
+        self.assertEqual(u2_db.username, ustr)
 
 
 class RecursiveDeleteTestCase(BasePeeweeTestCase):
