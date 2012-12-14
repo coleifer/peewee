@@ -328,6 +328,16 @@ class DecimalField(Field):
                 return value
             return decimal.Decimal(str(value))
 
+def format_unicode(s, encoding='utf-8'):
+    if isinstance(s, unicode):
+        return s
+    elif isinstance(s, basestring):
+        return s.decode(encoding)
+    elif hasattr(s, '__unicode__'):
+        return s.__unicode__()
+    else:
+        return unicode(bytes(s), encoding)
+
 class CharField(Field):
     db_field = 'string'
     template = '%(column_type)s(%(max_length)s)'
@@ -336,14 +346,14 @@ class CharField(Field):
         return {'max_length': 255}
 
     def coerce(self, value):
-        value = unicode(value or '')
+        value = format_unicode(value or '')
         return value[:self.attributes['max_length']]
 
 class TextField(Field):
     db_field = 'text'
 
     def coerce(self, value):
-        return unicode(value or '')
+        return format_unicode(value or '')
 
 def format_date_time(value, formats, post_process=None):
     post_process = post_process or (lambda x: x)
