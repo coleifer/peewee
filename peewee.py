@@ -993,6 +993,15 @@ class QueryResultWrapper(object):
         self.__idx += 1
         return instance
 
+    def fill_cache(self, n=None):
+        n = n or float('Inf')
+        self.__idx = self.__ct
+        while not self._populated and (n > self.__ct):
+            try:
+                self.next()
+            except StopIteration:
+                break
+
 def returns_clone(func):
     def inner(self, *args, **kwargs):
         clone = self.clone()

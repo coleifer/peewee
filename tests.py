@@ -670,6 +670,36 @@ class QueryResultWrapperTestCase(ModelTestCase):
         usernames = [u.username for u in qr.iterator()]
         self.assertEqual(usernames, [])
 
+    def test_fill_cache(self):
+        def assertUsernames(qr, n):
+            self.assertEqual([u.username for u in qr._result_cache], ['u%d' % i for i in range(1, n+1)])
+
+        self.create_users(20)
+        qc = len(self.queries())
+
+        qr = User.select().execute()
+
+        qr.fill_cache(5)
+        self.assertFalse(qr._populated)
+        assertUsernames(qr, 5)
+
+        # a subsequent call will not "over-fill"
+        qr.fill_cache(5)
+        self.assertFalse(qr._populated)
+        assertUsernames(qr, 5)
+
+        # ask for one more and ye shall receive
+        qr.fill_cache(6)
+        self.assertFalse(qr._populated)
+        assertUsernames(qr, 6)
+
+        qr.fill_cache(21)
+        self.assertTrue(qr._populated)
+        assertUsernames(qr, 20)
+
+        qc2 = len(self.queries())
+        self.assertEqual(qc2 - qc, 1)
+
     def test_select_related(self):
         u1 = User.create(username='u1')
         u2 = User.create(username='u2')
