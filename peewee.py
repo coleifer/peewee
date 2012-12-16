@@ -707,6 +707,8 @@ class QueryCompiler(object):
 
     def parse_select_query(self, query, start=1, alias_map=None):
         model = query.model_class
+        db = model._meta.database
+
         alias_map = alias_map or {}
         alias_map.update(self.calculate_alias_map(query, start))
 
@@ -747,8 +749,9 @@ class QueryCompiler(object):
             order_by, _ = self.parse_expr_list(query._order_by, alias_map)
             parts.append('ORDER BY %s' % order_by)
 
-        if query._limit:
-            parts.append('LIMIT %s' % query._limit)
+        if query._limit or (query._offset and not db.empty_limit):
+            limit = query._limit or -1
+            parts.append('LIMIT %s' % limit)
         if query._offset:
             parts.append('OFFSET %s' % query._offset)
         if query._for_update:
@@ -1331,6 +1334,25 @@ class SelectQuery(Query):
     def __iter__(self):
         return iter(self.execute())
 
+    def __getitem__(self, value):
+        offset = limit = None
+        if isinstance(value, slice):
+            if value.start:
+                offset = value.start
+            if value.stop:
+                limit = value.stop - (value.start or 0)
+        else:
+            if value < 0:
+                raise ValueError('Negative indexes are not supported, try ordering in reverse')
+            offset = value
+            limit = 1
+        if self._limit != limit or self._offset != offset:
+            self._qr = None
+        self._limit = limit
+        self._offset = offset
+        res = list(self)
+        return limit == 1 and res[0] or res
+
 
 class UpdateQuery(Query):
     def __init__(self, model_class, update=None):
@@ -1388,6 +1410,7 @@ class DeleteQuery(Query):
 class Database(object):
     commit_select = False
     compiler_class = QueryCompiler
+    empty_limit = False
     field_overrides = {}
     for_update = False
     interpolation = '?'
@@ -1571,6 +1594,7 @@ class SqliteDatabase(Database):
 
 class PostgresqlDatabase(Database):
     commit_select = True
+    empty_limit = True
     field_overrides = {
         'bigint': 'BIGINT',
         'bool': 'BOOLEAN',

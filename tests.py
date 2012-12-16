@@ -748,6 +748,56 @@ class QueryResultWrapperTestCase(ModelTestCase):
         self.assertEqual([u.username for u in users], ['u1', 'u2'])
         self.assertEqual([u.title for u in users], ['b1', 'b2'])
 
+    def test_slicing_dicing(self):
+        def assertUsernames(users, nums):
+            self.assertEqual([u.username for u in users], ['u%d' % i for i in nums])
+
+        self.create_users(10)
+        qc = len(self.queries())
+
+        uq = User.select().order_by(User.id)
+
+        for i in range(2):
+            res = uq[0]
+            self.assertEqual(res.username, 'u1')
+
+        qc2 = len(self.queries())
+        self.assertEqual(qc2 - qc, 1)
+
+        for i in range(2):
+            res = uq[1]
+            self.assertEqual(res.username, 'u2')
+
+        qc2 = len(self.queries())
+        self.assertEqual(qc2 - qc, 2)
+
+        for i in range(2):
+            res = uq[:3]
+            assertUsernames(res, [1, 2, 3])
+
+        qc2 = len(self.queries())
+        self.assertEqual(qc2 - qc, 3)
+
+        for i in range(2):
+            res = uq[2:5]
+            assertUsernames(res, [3, 4, 5])
+
+        qc2 = len(self.queries())
+        self.assertEqual(qc2 - qc, 4)
+
+        for i in range(2):
+            res = uq[5:]
+            assertUsernames(res, [6, 7, 8, 9, 10])
+
+        qc2 = len(self.queries())
+        self.assertEqual(qc2 - qc, 5)
+
+        self.assertRaises(IndexError, uq.__getitem__, 10)
+        self.assertRaises(ValueError, uq.__getitem__, -1)
+
+        res = uq[10:]
+        self.assertEqual(res, [])
+
 
 class ModelQueryTestCase(ModelTestCase):
     requires = [User, Blog]
@@ -1439,7 +1489,7 @@ class DBColumnTestCase(ModelTestCase):
         b2_db = DBBlog.get(DBBlog.blog_id==b2.get_id())
         self.assertEqual(b2_db.user.user_id, u2.user_id)
         self.assertEqual(b2_db.title, 'b2')
-        
+
         self.assertEqual([b.title for b in u2.dbblog_set], ['b2'])
 
 
