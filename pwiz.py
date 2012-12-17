@@ -118,21 +118,24 @@ class PgDB(DB):
         curs = self.conn.execute_sql('select * from %s limit 1' % table)
         return dict((c.name, self.reverse_mapping.get(c.type_code, 'UnknownFieldType')) for c in curs.description)
 
-    def get_foreign_keys(self, table):
+    def get_foreign_keys(self, table, schema='public'):
         framing = '''
             SELECT
                 kcu.column_name, ccu.table_name, ccu.column_name
             FROM information_schema.table_constraints AS tc
             JOIN information_schema.key_column_usage AS kcu
-                ON tc.constraint_name = kcu.constraint_name
+                ON (tc.constraint_name = kcu.constraint_name AND
+                    tc.constraint_schema = kcu.constraint_schema)
             JOIN information_schema.constraint_column_usage AS ccu
-                ON ccu.constraint_name = tc.constraint_name
+                ON (ccu.constraint_name = tc.constraint_name AND
+                    ccu.constraint_schema = tc.constraint_schema)
             WHERE
                 tc.constraint_type = 'FOREIGN KEY' AND
-                tc.table_name = %s
+                tc.table_name = %s AND
+                tc.table_schema = %s
         '''
         fks = []
-        for row in self.conn.execute_sql(framing, (table,)):
+        for row in self.conn.execute_sql(framing, (table,schema)):
             fks.append(row)
         return fks
 
@@ -273,7 +276,10 @@ def introspect(engine, database, **connect):
     for table in tables:
         models[table] = db.get_columns(table)
         table_to_model[table] = tn(table)
-        table_fks[table] = db.get_foreign_keys(table)
+        if schema:
+            table_fks[table] = db.get_foreign_keys(table,schema)
+        else:
+            table_fks[table] = db.get_foreign_keys(table)
 
     # second pass, convert foreign keys, assign primary keys, and mark
     # explicit column names where they don't match the "pythonic" ones
