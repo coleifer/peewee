@@ -115,7 +115,7 @@ class PgDB(DB):
         return PostgresqlDatabase
 
     def get_columns(self, table):
-        curs = self.conn.execute_sql('select * from %s limit 1' % table)
+        curs = self.conn.execute_sql('select * from `%s` limit 1' % table)
         return dict((c.name, self.reverse_mapping.get(c.type_code, 'UnknownFieldType')) for c in curs.description)
 
     def get_foreign_keys(self, table, schema='public'):
@@ -148,7 +148,7 @@ class MySQLDB(DB):
         return MySQLDatabase
 
     def get_columns(self, table):
-        curs = self.conn.execute_sql('select * from %s limit 1' % table)
+        curs = self.conn.execute_sql('select * from `%s` limit 1' % table)
         return dict((r[0], self.reverse_mapping.get(r[1], 'UnknownFieldType')) for r in curs.description)
 
     def get_foreign_keys(self, table):
