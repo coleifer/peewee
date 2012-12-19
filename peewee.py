@@ -619,7 +619,8 @@ class QueryCompiler(object):
         elif isinstance(expr, SelectQuery):
             max_alias = self._max_alias(alias_map)
             clone = expr.clone()
-            clone._select = (clone.model_class._meta.primary_key,)
+            if not expr._explicit_selection:
+                clone._select = (clone.model_class._meta.primary_key,)
             subselect, p = self.parse_select_query(clone, max_alias, alias_map)
             s = '(%s)' % subselect
         elif isinstance(expr, (list, tuple)):
@@ -1171,6 +1172,7 @@ class SelectQuery(Query):
     require_commit = False
 
     def __init__(self, model_class, *selection):
+        self._explicit_selection = len(selection) > 0
         self._select = self._model_shorthand(selection or model_class._meta.get_fields())
         self._group_by = None
         self._having = None
@@ -1185,6 +1187,7 @@ class SelectQuery(Query):
 
     def clone(self):
         query = super(SelectQuery, self).clone()
+        query._explicit_selection = self._explicit_selection
         query._select = list(self._select)
         if self._group_by is not None:
             query._group_by = list(self._group_by)

@@ -389,6 +389,9 @@ class SelectTestCase(BasePeeweeTestCase):
         sq = SelectQuery(User).where(User.id << User.select().where(User.username=='u1'))
         self.assertWhere(sq, '(users."id" IN (SELECT users."id" FROM "users" AS users WHERE (users."username" = ?)))', ['u1'])
 
+        sq = SelectQuery(User).where(User.username << User.select(User.username).where(User.username=='u1'))
+        self.assertWhere(sq, '(users."username" IN (SELECT users."username" FROM "users" AS users WHERE (users."username" = ?)))', ['u1'])
+
         sq = SelectQuery(Blog).where((Blog.pk == 3) | (Blog.user << User.select().where(User.username << ['u1', 'u2'])))
         self.assertWhere(sq, '((blog."pk" = ?) OR (blog."user_id" IN (SELECT users."id" FROM "users" AS users WHERE (users."username" IN (?,?)))))', [3, 'u1', 'u2'])
 
