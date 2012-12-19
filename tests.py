@@ -385,6 +385,13 @@ class SelectTestCase(BasePeeweeTestCase):
         sq = SelectQuery(User).where(fn.Lower(fn.Substr(User.username, 0, 1)) == 'a')
         self.assertWhere(sq, '(Lower(Substr(users."username", ?, ?)) = ?)', [0, 1, 'a'])
 
+    def test_where_r(self):
+        sq = SelectQuery(Blog).where(Blog.pub_date < R('NOW() - INTERVAL 1 HOUR'))
+        self.assertWhere(sq, '(blog."pub_date" < NOW() - INTERVAL 1 HOUR)', [])
+
+        sq = SelectQuery(Blog).where(Blog.pub_date < (fn.Now() - R('INTERVAL 1 HOUR')))
+        self.assertWhere(sq, '(blog."pub_date" < (Now() - INTERVAL 1 HOUR))', [])
+
     def test_where_subqueries(self):
         sq = SelectQuery(User).where(User.id << User.select().where(User.username=='u1'))
         self.assertWhere(sq, '(users."id" IN (SELECT users."id" FROM "users" AS users WHERE (users."username" = ?)))', ['u1'])
