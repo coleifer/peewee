@@ -884,6 +884,16 @@ class ModelAPITestCase(ModelTestCase):
         self.assertEqual([b.title for b in u1.blog_set], ['b11', 'b12'])
         self.assertEqual([b.title for b in u2.blog_set], ['b2'])
 
+    def test_related_name_collision(self):
+        class Foo(TestModel):
+            f1 = CharField()
+
+        def make_klass():
+            class FooRel(TestModel):
+                foo = ForeignKeyField(Foo, related_name='f1')
+
+        self.assertRaises(AttributeError, make_klass)
+
     def test_fk_exceptions(self):
         c1 = Category.create(name='c1')
         c2 = Category.create(parent=c1, name='c2')

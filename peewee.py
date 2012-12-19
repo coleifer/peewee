@@ -497,6 +497,9 @@ class ForeignKeyField(IntegerField):
 
         if self.rel_model == 'self':
             self.rel_model = self.model_class
+        if self.related_name in self.rel_model._meta.fields:
+            raise AttributeError('Foreign key: %s.%s related name "%s" collision with field of same name' % (
+                self.model_class._meta.name, self.name, self.related_name))
 
         setattr(model_class, name, RelationDescriptor(self, self.rel_model))
         setattr(self.rel_model, self.related_name, ReverseRelationDescriptor(self))
