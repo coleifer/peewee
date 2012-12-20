@@ -643,7 +643,6 @@ class QueryCompiler(object):
                 s = 'NOT %s' % s
             if expr._alias:
                 s = ' '.join((s, 'AS', expr._alias))
-
         return s, p
 
     def parse_query_node(self, qnode, alias_map):
