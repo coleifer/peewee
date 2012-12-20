@@ -437,7 +437,7 @@ class RelationDescriptor(FieldDescriptor):
 
     def get_object_or_id(self, instance):
         rel_id = instance._data.get(self.att_name)
-        if rel_id or self.att_name in instance._obj_cache:
+        if rel_id is not None or self.att_name in instance._obj_cache:
             if self.att_name not in instance._obj_cache:
                 obj = self.rel_model.get(self.rel_model._meta.primary_key==rel_id)
                 instance._obj_cache[self.att_name] = obj
@@ -640,7 +640,6 @@ class QueryCompiler(object):
                 s = 'NOT %s' % s
             if expr._alias:
                 s = ' '.join((s, 'AS', expr._alias))
-
         return s, p
 
     def parse_query_node(self, qnode, alias_map):
