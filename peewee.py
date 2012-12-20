@@ -437,7 +437,7 @@ class RelationDescriptor(FieldDescriptor):
 
     def get_object_or_id(self, instance):
         rel_id = instance._data.get(self.att_name)
-        if rel_id or self.att_name in instance._obj_cache:
+        if rel_id is not None or self.att_name in instance._obj_cache:
             if self.att_name not in instance._obj_cache:
                 obj = self.rel_model.get(self.rel_model._meta.primary_key==rel_id)
                 instance._obj_cache[self.att_name] = obj
@@ -956,7 +956,7 @@ class QueryResultWrapper(object):
                 if not fk_field:
                     continue
 
-                if not joined_inst.get_id() and fk_field.name in inst._data:
+                if joined_inst.get_id() is None and fk_field.name in inst._data:
                     rel_inst_id = inst._data[fk_field.name]
                     joined_inst.set_id(rel_inst_id)
 
@@ -1985,7 +1985,7 @@ class Model(object):
     def save(self, force_insert=False):
         field_dict = dict(self._data)
         pk = self._meta.primary_key
-        if self.get_id() and not force_insert:
+        if self.get_id() is not None and not force_insert:
             field_dict.pop(pk.name)
             update = self.update(
                 **field_dict
@@ -2026,7 +2026,7 @@ class Model(object):
 
     def __eq__(self, other):
         return other.__class__ == self.__class__ and \
-               self.get_id() and \
+               self.get_id() is not None and \
                other.get_id() == self.get_id()
 
     def __ne__(self, other):

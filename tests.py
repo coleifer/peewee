@@ -944,6 +944,18 @@ class ModelAPITestCase(ModelTestCase):
 
         self.assertEqual(User.select().count(), 1)
 
+    def test_zero_id(self):
+        query = 'insert into users (id, username) values (%s, %s)' % (
+            test_db.interpolation, test_db.interpolation)
+        test_db.execute_sql(query, (0, 'foo'))
+        Blog.insert(title='foo2', user=0).execute()
+
+        u = User.get(User.id == 0)
+        b = Blog.get(Blog.user == u)
+
+        self.assertTrue(u == u)
+        self.assertTrue(u == b.user)
+
     def test_saving_via_create_gh111(self):
         u = User.create(username='u')
         b = Blog.create(title='foo', user=u)
