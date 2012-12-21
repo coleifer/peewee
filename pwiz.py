@@ -250,22 +250,22 @@ engine_mapping = {
     'mysql': MySQLDB,
 }
 
-def get_db(engine):
+def get_conn(engine, database, **connect):
     if engine not in engine_mapping:
         err('Unsupported engine: "%s"' % engine)
         sys.exit(1)
 
-    db_class = engine_mapping[engine]
-    return db_class()
-
-def introspect(engine, database, **connect):
-    db = get_db(engine)
+    db = engine_mapping[engine]()
     schema = connect.pop('schema', None)
     db.connect(database, **connect)
 
     if schema:
         db.conn.set_search_path(*schema.split(','))
+    return db
 
+def introspect(engine, database, **connect):
+    schema = connect.get('schema')
+    db = get_conn(engine, database, **connect)
     tables = db.get_tables()
 
     models = {}
@@ -277,7 +277,7 @@ def introspect(engine, database, **connect):
         models[table] = db.get_columns(table)
         table_to_model[table] = tn(table)
         if schema:
-            table_fks[table] = db.get_foreign_keys(table,schema)
+            table_fks[table] = db.get_foreign_keys(table, schema)
         else:
             table_fks[table] = db.get_foreign_keys(table)
 
@@ -289,7 +289,11 @@ def introspect(engine, database, **connect):
         for column, rel_table, rel_pk in table_fks[table]:
             models[table][column] = 'ForeignKeyField'
             models[rel_table][rel_pk] = 'PrimaryKeyField'
-            col_meta[table][column] = {'rel_model': table_to_model[rel_table]}
+            if rel_table == table:
+                ttm = "'self'"
+            else:
+                ttm = table_to_model[rel_table]
+            col_meta[table][column] = {'rel_model': ttm}
 
         for column in models[table]:
             col_meta[table].setdefault(column, {})
@@ -300,11 +304,16 @@ def introspect(engine, database, **connect):
     print frame % (db.get_conn_class().__name__, database, repr(connect))
 
     # print the models
-    def print_model(model, seen):
+    def print_model(model, seen, accum=None):
+        accum = accum or []
+
         for _, rel_table, _ in table_fks[model]:
+            if rel_table in accum and model not in accum:
+                print '# POSSIBLE REFERENCE CYCLE: %s' % table_to_model[model]
+
             if rel_table not in seen:
                 seen.add(rel_table)
-                print_model(rel_table, seen)
+                print_model(rel_table, seen, accum + [model])
 
         ttm = table_to_model[model]
         print 'class %s(BaseModel):' % ttm
