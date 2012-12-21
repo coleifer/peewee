@@ -309,9 +309,9 @@ def introspect(engine, database, **connect):
 
         for _, rel_table, _ in table_fks[model]:
             if rel_table in accum and model not in accum:
-                print '# POSSIBLE REFERENCE CYCLE: %s' % table_to_model[model]
+                print '# POSSIBLE REFERENCE CYCLE: %s' % table_to_model[rel_table]
 
-            if rel_table not in seen:
+            if rel_table not in seen and rel_table not in accum:
                 seen.add(rel_table)
                 print_model(rel_table, seen, accum + [model])
 
