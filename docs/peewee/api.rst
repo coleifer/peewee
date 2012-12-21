@@ -1044,11 +1044,13 @@ Query Types
 Database and its subclasses
 ---------------------------
 
-.. py:class:: Database(database[, threadlocals=False[, autocommit=True[, **connect_kwargs]]])
+.. py:class:: Database(database[, threadlocals=False[, autocommit=True[, fields=None[, ops=None[, **connect_kwargs]]]]])
 
     :param database: the name of the database (or filename if using sqlite)
     :param threadlocals: whether to store connections in a threadlocal
     :param autocommit: automatically commit every query executed by calling :py:meth:`~Database.execute`
+    :param dict fields: a mapping of :py:attr:`~Field.db_field` to database column type, e.g. 'string' => 'varchar'
+    :param dict ops: a mapping of operations understood by the querycompiler to expressions
     :param connect_kwargs: any arbitrary parameters to pass to the database driver when connecting
 
     .. note::
@@ -1281,6 +1283,21 @@ Database and its subclasses
                 from_acct.charge(amt)
                 to_acct.pay(amt)
                 return amt
+ 
+    .. py:classmethod:: register_fields(fields)
+
+        Register a mapping of field overrides for the database class.  Used
+        to register custom fields or override the defaults.
+
+        :param dict fields: A mapping of :py:attr:`~Field.db_field` to column type
+
+    .. py:classmethod:: register_ops(ops)
+
+        Register a mapping of operations understood by the QueryCompiler to their
+        SQL equivalent, e.g. ``{OP_EQ: '='}``.  Used to extend the types of field
+        comparisons.
+
+        :param dict fields: A mapping of :py:attr:`~Field.db_field` to column type
 
 
 .. py:class:: SqliteDatabase(Database)
