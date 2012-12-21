@@ -69,18 +69,16 @@ class PostgresqlExtCompiler(QueryCompiler):
 
 class PostgresqlExtDatabase(PostgresqlDatabase):
     compiler_class = PostgresqlExtCompiler
-    field_overrides = dict_update(PostgresqlDatabase.field_overrides, {
-        'hash': 'hstore',
-        'uuid': 'uuid',
-    })
-    op_overrides = dict_update(PostgresqlDatabase.op_overrides, {
-        OP_HCONTAINS_DICT: '@>',
-        OP_HCONTAINS_KEYS: '?&',
-        OP_HCONTAINS_KEY: '?',
-        OP_HUPDATE: '||',
-    })
 
     def _connect(self, database, **kwargs):
         conn = super(PostgresqlExtDatabase, self)._connect(database, **kwargs)
         register_hstore(conn, globally=True)
         return conn
+
+PostgresqlExtDatabase.register_fields({'hash': 'hstore', 'uuid': 'uuid'})
+PostgresqlExtDatabase.register_ops({
+    OP_HCONTAINS_DICT: '@>',
+    OP_HCONTAINS_KEYS: '?&',
+    OP_HCONTAINS_KEY: '?',
+    OP_HUPDATE: '||',
+})

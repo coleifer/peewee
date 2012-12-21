@@ -1427,7 +1427,8 @@ class Database(object):
     sequences = False
     subquery_delete_same_table = True
 
-    def __init__(self, database, threadlocals=False, autocommit=True, **connect_kwargs):
+    def __init__(self, database, threadlocals=False, autocommit=True,
+                 fields=None, ops=None, **connect_kwargs):
         self.init(database, **connect_kwargs)
 
         if threadlocals:
@@ -1437,6 +1438,9 @@ class Database(object):
 
         self._conn_lock = threading.Lock()
         self.autocommit = autocommit
+
+        self.field_overrides = dict_update(self.field_overrides, fields or {})
+        self.op_overrides = dict_update(self.op_overrides, ops or {})
 
     def init(self, database, **connect_kwargs):
         self.deferred = database is None
@@ -1473,6 +1477,14 @@ class Database(object):
 
     def _connect(self, database, **kwargs):
         raise NotImplementedError
+
+    @classmethod
+    def register_fields(cls, fields):
+        cls.field_overrides = dict_update(cls.field_overrides, fields)
+
+    @classmethod
+    def register_ops(cls, ops):
+        cls.op_overrides = dict_update(cls.op_overrides, ops)
 
     def last_insert_id(self, cursor, model):
         if model._meta.auto_increment:
