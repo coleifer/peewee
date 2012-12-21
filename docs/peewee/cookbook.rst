@@ -478,6 +478,25 @@ to order tweets by the username of the author, then by created_date:
     ORDER BY t2."username", t1."created_date" DESC
 
 
+Getting random records
+^^^^^^^^^^^^^^^^^^^^^^
+
+Occasionally you may want to pull a random record from the database.  You can accomplish
+this by ordering by the ``random`` or ``rand`` function:
+
+Postgresql and Sqlite:
+
+.. code-block:: python
+
+    LotteryNumber.select().order_by(fn.Random()).limit(5) # pick 5 lucky winners
+
+MySQL:
+
+.. code-block:: python
+
+    LotterNumber.select().order_by(fn.Rand()).limit(5) # pick 5 lucky winners
+
+
 Paginating records
 ^^^^^^^^^^^^^^^^^^
 
