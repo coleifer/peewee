@@ -263,11 +263,9 @@ def get_conn(engine, database, **connect):
         db.conn.set_search_path(*schema.split(','))
     return db
 
-def introspect(engine, database, **connect):
-    schema = connect.get('schema')
-    db = get_conn(engine, database, **connect)
+def introspect(db, schema=None):
     tables = db.get_tables()
-
+    
     models = {}
     table_to_model = {}
     table_fks = {}
@@ -299,7 +297,15 @@ def introspect(engine, database, **connect):
             col_meta[table].setdefault(column, {})
             if column != cn(column):
                 col_meta[table][column]['db_column'] = "'%s'" % column
+    
+    return models, table_to_model, table_fks, col_meta
 
+def print_models(engine, database, **connect):
+    schema = connect.get('schema')
+    db = get_conn(engine, database, **connect)
+    
+    models, table_to_model, table_fks, col_meta = introspect(db, schema)
+    
     # write generated code to standard out
     print frame % (db.get_conn_class().__name__, database, repr(connect))
 
@@ -371,4 +377,4 @@ if __name__ == '__main__':
     if options.engine == 'mysql' and 'password' in connect:
         connect['passwd'] = connect.pop('password', None)
 
-    introspect(options.engine, database, **connect)
+    print_models(options.engine, database, **connect)
