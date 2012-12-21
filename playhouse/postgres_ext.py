@@ -1,5 +1,7 @@
+import uuid
+
 from peewee import *
-from peewee import QueryCompiler, Param, BinaryExpr, dict_update
+from peewee import QueryCompiler, Param, Expr, dict_update
 
 from psycopg2 import extensions
 from psycopg2.extras import register_hstore
@@ -27,17 +29,27 @@ class HStoreField(Field):
         return fn.defined(self, key)
 
     def update(self, **data):
-        return BinaryExpr(self, OP_HUPDATE, data)
+        return Expr(self, OP_HUPDATE, data)
 
     def delete(self, *keys):
         return fn.delete(self, Param(list(keys)))
 
     def contains(self, value):
         if isinstance(value, dict):
-            return Q(self, OP_HCONTAINS_DICT, Param(value))
+            return Expr(self, OP_HCONTAINS_DICT, Param(value))
         elif isinstance(value, (list, tuple)):
-            return Q(self, OP_HCONTAINS_KEYS, Param(value))
-        return Q(self, OP_HCONTAINS_KEY, value)
+            return Expr(self, OP_HCONTAINS_KEYS, Param(value))
+        return Expr(self, OP_HCONTAINS_KEY, value)
+
+
+class UUIDField(Field):
+    db_field = 'uuid'
+
+    def db_value(self, value):
+        return str(value)
+
+    def python_value(self, value):
+        return uuid.UUID(value)
 
 
 OP_HUPDATE = 120
@@ -59,6 +71,7 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
     compiler_class = PostgresqlExtCompiler
     field_overrides = dict_update(PostgresqlDatabase.field_overrides, {
         'hash': 'hstore',
+        'uuid': 'uuid',
     })
     op_overrides = dict_update(PostgresqlDatabase.op_overrides, {
         OP_HCONTAINS_DICT: '@>',
