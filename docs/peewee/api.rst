@@ -1283,7 +1283,7 @@ Database and its subclasses
                 from_acct.charge(amt)
                 to_acct.pay(amt)
                 return amt
- 
+
     .. py:classmethod:: register_fields(fields)
 
         Register a mapping of field overrides for the database class.  Used

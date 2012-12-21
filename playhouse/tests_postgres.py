@@ -1,4 +1,5 @@
 import unittest
+import uuid
 
 from postgres_ext import *
 
@@ -17,17 +18,30 @@ class Testing(BaseModel):
     class Meta:
         order_by = ('name',)
 
+class TestingID(BaseModel):
+    uniq = UUIDField()
 
-class PostgresExtHStoreTestCase(unittest.TestCase):
+
+class PostgresExtTestCase(unittest.TestCase):
     def setUp(self):
         Testing.drop_table(True)
         Testing.create_table()
+        TestingID.drop_table(True)
+        TestingID.create_table()
         self.t1 = None
         self.t2 = None
 
     def create(self):
         self.t1 = Testing.create(name='t1', data={'k1': 'v1', 'k2': 'v2'})
         self.t2 = Testing.create(name='t2', data={'k2': 'v2', 'k3': 'v3'})
+
+    def test_uuid(self):
+        uuid_str = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
+        uuid_obj = uuid.UUID(uuid_str)
+
+        t1 = TestingID.create(uniq=uuid_obj)
+        t1_db = TestingID.get(TestingID.uniq == uuid_str)
+        self.assertEqual(t1, t1_db)
 
     def test_storage(self):
         self.create()

@@ -488,3 +488,69 @@ for the first time, pass in ``force_insert = True``:
     Any foreign keys to a model with a non-integer primary key will have the
     ``ForeignKeyField`` use the same underlying storage type as the primary key
     they are related to.
+
+
+.. _custom-fields:
+
+Creating a custom field
+-----------------------
+
+It isn't too difficult to add support for custom field types in peewee. Let's add
+a UUID field for postgresql (which has a native UUID column type). This code is
+contained in the ``playhouse.postgres_ext`` module, for reference.
+
+To add a custom field type you need to first identify what type of column the field
+data will be stored in.  If you just want to add "python" behavior atop, say, a
+decimal field (for instance to make a currency field) you would just subclass
+:py:class:`DecimalField`.  On the other hand, if the database offers a custom
+column type you will need to let peewee know.  This is controlled by the :py:attr:`Field.db_field`
+attribute.
+
+Let's start by defining our UUID field:
+
+.. code-block:: python
+
+    class UUIDField(Field):
+        db_field = 'uuid'
+
+
+We will store the UUIDs in a native UUID column.  Since psycopg2 treats the data as
+a string by default, we will add two methods to the field to handle:
+
+* the data coming out of the database to be used in our application
+* the data from our python app going into the database
+
+.. code-block:: python
+
+    import uuid
+
+    class UUIDField(Field):
+        db_field = 'uuid'
+
+        def db_value(self, value):
+            return str(value) # convert UUID to str
+
+        def python_value(self, value):
+            return uuid.UUID(value) # convert str to UUID
+
+Now, we need to let the database know how to map this "uuid" label to an actual "uuid"
+column type in the database.  There are 2 ways of doing this:
+
+1. Specify the overrides in the :py:class:`Database` constructor:
+
+  .. code-block:: python
+
+      db = PostgresqlDatabase('my_db', fields={'uuid': 'uuid'})
+
+2. Register them class-wide using :py:meth:`Database.register_fields`:
+
+  .. code-block:: python
+
+      # will affect all instances of PostgresqlDatabase
+      PostgresqlDatabase.register_fields({'uuid': 'uuid'})
+
+
+That is it!  Some fields may support exotic operations, like the postgresql HStore field
+acts like a key/value store and has custom operators for things like "contains" and
+"update".  You can specify "op overrides" as well.  For more information, check out
+the source code for the :py:class:`HStoreField`, in ``playhouse.postgres_ext``.
