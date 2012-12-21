@@ -185,6 +185,7 @@ class DQ(Leaf):
 class Param(Leaf):
     def __init__(self, data):
         self.data = data
+        super(Param, self).__init__()
 
 
 class Func(Leaf):
