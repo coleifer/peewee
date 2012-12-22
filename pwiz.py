@@ -15,37 +15,20 @@
 #         `=. `=./
 #            `"`
 from optparse import OptionParser
+
 import re
 import sys
 
+from peewee import *
+
 try:
     from MySQLdb.constants import FIELD_TYPE
-    MYSQL_MAP = {
-        FIELD_TYPE.BLOB: 'TextField',
-        FIELD_TYPE.CHAR: 'CharField',
-        FIELD_TYPE.DECIMAL: 'DecimalField',
-        FIELD_TYPE.NEWDECIMAL: 'DecimalField',
-        FIELD_TYPE.DATE: 'DateField',
-        FIELD_TYPE.DATETIME: 'DateTimeField',
-        FIELD_TYPE.DOUBLE: 'FloatField',
-        FIELD_TYPE.FLOAT: 'FloatField',
-        FIELD_TYPE.INT24: 'IntegerField',
-        FIELD_TYPE.LONG: 'IntegerField',
-        FIELD_TYPE.LONGLONG: 'BigIntegerField',
-        FIELD_TYPE.SHORT: 'IntegerField',
-        FIELD_TYPE.STRING: 'CharField',
-        FIELD_TYPE.TIME: 'TimeField',
-        FIELD_TYPE.TIMESTAMP: 'DateTimeField',
-        FIELD_TYPE.TINY: 'IntegerField',
-        FIELD_TYPE.TINY_BLOB: 'TextField',
-        FIELD_TYPE.MEDIUM_BLOB: 'TextField',
-        FIELD_TYPE.LONG_BLOB: 'TextField',
-        FIELD_TYPE.VAR_STRING: 'CharField',
-    }
 except ImportError:
-    MYSQL_MAP = {}
+    FIELD_TYPE = None
 
-from peewee import *
+
+class UnknownFieldType(object):
+    pass
 
 
 class DB(object):
@@ -59,8 +42,8 @@ class DB(object):
         get_columns('some_table')
 
         {
-            'name': 'CharField',
-            'age': 'IntegerField',
+            'name': CharField,
+            'age': IntegerField,
         }
         """
         raise NotImplementedError
@@ -93,22 +76,22 @@ class DB(object):
 class PgDB(DB):
     # thanks, django
     reverse_mapping = {
-        16: 'BooleanField',
-        20: 'IntegerField',
-        21: 'IntegerField',
-        23: 'IntegerField',
-        25: 'TextField',
-        700: 'FloatField',
-        701: 'FloatField',
-        1042: 'CharField', # blank-padded CHAR
-        1043: 'CharField',
-        1082: 'DateField',
-        1114: 'DateTimeField',
-        1184: 'DateTimeField',
-        1083: 'TimeField',
-        1266: 'TimeField',
-        1700: 'DecimalField',
-        2950: 'TextField', # UUID
+        16: BooleanField,
+        20: IntegerField,
+        21: IntegerField,
+        23: IntegerField,
+        25: TextField,
+        700: FloatField,
+        701: FloatField,
+        1042: CharField, # blank-padded CHAR
+        1043: CharField,
+        1082: DateField,
+        1114: DateTimeField,
+        1184: DateTimeField,
+        1083: TimeField,
+        1266: TimeField,
+        1700: DecimalField,
+        2950: TextField, # UUID
     }
 
     def get_conn_class(self):
@@ -116,7 +99,7 @@ class PgDB(DB):
 
     def get_columns(self, table):
         curs = self.conn.execute_sql('select * from "%s" limit 1' % table)
-        return dict((c.name, self.reverse_mapping.get(c.type_code, 'UnknownFieldType')) for c in curs.description)
+        return dict((c.name, self.reverse_mapping.get(c.type_code, UnknownFieldType)) for c in curs.description)
 
     def get_foreign_keys(self, table, schema='public'):
         framing = '''
@@ -142,14 +125,38 @@ class PgDB(DB):
 
 class MySQLDB(DB):
     # thanks, django
-    reverse_mapping = MYSQL_MAP
+    if FIELD_TYPE is None:
+        reverse_mapping = {}
+    else:
+        reverse_mapping = {
+            FIELD_TYPE.BLOB: TextField,
+            FIELD_TYPE.CHAR: CharField,
+            FIELD_TYPE.DECIMAL: DecimalField,
+            FIELD_TYPE.NEWDECIMAL: DecimalField,
+            FIELD_TYPE.DATE: DateField,
+            FIELD_TYPE.DATETIME: DateTimeField,
+            FIELD_TYPE.DOUBLE: FloatField,
+            FIELD_TYPE.FLOAT: FloatField,
+            FIELD_TYPE.INT24: IntegerField,
+            FIELD_TYPE.LONG: IntegerField,
+            FIELD_TYPE.LONGLONG: BigIntegerField,
+            FIELD_TYPE.SHORT: IntegerField,
+            FIELD_TYPE.STRING: CharField,
+            FIELD_TYPE.TIME: TimeField,
+            FIELD_TYPE.TIMESTAMP: DateTimeField,
+            FIELD_TYPE.TINY: IntegerField,
+            FIELD_TYPE.TINY_BLOB: TextField,
+            FIELD_TYPE.MEDIUM_BLOB: TextField,
+            FIELD_TYPE.LONG_BLOB: TextField,
+            FIELD_TYPE.VAR_STRING: CharField,
+        }
 
     def get_conn_class(self):
         return MySQLDatabase
 
     def get_columns(self, table):
         curs = self.conn.execute_sql('select * from `%s` limit 1' % table)
-        return dict((r[0], self.reverse_mapping.get(r[1], 'UnknownFieldType')) for r in curs.description)
+        return dict((r[0], self.reverse_mapping.get(r[1], UnknownFieldType)) for r in curs.description)
 
     def get_foreign_keys(self, table):
         framing = '''
@@ -166,22 +173,22 @@ class MySQLDB(DB):
 class SqDB(DB):
     # thanks, django
     reverse_mapping = {
-        'bool': 'BooleanField',
-        'boolean': 'BooleanField',
-        'smallint': 'IntegerField',
-        'smallint unsigned': 'IntegerField',
-        'smallinteger': 'IntegerField',
-        'int': 'IntegerField',
-        'integer': 'IntegerField',
-        'bigint': 'BigIntegerField',
-        'integer unsigned': 'IntegerField',
-        'decimal': 'DecimalField',
-        'real': 'FloatField',
-        'text': 'TextField',
-        'char': 'CharField',
-        'date': 'DateField',
-        'datetime': 'DateTimeField',
-        'time': 'TimeField',
+        'bool': BooleanField,
+        'boolean': BooleanField,
+        'smallint': IntegerField,
+        'smallint unsigned': IntegerField,
+        'smallinteger': IntegerField,
+        'int': IntegerField,
+        'integer': IntegerField,
+        'bigint': BigIntegerField,
+        'integer unsigned': IntegerField,
+        'decimal': DecimalField,
+        'real': FloatField,
+        'text': TextField,
+        'char': CharField,
+        'date': DateField,
+        'datetime': DateTimeField,
+        'time': TimeField,
     }
 
     def get_conn_class(self):
@@ -192,9 +199,9 @@ class SqDB(DB):
         if col in self.reverse_mapping:
             return self.reverse_mapping[col]
         elif re.search(r'^\s*(?:var)?char\s*\(\s*(\d+)\s*\)\s*$', col):
-            return 'CharField'
+            return CharField
         else:
-            return 'UnknownFieldType'
+            return UnknownFieldType
 
     def get_columns(self, table):
         curs = self.conn.execute_sql('pragma table_info(%s)' % table)
@@ -202,7 +209,7 @@ class SqDB(DB):
         for (_, name, col, not_null, _, is_pk) in curs.fetchall():
             # cid, name, type, notnull, dflt_value, pk
             if is_pk:
-                col_type = 'PrimaryKeyField'
+                col_type = PrimaryKeyField
             else:
                 col_type = self.map_col(col)
             col_dict[name] = col_type
@@ -285,8 +292,8 @@ def introspect(db, schema=None):
     for table in tables:
         col_meta[table] = {}
         for column, rel_table, rel_pk in table_fks[table]:
-            models[table][column] = 'ForeignKeyField'
-            models[rel_table][rel_pk] = 'PrimaryKeyField'
+            models[table][column] = ForeignKeyField
+            models[rel_table][rel_pk] = PrimaryKeyField
             if rel_table == table:
                 ttm = "'self'"
             else:
@@ -325,13 +332,13 @@ def print_models(engine, database, **connect):
         print 'class %s(BaseModel):' % ttm
         cols = models[model]
         for column, field_class in ds(cols):
-            if column == 'id' and field_class in ('IntegerField', 'PrimaryKeyField'):
+            if column == 'id' and field_class in (IntegerField, PrimaryKeyField):
                 continue
 
             field_params = ', '.join([
                 '%s=%s' % (k, v) for k, v in col_meta[model][column].items()
             ])
-            print '    %s = %s(%s)' % (cn(column), field_class, field_params)
+            print '    %s = %s(%s)' % (cn(column), field_class.__name__, field_params)
         print
 
         print '    class Meta:'
