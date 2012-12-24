@@ -3,12 +3,9 @@
 peewee
 ======
 
-* a small orm
+* a small, expressive orm
 * written in python
-* provides a lightweight querying interface over sql
-* uses sql concepts when querying, like joins and where clauses
-* supports sqlite, mysql and postgresql
-* support for special extensions like `hstore <http://peewee.readthedocs.org/en/latest/peewee/playhouse.html#postgresql-extensions-hstore-ltree>`_ and `full-text search <http://peewee.readthedocs.org/en/latest/peewee/playhouse.html#full-text-search>`_
+* built-in support for sqlite, mysql and postgresql and special extensions like `hstore <http://peewee.readthedocs.org/en/latest/peewee/playhouse.html#postgresql-hstore>`_
 
 For flask integration, including an admin interface and RESTful API, check
 out `flask-peewee <https://github.com/coleifer/flask-peewee/>`_.
@@ -51,6 +48,9 @@ Examples::
     )
 
 
+Check out the `quick start <http://peewee.readthedocs.org/en/latest/peewee/quickstart.html>`_ for more!
+
+
 Learning more
 -------------
 
@@ -78,11 +78,9 @@ Why?
 
 peewee began when I was working on a small app in flask and found myself writing
 lots of queries and wanting a very simple abstraction on top of the sql.  I had
-so much fun working on it that I kept adding features.  My goal has always been,
-though, to keep the implementation incredibly simple.  I've made a couple dives
-into django's orm but have never come away with a deep understanding of its
-implementation.  peewee is small enough that its my hope anyone with an interest
-in orms will be able to understand the code without too much trouble.
+so much fun working on it that I kept adding features. peewee is small enough that 
+its my hope anyone with an interest in orms will be able to understand the code 
+without much trouble.
 
 
 model definitions and schema creation
@@ -210,3 +208,9 @@ you can now use MySQL::
             database = database
 
     # ... same as above sqlite example ...
+
+
+what now?
+---------
+
+Check out the `quick start <http://peewee.readthedocs.org/en/latest/peewee/quickstart.html>`_
