@@ -1686,7 +1686,7 @@ class MySQLDatabase(Database):
         'primary_key': 'INTEGER AUTO_INCREMENT',
         'text': 'LONGTEXT',
     }
-    for_update_support = True
+    for_update = True
     interpolation = '%s'
     op_overrides = {OP_LIKE: 'LIKE BINARY', OP_ILIKE: 'LIKE'}
     quote_char = '`'
