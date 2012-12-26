@@ -24,7 +24,10 @@ from peewee import *
 try:
     from MySQLdb.constants import FIELD_TYPE
 except ImportError:
-    FIELD_TYPE = None
+    try:
+        from pymysql.constants import FIELD_TYPE
+    except ImportError:
+        FIELD_TYPE = None
 
 
 class UnknownFieldType(object):

@@ -38,7 +38,10 @@ except ImportError:
 try:
     import MySQLdb as mysql
 except ImportError:
-    mysql = None
+    try:
+        import pymysql as mysql
+    except ImportError:
+        mysql = None
 
 class ImproperlyConfigured(Exception):
     pass
@@ -1684,7 +1687,7 @@ class MySQLDatabase(Database):
         'primary_key': 'INTEGER AUTO_INCREMENT',
         'text': 'LONGTEXT',
     }
-    for_update_support = True
+    for_update = True
     interpolation = '%s'
     op_overrides = {OP_LIKE: 'LIKE BINARY', OP_ILIKE: 'LIKE'}
     quote_char = '`'
