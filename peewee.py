@@ -40,7 +40,10 @@ except ImportError:
 try:
     import MySQLdb as mysql
 except ImportError:
-    mysql = None
+    try:
+        import pymysql as mysql
+    except ImportError:
+        mysql = None
 
 class ImproperlyConfigured(Exception):
     pass
