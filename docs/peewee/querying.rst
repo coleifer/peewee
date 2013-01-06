@@ -419,6 +419,9 @@ fetching all tweets (with related user data), then reconstructing the users in p
 is not provided as part of peewee.  For a detailed discussion of working
 around this, see the `discussion here <https://groups.google.com/forum/?fromgroups#!topic/peewee-orm/RLd2r-eKp7w>`_.
 
+If you are interested, the django developers added this feature.  Take a look 
+at `the prefetch_related ticket <https://code.djangoproject.com/ticket/16937>`_.
+
 
 Speeding up simple select queries
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
