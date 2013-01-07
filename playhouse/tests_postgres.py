@@ -43,6 +43,9 @@ class PostgresExtTestCase(unittest.TestCase):
         t1_db = TestingID.get(TestingID.uniq == uuid_str)
         self.assertEqual(t1, t1_db)
 
+        t2 = TestingID.get(TestingID.uniq == uuid_obj)
+        self.assertEqual(t1, t2)
+
     def test_storage(self):
         self.create()
         self.assertEqual(Testing.get(name='t1').data, {'k1': 'v1', 'k2': 'v2'})
