@@ -591,12 +591,14 @@ class QueryCompiler(object):
                     max_alias = i
         return max_alias + 1
 
-    def parse_expr(self, expr, alias_map=None):
+    def parse_expr(self, expr, alias_map=None, conv=None):
         s = self.interpolation
         p = [expr]
         if isinstance(expr, Expr):
-            lhs, lparams = self.parse_expr(expr.lhs, alias_map)
-            rhs, rparams = self.parse_expr(expr.rhs, alias_map)
+            if isinstance(expr.lhs, Field):
+                conv = expr.lhs
+            lhs, lparams = self.parse_expr(expr.lhs, alias_map, conv)
+            rhs, rparams = self.parse_expr(expr.rhs, alias_map, conv)
             s = '(%s %s %s)' % (lhs, self.get_op(expr.op), rhs)
             p = lparams + rparams
         elif isinstance(expr, Field):
@@ -608,7 +610,7 @@ class QueryCompiler(object):
             p = []
             exprs = []
             for param in expr.params:
-                parsed, params = self.parse_expr(param, alias_map)
+                parsed, params = self.parse_expr(param, alias_map, conv)
                 exprs.append(parsed)
                 p.extend(params)
             s = '%s(%s)' % (expr.name, ', '.join(exprs))
@@ -616,7 +618,7 @@ class QueryCompiler(object):
             s = self.interpolation
             p = [expr.data]
         elif isinstance(expr, Ordering):
-            s, p = self.parse_expr(expr.param, alias_map)
+            s, p = self.parse_expr(expr.param, alias_map, conv)
             s += ' ASC' if expr.asc else ' DESC'
         elif isinstance(expr, R):
             s = expr.value
@@ -632,13 +634,15 @@ class QueryCompiler(object):
             exprs = []
             p = []
             for i in expr:
-                e, v = self.parse_expr(i, alias_map)
+                e, v = self.parse_expr(i, alias_map, conv)
                 exprs.append(e)
                 p.extend(v)
             s = '(%s)' % ','.join(exprs)
         elif isinstance(expr, Model):
             s = self.interpolation
             p = [expr.get_id()]
+        elif conv and p:
+            p = [conv.db_value(i) for i in p]
 
         if isinstance(expr, Leaf):
             if expr.negated:

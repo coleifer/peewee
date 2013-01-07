@@ -367,6 +367,13 @@ class SelectTestCase(BasePeeweeTestCase):
         sq = SelectQuery(User).where(User.id < 5)
         self.assertWhere(sq, '(users."id" < ?)', [5])
 
+    def test_where_coercion(self):
+        sq = SelectQuery(User).where(User.id < '5')
+        self.assertWhere(sq, '(users."id" < ?)', [5])
+
+        sq = SelectQuery(User).where(User.id < (User.id - '5'))
+        self.assertWhere(sq, '(users."id" < (users."id" - ?))', [5])
+
     def test_where_lists(self):
         sq = SelectQuery(User).where(User.username << ['u1', 'u2'])
         self.assertWhere(sq, '(users."username" IN (?,?))', ['u1', 'u2'])
