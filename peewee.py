@@ -1756,10 +1756,6 @@ class transaction(object):
 class DoesNotExist(Exception):
     pass
 
-# doing an IN on empty set
-class EmptyResultException(Exception):
-    pass
-
 
 default_database = SqliteDatabase('peewee.db')
 
