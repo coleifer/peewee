@@ -1171,11 +1171,6 @@ Database and its subclasses
         :rtype: an instance of :py:class:`QueryCompiler` using the field and
             op overrides specified.
 
-    .. py:method:: execute(query)
-
-        :param: a query instance, such as a :py:class:`SelectQuery`
-        :rtype: the resulting cursor
-
     .. py:method:: execute_sql(sql[, params=None[, require_commit=True]])
 
         :param sql: a string sql query
@@ -1347,8 +1342,3 @@ Misc
     ``fn.Rand().alias('random')``                ``Rand() AS random``
     ``fn.Stddev(Employee.salary).alias('sdv')``  ``Stddev(t1."salary") AS sdv``
     ============================================ ============================================
-
-.. py:function:: raw_sql(query)
-
-    :param query: a :py:class:`Query` instance.
-    :rtype: 2-tuple of SQL query and parameters for the given query
