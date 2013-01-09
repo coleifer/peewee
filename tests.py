@@ -614,6 +614,9 @@ class SugarTestCase(BasePeeweeTestCase):
         self.assertSelect(sq, 'Count(users."id")', [])
         self.assertWhere(sq, '(users."id" < ?)', [10])
 
+        sq = User.select()._aggregate(fn.Sum(User.id).alias('baz'))
+        self.assertSelect(sq, 'Sum(users."id") AS baz', [])
+
 
 #
 # TEST CASE USED TO PROVIDE ACCESS TO DATABASE
@@ -840,6 +843,15 @@ class ModelQueryTestCase(ModelTestCase):
         users = User.select().paginate(2, 3)
         self.assertEqual([u.username for u in users], ['u3', 'u4', 'u5'])
 
+    def test_scalar(self):
+        self.create_users(5)
+
+        users = User.select(fn.Count(User.id)).scalar()
+        self.assertEqual(users, 5)
+
+        users = User.select(fn.Count(User.id)).where(User.username << ['u1', 'u2'])
+        self.assertEqual(users.scalar(), 2)
+
     def test_update(self):
         self.create_users(5)
         uq = User.update(username='u-edited').where(User.username << ['u1', 'u2', 'u3'])
@@ -879,6 +891,9 @@ class ModelQueryTestCase(ModelTestCase):
         rq = User.raw('select id, username, %s as secret from users where username = %s' % (INT,INT), 'sh', 'u2')
         self.assertEqual([u.secret for u in rq], ['sh'])
         self.assertEqual([u.username for u in rq], ['u2'])
+
+        rq = User.raw('select count(id) from users')
+        self.assertEqual(rq.scalar(), 3)
 
 
 class ModelAPITestCase(ModelTestCase):
