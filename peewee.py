@@ -883,6 +883,30 @@ class QueryCompiler(object):
     def drop_sequence(self, sequence_name):
         return 'DROP SEQUENCE %s;' % self.quote(sequence_name)
 
+class MySQLQueryCompiler(QueryCompiler):
+    def parse_update_query(self, query, start=1, alias_map=None):
+        model = query.model_class
+
+        alias_map = alias_map or {}
+        alias_map.update(self.calculate_alias_map(query, start))
+
+        parts = ['UPDATE %s SET' % self.quote(model._meta.db_table)]
+        sets, params = self._parse_field_dictionary(query._update)
+
+        parts.append(', '.join('%s=%s' % (f, v) for f, v in sets))
+
+        where, w_params = self.parse_query_node(query._where, None)
+        if where:
+            parts.append('WHERE %s' % where)
+            params.extend(w_params)
+        if query._order_by:
+            order_by, _ = self.parse_expr_list(query._order_by, alias_map)
+            parts.append('ORDER BY %s' % order_by)
+        if query._limit:
+            limit = query._limit
+            parts.append('LIMIT %s' % limit)
+        return ' '.join(parts), params
+
 
 class QueryResultWrapper(object):
     """
@@ -1371,7 +1395,6 @@ class SelectQuery(Query):
         res = list(self)
         return limit == 1 and res[0] or res
 
-
 class UpdateQuery(Query):
     def __init__(self, model_class, update=None):
         self._update = update
@@ -1389,6 +1412,38 @@ class UpdateQuery(Query):
 
     def execute(self):
         return self.database.rows_affected(self._execute())
+
+class MySQLUpdateQuery(Query):
+    def __init__(self, model_class, update=None, order_by=None, limit=None):
+        self._update = update
+        self._order_by = order_by
+        self._limit = limit
+        super(MySQLUpdateQuery, self).__init__(model_class)
+
+    def clone(self):
+        query = super(MySQLUpdateQuery, self).clone()
+        query._update = dict(self._update)
+        if self._order_by is not None:
+            query._order_by = list(self._order_by)
+        query._limit = self._limit
+        return query
+
+    join = not_allowed('joining')
+
+    @returns_clone
+    def order_by(self, *args):
+        self._order_by = list(args)
+
+    @returns_clone
+    def limit(self, lim):
+        self._limit = lim
+
+    def sql(self, compiler):
+        return compiler.parse_update_query(self)
+
+    def execute(self):
+        result = self.database.execute(self)
+        return self.database.rows_affected(result)
 
 class InsertQuery(Query):
     def __init__(self, model_class, insert=None):
@@ -1674,9 +1729,9 @@ class PostgresqlDatabase(Database):
         path_params = ','.join(['%s'] * len(search_path))
         self.execute_sql('SET search_path TO %s' % path_params, search_path)
 
-
 class MySQLDatabase(Database):
     commit_select = True
+    compiler_class = MySQLQueryCompiler
     field_overrides = {
         'bigint': 'BIGINT',
         'boolean': 'BOOL',
@@ -2044,6 +2099,12 @@ class Model(object):
 
     def __ne__(self, other):
         return not self == other
+
+class MySQLModel(Model):
+    @classmethod
+    def update(cls, **update):
+        fdict = dict((cls._meta.fields[f], v) for f, v in update.items())
+        return MySQLUpdateQuery(cls, fdict)
 
 
 def create_model_tables(models, **create_table_kwargs):
