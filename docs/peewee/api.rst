@@ -675,9 +675,8 @@ Query Types
 
         .. note:: this method is provided for compatibility with peewee 1.
 
-    .. py:method:: sql(compiler)
+    .. py:method:: sql()
 
-        :param compiler: an instance of :py:class:`QueryCompiler`
         :rtype: a 2-tuple containing the appropriate SQL query and a tuple of parameters
 
         .. warning: This method should be implemented by subclasses
@@ -687,6 +686,19 @@ Query Types
         Execute the given query
 
         .. warning: This method should be implemented by subclasses
+
+    .. py:method:: scalar([as_tuple=False])
+
+        :param bool as_tuple: return the row as a tuple or a single value
+        :rtype: the resulting row, either as a single value or tuple
+
+        Provide a way to retrieve single values from select queries, for instance
+        when performing an aggregation.
+
+        .. code-block:: pycon
+
+            >>> PageView.select(fn.Count(fn.Distinct(PageView.url))).scalar()
+            100 # <-- there are 100 distinct URLs in the pageview table
 
 
 .. py:class:: SelectQuery(model, *selection)

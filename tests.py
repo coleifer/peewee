@@ -861,6 +861,13 @@ class ModelQueryTestCase(ModelTestCase):
         self.assertEqual(users.scalar(), 5)
         self.assertEqual(users.scalar(True), (5, 5))
 
+        User.create(username='u1')
+        User.create(username='u2')
+        User.create(username='u3')
+        User.create(username='u99')
+        users = User.select(fn.Count(fn.Distinct(User.username))).scalar()
+        self.assertEqual(users, 6)
+
     def test_update(self):
         self.create_users(5)
         uq = User.update(username='u-edited').where(User.username << ['u1', 'u2', 'u3'])
