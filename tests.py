@@ -533,7 +533,7 @@ class RawTestCase(BasePeeweeTestCase):
     def test_raw(self):
         q = 'SELECT * FROM "users" WHERE id=?'
         rq = RawQuery(User, q, 100)
-        self.assertEqual(rq.sql(compiler), (q, [100]))
+        self.assertEqual(rq.sql(), (q, [100]))
 
 class SugarTestCase(BasePeeweeTestCase):
     # test things like filter, annotate, aggregate

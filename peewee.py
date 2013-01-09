@@ -1144,11 +1144,25 @@ class Query(object):
             query = query.ensure_join(lm, rm, field_obj)
         return query.where(dq_node)
 
-    def sql(self, compiler):
-        raise NotImplementedError()
+    def get_compiler(self):
+        return self.database.get_compiler()
+
+    def sql(self):
+        raise NotImplementedError
+
+    def _execute(self):
+        sql, params = self.sql()
+        return self.database.execute_sql(sql, params, self.require_commit)
 
     def execute(self):
         raise NotImplementedError
+
+    def scalar(self, as_tuple=False):
+        row = self._execute().fetchone()
+        if row and not as_tuple:
+            return row[0]
+        else:
+            return row
 
 
 class RawQuery(Query):
@@ -1161,16 +1175,16 @@ class RawQuery(Query):
     def clone(self):
         return RawQuery(self.model_class, self._sql, *self._params)
 
-    def sql(self, compiler):
-        return self._sql, self._params
-
     join = not_allowed('joining')
     where = not_allowed('where')
     switch = not_allowed('switch')
 
+    def sql(self):
+        return self._sql, self._params
+
     def execute(self):
         if self._qr is None:
-            self._qr = QueryResultWrapper(self.model_class, self.database.execute(self), None)
+            self._qr = QueryResultWrapper(self.model_class, self._execute(), None)
         return self._qr
 
     def __iter__(self):
@@ -1178,9 +1192,9 @@ class RawQuery(Query):
 
 
 class SelectQuery(Query):
-    require_commit = False
-
     def __init__(self, model_class, *selection):
+        super(SelectQuery, self).__init__(model_class)
+        self.require_commit = self.database.commit_select
         self._explicit_selection = len(selection) > 0
         self._select = self._model_shorthand(selection or model_class._meta.get_fields())
         self._group_by = None
@@ -1192,7 +1206,6 @@ class SelectQuery(Query):
         self._for_update = False
         self._naive = False
         self._qr = None
-        super(SelectQuery, self).__init__(model_class)
 
     def clone(self):
         query = super(SelectQuery, self).clone()
@@ -1275,43 +1288,32 @@ class SelectQuery(Query):
     def _aggregate(self, aggregation=None):
         aggregation = aggregation or fn.Count(self.model_class._meta.primary_key)
         query = self.order_by()
-        query._select = (aggregation,)
+        query._select = [aggregation]
         return query
 
     def aggregate(self, aggregation=None):
-        query = self._aggregate(aggregation)
-        compiler = self.database.get_compiler()
-        sql, params = query.sql(compiler)
-        curs = query.database.execute_sql(sql, params, require_commit=False)
-        return curs.fetchone()[0]
+        return self._aggregate(aggregation).scalar()
 
     def count(self):
         if self._distinct or self._group_by:
             return self.wrapped_count()
 
-        clone = self.order_by()
-        clone._limit = clone._offset = None
-        clone._select = [fn.Count(clone.model_class._meta.primary_key)]
-
-        res = clone.database.execute(clone)
-        return (res.fetchone() or [0])[0]
+        # defaults to a count() of the primary key
+        return self.aggregate() or 0
 
     def wrapped_count(self):
         clone = self.order_by()
         clone._limit = clone._offset = None
 
-        compiler = self.database.get_compiler()
-        sql, params = clone.sql(compiler)
-        query = 'SELECT COUNT(1) FROM (%s) AS wrapped_select' % sql
-
-        res = clone.database.execute_sql(query, params, require_commit=False)
-        return res.fetchone()[0]
+        sql, params = clone.sql()
+        wrapped = 'SELECT COUNT(1) FROM (%s) AS wrapped_select' % sql
+        rq = RawQuery(self.model_class, wrapped, *params)
+        return rq.scalar() or 0
 
     def exists(self):
         clone = self.paginate(1, 1)
         clone._select = [self.model_class._meta.primary_key]
-        res = self.database.execute(clone)
-        return bool(res.fetchone())
+        return bool(clone.scalar())
 
     def get(self):
         clone = self.paginate(1, 1)
@@ -1319,11 +1321,11 @@ class SelectQuery(Query):
             return clone.execute().next()
         except StopIteration:
             raise self.model_class.DoesNotExist('instance matching query does not exist:\nSQL: %s\nPARAMS: %s' % (
-                self.sql(self.database.get_compiler())
+                self.sql()
             ))
 
-    def sql(self, compiler):
-        return compiler.parse_select_query(self)
+    def sql(self):
+        return self.get_compiler().parse_select_query(self)
 
     def verify_naive(self):
         for expr in self._select:
@@ -1337,7 +1339,7 @@ class SelectQuery(Query):
                 query_meta = None
             else:
                 query_meta = [self._select, self._joins]
-            self._qr = QueryResultWrapper(self.model_class, self.database.execute(self), query_meta)
+            self._qr = QueryResultWrapper(self.model_class, self._execute(), query_meta)
             self._dirty = False
             return self._qr
         else:
@@ -1378,12 +1380,11 @@ class UpdateQuery(Query):
 
     join = not_allowed('joining')
 
-    def sql(self, compiler):
-        return compiler.parse_update_query(self)
+    def sql(self):
+        return self.get_compiler().parse_update_query(self)
 
     def execute(self):
-        result = self.database.execute(self)
-        return self.database.rows_affected(result)
+        return self.database.rows_affected(self._execute())
 
 class InsertQuery(Query):
     def __init__(self, model_class, insert=None):
@@ -1401,22 +1402,20 @@ class InsertQuery(Query):
     join = not_allowed('joining')
     where = not_allowed('where clause')
 
-    def sql(self, compiler):
-        return compiler.parse_insert_query(self)
+    def sql(self):
+        return self.get_compiler().parse_insert_query(self)
 
     def execute(self):
-        result = self.database.execute(self)
-        return self.database.last_insert_id(result, self.model_class)
+        return self.database.last_insert_id(self._execute(), self.model_class)
 
 class DeleteQuery(Query):
     join = not_allowed('joining')
 
-    def sql(self, compiler):
-        return compiler.parse_delete_query(self)
+    def sql(self):
+        return self.get_compiler().parse_delete_query(self)
 
     def execute(self):
-        result = self.database.execute(self)
-        return self.database.rows_affected(result)
+        return self.database.rows_affected(self._execute())
 
 
 class Database(object):
@@ -1502,14 +1501,6 @@ class Database(object):
         return self.compiler_class(
             self.quote_char, self.interpolation, self.field_overrides,
             self.op_overrides)
-
-    def execute(self, query):
-        sql, params = query.sql(self.get_compiler())
-        if isinstance(query, (SelectQuery, RawQuery)):
-            commit = self.commit_select
-        else:
-            commit = query.require_commit
-        return self.execute_sql(sql, params, commit)
 
     def execute_sql(self, sql, params=None, require_commit=True):
         cursor = self.get_cursor()
