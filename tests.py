@@ -851,6 +851,15 @@ class ModelQueryTestCase(ModelTestCase):
 
         users = User.select(fn.Count(User.id)).where(User.username << ['u1', 'u2'])
         self.assertEqual(users.scalar(), 2)
+        self.assertEqual(users.scalar(True), (2,))
+
+        users = User.select(fn.Count(User.id)).where(User.username == 'not-here')
+        self.assertEqual(users.scalar(), 0)
+        self.assertEqual(users.scalar(True), (0,))
+
+        users = User.select(fn.Count(User.id), fn.Count(User.username))
+        self.assertEqual(users.scalar(), 5)
+        self.assertEqual(users.scalar(True), (5, 5))
 
     def test_update(self):
         self.create_users(5)
