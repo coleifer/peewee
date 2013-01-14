@@ -241,7 +241,7 @@ Finally, let's do a complicated one.  Let's get all the people whose birthday wa
 either:
 
 * before 1940 (grandma)
-* after 1959 (herb)
+* after 1959 (bob)
 
 .. code-block:: pycon
 
