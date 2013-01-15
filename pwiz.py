@@ -33,6 +33,13 @@ except ImportError:
 class UnknownFieldType(object):
     pass
 
+reserved_words = set([
+    'and', 'as', 'assert', 'break', 'class', 'continue', 'def', 'del', 'elif',
+    'else', 'except', 'exec', 'finally', 'for', 'from', 'global', 'if', 'import',
+    'in', 'is', 'lambda', 'not', 'or', 'pass', 'print', 'raise', 'return', 'try',
+    'while', 'with', 'yield',
+])
+
 
 class DB(object):
     conn = None
@@ -341,7 +348,11 @@ def print_models(engine, database, **connect):
             field_params = ', '.join([
                 '%s=%s' % (k, v) for k, v in col_meta[model][column].items()
             ])
-            print '    %s = %s(%s)' % (cn(column), field_class.__name__, field_params)
+            colname = cn(column)
+            if colname in reserved_words:
+                print '    # FIXME: "%s" is a reserved word' % colname
+                colname = '#' + colname
+            print '    %s = %s(%s)' % (colname, field_class.__name__, field_params)
         print
 
         print '    class Meta:'
