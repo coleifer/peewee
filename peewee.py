@@ -773,6 +773,12 @@ class QueryCompiler(object):
         sets, params = [], []
         for field, expr in d.items():
             field_str, _ = self.parse_expr(field)
+            # because we don't know whether to call db_value or parse_expr first,
+            # we'd prefer to call parse_expr since its more general, but it does
+            # special things with lists -- it treats them as if it were buliding
+            # up an IN query. for some things we don't want that, so here, if the
+            # expr is *not* a special object, we'll pass thru parse_expr and let
+            # db_value handle it
             if not isinstance(expr, (Leaf, Model, Query)):
                 expr = Param(expr) # pass through to the fields db_value func
             val_str, val_params = self.parse_expr(expr)
