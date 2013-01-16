@@ -201,6 +201,18 @@ class ChildPet(TestModel):
 class OrphanPet(TestModel):
     orphan = ForeignKeyField(Orphan)
 
+class CSVField(TextField):
+    def db_value(self, value):
+        if value:
+            return ','.join(value)
+        return value or ''
+
+    def python_value(self, value):
+        return value.split(',') if value else []
+
+class CSVRow(TestModel):
+    data = CSVField()
+
 
 MODELS = [User, Blog, Comment, Relationship, NullModel, UniqueModel, OrderedModel, Category, UserCategory,
           NonIntModel, NonIntRelModel, DBUser, DBBlog, SeqModelA, SeqModelB, MultiIndexModel, BlogTwo]
@@ -515,6 +527,13 @@ class UpdateTestCase(BasePeeweeTestCase):
         uq = UpdateQuery(User, {User.id: 5 * (3 + User.id)})
         self.assertUpdate(uq, [('"id"', '(? * (? + "id"))')], [5, 3])
 
+    def test_update_special(self):
+        uq = UpdateQuery(CSVRow, {CSVRow.data: ['foo', 'bar', 'baz']})
+        self.assertUpdate(uq, [('"data"', '?')], ['foo,bar,baz'])
+
+        uq = UpdateQuery(CSVRow, {CSVRow.data: []})
+        self.assertUpdate(uq, [('"data"', '?')], [''])
+
     def test_where(self):
         uq = UpdateQuery(User, {User.username: 'updated'}).where(User.id == 2)
         self.assertWhere(uq, '(users."id" = ?)', [2])
@@ -523,6 +542,13 @@ class InsertTestCase(BasePeeweeTestCase):
     def test_insert(self):
         iq = InsertQuery(User, {User.username: 'inserted'})
         self.assertInsert(iq, [('"username"', '?')], ['inserted'])
+
+    def test_insert_special(self):
+        iq = InsertQuery(CSVRow, {CSVRow.data: ['foo', 'bar', 'baz']})
+        self.assertInsert(iq, [('"data"', '?')], ['foo,bar,baz'])
+
+        iq = InsertQuery(CSVRow, {CSVRow.data: []})
+        self.assertInsert(iq, [('"data"', '?')], [''])
 
 class DeleteTestCase(BasePeeweeTestCase):
     def test_where(self):
