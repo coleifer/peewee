@@ -773,6 +773,8 @@ class QueryCompiler(object):
         sets, params = [], []
         for field, expr in d.items():
             field_str, _ = self.parse_expr(field)
+            if not isinstance(expr, (Leaf, Model, Query)):
+                expr = Param(expr) # pass through to the fields db_value func
             val_str, val_params = self.parse_expr(expr)
             val_params = [field.db_value(vp) for vp in val_params]
             sets.append((field_str, val_str))
