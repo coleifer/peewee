@@ -527,6 +527,10 @@ class UpdateTestCase(BasePeeweeTestCase):
         uq = UpdateQuery(User, {User.id: 5 * (3 + User.id)})
         self.assertUpdate(uq, [('"id"', '(? * (? + "id"))')], [5, 3])
 
+        # set username to the maximum id of all users -- silly, yes, but lets see what happens
+        uq = UpdateQuery(User, {User.username: User.select(fn.Max(User.id).alias('maxid'))})
+        self.assertUpdate(uq, [('"username"', '(SELECT Max(users."id") AS maxid FROM "users" AS users)')], [])
+
     def test_update_special(self):
         uq = UpdateQuery(CSVRow, {CSVRow.data: ['foo', 'bar', 'baz']})
         self.assertUpdate(uq, [('"data"', '?')], ['foo,bar,baz'])
