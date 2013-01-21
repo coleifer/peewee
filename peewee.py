@@ -1156,8 +1156,8 @@ class Query(object):
             query = query.ensure_join(lm, rm, field_obj)
         return query.where(dq_node)
 
-    def get_compiler(self):
-        return self.database.get_compiler()
+    def compiler(self):
+        return self.database.compiler()
 
     def sql(self):
         raise NotImplementedError
@@ -1337,7 +1337,7 @@ class SelectQuery(Query):
             ))
 
     def sql(self):
-        return self.get_compiler().parse_select_query(self)
+        return self.compiler().parse_select_query(self)
 
     def verify_naive(self):
         for expr in self._select:
@@ -1393,7 +1393,7 @@ class UpdateQuery(Query):
     join = not_allowed('joining')
 
     def sql(self):
-        return self.get_compiler().parse_update_query(self)
+        return self.compiler().parse_update_query(self)
 
     def execute(self):
         return self.database.rows_affected(self._execute())
@@ -1415,7 +1415,7 @@ class InsertQuery(Query):
     where = not_allowed('where clause')
 
     def sql(self):
-        return self.get_compiler().parse_insert_query(self)
+        return self.compiler().parse_insert_query(self)
 
     def execute(self):
         return self.database.last_insert_id(self._execute(), self.model_class)
@@ -1424,7 +1424,7 @@ class DeleteQuery(Query):
     join = not_allowed('joining')
 
     def sql(self):
-        return self.get_compiler().parse_delete_query(self)
+        return self.compiler().parse_delete_query(self)
 
     def execute(self):
         return self.database.rows_affected(self._execute())
@@ -1509,7 +1509,7 @@ class Database(object):
     def rows_affected(self, cursor):
         return cursor.rowcount
 
-    def get_compiler(self):
+    def compiler(self):
         return self.compiler_class(
             self.quote_char, self.interpolation, self.field_overrides,
             self.op_overrides)
@@ -1549,11 +1549,11 @@ class Database(object):
         raise NotImplementedError
 
     def create_table(self, model_class):
-        qc = self.get_compiler()
+        qc = self.compiler()
         return self.execute_sql(qc.create_table(model_class))
 
     def create_index(self, model_class, fields, unique=False):
-        qc = self.get_compiler()
+        qc = self.compiler()
         if not isinstance(fields, (list, tuple)):
             raise ValueError('fields passed to "create_index" must be a list or tuple: "%s"' % fields)
         field_objs = [model_class._meta.fields[f] if isinstance(f, basestring) else f for f in fields]
@@ -1565,16 +1565,16 @@ class Database(object):
 
     def create_sequence(self, seq):
         if self.sequences:
-            qc = self.get_compiler()
+            qc = self.compiler()
             return self.execute_sql(qc.create_sequence(seq))
 
     def drop_table(self, model_class, fail_silently=False):
-        qc = self.get_compiler()
+        qc = self.compiler()
         return self.execute_sql(qc.drop_table(model_class, fail_silently))
 
     def drop_sequence(self, seq):
         if self.sequences:
-            qc = self.get_compiler()
+            qc = self.compiler()
             return self.execute_sql(qc.drop_sequence(seq))
 
     def transaction(self):
@@ -1711,7 +1711,7 @@ class MySQLDatabase(Database):
         return mysql.connect(db=database, **conn_kwargs)
 
     def create_foreign_key(self, model_class, field):
-        compiler = self.get_compiler()
+        compiler = self.compiler()
         framing = """
             ALTER TABLE %(table)s ADD CONSTRAINT %(constraint)s
             FOREIGN KEY (%(field)s) REFERENCES %(to)s(%(to_field)s)%(cascade)s;

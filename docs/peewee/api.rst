@@ -1166,7 +1166,7 @@ Database and its subclasses
 
         :rtype: number of rows affected by the last query
 
-    .. py:method:: get_compiler()
+    .. py:method:: compiler()
 
         :rtype: an instance of :py:class:`QueryCompiler` using the field and
             op overrides specified.

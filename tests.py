@@ -76,7 +76,7 @@ class TestDatabase(database_class):
 
 test_db = database_class(database_name, **database_params)
 query_db = TestDatabase(database_name, **database_params)
-compiler = query_db.get_compiler()
+compiler = query_db.compiler()
 
 #
 # BASE MODEL CLASS
