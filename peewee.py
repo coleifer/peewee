@@ -204,6 +204,8 @@ class Func(Leaf):
         return dec
 
 fn = Func(None)
+Ordering = namedtuple('Ordering', ('param', 'asc'))
+R = namedtuple('R', ('value',))
 
 
 class FieldDescriptor(object):
@@ -218,10 +220,6 @@ class FieldDescriptor(object):
 
     def __set__(self, instance, value):
         instance._data[self.att_name] = value
-
-
-Ordering = namedtuple('Ordering', ('param', 'asc'))
-R = namedtuple('R', ('value',))
 
 
 class Field(Leaf):
@@ -1539,6 +1537,26 @@ class Database(object):
             self.set_autocommit(self.autocommit)
         return self.__local.autocommit
 
+    def transaction(self):
+        return transaction(self)
+
+    def commit_on_success(self, func):
+        def inner(*args, **kwargs):
+            orig = self.get_autocommit()
+            self.set_autocommit(False)
+            self.begin()
+            try:
+                res = func(*args, **kwargs)
+                self.commit()
+            except:
+                self.rollback()
+                raise
+            else:
+                return res
+            finally:
+                self.set_autocommit(orig)
+        return inner
+
     def get_tables(self):
         raise NotImplementedError
 
@@ -1576,26 +1594,6 @@ class Database(object):
         if self.sequences:
             qc = self.compiler()
             return self.execute_sql(qc.drop_sequence(seq))
-
-    def transaction(self):
-        return transaction(self)
-
-    def commit_on_success(self, func):
-        def inner(*args, **kwargs):
-            orig = self.get_autocommit()
-            self.set_autocommit(False)
-            self.begin()
-            try:
-                res = func(*args, **kwargs)
-                self.commit()
-            except:
-                self.rollback()
-                raise
-            else:
-                return res
-            finally:
-                self.set_autocommit(orig)
-        return inner
 
 
 class SqliteDatabase(Database):

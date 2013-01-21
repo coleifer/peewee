@@ -62,7 +62,7 @@ class PostgresqlExtCompiler(QueryCompiler):
     def parse_create_index(self, model_class, fields, unique=False):
         parts = super(PostgresqlExtCompiler, self).parse_create_index(
             model_class, fields, unique)
-        if any(map(lambda f: isinstance(f, HStore), fields)):
+        if any(map(lambda f: isinstance(f, HStoreField), fields)):
             parts.insert(-1, 'USING GIST')
         return parts
 
