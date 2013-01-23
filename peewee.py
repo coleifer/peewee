@@ -626,7 +626,7 @@ class QueryCompiler(object):
             clone = expr.clone()
             if not expr._explicit_selection:
                 clone._select = (clone.model_class._meta.primary_key,)
-            subselect, p = self.parse_select_query(clone, max_alias, alias_map)
+            subselect, p = self.generate_select(clone, max_alias, alias_map)
             s = '(%s)' % subselect
         elif isinstance(expr, (list, tuple)):
             exprs = []
@@ -650,12 +650,51 @@ class QueryCompiler(object):
 
         return s, p
 
+    def parse_expr_list(self, s, alias_map):
+        parsed = []
+        data = []
+        for expr in s:
+            expr_str, vars = self.parse_expr(expr, alias_map)
+            parsed.append(expr_str)
+            data.extend(vars)
+        return ', '.join(parsed), data
+
+    def parse_field_dict(self, d):
+        sets, params = [], []
+        for field, expr in d.items():
+            field_str, _ = self.parse_expr(field)
+            # because we don't know whether to call db_value or parse_expr first,
+            # we'd prefer to call parse_expr since its more general, but it does
+            # special things with lists -- it treats them as if it were buliding
+            # up an IN query. for some things we don't want that, so here, if the
+            # expr is *not* a special object, we'll pass thru parse_expr and let
+            # db_value handle it
+            if not isinstance(expr, (Leaf, Model, Query)):
+                expr = Param(expr) # pass through to the fields db_value func
+            val_str, val_params = self.parse_expr(expr)
+            val_params = [field.db_value(vp) for vp in val_params]
+            sets.append((field_str, val_str))
+            params.extend(val_params)
+        return sets, params
+
     def parse_query_node(self, qnode, alias_map):
         if qnode is not None:
             return self.parse_expr(qnode, alias_map)
         return '', []
 
-    def parse_joins(self, joins, model_class, alias_map):
+    def calculate_alias_map(self, query, start=1):
+        alias_map = {query.model_class: 't%s' % start}
+        for model, joins in query._joins.items():
+            if model not in alias_map:
+                start += 1
+                alias_map[model] = 't%s' % start
+            for join in joins:
+                if join.model_class not in alias_map:
+                    start += 1
+                    alias_map[join.model_class] = 't%s' % start
+        return alias_map
+
+    def generate_joins(self, joins, model_class, alias_map):
         parsed = []
         seen = set()
 
@@ -692,28 +731,7 @@ class QueryCompiler(object):
         _traverse(model_class)
         return parsed
 
-    def parse_expr_list(self, s, alias_map):
-        parsed = []
-        data = []
-        for expr in s:
-            expr_str, vars = self.parse_expr(expr, alias_map)
-            parsed.append(expr_str)
-            data.extend(vars)
-        return ', '.join(parsed), data
-
-    def calculate_alias_map(self, query, start=1):
-        alias_map = {query.model_class: 't%s' % start}
-        for model, joins in query._joins.items():
-            if model not in alias_map:
-                start += 1
-                alias_map[model] = 't%s' % start
-            for join in joins:
-                if join.model_class not in alias_map:
-                    start += 1
-                    alias_map[join.model_class] = 't%s' % start
-        return alias_map
-
-    def parse_select_query(self, query, start=1, alias_map=None):
+    def generate_select(self, query, start=1, alias_map=None):
         model = query.model_class
         db = model._meta.database
 
@@ -734,7 +752,7 @@ class QueryCompiler(object):
 
         parts.append('FROM %s AS %s' % (self.quote(model._meta.db_table), alias_map[model]))
 
-        joins = self.parse_joins(query._joins, query.model_class, alias_map)
+        joins = self.generate_joins(query._joins, query.model_class, alias_map)
         if joins:
             parts.append(' '.join(joins))
 
@@ -767,29 +785,11 @@ class QueryCompiler(object):
 
         return ' '.join(parts), params
 
-    def _parse_field_dictionary(self, d):
-        sets, params = [], []
-        for field, expr in d.items():
-            field_str, _ = self.parse_expr(field)
-            # because we don't know whether to call db_value or parse_expr first,
-            # we'd prefer to call parse_expr since its more general, but it does
-            # special things with lists -- it treats them as if it were buliding
-            # up an IN query. for some things we don't want that, so here, if the
-            # expr is *not* a special object, we'll pass thru parse_expr and let
-            # db_value handle it
-            if not isinstance(expr, (Leaf, Model, Query)):
-                expr = Param(expr) # pass through to the fields db_value func
-            val_str, val_params = self.parse_expr(expr)
-            val_params = [field.db_value(vp) for vp in val_params]
-            sets.append((field_str, val_str))
-            params.extend(val_params)
-        return sets, params
-
-    def parse_update_query(self, query):
+    def generate_update(self, query):
         model = query.model_class
 
         parts = ['UPDATE %s SET' % self.quote(model._meta.db_table)]
-        sets, params = self._parse_field_dictionary(query._update)
+        sets, params = self.parse_field_dict(query._update)
 
         parts.append(', '.join('%s=%s' % (f, v) for f, v in sets))
 
@@ -799,18 +799,18 @@ class QueryCompiler(object):
             params.extend(w_params)
         return ' '.join(parts), params
 
-    def parse_insert_query(self, query):
+    def generate_insert(self, query):
         model = query.model_class
 
         parts = ['INSERT INTO %s' % self.quote(model._meta.db_table)]
-        sets, params = self._parse_field_dictionary(query._insert)
+        sets, params = self.parse_field_dict(query._insert)
 
         parts.append('(%s)' % ', '.join(s[0] for s in sets))
         parts.append('VALUES (%s)' % ', '.join(s[1] for s in sets))
 
         return ' '.join(parts), params
 
-    def parse_delete_query(self, query):
+    def generate_delete(self, query):
         model = query.model_class
 
         parts = ['DELETE FROM %s' % self.quote(model._meta.db_table)]
@@ -850,7 +850,7 @@ class QueryCompiler(object):
             parts.append("DEFAULT NEXTVAL('%s')" % self.quote(field.sequence))
         return ' '.join(p % attrs for p in parts)
 
-    def parse_create_table(self, model_class, safe=False):
+    def create_table_sql(self, model_class, safe=False):
         parts = ['CREATE TABLE']
         if safe:
             parts.append('IF NOT EXISTS')
@@ -860,7 +860,7 @@ class QueryCompiler(object):
         return parts
 
     def create_table(self, model_class, safe=False):
-        return ' '.join(self.parse_create_table(model_class, safe))
+        return ' '.join(self.create_table_sql(model_class, safe))
 
     def drop_table(self, model_class, fail_silently=False, cascade=False):
         parts = ['DROP TABLE']
@@ -871,7 +871,7 @@ class QueryCompiler(object):
             parts.append('CASCADE')
         return ' '.join(parts)
 
-    def parse_create_index(self, model_class, fields, unique):
+    def create_index_sql(self, model_class, fields, unique):
         tbl_name = model_class._meta.db_table
         colnames = [f.db_column for f in fields]
         parts = ['CREATE %s' % ('UNIQUE INDEX' if unique else 'INDEX')]
@@ -881,7 +881,7 @@ class QueryCompiler(object):
         return parts
 
     def create_index(self, model_class, fields, unique):
-        return ' '.join(self.parse_create_index(model_class, fields, unique))
+        return ' '.join(self.create_index_sql(model_class, fields, unique))
 
     def create_sequence(self, sequence_name):
         return 'CREATE SEQUENCE %s;' % self.quote(sequence_name)
@@ -1335,7 +1335,7 @@ class SelectQuery(Query):
             ))
 
     def sql(self):
-        return self.compiler().parse_select_query(self)
+        return self.compiler().generate_select(self)
 
     def verify_naive(self):
         for expr in self._select:
@@ -1391,7 +1391,7 @@ class UpdateQuery(Query):
     join = not_allowed('joining')
 
     def sql(self):
-        return self.compiler().parse_update_query(self)
+        return self.compiler().generate_update(self)
 
     def execute(self):
         return self.database.rows_affected(self._execute())
@@ -1413,7 +1413,7 @@ class InsertQuery(Query):
     where = not_allowed('where clause')
 
     def sql(self):
-        return self.compiler().parse_insert_query(self)
+        return self.compiler().generate_insert(self)
 
     def execute(self):
         return self.database.last_insert_id(self._execute(), self.model_class)
@@ -1422,7 +1422,7 @@ class DeleteQuery(Query):
     join = not_allowed('joining')
 
     def sql(self):
-        return self.compiler().parse_delete_query(self)
+        return self.compiler().generate_delete(self)
 
     def execute(self):
         return self.database.rows_affected(self._execute())
