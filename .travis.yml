@@ -1,7 +1,0 @@
-language: python
-python:
-  - "2.5"
-  - "2.7"
-script: python runtests.py
-notifications:
-  email: false
