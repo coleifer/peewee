@@ -797,6 +797,9 @@ class QueryCompiler(object):
         if where:
             parts.append('WHERE %s' % where)
             params.extend(w_params)
+        if query._limit:
+            parts.append('LIMIT %s' % query._limit)
+
         return ' '.join(parts), params
 
     def generate_insert(self, query):
@@ -1381,6 +1384,7 @@ class SelectQuery(Query):
 class UpdateQuery(Query):
     def __init__(self, model_class, update=None):
         self._update = update
+        self._limit = None
         super(UpdateQuery, self).__init__(model_class)
 
     def clone(self):
@@ -1390,11 +1394,16 @@ class UpdateQuery(Query):
 
     join = not_allowed('joining')
 
+    @returns_clone
+    def limit(self, lim):
+        self._limit = lim
+
     def sql(self):
         return self.compiler().generate_update(self)
 
     def execute(self):
         return self.database.rows_affected(self._execute())
+
 
 class InsertQuery(Query):
     def __init__(self, model_class, insert=None):
@@ -1417,6 +1426,7 @@ class InsertQuery(Query):
 
     def execute(self):
         return self.database.last_insert_id(self._execute(), self.model_class)
+
 
 class DeleteQuery(Query):
     join = not_allowed('joining')
