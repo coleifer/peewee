@@ -939,6 +939,13 @@ Query Types
 
             >>> user = User.get(User.active == True, User.username == username)
 
+    .. py:method:: first()
+
+        :rtype: :py:class:`Model` instance or ``None`` if no results
+
+        Fetch the first row from a query. The result will be cached in case the entire
+        query result-set should be iterated later.
+
     .. py:method:: execute()
 
         :rtype: :py:class:`QueryResultWrapper`
