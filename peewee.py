@@ -1288,6 +1288,13 @@ class SelectQuery(Query):
                 self.sql(self.database.get_compiler())
             ))
 
+    def first(self):
+        clone = self.limit(1)
+        try:
+            return clone.execute().next()
+        except StopIteration:
+            return None
+
     def sql(self, compiler):
         return compiler.parse_select_query(self)
 
