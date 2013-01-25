@@ -1333,6 +1333,14 @@ class SelectQuery(Query):
             raise self.model_class.DoesNotExist('instance matching query does not exist:\nSQL: %s\nPARAMS: %s' % (
                 self.sql()
             ))
+    
+    def first(self):
+        res = self.execute()
+        res.fill_cache(1)
+        try:
+            return res._result_cache[0]
+        except IndexError:
+            pass
 
     def sql(self):
         return self.compiler().generate_select(self)

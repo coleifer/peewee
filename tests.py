@@ -1054,6 +1054,46 @@ class ModelAPITestCase(ModelTestCase):
         self.assertEqual(u1.id, u1_x.id)
         self.assertEqual(User.select().count(), 1)
 
+    def test_first(self):
+        users = self.create_users(5)
+        qc = len(self.queries())
+
+        sq = User.select().order_by(User.username)
+        qr = sq.execute()
+
+        # call it once
+        first = sq.first()
+        self.assertEqual(first.username, 'u1')
+
+        # check the result cache
+        self.assertEqual(len(qr._result_cache), 1)
+
+        # call it again and we get the same result, but not an
+        # extra query
+        self.assertEqual(sq.first().username, 'u1')
+
+        qc2 = len(self.queries())
+        self.assertEqual(qc2 - qc, 1)
+
+        usernames = [u.username for u in sq]
+        self.assertEqual(usernames, ['u1', 'u2', 'u3', 'u4', 'u5'])
+
+        qc3 = len(self.queries())
+        self.assertEqual(qc3, qc2)
+
+        # call after iterating
+        self.assertEqual(sq.first().username, 'u1')
+
+        usernames = [u.username for u in sq]
+        self.assertEqual(usernames, ['u1', 'u2', 'u3', 'u4', 'u5'])
+
+        qc3 = len(self.queries())
+        self.assertEqual(qc3, qc2)
+
+        # call it with an empty result
+        sq = User.select().where(User.username == 'not-here')
+        self.assertEqual(sq.first(), None)
+
     def test_deleting(self):
         u1 = self.create_user('u1')
         u2 = self.create_user('u2')
