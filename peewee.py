@@ -173,7 +173,6 @@ class Expr(Leaf):
     def clone(self):
         return Expr(self.lhs, self.op, self.rhs, self.negated)
 
-
 class DQ(Leaf):
     def __init__(self, **query):
         super(DQ, self).__init__()
@@ -182,25 +181,21 @@ class DQ(Leaf):
     def clone(self):
         return DQ(**self.query)
 
-
 class Param(Leaf):
     def __init__(self, data):
         self.data = data
         super(Param, self).__init__()
-
 
 class R(Leaf):
     def __init__(self, value):
         self.value = value
         super(R, self).__init__()
 
-
 class Ordering(Leaf):
     def __init__(self, param, asc):
         self.param = param
         self.asc = asc
         super(Ordering, self).__init__()
-
 
 class Func(Leaf):
     def __init__(self, name, *params):
