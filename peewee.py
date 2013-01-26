@@ -189,6 +189,19 @@ class Param(Leaf):
         super(Param, self).__init__()
 
 
+class R(Leaf):
+    def __init__(self, value):
+        self.value = value
+        super(R, self).__init__()
+
+
+class Ordering(Leaf):
+    def __init__(self, param, asc):
+        self.param = param
+        self.asc = asc
+        super(Ordering, self).__init__()
+
+
 class Func(Leaf):
     def __init__(self, name, *params):
         self.name = name
@@ -204,8 +217,6 @@ class Func(Leaf):
         return dec
 
 fn = Func(None)
-Ordering = namedtuple('Ordering', ('param', 'asc'))
-R = namedtuple('R', ('value',))
 
 
 class FieldDescriptor(object):
