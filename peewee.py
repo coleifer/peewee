@@ -2021,11 +2021,20 @@ class Model(object):
     def prepared(self):
         pass
 
-    def save(self, force_insert=False):
+    def _prune_fields(self, field_dict, only):
+        new_data = {}
+        for field in only:
+            if field.name in field_dict:
+                new_data[field.name] = field_dict[field.name]
+        return new_data
+
+    def save(self, force_insert=False, only=None):
         field_dict = dict(self._data)
         pk = self._meta.primary_key
+        if only:
+            field_dict = self._prune_fields(field_dict, only)
         if self.get_id() is not None and not force_insert:
-            field_dict.pop(pk.name)
+            field_dict.pop(pk.name, None)
             update = self.update(
                 **field_dict
             ).where(pk == self.get_id())
