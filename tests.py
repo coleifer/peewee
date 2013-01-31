@@ -1054,6 +1054,14 @@ class ModelAPITestCase(ModelTestCase):
         self.assertEqual(b_db.title, 'b1-edit')
         self.assertEqual(b_db.content, 'ct')
 
+        b = Blog(user=u, title='b2', content='foo')
+        b.save(only=[Blog.user, Blog.title])
+
+        b_db = Blog.get(Blog.pk == b.pk)
+
+        self.assertEqual(b_db.title, 'b2')
+        self.assertEqual(b_db.content, '')
+
     def test_zero_id(self):
         query = 'insert into users (id, username) values (%s, %s)' % (
             test_db.interpolation, test_db.interpolation)
