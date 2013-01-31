@@ -299,7 +299,11 @@ Models
 
         :rtype: Boolean whether the table for this model exists in the database
 
-    .. py:method:: save([force_insert=False])
+    .. py:method:: save([force_insert=False[, only=None]])
+
+        :param bool force_insert: Whether to force execution of an insert
+        :param list only: A list of fields to persist -- when supplied, only the given
+            fields will be persisted.
 
         Save the given instance, creating or updating depending on whether it has a
         primary key.  If ``force_insert=True`` an ``INSERT`` will be issued regardless
@@ -674,6 +678,13 @@ Query Types
             >>> some_user = base_q.filter(username='charlie')
 
         .. note:: this method is provided for compatibility with peewee 1.
+
+    .. py:method:: alias(alias=None)
+
+        :param str alias: A string to alias the result of this query
+        :rtype: a Query instance
+
+        Assign an alias to given query, which can be used as part of a subquery.
 
     .. py:method:: sql()
 
