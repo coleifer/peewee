@@ -1045,10 +1045,12 @@ def not_allowed(fn):
 
 Join = namedtuple('Join', ('model_class', 'join_type', 'on'))
 
-class Query(object):
+class Query(Leaf):
     require_commit = True
 
     def __init__(self, model_class):
+        super(Query, self).__init__()
+
         self.model_class = model_class
         self.database = model_class._meta.database
 
@@ -1221,6 +1223,7 @@ class SelectQuery(Query):
         self._distinct = False
         self._for_update = False
         self._naive = False
+        self._alias = None
         self._qr = None
 
     def clone(self):
@@ -1238,12 +1241,15 @@ class SelectQuery(Query):
         query._distinct = self._distinct
         query._for_update = self._for_update
         query._naive = self._naive
+        query._alias = self._alias
         return query
 
     def _model_shorthand(self, args):
         accum = []
         for arg in args:
             if isinstance(arg, Leaf):
+                accum.append(arg)
+            elif isinstance(arg, Query):
                 accum.append(arg)
             elif issubclass(arg, Model):
                 accum.extend(arg._meta.get_fields())
@@ -1291,6 +1297,10 @@ class SelectQuery(Query):
     @returns_clone
     def naive(self, naive=True):
         self._naive = naive
+
+    @returns_clone
+    def alias(self, alias=None):
+        self._alias = alias
 
     def annotate(self, rel_model, annotation=None):
         annotation = annotation or fn.Count(rel_model._meta.primary_key).alias('count')

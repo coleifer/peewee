@@ -300,6 +300,18 @@ class SelectTestCase(BasePeeweeTestCase):
         sq = SelectQuery(User, User.username, fn.Count(Blog.select().where(Blog.user == User.id)))
         self.assertSelect(sq, 'users."username", Count((SELECT blog."pk" FROM "blog" AS blog WHERE (blog."user_id" = users."id")))', [])
 
+    def test_select_subquery(self):
+        subquery = SelectQuery(Child, fn.Count(Child.id)).where(Child.parent == Parent.id).group_by(Child.parent)
+        sq = SelectQuery(Parent, Parent, subquery.alias('count'))
+
+        sql = compiler.generate_select(sq)
+        self.assertEqual(sql, (
+            'SELECT parent."id", parent."data", ' + \
+            '(SELECT Count(child."id") FROM "child" AS child ' + \
+            'WHERE (child."parent_id" = parent."id") GROUP BY child."parent_id") ' + \
+            'AS count FROM "parent" AS parent', []
+        ))
+
     def test_joins(self):
         sq = SelectQuery(User).join(Blog)
         self.assertJoins(sq, ['INNER JOIN "blog" AS blog ON users."id" = blog."user_id"'])
@@ -872,6 +884,24 @@ class ModelQueryTestCase(ModelTestCase):
 
         users = User.select().paginate(2, 3)
         self.assertEqual([u.username for u in users], ['u3', 'u4', 'u5'])
+
+    def test_select_subquery(self):
+        # 10 users, 5 blogs each
+        self.create_users_blogs(5, 3)
+
+        # delete user 2's 2nd blog
+        Blog.delete().where(Blog.title == 'b-2-2').execute()
+
+        subquery = Blog.select(fn.Count(Blog.pk)).where(Blog.user == User.id).group_by(Blog.user)
+        users = User.select(User, subquery.alias('ct')).order_by(R('ct'), User.id)
+
+        self.assertEqual([(x.username, x.ct) for x in users], [
+            ('u2', 2),
+            ('u0', 3),
+            ('u1', 3),
+            ('u3', 3),
+            ('u4', 3),
+        ])
 
     def test_scalar(self):
         self.create_users(5)
