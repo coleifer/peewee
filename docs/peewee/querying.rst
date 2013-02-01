@@ -3,6 +3,10 @@
 Querying
 ========
 
+.. _expressions:
+
+.. include:: expressions.rst
+
 Constructing queries
 --------------------
 
