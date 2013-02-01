@@ -1086,7 +1086,7 @@ class Query(Leaf):
 
     @returns_clone
     def join(self, model_class, join_type=None, on=None):
-        if not self._query_ctx._meta.rel_exists(model_class):
+        if not self._query_ctx._meta.rel_exists(model_class) and on is None:
             raise ValueError('No foreign key between %s and %s' % (
                 self._query_ctx, model_class,
             ))
