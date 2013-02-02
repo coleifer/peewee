@@ -234,8 +234,7 @@ class SqDB(DB):
         try:
             columns = re.search('\((.+)\)', table_def).groups()[0]
         except AttributeError:
-            err('Unable to read table definition for "%s"' % table)
-            sys.exit(1)
+            return fks
 
         for col_def in columns.split(','):
             col_def = col_def.strip()
