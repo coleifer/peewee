@@ -718,8 +718,12 @@ class QueryCompiler(object):
                     right_field = to_model._meta.primary_key.db_column
                 else:
                     field = to_model._meta.rel_for_model(from_model, join.on)
-                    left_field = from_model._meta.primary_key.db_column
-                    right_field = field.db_column
+                    if field is not None:
+                        left_field = from_model._meta.primary_key.db_column
+                        right_field = field.db_column
+                    else:
+                        left_field = from_model._meta.primary_key.db_column
+                        right_field = join.on.lhs.db_column
 
                 join_type = join.join_type or JOIN_INNER
                 lhs = '%s.%s' % (alias_map[from_model], self.quote(left_field))
@@ -1086,7 +1090,7 @@ class Query(Leaf):
 
     @returns_clone
     def join(self, model_class, join_type=None, on=None):
-        if not self._query_ctx._meta.rel_exists(model_class):
+        if not self._query_ctx._meta.rel_exists(model_class) and on is None:
             raise ValueError('No foreign key between %s and %s' % (
                 self._query_ctx, model_class,
             ))
