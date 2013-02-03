@@ -268,7 +268,7 @@ class BasePeeweeTestCase(unittest.TestCase):
 
     def assertJoins(self, sq, exp_joins):
         am = compiler.calculate_alias_map(sq)
-        joins = compiler.generate_joins(sq._joins, sq.model_class, am)
+        joins, _ = compiler.generate_joins(sq._joins, sq.model_class, am)
         self.assertEqual(sorted(joins), sorted(exp_joins))
 
     def assertDict(self, qd, expected, expected_params):
@@ -314,35 +314,35 @@ class SelectTestCase(BasePeeweeTestCase):
 
     def test_joins(self):
         sq = SelectQuery(User).join(Blog)
-        self.assertJoins(sq, ['INNER JOIN "blog" AS blog ON users."id" = blog."user_id"'])
+        self.assertJoins(sq, ['INNER JOIN "blog" AS blog ON (users."id" = blog."user_id")'])
 
         sq = SelectQuery(Blog).join(User, JOIN_LEFT_OUTER)
-        self.assertJoins(sq, ['LEFT OUTER JOIN "users" AS users ON blog."user_id" = users."id"'])
+        self.assertJoins(sq, ['LEFT OUTER JOIN "users" AS users ON (blog."user_id" = users."id")'])
 
         sq = SelectQuery(User).join(Relationship)
-        self.assertJoins(sq, ['INNER JOIN "relationship" AS relationship ON users."id" = relationship."from_user_id"'])
+        self.assertJoins(sq, ['INNER JOIN "relationship" AS relationship ON (users."id" = relationship."from_user_id")'])
 
         sq = SelectQuery(User).join(Relationship, on=Relationship.to_user)
-        self.assertJoins(sq, ['INNER JOIN "relationship" AS relationship ON users."id" = relationship."to_user_id"'])
+        self.assertJoins(sq, ['INNER JOIN "relationship" AS relationship ON (users."id" = relationship."to_user_id")'])
 
         sq = SelectQuery(User).join(Relationship, JOIN_LEFT_OUTER, Relationship.to_user)
-        self.assertJoins(sq, ['LEFT OUTER JOIN "relationship" AS relationship ON users."id" = relationship."to_user_id"'])
+        self.assertJoins(sq, ['LEFT OUTER JOIN "relationship" AS relationship ON (users."id" = relationship."to_user_id")'])
 
     def test_join_self_referential(self):
         sq = SelectQuery(Category).join(Category)
-        self.assertJoins(sq, ['INNER JOIN "category" AS category ON category."parent_id" = category."id"'])
+        self.assertJoins(sq, ['INNER JOIN "category" AS category ON (category."parent_id" = category."id")'])
 
     def test_join_both_sides(self):
         sq = SelectQuery(Blog).join(Comment).switch(Blog).join(User)
         self.assertJoins(sq, [
-            'INNER JOIN "comment" AS comment ON blog."pk" = comment."blog_id"',
-            'INNER JOIN "users" AS users ON blog."user_id" = users."id"',
+            'INNER JOIN "comment" AS comment ON (blog."pk" = comment."blog_id")',
+            'INNER JOIN "users" AS users ON (blog."user_id" = users."id")',
         ])
 
         sq = SelectQuery(Blog).join(User).switch(Blog).join(Comment)
         self.assertJoins(sq, [
-            'INNER JOIN "users" AS users ON blog."user_id" = users."id"',
-            'INNER JOIN "comment" AS comment ON blog."pk" = comment."blog_id"',
+            'INNER JOIN "users" AS users ON (blog."user_id" = users."id")',
+            'INNER JOIN "comment" AS comment ON (blog."pk" = comment."blog_id")',
         ])
 
     def test_join_switching(self):
@@ -369,21 +369,21 @@ class SelectTestCase(BasePeeweeTestCase):
         multiple_first = Track.select().join(ReleaseTrack).join(Release).switch(Track).join(Artist).switch(Track).join(TrackGenre).join(Genre)
         self.assertSelect(multiple_first, 'track."id", track."artist_id"', [])
         self.assertJoins(multiple_first, [
-            'INNER JOIN "artist" AS artist ON track."artist_id" = artist."id"',
-            'INNER JOIN "genre" AS genre ON trackgenre."genre_id" = genre."id"',
-            'INNER JOIN "release" AS release ON releasetrack."release_id" = release."id"',
-            'INNER JOIN "releasetrack" AS releasetrack ON track."id" = releasetrack."track_id"',
-            'INNER JOIN "trackgenre" AS trackgenre ON track."id" = trackgenre."track_id"',
+            'INNER JOIN "artist" AS artist ON (track."artist_id" = artist."id")',
+            'INNER JOIN "genre" AS genre ON (trackgenre."genre_id" = genre."id")',
+            'INNER JOIN "release" AS release ON (releasetrack."release_id" = release."id")',
+            'INNER JOIN "releasetrack" AS releasetrack ON (track."id" = releasetrack."track_id")',
+            'INNER JOIN "trackgenre" AS trackgenre ON (track."id" = trackgenre."track_id")',
         ])
 
         single_first = Track.select().join(Artist).switch(Track).join(ReleaseTrack).join(Release).switch(Track).join(TrackGenre).join(Genre)
         self.assertSelect(single_first, 'track."id", track."artist_id"', [])
         self.assertJoins(single_first, [
-            'INNER JOIN "artist" AS artist ON track."artist_id" = artist."id"',
-            'INNER JOIN "genre" AS genre ON trackgenre."genre_id" = genre."id"',
-            'INNER JOIN "release" AS release ON releasetrack."release_id" = release."id"',
-            'INNER JOIN "releasetrack" AS releasetrack ON track."id" = releasetrack."track_id"',
-            'INNER JOIN "trackgenre" AS trackgenre ON track."id" = trackgenre."track_id"',
+            'INNER JOIN "artist" AS artist ON (track."artist_id" = artist."id")',
+            'INNER JOIN "genre" AS genre ON (trackgenre."genre_id" = genre."id")',
+            'INNER JOIN "release" AS release ON (releasetrack."release_id" = release."id")',
+            'INNER JOIN "releasetrack" AS releasetrack ON (track."id" = releasetrack."track_id")',
+            'INNER JOIN "trackgenre" AS trackgenre ON (track."id" = trackgenre."track_id")',
         ])
 
     def test_joining_expr(self):
@@ -401,8 +401,8 @@ class SelectTestCase(BasePeeweeTestCase):
         )
         self.assertSelect(sq, 'a."uniq_a", b."uniq_ab", b."uniq_b", c."uniq_bc"', [])
         self.assertJoins(sq, [
-            'INNER JOIN "b" AS b ON a."uniq_a" = b."uniq_ab"',
-            'INNER JOIN "c" AS c ON b."uniq_b" = c."uniq_bc"',
+            'INNER JOIN "b" AS b ON (a."uniq_a" = b."uniq_ab")',
+            'INNER JOIN "c" AS c ON (b."uniq_b" = c."uniq_bc")',
         ])
 
     def test_where(self):
@@ -603,20 +603,20 @@ class SugarTestCase(BasePeeweeTestCase):
         self.assertWhere(sq, '(users."username" = ?)', ['u1'])
 
         sq = Blog.filter(user__username='u1')
-        self.assertJoins(sq, ['INNER JOIN "users" AS users ON blog."user_id" = users."id"'])
+        self.assertJoins(sq, ['INNER JOIN "users" AS users ON (blog."user_id" = users."id")'])
         self.assertWhere(sq, '(users."username" = ?)', ['u1'])
 
         sq = Blog.filter(user__username__in=['u1', 'u2'], comments__comment='hurp')
         self.assertJoins(sq, [
-            'INNER JOIN "comment" AS comment ON blog."pk" = comment."blog_id"',
-            'INNER JOIN "users" AS users ON blog."user_id" = users."id"',
+            'INNER JOIN "comment" AS comment ON (blog."pk" = comment."blog_id")',
+            'INNER JOIN "users" AS users ON (blog."user_id" = users."id")',
         ])
         self.assertWhere(sq, '((comment."comment" = ?) AND (users."username" IN (?,?)))', ['hurp', 'u1', 'u2'])
 
         sq = Blog.filter(user__username__in=['u1', 'u2']).filter(comments__comment='hurp')
         self.assertJoins(sq, [
-            'INNER JOIN "users" AS users ON blog."user_id" = users."id"',
-            'INNER JOIN "comment" AS comment ON blog."pk" = comment."blog_id"',
+            'INNER JOIN "users" AS users ON (blog."user_id" = users."id")',
+            'INNER JOIN "comment" AS comment ON (blog."pk" = comment."blog_id")',
         ])
         self.assertWhere(sq, '((users."username" IN (?,?)) AND (comment."comment" = ?))', ['u1', 'u2', 'hurp'])
 
@@ -627,15 +627,15 @@ class SugarTestCase(BasePeeweeTestCase):
 
         sq = Comment.filter(DQ(blog__user__username='u1') | DQ(blog__title='b1'), DQ(comment='c1'))
         self.assertJoins(sq, [
-            'INNER JOIN "blog" AS blog ON comment."blog_id" = blog."pk"',
-            'INNER JOIN "users" AS users ON blog."user_id" = users."id"',
+            'INNER JOIN "blog" AS blog ON (comment."blog_id" = blog."pk")',
+            'INNER JOIN "users" AS users ON (blog."user_id" = users."id")',
         ])
         self.assertWhere(sq, '(((users."username" = ?) OR (blog."title" = ?)) AND (comment."comment" = ?))', ['u1', 'b1', 'c1'])
 
         sq = Blog.filter(DQ(user__username='u1') | DQ(comments__comment='c1'))
         self.assertJoins(sq, [
-            'INNER JOIN "comment" AS comment ON blog."pk" = comment."blog_id"',
-            'INNER JOIN "users" AS users ON blog."user_id" = users."id"',
+            'INNER JOIN "comment" AS comment ON (blog."pk" = comment."blog_id")',
+            'INNER JOIN "users" AS users ON (blog."user_id" = users."id")',
         ])
 
         self.assertWhere(sq, '((users."username" = ?) OR (comment."comment" = ?))', ['u1', 'c1'])
@@ -643,19 +643,19 @@ class SugarTestCase(BasePeeweeTestCase):
     def test_annotate(self):
         sq = User.select().annotate(Blog)
         self.assertSelect(sq, 'users."id", users."username", Count(blog."pk") AS count', [])
-        self.assertJoins(sq, ['INNER JOIN "blog" AS blog ON users."id" = blog."user_id"'])
+        self.assertJoins(sq, ['INNER JOIN "blog" AS blog ON (users."id" = blog."user_id")'])
         self.assertWhere(sq, '', [])
         self.assertGroupBy(sq, 'users."id", users."username"', [])
 
         sq = User.select(User.username).annotate(Blog, fn.Sum(Blog.pk).alias('sum')).where(User.username == 'foo')
         self.assertSelect(sq, 'users."username", Sum(blog."pk") AS sum', [])
-        self.assertJoins(sq, ['INNER JOIN "blog" AS blog ON users."id" = blog."user_id"'])
+        self.assertJoins(sq, ['INNER JOIN "blog" AS blog ON (users."id" = blog."user_id")'])
         self.assertWhere(sq, '(users."username" = ?)', ['foo'])
         self.assertGroupBy(sq, 'users."username"', [])
 
         sq = User.select(User.username).annotate(Blog).annotate(Blog, fn.Max(Blog.pk).alias('mx'))
         self.assertSelect(sq, 'users."username", Count(blog."pk") AS count, Max(blog."pk") AS mx', [])
-        self.assertJoins(sq, ['INNER JOIN "blog" AS blog ON users."id" = blog."user_id"'])
+        self.assertJoins(sq, ['INNER JOIN "blog" AS blog ON (users."id" = blog."user_id")'])
         self.assertWhere(sq, '', [])
         self.assertGroupBy(sq, 'users."username"', [])
 
@@ -665,7 +665,7 @@ class SugarTestCase(BasePeeweeTestCase):
 
         sq = User.select().join(Blog, JOIN_LEFT_OUTER).switch(User).annotate(Blog)
         self.assertSelect(sq, 'users."id", users."username", Count(blog."pk") AS count', [])
-        self.assertJoins(sq, ['LEFT OUTER JOIN "blog" AS blog ON users."id" = blog."user_id"'])
+        self.assertJoins(sq, ['LEFT OUTER JOIN "blog" AS blog ON (users."id" = blog."user_id")'])
         self.assertWhere(sq, '', [])
         self.assertGroupBy(sq, 'users."id", users."username"', [])
 
@@ -1683,7 +1683,7 @@ class DBColumnTestCase(ModelTestCase):
 
         sq = DBUser.select(DBUser.user_id).join(DBBlog).where(DBBlog.title == 'b1')
         self.assertSelect(sq, 'dbuser."db_user_id"', [])
-        self.assertJoins(sq, ['INNER JOIN "dbblog" AS dbblog ON dbuser."db_user_id" = dbblog."db_user"'])
+        self.assertJoins(sq, ['INNER JOIN "dbblog" AS dbblog ON (dbuser."db_user_id" = dbblog."db_user")'])
         self.assertWhere(sq, '(dbblog."db_title" = ?)', ['b1'])
 
     def test_db_column(self):

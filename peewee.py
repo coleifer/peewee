@@ -702,6 +702,7 @@ class QueryCompiler(object):
 
     def generate_joins(self, joins, model_class, alias_map):
         parsed = []
+        params = []
         seen = set()
         q = [model_class]
         while q:
@@ -713,32 +714,31 @@ class QueryCompiler(object):
                 from_model = curr
                 to_model = join.model_class
                 if isinstance(join.on, Expr):
-                    left_field = join.on.lhs.db_column
-                    right_field = join.on.rhs.db_column
+                    join_expr = join.on
                 else:
                     field = from_model._meta.rel_for_model(to_model, join.on)
                     if field:
-                        left_field = field.db_column
-                        right_field = to_model._meta.primary_key.db_column
+                        left_field = field
+                        right_field = to_model._meta.primary_key
                     else:
                         field = to_model._meta.rel_for_model(from_model, join.on)
-                        left_field = from_model._meta.primary_key.db_column
-                        right_field = field.db_column
+                        left_field = from_model._meta.primary_key
+                        right_field = field
+                    join_expr = (left_field == right_field)
 
                 join_type = join.join_type or JOIN_INNER
-                lhs = '%s.%s' % (alias_map[from_model], self.quote(left_field))
-                rhs = '%s.%s' % (alias_map[to_model], self.quote(right_field))
+                parsed_join, join_params = self.parse_expr(join_expr, alias_map)
 
-                parsed.append('%s JOIN %s AS %s ON %s = %s' % (
+                parsed.append('%s JOIN %s AS %s ON %s' % (
                     self.join_map[join_type],
                     self.quote(to_model._meta.db_table),
                     alias_map[to_model],
-                    lhs,
-                    rhs,
+                    parsed_join,
                 ))
+                params.extend(join_params)
 
                 q.append(to_model)
-        return parsed
+        return parsed, params
 
     def generate_select(self, query, start=1, alias_map=None):
         model = query.model_class
@@ -761,9 +761,10 @@ class QueryCompiler(object):
 
         parts.append('FROM %s AS %s' % (self.quote(model._meta.db_table), alias_map[model]))
 
-        joins = self.generate_joins(query._joins, query.model_class, alias_map)
+        joins, j_params = self.generate_joins(query._joins, query.model_class, alias_map)
         if joins:
             parts.append(' '.join(joins))
+            params.extend(j_params)
 
         where, w_params = self.parse_query_node(query._where, alias_map)
         if where:
