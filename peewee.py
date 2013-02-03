@@ -703,23 +703,27 @@ class QueryCompiler(object):
     def generate_joins(self, joins, model_class, alias_map):
         parsed = []
         seen = set()
-
-        def _traverse(curr):
+        q = [model_class]
+        while q:
+            curr = q.pop()
             if curr not in joins or curr in seen:
-                return
+                continue
             seen.add(curr)
             for join in joins[curr]:
                 from_model = curr
                 to_model = join.model_class
-
-                field = from_model._meta.rel_for_model(to_model, join.on)
-                if field:
-                    left_field = field.db_column
-                    right_field = to_model._meta.primary_key.db_column
+                if isinstance(join.on, Expr):
+                    left_field = join.on.lhs.db_column
+                    right_field = join.on.rhs.db_column
                 else:
-                    field = to_model._meta.rel_for_model(from_model, join.on)
-                    left_field = from_model._meta.primary_key.db_column
-                    right_field = field.db_column
+                    field = from_model._meta.rel_for_model(to_model, join.on)
+                    if field:
+                        left_field = field.db_column
+                        right_field = to_model._meta.primary_key.db_column
+                    else:
+                        field = to_model._meta.rel_for_model(from_model, join.on)
+                        left_field = from_model._meta.primary_key.db_column
+                        right_field = field.db_column
 
                 join_type = join.join_type or JOIN_INNER
                 lhs = '%s.%s' % (alias_map[from_model], self.quote(left_field))
@@ -733,8 +737,7 @@ class QueryCompiler(object):
                     rhs,
                 ))
 
-                _traverse(to_model)
-        _traverse(model_class)
+                q.append(to_model)
         return parsed
 
     def generate_select(self, query, start=1, alias_map=None):
@@ -1086,7 +1089,7 @@ class Query(Leaf):
 
     @returns_clone
     def join(self, model_class, join_type=None, on=None):
-        if not self._query_ctx._meta.rel_exists(model_class):
+        if not self._query_ctx._meta.rel_exists(model_class) and on is None:
             raise ValueError('No foreign key between %s and %s' % (
                 self._query_ctx, model_class,
             ))

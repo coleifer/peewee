@@ -386,6 +386,24 @@ class SelectTestCase(BasePeeweeTestCase):
             'INNER JOIN "trackgenre" AS trackgenre ON track."id" = trackgenre."track_id"',
         ])
 
+    def test_joining_expr(self):
+        class A(TestModel):
+            uniq_a = CharField(primary_key=True)
+        class B(TestModel):
+            uniq_ab = CharField(primary_key=True)
+            uniq_b = CharField()
+        class C(TestModel):
+            uniq_bc = CharField(primary_key=True)
+        sq = A.select(A, B, C).join(
+            B, on=(A.uniq_a == B.uniq_ab)
+        ).join(
+            C, on=(B.uniq_b == C.uniq_bc)
+        )
+        self.assertSelect(sq, 'a."uniq_a", b."uniq_ab", b."uniq_b", c."uniq_bc"', [])
+        self.assertJoins(sq, [
+            'INNER JOIN "b" AS b ON a."uniq_a" = b."uniq_ab"',
+            'INNER JOIN "c" AS c ON b."uniq_b" = c."uniq_bc"',
+        ])
 
     def test_where(self):
         sq = SelectQuery(User).where(User.id < 5)
