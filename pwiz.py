@@ -309,7 +309,7 @@ def introspect(db, schema=None):
     
     return models, table_to_model, table_fks, col_meta
 
-def print_models(engine, database, **connect):
+def print_models(engine, database, tables, **connect):
     schema = connect.get('schema')
     db = get_conn(engine, database, **connect)
     
@@ -355,7 +355,8 @@ def print_models(engine, database, **connect):
     seen = set()
     for model, cols in ds(models):
         if model not in seen:
-            print_model(model, seen)
+            if not tables or model in tables:
+                print_model(model, seen)
 
 # misc
 tn = lambda t: t.title().replace('_', '')
@@ -376,6 +377,7 @@ if __name__ == '__main__':
     ao('-P', '--password', dest='password')
     ao('-e', '--engine', dest='engine', default='postgresql')
     ao('-s', '--schema', dest='schema')
+    ao('-t', '--tables', dest='tables')
 
     options, args = parser.parse_args()
     ops = ('host', 'port', 'user', 'password', 'schema')
@@ -391,4 +393,8 @@ if __name__ == '__main__':
     if options.engine == 'mysql' and 'password' in connect:
         connect['passwd'] = connect.pop('password', None)
 
-    print_models(options.engine, database, **connect)
+    if options.tables:
+        tables = [x for x in options.tables.split(',') if x]
+    else:
+        tables = []
+    print_models(options.engine, database, tables, **connect)
