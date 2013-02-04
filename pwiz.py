@@ -49,24 +49,16 @@ class DB(object):
 
     def get_columns(self, table):
         """
-        get_columns('some_table')
-
-        {
-            'name': CharField,
-            'age': IntegerField,
-        }
+        {'name': CharField,
+         'age': IntegerField}
         """
         raise NotImplementedError
 
     def get_foreign_keys(self, table):
         """
-        get_foreign_keys('some_table')
-
-        [
-            # column,   rel table,  rel pk
-            ('blog_id', 'blog',     'id'),
-            ('user_id', 'users',    'id'),
-        ]
+        [# column,   rel table,  rel pk
+         ('blog_id', 'blog',     'id'),
+         ('user_id', 'users',    'id')]
         """
         raise NotImplementedError
 
