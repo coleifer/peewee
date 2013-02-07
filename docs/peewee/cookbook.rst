@@ -759,7 +759,7 @@ Non-integer primary keys
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
 If you would like use a non-integer primary key (which I generally don't recommend),
-you can override the default ``column_class`` of the :py:class:`PrimaryKeyField`:
+you can specify ``primary_key=True``.
 
 .. code-block:: python
 
