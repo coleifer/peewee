@@ -192,6 +192,8 @@ Option                Meaning                                          Inheritab
 ===================   ==============================================   ============
 
 
+.. _model_indexes:
+
 Specifying indexes for a model
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -313,7 +315,7 @@ Parameters accepted by all field types and their default values:
 
 * ``null = False`` -- boolean indicating whether null values are allowed to be stored
 * ``index = False`` -- boolean indicating whether to create an index on this column
-* ``unique = False`` -- boolean indicating whether to create a unique index on this column
+* ``unique = False`` -- boolean indicating whether to create a unique index on this column. See also :ref:`adding composite indexes <model_indexes>`.
 * ``verbose_name = None`` -- string representing the "user-friendly" name of this field
 * ``help_text = None`` -- string representing any helpful text for this field
 * ``db_column = None`` -- string representing the underlying column to use if different, useful for legacy databases
