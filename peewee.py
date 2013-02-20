@@ -1838,7 +1838,7 @@ class ModelOptions(object):
         return dd
 
     def get_sorted_fields(self):
-        return sorted(self.fields.items(), key=lambda (k,v): (v is self.primary_key and 1 or 2, v._order))
+        return sorted(self.fields.items(), key=lambda i: (i[1] is self.primary_key and 1 or 2, i[1]._order))
 
     def get_field_names(self):
         return [f[0] for f in self.get_sorted_fields()]
