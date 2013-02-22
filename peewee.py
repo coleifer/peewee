@@ -1781,11 +1781,15 @@ class transaction(object):
         self.db.begin()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        success = True
         if exc_type:
             self.db.rollback()
+            success = False
         else:
             self.db.commit()
         self.db.set_autocommit(self._orig)
+        return success
+
 
 class DoesNotExist(Exception):
     pass
