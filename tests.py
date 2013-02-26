@@ -312,6 +312,19 @@ class SelectTestCase(BasePeeweeTestCase):
             'AS count FROM "parent" AS parent', []
         ))
 
+    def test_select_cloning(self):
+        ct = fn.Count(Blog.pk)
+        sq = SelectQuery(User, User, User.id.alias('extra_id'), ct.alias('blog_ct')).join(
+            Blog, JOIN_LEFT_OUTER).group_by(User).order_by(ct.desc())
+        sql = compiler.generate_select(sq)
+        self.assertEqual(sql, (
+            'SELECT users."id", users."username", users."id" AS extra_id, Count(blog."pk") AS blog_ct ' + \
+            'FROM "users" AS users LEFT OUTER JOIN "blog" AS blog ON (users."id" = blog."user_id") ' + \
+            'GROUP BY users."id", users."username" ' + \
+            'ORDER BY Count(blog."pk") DESC', []
+        ))
+        self.assertEqual(User.id._alias, None)
+
     def test_joins(self):
         sq = SelectQuery(User).join(Blog)
         self.assertJoins(sq, ['INNER JOIN "blog" AS blog ON (users."id" = blog."user_id")'])

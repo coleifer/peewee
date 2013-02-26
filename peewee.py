@@ -287,6 +287,25 @@ class Field(Leaf):
         self._order = Field._field_counter
 
         super(Field, self).__init__()
+    
+    def clone_base(self, **kwargs):
+       inst = type(self)(
+           null=self.null,
+           index=self.index,
+           unique=self.unique,
+           help_text=self.help_text,
+           default=self.default,
+           choices=self.choices,
+           primary_key=self.primary_key,
+           sequence=self.sequence,
+           **kwargs
+       )
+       inst.attributes = dict(self.attributes)
+       inst.name = self.name
+       inst.model_class = self.model_class
+       inst.db_column = self.db_column
+       inst.verbose_name = self.verbose_name
+       return inst
 
     def add_to_class(self, model_class, name):
         self.name = name
@@ -521,6 +540,16 @@ class ForeignKeyField(IntegerField):
         ))
 
         super(ForeignKeyField, self).__init__(null=null, *args, **kwargs)
+
+    def clone_base(self):
+        inst = super(ForeignKeyField, self).clone_base(
+            rel_model=self.rel_model,
+            cascade=self.cascade,
+            extra=self.extra,
+        )
+        inst.related_name = self.related_name
+        inst.rel_model = self.rel_model
+        return inst
 
     def add_to_class(self, model_class, name):
         self.name = name
