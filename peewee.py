@@ -962,29 +962,32 @@ class QueryResultWrapper(object):
             else:
                 setattr(instance, cols[i], value)
 
-        return self.follow_joins(self.join_meta, collected_models, self.model)
+        return collected_models
 
-    def follow_joins(self, joins, collected_models, current):
-        inst = collected_models[current]
+    def follow_joins(self, collected):
+        joins = self.join_meta
+        stack = [self.model]
+        while stack:
+            current = stack.pop()
+            if current not in joins:
+                continue
 
-        if current not in joins:
-            return inst
+            inst = collected[current]
+            for joined_model, _, _ in joins[current]:
+                if joined_model in collected:
+                    joined_inst = collected[joined_model]
+                    fk_field = current._meta.rel_for_model(joined_model)
+                    if not fk_field:
+                        continue
 
-        for joined_model, _, _ in joins[current]:
-            if joined_model in collected_models:
-                joined_inst = self.follow_joins(joins, collected_models, joined_model)
-                fk_field = current._meta.rel_for_model(joined_model)
+                    if joined_inst.get_id() is None and fk_field.name in inst._data:
+                        rel_inst_id = inst._data[fk_field.name]
+                        joined_inst.set_id(rel_inst_id)
 
-                if not fk_field:
-                    continue
+                    setattr(inst, fk_field.name, joined_inst)
+                    stack.append(joined_model)
 
-                if joined_inst.get_id() is None and fk_field.name in inst._data:
-                    rel_inst_id = inst._data[fk_field.name]
-                    joined_inst.set_id(rel_inst_id)
-
-                setattr(inst, fk_field.name, joined_inst)
-
-        return inst
+        return collected[self.model]
 
     def __iter__(self):
         self.__idx = 0
@@ -1003,7 +1006,8 @@ class QueryResultWrapper(object):
         if self.naive:
             return self.simple_iter(row)
         else:
-            return self.construct_instance(row)
+            collected = self.construct_instance(row)
+            return self.follow_joins(collected)
 
     def iterator(self):
         while 1:
