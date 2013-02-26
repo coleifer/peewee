@@ -108,19 +108,43 @@ def dict_update(orig, extra):
     new.update(extra)
     return new
 
+def returns_clone(func):
+    def inner(self, *args, **kwargs):
+        clone = self.clone()
+        func(clone, *args, **kwargs)
+        return clone
+    inner.call_local = func
+    return inner
+
+def not_allowed(fn):
+    def inner(self, *args, **kwargs):
+        raise NotImplementedError('%s is not allowed on %s instances' % (
+            fn, type(self).__name__,
+        ))
+    return inner
+
 
 class Leaf(object):
     def __init__(self):
         self.negated = False
         self._alias = None
 
+    def clone_base(self):
+        return type(self)()
+
+    def clone(self):
+        inst = self.clone_base()
+        inst.negated = self.negated
+        inst._alias = self._alias
+        return inst
+
+    @returns_clone
     def __invert__(self):
         self.negated = not self.negated
-        return self
 
+    @returns_clone
     def alias(self, a):
         self._alias = a
-        return self
 
     def asc(self):
         return Ordering(self, True)
@@ -163,22 +187,21 @@ class Leaf(object):
 
 
 class Expr(Leaf):
-    def __init__(self, lhs, op, rhs, negated=False):
+    def __init__(self, lhs, op, rhs):
         super(Expr, self).__init__()
         self.lhs = lhs
         self.op = op
         self.rhs = rhs
-        self.negated = negated
 
-    def clone(self):
-        return Expr(self.lhs, self.op, self.rhs, self.negated)
+    def clone_base(self):
+        return Expr(self.lhs, self.op, self.rhs)
 
 class DQ(Leaf):
     def __init__(self, **query):
         super(DQ, self).__init__()
         self.query = query
 
-    def clone(self):
+    def clone_base(self):
         return DQ(**self.query)
 
 class Param(Leaf):
@@ -186,10 +209,16 @@ class Param(Leaf):
         self.data = data
         super(Param, self).__init__()
 
+    def clone_base(self):
+        return Param(self.data)
+
 class R(Leaf):
     def __init__(self, value):
         self.value = value
         super(R, self).__init__()
+
+    def clone_base(self):
+        return R(self.value)
 
 class Ordering(Leaf):
     def __init__(self, param, asc):
@@ -197,13 +226,16 @@ class Ordering(Leaf):
         self.asc = asc
         super(Ordering, self).__init__()
 
+    def clone_base(self):
+        return Ordering(self.param, self.asc)
+
 class Func(Leaf):
     def __init__(self, name, *params):
         self.name = name
         self.params = params
         super(Func, self).__init__()
 
-    def clone(self):
+    def clone_base(self):
         return Func(self.name, *self.params)
 
     def __getattr__(self, attr):
@@ -1034,22 +1066,6 @@ class QueryResultWrapper(object):
                 self.next()
             except StopIteration:
                 break
-
-def returns_clone(func):
-    def inner(self, *args, **kwargs):
-        clone = self.clone()
-        func(clone, *args, **kwargs)
-        return clone
-    inner.call_local = func
-    return inner
-
-def not_allowed(fn):
-    def inner(self, *args, **kwargs):
-        raise NotImplementedError('%s is not allowed on %s instances' % (
-            fn, type(self).__name__,
-        ))
-    return inner
-
 
 Join = namedtuple('Join', ('model_class', 'join_type', 'on'))
 
