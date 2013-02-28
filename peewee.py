@@ -1009,14 +1009,14 @@ class QueryResultWrapper(object):
             value = row[i]
             if isinstance(expr, FieldProxy):
                 key = expr.alias # model alias
-                model = expr.model # instance constructor
+                constructor = expr.model # instance constructor
             elif isinstance(expr, Field):
-                key = model = expr.model_class
+                key = constructor = expr.model_class
             else:
-                key = model = self.model
+                key = constructor = self.model
 
             if key not in collected_models:
-                collected_models[key] = model()
+                collected_models[key] = constructor()
             instance = collected_models[key]
 
             if isinstance(expr, Field):
