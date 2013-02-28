@@ -1079,22 +1079,31 @@ class ModelAPITestCase(ModelTestCase):
         self.assertEqual(len(self.queries()) - qc, 1)
 
     def test_category_select_related_alias(self):
-        Parent = Category.alias()
-        p1 = Category.create(name='p1')
-        p2 = Category.create(name='p2')
+        g1 = Category.create(name='g1')
+        g2 = Category.create(name='g2')
+
+        p1 = Category.create(name='p1', parent=g1)
+        p2 = Category.create(name='p2', parent=g2)
+
         c1 = Category.create(name='c1', parent=p1)
         c11 = Category.create(name='c11', parent=p1)
         c2 = Category.create(name='c2', parent=p2)
 
         qc = len(self.queries())
 
-        sq = Category.select(Category, Parent).join(
+        Grandparent = Category.alias()
+        Parent = Category.alias()
+        sq = Category.select(Category, Parent, Grandparent).join(
             Parent, on=(Category.parent == Parent.id)
-        ).where(Parent.name == 'p1').order_by(Category.name)
+        ).join(
+            Grandparent, on=(Parent.parent == Grandparent.id)
+        ).where(
+            Grandparent.name == 'g1'
+        ).order_by(Category.name)
 
-        self.assertEqual([(c.name, c.parent.name) for c in sq], [
-            ('c1', 'p1'),
-            ('c11', 'p1'),
+        self.assertEqual([(c.name, c.parent.name, c.parent.parent.name) for c in sq], [
+            ('c1', 'p1', 'g1'),
+            ('c11', 'p1', 'g1'),
         ])
 
         qc2 = len(self.queries())
