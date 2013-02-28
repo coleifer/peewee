@@ -1007,14 +1007,17 @@ class QueryResultWrapper(object):
         cols = [c[0] for c in self.cursor.description]
         for i, expr in enumerate(self.column_meta):
             value = row[i]
-            if isinstance(expr, Field):
-                model = expr.model_class
+            if isinstance(expr, FieldProxy):
+                key = expr.alias # model alias
+                model = expr.model # instance constructor
+            elif isinstance(expr, Field):
+                key = model = expr.model_class
             else:
-                model = self.model
+                key = model = self.model
 
-            if model not in collected_models:
-                collected_models[model] = model()
-            instance = collected_models[model]
+            if key not in collected_models:
+                collected_models[key] = model()
+            instance = collected_models[key]
 
             if isinstance(expr, Field):
                 setattr(instance, expr.name, expr.python_value(value))
@@ -1034,19 +1037,22 @@ class QueryResultWrapper(object):
                 continue
 
             inst = collected[current]
-            for joined_model, _, _ in joins[current]:
-                if joined_model in collected:
-                    joined_inst = collected[joined_model]
-                    fk_field = current._meta.rel_for_model(joined_model)
+            for join in joins[current]:
+                if join.model_class in collected:
+                    joined_inst = collected[join.model_class]
+                    fk_field = current._meta.rel_for_model(join.model_class)
                     if not fk_field:
-                        continue
+                        if isinstance(join.on, Expr):
+                            fk_field = join.on.lhs
+                        else:
+                            continue
 
                     if joined_inst.get_id() is None and fk_field.name in inst._data:
                         rel_inst_id = inst._data[fk_field.name]
                         joined_inst.set_id(rel_inst_id)
 
                     setattr(inst, fk_field.name, joined_inst)
-                    stack.append(joined_model)
+                    stack.append(join.model_class)
 
         return collected[self.model]
 
@@ -1304,6 +1310,8 @@ class SelectQuery(Query):
                 accum.append(arg)
             elif isinstance(arg, Query):
                 accum.append(arg)
+            elif isinstance(arg, ModelAlias):
+                accum.extend(arg.get_proxy_fields())
             elif issubclass(arg, Model):
                 accum.extend(arg._meta.get_fields())
         return accum
@@ -1977,6 +1985,34 @@ class BaseModel(type):
         return cls
 
 
+class FieldProxy(Field):
+    def __init__(self, alias, field_instance):
+        self.alias = alias
+        self.model = self.alias.model_class
+        self.field_instance = field_instance
+
+    def __getattr__(self, attr):
+        if attr == 'model_class':
+            return self.alias
+        return getattr(self.field_instance, attr)
+
+class ModelAlias(object):
+    def __init__(self, model_class):
+        self.__dict__['model_class'] = model_class
+
+    def __getattr__(self, attr):
+        model_attr = getattr(self.model_class, attr)
+        if isinstance(model_attr, Field):
+            return FieldProxy(self, model_attr)
+        return model_attr
+
+    def __setattr__(self, attr, value):
+        raise AttributeError('Cannot set attributes on ModelAlias instances')
+
+    def get_proxy_fields(self):
+        return [FieldProxy(self, f) for f in self.model_class._meta.get_fields()]
+
+
 class Model(object):
     __metaclass__ = BaseModel
 
@@ -1986,6 +2022,10 @@ class Model(object):
 
         for k, v in kwargs.items():
             setattr(self, k, v)
+
+    @classmethod
+    def alias(cls):
+        return ModelAlias(cls)
 
     @classmethod
     def select(cls, *selection):

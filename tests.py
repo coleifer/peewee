@@ -78,6 +78,10 @@ test_db = database_class(database_name, **database_params)
 query_db = TestDatabase(database_name, **database_params)
 compiler = query_db.compiler()
 
+# create a compiler we can use to test that will generate increasing aliases
+# this is used to test self-referential joins
+normal_compiler = QueryCompiler('"', '?', {}, {})
+
 #
 # BASE MODEL CLASS
 #
@@ -344,6 +348,20 @@ class SelectTestCase(BasePeeweeTestCase):
     def test_join_self_referential(self):
         sq = SelectQuery(Category).join(Category)
         self.assertJoins(sq, ['INNER JOIN "category" AS category ON (category."parent_id" = category."id")'])
+
+    def test_join_self_referential_alias(self):
+        Parent = Category.alias()
+        sq = SelectQuery(Category, Category, Parent).join(Parent, on=(Category.parent == Parent.id)).where(
+            Parent.name == 'parent name'
+        ).order_by(Parent.name)
+        sql, params = normal_compiler.generate_select(sq)
+        self.assertEqual(sql, 
+            'SELECT t1."id", t1."parent_id", t1."name", t2."id", t2."parent_id", t2."name" ' + \
+            'FROM "category" AS t1 INNER JOIN "category" AS t2 ON (t1."parent_id" = t2."id") ' + \
+            'WHERE (t2."name" = ?) ' + \
+            'ORDER BY t2."name"'
+        )
+        self.assertEqual(params, ['parent name'])
 
     def test_join_both_sides(self):
         sq = SelectQuery(Blog).join(Comment).switch(Blog).join(User)
@@ -1059,6 +1077,28 @@ class ModelAPITestCase(ModelTestCase):
 
         parent = c2_db.parent
         self.assertEqual(len(self.queries()) - qc, 1)
+
+    def test_category_select_related_alias(self):
+        Parent = Category.alias()
+        p1 = Category.create(name='p1')
+        p2 = Category.create(name='p2')
+        c1 = Category.create(name='c1', parent=p1)
+        c11 = Category.create(name='c11', parent=p1)
+        c2 = Category.create(name='c2', parent=p2)
+
+        qc = len(self.queries())
+
+        sq = Category.select(Category, Parent).join(
+            Parent, on=(Category.parent == Parent.id)
+        ).where(Parent.name == 'p1').order_by(Category.name)
+
+        self.assertEqual([(c.name, c.parent.name) for c in sq], [
+            ('c1', 'p1'),
+            ('c11', 'p1'),
+        ])
+
+        qc2 = len(self.queries())
+        self.assertEqual(qc2 - qc, 1)
 
     def test_creation(self):
         self.create_users(10)
