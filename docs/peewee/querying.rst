@@ -140,6 +140,34 @@ And here it is using joins:
         t1.status = ? AND
         t2.is_staff = ?
 
+
+.. _self-joins
+
+Self-joins
+^^^^^^^^^^
+
+Suppose you have some models organized in a self-referential hierarchy:
+
+.. code-block:: python
+
+    class Category(Model):
+        name = CharField()
+        parent = ForeignKeyField('self', null=True)
+
+If you want to do a self-join you will need to use the :py:meth:`Model.alias` method:
+
+.. code-block:: python
+
+    Parent = Category.alias()
+
+    # select all categories where the parent is named "Parent Category"
+    Category.select().join(Parent, on=(Category.parent == Parent.id)).where(
+        Parent.name == 'Parent Category'
+    )
+
+.. note:: You must explicitly specify how to construct the join when doing a self-join
+
+
 .. _column-lookups:
 
 Column lookups

@@ -201,6 +201,23 @@ Models
 
             >>> sq = Entry.filter(blog__title='Some Blog')
 
+    .. py:classmethod:: alias()
+
+        :rtype: :py:class:`ModelAlias` instance
+
+        The alias() method is used to build queries that use self-joins.
+
+        Example:
+
+        .. code-block:: pycon
+
+            >>> Parent = Category.alias()
+            >>> sq = Category.select(Category, Parent).join(
+            ...     Parent, on=(Category.parent == Parent.id)
+            >>> ).where(Parent.name == 'parent category')
+
+        .. note:: You must explicitly specify which columns to join on
+
     .. py:classmethod:: create_table([fail_silently=False])
 
         :param bool fail_silently: If set to ``True``, the method will check for the existence of the table
