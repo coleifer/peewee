@@ -446,13 +446,93 @@ normally.
 
 This works for following objects "up" the chain, i.e. following foreign key relationships.
 The reverse is not true, however -- you cannot issue a single query and get all related
-sub-objects, i.e. list users and prefetch all related tweets.  This *can* be done by
-fetching all tweets (with related user data), then reconstructing the users in python, but
-is not provided as part of peewee.  For a detailed discussion of working
-around this, see the `discussion here <https://groups.google.com/forum/?fromgroups#!topic/peewee-orm/RLd2r-eKp7w>`_.
+sub-objects, i.e. list users and prefetch all related tweets.  This *can* be done by using
+the :py:func:`prefetch` API discussed in the next secion.
 
-If you are interested, the django developers added this feature.  Take a look 
-at `the prefetch_related ticket <https://code.djangoproject.com/ticket/16937>`_.
+.. _prefetch:
+
+Pre-fetching related instances
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+As a corollary to the previous section in which we selected models going "up" the
+chain, in this section I will show you to select models going "down" the chain
+in a 1 -> many relationship.  For example, selecting users and all of their tweets.
+
+Assume you want to display a list of users and all of their tweets:
+
+.. code-block:: python
+
+    for user in User.select():
+        print user.username
+        for tweet in user.tweets:
+            print tweet.message
+
+This will generate N queries, however - 1 for the users, and then N for each user's
+tweets.  Instead of doing N queries, we can do 2 instead:
+
+1. One for all the users
+2. One for all the tweets for the users selected in (1)
+
+.. code-block:: sql
+
+    -- first query --
+    SELECT t1.id, t1.username FROM users AS t1;
+
+    -- second query --
+    SELECT t1.id, t1.message, t1.user_id
+    FROM tweet AS t1
+    WHERE t1.user_id IN (
+        SELECT t2.id FROM users AS t2
+    )
+
+Peewee can evaluate both queries and "prefetch" the tweets for each user, storing
+them in an attribute on the user model.  To do this, use the :py:func:`prefetch`
+function:
+
+.. code-block:: python
+
+    users = User.select()
+    tweets = Tweet.select()
+    users_prefetch = prefetch(users, tweets)
+
+    for user in users_prefetch:
+        print user.username
+
+        # note we are using a different attr -- it is the "related name" + "_prefetch"
+        for tweet in user.tweets_prefetch:
+            print tweet.message
+
+This will result in 2 queries -- one for the users and one for the tweets.  Either
+query can have restrictions, such as a ``WHERE`` clause, and the queries can follow
+relationships arbitrarily deep:
+
+.. code-block:: python
+
+    # let's say we have users -> photos -> comments / tags
+    # such that a user posts photos, assigns tags to those photos, and all those
+    # photos can be commented on
+
+    users = User.select().where(User.active == True)
+    photos = Photo.select().where(Photo.published == True)
+    tags = Tag.select()
+    comments = Comment.select().where(Comment.is_spam == False, Comment.flags < 3)
+
+    # this will execute 4 queries, one for each model
+    users_prefetch = prefetch(users, photos, tags, comments)
+
+    for user in users_prefetch:
+        print user.username
+        for photo in user.photo_set_prefetch:
+            print 'photo: ', photo.filename
+            for tag in photo.tag_set_prefetch:
+                print 'tagged with:', tag.tag
+            for comment in photo.comment_set_prefetch:
+                print 'comment:', comment.comment
+
+.. warning:: 
+    Care should be used with prefetch!  It can save you queries, but it can also
+    use a lot of memory if the number of results returned is large.  To mitigate
+    this, apply a ``LIMIT`` to your outer queries.
 
 
 Speeding up simple select queries
