@@ -2213,13 +2213,16 @@ def prefetch(sq, *subqueries):
                 id_map.setdefault(fk_val, [])
                 id_map[fk_val].append(result)
             if has_relations:
-                for rel_model, prefetch_attr in rel_map[query_model]:
-                    setattr(result, prefetch_attr, deps[rel_model].get(result.get_id(), []))
+                for rel_model, rel_fk in rel_map[query_model]:
+                    rel_name = '%s_prefetch' % rel_fk.related_name
+                    rel_instances = deps[rel_model].get(result.get_id(), [])
+                    for inst in rel_instances:
+                        setattr(inst, rel_fk.name, result)
+                    setattr(result, rel_name, rel_instances)
         if foreign_key_field:
             rel_model = foreign_key_field.rel_model
-            rel_name = '%s_prefetch' % foreign_key_field.related_name
             rel_map.setdefault(rel_model, [])
-            rel_map[rel_model].append((query_model, rel_name))
+            rel_map[rel_model].append((query_model, foreign_key_field))
 
     return query
 

@@ -1420,7 +1420,20 @@ class PrefetchTestCase(ModelTestCase):
             'u2',
             'u4', 'b5', 'b5-c1', 'b5-c2', 'b6', 'b6-c1',
         ])
-        self.assertEqual(len(self.queries()) - qc, 3)
+        qc2 = len(self.queries())
+        self.assertEqual(qc2 - qc, 3)
+
+        results = []
+        for user in prefetch_sq:
+            for blog in user.blog_set_prefetch:
+                results.append(blog.user.username)
+                for comment in blog.comments_prefetch:
+                    results.append(comment.blog.title)
+        self.assertEqual(results, [
+            'u1', 'b1', 'b1', 'u4', 'b5', 'b5', 'u4', 'b6',
+        ])
+        qc3 = len(self.queries())
+        self.assertEqual(qc3, qc2)
 
     def test_prefetch_multi_depth(self):
         sq = Parent.select()
