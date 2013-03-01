@@ -1019,6 +1019,76 @@ Query Types
         Performs the query
 
 
+.. py:func:: prefetch(sq, *subqueries)
+
+    :param sq: :py:class:`SelectQuery` instance
+    :param subqueries: one or more :py:class:`SelectQuery` instances to prefetch for ``sq``. You
+        can also pass models, but they will be converted into SelectQueries.
+
+    :rtype: :py:class:`SelectQuery` with related instances pre-populated
+
+    Pre-fetch the appropriate instances from the subqueries and apply them to
+    their corresponding parent row in the outer query. This function will eagerly
+    load the related instances specified in the subqueries. This is a technique used
+    to save doing O(n) queries for n rows, and rather is O(k) queries for *k*
+    subqueries.
+
+    For example, consider you have a list of users and want to display all their
+    tweets:
+
+    .. code-block:: python
+
+        # let's impost some small restrictions on our queries
+        users = User.select().where(User.active == True)
+        tweets = Tweet.select().where(Tweet.published == True)
+
+        # this will perform 2 queries
+        users_pf = prefetch(users, tweets)
+
+        # now we can:
+        for user in users_pf:
+            print user.username
+            for tweet in user.tweets_prefetch:
+                print '- ', tweet.content
+
+    You can prefetch an arbitrary number of items.  For instance, suppose we have
+    a photo site, User -> Photo -> (Comments, Tags).  That is, users can post photos,
+    and these photos can have tags and comments on them.  If we wanted to fetch a
+    list of users, all their photos, and all the comments and tags on the photos:
+
+    .. code-block:: python
+
+        users = User.select()
+        published_photos = Photo.select().where(Photo.published == True)
+        published_comments = Comment.select().where(
+            (Comment.is_spam == False) &
+            (Comment.num_flags < 3)
+        )
+
+        # note that we are just passing the Tag model -- it will be converted
+        # to a query automatically
+        users_pf = prefetch(users, published_photos, published_comments, Tag)
+
+        # now we can iterate users, photos, and comments/tags
+        for user in users_pf:
+            for photo in user.photo_set_prefetch:
+                for comment in photo.comment_set_prefetch:
+                    # ...
+                for tag in photo.tag_set_prefetch:
+                    # ...
+
+
+    .. note:: Subqueries must be related by foreign key and can be arbitrarily deep
+
+    .. warning::
+        :py:func:`prefetch` can use up lots of RAM when the result set is large,
+        and will not warn you if you are doing something dangerous, so it is up
+        to you to know when to use it.  Additionally, because of the semantics of
+        subquerying, there may be some cases when prefetch does not act as you
+        expect (for instnace, when applying a ``LIMIT`` to subqueries, but there
+        may be others) -- please report anything you think is a bug to `github <https://github.com/coleifer/peewee/issues>`_.
+
+
 Database and its subclasses
 ---------------------------
 

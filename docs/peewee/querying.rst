@@ -531,7 +531,7 @@ relationships arbitrarily deep:
 .. warning::
     Care should be used with prefetch!  It can save you queries, but it can also
     use a lot of memory if the number of results returned is large.  To mitigate
-    this, apply a ``LIMIT`` to your outer queries.
+    this, apply a ``LIMIT`` to your outer query.
 
 
 Speeding up simple select queries
