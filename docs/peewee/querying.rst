@@ -445,9 +445,8 @@ normally.
 .. note:: Note in the above example the call to ``.join(User)``
 
 This works for following objects "up" the chain, i.e. following foreign key relationships.
-The reverse is not true, however -- you cannot issue a single query and get all related
-sub-objects, i.e. list users and prefetch all related tweets.  This *can* be done by using
-the :py:func:`prefetch` API discussed in the next secion.
+To accomplish the reverse, i.e. list users and prefetch all related tweets, you will need
+to use the :py:func:`prefetch` API discussed in the next secion.
 
 .. _prefetch:
 
@@ -529,7 +528,7 @@ relationships arbitrarily deep:
             for comment in photo.comment_set_prefetch:
                 print 'comment:', comment.comment
 
-.. warning:: 
+.. warning::
     Care should be used with prefetch!  It can save you queries, but it can also
     use a lot of memory if the number of results returned is large.  To mitigate
     this, apply a ``LIMIT`` to your outer queries.
