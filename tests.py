@@ -247,19 +247,19 @@ class BasePeeweeTestCase(unittest.TestCase):
     def queries(self):
         return [x.msg for x in self.qh.queries]
 
-    def parse_expr(self, query, expr_list):
+    def parse_expr(self, query, expr_list, compiler=compiler):
         am = compiler.calculate_alias_map(query)
         return compiler.parse_expr_list(expr_list, am)
 
-    def parse_node(self, query, node):
+    def parse_node(self, query, node, compiler=compiler):
         am = compiler.calculate_alias_map(query)
         return compiler.parse_query_node(node, am)
 
     def make_fn(fn_name, attr_name):
-        def inner(self, query, expected, expected_params):
+        def inner(self, query, expected, expected_params, compiler=compiler):
             fn = getattr(self, fn_name)
             att = getattr(query, attr_name)
-            sql, params = fn(query, att)
+            sql, params = fn(query, att, compiler=compiler)
             self.assertEqual(sql, expected)
             self.assertEqual(params, expected_params)
         return inner
@@ -270,7 +270,7 @@ class BasePeeweeTestCase(unittest.TestCase):
     assertHaving = make_fn('parse_node', '_having')
     assertOrderBy = make_fn('parse_expr', '_order_by')
 
-    def assertJoins(self, sq, exp_joins):
+    def assertJoins(self, sq, exp_joins, compiler=compiler):
         am = compiler.calculate_alias_map(sq)
         joins, _ = compiler.generate_joins(sq._joins, sq.model_class, am)
         self.assertEqual(sorted(joins), sorted(exp_joins))
@@ -354,14 +354,12 @@ class SelectTestCase(BasePeeweeTestCase):
         sq = SelectQuery(Category, Category, Parent).join(Parent, on=(Category.parent == Parent.id)).where(
             Parent.name == 'parent name'
         ).order_by(Parent.name)
-        sql, params = normal_compiler.generate_select(sq)
-        self.assertEqual(sql, 
-            'SELECT t1."id", t1."parent_id", t1."name", t2."id", t2."parent_id", t2."name" ' + \
-            'FROM "category" AS t1 INNER JOIN "category" AS t2 ON (t1."parent_id" = t2."id") ' + \
-            'WHERE (t2."name" = ?) ' + \
-            'ORDER BY t2."name"'
-        )
-        self.assertEqual(params, ['parent name'])
+        self.assertSelect(sq, 't1."id", t1."parent_id", t1."name", t2."id", t2."parent_id", t2."name"', [], normal_compiler)
+        self.assertJoins(sq, [
+            'INNER JOIN "category" AS t2 ON (t1."parent_id" = t2."id")',
+        ], normal_compiler)
+        self.assertWhere(sq, '(t2."name" = ?)', ['parent name'], normal_compiler)
+        self.assertOrderBy(sq, 't2."name"', [], normal_compiler)
 
     def test_join_both_sides(self):
         sq = SelectQuery(Blog).join(Comment).switch(Blog).join(User)
