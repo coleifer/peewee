@@ -361,6 +361,19 @@ class SelectTestCase(BasePeeweeTestCase):
         self.assertWhere(sq, '(t2."name" = ?)', ['parent name'], normal_compiler)
         self.assertOrderBy(sq, 't2."name"', [], normal_compiler)
 
+        Grandparent = Category.alias()
+        sq = SelectQuery(Category, Category, Parent, Grandparent).join(
+            Parent, on=(Category.parent == Parent.id)
+        ).join(
+            Grandparent, on=(Parent.parent == Grandparent.id)
+        ).where(Grandparent.name == 'g1')
+        self.assertSelect(sq, 't1."id", t1."parent_id", t1."name", t2."id", t2."parent_id", t2."name", t3."id", t3."parent_id", t3."name"', [], normal_compiler)
+        self.assertJoins(sq, [
+            'INNER JOIN "category" AS t2 ON (t1."parent_id" = t2."id")',
+            'INNER JOIN "category" AS t3 ON (t2."parent_id" = t3."id")',
+        ], normal_compiler)
+        self.assertWhere(sq, '(t3."name" = ?)', ['g1'], normal_compiler)
+
     def test_join_both_sides(self):
         sq = SelectQuery(Blog).join(Comment).switch(Blog).join(User)
         self.assertJoins(sq, [
