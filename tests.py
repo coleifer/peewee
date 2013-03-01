@@ -1303,6 +1303,13 @@ class ModelAPITestCase(ModelTestCase):
         uc = User.select().where(User.username == 'u1').join(Blog).distinct().count()
         self.assertEqual(uc, 1)
 
+    def test_ordering(self):
+        u1 = User.create(username='u1')
+        u2 = User.create(username='u2')
+        u3 = User.create(username='u2')
+        users = User.select().order_by(User.username.desc(), User.id.desc())
+        self.assertEqual([u.get_id() for u in users], [u3.id, u2.id, u1.id])
+
     def test_count_transaction(self):
         for i in range(10):
             self.create_user(username='u%d' % i)
