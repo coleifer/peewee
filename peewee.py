@@ -143,7 +143,7 @@ class Leaf(object):
         self.negated = not self.negated
 
     @returns_clone
-    def alias(self, a):
+    def alias(self, a=None):
         self._alias = a
 
     def asc(self):
@@ -1008,7 +1008,7 @@ class QueryResultWrapper(object):
         for i, expr in enumerate(self.column_meta):
             value = row[i]
             if isinstance(expr, FieldProxy):
-                key = expr.alias # model alias
+                key = expr._model_alias # model alias
                 constructor = expr.model # instance constructor
             elif isinstance(expr, Field):
                 key = constructor = expr.model_class
@@ -1368,7 +1368,7 @@ class SelectQuery(Query):
         query = self.clone()
         query = query.ensure_join(query._query_ctx, rel_model)
         if not query._group_by:
-            query._group_by = list(query._select)
+            query._group_by = [x.alias() for x in query._select]
         query._select = tuple(query._select) + (annotation,)
         return query
 
@@ -1987,13 +1987,16 @@ class BaseModel(type):
 
 class FieldProxy(Field):
     def __init__(self, alias, field_instance):
-        self.alias = alias
-        self.model = self.alias.model_class
+        self._model_alias = alias
+        self.model = self._model_alias.model_class
         self.field_instance = field_instance
+
+    def clone_base(self):
+        return FieldProxy(self._model_alias, self.field_instance)
 
     def __getattr__(self, attr):
         if attr == 'model_class':
-            return self.alias
+            return self._model_alias
         return getattr(self.field_instance, attr)
 
 class ModelAlias(object):
