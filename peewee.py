@@ -22,7 +22,7 @@ __all__ = [
     'DecimalField', 'CharField', 'TextField', 'DateTimeField', 'DateField', 'TimeField',
     'BooleanField', 'ForeignKeyField', 'Model', 'DoesNotExist', 'ImproperlyConfigured',
     'DQ', 'fn', 'SqliteDatabase', 'MySQLDatabase', 'PostgresqlDatabase', 'Field',
-    'JOIN_LEFT_OUTER', 'JOIN_INNER', 'JOIN_FULL',
+    'JOIN_LEFT_OUTER', 'JOIN_INNER', 'JOIN_FULL', 'prefetch',
 ]
 
 try:
@@ -287,7 +287,7 @@ class Field(Leaf):
         self._order = Field._field_counter
 
         super(Field, self).__init__()
-    
+
     def clone_base(self, **kwargs):
        inst = type(self)(
            null=self.null,
@@ -1410,7 +1410,7 @@ class SelectQuery(Query):
             raise self.model_class.DoesNotExist('instance matching query does not exist:\nSQL: %s\nPARAMS: %s' % (
                 self.sql()
             ))
-    
+
     def first(self):
         res = self.execute()
         res.fill_cache(1)
@@ -2177,6 +2177,51 @@ class Model(object):
     def __ne__(self, other):
         return not self == other
 
+
+def prefetch_add_subquery(sq, subqueries):
+    fixed_queries = [(sq, None)]
+    for i, subquery in enumerate(subqueries):
+        subquery_model = subquery.model_class
+        fkf = None
+        for j in range(i + 1):
+            last_query = fixed_queries[i - j - 1][0]
+            fkf = subquery_model._meta.rel_for_model(last_query.model_class)
+            if fkf:
+                break
+        if not fkf:
+            raise AttributeError('Error: unable to find foreign key for query: %s' % subquery)
+        fixed_queries.append((subquery.where(fkf << last_query), fkf))
+
+    return fixed_queries
+
+def prefetch(sq, *subqueries):
+    if not subqueries:
+        return sq
+    fixed_queries = prefetch_add_subquery(sq, subqueries)
+
+    deps = {}
+    rel_map = {}
+    for query, foreign_key_field in reversed(fixed_queries):
+        query_model = query.model_class
+        deps[query_model] = {}
+        id_map = deps[query_model]
+        has_relations = bool(rel_map.get(query_model))
+
+        for result in query:
+            if foreign_key_field:
+                fk_val = result._data[foreign_key_field.name]
+                id_map.setdefault(fk_val, [])
+                id_map[fk_val].append(result)
+            if has_relations:
+                for rel_model, prefetch_attr in rel_map[query_model]:
+                    setattr(result, prefetch_attr, deps[rel_model].get(result.get_id(), []))
+        if foreign_key_field:
+            rel_model = foreign_key_field.rel_model
+            rel_name = '%s_prefetch' % foreign_key_field.related_name
+            rel_map.setdefault(rel_model, [])
+            rel_map[rel_model].append((query_model, rel_name))
+
+    return query
 
 def create_model_tables(models, **create_table_kwargs):
     """Create tables for all given models (in the right order)."""

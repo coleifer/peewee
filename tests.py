@@ -11,7 +11,8 @@ import unittest
 
 from peewee import *
 from peewee import QueryCompiler, R, SelectQuery, RawQuery, InsertQuery,\
-    UpdateQuery, DeleteQuery, logger, transaction, sort_models_topologically
+    UpdateQuery, DeleteQuery, logger, transaction, sort_models_topologically,\
+    prefetch_add_subquery
 
 
 
@@ -195,15 +196,19 @@ class Parent(TestModel):
 
 class Child(TestModel):
     parent = ForeignKeyField(Parent)
+    data = CharField(default='')
 
 class Orphan(TestModel):
     parent = ForeignKeyField(Parent, null=True)
+    data = CharField(default='')
 
 class ChildPet(TestModel):
     child = ForeignKeyField(Child)
+    data = CharField(default='')
 
 class OrphanPet(TestModel):
     orphan = ForeignKeyField(Orphan)
+    data = CharField(default='')
 
 class CSVField(TextField):
     def db_value(self, value):
@@ -219,7 +224,8 @@ class CSVRow(TestModel):
 
 
 MODELS = [User, Blog, Comment, Relationship, NullModel, UniqueModel, OrderedModel, Category, UserCategory,
-          NonIntModel, NonIntRelModel, DBUser, DBBlog, SeqModelA, SeqModelB, MultiIndexModel, BlogTwo]
+          NonIntModel, NonIntRelModel, DBUser, DBBlog, SeqModelA, SeqModelB, MultiIndexModel, BlogTwo,
+         Parent, Child, Orphan, ChildPet, OrphanPet]
 INT = test_db.interpolation
 
 def drop_tables(only=None):
@@ -584,6 +590,36 @@ class SelectTestCase(BasePeeweeTestCase):
         sq = SelectQuery(User).paginate(3, 30)
         self.assertEqual(sq._limit, 30)
         self.assertEqual(sq._offset, 60)
+
+    def test_prefetch_subquery(self):
+        sq = SelectQuery(User).where(User.username == 'foo')
+        sq2 = SelectQuery(Blog).where(Blog.title == 'bar')
+        sq3 = SelectQuery(Comment).where(Comment.comment == 'baz')
+        fixed = prefetch_add_subquery(sq, (sq2, sq3))
+        fixed_sql = [
+            ('SELECT t1."id", t1."username" FROM "users" AS t1 WHERE (t1."username" = ?)', ['foo']),
+            ('SELECT t1."pk", t1."user_id", t1."title", t1."content", t1."pub_date" FROM "blog" AS t1 WHERE ((t1."title" = ?) AND (t1."user_id" IN (SELECT t2."id" FROM "users" AS t2 WHERE (t2."username" = ?))))', ['bar', 'foo']),
+            ('SELECT t1."id", t1."blog_id", t1."comment" FROM "comment" AS t1 WHERE ((t1."comment" = ?) AND (t1."blog_id" IN (SELECT t2."pk" FROM "blog" AS t2 WHERE ((t2."title" = ?) AND (t2."user_id" IN (SELECT t3."id" FROM "users" AS t3 WHERE (t3."username" = ?)))))))', [u'baz', u'bar', u'foo']),
+        ]
+        for (query, fkf), expected in zip(fixed, fixed_sql):
+            self.assertEqual(normal_compiler.generate_select(query), expected)
+
+    def test_prefetch_subquery_same_depth(self):
+        sq = Parent.select()
+        sq2 = Child.select()
+        sq3 = Orphan.select()
+        sq4 = ChildPet.select()
+        sq5 = OrphanPet.select()
+        fixed = prefetch_add_subquery(sq, (sq2, sq3, sq4, sq5))
+        fixed_sql = [
+            ('SELECT t1."id", t1."data" FROM "parent" AS t1', []),
+            ('SELECT t1."id", t1."parent_id", t1."data" FROM "child" AS t1 WHERE (t1."parent_id" IN (SELECT t2."id" FROM "parent" AS t2))', []),
+            ('SELECT t1."id", t1."parent_id", t1."data" FROM "orphan" AS t1 WHERE (t1."parent_id" IN (SELECT t2."id" FROM "parent" AS t2))', []),
+            ('SELECT t1."id", t1."child_id", t1."data" FROM "childpet" AS t1 WHERE (t1."child_id" IN (SELECT t2."id" FROM "child" AS t2 WHERE (t2."parent_id" IN (SELECT t3."id" FROM "parent" AS t3))))', []),
+            ('SELECT t1."id", t1."orphan_id", t1."data" FROM "orphanpet" AS t1 WHERE (t1."orphan_id" IN (SELECT t2."id" FROM "orphan" AS t2 WHERE (t2."parent_id" IN (SELECT t3."id" FROM "parent" AS t3))))', []),
+        ]
+        for (query, fkf), expected in zip(fixed, fixed_sql):
+            self.assertEqual(normal_compiler.generate_select(query), expected)
 
 class UpdateTestCase(BasePeeweeTestCase):
     def test_update(self):
@@ -1302,15 +1338,124 @@ class ModelAPITestCase(ModelTestCase):
         # we get unicode back
         self.assertEqual(u2_db.username, ustr)
 
+class PrefetchTestCase(ModelTestCase):
+    requires = [User, Blog, Comment, Parent, Child, Orphan, ChildPet, OrphanPet]
+    user_data = [
+        ('u1', (('b1', ('b1-c1', 'b1-c2')), ('b2', ('b2-c1',)))),
+        ('u2', ()),
+        ('u3', (('b3', ('b3-c1', 'b3-c2')), ('b4', ()))),
+        ('u4', (('b5', ('b5-c1', 'b5-c2')), ('b6', ('b6-c1',)))),
+    ]
+    parent_data = [
+        ('p1', (
+            # children
+            (
+                ('c1', ('c1-p1', 'c1-p2')),
+                ('c2', ('c2-p1',)),
+                ('c3', ('c3-p1',)),
+                ('c4', ()),
+            ),
+            # orphans
+            (
+                ('o1', ('o1-p1', 'o1-p2')),
+                ('o2', ('o2-p1',)),
+                ('o3', ('o3-p1',)),
+                ('o4', ()),
+            ),
+        )),
+        ('p2', ((), ())),
+        ('p3', (
+            # children
+            (
+                ('c6', ()),
+                ('c7', ('c7-p1',)),
+            ),
+            # orphans
+            (
+                ('o6', ('o6-p1', 'o6-p2')),
+                ('o7', ('o7-p1',)),
+            ),
+        )),
+    ]
 
-class RecursiveDeleteTestCase(BasePeeweeTestCase):
+    def setUp(self):
+        super(PrefetchTestCase, self).setUp()
+        for parent, (children, orphans) in self.parent_data:
+            p = Parent.create(data=parent)
+            for child_pets in children:
+                child, pets = child_pets
+                c = Child.create(parent=p, data=child)
+                for pet in pets:
+                    ChildPet.create(child=c, data=pet)
+            for orphan_pets in orphans:
+                orphan, pets = orphan_pets
+                o = Orphan.create(parent=p, data=orphan)
+                for pet in pets:
+                    OrphanPet.create(orphan=o, data=pet)
+
+        for user, blog_comments in self.user_data:
+            u = User.create(username=user)
+            for blog, comments in blog_comments:
+                b = Blog.create(user=u, title=blog, content='')
+                for c in comments:
+                    Comment.create(blog=b, comment=c)
+
+    def test_prefetch_simple(self):
+        sq = User.select().where(User.username != 'u3')
+        sq2 = Blog.select().where(Blog.title != 'b2')
+        sq3 = Comment.select()
+        qc = len(self.queries())
+
+        prefetch_sq = prefetch(sq, sq2, sq3)
+        results = []
+        for user in prefetch_sq:
+            results.append(user.username)
+            for blog in user.blog_set_prefetch:
+                results.append(blog.title)
+                for comment in blog.comments_prefetch:
+                    results.append(comment.comment)
+
+        self.assertEqual(results, [
+            'u1', 'b1', 'b1-c1', 'b1-c2',
+            'u2',
+            'u4', 'b5', 'b5-c1', 'b5-c2', 'b6', 'b6-c1',
+        ])
+        self.assertEqual(len(self.queries()) - qc, 3)
+
+    def test_prefetch_multi_depth(self):
+        sq = Parent.select()
+        sq2 = Child.select()
+        sq3 = Orphan.select()
+        sq4 = ChildPet.select()
+        sq5 = OrphanPet.select()
+        qc = len(self.queries())
+
+        prefetch_sq = prefetch(sq, sq2, sq3, sq4, sq5)
+        results = []
+        for parent in prefetch_sq:
+            results.append(parent.data)
+            for child in parent.child_set_prefetch:
+                results.append(child.data)
+                for pet in child.childpet_set_prefetch:
+                    results.append(pet.data)
+
+            for orphan in parent.orphan_set_prefetch:
+                results.append(orphan.data)
+                for pet in orphan.orphanpet_set_prefetch:
+                    results.append(pet.data)
+
+        self.assertEqual(results, [
+            'p1', 'c1', 'c1-p1', 'c1-p2', 'c2', 'c2-p1', 'c3', 'c3-p1', 'c4',
+                  'o1', 'o1-p1', 'o1-p2', 'o2', 'o2-p1', 'o3', 'o3-p1', 'o4',
+            'p2',
+            'p3', 'c6', 'c7', 'c7-p1', 'o6', 'o6-p1', 'o6-p2', 'o7', 'o7-p1',
+        ])
+        self.assertEqual(len(self.queries()) - qc, 5)
+
+class RecursiveDeleteTestCase(ModelTestCase):
+    requires = [Parent, Child, Orphan, ChildPet, OrphanPet]
     def setUp(self):
         super(RecursiveDeleteTestCase, self).setUp()
-        Parent.create_table(True)
-        Child.create_table(True)
-        Orphan.create_table(True)
-        ChildPet.create_table(True)
-        OrphanPet.create_table(True)
         p1 = Parent.create(data='p1')
         p2 = Parent.create(data='p2')
         c11 = Child.create(parent=p1)
@@ -1331,14 +1476,6 @@ class RecursiveDeleteTestCase(BasePeeweeTestCase):
         OrphanPet.create(orphan=o22)
         self.p1 = p1
         self.p2 = p2
-
-    def tearDown(self):
-        super(RecursiveDeleteTestCase, self).tearDown()
-        OrphanPet.drop_table()
-        ChildPet.drop_table()
-        Orphan.drop_table()
-        Child.drop_table()
-        Parent.drop_table()
 
     def test_recursive_update(self):
         self.p1.delete_instance(recursive=True)
