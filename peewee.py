@@ -2184,6 +2184,8 @@ class Model(object):
 def prefetch_add_subquery(sq, subqueries):
     fixed_queries = [(sq, None)]
     for i, subquery in enumerate(subqueries):
+        if not isinstance(subquery, Query) and issubclass(subquery, Model):
+            subquery = subquery.select()
         subquery_model = subquery.model_class
         fkf = None
         for j in range(i + 1):

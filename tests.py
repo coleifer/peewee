@@ -604,6 +604,14 @@ class SelectTestCase(BasePeeweeTestCase):
         for (query, fkf), expected in zip(fixed, fixed_sql):
             self.assertEqual(normal_compiler.generate_select(query), expected)
 
+        fixed = prefetch_add_subquery(sq, (Blog,))
+        fixed_sql = [
+            ('SELECT t1."id", t1."username" FROM "users" AS t1 WHERE (t1."username" = ?)', ['foo']),
+            ('SELECT t1."pk", t1."user_id", t1."title", t1."content", t1."pub_date" FROM "blog" AS t1 WHERE (t1."user_id" IN (SELECT t2."id" FROM "users" AS t2 WHERE (t2."username" = ?)))', ['foo']),
+        ]
+        for (query, fkf), expected in zip(fixed, fixed_sql):
+            self.assertEqual(normal_compiler.generate_select(query), expected)
+
     def test_prefetch_subquery_same_depth(self):
         sq = Parent.select()
         sq2 = Child.select()
