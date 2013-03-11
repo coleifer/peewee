@@ -1492,11 +1492,13 @@ class PrefetchTestCase(ModelTestCase):
         Children = Category.alias()
         Grandchildren = Category.alias()
         qc = len(self.queries())
-        prefetch_sq = prefetch(Category.select(), Children, Grandchildren)
+        prefetch_sq = prefetch(Category.select().where(Category.parent >> None), Children, Grandchildren)
         results = []
         for cat in prefetch_sq:
             results.append(cat.name)
+            self.assertEqual(len(cat.children_prefetch), 2)
             for chld in cat.children_prefetch:
+                self.assertEqual(len(chld.children_prefetch), 2)
                 results.append(chld.name)
                 for gchld in chld.children_prefetch:
                     results.append(gchld.name)
