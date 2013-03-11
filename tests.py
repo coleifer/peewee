@@ -1354,7 +1354,7 @@ class ModelAPITestCase(ModelTestCase):
         self.assertEqual(u2_db.username, ustr)
 
 class PrefetchTestCase(ModelTestCase):
-    requires = [User, Blog, Comment, Parent, Child, Orphan, ChildPet, OrphanPet]
+    requires = [User, Blog, Comment, Parent, Child, Orphan, ChildPet, OrphanPet, Category]
     user_data = [
         ('u1', (('b1', ('b1-c1', 'b1-c2')), ('b2', ('b2-c1',)))),
         ('u2', ()),
@@ -1479,6 +1479,32 @@ class PrefetchTestCase(ModelTestCase):
             'p3', 'c6', 'c7', 'c7-p1', 'o6', 'o6-p1', 'o6-p2', 'o7', 'o7-p1',
         ])
         self.assertEqual(len(self.queries()) - qc, 5)
+
+    def test_prefetch_aliases(self):
+        # get a category and all its child categories
+        for g in range(2):
+            gc = Category.create(name='g%d' % g)
+            for p in range(2):
+                pc = Category.create(name='g%d-p%d' % (g, p), parent=g)
+                for c in range(2):
+                    Category.create(name='g%d-p%d-c%d' % (g, p, c), parent=p)
+
+        Children = Category.alias()
+        Grandchildren = Category.alias()
+        qc = len(self.queries())
+        prefetch_sq = prefetch(Category.select(), Children, Grandchildren)
+        results = []
+        for cat in prefetch_sq:
+            results.append(cat.name)
+            for chld in cat.children_prefetch:
+                results.append(chld.name)
+                for gchld in chld.children_prefetch:
+                    results.append(gchld.name)
+
+        self.assertEqual(results, [
+            'g0', 'g0-p0', 'g0-p0-c0', 'g0-p0-c1', 'g0-p1', 'g0-p1-c0', 'g0-p1-c1',
+            'g1', 'g1-p0', 'g1-p0-c0', 'g1-p0-c1', 'g1-p1', 'g1-p1-c0', 'g1-p1-c1',
+        ])
 
 class RecursiveDeleteTestCase(ModelTestCase):
     requires = [Parent, Child, Orphan, ChildPet, OrphanPet]
