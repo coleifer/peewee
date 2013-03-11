@@ -1485,9 +1485,9 @@ class PrefetchTestCase(ModelTestCase):
         for g in range(2):
             gc = Category.create(name='g%d' % g)
             for p in range(2):
-                pc = Category.create(name='g%d-p%d' % (g, p), parent=g)
+                pc = Category.create(name='g%d-p%d' % (g, p), parent=gc)
                 for c in range(2):
-                    Category.create(name='g%d-p%d-c%d' % (g, p, c), parent=p)
+                    Category.create(name='g%d-p%d-c%d' % (g, p, c), parent=pc)
 
         Children = Category.alias()
         Grandchildren = Category.alias()
