@@ -1031,6 +1031,7 @@ class QueryResultWrapper(object):
     def follow_joins(self, collected):
         joins = self.join_meta
         stack = [self.model]
+        prepared = [collected[self.model]]
         while stack:
             current = stack.pop()
             if current not in joins:
@@ -1053,8 +1054,9 @@ class QueryResultWrapper(object):
 
                     setattr(inst, fk_field.name, joined_inst)
                     stack.append(join.model_class)
+                    prepared.append(joined_inst)
 
-        return collected[self.model]
+        return prepared
 
     def __iter__(self):
         self.__idx = 0
@@ -1071,10 +1073,14 @@ class QueryResultWrapper(object):
             raise StopIteration
 
         if self.naive:
-            return self.simple_iter(row)
+            inst = self.simple_iter(row)
+            inst.prepared()
+            return inst
         else:
             collected = self.construct_instance(row)
-            return self.follow_joins(collected)
+            instances = self.follow_joins(collected)
+            map(lambda i: i.prepared(), instances)
+            return instances[0]
 
     def iterator(self):
         while 1:
@@ -1087,7 +1093,6 @@ class QueryResultWrapper(object):
             return inst
 
         instance = self.iterate()
-        instance.prepared() # <-- model prepared hook
         self._result_cache.append(instance)
         self.__ct += 1
         self.__idx += 1

@@ -101,6 +101,9 @@ class User(TestModel):
     class Meta:
         db_table = 'users'
 
+    def prepared(self):
+        self.foo = self.username
+
 class Blog(TestModel):
     user = ForeignKeyField(User)
     title = CharField(max_length=25)
@@ -110,6 +113,9 @@ class Blog(TestModel):
 
     def __unicode__(self):
         return '%s: %s' % (self.user.username, self.title)
+
+    def prepared(self):
+        self.foo = self.title
 
 class Comment(TestModel):
     blog = ForeignKeyField(Blog, related_name='comments')
@@ -963,6 +969,21 @@ class QueryResultWrapperTestCase(ModelTestCase):
 
         res = uq[10:]
         self.assertEqual(res, [])
+
+    def test_prepared(self):
+        for i in range(2):
+            u = User.create(username='u%d' % i)
+            for j in range(2):
+                Blog.create(title='b%d-%d' % (i, j), user=u, content='')
+
+        for u in User.select():
+            # check prepared was called
+            self.assertEqual(u.foo, u.username)
+
+        for b in Blog.select(Blog, User).join(User):
+            # prepared is called for select-related instances
+            self.assertEqual(b.foo, b.title)
+            self.assertEqual(b.user.foo, b.user.username)
 
 
 class ModelQueryTestCase(ModelTestCase):
