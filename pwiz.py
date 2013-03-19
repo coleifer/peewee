@@ -49,8 +49,8 @@ class DB(object):
 
     def get_columns(self, table):
         """
-        {'name': CharField,
-         'age': IntegerField}
+        {'name': (CharField, <is null>),
+         'age': (IntegerField, <is null>)}
         """
         raise NotImplementedError
 
@@ -100,8 +100,19 @@ class PgDB(DB):
         return PostgresqlDatabase
 
     def get_columns(self, table):
+        curs = self.conn.execute_sql("""
+            SELECT column_name, is_nullable
+            FROM information_schema.columns
+            WHERE table_name=%s""", (table,))
+        null_map = dict(curs.fetchall())
         curs = self.conn.execute_sql('select * from "%s" limit 1' % table)
-        return dict((c.name, self.reverse_mapping.get(c.type_code, UnknownFieldType)) for c in curs.description)
+        accum = {}
+        for col in curs.description:
+            accum[col.name] = [
+                self.reverse_mapping.get(col.type_code, UnknownFieldType),
+                null_map[col.name] == 'YES',
+            ]
+        return accum
 
     def get_foreign_keys(self, table, schema='public'):
         framing = '''
@@ -158,7 +169,9 @@ class MySQLDB(DB):
 
     def get_columns(self, table):
         curs = self.conn.execute_sql('select * from `%s` limit 1' % table)
-        return dict((r[0], self.reverse_mapping.get(r[1], UnknownFieldType)) for r in curs.description)
+        return dict(
+            [r[0], (self.reverse_mapping.get(r[1], UnknownFieldType), r[6])]
+            for r in curs.description)
 
     def get_foreign_keys(self, table):
         framing = '''
@@ -214,7 +227,7 @@ class SqDB(DB):
                 col_type = PrimaryKeyField
             else:
                 col_type = self.map_col(col)
-            col_dict[name] = col_type
+            col_dict[name] = [col_type, not not_null]
         return col_dict
 
     def get_foreign_keys(self, table):
@@ -294,18 +307,20 @@ def introspect(db, schema=None):
     for table in tables:
         col_meta[table] = {}
         for column, rel_table, rel_pk in table_fks[table]:
-            models[table][column] = ForeignKeyField
-            models[rel_table][rel_pk] = PrimaryKeyField
+            models[table][column][0] = ForeignKeyField
+            models[rel_table][rel_pk][0] = PrimaryKeyField
             if rel_table == table:
                 ttm = "'self'"
             else:
                 ttm = table_to_model[rel_table]
             col_meta[table][column] = {'rel_model': ttm}
 
-        for column in models[table]:
+        for column, (_, nullable) in models[table].iteritems():
             col_meta[table].setdefault(column, {})
             if column != cn(column):
                 col_meta[table][column]['db_column'] = "'%s'" % column
+            if nullable:
+                col_meta[table][column]['null'] = "True"
     
     return models, table_to_model, table_fks, col_meta
 
@@ -328,12 +343,13 @@ def print_models(engine, database, tables, **connect):
 
             if rel_table not in seen and rel_table not in accum:
                 seen.add(rel_table)
-                print_model(rel_table, seen, accum + [model])
+                if rel_table != model:
+                    print_model(rel_table, seen, accum + [model])
 
         ttm = table_to_model[model]
         print 'class %s(BaseModel):' % ttm
         cols = models[model]
-        for column, field_class in ds(cols):
+        for column, (field_class, nullable) in ds(cols):
             if column == 'id' and field_class in (IntegerField, PrimaryKeyField):
                 continue
 
