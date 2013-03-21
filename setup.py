@@ -22,6 +22,6 @@ setup(
         'Operating System :: OS Independent',
         'Programming Language :: Python',
     ],
-    test_suite='runtests.collect',
+    test_suite='tests',
     scripts = ['pwiz.py'],
 )
