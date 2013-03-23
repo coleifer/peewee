@@ -560,6 +560,14 @@ And here is how you would do the same if using a naive query:
     for tweet in tweets.order_by(Tweet.created_date.desc()).limit(10):
         print '%s, posted on %s' % (tweet.message, tweet.username)
 
+To iterate over raw tuples, use the :py:meth:`~SelectQuery.tuples` method:
+
+.. code-block:: python
+
+    stats = Stat.select(Stat.url, fn.Count(Stat.url)).group_by(Stat.url).values()
+    for stat_url, count in stats:
+        print stat_url, count
+
 
 Query evaluation
 ----------------

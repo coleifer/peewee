@@ -651,6 +651,26 @@ Suppose we want to grab the associated count and store it on the tag:
     ... ).join(PhotoTag).join(Photo).group_by(Tag).having(fn.Count(Photo.id) > 5)
 
 
+Retrieving Scalar Values
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+You can retrieve scalar values by calling :py:meth:`Query.scalar`.  For instance:
+
+.. code-block:: python
+
+    >>> PageView.select(fn.Count(fn.Distinct(PageView.url))).scalar()
+    100 # <-- there are 100 distinct URLs in the PageView table
+
+You can retrieve multiple scalar values by passing ``as_tuple=True``:
+
+.. code-block:: python
+
+    >>> Employee.select(
+    ...     fn.Min(Employee.salary), fn.Max(Employee.salary)
+    ... ).scalar(as_tuple=True)
+    (30000, 50000)
+
+
 SQL Functions, Subqueries and "Raw expressions"
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -682,6 +702,22 @@ alias:
 
     # now we will order by the count, which was aliased to "ct"
     query = query.order_by(R('ct'))
+
+
+Retrieving raw tuples
+^^^^^^^^^^^^^^^^^^^^^
+
+Sometimes you do not need the overhead of creating model instances and simply want
+to iterate over the row tuples.  To do this, call :py:meth:`SelectQuery.tuples` or
+:py:meth:`RawQuery.tuples`:
+
+.. code-block:: python
+
+    stats = Stat.select(Stat.url, fn.Count(Stat.url)).group_by(Stat.url).tuples()
+
+    # iterate over a list of 2-tuples containing the url and count
+    for stat_url, stat_count in stats:
+        print stat_url, stat_count
 
 
 .. _working_with_transactions:

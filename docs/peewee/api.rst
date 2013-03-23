@@ -807,6 +807,14 @@ Query Types
             this can provide a significant speed improvement when doing simple
             iteration over a large result set.
 
+    .. py:method:: tuples()
+
+        :rtype: :py:class:`SelectQuery`
+
+        Flag this query indicating it should simply return raw tuples from the cursor.
+        This method is useful when you either do not want or do not need full model
+        instances.
+
     .. py:method:: annotate(related_model, aggregation=None)
 
         :param related_model: related :py:class:`Model` on which to perform aggregation,
@@ -1011,6 +1019,14 @@ Query Types
         >>> for obj in rq.execute():
         ...     print obj
         <User: admin>
+
+    .. py:method:: tuples()
+
+        :rtype: :py:class:`RawQuery`
+
+        Flag this query indicating it should simply return raw tuples from the cursor.
+        This method is useful when you either do not want or do not need full model
+        instances.
 
     .. py:method:: execute()
 
