@@ -977,6 +977,23 @@ class QueryResultWrapperTestCase(ModelTestCase):
         self.assertEqual([u.username for u in users], ['u1', 'u2'])
         self.assertEqual([u.title for u in users], ['b1', 'b2'])
 
+    def test_values(self):
+        u1 = User.create(username='u1')
+        u2 = User.create(username='u2')
+        b1 = Blog.create(user=u1, title='b1')
+        b2 = Blog.create(user=u2, title='b2')
+        users = User.select().values()
+        self.assertEqual([r for r in users], [
+            (u1.id, 'u1'),
+            (u2.id, 'u2'),
+        ])
+
+        users = User.select(User, Blog).join(Blog).values()
+        self.assertEqual([r for r in users], [
+            (u1.id, 'u1', b1.pk, u1.id, b1.title, '', None),
+            (u2.id, 'u2', b2.pk, u2.id, b2.title, '', None),
+        ])
+
     def test_slicing_dicing(self):
         def assertUsernames(users, nums):
             self.assertEqual([u.username for u in users], ['u%d' % i for i in nums])
