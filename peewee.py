@@ -962,31 +962,16 @@ class QueryCompiler(object):
         return 'DROP SEQUENCE %s;' % self.quote(sequence_name)
 
 
-class QueryResultWrapper(object):
+class BaseQueryResultWrapper(object):
     """
     Provides an iterator over the results of a raw Query, additionally doing
     two things:
-    - converts rows from the database into model instances
+    - converts rows from the database into python representations
     - ensures that multiple iterations do not result in multiple queries
     """
     def __init__(self, model, cursor, meta=None):
         self.model = model
         self.cursor = cursor
-        self.naive = not meta
-
-        if self.naive:
-            cols = []
-            non_cols = []
-            for i in range(len(self.cursor.description)):
-                col = self.cursor.description[i][0]
-                if col in model._meta.columns:
-                    cols.append((i, model._meta.columns[col]))
-                else:
-                    non_cols.append((i, col))
-            self._cols = cols
-            self._non_cols = non_cols
-        else:
-            self.column_meta, self.join_meta = meta
 
         self.__ct = 0
         self.__idx = 0
@@ -994,13 +979,85 @@ class QueryResultWrapper(object):
         self._result_cache = []
         self._populated = False
 
-    def simple_iter(self, row):
+    def __iter__(self):
+        self.__idx = 0
+
+        if not self._populated:
+            return self
+        else:
+            return iter(self._result_cache)
+
+    def process_row(self, row):
+        return row
+
+    def iterate(self):
+        row = self.cursor.fetchone()
+        if not row:
+            self._populated = True
+            raise StopIteration
+        return self.process_row(row)
+
+    def iterator(self):
+        while True:
+            yield self.iterate()
+
+    def next(self):
+        if self.__idx < self.__ct:
+            inst = self._result_cache[self.__idx]
+            self.__idx += 1
+            return inst
+
+        obj = self.iterate()
+        self._result_cache.append(obj)
+        self.__ct += 1
+        self.__idx += 1
+        return obj
+
+    def fill_cache(self, n=None):
+        n = n or float('Inf')
+        self.__idx = self.__ct
+        while not self._populated and (n > self.__ct):
+            try:
+                self.next()
+            except StopIteration:
+                break
+
+class NaiveQueryResultWrapper(BaseQueryResultWrapper):
+    def __init__(self, model, cursor, meta=None):
+        super(NaiveQueryResultWrapper, self).__init__(model, cursor, meta)
+
+        cols = []
+        non_cols = []
+        for i in range(len(self.cursor.description)):
+            col = self.cursor.description[i][0]
+            if col in model._meta.columns:
+                field_obj = model._meta.columns[col]
+                cols.append((i, field_obj.name, field_obj.python_value))
+            else:
+                non_cols.append((i, col))
+        self._cols = cols
+        self._non_cols = non_cols
+
+    def process_row(self, row):
         instance = self.model()
-        for i, f in self._cols:
-            setattr(instance, f.name, f.python_value(row[i]))
+        for i, fname, pv in self._cols:
+            setattr(instance, fname, pv(row[i]))
         for i, f in self._non_cols:
             setattr(instance, f, row[i])
+        instance.prepared()
         return instance
+
+
+class ModelQueryResultWrapper(BaseQueryResultWrapper):
+    def __init__(self, model, cursor, meta=None):
+        super(ModelQueryResultWrapper, self).__init__(model, cursor, meta)
+        self.column_meta, self.join_meta = meta
+
+    def process_row(self, row):
+        collected = self.construct_instance(row)
+        instances = self.follow_joins(collected)
+        map(lambda i: i.prepared(), instances)
+        return instances[0]
 
     def construct_instance(self, row):
         # we have columns, models, and a graph of joins to reconstruct
@@ -1058,55 +1115,6 @@ class QueryResultWrapper(object):
                     prepared.append(joined_inst)
 
         return prepared
-
-    def __iter__(self):
-        self.__idx = 0
-
-        if not self._populated:
-            return self
-        else:
-            return iter(self._result_cache)
-
-    def iterate(self):
-        row = self.cursor.fetchone()
-        if not row:
-            self._populated = True
-            raise StopIteration
-
-        if self.naive:
-            inst = self.simple_iter(row)
-            inst.prepared()
-            return inst
-        else:
-            collected = self.construct_instance(row)
-            instances = self.follow_joins(collected)
-            map(lambda i: i.prepared(), instances)
-            return instances[0]
-
-    def iterator(self):
-        while 1:
-            yield self.iterate()
-
-    def next(self):
-        if self.__idx < self.__ct:
-            inst = self._result_cache[self.__idx]
-            self.__idx += 1
-            return inst
-
-        instance = self.iterate()
-        self._result_cache.append(instance)
-        self.__ct += 1
-        self.__idx += 1
-        return instance
-
-    def fill_cache(self, n=None):
-        n = n or float('Inf')
-        self.__idx = self.__ct
-        while not self._populated and (n > self.__ct):
-            try:
-                self.next()
-            except StopIteration:
-                break
 
 Join = namedtuple('Join', ('model_class', 'join_type', 'on'))
 
@@ -1267,7 +1275,7 @@ class RawQuery(Query):
 
     def execute(self):
         if self._qr is None:
-            self._qr = QueryResultWrapper(self.model_class, self._execute(), None)
+            self._qr = NaiveQueryResultWrapper(self.model_class, self._execute(), None)
         return self._qr
 
     def __iter__(self):
@@ -1438,9 +1446,11 @@ class SelectQuery(Query):
         if self._dirty or not self._qr:
             if self._naive or not self._joins or self.verify_naive():
                 query_meta = None
+                ResultWrapper = NaiveQueryResultWrapper
             else:
                 query_meta = [self._select, self._joins]
-            self._qr = QueryResultWrapper(self.model_class, self._execute(), query_meta)
+                ResultWrapper = ModelQueryResultWrapper
+            self._qr = ResultWrapper(self.model_class, self._execute(), query_meta)
             self._dirty = False
             return self._qr
         else:

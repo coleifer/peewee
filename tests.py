@@ -12,7 +12,7 @@ import unittest
 from peewee import *
 from peewee import QueryCompiler, R, SelectQuery, RawQuery, InsertQuery,\
     UpdateQuery, DeleteQuery, logger, transaction, sort_models_topologically,\
-    prefetch_add_subquery
+    prefetch_add_subquery, NaiveQueryResultWrapper, ModelQueryResultWrapper
 
 
 
@@ -954,10 +954,14 @@ class QueryResultWrapperTestCase(ModelTestCase):
         self.assertEqual([c.blog.user.username for c in comments], ['u1', 'u1'])
         self.assertEqual(len(self.queries()) - qc, 1)
 
+        self.assertTrue(isinstance(comments._qr, ModelQueryResultWrapper))
+
         qc = len(self.queries())
         comments = Comment.select().join(Blog).join(User).where(User.username == 'u1').order_by(Comment.id)
         self.assertEqual([c.blog.user.username for c in comments], ['u1', 'u1'])
         self.assertEqual(len(self.queries()) - qc, 5)
+
+        self.assertTrue(isinstance(comments._qr, NaiveQueryResultWrapper))
 
     def test_naive(self):
         u1 = User.create(username='u1')
@@ -967,6 +971,7 @@ class QueryResultWrapperTestCase(ModelTestCase):
 
         users = User.select().naive()
         self.assertEqual([u.username for u in users], ['u1', 'u2'])
+        self.assertTrue(isinstance(users._qr, NaiveQueryResultWrapper))
 
         users = User.select(User, Blog).join(Blog).naive()
         self.assertEqual([u.username for u in users], ['u1', 'u2'])
