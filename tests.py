@@ -1170,6 +1170,11 @@ class ModelQueryTestCase(ModelTestCase):
         rq = User.raw('select count(id) from users')
         self.assertEqual(rq.scalar(), 3)
 
+        rq = User.raw('select username from users').values()
+        self.assertEqual([r for r in rq], [
+            ('u1',), ('u2',), ('u3',),
+        ])
+
 
 class ModelAPITestCase(ModelTestCase):
     requires = [User, Blog, Category, UserCategory]

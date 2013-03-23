@@ -1261,21 +1261,29 @@ class RawQuery(Query):
         self._sql = query
         self._params = list(params)
         self._qr = None
+        self._values = False
         super(RawQuery, self).__init__(model)
 
     def clone(self):
-        return RawQuery(self.model_class, self._sql, *self._params)
+        query = RawQuery(self.model_class, self._sql, *self._params)
+        query._values = self._values
+        return query
 
     join = not_allowed('joining')
     where = not_allowed('where')
     switch = not_allowed('switch')
+
+    @returns_clone
+    def values(self, values=True):
+        self._values = values
 
     def sql(self):
         return self._sql, self._params
 
     def execute(self):
         if self._qr is None:
-            self._qr = NaiveQueryResultWrapper(self.model_class, self._execute(), None)
+            ResultWrapper = self._values and QueryResultWrapper or NaiveQueryResultWrapper
+            self._qr = ResultWrapper(self.model_class, self._execute(), None)
         return self._qr
 
     def __iter__(self):
@@ -1373,14 +1381,10 @@ class SelectQuery(Query):
 
     @returns_clone
     def naive(self, naive=True):
-        if self._values:
-            raise ValueError('Query cannot be both naive() and values()')
         self._naive = naive
 
     @returns_clone
     def values(self, values=True):
-        if self._naive:
-            raise ValueError('Query cannot be both naive() and values()')
         self._values = values
 
     @returns_clone
