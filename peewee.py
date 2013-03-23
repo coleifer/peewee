@@ -1296,6 +1296,7 @@ class SelectQuery(Query):
         self._distinct = False
         self._for_update = False
         self._naive = False
+        self._values = False
         self._alias = None
         self._qr = None
 
@@ -1314,6 +1315,7 @@ class SelectQuery(Query):
         query._distinct = self._distinct
         query._for_update = self._for_update
         query._naive = self._naive
+        query._values = self._values
         query._alias = self._alias
         return query
 
@@ -1371,7 +1373,15 @@ class SelectQuery(Query):
 
     @returns_clone
     def naive(self, naive=True):
+        if self._values:
+            raise ValueError('Query cannot be both naive() and values()')
         self._naive = naive
+
+    @returns_clone
+    def values(self, values=True):
+        if self._naive:
+            raise ValueError('Query cannot be both naive() and values()')
+        self._values = values
 
     @returns_clone
     def alias(self, alias=None):
@@ -1444,8 +1454,10 @@ class SelectQuery(Query):
 
     def execute(self):
         if self._dirty or not self._qr:
-            if self._naive or not self._joins or self.verify_naive():
-                query_meta = None
+            query_meta = None
+            if self._values:
+                ResultWrapper = BaseQueryResultWrapper
+            elif self._naive or not self._joins or self.verify_naive():
                 ResultWrapper = NaiveQueryResultWrapper
             else:
                 query_meta = [self._select, self._joins]
