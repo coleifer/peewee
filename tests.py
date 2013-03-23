@@ -328,6 +328,58 @@ class SelectTestCase(BasePeeweeTestCase):
             'AS count FROM "parent" AS parent', []
         ))
 
+    def test_select_subquery_ordering(self):
+        sq = Comment.select().join(Blog).where(Blog.pk == 1)
+        sq1 = Comment.select().where(
+            (Comment.id << sq) |
+            (Comment.comment == '*')
+        )
+        sq2 = Comment.select().where(
+            (Comment.comment == '*') |
+            (Comment.id << sq)
+        )
+
+        sql1, params1 = normal_compiler.generate_select(sq1)
+        self.assertEqual(sql1, (
+            'SELECT t1."id", t1."blog_id", t1."comment" FROM "comment" AS t1 '
+            'WHERE ((t1."id" IN ('
+            'SELECT t2."id" FROM "comment" AS t2 '
+            'INNER JOIN "blog" AS t3 ON (t2."blog_id" = t3."pk") '
+            'WHERE (t3."pk" = ?))) OR (t1."comment" = ?))'))
+        self.assertEqual(params1, [1, '*'])
+
+        sql2, params2 = normal_compiler.generate_select(sq2)
+        self.assertEqual(sql2, (
+            'SELECT t1."id", t1."blog_id", t1."comment" FROM "comment" AS t1 '
+            'WHERE ((t1."comment" = ?) OR (t1."id" IN ('
+            'SELECT t2."id" FROM "comment" AS t2 '
+            'INNER JOIN "blog" AS t3 ON (t2."blog_id" = t3."pk") '
+            'WHERE (t3."pk" = ?))))'))
+        self.assertEqual(params2, ['*', 1])
+
+    def test_multiple_subquery(self):
+        sq2 = Comment.select().where(Comment.comment == '2').join(Blog)
+        sq1 = Comment.select().where(
+            (Comment.comment == '1') &
+            (Comment.id << sq2)
+        ).join(Blog)
+        sq = Comment.select().where(
+            Comment.id << sq1
+        )
+        sql, params = normal_compiler.generate_select(sq)
+        self.assertEqual(sql, (
+            'SELECT t1."id", t1."blog_id", t1."comment" '
+            'FROM "comment" AS t1 '
+            'WHERE (t1."id" IN ('
+            'SELECT t2."id" FROM "comment" AS t2 '
+            'INNER JOIN "blog" AS t3 ON (t2."blog_id" = t3."pk") '
+            'WHERE ((t2."comment" = ?) AND (t2."id" IN ('
+            'SELECT t4."id" FROM "comment" AS t4 '
+            'INNER JOIN "blog" AS t5 ON (t4."blog_id" = t5."pk") '
+            'WHERE (t4."comment" = ?)'
+            ')))))'))
+        self.assertEqual(params, ['1', '2'])
+
     def test_select_cloning(self):
         ct = fn.Count(Blog.pk)
         sq = SelectQuery(User, User, User.id.alias('extra_id'), ct.alias('blog_ct')).join(

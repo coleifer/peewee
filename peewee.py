@@ -690,10 +690,11 @@ class QueryCompiler(object):
             p = []
         elif isinstance(expr, SelectQuery):
             max_alias = self._max_alias(alias_map)
+            alias_copy = alias_map and alias_map.copy() or None
             clone = expr.clone()
             if not expr._explicit_selection:
                 clone._select = (clone.model_class._meta.primary_key,)
-            subselect, p = self.generate_select(clone, max_alias, alias_map)
+            subselect, p = self.generate_select(clone, max_alias, alias_copy)
             s = '(%s)' % subselect
         elif isinstance(expr, (list, tuple)):
             exprs = []
