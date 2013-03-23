@@ -982,13 +982,13 @@ class QueryResultWrapperTestCase(ModelTestCase):
         u2 = User.create(username='u2')
         b1 = Blog.create(user=u1, title='b1')
         b2 = Blog.create(user=u2, title='b2')
-        users = User.select().values()
+        users = User.select().tuples()
         self.assertEqual([r for r in users], [
             (u1.id, 'u1'),
             (u2.id, 'u2'),
         ])
 
-        users = User.select(User, Blog).join(Blog).values()
+        users = User.select(User, Blog).join(Blog).tuples()
         self.assertEqual([r for r in users], [
             (u1.id, 'u1', b1.pk, u1.id, b1.title, '', None),
             (u2.id, 'u2', b2.pk, u2.id, b2.title, '', None),
@@ -1170,7 +1170,7 @@ class ModelQueryTestCase(ModelTestCase):
         rq = User.raw('select count(id) from users')
         self.assertEqual(rq.scalar(), 3)
 
-        rq = User.raw('select username from users').values()
+        rq = User.raw('select username from users').tuples()
         self.assertEqual([r for r in rq], [
             ('u1',), ('u2',), ('u3',),
         ])

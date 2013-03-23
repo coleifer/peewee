@@ -1261,12 +1261,12 @@ class RawQuery(Query):
         self._sql = query
         self._params = list(params)
         self._qr = None
-        self._values = False
+        self._tuples = False
         super(RawQuery, self).__init__(model)
 
     def clone(self):
         query = RawQuery(self.model_class, self._sql, *self._params)
-        query._values = self._values
+        query._tuples = self._tuples
         return query
 
     join = not_allowed('joining')
@@ -1274,15 +1274,15 @@ class RawQuery(Query):
     switch = not_allowed('switch')
 
     @returns_clone
-    def values(self, values=True):
-        self._values = values
+    def tuples(self, tuples=True):
+        self._tuples = tuples
 
     def sql(self):
         return self._sql, self._params
 
     def execute(self):
         if self._qr is None:
-            ResultWrapper = self._values and QueryResultWrapper or NaiveQueryResultWrapper
+            ResultWrapper = self._tuples and QueryResultWrapper or NaiveQueryResultWrapper
             self._qr = ResultWrapper(self.model_class, self._execute(), None)
         return self._qr
 
@@ -1304,7 +1304,7 @@ class SelectQuery(Query):
         self._distinct = False
         self._for_update = False
         self._naive = False
-        self._values = False
+        self._tuples = False
         self._alias = None
         self._qr = None
 
@@ -1323,7 +1323,7 @@ class SelectQuery(Query):
         query._distinct = self._distinct
         query._for_update = self._for_update
         query._naive = self._naive
-        query._values = self._values
+        query._tuples = self._tuples
         query._alias = self._alias
         return query
 
@@ -1384,8 +1384,8 @@ class SelectQuery(Query):
         self._naive = naive
 
     @returns_clone
-    def values(self, values=True):
-        self._values = values
+    def tuples(self, tuples=True):
+        self._tuples = tuples
 
     @returns_clone
     def alias(self, alias=None):
@@ -1459,7 +1459,7 @@ class SelectQuery(Query):
     def execute(self):
         if self._dirty or not self._qr:
             query_meta = None
-            if self._values:
+            if self._tuples:
                 ResultWrapper = QueryResultWrapper
             elif self._naive or not self._joins or self.verify_naive():
                 ResultWrapper = NaiveQueryResultWrapper
