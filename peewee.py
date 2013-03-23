@@ -962,7 +962,7 @@ class QueryCompiler(object):
         return 'DROP SEQUENCE %s;' % self.quote(sequence_name)
 
 
-class BaseQueryResultWrapper(object):
+class QueryResultWrapper(object):
     """
     Provides an iterator over the results of a raw Query, additionally doing
     two things:
@@ -1022,7 +1022,7 @@ class BaseQueryResultWrapper(object):
             except StopIteration:
                 break
 
-class NaiveQueryResultWrapper(BaseQueryResultWrapper):
+class NaiveQueryResultWrapper(QueryResultWrapper):
     def __init__(self, model, cursor, meta=None):
         super(NaiveQueryResultWrapper, self).__init__(model, cursor, meta)
 
@@ -1048,7 +1048,7 @@ class NaiveQueryResultWrapper(BaseQueryResultWrapper):
         return instance
 
 
-class ModelQueryResultWrapper(BaseQueryResultWrapper):
+class ModelQueryResultWrapper(QueryResultWrapper):
     def __init__(self, model, cursor, meta=None):
         super(ModelQueryResultWrapper, self).__init__(model, cursor, meta)
         self.column_meta, self.join_meta = meta
@@ -1456,7 +1456,7 @@ class SelectQuery(Query):
         if self._dirty or not self._qr:
             query_meta = None
             if self._values:
-                ResultWrapper = BaseQueryResultWrapper
+                ResultWrapper = QueryResultWrapper
             elif self._naive or not self._joins or self.verify_naive():
                 ResultWrapper = NaiveQueryResultWrapper
             else:
