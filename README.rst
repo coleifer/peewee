@@ -38,9 +38,12 @@ Examples::
     )
 
     # a similar way of expressing the same
-    User.select(
-        User, fn.Count(Tweet.id).alias('ct')
-    ).join(Tweet).group_by(User).order_by(R('ct desc'))
+    tweet_ct = fn.Count(Tweet.id)
+    (User
+      .select(User, tweet_ct.alias('ct'))
+      .join(Tweet)
+      .group_by(User)
+      .order_by(tweet_ct.desc()))
 
     # do an atomic update
     Counter.update(count=Counter.count + 1).where(
@@ -149,9 +152,11 @@ when the .where() and .order_by() are evaluated.
 
 an example using joins::
 
-    Tweet.select().join(User).where(
-        (Tweet.deleted == False) & (User.active == True)
-    ).order_by(Tweet.pub_date.desc())
+    (Tweet
+      .select()
+      .join(User)
+      .where((Tweet.deleted == False) & (User.active == True))
+      .order_by(Tweet.pub_date.desc()))
 
 this will select non-deleted tweets from active users.
 
