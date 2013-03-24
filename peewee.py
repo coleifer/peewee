@@ -1047,6 +1047,14 @@ class NaiveQueryResultWrapper(QueryResultWrapper):
         instance.prepared()
         return instance
 
+class DictQueryResultWrapper(NaiveQueryResultWrapper):
+    def process_row(self, row):
+        res = {}
+        for i, fname, pv in self._cols:
+            res[fname] = pv(row[i])
+        for i, f in self._non_cols:
+            res[f] = row[i]
+        return res
 
 class ModelQueryResultWrapper(QueryResultWrapper):
     def __init__(self, model, cursor, meta=None):
@@ -1262,11 +1270,13 @@ class RawQuery(Query):
         self._params = list(params)
         self._qr = None
         self._tuples = False
+        self._dicts = False
         super(RawQuery, self).__init__(model)
 
     def clone(self):
         query = RawQuery(self.model_class, self._sql, *self._params)
         query._tuples = self._tuples
+        query._dicts = self._dicts
         return query
 
     join = not_allowed('joining')
@@ -1277,12 +1287,21 @@ class RawQuery(Query):
     def tuples(self, tuples=True):
         self._tuples = tuples
 
+    @returns_clone
+    def dicts(self, dicts=True):
+        self._dicts = dicts
+
     def sql(self):
         return self._sql, self._params
 
     def execute(self):
         if self._qr is None:
-            ResultWrapper = self._tuples and QueryResultWrapper or NaiveQueryResultWrapper
+            if self._tuples:
+                ResultWrapper = QueryResultWrapper
+            elif self._dicts:
+                ResultWrapper = DictQueryResultWrapper
+            else:
+                ResultWrapper = NaiveQueryResultWrapper
             self._qr = ResultWrapper(self.model_class, self._execute(), None)
         return self._qr
 
@@ -1305,6 +1324,7 @@ class SelectQuery(Query):
         self._for_update = False
         self._naive = False
         self._tuples = False
+        self._dicts = False
         self._alias = None
         self._qr = None
 
@@ -1324,6 +1344,7 @@ class SelectQuery(Query):
         query._for_update = self._for_update
         query._naive = self._naive
         query._tuples = self._tuples
+        query._dicts = self._dicts
         query._alias = self._alias
         return query
 
@@ -1386,6 +1407,10 @@ class SelectQuery(Query):
     @returns_clone
     def tuples(self, tuples=True):
         self._tuples = tuples
+
+    @returns_clone
+    def dicts(self, dicts=True):
+        self._dicts = dicts
 
     @returns_clone
     def alias(self, alias=None):
@@ -1461,6 +1486,8 @@ class SelectQuery(Query):
             query_meta = None
             if self._tuples:
                 ResultWrapper = QueryResultWrapper
+            elif self._dicts:
+                ResultWrapper = DictQueryResultWrapper
             elif self._naive or not self._joins or self.verify_naive():
                 ResultWrapper = NaiveQueryResultWrapper
             else:
