@@ -1991,6 +1991,8 @@ class BaseModel(type):
         if meta:
             meta_options.update((k, v) for k, v in meta.__dict__.items() if not k.startswith('_'))
 
+        orig_primary_key = None
+
         # inherit any field descriptors by deep copying the underlying field obj
         # into the attrs of the new model, additionally see if the bases define
         # inheritable model options and swipe them
@@ -2007,6 +2009,8 @@ class BaseModel(type):
                 if isinstance(v, FieldDescriptor) and k not in attrs:
                     if not v.field.primary_key:
                         attrs[k] = deepcopy(v.field)
+                    elif not orig_primary_key:
+                        orig_primary_key = deepcopy(v.field)
 
         # initialize the new class and set the magic attributes
         cls = super(BaseModel, cls).__new__(cls, name, bases, attrs)
@@ -2023,12 +2027,17 @@ class BaseModel(type):
                 if attr.primary_key:
                     primary_key = attr
 
-        if not primary_key:
-            primary_key = PrimaryKeyField(primary_key=True)
-            primary_key.add_to_class(cls, 'id')
+        if primary_key is None:
+            if orig_primary_key:
+                primary_key = orig_primary_key
+                name = primary_key.name
+            else:
+                primary_key = PrimaryKeyField(primary_key=True)
+                name = 'id'
+            primary_key.add_to_class(cls, name)
 
         cls._meta.primary_key = primary_key
-        cls._meta.auto_increment = isinstance(primary_key, PrimaryKeyField) or primary_key.sequence
+        cls._meta.auto_increment = isinstance(primary_key, PrimaryKeyField) or bool(primary_key.sequence)
         if not cls._meta.db_table:
             cls._meta.db_table = re.sub('[^\w]+', '_', cls.__name__.lower())
 

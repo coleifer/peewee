@@ -2267,10 +2267,10 @@ class ModelInheritanceTestCase(ModelTestCase):
 
     def test_model_inheritance_attrs(self):
         self.assertEqual(Blog._meta.get_field_names(), ['pk', 'user', 'title', 'content', 'pub_date'])
-        self.assertEqual(BlogTwo._meta.get_field_names(), ['id', 'user', 'content', 'pub_date', 'title', 'extra_field'])
+        self.assertEqual(BlogTwo._meta.get_field_names(), ['pk', 'user', 'content', 'pub_date', 'title', 'extra_field'])
 
         self.assertEqual(Blog._meta.primary_key.name, 'pk')
-        self.assertEqual(BlogTwo._meta.primary_key.name, 'id')
+        self.assertEqual(BlogTwo._meta.primary_key.name, 'pk')
 
         self.assertEqual(Blog.user.related_name, 'blog_set')
         self.assertEqual(BlogTwo.user.related_name, 'blogtwo_set')
@@ -2293,7 +2293,7 @@ class ModelInheritanceTestCase(ModelTestCase):
         self.assertEqual(BlogTwo.select().count(), 1)
 
         b_from_db = Blog.get(Blog.pk==b.pk)
-        b2_from_db = BlogTwo.get(BlogTwo.id==b2.id)
+        b2_from_db = BlogTwo.get(BlogTwo.pk==b2.pk)
 
         self.assertEqual(b_from_db.user, u)
         self.assertEqual(b2_from_db.user, u)
