@@ -504,7 +504,7 @@ class RelationDescriptor(FieldDescriptor):
         return rel_id
 
     def __get__(self, instance, instance_type=None):
-        if instance:
+        if instance is not None:
             return self.get_object_or_id(instance)
         return self.field
 
@@ -522,7 +522,7 @@ class ReverseRelationDescriptor(object):
         self.rel_model = field.model_class
 
     def __get__(self, instance, instance_type=None):
-        if instance:
+        if instance is not None:
             return self.rel_model.select().where(self.field==instance.get_id())
         return self
 
