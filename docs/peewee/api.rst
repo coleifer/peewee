@@ -815,6 +815,14 @@ Query Types
         This method is useful when you either do not want or do not need full model
         instances.
 
+    .. py:method:: dicts()
+
+        :rtype: :py:class:`SelectQuery`
+
+        Flag this query indicating it should simply return dictionaries from the cursor.
+        This method is useful when you either do not want or do not need full model
+        instances.
+
     .. py:method:: annotate(related_model, aggregation=None)
 
         :param related_model: related :py:class:`Model` on which to perform aggregation,
@@ -1025,6 +1033,14 @@ Query Types
         :rtype: :py:class:`RawQuery`
 
         Flag this query indicating it should simply return raw tuples from the cursor.
+        This method is useful when you either do not want or do not need full model
+        instances.
+
+    .. py:method:: dicts()
+
+        :rtype: :py:class:`RawQuery`
+
+        Flag this query indicating it should simply return raw dicts from the cursor.
         This method is useful when you either do not want or do not need full model
         instances.
 

@@ -564,9 +564,17 @@ To iterate over raw tuples, use the :py:meth:`~SelectQuery.tuples` method:
 
 .. code-block:: python
 
-    stats = Stat.select(Stat.url, fn.Count(Stat.url)).group_by(Stat.url).values()
+    stats = Stat.select(Stat.url, fn.Count(Stat.url)).group_by(Stat.url).tuples()
     for stat_url, count in stats:
         print stat_url, count
+
+To iterate over dictionaries, use the :py:meth:`~SelectQuery.dicts` method:
+
+.. code-block:: python
+
+    stats = Stat.select(Stat.url, fn.Count(Stat.url).alias('ct')).group_by(Stat.url).dicts()
+    for stat in stats:
+        print stat['url'], stat['ct']
 
 
 Query evaluation

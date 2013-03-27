@@ -704,8 +704,8 @@ alias:
     query = query.order_by(R('ct'))
 
 
-Retrieving raw tuples
-^^^^^^^^^^^^^^^^^^^^^
+Retrieving raw tuples / dictionaries
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Sometimes you do not need the overhead of creating model instances and simply want
 to iterate over the row tuples.  To do this, call :py:meth:`SelectQuery.tuples` or
@@ -718,6 +718,17 @@ to iterate over the row tuples.  To do this, call :py:meth:`SelectQuery.tuples` 
     # iterate over a list of 2-tuples containing the url and count
     for stat_url, stat_count in stats:
         print stat_url, stat_count
+
+Similarly, you can return the rows from the cursor as dictionaries using :py:meth:`SelectQuery.dicts`
+or :py:meth:`RawQuery.dicts`:
+
+.. code-block:: python
+
+    stats = Stat.select(Stat.url, fn.Count(Stat.url).alias('ct')).group_by(Stat.url).dicts()
+
+    # iterate over a list of 2-tuples containing the url and count
+    for stat in stats:
+        print stat['url'], stat['ct']
 
 
 .. _working_with_transactions:
