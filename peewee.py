@@ -620,7 +620,7 @@ class QueryCompiler(object):
         OP_SUB: '-',
         OP_MUL: '*',
         OP_DIV: '/',
-        OP_XOR: '^',
+        OP_XOR: '#',
         OP_AND: 'AND',
         OP_OR: 'OR',
         OP_MOD: '%',
@@ -1839,7 +1839,11 @@ class MySQLDatabase(Database):
     }
     for_update = True
     interpolation = '%s'
-    op_overrides = {OP_LIKE: 'LIKE BINARY', OP_ILIKE: 'LIKE'}
+    op_overrides = {
+        OP_LIKE: 'LIKE BINARY', 
+        OP_ILIKE: 'LIKE',
+        OP_XOR: 'XOR',
+    }
     quote_char = '`'
     subquery_delete_same_table = False
 
