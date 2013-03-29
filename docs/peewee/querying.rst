@@ -191,6 +191,48 @@ Comparison       Meaning
 ================ =======================================
 
 
+.. _custom-lookups
+
+Adding user-defined operators
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Because I ran out of python operators to overload, there are some missing
+operators in peewee, for instance `modulo <https://github.com/coleifer/peewee/issues/177>`_.
+If you find that you need to support an operator that is not in the table
+above, it is very easy to add your own.
+
+Here is how you might add support for ``modulo`` and ``regexp`` in SQLite:
+
+.. code-block:: python
+
+    from peewee import *
+    from peewee import Expr # the building block for expressions
+
+    OP_MOD = 'mod'
+    OP_REGEXP = 'regexp'
+
+    def mod(lhs, rhs):
+        return Expr(lhs, OP_MOD, rhs)
+
+    def regexp(lhs, rhs):
+        return Expr(lhs, OP_REGEXP, rhs)
+
+    SqliteDatabase.register_ops({OP_MOD: '%', OP_REGEX: 'REGEXP'})
+
+Now you can use these custom operators to build richer queries:
+
+.. code-block:: python
+
+    # users with even ids
+    User.select().where(mod(User.id, 2) == 0)
+
+    # users whose username starts with a number
+    User.select().where(regexp(User.username, '[0-9].*'))
+
+For more examples check out the source to the ``playhouse.postgresql_ext``
+module, as it contains numerous operators specific to postgresql's hstore.
+
+
 Performing advanced queries
 ---------------------------
 

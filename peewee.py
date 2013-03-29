@@ -1840,7 +1840,7 @@ class MySQLDatabase(Database):
     for_update = True
     interpolation = '%s'
     op_overrides = {
-        OP_LIKE: 'LIKE BINARY', 
+        OP_LIKE: 'LIKE BINARY',
         OP_ILIKE: 'LIKE',
         OP_XOR: 'XOR',
     }
