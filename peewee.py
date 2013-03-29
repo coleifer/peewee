@@ -72,7 +72,7 @@ OP_DIV = 13
 OP_AND = 14
 OP_OR = 15
 OP_XOR = 16
-OP_USER = 19
+OP_MOD = 17
 
 OP_EQ = 20
 OP_LT = 21
@@ -623,6 +623,7 @@ class QueryCompiler(object):
         OP_XOR: '^',
         OP_AND: 'AND',
         OP_OR: 'OR',
+        OP_MOD: '%',
     }
 
     join_map = {
