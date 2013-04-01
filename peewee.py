@@ -32,13 +32,14 @@ def with_metaclass(meta, base=object):
 
 PY3 = sys.version_info[0] == 3
 if PY3:
+    import builtins
     from collections import Callable
     from functools import reduce
     callable = lambda c: isinstance(c, Callable)
     unicode_type = str
     string_type = bytes
     basestring = str
-    print_ = print
+    print_ = getattr(builtins, 'print')
 else:
     unicode_type = unicode
     string_type = basestring
