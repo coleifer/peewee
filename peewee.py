@@ -848,8 +848,8 @@ class QueryCompiler(object):
             order_by, _ = self.parse_expr_list(query._order_by, alias_map)
             parts.append('ORDER BY %s' % order_by)
 
-        if query._limit or (query._offset and not db.empty_limit):
-            limit = query._limit or -1
+        if query._limit or (query._offset and db.limit_max):
+            limit = query._limit or db.limit_max
             parts.append('LIMIT %s' % limit)
         if query._offset:
             parts.append('OFFSET %s' % query._offset)
@@ -1576,10 +1576,10 @@ class DeleteQuery(Query):
 class Database(object):
     commit_select = False
     compiler_class = QueryCompiler
-    empty_limit = False
     field_overrides = {}
     for_update = False
     interpolation = '?'
+    limit_max = None
     op_overrides = {}
     quote_char = '"'
     reserved_tables = []
@@ -1742,6 +1742,7 @@ class Database(object):
 
 
 class SqliteDatabase(Database):
+    limit_max = -1
     op_overrides = {
         OP_LIKE: 'GLOB',
         OP_ILIKE: 'LIKE',
@@ -1764,7 +1765,6 @@ class SqliteDatabase(Database):
 
 class PostgresqlDatabase(Database):
     commit_select = True
-    empty_limit = True
     field_overrides = {
         'bigint': 'BIGINT',
         'bool': 'BOOLEAN',
@@ -1839,6 +1839,7 @@ class MySQLDatabase(Database):
     }
     for_update = True
     interpolation = '%s'
+    limit_max = 2 ** 64 - 1  # MySQL quirk
     op_overrides = {
         OP_LIKE: 'LIKE BINARY',
         OP_ILIKE: 'LIKE',

@@ -1187,6 +1187,23 @@ class ModelQueryTestCase(ModelTestCase):
             ('u1',), ('u2',), ('u3',),
         ])
 
+    def test_limits_offsets(self):
+        for i in range(10):
+            self.create_user(username='u%d' % i)
+        sq = User.select().order_by(User.id)
+
+        offset_no_lim = sq.offset(3)
+        self.assertEqual(
+            [u.username for u in offset_no_lim],
+            ['u%d' % i for i in range(3, 10)]
+        )
+
+        offset_with_lim = sq.offset(5).limit(3)
+        self.assertEqual(
+            [u.username for u in offset_with_lim],
+            ['u%d' % i for i in range(5, 8)]
+        )
+
 
 class ModelAPITestCase(ModelTestCase):
     requires = [User, Blog, Category, UserCategory]
