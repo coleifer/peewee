@@ -4,6 +4,7 @@ import os
 import sys
 import unittest
 
+
 def collect():
     import tests
     runtests(tests, 1)
@@ -39,17 +40,18 @@ if __name__ == '__main__':
 
         #from playhouse import tests as extras_tests
         #modules.append(extras_tests)
+        from peewee import print_
         try:
             from playhouse import tests_apsw
             modules.append(tests_apsw)
         except ImportError:
-            print 'Unable to import apsw tests, skipping'
+            print_('Unable to import apsw tests, skipping')
 
         try:
             from playhouse import tests_postgres
             modules.append(tests_postgres)
         except ImportError:
-            print 'Unable to import postgres_ext tests, skipping'
+            print_('Unable to import postgres_ext tests, skipping')
     else:
         modules = [tests]
 

@@ -5,14 +5,18 @@ import datetime
 import decimal
 import logging
 import os
-import Queue
 import threading
 import unittest
+try:
+    from Queue import Queue
+except ImportError:
+    from queue import Queue
 
 from peewee import *
 from peewee import QueryCompiler, R, SelectQuery, RawQuery, InsertQuery,\
     UpdateQuery, DeleteQuery, logger, transaction, sort_models_topologically,\
-    prefetch_add_subquery, NaiveQueryResultWrapper, ModelQueryResultWrapper
+    prefetch_add_subquery, NaiveQueryResultWrapper, ModelQueryResultWrapper,\
+    print_
 
 
 
@@ -48,7 +52,7 @@ else:
     database_class = SqliteDatabase
     database_name = 'tmp.db'
     import sqlite3
-    print 'SQLITE VERSION: %s' % sqlite3.version
+    print_('SQLITE VERSION: %s' % sqlite3.version)
 
 #
 # TEST-ONLY QUERY COMPILER USED TO CREATE "predictable" QUERIES
@@ -2188,7 +2192,7 @@ class ConcurrencyTestCase(ModelTestCase):
         self.assertEqual(User.select().count(), 50)
 
     def test_multiple_readers(self):
-        data_queue = Queue.Queue()
+        data_queue = Queue()
 
         def reader_thread(q, num):
             for i in range(num):
@@ -2396,7 +2400,7 @@ def permutations(xs):
                 yield [y] + pys
 
 def selections(xs):
-    for i in xrange(len(xs)):
+    for i in range(len(xs)):
         yield (xs[i], xs[:i] + xs[i + 1:])
 
 
@@ -2436,7 +2440,7 @@ if test_db.for_update:
             self.assertEqual(username, 'u1_edited')
 
 elif TEST_VERBOSITY > 0:
-    print 'Skipping "for update" tests'
+    print_('Skipping "for update" tests')
 
 if test_db.sequences:
     class SequenceTestCase(ModelTestCase):
@@ -2455,7 +2459,7 @@ if test_db.sequences:
             self.assertEqual(b2.id, a3.id - 1)
 
 elif TEST_VERBOSITY > 0:
-    print 'Skipping "sequence" tests'
+    print_('Skipping "sequence" tests')
 
 
 class Job(TestModel):

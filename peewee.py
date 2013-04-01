@@ -13,6 +13,7 @@ import decimal
 import logging
 import operator
 import re
+import sys
 import threading
 from collections import deque, namedtuple
 from copy import deepcopy
@@ -25,6 +26,27 @@ __all__ = [
     'JOIN_LEFT_OUTER', 'JOIN_INNER', 'JOIN_FULL', 'prefetch',
 ]
 
+# Python 2/3 compat
+def with_metaclass(meta, base=object):
+    return meta("NewBase", (base,), {})
+
+PY3 = sys.version_info[0] == 3
+if PY3:
+    from collections import Callable
+    from functools import reduce
+    callable = lambda c: isinstance(c, Callable)
+    unicode_type = str
+    string_type = bytes
+    basestring = str
+    print_ = print
+else:
+    unicode_type = unicode
+    string_type = basestring
+    def print_(s):
+        sys.stdout.write(s)
+        sys.stdout.write('\n')
+
+# DB libraries
 try:
     import sqlite3
 except ImportError:
@@ -60,6 +82,7 @@ if psycopg2:
     psycopg2.extensions.register_type(psycopg2.extensions.UNICODE)
     psycopg2.extensions.register_type(psycopg2.extensions.UNICODEARRAY)
 
+# Peewee
 logger = logging.getLogger('peewee')
 
 OP_AND = 0
@@ -332,6 +355,9 @@ class Field(Leaf):
     def python_value(self, value):
         return value if value is None else self.coerce(value)
 
+    def __hash__(self):
+        return hash('.'.join((self.name, self.model_class.__name__)))
+
 
 class IntegerField(Field):
     db_field = 'int'
@@ -386,14 +412,11 @@ class DecimalField(Field):
             return decimal.Decimal(str(value))
 
 def format_unicode(s, encoding='utf-8'):
-    if isinstance(s, unicode):
+    if isinstance(s, unicode_type):
         return s
-    elif isinstance(s, basestring):
+    elif isinstance(s, string_type):
         return s.decode(encoding)
-    elif hasattr(s, '__unicode__'):
-        return s.__unicode__()
-    else:
-        return unicode(bytes(s), encoding)
+    return unicode_type(s)
 
 class CharField(Field):
     db_field = 'string'
@@ -1013,6 +1036,7 @@ class QueryResultWrapper(object):
         self.__ct += 1
         self.__idx += 1
         return obj
+    __next__ = next
 
     def fill_cache(self, n=None):
         n = n or float('Inf')
@@ -1065,7 +1089,8 @@ class ModelQueryResultWrapper(QueryResultWrapper):
     def process_row(self, row):
         collected = self.construct_instance(row)
         instances = self.follow_joins(collected)
-        map(lambda i: i.prepared(), instances)
+        for i in instances:
+            i.prepared()
         return instances[0]
 
     def construct_instance(self, row):
@@ -2026,7 +2051,7 @@ class BaseModel(type):
         primary_key = None
 
         # replace the fields with field descriptors, calling the add_to_class hook
-        for name, attr in cls.__dict__.items():
+        for name, attr in list(cls.__dict__.items()):
             cls._meta.indexes = list(cls._meta.indexes)
             if isinstance(attr, Field):
                 attr.add_to_class(cls, name)
@@ -2090,9 +2115,7 @@ class ModelAlias(object):
         return [FieldProxy(self, f) for f in self.model_class._meta.get_fields()]
 
 
-class Model(object):
-    __metaclass__ = BaseModel
-
+class Model(with_metaclass(BaseModel)):
     def __init__(self, *args, **kwargs):
         self._data = self._meta.get_default_dict()
         self._obj_cache = {} # cache of related objects
