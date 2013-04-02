@@ -7,7 +7,7 @@ peewee
 ======
 
 * a small, expressive orm
-* written in python
+* written in python (2.6+, 3.2+)
 
 .. image:: postgresql.png
     :target: peewee/cookbook.html#using-with-postgresql

@@ -4,7 +4,7 @@ peewee
 ======
 
 * a small, expressive orm
-* written in python
+* written in python (2.6+, 3.2+)
 * built-in support for sqlite, mysql and postgresql and special extensions like `hstore <http://peewee.readthedocs.org/en/latest/peewee/playhouse.html#postgresql-hstore>`_
 
 For flask integration, including an admin interface and RESTful API, check
@@ -12,7 +12,7 @@ out `flask-peewee <https://github.com/coleifer/flask-peewee/>`_.
 
 For notes on the upgrade from 1.0 to 2.0, check out `the upgrade docs <http://peewee.readthedocs.org/en/latest/peewee/upgrading.html>`_.
 
-Examples::
+Example queries::
 
     # a simple query selecting a user
     User.get(User.username == 'charles')
@@ -92,25 +92,25 @@ model definitions and schema creation
 smells like django::
 
 
-    import peewee
+    from peewee import *
 
-    class Blog(peewee.Model):
-        title = peewee.CharField()
+    class Blog(Model):
+        title = CharField()
 
         def __unicode__(self):
             return self.title
 
-    class Entry(peewee.Model):
-        title = peewee.CharField(max_length=50)
-        content = peewee.TextField()
-        pub_date = peewee.DateTimeField()
-        blog = peewee.ForeignKeyField(Blog)
+    class Entry(Model):
+        title = CharField(max_length=50)
+        content = TextField()
+        pub_date = DateTimeField()
+        blog = ForeignKeyField(Blog, related_name='entries')
 
         def __unicode__(self):
             return '%s: %s' % (self.blog.title, self.title)
 
 
-gotta connect::
+open a connection to the database::
 
     >>> from peewee import database
     >>> database.connect()
@@ -130,7 +130,7 @@ foreign keys work like django's
     >>> e.save()
     >>> e.blog
     <Blog: Peewee's Big Adventure>
-    >>> for e in b.entry_set:
+    >>> for e in b.entries:
     ...     print e.title
     ...
     Greatest movie ever?
@@ -139,7 +139,7 @@ foreign keys work like django's
 querying
 --------
 
-queries come in 4 flavors (select/update/insert/delete).
+queries come in 5 flavors (select/update/insert/delete/"raw").
 
 there's the notion of a *query context* which is the model being selected
 or joined on::
@@ -166,21 +166,21 @@ using sqlite
 
 ::
 
-    import peewee
+    from peewee import *
 
-    database = peewee.SqliteDatabase('my.db')
+    database = SqliteDatabase('my.db')
 
-    class BaseModel(peewee.Model):
+    class BaseModel(Model):
         class Meta:
             database = database
 
     class Blog(BaseModel):
-        creator = peewee.CharField()
-        name = peewee.CharField()
+        creator = CharField()
+        name = CharField()
 
     class Entry(BaseModel):
-        creator = peewee.CharField()
-        name = peewee.CharField()
+        creator = CharField()
+        name = CharField()
 
 
 using postgresql
@@ -188,11 +188,11 @@ using postgresql
 
 you can now use postgresql::
 
-    import peewee
+    from peewee import *
 
-    database = peewee.PostgresqlDatabase('my_db', user='root')
+    database = PostgresqlDatabase('my_db', user='root')
 
-    class BaseModel(peewee.Model):
+    class BaseModel(Model):
         class Meta:
             database = database
 
@@ -204,11 +204,11 @@ using mysql
 
 you can now use MySQL::
 
-    import peewee
+    from peewee import *
 
-    database = peewee.MySQLDatabase('my_db', user='root')
+    database = MySQLDatabase('my_db', user='root')
 
-    class BaseModel(peewee.Model):
+    class BaseModel(Model):
         class Meta:
             database = database
 
