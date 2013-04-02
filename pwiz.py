@@ -20,6 +20,7 @@ import re
 import sys
 
 from peewee import *
+from peewee import print_
 
 try:
     from MySQLdb.constants import FIELD_TYPE
@@ -315,7 +316,7 @@ def introspect(db, schema=None):
                 ttm = table_to_model[rel_table]
             col_meta[table][column] = {'rel_model': ttm}
 
-        for column, (_, nullable) in models[table].iteritems():
+        for column, (_, nullable) in models[table].items():
             col_meta[table].setdefault(column, {})
             if column != cn(column):
                 col_meta[table][column]['db_column'] = "'%s'" % column
@@ -331,7 +332,7 @@ def print_models(engine, database, tables, **connect):
     models, table_to_model, table_fks, col_meta = introspect(db, schema)
     
     # write generated code to standard out
-    print frame % (db.get_conn_class().__name__, database, repr(connect))
+    print_(frame % (db.get_conn_class().__name__, database, repr(connect)))
 
     # print the models
     def print_model(model, seen, accum=None):
@@ -339,7 +340,7 @@ def print_models(engine, database, tables, **connect):
 
         for _, rel_table, _ in table_fks[model]:
             if rel_table in accum and model not in accum:
-                print '# POSSIBLE REFERENCE CYCLE: %s' % table_to_model[rel_table]
+                print_('# POSSIBLE REFERENCE CYCLE: %s' % table_to_model[rel_table])
 
             if rel_table not in seen and rel_table not in accum:
                 seen.add(rel_table)
@@ -347,7 +348,7 @@ def print_models(engine, database, tables, **connect):
                     print_model(rel_table, seen, accum + [model])
 
         ttm = table_to_model[model]
-        print 'class %s(BaseModel):' % ttm
+        print_('class %s(BaseModel):' % ttm)
         cols = models[model]
         for column, (field_class, nullable) in ds(cols):
             if column == 'id' and field_class in (IntegerField, PrimaryKeyField):
@@ -358,14 +359,14 @@ def print_models(engine, database, tables, **connect):
             ])
             colname = cn(column)
             if colname in reserved_words:
-                print '    # FIXME: "%s" is a reserved word' % colname
+                print_('    # FIXME: "%s" is a reserved word' % colname)
                 colname = '#' + colname
-            print '    %s = %s(%s)' % (colname, field_class.__name__, field_params)
-        print
+            print_('    %s = %s(%s)' % (colname, field_class.__name__, field_params))
+        print_('')
 
-        print '    class Meta:'
-        print '        db_table = \'%s\'' % model
-        print
+        print_('    class Meta:')
+        print_('        db_table = \'%s\'' % model)
+        print_('')
         seen.add(model)
 
     seen = set()
@@ -400,7 +401,7 @@ if __name__ == '__main__':
     connect = dict((o, getattr(options, o)) for o in ops if getattr(options, o))
 
     if len(args) < 1:
-        print 'error: missing required parameter "database"'
+        print_('error: missing required parameter "database"')
         parser.print_help()
         sys.exit(1)
 
