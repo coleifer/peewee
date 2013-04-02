@@ -13,7 +13,12 @@ blog.tags -> select query of tags for ``blog`` instance
 Blog.tags -> select query of all tags for Blog instances
 """
 from peewee import *
-from peewee import FieldDescriptor, SelectQuery, UpdateQuery, Model as _Model, BaseModel as _BaseModel
+from peewee import BaseModel as _BaseModel
+from peewee import FieldDescriptor
+from peewee import Model as _Model
+from peewee import SelectQuery
+from peewee import UpdateQuery
+from peewee import with_metaclass
 
 
 all_models = set()
@@ -26,8 +31,8 @@ class BaseModel(_BaseModel):
         all_models.add(cls)
         return cls
 
-class Model(_Model):
-    __metaclass__ = BaseModel
+class Model(with_metaclass(BaseModel, _Model)):
+    pass
 
 def get_model(tbl_name):
     if tbl_name not in table_cache:

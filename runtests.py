@@ -38,8 +38,6 @@ if __name__ == '__main__':
         modules.append(tests_gfk)
         modules.append(tests_migrate)
 
-        #from playhouse import tests as extras_tests
-        #modules.append(extras_tests)
         from peewee import print_
         try:
             from playhouse import tests_apsw

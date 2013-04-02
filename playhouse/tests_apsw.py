@@ -2,7 +2,7 @@ import apsw
 import datetime
 import unittest
 
-from apsw_ext import *
+from playhouse.apsw_ext import *
 
 
 db = APSWDatabase(':memory:')
@@ -65,7 +65,7 @@ class APSWTestCase(unittest.TestCase):
         self.assertEqual(User.select().count(), 1)
 
     def test_transaction_handling(self):
-        dt = datetime.datetime(2012, 01, 01, 11, 11, 11)
+        dt = datetime.datetime(2012, 1, 1, 11, 11, 11)
 
         def do_ctx_mgr_error():
             with db.transaction():

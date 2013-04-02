@@ -1,7 +1,10 @@
 import uuid
 
 from peewee import *
-from peewee import QueryCompiler, Param, Expr, dict_update
+from peewee import dict_update
+from peewee import Expr
+from peewee import Param
+from peewee import QueryCompiler
 
 from psycopg2 import extensions
 from psycopg2.extras import register_hstore

@@ -1,7 +1,7 @@
 import unittest
 import uuid
 
-from postgres_ext import *
+from playhouse.postgres_ext import *
 
 
 test_db = PostgresqlExtDatabase('peewee_test', user='postgres')

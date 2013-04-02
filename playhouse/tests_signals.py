@@ -1,7 +1,7 @@
 import unittest
 
 from peewee import *
-import signals
+from playhouse import signals
 
 
 db = SqliteDatabase(':memory:')

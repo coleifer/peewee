@@ -1,8 +1,15 @@
 import apsw
 from peewee import *
-from peewee import SqliteDatabase, Database, logger
-from peewee import BooleanField as _BooleanField, DateField as _DateField, TimeField as _TimeField, \
-    DateTimeField as _DateTimeField, DecimalField as _DecimalField, transaction as _transaction
+from peewee import BooleanField as _BooleanField
+from peewee import Database
+from peewee import DateField as _DateField
+from peewee import DateTimeField as _DateTimeField
+from peewee import DecimalField as _DecimalField
+from peewee import logger
+from peewee import PY3
+from peewee import SqliteDatabase
+from peewee import TimeField as _TimeField
+from peewee import transaction as _transaction
 
 
 class ConnectionWrapper(apsw.Connection):
@@ -28,11 +35,18 @@ class CursorProxy(object):
         except apsw.ExecutionCompleteError:
             return []
 
-    def fetchone(self):
-        try:
-            return self.cursor_obj.next()
-        except StopIteration:
-            pass
+    if PY3:
+        def fetchone(self):
+            try:
+                return next(self.cursor_obj)
+            except StopIteration:
+                pass
+    else:
+        def fetchone(self):
+            try:
+                return self.cursor_obj.next()
+            except StopIteration:
+                pass
 
 
 class transaction(_transaction):
