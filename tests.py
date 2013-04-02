@@ -7,17 +7,27 @@ import logging
 import os
 import threading
 import unittest
+import sys
 try:
     from Queue import Queue
 except ImportError:
     from queue import Queue
 
 from peewee import *
-from peewee import QueryCompiler, R, SelectQuery, RawQuery, InsertQuery,\
-    UpdateQuery, DeleteQuery, logger, transaction, sort_models_topologically,\
-    prefetch_add_subquery, NaiveQueryResultWrapper, ModelQueryResultWrapper,\
-    print_
-
+from peewee import DeleteQuery
+from peewee import InsertQuery
+from peewee import logger
+from peewee import ModelQueryResultWrapper
+from peewee import NaiveQueryResultWrapper
+from peewee import prefetch_add_subquery
+from peewee import print_
+from peewee import QueryCompiler
+from peewee import R
+from peewee import RawQuery
+from peewee import SelectQuery
+from peewee import sort_models_topologically
+from peewee import transaction
+from peewee import UpdateQuery
 
 
 class QueryLogHandler(logging.Handler):
@@ -36,6 +46,8 @@ BACKEND = os.environ.get('PEEWEE_TEST_BACKEND', 'sqlite')
 TEST_VERBOSITY = int(os.environ.get('PEEWEE_TEST_VERBOSITY') or 1)
 
 database_params = {}
+
+print_('TESTING USING PYTHON %s' % sys.version)
 
 if BACKEND == 'postgresql':
     database_class = PostgresqlDatabase
