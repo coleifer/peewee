@@ -33,10 +33,9 @@ if __name__ == '__main__':
 
     if options.all or options.extra:
         modules = [tests]
-        from playhouse import tests_signals, tests_gfk, tests_migrate
+        from playhouse import tests_signals, tests_gfk
         modules.append(tests_signals)
         modules.append(tests_gfk)
-        modules.append(tests_migrate)
 
         from peewee import print_
         try:
@@ -46,10 +45,14 @@ if __name__ == '__main__':
             print_('Unable to import apsw tests, skipping')
 
         try:
+            import psycopg2
+        except ImportError:
+            print_('Unable to import psycopg2, skipping postgres tests')
+        else:
+            from playhouse import tests_migrate
             from playhouse import tests_postgres
             modules.append(tests_postgres)
-        except ImportError:
-            print_('Unable to import postgres_ext tests, skipping')
+            modules.append(tests_migrate)
     else:
         modules = [tests]
 
