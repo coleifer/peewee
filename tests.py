@@ -38,6 +38,12 @@ class QueryLogHandler(logging.Handler):
     def emit(self, record):
         self.queries.append(record)
 
+if sys.version_info[0] < 3:
+    import codecs
+    ulit = lambda s: codecs.unicode_escape_decode(s)[0]
+else:
+    ulit = lambda s: s
+
 #
 # JUNK TO ALLOW TESTING OF MULTIPLE DATABASE BACKENDS
 #
@@ -673,7 +679,7 @@ class SelectTestCase(BasePeeweeTestCase):
         fixed_sql = [
             ('SELECT t1."id", t1."username" FROM "users" AS t1 WHERE (t1."username" = ?)', ['foo']),
             ('SELECT t1."pk", t1."user_id", t1."title", t1."content", t1."pub_date" FROM "blog" AS t1 WHERE ((t1."title" = ?) AND (t1."user_id" IN (SELECT t2."id" FROM "users" AS t2 WHERE (t2."username" = ?))))', ['bar', 'foo']),
-            ('SELECT t1."id", t1."blog_id", t1."comment" FROM "comment" AS t1 WHERE ((t1."comment" = ?) AND (t1."blog_id" IN (SELECT t2."pk" FROM "blog" AS t2 WHERE ((t2."title" = ?) AND (t2."user_id" IN (SELECT t3."id" FROM "users" AS t3 WHERE (t3."username" = ?)))))))', [u'baz', u'bar', u'foo']),
+            ('SELECT t1."id", t1."blog_id", t1."comment" FROM "comment" AS t1 WHERE ((t1."comment" = ?) AND (t1."blog_id" IN (SELECT t2."pk" FROM "blog" AS t2 WHERE ((t2."title" = ?) AND (t2."user_id" IN (SELECT t3."id" FROM "users" AS t3 WHERE (t3."username" = ?)))))))', ['baz', 'bar', 'foo']),
         ]
         for (query, fkf), expected in zip(fixed, fixed_sql):
             self.assertEqual(normal_compiler.generate_select(query), expected)
@@ -1474,7 +1480,7 @@ class ModelAPITestCase(ModelTestCase):
 
     def test_unicode(self):
         # create a unicode literal
-        ustr = u'Lýðveldið Ísland'
+        ustr = ulit('Lýðveldið Ísland')
         u = self.create_user(username=ustr)
 
         # query using the unicode literal
