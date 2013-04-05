@@ -2137,12 +2137,14 @@ class Model(with_metaclass(BaseModel)):
 
     @classmethod
     def update(cls, **update):
-        fdict = dict((cls._meta.fields[f], v) for f, v in update.items())
+        vk = cls._meta.fields.keys()
+        fdict = dict((cls._meta.fields[f], v) for f, v in update.items() if f in vk)
         return UpdateQuery(cls, fdict)
 
     @classmethod
     def insert(cls, **insert):
-        fdict = dict((cls._meta.fields[f], v) for f, v in insert.items())
+        vk = cls._meta.fields.keys()
+        fdict = dict((cls._meta.fields[f], v) for f, v in insert.items() if f in vk)
         return InsertQuery(cls, fdict)
 
     @classmethod
