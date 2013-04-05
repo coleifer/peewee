@@ -357,7 +357,7 @@ class Field(Leaf):
         return value if value is None else self.coerce(value)
 
     def __hash__(self):
-        return hash('.'.join((self.name, self.model_class.__name__)))
+        return hash(self.name + '.' + self.model_class.__name__)
 
 
 class IntegerField(Field):
