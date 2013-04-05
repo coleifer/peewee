@@ -1169,6 +1169,8 @@ class ModelQueryTestCase(ModelTestCase):
         uq.execute()
         self.assertEqual([u.username for u in User.select().order_by(User.id)], ['u-edited', 'u-edited', 'u-edited', 'u4', 'u5'])
 
+        self.assertRaises(KeyError, User.update, doesnotexist='invalid')
+
     def test_insert(self):
         iq = User.insert(username='u1')
         self.assertEqual(User.select().count(), 0)
@@ -1177,6 +1179,8 @@ class ModelQueryTestCase(ModelTestCase):
         self.assertEqual(User.select().count(), 1)
         u = User.get(User.id==uid)
         self.assertEqual(u.username, 'u1')
+
+        self.assertRaises(KeyError, User.insert, doesnotexist='invalid')
 
     def test_delete(self):
         self.create_users(5)
