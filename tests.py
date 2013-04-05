@@ -1169,8 +1169,26 @@ class ModelQueryTestCase(ModelTestCase):
         uq.execute()
         self.assertEqual([u.username for u in User.select().order_by(User.id)], ['u-edited', 'u-edited', 'u-edited', 'u4', 'u5'])
 
+    def test_update_invalid_field(self):
+        self.create_users(5)
+        uq = User.update(username='u-edited', doesnotexist='invalid').where(User.username << ['u1', 'u2', 'u3'])
+        self.assertEqual([u.username for u in User.select().order_by(User.id)], ['u1', 'u2', 'u3', 'u4', 'u5'])
+
+        uq.execute()
+        self.assertEqual([u.username for u in User.select().order_by(User.id)], ['u-edited', 'u-edited', 'u-edited', 'u4', 'u5'])
+
+
     def test_insert(self):
         iq = User.insert(username='u1')
+        self.assertEqual(User.select().count(), 0)
+        uid = iq.execute()
+        self.assertTrue(uid > 0)
+        self.assertEqual(User.select().count(), 1)
+        u = User.get(User.id==uid)
+        self.assertEqual(u.username, 'u1')
+
+    def test_insert_invalid_field(self):
+        iq = User.insert(username='u1', doesnotexist='invalid')
         self.assertEqual(User.select().count(), 0)
         uid = iq.execute()
         self.assertTrue(uid > 0)
