@@ -1,3 +1,6 @@
+"""
+Provide django-style hooks for model events.
+"""
 from peewee import Model as _Model
 
 
@@ -21,6 +24,12 @@ class Signal(object):
             self._receiver_list.remove(name)
         else:
             raise ValueError('a receiver or a name must be provided')
+
+    def __call__(self, name=None, sender=None):
+        def decorator(fn):
+            self.connect(fn, name, sender)
+            return fn
+        return decorator
 
     def send(self, instance, *args, **kwargs):
         sender = type(instance)
@@ -63,9 +72,3 @@ class Model(_Model):
         pre_delete.send(self)
         super(Model, self).delete_instance(*args, **kwargs)
         post_delete.send(self)
-
-def connect(signal, name=None, sender=None):
-    def decorator(fn):
-        signal.connect(fn, name, sender)
-        return fn
-    return decorator

@@ -35,7 +35,7 @@ class SignalsTestCase(unittest.TestCase):
     def test_pre_save(self):
         state = []
 
-        @signals.connect(signals.pre_save)
+        @signals.pre_save()
         def pre_save(sender, instance, created):
             state.append((sender, instance, instance.get_id(), created))
         m = ModelA()
@@ -49,7 +49,7 @@ class SignalsTestCase(unittest.TestCase):
     def test_post_save(self):
         state = []
 
-        @signals.connect(signals.post_save)
+        @signals.post_save()
         def post_save(sender, instance, created):
             state.append((sender, instance, instance.get_id(), created))
         m = ModelA()
@@ -67,7 +67,7 @@ class SignalsTestCase(unittest.TestCase):
         m = ModelA()
         m.save()
 
-        @signals.connect(signals.pre_delete)
+        @signals.pre_delete()
         def pre_delete(sender, instance):
             state.append((sender, instance, ModelA.select().count()))
         m.delete_instance()
@@ -79,7 +79,7 @@ class SignalsTestCase(unittest.TestCase):
         m = ModelA()
         m.save()
 
-        @signals.connect(signals.post_delete)
+        @signals.post_delete()
         def post_delete(sender, instance):
             state.append((sender, instance, ModelA.select().count()))
         m.delete_instance()
@@ -91,7 +91,7 @@ class SignalsTestCase(unittest.TestCase):
         m = ModelA(a='a')
         m.save()
 
-        @signals.connect(signals.pre_init)
+        @signals.pre_init()
         def pre_init(sender, instance):
             state.append((sender, instance.a))
 
@@ -104,7 +104,7 @@ class SignalsTestCase(unittest.TestCase):
         m = ModelA(a='a')
         m.save()
 
-        @signals.connect(signals.post_init)
+        @signals.post_init()
         def post_init(sender, instance):
             state.append((sender, instance.a))
 
@@ -114,7 +114,7 @@ class SignalsTestCase(unittest.TestCase):
     def test_sender(self):
         state = []
 
-        @signals.connect(signals.post_save, sender=ModelA)
+        @signals.post_save(sender=ModelA)
         def post_save(sender, instance, created):
             state.append(instance)
 
@@ -127,7 +127,7 @@ class SignalsTestCase(unittest.TestCase):
     def test_connect_disconnect(self):
         state = []
 
-        @signals.connect(signals.post_save, sender=ModelA)
+        @signals.post_save(sender=ModelA)
         def post_save(sender, instance, created):
             state.append(instance)
 
