@@ -67,12 +67,13 @@ apsw_ext API notes
         :param string mod_name: name to use for module
 
 
-Postgresql HStore
------------------
+Postgresql Extension (HStore)
+-----------------------------
 
 The postgresql extensions module provides a number of "postgres-only" functions, currently:
 
 * :ref:`hstore support <hstore>`
+* `UUID` field type
 
 .. warning:: In order to start using the features described below, you will need to use the
     extension :py:class:`PostgresqlExtDatabase` class instead of :py:class:`PostgresqlDatabase`.
@@ -237,7 +238,7 @@ and you can just run:
 .. highlight:: console
 .. code-block:: console
 
-    pwiz.py -e postgresql -u postgres my_postgres_db > my_models.py
+    pwiz.py -e postgresql -u postgres my_postgres_db
 
 This will print a bunch of models to standard output.  So you can do this:
 
@@ -284,13 +285,13 @@ support for the various signals.
 .. highlight:: python
 .. code-block:: python
 
-    from playhouse.signals import Model, connect, post_save
+    from playhouse.signals import Model, post_save
 
 
     class MyModel(Model):
         data = IntegerField()
 
-    @connect(post_save, sender=MyModel)
+    @post_save(sender=MyModel)
     def on_save_handler(model_class, instance, created):
         put_data_in_cache(instance.data)
 
@@ -351,7 +352,7 @@ functionally equivalent to the above example:
 
 .. code-block:: python
 
-    @connect(post_save, sender=SomeModel)
+    @post_save(sender=SomeModel)
     def post_save_handler(sender, instance, created):
         print '%s was just saved' % instance
 
@@ -404,15 +405,15 @@ Signal API
         :param instance: a model instance
 
 
-.. py:function:: connect(signal[, sender=None[, name=None]])
+    .. py:method __call__([sender=None[, name=None]])
 
-    Function decorator that is an alias for a signal's connect method:
+        Function decorator that is an alias for a signal's connect method:
 
-    .. code-block:: python
+        .. code-block:: python
 
-        from playhouse.signals import connect, post_save
+            from playhouse.signals import connect, post_save
 
-        @connect(post_save, name='project.cache_buster')
-        def cache_bust_handler(sender, instance, *args, **kwargs):
-            # bust the cache for this instance
-            cache.delete(cache_key_for(instance))
+            @post_save(name='project.cache_buster')
+            def cache_bust_handler(sender, instance, *args, **kwargs):
+                # bust the cache for this instance
+                cache.delete(cache_key_for(instance))
