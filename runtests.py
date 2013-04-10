@@ -29,6 +29,7 @@ if __name__ == '__main__':
     os.environ['PEEWEE_TEST_BACKEND'] = options.engine
     os.environ['PEEWEE_TEST_VERBOSITY'] = str(options.verbosity)
 
+    from peewee import print_
     import tests
 
     if options.all or options.extra:
@@ -38,7 +39,6 @@ if __name__ == '__main__':
         modules.append(tests_gfk)
         modules.append(tests_sqlite_kv)
 
-        from peewee import print_
         try:
             from playhouse import tests_apsw
             modules.append(tests_apsw)
