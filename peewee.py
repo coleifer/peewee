@@ -62,11 +62,11 @@ if PY3:
     string_type = bytes
     basestring = str
     print_ = getattr(builtins, 'print')
-    binary_type = memoryview
+    binary_construct = lambda s: bytes(s.encode('raw_unicode_escape'))
 else:
     unicode_type = unicode
     string_type = basestring
-    binary_type = buffer
+    binary_construct = buffer
     def print_(s):
         sys.stdout.write(s)
         sys.stdout.write('\n')
@@ -464,8 +464,8 @@ class BlobField(Field):
     db_field = 'blob'
 
     def db_value(self, value):
-        if isinstance(value, string_type):
-            return binary_type(value)
+        if isinstance(value, basestring):
+            return binary_construct(value)
         return value
 
 def format_date_time(value, formats, post_process=None):

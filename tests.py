@@ -41,10 +41,12 @@ class QueryLogHandler(logging.Handler):
 if sys.version_info[0] < 3:
     import codecs
     ulit = lambda s: codecs.unicode_escape_decode(s)[0]
-    binary_type = buffer
+    binary_construct = buffer
+    binary_types = buffer
 else:
     ulit = lambda s: s
-    binary_type = memoryview
+    binary_construct = lambda s: bytes(s.encode('raw_unicode_escape'))
+    binary_types = (bytes, memoryview)
 
 #
 # JUNK TO ALLOW TESTING OF MULTIPLE DATABASE BACKENDS
@@ -2015,9 +2017,10 @@ class FieldTypeTestCase(ModelTestCase):
 
         # pull from db and check binary data
         res = BlobModel.get(BlobModel.id == blob.id)
-        self.assertEqual(type(res.data), binary_type)
+        self.assertTrue(isinstance(res.data, binary_types))
+
         self.assertEqual(len(res.data), byte_count)
-        self.assertEqual(res.data, binary_type(data))
+        self.assertEqual(res.data, binary_construct(data))
 
         # try querying the blob field
         binary_data = res.data
