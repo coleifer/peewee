@@ -98,14 +98,24 @@ class APSWDatabase(SqliteDatabase):
             conn.createmodule(mod_name, mod_inst)
         return conn
 
+    def _execute_sql(self, cursor, sql, params):
+        cursor.execute(sql, params or ())
+        return cursor
+
     def execute_sql(self, sql, params=None, require_commit=True):
         cursor = self.get_cursor()
         wrap_transaction = require_commit and self.get_autocommit()
         if wrap_transaction:
             cursor.execute('begin;')
-        res = cursor.execute(sql, params or ())
-        if wrap_transaction:
-            cursor.execute('commit;')
+            try:
+                self._execute_sql(cursor, sql, params)
+            except:
+                cursor.execute('rollback;')
+                raise
+            else:
+                cursor.execute('commit;')
+        else:
+            cursor = self._execute_sql(cursor, sql, params)
         logger.debug((sql, params))
         return cursor
 
