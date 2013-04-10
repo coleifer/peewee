@@ -20,6 +20,7 @@ from copy import deepcopy
 
 __all__ = [
     'BigIntegerField',
+    'BlobField',
     'BooleanField',
     'CharField',
     'DateField',
@@ -61,9 +62,11 @@ if PY3:
     string_type = bytes
     basestring = str
     print_ = getattr(builtins, 'print')
+    binary_type = memoryview
 else:
     unicode_type = unicode
     string_type = basestring
+    binary_type = buffer
     def print_(s):
         sys.stdout.write(s)
         sys.stdout.write('\n')
@@ -457,6 +460,14 @@ class TextField(Field):
     def coerce(self, value):
         return format_unicode(value or '')
 
+class BlobField(Field):
+    db_field = 'blob'
+
+    def db_value(self, value):
+        if isinstance(value, string_type):
+            return binary_type(value)
+        return value
+
 def format_date_time(value, formats, post_process=None):
     post_process = post_process or (lambda x: x)
     for fmt in formats:
@@ -636,18 +647,19 @@ class ForeignKeyField(IntegerField):
 
 class QueryCompiler(object):
     field_map = {
-        'int': 'INTEGER',
         'bigint': 'INTEGER',
-        'float': 'REAL',
-        'double': 'REAL',
+        'blob': 'BLOB',
+        'bool': 'SMALLINT',
+        'date': 'DATE',
+        'datetime': 'DATETIME',
         'decimal': 'DECIMAL',
+        'double': 'REAL',
+        'float': 'REAL',
+        'int': 'INTEGER',
+        'primary_key': 'INTEGER',
         'string': 'VARCHAR',
         'text': 'TEXT',
-        'datetime': 'DATETIME',
-        'date': 'DATE',
         'time': 'TIME',
-        'bool': 'SMALLINT',
-        'primary_key': 'INTEGER',
     }
 
     op_map = {
@@ -1814,6 +1826,7 @@ class PostgresqlDatabase(Database):
     commit_select = True
     field_overrides = {
         'bigint': 'BIGINT',
+        'blob': 'BYTEA',
         'bool': 'BOOLEAN',
         'datetime': 'TIMESTAMP',
         'decimal': 'NUMERIC',

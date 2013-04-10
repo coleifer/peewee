@@ -41,8 +41,10 @@ class QueryLogHandler(logging.Handler):
 if sys.version_info[0] < 3:
     import codecs
     ulit = lambda s: codecs.unicode_escape_decode(s)[0]
+    binary_type = buffer
 else:
     ulit = lambda s: s
+    binary_type = memoryview
 
 #
 # JUNK TO ALLOW TESTING OF MULTIPLE DATABASE BACKENDS
@@ -250,10 +252,13 @@ class CSVField(TextField):
 class CSVRow(TestModel):
     data = CSVField()
 
+class BlobModel(TestModel):
+    data = BlobField()
+
 
 MODELS = [User, Blog, Comment, Relationship, NullModel, UniqueModel, OrderedModel, Category, UserCategory,
           NonIntModel, NonIntRelModel, DBUser, DBBlog, SeqModelA, SeqModelB, MultiIndexModel, BlogTwo,
-         Parent, Child, Orphan, ChildPet, OrphanPet]
+         Parent, Child, Orphan, ChildPet, OrphanPet, BlobModel]
 INT = test_db.interpolation
 
 def drop_tables(only=None):
@@ -1800,7 +1805,7 @@ class ManyToManyTestCase(ModelTestCase):
 
 
 class FieldTypeTestCase(ModelTestCase):
-    requires = [NullModel]
+    requires = [NullModel, BlobModel]
 
     _dt = datetime.datetime
     _d = datetime.date
@@ -2002,6 +2007,28 @@ class FieldTypeTestCase(ModelTestCase):
         self.assertEqual(tf.python_value('11:11 PM'), t(
             23, 11
         ))
+
+    def test_blob_field(self):
+        byte_count = 256
+        data = ''.join(chr(i) for i in range(256))
+        blob = BlobModel.create(data=data)
+
+        # pull from db and check binary data
+        res = BlobModel.get(BlobModel.id == blob.id)
+        self.assertEqual(type(res.data), binary_type)
+        self.assertEqual(len(res.data), byte_count)
+        self.assertEqual(res.data, binary_type(data))
+
+        # try querying the blob field
+        binary_data = res.data
+
+        # use the string representation
+        res = BlobModel.get(BlobModel.data == data)
+        self.assertEqual(res.id, blob.id)
+
+        # use the binary representation
+        res = BlobModel.get(BlobModel.data == binary_data)
+        self.assertEqual(res.id, blob.id)
 
 
 class UniqueTestCase(ModelTestCase):
