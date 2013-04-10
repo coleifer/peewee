@@ -33,9 +33,10 @@ if __name__ == '__main__':
 
     if options.all or options.extra:
         modules = [tests]
-        from playhouse import tests_signals, tests_gfk
+        from playhouse import tests_signals, tests_gfk, tests_sqlite_kv
         modules.append(tests_signals)
         modules.append(tests_gfk)
+        modules.append(tests_sqlite_kv)
 
         from peewee import print_
         try:
@@ -63,6 +64,7 @@ if __name__ == '__main__':
     any_failures = False
     any_errors = False
     for module in modules:
+        print_('\nRunning tests for "%s"' % module.__name__)
         failures, errors = runtests(module, options.verbosity)
         any_failures = any_failures or bool(failures)
         any_errors = any_errors or bool(errors)
