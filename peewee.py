@@ -19,11 +19,32 @@ from collections import deque, namedtuple
 from copy import deepcopy
 
 __all__ = [
-    'IntegerField', 'BigIntegerField', 'PrimaryKeyField', 'FloatField', 'DoubleField',
-    'DecimalField', 'CharField', 'TextField', 'DateTimeField', 'DateField', 'TimeField',
-    'BooleanField', 'ForeignKeyField', 'Model', 'DoesNotExist', 'ImproperlyConfigured',
-    'DQ', 'fn', 'SqliteDatabase', 'MySQLDatabase', 'PostgresqlDatabase', 'Field',
-    'JOIN_LEFT_OUTER', 'JOIN_INNER', 'JOIN_FULL', 'prefetch',
+    'BigIntegerField',
+    'BooleanField',
+    'CharField',
+    'DateField',
+    'DateTimeField',
+    'DecimalField',
+    'DoesNotExist',
+    'DoubleField',
+    'DQ',
+    'Field',
+    'FloatField',
+    'fn',
+    'ForeignKeyField',
+    'ImproperlyConfigured',
+    'IntegerField',
+    'JOIN_FULL',
+    'JOIN_INNER',
+    'JOIN_LEFT_OUTER',
+    'Model',
+    'MySQLDatabase',
+    'PostgresqlDatabase',
+    'prefetch',
+    'PrimaryKeyField',
+    'SqliteDatabase',
+    'TextField',
+    'TimeField',
 ]
 
 # Python 2/3 compat
