@@ -1,3 +1,21 @@
+"""
+Peewee integration with APSW, "another python sqlite wrapper".
+
+Project page: https://code.google.com/p/apsw/
+
+APSW is a really neat library that provides a thin wrapper on top of SQLite's
+C interface.
+
+Here are just a few reasons to use APSW, taken from the documentation:
+
+* APSW gives all functionality of SQLite, including virtual tables, virtual
+  file system, blob i/o, backups and file control.
+* Connections can be shared across threads without any additional locking.
+* Transactions are managed explicitly by your code.
+* APSW can handle nested transactions.
+* Unicode is handled correctly.
+* APSW is faster.
+"""
 import apsw
 from peewee import *
 from peewee import BooleanField as _BooleanField

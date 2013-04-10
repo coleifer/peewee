@@ -1,3 +1,9 @@
+"""
+Collection of postgres-specific extensions, currently including:
+
+* Support for hstore, a key/value type storage
+* Support for UUID field
+"""
 import uuid
 
 from peewee import *

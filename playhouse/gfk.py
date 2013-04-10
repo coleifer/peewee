@@ -1,4 +1,11 @@
 """
+Provide a "Generic ForeignKey", similar to Django.  A "GFK" is composed of two
+columns: an object ID and an object type identifier.  The object types are
+collected in a global registry (all_models), so all you need to do is subclass
+``gfk.Model`` and your model will be added to the registry.
+
+Example:
+
 class Tag(Model):
     tag = CharField()
     object_type = CharField(null=True)
@@ -8,10 +15,14 @@ class Tag(Model):
 class Blog(Model):
     tags = ReverseGFK(Tag, 'object_type', 'object_id')
 
-tag.object -> should be a blog
+class Photo(Model):
+    tags = ReverseGFK(Tag, 'object_type', 'object_id')
+
+tag.object -> a blog or photo
 blog.tags -> select query of tags for ``blog`` instance
 Blog.tags -> select query of all tags for Blog instances
 """
+
 from peewee import *
 from peewee import BaseModel as _BaseModel
 from peewee import FieldDescriptor
