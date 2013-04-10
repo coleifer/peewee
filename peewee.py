@@ -1770,9 +1770,9 @@ class Database(object):
     def sequence_exists(self, seq):
         raise NotImplementedError
 
-    def create_table(self, model_class):
+    def create_table(self, model_class, safe=False):
         qc = self.compiler()
-        return self.execute_sql(qc.create_table(model_class))
+        return self.execute_sql(qc.create_table(model_class, safe))
 
     def create_index(self, model_class, fields, unique=False):
         qc = self.compiler()
@@ -1818,7 +1818,7 @@ class SqliteDatabase(Database):
         return rows
 
     def get_tables(self):
-        res = self.execute_sql('select name from sqlite_master where type="table" order by name')
+        res = self.execute_sql('select name from sqlite_master where type="table" order by name;')
         return [r[0] for r in res.fetchall()]
 
 
