@@ -1,3 +1,46 @@
+"""
+Lightweight schema migrations, currently only support for Postgresql.
+
+Example Usage
+-------------
+
+Instantiate a migrator:
+
+    my_db = PostgresqlDatabase(...)
+    migrator = Migrator(my_db)
+
+Adding a field to a model:
+
+    # declare a field instance
+    new_pubdate_field = DateTimeField(null=True)
+
+    # in a transaction, add the column to your model
+    with my_db.transaction():
+        migrator.add_column(Story, new_pubdate_field, 'pub_date')
+
+Renaming a field:
+
+    # specify the original name of the field and its new name
+    with my_db.transaction():
+        migrator.rename_column(Story, 'pub_date', 'publish_date')
+
+Dropping a field:
+
+   # specify the field name to drop
+   with my_db.transaction():
+       migrator.drop_column(Story, 'some_old_field')
+
+Setting nullable / not nullable
+
+    with my_db.transaction():
+        # make pubdate not nullable
+        migrator.set_nullable(Story, Story.pub_date, False)
+
+Renaming a table
+
+    with my_db.transaction():
+        migrator.rename_table(Story, 'stories')
+"""
 from peewee import *
 
 
