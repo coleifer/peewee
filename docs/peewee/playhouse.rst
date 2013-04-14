@@ -13,14 +13,29 @@ to mess around with.
 apsw, an advanced sqlite driver
 -------------------------------
 
-The ``apsw_ext`` module contains a database class suitable for use with the
-`apsw <http://code.google.com/p/apsw/>`_ sqlite driver.  With apsw, it is possible
-to use some of the more advanced features of sqlite.  It also offers better performance
-than pysqlite and finer-grained control over query execution.  For more information
-on the differences between apsw and pysqlite, check `the apsw docs <http://apidoc.apsw.googlecode.com/hg/pysqlite.html>`_.
+The ``apsw_ext`` module contains a database class suitable for use with
+the apsw sqlite driver.
 
-Example usage
-^^^^^^^^^^^^^
+APSW Project page: https://code.google.com/p/apsw/
+
+APSW is a really neat library that provides a thin wrapper on top of SQLite's
+C interface, making it possible to use all of SQLite's advanced features.
+
+Here are just a few reasons to use APSW, taken from the documentation:
+
+* APSW gives all functionality of SQLite, including virtual tables, virtual
+  file system, blob i/o, backups and file control.
+* Connections can be shared across threads without any additional locking.
+* Transactions are managed explicitly by your code.
+* APSW can handle nested transactions.
+* Unicode is handled correctly.
+* APSW is faster.
+
+For more information on the differences between apsw and pysqlite,
+check `the apsw docs <http://apidoc.apsw.googlecode.com/hg/pysqlite.html>`_.
+
+How to use the APSWDatabase
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code-block:: python
 
@@ -35,7 +50,7 @@ Example usage
     class SomeModel(BaseModel):
         col1 = CharField()
         col2 = DateTimeField()
-        # etc, etc
+
 
 apsw_ext API notes
 ^^^^^^^^^^^^^^^^^^
@@ -70,10 +85,15 @@ apsw_ext API notes
 Postgresql Extension (HStore)
 -----------------------------
 
-The postgresql extensions module provides a number of "postgres-only" functions, currently:
+The postgresql extensions module provides a number of "postgres-only" functions,
+currently:
 
 * :ref:`hstore support <hstore>`
 * `UUID` field type
+
+In the future I would like to add support for more of postgresql's features.
+If there is a particular feature you would like to see added, please
+`open a Github issue <https://github.com/coleifer/peewee/issues>`_.
 
 .. warning:: In order to start using the features described below, you will need to use the
     extension :py:class:`PostgresqlExtDatabase` class instead of :py:class:`PostgresqlDatabase`.
@@ -90,7 +110,6 @@ The code below will assume you are using the following database and base model:
         class Meta:
             database = ext_db
 
-
 .. _hstore:
 
 hstore support
@@ -98,22 +117,21 @@ hstore support
 
 `Postgresql hstore <http://www.postgresql.org/docs/current/static/hstore.html>`_ is
 an embedded key/value store.  With hstore, you can store arbitrary key/value pairs
-in your database alongside structured relational data.  hstore is great for storing
-JSON.
+in your database alongside structured relational data.
 
 Currently the ``postgres_ext`` module supports the following operations:
 
-* store and retrieve arbitrary dictionaries
-* filter by key(s) or partial dictionary
-* update/add one or more keys to an existing dictionary
-* delete one or more keys from an existing dictionary
-* select keys, values, or zip keys and values
-* retrieve a slice of keys/values
-* test for the existence of a key
-* test that a key has a non-NULL value
+* Store and retrieve arbitrary dictionaries
+* Filter by key(s) or partial dictionary
+* Update/add one or more keys to an existing dictionary
+* Delete one or more keys from an existing dictionary
+* Select keys, values, or zip keys and values
+* Retrieve a slice of keys/values
+* Test for the existence of a key
+* Test that a key has a non-NULL value
 
 
-using hstore
+Using hstore
 ^^^^^^^^^^^^
 
 To start with, you will need to import the custom database class and the hstore
@@ -417,3 +435,193 @@ Signal API
             def cache_bust_handler(sender, instance, *args, **kwargs):
                 # bust the cache for this instance
                 cache.delete(cache_key_for(instance))
+
+
+Generic foreign keys
+--------------------
+
+The ``gfk`` module provides a Generic ForeignKey (GFK), similar to Django.  A GFK
+is composed of two columns: an object ID and an object type identifier.  The
+object types are collected in a global registry (``all_models``).
+
+How a :py:class:`GFKField` is resolved:
+
+1. Look up the object type in the global registry (returns a model class)
+2. Look up the model instance by object ID
+
+.. note:: In order to use Generic ForeignKeys, your application's models *must*
+    subclass ``playhouse.gfk.Model``.  This ensures that the model class will
+    be added to the global registry.
+
+.. note:: GFKs themselves are not actually a field and will not add a column
+    to your table.
+
+Like regular ForeignKeys, GFKs support a "back-reference" via the :py:class:`ReverseGFK`
+descriptor.
+
+How to use GFKs
+^^^^^^^^^^^^^^^
+
+1. Be sure your model subclasses ``playhouse.gfk.Model``
+2. Add a :py:class:`CharField` to store the ``object_type``
+3. Add a field to store the ``object_id`` (usually a :py:class:`IntegerField`)
+4. Add a :py:class:`GFKField` and instantiate it with the names of the ``object_type``
+   and ``object_id`` fields.
+5. (optional) On any other models, add a :py:class:`ReverseGFK` descriptor
+
+Example:
+
+.. code-block:: python
+
+    from playhouse.gfk import *
+
+    class Tag(Model):
+        tag = CharField()
+        object_type = CharField(null=True)
+        object_id = IntegerField(null=True)
+        object = GFKField('object_type', 'object_id')
+
+    class Blog(Model):
+        tags = ReverseGFK(Tag, 'object_type', 'object_id')
+
+    class Photo(Model):
+        tags = ReverseGFK(Tag, 'object_type', 'object_id')
+
+How you use these is pretty straightforward hopefully:
+
+.. code-block:: pycon
+
+    >>> b = Blog.create(name='awesome post')
+    >>> Tag.create(tag='awesome', object=b)
+    >>> b2 = Blog.create(name='whiny post')
+    >>> Tag.create(tag='whiny', object=b2)
+
+    >>> b.tags # <-- a select query
+    <class '__main__.Tag'> SELECT t1."id", t1."tag", t1."object_type", t1."object_id" FROM "tag" AS t1 WHERE ((t1."object_type" = ?) AND (t1."object_id" = ?)) [u'blog', 1]
+
+    >>> [x.tag for x in b.tags]
+    [u'awesome']
+
+    >>> [x.tag for x in b2.tags]
+    [u'whiny']
+
+    >>> p = Photo.create(name='picture of cat')
+    >>> Tag.create(object=p, tag='kitties')
+    >>> Tag.create(object=p, tag='cats')
+
+    >>> [x.tag for x in p.tags]
+    [u'kitties', u'cats']
+
+    >>> [x.tag for x in Blog.tags]
+    [u'awesome', u'whiny']
+
+    >>> t = Tag.get(Tag.tag == 'awesome')
+    >>> t.object
+    <__main__.Blog at 0x268f450>
+
+    >>> t.object.name
+    u'awesome post'
+
+GFK API
+^^^^^^^
+
+.. py:class:: GFKField([model_type_field='object_type'[, model_id_field='object_id']])
+
+    Provide a clean API for storing "generic" foreign keys.  Generic foreign keys
+    are comprised of an object type, which maps to a model class, and an object id,
+    which maps to the primary key of the related model class.
+
+    Setting the GFKField on a model will automatically populate the ``model_type_field``
+    and ``model_id_field``.  Similarly, getting the GFKField on a model instance
+    will "resolve" the two fields, first looking up the model class, then looking
+    up the instance by ID.
+
+.. py:class:: ReverseGFK(model, [model_type_field='object_type'[, model_id_field='object_id']])
+
+    Back-reference support for :py:class:`GFKField`.
+
+
+Sqlite Key/Value Store
+----------------------
+
+Provides a simple in-memory key/value store using Sqlite, using a dictionary API.
+By default, the :py:class:`KeyStore` will use :py:class:`KVModel`:
+
+* ``key`` -- :py:class:`CharField`
+* ``value`` -- :py:class:`BlobField` with pickled value
+
+.. py:class:: KeyStore([ordered=False[, model=None]])
+
+    Lightweight dictionary interface to a model containing a key and value.
+
+    :param boolean ordered: Whether the keys should be returned in sorted order
+    :param Model model: :py:class:`Model` class to use for keys/values. If none
+        is supplied, :py:class:`KVModel` will be used.
+
+    .. note:: If you provide a custom model, it must contain fields named
+        "key" and "value".
+
+    Example:
+
+    .. code-block:: pycon
+
+        >>> from playhouse.sqlite_kv import KeyStore
+        >>> kv = KeyStore()
+        >>> kv['a'] = 'foo'
+        >>> for k, v in kv:
+        ...     print k, v
+        a foo
+
+        >>> 'a' in kv
+        True
+        >>> 'b' in kv
+        False
+
+
+Test Utils
+----------
+
+Contains utilities helpful when testing peewee projects.
+
+.. py:class:: test_database(db, models[, create_tables=True[, fail_silently=False]])
+
+    Context manager that lets you use a different database with a set of
+    models.  Models can also be automatically created and dropped.
+
+    This context manager helps make it possible to test your peewee models
+    using a "test-only" database.
+
+    :param Database db: Database to use with the given models
+    :param models: a ``list`` of :py:class:`Model` classes to use with the ``db``
+    :param boolean create_tables: Whether tables should be automatically created
+        and dropped.
+    :param boolean fail_silently: Whether the table create / drop should fail
+        silently.
+
+    Example::
+
+    .. code-block:: python
+
+        from unittest import TestCase
+        from playhouse.test_utils import test_database
+        from peewee import *
+
+        from my_app.models import User, Tweet
+
+        test_db = SqliteDatabase(':memory:')
+
+        class TestUsersTweets(TestCase):
+            def create_test_data(self):
+                # ... create a bunch of users and tweets
+                for i in range(10):
+                    User.create(username='user-%d' % i)
+
+            def test_timeline(self):
+                with test_database(test_db, (User, Tweet)):
+                    # This data will be created in `test_db`
+                    self.create_test_data()
+
+                    # Perform assertions on test data inside ctx manager.
+                    self.assertEqual(Tweet.timeline('user-0') [...])
+
+                # once we exit the context manager, we're back to using the normal database
