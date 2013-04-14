@@ -334,6 +334,7 @@ class Field(Leaf):
         Field._field_counter += 1
         self._order = Field._field_counter
 
+        self._is_bound = False
         super(Field, self).__init__()
 
     def clone_base(self, **kwargs):
@@ -341,7 +342,9 @@ class Field(Leaf):
            null=self.null,
            index=self.index,
            unique=self.unique,
+           verbose_name=self.verbose_name,
            help_text=self.help_text,
+           db_column=self.db_column,
            default=self.default,
            choices=self.choices,
            primary_key=self.primary_key,
@@ -349,10 +352,9 @@ class Field(Leaf):
            **kwargs
        )
        inst.attributes = dict(self.attributes)
-       inst.name = self.name
-       inst.model_class = self.model_class
-       inst.db_column = self.db_column
-       inst.verbose_name = self.verbose_name
+       if self._is_bound:
+           inst.name = self.name
+           inst.model_class = self.model_class
        return inst
 
     def add_to_class(self, model_class, name):
@@ -363,7 +365,9 @@ class Field(Leaf):
 
         model_class._meta.fields[self.name] = self
         model_class._meta.columns[self.db_column] = self
+
         setattr(model_class, name, FieldDescriptor(self))
+        self._is_bound = True
 
     def field_attributes(self):
         return {}
@@ -598,14 +602,12 @@ class ForeignKeyField(IntegerField):
         super(ForeignKeyField, self).__init__(null=null, *args, **kwargs)
 
     def clone_base(self):
-        inst = super(ForeignKeyField, self).clone_base(
+         return super(ForeignKeyField, self).clone_base(
             rel_model=self.rel_model,
+            related_name=self.related_name,
             cascade=self.cascade,
             extra=self.extra,
         )
-        inst.related_name = self.related_name
-        inst.rel_model = self.rel_model
-        return inst
 
     def add_to_class(self, model_class, name):
         self.name = name
@@ -626,6 +628,7 @@ class ForeignKeyField(IntegerField):
 
         setattr(model_class, name, RelationDescriptor(self, self.rel_model))
         setattr(self.rel_model, self.related_name, ReverseRelationDescriptor(self))
+        self._is_bound = True
 
         model_class._meta.rel[self.name] = self
         self.rel_model._meta.reverse_rel[self.related_name] = self
