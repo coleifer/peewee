@@ -369,6 +369,9 @@ class Field(Leaf):
         setattr(model_class, name, FieldDescriptor(self))
         self._is_bound = True
 
+    def get_database(self):
+        return self.model_class._meta.database
+
     def field_attributes(self):
         return {}
 
