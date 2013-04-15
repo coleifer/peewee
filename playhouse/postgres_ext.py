@@ -19,6 +19,10 @@ from psycopg2.extras import register_hstore
 class HStoreField(Field):
     db_field = 'hash'
 
+    def __init__(self, *args, **kwargs):
+        kwargs['index'] = True  # always use an Index
+        super(HStoreField, self).__init__(*args, **kwargs)
+
     def keys(self):
         return fn.akeys(self)
 
@@ -71,6 +75,8 @@ class PostgresqlExtCompiler(QueryCompiler):
     def parse_create_index(self, model_class, fields, unique=False):
         parts = super(PostgresqlExtCompiler, self).parse_create_index(
             model_class, fields, unique)
+        # If this index is on an HStoreField, be sure to specify the
+        # GIST index immediately before the column names.
         if any(map(lambda f: isinstance(f, HStoreField), fields)):
             parts.insert(-1, 'USING GIST')
         return parts
