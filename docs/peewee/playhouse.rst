@@ -169,7 +169,8 @@ Suppose you want to do an atomic update to the house:
 .. code-block:: pycon
 
     >>> f = House.features
-    >>> query = House.update(features=f.update({'bath': '2.5 bath', 'sqft': '1100'}))
+    >>> new_features = House.features.update({'bath': '2.5 bath', 'sqft': '1100'})
+    >>> query = House.update(features=new_features)
     >>> query.where(House.id == h.id).execute()
     1
     >>> h = House.get(House.id == h.id)
