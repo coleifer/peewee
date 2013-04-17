@@ -341,6 +341,7 @@ Field Type            Sqlite              Postgresql          MySQL
 ``ForeignKeyField``   integer             integer             integer
 ``DateField``         date                date                date
 ``TimeField``         time                time                time
+``BlobField``         blob                bytea               blob
 ===================   =================   =================   =================
 
 Some fields take special parameters...
