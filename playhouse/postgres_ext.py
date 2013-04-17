@@ -54,6 +54,9 @@ class HStoreField(Field):
             return Expr(self, OP_HCONTAINS_KEYS, Param(value))
         return Expr(self, OP_HCONTAINS_KEY, value)
 
+    def contains_any(self, *keys):
+        return Expr(self, OP_HCONTAINS_ANY_KEY, Param(value))
+
 
 class UUIDField(Field):
     db_field = 'uuid'
@@ -69,6 +72,7 @@ OP_HUPDATE = 120
 OP_HCONTAINS_DICT = 121
 OP_HCONTAINS_KEYS = 122
 OP_HCONTAINS_KEY = 123
+OP_HCONTAINS_ANY_KEY = 124
 
 
 class PostgresqlExtCompiler(QueryCompiler):
@@ -95,5 +99,6 @@ PostgresqlExtDatabase.register_ops({
     OP_HCONTAINS_DICT: '@>',
     OP_HCONTAINS_KEYS: '?&',
     OP_HCONTAINS_KEY: '?',
+    OP_HCONTAINS_ANY_KEY = '?|',
     OP_HUPDATE: '||',
 })
