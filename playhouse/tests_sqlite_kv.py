@@ -21,6 +21,20 @@ class KeyStoreTestCase(unittest.TestCase):
         del(self.kv['a'])
         self.assertRaises(KeyError, self.kv.__getitem__, 'a')
 
+        self.kv['a'] = 'A'
+        self.kv['c'] = 'C'
+        self.assertEqual(self.kv[self.kv.key << ('a', 'c')], ['A', 'C'])
+
+        self.kv[self.kv.key << ('a', 'c')] = 'X'
+        self.assertEqual(self.kv['a'], 'X')
+        self.assertEqual(self.kv['b'], 1)
+        self.assertEqual(self.kv['c'], 'X')
+
+        del(self.kv[self.kv.key << ('a', 'c')])
+        self.assertRaises(KeyError, self.kv.__getitem__, 'a')
+        self.assertRaises(KeyError, self.kv.__getitem__, 'c')
+        self.assertEqual(self.kv['b'], 1)
+
     def test_container_properties(self):
         self.kv['x'] = 'X'
         self.kv['y'] = 'Y'

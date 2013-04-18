@@ -28,6 +28,9 @@ class KV(Model):
 class KeyStore(object):
     def __init__(self, ordered=False, model=None):
         self.model = model or KV
+        self.key = self.model.key
+        self.value = self.model.value
+
         self._db = self.model._meta.database
         self._compiler = self._db.compiler()
         self._ordered = ordered
@@ -35,20 +38,19 @@ class KeyStore(object):
         self._db.create_table(self.model, True)
 
     def __contains__(self, key):
-        return self.model.select().where(self.model.key == key).exists()
+        return self.model.select().where(self.key == key).exists()
 
     def __len__(self):
         return self.model.select().count()
 
     def convert_expr(self, expr):
         if not isinstance(expr, Leaf):
-            return (self.model.key == expr), True
+            return (self.key == expr), True
         return expr, False
 
     def __getitem__(self, expr):
-        kv = self.model
         converted, is_single = self.convert_expr(expr)
-        query = self.query(kv.value).where(converted)
+        query = self.query(self.value).where(converted)
         result = [pickle.loads(item[0]) for item in query]
         if len(result) == 0 and is_single:
             raise KeyError(expr)
@@ -58,8 +60,8 @@ class KeyStore(object):
 
     def upsert(self, key, value):
         sets, params = self._compiler.parse_field_dict({
-            self.model.key: key,
-            self.model.value: value})
+            self.key: key,
+            self.value: value})
         fields, interp = zip(*sets)
         sql = 'INSERT OR REPLACE INTO %s (%s) VALUES (%s)' % (
             self._compiler.quote(self.model._meta.db_table),
@@ -70,18 +72,19 @@ class KeyStore(object):
     def __setitem__(self, expr, value):
         pickled_value = pickle.dumps(value)
         if isinstance(expr, Leaf):
-            kv = self.model
-            kv.update(**{kv.value: pickled_value}).where(expr).execute()
+            update = {self.value.name: pickled_value}
+            self.model.update(**update).where(expr).execute()
         else:
             self.upsert(expr, pickled_value)
 
-    def __delitem__(self, key):
-        self.model.delete().where(self.model.key == key).execute()
+    def __delitem__(self, expr):
+        converted, _ = self.convert_expr(expr)
+        self.model.delete().where(converted).execute()
 
     def query(self, *select):
         query = self.model.select(*select).tuples()
         if self._ordered:
-            query = query.order_by(self.model.key)
+            query = query.order_by(self.key)
         return query
 
     def __iter__(self):
@@ -89,11 +92,11 @@ class KeyStore(object):
             yield k, pickle.loads(v)
 
     def keys(self):
-        for row in self.query(self.model.key):
+        for row in self.query(self.key):
             yield row[0]
 
     def values(self):
-        for row in self.query(self.model.value):
+        for row in self.query(self.value):
             yield pickle.loads(row[0])
 
     def flush(self):
