@@ -1834,6 +1834,9 @@ class Database(object):
             qc = self.compiler()
             return self.execute_sql(qc.drop_sequence(seq))
 
+    def extract_date(self, date_part, date_field):
+        return fn.EXTRACT(Clause(date_part, R('FROM'), date_field))
+
 
 class SqliteDatabase(Database):
     limit_max = -1
@@ -1857,6 +1860,9 @@ class SqliteDatabase(Database):
     def get_tables(self):
         res = self.execute_sql('select name from sqlite_master where type="table" order by name;')
         return [r[0] for r in res.fetchall()]
+
+    def extract_date(self, date_part, date_field):
+        return fn.date_trunc(date_part, date_field)
 
 
 class PostgresqlDatabase(Database):
