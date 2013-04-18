@@ -23,6 +23,7 @@ __all__ = [
     'BlobField',
     'BooleanField',
     'CharField',
+    'Clause',
     'DateField',
     'DateTimeField',
     'DecimalField',
@@ -304,6 +305,14 @@ class Func(Leaf):
         return dec
 
 fn = Func(None)
+
+class Clause(Leaf):
+    def __init__(self, *pieces):
+        super(Clause, self).__init__()
+        self.pieces = pieces
+
+    def clone_base(self):
+        return Clause(*self.pieces)
 
 
 class FieldDescriptor(object):
@@ -755,6 +764,14 @@ class QueryCompiler(object):
                 exprs.append(parsed)
                 p.extend(params)
             s = '%s(%s)' % (expr.name, ', '.join(exprs))
+        elif isinstance(expr, Clause):
+            p = []
+            exprs = []
+            for piece in expr.pieces:
+                parsed, params = self.parse_expr(piece, alias_map, conv)
+                exprs.append(parsed)
+                p.extend(params)
+            s = ' '.join(exprs)
         elif isinstance(expr, Param):
             s = self.interpolation
             p = [expr.data]

@@ -862,6 +862,14 @@ class SugarTestCase(BasePeeweeTestCase):
         self.assertSelect(sq, 'Sum(users."id") AS baz', [])
 
 
+class CompilerTestCase(BasePeeweeTestCase):
+    def test_clause(self):
+        expr = fn.extract(Clause('year', R('FROM'), Blog.pub_date))
+        sql, params = compiler.parse_expr(expr)
+        self.assertEqual(sql, 'extract(? FROM "pub_date")')
+        self.assertEqual(params, ['year'])
+
+
 #
 # TEST CASE USED TO PROVIDE ACCESS TO DATABASE
 # FOR EXECUTION OF "LIVE" QUERIES
