@@ -99,6 +99,6 @@ PostgresqlExtDatabase.register_ops({
     OP_HCONTAINS_DICT: '@>',
     OP_HCONTAINS_KEYS: '?&',
     OP_HCONTAINS_KEY: '?',
-    OP_HCONTAINS_ANY_KEY = '?|',
+    OP_HCONTAINS_ANY_KEY: '?|',
     OP_HUPDATE: '||',
 })
