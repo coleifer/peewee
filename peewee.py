@@ -102,6 +102,18 @@ if sqlite3:
     sqlite3.register_adapter(datetime.time, str)
     sqlite3.register_converter('decimal', lambda v: decimal.Decimal(v))
 
+SQLITE_DT_FORMATS = (
+    '%Y-%m-%d %H:%M:%S',
+    '%Y-%m-%d %H:%M:%S.%f',
+    '%Y-%m-%d',
+    '%H:%M:%S',
+    '%H:%M:%S.%f',
+    '%H:%M')
+
+def _sqlite_date_part(lookup_type, datetime_string):
+    dt = format_date_time(datetime_string, SQLITE_DT_FORMATS)
+    return getattr(dt, lookup_type)
+
 if psycopg2:
     import psycopg2.extensions
     psycopg2.extensions.register_type(psycopg2.extensions.UNICODE)
@@ -1816,7 +1828,9 @@ class SqliteDatabase(Database):
     def _connect(self, database, **kwargs):
         if not sqlite3:
             raise ImproperlyConfigured('sqlite3 must be installed on the system')
-        return sqlite3.connect(database, **kwargs)
+        conn = sqlite3.connect(database, **kwargs)
+        conn.create_function('date_part', 2, _sqlite_date_part)
+        return conn
 
     def get_indexes_for_table(self, table):
         res = self.execute_sql('PRAGMA index_list(%s);' % self.quote(table))

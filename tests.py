@@ -257,10 +257,21 @@ class CSVRow(TestModel):
 class BlobModel(TestModel):
     data = BlobField()
 
+class Job(TestModel):
+    """A job that can be queued for later execution."""
+    name = CharField()
+
+class JobExecutionRecord(TestModel):
+    """Record of a job having been executed."""
+    # the foreign key is also the primary key to enforce the
+    # constraint that a job can be executed once and only once
+    job = ForeignKeyField(Job, primary_key=True)
+    status = CharField()
+
 
 MODELS = [User, Blog, Comment, Relationship, NullModel, UniqueModel, OrderedModel, Category, UserCategory,
           NonIntModel, NonIntRelModel, DBUser, DBBlog, SeqModelA, SeqModelB, MultiIndexModel, BlogTwo,
-         Parent, Child, Orphan, ChildPet, OrphanPet, BlobModel]
+          Parent, Child, Orphan, ChildPet, OrphanPet, BlobModel, Job, JobExecutionRecord]
 INT = test_db.interpolation
 
 def drop_tables(only=None):
@@ -2096,6 +2107,26 @@ class NonIntPKTestCase(ModelTestCase):
         self.assertEqual([r.id for r in sq], [rni21.id])
 
 
+class PrimaryForeignKeyTestCase(ModelTestCase):
+    requires = [Job, JobExecutionRecord]
+
+    def test_primary_foreign_key(self):
+        # we have one job, unexecuted, and therefore no executed jobs
+        job = Job.create(name='Job One')
+        executed_jobs = Job.select().join(JobExecutionRecord)
+        self.assertEqual([], list(executed_jobs))
+
+        # after execution, we must have one executed job
+        exec_record = JobExecutionRecord.create(job=job, status='success')
+        executed_jobs = Job.select().join(JobExecutionRecord)
+        self.assertEqual([job], list(executed_jobs))
+
+        # we must not be able to create another execution record for the job
+        with self.assertRaises(Exception):
+            JobExecutionRecord.create(job=job, status='success')
+        test_db.rollback()
+
+
 class DBColumnTestCase(ModelTestCase):
     requires = [DBUser, DBBlog]
 
@@ -2399,6 +2430,56 @@ class DatabaseTestCase(BasePeeweeTestCase):
         self.assertTrue(deferred_db.deferred)
 
 
+class SqliteDatePartTestCase(BasePeeweeTestCase):
+    def test_sqlite_date_part(self):
+        dp_db = SqliteDatabase(':memory:')
+        class SqDp(Model):
+            datetime_field = DateTimeField()
+            date_field = DateField()
+            time_field = TimeField()
+
+            class Meta:
+                database = dp_db
+
+            @classmethod
+            def date_query(cls, field, part):
+                return (SqDp
+                        .select(fn.date_part(part, field))
+                        .tuples()
+                        .order_by(SqDp.id))
+
+        SqDp.create_table()
+        datetimes = [
+            datetime.datetime(2000, 1, 2, 3, 4, 5),
+            datetime.datetime(2000, 2, 3, 4, 5, 6),
+        ]
+
+        for d in datetimes:
+            SqDp.create(datetime_field=d, date_field=d.date(),
+                        time_field=d.time())
+
+        for part in ('year', 'month', 'day', 'hour', 'minute', 'second'):
+            for i, dp in enumerate(SqDp.date_query(SqDp.datetime_field, part)):
+                self.assertEqual(dp[0], getattr(datetimes[i], part))
+
+        for part in ('year', 'month', 'day'):
+            for i, dp in enumerate(SqDp.date_query(SqDp.date_field, part)):
+                self.assertEqual(dp[0], getattr(datetimes[i], part))
+
+        for part in ('hour', 'minute', 'second'):
+            for i, dp in enumerate(SqDp.date_query(SqDp.time_field, part)):
+                self.assertEqual(dp[0], getattr(datetimes[i], part))
+
+        # ensure that the where clause works
+        query = SqDp.select().where(fn.date_part('year', SqDp.datetime_field) == 2000)
+        self.assertEqual(query.count(), 2)
+
+        query = SqDp.select().where(fn.date_part('month', SqDp.datetime_field) == 1)
+        self.assertEqual(query.count(), 1)
+        query = SqDp.select().where(fn.date_part('month', SqDp.datetime_field) == 3)
+        self.assertEqual(query.count(), 0)
+
+
 class ConnectionStateTestCase(BasePeeweeTestCase):
     def test_connection_state(self):
         conn = test_db.get_conn()
@@ -2512,40 +2593,3 @@ if test_db.sequences:
 
 elif TEST_VERBOSITY > 0:
     print_('Skipping "sequence" tests')
-
-
-class Job(TestModel):
-    """A job that can be queued for later execution."""
-    name = CharField()
-
-class JobExecutionRecord(TestModel):
-    """Record of a job having been executed."""
-    # the foreign key is also the primary key to enforce the
-    # constraint that a job can be executed once and only once
-    job = ForeignKeyField(Job, primary_key=True)
-    status = CharField()
-
-class PrimaryForeignKeyTestCase(unittest.TestCase):
-    def setUp(self):
-        Job.create_table()
-        JobExecutionRecord.create_table()
-
-    def tearDown(self):
-        JobExecutionRecord.drop_table()
-        Job.drop_table()
-
-    def test_primary_foreign_key(self):
-        # we have one job, unexecuted, and therefore no executed jobs
-        job = Job.create(name='Job One')
-        executed_jobs = Job.select().join(JobExecutionRecord)
-        self.assertEqual([], list(executed_jobs))
-
-        # after execution, we must have one executed job
-        exec_record = JobExecutionRecord.create(job=job, status='success')
-        executed_jobs = Job.select().join(JobExecutionRecord)
-        self.assertEqual([job], list(executed_jobs))
-
-        # we must not be able to create another execution record for the job
-        with self.assertRaises(Exception):
-            JobExecutionRecord.create(job=job, status='success')
-        test_db.rollback()
