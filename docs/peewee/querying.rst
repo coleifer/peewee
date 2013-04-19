@@ -257,7 +257,7 @@ In order to negate an expression, use the bitwise "invert" operator:
 
 .. code-block:: python
 
-    >>> staff_users = User.select().where(is_staff=True)
+    >>> staff_users = User.select().where(User.is_staff==True)
     >>> Tweet.select().where(
     ...     ~(Tweet.user << staff_users)
     ... )
