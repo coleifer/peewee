@@ -2105,8 +2105,14 @@ class DateTimeExtractTestCase(ModelTestCase):
         self.assertDates(NullModel.select(f.second), [5, 6, 7])
 
     def test_extract_datetime_where(self):
-        self.test_extract_date_where(NullModel.datetime_field)
-        self.test_extract_time_where(NullModel.datetime_field)
+        f = NullModel.datetime_field
+        self.test_extract_date_where(f)
+        self.test_extract_time_where(f)
+
+        sq = NullModel.select(NullModel.id)
+        self.assertPKs(sq.where((f.year == 2002) & (f.month == 2)), [1])
+        self.assertPKs(sq.where((f.year == 2002) & (f.hour == 4)), [1, 2])
+        self.assertPKs(sq.where((f.year == 2002) & (f.minute == 5)), [1])
 
     def test_extract_date_where(self, f=None):
         if f is None:
