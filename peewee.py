@@ -505,6 +505,11 @@ def format_date_time(value, formats, post_process=None):
             pass
     return value
 
+def _date_part(date_part):
+    def dec(self):
+        return self.model_class._meta.database.extract_date(date_part, self)
+    return dec
+
 class DateTimeField(Field):
     db_field = 'datetime'
 
@@ -521,6 +526,13 @@ class DateTimeField(Field):
         if value and isinstance(value, basestring):
             return format_date_time(value, self.attributes['formats'])
         return value
+
+    year = property(_date_part('year'))
+    month = property(_date_part('month'))
+    day = property(_date_part('day'))
+    hour = property(_date_part('hour'))
+    minute = property(_date_part('minute'))
+    second = property(_date_part('second'))
 
 class DateField(Field):
     db_field = 'date'
@@ -541,6 +553,10 @@ class DateField(Field):
         elif value and isinstance(value, datetime.datetime):
             return value.date()
         return value
+
+    year = property(_date_part('year'))
+    month = property(_date_part('month'))
+    day = property(_date_part('day'))
 
 class TimeField(Field):
     db_field = 'time'
@@ -563,6 +579,10 @@ class TimeField(Field):
         elif value and isinstance(value, datetime.datetime):
             return value.time()
         return value
+
+    hour = property(_date_part('hour'))
+    minute = property(_date_part('minute'))
+    second = property(_date_part('second'))
 
 class BooleanField(Field):
     db_field = 'bool'
@@ -1862,7 +1882,7 @@ class SqliteDatabase(Database):
         return [r[0] for r in res.fetchall()]
 
     def extract_date(self, date_part, date_field):
-        return fn.date_trunc(date_part, date_field)
+        return fn.date_part(date_part, date_field)
 
 
 class PostgresqlDatabase(Database):
