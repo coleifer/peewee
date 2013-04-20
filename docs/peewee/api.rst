@@ -1051,7 +1051,7 @@ Query Types
         Performs the query
 
 
-.. py:func:: prefetch(sq, *subqueries)
+.. py:function:: prefetch(sq, *subqueries)
 
     :param sq: :py:class:`SelectQuery` instance
     :param subqueries: one or more :py:class:`SelectQuery` instances to prefetch for ``sq``. You

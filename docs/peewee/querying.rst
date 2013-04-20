@@ -105,7 +105,7 @@ Comparison       Meaning
 ================ =======================================
 
 
-.. _custom-lookups
+.. _custom-lookups:
 
 Adding user-defined operators
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -214,7 +214,7 @@ Here is what the SQL looks like if we use the ``join`` method:
         t2.is_staff = ?
 
 
-.. _self-joins
+.. _self-joins:
 
 Self-joins
 ^^^^^^^^^^

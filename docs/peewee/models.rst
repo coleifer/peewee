@@ -108,8 +108,7 @@ You can use the :py:meth:`Model.create` classmethod:
         >>> user = User.create(username='charlie')
         >>> tweet = Tweet.create(
         ...     message='http://www.youtube.com/watch?v=xdhLQCYQ-nQ',
-        ...     user=user
-        ... )
+        ...     user=user)
 
         >>> tweet.user.username
         'charlie'
@@ -420,7 +419,13 @@ To query what classes a given student is enrolled in:
 
 .. code-block:: python
 
-    for course in Course.select().join(StudentCourse).join(Student).where(Student.name == 'da vinci'):
+    courses = (Course
+        .select()
+        .join(StudentCourse)
+        .join(Student)
+        .where(Student.name == 'da vinci'))
+
+    for course in courses:
         print course.name
 
 To efficiently iterate over a many-to-many relation, i.e., list all students
@@ -429,9 +434,11 @@ and "precompute" the Student and Course:
 
 .. code-block:: python
 
-    query = StudentCourse.select(
-        StudentCourse, Student, Course)
-    ).join(Course).switch(StudentCourse).join(Student)
+    query = (StudentCourse
+        .select(StudentCourse, Student, Course)
+        .join(Course)
+        .switch(StudentCourse)
+        .join(Student))
 
 To print a list of students and their courses you might do the following:
 
@@ -491,6 +498,41 @@ for the first time, pass in ``force_insert = True``:
     Any foreign keys to a model with a non-integer primary key will have the
     ``ForeignKeyField`` use the same underlying storage type as the primary key
     they are related to.
+
+
+DateTimeField, DateField and TimeField
+--------------------------------------
+
+The three fields devoted to working with dates and times have special properties
+which allow access to things like the year, month, hour, etc.
+
+:py:class:`DateField` has properties for:
+
+* ``year``
+* ``month``
+* ``day``
+
+:py:class:`TimeField` has properties for:
+
+* ``hour``
+* ``minute``
+* ``second``
+
+:py:class:`DateTimeField` has all of the above.
+
+These properties can be used just like any other expression.  Let's say we have
+an events calendar and want to hi-lite all the days in the current month that
+have an event attached:
+
+.. code-block:: python
+
+    # Get the current time.
+    now = datetime.datetime.now()
+
+    # Get days that have events for the current month.
+    Event.select(Event.event_date.day.alias('day')).where(
+        (Event.event_date.year == now.year) &
+        (Event.event_date.month == now.month))
 
 
 .. _custom-fields:
