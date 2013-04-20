@@ -257,7 +257,7 @@ can also be used to create joins on models not related by :py:class:`ForeignKeyF
 Performing advanced queries
 ---------------------------
 
-To create arbitrarily complex queries, simply use python's bitwise "and" 
+To create arbitrarily complex queries, simply use python's bitwise "and"
 and "or" operators:
 
 .. code-block:: python
