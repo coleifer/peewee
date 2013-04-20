@@ -12,13 +12,13 @@ Models
 
 .. py:class:: Model(**kwargs)
 
-    Models provide a 1-to-1 mapping to database tables.  Subclasses of ``Model``
-    declare any number of :py:class:`Field` instances as class attributes.  These
-    fields correspond to columns on the table.
+    Models provide a 1-to-1 mapping to database tables.  Subclasses of
+    ``Model`` declare any number of :py:class:`Field` instances as class
+    attributes.  These fields correspond to columns on the table.
 
-    Table-level operations, such as select/update/insert/delete queries, are implemented
-    as classmethods.  Row-level operations such as saving or deleting individual instances
-    are implemented as instancemethods.
+    Table-level operations, such as select/update/insert/delete queries, are
+    implemented as classmethods.  Row-level operations such as saving or
+    deleting individual instances are implemented as instancemethods.
 
     :param kwargs: Initialize the model, assigning the given key/values to the
         appropriate fields.
@@ -36,39 +36,46 @@ Models
 
     .. py:classmethod:: select(*selection)
 
-        :param selection: a list of model classes, field instances, functions or :ref:`expressions <expressions>`
+        :param selection: a list of model classes, field instances, functions
+          or :ref:`expressions <expressions>`
         :rtype: a :py:class:`SelectQuery` for the given ``Model``
 
         Examples of selecting all columns (default):
 
         .. code-block:: python
 
-            >>> User.select().where(User.active == True).order_by(User.username)
+            User.select().where(User.active == True).order_by(User.username)
 
-        Example of selecting all columns on ``Tweet`` *and* the parent model, ``User``.  When
-        the ``user`` foreign key is accessed on a ``tweet`` instance no additional query will
-        be needed:
+        Example of selecting all columns on ``Tweet`` *and* the parent model,
+        ``User``.  When the ``user`` foreign key is accessed on a ``Tweet``
+        instance no additional query will be needed:
 
         .. code-block:: python
 
-            >>> Tweet.select(Tweet, User).join(User).order_by(Tweet.created_date.desc())
+            (Tweet
+              .select(Tweet, User)
+              .join(User)
+              .order_by(Tweet.created_date.desc()))
 
     .. py:classmethod:: update(**update)
 
         :param update: mapping of field-name to expression
         :rtype: an :py:class:`UpdateQuery` for the given ``Model``
 
-        Example showing users being marked inactive if their registration expired:
+        Example showing users being marked inactive if their registration
+        expired:
 
         .. code-block:: python
 
-            >>> q = User.update(active=False).where(User.registration_expired == True)
-            >>> q.execute() # <-- execute the query
+            q = User.update(active=False).where(User.registration_expired == True)
+            q.execute()  # execute the query, updating the database.
 
         Example showing an atomic update:
 
-            >>> q = PageView.update(count=PageView.count + 1).where(PageView.url == url)
-            >>> q.execute() # <-- execute the query
+        .. code-block:: python
+
+            q = PageView.update(count=PageView.count + 1).where(PageView.url == url)
+            q.execute()  # execute the query, updating the database.
 
     .. py:classmethod:: insert(**insert)
 
@@ -79,9 +86,8 @@ Models
 
         .. code-block:: python
 
-            >>> q = User.insert(username='admin', active=True, registration_expired=False)
-            >>> q.execute()
-            1
+            q = User.insert(username='admin', active=True, registration_expired=False)
+            q.execute()  # perform the insert.
 
     .. py:classmethod:: delete()
 
@@ -91,12 +97,12 @@ Models
 
         .. code-block:: python
 
-            >>> q = User.delete().where(User.active == False)
-            >>> q.execute() # <-- execute it
+            q = User.delete().where(User.active == False)
+            q.execute()  # remove the rows
 
         .. warning::
-            This method performs a delete on the *entire table*.  To delete a single
-            instance, see :py:meth:`Model.delete_instance`.
+            This method performs a delete on the *entire table*.  To delete a
+            single instance, see :py:meth:`Model.delete_instance`.
 
     .. py:classmethod:: raw(sql, *params)
 
@@ -108,9 +114,9 @@ Models
 
         .. code-block:: python
 
-            >>> q = User.raw('select id, username from users')
-            >>> for user in q:
-            ...     print user.id, user.username
+            q = User.raw('select id, username from users')
+            for user in q:
+                print user.id, user.username
 
         .. note::
             Generally the use of ``raw`` is reserved for those cases where you
@@ -122,11 +128,12 @@ Models
         :param attributes: key/value pairs of model attributes
         :rtype: a model instance with the provided attributes
 
-        Example showing the creation of a user (a row will be added to the database):
+        Example showing the creation of a user (a row will be added to the
+        database):
 
         .. code-block:: python
 
-            >>> user = User.create(username='admin', password='test')
+            user = User.create(username='admin', password='test')
 
         .. note::
             The create() method is a shorthand for instantiate-then-save.
@@ -137,24 +144,24 @@ Models
         :param kwargs: a mapping of column + lookup to value, e.g. "age__gt=55"
         :rtype: :py:class:`Model` instance or raises ``DoesNotExist`` exception
 
-        Get a single row from the database that matches the given query.  Raises a
-        ``<model-class>.DoesNotExist`` if no rows are returned:
+        Get a single row from the database that matches the given query.
+        Raises a ``<model-class>.DoesNotExist`` if no rows are returned:
 
         .. code-block:: python
 
-            >>> user = User.get(User.username == username, User.password == password)
+            user = User.get(User.username == username, User.password == password)
 
-        This method is also expose via the :py:class:`SelectQuery`, though it takes
-        no parameters:
+        This method is also exposed via the :py:class:`SelectQuery`, though it
+        takes no parameters:
 
         .. code-block:: python
 
-            >>> active = User.select().where(User.active == True)
-            >>> try:
-            ...     users = active.where(User.username == username, User.password == password)
-            ...     user = users.get()
-            ... except User.DoesNotExist:
-            ...     user = None
+            active = User.select().where(User.active == True)
+            try:
+                users = active.where(User.username == username, User.password == password)
+                user = users.get()
+            except User.DoesNotExist:
+                user = None
 
         .. note::
             The ``get()`` method is shorthand for selecting with a limit of 1. It
@@ -181,7 +188,7 @@ Models
 
         .. code-block:: python
 
-            >>> CachedObj.get_or_create(key=key, val=some_val)
+            CachedObj.get_or_create(key=key, val=some_val)
 
     .. py:classmethod:: filter(*args, **kwargs)
 
@@ -199,7 +206,7 @@ Models
 
         .. code-block:: python
 
-            >>> sq = Entry.filter(blog__title='Some Blog')
+            sq = Entry.filter(blog__title='Some Blog')
 
     .. py:classmethod:: alias()
 
@@ -211,17 +218,18 @@ Models
 
         .. code-block:: pycon
 
-            >>> Parent = Category.alias()
-            >>> sq = Category.select(Category, Parent).join(
-            ...     Parent, on=(Category.parent == Parent.id)
-            >>> ).where(Parent.name == 'parent category')
+            Parent = Category.alias()
+            sq = (Category
+              .select(Category, Parent)
+              .join(Parent, on=(Category.parent == Parent.id))
+              .where(Parent.name == 'parent category'))
 
         .. note:: You must explicitly specify which columns to join on
 
     .. py:classmethod:: create_table([fail_silently=False])
 
-        :param bool fail_silently: If set to ``True``, the method will check for the existence of the table
-            before attempting to create.
+        :param bool fail_silently: If set to ``True``, the method will check
+          for the existence of the table before attempting to create.
 
         Create the table for the given model.
 
@@ -229,19 +237,19 @@ Models
 
         .. code-block:: python
 
-            >>> database.connect()
-            >>> SomeModel.create_table() # <-- creates the table for SomeModel
+            database.connect()
+            SomeModel.create_table()  # Execute the create table query.
 
     .. py:classmethod:: drop_table([fail_silently=False])
 
-        :param bool fail_silently: If set to ``True``, the query will check for the existence of
-            the table before attempting to remove.
+        :param bool fail_silently: If set to ``True``, the query will check for
+          the existence of the table before attempting to remove.
 
         Drop the table for the given model.
 
         .. note::
-            Cascading deletes are not handled by this method, nor is the removal
-            of any constraints.
+            Cascading deletes are not handled by this method, nor is the
+            removal of any constraints.
 
     .. py:classmethod:: table_exists()
 
