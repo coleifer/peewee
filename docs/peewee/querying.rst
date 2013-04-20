@@ -18,7 +18,7 @@ one clause at a time.  This way, rather complex queries are possible.
 
 Here is a barebones select query:
 
-.. code-block:: python
+.. code-block:: pycon
 
     >>> user_q = User.select() # <-- query is not executed
     >>> user_q
@@ -29,7 +29,7 @@ Here is a barebones select query:
 
 We can build up the query by adding some clauses to it:
 
-.. code-block:: python
+.. code-block:: pycon
 
     >>> user_q = user_q.where(User.username << ['admin', 'editor'])
     >>> user_q = user_q.order_by(User.username.desc())
@@ -42,26 +42,30 @@ Looking at some simple queries
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Get active users:
-    .. code-block:: python
 
-        User.select().where(User.active==True)
+.. code-block:: python
+
+    User.select().where(User.active == True)
 
 Get users who are either staff or superusers:
-    .. code-block:: python
 
-        User.select().where((User.is_staff==True) | (User.is_superuser==True))
+.. code-block:: python
+
+    User.select().where(
+        (User.is_staff == True) | (User.is_superuser == True))
 
 Get tweets by user named "charlie":
-    .. code-block:: python
 
-        Tweet.select().join(User).where(User.username=='charlie')
+.. code-block:: python
+
+    Tweet.select().join(User).where(User.username == 'charlie')
 
 Get tweets by staff or superusers (assumes FK relationship):
-    .. code-block:: python
 
-        Tweet.select().join(User).where(
-            (User.is_staff==True) | (User.is_superuser==True)
-        )
+.. code-block:: python
+
+    Tweet.select().join(User).where(
+        (User.is_staff == True) | (User.is_superuser == True))
 
 .. _where_clause:
 
@@ -69,104 +73,14 @@ Where clause
 ------------
 
 All queries except :py:class:`InsertQuery` support the ``where()`` method.  If you are
-familiar with Django's ORM, it is analagous to the ``filter()`` method.
+familiar with Django's ORM, it is analagous to the ``filter()`` method.  Inside the
+where clause, you will place one or more :ref:`expressions`.
 
 .. code-block:: python
 
-    >>> User.select().where(User.is_staff == True)
+    User.select().where(User.is_staff == True)
 
 .. note:: ``User.select()`` is equivalent to ``SelectQuery(User)``.
-
-Joining
-^^^^^^^
-
-You can join on tables related to one another by :py:class:`ForeignKeyField`.  The :py:meth:`~Query.join`
-method acts on the :py:class:`Model` that is the current "query context".
-This is either:
-
-* the model the query class was initialized with
-* the model most recently JOINed on
-
-There are three types of joins by default:
-
-* ``JOIN_INNER`` (default)
-* ``JOIN_LEFT_OUTER``
-* ``JOIN_FULL``
-
-Here is an example using JOINs:
-
-.. code-block:: python
-
-    >>> User.select().join(Blog).where(User.is_staff == True, Blog.status == LIVE)
-
-The above query grabs all staff users who have a blog that is "LIVE".  This next does the
-inverse: grabs all the blogs that are live whose author is a staffer:
-
-.. code-block:: python
-
-    >>> Blog.select().join(User).where(User.is_staff == True, Blog.status == LIVE)
-
-Another way to write the above query would be to use a subquery:
-
-.. code-block:: python
-
-    >>> staff = User.select().where(User.is_staff == true)
-    >>> Blog.select().where(Blog.status == LIVE, Blog.user << staff)
-
-The above bears a little bit of explanation.  First off the SQL generated will
-not perform any explicit ``JOIN`` - it will rather use a subquery in the ``WHERE``
-clause:
-
-.. code-block:: sql
-
-    -- translates roughly to --
-    SELECT t1.* FROM blog AS t1
-    WHERE (
-        t1.status = ? AND
-        t1.user_id IN (
-            SELECT t2.id FROM user AS t2 WHERE t2.is_staff = ?
-        )
-    )
-
-And here it is using joins:
-
-.. code-block:: sql
-
-    -- and here it would be if using joins --
-    SELECT t1.* FROM blog AS t1
-    INNER JOIN user AS t2
-        ON t1.user_id = t2.id
-    WHERE
-        t1.status = ? AND
-        t2.is_staff = ?
-
-
-.. _self-joins
-
-Self-joins
-^^^^^^^^^^
-
-Suppose you have some models organized in a self-referential hierarchy:
-
-.. code-block:: python
-
-    class Category(Model):
-        name = CharField()
-        parent = ForeignKeyField('self', null=True)
-
-If you want to do a self-join you will need to use the :py:meth:`Model.alias` method:
-
-.. code-block:: python
-
-    Parent = Category.alias()
-
-    # select all categories where the parent is named "Parent Category"
-    Category.select().join(Parent, on=(Category.parent == Parent.id)).where(
-        Parent.name == 'Parent Category'
-    )
-
-.. note:: You must explicitly specify how to construct the join when doing a self-join
-
 
 .. _column-lookups:
 
@@ -233,19 +147,124 @@ For more examples check out the source to the ``playhouse.postgresql_ext``
 module, as it contains numerous operators specific to postgresql's hstore.
 
 
-Performing advanced queries
----------------------------
+Joining Tables
+--------------
 
-As you may have noticed, all the examples up to now have shown queries that
-combine multiple clauses with "AND".  To create arbitrarily complex queries,
-simply use python's bitwise "and" and "or" operators:
+You can join on tables related to one another by :py:class:`ForeignKeyField`.  The :py:meth:`~Query.join`
+method acts on the :py:class:`Model` that is the current "query context".
+This is either:
+
+* the model the query class was initialized with
+* the model most recently JOINed on
+
+There are three types of joins by default:
+
+* ``JOIN_INNER`` (default)
+* ``JOIN_LEFT_OUTER``
+* ``JOIN_FULL``
+
+Here are some examples:
 
 .. code-block:: python
 
-    >>> sq = User.select().where(
-    ...     (User.is_staff == True) |
-    ...     (User.is_superuser == True)
-    ... )
+    User.select().join(Blog).where(
+        (User.is_staff == True) & (Blog.status == LIVE))
+
+The above query grabs all staff users who have a blog that is "LIVE".  This next does the
+inverse: grabs all the blogs that are live whose author is a staffer:
+
+.. code-block:: python
+
+    Blog.select().join(User).where(
+        (User.is_staff == True) & (Blog.status == LIVE))
+
+Another way to write the above query would be to use a subquery:
+
+.. code-block:: python
+
+    staff = User.select().where(User.is_staff == True)
+    Blog.select().where(
+        (Blog.status == LIVE) & (Blog.user << staff))
+
+The above bears a little bit of explanation.  First off the SQL generated will
+not perform any explicit ``JOIN`` - it will rather use a subquery in the ``WHERE``
+clause:
+
+.. code-block:: sql
+
+    -- translates roughly to --
+    SELECT t1.* FROM blog AS t1
+    WHERE (
+        t1.status = ? AND
+        t1.user_id IN (
+            SELECT t2.id FROM user AS t2 WHERE t2.is_staff = ?
+        )
+    )
+
+Here is what the SQL looks like if we use the ``join`` method:
+
+.. code-block:: sql
+
+    -- and here it would be if using joins --
+    SELECT t1.* FROM blog AS t1
+    INNER JOIN user AS t2
+        ON t1.user_id = t2.id
+    WHERE
+        t1.status = ? AND
+        t2.is_staff = ?
+
+
+.. _self-joins
+
+Self-joins
+^^^^^^^^^^
+
+Suppose you have some models organized in a self-referential hierarchy:
+
+.. code-block:: python
+
+    class Category(Model):
+        name = CharField()
+        parent = ForeignKeyField('self', null=True)
+
+If you want to do a self-join you will need to use the :py:meth:`Model.alias` method:
+
+.. code-block:: python
+
+    Parent = Category.alias()
+
+    # select all categories where the parent is named "Parent Category"
+    Category.select().join(Parent, on=(Category.parent == Parent.id)).where(
+        Parent.name == 'Parent Category')
+
+.. note:: You must explicitly specify how to construct the join when doing a self-join
+
+.. _non-fk-joins:
+
+Joining on Unrelated Models or Conditions other than Equality
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+It is possible to use peewee's rich expressions to specify join conditions.  This
+can also be used to create joins on models not related by :py:class:`ForeignKeyField`.
+
+.. code-block:: python
+
+    # No explicit foreign key between these models.
+    OutboundShipment.select().join(InboundShipment, on=(
+        OutboundShipment.barcode == InboundShipment.barcode))
+
+
+Performing advanced queries
+---------------------------
+
+To create arbitrarily complex queries, simply use python's bitwise "and" 
+and "or" operators:
+
+.. code-block:: python
+
+    sq = User.select().where(
+        (User.is_staff == True) |
+        (User.is_superuser == True))
 
 The ``WHERE`` clause will look something like:
 
@@ -257,10 +276,9 @@ In order to negate an expression, use the bitwise "invert" operator:
 
 .. code-block:: python
 
-    >>> staff_users = User.select().where(User.is_staff==True)
-    >>> Tweet.select().where(
-    ...     ~(Tweet.user << staff_users)
-    ... )
+    staff_users = User.select().where(User.is_staff == True)
+    Tweet.select().where(
+        ~(Tweet.user << staff_users))
 
 This query generates roughly the following SQL:
 
@@ -269,17 +287,15 @@ This query generates roughly the following SQL:
     SELECT t1.* FROM blog AS t1
     WHERE
         NOT t1.user_id IN (
-            SELECT t2.id FROM user AS t2 WHERE t2.is_staff = ?
-        )
+            SELECT t2.id FROM user AS t2 WHERE t2.is_staff = ?)
 
 Rather complex lookups are possible:
 
 .. code-block:: python
 
-    >>> sq = User.select().where(
-    ...     ((User.is_staff == True) | (User.is_superuser == True)) &
-    ...     (User.join_date >= datetime(2009, 1, 1)
-    ... )
+    sq = User.select().where(
+        ((User.is_staff == True) | (User.is_superuser == True)) &
+        (User.join_date >= datetime(2009, 1, 1))
 
 This generates roughly the following SQL:
 
@@ -288,8 +304,7 @@ This generates roughly the following SQL:
     SELECT * FROM user
     WHERE (
         (is_staff = ? OR is_superuser = ?) AND
-        (join_date >= ?)
-    )
+        (join_date >= ?))
 
 
 Other types of comparisons
@@ -311,8 +326,7 @@ than "desired" (maybe you want to find out who may be looking for a raise)?
 .. code-block:: python
 
     WorkerProfile.select().where(
-        WorkerProfile.salary < WorkerProfile.desired
-    )
+        WorkerProfile.salary < WorkerProfile.desired)
 
 We can also create expressions, like to find employees who might not be getting
 paid enough based on their tenure:
@@ -320,8 +334,7 @@ paid enough based on their tenure:
 .. code-block:: python
 
     WorkerProfile.select().where(
-        WorkerProfile.salary < (WorkerProfile.tenure * 1000) + 40000
-    )
+        WorkerProfile.salary < (WorkerProfile.tenure * 1000) + 40000)
 
 
 Atomic updates
@@ -333,8 +346,7 @@ are counting pageviews in a special table:
 .. code-block:: python
 
     PageView.update(count=PageView.count + 1).where(
-        PageView.url == request.url
-    )
+        PageView.url == request.url)
 
 
 The "fn" helper
@@ -407,7 +419,8 @@ the users with the date of their most recent tweet:
 
 .. code-block:: python
 
-    query = User.select().annotate(Tweet, fn.Max(Tweet.created_date).alias('latest'))
+    query = User.select().annotate(
+        Tweet, fn.Max(Tweet.created_date).alias('latest'))
 
 Conversely, sometimes you want to perform an aggregate query that returns a
 scalar value, like the "max id".  Queries like this can be executed by using
@@ -427,18 +440,22 @@ Selecting users and counts of tweets:
 
 .. code-block:: python
 
-    >>> users = User.select(User, fn.Count(Tweet.id).alias('count')).join(Tweet).group_by(User)
-    >>> for user in users:
-    ...     print user.username, 'posted', user.count, 'tweets'
+    users = (User
+        .select(User, fn.Count(Tweet.id).alias('count'))
+        .join(Tweet)
+        .group_by(User))
+
+    for user in users:
+        print user.username, 'posted', user.count, 'tweets'
 
 
 This functionality can also be used as part of the ``WHERE`` or ``HAVING`` clauses:
 
-.. code-block:: python
+.. code-block:: pycon
 
     >>> a_users = User.select().where(fn.Lower(fn.Substr(User.username, 1, 1)) == 'a')
     >>> for user in a_users:
-    ...    print user.username
+    ...   print user.username
 
     alpha
     Alton
@@ -523,8 +540,7 @@ tweets.  Instead of doing N queries, we can do 2 instead:
     SELECT t1.id, t1.message, t1.user_id
     FROM tweet AS t1
     WHERE t1.user_id IN (
-        SELECT t2.id FROM users AS t2
-    )
+        SELECT t2.id FROM users AS t2)
 
 Peewee can evaluate both queries and "prefetch" the tweets for each user, storing
 them in an attribute on the user model.  To do this, use the :py:func:`prefetch`
@@ -579,10 +595,10 @@ relationships arbitrarily deep:
 Speeding up simple select queries
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Simple select queries can get a performance boost (especially when iterating over large
+Complex select queries can get a performance boost (especially when iterating over large
 result sets) by calling :py:meth:`~SelectQuery.naive`.  This method simply patches all
-attributes directly from the cursor onto the model.  For simple queries this should have
-no noticeable impact.  The main difference is when multiple tables are queried, as in the
+attributes directly from the cursor onto the model.  For simple queries this will have
+no noticeable impact.  The *only* difference is when multiple tables are queried, as in the
 previous example:
 
 .. code-block:: python
@@ -628,7 +644,7 @@ method.
 To get a better idea of how querying works let's look at some example queries
 and their return values:
 
-.. code-block:: python
+.. code-block:: pycon
 
     >>> dq = User.delete().where(User.active == False) # <-- returns a DeleteQuery
     >>> dq
