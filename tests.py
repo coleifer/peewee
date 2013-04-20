@@ -2053,6 +2053,96 @@ class FieldTypeTestCase(ModelTestCase):
         self.assertEqual(res.id, blob.id)
 
 
+class DateTimeExtractTestCase(ModelTestCase):
+    requires = [NullModel]
+
+    test_datetimes = [
+        datetime.datetime(2001, 1, 2, 3, 4, 5),
+        datetime.datetime(2002, 2, 3, 4, 5, 6),
+        # overlap on year and hour with previous
+        datetime.datetime(2002, 3, 4, 4, 6, 7),
+    ]
+    datetime_parts = ['year', 'month', 'day', 'hour', 'minute', 'second']
+    date_parts = datetime_parts[:3]
+    time_parts = datetime_parts[3:]
+
+    def setUp(self):
+        super(DateTimeExtractTestCase, self).setUp()
+
+        self.nms = []
+        for dt in self.test_datetimes:
+            self.nms.append(NullModel.create(
+                datetime_field=dt,
+                date_field=dt.date(),
+                time_field=dt.time()))
+
+    def assertDates(self, sq, expected):
+        sq = sq.tuples().order_by(NullModel.id)
+        self.assertEqual(list(sq), [(e,) for e in expected])
+
+    def assertPKs(self, sq, idxs):
+        sq = sq.tuples().order_by(NullModel.id)
+        self.assertEqual(list(sq), [(self.nms[i].id,) for i in idxs])
+
+    def test_extract_datetime(self):
+        self.test_extract_date(NullModel.datetime_field)
+        self.test_extract_time(NullModel.datetime_field)
+
+    def test_extract_date(self, f=None):
+        if f is None:
+            f = NullModel.date_field
+
+        self.assertDates(NullModel.select(f.year), [2001, 2002, 2002])
+        self.assertDates(NullModel.select(f.month), [1, 2, 3])
+        self.assertDates(NullModel.select(f.day), [2, 3, 4])
+
+    def test_extract_time(self, f=None):
+        if f is None:
+            f = NullModel.time_field
+
+        self.assertDates(NullModel.select(f.hour), [3, 4, 4])
+        self.assertDates(NullModel.select(f.minute), [4, 5, 6])
+        self.assertDates(NullModel.select(f.second), [5, 6, 7])
+
+    def test_extract_datetime_where(self):
+        self.test_extract_date_where(NullModel.datetime_field)
+        self.test_extract_time_where(NullModel.datetime_field)
+
+    def test_extract_date_where(self, f=None):
+        if f is None:
+            f = NullModel.date_field
+
+        sq = NullModel.select(NullModel.id)
+        self.assertPKs(sq.where(f.year == 2001), [0])
+        self.assertPKs(sq.where(f.year == 2002), [1, 2])
+        self.assertPKs(sq.where(f.year == 2003), [])
+
+        self.assertPKs(sq.where(f.month == 1), [0])
+        self.assertPKs(sq.where(f.month > 1), [1, 2])
+        self.assertPKs(sq.where(f.month == 4), [])
+
+        self.assertPKs(sq.where(f.day == 2), [0])
+        self.assertPKs(sq.where(f.day > 2), [1, 2])
+        self.assertPKs(sq.where(f.day == 5), [])
+
+    def test_extract_time_where(self, f=None):
+        if f is None:
+            f = NullModel.time_field
+
+        sq = NullModel.select(NullModel.id)
+        self.assertPKs(sq.where(f.hour == 3), [0])
+        self.assertPKs(sq.where(f.hour == 4), [1, 2])
+        self.assertPKs(sq.where(f.hour == 5), [])
+
+        self.assertPKs(sq.where(f.minute == 4), [0])
+        self.assertPKs(sq.where(f.minute > 4), [1, 2])
+        self.assertPKs(sq.where(f.minute == 7), [])
+
+        self.assertPKs(sq.where(f.second == 5), [0])
+        self.assertPKs(sq.where(f.second > 5), [1, 2])
+        self.assertPKs(sq.where(f.second == 8), [])
+
+
 class UniqueTestCase(ModelTestCase):
     requires = [UniqueModel, MultiIndexModel]
 
