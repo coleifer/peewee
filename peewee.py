@@ -145,6 +145,7 @@ OP_IN = 26
 OP_IS = 27
 OP_LIKE = 28
 OP_ILIKE = 29
+OP_BETWEEN = 30
 
 DJANGO_MAP = {
     'eq': OP_EQ,
@@ -410,6 +411,9 @@ class Field(Leaf):
 
     def __hash__(self):
         return hash(self.name + '.' + self.model_class.__name__)
+
+    def between(self, low, high):
+        return Expr(self, OP_BETWEEN, Clause(low, R('AND'), high))
 
 
 class IntegerField(Field):
@@ -720,6 +724,7 @@ class QueryCompiler(object):
         OP_IS: 'IS',
         OP_LIKE: 'LIKE',
         OP_ILIKE: 'ILIKE',
+        OP_BETWEEN: 'BETWEEN',
         OP_ADD: '+',
         OP_SUB: '-',
         OP_MUL: '*',

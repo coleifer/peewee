@@ -2052,6 +2052,12 @@ class FieldTypeTestCase(ModelTestCase):
         res = BlobModel.get(BlobModel.data == binary_data)
         self.assertEqual(res.id, blob.id)
 
+    def test_between(self):
+        field = NullModel.int_field
+        self.assertNM(field.between(1, 2), ['c1', 'c2'])
+        self.assertNM(field.between(2, 3), ['c2', 'c3'])
+        self.assertNM(field.between(5, 300), [])
+
 
 class DateTimeExtractTestCase(ModelTestCase):
     requires = [NullModel]

@@ -332,6 +332,18 @@ Fields
 
         A template for generating the SQL for this field
 
+    .. py:attribute:: _is_bound
+
+        Boolean flag indicating if the field is attached to a model class.
+
+    .. py:attribute:: model_class
+
+        The model the field belongs to. *Only applies to bound fields.*
+
+    .. py:attribute:: name
+
+        The name of the field. *Only applies to bound fields.*
+
     .. py:method:: db_value(value)
 
         :param value: python data type to prep for storage in the database
@@ -357,10 +369,16 @@ Fields
 
         :rtype: a python dictionary
 
-    .. py:method:: class_prepared()
+    .. py:method:: between(low, high)
 
-        Simple hook for :py:class:`Field` classes to indicate when the :py:class:`Model`
-        class the field exists on has been created.
+        Return an expression suitable for performing "BETWEEN" queries.
+
+        :rtype: an ``Expression`` object.
+
+        .. code-block:: python
+
+            # select employees making between $50 and $60
+            Employee.select().where(Employee.salary.between(50, 60))
 
 .. py:class:: IntegerField
 
