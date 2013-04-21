@@ -269,9 +269,9 @@ Models
 
         .. code-block:: python
 
-            >>> user = User()
-            >>> user.username = 'some-user' # <-- does not touch the database
-            >>> user.save() # <-- change is persisted to the db
+            user = User()
+            user.username = 'some-user'  # does not touch the database
+            user.save()  # change is persisted to the db
 
     .. py:method:: delete_instance([recursive=False[, delete_nullable=False]])
 
@@ -291,7 +291,7 @@ Models
 
         .. code-block:: python
 
-            >>> some_obj.delete_instance() # <-- it is gone forever
+            some_obj.delete_instance()  # it is gone forever
 
     .. py:method:: dependencies([search_nullable=False])
 
@@ -447,6 +447,35 @@ Fields
 
     .. py:attribute:: db_field = 'datetime'
 
+    .. py:attribute:: year
+
+        An expression suitable for extracting the year, for example to retrieve
+        all blog posts from 2013:
+
+        .. code-block:: python
+
+            Blog.select().where(Blog.pub_date.year == 2013)
+
+    .. py:attribute:: month
+
+        Same as :py:attr:`~DateTimeField.year`, except extract month.
+
+    .. py:attribute:: day
+
+        Same as :py:attr:`~DateTimeField.year`, except extract day.
+
+    .. py:attribute:: hour
+
+        Same as :py:attr:`~DateTimeField.year`, except extract hour.
+
+    .. py:attribute:: minute
+
+        Same as :py:attr:`~DateTimeField.year`, except extract minute.
+
+    .. py:attribute:: second
+
+        Same as :py:attr:`~DateTimeField.year`, except extract second..
+
 .. py:class:: DateField
 
     Stores: python ``datetime.date`` instances
@@ -464,6 +493,23 @@ Fields
         If the incoming value does not match a format, it will be returned as-is
 
     .. py:attribute:: db_field = 'date'
+
+    .. py:attribute:: year
+
+        An expression suitable for extracting the year, for example to retrieve
+        all people born in 1980:
+
+        .. code-block:: python
+
+            Person.select().where(Person.dob.year == 1983)
+
+    .. py:attribute:: month
+
+        Same as :py:attr:`~DateField.year`, except extract month.
+
+    .. py:attribute:: day
+
+        Same as :py:attr:`~DateField.year`, except extract day.
 
 .. py:class:: TimeField
 
@@ -484,6 +530,23 @@ Fields
         If the incoming value does not match a format, it will be returned as-is
 
     .. py:attribute:: db_field = 'time'
+
+    .. py:attribute:: hour
+
+        Extract the hour from a time, for example to retreive all events
+        occurring in the evening:
+
+        .. code-block:: python
+
+            Event.select().where(Event.time.hour > 17)
+
+    .. py:attribute:: minute
+
+        Same as :py:attr:`~TimeField.hour`, except extract minute.
+
+    .. py:attribute:: second
+
+        Same as :py:attr:`~TimeField.hour`, except extract second..
 
 .. py:class:: BooleanField
 
@@ -543,25 +606,23 @@ Query Types
 
         .. code-block:: python
 
-            >>> sq = SelectQuery(User).where(User.username == 'somebody')
+            sq = SelectQuery(User).where(User.username == 'somebody')
 
         Example selecting tweets made by users who are either editors or administrators:
 
         .. code-block:: python
 
-            >>> sq = SelectQuery(Tweet).join(User).where(
-            ...     (User.is_editor == True) |
-            ...     (User.is_admin == True)
-            ... )
+            sq = SelectQuery(Tweet).join(User).where(
+                (User.is_editor == True) |
+                (User.is_admin == True))
 
         Example of deleting tweets by users who are no longer active:
 
         .. code-block:: python
 
-            >>> dq = DeleteQuery(Tweet).where(
-            ...     Tweet.user << User.select().where(User.active == False)
-            ... )
-            >>> dq.execute()
+            dq = DeleteQuery(Tweet).where(
+                Tweet.user << User.select().where(User.active == False))
+            dq.execute()  # perform the delete query
 
         .. note::
 
@@ -586,14 +647,14 @@ Query Types
 
         .. code-block:: python
 
-            >>> sq = SelectQuery(Tweet).join(User).where(User.is_admin == True)
+            sq = SelectQuery(Tweet).join(User).where(User.is_admin == True)
 
         Example selecting users and joining on a particular foreign key field.
         See the :py:ref:`example app <example-app>` for a real-life usage:
 
         .. code-block:: python
 
-            >>> sq = SelectQuery(User).join(Relationship, on=Relationship.to_user)
+            sq = SelectQuery(User).join(Relationship, on=Relationship.to_user)
 
     .. py:method:: switch(model)
 
@@ -608,7 +669,7 @@ Query Types
 
         .. code-block:: python
 
-            >>> sq = SelectQuery(Blog).join(Entry).switch(Blog).join(User)
+            sq = SelectQuery(Blog).join(Entry).switch(Blog).join(User)
 
     .. py:method:: filter(*args, **kwargs)
 
@@ -626,12 +687,14 @@ Query Types
 
         .. code-block:: python
 
-            >>> sq = Entry.filter(blog__title='Some Blog')
+            sq = Entry.filter(blog__title='Some Blog')
 
-        This method is chainable::
+        This method is chainable:
 
-            >>> base_q = User.filter(active=True)
-            >>> some_user = base_q.filter(username='charlie')
+        .. code-block:: python
+
+            base_q = User.filter(active=True)
+            some_user = base_q.filter(username='charlie')
 
         .. note:: this method is provided for compatibility with peewee 1.
 
@@ -690,9 +753,9 @@ Query Types
 
     .. code-block:: python
 
-        >>> sq = SelectQuery(User, User.id, User.username)
-        >>> for user in sq:
-        ...     print user.username
+        sq = SelectQuery(User, User.id, User.username)
+        for user in sq:
+            print user.username
 
     Example selecting users and additionally the number of tweets made by the user.
     The ``User`` instances returned will have an additional attribute, 'count', that
@@ -700,9 +763,10 @@ Query Types
 
     .. code-block:: python
 
-        >>> sq = SelectQuery(User,
-        ...     User, fn.Count(Tweet.id).alias('count')
-        ... ).join(Tweet).group_by(User)
+        sq = (SelectQuery(
+            User, User, fn.Count(Tweet.id).alias('count'))
+            .join(Tweet)
+            .group_by(User))
 
     .. py:method:: group_by(*clauses)
 
@@ -717,9 +781,10 @@ Query Types
 
         .. code-block:: python
 
-            >>> sq = User.select(
-            ...     User, fn.Count(Tweet.id).alias('count')
-            ... ).join(Tweet).group_by(User)
+            sq = (User
+                .select(User, fn.Count(Tweet.id).alias('count'))
+                .join(Tweet)
+                .group_by(User))
 
     .. py:method:: having(*expressions)
 
@@ -731,9 +796,11 @@ Query Types
 
         .. code-block:: python
 
-            >>> sq = User.select(
-            ...     User, fn.Count(Tweet.id).alias('count')
-            ... ).join(Tweet).group_by(User).having(fn.Count(Tweet.id) > 100)
+            sq = (User
+                .select(User, fn.Count(Tweet.id).alias('count'))
+                .join(Tweet)
+                .group_by(User)
+                .having(fn.Count(Tweet.id) > 100))
 
     .. py:method:: order_by(*clauses)
 
@@ -744,27 +811,27 @@ Query Types
 
         .. code-block:: python
 
-            >>> User.select().order_by(User.username)
+            User.select().order_by(User.username)
 
         Example of selecting tweets and ordering them first by user, then newest
         first:
 
         .. code-block:: python
 
-            >>> Tweet.select().join(User).order_by(
-            ...     User.username, Tweet.created_date.desc()
-            ... )
+            Tweet.select().join(User).order_by(
+                User.username, Tweet.created_date.desc())
 
         A more complex example ordering users by the number of tweets made (greatest
         to least), then ordered by username in the event of a tie:
 
         .. code-block:: python
 
-            >>> sq = User.select(
-            ...     User, fn.Count(Tweet.id).alias('count')
-            ... ).join(Tweet).group_by(User).order_by(
-            ...     fn.Count(Tweet.id).desc(), User.username
-            ... )
+            tweet_ct = fn.Count(Tweet.id)
+            sq = (User
+                .select(User, tweet_ct.alias('count'))
+                .join(Tweet)
+                .group_by(User)
+                .order_by(tweet_ct.desc(), User.username))
 
     .. py:method:: limit(num)
 
@@ -784,7 +851,7 @@ Query Types
 
         .. code-block:: python
 
-            >>> User.select().order_by(User.username).paginate(3, 20) # <-- get users 41-60
+            User.select().order_by(User.username).paginate(3, 20)  # get users 41-60
 
     .. py:method:: distinct()
 
@@ -857,7 +924,7 @@ Query Types
             If the ``ForeignKeyField`` is ``nullable``, then a ``LEFT OUTER`` join
             may need to be used::
 
-                >>> User.select().join(Tweet, JOIN_LEFT_OUTER).annotate(Tweet)
+                User.select().join(Tweet, JOIN_LEFT_OUTER).annotate(Tweet)
 
     .. py:method:: aggregate(aggregation)
 
@@ -874,10 +941,10 @@ Query Types
 
         >>> sq = SelectQuery(Tweet)
         >>> sq.count()
-        45 # <-- number of tweets
+        45  # number of tweets
         >>> sq.where(Tweet.status == DELETED)
         >>> sq.count()
-        3 # <-- number of tweets that are marked as deleted
+        3  # number of tweets that are marked as deleted
 
     .. py:method:: wrapped_count()
 
@@ -898,9 +965,9 @@ Query Types
 
         .. code-block:: python
 
-            >>> sq = User.select().where(User.active == True)
-            >>> if sq.where(User.username==username, User.password==password).exists():
-            ...     authenticated = True
+            sq = User.select().where(User.active == True)
+            if sq.where(User.username == username, User.password == password).exists():
+                authenticated = True
 
     .. py:method:: get()
 
@@ -911,16 +978,16 @@ Query Types
 
         .. code-block:: python
 
-            >>> active = User.select().where(User.active == True)
-            >>> try:
-            ...     user = active.where(User.username == username).get()
-            ... except User.DoesNotExist:
-            ...     user = None
+            active = User.select().where(User.active == True)
+            try:
+                user = active.where(User.username == username).get()
+            except User.DoesNotExist:
+                user = None
 
         This method is also exposed via the :py:class:`Model` api, in which case it
         accepts arguments that are translated to the where clause:
 
-            >>> user = User.get(User.active == True, User.username == username)
+            user = User.get(User.active == True, User.username == username)
 
     .. py:method:: first()
 
@@ -944,8 +1011,8 @@ Query Types
 
         .. code-block:: python
 
-            >>> for user in User.select().where(User.active == True):
-            ...     print user.username
+            for user in User.select().where(User.active == True):
+                print user.username
 
 
 .. py:class:: UpdateQuery(model, **kwargs)
@@ -957,15 +1024,16 @@ Query Types
 
     .. code-block:: python
 
-        >>> uq = UpdateQuery(User, active=False).where(User.registration_expired==True)
-        >>> uq.execute() # run the query
+        uq = UpdateQuery(User, active=False).where(User.registration_expired == True)
+        uq.execute()  # Perform the actual update
 
     Example of an atomic update:
 
     .. code-block:: python
 
-        >>> atomic_update = UpdateQuery(PageCount, count = PageCount.count + 1).where(PageCount.url == url)
-        >>> atomic_update.execute() # run the query
+        atomic_update = UpdateQuery(PageCount, count = PageCount.count + 1).where(
+            PageCount.url == url)
+        atomic_update.execute()  # will perform the actual update
 
     .. py:method:: execute()
 
@@ -979,10 +1047,10 @@ Query Types
     Creates an ``InsertQuery`` instance for the given model where kwargs is a
     dictionary of field name to value:
 
-    .. code-block:: python
+    .. code-block:: pycon
 
         >>> iq = InsertQuery(User, username='admin', password='test', active=True)
-        >>> iq.execute() # <--- insert new row and return primary key
+        >>> iq.execute()  # insert new row and return primary key
         2L
 
     .. py:method:: execute()
@@ -1004,7 +1072,7 @@ Query Types
 
     .. code-block:: python
 
-        >>> dq = DeleteQuery(User).where(User.active==False)
+        dq = DeleteQuery(User).where(User.active == False)
 
     .. py:method:: execute()
 
@@ -1029,7 +1097,7 @@ Query Types
 
     Example selecting users with a given username:
 
-    .. code-block:: python
+    .. code-block:: pycon
 
         >>> rq = RawQuery(User, 'SELECT * FROM users WHERE username = ?', 'admin')
         >>> for obj in rq.execute():
@@ -1102,8 +1170,7 @@ Query Types
         published_photos = Photo.select().where(Photo.published == True)
         published_comments = Comment.select().where(
             (Comment.is_spam == False) &
-            (Comment.num_flags < 3)
-        )
+            (Comment.num_flags < 3))
 
         # note that we are just passing the Tag model -- it will be converted
         # to a query automatically
@@ -1381,6 +1448,16 @@ Database and its subclasses
         comparisons.
 
         :param dict fields: A mapping of :py:attr:`~Field.db_field` to column type
+
+    .. py:method:: extract_date(date_part, date_field)
+
+        Return an expression suitable for extracting a date part from a date
+        field.  For instance, extract the year from a :py:class:`DateTimeField`.
+
+        :param str date_part: The date part attribute to retrieve.  Valid options
+          are: "year", "month", "day", "hour", "minute" and "second".
+        :param Field date_field: field instance storing a datetime, date or time.
+        :rtype: an expression object.
 
 
 .. py:class:: SqliteDatabase(Database)
