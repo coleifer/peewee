@@ -306,9 +306,11 @@ This allows you to write code like the following:
     another message
     yet another message
 
+For full documentation on fields, see the :ref:`Fields API notes <fields-api>`
 
-Field types table
------------------
+
+Field initialization arguments
+------------------------------
 
 Parameters accepted by all field types and their default values:
 
@@ -323,6 +325,9 @@ Parameters accepted by all field types and their default values:
 * ``primary_key = False`` -- whether this field is the primary key for the table
 * ``sequence = None`` -- sequence to populate field (if backend supports it)
 
+
+Field types table
+-----------------
 
 ===================   =================   =================   =================
 Field Type            Sqlite              Postgresql          MySQL
