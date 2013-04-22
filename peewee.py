@@ -110,10 +110,22 @@ SQLITE_DT_FORMATS = (
     '%H:%M:%S',
     '%H:%M:%S.%f',
     '%H:%M')
+STRFTIME_DT_LOOKUPS = {
+    'year': '%Y-01-01 00:00:00',
+    'month': '%Y-%m-01 00:00:00',
+    'day': '%Y-%m-%d 00:00:00',
+    'hour': '%Y-%m-%d %H:00:00',
+    'minute': '%Y-%m-%d %H:%M:00',
+    'second': '%Y-%m-%d %H:%M:%S',
+}
 
 def _sqlite_date_part(lookup_type, datetime_string):
     dt = format_date_time(datetime_string, SQLITE_DT_FORMATS)
     return getattr(dt, lookup_type)
+
+def _sqlite_date_trunc(lookup_type, datetime_string):
+    dt = format_date_time(datetime_string, SQLITE_DT_FORMATS)
+    return dt.strftime(STRFTIME_DT_LOOKUPS[lookup_type])
 
 if psycopg2:
     import psycopg2.extensions
@@ -1862,6 +1874,9 @@ class Database(object):
     def extract_date(self, date_part, date_field):
         return fn.EXTRACT(Clause(date_part, R('FROM'), date_field))
 
+    def date_trunc(self, date_part, date_field):
+        return fn.date_trunc(date_part, date_field)
+
 
 class SqliteDatabase(Database):
     limit_max = -1
@@ -1875,6 +1890,7 @@ class SqliteDatabase(Database):
             raise ImproperlyConfigured('sqlite3 must be installed on the system')
         conn = sqlite3.connect(database, **kwargs)
         conn.create_function('date_part', 2, _sqlite_date_part)
+        conn.create_function('date_trunc', 2, _sqlite_date_trunc)
         return conn
 
     def get_indexes_for_table(self, table):
@@ -2019,6 +2035,13 @@ class MySQLDatabase(Database):
     def get_tables(self):
         res = self.execute_sql('SHOW TABLES;')
         return [r[0] for r in res.fetchall()]
+
+    def extract_date(self, date_part, date_field):
+        assert date_part.lower() in STRFTIME_DT_LOOKUPS.keys()
+        return fn.EXTRACT(Clause(R(date_part), R('FROM'), date_field))
+
+    def date_trunc(self, date_part, date_field):
+        return fn.date_format(date_field, STRFTIME_DT_LOOKUPS[date_part])
 
 
 class transaction(object):
