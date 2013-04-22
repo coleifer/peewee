@@ -1379,6 +1379,9 @@ class ModelAPITestCase(ModelTestCase):
         self.assertEqual(b_db.content, '')
 
     def test_zero_id(self):
+        if BACKEND == 'mysql':
+            # Need to explicitly tell MySQL it's OK to use zero.
+            test_db.execute_sql("SET SESSION sql_mode='NO_AUTO_VALUE_ON_ZERO'")
         query = 'insert into users (id, username) values (%s, %s)' % (
             test_db.interpolation, test_db.interpolation)
         test_db.execute_sql(query, (0, 'foo'))
