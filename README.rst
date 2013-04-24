@@ -114,10 +114,25 @@ open a connection to the database::
     >>> from peewee import database
     >>> database.connect()
 
-create some tables::
+create a set of tables from models ::
+
+     >>> from peewee import create_model_tables
+     >>> create_model_tables([Blog, Entry]) # will be sorted topologically
+
+create a specific table ::
 
     >>> Blog.create_table()
     >>> Entry.create_table()
+
+drop a specific table ::
+
+    >>> Blog.drop_table()
+    >>> Entry.drop_table()
+
+drop a set of tables from models ::
+
+    >>> from peewee import drop_model_tables
+    >>> drop_model_tables([Blog, Entry]) # Drop tables for all given models (in the right order)
 
 
 foreign keys work like django's
