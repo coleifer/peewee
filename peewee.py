@@ -2335,7 +2335,10 @@ class Model(with_metaclass(BaseModel)):
         return new_data
 
     def save(self, force_insert=False, only=None):
-        field_dict = dict(self._data)
+        field_dict = dict(self._data)        
+        if not len(field_dict):
+            raise AttributeError('Cannot save: \'%s\' instance has no assigned fields' % 
+                                (self._meta.name))
         pk = self._meta.primary_key
         if only:
             field_dict = self._prune_fields(field_dict, only)
