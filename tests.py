@@ -768,6 +768,13 @@ class InsertTestCase(BasePeeweeTestCase):
         iq = InsertQuery(CSVRow, {CSVRow.data: []})
         self.assertInsert(iq, [('"data"', '?')], [''])
 
+    def test_empty_insert(self):
+        class EmptyModel(TestModel):
+            pass
+        iq = InsertQuery(EmptyModel, {})
+        sql, params = compiler.generate_insert(iq)
+        self.assertEqual(sql, 'INSERT INTO "emptymodel"')
+
 class DeleteTestCase(BasePeeweeTestCase):
     def test_where(self):
         dq = DeleteQuery(User).where(User.id == 2)
