@@ -220,7 +220,7 @@ class SqDB(DB):
             return UnknownFieldType
 
     def get_columns(self, table):
-        curs = self.conn.execute_sql('pragma table_info(%s)' % table)
+        curs = self.conn.execute_sql('pragma table_info("%s")' % table)
         col_dict = {}
         for (_, name, col, not_null, _, is_pk) in curs.fetchall():
             # cid, name, type, notnull, dflt_value, pk
@@ -288,7 +288,7 @@ def get_conn(engine, database, **connect):
 
 def introspect(db, schema=None):
     tables = db.get_tables()
-    
+
     models = {}
     table_to_model = {}
     table_fks = {}
@@ -322,15 +322,15 @@ def introspect(db, schema=None):
                 col_meta[table][column]['db_column'] = "'%s'" % column
             if nullable:
                 col_meta[table][column]['null'] = "True"
-    
+
     return models, table_to_model, table_fks, col_meta
 
 def print_models(engine, database, tables, **connect):
     schema = connect.get('schema')
     db = get_conn(engine, database, **connect)
-    
+
     models, table_to_model, table_fks, col_meta = introspect(db, schema)
-    
+
     # write generated code to standard out
     print_(frame % (db.get_conn_class().__name__, database, repr(connect)))
 
@@ -376,7 +376,7 @@ def print_models(engine, database, tables, **connect):
                 print_model(model, seen)
 
 # misc
-tn = lambda t: t.title().replace('_', '')
+tn = lambda t: re.sub('[^\w]+', '', t.title())
 cn = lambda c: re.sub('_id$', '', c.lower())
 ds = lambda d: sorted(d.items(), key=lambda t:t[0])
 
@@ -406,7 +406,7 @@ if __name__ == '__main__':
         sys.exit(1)
 
     database = args[-1]
-    
+
     if options.engine == 'mysql' and 'password' in connect:
         connect['passwd'] = connect.pop('password', None)
 
