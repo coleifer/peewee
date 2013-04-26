@@ -949,6 +949,22 @@ class QueryResultWrapperTestCase(ModelTestCase):
         usernames = [u.username for u in qr.iterator()]
         self.assertEqual(usernames, [])
 
+    def test_iterator_query_method(self):
+        self.create_users(10)
+        qc = len(self.queries())
+
+        qr = User.select()
+        usernames = [u.username for u in qr.iterator()]
+        self.assertEqual(usernames, ['u%d' % i for i in range(1, 11)])
+
+        qc1 = len(self.queries())
+        self.assertEqual(qc1 - qc, 1)
+
+        again = [u.username for u in qr]
+        self.assertEqual(again, [])
+        qc2 = len(self.queries())
+        self.assertEqual(qc2 - qc1, 0)
+
     def test_fill_cache(self):
         def assertUsernames(qr, n):
             self.assertEqual([u.username for u in qr._result_cache], ['u%d' % i for i in range(1, n+1)])

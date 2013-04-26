@@ -1625,6 +1625,9 @@ class SelectQuery(Query):
     def __iter__(self):
         return iter(self.execute())
 
+    def iterator(self):
+        return iter(self.execute().iterator())
+
     def __getitem__(self, value):
         offset = limit = None
         if isinstance(value, slice):
