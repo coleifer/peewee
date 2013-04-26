@@ -138,7 +138,7 @@ project.
 Google Cloud SQL
 ^^^^^^^^^^^^^^^^
 
-[Code shared on a GitHub issue](https://github.com/coleifer/peewee/issues/183):
+`Code shared on a GitHub issue <https://github.com/coleifer/peewee/issues/183>`_:
 
 .. code-block:: python
 
