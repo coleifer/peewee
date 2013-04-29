@@ -997,8 +997,9 @@ class QueryCompiler(object):
         parts = ['INSERT INTO %s' % self.quote(model._meta.db_table)]
         sets, params = self.parse_field_dict(query._insert)
 
-        parts.append('(%s)' % ', '.join(s[0] for s in sets))
-        parts.append('VALUES (%s)' % ', '.join(s[1] for s in sets))
+        if sets:
+            parts.append('(%s)' % ', '.join(s[0] for s in sets))
+            parts.append('VALUES (%s)' % ', '.join(s[1] for s in sets))
 
         return ' '.join(parts), params
 
@@ -1623,6 +1624,9 @@ class SelectQuery(Query):
 
     def __iter__(self):
         return iter(self.execute())
+
+    def iterator(self):
+        return iter(self.execute().iterator())
 
     def __getitem__(self, value):
         offset = limit = None

@@ -768,6 +768,13 @@ class InsertTestCase(BasePeeweeTestCase):
         iq = InsertQuery(CSVRow, {CSVRow.data: []})
         self.assertInsert(iq, [('"data"', '?')], [''])
 
+    def test_empty_insert(self):
+        class EmptyModel(TestModel):
+            pass
+        iq = InsertQuery(EmptyModel, {})
+        sql, params = compiler.generate_insert(iq)
+        self.assertEqual(sql, 'INSERT INTO "emptymodel"')
+
 class DeleteTestCase(BasePeeweeTestCase):
     def test_where(self):
         dq = DeleteQuery(User).where(User.id == 2)
@@ -941,6 +948,22 @@ class QueryResultWrapperTestCase(ModelTestCase):
         qr = User.select().where(User.username == 'xxx').execute()
         usernames = [u.username for u in qr.iterator()]
         self.assertEqual(usernames, [])
+
+    def test_iterator_query_method(self):
+        self.create_users(10)
+        qc = len(self.queries())
+
+        qr = User.select()
+        usernames = [u.username for u in qr.iterator()]
+        self.assertEqual(usernames, ['u%d' % i for i in range(1, 11)])
+
+        qc1 = len(self.queries())
+        self.assertEqual(qc1 - qc, 1)
+
+        again = [u.username for u in qr]
+        self.assertEqual(again, [])
+        qc2 = len(self.queries())
+        self.assertEqual(qc2 - qc1, 0)
 
     def test_fill_cache(self):
         def assertUsernames(qr, n):

@@ -124,3 +124,30 @@ Our new database can be used just like any of the other database subclasses:
         title = CharField()
         contents = TextField()
         pub_date = DateTimeField()
+
+
+Peewee and Other Databases
+--------------------------
+
+This section will document how peewee has been used with other databases. If
+someone has written an integration between peewee and another database I will
+be happy to list the project name, database it works with and a link to the
+project.
+
+
+Google Cloud SQL
+^^^^^^^^^^^^^^^^
+
+`Code shared on a GitHub issue <https://github.com/coleifer/peewee/issues/183>`_:
+
+.. code-block:: python
+
+    from google.appengine.api import rdbms
+    from peewee import *
+
+    class AppEngineDatabase(MySQLDatabase):
+        def _connect(self, database, **kwargs):
+            if 'instance' not in kwargs:
+                raise ImproperlyConfigured(
+                    'Missing "instance" keyword to connect to database')
+            return rdbms.connect(database=database, **kwargs)
