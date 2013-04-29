@@ -1281,12 +1281,16 @@ class Query(Leaf):
         )
 
     @returns_clone
-    def where(self, *q_or_node):
+    def where(self, *q_or_node, **kwargs):
         if self._where is None:
             self._where = reduce(operator.and_, q_or_node)
         else:
+            op = kwargs.get('op', OP_AND)
             for piece in q_or_node:
-                self._where &= piece
+                if op == OP_OR:
+                    self._where |= piece
+                else:
+                    self._where &= piece
 
     @returns_clone
     def join(self, model_class, join_type=None, on=None):
