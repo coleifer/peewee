@@ -72,15 +72,25 @@ Get tweets by staff or superusers (assumes FK relationship):
 Where clause
 ------------
 
-All queries except :py:class:`InsertQuery` support the ``where()`` method.  If you are
-familiar with Django's ORM, it is analagous to the ``filter()`` method.  Inside the
-where clause, you will place one or more :ref:`expressions`.
+All queries except :py:class:`InsertQuery` and :py:class:`RawQuery` support the
+:py:meth:`~Query.where` method.  If you are familiar with Django's ORM, it is
+analagous to the ``filter()`` method.  Inside the where clause, you will place
+one or more :ref:`expressions`.
 
 .. code-block:: python
 
     User.select().where(User.is_staff == True)
 
 .. note:: ``User.select()`` is equivalent to ``SelectQuery(User)``.
+
+.. note::
+    Multiple calls to :py:meth:`~Query.where` will be ``AND``-ed together. To
+    dynamically connect clauses with ``OR``:
+
+    .. code-block:: python
+
+        import operator
+        or_clauses = reduce(operator.or_, clauses)  # OR together all clauses
 
 .. _column-lookups:
 
@@ -104,6 +114,12 @@ Comparison       Meaning
 ``**``           x ILIKE y where y may contain wildcards
 ================ =======================================
 
+You can also perform "BETWEEN" lookups by calling the ``between`` method on
+a field object:
+
+.. code-block:: python
+
+    Employee.select().where(Employee.salary.between(50000, 60000))
 
 .. _custom-lookups:
 
