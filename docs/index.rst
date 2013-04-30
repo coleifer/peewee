@@ -21,6 +21,7 @@ peewee
     :target: peewee/cookbook.html#using-with-sqlite
     :alt: sqlite
 
+`Code hosted on GitHub <https://github.com/coleifer/peewee>`_.
 
 See notes on :ref:`notes on upgrading and changes from 1.0 <upgrading>`
 
