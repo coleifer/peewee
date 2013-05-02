@@ -121,6 +121,13 @@ a field object:
 
     Employee.select().where(Employee.salary.between(50000, 60000))
 
+.. note::
+    Because SQLite's ``LIKE`` operation is case-insensitive by default,
+    peewee will use the SQLite ``GLOB`` operation for case-sensitive searches.
+    The glob operation uses asterisks for wildcards as opposed to the usual
+    percent-sign.  **If you are using SQLite and want case-sensitive partial
+    string matching, remember to use asterisks for the wildcard (``*``).**
+
 .. _custom-lookups:
 
 Adding user-defined operators
