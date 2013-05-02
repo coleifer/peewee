@@ -1905,9 +1905,28 @@ class FieldTypeTestCase(ModelTestCase):
             self.assertNM(field_obj << [values[1]], ['c2'])
 
     def test_charfield(self):
-        nm = NullModel.create(char_field=4)
-        nm_db = NullModel.get(NullModel.id==nm.id)
+        NM = NullModel
+        nm = NM.create(char_field=4)
+        nm_db = NM.get(NM.id==nm.id)
         self.assertEqual(nm_db.char_field, '4')
+
+        nm_alpha = NM.create(char_field='Alpha')
+        nm_bravo = NM.create(char_field='Bravo')
+
+        if BACKEND == 'sqlite':
+            # since sqlite uses "*" as the wildcard for case-sensitive lookups,
+            # need to special case
+            like_wildcard = '*'
+        else:
+            like_wildcard = '%'
+        like_str = '%sA%s' % (like_wildcard, like_wildcard)
+        ilike_str = '%A%'
+
+        case_sens = NM.select(NM.char_field).where(NM.char_field % like_str)
+        self.assertEqual([x[0] for x in case_sens.tuples()], ['Alpha'])
+
+        case_insens = NM.select(NM.char_field).where(NM.char_field ** ilike_str)
+        self.assertEqual([x[0] for x in case_insens.tuples()], ['Alpha', 'Bravo'])
 
     def test_intfield(self):
         nm = NullModel.create(int_field='4')
