@@ -720,3 +720,34 @@ general it should not need to be dealt with explicitly.
 
 The preferred method of iterating over a result set is to iterate directly over
 the :py:class:`SelectQuery`, allowing it to manage the :py:class:`QueryResultWrapper` internally.
+
+
+.. _using_sql:
+
+Writing queries by hand with SQL
+--------------------------------
+
+There are two ways to execute hand-crafted SQL statements with peewee:
+
+1. :py:meth:`Database.execute_sql` for executing any type of query
+2. :py:class:`RawQuery` for executing ``SELECT`` queries and *returning model instances*.
+
+Example:
+
+.. code-block:: python
+
+    db = SqliteDatabase(':memory:')
+
+    class Person(Model):
+        name = CharField()
+        class Meta:
+            database = db
+
+    # let's pretend we want to do an "upsert", something that SQLite can
+    # do, but peewee cannot.
+    for name in ('charlie', 'mickey', 'huey'):
+        db.execute_sql('REPLACE INTO person (name) VALUES (?)', (name,))
+
+    # now let's iterate over the people using our own query.
+    for person in Person.raw('select * from person'):
+        print person.name  # .raw() will return model instances.

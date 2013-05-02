@@ -703,6 +703,8 @@ alias:
     # now we will order by the count, which was aliased to "ct"
     query = query.order_by(R('ct'))
 
+To execute custom SQL, please refer to :ref:`using_sql`.
+
 
 Retrieving raw tuples / dictionaries
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -729,7 +731,6 @@ or :py:meth:`RawQuery.dicts`:
     # iterate over a list of 2-tuples containing the url and count
     for stat in stats:
         print stat['url'], stat['ct']
-
 
 .. _working_with_transactions:
 
