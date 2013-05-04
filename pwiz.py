@@ -171,7 +171,7 @@ class MySQLDB(DB):
     def get_columns(self, table):
         curs = self.conn.execute_sql('select * from `%s` limit 1' % table)
         return dict(
-            [r[0], (self.reverse_mapping.get(r[1], UnknownFieldType), r[6])]
+            [r[0], [self.reverse_mapping.get(r[1], UnknownFieldType), r[6]]]
             for r in curs.description)
 
     def get_foreign_keys(self, table):
