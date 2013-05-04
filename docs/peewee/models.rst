@@ -600,6 +600,26 @@ column type in the database.  There are 2 ways of doing this:
       PostgresqlDatabase.register_fields({'uuid': 'uuid'})
 
 
+Custom field example for a Postgresql array column type 
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. code-block:: python    
+
+    # custom type for postgres Text[] array column
+    class TextArrayField(Field):
+        db_field = 'Text[]'   	
+
+        def db_value(self, value):
+            return value
+
+        def python_value(self, value):
+            return value
+
+    class Product(Model):
+        name = CharField()
+        tags = TextArrayField() # Text[] array column
+
+
+
 That is it!  Some fields may support exotic operations, like the postgresql HStore field
 acts like a key/value store and has custom operators for things like "contains" and
 "update".  You can specify "op overrides" as well.  For more information, check out
