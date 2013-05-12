@@ -680,6 +680,14 @@ class SelectTestCase(BasePeeweeTestCase):
         sq = OrderedModel.select().order_by(OrderedModel.id.asc())
         self.assertOrderBy(sq, 'orderedmodel."id" ASC', [])
 
+        sq = User.select().order_by(User.id * 5)
+        self.assertOrderBy(sq, '(users."id" * ?)', [5])
+        sql = compiler.generate_select(sq)
+        self.assertEqual(sql, (
+            'SELECT users."id", users."username" '
+            'FROM "users" AS users ORDER BY (users."id" * ?)',
+            [5]))
+
     def test_paginate(self):
         sq = SelectQuery(User).paginate(1, 20)
         self.assertEqual(sq._limit, 20)

@@ -964,8 +964,9 @@ class QueryCompiler(object):
             params.extend(h_params)
 
         if query._order_by:
-            order_by, _ = self.parse_expr_list(query._order_by, alias_map)
+            order_by, o_params = self.parse_expr_list(query._order_by, alias_map)
             parts.append('ORDER BY %s' % order_by)
+            params.extend(o_params)
 
         if query._limit or (query._offset and db.limit_max):
             limit = query._limit or db.limit_max
