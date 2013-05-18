@@ -2,6 +2,7 @@
 Provides a simple, in-memory key/value store using Sqlite.
 """
 
+import itertools
 import pickle
 from peewee import *
 from peewee import Leaf
@@ -13,6 +14,8 @@ try:
 except ImportError:
     def KeyValueDatabase(db_name):
         return SqliteDatabase(db_name, check_same_thread=False)
+
+Sentinel = type('Sentinel', (object,), {})
 
 key_value_db = KeyValueDatabase(':memory:')
 
@@ -58,7 +61,7 @@ class KeyStore(object):
             return result[0]
         return result
 
-    def upsert(self, key, value):
+    def _upsert(self, key, value):
         sets, params = self._compiler.parse_field_dict({
             self.key: key,
             self.value: value})
@@ -75,7 +78,7 @@ class KeyStore(object):
             update = {self.value.name: pickled_value}
             self.model.update(**update).where(expr).execute()
         else:
-            self.upsert(expr, pickled_value)
+            self._upsert(expr, pickled_value)
 
     def __delitem__(self, expr):
         converted, _ = self.convert_expr(expr)
@@ -99,5 +102,26 @@ class KeyStore(object):
         for row in self.query(self.value):
             yield pickle.loads(row[0])
 
-    def flush(self):
+    def items(self):
+        return iter(self)
+
+    def get(self, k, default=None):
+        try:
+            return self[k]
+        except KeyError:
+            return default
+
+    def pop(self, k, default=Sentinel):
+        with self._db.transaction():
+            expr, is_single = self.convert_expr(k)
+            try:
+                res = self[k]
+            except KeyError:
+                if default is Sentinel:
+                    raise
+                return default
+            del(self[expr])
+        return res
+
+    def clear(self):
         self.model.delete().execute()

@@ -9,7 +9,7 @@ class KeyStoreTestCase(unittest.TestCase):
     def setUp(self):
         self.kv = KeyStore()
         self.ordered_kv = KeyStore(ordered=True)
-        self.kv.flush()
+        self.kv.clear()
 
     def test_storage(self):
         self.kv['a'] = 'A'
@@ -48,6 +48,11 @@ class KeyStoreTestCase(unittest.TestCase):
         self.ordered_kv['b'] = 'B'
         self.assertEqual(list(self.ordered_kv.keys()), ['a', 'b', 'c'])
         self.assertEqual(list(self.ordered_kv.values()), ['A', 'B', 'C'])
+        self.assertEqual(list(self.ordered_kv.items()), [
+            ('a', 'A'),
+            ('b', 'B'),
+            ('c', 'C'),
+        ])
 
     def test_iteration(self):
         self.ordered_kv['a'] = 'A'
@@ -73,3 +78,34 @@ class KeyStoreTestCase(unittest.TestCase):
         t.join()
 
         self.assertEqual(self.kv['b'], 'yyy')
+
+    def test_get(self):
+        self.kv['a'] = 'A'
+        self.kv['b'] = 'B'
+        self.assertEqual(self.kv.get('a'), 'A')
+        self.assertEqual(self.kv.get('x'), None)
+        self.assertEqual(self.kv.get('x', 'y'), 'y')
+
+        self.assertEqual(
+            list(self.kv.get(self.kv.key << ('a', 'b'))),
+            ['A', 'B'])
+        self.assertEqual(
+            list(self.kv.get(self.kv.key << ('x', 'y'))),
+            [])
+
+    def test_pop(self):
+        self.ordered_kv['a'] = 'A'
+        self.ordered_kv['b'] = 'B'
+        self.ordered_kv['c'] = 'C'
+
+        self.assertEqual(self.ordered_kv.pop('a'), 'A')
+        self.assertEqual(list(self.ordered_kv.keys()), ['b', 'c'])
+
+        self.assertRaises(KeyError, self.ordered_kv.pop, 'x')
+        self.assertEqual(self.ordered_kv.pop('x', 'y'), 'y')
+
+        self.assertEqual(
+            list(self.ordered_kv.pop(self.ordered_kv.key << ['b', 'c'])),
+            ['B', 'C'])
+
+        self.assertEqual(list(self.ordered_kv.keys()), [])
