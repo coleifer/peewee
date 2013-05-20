@@ -102,8 +102,14 @@ class KeyStore(object):
         elif self._native_upsert:
             self._upsert(expr, value)
         else:
-            with self._database.transaction():
-                pass
+            try:
+                self.model.create(key=expr, value=value)
+            except:
+                self._database.rollback()
+                (self.model
+                 .update(**{self.value.name: value})
+                 .where(self.key == expr)
+                 .execute())
 
     def __delitem__(self, expr):
         converted, _ = self.convert_expr(expr)

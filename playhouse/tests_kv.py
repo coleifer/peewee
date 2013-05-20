@@ -118,3 +118,24 @@ class KeyStoreTestCase(unittest.TestCase):
             ['B', 'C'])
 
         self.assertEqual(list(self.ordered_kv.keys()), [])
+
+try:
+    import psycopg2
+except ImportError:
+    psycopg2 = None
+
+if psycopg2 is not None:
+    db = PostgresqlDatabase('peewee_test')
+
+    class PostgresqlKeyStoreTestCase(unittest.TestCase):
+        def setUp(self):
+            self.kv = KeyStore(CharField(), ordered=True, database=db)
+            self.kv.clear()
+
+        def test_non_native_upsert(self):
+            self.kv['a'] = 'A'
+            self.kv['b'] = 'B'
+            self.assertEqual(self.kv['a'], 'A')
+
+            self.kv['a'] = 'C'
+            self.assertEqual(self.kv['a'], 'C')
