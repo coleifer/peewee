@@ -26,10 +26,10 @@ def get_option_parser():
     cases = optparse.OptionGroup(parser, 'Individual test module options')
     cases.add_option('--apsw', dest='apsw', default=False, action='store_true', help='apsw tests (requires apsw)')
     cases.add_option('--gfk', dest='gfk', default=False, action='store_true', help='gfk tests')
+    cases.add_option('--kv', dest='kv', default=False, action='store_true', help='key/value store tests')
     cases.add_option('--migrations', dest='migrations', default=False, action='store_true', help='migration helper tests (requires psycopg2)')
     cases.add_option('--postgres-ext', dest='postgres_ext', default=False, action='store_true', help='postgres_ext tests (requires psycopg2)')
     cases.add_option('--signals', dest='signals', default=False, action='store_true', help='signals tests')
-    cases.add_option('--sqlite-kv', dest='sqlite_kv', default=False, action='store_true', help='sqlite key/value store tests')
     cases.add_option('--test-utils', dest='test_utils', default=False, action='store_true', help='test_utils tests')
 
     parser.add_option_group(basic)
@@ -64,9 +64,9 @@ def collect_modules(options):
     if xtra(options.signals):
         from playhouse import tests_signals
         modules.append(tests_signals)
-    if xtra(options.sqlite_kv):
-        from playhouse import tests_sqlite_kv
-        modules.append(tests_sqlite_kv)
+    if xtra(options.kv):
+        from playhouse import tests_kv
+        modules.append(tests_kv)
     if xtra(options.test_utils):
         from playhouse import tests_test_utils
         modules.append(tests_test_utils)

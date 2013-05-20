@@ -2,8 +2,8 @@ import threading
 import unittest
 
 from peewee import *
-from playhouse.sqlite_kv import PickledKeyStore
-from playhouse.sqlite_kv import KeyStore
+from playhouse.kv import PickledKeyStore
+from playhouse.kv import KeyStore
 
 
 class KeyStoreTestCase(unittest.TestCase):

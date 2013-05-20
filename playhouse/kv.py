@@ -1,7 +1,3 @@
-"""
-Provides a simple, in-memory key/value store using Sqlite.
-"""
-
 import itertools
 import operator
 import pickle
