@@ -1145,6 +1145,23 @@ class QueryResultWrapper(object):
             except StopIteration:
                 break
 
+class TuplesQueryResultWrapper(QueryResultWrapper):
+    def __init__(self, model, cursor, meta=None):
+        super(TuplesQueryResultWrapper, self).__init__(model, cursor, meta)
+        conv = []
+        identity = lambda x: x
+        for i in range(len(self.cursor.description)):
+            col = self.cursor.description[i][0]
+            if col in model._meta.columns:
+                field_obj = model._meta.columns[col]
+                conv.append(field_obj.python_value)
+            else:
+                conv.append(identity)
+        self.conv = conv
+
+    def process_row(self, row):
+        return tuple([self.conv[i](col) for i, col in enumerate(row)])
+
 class NaiveQueryResultWrapper(QueryResultWrapper):
     def __init__(self, model, cursor, meta=None):
         super(NaiveQueryResultWrapper, self).__init__(model, cursor, meta)
@@ -1421,7 +1438,7 @@ class RawQuery(Query):
     def execute(self):
         if self._qr is None:
             if self._tuples:
-                ResultWrapper = QueryResultWrapper
+                ResultWrapper = TuplesQueryResultWrapper
             elif self._dicts:
                 ResultWrapper = DictQueryResultWrapper
             else:
@@ -1609,7 +1626,7 @@ class SelectQuery(Query):
         if self._dirty or not self._qr:
             query_meta = None
             if self._tuples:
-                ResultWrapper = QueryResultWrapper
+                ResultWrapper = TuplesQueryResultWrapper
             elif self._dicts:
                 ResultWrapper = DictQueryResultWrapper
             elif self._naive or not self._joins or self.verify_naive():
