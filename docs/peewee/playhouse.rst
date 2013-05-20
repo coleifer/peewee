@@ -542,32 +542,57 @@ GFK API
     Back-reference support for :py:class:`GFKField`.
 
 
-Sqlite Key/Value Store
-----------------------
+Key/Value Store
+---------------
 
-Provides a simple in-memory key/value store using Sqlite, using a dictionary API.
-By default, the :py:class:`KeyStore` will use :py:class:`KVModel`:
+Provides a simple key/value store, using a dictionary API.  By default the
+the :py:class:`KeyStore` will use an in-memory sqlite database, but any database
+will work.
 
-* ``key`` -- :py:class:`CharField`
-* ``value`` -- :py:class:`BlobField` with pickled value
+To start using the key-store, create an instance and pass it a field to use
+for the values.
 
-.. py:class:: KeyStore([ordered=False[, model=None]])
+.. code-block:: python
+
+    >>> kv = KeyStore(TextField())
+    >>> kv['a'] = 'A'
+    >>> kv['a']
+    'A'
+
+.. note::
+  To store arbitrary python objects, use the :py:class:`PickledKeyStore`, which
+  stores values in a pickled :py:class:`BlobField`.
+
+Using the :py:class:`KeyStore` it is possible to use "expressions" to retrieve
+values from the dictionary.  For instance, imagine you want to get all keys
+which contain a certain substring:
+
+.. code-block:: python
+
+    >>> keys_matching_substr = kv[kv.key % '%substr%']
+    >>> keys_start_with_a = kv[fn.Lower(fn.Substr(kv.key, 1, 1)) == 'a']
+
+KeyStore API
+^^^^^^^^^^^^
+
+.. py:class:: KeyStore(value_field[, ordered=False[, database=None]])
 
     Lightweight dictionary interface to a model containing a key and value.
+    Implements common dictionary methods, such as ``__getitem__``, ``__setitem__``,
+    ``get``, ``pop``, ``items``, ``keys``, and ``values``.
 
+    :param Field value_field: Field instance to use as value field, e.g. an
+        instance of :py:class:`TextField`.
     :param boolean ordered: Whether the keys should be returned in sorted order
-    :param Model model: :py:class:`Model` class to use for keys/values. If none
-        is supplied, :py:class:`KVModel` will be used.
-
-    .. note:: If you provide a custom model, it must contain fields named
-        "key" and "value".
+    :param Database database: :py:class:`Database` class to use for the storage
+        backend.  If none is supplied, an in-memory Sqlite DB will be used.
 
     Example:
 
     .. code-block:: pycon
 
-        >>> from playhouse.sqlite_kv import KeyStore
-        >>> kv = KeyStore()
+        >>> from playhouse.kv import KeyStore
+        >>> kv = KeyStore(TextField())
         >>> kv['a'] = 'foo'
         >>> for k, v in kv:
         ...     print k, v
@@ -577,6 +602,23 @@ By default, the :py:class:`KeyStore` will use :py:class:`KVModel`:
         True
         >>> 'b' in kv
         False
+
+.. py:class:: PickledKeyStore([ordered=False[, database=None]])
+
+    Identical to the :py:class:`KeyStore` except *anything* can be stored as
+    a value in the dictionary.  The storage for the value will be a pickled
+    :py:class:`BlobField`.
+
+    Example:
+
+    .. code-block:: pycon
+
+        >>> from playhouse.kv import PickledKeyStore
+        >>> pkv = PickledKeyStore()
+        >>> pkv['a'] = 'A'
+        >>> pkv['b'] = 1.0
+        >>> list(pkv.items())
+        [(u'a', 'A'), (u'b', 1.0)]
 
 
 Test Utils
