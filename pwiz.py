@@ -346,10 +346,9 @@ def introspect(db, schema=None):
 
         for col_name, column_info in table_columns[table].items():
             column_metadata[table].setdefault(col_name, {})
-            test_col_name = col_name
             if column_info.field_class is ForeignKeyField:
-                test_col_name = test_col_name.rstrip('_id')
-            if test_col_name != cn(col_name):
+                column_metadata[table][col_name]['db_column'] = "'%s'" % col_name
+            elif col_name != cn(col_name):
                 column_metadata[table][col_name]['db_column'] = "'%s'" % col_name
             if column_info.nullable:
                 column_metadata[table][col_name]['null'] = "True"
