@@ -44,6 +44,7 @@ __all__ = [
     'PostgresqlDatabase',
     'prefetch',
     'PrimaryKeyField',
+    'R',
     'SqliteDatabase',
     'TextField',
     'TimeField',
@@ -2325,7 +2326,11 @@ class Model(with_metaclass(BaseModel)):
             db.create_sequence(pk.sequence)
 
         db.create_table(cls)
+        cls._create_indexes()
 
+    @classmethod
+    def _create_indexes(cls):
+        db = cls._meta.database
         for field_name, field_obj in cls._meta.fields.items():
             if isinstance(field_obj, ForeignKeyField):
                 db.create_foreign_key(cls, field_obj)

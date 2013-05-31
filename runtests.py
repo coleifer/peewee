@@ -30,6 +30,7 @@ def get_option_parser():
     cases.add_option('--migrations', dest='migrations', default=False, action='store_true', help='migration helper tests (requires psycopg2)')
     cases.add_option('--postgres-ext', dest='postgres_ext', default=False, action='store_true', help='postgres_ext tests (requires psycopg2)')
     cases.add_option('--signals', dest='signals', default=False, action='store_true', help='signals tests')
+    cases.add_option('--sqlite-ext', dest='sqlite_ext', default=False, action='store_true', help='sqlite_ext tests')
     cases.add_option('--test-utils', dest='test_utils', default=False, action='store_true', help='test_utils tests')
 
     parser.add_option_group(basic)
@@ -64,6 +65,9 @@ def collect_modules(options):
     if xtra(options.signals):
         from playhouse import tests_signals
         modules.append(tests_signals)
+    if xtra(options.sqlite_ext):
+        from playhouse import tests_sqlite_ext
+        modules.append(tests_sqlite_ext)
     if xtra(options.kv):
         from playhouse import tests_kv
         modules.append(tests_kv)
