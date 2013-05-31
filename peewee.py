@@ -9,6 +9,7 @@
 #    '
 from __future__ import with_statement
 import datetime
+from DBUtils.PooledDB import PooledDB
 import decimal
 import logging
 import operator
@@ -1732,6 +1733,7 @@ class Database(object):
 
     def __init__(self, database, threadlocals=False, autocommit=True,
                  fields=None, ops=None, **connect_kwargs):
+        connect_kwargs.setdefault('max_connections', 50)
         self.init(database, **connect_kwargs)
 
         if threadlocals:
@@ -1749,6 +1751,10 @@ class Database(object):
         self.deferred = database is None
         self.database = database
         self.connect_kwargs = connect_kwargs
+        self.init_pool(database, **connect_kwargs)
+
+    def init_pool(self, database, **connect_kwargs):
+        raise NotImplementedError
 
     def connect(self):
         with self._conn_lock:
@@ -1779,6 +1785,7 @@ class Database(object):
         conn.close()
 
     def _connect(self, database, **kwargs):
+        return self._pool.connection()
         raise NotImplementedError
 
     @classmethod
@@ -1895,12 +1902,16 @@ class SqliteDatabase(Database):
         OP_ILIKE: 'LIKE',
     }
 
-    def _connect(self, database, **kwargs):
+    def init_pool(self, database, **kwargs):
         if not sqlite3:
             raise ImproperlyConfigured('sqlite3 must be installed on the system')
-        conn = sqlite3.connect(database, **kwargs)
-        conn.create_function('date_part', 2, _sqlite_date_part)
-        return conn
+
+        connection_count = kwargs.pop('max_connections')
+        self._pool = PooledDB(
+                sqlite3, 0, connection_count,
+                db=database, **kwargs) 
+
+        #conn.create_function('date_part', 2, _sqlite_date_part)
 
     def get_indexes_for_table(self, table):
         res = self.execute_sql('PRAGMA index_list(%s);' % self.quote(table))
@@ -1931,10 +1942,14 @@ class PostgresqlDatabase(Database):
     reserved_tables = ['user']
     sequences = True
 
-    def _connect(self, database, **kwargs):
+    def init_pool(self, database, **kwargs):
         if not psycopg2:
             raise ImproperlyConfigured('psycopg2 must be installed on the system')
-        return psycopg2.connect(database=database, **kwargs)
+
+        connection_count = kwargs.pop('max_connections')
+        self._pool = PooledDB(
+                psycopg2, 0, connection_count,
+                db=database, **kwargs) 
 
     def last_insert_id(self, cursor, model):
         seq = model._meta.primary_key.sequence
@@ -2001,7 +2016,7 @@ class MySQLDatabase(Database):
     quote_char = '`'
     subquery_delete_same_table = False
 
-    def _connect(self, database, **kwargs):
+    def init_pool(self, database, **kwargs):
         if not mysql:
             raise ImproperlyConfigured('MySQLdb must be installed on the system')
         conn_kwargs = {
@@ -2009,7 +2024,11 @@ class MySQLDatabase(Database):
             'use_unicode': True,
         }
         conn_kwargs.update(kwargs)
-        return mysql.connect(db=database, **conn_kwargs)
+        connection_count = conn_kwargs.pop('max_connections')
+
+        self._pool = PooledDB(
+                mysql, 0, connection_count,
+                db=database, **conn_kwargs) 
 
     def create_foreign_key(self, model_class, field):
         compiler = self.compiler()
