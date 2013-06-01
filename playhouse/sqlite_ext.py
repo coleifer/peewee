@@ -8,11 +8,15 @@ from peewee import Expr, QueryCompiler, R, transaction
 
 FTS_VER = sqlite3.sqlite_version_info[:3] >= (3, 7, 4) and 'FTS4' or 'FTS3'
 
+
 class SqliteQueryCompiler(QueryCompiler):
-    def create_table_sql(self, model_class, safe=False, vt_options=None):
+    """
+    Subclass of QueryCompiler that can be used to construct virtual tables.
+    """
+    def create_table_sql(self, model_class, safe=False, options=None):
         if issubclass(model_class, VirtualModel):
             parts = ['CREATE VIRTUAL TABLE']
-            using = ['USING %s' % model_class.extension]
+            using = ['USING %s' % model_class._extension]
         else:
             parts = ['CREATE TABLE']
             using = []
@@ -21,22 +25,23 @@ class SqliteQueryCompiler(QueryCompiler):
         parts.append(self.quote(model_class._meta.db_table))
         parts.extend(using)
         fields = [self.field_sql(f) for f in model_class._meta.get_fields()]
-        if vt_options:
-            fields.extend('%s=%s' % (k, v) for k, v in vt_options.items())
+        if options:
+            fields.extend('%s=%s' % (k, v) for k, v in options.items())
         parts.append('(%s)' % ', '.join(fields))
         return parts
 
-    def create_table(self, model_class, safe=False, vt_options=None):
+    def create_table(self, model_class, safe=False, options=None):
         return ' '.join(self.create_table_sql(
             model_class,
             safe=safe,
-            vt_options=vt_options))
+            options=options))
 
 class VirtualModel(Model):
-    extension = ''
+    """Model class stored using a Sqlite virtual table."""
+    _extension = ''
 
 class FTSModel(VirtualModel):
-    extension = FTS_VER
+    _extension = FTS_VER
 
     @classmethod
     def create_table(cls, fail_silently=False, **options):
@@ -46,31 +51,52 @@ class FTSModel(VirtualModel):
         if 'content_model' in options:
             options['content'] = options.pop('content_model')._meta.db_table
 
-        cls._meta.database.create_table(cls, vt_options=options)
+        cls._meta.database.create_table(cls, options=options)
         cls._create_indexes()
 
     @classmethod
+    def _fts_cmd(cls, cmd):
+        tbl = cls._meta.db_table
+        res = cls._meta.database.execute_sql(
+            "INSERT INTO %s(%s) VALUES('%s');" % (tbl, tbl, cmd))
+        return res.fetchone()
+
+    @classmethod
     def optimize(cls):
-        return cls._meta.database.optimize(cls)
+        return cls._fts_cmd('optimize')
 
     @classmethod
     def rebuild(cls):
-        return cls._meta.database.rebuild(cls)
+        return cls._fts_cmd('rebuild')
 
     @classmethod
     def integrity_check(cls):
-        return cls._meta.database.integrity_check(cls)
+        return cls._fts_cmd('integrity-check')
 
     @classmethod
     def merge(cls, blocks=200, segments=8):
-        return cls._meta.database.merge(cls, blocks, segments)
+        return cls._fts_cmd('merge=%s,%s' % (blocks, segments))
 
     @classmethod
     def automerge(cls, state=True):
-        return cls._meta.database.automerge(cls, state)
+        return cls._fts_cmd('automerge=%s' % (state and '1' or '0'))
+
+    @classmethod
+    def rank(cls, alias=None):
+        rank_fn = Rank(cls)
+        if alias:
+            return rank_fn.alias(alias)
+        return rank_fn
 
 
 class SqliteExtDatabase(SqliteDatabase):
+    """
+    Database class which provides additional Sqlite-specific functionality:
+
+    * Register custom aggregates, collations and functions
+    * Specify a row factory
+    * Advanced transactions (specify isolation level)
+    """
     compiler_class = SqliteQueryCompiler
 
     def __init__(self, *args, **kwargs):
@@ -119,9 +145,9 @@ class SqliteExtDatabase(SqliteDatabase):
     def row_factory(self, fn):
         self._row_factory = fn
 
-    def create_table(self, model_class, safe=False, vt_options=None):
+    def create_table(self, model_class, safe=False, options=None):
         qc = self.compiler()
-        create_sql = qc.create_table(model_class, safe, vt_options)
+        create_sql = qc.create_table(model_class, safe, options)
         return self.execute_sql(create_sql)
 
     def create_index(self, model_class, field_name, unique=False):
@@ -129,36 +155,9 @@ class SqliteExtDatabase(SqliteDatabase):
             return
         return super(SqliteExtDatabase, self).create_index(model_class, field_name, unique)
 
-    def _fts_cmd(self, model_class, cmd):
-        tbl = model_class._meta.db_table
-        res = self.execute_sql("INSERT INTO %s(%s) VALUES('%s');" % (tbl, tbl, cmd))
-        return res.fetchone()
-
-    def optimize(self, model_class):
-        return self._fts_cmd(model_class, 'optimize')
-
-    def rebuild(self, model_class):
-        return self._fts_cmd(model_class, 'rebuild')
-
-    def integrity_check(self, model_class):
-        return self._fts_cmd(model_class, 'integrity-check')
-
-    def merge(self, model_class, blocks=200, segments=8):
-        return self._fts_cmd(model_class, 'merge=%s,%s' % (blocks, segments))
-
-    def automerge(self, model_class, state=True):
-        return self._fts_cmd(model_class, 'automerge=%s' % (state and '1' or '0'))
-
     def granular_transaction(self, lock_type='deferred'):
         assert lock_type.lower() in ('deferred', 'immediate', 'exclusive')
         return granular_transaction(self, lock_type)
-
-
-SqliteExtDatabase.register_ops({
-    'match': 'MATCH',
-})
-def match(lhs, rhs):
-    return Expr(lhs, 'match', rhs)
 
 
 class granular_transaction(transaction):
@@ -181,6 +180,14 @@ class granular_transaction(transaction):
         self.conn.isolation_level = self._orig_isolation
         return success
 
+
+OP_MATCH = 'match'
+SqliteExtDatabase.register_ops({
+    OP_MATCH: 'MATCH',
+})
+
+def match(lhs, rhs):
+    return Expr(lhs, OP_MATCH, rhs)
 
 # Shortcut for calculating ranks.
 Rank = lambda model: fn.rank(fn.matchinfo(R(model._meta.db_table)))
