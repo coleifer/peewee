@@ -17,6 +17,7 @@ import sys
 import threading
 from collections import deque, namedtuple
 from copy import deepcopy
+from inspect import isclass
 
 __all__ = [
     'BigIntegerField',
@@ -828,6 +829,9 @@ class QueryCompiler(object):
         elif isinstance(expr, Model):
             s = self.interpolation
             p = [expr.get_id()]
+        elif isclass(expr) and issubclass(expr, Model):
+            s = self.quote(expr._meta.db_table)
+            p = []
         elif conv and p:
             p = [conv.db_value(i) for i in p]
 
@@ -1499,7 +1503,7 @@ class SelectQuery(Query):
                 accum.append(arg)
             elif isinstance(arg, ModelAlias):
                 accum.extend(arg.get_proxy_fields())
-            elif issubclass(arg, Model):
+            elif isclass(arg) and issubclass(arg, Model):
                 accum.extend(arg._meta.get_fields())
         return accum
 

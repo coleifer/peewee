@@ -1,3 +1,36 @@
+"""
+Sqlite3 extensions
+==================
+
+* Define custom aggregates, collations and functions
+* Basic support for virtual tables
+* Basic support for FTS3/4
+* Specify isolation level in transactions
+
+Example usage of the Full-text search:
+
+class Document(FTSModel):
+    title = TextField()  # type affinities are ignored in FTS
+    content = TextField()
+
+Document.create_table(tokenize='porter')  # use the porter stemmer
+
+# populate the documents using normal operations.
+for doc in documents:
+    Document.create(title=doc['title'], content=doc['content'])
+
+# use the "match" operation for FTS queries.
+matching_docs = Document.select().where(match(Document.title, 'some query'))
+
+# to sort by best match, use the custom "rank" function.
+best_docs = (Document
+             .select(Document, Document.rank('score'))
+             .where(match(Document.title, 'some query'))
+             .order_by(R('score').desc()))
+
+# or use the shortcut method.
+best_docs = Document.match('some phrase')
+"""
 import inspect
 import sqlite3
 import struct
@@ -80,6 +113,13 @@ class FTSModel(VirtualModel):
     @classmethod
     def automerge(cls, state=True):
         return cls._fts_cmd('automerge=%s' % (state and '1' or '0'))
+
+    @classmethod
+    def match(cls, search):
+        return (cls
+                .select(cls, cls.rank().alias('score'))
+                .where(match(cls, search))
+                .order_by(R('score').desc()))
 
     @classmethod
     def rank(cls, alias=None):
