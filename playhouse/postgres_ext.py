@@ -58,6 +58,10 @@ class HStoreField(Field):
         return Expr(self, OP_HCONTAINS_ANY_KEY, Param(value))
 
 
+class DateTimeTZField(DateTimeField):
+    db_field = 'datetime_tz'
+
+
 class UUIDField(Field):
     db_field = 'uuid'
 
@@ -94,7 +98,10 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
         register_hstore(conn, globally=True)
         return conn
 
-PostgresqlExtDatabase.register_fields({'hash': 'hstore', 'uuid': 'uuid'})
+PostgresqlExtDatabase.register_fields({
+    'hash': 'hstore',
+    'datetime_tz': 'timestamp with time zone',
+    'uuid': 'uuid'})
 PostgresqlExtDatabase.register_ops({
     OP_HCONTAINS_DICT: '@>',
     OP_HCONTAINS_KEYS: '?&',

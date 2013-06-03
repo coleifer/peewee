@@ -1,3 +1,4 @@
+import datetime
 import unittest
 import uuid
 
@@ -20,6 +21,9 @@ class Testing(BaseModel):
 
 class TestingID(BaseModel):
     uniq = UUIDField()
+
+class TZModel(BaseModel):
+    dt = DateTimeTZField()
 
 
 class PostgresExtTestCase(unittest.TestCase):
@@ -45,6 +49,19 @@ class PostgresExtTestCase(unittest.TestCase):
 
         t2 = TestingID.get(TestingID.uniq == uuid_obj)
         self.assertEqual(t1, t2)
+
+    def test_tz_field(self):
+        TZModel.drop_table(True)
+        TZModel.create_table()
+
+        test_db.execute_sql('set time zone "us/central";')
+
+        dt = datetime.datetime.now()
+        tz = TZModel.create(dt=dt)
+        self.assertTrue(tz.dt.tzinfo is None)
+
+        tz = TZModel.get(TZModel.id == tz.id)
+        self.assertFalse(tz.dt.tzinfo is None)
 
     def test_storage(self):
         self.create()
