@@ -82,6 +82,163 @@ apsw_ext API notes
         :param string mod_name: name to use for module
 
 
+Sqlite Extensions
+-----------------
+
+The SQLite extensions module provides support for some interesting sqlite-only
+features:
+
+* Define custom aggregates, collations and functions.
+* Basic support for virtual tables.
+* Basic support for FTS3/4 (sqlite full-text search).
+* Specify isolation level in transactions.
+
+
+Defining a custom aggregate
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Aggregates are classes that implement two important methods.  Below is an
+example custom aggregate that calculates a weighted average.
+
+.. code-block:: python
+
+    class WeightedAverage(object):
+        def __init__(self):
+            self.total_weight = 0.0
+            self.total_ct = 0.0
+
+        def step(self, value, wt=None):
+            wt = wt or 1.0
+            self.total_weight += wt
+            self.total_ct += (wt * value)
+
+        def finalize(self):
+            if self.total_weight != 0.0:
+                return self.total_ct / self.total_weight
+            return 0.0
+
+
+To use the custom aggregate function register it with the database by passing
+in the class, the number of arguments it accepts, and the name to access it
+with:
+
+
+.. code-block:: python
+
+    db = SqliteExtDatabase('foo.db')
+    db.register_aggregate(WeightedAverage, 2, 'wavg')
+
+
+Use it as you would any other aggregate function:
+
+.. code-block:: python
+
+    vq = (Values
+          .select(
+              Values.type,
+              fn.wavg(Values.value, Values.weight).alias('wtavg'))
+          .group_by(Values.type))
+
+
+Defining a custom collation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+You can provide custom sorting functions.  Below is a simple example that sorts
+in reverse:
+
+.. code-block:: python
+
+    def collate_reverse(s1, s2):
+        return -cmp(s1, s2)
+
+To use the collation register it with the database:
+
+.. code-block:: python
+
+    db.register_collation(collate_reverse)
+
+    # explicitly specify our collation.
+    ordering = Clause(Person.last_name, R('collate collate_reverse'))
+    names_ztoa = Person.select().order_by(ordering)
+
+
+Defining a custom function
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Lastly, you can provide custom functions to operate on your queries.  Here is
+an example "title-case" function:
+
+.. code-block:: python
+
+    def title_case(s):
+        return s.title()
+
+    db.register_function(title_case)
+
+    # use in the select clause, where clause, etc.
+    titled_books = Book.select(fn.title_case(Book.title))
+
+    war_and_peace = (Book
+                     .select()
+                     .where(fn.title_case(Book.title) == 'War And Peace'))
+
+Full-text search
+^^^^^^^^^^^^^^^^
+
+Below is a simple example of using FTS:
+
+.. code-block:: python
+
+    class Document(FTSModel):
+        title = TextField()  # type affinities are ignored by FTS
+        content = TextField()
+
+    Document.create_table(tokenize='porter')
+
+    # populate documents using normal operations.
+    for doc in list_of_docs_to_index:
+        Document.create(title=doc['title'], content=doc['content'])
+
+    # use the "match" operation for FTS queries.
+    matching_docs = Document.select().where(match(Document.title, 'some query'))
+
+    # to sort by best match, use the custom "rank" function.
+    best = (Document
+            .select(Document, Document.rank('score'))
+            .where(match(Document.title, 'some query'))
+            .order_by(R('score').desc()))
+
+    # or use the shortcut method:
+    best = Document.match('some phrase')
+
+
+Transaction support
+^^^^^^^^^^^^^^^^^^^
+
+With the ``granular_transaction`` helper, you can specify the isolation level
+for an individual transaction.  The valid options are:
+
+* ``exclusive``
+* ``immediate``
+* ``deferred``
+
+Example usage:
+
+.. code-block:: python
+
+    with db.granular_transaction('exclusive'):
+        # no other readers or writers!
+        (Account
+         .update(Account.balance=Account.balance - 100)
+         .where(Account.id == from_acct)
+         .execute())
+
+        (Account
+         .update(Account.balance=Account.balance + 100)
+         .where(Account.id == to_acct)
+         .execute())
+
+
 Postgresql Extension (HStore)
 -----------------------------
 
@@ -90,6 +247,7 @@ currently:
 
 * :ref:`hstore support <hstore>`
 * `UUID` field type
+* `DateTimeTZ` field type (timezone-aware datetime field)
 
 In the future I would like to add support for more of postgresql's features.
 If there is a particular feature you would like to see added, please
@@ -641,7 +799,7 @@ Contains utilities helpful when testing peewee projects.
     :param boolean fail_silently: Whether the table create / drop should fail
         silently.
 
-    Example::
+    Example:
 
     .. code-block:: python
 
