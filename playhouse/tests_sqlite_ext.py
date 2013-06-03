@@ -4,6 +4,11 @@ import unittest
 from peewee import *
 import sqlite_ext as sqe
 
+# use a disk-backed db since memory dbs only exist for a single connection and
+# we need to share the db w/2 for the locking tests.  additionally, set the
+# sqlite_busy_timeout to 100ms so when we test locking it doesn't take forever
+ext_db = sqe.SqliteExtDatabase('tmp.db', timeout=.1)
+
 # test aggregate.
 class WeightedAverage(object):
     def __init__(self):
@@ -20,18 +25,21 @@ class WeightedAverage(object):
             return self.total_ct / self.total_weight
         return 0.0
 
-# test collation
+# test collations
 def collate_reverse(s1, s2):
     return -cmp(s1, s2)
+
+@ext_db.collation()
+def collate_case_insensitive(s1, s2):
+    return cmp(s1.lower(), s2.lower())
 
 # test function
 def title_case(s):
     return s.title()
 
-# use a disk-backed db since memory dbs only exist for a single connection and
-# we need to share the db w/2 for the locking tests.  additionally, set the
-# sqlite_busy_timeout to 100ms so when we test locking it doesn't take forever
-ext_db = sqe.SqliteExtDatabase('tmp.db', timeout=.1)
+@ext_db.func()
+def rstrip(s, n):
+    return s.rstrip(n)
 
 # register test aggregates / collations / functions
 ext_db.register_aggregate(WeightedAverage, 1, 'weighted_avg')
@@ -187,6 +195,17 @@ class SqliteExtTestCase(unittest.TestCase):
         pq = Post.select().order_by(Clause(Post.message, R('collate collate_reverse')))
         self.assertEqual([p.message for p in pq], ['p5', 'p4', 'p3', 'p2', 'p1'])
 
+    def test_collation_decorator(self):
+        posts = [Post.create(message=m) for m in ['aaa', 'Aab', 'ccc', 'Bba', 'BbB']]
+        pq = Post.select().order_by(collate_case_insensitive.collation(Post.message))
+        self.assertEqual([p.message for p in pq], [
+            'aaa',
+            'Aab',
+            'Bba',
+            'BbB',
+            'ccc',
+        ])
+
     def test_custom_function(self):
         p1 = Post.create(message='this is a test')
         p2 = Post.create(message='another TEST')
@@ -199,6 +218,16 @@ class SqliteExtTestCase(unittest.TestCase):
             'This Is A Test',
             'Another Test',
         ])
+
+    def test_function_decorator(self):
+        [Post.create(message=m) for m in ['testing', 'chatting  ', '  foo']]
+        pq = Post.select(fn.rstrip(Post.message, 'ing')).order_by(Post.id)
+        self.assertEqual([x[0] for x in pq.tuples()], [
+            'test', 'chatting  ', '  foo'])
+
+        pq = Post.select(fn.rstrip(Post.message, ' ')).order_by(Post.id)
+        self.assertEqual([x[0] for x in pq.tuples()], [
+            'testing', 'chatting', '  foo'])
 
     def test_granular_transaction(self):
         conn = ext_db.get_conn()

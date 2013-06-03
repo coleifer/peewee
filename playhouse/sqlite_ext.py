@@ -165,13 +165,36 @@ class SqliteExtDatabase(SqliteDatabase):
     def register_aggregate(self, klass, num_params, name=None):
         self._aggregates[name or klass.__name__.lower()] = (klass, num_params)
 
+    def aggregate(self, num_params, name=None):
+        def decorator(klass):
+            self.register_aggregate(klass, num_params, name)
+            return klass
+        return decorator
+
     def register_collation(self, fn, name=None):
-        self._collations[name or fn.__name__] = fn
+        name = name or fn.__name__
+        def _collation(*args):
+            expressions = args + (R('collate %s' % name),)
+            return Clause(*expressions)
+        fn.collation = _collation
+        self._collations[name] = fn
+
+    def collation(self, name=None):
+        def decorator(fn):
+            self.register_collation(fn, name)
+            return fn
+        return decorator
 
     def register_function(self, fn, name=None, num_params=None):
         if num_params is None:
             num_params = self._argc(fn)
         self._functions[name or fn.__name__] = (fn, num_params)
+
+    def func(self, name=None, num_params=None):
+        def decorator(fn):
+            self.register_function(fn, name, num_params)
+            return fn
+        return decorator
 
     def unregister_aggregate(self, name):
         del(self._aggregates[name])
