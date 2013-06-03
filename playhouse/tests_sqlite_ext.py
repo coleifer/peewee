@@ -48,7 +48,14 @@ class Post(BaseExtModel):
     message = TextField()
 
 class FTSPost(Post, sqe.FTSModel):
+    """Automatically managed and populated via the Post model."""
     pass
+
+class FTSDoc(sqe.FTSModel):
+    """Manually managed and populated using queries."""
+    message = TextField()
+    class Meta:
+        database = ext_db
 
 class Values(BaseExtModel):
     klass = IntegerField()
@@ -66,14 +73,24 @@ class SqliteExtTestCase(unittest.TestCase):
         'Faith has to do with things that are not seen and hope with things that are not at hand.',
     ]
     def setUp(self):
+        FTSDoc.drop_table(True)
         FTSPost.drop_table(True)
         Post.drop_table(True)
         Values.drop_table(True)
         Values.create_table()
         Post.create_table()
         FTSPost.create_table(tokenize='porter', content_model=Post)
+        FTSDoc.create_table(tokenize='porter')
 
-    def test_fts(self):
+    def test_fts_manual(self):
+        matches = lambda s: sqe.match(FTSDoc.message, s)
+        messages = [FTSDoc.create(message=msg) for msg in self.messages]
+        q = FTSDoc.select().where(matches('believe')).order_by(FTSDoc.id)
+        self.assertEqual([x.message for x in q], [
+            self.messages[0],
+            self.messages[3]])
+
+    def test_fts_auto(self):
         matches = lambda s: sqe.match(FTSPost.message, s)
         posts = []
         for message in self.messages:
@@ -87,22 +104,22 @@ class SqliteExtTestCase(unittest.TestCase):
         FTSPost.optimize()
 
         # it will stem faithful -> faith b/c we use the porter tokenizer
-        pq = FTSPost.select().where(matches('faith')).order_by('id')
+        pq = FTSPost.select().where(matches('faith')).order_by(FTSPost.id)
         self.assertEqual([x.message for x in pq], self.messages)
 
-        pq = FTSPost.select().where(matches('believe')).order_by('id')
+        pq = FTSPost.select().where(matches('believe')).order_by(FTSPost.id)
         self.assertEqual([x.message for x in pq], [
             self.messages[0],
             self.messages[3],
         ])
 
-        pq = FTSPost.select().where(matches('thin*')).order_by('id')
+        pq = FTSPost.select().where(matches('thin*')).order_by(FTSPost.id)
         self.assertEqual([x.message for x in pq], [
             self.messages[2],
             self.messages[4],
         ])
 
-        pq = FTSPost.select().where(matches('"it is"')).order_by('id')
+        pq = FTSPost.select().where(matches('"it is"')).order_by(FTSPost.id)
         self.assertEqual([x.message for x in pq], [
             self.messages[2],
             self.messages[3],
