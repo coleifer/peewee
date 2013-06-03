@@ -148,18 +148,15 @@ in reverse:
 
 .. code-block:: python
 
+    @db.collation()
     def collate_reverse(s1, s2):
         return -cmp(s1, s2)
 
-To use the collation register it with the database:
+Here is how you can use the collation:
 
 .. code-block:: python
 
-    db.register_collation(collate_reverse)
-
-    # explicitly specify our collation.
-    ordering = Clause(Person.last_name, R('collate collate_reverse'))
-    names_ztoa = Person.select().order_by(ordering)
+    Book.select().order_by(collate_reverse.collation(Book.title))
 
 
 Defining a custom function
@@ -170,10 +167,9 @@ an example "title-case" function:
 
 .. code-block:: python
 
+    @db.func()
     def title_case(s):
         return s.title()
-
-    db.register_function(title_case)
 
     # use in the select clause, where clause, etc.
     titled_books = Book.select(fn.title_case(Book.title))
