@@ -81,6 +81,10 @@ apsw_ext API notes
 
         :param string mod_name: name to use for module
 
+.. note::
+    Be sure to use the ``Field`` subclasses defined in the ``apsw_ext``
+    module, as they will properly handle adapting the data types for storage.
+
 
 Sqlite Extensions
 -----------------
@@ -94,145 +98,228 @@ features:
 * Specify isolation level in transactions.
 
 
-Defining a custom aggregate
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite_ext API notes
+^^^^^^^^^^^^^^^^^^^^
 
-Aggregates are classes that implement two important methods.  Below is an
-example custom aggregate that calculates a weighted average.
+.. py:class:: SqliteExtDatabase(database, **kwargs)
 
-.. code-block:: python
+    Subclass of the :py:class:`SqliteDatabase` that provides some advanced
+    features only offered by Sqlite.
 
-    class WeightedAverage(object):
-        def __init__(self):
-            self.total_weight = 0.0
-            self.total_ct = 0.0
+    * Register custom aggregates, collations and functions
+    * Specify a row factory
+    * Advanced transactions (specify isolation level)
 
-        def step(self, value, wt=None):
-            wt = wt or 1.0
-            self.total_weight += wt
-            self.total_ct += (wt * value)
+    .. py:method:: aggregate(num_params[, name])
 
-        def finalize(self):
-            if self.total_weight != 0.0:
-                return self.total_ct / self.total_weight
-            return 0.0
+        Class-decorator for registering custom aggregation functions.
 
+        :param num_params: integer representing number of parameters the
+            aggregate function accepts.
+        :param name: string name for the aggregate, defaults to the name of
+            the class.
 
-To use the custom aggregate function register it with the database by passing
-in the class, the number of arguments it accepts, and the name to access it
-with:
+        .. code-block:: python
 
+            @db.aggregate(1, 'product')
+            class Product(object):
+                """Like sum, except calculate the product of a series of numbers."""
+                def __init__(self):
+                    self.product = 1
 
-.. code-block:: python
+                def step(self, value):
+                    self.product *= value
 
-    db = SqliteExtDatabase('foo.db')
-    db.register_aggregate(WeightedAverage, 2, 'wavg')
+                def finalize(self):
+                    return self.product
 
+            # To use this aggregate:
+            product = (Score
+                       .select(fn.product(Score.value))
+                       .scalar())
 
-Use it as you would any other aggregate function:
+    .. py:method:: collation([name])
 
-.. code-block:: python
+        Function decorator for registering a custom collation.
 
-    vq = (Values
-          .select(
-              Values.type,
-              fn.wavg(Values.value, Values.weight).alias('wtavg'))
-          .group_by(Values.type))
+        :param name: string name to use for this collation.
 
+        .. code-block:: python
 
-Defining a custom collation
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            @db.collation()
+            def collate_reverse(s1, s2):
+                return -cmp(s1, s2)
 
-You can provide custom sorting functions.  Below is a simple example that sorts
-in reverse:
+            # To use this collation:
+            Book.select().order_by(collate_reverse.collation(Book.title))
 
-.. code-block:: python
+        As you might have noticed, the original ``collate_reverse`` function
+        has a special attribute called ``collation`` attached to it.  This extra
+        attribute provides a shorthand way to generate the SQL necessary to use
+        our custom collation.
 
-    @db.collation()
-    def collate_reverse(s1, s2):
-        return -cmp(s1, s2)
+    .. py:method:: func([name[, num_params]])
 
-Here is how you can use the collation:
+        Function decorator for registering user-defined functions.
 
-.. code-block:: python
+        :param name: name to use for this function.
+        :param num_params: number of parameters this function accepts.  If not
+            provided, peewee will introspect the function for you.
 
-    Book.select().order_by(collate_reverse.collation(Book.title))
+        .. code-block:: python
 
+            @db.func()
+            def title_case(s):
+                return s.title()
 
-Defining a custom function
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+            # Use in the select clause...
+            titled_books = Book.select(fn.title_case(Book.title))
 
-Lastly, you can provide custom functions to operate on your queries.  Here is
-an example "title-case" function:
+            @db.func()
+            def sha1(s):
+                return hashlib.sha1(s).hexdigest()
 
-.. code-block:: python
+            # Use in the where clause...
+            user = User.select().where(
+                (User.username == username) &
+                (fn.sha1(User.password) == password_hash)).get()
 
-    @db.func()
-    def title_case(s):
-        return s.title()
+    .. py:method:: granular_transaction([lock_type='deferred'])
 
-    # use in the select clause, where clause, etc.
-    titled_books = Book.select(fn.title_case(Book.title))
+        With the ``granular_transaction`` helper, you can specify the isolation level
+        for an individual transaction.  The valid options are:
 
-    war_and_peace = (Book
-                     .select()
-                     .where(fn.title_case(Book.title) == 'War And Peace'))
+        * ``exclusive``
+        * ``immediate``
+        * ``deferred``
 
-Full-text search
-^^^^^^^^^^^^^^^^
+        Example usage:
 
-Below is a simple example of using FTS:
+        .. code-block:: python
 
-.. code-block:: python
+            with db.granular_transaction('exclusive'):
+                # no other readers or writers!
+                (Account
+                 .update(Account.balance=Account.balance - 100)
+                 .where(Account.id == from_acct)
+                 .execute())
 
-    class Document(FTSModel):
-        title = TextField()  # type affinities are ignored by FTS
-        content = TextField()
-
-    Document.create_table(tokenize='porter')
-
-    # populate documents using normal operations.
-    for doc in list_of_docs_to_index:
-        Document.create(title=doc['title'], content=doc['content'])
-
-    # use the "match" operation for FTS queries.
-    matching_docs = Document.select().where(match(Document.title, 'some query'))
-
-    # to sort by best match, use the custom "rank" function.
-    best = (Document
-            .select(Document, Document.rank('score'))
-            .where(match(Document.title, 'some query'))
-            .order_by(R('score').desc()))
-
-    # or use the shortcut method:
-    best = Document.match('some phrase')
+                (Account
+                 .update(Account.balance=Account.balance + 100)
+                 .where(Account.id == to_acct)
+                 .execute())
 
 
-Transaction support
-^^^^^^^^^^^^^^^^^^^
+.. py:class:: VirtualModel
 
-With the ``granular_transaction`` helper, you can specify the isolation level
-for an individual transaction.  The valid options are:
+    Subclass of :py:class:`Model` that signifies the model operates using a
+    virtual table provided by a sqlite extension.
 
-* ``exclusive``
-* ``immediate``
-* ``deferred``
+    .. py:attribute:: _extension = 'name of sqlite extension'
 
-Example usage:
 
-.. code-block:: python
+.. py:class:: FTSModel
 
-    with db.granular_transaction('exclusive'):
-        # no other readers or writers!
-        (Account
-         .update(Account.balance=Account.balance - 100)
-         .where(Account.id == from_acct)
-         .execute())
+    Model class that provides support for Sqlite's full-text search extension.
+    Models should be defined normally, however there are a couple caveats:
 
-        (Account
-         .update(Account.balance=Account.balance + 100)
-         .where(Account.id == to_acct)
-         .execute())
+    * Indexes are ignored completely
+    * Sqlite will treat all column types as :py:class:`TextField` (although you
+      can store other data types, Sqlite will treat them as text).
+
+    Therefore it usually makes sense to index the content you intend to search
+    and a single link back to the original document, since all SQL queries
+    *except* full-text searches and ``rowid`` lookups will be slow.
+
+    Example:
+
+    .. code-block:: python
+
+        class Document(FTSModel):
+            title = TextField()  # type affinities are ignored by FTS, so use TextField
+            content = TextField()
+
+        Document.create_table(tokenize='porter')  # use the porter stemmer.
+
+        # populate documents using normal operations.
+        for doc in list_of_docs_to_index:
+            Document.create(title=doc['title'], content=doc['content'])
+
+        # use the "match" operation for FTS queries.
+        matching_docs = Document.select().where(match(Document.title, 'some query'))
+
+        # to sort by best match, use the custom "rank" function.
+        best = (Document
+                .select(Document, Document.rank('score'))
+                .where(match(Document.title, 'some query'))
+                .order_by(R('score').desc()))
+
+        # or use the shortcut method:
+        best = Document.match('some phrase')
+
+    If you have an existing table and would like to add search for a column
+    on that table, you can specify it using the ``content`` option:
+
+    .. code-block:: python
+
+        class Blog(Model):
+            title = CharField()
+            pub_date = DateTimeField()
+            content = TextField()  # we want to search this.
+
+        class FTSBlog(FTSModel):
+            content = TextField()
+
+        Blog.create_table()
+        FTSBlog.create_table(content=Blog.content)
+
+        # Now, we can manage content in the FTSBlog.  To populate it with
+        # content:
+        FTSBlog.rebuild()
+
+        # Optimize the index.
+        FTSBlog.optimize()
+
+    The ``content`` option accepts either a single :py:class:`Field` or a :py:class:`Model`
+    and can reduce the amount of storage used.  However, content will need to be
+    manually moved to/from the associated ``FTSModel``.
+
+    .. py:classmethod:: create_table([fail_silently=False[, **options]])
+
+        :param boolean fail_silently: do not re-create if table already exists.
+        :param options: options passed along when creating the table, e.g. ``content``.
+
+    .. py:classmethod:: rebuild()
+
+        Rebuild the search index -- this only works when the ``content`` option
+        was specified during table creation.
+
+    .. py:classmethod:: optimize()
+
+        Optimize the search index.
+
+    .. py:classmethod:: match(search_phrase)
+
+        Shorthand way of performing a search for a given phrase.  Example:
+
+        .. code-block:: python
+
+            for doc in Document.match('search phrase'):
+                print 'match: ', doc.title
+
+    .. py:classmethod:: rank([alias])
+
+        Shorthand way of sorting search results by the quality of their match.
+
+        .. code-block:: python
+
+            docs = (Document
+                    .select(Document, Document.rank().alias('score'))
+                    .where(match(Document, search))
+                    .order_by(R('score').desc()))
+
+        The above code is exactly what the :py:meth:`match` function
+        provides.
 
 
 Postgresql Extension (HStore)

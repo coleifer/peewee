@@ -59,7 +59,14 @@ class SqliteQueryCompiler(QueryCompiler):
         parts.extend(using)
         fields = [self.field_sql(f) for f in model_class._meta.get_fields()]
         if options:
-            fields.extend('%s=%s' % (k, v) for k, v in options.items())
+            for k, v in options.items():
+                if isinstance(v, Field):
+                    v = '.'.join((
+                        self.quote(v.model_class._meta.db_table),
+                        self.quote(v.name)))
+                elif inspect.isclass(v) and issubclass(v, Model):
+                    v = self.quote(v._meta.db_table)
+                fields.append('%s=%s' % (k, v))
         parts.append('(%s)' % ', '.join(fields))
         return parts
 
@@ -80,9 +87,6 @@ class FTSModel(VirtualModel):
     def create_table(cls, fail_silently=False, **options):
         if fail_silently and cls.table_exists():
             return
-
-        if 'content_model' in options:
-            options['content'] = options.pop('content_model')._meta.db_table
 
         cls._meta.database.create_table(cls, options=options)
         cls._create_indexes()

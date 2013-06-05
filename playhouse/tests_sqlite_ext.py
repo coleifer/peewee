@@ -65,6 +65,11 @@ class FTSDoc(sqe.FTSModel):
     class Meta:
         database = ext_db
 
+class ManagedDoc(sqe.FTSModel):
+    message = TextField()
+    class Meta:
+        database = ext_db
+
 class Values(BaseExtModel):
     klass = IntegerField()
     value = FloatField()
@@ -82,12 +87,14 @@ class SqliteExtTestCase(unittest.TestCase):
     ]
     def setUp(self):
         FTSDoc.drop_table(True)
+        ManagedDoc.drop_table(True)
         FTSPost.drop_table(True)
         Post.drop_table(True)
         Values.drop_table(True)
         Values.create_table()
         Post.create_table()
-        FTSPost.create_table(tokenize='porter', content_model=Post)
+        FTSPost.create_table(tokenize='porter', content=Post)
+        ManagedDoc.create_table(tokenize='porter', content=Post.message)
         FTSDoc.create_table(tokenize='porter')
 
     def assertMessages(self, query, indices):
@@ -109,34 +116,35 @@ class SqliteExtTestCase(unittest.TestCase):
             (self.messages[4], 2.0 / 3),
             (self.messages[2], 1.0 / 3),
         ])
-    def test_fts_auto(self):
-        matches = lambda s: sqe.match(FTSPost.message, s)
+
+    def _test_fts_auto(self, ModelClass):
+        matches = lambda s: sqe.match(ModelClass.message, s)
         posts = []
         for message in self.messages:
             posts.append(Post.create(message=message))
 
         # Nothing matches, index is not built.
-        pq = FTSPost.select().where(matches('faith'))
+        pq = ModelClass.select().where(matches('faith'))
         self.assertEqual(list(pq), [])
 
-        FTSPost.rebuild()
-        FTSPost.optimize()
+        ModelClass.rebuild()
+        ModelClass.optimize()
 
         # it will stem faithful -> faith b/c we use the porter tokenizer
-        pq = FTSPost.select().where(matches('faith')).order_by(FTSPost.id)
+        pq = ModelClass.select().where(matches('faith')).order_by(ModelClass.id)
         self.assertMessages(pq, range(len(self.messages)))
 
-        pq = FTSPost.select().where(matches('believe')).order_by(FTSPost.id)
+        pq = ModelClass.select().where(matches('believe')).order_by(ModelClass.id)
         self.assertMessages(pq, [0, 3])
 
-        pq = FTSPost.select().where(matches('thin*')).order_by(FTSPost.id)
+        pq = ModelClass.select().where(matches('thin*')).order_by(ModelClass.id)
         self.assertMessages(pq, [2, 4])
 
-        pq = FTSPost.select().where(matches('"it is"')).order_by(FTSPost.id)
+        pq = ModelClass.select().where(matches('"it is"')).order_by(ModelClass.id)
         self.assertMessages(pq, [2, 3])
 
-        pq = (FTSPost
-              .select(FTSPost, sqe.Rank(FTSPost).alias('score'))
+        pq = (ModelClass
+              .select(ModelClass, sqe.Rank(ModelClass).alias('score'))
               .where(matches('things'))
               .order_by(R('score').desc()))
         self.assertEqual([(x.message, x.score) for x in pq], [
@@ -144,11 +152,17 @@ class SqliteExtTestCase(unittest.TestCase):
             (self.messages[2], 1.0 / 3),
         ])
 
-        pq = FTSPost.select(sqe.Rank(FTSPost)).where(matches('faithful')).tuples()
+        pq = ModelClass.select(sqe.Rank(ModelClass)).where(matches('faithful')).tuples()
         self.assertEqual([x[0] for x in pq], [.2] * 5)
 
-        pq = FTSPost.select(FTSPost.rank()).where(matches('faithful')).tuples()
+        pq = ModelClass.select(ModelClass.rank()).where(matches('faithful')).tuples()
         self.assertEqual([x[0] for x in pq], [.2] * 5)
+
+    def test_fts_auto_model(self):
+        self._test_fts_auto(FTSPost)
+
+    def test_fts_auto_field(self):
+        self._test_fts_auto(ManagedDoc)
 
     def test_custom_agg(self):
         data = (
