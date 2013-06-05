@@ -1806,11 +1806,11 @@ class Database(object):
             self.op_overrides)
 
     def execute_sql(self, sql, params=None, require_commit=True):
+        logger.debug((sql, params))
         cursor = self.get_cursor()
         res = cursor.execute(sql, params or ())
         if require_commit and self.get_autocommit():
             self.commit()
-        logger.debug((sql, params))
         return cursor
 
     def begin(self):
