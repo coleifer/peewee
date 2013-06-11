@@ -99,6 +99,8 @@ Point models at an instance of :py:class:`PostgresqlDatabase`.
 .. code-block:: python
 
     psql_db = PostgresqlDatabase('my_database', user='code')
+    # if your Postgres template doesn't use UTF8, you can set the connection encoding like so:
+    psql_db.get_conn().set_client_encoding('UTF8')
 
 
     class PostgresqlModel(Model):
