@@ -1568,6 +1568,11 @@ class ModelAPITestCase(ModelTestCase):
         # we get unicode back
         self.assertEqual(u2_db.username, ustr)
 
+    def test_unicode_issue202(self):
+        ustr = ulit('M\u00f6rk')
+        user = User.create(username=ustr)
+        self.assertEqual(user.username, ustr)
+
 class PrefetchTestCase(ModelTestCase):
     requires = [User, Blog, Comment, Parent, Child, Orphan, ChildPet, OrphanPet, Category]
     user_data = [
