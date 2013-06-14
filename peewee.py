@@ -15,7 +15,8 @@ import operator
 import re
 import sys
 import threading
-from collections import deque, namedtuple
+from collections import deque
+from collections import namedtuple
 from copy import deepcopy
 from inspect import isclass
 

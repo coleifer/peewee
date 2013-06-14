@@ -1,6 +1,10 @@
 import datetime
 
-from models import create_tables, drop_tables, User, Blog, Entry
+from models import Blog
+from models import Entry
+from models import User
+from models import create_tables
+from models import drop_tables
 
 
 def initialize():

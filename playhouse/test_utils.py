@@ -1,4 +1,5 @@
-from peewee import create_model_tables, drop_model_tables
+from peewee import create_model_tables
+from peewee import drop_model_tables
 
 
 class test_database(object):

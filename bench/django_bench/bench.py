@@ -1,7 +1,9 @@
 import datetime
 import os
 
-from models import User, Blog, Entry
+from models import Blog
+from models import Entry
+from models import User
 
 
 def initialize():

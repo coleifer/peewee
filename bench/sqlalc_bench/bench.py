@@ -2,9 +2,12 @@ import datetime
 import os
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, joinedload
+from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import sessionmaker
 
-from models import User, Blog, Entry
+from models import Blog
+from models import Entry
+from models import User
 
 db_file = os.path.join(os.getcwd(), 'test_sa.db')
 engine = create_engine('sqlite:///%s' % db_file)

@@ -1,9 +1,15 @@
 import os
 
-from sqlalchemy import (Table, Column, Integer, String, Boolean, DateTime,
-                        ForeignKey)
+from sqlalchemy import Table
+from sqlalchemy import Boolean
+from sqlalchemy import Column
+from sqlalchemy import DateTime
+from sqlalchemy import Integer
+from sqlalchemy import String
+from sqlalchemy import ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, backref
+from sqlalchemy.orm import backref
+from sqlalchemy.orm import relationship
 
 
 Base = declarative_base()
