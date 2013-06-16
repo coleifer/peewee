@@ -351,7 +351,7 @@ class Field(Leaf):
         self.help_text = help_text
         self.db_column = db_column
         self.default = default
-        self.choices = choices
+        self.choices = self.choices_attribute(choices)
         self.primary_key = primary_key
         self.sequence = sequence
 
@@ -401,6 +401,14 @@ class Field(Leaf):
 
     def field_attributes(self):
         return {}
+
+    def choices_attribute(self, choices):
+        if choices:
+            for choice in choices:
+                if not (isinstance(choice, tuple) and len(choice) == 2):
+                    raise ValueError("Choices argument must be and optional "
+                            "iterable containing 2-tuples of (value, display)")
+        return choices
 
     def get_db_field(self):
         return self.db_field
