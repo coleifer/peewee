@@ -2116,6 +2116,16 @@ class FieldTypeTestCase(ModelTestCase):
         self.assertNM(field.between(2, 3), ['c2', 'c3'])
         self.assertNM(field.between(5, 300), [])
 
+class FieldAttributeTestCase(ModelTestCase):
+
+    def setUp(self):
+        self.model = TestModel()
+
+    def test_choices(self):
+        self.assertRaises(ValueError, CharField, choices=[(None)])
+        choices=[('FIELD', 'field'), ('FIELD2', 'field2')]
+        field = CharField(choices=choices)
+        self.assertEquals(field.choices, choices)
 
 class DateTimeExtractTestCase(ModelTestCase):
     requires = [NullModel]
