@@ -703,7 +703,7 @@ class ForeignKeyField(IntegerField):
 
 class QueryCompiler(object):
     field_map = {
-        'bigint': 'INTEGER',
+        'bigint': 'BIGINT',
         'blob': 'BLOB',
         'bool': 'SMALLINT',
         'date': 'DATE',
@@ -1259,6 +1259,7 @@ class ModelQueryResultWrapper(QueryResultWrapper):
                         if isinstance(join.on, Expr):
                             fk_field = join.on.lhs
                         else:
+                            # When does this happen?
                             continue
 
                     if joined_inst.get_id() is None and fk_field.name in inst._data:
@@ -1923,7 +1924,6 @@ class SqliteDatabase(Database):
 class PostgresqlDatabase(Database):
     commit_select = True
     field_overrides = {
-        'bigint': 'BIGINT',
         'blob': 'BYTEA',
         'bool': 'BOOLEAN',
         'datetime': 'TIMESTAMP',
@@ -1987,7 +1987,6 @@ class PostgresqlDatabase(Database):
 class MySQLDatabase(Database):
     commit_select = True
     field_overrides = {
-        'bigint': 'BIGINT',
         'boolean': 'BOOL',
         'decimal': 'NUMERIC',
         'double': 'DOUBLE PRECISION',
