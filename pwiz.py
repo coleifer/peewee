@@ -45,11 +45,12 @@ RESERVED_WORDS = set([
 ])
 
 class ColumnInfo(object):
-    __slots__ = ['field_class', 'nullable']
+    __slots__ = ['field_class', 'nullable', 'is_pk']
 
-    def __init__(self, field_class, nullable):
+    def __init__(self, field_class, nullable, is_pk=False):
         self.field_class = field_class
         self.nullable = nullable
+        self.is_pk = is_pk
 
 ForeignKeyMapping = namedtuple('ForeignKeyMapping', ('column', 'table', 'pk'))
 
@@ -107,7 +108,8 @@ class Introspector(object):
 class PostgresqlIntrospector(Introspector):
     mapping = {
         16: BooleanField,
-        20: IntegerField,
+        17: BlobField,
+        20: BigIntegerField,
         21: IntegerField,
         23: IntegerField,
         25: TextField,
@@ -139,6 +141,20 @@ class PostgresqlIntrospector(Introspector):
             field_class = self.mapping.get(column.type_code, UnknownFieldType)
             is_null = null_map[column.name] == 'YES'
             accum[column.name] = ColumnInfo(field_class, is_null)
+
+        curs = self.conn.execute_sql("""
+            SELECT pg_attribute.attname
+            FROM pg_index, pg_class, pg_attribute
+            WHERE
+              pg_class.oid = '%s'::regclass AND
+              indrelid = pg_class.oid AND
+              pg_attribute.attrelid = pg_class.oid AND
+              pg_attribute.attnum = any(pg_index.indkey)
+              AND indisprimary;""" % table)
+        pks = [x[0] for x in curs.fetchall()]
+        for pk in pks:
+            accum[pk].field_class = PrimaryKeyField
+
         return accum
 
     def get_foreign_keys(self, table, schema='public'):
@@ -246,7 +262,9 @@ class SqliteIntrospector(Introspector):
             return self.mapping[column_type]
         elif re.search(self.re_varchar, column_type):
             return CharField
-        return UnknownFieldType
+        else:
+            column_type = re.sub('\(.+\)', '', column_type)
+            return self.mapping.get(column_type, UnknownFieldType)
 
     def get_columns(self, table):
         curs = self.conn.execute_sql('pragma table_info("%s")' % table)
@@ -277,7 +295,7 @@ class SqliteIntrospector(Introspector):
             if not match:
                 continue
 
-            fk_column, rel_table, rel_pk = [s.strip('"') for s in m.groups()]
+            fk_column, rel_table, rel_pk = [s.strip('"') for s in match.groups()]
             fks.append(ForeignKeyMapping(fk_column, rel_table, rel_pk))
         return fks
 
@@ -336,6 +354,7 @@ def introspect(db, schema=None):
     for table in tables:
         column_metadata[table] = {}
         for column, rel_table, rel_pk in table_fks[table]:
+            is_pk = table_columns[table][column].field_class is PrimaryKeyField
             table_columns[table][column].field_class = ForeignKeyField
             table_columns[rel_table][rel_pk].field_class = PrimaryKeyField
             if rel_table == table:
@@ -343,6 +362,8 @@ def introspect(db, schema=None):
             else:
                 ttm = table_to_model[rel_table]
             column_metadata[table][column] = {'rel_model': ttm}
+            if is_pk:
+                column_metadata[table][column]['primary_key'] = True
 
         for col_name, column_info in table_columns[table].items():
             column_metadata[table].setdefault(col_name, {})
