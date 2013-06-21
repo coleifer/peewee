@@ -29,6 +29,7 @@ def get_option_parser():
     cases.add_option('--kv', dest='kv', default=False, action='store_true', help='key/value store tests')
     cases.add_option('--migrations', dest='migrations', default=False, action='store_true', help='migration helper tests (requires psycopg2)')
     cases.add_option('--postgres-ext', dest='postgres_ext', default=False, action='store_true', help='postgres_ext tests (requires psycopg2)')
+    cases.add_option('--pwiz', dest='pwiz', default=False, action='store_true', help='pwiz, schema introspector and model generator')
     cases.add_option('--signals', dest='signals', default=False, action='store_true', help='signals tests')
     cases.add_option('--sqlite-ext', dest='sqlite_ext', default=False, action='store_true', help='sqlite_ext tests')
     cases.add_option('--test-utils', dest='test_utils', default=False, action='store_true', help='test_utils tests')
@@ -62,6 +63,9 @@ def collect_modules(options):
             modules.append(tests_postgres)
         except ImportError:
             print_('Unable to import postgres-ext tests, skipping')
+    if xtra(options.pwiz):
+        from playhouse import tests_pwiz
+        modules.append(tests_pwiz)
     if xtra(options.signals):
         from playhouse import tests_signals
         modules.append(tests_signals)
