@@ -902,7 +902,8 @@ class QueryCompiler(object):
                 from_model = curr
                 to_model = join.model_class
                 if isinstance(join.on, Expr):
-                    join_expr = join.on
+                    # Clear any alias on the join expression.
+                    join_expr = join.on.clone().alias()
                 else:
                     field = from_model._meta.rel_for_model(to_model, join.on)
                     if field:
@@ -1257,16 +1258,19 @@ class ModelQueryResultWrapper(QueryResultWrapper):
                     fk_field = current._meta.rel_for_model(join.model_class)
                     if not fk_field:
                         if isinstance(join.on, Expr):
-                            fk_field = join.on.lhs
+                            fk_name = join.on._alias or join.on.lhs.name
                         else:
-                            # When does this happen?
-                            continue
+                            # Patch the joined model using the name of the
+                            # database table.
+                            fk_name = join.model_class._meta.db_table
+                    else:
+                        fk_name = fk_field.name
 
-                    if joined_inst.get_id() is None and fk_field.name in inst._data:
-                        rel_inst_id = inst._data[fk_field.name]
+                    if joined_inst.get_id() is None and fk_name in inst._data:
+                        rel_inst_id = inst._data[fk_name]
                         joined_inst.set_id(rel_inst_id)
 
-                    setattr(inst, fk_field.name, joined_inst)
+                    setattr(inst, fk_name, joined_inst)
                     stack.append(join.model_class)
                     prepared.append(joined_inst)
 

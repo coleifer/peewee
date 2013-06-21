@@ -268,10 +268,49 @@ class JobExecutionRecord(TestModel):
     job = ForeignKeyField(Job, primary_key=True)
     status = CharField()
 
+class TestModelA(TestModel):
+    field = CharField(primary_key=True)
+    data = CharField()
 
-MODELS = [User, Blog, Comment, Relationship, NullModel, UniqueModel, OrderedModel, Category, UserCategory,
-          NonIntModel, NonIntRelModel, DBUser, DBBlog, SeqModelA, SeqModelB, MultiIndexModel, BlogTwo,
-          Parent, Child, Orphan, ChildPet, OrphanPet, BlobModel, Job, JobExecutionRecord]
+class TestModelB(TestModel):
+    field = CharField(primary_key=True)
+    data = CharField()
+
+class TestModelC(TestModel):
+    field = CharField(primary_key=True)
+    data = CharField()
+
+
+MODELS = [
+    User,
+    Blog,
+    Comment,
+    Relationship,
+    NullModel,
+    UniqueModel,
+    OrderedModel,
+    Category,
+    UserCategory,
+    NonIntModel,
+    NonIntRelModel,
+    DBUser,
+    DBBlog,
+    SeqModelA,
+    SeqModelB,
+    MultiIndexModel,
+    BlogTwo,
+    Parent,
+    Child,
+    Orphan,
+    ChildPet,
+    OrphanPet,
+    BlobModel,
+    Job,
+    JobExecutionRecord,
+    TestModelA,
+    TestModelB,
+    TestModelC,
+]
 INT = test_db.interpolation
 
 def drop_tables(only=None):
@@ -1150,6 +1189,61 @@ class QueryResultWrapperTestCase(ModelTestCase):
             self.assertEqual(b.foo, b.title)
             self.assertEqual(b.user.foo, b.user.username)
 
+
+class ModelQueryResultWrapperTestCase(ModelTestCase):
+    requires = [TestModelA, TestModelB, TestModelC]
+
+    data = (
+        (TestModelA, (
+            ('pk1', 'a1'),
+            ('pk2', 'a2'),
+            ('pk3', 'a3'))),
+        (TestModelB, (
+            ('pk1', 'b1'),
+            ('pk2', 'b2'),
+            ('pk3', 'b3'))),
+        (TestModelC, (
+            ('pk1', 'c1'),
+            ('pk2', 'c2'))),
+    )
+
+    def setUp(self):
+        super(ModelQueryResultWrapperTestCase, self).setUp()
+        for model_class, model_data in self.data:
+            for pk, data in model_data:
+                model_class.create(field=pk, data=data)
+
+    def test_join_expr(self):
+        def get_query(join_type=JOIN_INNER):
+            sq = (TestModelA
+                  .select(TestModelA, TestModelB, TestModelC)
+                  .join(
+                      TestModelB,
+                      on=(TestModelA.field == TestModelB.field).alias('rel_b'))
+                  .join(
+                      TestModelC,
+                      join_type=join_type,
+                      on=(TestModelB.field == TestModelC.field))
+                  .order_by(TestModelA.field))
+            return sq
+
+        sq = get_query()
+        self.assertEqual(sq.count(), 2)
+
+        results = list(sq)
+        expected = (('b1', 'c1'), ('b2', 'c2'))
+        for i, (b_data, c_data) in enumerate(expected):
+            self.assertEqual(results[i].rel_b.data, b_data)
+            self.assertEqual(results[i].rel_b.field.data, c_data)
+
+        sq = get_query(JOIN_LEFT_OUTER)
+        self.assertEqual(sq.count(), 3)
+
+        results = list(sq)
+        expected = (('b1', 'c1'), ('b2', 'c2'), ('b3', None))
+        for i, (b_data, c_data) in enumerate(expected):
+            self.assertEqual(results[i].rel_b.data, b_data)
+            self.assertEqual(results[i].rel_b.field.data, c_data)
 
 class ModelQueryTestCase(ModelTestCase):
     requires = [User, Blog]
