@@ -104,7 +104,6 @@ if sqlite3:
     sqlite3.register_adapter(decimal.Decimal, str)
     sqlite3.register_adapter(datetime.date, str)
     sqlite3.register_adapter(datetime.time, str)
-    sqlite3.register_converter('decimal', lambda v: decimal.Decimal(v))
 
 SQLITE_DT_FORMATS = (
     '%Y-%m-%d %H:%M:%S',

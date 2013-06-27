@@ -1674,7 +1674,7 @@ class ModelAggregateTestCase(ModelTestCase):
     def create_ordered_models(self):
         return [
             OrderedModel.create(
-                title=n, created=datetime.datetime(2013, 1, i + 1))
+                title=i, created=datetime.datetime(2013, 1, i + 1))
             for i in range(3)]
 
     def create_user_blogs(self):
