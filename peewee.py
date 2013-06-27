@@ -1107,6 +1107,11 @@ class QueryResultWrapper(object):
         self._result_cache = []
         self._populated = False
 
+        if meta is not None:
+            self.column_meta, self.join_meta = meta
+        else:
+            self.column_meta = self.join_meta = None
+
     def __iter__(self):
         self.__idx = 0
 
@@ -1151,62 +1156,47 @@ class QueryResultWrapper(object):
             except StopIteration:
                 break
 
-class TuplesQueryResultWrapper(QueryResultWrapper):
+class ExtQueryResultWrapper(QueryResultWrapper):
     def __init__(self, model, cursor, meta=None):
-        super(TuplesQueryResultWrapper, self).__init__(model, cursor, meta)
+        super(ExtQueryResultWrapper, self).__init__(model, cursor, meta)
         conv = []
         identity = lambda x: x
         for i in range(len(self.cursor.description)):
-            col = self.cursor.description[i][0]
-            if col in model._meta.columns:
-                field_obj = model._meta.columns[col]
-                conv.append(field_obj.python_value)
-            else:
-                conv.append(identity)
+            column = self.cursor.description[i][0]
+            func = identity
+            if column in model._meta.columns:
+                field_obj = model._meta.columns[column]
+                column = field_obj.name
+                func = field_obj.python_value
+            elif self.column_meta is not None:
+                select_column = self.column_meta[i]
+                # Special-case handling aggregations.
+                if (isinstance(select_column, Func) and
+                        isinstance(select_column.params[0], Field)):
+                    func = select_column.params[0].python_value
+            conv.append((i, column, func))
         self.conv = conv
 
+class TuplesQueryResultWrapper(ExtQueryResultWrapper):
     def process_row(self, row):
-        return tuple([self.conv[i](col) for i, col in enumerate(row)])
+        return tuple([self.conv[i][2](col) for i, col in enumerate(row)])
 
-class NaiveQueryResultWrapper(QueryResultWrapper):
-    def __init__(self, model, cursor, meta=None):
-        super(NaiveQueryResultWrapper, self).__init__(model, cursor, meta)
-
-        cols = []
-        non_cols = []
-        for i in range(len(self.cursor.description)):
-            col = self.cursor.description[i][0]
-            if col in model._meta.columns:
-                field_obj = model._meta.columns[col]
-                cols.append((i, field_obj.name, field_obj.python_value))
-            else:
-                non_cols.append((i, col))
-        self._cols = cols
-        self._non_cols = non_cols
-
+class NaiveQueryResultWrapper(ExtQueryResultWrapper):
     def process_row(self, row):
         instance = self.model()
-        for i, fname, pv in self._cols:
-            setattr(instance, fname, pv(row[i]))
-        for i, f in self._non_cols:
-            setattr(instance, f, row[i])
+        for i, column, func in self.conv:
+            setattr(instance, column, func(row[i]))
         instance.prepared()
         return instance
 
-class DictQueryResultWrapper(NaiveQueryResultWrapper):
+class DictQueryResultWrapper(ExtQueryResultWrapper):
     def process_row(self, row):
         res = {}
-        for i, fname, pv in self._cols:
-            res[fname] = pv(row[i])
-        for i, f in self._non_cols:
-            res[f] = row[i]
+        for i, column, func in self.conv:
+            res[column] = func(row[i])
         return res
 
 class ModelQueryResultWrapper(QueryResultWrapper):
-    def __init__(self, model, cursor, meta=None):
-        super(ModelQueryResultWrapper, self).__init__(model, cursor, meta)
-        self.column_meta, self.join_meta = meta
-
     def process_row(self, row):
         collected = self.construct_instance(row)
         instances = self.follow_joins(collected)
@@ -1634,7 +1624,7 @@ class SelectQuery(Query):
 
     def execute(self):
         if self._dirty or not self._qr:
-            query_meta = None
+            query_meta = [self._select, self._joins]
             if self._tuples:
                 ResultWrapper = TuplesQueryResultWrapper
             elif self._dicts:
@@ -1642,7 +1632,6 @@ class SelectQuery(Query):
             elif self._naive or not self._joins or self.verify_naive():
                 ResultWrapper = NaiveQueryResultWrapper
             else:
-                query_meta = [self._select, self._joins]
                 ResultWrapper = ModelQueryResultWrapper
             self._qr = ResultWrapper(self.model_class, self._execute(), query_meta)
             self._dirty = False
