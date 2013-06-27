@@ -1667,6 +1667,59 @@ class ModelAPITestCase(ModelTestCase):
         user = User.create(username=ustr)
         self.assertEqual(user.username, ustr)
 
+
+class ModelAggregateTestCase(ModelTestCase):
+    requires = [OrderedModel, User, Blog]
+
+    def create_ordered_models(self):
+        return [
+            OrderedModel.create(
+                title=n, created=datetime.datetime(2013, 1, i + 1))
+            for i in range(3)]
+
+    def create_user_blogs(self):
+        users = []
+        ct = 0
+        for i in range(2):
+            user = User.create(username='u-%d' % i)
+            for j in range(2):
+                ct += 1
+                Blog.create(
+                    user=user,
+                    title='b-%d-%d' % (i, j),
+                    pub_date=datetime.datetime(2013, 1, ct))
+            users.append(user)
+        return users
+
+    def test_annotate_int(self):
+        users = self.create_user_blogs()
+        annotated = User.select().annotate(Blog, fn.Count(Blog.id).alias('ct'))
+        for i, user in enumerate(annotated):
+            self.assertEqual(user.ct, 2)
+            self.assertEqual(user.username, 'u-%d' % i)
+
+    def test_annotate_datetime(self):
+        users = self.create_user_blogs()
+        annotated = (User
+                     .select()
+                     .annotate(Blog, fn.Max(Blog.pub_date).alias('max_pub')))
+        user_0, user_1 = annotated
+        self.assertEqual(user_0.max_pub, datetime.datetime(2013, 1, 2))
+        self.assertEqual(user_1.max_pub, datetime.datetime(2013, 1, 4))
+
+    def test_aggregate_int(self):
+        models = self.create_ordered_models()
+        max_id = OrderedModel.select().aggregate(fn.Max(OrderedModel.id))
+        self.assertEqual(max_id, models[-1].id)
+
+    def test_aggregate_datetime(self):
+        models = self.create_ordered_models()
+        max_created = (OrderedModel
+                       .select()
+                       .aggregate(fn.Max(OrderedModel.created)))
+        self.assertEqual(max_created, models[-1].created)
+
+
 class PrefetchTestCase(ModelTestCase):
     requires = [User, Blog, Comment, Parent, Child, Orphan, ChildPet, OrphanPet, Category]
     user_data = [
