@@ -1397,8 +1397,11 @@ class Query(Leaf):
     def execute(self):
         raise NotImplementedError
 
-    def scalar(self, as_tuple=False):
-        row = self._execute().fetchone()
+    def scalar(self, as_tuple=False, convert=False):
+        if convert:
+            row = self.tuples().first()
+        else:
+            row = self._execute().fetchone()
         if row and not as_tuple:
             return row[0]
         else:
@@ -1572,15 +1575,15 @@ class SelectQuery(Query):
         query._select = [aggregation]
         return query
 
-    def aggregate(self, aggregation=None):
-        return self._aggregate(aggregation).scalar()
+    def aggregate(self, aggregation=None, convert=True):
+        return self._aggregate(aggregation).scalar(convert=convert)
 
     def count(self):
         if self._distinct or self._group_by:
             return self.wrapped_count()
 
         # defaults to a count() of the primary key
-        return self.aggregate() or 0
+        return self.aggregate(convert=False) or 0
 
     def wrapped_count(self):
         clone = self.order_by()
