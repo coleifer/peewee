@@ -422,9 +422,7 @@ class Field(Leaf):
 
 class IntegerField(Field):
     db_field = 'int'
-
-    def coerce(self, value):
-        return int(value)
+    coerce = int
 
 class BigIntegerField(IntegerField):
     db_field = 'bigint'
@@ -438,9 +436,7 @@ class PrimaryKeyField(IntegerField):
 
 class FloatField(Field):
     db_field = 'float'
-
-    def coerce(self, value):
-        return float(value)
+    coerce = float
 
 class DoubleField(FloatField):
     db_field = 'double'
@@ -594,9 +590,7 @@ class TimeField(Field):
 
 class BooleanField(Field):
     db_field = 'bool'
-
-    def coerce(self, value):
-        return bool(value)
+    coerce = bool
 
 
 class RelationDescriptor(FieldDescriptor):
