@@ -1197,6 +1197,33 @@ class DictQueryResultWrapper(ExtQueryResultWrapper):
         return res
 
 class ModelQueryResultWrapper(QueryResultWrapper):
+    def __init__(self, *args, **kwargs):
+        super(ModelQueryResultWrapper, self).__init__(*args, **kwargs)
+        self.column_map, self.join_map = self.prepare()
+
+    def prepare(self):
+        columns = []
+        #joins = []
+        #models = set([self.model])
+        for i, expr in enumerate(self.column_meta):
+            attr = conv = None
+            if isinstance(expr, Field):
+                if isinstance(expr, FieldProxy):
+                    key = expr._model_alias
+                    constructor = expr.model
+                else:
+                    key = constructor = expr.model_class
+                attr = expr.name
+                conv = expr.python_value
+            else:
+                key = constructor = self.model
+                if isinstance(expr, Expr) and expr._alias:
+                    attr = expr._alias
+            columns.append((key, constructor, attr, conv))
+            #if constructor not in seen_models:
+            #    models.add(constructor)
+        return columns, None
+
     def process_row(self, row):
         collected = self.construct_instance(row)
         instances = self.follow_joins(collected)
@@ -1205,29 +1232,17 @@ class ModelQueryResultWrapper(QueryResultWrapper):
         return instances[0]
 
     def construct_instance(self, row):
-        # we have columns, models, and a graph of joins to reconstruct
         collected_models = {}
-        cols = [c[0] for c in self.cursor.description]
-        for i, expr in enumerate(self.column_meta):
+        for i, (key, constructor, attr, conv) in enumerate(self.column_map):
             value = row[i]
-            if isinstance(expr, FieldProxy):
-                key = expr._model_alias # model alias
-                constructor = expr.model # instance constructor
-            elif isinstance(expr, Field):
-                key = constructor = expr.model_class
-            else:
-                key = constructor = self.model
-
             if key not in collected_models:
                 collected_models[key] = constructor()
             instance = collected_models[key]
-
-            if isinstance(expr, Field):
-                setattr(instance, expr.name, expr.python_value(value))
-            elif isinstance(expr, Expr) and expr._alias:
-                setattr(instance, expr._alias, value)
-            else:
-                setattr(instance, cols[i], value)
+            if attr is None:
+                attr = self.cursor.description[i][0]
+            if conv is not None:
+                value = conv(value)
+            setattr(instance, attr, value)
 
         return collected_models
 
