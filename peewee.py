@@ -1199,12 +1199,10 @@ class DictQueryResultWrapper(ExtQueryResultWrapper):
 class ModelQueryResultWrapper(QueryResultWrapper):
     def __init__(self, *args, **kwargs):
         super(ModelQueryResultWrapper, self).__init__(*args, **kwargs)
-        self.column_map, self.join_map = self.prepare()
+        self.column_map = self.prepare()
 
     def prepare(self):
         columns = []
-        #joins = []
-        #models = set([self.model])
         for i, expr in enumerate(self.column_meta):
             attr = conv = None
             if isinstance(expr, Field):
@@ -1220,9 +1218,7 @@ class ModelQueryResultWrapper(QueryResultWrapper):
                 if isinstance(expr, Expr) and expr._alias:
                     attr = expr._alias
             columns.append((key, constructor, attr, conv))
-            #if constructor not in seen_models:
-            #    models.add(constructor)
-        return columns, None
+        return columns
 
     def process_row(self, row):
         collected = self.construct_instance(row)
