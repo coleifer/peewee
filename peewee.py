@@ -1199,10 +1199,12 @@ class DictQueryResultWrapper(ExtQueryResultWrapper):
 class ModelQueryResultWrapper(QueryResultWrapper):
     def __init__(self, *args, **kwargs):
         super(ModelQueryResultWrapper, self).__init__(*args, **kwargs)
-        self.column_map = self.prepare()
+        self.column_map, self.join_map = self.prepare()
 
     def prepare(self):
-        columns = []
+        column_map = []
+        join_map = []
+        models = set([self.model])
         for i, expr in enumerate(self.column_meta):
             attr = conv = None
             if isinstance(expr, Field):
@@ -1217,8 +1219,34 @@ class ModelQueryResultWrapper(QueryResultWrapper):
                 key = constructor = self.model
                 if isinstance(expr, Expr) and expr._alias:
                     attr = expr._alias
-            columns.append((key, constructor, attr, conv))
-        return columns
+            column_map.append((key, constructor, attr, conv))
+            models.add(key)
+
+        joins = self.join_meta
+        stack = [self.model]
+        while stack:
+            current = stack.pop()
+            if current not in joins:
+                continue
+
+            for join in joins[current]:
+                join_model = join.model_class
+                if join_model in models:
+                    fk_field = current._meta.rel_for_model(join_model)
+                    if not fk_field:
+                        if isinstance(join.on, Expr):
+                            fk_name = join.on._alias or join.on.lhs.name
+                        else:
+                            # Patch the joined model using the name of the
+                            # database table.
+                            fk_name = join_model._meta.db_table
+                    else:
+                        fk_name = fk_field.name
+
+                    stack.append(join_model)
+                    join_map.append((current, fk_name, join_model))
+
+        return column_map, join_map
 
     def process_row(self, row):
         collected = self.construct_instance(row)
@@ -1243,36 +1271,16 @@ class ModelQueryResultWrapper(QueryResultWrapper):
         return collected_models
 
     def follow_joins(self, collected):
-        joins = self.join_meta
-        stack = [self.model]
         prepared = [collected[self.model]]
-        while stack:
-            current = stack.pop()
-            if current not in joins:
-                continue
+        for (lhs, attr, rhs) in self.join_map:
+            inst = collected[lhs]
+            joined_inst = collected[rhs]
 
-            inst = collected[current]
-            for join in joins[current]:
-                if join.model_class in collected:
-                    joined_inst = collected[join.model_class]
-                    fk_field = current._meta.rel_for_model(join.model_class)
-                    if not fk_field:
-                        if isinstance(join.on, Expr):
-                            fk_name = join.on._alias or join.on.lhs.name
-                        else:
-                            # Patch the joined model using the name of the
-                            # database table.
-                            fk_name = join.model_class._meta.db_table
-                    else:
-                        fk_name = fk_field.name
+            if joined_inst.get_id() is None and attr in inst._data:
+                joined_inst.set_id(inst._data[attr])
 
-                    if joined_inst.get_id() is None and fk_name in inst._data:
-                        rel_inst_id = inst._data[fk_name]
-                        joined_inst.set_id(rel_inst_id)
-
-                    setattr(inst, fk_name, joined_inst)
-                    stack.append(join.model_class)
-                    prepared.append(joined_inst)
+            setattr(inst, attr, joined_inst)
+            prepared.append(joined_inst)
 
         return prepared
 
