@@ -46,6 +46,7 @@ __all__ = [
     'PostgresqlDatabase',
     'prefetch',
     'PrimaryKeyField',
+    'Proxy',
     'R',
     'SqliteDatabase',
     'TextField',
@@ -94,8 +95,7 @@ except ImportError:
     except ImportError:
         mysql = None
 
-class ImproperlyConfigured(Exception):
-    pass
+class ImproperlyConfigured(Exception): pass
 
 if sqlite3 is None and psycopg2 is None and mysql is None:
     raise ImproperlyConfigured('Either sqlite3, psycopg2 or MySQLdb must be installed')
@@ -251,7 +251,6 @@ class Leaf(object):
     __mod__ = _e(OP_LIKE)
     __pow__ = _e(OP_ILIKE)
 
-
 class Expr(Leaf):
     def __init__(self, lhs, op, rhs):
         super(Expr, self).__init__()
@@ -319,6 +318,7 @@ class Clause(Leaf):
     def clone_base(self):
         return Clause(*self.pieces)
 
+Join = namedtuple('Join', ('model_class', 'join_type', 'on'))
 
 class FieldDescriptor(object):
     def __init__(self, field):
@@ -332,7 +332,6 @@ class FieldDescriptor(object):
 
     def __set__(self, instance, value):
         instance._data[self.att_name] = value
-
 
 class Field(Leaf):
     _field_counter = 0
@@ -418,7 +417,6 @@ class Field(Leaf):
 
     def between(self, low, high):
         return Expr(self, OP_BETWEEN, Clause(low, R('AND'), high))
-
 
 class IntegerField(Field):
     db_field = 'int'
@@ -592,7 +590,6 @@ class BooleanField(Field):
     db_field = 'bool'
     coerce = bool
 
-
 class RelationDescriptor(FieldDescriptor):
     def __init__(self, field, rel_model):
         self.rel_model = rel_model
@@ -621,7 +618,6 @@ class RelationDescriptor(FieldDescriptor):
         else:
             instance._data[self.att_name] = value
 
-
 class ReverseRelationDescriptor(object):
     def __init__(self, field):
         self.field = field
@@ -631,7 +627,6 @@ class ReverseRelationDescriptor(object):
         if instance is not None:
             return self.rel_model.select().where(self.field==instance.get_id())
         return self
-
 
 class ForeignKeyField(IntegerField):
     def __init__(self, rel_model, null=False, related_name=None, cascade=False, extra=None, *args, **kwargs):
@@ -1278,7 +1273,6 @@ class ModelQueryResultWrapper(QueryResultWrapper):
 
         return prepared
 
-Join = namedtuple('Join', ('model_class', 'join_type', 'on'))
 
 class Query(Leaf):
     require_commit = True
@@ -1420,7 +1414,6 @@ class Query(Leaf):
         else:
             return row
 
-
 class RawQuery(Query):
     def __init__(self, model, query, *params):
         self._sql = query
@@ -1464,7 +1457,6 @@ class RawQuery(Query):
 
     def __iter__(self):
         return iter(self.execute())
-
 
 class SelectQuery(Query):
     def __init__(self, model_class, *selection):
@@ -1680,7 +1672,6 @@ class SelectQuery(Query):
         res = list(self)
         return limit == 1 and res[0] or res
 
-
 class UpdateQuery(Query):
     def __init__(self, model_class, update=None):
         self._update = update
@@ -1729,6 +1720,26 @@ class DeleteQuery(Query):
 
     def execute(self):
         return self.database.rows_affected(self._execute())
+
+
+class Proxy(object):
+    __slots__ = ['obj']
+
+    def __init__(self):
+        self.initialize(None)
+
+    def initialize(self, obj):
+        self.obj = obj
+
+    def __getattr__(self, attr):
+        if self.obj is None:
+            raise AttributeError('Cannot use uninitialized Proxy.')
+        return getattr(self.obj, attr)
+
+    def __setattr__(self, attr, value):
+        if attr != 'obj':
+            raise AttributeError('Cannot set attribute on proxy.')
+        return super(Proxy, self).__setattr__(attr, value)
 
 
 class Database(object):
@@ -1901,7 +1912,6 @@ class Database(object):
     def extract_date(self, date_part, date_field):
         return fn.EXTRACT(Clause(date_part, R('FROM'), date_field))
 
-
 class SqliteDatabase(Database):
     limit_max = -1
     op_overrides = {
@@ -1927,7 +1937,6 @@ class SqliteDatabase(Database):
 
     def extract_date(self, date_part, date_field):
         return fn.date_part(date_part, date_field)
-
 
 class PostgresqlDatabase(Database):
     commit_select = True
@@ -1990,7 +1999,6 @@ class PostgresqlDatabase(Database):
     def set_search_path(self, *search_path):
         path_params = ','.join(['%s'] * len(search_path))
         self.execute_sql('SET search_path TO %s' % path_params, search_path)
-
 
 class MySQLDatabase(Database):
     commit_select = True
@@ -2082,12 +2090,40 @@ class transaction(object):
         return success
 
 
-class DoesNotExist(Exception):
-    pass
+class FieldProxy(Field):
+    def __init__(self, alias, field_instance):
+        self._model_alias = alias
+        self.model = self._model_alias.model_class
+        self.field_instance = field_instance
 
+    def clone_base(self):
+        return FieldProxy(self._model_alias, self.field_instance)
+
+    def __getattr__(self, attr):
+        if attr == 'model_class':
+            return self._model_alias
+        return getattr(self.field_instance, attr)
+
+class ModelAlias(object):
+    def __init__(self, model_class):
+        self.__dict__['model_class'] = model_class
+
+    def __getattr__(self, attr):
+        model_attr = getattr(self.model_class, attr)
+        if isinstance(model_attr, Field):
+            return FieldProxy(self, model_attr)
+        return model_attr
+
+    def __setattr__(self, attr, value):
+        raise AttributeError('Cannot set attributes on ModelAlias instances')
+
+    def get_proxy_fields(self):
+        return [FieldProxy(self, f) for f in self.model_class._meta.get_fields()]
+
+
+class DoesNotExist(Exception): pass
 
 default_database = SqliteDatabase('peewee.db')
-
 
 class ModelOptions(object):
     def __init__(self, cls, database=None, db_table=None, indexes=None,
@@ -2226,38 +2262,6 @@ class BaseModel(type):
         cls._meta.prepared()
 
         return cls
-
-
-class FieldProxy(Field):
-    def __init__(self, alias, field_instance):
-        self._model_alias = alias
-        self.model = self._model_alias.model_class
-        self.field_instance = field_instance
-
-    def clone_base(self):
-        return FieldProxy(self._model_alias, self.field_instance)
-
-    def __getattr__(self, attr):
-        if attr == 'model_class':
-            return self._model_alias
-        return getattr(self.field_instance, attr)
-
-class ModelAlias(object):
-    def __init__(self, model_class):
-        self.__dict__['model_class'] = model_class
-
-    def __getattr__(self, attr):
-        model_attr = getattr(self.model_class, attr)
-        if isinstance(model_attr, Field):
-            return FieldProxy(self, model_attr)
-        return model_attr
-
-    def __setattr__(self, attr, value):
-        raise AttributeError('Cannot set attributes on ModelAlias instances')
-
-    def get_proxy_fields(self):
-        return [FieldProxy(self, f) for f in self.model_class._meta.get_fields()]
-
 
 class Model(with_metaclass(BaseModel)):
     def __init__(self, *args, **kwargs):
