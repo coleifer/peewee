@@ -220,6 +220,10 @@ and any additional kwargs:
     database_name = raw_input('What is the name of the db? ')
     deferred_db.init(database_name)
 
+For the scenario when you may be using an entirely different database driver,
+you can try out the :py:class:`Proxy` helper, which is included in the
+``playhouse.proxy`` module.  Check :ref:`the docs <proxy>` for details on usage.
+
 
 Creating, Reading, Updating and Deleting
 ----------------------------------------
