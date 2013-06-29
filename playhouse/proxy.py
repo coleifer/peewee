@@ -4,6 +4,9 @@ an object.
 
 Example:
 
+    from peewee import *
+    from playhouse.proxy import Proxy
+
     database_proxy = Proxy()  # Create a proxy for our db.
 
     class BaseModel(Model):
