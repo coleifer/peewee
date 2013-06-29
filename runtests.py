@@ -29,6 +29,7 @@ def get_option_parser():
     cases.add_option('--kv', dest='kv', default=False, action='store_true', help='key/value store tests')
     cases.add_option('--migrations', dest='migrations', default=False, action='store_true', help='migration helper tests (requires psycopg2)')
     cases.add_option('--postgres-ext', dest='postgres_ext', default=False, action='store_true', help='postgres_ext tests (requires psycopg2)')
+    cases.add_option('--proxy', dest='proxy', default=False, action='store_true', help='proxy tests')
     cases.add_option('--pwiz', dest='pwiz', default=False, action='store_true', help='pwiz, schema introspector and model generator')
     cases.add_option('--signals', dest='signals', default=False, action='store_true', help='signals tests')
     cases.add_option('--sqlite-ext', dest='sqlite_ext', default=False, action='store_true', help='sqlite_ext tests')
@@ -63,6 +64,9 @@ def collect_modules(options):
             modules.append(tests_postgres)
         except ImportError:
             print_('Unable to import postgres-ext tests, skipping')
+    if xtra(options.proxy):
+        from playhouse import tests_proxy
+        modules.append(tests_proxy)
     if xtra(options.pwiz):
         from playhouse import tests_pwiz
         modules.append(tests_pwiz)
@@ -95,7 +99,7 @@ if __name__ == '__main__':
 
     suite = unittest.TestSuite()
     for module in collect_modules(options):
-        print_('Adding tests for for "%s"' % module.__name__)
+        print_('Adding tests for "%s"' % module.__name__)
         module_suite = unittest.TestLoader().loadTestsFromModule(module)
         suite.addTest(module_suite)
 
