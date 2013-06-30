@@ -66,7 +66,7 @@ elif BACKEND == 'mysql':
     database_class = MySQLDatabase
     database_name = 'peewee_test'
 elif BACKEND == 'apsw':
-    from extras.apsw_ext import *
+    from playhouse.apsw_ext import *
     database_class = APSWDatabase
     database_name = 'tmp.db'
     database_params['timeout'] = 1000
