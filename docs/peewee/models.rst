@@ -443,7 +443,8 @@ and "precompute" the Student and Course:
         .select(StudentCourse, Student, Course)
         .join(Course)
         .switch(StudentCourse)
-        .join(Student))
+        .join(Student)
+        .order_by(Student.name))
 
 To print a list of students and their courses you might do the following:
 
