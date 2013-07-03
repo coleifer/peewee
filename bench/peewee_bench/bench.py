@@ -53,4 +53,7 @@ def get_user(username):
     return User.get(username=username)
 
 def get_or_create_user(username):
-    return User.get_or_create(username=username)
+    try:
+        User.get(User.username == username)
+    except User.DoesNotExist:
+        User.create(username=username)
