@@ -18,6 +18,7 @@ Here are just a few reasons to use APSW, taken from the documentation:
 """
 import apsw
 from peewee import *
+from peewee import _sqlite_date_part
 from peewee import BooleanField as _BooleanField
 from peewee import Database
 from peewee import DateField as _DateField
@@ -94,6 +95,7 @@ class APSWDatabase(SqliteDatabase):
         conn = ConnectionWrapper(database, **kwargs)
         if self.timeout is not None:
             conn.setbusytimeout(self.timeout)
+        conn.createscalarfunction('date_part', _sqlite_date_part, 2)
         for mod_name, mod_inst in self._modules.items():
             conn.createmodule(mod_name, mod_inst)
         return conn
