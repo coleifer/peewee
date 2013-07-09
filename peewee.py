@@ -409,6 +409,9 @@ class Field(Leaf):
     def get_db_field(self):
         return self.db_field
 
+    def get_template(self):
+        return self.template
+
     def coerce(self, value):
         return value
 
@@ -718,6 +721,8 @@ class QueryCompiler(object):
         OP_NE: '!=',
         OP_IN: 'IN',
         OP_IS: 'IS',
+        OP_BIN_AND: '&',
+        OP_BIN_OR: '|',
         OP_LIKE: 'LIKE',
         OP_ILIKE: 'ILIKE',
         OP_BETWEEN: 'BETWEEN',
@@ -1018,12 +1023,12 @@ class QueryCompiler(object):
     def field_sql(self, field):
         attrs = field.attributes
         attrs['column_type'] = self.get_field(field.get_db_field())
-        template = field.template
+        template = field.get_template()
 
         if isinstance(field, ForeignKeyField):
             to_pk = field.rel_model._meta.primary_key
             if not isinstance(to_pk, PrimaryKeyField):
-                template = to_pk.template
+                template = to_pk.get_template()
                 attrs.update(to_pk.attributes)
 
         parts = [self.quote(field.db_column), template]
