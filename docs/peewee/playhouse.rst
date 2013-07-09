@@ -108,15 +108,16 @@ apsw_ext API notes
 
 .. _postgres_ext:
 
-Postgresql Extension (HStore)
------------------------------
+Postgresql Extensions
+---------------------
 
 The postgresql extensions module provides a number of "postgres-only" functions,
 currently:
 
 * :ref:`hstore support <hstore>`
-* `UUID` field type
-* `DateTimeTZ` field type (timezone-aware datetime field)
+* :py:class:`ArrayField` field type, for storing arrays.
+* :py:class:`UUIDField` field type, for storing UUID objects.
+* :py:class:`DateTimeTZ` field type, a timezone-aware datetime field.
 
 In the future I would like to add support for more of postgresql's features.
 If there is a particular feature you would like to see added, please
@@ -267,6 +268,177 @@ You can check for the existence of a key and filter rows accordingly:
 
     123 Main St 2 cars
 
+postgres_ext API notes
+^^^^^^^^^^^^^^^^^^^^^^
+
+.. py:class:: ArrayField([field_class=IntegerField[, dimensions=1]])
+
+    Field capable of storing arrays of the provided `field_class`.
+
+    :param field_class: a subclass of :py:class:`Field`, e.g. :py:class:`IntegerField`.
+    :param int dimensions: dimensions of array.
+
+    You can store and retrieve lists (or lists-of-lists):
+
+    .. code-block:: python
+
+        class BlogPost(BaseModel):
+            content = TextField()
+            tags = ArrayField(CharField)
+
+
+        post = BlogPost(content='awesome', tags=['foo', 'bar', 'baz'])
+
+    Additionally, you can use the ``__getitem__`` API to query values or slices
+    in the database:
+
+    .. code-block:: python
+
+        # Get the first tag on a given blog post.
+        first_tag = (BlogPost
+                     .select(BlogPost.tags[0].alias('first_tag'))
+                     .where(BlogPost.id == 1)
+                     .dicts()
+                     .get())
+
+        # first_tag = {'first_tag': 'foo'}
+
+    Get a slice of values:
+
+    .. code-block:: python
+
+        # Get the first two tags.
+        two_tags = (BlogPost
+                    .select(BlogPost.tags[:2].alias('two'))
+                    .dicts()
+                    .get())
+        # two_tags = {'two': ['foo', 'bar']}
+
+.. py:class:: DateTimeTZField(*args, **kwargs)
+
+    A timezone-aware subclass of :py:class:`DateTimeField`.
+
+.. py:class:: HStoreField(*args, **kwargs)
+
+    A field for storing and retrieving arbitrary key/value pairs.  For details
+    on usage, see :ref:`hstore`.
+
+    .. py:method:: keys()
+
+        Returns the keys for a given row.
+
+        .. code-block:: pycon
+
+            >>> f = House.features
+            >>> for h in House.select(House.address, f.keys().alias('keys')):
+            ...     print h.address, h.keys
+
+            123 Main St [u'bath', u'garage']
+
+    .. py:method:: values()
+
+        Return the values for a given row.
+
+        .. code-block:: pycon
+
+            >>> for h in House.select(House.address, f.values().alias('vals')):
+            ...     print h.address, h.vals
+
+            123 Main St [u'2 bath', u'2 cars']
+
+    .. py:method:: items()
+
+        Like python's ``dict``, return the keys and values in a list-of-lists:
+
+        .. code-block:: pycon
+
+            >>> for h in House.select(House.address, f.items().alias('mtx')):
+            ...     print h.address, h.mtx
+
+            123 Main St [[u'bath', u'2 bath'], [u'garage', u'2 cars']]
+
+    .. py:method:: slice(*args)
+
+        Return a slice of data given a list of keys.
+
+        .. code-block:: pycon
+
+            >>> f = House.features
+            >>> for h in House.select(House.address, f.slice('garage').alias('garage_data')):
+            ...     print h.address, h.garage_data
+
+            123 Main St {'garage': '2 cars'}
+
+    .. py:method:: exists(key)
+
+        Query for whether the given key exists.
+
+        .. code-block:: pycon
+
+            >>> for h in House.select(House.address, f.exists('garage').alias('has_garage')):
+            ...     print h.address, h.has_garage
+
+            123 Main St True
+
+            >>> for h in House.select().where(f.exists('garage')):
+            ...     print h.address, h.features['garage'] # <-- just houses w/garage data
+
+            123 Main St 2 cars
+
+    .. py:method:: defined(key)
+
+        Query for whether the given key has a value associated with it.
+
+    .. py:method:: update(**data)
+
+        Perform an atomic update to the keys/values for a given row or rows.
+
+        .. code-block:: pycon
+
+            >>> query = House.update(features=House.features.update(
+            ...     sqft=2000,
+            ...     year_built=2012))
+            >>> query.where(House.id == 1).execute()
+
+    .. py:method:: delete(*keys)
+
+        Delete the provided keys for a given row or rows.
+
+        .. note:: We will use an ``UPDATE`` query.
+
+        .. code-block:: pycon
+
+        >>> query = House.update(features=House.features.delete(
+        ...     'sqft', 'year_built'))
+        >>> query.where(House.id == 1).execute()
+
+    .. py:method:: contains(value)
+
+        :param value: Either a ``dict``, a ``list`` of keys, or a single key.
+
+        Query rows for the existence of either:
+
+        * a partial dictionary.
+        * a list of keys.
+        * a single key.
+
+        .. code-block:: pycon
+
+            >>> f = House.features
+            >>> House.select().where(f.contains('garage')) # <-- all houses w/garage key
+            >>> House.select().where(f.contains(['garage', 'bath'])) # <-- all houses w/garage & bath
+            >>> House.select().where(f.contains({'garage': '2 cars'})) # <-- houses w/2-car garage
+
+    .. py:method:: contains_any(*keys)
+
+        :param keys: One or more keys to search for.
+
+        Query rows for the existince of *any* key.
+
+
+.. py:class:: UUIDField(*args, **kwargs)
+
+    A field for storing and retrieving ``UUID`` objects.
 
 .. _sqlite_ext:
 
