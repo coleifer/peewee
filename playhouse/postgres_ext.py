@@ -16,6 +16,25 @@ from psycopg2 import extensions
 from psycopg2.extras import register_hstore
 
 
+class ArrayField(Field):
+    def __init__(self, field_class=IntegerField, dimensions=1, *args, **kwargs):
+        kwargs['field_class'] = field_class
+        kwargs['dimensions'] = dimensions
+        self.__field = field_class(*args, **kwargs)
+        self.db_field = self.__field.get_db_field()
+        super(ArrayField, self).__init__(*args, **kwargs)
+
+    def get_template(self):
+        return self.__field.get_template() + ('[]' * self.attributes['dimensions'])
+
+    def field_attributes(self):
+        return self.__field.field_attributes()
+
+
+class DateTimeTZField(DateTimeField):
+    db_field = 'datetime_tz'
+
+
 class HStoreField(Field):
     db_field = 'hash'
 
@@ -56,10 +75,6 @@ class HStoreField(Field):
 
     def contains_any(self, *keys):
         return Expr(self, OP_HCONTAINS_ANY_KEY, Param(value))
-
-
-class DateTimeTZField(DateTimeField):
-    db_field = 'datetime_tz'
 
 
 class UUIDField(Field):

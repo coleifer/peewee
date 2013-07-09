@@ -25,6 +25,10 @@ class TestingID(BaseModel):
 class TZModel(BaseModel):
     dt = DateTimeTZField()
 
+class ArrayModel(BaseModel):
+    tags = ArrayField(CharField)
+    ints = ArrayField(IntegerField, dimensions=2)
+
 
 class PostgresExtTestCase(unittest.TestCase):
     def setUp(self):
@@ -32,6 +36,8 @@ class PostgresExtTestCase(unittest.TestCase):
         Testing.create_table()
         TestingID.drop_table(True)
         TestingID.create_table()
+        ArrayModel.drop_table(True)
+        ArrayModel.create_table(True)
         self.t1 = None
         self.t2 = None
 
@@ -204,3 +210,13 @@ class PostgresExtTestCase(unittest.TestCase):
             {},
             {'k3': 'v3', 'k6': 'v6'}
         ])
+
+    def test_array_storage_retrieval(self):
+        am = ArrayModel(
+            tags=['foo', 'bar'],
+            ints=[[1, 2], [3, 4]])
+        am.save()
+
+        am_db = ArrayModel.get(ArrayModel.id == am.id)
+        self.assertEqual(am_db.tags, ['foo', 'bar'])
+        self.assertEqual(am_db.ints, [[1, 2], [3, 4]])
