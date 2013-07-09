@@ -72,11 +72,11 @@ class UUIDField(Field):
         return uuid.UUID(value)
 
 
-OP_HUPDATE = 120
-OP_HCONTAINS_DICT = 121
-OP_HCONTAINS_KEYS = 122
-OP_HCONTAINS_KEY = 123
-OP_HCONTAINS_ANY_KEY = 124
+OP_HUPDATE = 'H@>'
+OP_HCONTAINS_DICT = 'H?&'
+OP_HCONTAINS_KEYS = 'H?'
+OP_HCONTAINS_KEY = 'H?|'
+OP_HCONTAINS_ANY_KEY = 'H||'
 
 
 class PostgresqlExtCompiler(QueryCompiler):

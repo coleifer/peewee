@@ -111,7 +111,8 @@ SQLITE_DT_FORMATS = (
     '%H:%M:%S',
     '%H:%M:%S.%f',
     '%H:%M')
-DT_LOOKUPS = set(['year', 'month', 'day', 'hour', 'minute', 'second'])
+DT_PARTS = ['year', 'month', 'day', 'hour', 'minute', 'second']
+DT_LOOKUPS = set(DT_PARTS)
 
 def _sqlite_date_part(lookup_type, datetime_string):
     assert lookup_type in DT_LOOKUPS
@@ -126,29 +127,29 @@ if psycopg2:
 # Peewee
 logger = logging.getLogger('peewee')
 
-OP_AND = 0
-OP_OR = 1
+OP_AND = 'and'
+OP_OR = 'or'
 
-OP_ADD = 10
-OP_SUB = 11
-OP_MUL = 12
-OP_DIV = 13
-OP_AND = 14
-OP_OR = 15
-OP_XOR = 16
-OP_MOD = 17
+OP_ADD = '+'
+OP_SUB = '-'
+OP_MUL = '*'
+OP_DIV = '/'
+OP_BIN_AND = '&'
+OP_BIN_OR = '|'
+OP_XOR = '^'
+OP_MOD = '%'
 
-OP_EQ = 20
-OP_LT = 21
-OP_LTE = 22
-OP_GT = 23
-OP_GTE = 24
-OP_NE = 25
-OP_IN = 26
-OP_IS = 27
-OP_LIKE = 28
-OP_ILIKE = 29
-OP_BETWEEN = 30
+OP_EQ = '='
+OP_LT = '<'
+OP_LTE = '<='
+OP_GT = '>'
+OP_GTE = '>='
+OP_NE = '!='
+OP_IN = 'in'
+OP_IS = 'is'
+OP_LIKE = 'like'
+OP_ILIKE = 'ilike'
+OP_BETWEEN = 'between'
 
 DJANGO_MAP = {
     'eq': OP_EQ,
@@ -163,9 +164,9 @@ DJANGO_MAP = {
     'ilike': OP_ILIKE,
 }
 
-JOIN_INNER = 1
-JOIN_LEFT_OUTER = 2
-JOIN_FULL = 3
+JOIN_INNER = 'inner'
+JOIN_LEFT_OUTER = 'left outer'
+JOIN_FULL = 'full'
 
 def dict_update(orig, extra):
     new = {}
@@ -249,6 +250,12 @@ class Leaf(object):
     __rshift__ = _e(OP_IS)
     __mod__ = _e(OP_LIKE)
     __pow__ = _e(OP_ILIKE)
+
+    bin_and = _e(OP_BIN_AND)
+    bin_or = _e(OP_BIN_OR)
+
+    def between(self, low, high):
+        return Expr(self, OP_BETWEEN, Clause(low, R('AND'), high))
 
 class Expr(Leaf):
     def __init__(self, lhs, op, rhs):
@@ -413,9 +420,6 @@ class Field(Leaf):
 
     def __hash__(self):
         return hash(self.name + '.' + self.model_class.__name__)
-
-    def between(self, low, high):
-        return Expr(self, OP_BETWEEN, Clause(low, R('AND'), high))
 
 class IntegerField(Field):
     db_field = 'int'
