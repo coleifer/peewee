@@ -7,6 +7,26 @@ Peewee comes with numerous extras which I didn't really feel like including in
 the main source module, but which might be interesting to implementers or fun
 to mess around with.
 
+The playhouse includes modules for different database drivers or database
+specific functionality:
+
+* :ref:`apsw`
+* :ref:`postgres_ext`
+* :ref:`sqlite_ext`
+
+Modules which expose higher-level python constructs:
+
+* :ref:`gfk`
+* :ref:`kv`
+* :ref:`proxy`
+* :ref:`signals`
+
+As well as tools for working with databases:
+
+* :ref:`pwiz`
+* :ref:`migrate`
+* :ref:`test_utils`
+
 
 .. _apsw:
 
@@ -85,6 +105,170 @@ apsw_ext API notes
     Be sure to use the ``Field`` subclasses defined in the ``apsw_ext``
     module, as they will properly handle adapting the data types for storage.
 
+
+.. _postgres_ext:
+
+Postgresql Extension (HStore)
+-----------------------------
+
+The postgresql extensions module provides a number of "postgres-only" functions,
+currently:
+
+* :ref:`hstore support <hstore>`
+* `UUID` field type
+* `DateTimeTZ` field type (timezone-aware datetime field)
+
+In the future I would like to add support for more of postgresql's features.
+If there is a particular feature you would like to see added, please
+`open a Github issue <https://github.com/coleifer/peewee/issues>`_.
+
+.. warning:: In order to start using the features described below, you will need to use the
+    extension :py:class:`PostgresqlExtDatabase` class instead of :py:class:`PostgresqlDatabase`.
+
+The code below will assume you are using the following database and base model:
+
+.. code-block:: python
+
+    from playhouse.postgres_ext import *
+
+    ext_db = PostgresqlExtDatabase('peewee_test', user='postgres')
+
+    class BaseExtModel(Model):
+        class Meta:
+            database = ext_db
+
+.. _hstore:
+
+hstore support
+^^^^^^^^^^^^^^
+
+`Postgresql hstore <http://www.postgresql.org/docs/current/static/hstore.html>`_ is
+an embedded key/value store.  With hstore, you can store arbitrary key/value pairs
+in your database alongside structured relational data.
+
+Currently the ``postgres_ext`` module supports the following operations:
+
+* Store and retrieve arbitrary dictionaries
+* Filter by key(s) or partial dictionary
+* Update/add one or more keys to an existing dictionary
+* Delete one or more keys from an existing dictionary
+* Select keys, values, or zip keys and values
+* Retrieve a slice of keys/values
+* Test for the existence of a key
+* Test that a key has a non-NULL value
+
+
+Using hstore
+^^^^^^^^^^^^
+
+To start with, you will need to import the custom database class and the hstore
+functions from ``playhouse.postgres_ext`` (see above code snippet).  Then, it is
+as simple as adding a :py:class:`HStoreField` to your model:
+
+.. code-block:: python
+
+    class House(BaseExtModel):
+        address = CharField()
+        features = HStoreField()
+
+
+You can now store arbitrary key/value pairs on ``House`` instances:
+
+.. code-block:: pycon
+
+    >>> h = House.create(address='123 Main St', features={'garage': '2 cars', 'bath': '2 bath'})
+    >>> h_from_db = House.get(House.id == h.id)
+    >>> h_from_db.features
+    {'bath': '2 bath', 'garage': '2 cars'}
+
+
+You can filter by keys or partial dictionary:
+
+.. code-block:: pycon
+
+    >>> f = House.features
+    >>> House.select().where(f.contains('garage')) # <-- all houses w/garage key
+    >>> House.select().where(f.contains(['garage', 'bath'])) # <-- all houses w/garage & bath
+    >>> House.select().where(f.contains({'garage': '2 cars'})) # <-- houses w/2-car garage
+
+Suppose you want to do an atomic update to the house:
+
+.. code-block:: pycon
+
+    >>> f = House.features
+    >>> new_features = House.features.update({'bath': '2.5 bath', 'sqft': '1100'})
+    >>> query = House.update(features=new_features)
+    >>> query.where(House.id == h.id).execute()
+    1
+    >>> h = House.get(House.id == h.id)
+    >>> h.features
+    {'bath': '2.5 bath', 'garage': '2 cars', 'sqft': '1100'}
+
+
+Or, alternatively an atomic delete:
+
+.. code-block:: pycon
+
+    >>> query = House.update(features=f.delete('bath'))
+    >>> query.where(House.id == h.id).execute()
+    1
+    >>> h = House.get(House.id == h.id)
+    >>> h.features
+    {'garage': '2 cars', 'sqft': '1100'}
+
+
+Multiple keys can be deleted at the same time:
+
+.. code-block:: pycon
+
+    >>> query = House.update(features=f.delete('garage', 'sqft'))
+
+You can select just keys, just values, or zip the two:
+
+.. code-block:: pycon
+
+    >>> f = House.features
+    >>> for h in House.select(House.address, f.keys().alias('keys')):
+    ...     print h.address, h.keys
+
+    123 Main St [u'bath', u'garage']
+
+    >>> for h in House.select(House.address, f.values().alias('vals')):
+    ...     print h.address, h.vals
+
+    123 Main St [u'2 bath', u'2 cars']
+
+    >>> for h in House.select(House.address, f.items().alias('mtx')):
+    ...     print h.address, h.mtx
+
+    123 Main St [[u'bath', u'2 bath'], [u'garage', u'2 cars']]
+
+You can retrieve a slice of data, for example, all the garage data:
+
+.. code-block:: pycon
+
+    >>> f = House.features
+    >>> for h in House.select(House.address, f.slice('garage').alias('garage_data')):
+    ...     print h.address, h.garage_data
+
+    123 Main St {'garage': '2 cars'}
+
+You can check for the existence of a key and filter rows accordingly:
+
+.. code-block:: pycon
+
+    >>> for h in House.select(House.address, f.exists('garage').alias('has_garage')):
+    ...     print h.address, h.has_garage
+
+    123 Main St True
+
+    >>> for h in House.select().where(f.exists('garage')):
+    ...     print h.address, h.features['garage'] # <-- just houses w/garage data
+
+    123 Main St 2 cars
+
+
+.. _sqlite_ext:
 
 Sqlite Extensions
 -----------------
@@ -321,218 +505,239 @@ sqlite_ext API notes
         The above code is exactly what the :py:meth:`match` function
         provides.
 
+.. _gfk:
 
-Postgresql Extension (HStore)
------------------------------
+Generic foreign keys
+--------------------
 
-The postgresql extensions module provides a number of "postgres-only" functions,
-currently:
+The ``gfk`` module provides a Generic ForeignKey (GFK), similar to Django.  A GFK
+is composed of two columns: an object ID and an object type identifier.  The
+object types are collected in a global registry (``all_models``).
 
-* :ref:`hstore support <hstore>`
-* `UUID` field type
-* `DateTimeTZ` field type (timezone-aware datetime field)
+How a :py:class:`GFKField` is resolved:
 
-In the future I would like to add support for more of postgresql's features.
-If there is a particular feature you would like to see added, please
-`open a Github issue <https://github.com/coleifer/peewee/issues>`_.
+1. Look up the object type in the global registry (returns a model class)
+2. Look up the model instance by object ID
 
-.. warning:: In order to start using the features described below, you will need to use the
-    extension :py:class:`PostgresqlExtDatabase` class instead of :py:class:`PostgresqlDatabase`.
+.. note:: In order to use Generic ForeignKeys, your application's models *must*
+    subclass ``playhouse.gfk.Model``.  This ensures that the model class will
+    be added to the global registry.
 
-The code below will assume you are using the following database and base model:
+.. note:: GFKs themselves are not actually a field and will not add a column
+    to your table.
+
+Like regular ForeignKeys, GFKs support a "back-reference" via the :py:class:`ReverseGFK`
+descriptor.
+
+How to use GFKs
+^^^^^^^^^^^^^^^
+
+1. Be sure your model subclasses ``playhouse.gfk.Model``
+2. Add a :py:class:`CharField` to store the ``object_type``
+3. Add a field to store the ``object_id`` (usually a :py:class:`IntegerField`)
+4. Add a :py:class:`GFKField` and instantiate it with the names of the ``object_type``
+   and ``object_id`` fields.
+5. (optional) On any other models, add a :py:class:`ReverseGFK` descriptor
+
+Example:
 
 .. code-block:: python
 
-    from playhouse.postgres_ext import *
+    from playhouse.gfk import *
 
-    ext_db = PostgresqlExtDatabase('peewee_test', user='postgres')
+    class Tag(Model):
+        tag = CharField()
+        object_type = CharField(null=True)
+        object_id = IntegerField(null=True)
+        object = GFKField('object_type', 'object_id')
 
-    class BaseExtModel(Model):
-        class Meta:
-            database = ext_db
+    class Blog(Model):
+        tags = ReverseGFK(Tag, 'object_type', 'object_id')
 
-.. _hstore:
+    class Photo(Model):
+        tags = ReverseGFK(Tag, 'object_type', 'object_id')
 
-hstore support
-^^^^^^^^^^^^^^
+How you use these is pretty straightforward hopefully:
 
-`Postgresql hstore <http://www.postgresql.org/docs/current/static/hstore.html>`_ is
-an embedded key/value store.  With hstore, you can store arbitrary key/value pairs
-in your database alongside structured relational data.
+.. code-block:: pycon
 
-Currently the ``postgres_ext`` module supports the following operations:
+    >>> b = Blog.create(name='awesome post')
+    >>> Tag.create(tag='awesome', object=b)
+    >>> b2 = Blog.create(name='whiny post')
+    >>> Tag.create(tag='whiny', object=b2)
 
-* Store and retrieve arbitrary dictionaries
-* Filter by key(s) or partial dictionary
-* Update/add one or more keys to an existing dictionary
-* Delete one or more keys from an existing dictionary
-* Select keys, values, or zip keys and values
-* Retrieve a slice of keys/values
-* Test for the existence of a key
-* Test that a key has a non-NULL value
+    >>> b.tags # <-- a select query
+    <class '__main__.Tag'> SELECT t1."id", t1."tag", t1."object_type", t1."object_id" FROM "tag" AS t1 WHERE ((t1."object_type" = ?) AND (t1."object_id" = ?)) [u'blog', 1]
 
+    >>> [x.tag for x in b.tags]
+    [u'awesome']
 
-Using hstore
+    >>> [x.tag for x in b2.tags]
+    [u'whiny']
+
+    >>> p = Photo.create(name='picture of cat')
+    >>> Tag.create(object=p, tag='kitties')
+    >>> Tag.create(object=p, tag='cats')
+
+    >>> [x.tag for x in p.tags]
+    [u'kitties', u'cats']
+
+    >>> [x.tag for x in Blog.tags]
+    [u'awesome', u'whiny']
+
+    >>> t = Tag.get(Tag.tag == 'awesome')
+    >>> t.object
+    <__main__.Blog at 0x268f450>
+
+    >>> t.object.name
+    u'awesome post'
+
+GFK API
+^^^^^^^
+
+.. py:class:: GFKField([model_type_field='object_type'[, model_id_field='object_id']])
+
+    Provide a clean API for storing "generic" foreign keys.  Generic foreign keys
+    are comprised of an object type, which maps to a model class, and an object id,
+    which maps to the primary key of the related model class.
+
+    Setting the GFKField on a model will automatically populate the ``model_type_field``
+    and ``model_id_field``.  Similarly, getting the GFKField on a model instance
+    will "resolve" the two fields, first looking up the model class, then looking
+    up the instance by ID.
+
+.. py:class:: ReverseGFK(model, [model_type_field='object_type'[, model_id_field='object_id']])
+
+    Back-reference support for :py:class:`GFKField`.
+
+.. _kv:
+
+Key/Value Store
+---------------
+
+Provides a simple key/value store, using a dictionary API.  By default the
+the :py:class:`KeyStore` will use an in-memory sqlite database, but any database
+will work.
+
+To start using the key-store, create an instance and pass it a field to use
+for the values.
+
+.. code-block:: python
+
+    >>> kv = KeyStore(TextField())
+    >>> kv['a'] = 'A'
+    >>> kv['a']
+    'A'
+
+.. note::
+  To store arbitrary python objects, use the :py:class:`PickledKeyStore`, which
+  stores values in a pickled :py:class:`BlobField`.
+
+Using the :py:class:`KeyStore` it is possible to use "expressions" to retrieve
+values from the dictionary.  For instance, imagine you want to get all keys
+which contain a certain substring:
+
+.. code-block:: python
+
+    >>> keys_matching_substr = kv[kv.key % '%substr%']
+    >>> keys_start_with_a = kv[fn.Lower(fn.Substr(kv.key, 1, 1)) == 'a']
+
+KeyStore API
 ^^^^^^^^^^^^
 
-To start with, you will need to import the custom database class and the hstore
-functions from ``playhouse.postgres_ext`` (see above code snippet).  Then, it is
-as simple as adding a :py:class:`HStoreField` to your model:
+.. py:class:: KeyStore(value_field[, ordered=False[, database=None]])
+
+    Lightweight dictionary interface to a model containing a key and value.
+    Implements common dictionary methods, such as ``__getitem__``, ``__setitem__``,
+    ``get``, ``pop``, ``items``, ``keys``, and ``values``.
+
+    :param Field value_field: Field instance to use as value field, e.g. an
+        instance of :py:class:`TextField`.
+    :param boolean ordered: Whether the keys should be returned in sorted order
+    :param Database database: :py:class:`Database` class to use for the storage
+        backend.  If none is supplied, an in-memory Sqlite DB will be used.
+
+    Example:
+
+    .. code-block:: pycon
+
+        >>> from playhouse.kv import KeyStore
+        >>> kv = KeyStore(TextField())
+        >>> kv['a'] = 'foo'
+        >>> for k, v in kv:
+        ...     print k, v
+        a foo
+
+        >>> 'a' in kv
+        True
+        >>> 'b' in kv
+        False
+
+.. py:class:: PickledKeyStore([ordered=False[, database=None]])
+
+    Identical to the :py:class:`KeyStore` except *anything* can be stored as
+    a value in the dictionary.  The storage for the value will be a pickled
+    :py:class:`BlobField`.
+
+    Example:
+
+    .. code-block:: pycon
+
+        >>> from playhouse.kv import PickledKeyStore
+        >>> pkv = PickledKeyStore()
+        >>> pkv['a'] = 'A'
+        >>> pkv['b'] = 1.0
+        >>> list(pkv.items())
+        [(u'a', 'A'), (u'b', 1.0)]
+
+
+.. _proxy:
+
+Proxy
+-----
+
+Proxy class useful for situations when you wish to defer the initialization of
+an object.  For instance, you want to define your models but you do not know
+what database engine you will be using until runtime.
 
 .. code-block:: python
 
-    class House(BaseExtModel):
-        address = CharField()
-        features = HStoreField()
+    database_proxy = Proxy()  # Create a proxy for our db.
+
+    class BaseModel(Model):
+        class Meta:
+            database = database_proxy  # Use proxy for our DB.
+
+    class User(BaseModel):
+        username = CharField()
+
+    # Based on configuration, use a different database.
+    if app.config['DEBUG']:
+        database = SqliteDatabase('local.db')
+    elif app.config['TESTING']:
+        database = SqliteDatabase(':memory:')
+    else:
+        database = PostgresqlDatabase('mega_production_db')
+
+    # Configure our proxy to use the db we specified in config.
+    database_proxy.initialize(database)
 
 
-You can now store arbitrary key/value pairs on ``House`` instances:
+Proxy API
+^^^^^^^^^
 
-.. code-block:: pycon
+.. py:class:: Proxy()
 
-    >>> h = House.create(address='123 Main St', features={'garage': '2 cars', 'bath': '2 bath'})
-    >>> h_from_db = House.get(House.id == h.id)
-    >>> h_from_db.features
-    {'bath': '2 bath', 'garage': '2 cars'}
+    Create a new :py:class:`Proxy` instance.
 
+    .. py:method:: initialize(obj)
 
-You can filter by keys or partial dictionary:
+        :param obj: The object to proxy to.
 
-.. code-block:: pycon
+        Once initialized, the attributes and methods on ``obj`` can be accessed
+        directly via the :py:class:`Proxy` instance.
 
-    >>> f = House.features
-    >>> House.select().where(f.contains('garage')) # <-- all houses w/garage key
-    >>> House.select().where(f.contains(['garage', 'bath'])) # <-- all houses w/garage & bath
-    >>> House.select().where(f.contains({'garage': '2 cars'})) # <-- houses w/2-car garage
-
-Suppose you want to do an atomic update to the house:
-
-.. code-block:: pycon
-
-    >>> f = House.features
-    >>> new_features = House.features.update({'bath': '2.5 bath', 'sqft': '1100'})
-    >>> query = House.update(features=new_features)
-    >>> query.where(House.id == h.id).execute()
-    1
-    >>> h = House.get(House.id == h.id)
-    >>> h.features
-    {'bath': '2.5 bath', 'garage': '2 cars', 'sqft': '1100'}
-
-
-Or, alternatively an atomic delete:
-
-.. code-block:: pycon
-
-    >>> query = House.update(features=f.delete('bath'))
-    >>> query.where(House.id == h.id).execute()
-    1
-    >>> h = House.get(House.id == h.id)
-    >>> h.features
-    {'garage': '2 cars', 'sqft': '1100'}
-
-
-Multiple keys can be deleted at the same time:
-
-.. code-block:: pycon
-
-    >>> query = House.update(features=f.delete('garage', 'sqft'))
-
-You can select just keys, just values, or zip the two:
-
-.. code-block:: pycon
-
-    >>> f = House.features
-    >>> for h in House.select(House.address, f.keys().alias('keys')):
-    ...     print h.address, h.keys
-
-    123 Main St [u'bath', u'garage']
-
-    >>> for h in House.select(House.address, f.values().alias('vals')):
-    ...     print h.address, h.vals
-
-    123 Main St [u'2 bath', u'2 cars']
-
-    >>> for h in House.select(House.address, f.items().alias('mtx')):
-    ...     print h.address, h.mtx
-
-    123 Main St [[u'bath', u'2 bath'], [u'garage', u'2 cars']]
-
-You can retrieve a slice of data, for example, all the garage data:
-
-.. code-block:: pycon
-
-    >>> f = House.features
-    >>> for h in House.select(House.address, f.slice('garage').alias('garage_data')):
-    ...     print h.address, h.garage_data
-
-    123 Main St {'garage': '2 cars'}
-
-You can check for the existence of a key and filter rows accordingly:
-
-.. code-block:: pycon
-
-    >>> for h in House.select(House.address, f.exists('garage').alias('has_garage')):
-    ...     print h.address, h.has_garage
-
-    123 Main St True
-
-    >>> for h in House.select().where(f.exists('garage')):
-    ...     print h.address, h.features['garage'] # <-- just houses w/garage data
-
-    123 Main St 2 cars
-
-
-.. _pwiz:
-
-pwiz, a model generator
------------------------
-
-``pwiz`` is a little script that ships with peewee and is capable of introspecting
-an existing database and generating model code suitable for interacting with the
-underlying data.  If you have a database already, pwiz can give you a nice boost
-by generating skeleton code with correct column affinities and foreign keys.
-
-If you install peewee using ``setup.py install``, pwiz will be installed as a "script"
-and you can just run:
-
-.. highlight:: console
-.. code-block:: console
-
-    pwiz.py -e postgresql -u postgres my_postgres_db
-
-This will print a bunch of models to standard output.  So you can do this:
-
-.. code-block:: console
-
-    pwiz.py -e postgresql my_postgres_db > mymodels.py
-    python # <-- fire up an interactive shell
-
-
-.. highlight:: pycon
-.. code-block:: pycon
-
-    >>> from mymodels import Blog, Entry, Tag, Whatever
-    >>> print [blog.name for blog in Blog.select()]
-
-
-======    ========================= ============================================
-Option    Meaning                   Example
-======    ========================= ============================================
--h        show help
--e        database backend          -e mysql
--H        host to connect to        -H remote.db.server
--p        port to connect on        -p 9001
--u        database user             -u postgres
--P        database password         -P secret
--s        postgres schema           -s public
-======    ========================= ============================================
-
-The following are valid parameters for the engine:
-
-* sqlite
-* mysql
-* postgresql
-
+.. _signals:
 
 Signal support
 --------------
@@ -678,236 +883,116 @@ Signal API
                 # bust the cache for this instance
                 cache.delete(cache_key_for(instance))
 
+.. _pwiz:
 
-Generic foreign keys
---------------------
+pwiz, a model generator
+-----------------------
 
-The ``gfk`` module provides a Generic ForeignKey (GFK), similar to Django.  A GFK
-is composed of two columns: an object ID and an object type identifier.  The
-object types are collected in a global registry (``all_models``).
+``pwiz`` is a little script that ships with peewee and is capable of introspecting
+an existing database and generating model code suitable for interacting with the
+underlying data.  If you have a database already, pwiz can give you a nice boost
+by generating skeleton code with correct column affinities and foreign keys.
 
-How a :py:class:`GFKField` is resolved:
+If you install peewee using ``setup.py install``, pwiz will be installed as a "script"
+and you can just run:
 
-1. Look up the object type in the global registry (returns a model class)
-2. Look up the model instance by object ID
+.. highlight:: console
+.. code-block:: console
 
-.. note:: In order to use Generic ForeignKeys, your application's models *must*
-    subclass ``playhouse.gfk.Model``.  This ensures that the model class will
-    be added to the global registry.
+    pwiz.py -e postgresql -u postgres my_postgres_db
 
-.. note:: GFKs themselves are not actually a field and will not add a column
-    to your table.
+This will print a bunch of models to standard output.  So you can do this:
 
-Like regular ForeignKeys, GFKs support a "back-reference" via the :py:class:`ReverseGFK`
-descriptor.
+.. code-block:: console
 
-How to use GFKs
-^^^^^^^^^^^^^^^
+    pwiz.py -e postgresql my_postgres_db > mymodels.py
+    python # <-- fire up an interactive shell
 
-1. Be sure your model subclasses ``playhouse.gfk.Model``
-2. Add a :py:class:`CharField` to store the ``object_type``
-3. Add a field to store the ``object_id`` (usually a :py:class:`IntegerField`)
-4. Add a :py:class:`GFKField` and instantiate it with the names of the ``object_type``
-   and ``object_id`` fields.
-5. (optional) On any other models, add a :py:class:`ReverseGFK` descriptor
 
-Example:
-
-.. code-block:: python
-
-    from playhouse.gfk import *
-
-    class Tag(Model):
-        tag = CharField()
-        object_type = CharField(null=True)
-        object_id = IntegerField(null=True)
-        object = GFKField('object_type', 'object_id')
-
-    class Blog(Model):
-        tags = ReverseGFK(Tag, 'object_type', 'object_id')
-
-    class Photo(Model):
-        tags = ReverseGFK(Tag, 'object_type', 'object_id')
-
-How you use these is pretty straightforward hopefully:
-
+.. highlight:: pycon
 .. code-block:: pycon
 
-    >>> b = Blog.create(name='awesome post')
-    >>> Tag.create(tag='awesome', object=b)
-    >>> b2 = Blog.create(name='whiny post')
-    >>> Tag.create(tag='whiny', object=b2)
-
-    >>> b.tags # <-- a select query
-    <class '__main__.Tag'> SELECT t1."id", t1."tag", t1."object_type", t1."object_id" FROM "tag" AS t1 WHERE ((t1."object_type" = ?) AND (t1."object_id" = ?)) [u'blog', 1]
-
-    >>> [x.tag for x in b.tags]
-    [u'awesome']
-
-    >>> [x.tag for x in b2.tags]
-    [u'whiny']
-
-    >>> p = Photo.create(name='picture of cat')
-    >>> Tag.create(object=p, tag='kitties')
-    >>> Tag.create(object=p, tag='cats')
-
-    >>> [x.tag for x in p.tags]
-    [u'kitties', u'cats']
-
-    >>> [x.tag for x in Blog.tags]
-    [u'awesome', u'whiny']
-
-    >>> t = Tag.get(Tag.tag == 'awesome')
-    >>> t.object
-    <__main__.Blog at 0x268f450>
-
-    >>> t.object.name
-    u'awesome post'
-
-GFK API
-^^^^^^^
-
-.. py:class:: GFKField([model_type_field='object_type'[, model_id_field='object_id']])
-
-    Provide a clean API for storing "generic" foreign keys.  Generic foreign keys
-    are comprised of an object type, which maps to a model class, and an object id,
-    which maps to the primary key of the related model class.
-
-    Setting the GFKField on a model will automatically populate the ``model_type_field``
-    and ``model_id_field``.  Similarly, getting the GFKField on a model instance
-    will "resolve" the two fields, first looking up the model class, then looking
-    up the instance by ID.
-
-.. py:class:: ReverseGFK(model, [model_type_field='object_type'[, model_id_field='object_id']])
-
-    Back-reference support for :py:class:`GFKField`.
+    >>> from mymodels import Blog, Entry, Tag, Whatever
+    >>> print [blog.name for blog in Blog.select()]
 
 
-Key/Value Store
----------------
+======    ========================= ============================================
+Option    Meaning                   Example
+======    ========================= ============================================
+-h        show help
+-e        database backend          -e mysql
+-H        host to connect to        -H remote.db.server
+-p        port to connect on        -p 9001
+-u        database user             -u postgres
+-P        database password         -P secret
+-s        postgres schema           -s public
+======    ========================= ============================================
 
-Provides a simple key/value store, using a dictionary API.  By default the
-the :py:class:`KeyStore` will use an in-memory sqlite database, but any database
-will work.
+The following are valid parameters for the engine:
 
-To start using the key-store, create an instance and pass it a field to use
-for the values.
+* sqlite
+* mysql
+* postgresql
+
+.. _migrate:
+
+Basic Schema Migrations
+-----------------------
+
+.. note:: This module is still pretty experimental, but it provides a light
+    API for doing schema migrations with postgresql.
+
+Instantiate a migrator:
 
 .. code-block:: python
 
-    >>> kv = KeyStore(TextField())
-    >>> kv['a'] = 'A'
-    >>> kv['a']
-    'A'
+    my_db = PostgresqlDatabase(...)
+    migrator = Migrator(my_db)
 
-.. note::
-  To store arbitrary python objects, use the :py:class:`PickledKeyStore`, which
-  stores values in a pickled :py:class:`BlobField`.
-
-Using the :py:class:`KeyStore` it is possible to use "expressions" to retrieve
-values from the dictionary.  For instance, imagine you want to get all keys
-which contain a certain substring:
+Adding a field to a model:
 
 .. code-block:: python
 
-    >>> keys_matching_substr = kv[kv.key % '%substr%']
-    >>> keys_start_with_a = kv[fn.Lower(fn.Substr(kv.key, 1, 1)) == 'a']
+    # declare a field instance
+    new_pubdate_field = DateTimeField(null=True)
 
-KeyStore API
-^^^^^^^^^^^^
+    # in a transaction, add the column to your model
+    with my_db.transaction():
+        migrator.add_column(Story, new_pubdate_field, 'pub_date')
 
-.. py:class:: KeyStore(value_field[, ordered=False[, database=None]])
-
-    Lightweight dictionary interface to a model containing a key and value.
-    Implements common dictionary methods, such as ``__getitem__``, ``__setitem__``,
-    ``get``, ``pop``, ``items``, ``keys``, and ``values``.
-
-    :param Field value_field: Field instance to use as value field, e.g. an
-        instance of :py:class:`TextField`.
-    :param boolean ordered: Whether the keys should be returned in sorted order
-    :param Database database: :py:class:`Database` class to use for the storage
-        backend.  If none is supplied, an in-memory Sqlite DB will be used.
-
-    Example:
-
-    .. code-block:: pycon
-
-        >>> from playhouse.kv import KeyStore
-        >>> kv = KeyStore(TextField())
-        >>> kv['a'] = 'foo'
-        >>> for k, v in kv:
-        ...     print k, v
-        a foo
-
-        >>> 'a' in kv
-        True
-        >>> 'b' in kv
-        False
-
-.. py:class:: PickledKeyStore([ordered=False[, database=None]])
-
-    Identical to the :py:class:`KeyStore` except *anything* can be stored as
-    a value in the dictionary.  The storage for the value will be a pickled
-    :py:class:`BlobField`.
-
-    Example:
-
-    .. code-block:: pycon
-
-        >>> from playhouse.kv import PickledKeyStore
-        >>> pkv = PickledKeyStore()
-        >>> pkv['a'] = 'A'
-        >>> pkv['b'] = 1.0
-        >>> list(pkv.items())
-        [(u'a', 'A'), (u'b', 1.0)]
-
-
-.. _proxy:
-
-Proxy
------
-
-Proxy class useful for situations when you wish to defer the initialization of
-an object.  For instance, you want to define your models but you do not know
-what database engine you will be using until runtime.
+Renaming a field:
 
 .. code-block:: python
 
-    database_proxy = Proxy()  # Create a proxy for our db.
+    # specify the original name of the field and its new name
+    with my_db.transaction():
+        migrator.rename_column(Story, 'pub_date', 'publish_date')
 
-    class BaseModel(Model):
-        class Meta:
-            database = database_proxy  # Use proxy for our DB.
+Dropping a field:
 
-    class User(BaseModel):
-        username = CharField()
+.. code-block:: python
 
-    # Based on configuration, use a different database.
-    if app.config['DEBUG']:
-        database = SqliteDatabase('local.db')
-    elif app.config['TESTING']:
-        database = SqliteDatabase(':memory:')
-    else:
-        database = PostgresqlDatabase('mega_production_db')
+   # specify the field name to drop
+   with my_db.transaction():
+       migrator.drop_column(Story, 'some_old_field')
 
-    # Configure our proxy to use the db we specified in config.
-    database_proxy.initialize(database)
+Setting nullable / not nullable
+
+.. code-block:: python
+
+    with my_db.transaction():
+        # make pubdate not nullable
+        migrator.set_nullable(Story, Story.pub_date, False)
+
+Renaming a table
+
+.. code-block:: python
+
+    with my_db.transaction():
+        migrator.rename_table(Story, 'stories')
 
 
-Proxy API
-^^^^^^^^^
-
-.. py:class:: Proxy()
-
-    Create a new :py:class:`Proxy` instance.
-
-    .. py:method:: initialize(obj)
-
-        :param obj: The object to proxy to.
-
-        Once initialized, the attributes and methods on ``obj`` can be accessed
-        directly via the :py:class:`Proxy` instance.
-
+.. _test_utils:
 
 Test Utils
 ----------
