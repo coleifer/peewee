@@ -211,12 +211,39 @@ class PostgresExtTestCase(unittest.TestCase):
             {'k3': 'v3', 'k6': 'v6'}
         ])
 
-    def test_array_storage_retrieval(self):
-        am = ArrayModel(
-            tags=['foo', 'bar'],
-            ints=[[1, 2], [3, 4]])
-        am.save()
+    def _create_am(self):
+        return ArrayModel.create(
+            tags=['alpha', 'beta', 'gamma', 'delta'],
+            ints=[[1, 2], [3, 4], [5, 6]])
 
+    def test_array_storage_retrieval(self):
+        am = self._create_am()
         am_db = ArrayModel.get(ArrayModel.id == am.id)
-        self.assertEqual(am_db.tags, ['foo', 'bar'])
-        self.assertEqual(am_db.ints, [[1, 2], [3, 4]])
+        self.assertEqual(am_db.tags, ['alpha', 'beta', 'gamma', 'delta'])
+        self.assertEqual(am_db.ints, [[1, 2], [3, 4], [5, 6]])
+
+    def test_array_index_slice(self):
+        self._create_am()
+        res = (ArrayModel
+               .select(ArrayModel.tags[1].alias('arrtags'))
+               .dicts()
+               .get())
+        self.assertEqual(res['arrtags'], 'beta')
+
+        res = (ArrayModel
+               .select(ArrayModel.tags[2:4].alias('foo'))
+               .dicts()
+               .get())
+        self.assertEqual(res['foo'], ['gamma', 'delta'])
+
+        res = (ArrayModel
+               .select(ArrayModel.ints[1][1].alias('ints'))
+               .dicts()
+               .get())
+        self.assertEqual(res['ints'], 4)
+
+        res = (ArrayModel
+               .select(ArrayModel.ints[1:2][0].alias('ints'))
+               .dicts()
+               .get())
+        self.assertEqual(res['ints'], [[3], [5]])

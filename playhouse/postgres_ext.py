@@ -9,11 +9,35 @@ import uuid
 from peewee import *
 from peewee import dict_update
 from peewee import Expr
+from peewee import Leaf
 from peewee import Param
 from peewee import QueryCompiler
 
 from psycopg2 import extensions
 from psycopg2.extras import register_hstore
+
+
+class ObjectSlice(Leaf):
+    def __init__(self, expr, parts):
+        self.expr = expr
+        self.parts = parts
+        super(ObjectSlice, self).__init__()
+
+    def clone_base(self):
+        return ObjectSlice(self.expr, list(self.parts))
+
+    @classmethod
+    def create(cls, expr, value):
+        if isinstance(value, slice):
+            parts = [value.start or 0, value.stop or 0]
+        elif isinstance(value, int):
+            parts = [value]
+        else:
+            parts = map(int, value.split(':'))
+        return cls(expr, parts)
+
+    def __getitem__(self, value):
+        return ObjectSlice.create(self, value)
 
 
 class ArrayField(Field):
@@ -29,6 +53,9 @@ class ArrayField(Field):
 
     def field_attributes(self):
         return self.__field.field_attributes()
+
+    def __getitem__(self, value):
+        return ObjectSlice.create(self, value)
 
 
 class DateTimeTZField(DateTimeField):
@@ -103,6 +130,17 @@ class PostgresqlExtCompiler(QueryCompiler):
         if any(map(lambda f: isinstance(f, HStoreField), fields)):
             parts.insert(-1, 'USING GIST')
         return parts
+
+    def _parse(self, expr, alias_map, conv):
+        s, p, unknown = super(PostgresqlExtCompiler, self)._parse(
+            expr, alias_map, conv)
+        if unknown and isinstance(expr, ObjectSlice):
+            unknown = False
+            s, p = self.parse_expr(expr.expr)
+            # Postgresql uses 1-based indexes.
+            parts = [str(part + 1) for part in expr.parts]
+            s = '%s[%s]' % (s, ':'.join(parts))
+        return s, p, unknown
 
 
 class PostgresqlExtDatabase(PostgresqlDatabase):

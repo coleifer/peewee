@@ -767,9 +767,10 @@ class QueryCompiler(object):
                     max_alias = i
         return max_alias + 1
 
-    def parse_expr(self, expr, alias_map=None, conv=None):
+    def _parse(self, expr, alias_map, conv):
         s = self.interpolation
         p = [expr]
+        unknown = False
         if isinstance(expr, Expr):
             if isinstance(expr.lhs, Field):
                 conv = expr.lhs
@@ -829,7 +830,13 @@ class QueryCompiler(object):
         elif isclass(expr) and issubclass(expr, Model):
             s = self.quote(expr._meta.db_table)
             p = []
-        elif conv and p:
+        else:
+            unknown = True
+        return s, p, unknown
+
+    def parse_expr(self, expr, alias_map=None, conv=None):
+        s, p, unknown = self._parse(expr, alias_map, conv)
+        if unknown and conv and p:
             p = [conv.db_value(i) for i in p]
 
         if isinstance(expr, Leaf):
@@ -837,7 +844,6 @@ class QueryCompiler(object):
                 s = 'NOT %s' % s
             if expr._alias:
                 s = ' '.join((s, 'AS', expr._alias))
-
         return s, p
 
     def parse_expr_list(self, s, alias_map):
