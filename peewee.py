@@ -487,8 +487,7 @@ class CharField(Field):
         return {'max_length': 255}
 
     def coerce(self, value):
-        value = format_unicode(value or '')
-        return value[:self.attributes['max_length']]
+        return format_unicode(value or '')
 
 class TextField(Field):
     db_field = 'text'
