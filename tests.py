@@ -1191,7 +1191,7 @@ class QueryResultWrapperTestCase(ModelTestCase):
 
 
 class ModelQueryResultWrapperTestCase(ModelTestCase):
-    requires = [TestModelA, TestModelB, TestModelC]
+    requires = [TestModelA, TestModelB, TestModelC, User, Blog]
 
     data = (
         (TestModelA, (
@@ -1244,6 +1244,25 @@ class ModelQueryResultWrapperTestCase(ModelTestCase):
         for i, (b_data, c_data) in enumerate(expected):
             self.assertEqual(results[i].rel_b.data, b_data)
             self.assertEqual(results[i].rel_b.field.data, c_data)
+
+    def test_backward_join(self):
+        u1 = User.create(username='u1')
+        u2 = User.create(username='u2')
+        for user in (u1, u2):
+            Blog.create(title='b-%s' % user.username, user=user)
+
+        # Create an additional blog for user 2.
+        Blog.create(title='b-u2-2', user=u2)
+
+        res = (User
+               .select(User.username, Blog.title)
+               .join(Blog)
+               .order_by(User.username.asc(), Blog.title.asc()))
+        self.assertEqual([(u.username, u.blog.title) for u in res], [
+            ('u1', 'b-u1'),
+            ('u2', 'b-u2'),
+            ('u2', 'b-u2-2')])
+
 
 class ModelQueryTestCase(ModelTestCase):
     requires = [User, Blog]
