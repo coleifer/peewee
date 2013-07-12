@@ -23,6 +23,8 @@ peewee
 
 `Code hosted on GitHub <https://github.com/coleifer/peewee>`_.
 
+New to peewee? Check out the `getting started IPython notebook <http://nbviewer.ipython.org/d3faf30bbff67ce5f70c>`_.
+
 See notes on :ref:`notes on upgrading and changes from 1.0 <upgrading>`
 
 Contents:

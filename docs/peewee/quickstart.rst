@@ -14,6 +14,8 @@ peewee and some of its features.  This guide will cover:
     If you'd like something a bit more meaty, there is a thorough tutorial on
     :ref:`creating a "twitter"-style web app  <example-app>` using peewee.
 
+If you'd like, you can find this guide as an `IPython notebook <http://nbviewer.ipython.org/d3faf30bbff67ce5f70c>`_.
+
 I recommend opening an interactive shell session and running the code.  That way
 you can get a feel for typing in queries.
 

@@ -12,6 +12,8 @@ out `flask-peewee <https://github.com/coleifer/flask-peewee/>`_.
 
 For notes on the upgrade from 1.0 to 2.0, check out `the upgrade docs <http://peewee.readthedocs.org/en/latest/peewee/upgrading.html>`_.
 
+Check out the `quickstart IPython notebook <http://nbviewer.ipython.org/d3faf30bbff67ce5f70c>`_.
+
 Example queries::
 
     # a simple query selecting a user
@@ -80,8 +82,8 @@ Why?
 
 peewee began when I was working on a small app in flask and found myself writing
 lots of queries and wanting a very simple abstraction on top of the sql.  I had
-so much fun working on it that I kept adding features. peewee is small enough that 
-its my hope anyone with an interest in orms will be able to understand the code 
+so much fun working on it that I kept adding features. peewee is small enough that
+its my hope anyone with an interest in orms will be able to understand the code
 without much trouble.
 
 
