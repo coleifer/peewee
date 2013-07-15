@@ -192,7 +192,7 @@ def not_allowed(fn):
 
 class Leaf(object):
     def __init__(self):
-        self.negated = False
+        self._negated = False
         self._alias = None
 
     def clone_base(self):
@@ -200,13 +200,13 @@ class Leaf(object):
 
     def clone(self):
         inst = self.clone_base()
-        inst.negated = self.negated
+        inst._negated = self._negated
         inst._alias = self._alias
         return inst
 
     @returns_clone
     def __invert__(self):
-        self.negated = not self.negated
+        self._negated = not self._negated
 
     @returns_clone
     def alias(self, a=None):
@@ -671,6 +671,12 @@ class ForeignKeyField(IntegerField):
         if self.related_name in self.rel_model._meta.fields:
             raise AttributeError('Foreign key: %s.%s related name "%s" collision with field of same name' % (
                 self.model_class._meta.name, self.name, self.related_name))
+        if self.related_name in self.rel_model._meta.reverse_rel:
+            raise AttributeError(
+                'Foreign key: %s.%s related name "%s" collision with foreign '
+                'key using the same related_name.' % (
+                    self.model_class._meta.name, self.name, self.related_name))
+
 
         setattr(model_class, name, RelationDescriptor(self, self.rel_model))
         setattr(self.rel_model, self.related_name, ReverseRelationDescriptor(self))
@@ -783,23 +789,11 @@ class QueryCompiler(object):
                 s = '.'.join((alias_map[expr.model_class], s))
             p = []
         elif isinstance(expr, Func):
-            p = []
-            exprs = []
-            for param in expr.params:
-                parsed, params = self.parse_expr(param, alias_map, conv)
-                exprs.append(parsed)
-                p.extend(params)
-            s = '%s(%s)' % (expr.name, ', '.join(exprs))
+            sql, p = self.parse_expr_list(expr.params, alias_map, conv)
+            s = '%s(%s)' % (expr.name, sql)
         elif isinstance(expr, Clause):
-            p = []
-            exprs = []
-            for piece in expr.pieces:
-                parsed, params = self.parse_expr(piece, alias_map, conv)
-                exprs.append(parsed)
-                p.extend(params)
-            s = ' '.join(exprs)
+            s, p = self.parse_expr_list(expr.pieces, alias_map, conv, ' ')
         elif isinstance(expr, Param):
-            s = self.interpolation
             p = [expr.data]
         elif isinstance(expr, Ordering):
             s, p = self.parse_expr(expr.param, alias_map, conv)
@@ -816,13 +810,8 @@ class QueryCompiler(object):
             subselect, p = self.generate_select(clone, max_alias, alias_copy)
             s = '(%s)' % subselect
         elif isinstance(expr, (list, tuple)):
-            exprs = []
-            p = []
-            for i in expr:
-                e, v = self.parse_expr(i, alias_map, conv)
-                exprs.append(e)
-                p.extend(v)
-            s = '(%s)' % ','.join(exprs)
+            s, p = self.parse_expr_list(expr, alias_map, conv)
+            s = '(%s)' % s
         elif isinstance(expr, Model):
             s = self.interpolation
             p = [expr.get_id()]
@@ -839,20 +828,20 @@ class QueryCompiler(object):
             p = [conv.db_value(i) for i in p]
 
         if isinstance(expr, Leaf):
-            if expr.negated:
+            if expr._negated:
                 s = 'NOT %s' % s
             if expr._alias:
                 s = ' '.join((s, 'AS', expr._alias))
         return s, p
 
-    def parse_expr_list(self, s, alias_map):
+    def parse_expr_list(self, s, alias_map, conv=None, glue=', '):
         parsed = []
         data = []
         for expr in s:
-            expr_str, vars = self.parse_expr(expr, alias_map)
+            expr_str, vars = self.parse_expr(expr, alias_map, conv)
             parsed.append(expr_str)
             data.extend(vars)
-        return ', '.join(parsed), data
+        return glue.join(parsed), data
 
     def parse_field_dict(self, d):
         sets, params = [], []
@@ -1318,13 +1307,15 @@ class Query(Leaf):
             (mc, list(j)) for mc, j in self._joins.items()
         )
 
+    def _build_tree(self, initial, expressions):
+        reduced = reduce(operator.and_, expressions)
+        if initial is None:
+            return reduced
+        return initial & reduced
+
     @returns_clone
-    def where(self, *q_or_node):
-        if self._where is None:
-            self._where = reduce(operator.and_, q_or_node)
-        else:
-            for piece in q_or_node:
-                self._where &= piece
+    def where(self, *expressions):
+        self._where = self._build_tree(self._where, expressions)
 
     @returns_clone
     def join(self, model_class, join_type=None, on=None):
@@ -1528,12 +1519,8 @@ class SelectQuery(Query):
         self._group_by = self._model_shorthand(args)
 
     @returns_clone
-    def having(self, *q_or_node):
-        if self._having is None:
-            self._having = reduce(operator.and_, q_or_node)
-        else:
-            for piece in q_or_node:
-                self._having &= piece
+    def having(self, *expressions):
+        self._having = self._build_tree(self._having, expressions)
 
     @returns_clone
     def order_by(self, *args):

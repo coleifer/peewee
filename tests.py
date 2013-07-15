@@ -603,10 +603,10 @@ class SelectTestCase(BasePeeweeTestCase):
 
     def test_where_lists(self):
         sq = SelectQuery(User).where(User.username << ['u1', 'u2'])
-        self.assertWhere(sq, '(users."username" IN (?,?))', ['u1', 'u2'])
+        self.assertWhere(sq, '(users."username" IN (?, ?))', ['u1', 'u2'])
 
         sq = SelectQuery(User).where((User.username << ['u1', 'u2']) | (User.username << ['u3', 'u4']))
-        self.assertWhere(sq, '((users."username" IN (?,?)) OR (users."username" IN (?,?)))', ['u1', 'u2', 'u3', 'u4'])
+        self.assertWhere(sq, '((users."username" IN (?, ?)) OR (users."username" IN (?, ?)))', ['u1', 'u2', 'u3', 'u4'])
 
     def test_where_joins(self):
         sq = SelectQuery(User).where(
@@ -634,14 +634,14 @@ class SelectTestCase(BasePeeweeTestCase):
         self.assertWhere(sq, '(users."username" IN (SELECT users."username" FROM "users" AS users WHERE (users."username" = ?)))', ['u1'])
 
         sq = SelectQuery(Blog).where((Blog.pk == 3) | (Blog.user << User.select().where(User.username << ['u1', 'u2'])))
-        self.assertWhere(sq, '((blog."pk" = ?) OR (blog."user_id" IN (SELECT users."id" FROM "users" AS users WHERE (users."username" IN (?,?)))))', [3, 'u1', 'u2'])
+        self.assertWhere(sq, '((blog."pk" = ?) OR (blog."user_id" IN (SELECT users."id" FROM "users" AS users WHERE (users."username" IN (?, ?)))))', [3, 'u1', 'u2'])
 
     def test_where_fk(self):
         sq = SelectQuery(Blog).where(Blog.user == User(id=100))
         self.assertWhere(sq, '(blog."user_id" = ?)', [100])
 
         sq = SelectQuery(Blog).where(Blog.user << [User(id=100), User(id=101)])
-        self.assertWhere(sq, '(blog."user_id" IN (?,?))', [100, 101])
+        self.assertWhere(sq, '(blog."user_id" IN (?, ?))', [100, 101])
 
     def test_where_negation(self):
         sq = SelectQuery(Blog).where(~(Blog.title == 'foo'))
@@ -849,14 +849,14 @@ class SugarTestCase(BasePeeweeTestCase):
             'INNER JOIN "comment" AS comment ON (blog."pk" = comment."blog_id")',
             'INNER JOIN "users" AS users ON (blog."user_id" = users."id")',
         ])
-        self.assertWhere(sq, '((comment."comment" = ?) AND (users."username" IN (?,?)))', ['hurp', 'u1', 'u2'])
+        self.assertWhere(sq, '((comment."comment" = ?) AND (users."username" IN (?, ?)))', ['hurp', 'u1', 'u2'])
 
         sq = Blog.filter(user__username__in=['u1', 'u2']).filter(comments__comment='hurp')
         self.assertJoins(sq, [
             'INNER JOIN "users" AS users ON (blog."user_id" = users."id")',
             'INNER JOIN "comment" AS comment ON (blog."pk" = comment."blog_id")',
         ])
-        self.assertWhere(sq, '((users."username" IN (?,?)) AND (comment."comment" = ?))', ['u1', 'u2', 'hurp'])
+        self.assertWhere(sq, '((users."username" IN (?, ?)) AND (comment."comment" = ?))', ['u1', 'u2', 'hurp'])
 
     def test_filter_dq(self):
         sq = User.filter(DQ(username='u1') | DQ(username='u2'))
