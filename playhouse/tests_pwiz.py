@@ -46,7 +46,7 @@ class Nullable(BaseModel):
     nullable_if = IntegerField(null=True)
 
 class RelModel(BaseModel):
-    col_types = ForeignKeyField(ColTypes)
+    col_types = ForeignKeyField(ColTypes, related_name='foo')
     col_types_nullable = ForeignKeyField(ColTypes, null=True)
 
 class FKPK(BaseModel):
