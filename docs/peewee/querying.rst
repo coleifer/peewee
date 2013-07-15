@@ -36,6 +36,14 @@ We can build up the query by adding some clauses to it:
     >>> [u.username for u in user_q] # <-- query is re-evaluated here
     [u'editor', u'admin']
 
+Peewee and SQL Injection
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Because peewee uses parameterized queries, values passed in are automatically
+escaped and cannot be used for SQL injection attacks. If you are writing SQL
+via either :py:class:`RawQuery` or :py:meth:`~Database.execute_sql` simply be
+sure that you pass any untrusted values in as parameters to the query.
+
 .. _query_compare:
 
 Looking at some simple queries
