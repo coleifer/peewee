@@ -41,7 +41,8 @@ class ObjectSlice(Node):
 
 
 class ArrayField(Field):
-    def __init__(self, field_class=IntegerField, dimensions=1, *args, **kwargs):
+    def __init__(self, field_class=IntegerField, dimensions=1, *args,
+                 **kwargs):
         kwargs['field_class'] = field_class
         kwargs['dimensions'] = dimensions
         self.__field = field_class(*args, **kwargs)
@@ -49,7 +50,8 @@ class ArrayField(Field):
         super(ArrayField, self).__init__(*args, **kwargs)
 
     def get_template(self):
-        return self.__field.get_template() + ('[]' * self.attributes['dimensions'])
+        brackets = ('[]' * self.attributes['dimensions'])
+        return self.__field.get_template() + brackets
 
     def field_attributes(self):
         return self.__field.field_attributes()

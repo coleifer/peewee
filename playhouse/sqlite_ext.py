@@ -223,7 +223,8 @@ class SqliteExtDatabase(SqliteDatabase):
     def create_index(self, model_class, field_name, unique=False):
         if issubclass(model_class, FTSModel):
             return
-        return super(SqliteExtDatabase, self).create_index(model_class, field_name, unique)
+        return super(SqliteExtDatabase, self).create_index(
+            model_class, field_name, unique)
 
     def granular_transaction(self, lock_type='deferred'):
         assert lock_type.lower() in ('deferred', 'immediate', 'exclusive')
