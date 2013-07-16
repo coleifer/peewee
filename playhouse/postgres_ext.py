@@ -132,15 +132,15 @@ class PostgresqlExtCompiler(QueryCompiler):
         return parts
 
     def _parse(self, node, alias_map, conv):
-        s, p, unknown = super(PostgresqlExtCompiler, self)._parse(
+        sql, params, unknown = super(PostgresqlExtCompiler, self)._parse(
             node, alias_map, conv)
         if unknown and isinstance(node, ObjectSlice):
             unknown = False
-            s, p = self.parse_node(node.node)
+            sql, params = self.parse_node(node.node)
             # Postgresql uses 1-based indexes.
             parts = [str(part + 1) for part in node.parts]
-            s = '%s[%s]' % (s, ':'.join(parts))
-        return s, p, unknown
+            sql = '%s[%s]' % (sql, ':'.join(parts))
+        return sql, params, unknown
 
 
 class PostgresqlExtDatabase(PostgresqlDatabase):
