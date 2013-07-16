@@ -276,12 +276,12 @@ class DQ(Node):
         return DQ(**self.query)
 
 class Param(Node):
-    def __init__(self, data):
-        self.data = data
+    def __init__(self, value):
+        self.value = value
         super(Param, self).__init__()
 
     def clone_base(self):
-        return Param(self.data)
+        return Param(self.value)
 
 class R(Node):
     def __init__(self, value):
@@ -292,22 +292,22 @@ class R(Node):
         return R(self.value)
 
 class Ordering(Node):
-    def __init__(self, param, asc):
-        self.param = param
+    def __init__(self, value, asc):
+        self.value = value
         self.asc = asc
         super(Ordering, self).__init__()
 
     def clone_base(self):
-        return Ordering(self.param, self.asc)
+        return Ordering(self.value, self.asc)
 
 class Func(Node):
-    def __init__(self, name, *params):
+    def __init__(self, name, *nodes):
         self.name = name
-        self.params = params
+        self.nodes = nodes
         super(Func, self).__init__()
 
     def clone_base(self):
-        return Func(self.name, *self.params)
+        return Func(self.name, *self.nodes)
 
     def __getattr__(self, attr):
         def dec(*args, **kwargs):
@@ -317,12 +317,12 @@ class Func(Node):
 fn = Func(None)
 
 class Clause(Node):
-    def __init__(self, *pieces):
+    def __init__(self, *nodes):
         super(Clause, self).__init__()
-        self.pieces = pieces
+        self.nodes = nodes
 
     def clone_base(self):
-        return Clause(*self.pieces)
+        return Clause(*self.nodes)
 
 Join = namedtuple('Join', ('model_class', 'join_type', 'on'))
 
@@ -789,14 +789,14 @@ class QueryCompiler(object):
                 s = '.'.join((alias_map[expr.model_class], s))
             p = []
         elif isinstance(expr, Func):
-            sql, p = self.parse_expr_list(expr.params, alias_map, conv)
+            sql, p = self.parse_expr_list(expr.nodes, alias_map, conv)
             s = '%s(%s)' % (expr.name, sql)
         elif isinstance(expr, Clause):
-            s, p = self.parse_expr_list(expr.pieces, alias_map, conv, ' ')
+            s, p = self.parse_expr_list(expr.nodes, alias_map, conv, ' ')
         elif isinstance(expr, Param):
-            p = [expr.data]
+            p = [expr.value]
         elif isinstance(expr, Ordering):
-            s, p = self.parse_expr(expr.param, alias_map, conv)
+            s, p = self.parse_expr(expr.value, alias_map, conv)
             s += ' ASC' if expr.asc else ' DESC'
         elif isinstance(expr, R):
             s = expr.value
@@ -1163,8 +1163,8 @@ class ExtQueryResultWrapper(QueryResultWrapper):
                 select_column = self.column_meta[i]
                 # Special-case handling aggregations.
                 if (isinstance(select_column, Func) and
-                        isinstance(select_column.params[0], Field)):
-                    func = select_column.params[0].python_value
+                        isinstance(select_column.nodes[0], Field)):
+                    func = select_column.nodes[0].python_value
             conv.append((i, column, func))
         self.conv = conv
 
