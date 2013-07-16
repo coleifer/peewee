@@ -836,36 +836,36 @@ class QueryCompiler(object):
                 s = ' '.join((s, 'AS', node._alias))
         return s, p
 
-    def parse_node_list(self, s, alias_map, conv=None, glue=', '):
-        parsed = []
-        data = []
-        for node in s:
-            node_str, vars = self.parse_node(node, alias_map, conv)
-            parsed.append(node_str)
-            data.extend(vars)
-        return glue.join(parsed), data
+    def parse_node_list(self, nodes, alias_map, conv=None, glue=', '):
+        sql = []
+        params = []
+        for node in nodes:
+            node_sql, node_params = self.parse_node(node, alias_map, conv)
+            sql.append(node_sql)
+            params.extend(node_params)
+        return glue.join(sql), params
 
     def parse_field_dict(self, d):
         sets, params = [], []
-        for field, node in d.items():
-            field_str, _ = self.parse_node(field)
+        for field, value in d.items():
+            field_sql, _ = self.parse_node(field)
             # because we don't know whether to call db_value or parse_node first,
             # we'd prefer to call parse_node since its more general, but it does
             # special things with lists -- it treats them as if it were buliding
             # up an IN query. for some things we don't want that, so here, if the
             # node is *not* a special object, we'll pass thru parse_node and let
             # db_value handle it
-            if not isinstance(node, (Node, Model, Query)):
-                node = Param(node) # pass through to the fields db_value func
-            val_str, val_params = self.parse_node(node)
+            if not isinstance(value, (Node, Model, Query)):
+                value = Param(value) # pass through to the fields db_value func
+            val_sql, val_params = self.parse_node(value)
             val_params = [field.db_value(vp) for vp in val_params]
-            sets.append((field_str, val_str))
+            sets.append((field_sql, val_sql))
             params.extend(val_params)
         return sets, params
 
-    def parse_query_node(self, qnode, alias_map):
-        if qnode is not None:
-            return self.parse_node(qnode, alias_map)
+    def parse_query_node(self, node, alias_map):
+        if node is not None:
+            return self.parse_node(node, alias_map)
         return '', []
 
     def calculate_alias_map(self, query, start=1):
