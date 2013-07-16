@@ -190,7 +190,7 @@ def not_allowed(fn):
     return inner
 
 
-class Leaf(object):
+class Node(object):
     def __init__(self):
         self._negated = False
         self._alias = None
@@ -257,7 +257,7 @@ class Leaf(object):
     def between(self, low, high):
         return Expr(self, OP_BETWEEN, Clause(low, R('AND'), high))
 
-class Expr(Leaf):
+class Expr(Node):
     def __init__(self, lhs, op, rhs):
         super(Expr, self).__init__()
         self.lhs = lhs
@@ -267,7 +267,7 @@ class Expr(Leaf):
     def clone_base(self):
         return Expr(self.lhs, self.op, self.rhs)
 
-class DQ(Leaf):
+class DQ(Node):
     def __init__(self, **query):
         super(DQ, self).__init__()
         self.query = query
@@ -275,7 +275,7 @@ class DQ(Leaf):
     def clone_base(self):
         return DQ(**self.query)
 
-class Param(Leaf):
+class Param(Node):
     def __init__(self, data):
         self.data = data
         super(Param, self).__init__()
@@ -283,7 +283,7 @@ class Param(Leaf):
     def clone_base(self):
         return Param(self.data)
 
-class R(Leaf):
+class R(Node):
     def __init__(self, value):
         self.value = value
         super(R, self).__init__()
@@ -291,7 +291,7 @@ class R(Leaf):
     def clone_base(self):
         return R(self.value)
 
-class Ordering(Leaf):
+class Ordering(Node):
     def __init__(self, param, asc):
         self.param = param
         self.asc = asc
@@ -300,7 +300,7 @@ class Ordering(Leaf):
     def clone_base(self):
         return Ordering(self.param, self.asc)
 
-class Func(Leaf):
+class Func(Node):
     def __init__(self, name, *params):
         self.name = name
         self.params = params
@@ -316,7 +316,7 @@ class Func(Leaf):
 
 fn = Func(None)
 
-class Clause(Leaf):
+class Clause(Node):
     def __init__(self, *pieces):
         super(Clause, self).__init__()
         self.pieces = pieces
@@ -339,7 +339,7 @@ class FieldDescriptor(object):
     def __set__(self, instance, value):
         instance._data[self.att_name] = value
 
-class Field(Leaf):
+class Field(Node):
     _field_counter = 0
     _order = 0
     db_field = 'unknown'
@@ -827,7 +827,7 @@ class QueryCompiler(object):
         if unknown and conv and p:
             p = [conv.db_value(i) for i in p]
 
-        if isinstance(expr, Leaf):
+        if isinstance(expr, Node):
             if expr._negated:
                 s = 'NOT %s' % s
             if expr._alias:
@@ -853,7 +853,7 @@ class QueryCompiler(object):
             # up an IN query. for some things we don't want that, so here, if the
             # expr is *not* a special object, we'll pass thru parse_expr and let
             # db_value handle it
-            if not isinstance(expr, (Leaf, Model, Query)):
+            if not isinstance(expr, (Node, Model, Query)):
                 expr = Param(expr) # pass through to the fields db_value func
             val_str, val_params = self.parse_expr(expr)
             val_params = [field.db_value(vp) for vp in val_params]
@@ -1276,7 +1276,7 @@ class ModelQueryResultWrapper(QueryResultWrapper):
         return prepared
 
 
-class Query(Leaf):
+class Query(Node):
     require_commit = True
 
     def __init__(self, model_class):
@@ -1361,13 +1361,13 @@ class Query(Leaf):
 
     def filter(self, *args, **kwargs):
         # normalize args and kwargs into a new expression
-        dq_node = Leaf()
+        dq_node = Node()
         if args:
             dq_node &= reduce(operator.and_, [a.clone() for a in args])
         if kwargs:
             dq_node &= DQ(**kwargs)
 
-        # dq_node should now be an Expr, lhs = Leaf(), rhs = ...
+        # dq_node should now be an Expr, lhs = Node(), rhs = ...
         q = deque([dq_node])
         dq_joins = set()
         while q:
@@ -1504,7 +1504,7 @@ class SelectQuery(Query):
     def _model_shorthand(self, args):
         accum = []
         for arg in args:
-            if isinstance(arg, Leaf):
+            if isinstance(arg, Node):
                 accum.append(arg)
             elif isinstance(arg, Query):
                 accum.append(arg)

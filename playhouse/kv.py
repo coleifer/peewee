@@ -2,7 +2,7 @@ import itertools
 import operator
 import pickle
 from peewee import *
-from peewee import Leaf
+from peewee import Node
 
 try:
     from playhouse.apsw_ext import APSWDatabase
@@ -62,7 +62,7 @@ class KeyStore(object):
         return query
 
     def convert_expr(self, expr):
-        if not isinstance(expr, Leaf):
+        if not isinstance(expr, Node):
             return (self.key == expr), True
         return expr, False
 
@@ -96,7 +96,7 @@ class KeyStore(object):
         self._database.execute_sql(sql, params, True)
 
     def __setitem__(self, expr, value):
-        if isinstance(expr, Leaf):
+        if isinstance(expr, Node):
             update = {self.value.name: value}
             self.model.update(**update).where(expr).execute()
         elif self._native_upsert:

@@ -9,7 +9,7 @@ import uuid
 from peewee import *
 from peewee import dict_update
 from peewee import Expr
-from peewee import Leaf
+from peewee import Node
 from peewee import Param
 from peewee import QueryCompiler
 
@@ -17,7 +17,7 @@ from psycopg2 import extensions
 from psycopg2.extras import register_hstore
 
 
-class ObjectSlice(Leaf):
+class ObjectSlice(Node):
     def __init__(self, expr, parts):
         self.expr = expr
         self.parts = parts
