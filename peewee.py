@@ -772,55 +772,57 @@ class QueryCompiler(object):
                     max_alias = i
         return max_alias + 1
 
-    def _parse(self, expr, alias_map, conv):
-        s = self.interpolation
-        p = [expr]
+    def _parse(self, node, alias_map, conv):
+        # By default treat the incoming node as a raw value that should be
+        # parameterized.
+        sql = self.interpolation
+        params = [node]
         unknown = False
-        if isinstance(expr, Expr):
-            if isinstance(expr.lhs, Field):
-                conv = expr.lhs
-            lhs, lparams = self.parse_expr(expr.lhs, alias_map, conv)
-            rhs, rparams = self.parse_expr(expr.rhs, alias_map, conv)
-            s = '(%s %s %s)' % (lhs, self.get_op(expr.op), rhs)
-            p = lparams + rparams
-        elif isinstance(expr, Field):
-            s = self.quote(expr.db_column)
-            if alias_map and expr.model_class in alias_map:
-                s = '.'.join((alias_map[expr.model_class], s))
-            p = []
-        elif isinstance(expr, Func):
-            sql, p = self.parse_expr_list(expr.nodes, alias_map, conv)
-            s = '%s(%s)' % (expr.name, sql)
-        elif isinstance(expr, Clause):
-            s, p = self.parse_expr_list(expr.nodes, alias_map, conv, ' ')
-        elif isinstance(expr, Param):
-            p = [expr.value]
-        elif isinstance(expr, Ordering):
-            s, p = self.parse_expr(expr.value, alias_map, conv)
-            s += ' ASC' if expr.asc else ' DESC'
-        elif isinstance(expr, R):
-            s = expr.value
-            p = []
-        elif isinstance(expr, SelectQuery):
+        if isinstance(node, Expr):
+            if isinstance(node.lhs, Field):
+                conv = node.lhs
+            lhs, lparams = self.parse_expr(node.lhs, alias_map, conv)
+            rhs, rparams = self.parse_expr(node.rhs, alias_map, conv)
+            sql = '(%s %s %s)' % (lhs, self.get_op(node.op), rhs)
+            params = lparams + rparams
+        elif isinstance(node, Field):
+            sql = self.quote(node.db_column)
+            if alias_map and node.model_class in alias_map:
+                sql = '.'.join((alias_map[node.model_class], sql))
+            params = []
+        elif isinstance(node, Func):
+            sql, params = self.parse_expr_list(node.nodes, alias_map, conv)
+            sql = '%s(%s)' % (node.name, sql)
+        elif isinstance(node, Clause):
+            sql, params = self.parse_expr_list(node.nodes, alias_map, conv, ' ')
+        elif isinstance(node, Param):
+            params = [node.value]
+        elif isinstance(node, Ordering):
+            sql, params = self.parse_expr(node.value, alias_map, conv)
+            sql += ' ASC' if node.asc else ' DESC'
+        elif isinstance(node, R):
+            sql = node.value
+            params = []
+        elif isinstance(node, SelectQuery):
             max_alias = self._max_alias(alias_map)
             alias_copy = alias_map and alias_map.copy() or None
-            clone = expr.clone()
-            if not expr._explicit_selection:
+            clone = node.clone()
+            if not node._explicit_selection:
                 clone._select = (clone.model_class._meta.primary_key,)
-            subselect, p = self.generate_select(clone, max_alias, alias_copy)
-            s = '(%s)' % subselect
-        elif isinstance(expr, (list, tuple)):
-            s, p = self.parse_expr_list(expr, alias_map, conv)
-            s = '(%s)' % s
-        elif isinstance(expr, Model):
-            s = self.interpolation
-            p = [expr.get_id()]
-        elif isclass(expr) and issubclass(expr, Model):
-            s = self.quote(expr._meta.db_table)
-            p = []
+            subselect, params = self.generate_select(clone, max_alias, alias_copy)
+            sql = '(%s)' % subselect
+        elif isinstance(node, (list, tuple)):
+            sql, params = self.parse_expr_list(node, alias_map, conv)
+            sql = '(%s)' % sql
+        elif isinstance(node, Model):
+            sql = self.interpolation
+            params = [node.get_id()]
+        elif isclass(node) and issubclass(node, Model):
+            sql = self.quote(node._meta.db_table)
+            params = []
         else:
             unknown = True
-        return s, p, unknown
+        return sql, params, unknown
 
     def parse_expr(self, expr, alias_map=None, conv=None):
         s, p, unknown = self._parse(expr, alias_map, conv)
