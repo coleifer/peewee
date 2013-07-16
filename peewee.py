@@ -755,7 +755,7 @@ class QueryCompiler(object):
         self._op_map = dict_update(self.op_map, op_overrides or {})
 
     def quote(self, s):
-        return ''.join((self.quote_char, s, self.quote_char))
+        return s.join((self.quote_char, self.quote_char))
 
     def get_field(self, f):
         return self._field_map[f]
@@ -825,16 +825,16 @@ class QueryCompiler(object):
         return sql, params, unknown
 
     def parse_node(self, node, alias_map=None, conv=None):
-        s, p, unknown = self._parse(node, alias_map, conv)
-        if unknown and conv and p:
-            p = [conv.db_value(i) for i in p]
+        sql, params, unknown = self._parse(node, alias_map, conv)
+        if unknown and conv and params:
+            params = [conv.db_value(i) for i in params]
 
         if isinstance(node, Node):
             if node._negated:
-                s = 'NOT %s' % s
+                sql = 'NOT %s' % sql
             if node._alias:
-                s = ' '.join((s, 'AS', node._alias))
-        return s, p
+                sql = ' '.join((sql, 'AS', node._alias))
+        return sql, params
 
     def parse_node_list(self, nodes, alias_map, conv=None, glue=', '):
         sql = []
