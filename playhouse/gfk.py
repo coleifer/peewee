@@ -54,24 +54,30 @@ def get_model(tbl_name):
     return table_cache.get(tbl_name)
 
 class GFKField(object):
-    def __init__(self, model_type_field='object_type', model_id_field='object_id'):
+    def __init__(self, model_type_field='object_type',
+                 model_id_field='object_id'):
         self.model_type_field = model_type_field
         self.model_id_field = model_id_field
         self.att_name = '.'.join((self.model_type_field, self.model_id_field))
 
+    def get_obj(self, instance):
+        data = instance._data
+        if data.get(self.model_type_field) and data.get(self.model_id_field):
+            tbl_name = data[self.model_type_field]
+            model_class = get_model(tbl_name)
+            if not model_class:
+                raise AttributeError('Model for table "%s" not found in GFK '
+                                     'lookup.' % tbl_name)
+            query = model_class.select().where(
+                model_class._meta.primary_key == data[self.model_id_field])
+            return query.get()
+
     def __get__(self, instance, instance_type=None):
         if instance:
             if self.att_name not in instance._obj_cache:
-                inst_data = instance._data
-                if inst_data.get(self.model_type_field) and inst_data.get(self.model_id_field):
-                    tbl_name = instance._data[self.model_type_field]
-                    model_class = get_model(tbl_name)
-                    if not model_class:
-                        raise AttributeError('Model for table "%s" not found in GFK lookup' % tbl_name)
-
-                    instance._obj_cache[self.att_name] = model_class.select().where(
-                        model_class._meta.primary_key == instance._data[self.model_id_field]
-                    ).get()
+                rel_obj = self.get_obj(instance)
+                if rel_obj:
+                    instance._obj_cache[self.att_name] = rel_obj
             return instance._obj_cache.get(self.att_name)
         return self.field
 
@@ -81,7 +87,8 @@ class GFKField(object):
         instance._data[self.model_id_field] = value.get_id()
 
 class ReverseGFK(object):
-    def __init__(self, model, model_type_field='object_type', model_id_field='object_id'):
+    def __init__(self, model, model_type_field='object_type',
+                 model_id_field='object_id'):
         self.model_class = model
         self.model_type_field = model._meta.fields[model_type_field]
         self.model_id_field = model._meta.fields[model_id_field]
@@ -100,7 +107,8 @@ class ReverseGFK(object):
     def __set__(self, instance, value):
         mtv = instance._meta.db_table
         miv = instance.get_id()
-        if isinstance(value, SelectQuery) and value.model_class == self.model_class:
+        if (isinstance(value, SelectQuery) and
+                value.model_class == self.model_class):
             uq = UpdateQuery(self.model_class, {
                 self.model_type_field: mtv,
                 self.model_id_field: miv,
