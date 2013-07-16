@@ -36,7 +36,7 @@ import sqlite3
 import struct
 
 from peewee import *
-from peewee import Expr
+from peewee import Expression
 from peewee import QueryCompiler
 from peewee import R
 from peewee import transaction
@@ -257,7 +257,7 @@ SqliteExtDatabase.register_ops({
 })
 
 def match(lhs, rhs):
-    return Expr(lhs, OP_MATCH, rhs)
+    return Expression(lhs, OP_MATCH, rhs)
 
 # Shortcut for calculating ranks.
 Rank = lambda model: fn.rank(fn.matchinfo(R(model._meta.db_table)))

@@ -8,7 +8,7 @@ import uuid
 
 from peewee import *
 from peewee import dict_update
-from peewee import Expr
+from peewee import Expression
 from peewee import Node
 from peewee import Param
 from peewee import QueryCompiler
@@ -88,20 +88,20 @@ class HStoreField(Field):
         return fn.defined(self, key)
 
     def update(self, **data):
-        return Expr(self, OP_HUPDATE, data)
+        return Expression(self, OP_HUPDATE, data)
 
     def delete(self, *keys):
         return fn.delete(self, Param(list(keys)))
 
     def contains(self, value):
         if isinstance(value, dict):
-            return Expr(self, OP_HCONTAINS_DICT, Param(value))
+            return Expression(self, OP_HCONTAINS_DICT, Param(value))
         elif isinstance(value, (list, tuple)):
-            return Expr(self, OP_HCONTAINS_KEYS, Param(value))
-        return Expr(self, OP_HCONTAINS_KEY, value)
+            return Expression(self, OP_HCONTAINS_KEYS, Param(value))
+        return Expression(self, OP_HCONTAINS_KEY, value)
 
     def contains_any(self, *keys):
-        return Expr(self, OP_HCONTAINS_ANY_KEY, Param(value))
+        return Expression(self, OP_HCONTAINS_ANY_KEY, Param(value))
 
 
 class UUIDField(Field):

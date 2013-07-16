@@ -151,16 +151,16 @@ Here is how you might add support for ``modulo`` and ``regexp`` in SQLite:
 .. code-block:: python
 
     from peewee import *
-    from peewee import Expr # the building block for expressions
+    from peewee import Expression # the building block for expressions
 
     OP_MOD = 'mod'
     OP_REGEXP = 'regexp'
 
     def mod(lhs, rhs):
-        return Expr(lhs, OP_MOD, rhs)
+        return Expression(lhs, OP_MOD, rhs)
 
     def regexp(lhs, rhs):
-        return Expr(lhs, OP_REGEXP, rhs)
+        return Expression(lhs, OP_REGEXP, rhs)
 
     SqliteDatabase.register_ops({OP_MOD: '%', OP_REGEX: 'REGEXP'})
 

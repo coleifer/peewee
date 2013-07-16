@@ -221,8 +221,8 @@ class Node(object):
     def _e(op, inv=False):
         def inner(self, rhs):
             if inv:
-                return Expr(rhs, op, self)
-            return Expr(self, op, rhs)
+                return Expression(rhs, op, self)
+            return Expression(self, op, rhs)
         return inner
     __and__ = _e(OP_AND)
     __or__ = _e(OP_OR)
@@ -255,17 +255,17 @@ class Node(object):
     bin_or = _e(OP_BIN_OR)
 
     def between(self, low, high):
-        return Expr(self, OP_BETWEEN, Clause(low, R('AND'), high))
+        return Expression(self, OP_BETWEEN, Clause(low, R('AND'), high))
 
-class Expr(Node):
+class Expression(Node):
     def __init__(self, lhs, op, rhs):
-        super(Expr, self).__init__()
+        super(Expression, self).__init__()
         self.lhs = lhs
         self.op = op
         self.rhs = rhs
 
     def clone_base(self):
-        return Expr(self.lhs, self.op, self.rhs)
+        return Expression(self.lhs, self.op, self.rhs)
 
 class DQ(Node):
     def __init__(self, **query):
@@ -778,7 +778,7 @@ class QueryCompiler(object):
         sql = self.interpolation
         params = [node]
         unknown = False
-        if isinstance(node, Expr):
+        if isinstance(node, Expression):
             if isinstance(node.lhs, Field):
                 conv = node.lhs
             lhs, lparams = self.parse_node(node.lhs, alias_map, conv)
@@ -893,7 +893,7 @@ class QueryCompiler(object):
             for join in joins[curr]:
                 from_model = curr
                 to_model = join.model_class
-                if isinstance(join.on, Expr):
+                if isinstance(join.on, Expression):
                     # Clear any alias on the join expression.
                     join_node = join.on.clone().alias()
                 else:
@@ -1210,7 +1210,7 @@ class ModelQueryResultWrapper(QueryResultWrapper):
                 conv = node.python_value
             else:
                 key = constructor = self.model
-                if isinstance(node, Expr) and node._alias:
+                if isinstance(node, Expression) and node._alias:
                     attr = node._alias
             column_map.append((key, constructor, attr, conv))
             models.add(key)
@@ -1227,7 +1227,7 @@ class ModelQueryResultWrapper(QueryResultWrapper):
                 if join_model in models:
                     fk_field = current._meta.rel_for_model(join_model)
                     if not fk_field:
-                        if isinstance(join.on, Expr):
+                        if isinstance(join.on, Expression):
                             fk_name = join.on._alias or join.on.lhs.name
                         else:
                             # Patch the joined model using the name of the
@@ -1358,7 +1358,7 @@ class Query(Node):
                 if isinstance(model_attr, (ForeignKeyField, ReverseRelationDescriptor)):
                     curr = model_attr.rel_model
                     joins.append(model_attr)
-            accum.append(Expr(model_attr, op, value))
+            accum.append(Expression(model_attr, op, value))
         return accum, joins
 
     def filter(self, *args, **kwargs):
@@ -1369,12 +1369,12 @@ class Query(Node):
         if kwargs:
             dq_node &= DQ(**kwargs)
 
-        # dq_node should now be an Expr, lhs = Node(), rhs = ...
+        # dq_node should now be an Expression, lhs = Node(), rhs = ...
         q = deque([dq_node])
         dq_joins = set()
         while q:
             curr = q.popleft()
-            if not isinstance(curr, Expr):
+            if not isinstance(curr, Expression):
                 continue
             for side, piece in (('lhs', curr.lhs), ('rhs', curr.rhs)):
                 if isinstance(piece, DQ):
