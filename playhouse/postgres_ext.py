@@ -136,7 +136,7 @@ class PostgresqlExtCompiler(QueryCompiler):
             expr, alias_map, conv)
         if unknown and isinstance(expr, ObjectSlice):
             unknown = False
-            s, p = self.parse_expr(expr.expr)
+            s, p = self.parse_node(expr.expr)
             # Postgresql uses 1-based indexes.
             parts = [str(part + 1) for part in expr.parts]
             s = '%s[%s]' % (s, ':'.join(parts))

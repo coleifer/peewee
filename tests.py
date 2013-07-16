@@ -338,11 +338,11 @@ class BasePeeweeTestCase(unittest.TestCase):
     def queries(self):
         return [x.msg for x in self.qh.queries]
 
-    def parse_expr(self, query, expr_list, compiler=compiler):
+    def parse_node(self, query, expr_list, compiler=compiler):
         am = compiler.calculate_alias_map(query)
-        return compiler.parse_expr_list(expr_list, am)
+        return compiler.parse_node_list(expr_list, am)
 
-    def parse_node(self, query, node, compiler=compiler):
+    def parse_query(self, query, node, compiler=compiler):
         am = compiler.calculate_alias_map(query)
         return compiler.parse_query_node(node, am)
 
@@ -355,11 +355,11 @@ class BasePeeweeTestCase(unittest.TestCase):
             self.assertEqual(params, expected_params)
         return inner
 
-    assertSelect = make_fn('parse_expr', '_select')
-    assertWhere = make_fn('parse_node', '_where')
-    assertGroupBy = make_fn('parse_expr', '_group_by')
-    assertHaving = make_fn('parse_node', '_having')
-    assertOrderBy = make_fn('parse_expr', '_order_by')
+    assertSelect = make_fn('parse_node', '_select')
+    assertWhere = make_fn('parse_query', '_where')
+    assertGroupBy = make_fn('parse_node', '_group_by')
+    assertHaving = make_fn('parse_query', '_having')
+    assertOrderBy = make_fn('parse_node', '_order_by')
 
     def assertJoins(self, sq, exp_joins, compiler=compiler):
         am = compiler.calculate_alias_map(sq)
@@ -919,7 +919,7 @@ class SugarTestCase(BasePeeweeTestCase):
 class CompilerTestCase(BasePeeweeTestCase):
     def test_clause(self):
         expr = fn.extract(Clause('year', R('FROM'), Blog.pub_date))
-        sql, params = compiler.parse_expr(expr)
+        sql, params = compiler.parse_node(expr)
         self.assertEqual(sql, 'extract(? FROM "pub_date")')
         self.assertEqual(params, ['year'])
 

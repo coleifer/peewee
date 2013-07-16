@@ -781,8 +781,8 @@ class QueryCompiler(object):
         if isinstance(node, Expr):
             if isinstance(node.lhs, Field):
                 conv = node.lhs
-            lhs, lparams = self.parse_expr(node.lhs, alias_map, conv)
-            rhs, rparams = self.parse_expr(node.rhs, alias_map, conv)
+            lhs, lparams = self.parse_node(node.lhs, alias_map, conv)
+            rhs, rparams = self.parse_node(node.rhs, alias_map, conv)
             sql = '(%s %s %s)' % (lhs, self.get_op(node.op), rhs)
             params = lparams + rparams
         elif isinstance(node, Field):
@@ -791,14 +791,14 @@ class QueryCompiler(object):
                 sql = '.'.join((alias_map[node.model_class], sql))
             params = []
         elif isinstance(node, Func):
-            sql, params = self.parse_expr_list(node.nodes, alias_map, conv)
+            sql, params = self.parse_node_list(node.nodes, alias_map, conv)
             sql = '%s(%s)' % (node.name, sql)
         elif isinstance(node, Clause):
-            sql, params = self.parse_expr_list(node.nodes, alias_map, conv, ' ')
+            sql, params = self.parse_node_list(node.nodes, alias_map, conv, ' ')
         elif isinstance(node, Param):
             params = [node.value]
         elif isinstance(node, Ordering):
-            sql, params = self.parse_expr(node.value, alias_map, conv)
+            sql, params = self.parse_node(node.value, alias_map, conv)
             sql += ' ASC' if node.asc else ' DESC'
         elif isinstance(node, R):
             sql = node.value
@@ -812,7 +812,7 @@ class QueryCompiler(object):
             subselect, params = self.generate_select(clone, max_alias, alias_copy)
             sql = '(%s)' % subselect
         elif isinstance(node, (list, tuple)):
-            sql, params = self.parse_expr_list(node, alias_map, conv)
+            sql, params = self.parse_node_list(node, alias_map, conv)
             sql = '(%s)' % sql
         elif isinstance(node, Model):
             sql = self.interpolation
@@ -824,7 +824,7 @@ class QueryCompiler(object):
             unknown = True
         return sql, params, unknown
 
-    def parse_expr(self, expr, alias_map=None, conv=None):
+    def parse_node(self, expr, alias_map=None, conv=None):
         s, p, unknown = self._parse(expr, alias_map, conv)
         if unknown and conv and p:
             p = [conv.db_value(i) for i in p]
@@ -836,11 +836,11 @@ class QueryCompiler(object):
                 s = ' '.join((s, 'AS', expr._alias))
         return s, p
 
-    def parse_expr_list(self, s, alias_map, conv=None, glue=', '):
+    def parse_node_list(self, s, alias_map, conv=None, glue=', '):
         parsed = []
         data = []
         for expr in s:
-            expr_str, vars = self.parse_expr(expr, alias_map, conv)
+            expr_str, vars = self.parse_node(expr, alias_map, conv)
             parsed.append(expr_str)
             data.extend(vars)
         return glue.join(parsed), data
@@ -848,16 +848,16 @@ class QueryCompiler(object):
     def parse_field_dict(self, d):
         sets, params = [], []
         for field, expr in d.items():
-            field_str, _ = self.parse_expr(field)
-            # because we don't know whether to call db_value or parse_expr first,
-            # we'd prefer to call parse_expr since its more general, but it does
+            field_str, _ = self.parse_node(field)
+            # because we don't know whether to call db_value or parse_node first,
+            # we'd prefer to call parse_node since its more general, but it does
             # special things with lists -- it treats them as if it were buliding
             # up an IN query. for some things we don't want that, so here, if the
-            # expr is *not* a special object, we'll pass thru parse_expr and let
+            # expr is *not* a special object, we'll pass thru parse_node and let
             # db_value handle it
             if not isinstance(expr, (Node, Model, Query)):
                 expr = Param(expr) # pass through to the fields db_value func
-            val_str, val_params = self.parse_expr(expr)
+            val_str, val_params = self.parse_node(expr)
             val_params = [field.db_value(vp) for vp in val_params]
             sets.append((field_str, val_str))
             params.extend(val_params)
@@ -865,7 +865,7 @@ class QueryCompiler(object):
 
     def parse_query_node(self, qnode, alias_map):
         if qnode is not None:
-            return self.parse_expr(qnode, alias_map)
+            return self.parse_node(qnode, alias_map)
         return '', []
 
     def calculate_alias_map(self, query, start=1):
@@ -908,7 +908,7 @@ class QueryCompiler(object):
                     join_expr = (left_field == right_field)
 
                 join_type = join.join_type or JOIN_INNER
-                parsed_join, join_params = self.parse_expr(join_expr, alias_map)
+                parsed_join, join_params = self.parse_node(join_expr, alias_map)
 
                 parsed.append('%s JOIN %s AS %s ON %s' % (
                     self.join_map[join_type],
@@ -935,7 +935,7 @@ class QueryCompiler(object):
             parts.append('DISTINCT')
 
         selection = query._select
-        select, s_params = self.parse_expr_list(selection, alias_map)
+        select, s_params = self.parse_node_list(selection, alias_map)
 
         parts.append(select)
         params.extend(s_params)
@@ -953,7 +953,7 @@ class QueryCompiler(object):
             params.extend(w_params)
 
         if query._group_by:
-            group_by, g_params = self.parse_expr_list(query._group_by, alias_map)
+            group_by, g_params = self.parse_node_list(query._group_by, alias_map)
             parts.append('GROUP BY %s' % group_by)
             params.extend(g_params)
 
@@ -963,7 +963,7 @@ class QueryCompiler(object):
             params.extend(h_params)
 
         if query._order_by:
-            order_by, o_params = self.parse_expr_list(query._order_by, alias_map)
+            order_by, o_params = self.parse_node_list(query._order_by, alias_map)
             parts.append('ORDER BY %s' % order_by)
             params.extend(o_params)
 
