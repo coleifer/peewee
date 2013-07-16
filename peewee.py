@@ -824,40 +824,40 @@ class QueryCompiler(object):
             unknown = True
         return sql, params, unknown
 
-    def parse_node(self, expr, alias_map=None, conv=None):
-        s, p, unknown = self._parse(expr, alias_map, conv)
+    def parse_node(self, node, alias_map=None, conv=None):
+        s, p, unknown = self._parse(node, alias_map, conv)
         if unknown and conv and p:
             p = [conv.db_value(i) for i in p]
 
-        if isinstance(expr, Node):
-            if expr._negated:
+        if isinstance(node, Node):
+            if node._negated:
                 s = 'NOT %s' % s
-            if expr._alias:
-                s = ' '.join((s, 'AS', expr._alias))
+            if node._alias:
+                s = ' '.join((s, 'AS', node._alias))
         return s, p
 
     def parse_node_list(self, s, alias_map, conv=None, glue=', '):
         parsed = []
         data = []
-        for expr in s:
-            expr_str, vars = self.parse_node(expr, alias_map, conv)
-            parsed.append(expr_str)
+        for node in s:
+            node_str, vars = self.parse_node(node, alias_map, conv)
+            parsed.append(node_str)
             data.extend(vars)
         return glue.join(parsed), data
 
     def parse_field_dict(self, d):
         sets, params = [], []
-        for field, expr in d.items():
+        for field, node in d.items():
             field_str, _ = self.parse_node(field)
             # because we don't know whether to call db_value or parse_node first,
             # we'd prefer to call parse_node since its more general, but it does
             # special things with lists -- it treats them as if it were buliding
             # up an IN query. for some things we don't want that, so here, if the
-            # expr is *not* a special object, we'll pass thru parse_node and let
+            # node is *not* a special object, we'll pass thru parse_node and let
             # db_value handle it
-            if not isinstance(expr, (Node, Model, Query)):
-                expr = Param(expr) # pass through to the fields db_value func
-            val_str, val_params = self.parse_node(expr)
+            if not isinstance(node, (Node, Model, Query)):
+                node = Param(node) # pass through to the fields db_value func
+            val_str, val_params = self.parse_node(node)
             val_params = [field.db_value(vp) for vp in val_params]
             sets.append((field_str, val_str))
             params.extend(val_params)
@@ -895,7 +895,7 @@ class QueryCompiler(object):
                 to_model = join.model_class
                 if isinstance(join.on, Expr):
                     # Clear any alias on the join expression.
-                    join_expr = join.on.clone().alias()
+                    join_node = join.on.clone().alias()
                 else:
                     field = from_model._meta.rel_for_model(to_model, join.on)
                     if field:
@@ -905,10 +905,10 @@ class QueryCompiler(object):
                         field = to_model._meta.rel_for_model(from_model, join.on)
                         left_field = from_model._meta.primary_key
                         right_field = field
-                    join_expr = (left_field == right_field)
+                    join_node = (left_field == right_field)
 
                 join_type = join.join_type or JOIN_INNER
-                parsed_join, join_params = self.parse_node(join_expr, alias_map)
+                parsed_join, join_params = self.parse_node(join_node, alias_map)
 
                 parsed.append('%s JOIN %s AS %s ON %s' % (
                     self.join_map[join_type],
@@ -1198,20 +1198,20 @@ class ModelQueryResultWrapper(QueryResultWrapper):
         column_map = []
         join_map = []
         models = set([self.model])
-        for i, expr in enumerate(self.column_meta):
+        for i, node in enumerate(self.column_meta):
             attr = conv = None
-            if isinstance(expr, Field):
-                if isinstance(expr, FieldProxy):
-                    key = expr._model_alias
-                    constructor = expr.model
+            if isinstance(node, Field):
+                if isinstance(node, FieldProxy):
+                    key = node._model_alias
+                    constructor = node.model
                 else:
-                    key = constructor = expr.model_class
-                attr = expr.name
-                conv = expr.python_value
+                    key = constructor = node.model_class
+                attr = node.name
+                conv = node.python_value
             else:
                 key = constructor = self.model
-                if isinstance(expr, Expr) and expr._alias:
-                    attr = expr._alias
+                if isinstance(node, Expr) and node._alias:
+                    attr = node._alias
             column_map.append((key, constructor, attr, conv))
             models.add(key)
 
@@ -1627,8 +1627,8 @@ class SelectQuery(Query):
         return self.compiler().generate_select(self)
 
     def verify_naive(self):
-        for expr in self._select:
-            if isinstance(expr, Field) and expr.model_class != self.model_class:
+        for node in self._select:
+            if isinstance(node, Field) and node.model_class != self.model_class:
                 return False
         return True
 
@@ -2389,10 +2389,10 @@ class Model(with_metaclass(BaseModel)):
             seen.add(klass)
             for rel_name, fk in klass._meta.reverse_rel.items():
                 rel_model = fk.model_class
-                expr = fk << query
+                node = fk << query
                 if not fk.null or search_nullable:
-                    stack.append((rel_model, rel_model.select().where(expr)))
-                yield (expr, fk)
+                    stack.append((rel_model, rel_model.select().where(node)))
+                yield (node, fk)
 
     def delete_instance(self, recursive=False, delete_nullable=False):
         if recursive:

@@ -249,5 +249,5 @@ makes it possible to write things like:
 
 .. note:: I totally went crazy with operator overloading.
 
-If you're interested in looking, the ``QueryCompiler.parse_expr`` method is where
+If you're interested in looking, the ``QueryCompiler.parse_node`` method is where
 the bulk of the code lives.

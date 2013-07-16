@@ -18,23 +18,23 @@ from psycopg2.extras import register_hstore
 
 
 class ObjectSlice(Node):
-    def __init__(self, expr, parts):
-        self.expr = expr
+    def __init__(self, node, parts):
+        self.node = node
         self.parts = parts
         super(ObjectSlice, self).__init__()
 
     def clone_base(self):
-        return ObjectSlice(self.expr, list(self.parts))
+        return ObjectSlice(self.node, list(self.parts))
 
     @classmethod
-    def create(cls, expr, value):
+    def create(cls, node, value):
         if isinstance(value, slice):
             parts = [value.start or 0, value.stop or 0]
         elif isinstance(value, int):
             parts = [value]
         else:
             parts = map(int, value.split(':'))
-        return cls(expr, parts)
+        return cls(node, parts)
 
     def __getitem__(self, value):
         return ObjectSlice.create(self, value)
@@ -131,14 +131,14 @@ class PostgresqlExtCompiler(QueryCompiler):
             parts.insert(-1, 'USING GIST')
         return parts
 
-    def _parse(self, expr, alias_map, conv):
+    def _parse(self, node, alias_map, conv):
         s, p, unknown = super(PostgresqlExtCompiler, self)._parse(
-            expr, alias_map, conv)
-        if unknown and isinstance(expr, ObjectSlice):
+            node, alias_map, conv)
+        if unknown and isinstance(node, ObjectSlice):
             unknown = False
-            s, p = self.parse_node(expr.expr)
+            s, p = self.parse_node(node.node)
             # Postgresql uses 1-based indexes.
-            parts = [str(part + 1) for part in expr.parts]
+            parts = [str(part + 1) for part in node.parts]
             s = '%s[%s]' % (s, ':'.join(parts))
         return s, p, unknown
 

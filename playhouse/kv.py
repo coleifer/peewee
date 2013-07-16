@@ -61,25 +61,25 @@ class KeyStore(object):
             query = query.order_by(self.key)
         return query
 
-    def convert_expr(self, expr):
-        if not isinstance(expr, Node):
-            return (self.key == expr), True
-        return expr, False
+    def convert_node(self, node):
+        if not isinstance(node, Node):
+            return (self.key == node), True
+        return node, False
 
     def __contains__(self, key):
-        expr, _ = self.convert_expr(key)
-        return self.model.select().where(expr).exists()
+        node, _ = self.convert_node(key)
+        return self.model.select().where(node).exists()
 
     def __len__(self):
         return self.model.select().count()
 
-    def __getitem__(self, expr):
-        converted, is_single = self.convert_expr(expr)
+    def __getitem__(self, node):
+        converted, is_single = self.convert_node(node)
         result = self.query(self.value).where(converted)
         item_getter = operator.itemgetter(0)
         result = [item_getter(val) for val in result]
         if len(result) == 0 and is_single:
-            raise KeyError(expr)
+            raise KeyError(node)
         elif is_single:
             return result[0]
         return result
@@ -95,24 +95,24 @@ class KeyStore(object):
             ', '.join(interp))
         self._database.execute_sql(sql, params, True)
 
-    def __setitem__(self, expr, value):
-        if isinstance(expr, Node):
+    def __setitem__(self, node, value):
+        if isinstance(node, Node):
             update = {self.value.name: value}
-            self.model.update(**update).where(expr).execute()
+            self.model.update(**update).where(node).execute()
         elif self._native_upsert:
-            self._upsert(expr, value)
+            self._upsert(node, value)
         else:
             try:
-                self.model.create(key=expr, value=value)
+                self.model.create(key=node, value=value)
             except:
                 self._database.rollback()
                 (self.model
                  .update(**{self.value.name: value})
-                 .where(self.key == expr)
+                 .where(self.key == node)
                  .execute())
 
-    def __delitem__(self, expr):
-        converted, _ = self.convert_expr(expr)
+    def __delitem__(self, node):
+        converted, _ = self.convert_node(node)
         self.model.delete().where(converted).execute()
 
     def __iter__(self):
@@ -135,14 +135,14 @@ class KeyStore(object):
 
     def pop(self, k, default=Sentinel):
         with self._database.transaction():
-            expr, is_single = self.convert_expr(k)
+            node, is_single = self.convert_node(k)
             try:
                 res = self[k]
             except KeyError:
                 if default is Sentinel:
                     raise
                 return default
-            del(self[expr])
+            del(self[node])
         return res
 
     def clear(self):
