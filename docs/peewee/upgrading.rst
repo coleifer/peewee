@@ -126,7 +126,10 @@ where clause stuff gets crazy as there are args being combined with bitwise
 operators ("Q" expressions) and also kwargs being used with django-style "double-underscore"
 lookups. The crazy thing is, there are so many different ways I could have expressed
 some of the above queries using peewee 1.0 that I had a hard time deciding which
-to even write.
+to even write. For backwards compatibility the :py:meth:`SelectQuery.filter` method
+will continue to work, although instead of ``Q`` you should use ``DQ`` to create
+complex queries -- although I strongly recommend just upgrading your code to the
+new APIs.
 
 The 2.0 API is hopefully more consistent.  Selections, groupings, functions, joins
 and orderings all pretty much conform to the same API.  Likewise, where and having
