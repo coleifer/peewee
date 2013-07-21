@@ -875,8 +875,21 @@ class SugarTestCase(BasePeeweeTestCase):
             'INNER JOIN "comment" AS comment ON (blog."pk" = comment."blog_id")',
             'INNER JOIN "users" AS users ON (blog."user_id" = users."id")',
         ])
-
         self.assertWhere(sq, '((users."username" = ?) OR (comment."comment" = ?))', ['u1', 'c1'])
+
+        sq = Blog.filter(~DQ(user__username='u1') | DQ(user__username='b2'))
+        self.assertJoins(sq, [
+            'INNER JOIN "users" AS users ON (blog."user_id" = users."id")',
+        ])
+        self.assertWhere(sq, '(NOT (users."username" = ?) OR (users."username" = ?))', ['u1', 'b2'])
+
+        sq = Blog.filter(~(
+            DQ(user__username='u1') |
+            ~DQ(title='b1')))
+        self.assertJoins(sq, [
+            'INNER JOIN "users" AS users ON (blog."user_id" = users."id")',
+        ])
+        self.assertWhere(sq, 'NOT ((users."username" = ?) OR NOT (blog."title" = ?))', ['u1', 'b1'])
 
     def test_annotate(self):
         sq = User.select().annotate(Blog)

@@ -1390,7 +1390,11 @@ class Query(Node):
                 if isinstance(piece, DQ):
                     query, joins = self.convert_dict_to_node(piece.query)
                     dq_joins.update(joins)
-                    setattr(curr, side, reduce(operator.and_, query))
+                    expression = reduce(operator.and_, query)
+                    # Apply values from the DQ object.
+                    expression._negated = piece._negated
+                    expression._alias = piece._alias
+                    setattr(curr, side, expression)
                 else:
                     q.append(piece)
 
