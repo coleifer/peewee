@@ -194,6 +194,7 @@ class Node(object):
     def __init__(self):
         self._negated = False
         self._alias = None
+        self._ordering = None
 
     def clone_base(self):
         return type(self)()
@@ -212,11 +213,13 @@ class Node(object):
     def alias(self, a=None):
         self._alias = a
 
+    @returns_clone
     def asc(self):
-        return Ordering(self, True)
+        self._ordering = 'ASC'
 
+    @returns_clone
     def desc(self):
-        return Ordering(self, False)
+        self._ordering = 'DESC'
 
     def _e(op, inv=False):
         def inner(self, rhs):
@@ -290,15 +293,6 @@ class R(Node):
 
     def clone_base(self):
         return R(self.value)
-
-class Ordering(Node):
-    def __init__(self, value, asc):
-        self.value = value
-        self.asc = asc
-        super(Ordering, self).__init__()
-
-    def clone_base(self):
-        return Ordering(self.value, self.asc)
 
 class Func(Node):
     def __init__(self, name, *nodes):
@@ -806,9 +800,6 @@ class QueryCompiler(object):
                 node.nodes, alias_map, conv, ' ')
         elif isinstance(node, Param):
             params = [node.value]
-        elif isinstance(node, Ordering):
-            sql, params = self.parse_node(node.value, alias_map, conv)
-            sql += ' ASC' if node.asc else ' DESC'
         elif isinstance(node, R):
             sql = node.value
             params = []
@@ -843,6 +834,8 @@ class QueryCompiler(object):
                 sql = 'NOT %s' % sql
             if node._alias:
                 sql = ' '.join((sql, 'AS', node._alias))
+            if node._ordering:
+                sql = ' '.join((sql, node._ordering))
         return sql, params
 
     def parse_node_list(self, nodes, alias_map, conv=None, glue=', '):
