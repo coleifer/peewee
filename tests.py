@@ -885,11 +885,11 @@ class SugarTestCase(BasePeeweeTestCase):
 
         sq = Blog.filter(~(
             DQ(user__username='u1') |
-            ~DQ(title='b1')))
+            ~DQ(title='b1', pk=3)))
         self.assertJoins(sq, [
             'INNER JOIN "users" AS users ON (blog."user_id" = users."id")',
         ])
-        self.assertWhere(sq, 'NOT ((users."username" = ?) OR NOT (blog."title" = ?))', ['u1', 'b1'])
+        self.assertWhere(sq, 'NOT ((users."username" = ?) OR NOT ((blog."pk" = ?) AND (blog."title" = ?)))', ['u1', 3, 'b1'])
 
     def test_annotate(self):
         sq = User.select().annotate(Blog)
