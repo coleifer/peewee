@@ -2,10 +2,16 @@ import datetime
 import unittest
 import uuid
 
+import psycopg2
+
 from playhouse.postgres_ext import *
 
 
 test_db = PostgresqlExtDatabase('peewee_test', user='postgres')
+test_ss_db = PostgresqlExtDatabase(
+    'peewee_test',
+    server_side_cursors=True,
+    user='postgres')
 
 
 class BaseModel(Model):
@@ -28,6 +34,12 @@ class TZModel(BaseModel):
 class ArrayModel(BaseModel):
     tags = ArrayField(CharField)
     ints = ArrayField(IntegerField, dimensions=2)
+
+class SSCursorModel(Model):
+    data = CharField()
+
+    class Meta:
+        database = test_ss_db
 
 
 class PostgresExtTestCase(unittest.TestCase):
@@ -247,3 +259,59 @@ class PostgresExtTestCase(unittest.TestCase):
                .dicts()
                .get())
         self.assertEqual(res['ints'], [[3], [5]])
+
+
+class SSCursorTestCase(unittest.TestCase):
+    counter = 0
+
+    def setUp(self):
+        self.close_conn()  # Close open connection.
+        SSCursorModel.drop_table(True)
+        SSCursorModel.create_table()
+        self.counter = 0
+
+    def create(self):
+        self.counter += 1
+        SSCursorModel.create(data=self.counter)
+
+    def close_conn(self):
+        if not test_ss_db.is_closed():
+            test_ss_db.close()
+
+    def test_model_interaction(self):
+        for i in range(3):
+            self.create()
+
+        query = SSCursorModel.select().order_by(SSCursorModel.data)
+        data = [foo.data for foo in query]
+        self.assertEqual(data, map(str, range(1, 4)))
+
+    def test_ss_cursor(self):
+        for i in range(3):
+            self.create()
+
+        tbl = SSCursorModel._meta.db_table
+        name = str(uuid.uuid1())
+
+        # Get a named cursor and execute a select query.
+        cursor = test_ss_db.get_cursor(name=name)
+        cursor.execute('select data from %s order by id' % tbl)
+
+        # Ensure the cursor attributes are as we expect.
+        self.assertEqual(cursor.description, None)
+        self.assertEqual(cursor.name, name)
+        self.assertFalse(cursor.withhold)  # Close cursor after commit.
+
+        # Cursor works and populates description after fetching one row.
+        self.assertEqual(cursor.fetchone(), ('1',))
+        self.assertEqual(cursor.description[0].name, 'data')
+
+        # Explicitly close the cursor.
+        test_ss_db.commit()
+        with self.assertRaises(psycopg2.ProgrammingError):
+            cursor.fetchone()
+
+        # This would not work is the named cursor was still holding a ref to
+        # the table.
+        test_ss_db.execute_sql('truncate table %s;' % tbl)
+        test_ss_db.commit()

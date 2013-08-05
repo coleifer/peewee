@@ -9,6 +9,7 @@ import uuid
 from peewee import *
 from peewee import dict_update
 from peewee import Expression
+from peewee import logger
 from peewee import Node
 from peewee import Param
 from peewee import QueryCompiler
@@ -147,6 +148,26 @@ class PostgresqlExtCompiler(QueryCompiler):
 
 class PostgresqlExtDatabase(PostgresqlDatabase):
     compiler_class = PostgresqlExtCompiler
+
+    def __init__(self, *args, **kwargs):
+        self.server_side_cursors = kwargs.pop('server_side_cursors', False)
+        # If using server side cursors, do not commit select queries.
+        self.commit_select = not self.server_side_cursors
+        super(PostgresqlExtDatabase, self).__init__(*args, **kwargs)
+
+    def get_cursor(self, name=None):
+        return self.get_conn().cursor(name=name)
+
+    def execute_sql(self, sql, params=None, require_commit=True):
+        logger.debug((sql, params))
+        if self.server_side_cursors and sql.lower().startswith('select'):
+            cursor = self.get_cursor(name=str(uuid.uuid1()))
+        else:
+            cursor = self.get_cursor()
+        res = cursor.execute(sql, params or ())
+        if require_commit and self.get_autocommit():
+            self.commit()
+        return cursor
 
     def _connect(self, database, **kwargs):
         conn = super(PostgresqlExtDatabase, self)._connect(database, **kwargs)
