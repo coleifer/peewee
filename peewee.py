@@ -1101,6 +1101,7 @@ class QueryResultWrapper(object):
 
         self._result_cache = []
         self._populated = False
+        self._initialized = False
 
         if meta is not None:
             self.column_meta, self.join_meta = meta
@@ -1123,6 +1124,9 @@ class QueryResultWrapper(object):
         if not row:
             self._populated = True
             raise StopIteration
+        elif not self._initialized:
+            self.initialize(self.cursor.description)
+            self._initialized = True
         return self.process_row(row)
 
     def iterator(self):
@@ -1152,12 +1156,12 @@ class QueryResultWrapper(object):
                 break
 
 class ExtQueryResultWrapper(QueryResultWrapper):
-    def __init__(self, model, cursor, meta=None):
-        super(ExtQueryResultWrapper, self).__init__(model, cursor, meta)
+    def initialize(self, description):
+        model = self.model
         conv = []
         identity = lambda x: x
-        for i in range(len(self.cursor.description)):
-            column = self.cursor.description[i][0]
+        for i in range(len(description)):
+            column = description[i][0]
             func = identity
             if column in model._meta.columns:
                 field_obj = model._meta.columns[column]
@@ -1192,11 +1196,7 @@ class DictQueryResultWrapper(ExtQueryResultWrapper):
         return res
 
 class ModelQueryResultWrapper(QueryResultWrapper):
-    def __init__(self, *args, **kwargs):
-        super(ModelQueryResultWrapper, self).__init__(*args, **kwargs)
-        self.column_map, self.join_map = self.prepare()
-
-    def prepare(self):
+    def initialize(self, description):
         column_map = []
         join_map = []
         models = set([self.model])
@@ -1241,7 +1241,7 @@ class ModelQueryResultWrapper(QueryResultWrapper):
                     stack.append(join_model)
                     join_map.append((current, fk_name, join_model))
 
-        return column_map, join_map
+        self.column_map, self.join_map = column_map, join_map
 
     def process_row(self, row):
         collected = self.construct_instance(row)
