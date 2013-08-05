@@ -220,9 +220,37 @@ and any additional kwargs:
     database_name = raw_input('What is the name of the db? ')
     deferred_db.init(database_name)
 
-For the scenario when you may be using an entirely different database driver,
-you can try out the :py:class:`Proxy` helper, which is included in the
-``playhouse.proxy`` module.  Check :ref:`the docs <proxy>` for details on usage.
+.. _dynamic_db:
+
+Dynamically defining a database
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For even more control over how your database is defined/initialized, you can
+use the :py:class:`Proxy` helper, which is included in the ``playhouse.proxy``
+module.  :ref:`The docs <proxy>` contain details on usage, but here is a
+short example:
+
+.. code-block:: python
+
+    database_proxy = Proxy()  # Create a proxy for our db.
+
+    class BaseModel(Model):
+        class Meta:
+            database = database_proxy  # Use proxy for our DB.
+
+    class User(BaseModel):
+        username = CharField()
+
+    # Based on configuration, use a different database.
+    if app.config['DEBUG']:
+        database = SqliteDatabase('local.db')
+    elif app.config['TESTING']:
+        database = SqliteDatabase(':memory:')
+    else:
+        database = PostgresqlDatabase('mega_production_db')
+
+    # Configure our proxy to use the db we specified in config.
+    database_proxy.initialize(database)
 
 
 Creating, Reading, Updating and Deleting
