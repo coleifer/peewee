@@ -344,9 +344,9 @@ postgres_ext API notes
     If using ``server_side_cursors``, also be sure to wrap your queries with
     :py:func:`ServerSide`.
 
-.. py:func:: ServerSide(select_query)
+.. py:function:: ServerSide(select_query)
 
-    Wrap the given select query in a transaction, and call it's :py:meth:`~SelectQuery.iterator``
+    Wrap the given select query in a transaction, and call it's :py:meth:`~SelectQuery.iterator`
     method to avoid caching row instances.  In order for the server-side resources
     to be released, be sure to exhaust the generator (iterate over all the rows).
 
