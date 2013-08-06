@@ -185,3 +185,8 @@ PostgresqlExtDatabase.register_ops({
     OP_HCONTAINS_ANY_KEY: '?|',
     OP_HUPDATE: '||',
 })
+
+def ServerSide(select_query):
+    with select_query.database.transaction():
+        for obj in select_query:
+            yield obj

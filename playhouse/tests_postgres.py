@@ -282,9 +282,42 @@ class SSCursorTestCase(unittest.TestCase):
         for i in range(3):
             self.create()
 
+        def assertList(iterable):
+            self.assertEqual([x.data for x in iterable], map(str, range(1, 4)))
+
         query = SSCursorModel.select().order_by(SSCursorModel.data)
-        data = [foo.data for foo in query]
-        self.assertEqual(data, map(str, range(1, 4)))
+        assertList(query)
+
+        query2 = query.clone()
+        qr = query2.execute()
+        assertList(qr)
+
+        # The cursor is named and is still "alive" because we can still try
+        # to fetch results.
+        self.assertTrue(qr.cursor.name is not None)
+        self.assertEqual(qr.cursor.fetchone(), None)
+
+        # Execute the query in a transaction.
+        with test_ss_db.transaction():
+            query3 = query.clone()
+            qr2 = query3.execute()
+
+            # Different named cursor
+            self.assertFalse(qr2.cursor.name == qr.cursor.name)
+            assertList(qr2)
+
+        # After the transaction we cannot fetch a result because the cursor
+        # is dead.
+        with self.assertRaises(psycopg2.ProgrammingError):
+            qr2.cursor.fetchone()
+
+        # Try using the helper.
+        query4 = query.clone()
+        assertList(ServerSide(query4))
+
+        # After using the helper, the cursor is dead.
+        with self.assertRaises(psycopg2.ProgrammingError):
+            query4._qr.cursor.fetchone()
 
     def test_ss_cursor(self):
         for i in range(3):
