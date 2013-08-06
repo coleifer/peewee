@@ -1302,13 +1302,16 @@ class Query(Node):
 
     def clone(self):
         query = type(self)(self.model_class)
+        return self._clone_attributes(query)
+
+    def _clone_attributes(self, query):
         if self._where is not None:
             query._where = self._where.clone()
-        query._joins = self.clone_joins()
+        query._joins = self._clone_joins()
         query._query_ctx = self._query_ctx
         return query
 
-    def clone_joins(self):
+    def _clone_joins(self):
         return dict(
             (mc, list(j)) for mc, j in self._joins.items()
         )
@@ -1493,11 +1496,8 @@ class SelectQuery(Query):
         self._alias = None
         self._qr = None
 
-    def clone(self):
-        query = super(SelectQuery, self).clone()
-        return self._update_clone(query)
-
-    def _update_clone(self, query):
+    def _clone_attributes(self, query):
+        query = super(SelectQuery, self)._clone_attributes(query)
         query._explicit_selection = self._explicit_selection
         query._select = list(self._select)
         if self._group_by is not None:
@@ -1686,8 +1686,7 @@ class UpdateQuery(Query):
         self._update = update
         super(UpdateQuery, self).__init__(model_class)
 
-    def clone(self):
-        query = super(UpdateQuery, self).clone()
+    def _clone_attributes(self, query):
         query._update = dict(self._update)
         return query
 
@@ -1708,8 +1707,7 @@ class InsertQuery(Query):
         self._insert = query
         super(InsertQuery, self).__init__(model_class)
 
-    def clone(self):
-        query = super(InsertQuery, self).clone()
+    def _clone_attributes(self, query):
         query._insert = dict(self._insert)
         return query
 
