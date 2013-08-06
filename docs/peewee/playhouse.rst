@@ -274,45 +274,15 @@ You can check for the existence of a key and filter rows accordingly:
 Server-side cursors
 ^^^^^^^^^^^^^^^^^^^
 
-For the definitive reference, please see the `psycopg2 documentation <http://initd.org/psycopg/docs/usage.html#server-side-cursors>`_.
-Peewee has basic support for server-side cursors, actived by an optional parameter
-when initializing the :py:class:`PostgresqlExtDatabase`:
-
-.. code-block:: python
-
-    from postgres_ext import PostgresqlExtDatabase
-
-    ss_db = PostgresqlExtDatabase('my_db', server_side_cursors=True)
-
 When psycopg2 executes a query, normally all results are fetched and returned to
-the client by the backend.  Using server-side cursors, results are returned a
-little at a time (by default 2000 records).
+the client by the backend.  This can cause your application to use a lot of memory
+when making large queries.  Using server-side cursors, results are returned a
+little at a time (by default 2000 records).  For the definitive reference, please see the `psycopg2 documentation <http://initd.org/psycopg/docs/usage.html#server-side-cursors>`_.
 
-Server-side cursors live only as long as the transaction, so for this reason
-peewee will not automatically call ``commit()`` after executing a ``SELECT``
-query.
+.. note:: To use server-side (or named) cursors, you must be using :py:class:`PostgresqlExtDatabase`.
 
-.. warning:: If you do not ``commit`` after you are done iterating, you will not release
-  the server-side resources until the connection is closed (or the transaction
-  is committed later).
-
-To prevent wasting server-side resources, I recommend running your select
-queries in a transaction if you use server-side cursors:
-
-.. code-block:: python
-
-    with ss_psql_db.transaction():
-        for inst in MyModel.select().iterator():
-            # do something with inst.
-            pass
-
-Furthermore, because peewee by default will cache query results locally, be
-sure to call ``.iterator()`` on your query before iterating.  See the docs
-on :py:meth:`SelectQuery.iterator` for more details.
-
-.. note:: Always call :py:meth:`SelectQuery.iterator` when using server-side cursors.
-
-**To make this nicer**, there is a helper function :py:func:`ServerSide`:
+To execute a query using a server-side cursor, simply wrap your select query
+using the :py:func:`ServerSide` helper:
 
 .. code-block:: python
 
@@ -324,6 +294,27 @@ on :py:meth:`SelectQuery.iterator` for more details.
         pass
 
     # Server-side resources are released.
+
+If you would like all ``SELECT`` queries to automatically use a server-side
+cursor, you can specify this when creating your :py:class:`PostgresqlExtDatabase`:
+
+.. code-block:: python
+
+    from postgres_ext import PostgresqlExtDatabase
+
+    ss_db = PostgresqlExtDatabase('my_db', server_side_cursors=True)
+
+.. note::
+    Server-side cursors live only as long as the transaction, so for this reason
+    peewee will not automatically call ``commit()`` after executing a ``SELECT``
+    query.  If you do not ``commit`` after you are done iterating, you will not
+    release the server-side resources until the connection is closed (or the
+    transaction is committed later).  Furthermore, since peewee will by default
+    cache rows returned by the cursor, you should always call ``.iterator()``
+    when iterating over a large query.
+
+    If you are using the :py:func:`ServerSide` helper, the transaction and
+    call to ``iterator()`` will be handled transparently.
 
 
 postgres_ext API notes
