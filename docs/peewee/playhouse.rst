@@ -312,16 +312,18 @@ on :py:meth:`SelectQuery.iterator` for more details.
 
 .. note:: Always call :py:meth:`SelectQuery.iterator` when using server-side cursors.
 
-**To make all of this nicer**, there is a helper function :py:func:`ServerSide` which
-will do all this for you:
+**To make this nicer**, there is a helper function :py:func:`ServerSide`:
 
 .. code-block:: python
 
     large_query = PageView.select()  # Build query normally.
 
+    # Iterate over large query inside a transaction.
     for page_view in ServerSide(large_query):
         # do some interesting analysis here.
         pass
+
+    # Server-side resources are released.
 
 
 postgres_ext API notes
