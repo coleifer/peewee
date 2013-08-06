@@ -1158,28 +1158,28 @@ class QueryResultWrapperTestCase(ModelTestCase):
             self.assertEqual(res.username, 'u2')
 
         qc2 = len(self.queries())
-        self.assertEqual(qc2 - qc, 2)
+        self.assertEqual(qc2 - qc, 1)
 
         for i in range(2):
             res = uq[:3]
             assertUsernames(res, [1, 2, 3])
 
         qc2 = len(self.queries())
-        self.assertEqual(qc2 - qc, 3)
+        self.assertEqual(qc2 - qc, 1)
 
         for i in range(2):
             res = uq[2:5]
             assertUsernames(res, [3, 4, 5])
 
         qc2 = len(self.queries())
-        self.assertEqual(qc2 - qc, 4)
+        self.assertEqual(qc2 - qc, 1)
 
         for i in range(2):
             res = uq[5:]
             assertUsernames(res, [6, 7, 8, 9, 10])
 
         qc2 = len(self.queries())
-        self.assertEqual(qc2 - qc, 5)
+        self.assertEqual(qc2 - qc, 1)
 
         self.assertRaises(IndexError, uq.__getitem__, 10)
         self.assertRaises(ValueError, uq.__getitem__, -1)

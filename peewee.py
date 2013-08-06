@@ -1148,6 +1148,8 @@ class QueryResultWrapper(object):
 
     def fill_cache(self, n=None):
         n = n or float('Inf')
+        if n < 0:
+            raise ValueError('Negative values are not supported.')
         self.__idx = self.__ct
         while not self._populated and (n > self.__ct):
             try:
@@ -1668,24 +1670,13 @@ class SelectQuery(Query):
         return iter(self.execute().iterator())
 
     def __getitem__(self, value):
-        offset = limit = None
+        start = end = None
+        res = self.execute()
         if isinstance(value, slice):
-            if value.start:
-                offset = value.start
-            if value.stop:
-                limit = value.stop - (value.start or 0)
+            res.fill_cache(value.stop)
         else:
-            if value < 0:
-                raise ValueError('Negative indexes are not supported, try '
-                                 'ordering in reverse instead.')
-            offset = value
-            limit = 1
-        if self._limit != limit or self._offset != offset:
-            self._qr = None
-        self._limit = limit
-        self._offset = offset
-        res = list(self)
-        return limit == 1 and res[0] or res
+            res.fill_cache(value)
+        return res._result_cache[value]
 
 class UpdateQuery(Query):
     def __init__(self, model_class, update=None):
