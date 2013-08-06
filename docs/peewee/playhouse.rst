@@ -278,7 +278,7 @@ For the definitive reference, please see the `psycopg2 documentation <http://ini
 Peewee has basic support for server-side cursors, actived by an optional parameter
 when initializing the :py:class:`PostgresqlExtDatabase`:
 
-.. code-block::
+.. code-block:: python
 
     from postgres_ext import PostgresqlExtDatabase
 

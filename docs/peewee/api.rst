@@ -910,7 +910,7 @@ Query Types
         of rows, however, this cache can take up a lot of memory. Using ``iterator()``
         will save memory by not storing all the returned model instances.
 
-        .. code-block::
+        .. code-block:: python
 
             # iterate over large number of rows.
             for obj in Stats.select().iterator():
