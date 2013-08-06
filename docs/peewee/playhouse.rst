@@ -115,7 +115,7 @@ The postgresql extensions module provides a number of "postgres-only" functions,
 currently:
 
 * :ref:`hstore support <hstore>`
-* :ref:`server-side cursors <server-side-cursors>`
+* :ref:`server-side cursors <server_side_cursors>`
 * :py:class:`ArrayField` field type, for storing arrays.
 * :py:class:`UUIDField` field type, for storing UUID objects.
 * :py:class:`DateTimeTZ` field type, a timezone-aware datetime field.
@@ -269,7 +269,7 @@ You can check for the existence of a key and filter rows accordingly:
 
     123 Main St 2 cars
 
-.. _server-side-cursors
+.. _server_side_cursors:
 
 Server-side cursors
 ^^^^^^^^^^^^^^^^^^^
@@ -331,7 +331,7 @@ postgres_ext API notes
 
     Identical to :py:class:`PostgresqlDatabase` but required in order to support:
 
-    * :ref:`server-side-cursors`
+    * :ref:`server_side_cursors`
     * :py:class:`ArrayField`
     * :py:class:`DateTimeTZField`
     * :py:class:`HStoreField`
