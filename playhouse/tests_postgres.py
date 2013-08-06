@@ -41,6 +41,9 @@ class SSCursorModel(Model):
     class Meta:
         database = test_ss_db
 
+class NormalModel(BaseModel):
+    data = CharField()
+
 
 class PostgresExtTestCase(unittest.TestCase):
     def setUp(self):
@@ -267,30 +270,34 @@ class SSCursorTestCase(unittest.TestCase):
     def setUp(self):
         self.close_conn()  # Close open connection.
         SSCursorModel.drop_table(True)
+        NormalModel.drop_table(True)
         SSCursorModel.create_table()
+        NormalModel.create_table()
         self.counter = 0
+        for i in range(3):
+            self.create()
 
     def create(self):
         self.counter += 1
         SSCursorModel.create(data=self.counter)
+        NormalModel.create(data=self.counter)
 
     def close_conn(self):
         if not test_ss_db.is_closed():
             test_ss_db.close()
 
+    def assertList(self, iterable):
+        self.assertEqual(
+            [x.data for x in iterable],
+            map(str, range(1, self.counter + 1)))
+
     def test_model_interaction(self):
-        for i in range(3):
-            self.create()
-
-        def assertList(iterable):
-            self.assertEqual([x.data for x in iterable], map(str, range(1, 4)))
-
         query = SSCursorModel.select().order_by(SSCursorModel.data)
-        assertList(query)
+        self.assertList(query)
 
         query2 = query.clone()
         qr = query2.execute()
-        assertList(qr)
+        self.assertList(qr)
 
         # The cursor is named and is still "alive" because we can still try
         # to fetch results.
@@ -304,7 +311,7 @@ class SSCursorTestCase(unittest.TestCase):
 
             # Different named cursor
             self.assertFalse(qr2.cursor.name == qr.cursor.name)
-            assertList(qr2)
+            self.assertList(qr2)
 
         # After the transaction we cannot fetch a result because the cursor
         # is dead.
@@ -313,16 +320,32 @@ class SSCursorTestCase(unittest.TestCase):
 
         # Try using the helper.
         query4 = query.clone()
-        assertList(ServerSide(query4))
+        self.assertList(ServerSide(query4))
 
-        # After using the helper, the cursor is dead.
+        # Named cursor is dead.
         with self.assertRaises(psycopg2.ProgrammingError):
             query4._qr.cursor.fetchone()
 
-    def test_ss_cursor(self):
-        for i in range(3):
-            self.create()
+    def test_serverside_normal_model(self):
+        query = NormalModel.select().order_by(NormalModel.data)
+        self.assertList(query)
 
+        # We can ask for more results from a normal query.
+        self.assertEqual(query._qr.cursor.fetchone(), None)
+
+        clone = query.clone()
+        self.assertList(ServerSide(clone))
+
+        # Named cursor is dead.
+        with self.assertRaises(psycopg2.ProgrammingError):
+            clone._qr.cursor.fetchone()
+
+        # Ensure where clause is preserved.
+        query = query.where(NormalModel.data == '2')
+        data = [x.data for x in ServerSide(query)]
+        self.assertEqual(data, ['2'])
+
+    def test_ss_cursor(self):
         tbl = SSCursorModel._meta.db_table
         name = str(uuid.uuid1())
 

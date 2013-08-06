@@ -13,6 +13,7 @@ from peewee import logger
 from peewee import Node
 from peewee import Param
 from peewee import QueryCompiler
+from peewee import SelectQuery
 
 from psycopg2 import extensions
 from psycopg2.extras import register_hstore
@@ -151,17 +152,20 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
 
     def __init__(self, *args, **kwargs):
         self.server_side_cursors = kwargs.pop('server_side_cursors', False)
-        # If using server side cursors, do not commit select queries.
-        self.commit_select = not self.server_side_cursors
         super(PostgresqlExtDatabase, self).__init__(*args, **kwargs)
 
     def get_cursor(self, name=None):
         return self.get_conn().cursor(name=name)
 
-    def execute_sql(self, sql, params=None, require_commit=True):
+    def execute_sql(self, sql, params=None, require_commit=True,
+                    named_cursor=False):
         logger.debug((sql, params))
-        if self.server_side_cursors and sql.lower().startswith('select'):
+        use_named_cursor = (named_cursor or (
+                            self.server_side_cursors and
+                            sql.lower().startswith('select')))
+        if use_named_cursor:
             cursor = self.get_cursor(name=str(uuid.uuid1()))
+            require_commit = False
         else:
             cursor = self.get_cursor()
         res = cursor.execute(sql, params or ())
@@ -173,6 +177,19 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
         conn = super(PostgresqlExtDatabase, self)._connect(database, **kwargs)
         register_hstore(conn, globally=True)
         return conn
+
+
+class ServerSideSelectQuery(SelectQuery):
+    @classmethod
+    def clone_from_query(cls, query):
+        clone = ServerSideSelectQuery(query.model_class)
+        return query._clone_attributes(clone)
+
+    def _execute(self):
+        sql, params = self.sql()
+        return self.database.execute_sql(
+            sql, params, require_commit=False, named_cursor=True)
+
 
 PostgresqlExtDatabase.register_fields({
     'hash': 'hstore',
@@ -187,6 +204,10 @@ PostgresqlExtDatabase.register_ops({
 })
 
 def ServerSide(select_query):
-    with select_query.database.transaction():
-        for obj in select_query.iterator():
+    # Flag query for execution using server-side cursors.
+    clone = ServerSideSelectQuery.clone_from_query(select_query)
+    with clone.database.transaction():
+        for obj in clone.iterator():
             yield obj
+    # Patch QueryResultWrapper onto original query.
+    select_query._qr = clone._qr
