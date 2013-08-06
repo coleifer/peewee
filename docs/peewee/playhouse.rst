@@ -312,7 +312,7 @@ on :py:meth:`SelectQuery.iterator` for more details.
 
 .. note:: Always call :py:meth:`SelectQuery.iterator` when using server-side cursors.
 
-**To make all of this nicer**, there is a helper function in ``postgres_ext`` which
+**To make all of this nicer**, there is a helper function :py:func:`ServerSide` which
 will do all this for you:
 
 .. code-block:: python
