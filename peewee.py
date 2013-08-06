@@ -1495,6 +1495,9 @@ class SelectQuery(Query):
 
     def clone(self):
         query = super(SelectQuery, self).clone()
+        return self._update_clone(query)
+
+    def _update_clone(self, query):
         query._explicit_selection = self._explicit_selection
         query._select = list(self._select)
         if self._group_by is not None:
