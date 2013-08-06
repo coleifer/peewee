@@ -900,6 +900,23 @@ Query Types
             this can provide a significant speed improvement when doing simple
             iteration over a large result set.
 
+    .. py:method:: iterator()
+
+        :rtype: ``iterable``
+
+        By default peewee will cache rows returned by the cursor.  This is to
+        prevent things like multiple iterations, slicing and indexing from
+        triggering extra queries.  When you are iterating over a large number
+        of rows, however, this cache can take up a lot of memory. Using ``iterator()``
+        will save memory by not storing all the returned model instances.
+
+        .. code-block::
+
+            # iterate over large number of rows.
+            for obj in Stats.select().iterator():
+                # do something.
+                pass
+
     .. py:method:: tuples()
 
         :rtype: :py:class:`SelectQuery`

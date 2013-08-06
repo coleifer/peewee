@@ -188,5 +188,5 @@ PostgresqlExtDatabase.register_ops({
 
 def ServerSide(select_query):
     with select_query.database.transaction():
-        for obj in select_query:
+        for obj in select_query.iterator():
             yield obj

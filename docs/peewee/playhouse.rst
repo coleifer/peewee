@@ -115,6 +115,7 @@ The postgresql extensions module provides a number of "postgres-only" functions,
 currently:
 
 * :ref:`hstore support <hstore>`
+* :ref:`server-side cursors <server-side-cursors>`
 * :py:class:`ArrayField` field type, for storing arrays.
 * :py:class:`UUIDField` field type, for storing UUID objects.
 * :py:class:`DateTimeTZ` field type, a timezone-aware datetime field.
@@ -268,8 +269,100 @@ You can check for the existence of a key and filter rows accordingly:
 
     123 Main St 2 cars
 
+.. _server-side-cursors
+
+Server-side cursors
+^^^^^^^^^^^^^^^^^^^
+
+For the definitive reference, please see the `psycopg2 documentation <http://initd.org/psycopg/docs/usage.html#server-side-cursors>`_.
+Peewee has basic support for server-side cursors, actived by an optional parameter
+when initializing the :py:class:`PostgresqlExtDatabase`:
+
+.. code-block::
+
+    from postgres_ext import PostgresqlExtDatabase
+
+    ss_db = PostgresqlExtDatabase('my_db', server_side_cursors=True)
+
+When psycopg2 executes a query, normally all results are fetched and returned to
+the client by the backend.  Using server-side cursors, results are returned a
+little at a time (by default 2000 records).
+
+Server-side cursors live only as long as the transaction, so for this reason
+peewee will not automatically call ``commit()`` after executing a ``SELECT``
+query.
+
+.. warning:: If you do not ``commit`` after you are done iterating, you will not release
+  the server-side resources until the connection is closed (or the transaction
+  is committed later).
+
+To prevent wasting server-side resources, I recommend running your select
+queries in a transaction if you use server-side cursors:
+
+.. code-block:: python
+
+    with ss_psql_db.transaction():
+        for inst in MyModel.select().iterator():
+            # do something with inst.
+            pass
+
+Furthermore, because peewee by default will cache query results locally, be
+sure to call ``.iterator()`` on your query before iterating.  See the docs
+on :py:meth:`SelectQuery.iterator` for more details.
+
+.. note:: Always call :py:meth:`SelectQuery.iterator` when using server-side cursors.
+
+**To make all of this nicer**, there is a helper function in ``postgres_ext`` which
+will do all this for you:
+
+.. code-block:: python
+
+    large_query = PageView.select()  # Build query normally.
+
+    for page_view in ServerSide(large_query):
+        # do some interesting analysis here.
+        pass
+
+
 postgres_ext API notes
 ^^^^^^^^^^^^^^^^^^^^^^
+
+.. py:class:: PostgresqlExtDatabase(database[, server_side_cursors=False[,...]])
+
+    Identical to :py:class:`PostgresqlDatabase` but required in order to support:
+
+    * :ref:`server-side-cursors`
+    * :py:class:`ArrayField`
+    * :py:class:`DateTimeTZField`
+    * :py:class:`HStoreField`
+    * :py:class:`UUIDField`
+
+    :param str database: Name of database to connect to.
+    :param bool server_side_cursors: Whether ``SELECT`` queries should utilize
+        server-side cursors.
+
+    If using ``server_side_cursors``, also be sure to wrap your queries with
+    :py:func:`ServerSide`.
+
+.. py:func:: ServerSide(select_query)
+
+    Wrap the given select query in a transaction, and call it's :py:meth:`~SelectQuery.iterator``
+    method to avoid caching row instances.  In order for the server-side resources
+    to be released, be sure to exhaust the generator (iterate over all the rows).
+
+    :param select_query: a :py:class:`SelectQuery` instance.
+    :rtype: ``generator``
+
+    Usage:
+
+    .. code-block:: python
+
+        large_query = PageView.select()
+        for page_view in ServerSide(large_query):
+            # Do something interesting.
+            pass
+
+        # At this point server side resources are released.
 
 .. py:class:: ArrayField([field_class=IntegerField[, dimensions=1]])
 
