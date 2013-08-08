@@ -207,7 +207,12 @@ def ServerSide(select_query):
     # Flag query for execution using server-side cursors.
     clone = ServerSideSelectQuery.clone_from_query(select_query)
     with clone.database.transaction():
-        for obj in clone.iterator():
+        # Execute the query.
+        query_result = clone.execute()
+
+        # Patch QueryResultWrapper onto original query.
+        select_query._qr = query_result
+
+        # Expose generator for iterating over query.
+        for obj in query_result.iterator():
             yield obj
-    # Patch QueryResultWrapper onto original query.
-    select_query._qr = clone._qr
