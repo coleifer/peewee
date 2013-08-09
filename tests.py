@@ -2595,10 +2595,17 @@ class TransactionTestCase(ModelTestCase):
 
 class ConcurrencyTestCase(ModelTestCase):
     requires = [User]
+    threads = 4
 
     def setUp(self):
         self._orig_db = test_db
-        User._meta.database = database_class(database_name, threadlocals=True)
+        kwargs = {'threadlocals': True}
+        if isinstance(test_db, SqliteDatabase):
+            # Put a very large timeout in place to avoid `database is locked`
+            # when using SQLite (default is 5).
+            kwargs['timeout'] = 30
+
+        User._meta.database = database_class(database_name, **kwargs)
         super(ConcurrencyTestCase, self).setUp()
 
     def tearDown(self):
@@ -2613,13 +2620,13 @@ class ConcurrencyTestCase(ModelTestCase):
 
         threads = []
 
-        for i in range(5):
+        for i in range(self.threads):
             threads.append(threading.Thread(target=create_user_thread, args=(i*10, i * 10 + 10)))
 
         [t.start() for t in threads]
         [t.join() for t in threads]
 
-        self.assertEqual(User.select().count(), 50)
+        self.assertEqual(User.select().count(), self.threads * 10)
 
     def test_multiple_readers(self):
         data_queue = Queue()
@@ -2630,13 +2637,13 @@ class ConcurrencyTestCase(ModelTestCase):
 
         threads = []
 
-        for i in range(5):
+        for i in range(self.threads):
             threads.append(threading.Thread(target=reader_thread, args=(data_queue, 20)))
 
         [t.start() for t in threads]
         [t.join() for t in threads]
 
-        self.assertEqual(data_queue.qsize(), 100)
+        self.assertEqual(data_queue.qsize(), self.threads * 20)
 
 
 class ModelOptionInheritanceTestCase(BasePeeweeTestCase):
