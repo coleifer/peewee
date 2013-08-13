@@ -32,6 +32,7 @@ __all__ = [
     'DoesNotExist',
     'DoubleField',
     'DQ',
+    'Entity',
     'Field',
     'FloatField',
     'fn',
@@ -317,6 +318,17 @@ class Clause(Node):
 
     def clone_base(self):
         return Clause(*self.nodes)
+
+class Entity(Node):
+    def __init__(self, *path):
+        super(Entity, self).__init__()
+        self.path = path
+
+    def clone_base(self):
+        return Entity(*self.path)
+
+    def __getattr__(self, attr):
+        return Entity(*self.path + (attr,))
 
 Join = namedtuple('Join', ('model_class', 'join_type', 'on'))
 
@@ -817,6 +829,9 @@ class QueryCompiler(object):
         elif isinstance(node, Model):
             sql = self.interpolation
             params = [node.get_id()]
+        elif isinstance(node, Entity):
+            sql = '.'.join(map(self.quote, node.path))
+            params = []
         elif isclass(node) and issubclass(node, Model):
             sql = self.quote(node._meta.db_table)
             params = []
