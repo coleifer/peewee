@@ -605,7 +605,7 @@ Performing atomic updates
 
 .. code-block:: python
 
-    >>> Stat.update(counter=Stat.counter + 1).where(Stat.url == request.url)
+    >>> Stat.update(counter=Stat.counter + 1).where(Stat.url == request.url).execute()
 
 
 Aggregating records
