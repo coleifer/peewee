@@ -1820,8 +1820,13 @@ class Database(object):
 
     def execute_sql(self, sql, params=None, require_commit=True):
         logger.debug((sql, params))
-        cursor = self.get_cursor()
-        res = cursor.execute(sql, params or ())
+        try:
+            cursor = self.get_cursor()
+            res = cursor.execute(sql, params or ())
+        except self.ConnGoneAwayError:
+            self.close()
+            cursor = self.get_cursor()
+            res = cursor.execute(sql, params or ())
         if require_commit and self.get_autocommit():
             self.commit()
         return cursor
@@ -1913,6 +1918,8 @@ class SqliteDatabase(Database):
         OP_LIKE: 'GLOB',
         OP_ILIKE: 'LIKE',
     }
+    if sqlite3:
+        ConnGoneAwayError = sqlite3.OperationalError
 
     def _connect(self, database, **kwargs):
         if not sqlite3:
@@ -1948,6 +1955,8 @@ class PostgresqlDatabase(Database):
     interpolation = '%s'
     reserved_tables = ['user']
     sequences = True
+    if psycopg2:
+        ConnGoneAwayError = psycopg2.OperationalError
 
     def _connect(self, database, **kwargs):
         if not psycopg2:
@@ -2021,6 +2030,8 @@ class MySQLDatabase(Database):
     }
     quote_char = '`'
     subquery_delete_same_table = False
+    if mysql:
+        ConnGoneAwayError = mysql.OperationalError
 
     def _connect(self, database, **kwargs):
         if not mysql:
