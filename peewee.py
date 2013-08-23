@@ -1828,7 +1828,7 @@ class Database(object):
     def rows_affected(self, cursor):
         return cursor.rowcount
 
-    def sql_error_handler(self, exception, sql, params):
+    def sql_error_handler(self, exception, sql, params, require_commit):
         raise exception
 
     def compiler(self):
@@ -1843,7 +1843,7 @@ class Database(object):
             res = cursor.execute(sql, params or ())
         except Exception as exception:
             logger.error('Error executing query %s (%s)' % (sql, params))
-            self.sql_error_handler(exception, sql, params)
+            self.sql_error_handler(exception, sql, params, require_commit)
         if require_commit and self.get_autocommit():
             self.commit()
         return cursor

@@ -101,10 +101,10 @@ class TestDatabase(database_class):
     op_overrides = {}
     quote_char = '"'
 
-    def sql_error_handler(self, exception, sql, params):
+    def sql_error_handler(self, exception, sql, params, require_commit):
         self.last_error = (sql, params)
         return super(TestDatabase, self).sql_error_handler(
-            exception, sql, params)
+            exception, sql, params, require_commit)
 
 test_db = database_class(database_name, **database_params)
 query_db = TestDatabase(database_name, **database_params)
