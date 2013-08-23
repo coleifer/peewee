@@ -101,6 +101,11 @@ class TestDatabase(database_class):
     op_overrides = {}
     quote_char = '"'
 
+    def sql_error_handler(self, exception, sql, params):
+        self.last_error = (sql, params)
+        return super(TestDatabase, self).sql_error_handler(
+            exception, sql, params)
+
 test_db = database_class(database_name, **database_params)
 query_db = TestDatabase(database_name, **database_params)
 compiler = query_db.compiler()
@@ -2783,6 +2788,11 @@ class DatabaseTestCase(BasePeeweeTestCase):
         deferred_db.init(None)
         self.assertTrue(deferred_db.deferred)
 
+    def test_sql_error(self):
+        bad_sql = 'select asdf from -1;'
+        with self.assertRaises(Exception):
+            query_db.execute_sql(bad_sql)
+        self.assertEqual(query_db.last_error, (bad_sql, None))
 
 class SqliteDatePartTestCase(BasePeeweeTestCase):
     def test_sqlite_date_part(self):

@@ -168,7 +168,11 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
             require_commit = False
         else:
             cursor = self.get_cursor()
-        res = cursor.execute(sql, params or ())
+        try:
+            res = cursor.execute(sql, params or ())
+        except Exception as exception:
+            logger.error('Error executing query %s (%s)' % (sql, params))
+            self.sql_error_handler(exception, sql, params)
         if require_commit and self.get_autocommit():
             self.commit()
         return cursor

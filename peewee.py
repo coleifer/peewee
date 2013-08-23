@@ -1828,6 +1828,9 @@ class Database(object):
     def rows_affected(self, cursor):
         return cursor.rowcount
 
+    def sql_error_handler(self, exception, sql, params):
+        raise exception
+
     def compiler(self):
         return self.compiler_class(
             self.quote_char, self.interpolation, self.field_overrides,
@@ -1836,7 +1839,11 @@ class Database(object):
     def execute_sql(self, sql, params=None, require_commit=True):
         logger.debug((sql, params))
         cursor = self.get_cursor()
-        res = cursor.execute(sql, params or ())
+        try:
+            res = cursor.execute(sql, params or ())
+        except Exception as exception:
+            logger.error('Error executing query %s (%s)' % (sql, params))
+            self.sql_error_handler(exception, sql, params)
         if require_commit and self.get_autocommit():
             self.commit()
         return cursor
@@ -1928,6 +1935,8 @@ class SqliteDatabase(Database):
         OP_LIKE: 'GLOB',
         OP_ILIKE: 'LIKE',
     }
+    if sqlite3:
+        ConnectionError = sqlite3.OperationalError
 
     def _connect(self, database, **kwargs):
         if not sqlite3:
