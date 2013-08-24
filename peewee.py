@@ -2154,7 +2154,7 @@ default_database = SqliteDatabase('peewee.db')
 
 class ModelOptions(object):
     def __init__(self, cls, database=None, db_table=None, indexes=None,
-                 order_by=None, primary_key=None):
+                 order_by=None, primary_key=None, **kwargs):
         self.model_class = cls
         self.name = cls.__name__.lower()
         self.fields = {}
@@ -2170,6 +2170,9 @@ class ModelOptions(object):
         self.auto_increment = None
         self.rel = {}
         self.reverse_rel = {}
+
+        for key in kwargs:
+            self[key] = kwargs[key]
 
     def prepared(self):
         for field in self.fields.values():
