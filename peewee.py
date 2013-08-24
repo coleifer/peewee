@@ -2172,7 +2172,7 @@ class ModelOptions(object):
         self.reverse_rel = {}
 
         for key in kwargs:
-            self[key] = kwargs[key]
+            setattr(self, key, kwargs[key])
 
     def prepared(self):
         for field in self.fields.values():
