@@ -2,6 +2,7 @@ import unittest
 
 from peewee import *
 from pwiz import *
+from peewee import print_
 
 
 # test databases
@@ -81,7 +82,7 @@ class TestPwiz(unittest.TestCase):
                     self.create_tables(database)
                     fn(self, database, db_name)
                 else:
-                    print 'Skipping %s, driver not found' % db_name
+                    print_('Skipping %s, driver not found' % db_name)
         return inner
 
     def introspect(self, database, db_name):
