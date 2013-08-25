@@ -81,7 +81,7 @@ class TestPwiz(unittest.TestCase):
                     self.create_tables(database)
                     fn(self, database, db_name)
                 else:
-                    print 'Skipping %s, driver not found' % db_name
+                    print ('Skipping %s, driver not found' % db_name)
         return inner
 
     def introspect(self, database, db_name):
