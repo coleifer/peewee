@@ -2154,7 +2154,7 @@ default_database = SqliteDatabase('peewee.db')
 
 class ModelOptions(object):
     def __init__(self, cls, database=None, db_table=None, indexes=None,
-                 order_by=None, primary_key=None):
+                 order_by=None, primary_key=None, **kwargs):
         self.model_class = cls
         self.name = cls.__name__.lower()
         self.fields = {}
@@ -2163,13 +2163,17 @@ class ModelOptions(object):
 
         self.database = database or default_database
         self.db_table = db_table
-        self.indexes = indexes or []
+        self.indexes = list(indexes or [])
         self.order_by = order_by
         self.primary_key = primary_key
 
         self.auto_increment = None
         self.rel = {}
         self.reverse_rel = {}
+
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+        self._additional_keys = set(kwargs.keys())
 
     def prepared(self):
         for field in self.fields.values():
@@ -2219,7 +2223,7 @@ class ModelOptions(object):
 
 
 class BaseModel(type):
-    inheritable_options = ['database', 'indexes', 'order_by', 'primary_key']
+    inheritable = set(['database', 'indexes', 'order_by', 'primary_key'])
 
     def __new__(cls, name, bases, attrs):
         if not bases:
@@ -2242,8 +2246,9 @@ class BaseModel(type):
                 continue
 
             base_meta = getattr(b, '_meta')
+            all_inheritable = cls.inheritable | base_meta._additional_keys
             for (k, v) in base_meta.__dict__.items():
-                if k in cls.inheritable_options and k not in meta_options:
+                if k in all_inheritable and k not in meta_options:
                     meta_options[k] = v
 
             for (k, v) in b.__dict__.items():
