@@ -2236,7 +2236,8 @@ class BaseModel(type):
                 if not k.startswith('_'):
                     meta_options[k] = v
 
-        orig_primary_key = None
+        model_pk = getattr(meta, 'primary_key', None)
+        parent_pk = None
 
         # inherit any field descriptors by deep copying the underlying field
         # into the attrs of the new model, additionally see if the bases define
@@ -2246,6 +2247,8 @@ class BaseModel(type):
                 continue
 
             base_meta = getattr(b, '_meta')
+            if parent_pk is None:
+                parent_pk = deepcopy(base_meta.primary_key)
             all_inheritable = cls.inheritable | base_meta._additional_keys
             for (k, v) in base_meta.__dict__.items():
                 if k in all_inheritable and k not in meta_options:
@@ -2255,37 +2258,33 @@ class BaseModel(type):
                 if isinstance(v, FieldDescriptor) and k not in attrs:
                     if not v.field.primary_key:
                         attrs[k] = deepcopy(v.field)
-                    elif not orig_primary_key:
-                        orig_primary_key = deepcopy(v.field)
 
         # initialize the new class and set the magic attributes
         cls = super(BaseModel, cls).__new__(cls, name, bases, attrs)
         cls._meta = ModelOptions(cls, **meta_options)
         cls._data = None
 
-        primary_key = None
-
         # replace fields with field descriptors, calling the add_to_class hook
         for name, attr in list(cls.__dict__.items()):
             cls._meta.indexes = list(cls._meta.indexes)
             if isinstance(attr, Field):
                 attr.add_to_class(cls, name)
-                if attr.primary_key:
-                    primary_key = attr
+                if attr.primary_key and model_pk:
+                    raise ValueError('primary key is overdetermined.')
+                elif attr.primary_key:
+                    model_pk = attr
 
-        if primary_key is None:
-            if orig_primary_key:
-                primary_key = orig_primary_key
-                name = primary_key.name
+        if model_pk is None:
+            if parent_pk:
+                model_pk, name = parent_pk, parent_pk.name
             else:
-                primary_key = PrimaryKeyField(primary_key=True)
-                name = 'id'
-            primary_key.add_to_class(cls, name)
+                model_pk, name = PrimaryKeyField(primary_key=True), 'id'
+            model_pk.add_to_class(cls, name)
 
-        cls._meta.primary_key = primary_key
+        cls._meta.primary_key = model_pk
         cls._meta.auto_increment = (
-            isinstance(primary_key, PrimaryKeyField) or
-            bool(primary_key.sequence))
+            isinstance(model_pk, PrimaryKeyField) or
+            bool(model_pk.sequence))
         if not cls._meta.db_table:
             cls._meta.db_table = re.sub('[^\w]+', '_', cls.__name__.lower())
 
