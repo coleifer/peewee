@@ -2427,12 +2427,12 @@ class Model(with_metaclass(BaseModel)):
             ).where(pk == self.get_id())
             update.execute()
         else:
-            if self._meta.auto_increment:
-                field_dict.pop(pk.name, None)
+            pk = self.get_id()
             insert = self.insert(**field_dict)
-            new_pk = insert.execute()
-            if self._meta.auto_increment:
-                self.set_id(new_pk)
+            ret_pk = insert.execute()
+            if ret_pk is not None:
+                pk = ret_pk
+            self.set_id(pk)
 
     def dependencies(self, search_nullable=False):
         query = self.select().where(self._meta.primary_key == self.get_id())
