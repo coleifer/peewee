@@ -2028,7 +2028,7 @@ class PostgresqlDatabase(Database):
 class MySQLDatabase(Database):
     commit_select = True
     field_overrides = {
-        'boolean': 'BOOL',
+        'bool': 'BOOL',
         'decimal': 'NUMERIC',
         'double': 'DOUBLE PRECISION',
         'float': 'FLOAT',
