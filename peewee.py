@@ -714,6 +714,11 @@ class ForeignKeyField(IntegerField):
         return self.rel_model._meta.primary_key.db_value(value)
 
 
+class CompositeKey(object):
+    def __init__(self, *fields):
+        self.fields = fields
+
+
 class QueryCompiler(object):
     field_map = {
         'bigint': 'BIGINT',
@@ -1051,8 +1056,7 @@ class QueryCompiler(object):
         if isinstance(field, ForeignKeyField):
             ref_mc = (
                 self.quote(field.rel_model._meta.db_table),
-                self.quote(field.rel_model._meta.primary_key.db_column),
-            )
+                self.quote(field.rel_model._meta.primary_key.db_column))
             parts.append('REFERENCES %s (%s)' % ref_mc)
             parts.append('%(cascade)s%(extra)s')
         elif field.sequence:
@@ -2405,6 +2409,9 @@ class Model(with_metaclass(BaseModel)):
     def set_id(self, id):
         setattr(self, self._meta.primary_key.name, id)
 
+    def pk_expr(self):
+        return self._meta.primary_key == self.get_id()
+
     def prepared(self):
         pass
 
@@ -2422,20 +2429,16 @@ class Model(with_metaclass(BaseModel)):
             field_dict = self._prune_fields(field_dict, only)
         if self.get_id() is not None and not force_insert:
             field_dict.pop(pk.name, None)
-            update = self.update(
-                **field_dict
-            ).where(pk == self.get_id())
-            update.execute()
+            self.update(**field_dict).where(self.pk_expr()).execute()
         else:
             pk = self.get_id()
-            insert = self.insert(**field_dict)
-            ret_pk = insert.execute()
+            ret_pk = self.insert(**field_dict).execute()
             if ret_pk is not None:
                 pk = ret_pk
             self.set_id(pk)
 
     def dependencies(self, search_nullable=False):
-        query = self.select().where(self._meta.primary_key == self.get_id())
+        query = self.select().where(self.pk_expr())
         stack = [(type(self), query)]
         seen = set()
 
@@ -2460,8 +2463,7 @@ class Model(with_metaclass(BaseModel)):
                     model.update(**{fk.name: None}).where(query).execute()
                 else:
                     model.delete().where(query).execute()
-        return self.delete().where(
-            self._meta.primary_key == self.get_id()).execute()
+        return self.delete().where(self.pk_expr()).execute()
 
     def __eq__(self, other):
         return (
