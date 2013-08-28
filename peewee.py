@@ -2263,10 +2263,10 @@ class BaseModel(type):
         cls = super(BaseModel, cls).__new__(cls, name, bases, attrs)
         cls._meta = ModelOptions(cls, **meta_options)
         cls._data = None
+        cls._meta.indexes = list(cls._meta.indexes)
 
         # replace fields with field descriptors, calling the add_to_class hook
         for name, attr in list(cls.__dict__.items()):
-            cls._meta.indexes = list(cls._meta.indexes)
             if isinstance(attr, Field):
                 attr.add_to_class(cls, name)
                 if attr.primary_key and model_pk:
