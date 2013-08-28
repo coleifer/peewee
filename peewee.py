@@ -26,6 +26,7 @@ __all__ = [
     'BooleanField',
     'CharField',
     'Clause',
+    'CompositeKey',
     'DateField',
     'DateTimeField',
     'DecimalField',
@@ -722,7 +723,15 @@ class CompositeKey(object):
 
     def add_to_class(self, model_class, name):
         self.name = name
-        setattr(model_class, name, None)
+        setattr(model_class, name, self)
+
+    def __get__(self, instance, instance_type=None):
+        if instance is not None:
+            return [getattr(instance, field) for field in self.fields]
+        return self
+
+    def __set__(self, instance, value):
+        pass
 
 
 class QueryCompiler(object):
