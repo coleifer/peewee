@@ -285,6 +285,19 @@ class TestModelC(TestModel):
     field = CharField(primary_key=True)
     data = CharField()
 
+class Post(TestModel):
+    title = CharField()
+
+class Tag(TestModel):
+    tag = CharField()
+
+class TagPostThrough(TestModel):
+    tag = ForeignKeyField(Tag, related_name='posts')
+    post = ForeignKeyField(Post, related_name='tags')
+
+    class Meta:
+        primary_key = CompositeKey('tag', 'post')
+
 
 MODELS = [
     User,
@@ -315,6 +328,9 @@ MODELS = [
     TestModelA,
     TestModelB,
     TestModelC,
+    Tag,
+    Post,
+    TagPostThrough,
 ]
 INT = test_db.interpolation
 
@@ -1988,6 +2004,63 @@ class MultipleFKTestCase(ModelTestCase):
             Relationship, on=Relationship.from_user
         ).where(Relationship.to_user == c.id)
         self.assertEqual(list(followers), [b])
+
+
+class CompositeKeyTestCase(ModelTestCase):
+    requires = [Tag, Post, TagPostThrough]
+
+    def setUp(self):
+        super(CompositeKeyTestCase, self).setUp()
+        tags = [Tag.create(tag='t%d' % i) for i in range(1, 4)]
+        posts = [Post.create(title='p%d' % i) for i in range(1, 4)]
+        p12 = Post.create(title='p12')
+        for t, p in zip(tags, posts):
+            TagPostThrough.create(tag=t, post=p)
+        TagPostThrough.create(tag=tags[0], post=p12)
+        TagPostThrough.create(tag=tags[1], post=p12)
+
+    def test_create_table_query(self):
+        query = compiler.create_table_sql(TagPostThrough)
+        create, tbl, tbldefs = query
+        self.assertEqual(tbl, '"tagpostthrough"')
+        self.assertEqual(tbldefs,
+            '("tag_id" INTEGER NOT NULL REFERENCES "tag" ("id") , '
+            '"post_id" INTEGER NOT NULL REFERENCES "post" ("id") , '
+            'PRIMARY KEY ("tag_id", "post_id"))')
+
+    def test_get_set_id(self):
+        tpt = (TagPostThrough
+               .select()
+               .join(Tag)
+               .switch(TagPostThrough)
+               .join(Post)
+               .order_by(Tag.tag, Post.title)).get()
+        # Sanity check.
+        self.assertEqual(tpt.tag.tag, 't1')
+        self.assertEqual(tpt.post.title, 'p1')
+
+        tag = Tag.select().where(Tag.tag == 't1').get()
+        post = Post.select().where(Post.title == 'p1').get()
+        self.assertEqual(tpt.get_id(), [tag, post])
+
+        # set_id is a no-op.
+        tpt.set_id(None)
+        self.assertEqual(tpt.get_id(), [tag, post])
+
+    def test_querying(self):
+        posts = (Post.select()
+                 .join(TagPostThrough)
+                 .join(Tag)
+                 .where(Tag.tag == 't1')
+                 .order_by(Post.title))
+        self.assertEqual([p.title for p in posts], ['p1', 'p12'])
+
+        tags = (Tag.select()
+                .join(TagPostThrough)
+                .join(Post)
+                .where(Post.title == 'p12')
+                .order_by(Tag.tag))
+        self.assertEqual([t.tag for t in tags], ['t1', 't2'])
 
 
 class ManyToManyTestCase(ModelTestCase):
