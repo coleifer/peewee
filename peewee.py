@@ -715,8 +715,14 @@ class ForeignKeyField(IntegerField):
 
 
 class CompositeKey(object):
+    sequence = None
+
     def __init__(self, *fields):
         self.fields = fields
+
+    def add_to_class(self, model_class, name):
+        self.name = name
+        setattr(model_class, name, None)
 
 
 class QueryCompiler(object):
@@ -1069,8 +1075,12 @@ class QueryCompiler(object):
             parts.append('IF NOT EXISTS')
         meta = model_class._meta
         parts.append(self.quote(meta.db_table))
-        columns = ', '.join(self.field_sql(f) for f in meta.get_fields())
-        parts.append('(%s)' % columns)
+        columns = map(self.field_sql, meta.get_fields())
+        if isinstance(meta.primary_key, CompositeKey):
+            pk_cols = map(self.quote, (
+                meta.fields[f].db_column for f in meta.primary_key.fields))
+            columns.append('PRIMARY KEY (%s)' % ', '.join(pk_cols))
+        parts.append('(%s)' % ', '.join(columns))
         return parts
 
     def create_table(self, model_class, safe=False):
@@ -2284,6 +2294,8 @@ class BaseModel(type):
             else:
                 model_pk, name = PrimaryKeyField(primary_key=True), 'id'
             model_pk.add_to_class(cls, name)
+        elif isinstance(model_pk, CompositeKey):
+            model_pk.add_to_class(cls, '_composite_key')
 
         cls._meta.primary_key = model_pk
         cls._meta.auto_increment = (
