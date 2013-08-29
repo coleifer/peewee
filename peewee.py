@@ -2503,7 +2503,7 @@ def prefetch_add_subquery(sq, subqueries):
             subquery = subquery.select()
         subquery_model = subquery.model_class
         fkf = None
-        for j in range(i, -1, -1):
+        for j in reversed(range(i + 1)):
             last_query = fixed_queries[j][0]
             fkf = subquery_model._meta.rel_for_model(last_query.model_class)
             if fkf:
