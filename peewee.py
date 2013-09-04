@@ -351,6 +351,7 @@ class Field(Node):
     _order = 0
     db_field = 'unknown'
     template = '%(column_type)s'
+    template_extra = ''
 
     def __init__(self, null=False, index=False, unique=False,
                  verbose_name=None, help_text=None, db_column=None,
@@ -1068,6 +1069,8 @@ class QueryCompiler(object):
             parts.append('NOT NULL')
         if field.primary_key:
             parts.append('PRIMARY KEY')
+        if field.template_extra:
+            parts.append(field.template_extra)
         if isinstance(field, ForeignKeyField):
             ref_mc = (
                 self.quote(field.rel_model._meta.db_table),

@@ -97,6 +97,17 @@ class SqliteExtTestCase(unittest.TestCase):
         ManagedDoc.create_table(tokenize='porter', content=Post.message)
         FTSDoc.create_table(tokenize='porter')
 
+    def test_pk_autoincrement(self):
+        class AutoInc(Model):
+            id = sqe.PrimaryKeyAutoIncrementField()
+            foo = CharField()
+
+        compiler = ext_db.compiler()
+        table_sql = compiler.create_table_sql(AutoInc)
+        self.assertEqual(table_sql[-1],
+                         '("id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, '
+                         '"foo" VARCHAR(255) NOT NULL)')
+
     def assertMessages(self, query, indices):
         self.assertEqual([x.message for x in query], [
             self.messages[i] for i in indices])
