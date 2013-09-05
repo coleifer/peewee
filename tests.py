@@ -2740,6 +2740,25 @@ class ModelOptionInheritanceTestCase(BasePeeweeTestCase):
             pass
         self.assertEqual(Foo_3._meta.db_table, 'foo_3')
 
+    def test_custom_options(self):
+        class A(Model):
+            class Meta:
+                a = 'a'
+
+        class B1(A):
+            class Meta:
+                b = 1
+
+        class B2(A):
+            class Meta:
+                b = 2
+
+        self.assertEqual(A._meta.a, 'a')
+        self.assertEqual(B1._meta.a, 'a')
+        self.assertEqual(B2._meta.a, 'a')
+        self.assertEqual(B1._meta.b, 1)
+        self.assertEqual(B2._meta.b, 2)
+
     def test_option_inheritance(self):
         x_test_db = SqliteDatabase('testing.db')
         child2_db = SqliteDatabase('child2.db')
