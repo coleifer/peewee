@@ -8,6 +8,7 @@
 #     //
 #    '
 import datetime
+import time
 import decimal
 import logging
 import operator
@@ -2046,9 +2047,9 @@ class Database(object):
             self.op_overrides)
 
     def execute_sql(self, sql, params=None, require_commit=True):
-        logger.debug((sql, params))
         with self.exception_wrapper():
             cursor = self.get_cursor()
+            start_time = time.time()
             try:
                 res = cursor.execute(sql, params or ())
             except Exception as exc:
@@ -2058,6 +2059,15 @@ class Database(object):
             else:
                 if require_commit and self.get_autocommit():
                     self.commit()
+        table_name = ""
+        try:
+            table_name = sql[sql.find("`",sql.find("FROM"))+1:]
+            table_name = table_name[:table_name.find('`')]
+        except:
+            pass
+        if not params:
+            params = ()
+        logger.debug((sql, params, len(params), table_name, ((time.time() - start_time)*1000)))
         return cursor
 
     def begin(self):
