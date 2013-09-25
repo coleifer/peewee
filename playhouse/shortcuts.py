@@ -22,6 +22,16 @@ def case(predicate, expression_tuples, default=None):
                 WHEN 2 THEN "two"
                 ELSE "?"
             END
+
+    Corresponding peewee:
+
+        Bar.select(Bar.foo, case(None, (
+            (Bar.foo == 1, "one"),
+            (Bar.foo == 2, "two")), "?"))
+
+        Bar.select(Bar.foo, case(Bar.foo, (
+            (1, "one"),
+            (2, "two")), "?"))
     """
     clauses = [R('CASE')]
     simple_case = predicate is not None
