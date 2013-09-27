@@ -19,6 +19,7 @@ Modules which expose higher-level python constructs:
 * :ref:`gfk`
 * :ref:`kv`
 * :ref:`proxy`
+* :ref:`shortcuts`
 * :ref:`signals`
 
 As well as tools for working with databases:
@@ -994,6 +995,65 @@ Proxy API
 
         Once initialized, the attributes and methods on ``obj`` can be accessed
         directly via the :py:class:`Proxy` instance.
+
+.. _shortcuts:
+
+Shortcuts
+---------
+
+This module contains helper functions for expressing things that would otherwise
+be somewhat verbose or cumbersome using peewee's APIs.
+
+.. py:function:: case(predicate, expression_tuples, default=None)
+
+    :param predicate: A SQL expression or can be ``None``.
+    :param expression_tuples: An iterable containing one or more 2-tuples
+      comprised of an expression and return value.
+    :param default: default if none of the cases match.
+
+    Example SQL case statements:
+
+    .. code-block:: sql
+
+        -- case with predicate --
+        SELECT "username",
+          CASE "user_id"
+            WHEN 1 THEN "one"
+            WHEN 2 THEN "two"
+            ELSE "?"
+          END
+        FROM "users";
+
+        -- case with no predicate (inline expressions) --
+        SELECT "username",
+          CASE
+            WHEN "user_id" = 1 THEN "one"
+            WHEN "user_id" = 2 THEN "two"
+            ELSE "?"
+          END
+        FROM "users";
+
+    Equivalent function invocations:
+
+    .. code-block:: python
+
+        User.select(User.username, case(User.user_id, (
+          (1, "one"),
+          (2, "two")), "?"))
+
+        User.select(User.username, case(None, (
+          (User.user_id == 1, "one"),  # note the double equals
+          (User.user_id == 2, "two")), "?"))
+
+    You can specify a value for the CASE expression using the ``alias()``
+    method:
+
+    .. code-block:: python
+
+        User.select(User.username, case(User.user_id, (
+          (1, "one"),
+          (2, "two")), "?").alias("id_string"))
+
 
 .. _signals:
 

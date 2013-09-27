@@ -25,10 +25,12 @@ def case(predicate, expression_tuples, default=None):
 
     Corresponding peewee:
 
+        # No predicate, use expressions.
         Bar.select(Bar.foo, case(None, (
             (Bar.foo == 1, "one"),
             (Bar.foo == 2, "two")), "?"))
 
+        # Predicate, will test for equality.
         Bar.select(Bar.foo, case(Bar.foo, (
             (1, "one"),
             (2, "two")), "?"))
