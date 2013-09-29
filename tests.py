@@ -1209,20 +1209,36 @@ class QueryResultWrapperTestCase(ModelTestCase):
         self.assertEqual(res, [])
 
     def test_indexing_fill_cache(self):
+        def assertUser(query_or_qr, idx):
+            self.assertEqual(query_or_qr[idx].username, 'u%d' % (idx + 1))
+
         self.create_users(10)
         uq = User.select().order_by(User.id)
         qc = len(self.queries())
-        self.assertEqual(uq[0].username, 'u1')
-        self.assertEqual(uq.count(), 10)
-        self.assertEqual(uq[1].username, 'u2')
-        self.assertEqual(uq[2].username, 'u3')
-        self.assertEqual(uq[3].username, 'u4')
-        self.assertEqual(len(self.queries()) - qc, 2)
 
-        # Iterate in reverse
+        # Ensure we can grab the first 5 users and that it only costs 1 query.
+        for i in range(5):
+            assertUser(uq, i)
+        self.assertEqual(len(self.queries()) - qc, 1)
+
+        # Iterate in reverse and ensure only costs 1 query.
         uq = User.select().order_by(User.id)
         for i in reversed(range(10)):
-            self.assertEqual(uq[i].username, 'u%d' % (i + 1))
+            assertUser(uq, i)
+        self.assertEqual(len(self.queries()) - qc, 2)
+
+        # Execute the query and get reference to result wrapper.
+        query = User.select().order_by(User.id)
+        query.execute()
+        qr = query._qr
+
+        # Getting the first user will populate the result cache with 1 obj.
+        assertUser(query, 0)
+        self.assertEqual(len(qr._result_cache), 1)
+
+        # Getting the last user will fill the cache.
+        assertUser(query, 9)
+        self.assertEqual(len(qr._result_cache), 10)
 
     def test_prepared(self):
         for i in range(2):
