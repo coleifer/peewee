@@ -1717,9 +1717,12 @@ class SelectQuery(Query):
         start = end = None
         res = self.execute()
         if isinstance(value, slice):
-            res.fill_cache(value.stop)
+            index = value.stop
         else:
-            res.fill_cache(value)
+            index = value
+        if index >= 0:
+            index += 1
+        res.fill_cache(index)
         return res._result_cache[value]
 
 class UpdateQuery(Query):

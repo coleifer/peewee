@@ -1213,11 +1213,16 @@ class QueryResultWrapperTestCase(ModelTestCase):
         uq = User.select().order_by(User.id)
         qc = len(self.queries())
         self.assertEqual(uq[0].username, 'u1')
-        uq.count()
+        self.assertEqual(uq.count(), 10)
         self.assertEqual(uq[1].username, 'u2')
         self.assertEqual(uq[2].username, 'u3')
         self.assertEqual(uq[3].username, 'u4')
         self.assertEqual(len(self.queries()) - qc, 2)
+
+        # Iterate in reverse
+        uq = User.select().order_by(User.id)
+        for i in reversed(range(10)):
+            self.assertEqual(uq[i].username, 'u%d' % (i + 1))
 
     def test_prepared(self):
         for i in range(2):
