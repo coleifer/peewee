@@ -1208,6 +1208,17 @@ class QueryResultWrapperTestCase(ModelTestCase):
         res = uq[10:]
         self.assertEqual(res, [])
 
+    def test_indexing_fill_cache(self):
+        self.create_users(10)
+        uq = User.select().order_by(User.id)
+        qc = len(self.queries())
+        self.assertEqual(uq[0].username, 'u1')
+        uq.count()
+        self.assertEqual(uq[1].username, 'u2')
+        self.assertEqual(uq[2].username, 'u3')
+        self.assertEqual(uq[3].username, 'u4')
+        self.assertEqual(len(self.queries()) - qc, 2)
+
     def test_prepared(self):
         for i in range(2):
             u = User.create(username='u%d' % i)
