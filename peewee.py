@@ -172,8 +172,7 @@ JOIN_LEFT_OUTER = 'left outer'
 JOIN_FULL = 'full'
 
 def dict_update(orig, extra):
-    new = {}
-    new.update(orig)
+    new = orig.copy()
     new.update(extra)
     return new
 
@@ -907,15 +906,16 @@ class QueryCompiler(object):
         return '', []
 
     def calculate_alias_map(self, query, start=1):
-        alias_map = {query.model_class: 't%s' % start}
+        make_alias = lambda model: model._meta.table_alias or 't%s' % start
+        alias_map = {query.model_class: make_alias(query.model_class)}
         for model, joins in query._joins.items():
             if model not in alias_map:
                 start += 1
-                alias_map[model] = 't%s' % start
+                alias_map[model] = make_alias(model)
             for join in joins:
                 if join.model_class not in alias_map:
                     start += 1
-                    alias_map[join.model_class] = 't%s' % start
+                    alias_map[join.model_class] = make_alias(join.model_class)
         return alias_map
 
     def generate_joins(self, joins, model_class, alias_map):
@@ -2183,7 +2183,7 @@ default_database = SqliteDatabase('peewee.db')
 
 class ModelOptions(object):
     def __init__(self, cls, database=None, db_table=None, indexes=None,
-                 order_by=None, primary_key=None, **kwargs):
+                 order_by=None, primary_key=None, table_alias=None, **kwargs):
         self.model_class = cls
         self.name = cls.__name__.lower()
         self.fields = {}
@@ -2195,6 +2195,7 @@ class ModelOptions(object):
         self.indexes = list(indexes or [])
         self.order_by = order_by
         self.primary_key = primary_key
+        self.table_alias = table_alias
 
         self.auto_increment = None
         self.rel = {}
