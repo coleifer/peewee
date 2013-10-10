@@ -957,6 +957,37 @@ class CompilerTestCase(BasePeeweeTestCase):
         self.assertEqual(sql, 'extract(? FROM "pub_date")')
         self.assertEqual(params, ['year'])
 
+    def test_custom_alias(self):
+        class Person(TestModel):
+            name = CharField()
+
+            class Meta:
+                table_alias = 'person_tbl'
+
+        class Pet(TestModel):
+            name = CharField()
+            owner = ForeignKeyField(Person)
+
+            class Meta:
+                table_alias = 'pet_tbl'
+
+        sq = Person.select().where(Person.name == 'peewee')
+        sql = normal_compiler.generate_select(sq)
+        self.assertEqual(
+            sql[0],
+            'SELECT person_tbl."id", person_tbl."name" FROM "person" AS '
+            'person_tbl WHERE (person_tbl."name" = ?)')
+
+        sq = Pet.select(Pet, Person.name).join(Person)
+        sql = normal_compiler.generate_select(sq)
+        self.assertEqual(
+            sql[0],
+            'SELECT pet_tbl."id", pet_tbl."name", pet_tbl."owner_id", '
+            'person_tbl."name" '
+            'FROM "pet" AS pet_tbl '
+            'INNER JOIN "person" AS person_tbl '
+            'ON (pet_tbl."owner_id" = person_tbl."id")')
+
 
 #
 # TEST CASE USED TO PROVIDE ACCESS TO DATABASE
