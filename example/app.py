@@ -5,8 +5,7 @@ from flask import g
 from flask import redirect
 from flask import request
 from flask import session
-from flask import url_for
-        abort, render_template, flash
+from flask import url_for, abort, render_template, flash
 from functools import wraps
 from hashlib import md5
 from peewee import *
