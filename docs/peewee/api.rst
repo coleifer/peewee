@@ -878,11 +878,13 @@ Query Types
         indicates that this query should only return distinct rows.  results in a
         ``SELECT DISTINCT`` query.
 
-    .. py:method:: for_update([for_update=True])
+    .. py:method:: for_update([for_update=True[, nowait=False]])
 
         :rtype: :py:class:`SelectQuery`
 
-        indicates that this query should lock rows for update
+        Indicate that this query should lock rows for update.  If ``nowait`` is
+        ``True`` then the database will raise an ``OperationalError`` if it
+        cannot obtain the lock.
 
     .. py:method:: naive()
 
