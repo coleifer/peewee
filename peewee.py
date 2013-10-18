@@ -1009,8 +1009,11 @@ class QueryCompiler(object):
             parts.append('LIMIT %s' % limit)
         if query._offset:
             parts.append('OFFSET %s' % query._offset)
-        if query._for_update:
+        for_update, no_wait = query._for_update
+        if for_update:
             parts.append('FOR UPDATE')
+            if no_wait:
+                parts.append('NOWAIT')
 
         return ' '.join(parts), params
 
@@ -1530,7 +1533,7 @@ class SelectQuery(Query):
         self._limit = None
         self._offset = None
         self._distinct = False
-        self._for_update = False
+        self._for_update = (False, False)
         self._naive = False
         self._tuples = False
         self._dicts = False
@@ -1602,8 +1605,8 @@ class SelectQuery(Query):
         self._distinct = is_distinct
 
     @returns_clone
-    def for_update(self, for_update=True):
-        self._for_update = for_update
+    def for_update(self, for_update=True, nowait=False):
+        self._for_update = (for_update, nowait)
 
     @returns_clone
     def naive(self, naive=True):

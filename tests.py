@@ -62,9 +62,16 @@ print_('TESTING USING PYTHON %s' % sys.version)
 if BACKEND == 'postgresql':
     database_class = PostgresqlDatabase
     database_name = 'peewee_test'
+    import psycopg2
+    OperationalError = psycopg2.OperationalError
 elif BACKEND == 'mysql':
     database_class = MySQLDatabase
     database_name = 'peewee_test'
+    try:
+        import MySQLdb as mysql
+    except ImportError:
+        import pymysql as mysql
+    OperationalError = mysql.OperationalError
 elif BACKEND == 'apsw':
     from playhouse.apsw_ext import *
     database_class = APSWDatabase
@@ -74,6 +81,7 @@ else:
     database_class = SqliteDatabase
     database_name = 'tmp.db'
     import sqlite3
+    OperationalError = sqlite3.OperationalError
     print_('SQLITE VERSION: %s' % sqlite3.version)
 
 #
@@ -3090,6 +3098,35 @@ if test_db.for_update:
             res = new_db.execute_sql('select username from users where id = %s;' % u1.id)
             username = res.fetchone()[0]
             self.assertEqual(username, 'u1_edited')
+
+        def test_for_update_exc(self):
+            u1 = self.create_user('u1')
+            test_db.set_autocommit(False)
+
+            user = (User
+                    .select()
+                    .where(User.username == 'u1')
+                    .for_update(nowait=True)
+                    .execute())
+
+            # Open up a second conn.
+            new_db = database_class(database_name)
+
+            class User2(User):
+                class Meta:
+                    database = new_db
+                    db_table = User._meta.db_table
+
+            # Select the username -- it will raise an error.
+            def try_lock():
+                user2 = (User2
+                         .select()
+                         .where(User.username == 'u1')
+                         .for_update(nowait=True)
+                         .execute())
+            self.assertRaises(OperationalError, try_lock)
+            test_db.rollback()
+
 
 elif TEST_VERBOSITY > 0:
     print_('Skipping "for update" tests')
