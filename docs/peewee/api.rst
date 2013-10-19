@@ -606,6 +606,23 @@ Fields
         related to.
 
 
+.. py:class:: CompositeKey(*fields)
+
+    Specify a composite primary key for a model.  Unlike the other fields, a
+    composite key is defined in the model's ``Meta`` class after the fields
+    have been defined.  It takes as parameters the string names of the fields
+    to use as the primary key:
+
+    .. code-block:: python
+
+        class BlogTagThrough(Model):
+            blog = ForeignKeyField(Blog, related_name='tags')
+            tag = ForeignKeyField(Tag, related_name='blogs')
+
+            class Meta:
+                primary_key = CompositeKey('blog', 'tag')
+
+
 .. _query-types:
 
 Query Types
