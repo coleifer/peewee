@@ -1496,6 +1496,23 @@ Database and its subclasses
         :param Field date_field: field instance storing a datetime, date or time.
         :rtype: an expression object.
 
+    .. py:method:: sql_error_handler(exception, sql, params, require_commit)
+
+        This hook is called when an error is raised executing a query, allowing
+        your application to inject custom error handling behavior.  The default
+        implementation simply reraises the exception.
+
+        .. code-block:: python
+
+            class SqliteDatabaseCustom(SqliteDatabase):
+                def sql_error_handler(self, exception, sql, params, require_commit):
+                    # Perform some custom behavior, for example close the
+                    # connection to the database.
+                    self.close()
+
+                    # Re-raise the exception.
+                    raise exception
+
 
 .. py:class:: SqliteDatabase(Database)
 
