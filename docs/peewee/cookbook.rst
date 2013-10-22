@@ -178,9 +178,11 @@ instantiate your database with ``threadlocals=True`` (*recommended*):
 
     concurrent_db = SqliteDatabase('stats.db', threadlocals=True)
 
-The above implementation stores connection state in a thread local and will only
-use that connection for a given thread.  Pysqlite can share a connection across
-threads, so if you would prefer to reuse a connection in multiple threads:
+With the above peewee stores connection state in a thread local; each thread gets its
+own separate connection.
+
+Alternatively, Python sqlite3 module can share a connection across different threads,
+but you have to disable runtime checks to reuse the single connection:
 
 .. code-block:: python
 
