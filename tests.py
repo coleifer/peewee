@@ -1545,6 +1545,25 @@ class ModelAPITestCase(ModelTestCase):
         self.assertEqual(b.user, u)
         self.assertRaises(User.DoesNotExist, getattr, b2, 'user')
 
+    def test_fk_cache_invalidated(self):
+        u1 = self.create_user('u1')
+        u2 = self.create_user('u2')
+        b = Blog.create(user=u1, title='b')
+
+        blog = Blog.get(Blog.pk == b)
+        qc = len(self.queries())
+        self.assertEqual(blog.user.id, u1.id)
+        self.assertEqual(len(self.queries()), qc + 1)
+
+        blog.user = u2.id
+        self.assertEqual(blog.user.id, u2.id)
+        self.assertEqual(len(self.queries()), qc + 2)
+
+        # No additional query.
+        blog.user = u2.id
+        self.assertEqual(blog.user.id, u2.id)
+        self.assertEqual(len(self.queries()), qc + 2)
+
     def test_fk_ints(self):
         c1 = Category.create(name='c1')
         c2 = Category.create(name='c2', parent=c1.id)

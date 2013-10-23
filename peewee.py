@@ -630,7 +630,10 @@ class RelationDescriptor(FieldDescriptor):
             instance._data[self.att_name] = value.get_id()
             instance._obj_cache[self.att_name] = value
         else:
+            orig_value = instance._data.get(self.att_name)
             instance._data[self.att_name] = value
+            if orig_value != value and self.att_name in instance._obj_cache:
+                del instance._obj_cache[self.att_name]
 
 class ReverseRelationDescriptor(object):
     def __init__(self, field):
