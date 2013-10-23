@@ -123,9 +123,7 @@ def _sqlite_date_part(lookup_type, datetime_string):
     return getattr(dt, lookup_type)
 
 if psycopg2:
-    import psycopg2.extensions
-    psycopg2.extensions.register_type(psycopg2.extensions.UNICODE)
-    psycopg2.extensions.register_type(psycopg2.extensions.UNICODEARRAY)
+    from psycopg2 import extensions as pg_extensions
 
 # Peewee
 logger = logging.getLogger('peewee')
@@ -2005,10 +2003,16 @@ class PostgresqlDatabase(Database):
     reserved_tables = ['user']
     sequences = True
 
+    register_unicode = True
+
     def _connect(self, database, **kwargs):
         if not psycopg2:
             raise ImproperlyConfigured('psycopg2 must be installed.')
-        return psycopg2.connect(database=database, **kwargs)
+        conn = psycopg2.connect(database=database, **kwargs)
+        if self.register_unicode:
+            pg_extensions.register_type(pg_extensions.UNICODE, conn)
+            pg_extensions.register_type(pg_extensions.UNICODEARRAY, conn)
+        return conn
 
     def last_insert_id(self, cursor, model):
         seq = model._meta.primary_key.sequence

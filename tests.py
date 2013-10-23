@@ -3149,3 +3149,38 @@ if test_db.sequences:
 
 elif TEST_VERBOSITY > 0:
     print_('Skipping "sequence" tests')
+
+if database_class is PostgresqlDatabase:
+    class TestUnicodeConversion(ModelTestCase):
+        requires = [User]
+
+        def setUp(self):
+            super(TestUnicodeConversion, self).setUp()
+
+            # Create a user object with UTF-8 encoded username.
+            ustr = ulit('Ísland')
+            self.user = User.create(username=ustr)
+
+        def tearDown(self):
+            super(TestUnicodeConversion, self).tearDown()
+            test_db.register_unicode = True
+            test_db.close()
+
+        def reset_encoding(self, encoding):
+            test_db.close()
+            conn = test_db.get_conn()
+            conn.set_client_encoding(encoding)
+
+        def test_unicode_conversion(self):
+            # Turn off unicode conversion on a per-connection basis.
+            test_db.register_unicode = False
+            self.reset_encoding('LATIN1')
+
+            u = User.get(User.id == self.user.id)
+            self.assertFalse(u.username == self.user.username)
+
+            test_db.register_unicode = True
+            self.reset_encoding('LATIN1')
+
+            u = User.get(User.id == self.user.id)
+            self.assertEqual(u.username, self.user.username)
