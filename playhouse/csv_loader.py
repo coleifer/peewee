@@ -81,7 +81,7 @@ class RowConverter(object):
     def is_boolean(self, value):
         return value.lower() in ('t', 'f', 'true', 'false')
 
-    @field(BareField, null=True)
+    @field(BareField, default='')
     def default(self, value):
         return True
 
@@ -192,6 +192,7 @@ class Loader(object):
     def model_class(self, field_names, fields):
         model_name = os.path.splitext(os.path.basename(self.filename))[0]
         attrs = dict(zip(field_names, fields))
+        attrs['_auto_pk'] = PrimaryKeyField()
         klass = type(model_name.title(), (Model,), attrs)
         klass._meta.database = self.database
         return klass
@@ -213,11 +214,13 @@ class Loader(object):
         with self.database.transaction():
             ModelClass.create_table(True)
             for row in reader:
-                inst = ModelClass()
-                for i, field_name in enumerate(self.field_names):
-                    if row[i]:
-                        setattr(inst, field_name, row[i])
-                inst.save()
+                insert = {}
+                for field_name, value in zip(self.field_names, row):
+                    if value:
+                        value = value.decode('utf-8')
+                        insert[field_name] = value
+                if insert:
+                    ModelClass.insert(**insert).execute()
 
         return ModelClass
 
