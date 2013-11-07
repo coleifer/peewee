@@ -21,6 +21,7 @@ import re
 from collections import OrderedDict
 
 from peewee import *
+from peewee import Database
 
 
 class RowConverter(object):
@@ -153,7 +154,7 @@ class Loader(object):
     Load the contents of a CSV file into a database and return a model class
     suitable for working with the CSV data.
 
-    :param database: a peewee Database instance.
+    :param db_or_model: a peewee Database instance or a Model class.
     :param str filename: the filename of the CSV file.
     :param list fields: A list of peewee Field() instances appropriate to
         the values in the CSV file.
@@ -162,10 +163,9 @@ class Loader(object):
     :param converter: A RowConverter instance to use.
     :param reader_kwargs: Arbitrary arguments to pass to the CSV reader.
     """
-    def __init__(self, database, filename, fields=None, field_names=None,
+    def __init__(self, db_or_model, filename, fields=None, field_names=None,
                  has_header=True, sample_size=10, converter=None,
                  **reader_kwargs):
-        self.database = database
         self.filename = filename
         self.fields = fields
         self.field_names = field_names
@@ -173,6 +173,19 @@ class Loader(object):
         self.sample_size = sample_size
         self.converter = converter
         self.reader_kwargs = reader_kwargs
+
+        if isinstance(db_or_model, Database):
+            self.database = db_or_model
+            self.model = None
+        else:
+            self.model = db_or_model
+            self.database = self.model._meta.database
+            self.fields = self.model._meta.get_fields()
+            self.field_names = self.model._meta.get_field_names()
+            # If using an auto-incrementing primary key, ignore it.
+            if self.model._meta.auto_increment:
+                self.fields = self.fields[1:]
+                self.field_names = self.field_names[1:]
 
     def clean_field_name(self, s):
         return re.sub('[^a-z0-9]+', '_', s.lower())
@@ -199,7 +212,9 @@ class Loader(object):
         fh = open(self.filename, 'r')
         return csv.reader(fh, **self.reader_kwargs)
 
-    def model_class(self, field_names, fields):
+    def get_model_class(self, field_names, fields):
+        if self.model:
+            return self.model
         model_name = os.path.splitext(os.path.basename(self.filename))[0]
         attrs = dict(zip(field_names, fields))
         attrs['_auto_pk'] = PrimaryKeyField()
@@ -219,7 +234,7 @@ class Loader(object):
         elif self.has_header:
             reader.next()
 
-        ModelClass = self.model_class(self.field_names, self.fields)
+        ModelClass = self.get_model_class(self.field_names, self.fields)
 
         with self.database.transaction():
             ModelClass.create_table(True)
@@ -227,15 +242,14 @@ class Loader(object):
                 insert = {}
                 for field_name, value in zip(self.field_names, row):
                     if value:
-                        value = value.decode('utf-8')
-                        insert[field_name] = value
+                        insert[field_name] = value.decode('utf-8')
                 if insert:
                     ModelClass.insert(**insert).execute()
 
         return ModelClass
 
-def load_csv(database, filename, fields=None, field_names=None, has_header=True,
-             sample_size=10, converter=None, **reader_kwargs):
-    loader = Loader(database, filename, fields, field_names, has_header,
+def load_csv(db_or_model, filename, fields=None, field_names=None,
+             has_header=True, sample_size=10, converter=None, **reader_kwargs):
+    loader = Loader(db_or_model, filename, fields, field_names, has_header,
                     sample_size, converter, **reader_kwargs)
     return loader.load()
