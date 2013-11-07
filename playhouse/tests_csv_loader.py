@@ -71,8 +71,44 @@ class TestCSVConversion(unittest.TestCase):
             self.float_sal,
             field_names=['f1', 'f2', 'f3', 'f4', 'f5'],
             has_header=False)
+        self.assertEqual(ModelClass._meta.get_field_names(), [
+            '_auto_pk', 'f1', 'f2', 'f3', 'f4', 'f5'])
         self.assertData(ModelClass, [
             (10, 'F1 L1', date(1983, 1, 1), 10000., 't'),
             (20, 'F2 L2', date(1983, 1, 2), 20000.5, 'f')])
+
+    def test_no_header_no_fieldnames(self):
+        ModelClass = self.load(
+            self.simple,
+            self.float_sal,
+            has_header=False)
         self.assertEqual(ModelClass._meta.get_field_names(), [
-            '_auto_pk', 'f1', 'f2', 'f3', 'f4', 'f5'])
+            '_auto_pk', 'field_0', 'field_1', 'field_2', 'field_3', 'field_4'])
+
+    def test_mismatch_types(self):
+        ModelClass = self.load(
+            self.header,
+            self.simple,
+            self.mismatch)
+        self.assertData(ModelClass, [
+            ('10', 'F1 L1', '1983-01-01', '10000', 't'),
+            ('foo', 'F4 L4', 'dob', 'sal', 'x')])
+
+    def test_fields(self):
+        fields = [
+            IntegerField(),
+            CharField(),
+            DateField(),
+            FloatField(),
+            CharField()]
+        ModelClass = self.load(
+            self.header,
+            self.simple,
+            self.float_sal,
+            fields=fields)
+        self.assertEqual(
+            map(type, fields),
+            map(type, ModelClass._meta.get_fields()[1:]))
+        self.assertData(ModelClass, [
+            (10, 'F1 L1', date(1983, 1, 1), 10000., 't'),
+            (20, 'F2 L2', date(1983, 1, 2), 20000.5, 'f')])
