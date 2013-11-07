@@ -35,6 +35,9 @@ class TestCSVConversion(unittest.TestCase):
     only_name = ',"F3 L3",,,'
     mismatch = 'foo,F4 L4,dob,sal,x'
 
+    def setUp(self):
+        db.execute_sql('drop table if exists csv_test;')
+
     def build_csv(self, *lines):
         return '\r\n'.join(lines)
 
@@ -46,7 +49,8 @@ class TestCSVConversion(unittest.TestCase):
         return TestLoader(**loader_kwargs).load()
 
     def assertData(self, ModelClass, expected):
-        query = ModelClass.select().order_by(ModelClass.name).tuples()
+        name_field = ModelClass._meta.get_fields()[2]
+        query = ModelClass.select().order_by(name_field).tuples()
         self.assertEqual([row[1:] for row in query], expected)
 
     def test_defaults(self):
@@ -60,3 +64,15 @@ class TestCSVConversion(unittest.TestCase):
             (20, 'F2 L2', date(1983, 1, 2), 20000.5, 'f'),
             (0, 'F3 L3', None, 0., ''),
         ])
+
+    def test_no_header(self):
+        ModelClass = self.load(
+            self.simple,
+            self.float_sal,
+            field_names=['f1', 'f2', 'f3', 'f4', 'f5'],
+            has_header=False)
+        self.assertData(ModelClass, [
+            (10, 'F1 L1', date(1983, 1, 1), 10000., 't'),
+            (20, 'F2 L2', date(1983, 1, 2), 20000.5, 'f')])
+        self.assertEqual(ModelClass._meta.get_field_names(), [
+            '_auto_pk', 'f1', 'f2', 'f3', 'f4', 'f5'])

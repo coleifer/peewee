@@ -117,7 +117,7 @@ class RowConverter(_CSVReader):
         if self.has_header:
             header, rows = rows[0], rows[1:]
         else:
-            header = ['field_%d' for i in range(len(rows[0]))]
+            header = ['field_%d' % i for i in range(len(rows[0]))]
         return header, rows
 
     def get_checks(self):
@@ -232,7 +232,8 @@ class Loader(_CSVReader):
         if not self.fields:
             self.analyze_csv()
         if not self.field_names and not self.has_header:
-            self.field_names = ['field_%s' for i in range(len(self.fields))]
+            self.field_names = [
+                'field_%d' % i for i in range(len(self.fields))]
 
         with self.get_reader(self.filename, **self.reader_kwargs) as reader:
             if not self.field_names:
