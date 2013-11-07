@@ -160,7 +160,11 @@ class Loader(object):
         the values in the CSV file.
     :param list field_names: A list of names to use for the fields.
     :param bool has_header: Whether the first row of the CSV file is a header.
+    :param int sample_size: Number of rows to introspect if fields are not
+        defined.
     :param converter: A RowConverter instance to use.
+    :param str db_table: Name of table to store data in (if not specified, the
+        table name will be derived from the CSV filename).
     :param reader_kwargs: Arbitrary arguments to pass to the CSV reader.
     """
     def __init__(self, db_or_model, filename, fields=None, field_names=None,
@@ -256,3 +260,4 @@ def load_csv(db_or_model, filename, fields=None, field_names=None,
     loader = Loader(db_or_model, filename, fields, field_names, has_header,
                     sample_size, converter, db_table, **reader_kwargs)
     return loader.load()
+load_csv.__doc__ = Loader.__doc__
