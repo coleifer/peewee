@@ -165,7 +165,7 @@ class Loader(object):
     """
     def __init__(self, db_or_model, filename, fields=None, field_names=None,
                  has_header=True, sample_size=10, converter=None,
-                 **reader_kwargs):
+                 db_table=None, **reader_kwargs):
         self.filename = filename
         self.fields = fields
         self.field_names = field_names
@@ -177,9 +177,11 @@ class Loader(object):
         if isinstance(db_or_model, Database):
             self.database = db_or_model
             self.model = None
+            self.db_table = os.path.splitext(os.path.basename(filename))[0]
         else:
             self.model = db_or_model
             self.database = self.model._meta.database
+            self.db_table = self.model._meta.db_table
             self.fields = self.model._meta.get_fields()
             self.field_names = self.model._meta.get_field_names()
             # If using an auto-incrementing primary key, ignore it.
@@ -215,11 +217,11 @@ class Loader(object):
     def get_model_class(self, field_names, fields):
         if self.model:
             return self.model
-        model_name = os.path.splitext(os.path.basename(self.filename))[0]
         attrs = dict(zip(field_names, fields))
         attrs['_auto_pk'] = PrimaryKeyField()
-        klass = type(model_name.title(), (Model,), attrs)
+        klass = type(self.db_table.title(), (Model,), attrs)
         klass._meta.database = self.database
+        klass._meta.db_table = self.db_table
         return klass
 
     def load(self):
@@ -249,7 +251,8 @@ class Loader(object):
         return ModelClass
 
 def load_csv(db_or_model, filename, fields=None, field_names=None,
-             has_header=True, sample_size=10, converter=None, **reader_kwargs):
+             has_header=True, sample_size=10, converter=None,
+             db_table=None, **reader_kwargs):
     loader = Loader(db_or_model, filename, fields, field_names, has_header,
-                    sample_size, converter, **reader_kwargs)
+                    sample_size, converter, db_table, **reader_kwargs)
     return loader.load()
