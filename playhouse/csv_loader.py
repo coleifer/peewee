@@ -1,14 +1,18 @@
 """
 Peewee helper for loading CSV data into a database.
 
-db = SqliteDatabase(':memory:')
+Load the users CSV file into the database and return a Model for accessing
+the data:
 
-# Load the users CSV file into the database and return a Model for accessing
-# the data.
-User = load_csv.load(db, 'users.csv')
+    from playhouse.csv_loader import load_csv
+    db = SqliteDatabase(':memory:')
+    User = load_csv(db, 'users.csv')
 
-# Provide column types.
-Payments = load_csv.load(db, 'payments.csv', (CharField, DecimalField))
+Provide explicit field types and/or field names:
+
+    fields = [IntegerField(), IntegerField(), DateTimeField(), DecimalField()]
+    field_names = ['from_acct', 'to_acct', 'timestamp', 'amount']
+    Payments = load_csv(db, 'payments.csv', fields, field_names)
 """
 import csv
 import datetime
@@ -141,6 +145,19 @@ class RowConverter(object):
 
 
 class Loader(object):
+    """
+    Load the contents of a CSV file into a database and return a model class
+    suitable for working with the CSV data.
+
+    :param database: a peewee Database instance.
+    :param str filename: the filename of the CSV file.
+    :param list fields: A list of peewee Field() instances appropriate to
+        the values in the CSV file.
+    :param list field_names: A list of names to use for the fields.
+    :param bool has_header: Whether the first row of the CSV file is a header.
+    :param converter: A RowConverter instance to use.
+    :param reader_kwargs: Arbitrary arguments to pass to the CSV reader.
+    """
     def __init__(self, database, filename, fields=None, field_names=None,
                  has_header=True, converter=None, **reader_kwargs):
         self.database = database
@@ -202,8 +219,8 @@ class Loader(object):
 
         return ModelClass
 
-def load(database, filename, fields=None, field_names=None, has_header=True,
-         converter=None, **reader_kwargs):
+def load_csv(database, filename, fields=None, field_names=None, has_header=True,
+             converter=None, **reader_kwargs):
     loader = Loader(database, filename, fields, field_names, has_header,
                     converter, **reader_kwargs)
     return loader.load()
