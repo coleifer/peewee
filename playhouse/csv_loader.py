@@ -178,7 +178,9 @@ class Loader(object):
 
     def analyze_csv(self):
         converter = self.get_converter()
-        header, rows = converter.extract_rows(self.filename)
+        header, rows = converter.extract_rows(
+            self.filename,
+            **self.reader_kwargs)
         self.fields = converter.analyze(rows)
         if not self.field_names:
             self.field_names = map(self.clean_field_name, header)
