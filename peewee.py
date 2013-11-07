@@ -21,6 +21,7 @@ from copy import deepcopy
 from inspect import isclass
 
 __all__ = [
+    'BareField',
     'BigIntegerField',
     'BlobField',
     'BooleanField',
@@ -431,6 +432,10 @@ class Field(Node):
     def __hash__(self):
         return hash(self.name + '.' + self.model_class.__name__)
 
+class BareField(Field):
+    db_field = 'bare'
+    template = ''
+
 class IntegerField(Field):
     db_field = 'int'
     coerce = int
@@ -737,6 +742,7 @@ class CompositeKey(object):
 
 class QueryCompiler(object):
     field_map = {
+        'bare': '',
         'bigint': 'BIGINT',
         'blob': 'BLOB',
         'bool': 'SMALLINT',
