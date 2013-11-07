@@ -181,7 +181,8 @@ class Loader(object):
         if isinstance(db_or_model, Database):
             self.database = db_or_model
             self.model = None
-            self.db_table = os.path.splitext(os.path.basename(filename))[0]
+            self.db_table = (db_table or
+                             os.path.splitext(os.path.basename(filename))[0])
         else:
             self.model = db_or_model
             self.database = self.model._meta.database
