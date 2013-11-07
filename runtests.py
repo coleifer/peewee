@@ -25,6 +25,7 @@ def get_option_parser():
 
     cases = optparse.OptionGroup(parser, 'Individual test module options')
     cases.add_option('--apsw', dest='apsw', default=False, action='store_true', help='apsw tests (requires apsw)')
+    cases.add_option('--csv', dest='csv', default=False, action='store_true', help='csv tests')
     cases.add_option('--gfk', dest='gfk', default=False, action='store_true', help='gfk tests')
     cases.add_option('--kv', dest='kv', default=False, action='store_true', help='key/value store tests')
     cases.add_option('--migrations', dest='migrations', default=False, action='store_true', help='migration helper tests (requires psycopg2)')
@@ -50,6 +51,9 @@ def collect_modules(options):
             modules.append(tests_apsw)
         except ImportError:
             print_('Unable to import apsw tests, skipping')
+    if xtra(options.csv):
+        from playhouse import tests_csv_loader
+        modules.append(tests_csv_loader)
     if xtra(options.gfk):
         from playhouse import tests_gfk
         modules.append(tests_gfk)

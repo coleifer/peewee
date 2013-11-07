@@ -19,12 +19,21 @@ import datetime
 import os
 import re
 from collections import OrderedDict
+from contextlib import contextmanager
 
 from peewee import *
 from peewee import Database
 
 
-class RowConverter(object):
+class _CSVReader(object):
+    @contextmanager
+    def get_reader(self, filename, **reader_kwargs):
+        fh = open(filename, 'r')
+        reader = csv.reader(fh, **reader_kwargs)
+        yield reader
+        fh.close()
+
+class RowConverter(_CSVReader):
     """
     Simple introspection utility to convert a CSV file into a list of headers
     and column types.
@@ -82,10 +91,6 @@ class RowConverter(object):
     def is_date(self, value):
         return self.matches_date(value, self.date_formats)
 
-    @field(BooleanField, default=False)
-    def is_boolean(self, value):
-        return value.lower() in ('t', 'f', 'true', 'false')
-
     @field(BareField, default='')
     def default(self, value):
         return True
@@ -102,8 +107,7 @@ class RowConverter(object):
         """
         rows = []
         rows_to_read = self.sample_size
-        with open(filename) as fh:
-            reader = csv.reader(fh, **reader_kwargs)
+        with self.get_reader(filename, **reader_kwargs) as reader:
             if self.has_header:
                 rows_to_read += 1
             for i, row in enumerate(reader):
@@ -123,7 +127,6 @@ class RowConverter(object):
             self.is_datetime,
             self.is_integer,
             self.is_float,
-            self.is_boolean,
             self.default]
 
     def analyze(self, rows):
@@ -149,7 +152,7 @@ class RowConverter(object):
         return column_types
 
 
-class Loader(object):
+class Loader(_CSVReader):
     """
     Load the contents of a CSV file into a database and return a model class
     suitable for working with the CSV data.
@@ -215,10 +218,6 @@ class Loader(object):
         if not self.field_names:
             self.field_names = map(self.clean_field_name, header)
 
-    def get_reader(self):
-        fh = open(self.filename, 'r')
-        return csv.reader(fh, **self.reader_kwargs)
-
     def get_model_class(self, field_names, fields):
         if self.model:
             return self.model
@@ -235,23 +234,23 @@ class Loader(object):
         if not self.field_names and not self.has_header:
             self.field_names = ['field_%s' for i in range(len(self.fields))]
 
-        reader = self.get_reader()
-        if not self.field_names:
-            self.field_names = map(self.clean_field_name, reader.next())
-        elif self.has_header:
-            reader.next()
+        with self.get_reader(self.filename, **self.reader_kwargs) as reader:
+            if not self.field_names:
+                self.field_names = map(self.clean_field_name, reader.next())
+            elif self.has_header:
+                reader.next()
 
-        ModelClass = self.get_model_class(self.field_names, self.fields)
+            ModelClass = self.get_model_class(self.field_names, self.fields)
 
-        with self.database.transaction():
-            ModelClass.create_table(True)
-            for row in reader:
-                insert = {}
-                for field_name, value in zip(self.field_names, row):
-                    if value:
-                        insert[field_name] = value.decode('utf-8')
-                if insert:
-                    ModelClass.insert(**insert).execute()
+            with self.database.transaction():
+                ModelClass.create_table(True)
+                for row in reader:
+                    insert = {}
+                    for field_name, value in zip(self.field_names, row):
+                        if value:
+                            insert[field_name] = value.decode('utf-8')
+                    if insert:
+                        ModelClass.insert(**insert).execute()
 
         return ModelClass
 
