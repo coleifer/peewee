@@ -27,6 +27,10 @@ class RowConverter(object):
     """
     Simple introspection utility to convert a CSV file into a list of headers
     and column types.
+
+    :param database: a peewee Database object.
+    :param bool has_header: whether the first row of CSV is a header row.
+    :param int sample_size: number of rows to introspect
     """
     date_formats = [
         '%Y-%m-%d',
@@ -159,12 +163,14 @@ class Loader(object):
     :param reader_kwargs: Arbitrary arguments to pass to the CSV reader.
     """
     def __init__(self, database, filename, fields=None, field_names=None,
-                 has_header=True, converter=None, **reader_kwargs):
+                 has_header=True, sample_size=10, converter=None,
+                 **reader_kwargs):
         self.database = database
         self.filename = filename
         self.fields = fields
         self.field_names = field_names
         self.has_header = has_header
+        self.sample_size = sample_size
         self.converter = converter
         self.reader_kwargs = reader_kwargs
 
@@ -174,14 +180,18 @@ class Loader(object):
     def get_converter(self):
         return self.converter or RowConverter(
             self.database,
-            has_header=self.has_header)
+            has_header=self.has_header,
+            sample_size=self.sample_size)
 
     def analyze_csv(self):
         converter = self.get_converter()
         header, rows = converter.extract_rows(
             self.filename,
             **self.reader_kwargs)
-        self.fields = converter.analyze(rows)
+        if rows:
+            self.fields = converter.analyze(rows)
+        else:
+            self.fields = [converter.default.field() for _ in header]
         if not self.field_names:
             self.field_names = map(self.clean_field_name, header)
 
@@ -225,7 +235,7 @@ class Loader(object):
         return ModelClass
 
 def load_csv(database, filename, fields=None, field_names=None, has_header=True,
-             converter=None, **reader_kwargs):
+             sample_size=10, converter=None, **reader_kwargs):
     loader = Loader(database, filename, fields, field_names, has_header,
-                    converter, **reader_kwargs)
+                    sample_size, converter, **reader_kwargs)
     return loader.load()
