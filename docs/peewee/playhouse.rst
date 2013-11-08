@@ -26,6 +26,7 @@ As well as tools for working with databases:
 
 * :ref:`pwiz`
 * :ref:`migrate`
+* :ref:`csv_loader`
 * :ref:`test_utils`
 
 
@@ -1308,6 +1309,87 @@ Renaming a table
 
     with my_db.transaction():
         migrator.rename_table(Story, 'stories')
+
+
+.. _csv_loader:
+
+CSV Loader
+----------
+
+This module contains helpers for loading CSV data into a database.  CSV files can
+be introspected to generate an appropriate model class for working with the data.
+This makes it really easy to explore the data in a CSV file using Peewee and SQL.
+
+Here is how you would load a CSV file into an in-memory SQLite database.  The
+call to :py:func:`load_csv` returns a :py:class:`Model` instance suitable for
+working with the CSV data:
+
+.. code-block:: python
+
+    from playhouse.csv_loader import load_csv
+    db = SqliteDatabase(':memory:')
+    ZipToTZ = load_csv(db, 'zip_to_tz.csv')
+
+Now we can run queries using the new model.
+
+.. code-block:: pycon
+
+    # Get the timezone for a zipcode.
+    >>> ZipToTZ.get(ZipToTZ.zip == 66047).timezone
+    'US/Central'
+
+    # Get all the zipcodes for my town.
+    >>> [row.zip for row in ZipToTZ.select().where(
+    ...     (ZipToTZ.city == 'Lawrence') && (ZipToTZ.state == 'KS'))]
+    [66044, 66045, 66046, 66047, 66049]
+
+For more information and examples check out this `blog post <http://charlesleifer.com/blog/using-peewee-to-explore-csv-files/>`_.
+
+
+CSV Loader API
+^^^^^^^^^^^^^^
+
+.. py:function:: load_csv(db_or_model, filename[, fields=None[, field_names=None[, has_header=True[, sample_size=10[, converter=None[, db_table=None[, **reader_kwargs]]]]]]])
+
+    Load a CSV file into the provided database or model class, returning a
+    :py:class:`Model` suitable for working with the CSV data.
+
+    :param db_or_model: Either a :py:class:`Database` instance or a :py:class:`Model` class.  If a model is not provided, one will be automatically generated for you.
+    :param str filename: Path of CSV file to load.
+    :param list fields: A list of :py:class:`Field` instances mapping to each column in the CSV.  This allows you to manually specify the column types.  If not provided, and a model is not provided, the field types will be determined automatically.
+    :param list field_names: A list of strings to use as field names for each column in the CSV.  If not provided, and a model is not provided, the field names will be determined by looking at the header row of the file.  If no header exists, then the fields will be given generic names.
+    :param bool has_header: Whether the first row is a header.
+    :param int sample_size: Number of rows to look at when introspecting data types.  If set to ``0``, then a generic field type will be used for all fields.
+    :param RowConverter converter: a :py:class:`RowConverter` instance to use for introspecting the CSV.  If not provided, one will be created.
+    :param str db_table: The name of the database table to load data into.  If this value is not provided, it will be determined using the filename of the CSV file.  If a model is provided, this value is ignored.
+    :param reader_kwargs: Arbitrary keyword arguments to pass to the ``csv.reader`` object, such as the dialect, separator, etc.
+    :rtype: A :py:class:`Model` suitable for querying the CSV data.
+
+    Basic example -- field names and types will be introspected:
+
+    .. code-block:: python
+
+        from playhouse.csv_loader import *
+        db = SqliteDatabase(':memory:')
+        User = load_csv(db, 'users.csv')
+
+    Using a pre-defined model:
+
+    .. code-block:: python
+
+        class ZipToTZ(Model):
+            zip = IntegerField()
+            timezone = CharField()
+
+        load_csv(ZipToTZ, 'zip_to_tz.csv')
+
+    Specifying fields:
+
+    .. code-block:: python
+
+        fields = [DecimalField(), IntegerField(), IntegerField(), DateField()]
+        field_names = ['amount', 'from_acct', 'to_acct', 'timestamp']
+        Payments = load_csv(db, 'payments.csv', fields=fields, field_names=field_names, has_header=False)
 
 
 .. _test_utils:
