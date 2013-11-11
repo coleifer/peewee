@@ -1469,6 +1469,7 @@ class Query(Node):
         self._query_ctx = model_class
         self._joins = {self.model_class: []} # Join graph as adjacency list.
         self._where = None
+        self._execution_time = None
 
     def __repr__(self):
         sql, params = self.sql()
@@ -1590,7 +1591,9 @@ class Query(Node):
 
     def _execute(self):
         sql, params = self.sql()
-        return self.database.execute_sql(sql, params, self.require_commit)
+        cursor = self.database.execute_sql(sql, params, self.require_commit)
+        self._execution_time = cursor._execution_time
+        return cursor
 
     def execute(self):
         raise NotImplementedError
@@ -2068,6 +2071,7 @@ class Database(object):
         if not params:
             params = ()
         logger.debug((sql, params, len(params), table_name, ((time.time() - start_time)*1000)))
+        cursor._execution_time = time.time() - start_time
         return cursor
 
     def begin(self):
