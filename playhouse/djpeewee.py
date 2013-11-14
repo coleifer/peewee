@@ -84,6 +84,7 @@ class DjangoTranslator(object):
 
         klass = type(options.object_name, (Model,), attrs)
         klass._meta.db_table = options.db_table
+        klass._meta.database.interpolation = '%s'
         mapping[options.object_name] = klass
 
         # Load up many-to-many relationships.
