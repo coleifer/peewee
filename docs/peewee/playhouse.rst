@@ -840,7 +840,7 @@ as separate models since peewee does not abstract away these types of relationsh
 Using the above models it is possible to construct joins.  The following example
 will get all users who belong to a group that starts with the letter "A":
 
-.. code-block::pycon
+.. code-block:: pycon
 
     >>> P = translate(User, Group)
     >>> query = P.User.select().join(P.User_groups).join(P.Group).where(
