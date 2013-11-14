@@ -771,8 +771,8 @@ sqlite_ext API notes
 Django Integration
 ------------------
 
-The Django ORM provides a very high-level abstraction over SQL and is
-`very limited in terms of flexibility or expressiveness <http://charlesleifer.com/blog/shortcomings-in-the-django-orm-and-a-look-at-peewee-a-lightweight-alternative/>`_. I
+The Django ORM provides a very high-level abstraction over SQL and as a consequence is in some ways
+`limited in terms of flexibility or expressiveness <http://charlesleifer.com/blog/shortcomings-in-the-django-orm-and-a-look-at-peewee-a-lightweight-alternative/>`_. I
 wrote a `blog post <http://charlesleifer.com/blog/the-search-for-the-missing-link-what-lies-between-sql-and-django-s-orm-/>`_
 describing my search for a "missing link" between Django's ORM and the SQL it
 generates, concluding that no such layer exists.  The ``djpeewee`` module attempts
