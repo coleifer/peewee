@@ -784,8 +784,8 @@ A couple use-cases might be:
 * Joining on fields that are not related by foreign key (for example UUID fields).
 * Performing aggregate queries on calculated values.
 * Features that Django does not support such as ``CASE`` statements.
-* Utilize SQL functions that Django does not support, such as ``SUBSTR``.
-* Replace nearly-identical SQL queries with reusable, composable data-structures.
+* Utilizing SQL functions that Django does not support, such as ``SUBSTR``.
+* Replacing nearly-identical SQL queries with reusable, composable data-structures.
 
 Below is an example of how you might use this:
 
