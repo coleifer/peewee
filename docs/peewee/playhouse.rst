@@ -851,7 +851,7 @@ will get all users who belong to a group that starts with the letter "A":
     FROM "auth_user" AS t1
     INNER JOIN "auth_user_groups" AS t2 ON (t1."id" = t2."user_id")
     INNER JOIN "auth_group" AS t3 ON (t2."group_id" = t3."id")
-    WHERE (Lower(Substr(t3."name", ?, ?)) = ?)
+    WHERE (Lower(Substr(t3."name", %s, %s)) = %s)
 
 djpeewee API
 ^^^^^^^^^^^^
