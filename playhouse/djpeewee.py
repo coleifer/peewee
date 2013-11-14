@@ -35,6 +35,9 @@ class DjangoTranslator(object):
     def _translate_model(self, model, mapping):
         from django.db.models import fields as djf
         options = model._meta
+        if options.object_name in mapping:
+            return
+
         attrs = {}
         # Sort fields such that nullable fields appear last.
         field_key = lambda field: (field.null and 1 or 0, field)
@@ -63,9 +66,9 @@ class DjangoTranslator(object):
                 else:
                     related_name = model_field.related_query_name()
                     if related_name.endswith('+'):
-                        related_name = '__ignore_%s_%s_%s' % (
+                        related_name = '__%s:%s:%s' % (
+                            options,
                             model_field.name,
-                            model_name,
                             related_name.strip('+'))
 
                     attrs[model_field.name] = ForeignKeyField(

@@ -1,3 +1,4 @@
+from datetime import timedelta
 import unittest
 
 from peewee import *
@@ -42,6 +43,14 @@ if django is not None:
     class Tag(models.Model):
         tag = models.CharField()
         posts = models.ManyToManyField(Post)
+
+    class Event(models.Model):
+        start_time = models.DateTimeField()
+        end_time = models.DateTimeField()
+        title = models.CharField()
+
+        class Meta:
+            db_table = 'events_tbl'
 
     class TestDjPeewee(unittest.TestCase):
         def assertFields(self, model, expected):
@@ -128,24 +137,36 @@ if django is not None:
             T = trans['Tag']
             TP = trans['Tag_posts']
 
-            query = (P.select(P, U)
-                     .join(U)
-                     .switch(P)
+            query = (P.select()
                      .join(TP)
                      .join(T)
                      .where(T.tag == 'test'))
             sql, params = query.sql()
             self.assertEqual(
                 sql,
-                'SELECT t1."id", t1."author_id", t1."content", '
-                't4."id", t4."username" FROM "playhouse_post" AS t1 '
-                'INNER JOIN "user_tbl" AS t4 '
-                'ON (t1."author_id" = t4."id") '
+                'SELECT t1."id", t1."author_id", t1."content" '
+                'FROM "playhouse_post" AS t1 '
                 'INNER JOIN "playhouse_tag_posts" AS t2 '
                 'ON (t1."id" = t2."post_id") '
                 'INNER JOIN "playhouse_tag" AS t3 '
                 'ON (t2."tag_id" = t3."id") WHERE (t3."tag" = ?)')
             self.assertEqual(params, ['test'])
+
+        def test_docs_example(self):
+            # The docs don't lie.
+            PEvent = translate(Event)['Event']
+            hour = timedelta(hours=1)
+            query = (PEvent
+                     .select()
+                     .where(
+                         (PEvent.end_time - PEvent.start_time) > hour))
+            sql, params = query.sql()
+            self.assertEqual(
+                sql,
+                'SELECT t1."id", t1."start_time", t1."end_time", t1."title" '
+                'FROM "events_tbl" AS t1 '
+                'WHERE ((t1."end_time" - t1."start_time") > ?)')
+            self.assertEqual(params, [hour])
 
 
 else:
