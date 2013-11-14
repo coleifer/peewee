@@ -35,7 +35,7 @@ class DjangoTranslator(object):
     def _translate_model(self, model, mapping):
         from django.db.models import fields as djf
         options = model._meta
-        if options.object_name in mapping:
+        if mapping.get(options.object_name):
             return
 
         attrs = {}
