@@ -16,6 +16,7 @@ specific functionality:
 
 Modules which expose higher-level python constructs:
 
+* :ref:`djpeewee`
 * :ref:`gfk`
 * :ref:`kv`
 * :ref:`proxy`
@@ -764,6 +765,107 @@ sqlite_ext API notes
 
         The above code is exactly what the :py:meth:`match` function
         provides.
+
+.. _djpeewee:
+
+Django Integration
+------------------
+
+The Django ORM provides a very high-level abstraction over SQL and is
+`very limited in terms of flexibility or expressiveness <http://charlesleifer.com/blog/shortcomings-in-the-django-orm-and-a-look-at-peewee-a-lightweight-alternative/>`_. I
+wrote a `blog post <http://charlesleifer.com/blog/the-search-for-the-missing-link-what-lies-between-sql-and-django-s-orm-/>`_
+describing my search for a "missing link" between Django's ORM and the SQL it
+generates, concluding that no such layer exists.  The ``djpeewee`` module attempts
+to provide an easy-to-use, structured layer for generating SQL queries for use
+with Django's ORM.
+
+A couple use-cases might be:
+
+* Joining on fields that are not related by foreign key (for example UUID fields).
+* Performing aggregate queries on calculated values.
+* Features that Django does not support such as ``CASE`` statements.
+* Utilize SQL functions that Django does not support, such as ``SUBSTR``.
+* Replace nearly-identical SQL queries with reusable, composable data-structures.
+
+Below is an example of how you might use this:
+
+.. code-block:: python
+
+    # Django model.
+    class Event(models.Model):
+        start_time = models.DateTimeField()
+        end_time = models.DateTimeField()
+        title = models.CharField(max_length=255)
+
+    # Suppose we want to find all events that are longer than an hour.  Django
+    # does not support this, but we can use peewee.
+    from playhouse.djpeewee import translate
+    P = translate(Event)
+    query = (P.Event
+             .select()
+             .where(
+                 (P.Event.end_time - P.Event.start_time) > timedelta(hours=1)))
+
+    # Now feed our peewee query into Django's `raw()` method:
+    sql, params = query.sql()
+    Event.objects.raw(sql, params)
+
+Foreign keys and Many-to-many relationships
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The :py:func:`translate` function will recursively traverse the graph of models
+and return a dictionary populated with everything it finds.  Back-references are
+not searched, only explicit foreign keys or many-to-manys.
+
+Example:
+
+.. code-block:: pycon
+
+    >>> from django.contrib.auth.models import User, Group
+    >>> from playhouse.djpeewee import translate
+    >>> translate(User, Group)
+    {'ContentType': peewee.ContentType,
+     'Group': peewee.Group,
+     'Group_permissions': peewee.Group_permissions,
+     'Permission': peewee.Permission,
+     'User': peewee.User,
+     'User_groups': peewee.User_groups,
+     'User_user_permissions': peewee.User_user_permissions}
+
+As you can see in the example above, although only `User` and `Group` were passed
+in to :py:func:`translate`, several other models which are related by foreign key
+were also created. Additionally, the many-to-many "through" tables were created
+as separate models since peewee does not abstract away these types of relationships.
+
+Using the above models it is possible to construct joins.  The following example
+will get all users who belong to a group that starts with the letter "A":
+
+.. code-block::pycon
+
+    >>> P = translate(User, Group)
+    >>> query = P.User.select().join(P.User_groups).join(P.Group).where(
+    ...     fn.Lower(fn.Substr(P.Group.name, 1, 1)) == 'a')
+    >>> sql, params = query.sql()
+    >>> print sql  # formatted for legibility
+    SELECT t1."id", t1."password", ...
+    FROM "auth_user" AS t1
+    INNER JOIN "auth_user_groups" AS t2 ON (t1."id" = t2."user_id")
+    INNER JOIN "auth_group" AS t3 ON (t2."group_id" = t3."id")
+    WHERE (Lower(Substr(t3."name", ?, ?)) = ?)
+
+djpeewee API
+^^^^^^^^^^^^
+
+.. py:function:: translate(*models)
+
+    Translate the given Django models into roughly equivalent peewee models
+    suitable for use constructing queries. Foreign keys and many-to-many relationships
+    will be followed and models generated, although back references are not traversed.
+
+    :param models: One or more Django model classes.
+    :returns: A dict-like object containing the generated models, but which supports
+        dotted-name style lookups.
+
 
 .. _gfk:
 
