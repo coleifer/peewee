@@ -8,6 +8,10 @@ from peewee import *
 
 logger = logging.getLogger('peewee.playhouse.djpeewee')
 
+class AttrDict(dict):
+    def __getattr__(self, attr):
+        return self[attr]
+
 class DjangoTranslator(object):
     def __init__(self):
         self._field_map = self.get_django_field_map()
@@ -112,7 +116,7 @@ class DjangoTranslator(object):
             # Django raw query.
             users = User.objects.raw(*query.sql())
         """
-        mapping = {}
+        mapping = AttrDict()
         for model in models:
             self._translate_model(model, mapping)
         return mapping
