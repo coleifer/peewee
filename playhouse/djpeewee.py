@@ -36,48 +36,74 @@ class DjangoTranslator(object):
             (djf.related.ForeignKey, ForeignKeyField),
         ]
 
-    def _translate_model(self, model, mapping):
+    def convert_field(self, field):
+        converted = None
+        for django_field, peewee_field in self._field_map:
+            if isinstance(field, django_field):
+                converted = peewee_field
+                break
+        return converted
+
+    def _translate_model(self,
+                         model,
+                         mapping,
+                         max_depth=None,
+                         backrefs=False,
+                         exclude=None):
+        if exclude and model in exclude:
+            return
+
+        if max_depth is None:
+            max_depth = -1
+
         from django.db.models import fields as djf
         options = model._meta
         if mapping.get(options.object_name):
             return
+        mapping[options.object_name] = None
 
         attrs = {}
         # Sort fields such that nullable fields appear last.
         field_key = lambda field: (field.null and 1 or 0, field)
         for model_field in sorted(options.fields, key=field_key):
-            # Find the appropriate peewee field class.
-            converted = None
-            for django_field, peewee_field in self._field_map:
-                if isinstance(model_field, django_field):
-                    converted = peewee_field
-                    break
+            # Get peewee equivalent for this field type.
+            converted = self.convert_field(model_field)
 
             # Special-case ForeignKey fields.
             if converted is ForeignKeyField:
-                related_model = model_field.rel.to
-                model_name = related_model._meta.object_name
-                # If we haven't processed the related model yet, do so now.
-                if model_name not in mapping:
-                    mapping[model_name] = None  # Avoid endless recursion.
-                    self._translate_model(related_model, mapping)
-                if mapping[model_name] is None:
-                    # Put an integer field here.
-                    logger.warn('Cycle detected: %s: %s',
-                                model_field.name, model_name)
-                    mapping[model_name] = IntegerField(
-                        db_column=model_field.get_attname())
-                else:
-                    related_name = model_field.related_query_name()
-                    if related_name.endswith('+'):
-                        related_name = '__%s:%s:%s' % (
-                            options,
-                            model_field.name,
-                            related_name.strip('+'))
+                if max_depth != 0:
+                    related_model = model_field.rel.to
+                    model_name = related_model._meta.object_name
+                    # If we haven't processed the related model yet, do so now.
+                    if model_name not in mapping:
+                        mapping[model_name] = None  # Avoid endless recursion.
+                        self._translate_model(
+                            related_model,
+                            mapping,
+                            max_depth=max_depth - 1,
+                            backrefs=backrefs,
+                            exclude=exclude)
+                    if mapping[model_name] is None:
+                        # Cycle detected, put an integer field here.
+                        logger.warn('Cycle detected: %s: %s',
+                                    model_field.name, model_name)
+                        attrs[model_field.name] = IntegerField(
+                            db_column=model_field.get_attname())
+                    else:
+                        related_name = model_field.related_query_name()
+                        if related_name.endswith('+'):
+                            related_name = '__%s:%s:%s' % (
+                                options,
+                                model_field.name,
+                                related_name.strip('+'))
 
-                    attrs[model_field.name] = ForeignKeyField(
-                        mapping[model_name],
-                        related_name=related_name)
+                        attrs[model_field.name] = ForeignKeyField(
+                            mapping[model_name],
+                            related_name=related_name)
+
+                else:
+                    attrs[model_field.name] = IntegerField(
+                        db_column=model_field.get_attname())
 
             elif converted:
                 attrs[model_field.name] = converted()
@@ -87,21 +113,45 @@ class DjangoTranslator(object):
         klass._meta.database.interpolation = '%s'
         mapping[options.object_name] = klass
 
+        if backrefs:
+            # Follow back-references for foreign keys.
+            for rel_obj in options.get_all_related_objects():
+                if rel_obj.model._meta.object_name in mapping:
+                    continue
+                self._translate_model(
+                    rel_obj.model,
+                    mapping,
+                    max_depth=max_depth - 1,
+                    backrefs=backrefs,
+                    exclude=exclude)
+
         # Load up many-to-many relationships.
         for many_to_many in options.many_to_many:
             if not isinstance(many_to_many, djf.related.ManyToManyField):
                 continue
-            self._translate_model(many_to_many.rel.through, mapping)
+            self._translate_model(
+                many_to_many.rel.through,
+                mapping,
+                max_depth=max_depth,  # Do not decrement.
+                backrefs=backrefs,
+                exclude=exclude)
 
 
-    def translate_models(self, *models):
+    def translate_models(self, *models, **options):
         """
         Generate a group of peewee models analagous to the provided Django models
         for the purposes of creating queries.
 
         :param model: A Django model class.
+        :param options: A dictionary of options, see note below.
         :returns: A dictionary mapping model names to peewee model classes.
         :rtype: dict
+
+        Recognized options:
+            `recurse`: Follow foreign keys (default: True)
+            `max_depth`: Max depth to recurse (default: None, unlimited)
+            `backrefs`: Follow backrefs (default: False)
+            `exclude`: A list of models to exclude
 
         Example::
 
@@ -118,8 +168,25 @@ class DjangoTranslator(object):
             users = User.objects.raw(*query.sql())
         """
         mapping = AttrDict()
+        recurse = options.get('recurse', True)
+        max_depth = options.get('max_depth', None)
+        backrefs = options.get('backrefs', False)
+        exclude = options.get('exclude', None)
+        if not recurse and max_depth:
+            raise ValueError('Error, you cannot specify a max_depth when '
+                             'recurse=False.')
+        elif not recurse:
+            max_depth = 0
+        elif recurse and max_depth is None:
+            max_depth = -1
+
         for model in models:
-            self._translate_model(model, mapping)
+            self._translate_model(
+                model,
+                mapping,
+                max_depth=max_depth,
+                backrefs=backrefs,
+                exclude=exclude)
         return mapping
 
 try:

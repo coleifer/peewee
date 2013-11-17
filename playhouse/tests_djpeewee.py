@@ -52,12 +52,26 @@ if django is not None:
         class Meta:
             db_table = 'events_tbl'
 
+    class Category(models.Model):
+        parent = models.ForeignKey('self', null=True)
+
+    class A(models.Model):
+        a_field = models.IntegerField()
+        b = models.ForeignKey('B', null=True, related_name='as')
+
+    class B(models.Model):
+        a = models.ForeignKey(A, related_name='bs')
+
+    class C(models.Model):
+        b = models.ForeignKey(B, related_name='cs')
+
     class TestDjPeewee(unittest.TestCase):
         def assertFields(self, model, expected):
+            self.assertEqual(len(model._meta.fields), len(expected))
             zipped = zip(model._meta.get_fields(), expected)
             for (model_field, (name, field_type)) in zipped:
                 self.assertEqual(model_field.name, name)
-                self.assertEqual(type(model_field), field_type)
+                self.assertTrue(type(model_field) is field_type)
 
         def test_simple(self):
             P = translate(Simple)
@@ -167,6 +181,63 @@ if django is not None:
                 'FROM "events_tbl" AS t1 '
                 'WHERE ((t1."end_time" - t1."start_time") > %s)')
             self.assertEqual(params, [hour])
+
+        def test_self_referential(self):
+            trans = translate(Category)
+            self.assertFields(trans['Category'], [
+                ('id', PrimaryKeyField),
+                ('parent', IntegerField)])
+
+        def test_cycle(self):
+            trans = translate(A)
+            self.assertFields(trans['A'], [
+                ('id', PrimaryKeyField),
+                ('a_field', IntegerField),
+                ('b', ForeignKeyField)])
+            self.assertFields(trans['B'], [
+                ('id', PrimaryKeyField),
+                ('a', IntegerField)])
+
+            trans = translate(B)
+            self.assertFields(trans['A'], [
+                ('id', PrimaryKeyField),
+                ('a_field', IntegerField),
+                ('b', IntegerField)])
+            self.assertFields(trans['B'], [
+                ('id', PrimaryKeyField),
+                ('a', ForeignKeyField)])
+
+        def test_max_depth(self):
+            trans = translate(C, max_depth=1)
+            self.assertFields(trans['C'], [
+                ('id', PrimaryKeyField),
+                ('b', ForeignKeyField)])
+            self.assertFields(trans['B'], [
+                ('id', PrimaryKeyField),
+                ('a', IntegerField)])
+
+        def test_exclude(self):
+            trans = translate(Comment, exclude=(User,))
+            self.assertFields(trans['Post'], [
+                ('id', PrimaryKeyField),
+                ('author', IntegerField),
+                ('content', TextField)])
+            self.assertEqual(
+                trans['Post'].comments.rel_model,
+                trans['Comment'])
+
+            self.assertFields(trans['Comment'], [
+                ('id', PrimaryKeyField),
+                ('post', ForeignKeyField),
+                ('commenter', IntegerField),
+                ('comment', TextField)])
+
+        def test_backrefs(self):
+            trans = translate(User, backrefs=True)
+            self.assertEqual(sorted(trans.keys()), [
+                'Comment',
+                'Post',
+                'User'])
 
 
 else:
