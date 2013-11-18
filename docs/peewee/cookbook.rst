@@ -178,9 +178,11 @@ instantiate your database with ``threadlocals=True`` (*recommended*):
 
     concurrent_db = SqliteDatabase('stats.db', threadlocals=True)
 
-The above implementation stores connection state in a thread local and will only
-use that connection for a given thread.  Pysqlite can share a connection across
-threads, so if you would prefer to reuse a connection in multiple threads:
+With the above peewee stores connection state in a thread local; each thread gets its
+own separate connection.
+
+Alternatively, Python sqlite3 module can share a connection across different threads,
+but you have to disable runtime checks to reuse the single connection:
 
 .. code-block:: python
 
@@ -834,8 +836,8 @@ off when instantiating your database:
 
 .. _non_integer_primary_keys:
 
-Non-integer Primary Keys and other Tricks
------------------------------------------
+Non-integer Primary Keys, Composite Keys and other Tricks
+---------------------------------------------------------
 
 Non-integer primary keys
 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -865,6 +867,24 @@ you can specify ``primary_key=True``.
     they are related to.
 
 See full documentation on :ref:`non-integer primary keys <non_int_pks>`.
+
+
+Composite primary keys
+^^^^^^^^^^^^^^^^^^^^^^
+
+Peewee has very basic support for composite keys.  In order to use a composite
+key, you must set the ``primary_key`` attribute of the model options to a
+:py:class:`CompositeKey` instance:
+
+.. code-block:: python
+
+    class BlogToTag(Model):
+        """A simple "through" table for many-to-many relationship."""
+        blog = ForeignKeyField(Blog)
+        tag = ForeignKeyField(Tag)
+
+        class Meta:
+            primary_key = CompositeKey('blog', 'tag')
 
 
 Bulk loading data or manually specifying primary keys

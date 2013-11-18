@@ -45,6 +45,14 @@ Contents:
    peewee/playhouse
    peewee/upgrading
 
+Note
+----
+
+Hi, I'm Charlie the author of peewee.  I hope that you enjoy using this library
+as much as I've enjoyed writing it.  Peewee wouldn't be anywhere near as useful
+without people like you, so thank you.  If you find any bugs, odd behavior, or
+have an idea for a new feature please don't hesitate to `open an issue <https://github.com/coleifer/peewee/issues?state=open>`_ on GitHub.
+
 Indices and tables
 ==================
 

@@ -1,6 +1,5 @@
 # encoding=utf-8
 
-from __future__ import with_statement
 import datetime
 import decimal
 import logging
@@ -62,9 +61,16 @@ print_('TESTING USING PYTHON %s' % sys.version)
 if BACKEND == 'postgresql':
     database_class = PostgresqlDatabase
     database_name = 'peewee_test'
+    import psycopg2
+    OperationalError = psycopg2.OperationalError
 elif BACKEND == 'mysql':
     database_class = MySQLDatabase
     database_name = 'peewee_test'
+    try:
+        import MySQLdb as mysql
+    except ImportError:
+        import pymysql as mysql
+    OperationalError = mysql.OperationalError
 elif BACKEND == 'apsw':
     from playhouse.apsw_ext import *
     database_class = APSWDatabase
@@ -74,6 +80,7 @@ else:
     database_class = SqliteDatabase
     database_name = 'tmp.db'
     import sqlite3
+    OperationalError = sqlite3.OperationalError
     print_('SQLITE VERSION: %s' % sqlite3.version)
 
 #
@@ -285,6 +292,19 @@ class TestModelC(TestModel):
     field = CharField(primary_key=True)
     data = CharField()
 
+class Post(TestModel):
+    title = CharField()
+
+class Tag(TestModel):
+    tag = CharField()
+
+class TagPostThrough(TestModel):
+    tag = ForeignKeyField(Tag, related_name='posts')
+    post = ForeignKeyField(Post, related_name='tags')
+
+    class Meta:
+        primary_key = CompositeKey('tag', 'post')
+
 
 MODELS = [
     User,
@@ -315,6 +335,9 @@ MODELS = [
     TestModelA,
     TestModelB,
     TestModelC,
+    Tag,
+    Post,
+    TagPostThrough,
 ]
 INT = test_db.interpolation
 
@@ -941,6 +964,37 @@ class CompilerTestCase(BasePeeweeTestCase):
         self.assertEqual(sql, 'extract(? FROM "pub_date")')
         self.assertEqual(params, ['year'])
 
+    def test_custom_alias(self):
+        class Person(TestModel):
+            name = CharField()
+
+            class Meta:
+                table_alias = 'person_tbl'
+
+        class Pet(TestModel):
+            name = CharField()
+            owner = ForeignKeyField(Person)
+
+            class Meta:
+                table_alias = 'pet_tbl'
+
+        sq = Person.select().where(Person.name == 'peewee')
+        sql = normal_compiler.generate_select(sq)
+        self.assertEqual(
+            sql[0],
+            'SELECT person_tbl."id", person_tbl."name" FROM "person" AS '
+            'person_tbl WHERE (person_tbl."name" = ?)')
+
+        sq = Pet.select(Pet, Person.name).join(Person)
+        sql = normal_compiler.generate_select(sq)
+        self.assertEqual(
+            sql[0],
+            'SELECT pet_tbl."id", pet_tbl."name", pet_tbl."owner_id", '
+            'person_tbl."name" '
+            'FROM "pet" AS pet_tbl '
+            'INNER JOIN "person" AS person_tbl '
+            'ON (pet_tbl."owner_id" = person_tbl."id")')
+
 
 #
 # TEST CASE USED TO PROVIDE ACCESS TO DATABASE
@@ -1191,6 +1245,38 @@ class QueryResultWrapperTestCase(ModelTestCase):
 
         res = uq[10:]
         self.assertEqual(res, [])
+
+    def test_indexing_fill_cache(self):
+        def assertUser(query_or_qr, idx):
+            self.assertEqual(query_or_qr[idx].username, 'u%d' % (idx + 1))
+
+        self.create_users(10)
+        uq = User.select().order_by(User.id)
+        qc = len(self.queries())
+
+        # Ensure we can grab the first 5 users and that it only costs 1 query.
+        for i in range(5):
+            assertUser(uq, i)
+        self.assertEqual(len(self.queries()) - qc, 1)
+
+        # Iterate in reverse and ensure only costs 1 query.
+        uq = User.select().order_by(User.id)
+        for i in reversed(range(10)):
+            assertUser(uq, i)
+        self.assertEqual(len(self.queries()) - qc, 2)
+
+        # Execute the query and get reference to result wrapper.
+        query = User.select().order_by(User.id)
+        query.execute()
+        qr = query._qr
+
+        # Getting the first user will populate the result cache with 1 obj.
+        assertUser(query, 0)
+        self.assertEqual(len(qr._result_cache), 1)
+
+        # Getting the last user will fill the cache.
+        assertUser(query, 9)
+        self.assertEqual(len(qr._result_cache), 10)
 
     def test_prepared(self):
         for i in range(2):
@@ -1457,6 +1543,25 @@ class ModelAPITestCase(ModelTestCase):
 
         self.assertEqual(b.user, u)
         self.assertRaises(User.DoesNotExist, getattr, b2, 'user')
+
+    def test_fk_cache_invalidated(self):
+        u1 = self.create_user('u1')
+        u2 = self.create_user('u2')
+        b = Blog.create(user=u1, title='b')
+
+        blog = Blog.get(Blog.pk == b)
+        qc = len(self.queries())
+        self.assertEqual(blog.user.id, u1.id)
+        self.assertEqual(len(self.queries()), qc + 1)
+
+        blog.user = u2.id
+        self.assertEqual(blog.user.id, u2.id)
+        self.assertEqual(len(self.queries()), qc + 2)
+
+        # No additional query.
+        blog.user = u2.id
+        self.assertEqual(blog.user.id, u2.id)
+        self.assertEqual(len(self.queries()), qc + 2)
 
     def test_fk_ints(self):
         c1 = Category.create(name='c1')
@@ -1988,6 +2093,63 @@ class MultipleFKTestCase(ModelTestCase):
             Relationship, on=Relationship.from_user
         ).where(Relationship.to_user == c.id)
         self.assertEqual(list(followers), [b])
+
+
+class CompositeKeyTestCase(ModelTestCase):
+    requires = [Tag, Post, TagPostThrough]
+
+    def setUp(self):
+        super(CompositeKeyTestCase, self).setUp()
+        tags = [Tag.create(tag='t%d' % i) for i in range(1, 4)]
+        posts = [Post.create(title='p%d' % i) for i in range(1, 4)]
+        p12 = Post.create(title='p12')
+        for t, p in zip(tags, posts):
+            TagPostThrough.create(tag=t, post=p)
+        TagPostThrough.create(tag=tags[0], post=p12)
+        TagPostThrough.create(tag=tags[1], post=p12)
+
+    def test_create_table_query(self):
+        query = compiler.create_table_sql(TagPostThrough)
+        create, tbl, tbldefs = query
+        self.assertEqual(tbl, '"tagpostthrough"')
+        self.assertEqual(tbldefs,
+            '("tag_id" INTEGER NOT NULL REFERENCES "tag" ("id") , '
+            '"post_id" INTEGER NOT NULL REFERENCES "post" ("id") , '
+            'PRIMARY KEY ("tag_id", "post_id"))')
+
+    def test_get_set_id(self):
+        tpt = (TagPostThrough
+               .select()
+               .join(Tag)
+               .switch(TagPostThrough)
+               .join(Post)
+               .order_by(Tag.tag, Post.title)).get()
+        # Sanity check.
+        self.assertEqual(tpt.tag.tag, 't1')
+        self.assertEqual(tpt.post.title, 'p1')
+
+        tag = Tag.select().where(Tag.tag == 't1').get()
+        post = Post.select().where(Post.title == 'p1').get()
+        self.assertEqual(tpt.get_id(), [tag, post])
+
+        # set_id is a no-op.
+        tpt.set_id(None)
+        self.assertEqual(tpt.get_id(), [tag, post])
+
+    def test_querying(self):
+        posts = (Post.select()
+                 .join(TagPostThrough)
+                 .join(Tag)
+                 .where(Tag.tag == 't1')
+                 .order_by(Post.title))
+        self.assertEqual([p.title for p in posts], ['p1', 'p12'])
+
+        tags = (Tag.select()
+                .join(TagPostThrough)
+                .join(Post)
+                .where(Post.title == 'p12')
+                .order_by(Tag.tag))
+        self.assertEqual([t.tag for t in tags], ['t1', 't2'])
 
 
 class ManyToManyTestCase(ModelTestCase):
@@ -2667,6 +2829,25 @@ class ModelOptionInheritanceTestCase(BasePeeweeTestCase):
             pass
         self.assertEqual(Foo_3._meta.db_table, 'foo_3')
 
+    def test_custom_options(self):
+        class A(Model):
+            class Meta:
+                a = 'a'
+
+        class B1(A):
+            class Meta:
+                b = 1
+
+        class B2(A):
+            class Meta:
+                b = 2
+
+        self.assertEqual(A._meta.a, 'a')
+        self.assertEqual(B1._meta.a, 'a')
+        self.assertEqual(B2._meta.a, 'a')
+        self.assertEqual(B1._meta.b, 1)
+        self.assertEqual(B2._meta.b, 2)
+
     def test_option_inheritance(self):
         x_test_db = SqliteDatabase('testing.db')
         child2_db = SqliteDatabase('child2.db')
@@ -2936,6 +3117,35 @@ if test_db.for_update:
             username = res.fetchone()[0]
             self.assertEqual(username, 'u1_edited')
 
+        def test_for_update_exc(self):
+            u1 = self.create_user('u1')
+            test_db.set_autocommit(False)
+
+            user = (User
+                    .select()
+                    .where(User.username == 'u1')
+                    .for_update(nowait=True)
+                    .execute())
+
+            # Open up a second conn.
+            new_db = database_class(database_name)
+
+            class User2(User):
+                class Meta:
+                    database = new_db
+                    db_table = User._meta.db_table
+
+            # Select the username -- it will raise an error.
+            def try_lock():
+                user2 = (User2
+                         .select()
+                         .where(User.username == 'u1')
+                         .for_update(nowait=True)
+                         .execute())
+            self.assertRaises(OperationalError, try_lock)
+            test_db.rollback()
+
+
 elif TEST_VERBOSITY > 0:
     print_('Skipping "for update" tests')
 
@@ -2957,3 +3167,38 @@ if test_db.sequences:
 
 elif TEST_VERBOSITY > 0:
     print_('Skipping "sequence" tests')
+
+if database_class is PostgresqlDatabase:
+    class TestUnicodeConversion(ModelTestCase):
+        requires = [User]
+
+        def setUp(self):
+            super(TestUnicodeConversion, self).setUp()
+
+            # Create a user object with UTF-8 encoded username.
+            ustr = ulit('Ísland')
+            self.user = User.create(username=ustr)
+
+        def tearDown(self):
+            super(TestUnicodeConversion, self).tearDown()
+            test_db.register_unicode = True
+            test_db.close()
+
+        def reset_encoding(self, encoding):
+            test_db.close()
+            conn = test_db.get_conn()
+            conn.set_client_encoding(encoding)
+
+        def test_unicode_conversion(self):
+            # Turn off unicode conversion on a per-connection basis.
+            test_db.register_unicode = False
+            self.reset_encoding('LATIN1')
+
+            u = User.get(User.id == self.user.id)
+            self.assertFalse(u.username == self.user.username)
+
+            test_db.register_unicode = True
+            self.reset_encoding('LATIN1')
+
+            u = User.get(User.id == self.user.id)
+            self.assertEqual(u.username, self.user.username)

@@ -606,6 +606,23 @@ Fields
         related to.
 
 
+.. py:class:: CompositeKey(*fields)
+
+    Specify a composite primary key for a model.  Unlike the other fields, a
+    composite key is defined in the model's ``Meta`` class after the fields
+    have been defined.  It takes as parameters the string names of the fields
+    to use as the primary key:
+
+    .. code-block:: python
+
+        class BlogTagThrough(Model):
+            blog = ForeignKeyField(Blog, related_name='tags')
+            tag = ForeignKeyField(Tag, related_name='blogs')
+
+            class Meta:
+                primary_key = CompositeKey('blog', 'tag')
+
+
 .. _query-types:
 
 Query Types
@@ -878,11 +895,13 @@ Query Types
         indicates that this query should only return distinct rows.  results in a
         ``SELECT DISTINCT`` query.
 
-    .. py:method:: for_update([for_update=True])
+    .. py:method:: for_update([for_update=True[, nowait=False]])
 
         :rtype: :py:class:`SelectQuery`
 
-        indicates that this query should lock rows for update
+        Indicate that this query should lock rows for update.  If ``nowait`` is
+        ``True`` then the database will raise an ``OperationalError`` if it
+        cannot obtain the lock.
 
     .. py:method:: naive()
 
@@ -1493,6 +1512,23 @@ Database and its subclasses
           are: "year", "month", "day", "hour", "minute" and "second".
         :param Field date_field: field instance storing a datetime, date or time.
         :rtype: an expression object.
+
+    .. py:method:: sql_error_handler(exception, sql, params, require_commit)
+
+        This hook is called when an error is raised executing a query, allowing
+        your application to inject custom error handling behavior.  The default
+        implementation simply reraises the exception.
+
+        .. code-block:: python
+
+            class SqliteDatabaseCustom(SqliteDatabase):
+                def sql_error_handler(self, exception, sql, params, require_commit):
+                    # Perform some custom behavior, for example close the
+                    # connection to the database.
+                    self.close()
+
+                    # Re-raise the exception.
+                    raise exception
 
 
 .. py:class:: SqliteDatabase(Database)

@@ -45,6 +45,9 @@ from peewee import transaction
 FTS_VER = sqlite3.sqlite_version_info[:3] >= (3, 7, 4) and 'FTS4' or 'FTS3'
 
 
+class PrimaryKeyAutoIncrementField(PrimaryKeyField):
+    template_extra = 'AUTOINCREMENT'
+
 class SqliteQueryCompiler(QueryCompiler):
     """
     Subclass of QueryCompiler that can be used to construct virtual tables.

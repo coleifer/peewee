@@ -16,15 +16,18 @@ specific functionality:
 
 Modules which expose higher-level python constructs:
 
+* :ref:`djpeewee`
 * :ref:`gfk`
 * :ref:`kv`
 * :ref:`proxy`
+* :ref:`shortcuts`
 * :ref:`signals`
 
 As well as tools for working with databases:
 
 * :ref:`pwiz`
 * :ref:`migrate`
+* :ref:`csv_loader`
 * :ref:`test_utils`
 
 
@@ -763,6 +766,107 @@ sqlite_ext API notes
         The above code is exactly what the :py:meth:`match` function
         provides.
 
+.. _djpeewee:
+
+Django Integration
+------------------
+
+The Django ORM provides a very high-level abstraction over SQL and as a consequence is in some ways
+`limited in terms of flexibility or expressiveness <http://charlesleifer.com/blog/shortcomings-in-the-django-orm-and-a-look-at-peewee-a-lightweight-alternative/>`_. I
+wrote a `blog post <http://charlesleifer.com/blog/the-search-for-the-missing-link-what-lies-between-sql-and-django-s-orm-/>`_
+describing my search for a "missing link" between Django's ORM and the SQL it
+generates, concluding that no such layer exists.  The ``djpeewee`` module attempts
+to provide an easy-to-use, structured layer for generating SQL queries for use
+with Django's ORM.
+
+A couple use-cases might be:
+
+* Joining on fields that are not related by foreign key (for example UUID fields).
+* Performing aggregate queries on calculated values.
+* Features that Django does not support such as ``CASE`` statements.
+* Utilizing SQL functions that Django does not support, such as ``SUBSTR``.
+* Replacing nearly-identical SQL queries with reusable, composable data-structures.
+
+Below is an example of how you might use this:
+
+.. code-block:: python
+
+    # Django model.
+    class Event(models.Model):
+        start_time = models.DateTimeField()
+        end_time = models.DateTimeField()
+        title = models.CharField(max_length=255)
+
+    # Suppose we want to find all events that are longer than an hour.  Django
+    # does not support this, but we can use peewee.
+    from playhouse.djpeewee import translate
+    P = translate(Event)
+    query = (P.Event
+             .select()
+             .where(
+                 (P.Event.end_time - P.Event.start_time) > timedelta(hours=1)))
+
+    # Now feed our peewee query into Django's `raw()` method:
+    sql, params = query.sql()
+    Event.objects.raw(sql, params)
+
+Foreign keys and Many-to-many relationships
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The :py:func:`translate` function will recursively traverse the graph of models
+and return a dictionary populated with everything it finds.  Back-references are
+not searched, only explicit foreign keys or many-to-manys.
+
+Example:
+
+.. code-block:: pycon
+
+    >>> from django.contrib.auth.models import User, Group
+    >>> from playhouse.djpeewee import translate
+    >>> translate(User, Group)
+    {'ContentType': peewee.ContentType,
+     'Group': peewee.Group,
+     'Group_permissions': peewee.Group_permissions,
+     'Permission': peewee.Permission,
+     'User': peewee.User,
+     'User_groups': peewee.User_groups,
+     'User_user_permissions': peewee.User_user_permissions}
+
+As you can see in the example above, although only `User` and `Group` were passed
+in to :py:func:`translate`, several other models which are related by foreign key
+were also created. Additionally, the many-to-many "through" tables were created
+as separate models since peewee does not abstract away these types of relationships.
+
+Using the above models it is possible to construct joins.  The following example
+will get all users who belong to a group that starts with the letter "A":
+
+.. code-block:: pycon
+
+    >>> P = translate(User, Group)
+    >>> query = P.User.select().join(P.User_groups).join(P.Group).where(
+    ...     fn.Lower(fn.Substr(P.Group.name, 1, 1)) == 'a')
+    >>> sql, params = query.sql()
+    >>> print sql  # formatted for legibility
+    SELECT t1."id", t1."password", ...
+    FROM "auth_user" AS t1
+    INNER JOIN "auth_user_groups" AS t2 ON (t1."id" = t2."user_id")
+    INNER JOIN "auth_group" AS t3 ON (t2."group_id" = t3."id")
+    WHERE (Lower(Substr(t3."name", %s, %s)) = %s)
+
+djpeewee API
+^^^^^^^^^^^^
+
+.. py:function:: translate(*models)
+
+    Translate the given Django models into roughly equivalent peewee models
+    suitable for use constructing queries. Foreign keys and many-to-many relationships
+    will be followed and models generated, although back references are not traversed.
+
+    :param models: One or more Django model classes.
+    :returns: A dict-like object containing the generated models, but which supports
+        dotted-name style lookups.
+
+
 .. _gfk:
 
 Generic foreign keys
@@ -994,6 +1098,65 @@ Proxy API
 
         Once initialized, the attributes and methods on ``obj`` can be accessed
         directly via the :py:class:`Proxy` instance.
+
+.. _shortcuts:
+
+Shortcuts
+---------
+
+This module contains helper functions for expressing things that would otherwise
+be somewhat verbose or cumbersome using peewee's APIs.
+
+.. py:function:: case(predicate, expression_tuples, default=None)
+
+    :param predicate: A SQL expression or can be ``None``.
+    :param expression_tuples: An iterable containing one or more 2-tuples
+      comprised of an expression and return value.
+    :param default: default if none of the cases match.
+
+    Example SQL case statements:
+
+    .. code-block:: sql
+
+        -- case with predicate --
+        SELECT "username",
+          CASE "user_id"
+            WHEN 1 THEN "one"
+            WHEN 2 THEN "two"
+            ELSE "?"
+          END
+        FROM "users";
+
+        -- case with no predicate (inline expressions) --
+        SELECT "username",
+          CASE
+            WHEN "user_id" = 1 THEN "one"
+            WHEN "user_id" = 2 THEN "two"
+            ELSE "?"
+          END
+        FROM "users";
+
+    Equivalent function invocations:
+
+    .. code-block:: python
+
+        User.select(User.username, case(User.user_id, (
+          (1, "one"),
+          (2, "two")), "?"))
+
+        User.select(User.username, case(None, (
+          (User.user_id == 1, "one"),  # note the double equals
+          (User.user_id == 2, "two")), "?"))
+
+    You can specify a value for the CASE expression using the ``alias()``
+    method:
+
+    .. code-block:: python
+
+        User.select(User.username, case(User.user_id, (
+          (1, "one"),
+          (2, "two")), "?").alias("id_string"))
+
 
 .. _signals:
 
@@ -1248,6 +1411,87 @@ Renaming a table
 
     with my_db.transaction():
         migrator.rename_table(Story, 'stories')
+
+
+.. _csv_loader:
+
+CSV Loader
+----------
+
+This module contains helpers for loading CSV data into a database.  CSV files can
+be introspected to generate an appropriate model class for working with the data.
+This makes it really easy to explore the data in a CSV file using Peewee and SQL.
+
+Here is how you would load a CSV file into an in-memory SQLite database.  The
+call to :py:func:`load_csv` returns a :py:class:`Model` instance suitable for
+working with the CSV data:
+
+.. code-block:: python
+
+    from playhouse.csv_loader import load_csv
+    db = SqliteDatabase(':memory:')
+    ZipToTZ = load_csv(db, 'zip_to_tz.csv')
+
+Now we can run queries using the new model.
+
+.. code-block:: pycon
+
+    # Get the timezone for a zipcode.
+    >>> ZipToTZ.get(ZipToTZ.zip == 66047).timezone
+    'US/Central'
+
+    # Get all the zipcodes for my town.
+    >>> [row.zip for row in ZipToTZ.select().where(
+    ...     (ZipToTZ.city == 'Lawrence') && (ZipToTZ.state == 'KS'))]
+    [66044, 66045, 66046, 66047, 66049]
+
+For more information and examples check out this `blog post <http://charlesleifer.com/blog/using-peewee-to-explore-csv-files/>`_.
+
+
+CSV Loader API
+^^^^^^^^^^^^^^
+
+.. py:function:: load_csv(db_or_model, filename[, fields=None[, field_names=None[, has_header=True[, sample_size=10[, converter=None[, db_table=None[, **reader_kwargs]]]]]]])
+
+    Load a CSV file into the provided database or model class, returning a
+    :py:class:`Model` suitable for working with the CSV data.
+
+    :param db_or_model: Either a :py:class:`Database` instance or a :py:class:`Model` class.  If a model is not provided, one will be automatically generated for you.
+    :param str filename: Path of CSV file to load.
+    :param list fields: A list of :py:class:`Field` instances mapping to each column in the CSV.  This allows you to manually specify the column types.  If not provided, and a model is not provided, the field types will be determined automatically.
+    :param list field_names: A list of strings to use as field names for each column in the CSV.  If not provided, and a model is not provided, the field names will be determined by looking at the header row of the file.  If no header exists, then the fields will be given generic names.
+    :param bool has_header: Whether the first row is a header.
+    :param int sample_size: Number of rows to look at when introspecting data types.  If set to ``0``, then a generic field type will be used for all fields.
+    :param RowConverter converter: a :py:class:`RowConverter` instance to use for introspecting the CSV.  If not provided, one will be created.
+    :param str db_table: The name of the database table to load data into.  If this value is not provided, it will be determined using the filename of the CSV file.  If a model is provided, this value is ignored.
+    :param reader_kwargs: Arbitrary keyword arguments to pass to the ``csv.reader`` object, such as the dialect, separator, etc.
+    :rtype: A :py:class:`Model` suitable for querying the CSV data.
+
+    Basic example -- field names and types will be introspected:
+
+    .. code-block:: python
+
+        from playhouse.csv_loader import *
+        db = SqliteDatabase(':memory:')
+        User = load_csv(db, 'users.csv')
+
+    Using a pre-defined model:
+
+    .. code-block:: python
+
+        class ZipToTZ(Model):
+            zip = IntegerField()
+            timezone = CharField()
+
+        load_csv(ZipToTZ, 'zip_to_tz.csv')
+
+    Specifying fields:
+
+    .. code-block:: python
+
+        fields = [DecimalField(), IntegerField(), IntegerField(), DateField()]
+        field_names = ['amount', 'from_acct', 'to_acct', 'timestamp']
+        Payments = load_csv(db, 'payments.csv', fields=fields, field_names=field_names, has_header=False)
 
 
 .. _test_utils:
