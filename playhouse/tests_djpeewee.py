@@ -65,6 +65,13 @@ if django is not None:
     class C(models.Model):
         b = models.ForeignKey(B, related_name='cs')
 
+    class Parent(models.Model):
+        pass
+
+    class Child(Parent):
+        pass
+
+
     class TestDjPeewee(unittest.TestCase):
         def assertFields(self, model, expected):
             self.assertEqual(len(model._meta.fields), len(expected))
@@ -238,6 +245,18 @@ if django is not None:
                 'Comment',
                 'Post',
                 'User'])
+
+        def test_inheritance(self):
+            trans = translate(Parent)
+            self.assertEqual(trans.keys(), ['Parent'])
+            self.assertFields(trans['Parent'], [
+                ('id', PrimaryKeyField),])
+
+            trans = translate(Child)
+            self.assertEqual(sorted(trans.keys()), ['Child', 'Parent'])
+            self.assertFields(trans['Child'], [
+                ('id', PrimaryKeyField),
+                ('parent_ptr', ForeignKeyField)])
 
 
 else:

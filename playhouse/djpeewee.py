@@ -90,7 +90,8 @@ class DjangoTranslator(object):
                         attrs[model_field.name] = IntegerField(
                             db_column=model_field.get_attname())
                     else:
-                        related_name = model_field.related_query_name()
+                        related_name = (model_field.rel.related_name or
+                                        model_field.related_query_name())
                         if related_name.endswith('+'):
                             related_name = '__%s:%s:%s' % (
                                 options,
