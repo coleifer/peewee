@@ -815,7 +815,7 @@ Foreign keys and Many-to-many relationships
 
 The :py:func:`translate` function will recursively traverse the graph of models
 and return a dictionary populated with everything it finds.  Back-references are
-not searched, only explicit foreign keys or many-to-manys.
+not searched by default, but can be included by specifying ``backrefs=True``.
 
 Example:
 
@@ -856,15 +856,23 @@ will get all users who belong to a group that starts with the letter "A":
 djpeewee API
 ^^^^^^^^^^^^
 
-.. py:function:: translate(*models)
+.. py:function:: translate(*models, **options)
 
     Translate the given Django models into roughly equivalent peewee models
     suitable for use constructing queries. Foreign keys and many-to-many relationships
     will be followed and models generated, although back references are not traversed.
 
     :param models: One or more Django model classes.
+    :param options: A dictionary of options, see note below.
     :returns: A dict-like object containing the generated models, but which supports
         dotted-name style lookups.
+
+    The following are valid options:
+
+    * ``recurse``: Follow foreign keys and many to many (default: ``True``).
+    * ``max_depth``: Maximum depth to recurse (default: ``None``, unlimited).
+    * ``backrefs``: Follow backrefs (default: ``False``).
+    * ``exclude``: A list of models to exclude.
 
 
 .. _gfk:
