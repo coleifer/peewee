@@ -1657,9 +1657,10 @@ class SelectQuery(Query):
         # defaults to a count() of the primary key
         return self.aggregate(convert=False) or 0
 
-    def wrapped_count(self):
+    def wrapped_count(self, clear_limit=True):
         clone = self.order_by()
-        clone._limit = clone._offset = None
+        if clear_limit:
+            clone._limit = clone._offset = None
 
         sql, params = clone.sql()
         wrapped = 'SELECT COUNT(1) FROM (%s) AS wrapped_select' % sql
