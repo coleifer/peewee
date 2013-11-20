@@ -45,6 +45,7 @@ __all__ = [
     'JOIN_LEFT_OUTER',
     'Model',
     'MySQLDatabase',
+    'Param',
     'PostgresqlDatabase',
     'prefetch',
     'PrimaryKeyField',
@@ -838,6 +839,7 @@ class QueryCompiler(object):
                 node.nodes, alias_map, conv, ' ')
         elif isinstance(node, Param):
             params = [node.value]
+            unknown = True
         elif isinstance(node, R):
             sql = node.value
             params = []
