@@ -68,25 +68,28 @@ class Migrator(object):
     def quote(self, s):
         return self.compiler.quote(s)
 
-    def add_column(self, model_class, field, field_name=None):
+    def add_column(
+        self, model_class, field, field_name=None, allow_null=False
+    ):
         if not field_name and not field.db_column:
             raise AttributeError('Missing required field name')
         elif not field.db_column:
             field.name = field.db_column = field_name
             field.model_class = model_class
 
-        if not field.null and field.default is None:
-            raise ValueError('Field %s is not null but has no default' %
-                             field.db_column)
+        if not allow_null:
+            if not field.null and field.default is None:
+                raise ValueError('Field %s is not null but has no default' %
+                                 field.db_column)
+            # make field null at first
+            field_null, field.null = field.null, True
 
-        # make field null at first
-        field_null, field.null = field.null, True
         table = self.quote(model_class._meta.db_table)
         self.execute(self.sql_add_column % {
             'table': table,
             'column': self.compiler.field_sql(field)})
 
-        if not field_null:
+        if not allow_null and not field_null:
             # update the new column with the provided default
             default = field.default
             if callable(default):
