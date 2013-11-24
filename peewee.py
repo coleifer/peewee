@@ -79,10 +79,7 @@ else:
         sys.stdout.write('\n')
 
 # DB libraries
-try:
-    import sqlite3
-except ImportError:
-    sqlite3 = None
+import sqlite3
 
 try:
     import psycopg2
