@@ -43,7 +43,7 @@ class TestCSVConversion(unittest.TestCase):
 
     def load(self, *lines, **loader_kwargs):
         csv = self.build_csv(*lines)
-        loader_kwargs['filename'] = csv
+        loader_kwargs['file_or_name'] = csv
         loader_kwargs.setdefault('db_table', 'csv_test')
         loader_kwargs.setdefault('db_or_model', db)
         return TestLoader(**loader_kwargs).load()

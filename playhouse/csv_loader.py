@@ -23,12 +23,19 @@ from contextlib import contextmanager
 
 from peewee import *
 from peewee import Database
+from peewee import PY3
 
+if PY3:
+    basestring = str
 
 class _CSVReader(object):
     @contextmanager
-    def get_reader(self, filename, **reader_kwargs):
-        fh = open(filename, 'r')
+    def get_reader(self, file_or_name, **reader_kwargs):
+        if isinstance(file_or_name, basestring):
+            fh = open(file_or_name, 'r')
+        else:
+            fh = file_or_name
+            fh.seek(0)
         reader = csv.reader(fh, **reader_kwargs)
         yield reader
         fh.close()
@@ -95,19 +102,19 @@ class RowConverter(_CSVReader):
     def default(self, value):
         return True
 
-    def extract_rows(self, filename, **reader_kwargs):
+    def extract_rows(self, file_or_name, **reader_kwargs):
         """
         Extract `self.sample_size` rows from the CSV file and analyze their
         data-types.
 
-        :param str filename: A string filename.
+        :param str file_or_name: A string filename or a file handle.
         :param reader_kwargs: Arbitrary parameters to pass to the CSV reader.
         :returns: A 2-tuple containing a list of headers and list of rows
                   read from the CSV file.
         """
         rows = []
         rows_to_read = self.sample_size
-        with self.get_reader(filename, **reader_kwargs) as reader:
+        with self.get_reader(file_or_name, **reader_kwargs) as reader:
             if self.has_header:
                 rows_to_read += 1
             for i, row in enumerate(reader):
@@ -158,7 +165,7 @@ class Loader(_CSVReader):
     suitable for working with the CSV data.
 
     :param db_or_model: a peewee Database instance or a Model class.
-    :param str filename: the filename of the CSV file.
+    :param file_or_name: the filename of the CSV file *or* a file handle.
     :param list fields: A list of peewee Field() instances appropriate to
         the values in the CSV file.
     :param list field_names: A list of names to use for the fields.
@@ -170,10 +177,10 @@ class Loader(_CSVReader):
         table name will be derived from the CSV filename).
     :param reader_kwargs: Arbitrary arguments to pass to the CSV reader.
     """
-    def __init__(self, db_or_model, filename, fields=None, field_names=None,
+    def __init__(self, db_or_model, file_or_name, fields=None, field_names=None,
                  has_header=True, sample_size=10, converter=None,
                  db_table=None, **reader_kwargs):
-        self.filename = filename
+        self.file_or_name = file_or_name
         self.fields = fields
         self.field_names = field_names
         self.has_header = has_header
@@ -181,11 +188,17 @@ class Loader(_CSVReader):
         self.converter = converter
         self.reader_kwargs = reader_kwargs
 
+        if isinstance(file_or_name, basestring):
+            self.filename = file_or_name
+        else:
+            self.filename = file_or_name.name
+
         if isinstance(db_or_model, Database):
             self.database = db_or_model
             self.model = None
-            self.db_table = (db_table or
-                             os.path.splitext(os.path.basename(filename))[0])
+            self.db_table = (
+                db_table or
+                os.path.splitext(os.path.basename(self.filename))[0])
         else:
             self.model = db_or_model
             self.database = self.model._meta.database
@@ -209,7 +222,7 @@ class Loader(_CSVReader):
     def analyze_csv(self):
         converter = self.get_converter()
         header, rows = converter.extract_rows(
-            self.filename,
+            self.file_or_name,
             **self.reader_kwargs)
         if rows:
             self.fields = converter.analyze(rows)
@@ -235,7 +248,7 @@ class Loader(_CSVReader):
             self.field_names = [
                 'field_%d' % i for i in range(len(self.fields))]
 
-        with self.get_reader(self.filename, **self.reader_kwargs) as reader:
+        with self.get_reader(self.file_or_name, **self.reader_kwargs) as reader:
             if not self.field_names:
                 self.field_names = map(self.clean_field_name, reader.next())
             elif self.has_header:
@@ -255,10 +268,10 @@ class Loader(_CSVReader):
 
         return ModelClass
 
-def load_csv(db_or_model, filename, fields=None, field_names=None,
+def load_csv(db_or_model, file_or_name, fields=None, field_names=None,
              has_header=True, sample_size=10, converter=None,
              db_table=None, **reader_kwargs):
-    loader = Loader(db_or_model, filename, fields, field_names, has_header,
+    loader = Loader(db_or_model, file_or_name, fields, field_names, has_header,
                     sample_size, converter, db_table, **reader_kwargs)
     return loader.load()
 load_csv.__doc__ = Loader.__doc__
