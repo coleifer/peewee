@@ -70,6 +70,10 @@ if PY3:
     basestring = str
     print_ = getattr(builtins, 'print')
     binary_construct = lambda s: bytes(s.encode('raw_unicode_escape'))
+    def reraise(tp, value, tb=None):
+        if value.__traceback__ is not tb:
+            raise value.with_traceback(tb)
+        raise value
 else:
     unicode_type = unicode
     string_type = basestring
@@ -77,6 +81,7 @@ else:
     def print_(s):
         sys.stdout.write(s)
         sys.stdout.write('\n')
+    exec('def reraise(tp, value, tb=None): raise tp, value, tb')
 
 # DB libraries
 import sqlite3
@@ -1783,6 +1788,31 @@ class DeleteQuery(Query):
         return self.database.rows_affected(self._execute())
 
 
+class PeeweeException(Exception): pass
+class DatabaseError(PeeweeException): pass
+class DataError(DatabaseError): pass
+class IntegrityError(DatabaseError): pass
+class InterfaceError(PeeweeException): pass
+class InternalError(DatabaseError): pass
+class NotSupportedError(DatabaseError): pass
+class OperationalError(DatabaseError): pass
+class ProgrammingError(DatabaseError): pass
+
+class ExceptionWrapper(object):
+    __slots__ = ['exceptions']
+
+    def __init__(self, exceptions):
+        self.exceptions = exceptions
+
+    def __enter__(self): pass
+    def __exit__(self, exc_type, exc_value, traceback):
+        if exc_type is None:
+            return
+        if exc_type.__name__ in self.exceptions:
+            new_type = self.exceptions[exc_type.__name__]
+            reraise(new_type, new_type(*exc_value.args), traceback)
+
+
 class Database(object):
     commit_select = False
     compiler_class = QueryCompiler
@@ -1795,6 +1825,16 @@ class Database(object):
     reserved_tables = []
     sequences = False
     subquery_delete_same_table = True
+
+    exceptions = {
+        'DatabaseError': DatabaseError,
+        'DataError': DataError,
+        'IntegrityError': IntegrityError,
+        'InterfaceError': InterfaceError,
+        'InternalError': InternalError,
+        'NotSupportedError': NotSupportedError,
+        'OperationalError': OperationalError,
+        'ProgrammingError': ProgrammingError}
 
     def __init__(self, database, threadlocals=False, autocommit=True,
                  fields=None, ops=None, **connect_kwargs):
@@ -1816,23 +1856,28 @@ class Database(object):
         self.database = database
         self.connect_kwargs = connect_kwargs
 
+    def exception_wrapper(self):
+        return ExceptionWrapper(self.exceptions)
+
     def connect(self):
         with self._conn_lock:
             if self.deferred:
                 raise Exception('Error, database not properly initialized '
                                 'before opening connection')
-            self.__local.conn = self._connect(
-                self.database,
-                **self.connect_kwargs)
-            self.__local.closed = False
+            with self.exception_wrapper():
+                self.__local.conn = self._connect(
+                    self.database,
+                    **self.connect_kwargs)
+                self.__local.closed = False
 
     def close(self):
         with self._conn_lock:
             if self.deferred:
                 raise Exception('Error, database not properly initialized '
                                 'before closing connection')
-            self._close(self.__local.conn)
-            self.__local.closed = True
+            with self.exception_wrapper():
+                self._close(self.__local.conn)
+                self.__local.closed = True
 
     def get_conn(self):
         if not hasattr(self.__local, 'closed') or self.__local.closed:
@@ -1867,7 +1912,7 @@ class Database(object):
         return cursor.rowcount
 
     def sql_error_handler(self, exception, sql, params, require_commit):
-        raise exception
+        return True
 
     def compiler(self):
         return self.compiler_class(
@@ -1876,14 +1921,17 @@ class Database(object):
 
     def execute_sql(self, sql, params=None, require_commit=True):
         logger.debug((sql, params))
-        cursor = self.get_cursor()
-        try:
-            res = cursor.execute(sql, params or ())
-        except Exception as exc:
-            logger.error('Error executing query %s (%s)' % (sql, params))
-            return self.sql_error_handler(exc, sql, params, require_commit)
-        if require_commit and self.get_autocommit():
-            self.commit()
+        with self.exception_wrapper():
+            cursor = self.get_cursor()
+            try:
+                res = cursor.execute(sql, params or ())
+            except Exception as exc:
+                logger.exception('%s %s', sql, params)
+                if self.sql_error_handler(exc, sql, params, require_commit):
+                    raise
+            else:
+                if require_commit and self.get_autocommit():
+                    self.commit()
         return cursor
 
     def begin(self):
@@ -1973,8 +2021,6 @@ class SqliteDatabase(Database):
         OP_LIKE: 'GLOB',
         OP_ILIKE: 'LIKE',
     }
-    if sqlite3:
-        ConnectionError = sqlite3.OperationalError
 
     def _connect(self, database, **kwargs):
         if not sqlite3:
