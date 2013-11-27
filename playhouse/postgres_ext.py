@@ -163,18 +163,21 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
         use_named_cursor = (named_cursor or (
                             self.server_side_cursors and
                             sql.lower().startswith('select')))
-        if use_named_cursor:
-            cursor = self.get_cursor(name=str(uuid.uuid1()))
-            require_commit = False
-        else:
-            cursor = self.get_cursor()
-        try:
-            res = cursor.execute(sql, params or ())
-        except Exception as exc:
-            logger.error('Error executing query %s (%s)' % (sql, params))
-            return self.sql_error_handler(exc, sql, params, require_commit)
-        if require_commit and self.get_autocommit():
-            self.commit()
+        with self.exception_wrapper():
+            if use_named_cursor:
+                cursor = self.get_cursor(name=str(uuid.uuid1()))
+                require_commit = False
+            else:
+                cursor = self.get_cursor()
+            try:
+                res = cursor.execute(sql, params or ())
+            except Exception as exc:
+                logger.exception('%s %s', sql, params)
+                if self.sql_error_handler(exc, sql, params, require_commit):
+                    raise
+            else:
+                if require_commit and self.get_autocommit():
+                    self.commit()
         return cursor
 
     def _connect(self, database, **kwargs):
