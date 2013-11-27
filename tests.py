@@ -62,7 +62,6 @@ if BACKEND == 'postgresql':
     database_class = PostgresqlDatabase
     database_name = 'peewee_test'
     import psycopg2
-    OperationalError = psycopg2.OperationalError
 elif BACKEND == 'mysql':
     database_class = MySQLDatabase
     database_name = 'peewee_test'
@@ -70,7 +69,6 @@ elif BACKEND == 'mysql':
         import MySQLdb as mysql
     except ImportError:
         import pymysql as mysql
-    OperationalError = mysql.OperationalError
 elif BACKEND == 'apsw':
     from playhouse.apsw_ext import *
     database_class = APSWDatabase
@@ -80,7 +78,6 @@ else:
     database_class = SqliteDatabase
     database_name = 'tmp.db'
     import sqlite3
-    OperationalError = sqlite3.OperationalError
     print_('SQLITE VERSION: %s' % sqlite3.version)
 
 #

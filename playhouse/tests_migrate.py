@@ -17,7 +17,7 @@ class Tag(BaseModel):
 
 
 class MigrateTestCase(unittest.TestCase):
-    integrity_error = psycopg2.IntegrityError
+    integrity_error = IntegrityError
 
     def setUp(self):
         Tag._meta.db_table = 'tag'
