@@ -1436,6 +1436,7 @@ working with the CSV data:
 
 .. code-block:: python
 
+    from peewee import *
     from playhouse.csv_loader import load_csv
     db = SqliteDatabase(':memory:')
     ZipToTZ = load_csv(db, 'zip_to_tz.csv')
@@ -1479,6 +1480,7 @@ CSV Loader API
 
     .. code-block:: python
 
+        from peewee import *
         from playhouse.csv_loader import *
         db = SqliteDatabase(':memory:')
         User = load_csv(db, 'users.csv')
