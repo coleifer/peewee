@@ -799,6 +799,15 @@ class SelectTestCase(BasePeeweeTestCase):
         for (query, fkf), expected in zip(fixed, fixed_sql):
             self.assertEqual(normal_compiler.generate_select(query), expected)
 
+    def test_outer_inner_alias(self):
+        UA = User.alias()
+        inner = SelectQuery(UA, fn.Sum(UA.id)).where(UA.id == User.id)
+        query = User.select(User, inner.alias('xxx'))
+        sql, params = query.sql()
+        self.assertEqual(
+            sql,
+            'SELECT t1."id", t1."username", (SELECT Sum(t2."id") FROM "users" AS t2 WHERE (t2."id" = t1."id")) AS xxx FROM "users" AS t1')
+
 class UpdateTestCase(BasePeeweeTestCase):
     def test_update(self):
         uq = UpdateQuery(User, {User.username: 'updated'})
