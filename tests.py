@@ -800,13 +800,16 @@ class SelectTestCase(BasePeeweeTestCase):
             self.assertEqual(normal_compiler.generate_select(query), expected)
 
     def test_outer_inner_alias(self):
+        expected = 'SELECT t1."id", t1."username", (SELECT Sum(t2."id") FROM "users" AS t2 WHERE (t2."id" = t1."id")) AS xxx FROM "users" AS t1'
         UA = User.alias()
         inner = SelectQuery(UA, fn.Sum(UA.id)).where(UA.id == User.id)
         query = User.select(User, inner.alias('xxx'))
-        sql, params = query.sql()
-        self.assertEqual(
-            sql,
-            'SELECT t1."id", t1."username", (SELECT Sum(t2."id") FROM "users" AS t2 WHERE (t2."id" = t1."id")) AS xxx FROM "users" AS t1')
+        self.assertEqual(query.sql()[0], expected)
+
+        # Ensure that ModelAlias.select() does the right thing.
+        inner = UA.select(fn.Sum(UA.id)).where(UA.id == User.id)
+        query = User.select(User, inner.alias('xxx'))
+        self.assertEqual(query.sql()[0], expected)
 
 class UpdateTestCase(BasePeeweeTestCase):
     def test_update(self):
