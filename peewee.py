@@ -2081,6 +2081,7 @@ class PostgresqlDatabase(Database):
         if self.register_unicode:
             pg_extensions.register_type(pg_extensions.UNICODE, conn)
             pg_extensions.register_type(pg_extensions.UNICODEARRAY, conn)
+        self.__tr_local.depth = 0
         return conn
 
     def _get_transaction_depth(self):
@@ -2094,22 +2095,26 @@ class PostgresqlDatabase(Database):
             self.__tr_local.depth = self._get_transaction_depth() - 1
 
     def begin(self):
-        self.execute_sql('SAVEPOINT savepoint', require_commit=False)
         self._inc_transaction_depth()
+        if self._get_transaction_depth() > 1:
+            # only create a savepoint for the nested transaction
+            self.execute_sql('SAVEPOINT savepoint', require_commit=False)
 
     def commit(self):
-        if self._get_transaction_depth() > 0:
+        if self._get_transaction_depth() > 1:
             self.execute_sql('RELEASE SAVEPOINT savepoint', require_commit=False)
-            self._dec_transaction_depth()
-        if self._get_transaction_depth() == 0:
+        else:
             super(PostgresqlDatabase, self).commit()
+        # decrement no matter what, won't fall below 0
+        self._dec_transaction_depth()
 
     def rollback(self):
-        if self._get_transaction_depth() > 0:
+        if self._get_transaction_depth() > 1:
             self.execute_sql('ROLLBACK TO SAVEPOINT savepoint', require_commit=False)
-            self._dec_transaction_depth()
-        if self._get_transaction_depth() == 0:
+        else:
             super(PostgresqlDatabase, self).rollback()
+        # decrement no matter what, won't fall below 0
+        self._dec_transaction_depth()
 
     def last_insert_id(self, cursor, model):
         seq = model._meta.primary_key.sequence
