@@ -2067,6 +2067,13 @@ class PostgresqlDatabase(Database):
 
     register_unicode = True
 
+    def __init__(self, database, threadlocals=False, autocommit=True, fields=None, ops=None, **connect_kwargs):
+        super(PostgresqlDatabase, self).__init__(database, threadlocals, autocommit, fields, ops, **connect_kwargs)
+        if threadlocals:
+            self.__tr_local = threading.local()
+        else:
+            self.__tr_local = type('DummyTransactionLocal', (object,), {})
+
     def _connect(self, database, **kwargs):
         if not psycopg2:
             raise ImproperlyConfigured('psycopg2 must be installed.')
@@ -2075,6 +2082,34 @@ class PostgresqlDatabase(Database):
             pg_extensions.register_type(pg_extensions.UNICODE, conn)
             pg_extensions.register_type(pg_extensions.UNICODEARRAY, conn)
         return conn
+
+    def _get_transaction_depth(self):
+        return getattr(self.__tr_local, 'depth', 0)
+
+    def _inc_transaction_depth(self):
+        self.__tr_local.depth = self._get_transaction_depth() + 1
+
+    def _dec_transaction_depth(self):
+        if self._get_transaction_depth() > 0:
+            self.__tr_local.depth = self._get_transaction_depth() - 1
+
+    def begin(self):
+        self.execute_sql('SAVEPOINT savepoint', require_commit=False)
+        self._inc_transaction_depth()
+
+    def commit(self):
+        if self._get_transaction_depth() > 0:
+            self.execute_sql('RELEASE SAVEPOINT savepoint', require_commit=False)
+            self._dec_transaction_depth()
+        if self._get_transaction_depth() == 0:
+            super(PostgresqlDatabase, self).commit()
+
+    def rollback(self):
+        if self._get_transaction_depth() > 0:
+            self.execute_sql('ROLLBACK TO SAVEPOINT savepoint', require_commit=False)
+            self._dec_transaction_depth()
+        if self._get_transaction_depth() == 0:
+            super(PostgresqlDatabase, self).rollback()
 
     def last_insert_id(self, cursor, model):
         seq = model._meta.primary_key.sequence
