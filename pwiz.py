@@ -430,7 +430,7 @@ def print_models(engine, database, tables, **connect):
 
 # misc
 tn = lambda t: re.sub('[^\w]+', '', t.title())
-cn = lambda c: re.sub('_id$', '', c.lower())
+cn = lambda c: re.sub('_id$', '', c.lower()) or c.lower()
 ds = lambda d: sorted(d.items(), key=lambda t:t[0])
 
 def err(msg):
