@@ -45,12 +45,17 @@ RESERVED_WORDS = set([
 ])
 
 class ColumnInfo(object):
-    __slots__ = ['field_class', 'nullable', 'is_pk']
+    """
+    Store metadata about a given column.
+    """
+    __slots__ = ['field_class', 'kwargs', 'is_pk', 'raw_column_type']
 
-    def __init__(self, field_class, nullable, is_pk=False):
+    def __init__(self, field_class, kwargs=None, is_pk=False,
+                 raw_column_type=None):
         self.field_class = field_class
-        self.nullable = nullable
+        self.kwargs = kwargs
         self.is_pk = is_pk
+        self.raw_column_type = raw_column_type
 
 ForeignKeyMapping = namedtuple('ForeignKeyMapping', ('column', 'table', 'pk'))
 
@@ -106,6 +111,7 @@ class Introspector(object):
 
 
 class PostgresqlIntrospector(Introspector):
+    # select oid, typname from pg_type;
     mapping = {
         16: BooleanField,
         17: BlobField,
@@ -129,19 +135,39 @@ class PostgresqlIntrospector(Introspector):
     def get_conn_class(self):
         return PostgresqlDatabase
 
+    def _get_field_class(self, oid):
+        return self.mapping.get(oid, UnknownFieldType)
+
     def get_columns(self, table):
+        # Get basic metadata about columns.
         curs = self.conn.execute_sql("""
-            SELECT column_name, is_nullable
+            SELECT column_name, is_nullable, data_type, character_maximum_length
             FROM information_schema.columns
             WHERE table_name=%s""", (table,))
-        null_map = dict(curs.fetchall())
-        curs = self.conn.execute_sql('select * from "%s" limit 1' % table)
-        accum = {}
-        for column in curs.description:
-            field_class = self.mapping.get(column.type_code, UnknownFieldType)
-            is_null = null_map[column.name] == 'YES'
-            accum[column.name] = ColumnInfo(field_class, is_null)
+        columns = curs.fetchall()
 
+        # Look up the actual column type for each column.  TODO: combine with
+        # query above?
+        curs = self.conn.execute_sql('select * from "%s" limit 1' % table)
+
+        # Store column metadata in dictionary keyed by column name.
+        accum = {}
+        for idx, column_description in enumerate(curs.description):
+            field_class = self._get_field_class(column_description.type_code)
+            name, nullable, data_type, max_length = columns[idx]
+
+            kwargs = {}
+            if nullable == 'YES':
+                kwargs['null'] = True
+            if field_class is CharField and max_length:
+                kwargs['max_length'] = max_length
+
+            accum[name] = ColumnInfo(
+                field_class,
+                kwargs,
+                raw_column_type=data_type)
+
+        # Look up the primary keys.
         curs = self.conn.execute_sql("""
             SELECT pg_attribute.attname
             FROM pg_index, pg_class, pg_attribute
@@ -158,7 +184,7 @@ class PostgresqlIntrospector(Introspector):
         return accum
 
     def get_foreign_keys(self, table, schema='public'):
-        framing = '''
+        sql = '''
             SELECT
                 kcu.column_name, ccu.table_name, ccu.column_name
             FROM information_schema.table_constraints AS tc
@@ -173,10 +199,8 @@ class PostgresqlIntrospector(Introspector):
                 tc.table_name = %s AND
                 tc.table_schema = %s
         '''
-        fks = []
-        for row in self.conn.execute_sql(framing, (table,schema)):
-            fks.append(ForeignKeyMapping(*row))
-        return fks
+        result = self.conn.execute_sql(sql, (table, schema))
+        return [ForeignKeyMapping(*row) for row in result]
 
 
 class MySQLIntrospector(Introspector):
@@ -210,11 +234,30 @@ class MySQLIntrospector(Introspector):
         return MySQLDatabase
 
     def get_columns(self, table):
+        # Get basic metadata about columns.  Amazingly, this is the same query
+        # as we use with postgresql.
+        curs = self.conn.execute_sql("""
+            SELECT column_name, is_nullable, data_type, character_maximum_length
+            FROM information_schema.columns
+            WHERE table_name=%s""", (table,))
+        columns = curs.fetchall()
+
         curs = self.conn.execute_sql('select * from `%s` limit 1' % table)
         accum = {}
-        for column in curs.description:
+        for idx, column in enumerate(curs.description):
             field_class = self.mapping.get(column[1], UnknownFieldType)
-            accum[column[0]] = ColumnInfo(field_class, column[6])
+            name, nullable, data_type, max_length = columns[idx]
+
+            kwargs = {}
+            if nullable == 'YES':
+                kwargs['null'] = True
+            if field_class is CharField and max_length:
+                kwargs['max_length'] = max_length
+
+            accum[name] = ColumnInfo(
+                field_class,
+                kwargs,
+                raw_column_type=data_type)
         return accum
 
     def get_foreign_keys(self, table):
@@ -260,23 +303,32 @@ class SqliteIntrospector(Introspector):
     def map_col(self, column_type):
         column_type = column_type.lower()
         if column_type in self.mapping:
-            return self.mapping[column_type]
+            column_class = self.mapping[column_type]
         elif re.search(self.re_varchar, column_type):
-            return CharField
+            column_class = CharField
         else:
             column_type = re.sub('\(.+\)', '', column_type)
-            return self.mapping.get(column_type, UnknownFieldType)
+            column_class = self.mapping.get(column_type, UnknownFieldType)
+        return column_class, column_type
 
     def get_columns(self, table):
         curs = self.conn.execute_sql('pragma table_info("%s")' % table)
         accum = {}
         # cid, name, type, notnull, dflt_value, pk
         for (_, name, column_type, not_null, _, is_pk) in curs.fetchall():
+            field_class, raw_column_type = self.map_col(column_type)
             if is_pk:
                 field_class = PrimaryKeyField
-            else:
-                field_class = self.map_col(column_type)
-            accum[name] = ColumnInfo(field_class, not not_null)
+
+            kwargs = {}
+            if not not_null:
+                kwargs['null'] = True
+
+            accum[name] = ColumnInfo(
+                field_class,
+                kwargs,
+                is_pk=is_pk,
+                raw_column_type=raw_column_type)
         return accum
 
     def get_foreign_keys(self, table):
@@ -298,6 +350,7 @@ class SqliteIntrospector(Introspector):
 
             fk_column, rel_table, rel_pk = [s.strip('"') for s in match.groups()]
             fks.append(ForeignKeyMapping(fk_column, rel_table, rel_pk))
+
         return fks
 
 
@@ -367,13 +420,13 @@ def introspect(db, schema=None):
                 column_metadata[table][column]['primary_key'] = True
 
         for col_name, column_info in table_columns[table].items():
-            column_metadata[table].setdefault(col_name, {})
-            if column_info.field_class is ForeignKeyField:
+            column_metadata[table].setdefault(col_name, column_info.kwargs)
+            requires_db_column = any((
+                column_info.field_class is ForeignKeyField,
+                col_name != cn(col_name),
+                cn(col_name) in RESERVED_WORDS))
+            if requires_db_column:
                 column_metadata[table][col_name]['db_column'] = "'%s'" % col_name
-            elif col_name != cn(col_name):
-                column_metadata[table][col_name]['db_column'] = "'%s'" % col_name
-            if column_info.nullable:
-                column_metadata[table][col_name]['null'] = "True"
 
     return table_columns, table_to_model, table_fks, column_metadata
 
@@ -412,10 +465,19 @@ def print_models(engine, database, tables, **connect):
             ])
             colname = cn(column)
             if colname in RESERVED_WORDS:
-                print_('    # FIXME: "%s" is a reserved word' % colname)
-                colname = '#' + colname
-            print_('    %s = %s(%s)' % (
-                colname, column_info.field_class.__name__, field_params))
+                print_('    # FIXME: "%s" is a reserved word, renamed.' % colname)
+                colname = colname + '_'
+
+            comments = ''
+            if column_info.field_class is UnknownFieldType:
+                comments = '  # %s' % column_info.raw_column_type
+
+            print_('    %s = %s(%s)%s' % (
+                colname,
+                column_info.field_class.__name__,
+                field_params,
+                comments))
+
         print_('')
 
         print_('    class Meta:')
