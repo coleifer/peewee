@@ -804,12 +804,14 @@ class SelectTestCase(BasePeeweeTestCase):
         UA = User.alias()
         inner = SelectQuery(UA, fn.Sum(UA.id)).where(UA.id == User.id)
         query = User.select(User, inner.alias('xxx'))
-        self.assertEqual(query.sql()[0], expected)
+        sql, _ = normal_compiler.generate_select(query)
+        self.assertEqual(sql, expected)
 
         # Ensure that ModelAlias.select() does the right thing.
         inner = UA.select(fn.Sum(UA.id)).where(UA.id == User.id)
         query = User.select(User, inner.alias('xxx'))
-        self.assertEqual(query.sql()[0], expected)
+        sql, _ = normal_compiler.generate_select(query)
+        self.assertEqual(sql, expected)
 
 class UpdateTestCase(BasePeeweeTestCase):
     def test_update(self):
