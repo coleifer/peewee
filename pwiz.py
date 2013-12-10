@@ -243,6 +243,7 @@ class SqliteIntrospector(Introspector):
         'integer': IntegerField,
         'integer unsigned': IntegerField,
         'int': IntegerField,
+        'long': BigIntegerField,
         'real': FloatField,
         'smallinteger': IntegerField,
         'smallint': IntegerField,
