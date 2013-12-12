@@ -1478,6 +1478,10 @@ Database and its subclasses
         upon success will be committed.  If an error is raised inside the function,
         the transaction will be rolled back and the error will be re-raised.
 
+        Nested functions can be wrapped with ``commit_on_success`` - the database
+        will keep a stack and only commit when it reaches the end of the outermost
+        function.
+
         :param func: function to decorate
 
         .. code-block:: python
@@ -1487,6 +1491,16 @@ Database and its subclasses
                 from_acct.charge(amt)
                 to_acct.pay(amt)
                 return amt
+
+    .. py:method:: savepoint([sid=None])
+
+        Return a context manager that executes statements in a savepoint.  If an
+        error is raised inside the context manager, the savepoint will be rolled
+        back, otherwise statements are committed when exiting.
+
+        Savepoints can be thought of as nested transactions.
+
+        :param str sid: A string identifier for the savepoint.
 
     .. py:classmethod:: register_fields(fields)
 

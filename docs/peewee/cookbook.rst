@@ -186,7 +186,7 @@ but you have to disable runtime checks to reuse the single connection:
 
 .. code-block:: python
 
-    native_concurrent_db = SqliteDatabase('stats.db', check_same_thread=False)
+    concurrent_db = SqliteDatabase('stats.db', check_same_thread=False)
 
 
 .. _deferring_initialization:
@@ -446,7 +446,7 @@ You can also filter across joins:
     this is fun
     look at this picture of my food
 
-If you want to express a complex query, use parentheses and python's "or" and "and"
+If you want to express a complex query, use parentheses and python's bitwise "or" and "and"
 operators:
 
 .. code-block:: pycon
@@ -818,7 +818,11 @@ context manager and decorator:
         db.rollback()
         raise
     else:
-        db.commit()
+        try:
+            db.commit()
+        except:
+            db.rollback()
+            raise
     finally:
         db.set_autocommit(True)
 
@@ -889,6 +893,14 @@ key, you must set the ``primary_key`` attribute of the model options to a
 
 Bulk loading data or manually specifying primary keys
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The fastest way to load a large number of rows is to use a transaction:
+
+.. code-block:: python
+
+    with db.transaction():
+        for row in data_file:
+            User.create(username=row['username'])
 
 Sometimes you do not want the database to automatically generate a primary key,
 for instance when bulk loading relational data.  To handle this on a "one-off"

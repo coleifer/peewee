@@ -188,8 +188,8 @@ Option                Meaning                                          Inheritab
 ``db_table``          name of the table to store data                  no
 ``indexes``           a list of fields to index                        yes
 ``order_by``          a list of fields to use for default ordering     yes
-``primary_key``       a tuple of field names to use for composite PK   yes
-``table_alias``       a :py:class:`CompositeKey` instance              yes
+``primary_key``       a :py:class:`CompositeKey` instance              yes
+``table_alias``       an alias to use for the table in queries         no
 ===================   ==============================================   ============
 
 
