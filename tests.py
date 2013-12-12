@@ -3214,3 +3214,56 @@ if database_class is PostgresqlDatabase:
 
             u = User.get(User.id == self.user.id)
             self.assertEqual(u.username, self.user.username)
+
+if test_db.savepoints:
+    class TestSavepoints(ModelTestCase):
+        requires = [User]
+
+        def _outer(self, fail_outer=False, fail_inner=False):
+            with test_db.savepoint():
+                User.create(username='outer')
+                try:
+                    self._inner(fail_inner)
+                except ValueError:
+                    pass
+                if fail_outer:
+                    raise ValueError
+
+        def _inner(self, fail_inner):
+            with test_db.savepoint():
+                User.create(username='inner')
+                if fail_inner:
+                    raise ValueError('failing')
+
+        def assertNames(self, expected):
+            query = User.select().order_by(User.username)
+            self.assertEqual([u.username for u in query], expected)
+
+        def test_success(self):
+            with test_db.transaction():
+                self._outer()
+                self.assertEqual(User.select().count(), 2)
+            self.assertNames(['inner', 'outer'])
+
+        def test_inner_failure(self):
+            with test_db.transaction():
+                self._outer(fail_inner=True)
+                self.assertEqual(User.select().count(), 1)
+            self.assertNames(['outer'])
+
+        def test_outer_failure(self):
+            # Because the outer savepoint is rolled back, we'll lose the
+            # inner savepoint as well.
+            with test_db.transaction():
+                self.assertRaises(ValueError, self._outer, fail_outer=True)
+                self.assertEqual(User.select().count(), 0)
+
+        def test_failure(self):
+            with test_db.transaction():
+                self.assertRaises(
+                    ValueError, self._outer, fail_outer=True, fail_inner=True)
+                self.assertEqual(User.select().count(), 0)
+
+
+elif TEST_VERBOSITY > 0:
+    print_('Skipping "savepoint" tests')

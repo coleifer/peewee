@@ -14,6 +14,7 @@ import operator
 import re
 import sys
 import threading
+import uuid
 from collections import deque
 from collections import namedtuple
 from copy import deepcopy
@@ -1831,6 +1832,7 @@ class Database(object):
     op_overrides = {}
     quote_char = '"'
     reserved_tables = []
+    savepoints = True
     sequences = False
     subquery_delete_same_table = True
 
@@ -1979,6 +1981,11 @@ class Database(object):
                 return func(*args, **kwargs)
         return inner
 
+    def savepoint(self, sid=None):
+        if not self.savepoints:
+            raise NotImplementedError
+        return savepoint(self, sid)
+
     def get_tables(self):
         raise NotImplementedError
 
@@ -2029,6 +2036,7 @@ class SqliteDatabase(Database):
         OP_LIKE: 'GLOB',
         OP_ILIKE: 'LIKE',
     }
+    savepoints = False
 
     def _connect(self, database, **kwargs):
         if not sqlite3:
@@ -2222,6 +2230,35 @@ class transaction(object):
             self.db.set_autocommit(self._orig)
             self.db.pop_transaction()
 
+
+class savepoint(object):
+    def __init__(self, db, sid=None):
+        self.db = db
+        _compiler = db.compiler()
+        self.sid = sid or 's' + uuid.uuid4().get_hex()
+        self.quoted_sid = _compiler.quote(self.sid)
+
+    def _execute(self, query):
+        self.db.execute_sql(query, require_commit=False)
+
+    def __enter__(self):
+        self._orig_autocommit = self.db.get_autocommit()
+        self.db.set_autocommit(False)
+        self._execute('SAVEPOINT %s;' % self.quoted_sid)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            if exc_type:
+                self._execute('ROLLBACK TO SAVEPOINT %s;' % self.quoted_sid)
+            else:
+                try:
+                    self._execute('RELEASE SAVEPOINT %s;' % self.quoted_sid)
+                except:
+                    self._execute(
+                        'ROLLBACK TO SAVEPOINT %s;' % self.quoted_sid)
+                    raise
+        finally:
+            self.db.set_autocommit(self._orig_autocommit)
 
 class FieldProxy(Field):
     def __init__(self, alias, field_instance):
