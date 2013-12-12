@@ -2036,7 +2036,6 @@ class SqliteDatabase(Database):
         OP_LIKE: 'GLOB',
         OP_ILIKE: 'LIKE',
     }
-    savepoints = False
 
     def _connect(self, database, **kwargs):
         if not sqlite3:
@@ -2054,6 +2053,9 @@ class SqliteDatabase(Database):
         res = self.execute_sql('select name from sqlite_master where '
                                'type="table" order by name;')
         return [r[0] for r in res.fetchall()]
+
+    def savepoint(self, sid=None):
+        return savepoint_sqlite(self, sid)
 
     def extract_date(self, date_part, date_field):
         return fn.date_part(date_part, date_field)
@@ -2259,6 +2261,27 @@ class savepoint(object):
                     raise
         finally:
             self.db.set_autocommit(self._orig_autocommit)
+
+class savepoint_sqlite(savepoint):
+    def __enter__(self):
+        conn = self.db.get_conn()
+        # For sqlite, the connection's isolation_level *must* be set to None.
+        # The act of setting it, though, will break any existing savepoints,
+        # so only write to it if necessary.
+        if conn.isolation_level is not None:
+            self._orig_isolation_level = conn.isolation_level
+            conn.isolation_level = None
+        else:
+            self._orig_isolation_level = None
+        super(savepoint_sqlite, self).__enter__()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            return super(savepoint_sqlite, self).__exit__(
+                exc_type, exc_val, exc_tb)
+        finally:
+            if self._orig_isolation_level is not None:
+                self.db.get_conn().isolation_level = self._orig_isolation_level
 
 class FieldProxy(Field):
     def __init__(self, alias, field_instance):
