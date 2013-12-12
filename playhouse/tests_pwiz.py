@@ -134,7 +134,9 @@ class TestPwiz(unittest.TestCase):
                     column_info.field_class in klass,
                     '[%s] %s %s not in %s' % (
                         db_name, table, column_info.field_class, klass))
-                self.assertEqual(column_info.nullable, nullable)
+                self.assertEqual(
+                    column_info.kwargs.get('null', False),
+                    nullable)
 
     @generative_test
     def test_foreign_keys(self, database, db_name):
@@ -173,7 +175,7 @@ class TestPwiz(unittest.TestCase):
         self.assertEqual(rm_meta['col_types_nullable_id'], {
             'db_column': "'col_types_nullable_id'",
             'rel_model': 'Coltypes',
-            'null': 'True'})
+            'null': True})
 
         fkpk_meta = col_meta['fkpk']
         self.assertEqual(fkpk_meta['col_types_id'], {
