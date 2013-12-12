@@ -1959,6 +1959,17 @@ class Database(object):
             self.set_autocommit(self.autocommit)
         return self.__local.autocommit
 
+    def push_transaction(self, transaction):
+        if not hasattr(self.__local, 'transactions'):
+            self.__local.transactions = []
+        self.__local.transactions.append(transaction)
+
+    def pop_transaction(self):
+        self.__local.transactions.pop()
+
+    def transaction_depth(self):
+        return len(getattr(self.__local, 'transactions', []))
+
     def transaction(self):
         return transaction(self)
 
@@ -2187,16 +2198,21 @@ class transaction(object):
     def __init__(self, db):
         self.db = db
 
+    def _begin(self):
+        self.db.begin()
+
     def __enter__(self):
         self._orig = self.db.get_autocommit()
         self.db.set_autocommit(False)
-        self.db.begin()
+        if self.db.transaction_depth() == 0:
+            self._begin()
+        self.db.push_transaction(self)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         try:
             if exc_type:
                 self.db.rollback()
-            else:
+            elif self.db.transaction_depth() == 1:
                 try:
                     self.db.commit()
                 except:
@@ -2204,6 +2220,7 @@ class transaction(object):
                     raise
         finally:
             self.db.set_autocommit(self._orig)
+            self.db.pop_transaction()
 
 
 class FieldProxy(Field):

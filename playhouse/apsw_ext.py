@@ -73,9 +73,7 @@ class transaction(_transaction):
         self.db = db
         self.lock_type = lock_type
 
-    def __enter__(self):
-        self._orig = self.db.get_autocommit()
-        self.db.set_autocommit(False)
+    def _begin(self):
         self.db.begin(self.lock_type)
 
 
