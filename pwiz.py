@@ -420,7 +420,8 @@ def introspect(db, schema=None):
                 column_metadata[table][column]['primary_key'] = True
 
         for col_name, column_info in table_columns[table].items():
-            column_metadata[table].setdefault(col_name, column_info.kwargs)
+            column_metadata[table].setdefault(col_name, {})
+            column_metadata[table][col_name].update(column_info.kwargs)
             requires_db_column = any((
                 column_info.field_class is ForeignKeyField,
                 col_name != cn(col_name),
