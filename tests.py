@@ -2714,64 +2714,62 @@ class TransactionTestCase(ModelTestCase):
 
         @test_db.commit_on_success
         def will_fail():
-            u = User.create(username='u1')
-            b = Blog.create() # no blog, will raise an error
-            return u, b
+            User.create(username='u1')
+            Blog.create() # no blog, will raise an error
 
-        self.assertRaises(Exception, will_fail)
+        self.assertRaises(IntegrityError, will_fail)
         self.assertEqual(User.select().count(), 0)
         self.assertEqual(Blog.select().count(), 0)
 
         @test_db.commit_on_success
         def will_succeed():
             u = User.create(username='u1')
-            b = Blog.create(title='b1', user=u)
-            return u, b
+            Blog.create(title='b1', user=u)
 
-        u, b = will_succeed()
+        will_succeed()
         self.assertEqual(User.select().count(), 1)
         self.assertEqual(Blog.select().count(), 1)
 
     def test_context_mgr(self):
-        def will_fail():
-            u = User.create(username='u1')
-            b = Blog.create() # no blog, will raise an error
-            return u, b
-
         def do_will_fail():
-            with transaction(test_db):
-                will_fail()
-
-        def do_will_fail2():
             with test_db.transaction():
-                will_fail()
+                User.create(username='u1')
+                Blog.create() # no blog, will raise an error
 
-        self.assertRaises(Exception, do_will_fail)
+        self.assertRaises(IntegrityError, do_will_fail)
         self.assertEqual(Blog.select().count(), 0)
-
-        self.assertRaises(Exception, do_will_fail2)
-        self.assertEqual(Blog.select().count(), 0)
-
-        def will_succeed():
-            u = User.create(username='u1')
-            b = Blog.create(title='b1', user=u)
-            return u, b
 
         def do_will_succeed():
             with transaction(test_db):
-                will_succeed()
-
-        def do_will_succeed2():
-            with test_db.transaction():
-                will_succeed()
+                u = User.create(username='u1')
+                Blog.create(title='b1', user=u)
 
         do_will_succeed()
         self.assertEqual(User.select().count(), 1)
         self.assertEqual(Blog.select().count(), 1)
 
-        do_will_succeed2()
+    def test_nesting_transactions(self):
+        @test_db.commit_on_success
+        def outer(should_fail=False):
+            self.assertEqual(test_db.transaction_depth(), 1)
+            User.create(username='outer')
+            inner(should_fail)
+            self.assertEqual(test_db.transaction_depth(), 1)
+
+        @test_db.commit_on_success
+        def inner(should_fail):
+            self.assertEqual(test_db.transaction_depth(), 2)
+            User.create(username='inner')
+            if should_fail:
+                raise ValueError('failing')
+
+        self.assertRaises(ValueError, outer, should_fail=True)
+        self.assertEqual(User.select().count(), 0)
+        self.assertEqual(test_db.transaction_depth(), 0)
+
+        outer(should_fail=False)
         self.assertEqual(User.select().count(), 2)
-        self.assertEqual(Blog.select().count(), 2)
+        self.assertEqual(test_db.transaction_depth(), 0)
 
 
 class ConcurrencyTestCase(ModelTestCase):

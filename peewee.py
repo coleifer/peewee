@@ -1968,7 +1968,7 @@ class Database(object):
         self.__local.transactions.pop()
 
     def transaction_depth(self):
-        return len(getattr(self.__local, 'transactions', []))
+        return len(getattr(self.__local, 'transactions', ()))
 
     def transaction(self):
         return transaction(self)
