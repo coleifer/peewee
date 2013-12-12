@@ -241,18 +241,16 @@ class granular_transaction(transaction):
         self.lock_type = lock_type
 
     def __enter__(self):
-        self._orig = self.db.get_autocommit()
-        self.db.set_autocommit(False)
         self._orig_isolation = self.conn.isolation_level
         self.conn.isolation_level = self.lock_type
+        super(granular_transaction, self).__enter__()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        success = super(granular_transaction, self).__exit__(
-            exc_type,
-            exc_val,
-            exc_tb)
-        self.conn.isolation_level = self._orig_isolation
-        return success
+        try:
+            super(granular_transaction, self).__exit__(
+                exc_type, exc_val, exc_tb)
+        finally:
+            self.conn.isolation_level = self._orig_isolation
 
 
 OP_MATCH = 'match'

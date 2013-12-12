@@ -1964,19 +1964,8 @@ class Database(object):
 
     def commit_on_success(self, func):
         def inner(*args, **kwargs):
-            orig = self.get_autocommit()
-            self.set_autocommit(False)
-            self.begin()
-            try:
-                res = func(*args, **kwargs)
-                self.commit()
-            except:
-                self.rollback()
-                raise
-            else:
-                return res
-            finally:
-                self.set_autocommit(orig)
+            with self.transaction():
+                return func(*args, **kwargs)
         return inner
 
     def get_tables(self):
@@ -2204,14 +2193,17 @@ class transaction(object):
         self.db.begin()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        success = True
-        if exc_type:
-            self.db.rollback()
-            success = False
-        else:
-            self.db.commit()
-        self.db.set_autocommit(self._orig)
-        return success
+        try:
+            if exc_type:
+                self.db.rollback()
+            else:
+                try:
+                    self.db.commit()
+                except:
+                    self.db.rollback()
+                    raise
+        finally:
+            self.db.set_autocommit(self._orig)
 
 
 class FieldProxy(Field):
