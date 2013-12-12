@@ -20,6 +20,7 @@ from collections import namedtuple
 from copy import deepcopy
 from inspect import isclass
 
+# Module exports, to make the use of `from peewee import *` somewhat palatable.
 __all__ = [
     'BareField',
     'BigIntegerField',
@@ -64,10 +65,15 @@ __all__ = [
     'TimeField',
 ]
 
-# Python 2/3 compat
+# All peewee-generated logs are logged to this namespace.
+logger = logging.getLogger('peewee')
+
+# Python 2/3 compatibility helpers. These helpers are used internally and are
+# not exported.
 def with_metaclass(meta, base=object):
     return meta("NewBase", (base,), {})
 
+PY2 = sys.version_info[0] == 2
 PY3 = sys.version_info[0] == 3
 if PY3:
     import builtins
@@ -83,7 +89,7 @@ if PY3:
         if value.__traceback__ is not tb:
             raise value.with_traceback(tb)
         raise value
-else:
+elif PY2:
     unicode_type = unicode
     string_type = basestring
     binary_construct = buffer
@@ -91,34 +97,33 @@ else:
         sys.stdout.write(s)
         sys.stdout.write('\n')
     exec('def reraise(tp, value, tb=None): raise tp, value, tb')
+else:
+    raise RuntimeError('Unsupported python version.')
 
-# DB libraries
+# Default database drivers. When drivers cannot be imported they are stored as
+# None to avoid `NameError`s.
 import sqlite3
-
 try:
     import psycopg2
+    from psycopg2 import extensions as pg_extensions
 except ImportError:
     psycopg2 = None
-
 try:
-    import MySQLdb as mysql
+    import MySQLdb as mysql  # prefer the C module.
 except ImportError:
     try:
         import pymysql as mysql
     except ImportError:
         mysql = None
 
-class ImproperlyConfigured(Exception): pass
+# Register commonplace adapters.  This happens a module-import time, as the
+# sqlite module itself handles adapters globally.
+sqlite3.register_adapter(decimal.Decimal, str)
+sqlite3.register_adapter(datetime.date, str)
+sqlite3.register_adapter(datetime.time, str)
 
-if sqlite3 is None and psycopg2 is None and mysql is None:
-    raise ImproperlyConfigured('Either sqlite3, psycopg2 or MySQLdb must be '
-                               'installed')
-
-if sqlite3:
-    sqlite3.register_adapter(decimal.Decimal, str)
-    sqlite3.register_adapter(datetime.date, str)
-    sqlite3.register_adapter(datetime.time, str)
-
+# Sqlite does not support the `date_part` SQL function, so we will define an
+# implementation in python.
 SQLITE_DT_FORMATS = (
     '%Y-%m-%d %H:%M:%S',
     '%Y-%m-%d %H:%M:%S.%f',
@@ -134,12 +139,7 @@ def _sqlite_date_part(lookup_type, datetime_string):
     dt = format_date_time(datetime_string, SQLITE_DT_FORMATS)
     return getattr(dt, lookup_type)
 
-if psycopg2:
-    from psycopg2 import extensions as pg_extensions
-
-# Peewee
-logger = logging.getLogger('peewee')
-
+# Define common operations using unique, semantic identifiers.
 OP_AND = 'and'
 OP_OR = 'or'
 
@@ -164,6 +164,8 @@ OP_LIKE = 'like'
 OP_ILIKE = 'ilike'
 OP_BETWEEN = 'between'
 
+# To support "django-style" double-underscore filters, create a mapping between
+# operation name and operation code.
 DJANGO_MAP = {
     'eq': OP_EQ,
     'lt': OP_LT,
@@ -181,31 +183,44 @@ JOIN_INNER = 'inner'
 JOIN_LEFT_OUTER = 'left outer'
 JOIN_FULL = 'full'
 
-def dict_update(orig, extra):
-    new = orig.copy()
-    new.update(extra)
-    return new
+# Helper functions that are used in various parts of the codebase.
+def merge_dict(d1, d2):
+    """Merge two dictionaries, giving preference to `d2`."""
+    merged = d1.copy()
+    merged.update(d2)
+    return merged
 
 def returns_clone(func):
+    """
+    Method decorator that will "clone" the object before applying the given
+    method.  This ensures that state is mutated in a more predictable fashion,
+    and promotes the use of method-chaining.
+    """
     def inner(self, *args, **kwargs):
-        clone = self.clone()
+        clone = self.clone()  # Assumes object implements `clone`.
         func(clone, *args, **kwargs)
         return clone
-    inner.call_local = func
+    inner.call_local = func  # Provide a way to call without cloning.
     return inner
 
 def not_allowed(fn):
+    """
+    Method decorator to indicate a method is not allowed to be called.  Will
+    raise a `NotImplementedError`.
+    """
     def inner(self, *args, **kwargs):
         raise NotImplementedError('%s is not allowed on %s instances' % (
             fn, type(self).__name__))
     return inner
 
+# Classes representing the query tree.
 
 class Node(object):
+    """Base-class for any part of a query which shall be composable."""
     def __init__(self):
         self._negated = False
-        self._alias = None
-        self._ordering = None
+        self._alias = None  # Alias this to a name.
+        self._ordering = None  # ASC or DESC.
 
     def clone_base(self):
         return type(self)()
@@ -233,6 +248,10 @@ class Node(object):
         self._ordering = 'DESC'
 
     def _e(op, inv=False):
+        """
+        Lightweight method factory which will build an Expression consisting of
+        the left-hand and right-hand operands, using the passed in `op`.
+        """
         def inner(self, rhs):
             if inv:
                 return Expression(rhs, op, self)
@@ -272,6 +291,7 @@ class Node(object):
         return Expression(self, OP_BETWEEN, Clause(low, R('AND'), high))
 
 class Expression(Node):
+    """A Node consisting of a left-hand, operand, and right-hand."""
     def __init__(self, lhs, op, rhs):
         super(Expression, self).__init__()
         self.lhs = lhs
@@ -282,6 +302,7 @@ class Expression(Node):
         return Expression(self.lhs, self.op, self.rhs)
 
 class DQ(Node):
+    """A Node representing a "django-style" filter expression."""
     def __init__(self, **query):
         super(DQ, self).__init__()
         self.query = query
@@ -290,6 +311,7 @@ class DQ(Node):
         return DQ(**self.query)
 
 class Param(Node):
+    """A Node representing a query parameter."""
     def __init__(self, value):
         self.value = value
         super(Param, self).__init__()
@@ -298,6 +320,7 @@ class Param(Node):
         return Param(self.value)
 
 class R(Node):
+    """A Node representing an unescaped SQL string."""
     def __init__(self, value):
         self.value = value
         super(R, self).__init__()
@@ -306,6 +329,7 @@ class R(Node):
         return R(self.value)
 
 class Func(Node):
+    """A Node representing an arbitrary SQL function call."""
     def __init__(self, name, *nodes):
         self.name = name
         self.nodes = nodes
@@ -319,9 +343,12 @@ class Func(Node):
             return Func(attr, *args, **kwargs)
         return dec
 
+# fn is a factory for creating `Func` objects and supports a more friendly
+# API.  So instead of `Func("LOWER", param)`, `fn.LOWER(param)`.
 fn = Func(None)
 
 class Clause(Node):
+    """A Node representing a SQL clause, or reserved word(s)."""
     def __init__(self, *nodes):
         super(Clause, self).__init__()
         self.nodes = nodes
@@ -330,6 +357,7 @@ class Clause(Node):
         return Clause(*self.nodes)
 
 class Entity(Node):
+    """A Node representing a quoted-name or entity."""
     def __init__(self, *path):
         super(Entity, self).__init__()
         self.path = path
@@ -343,6 +371,8 @@ class Entity(Node):
 Join = namedtuple('Join', ('model_class', 'join_type', 'on'))
 
 class FieldDescriptor(object):
+    # Fields are exposed as descriptors in order to control access to the
+    # underlying "raw" data.
     def __init__(self, field):
         self.field = field
         self.att_name = self.field.name
@@ -356,6 +386,7 @@ class FieldDescriptor(object):
         instance._data[self.att_name] = value
 
 class Field(Node):
+    """A Node representing a column on a table."""
     _field_counter = 0
     _order = 0
     db_field = 'unknown'
@@ -803,8 +834,8 @@ class QueryCompiler(object):
                  op_overrides=None):
         self.quote_char = quote_char
         self.interpolation = interpolation
-        self._field_map = dict_update(self.field_map, field_overrides or {})
-        self._op_map = dict_update(self.op_map, op_overrides or {})
+        self._field_map = merge_dict(self.field_map, field_overrides or {})
+        self._op_map = merge_dict(self.op_map, op_overrides or {})
 
     def quote(self, s):
         return s.join((self.quote_char, self.quote_char))
@@ -1798,6 +1829,7 @@ class DeleteQuery(Query):
 
 
 class PeeweeException(Exception): pass
+class ImproperlyConfigured(PeeweeException): pass
 class DatabaseError(PeeweeException): pass
 class DataError(DatabaseError): pass
 class IntegrityError(DatabaseError): pass
@@ -1806,6 +1838,7 @@ class InternalError(DatabaseError): pass
 class NotSupportedError(DatabaseError): pass
 class OperationalError(DatabaseError): pass
 class ProgrammingError(DatabaseError): pass
+
 
 class ExceptionWrapper(object):
     __slots__ = ['exceptions']
@@ -1858,8 +1891,8 @@ class Database(object):
         self._conn_lock = threading.Lock()
         self.autocommit = autocommit
 
-        self.field_overrides = dict_update(self.field_overrides, fields or {})
-        self.op_overrides = dict_update(self.op_overrides, ops or {})
+        self.field_overrides = merge_dict(self.field_overrides, fields or {})
+        self.op_overrides = merge_dict(self.op_overrides, ops or {})
 
     def init(self, database, **connect_kwargs):
         self.deferred = database is None
@@ -1908,11 +1941,11 @@ class Database(object):
 
     @classmethod
     def register_fields(cls, fields):
-        cls.field_overrides = dict_update(cls.field_overrides, fields)
+        cls.field_overrides = merge_dict(cls.field_overrides, fields)
 
     @classmethod
     def register_ops(cls, ops):
-        cls.op_overrides = dict_update(cls.op_overrides, ops)
+        cls.op_overrides = merge_dict(cls.op_overrides, ops)
 
     def last_insert_id(self, cursor, model):
         if model._meta.auto_increment:

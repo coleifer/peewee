@@ -7,7 +7,6 @@ Collection of postgres-specific extensions, currently including:
 import uuid
 
 from peewee import *
-from peewee import dict_update
 from peewee import Expression
 from peewee import logger
 from peewee import Node
