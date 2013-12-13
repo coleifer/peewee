@@ -61,6 +61,7 @@ __all__ = [
     'ProgrammingError',
     'R',
     'SqliteDatabase',
+    'SQL',
     'TextField',
     'TimeField',
 ]
@@ -165,7 +166,7 @@ OP_ILIKE = 'ilike'
 OP_BETWEEN = 'between'
 
 # To support "django-style" double-underscore filters, create a mapping between
-# operation name and operation code.
+# operation name and operation code, e.g. "__eq" == OP_EQ.
 DJANGO_MAP = {
     'eq': OP_EQ,
     'lt': OP_LT,
@@ -184,10 +185,9 @@ JOIN_LEFT_OUTER = 'left outer'
 JOIN_FULL = 'full'
 
 # Helper functions that are used in various parts of the codebase.
-def merge_dict(d1, d2):
-    """Merge two dictionaries, giving preference to `d2`."""
-    merged = d1.copy()
-    merged.update(d2)
+def merge_dict(source, overrides):
+    merged = source.copy()
+    merged.update(overrides)
     return merged
 
 def returns_clone(func):
@@ -219,7 +219,7 @@ class Node(object):
     """Base-class for any part of a query which shall be composable."""
     def __init__(self):
         self._negated = False
-        self._alias = None  # Alias this to a name.
+        self._alias = None
         self._ordering = None  # ASC or DESC.
 
     def clone_base(self):
@@ -249,8 +249,9 @@ class Node(object):
 
     def _e(op, inv=False):
         """
-        Lightweight method factory which will build an Expression consisting of
-        the left-hand and right-hand operands, using the passed in `op`.
+        Lightweight method factory which returns a method that will build an
+        Expression consisting of the left-hand and right-hand operands, using
+        the passed in `op`.
         """
         def inner(self, rhs):
             if inv:
@@ -291,7 +292,7 @@ class Node(object):
         return Expression(self, OP_BETWEEN, Clause(low, R('AND'), high))
 
 class Expression(Node):
-    """A Node consisting of a left-hand, operand, and right-hand."""
+    """A binary expression, e.g `foo + 1`."""
     def __init__(self, lhs, op, rhs):
         super(Expression, self).__init__()
         self.lhs = lhs
@@ -302,7 +303,7 @@ class Expression(Node):
         return Expression(self.lhs, self.op, self.rhs)
 
 class DQ(Node):
-    """A Node representing a "django-style" filter expression."""
+    """A "django-style" filter expression, e.g. {'foo__eq': 'x'}."""
     def __init__(self, **query):
         super(DQ, self).__init__()
         self.query = query
@@ -311,7 +312,7 @@ class DQ(Node):
         return DQ(**self.query)
 
 class Param(Node):
-    """A Node representing a query parameter."""
+    """Arbitrary parameter passed into a query."""
     def __init__(self, value):
         self.value = value
         super(Param, self).__init__()
@@ -319,17 +320,18 @@ class Param(Node):
     def clone_base(self):
         return Param(self.value)
 
-class R(Node):
-    """A Node representing an unescaped SQL string."""
+class SQL(Node):
+    """An unescaped SQL string."""
     def __init__(self, value):
         self.value = value
-        super(R, self).__init__()
+        super(SQL, self).__init__()
 
     def clone_base(self):
-        return R(self.value)
+        return SQL(self.value)
+R = SQL  # backwards-compat.
 
 class Func(Node):
-    """A Node representing an arbitrary SQL function call."""
+    """An arbitrary SQL function call."""
     def __init__(self, name, *nodes):
         self.name = name
         self.nodes = nodes
@@ -348,7 +350,7 @@ class Func(Node):
 fn = Func(None)
 
 class Clause(Node):
-    """A Node representing a SQL clause, or reserved word(s)."""
+    """A SQL clause, or reserved word(s)."""
     def __init__(self, *nodes):
         super(Clause, self).__init__()
         self.nodes = nodes
@@ -357,7 +359,7 @@ class Clause(Node):
         return Clause(*self.nodes)
 
 class Entity(Node):
-    """A Node representing a quoted-name or entity."""
+    """A quoted-name or entity, e.g. "table"."column"."""
     def __init__(self, *path):
         super(Entity, self).__init__()
         self.path = path
