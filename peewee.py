@@ -1401,6 +1401,7 @@ class ModelQueryResultWrapper(QueryResultWrapper):
 
 
 class Query(Node):
+    """Base class representing a database query on one or more tables."""
     require_commit = True
 
     def __init__(self, model_class):
@@ -1411,7 +1412,7 @@ class Query(Node):
 
         self._dirty = True
         self._query_ctx = model_class
-        self._joins = {self.model_class: []} # adjacency graph
+        self._joins = {self.model_class: []} # Join graph as adjacency list.
         self._where = None
 
     def __repr__(self):
@@ -1431,10 +1432,9 @@ class Query(Node):
 
     def _clone_joins(self):
         return dict(
-            (mc, list(j)) for mc, j in self._joins.items()
-        )
+            (mc, list(j)) for mc, j in self._joins.items())
 
-    def _build_tree(self, initial, expressions):
+    def _add_query_clauses(self, initial, expressions):
         reduced = reduce(operator.and_, expressions)
         if initial is None:
             return reduced
@@ -1442,14 +1442,13 @@ class Query(Node):
 
     @returns_clone
     def where(self, *expressions):
-        self._where = self._build_tree(self._where, expressions)
+        self._where = self._add_query_clauses(self._where, expressions)
 
     @returns_clone
     def join(self, model_class, join_type=None, on=None):
         if not self._query_ctx._meta.rel_exists(model_class) and on is None:
             raise ValueError('No foreign key between %s and %s' % (
-                self._query_ctx, model_class,
-            ))
+                self._query_ctx, model_class))
         if on and isinstance(on, basestring):
             on = self._query_ctx._meta.fields[on]
         self._joins.setdefault(self._query_ctx, [])
@@ -1653,7 +1652,7 @@ class SelectQuery(Query):
 
     @returns_clone
     def having(self, *expressions):
-        self._having = self._build_tree(self._having, expressions)
+        self._having = self._add_query_clauses(self._having, expressions)
 
     @returns_clone
     def order_by(self, *args):
