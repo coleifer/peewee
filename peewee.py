@@ -125,19 +125,19 @@ sqlite3.register_adapter(datetime.time, str)
 
 # Sqlite does not support the `date_part` SQL function, so we will define an
 # implementation in python.
-SQLITE_DT_FORMATS = (
+SQLITE_DATETIME_FORMATS = (
     '%Y-%m-%d %H:%M:%S',
     '%Y-%m-%d %H:%M:%S.%f',
     '%Y-%m-%d',
     '%H:%M:%S',
     '%H:%M:%S.%f',
     '%H:%M')
-DT_PARTS = ['year', 'month', 'day', 'hour', 'minute', 'second']
-DT_LOOKUPS = set(DT_PARTS)
+DATETIME_PARTS = ['year', 'month', 'day', 'hour', 'minute', 'second']
+DATETIME_LOOKUPS = set(DATETIME_PARTS)
 
 def _sqlite_date_part(lookup_type, datetime_string):
-    assert lookup_type in DT_LOOKUPS
-    dt = format_date_time(datetime_string, SQLITE_DT_FORMATS)
+    assert lookup_type in DATETIME_LOOKUPS
+    dt = format_date_time(datetime_string, SQLITE_DATETIME_FORMATS)
     return getattr(dt, lookup_type)
 
 # Define common operations using unique, semantic identifiers.
@@ -203,14 +203,14 @@ def returns_clone(func):
     inner.call_local = func  # Provide a way to call without cloning.
     return inner
 
-def not_allowed(fn):
+def not_allowed(func):
     """
     Method decorator to indicate a method is not allowed to be called.  Will
     raise a `NotImplementedError`.
     """
     def inner(self, *args, **kwargs):
         raise NotImplementedError('%s is not allowed on %s instances' % (
-            fn, type(self).__name__))
+            func, type(self).__name__))
     return inner
 
 # Classes representing the query tree.
@@ -312,7 +312,11 @@ class DQ(Node):
         return DQ(**self.query)
 
 class Param(Node):
-    """Arbitrary parameter passed into a query."""
+    """
+    Arbitrary parameter passed into a query. Instructs the query compiler to
+    specifically treat this value as a parameter, useful for `list` which is
+    special-cased for `IN` lookups.
+    """
     def __init__(self, value):
         self.value = value
         super(Param, self).__init__()
@@ -332,13 +336,13 @@ R = SQL  # backwards-compat.
 
 class Func(Node):
     """An arbitrary SQL function call."""
-    def __init__(self, name, *nodes):
+    def __init__(self, name, *arguments):
         self.name = name
-        self.nodes = nodes
+        self.arguments = arguments
         super(Func, self).__init__()
 
     def clone_base(self):
-        return Func(self.name, *self.nodes)
+        return Func(self.name, *self.arguments)
 
     def __getattr__(self, attr):
         def dec(*args, **kwargs):
@@ -350,7 +354,7 @@ class Func(Node):
 fn = Func(None)
 
 class Clause(Node):
-    """A SQL clause, or reserved word(s)."""
+    """A SQL clause, one or more SQL expressions joined by spaces."""
     def __init__(self, *nodes):
         super(Clause, self).__init__()
         self.nodes = nodes
@@ -388,7 +392,7 @@ class FieldDescriptor(object):
         instance._data[self.att_name] = value
 
 class Field(Node):
-    """A Node representing a column on a table."""
+    """A column on a table."""
     _field_counter = 0
     _order = 0
     db_field = 'unknown'
@@ -440,6 +444,11 @@ class Field(Node):
        return inst
 
     def add_to_class(self, model_class, name):
+        """
+        Hook that replaces the `Field` attribute on a class with a named
+        `FieldDescriptor`. Called by the metaclass during construction of the
+        `Model`.
+        """
         self.name = name
         self.model_class = model_class
         self.db_column = self.db_column or self.name
@@ -456,6 +465,7 @@ class Field(Node):
         return self.model_class._meta.database
 
     def field_attributes(self):
+        """Arbitrary default attributes, e.g. "max_length" or "precision"."""
         return {}
 
     def get_db_field(self):
@@ -468,9 +478,11 @@ class Field(Node):
         return value
 
     def db_value(self, value):
+        """Convert the python value for storage in the database."""
         return value if value is None else self.coerce(value)
 
     def python_value(self, value):
+        """Convert the database value to a pythonic value."""
         return value if value is None else self.coerce(value)
 
     def __hash__(self):
@@ -529,7 +541,7 @@ class DecimalField(Field):
                 return value
             return decimal.Decimal(str(value))
 
-def format_unicode(s, encoding='utf-8'):
+def coerce_to_unicode(s, encoding='utf-8'):
     if isinstance(s, unicode_type):
         return s
     elif isinstance(s, string_type):
@@ -544,13 +556,13 @@ class CharField(Field):
         return {'max_length': 255}
 
     def coerce(self, value):
-        return format_unicode(value or '')
+        return coerce_to_unicode(value or '')
 
 class TextField(Field):
     db_field = 'text'
 
     def coerce(self, value):
-        return format_unicode(value or '')
+        return coerce_to_unicode(value or '')
 
 class BlobField(Field):
     db_field = 'blob'
@@ -653,6 +665,7 @@ class BooleanField(Field):
     coerce = bool
 
 class RelationDescriptor(FieldDescriptor):
+    """Foreign-key abstraction to replace a related PK with a related model."""
     def __init__(self, field, rel_model):
         self.rel_model = rel_model
         super(RelationDescriptor, self).__init__(field)
@@ -685,6 +698,7 @@ class RelationDescriptor(FieldDescriptor):
                 del instance._obj_cache[self.att_name]
 
 class ReverseRelationDescriptor(object):
+    """Back-reference to expose related objects as a `SelectQuery`."""
     def __init__(self, field):
         self.field = field
         self.rel_model = field.model_class
@@ -766,10 +780,11 @@ class ForeignKeyField(IntegerField):
 
 
 class CompositeKey(object):
+    """A primary key composed of multiple columns."""
     sequence = None
 
-    def __init__(self, *fields):
-        self.fields = fields
+    def __init__(self, *field_names):
+        self.field_names = field_names
 
     def add_to_class(self, model_class, name):
         self.name = name
@@ -777,7 +792,8 @@ class CompositeKey(object):
 
     def __get__(self, instance, instance_type=None):
         if instance is not None:
-            return [getattr(instance, field) for field in self.fields]
+            return [getattr(instance, field_name)
+                    for field_name in self.field_names]
         return self
 
     def __set__(self, instance, value):
@@ -785,6 +801,8 @@ class CompositeKey(object):
 
 
 class QueryCompiler(object):
+    # Mapping of `db_type` to actual column type used by database driver.
+    # Database classes may provide additional column types or overrides.
     field_map = {
         'bare': '',
         'bigint': 'BIGINT',
@@ -802,6 +820,9 @@ class QueryCompiler(object):
         'time': 'TIME',
     }
 
+    # Mapping of OP_ to actual SQL operation.  For most databases this will be
+    # the same, but some column types or databases may support additional ops.
+    # Like `field_map`, Database classes may extend or override these.
     op_map = {
         OP_EQ: '=',
         OP_LT: '<',
@@ -842,7 +863,7 @@ class QueryCompiler(object):
     def quote(self, s):
         return s.join((self.quote_char, self.quote_char))
 
-    def get_field(self, f):
+    def get_column_type(self, f):
         return self._field_map[f]
 
     def get_op(self, q):
@@ -876,7 +897,7 @@ class QueryCompiler(object):
                 sql = '.'.join((alias_map[node.model_class], sql))
             params = []
         elif isinstance(node, Func):
-            sql, params = self.parse_node_list(node.nodes, alias_map, conv)
+            sql, params = self.parse_node_list(node.arguments, alias_map, conv)
             sql = '%s(%s)' % (node.name, sql)
         elif isinstance(node, Clause):
             sql, params = self.parse_node_list(
@@ -1110,7 +1131,7 @@ class QueryCompiler(object):
 
     def field_sql(self, field):
         attrs = field.attributes
-        attrs['column_type'] = self.get_field(field.get_db_field())
+        attrs['column_type'] = self.get_column_type(field.get_db_field())
         template = field.get_template()
 
         if isinstance(field, ForeignKeyField):
@@ -1144,8 +1165,8 @@ class QueryCompiler(object):
         parts.append(self.quote(meta.db_table))
         columns = map(self.field_sql, meta.get_fields())
         if isinstance(meta.primary_key, CompositeKey):
-            pk_cols = map(self.quote, (
-                meta.fields[f].db_column for f in meta.primary_key.fields))
+            pk_cols = map(self.quote, (meta.fields[f].db_column
+                                       for f in meta.primary_key.field_names))
             columns.append('PRIMARY KEY (%s)' % ', '.join(pk_cols))
         parts.append('(%s)' % ', '.join(columns))
         return parts
@@ -1260,7 +1281,6 @@ class ExtQueryResultWrapper(QueryResultWrapper):
         identity = lambda x: x
         for i in range(len(description)):
             column = description[i][0]
-            func = identity
             if column in model._meta.columns:
                 field_obj = model._meta.columns[column]
                 column = field_obj.name
@@ -1269,8 +1289,10 @@ class ExtQueryResultWrapper(QueryResultWrapper):
                 select_column = self.column_meta[i]
                 # Special-case handling aggregations.
                 if (isinstance(select_column, Func) and
-                        isinstance(select_column.nodes[0], Field)):
-                    func = select_column.nodes[0].python_value
+                        isinstance(select_column.arguments[0], Field)):
+                    func = select_column.arguments[0].python_value
+                else:
+                    func = identity
             conv.append((i, column, func))
         self.conv = conv
 
