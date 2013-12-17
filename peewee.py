@@ -20,7 +20,6 @@ from collections import namedtuple
 from copy import deepcopy
 from inspect import isclass
 
-# Module exports, to make the use of `from peewee import *` somewhat palatable.
 __all__ = [
     'BareField',
     'BigIntegerField',
@@ -101,8 +100,7 @@ elif PY2:
 else:
     raise RuntimeError('Unsupported python version.')
 
-# Default database drivers. When drivers cannot be imported they are stored as
-# None to avoid `NameError`s.
+# By default, peewee supports Sqlite, MySQL and Postgresql.
 import sqlite3
 try:
     import psycopg2
@@ -117,11 +115,12 @@ except ImportError:
     except ImportError:
         mysql = None
 
-# Register commonplace adapters.  This happens a module-import time, as the
-# sqlite module itself handles adapters globally.
 sqlite3.register_adapter(decimal.Decimal, str)
 sqlite3.register_adapter(datetime.date, str)
 sqlite3.register_adapter(datetime.time, str)
+
+DATETIME_PARTS = ['year', 'month', 'day', 'hour', 'minute', 'second']
+DATETIME_LOOKUPS = set(DATETIME_PARTS)
 
 # Sqlite does not support the `date_part` SQL function, so we will define an
 # implementation in python.
@@ -132,15 +131,13 @@ SQLITE_DATETIME_FORMATS = (
     '%H:%M:%S',
     '%H:%M:%S.%f',
     '%H:%M')
-DATETIME_PARTS = ['year', 'month', 'day', 'hour', 'minute', 'second']
-DATETIME_LOOKUPS = set(DATETIME_PARTS)
 
 def _sqlite_date_part(lookup_type, datetime_string):
     assert lookup_type in DATETIME_LOOKUPS
     dt = format_date_time(datetime_string, SQLITE_DATETIME_FORMATS)
     return getattr(dt, lookup_type)
 
-# Define common operations using unique, semantic identifiers.
+# Operators used in binary expressions.
 OP_AND = 'and'
 OP_OR = 'or'
 
@@ -249,9 +246,8 @@ class Node(object):
 
     def _e(op, inv=False):
         """
-        Lightweight method factory which returns a method that will build an
-        Expression consisting of the left-hand and right-hand operands, using
-        the passed in `op`.
+        Lightweight factory which returns a method that builds an Expression
+        consisting of the left-hand and right-hand operands, using `op`.
         """
         def inner(self, rhs):
             if inv:
@@ -292,7 +288,7 @@ class Node(object):
         return Expression(self, OP_BETWEEN, Clause(low, R('AND'), high))
 
 class Expression(Node):
-    """A binary expression, e.g `foo + 1`."""
+    """A binary expression, e.g `foo + 1` or `bar < 7`."""
     def __init__(self, lhs, op, rhs):
         super(Expression, self).__init__()
         self.lhs = lhs
@@ -354,7 +350,7 @@ class Func(Node):
 fn = Func(None)
 
 class Clause(Node):
-    """A SQL clause, one or more SQL expressions joined by spaces."""
+    """A SQL clause, one or more Node objects joined by spaces."""
     def __init__(self, *nodes):
         super(Clause, self).__init__()
         self.nodes = nodes
@@ -746,7 +742,7 @@ class ForeignKeyField(IntegerField):
             self.rel_model = self.model_class
         if self.related_name in self.rel_model._meta.fields:
             error = ('Foreign key: %s.%s related name "%s" collision with '
-                     'field of the same name.')
+                     'model field of the same name.')
             params = self.model_class._meta.name, self.name, self.related_name
             raise AttributeError(error % params)
         if self.related_name in self.rel_model._meta.reverse_rel:
@@ -765,6 +761,10 @@ class ForeignKeyField(IntegerField):
         self.rel_model._meta.reverse_rel[self.related_name] = self
 
     def get_db_field(self):
+        """
+        Overridden to ensure Foreign Keys use same column type as the primary
+        key they point to.
+        """
         to_pk = self.rel_model._meta.primary_key
         if not isinstance(to_pk, PrimaryKeyField):
             return to_pk.get_db_field()
@@ -869,13 +869,13 @@ class QueryCompiler(object):
     def get_op(self, q):
         return self._op_map[q]
 
-    def _max_alias(self, am):
+    def _max_alias(self, alias_map):
         max_alias = 0
-        if am:
-            for a in am.values():
-                i = int(a.lstrip('t'))
-                if i > max_alias:
-                    max_alias = i
+        if alias_map:
+            for alias in alias_map.values():
+                alias_number = int(alias.lstrip('t'))
+                if alias_number > max_alias:
+                    max_alias = alias_number
         return max_alias + 1
 
     def _parse(self, node, alias_map, conv):
@@ -959,12 +959,12 @@ class QueryCompiler(object):
         sets, params = [], []
         for field, value in d.items():
             field_sql, _ = self.parse_node(field)
-            # because we don't know whether to call db_value or parse_node
+            # Because we don't know whether to call db_value or parse_node
             # first, we'd prefer to call parse_node since its more general, but
             # it does special things with lists -- it treats them as if it were
-            # buliding up an IN query. for some things we don't want that, so
+            # buliding up an IN query. For some things we don't want that, so
             # here, if the node is *not* a special object, we'll pass thru
-            # parse_node and let db_value handle it
+            # parse_node and let db_value handle it.
             if not isinstance(value, (Node, Model, Query)):
                 value = Param(value)  # passthru to the field's db_value func
             val_sql, val_params = self.parse_node(value)
@@ -1457,6 +1457,7 @@ class Query(Node):
 
     @returns_clone
     def switch(self, model_class=None):
+        """Change or reset the query context."""
         self._query_ctx = model_class or self.model_class
 
     def ensure_join(self, lm, rm, on=None):
@@ -1550,6 +1551,10 @@ class Query(Node):
             return row
 
 class RawQuery(Query):
+    """
+    Execute a SQL query, returning a standard iterable interface that returns
+    model instances.
+    """
     def __init__(self, model, query, *params):
         self._sql = query
         self._params = list(params)
