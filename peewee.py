@@ -410,13 +410,18 @@ class Field(Node):
         self.primary_key = primary_key
         self.sequence = sequence
 
+        # Set `self.attributes` using any arbitrary key/value pairs.  These are
+        # made available when rendering the field's `template`, and so can
+        # contain things like `max_length` or `decimal_places`.
         self.attributes = self.field_attributes()
         self.attributes.update(kwargs)
 
+        # Used internally for recovering the order in which Fields were defined
+        # on the Model class.
         Field._field_counter += 1
         self._order = Field._field_counter
 
-        self._is_bound = False
+        self._is_bound = False  # Whether the Field is "bound" to a Model.
         super(Field, self).__init__()
 
     def clone_base(self, **kwargs):
@@ -2272,22 +2277,29 @@ class transaction(object):
     def _begin(self):
         self.db.begin()
 
+    def commit(self):
+        self.db.commit()
+
+    def rollback(self):
+        self.db.rollback()
+
     def __enter__(self):
         self._orig = self.db.get_autocommit()
         self.db.set_autocommit(False)
         if self.db.transaction_depth() == 0:
             self._begin()
         self.db.push_transaction(self)
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         try:
             if exc_type:
-                self.db.rollback()
+                self.rollback()
             elif self.db.transaction_depth() == 1:
                 try:
-                    self.db.commit()
+                    self.commit()
                 except:
-                    self.db.rollback()
+                    self.rollback()
                     raise
         finally:
             self.db.set_autocommit(self._orig)
@@ -2304,21 +2316,27 @@ class savepoint(object):
     def _execute(self, query):
         self.db.execute_sql(query, require_commit=False)
 
+    def commit(self):
+        self._execute('RELEASE SAVEPOINT %s;' % self.quoted_sid)
+
+    def rollback(self):
+        self._execute('ROLLBACK TO SAVEPOINT %s;' % self.quoted_sid)
+
     def __enter__(self):
         self._orig_autocommit = self.db.get_autocommit()
         self.db.set_autocommit(False)
         self._execute('SAVEPOINT %s;' % self.quoted_sid)
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         try:
             if exc_type:
-                self._execute('ROLLBACK TO SAVEPOINT %s;' % self.quoted_sid)
+                self.rollback()
             else:
                 try:
-                    self._execute('RELEASE SAVEPOINT %s;' % self.quoted_sid)
+                    self.commit()
                 except:
-                    self._execute(
-                        'ROLLBACK TO SAVEPOINT %s;' % self.quoted_sid)
+                    self.rollback()
                     raise
         finally:
             self.db.set_autocommit(self._orig_autocommit)
