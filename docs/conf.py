@@ -11,7 +11,7 @@
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
-RTD_NEW_THEME = True
+#RTD_NEW_THEME = True
 
 import sys, os
 
