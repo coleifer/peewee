@@ -27,6 +27,7 @@ __all__ = [
     'BooleanField',
     'CharField',
     'Clause',
+    'CompositeForeignKey',
     'CompositeKey',
     'DatabaseError',
     'DataError',
@@ -803,6 +804,42 @@ class CompositeKey(object):
 
     def __set__(self, instance, value):
         pass
+
+
+class CompositeForeignKey(object):
+    """A foreign key to a model with a composite primary key."""
+    primary_key = False  # Cannot be primary key.
+
+    def __init__(self, rel_model, *field_names):
+        self.rel_model = rel_model
+        rel_model_pk_fields = rel_model._meta.primary_key.field_names
+        if not field_names:
+            field_names = rel_model_pk_fields
+        self.field_mapping = dict(zip(field_names, rel_model_pk_fields))
+
+    def add_to_class(self, model_class, name):
+        self.name = name
+        setattr(model_class, name, self)
+
+    def __get__(self, instance, instance_type=None):
+        if instance is not None:
+            if self.name not in instance._obj_cache:
+                query = [(
+                    self.rel_model._meta.fields[pk_field] ==
+                    getattr(instance, fk_field))
+                    for pk_field, fk_field in self.field_mapping.items()]
+                obj = self.rel_model.get(*query)
+                instance._obj_cache[self.name] = obj
+            return instance._obj_cache[self.name]
+        return self
+
+    def __set__(self, instance, value):
+        if value is None:
+            for fk_field in self.field_mapping.values():
+                setattr(instance, fk_field, None)
+        else:
+            for pk_field, fk_field in self.field_mapping.items():
+                setattr(instance, fk_field, getattr(value, pk_field))
 
 
 class QueryCompiler(object):
@@ -2508,9 +2545,13 @@ class BaseModel(type):
                     meta_options[k] = v
 
             for (k, v) in b.__dict__.items():
-                if isinstance(v, FieldDescriptor) and k not in attrs:
+                if k in attrs:
+                    continue
+                if isinstance(v, FieldDescriptor):
                     if not v.field.primary_key:
                         attrs[k] = deepcopy(v.field)
+                elif isinstance(v, CompositeForeignKey):
+                    attrs[k] = deepcopy(v)
 
         # initialize the new class and set the magic attributes
         cls = super(BaseModel, cls).__new__(cls, name, bases, attrs)
@@ -2520,7 +2561,7 @@ class BaseModel(type):
 
         # replace fields with field descriptors, calling the add_to_class hook
         for name, attr in list(cls.__dict__.items()):
-            if isinstance(attr, Field):
+            if isinstance(attr, (Field, CompositeForeignKey)):
                 attr.add_to_class(cls, name)
                 if attr.primary_key and model_pk:
                     raise ValueError('primary key is overdetermined.')

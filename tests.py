@@ -2165,6 +2165,23 @@ class CompositeKeyTestCase(ModelTestCase):
                 .order_by(Tag.tag))
         self.assertEqual([t.tag for t in tags], ['t1', 't2'])
 
+    def test_fk_to_composite_key(self):
+        class CompositeModel(TestModel):
+            key = CharField()
+            value = CharField()
+            class Meta:
+                primary_key = CompositeKey('key', 'value')
+
+        class RelatedToCompositeModel(TestModel):
+            composite_model = ForeignKeyField(CompositeModel)
+
+        RelatedToCompositeModel.drop_table(True)
+        CompositeModel.drop_table(True)
+
+        with test_db.transaction() as txn:
+            CompositeModel.create_table()
+            RelatedToCompositeModel.create_table()
+
 
 class ManyToManyTestCase(ModelTestCase):
     requires = [User, Category, UserCategory]
