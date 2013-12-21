@@ -227,6 +227,7 @@ class Node(object):
         inst = self.clone_base()
         inst._negated = self._negated
         inst._alias = self._alias
+        inst._ordering = self._ordering
         return inst
 
     @returns_clone
