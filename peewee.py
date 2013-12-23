@@ -210,6 +210,29 @@ def not_allowed(func):
             func, type(self).__name__))
     return inner
 
+class Proxy(object):
+    """
+    Proxy class useful for situations when you wish to defer the initialization
+    of an object.
+    """
+    __slots__ = ['obj']
+
+    def __init__(self):
+        self.initialize(None)
+
+    def initialize(self, obj):
+        self.obj = obj
+
+    def __getattr__(self, attr):
+        if self.obj is None:
+            raise AttributeError('Cannot use uninitialized Proxy.')
+        return getattr(self.obj, attr)
+
+    def __setattr__(self, attr, value):
+        if attr != 'obj':
+            raise AttributeError('Cannot set attribute on proxy.')
+        return super(Proxy, self).__setattr__(attr, value)
+
 # Classes representing the query tree.
 
 class Node(object):
@@ -713,9 +736,11 @@ class ReverseRelationDescriptor(object):
 class ForeignKeyField(IntegerField):
     def __init__(self, rel_model, null=False, related_name=None, cascade=False,
                  extra=None, *args, **kwargs):
-        if rel_model != 'self' and not issubclass(rel_model, Model):
+        from playhouse.proxy import Proxy
+        if rel_model != 'self' and not isinstance(rel_model, Proxy) and not \
+                issubclass(rel_model, Model):
             raise TypeError('Unexpected value for `rel_model`.  Expected '
-                            '`Model` or "self"')
+                            '`Model`, `Proxy` or "self"')
         self.rel_model = rel_model
         self._related_name = related_name
         self.cascade = cascade

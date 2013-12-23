@@ -28,21 +28,4 @@ Example:
     database_proxy.initialize(database)
 """
 
-class Proxy(object):
-    __slots__ = ['obj']
-
-    def __init__(self):
-        self.initialize(None)
-
-    def initialize(self, obj):
-        self.obj = obj
-
-    def __getattr__(self, attr):
-        if self.obj is None:
-            raise AttributeError('Cannot use uninitialized Proxy.')
-        return getattr(self.obj, attr)
-
-    def __setattr__(self, attr, value):
-        if attr != 'obj':
-            raise AttributeError('Cannot set attribute on proxy.')
-        return super(Proxy, self).__setattr__(attr, value)
+from peewee import Proxy  # Moved into peewee, here for backwards-compat.
