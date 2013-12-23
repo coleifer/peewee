@@ -713,6 +713,9 @@ class ReverseRelationDescriptor(object):
 class ForeignKeyField(IntegerField):
     def __init__(self, rel_model, null=False, related_name=None, cascade=False,
                  extra=None, *args, **kwargs):
+        if rel_model != 'self' and not issubclass(rel_model, Model):
+            raise TypeError('Unexpected value for `rel_model`.  Expected '
+                            '`Model` or "self"')
         self.rel_model = rel_model
         self._related_name = related_name
         self.cascade = cascade

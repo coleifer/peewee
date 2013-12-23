@@ -1007,6 +1007,21 @@ class CompilerTestCase(BasePeeweeTestCase):
             'ON (pet_tbl."owner_id" = person_tbl."id")')
 
 
+class ValidationTestCase(BasePeeweeTestCase):
+    def test_foreign_key_validation(self):
+        def declare_bad(val):
+            class Bad(TestModel):
+                name = ForeignKeyField(val)
+
+        vals_to_try = [
+            ForeignKeyField(User),
+            'Self',
+            object,
+            object()]
+
+        for val in vals_to_try:
+            self.assertRaises(TypeError, declare_bad, val)
+
 #
 # TEST CASE USED TO PROVIDE ACCESS TO DATABASE
 # FOR EXECUTION OF "LIVE" QUERIES
