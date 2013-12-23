@@ -58,6 +58,7 @@ __all__ = [
     'prefetch',
     'PrimaryKeyField',
     'ProgrammingError',
+    'Proxy',
     'R',
     'SqliteDatabase',
     'SQL',
