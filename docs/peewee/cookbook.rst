@@ -228,9 +228,10 @@ Dynamically defining a database
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 For even more control over how your database is defined/initialized, you can
-use the :py:class:`Proxy` helper, which is included in the ``playhouse.proxy``
-module.  :ref:`The docs <proxy>` contain details on usage, but here is a
-short example:
+use the :py:class:`Proxy` helper, which is included as part of peewee.  You
+can use the proxy as a "placeholder", and then at run-time swap it out for a
+different object.  In the example below, we will swap out the database depending
+on how the app is configured:
 
 .. code-block:: python
 

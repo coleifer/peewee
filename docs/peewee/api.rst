@@ -1580,3 +1580,40 @@ Misc
     ``fn.Rand().alias('random')``                ``Rand() AS random``
     ``fn.Stddev(Employee.salary).alias('sdv')``  ``Stddev(t1."salary") AS sdv``
     ============================================ ============================================
+
+.. py:class:: Proxy()
+
+    Proxy class useful for situations when you wish to defer the initialization of
+    an object.  For instance, you want to define your models but you do not know
+    what database engine you will be using until runtime.
+
+    Example:
+
+        .. code-block:: python
+
+            database_proxy = Proxy()  # Create a proxy for our db.
+
+            class BaseModel(Model):
+                class Meta:
+                    database = database_proxy  # Use proxy for our DB.
+
+            class User(BaseModel):
+                username = CharField()
+
+            # Based on configuration, use a different database.
+            if app.config['DEBUG']:
+                database = SqliteDatabase('local.db')
+            elif app.config['TESTING']:
+                database = SqliteDatabase(':memory:')
+            else:
+                database = PostgresqlDatabase('mega_production_db')
+
+            # Configure our proxy to use the db we specified in config.
+            database_proxy.initialize(database)
+
+    .. py:method:: initialize(obj)
+
+        :param obj: The object to proxy to.
+
+        Once initialized, the attributes and methods on ``obj`` can be accessed
+        directly via the :py:class:`Proxy` instance.
