@@ -388,6 +388,18 @@ class Clause(Node):
     def clone_base(self):
         return Clause(*self.nodes)
 
+class Entity(Node):
+    """A quoted-name or entity, e.g. "table"."column"."""
+    def __init__(self, *path):
+        super(Entity, self).__init__()
+        self.path = pathA
+
+    def clone_base(self):
+        return Entity(*self.path)
+
+    def __getattr__(self, attr):
+        return Entity(*self.path + (attr,))
+
 Join = namedtuple('Join', ('model_class', 'join_type', 'on'))
 
 class _ActionFactory(object):
@@ -426,6 +438,13 @@ class Constraint(Node):
     """
     def __init__(self, name=None):
         self._name = name
+
+    def base(self):
+        if self._name:
+            return [SQL('CONSTRAINT'),
+
+    def check(self, *expressions):
+        return Clause(SQL('CHECK'), *expressions)
 
 
 class ColumnBuilder(object):
@@ -1006,6 +1025,9 @@ class QueryCompiler(object):
         elif isinstance(node, (list, tuple)):
             sql, params = self.parse_node_list(node, alias_map, conv)
             sql = '(%s)' % sql
+        elif isinstance(node, Entity):
+            sql = '.'.join(map(self.quote, node.path))
+            params = []
         elif isinstance(node, Model):
             sql = self.interpolation
             params = [node.get_id()]
