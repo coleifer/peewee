@@ -728,7 +728,7 @@ function to construct queries:
     ...    print user.username
 
 There are times when you may want to simply pass in some arbitrary sql.  You can do
-this using the special :py:class:`R` class.  One use-case is when referencing an
+this using the special :py:class:`SQL` class.  One use-case is when referencing an
 alias:
 
 .. code-block:: python
@@ -738,7 +738,7 @@ alias:
     query = User.select(User, fn.Count(Tweet.id).alias('ct')).join(Tweet).group_by(User)
 
     # now we will order by the count, which was aliased to "ct"
-    query = query.order_by(R('ct'))
+    query = query.order_by(SQL('ct'))
 
 To execute custom SQL, please refer to :ref:`using_sql`.
 
@@ -934,6 +934,79 @@ the ``PrimaryKeyField`` type:
     999
     >>> User.get(User.username == 'somebody').id
     999
+
+Self-referential foreign keys
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When creating a heirarchical structure it is necessary to create a self-referential
+foreign key which links a child object to its parent.  Because the model class is not
+defined at the time you instantiate the self-referential foreign key, use the special
+string ``'self'`` to indicate a self-referential foreign key:
+
+.. code-block:: python
+
+    class Category(Model):
+        name = CharField()
+        parent = ForeignKeyField('self', null=True, related_name='children')
+
+As you can see, the foreign key points "upward" to the parent object and the
+back-reference is named "children".
+
+.. note:: Self-referential foreign-keys should always be ``null=True``.
+
+
+Circular foreign key dependencies
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Sometimes it happens that you will create a circular dependency between two
+tables.
+
+.. note::
+  My personal opinion is that circular foreign keys are a code smell and should
+  be refactored (by adding an intermediary table, for instance).
+
+Adding circular foreign keys with peewee is a bit tricky because at the time you
+are defining either foreign key, the model it points to will not have been defined
+yet, causing a ``NameError``.
+
+By using :py:class:`Proxy` we can get around the problem, though:
+
+.. code-block:: python
+
+    # Create a proxy object to stand in for our as-yet-undefined Tweet model.
+    TweetProxy = Proxy()
+
+    class User(Model):
+        username = CharField()
+        # Tweet has not been defined yet so use the proxy.
+        favorite_tweet = ForeignKeyField(TweetProxy, null=True)
+
+    class Tweet(Model):
+        message = TextField()
+        user = ForeignKeyField(User, related_name='tweets')
+
+    # Now that Tweet is defined, we can initialize the proxy object.
+    TweetProxy.initialize(Tweet)
+
+After initializing the proxy the foreign key fields are now correctly set up.
+There is one more quirk to watch out for, though.  When you call :py:class:`~Model.create_table`
+we will again encounter the same issue.  For this reason peewee will not automatically
+create a foreign key constraint for any "deferred" foreign keys.
+
+Here is how to create the tables:
+
+.. code-block:: python
+
+    # Foreign key constraint from User -> Tweet will NOT be created because the
+    # Tweet table does not exist yet. `favorite_tweet` will just be a regular
+    # integer field:
+    User.create_table()
+
+    # Foreign key constraint from Tweet -> User will be created normally.
+    Tweet.create_table()
+
+    # Now that both tables exist, we can create the foreign key from User -> Tweet:
+    db.create_foreign_key(User, User.favorite_tweet)
 
 
 Introspecting databases

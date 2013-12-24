@@ -696,7 +696,7 @@ sqlite_ext API notes
         best = (Document
                 .select(Document, Document.rank('score'))
                 .where(match(Document.title, 'some query'))
-                .order_by(R('score').desc()))
+                .order_by(SQL('score').desc()))
 
         # or use the shortcut method:
         best = Document.match('some phrase')
@@ -760,7 +760,7 @@ sqlite_ext API notes
             docs = (Document
                     .select(Document, Document.rank().alias('score'))
                     .where(match(Document, search))
-                    .order_by(R('score').desc()))
+                    .order_by(SQL('score').desc()))
 
         The above code is exactly what the :py:meth:`match` function
         provides.

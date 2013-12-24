@@ -1289,6 +1289,10 @@ Database and its subclasses
 
         A mapping of field types to database column types, e.g. ``{'primary_key': 'SERIAL'}``
 
+    .. py:attribute:: foreign_keys = True
+
+        Whether the given backend enforces foreign key constraints.
+
     .. py:attribute:: for_update = False
 
         Whether the given backend supports selecting rows for update
@@ -1432,10 +1436,39 @@ Database and its subclasses
         :param fields: field(s) to create index on (either field instances or field names)
         :param unique: whether the index should enforce uniqueness
 
-    .. py:method:: create_foreign_key(model_class, field)
+    .. py:method:: create_foreign_key(model_class, field[, constraint=None])
 
-        :param model_class: :py:class:`Model` table on which to create foreign key index / constraint
+        :param model_class: :py:class:`Model` table on which to create foreign key constraint
         :param field: :py:class:`Field` object
+        :param str constraint: Name to give foreign key constraint.
+
+        Manually create a foreign key constraint using an ``ALTER TABLE`` query.
+        This is primarily used when creating a circular foreign key dependency,
+        for example:
+
+        .. code-block:: python
+
+            PostProxy = Proxy()
+
+            class User(Model):
+                username = CharField()
+                favorite_post = ForeignKeyField(PostProxy, null=True)
+
+            class Post(Model):
+                title = CharField()
+                author = ForeignKeyField(User, related_name='posts')
+
+            PostProxy.initialize(Post)
+
+            # Create tables.  The foreign key from Post -> User will be created
+            # automatically, but the foreign key from User -> Post must be added
+            # manually.
+            User.create_table()
+            Post.create_table()
+
+            # Manually add the foreign key constraint on `User`, since we could
+            # not add it until we had created the `Post` table.
+            db.create_foreign_key(User, User.favorite_post)
 
     .. py:method:: create_sequence(sequence_name)
 
@@ -1547,15 +1580,15 @@ Database and its subclasses
 
 .. py:class:: SqliteDatabase(Database)
 
-    :py:class:`Database` subclass that communicates to the "sqlite3" driver
+    :py:class:`Database` subclass that works with the "sqlite3" driver
 
 .. py:class:: MySQLDatabase(Database)
 
-    :py:class:`Database` subclass that communicates to the "MySQLdb" driver
+    :py:class:`Database` subclass that works with either "MySQLdb" or "pymysql".
 
 .. py:class:: PostgresqlDatabase(Database)
 
-    :py:class:`Database` subclass that communicates to the "psycopg2" driver
+    :py:class:`Database` subclass that works with the "psycopg2" driver
 
 
 Misc
@@ -1580,6 +1613,26 @@ Misc
     ``fn.Rand().alias('random')``                ``Rand() AS random``
     ``fn.Stddev(Employee.salary).alias('sdv')``  ``Stddev(t1."salary") AS sdv``
     ============================================ ============================================
+
+.. py:class:: SQL(sql)
+
+    Add fragments of SQL to a peewee query.  For example you might want to reference
+    an aliased name.
+
+    :param str sql: Arbitrary SQL string.
+
+    .. code-block:: python
+
+        # Retrieve user table and "annotate" it with a count of tweets for each
+        # user.
+        query = (User
+                 .select(User, fn.Count(Tweet.id).alias('ct'))
+                 .join(Tweet, JOIN_LEFT_OUTER)
+                 .group_by(User))
+
+        # Sort the users by number of tweets.
+        query = query.order_by(SQL('ct DESC'))
+
 
 .. py:class:: Proxy()
 
