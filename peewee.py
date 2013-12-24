@@ -1195,13 +1195,7 @@ class QueryCompiler(object):
             parts.append('PRIMARY KEY')
         if field.template_extra:
             parts.append(field.template_extra)
-        if isinstance(field, ForeignKeyField):
-            ref_mc = (
-                self.quote(field.rel_model._meta.db_table),
-                self.quote(field.rel_model._meta.primary_key.db_column))
-            parts.append('REFERENCES %s (%s)' % ref_mc)
-            parts.append('%(cascade)s%(extra)s')
-        elif field.sequence:
+        if field.sequence:
             parts.append("DEFAULT NEXTVAL('%s')" % self.quote(field.sequence))
         return ' '.join(p % attrs for p in parts)
 
@@ -1216,6 +1210,16 @@ class QueryCompiler(object):
             pk_cols = map(self.quote, (meta.fields[f].db_column
                                        for f in meta.primary_key.field_names))
             columns.append('PRIMARY KEY (%s)' % ', '.join(pk_cols))
+        for field in meta.get_fields():
+            if isinstance(field, ForeignKeyField) and not field.deferred:
+                extra = field.attributes['extra']
+                columns.append('FOREIGN KEY (%s) REFERENCES %s (%s)%s%s' % (
+                    self.quote(field.db_column),
+                    self.quote(field.rel_model._meta.db_table),
+                    self.quote(field.rel_model._meta.primary_key.db_column),
+                    field.attributes['cascade'],
+                    ' %s' % extra if extra else ''))
+
         parts.append('(%s)' % ', '.join(columns))
         return parts
 
@@ -1935,6 +1939,7 @@ class Database(object):
     commit_select = False
     compiler_class = QueryCompiler
     field_overrides = {}
+    foreign_keys = True
     for_update = False
     interpolation = '?'
     limit_max = None
@@ -2140,6 +2145,7 @@ class Database(object):
         return fn.EXTRACT(Clause(date_part, R('FROM'), date_field))
 
 class SqliteDatabase(Database):
+    foreign_keys = False
     limit_max = -1
     op_overrides = {
         OP_LIKE: 'GLOB',
@@ -2272,32 +2278,6 @@ class MySQLDatabase(Database):
         }
         conn_kwargs.update(kwargs)
         return mysql.connect(db=database, **conn_kwargs)
-
-    def create_foreign_key(self, model_class, field):
-        compiler = self.compiler()
-        framing = """
-            ALTER TABLE %(table)s ADD CONSTRAINT %(constraint)s
-            FOREIGN KEY (%(field)s) REFERENCES %(to)s(%(to_field)s)%(cascade)s;
-        """
-        db_table = model_class._meta.db_table
-        constraint = 'fk_%s_%s_%s' % (
-            db_table,
-            field.rel_model._meta.db_table,
-            field.db_column,
-        )
-
-        quote = compiler.quote
-        query = framing % {
-            'table': quote(db_table),
-            'constraint': quote(constraint),
-            'field': quote(field.db_column),
-            'to': quote(field.rel_model._meta.db_table),
-            'to_field': quote(field.rel_model._meta.primary_key.db_column),
-            'cascade': ' ON DELETE CASCADE' if field.cascade else ''}
-
-        self.execute_sql(query)
-        return super(MySQLDatabase, self).create_foreign_key(
-            model_class, field)
 
     def get_indexes_for_table(self, table):
         res = self.execute_sql('SHOW INDEXES IN `%s`;' % table)
@@ -2686,8 +2666,10 @@ class Model(with_metaclass(BaseModel)):
     def _create_indexes(cls):
         db = cls._meta.database
         for field_name, field_obj in cls._meta.fields.items():
+            if field_obj.primary_key:
+                continue
             if isinstance(field_obj, ForeignKeyField):
-                db.create_foreign_key(cls, field_obj)
+                db.create_index(cls, [field_obj], False)
             elif field_obj.index or field_obj.unique:
                 db.create_index(cls, [field_obj], field_obj.unique)
 

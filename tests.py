@@ -302,6 +302,19 @@ class TagPostThrough(TestModel):
     class Meta:
         primary_key = CompositeKey('tag', 'post')
 
+# Deferred foreign keys.
+SnippetProxy = Proxy()
+
+class Language(TestModel):
+    name = CharField()
+    selected_snippet = ForeignKeyField(SnippetProxy, null=True)
+
+class Snippet(TestModel):
+    code = TextField()
+    language = ForeignKeyField(Language, related_name='snippets')
+
+SnippetProxy.initialize(Snippet)
+
 
 MODELS = [
     User,
@@ -335,6 +348,8 @@ MODELS = [
     Tag,
     Post,
     TagPostThrough,
+    Language,
+    Snippet,
 ]
 INT = test_db.interpolation
 
@@ -2177,9 +2192,12 @@ class CompositeKeyTestCase(ModelTestCase):
         create, tbl, tbldefs = query
         self.assertEqual(tbl, '"tagpostthrough"')
         self.assertEqual(tbldefs,
-            '("tag_id" INTEGER NOT NULL REFERENCES "tag" ("id") , '
-            '"post_id" INTEGER NOT NULL REFERENCES "post" ("id") , '
-            'PRIMARY KEY ("tag_id", "post_id"))')
+            '("tag_id" INTEGER NOT NULL, '
+            '"post_id" INTEGER NOT NULL, '
+            'PRIMARY KEY ("tag_id", "post_id"), '
+            'FOREIGN KEY ("tag_id") REFERENCES "tag" ("id"), '
+            'FOREIGN KEY ("post_id") REFERENCES "post" ("id")'
+            ')')
 
     def test_get_set_id(self):
         tpt = (TagPostThrough
@@ -2641,7 +2659,6 @@ class UniqueTestCase(ModelTestCase):
         test_db.rollback()
 
         mi3 = MultiIndexModel.create(f1='a', f2='b', f3='b')
-
 
 class NonIntPKTestCase(ModelTestCase):
     requires = [NonIntModel, NonIntRelModel]
@@ -3317,3 +3334,19 @@ if test_db.savepoints:
 
 elif TEST_VERBOSITY > 0:
     print_('Skipping "savepoint" tests')
+
+if test_db.foreign_keys:
+    class ForeignKeyConstraintTestCase(ModelTestCase):
+        requires = [User, Blog]
+
+        def test_constraint_exists(self):
+            # IntegrityError is raised when we specify a non-existent user_id.
+            max_id = User.select(fn.Max(User.id)).scalar() or 0
+
+            def will_fail():
+                with test_db.transaction() as txn:
+                    Blog.create(user=max_id + 1, title='testing')
+
+            self.assertRaises(IntegrityError, will_fail)
+elif TEST_VERBOSITY > 0:
+    print_('Skipping "foreign key" tests')
