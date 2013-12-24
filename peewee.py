@@ -1212,13 +1212,15 @@ class QueryCompiler(object):
             columns.append('PRIMARY KEY (%s)' % ', '.join(pk_cols))
         for field in meta.get_fields():
             if isinstance(field, ForeignKeyField) and not field.deferred:
-                extra = field.attributes['extra']
-                columns.append('FOREIGN KEY (%s) REFERENCES %s (%s)%s%s' % (
+                foreign_key = ['FOREIGN KEY (%s) REFERENCES %s (%s)' % (
                     self.quote(field.db_column),
                     self.quote(field.rel_model._meta.db_table),
-                    self.quote(field.rel_model._meta.primary_key.db_column),
-                    field.attributes['cascade'],
-                    ' %s' % extra if extra else ''))
+                    self.quote(field.rel_model._meta.primary_key.db_column))]
+                if field.cascade:
+                    foreign_key.append(field.attributes['cascade'])
+                if field.extra:
+                    foreign_key.append(field.attributes['extra'])
+                columns.append(' '.join(foreign_key))
 
         parts.append('(%s)' % ', '.join(columns))
         return parts
@@ -2123,9 +2125,28 @@ class Database(object):
             for f in fields]
         return self.execute_sql(qc.create_index(model_class, fobjs, unique))
 
-    def create_foreign_key(self, model_class, field):
-        if not field.primary_key:
-            return self.create_index(model_class, [field], field.unique)
+    def create_foreign_key(self, model_class, field, constraint=None):
+        constraint = constraint or 'fk_%s_%s_refs_%s' % (
+            model_class._meta.db_table,
+            field.db_column,
+            field.rel_model._meta.db_table)
+        framing = ('ALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY '
+                   '(%s) REFERENCES %s (%s)')
+        qc = self.compiler()
+        params = map(qc.quote, [
+            model_class._meta.db_table,
+            constraint,
+            field.db_column,
+            field.rel_model._meta.db_table,
+            field.rel_model._meta.primary_key.db_column])
+
+        foreign_key = [framing % tuple(params)]
+        if field.cascade:
+            foreign_key.append(field.attributes['cascade'])
+        if field.extra:
+            foreign_key.append(field.attributes['extra'])
+
+        return self.execute_sql(' '.join(foreign_key))
 
     def create_sequence(self, seq):
         if self.sequences:
@@ -2665,12 +2686,14 @@ class Model(with_metaclass(BaseModel)):
     @classmethod
     def _create_indexes(cls):
         db = cls._meta.database
-        for field_name, field_obj in cls._meta.fields.items():
+        for field_obj in cls._meta.fields.values():
             if field_obj.primary_key:
                 continue
-            if isinstance(field_obj, ForeignKeyField):
-                db.create_index(cls, [field_obj], False)
-            elif field_obj.index or field_obj.unique:
+            requires_index = any((
+                field_obj.index,
+                field_obj.unique,
+                isinstance(field_obj, ForeignKeyField)))
+            if requires_index:
                 db.create_index(cls, [field_obj], field_obj.unique)
 
         if cls._meta.indexes:

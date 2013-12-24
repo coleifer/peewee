@@ -3394,5 +3394,37 @@ if test_db.foreign_keys:
                     Blog.create(user=max_id + 1, title='testing')
 
             self.assertRaises(IntegrityError, will_fail)
+
+        def test_constraint_creation(self):
+            class FKC_a(TestModel):
+                name = CharField()
+
+            fkc_proxy = Proxy()
+
+            class FKC_b(TestModel):
+                fkc_a = ForeignKeyField(fkc_proxy)
+
+            fkc_proxy.initialize(FKC_a)
+
+            with test_db.transaction() as txn:
+                FKC_a.create_table()
+                FKC_b.create_table()
+
+                # Foreign key constraint is not enforced.
+                fb = FKC_b.create(fkc_a=-1000)
+                fb.delete_instance()
+
+                # Add constraint.
+                test_db.create_foreign_key(FKC_b, FKC_b.fkc_a)
+
+                with self.assertRaises(IntegrityError):
+                    with test_db.savepoint() as s1:
+                        fb = FKC_b.create(fkc_a=-1000)
+
+                fa = FKC_a.create(name='fa')
+                fb = FKC_b.create(fkc_a=fa)
+                txn.rollback()
+
+
 elif TEST_VERBOSITY > 0:
     print_('Skipping "foreign key" tests')
