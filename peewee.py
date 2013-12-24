@@ -36,7 +36,6 @@ __all__ = [
     'DoesNotExist',
     'DoubleField',
     'DQ',
-    'Entity',
     'Field',
     'FloatField',
     'fn',
@@ -389,19 +388,65 @@ class Clause(Node):
     def clone_base(self):
         return Clause(*self.nodes)
 
-class Entity(Node):
-    """A quoted-name or entity, e.g. "table"."column"."""
-    def __init__(self, *path):
-        super(Entity, self).__init__()
-        self.path = path
+Join = namedtuple('Join', ('model_class', 'join_type', 'on'))
 
-    def clone_base(self):
-        return Entity(*self.path)
+class _ActionFactory(object):
+    actions = {
+        'cascade': 'CASCADE',
+        'no_action': 'NO ACTION',
+        'restrict': 'RESTRICT',
+        'set_default': 'SET DEFAULT',
+        'set_null': 'SET NULL',
+    }
 
     def __getattr__(self, attr):
-        return Entity(*self.path + (attr,))
+        return Clause(self.actions[attr])
+Action = _ActionFactory()
 
-Join = namedtuple('Join', ('model_class', 'join_type', 'on'))
+class Constraint(Node):
+    """
+    SQL constraint.
+
+    After column definition:
+
+    * price numeric CHECK (price > 0)
+    * price numeric CONSTRAINT positive_price CHECK (price > 0)
+    * some_column NOT NULL
+    * ssn UNIQUE
+    * id PRIMARY KEY
+    * user_id REFERENCES user (id)
+    * foo REFERENCES bar (id) ON DELETE CASCADE
+
+    * CHECK (price > discounted_price)  (inter-column)
+    * CHECK (price > discounted_price AND discounted_price > 0)
+    * UNIQUE (ssn)
+    * PRIMARY KEY (id)
+    * FOREIGN KEY (user_id) REFERENCES user (id)
+    * FOREIGN KEY (foo) REFERENCES bar (id) ON DELETE CASCADE
+    """
+    def __init__(self, name=None):
+        self._name = name
+
+
+class ColumnBuilder(object):
+    """Convert a `Field` into one or more Nodes."""
+    def build(self, field):
+        pass
+
+
+"""
+a table definition is just...
+
+<table name> (list of columns and constraints).
+
+a column definition is just...
+
+<column name> <affinity>(<modifiers>) <constraints>
+
+extra constraints are just...
+
+<constraint1>, <constraint2>
+"""
 
 class FieldDescriptor(object):
     # Fields are exposed as descriptors in order to control access to the
@@ -423,13 +468,11 @@ class Field(Node):
     _field_counter = 0
     _order = 0
     db_field = 'unknown'
-    template = '%(column_type)s'
-    template_extra = ''
 
     def __init__(self, null=False, index=False, unique=False,
                  verbose_name=None, help_text=None, db_column=None,
                  default=None, choices=None, primary_key=False, sequence=None,
-                 *args, **kwargs):
+                 *constraints):
         self.null = null
         self.index = index
         self.unique = unique
@@ -440,12 +483,7 @@ class Field(Node):
         self.choices = choices
         self.primary_key = primary_key
         self.sequence = sequence
-
-        # Set `self.attributes` using any arbitrary key/value pairs.  These are
-        # made available when rendering the field's `template`, and so can
-        # contain things like `max_length` or `decimal_places`.
-        self.attributes = self.field_attributes()
-        self.attributes.update(kwargs)
+        self.constraints = list(constraints)
 
         # Used internally for recovering the order in which Fields were defined
         # on the Model class.
@@ -456,24 +494,23 @@ class Field(Node):
         super(Field, self).__init__()
 
     def clone_base(self, **kwargs):
-       inst = type(self)(
-           null=self.null,
-           index=self.index,
-           unique=self.unique,
-           verbose_name=self.verbose_name,
-           help_text=self.help_text,
-           db_column=self.db_column,
-           default=self.default,
-           choices=self.choices,
-           primary_key=self.primary_key,
-           sequence=self.sequence,
-           **kwargs
-       )
-       inst.attributes = dict(self.attributes)
-       if self._is_bound:
-           inst.name = self.name
-           inst.model_class = self.model_class
-       return inst
+        inst = type(self)(
+            null=self.null,
+            index=self.index,
+            unique=self.unique,
+            verbose_name=self.verbose_name,
+            help_text=self.help_text,
+            db_column=self.db_column,
+            default=self.default,
+            choices=self.choices,
+            primary_key=self.primary_key,
+            sequence=self.sequence,
+            constraints=self.constraints,
+            **kwargs)
+        if self._is_bound:
+            inst.name = self.name
+            inst.model_class = self.model_class
+            return inst
 
     def add_to_class(self, model_class, name):
         """
@@ -496,15 +533,8 @@ class Field(Node):
     def get_database(self):
         return self.model_class._meta.database
 
-    def field_attributes(self):
-        """Arbitrary default attributes, e.g. "max_length" or "precision"."""
-        return {}
-
     def get_db_field(self):
         return self.db_field
-
-    def get_template(self):
-        return self.template
 
     def coerce(self, value):
         return value
@@ -522,7 +552,6 @@ class Field(Node):
 
 class BareField(Field):
     db_field = 'bare'
-    template = ''
 
 class IntegerField(Field):
     db_field = 'int'
@@ -545,25 +574,32 @@ class FloatField(Field):
 class DoubleField(FloatField):
     db_field = 'double'
 
-class DecimalField(Field):
+class DecimalField(Field):  # col_type(max_digits, decimal_places)
     db_field = 'decimal'
-    template = '%(column_type)s(%(max_digits)d, %(decimal_places)d)'
 
-    def field_attributes(self):
-        return {
-            'max_digits': 10,
-            'decimal_places': 5,
-            'auto_round': False,
-            'rounding': decimal.DefaultContext.rounding,
-        }
+    def __init__(self, max_digits=10, decimal_places=5, auto_round=False,
+                 rounding=None, *args, **kwargs):
+        self.max_digits = max_digits
+        self.decimal_places = decimal_places
+        self.auto_round = auto_round
+        self.rounding = rounding or decimal.DefaultContext.rounding
+        super(DecimalField, self).__init__(*args, **kwargs)
+
+    def clone_base(self, **kwargs):
+        return super(DecimalField, self).clone_base(
+            max_digits=max_digits,
+            decimal_places=decimal_places,
+            auto_round=auto_round,
+            rounding=rounding,
+            **kwargs)
 
     def db_value(self, value):
         D = decimal.Decimal
         if not value:
             return value if value is None else D(0)
-        if self.attributes['auto_round']:
-            exp = D(10) ** (-self.attributes['decimal_places'])
-            rounding = self.attributes['rounding']
+        if self.auto_round:
+            exp = D(10) ** (-self.decimal_places)
+            rounding = self.rounding
             return D(str(value)).quantize(exp, rounding=rounding)
         return value
 
@@ -584,8 +620,14 @@ class CharField(Field):
     db_field = 'string'
     template = '%(column_type)s(%(max_length)s)'
 
-    def field_attributes(self):
-        return {'max_length': 255}
+    def __init__(self, max_length=255, *args, **kwargs):
+        self.max_length = max_length
+        super(CharField, self).__init__(*args, **kwargs)
+
+    def clone_base(self, **kwargs):
+        return super(CharField, self).clone_base(
+            max_length=self.max_length,
+            **kwargs)
 
     def coerce(self, value):
         return coerce_to_unicode(value or '')
@@ -618,17 +660,25 @@ def _date_part(date_part):
         return self.model_class._meta.database.extract_date(date_part, self)
     return dec
 
-class DateTimeField(Field):
-    db_field = 'datetime'
+class _BaseFormattedField(Field):
+    formats = None
+    def __init__(self, formats=None, *args, **kwargs):
+        if formats is not None:
+            self.formats = formats
+        super(_BaseFormattedField, self).__init__(*args, **kwargs)
 
-    def field_attributes(self):
-        return {
-            'formats': [
-                '%Y-%m-%d %H:%M:%S.%f',
-                '%Y-%m-%d %H:%M:%S',
-                '%Y-%m-%d',
-            ]
-        }
+    def clone_base(self, **kwargs):
+        return super(_BaseFormattedField, self).clone_base(
+            formats=self.formats,
+            **kwargs)
+
+class DateTimeField(_BaseFormattedField):
+    db_field = 'datetime'
+    formats = [
+        '%Y-%m-%d %H:%M:%S.%f',
+        '%Y-%m-%d %H:%M:%S',
+        '%Y-%m-%d',
+    ]
 
     def python_value(self, value):
         if value and isinstance(value, basestring):
@@ -644,15 +694,11 @@ class DateTimeField(Field):
 
 class DateField(Field):
     db_field = 'date'
-
-    def field_attributes(self):
-        return {
-            'formats': [
-                '%Y-%m-%d',
-                '%Y-%m-%d %H:%M:%S',
-                '%Y-%m-%d %H:%M:%S.%f',
-            ]
-        }
+    formats = [
+        '%Y-%m-%d',
+        '%Y-%m-%d %H:%M:%S',
+        '%Y-%m-%d %H:%M:%S.%f',
+    ]
 
     def python_value(self, value):
         if value and isinstance(value, basestring):
@@ -666,19 +712,15 @@ class DateField(Field):
     month = property(_date_part('month'))
     day = property(_date_part('day'))
 
-class TimeField(Field):
+class TimeField(_BaseFormattedField):
     db_field = 'time'
-
-    def field_attributes(self):
-        return {
-            'formats': [
-                '%H:%M:%S.%f',
-                '%H:%M:%S',
-                '%H:%M',
-                '%Y-%m-%d %H:%M:%S.%f',
-                '%Y-%m-%d %H:%M:%S',
-            ]
-        }
+    formats = [
+        '%H:%M:%S.%f',
+        '%H:%M:%S',
+        '%H:%M',
+        '%Y-%m-%d %H:%M:%S.%f',
+        '%Y-%m-%d %H:%M:%S',
+    ]
 
     def python_value(self, value):
         if value and isinstance(value, basestring):
@@ -741,8 +783,8 @@ class ReverseRelationDescriptor(object):
         return self
 
 class ForeignKeyField(IntegerField):
-    def __init__(self, rel_model, null=False, related_name=None, cascade=False,
-                 extra=None, *args, **kwargs):
+    def __init__(self, rel_model, related_name=None, on_delete=None,
+                 on_update=None, extra=None, *args, **kwargs):
         if rel_model != 'self' and not isinstance(rel_model, Proxy) and not \
                 issubclass(rel_model, Model):
             raise TypeError('Unexpected value for `rel_model`.  Expected '
@@ -750,21 +792,18 @@ class ForeignKeyField(IntegerField):
         self.rel_model = rel_model
         self._related_name = related_name
         self.deferred = isinstance(rel_model, Proxy)
-        self.cascade = cascade
+        self.on_delete = on_delete
+        self.on_update = on_update
         self.extra = extra
-
-        kwargs.update(dict(
-            cascade='ON DELETE CASCADE' if self.cascade else '',
-            extra=extra or ''))
-
         super(ForeignKeyField, self).__init__(null=null, *args, **kwargs)
 
-    def clone_base(self):
+    def clone_base(self, **kwargs):
          return super(ForeignKeyField, self).clone_base(
             rel_model=self.rel_model,
             related_name=self.related_name,
             cascade=self.cascade,
-            extra=self.extra)
+            extra=self.extra,
+            **kwargs)
 
     def add_to_class(self, model_class, name):
         if isinstance(self.rel_model, Proxy):
@@ -953,7 +992,7 @@ class QueryCompiler(object):
         elif isinstance(node, Param):
             params = [node.value]
             unknown = True
-        elif isinstance(node, R):
+        elif isinstance(node, SQL):
             sql = node.value
             params = []
         elif isinstance(node, SelectQuery):
@@ -970,9 +1009,6 @@ class QueryCompiler(object):
         elif isinstance(node, Model):
             sql = self.interpolation
             params = [node.get_id()]
-        elif isinstance(node, Entity):
-            sql = '.'.join(map(self.quote, node.path))
-            params = []
         elif isclass(node) and issubclass(node, Model):
             sql = self.quote(node._meta.db_table)
             params = []
@@ -1216,7 +1252,7 @@ class QueryCompiler(object):
                     self.quote(field.db_column),
                     self.quote(field.rel_model._meta.db_table),
                     self.quote(field.rel_model._meta.primary_key.db_column))]
-                if field.cascade:
+                if field.on_delete:
                     foreign_key.append(field.attributes['cascade'])
                 if field.extra:
                     foreign_key.append(field.attributes['extra'])
