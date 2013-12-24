@@ -2717,8 +2717,7 @@ class PrimaryForeignKeyTestCase(ModelTestCase):
         self.assertEqual([job], list(executed_jobs))
 
         # we must not be able to create another execution record for the job
-        with self.assertRaises(Exception):
-            JobExecutionRecord.create(job=job, status='success')
+        self.assertRaises(Exception, JobExecutionRecord.create, job=job, status='success')
         test_db.rollback()
 
 
@@ -3096,8 +3095,7 @@ class DatabaseTestCase(BasePeeweeTestCase):
 
     def test_sql_error(self):
         bad_sql = 'select asdf from -1;'
-        with self.assertRaises(Exception):
-            query_db.execute_sql(bad_sql)
+        self.assertRaises(Exception, query_db.execute_sql, bad_sql)
         self.assertEqual(query_db.last_error, (bad_sql, None))
 
 class SqliteDatePartTestCase(BasePeeweeTestCase):
@@ -3407,6 +3405,8 @@ if test_db.foreign_keys:
             fkc_proxy.initialize(FKC_a)
 
             with test_db.transaction() as txn:
+                FKC_b.drop_table(True)
+                FKC_a.drop_table(True)
                 FKC_a.create_table()
                 FKC_b.create_table()
 
@@ -3417,9 +3417,11 @@ if test_db.foreign_keys:
                 # Add constraint.
                 test_db.create_foreign_key(FKC_b, FKC_b.fkc_a)
 
-                with self.assertRaises(IntegrityError):
+                def _trigger_exc():
                     with test_db.savepoint() as s1:
                         fb = FKC_b.create(fkc_a=-1000)
+
+                self.assertRaises(IntegrityError, _trigger_exc)
 
                 fa = FKC_a.create(name='fa')
                 fb = FKC_b.create(fkc_a=fa)
