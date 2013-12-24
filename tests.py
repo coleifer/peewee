@@ -2722,6 +2722,52 @@ class PrimaryForeignKeyTestCase(ModelTestCase):
         test_db.rollback()
 
 
+class DeferredForeignKeyTestCase(ModelTestCase):
+    requires = [Snippet, Language]
+
+    def test_field_definitions(self):
+        self.assertEqual(Snippet._meta.fields['language'].rel_model, Language)
+        self.assertEqual(Language._meta.fields['selected_snippet'].rel_model,
+                         Snippet)
+
+    def test_create_table_query(self):
+        query = compiler.create_table_sql(Snippet)
+        create, tbl, tbldefs = query
+        self.assertEqual(tbl, '"snippet"')
+        self.assertEqual(tbldefs,
+            '("id" INTEGER NOT NULL PRIMARY KEY, '
+            '"code" TEXT NOT NULL, '
+            '"language_id" INTEGER NOT NULL, '
+            'FOREIGN KEY ("language_id") REFERENCES "language" ("id")'
+            ')')
+
+        query = compiler.create_table_sql(Language)
+        create, tbl, tbldefs = query
+        self.assertEqual(tbl, '"language"')
+        self.assertEqual(tbldefs,
+            '("id" INTEGER NOT NULL PRIMARY KEY, '
+            '"name" VARCHAR(255) NOT NULL, '
+            '"selected_snippet_id" INTEGER)')
+
+    def test_storage_retrieval(self):
+        python = Language.create(name='python')
+        javascript = Language.create(name='javascript')
+        p1 = Snippet.create(code="print 'Hello world'", language=python)
+        p2 = Snippet.create(code="print 'Goodbye world'", language=python)
+        j1 = Snippet.create(code="alert('Hello world')", language=javascript)
+
+        self.assertEqual(Snippet.get(Snippet.id == p1.id).language, python)
+        self.assertEqual(Snippet.get(Snippet.id == j1.id).language, javascript)
+
+        python.selected_snippet = p2
+        python.save()
+
+        self.assertEqual(
+            Language.get(Language.id == python.id).selected_snippet, p2)
+        self.assertEqual(
+            Language.get(Language.id == javascript.id).selected_snippet, None)
+
+
 class DBColumnTestCase(ModelTestCase):
     requires = [DBUser, DBBlog]
 
