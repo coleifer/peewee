@@ -216,13 +216,19 @@ class Proxy(object):
     Proxy class useful for situations when you wish to defer the initialization
     of an object.
     """
-    __slots__ = ['obj']
+    __slots__ = ['obj', '_callbacks']
 
     def __init__(self):
+        self._callbacks = []
         self.initialize(None)
 
     def initialize(self, obj):
         self.obj = obj
+        for callback in self._callbacks:
+            callback(obj)
+
+    def attach_callback(self, callback):
+        self._callbacks.append(callback)
 
     def __getattr__(self, attr):
         if self.obj is None:
@@ -230,7 +236,7 @@ class Proxy(object):
         return getattr(self.obj, attr)
 
     def __setattr__(self, attr, value):
-        if attr != 'obj':
+        if attr not in self.__slots__:
             raise AttributeError('Cannot set attribute on proxy.')
         return super(Proxy, self).__setattr__(attr, value)
 
@@ -737,13 +743,13 @@ class ReverseRelationDescriptor(object):
 class ForeignKeyField(IntegerField):
     def __init__(self, rel_model, null=False, related_name=None, cascade=False,
                  extra=None, *args, **kwargs):
-        from playhouse.proxy import Proxy
         if rel_model != 'self' and not isinstance(rel_model, Proxy) and not \
                 issubclass(rel_model, Model):
             raise TypeError('Unexpected value for `rel_model`.  Expected '
                             '`Model`, `Proxy` or "self"')
         self.rel_model = rel_model
         self._related_name = related_name
+        self.deferred = isinstance(rel_model, Proxy)
         self.cascade = cascade
         self.extra = extra
 
@@ -761,6 +767,13 @@ class ForeignKeyField(IntegerField):
             extra=self.extra)
 
     def add_to_class(self, model_class, name):
+        if isinstance(self.rel_model, Proxy):
+            def callback(rel_model):
+                self.rel_model = rel_model
+                self.add_to_class(model_class, name)
+            self.rel_model.attach_callback(callback)
+            return
+
         self.name = name
         self.model_class = model_class
         self.db_column = self.db_column or '%s_id' % self.name
