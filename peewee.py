@@ -2310,7 +2310,7 @@ class MySQLDatabase(Database):
         return [r[0] for r in res.fetchall()]
 
     def extract_date(self, date_part, date_field):
-        assert date_part.lower() in DT_LOOKUPS
+        assert date_part.lower() in DATETIME_LOOKUPS
         return fn.EXTRACT(Clause(R(date_part), R('FROM'), date_field))
 
 
