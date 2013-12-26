@@ -381,12 +381,17 @@ fn = Func(None)
 
 class Clause(Node):
     """A SQL clause, one or more Node objects joined by spaces."""
+    glue = ' '
+
     def __init__(self, *nodes):
         super(Clause, self).__init__()
         self.nodes = nodes
 
     def clone_base(self):
         return Clause(*self.nodes)
+
+class ClauseList(Clause):
+    glue = ', '
 
 class Entity(Node):
     """A quoted-name or entity, e.g. "table"."column"."""
@@ -441,10 +446,44 @@ class Constraint(Node):
 
     def base(self):
         if self._name:
-            return [SQL('CONSTRAINT'),
+            return [SQL('CONSTRAINT'), Entity(self._name)]
+        return []
 
-    def check(self, *expressions):
-        return Clause(SQL('CHECK'), *expressions)
+    def constraint_builder(fn):
+        def inner(self, *args, **kwargs):
+            base = self.base()
+            return fn(self, self.base(), *args, **kwargs)
+        return inner
+
+    @constraint_builder
+    def check(self, base, *expressions):
+        base.append(SQL('CHECK'))
+        base.extend(*expressions)
+        return base
+
+    @constraint_builder
+    def unique(self, base, *fields):
+        base.append(SQL('UNIQUE'))
+        if fields:
+            entities = [Entity(field.db_column) for field in fields]
+            base.append(ClauseList(*entities))
+        return base
+
+    @constraint_builder
+    def not_null(self, base, *fields):
+        return base + [SQL('NOT NULL')]
+
+    @constraint_builder
+    def primary_key(self, base, *fields):
+        base.append(SQL('PRIMARY KEY'))
+        if fields:
+            entities = [Entity(field.db_column) for field in fields]
+            base.append(ClauseList(*entities))
+        return base
+
+    @constraint_builder
+    def foreign_key(self, base, *fields):
+        pass
 
 
 class ColumnBuilder(object):
@@ -1007,7 +1046,9 @@ class QueryCompiler(object):
             sql = '%s(%s)' % (node.name, sql)
         elif isinstance(node, Clause):
             sql, params = self.parse_node_list(
-                node.nodes, alias_map, conv, ' ')
+                node.nodes, alias_map, conv, node.glue)
+            if isinstance(node, ClauseList):
+                sql = '(%s)' % sql
         elif isinstance(node, Param):
             params = [node.value]
             unknown = True
