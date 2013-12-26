@@ -1205,7 +1205,7 @@ class QueryCompiler(object):
             parts.append('IF NOT EXISTS')
         meta = model_class._meta
         parts.append(self.quote(meta.db_table))
-        columns = list(map(self.field_sql, meta.get_fields()))
+        columns = [self.field_sql(field) for field in meta.get_fields()]
         if isinstance(meta.primary_key, CompositeKey):
             pk_cols = map(self.quote, (meta.fields[f].db_column
                                        for f in meta.primary_key.field_names))
