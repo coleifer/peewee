@@ -397,7 +397,7 @@ class Entity(Node):
     """A quoted-name or entity, e.g. "table"."column"."""
     def __init__(self, *path):
         super(Entity, self).__init__()
-        self.path = pathA
+        self.path = path
 
     def clone_base(self):
         return Entity(*self.path)
@@ -417,7 +417,7 @@ class _ActionFactory(object):
     }
 
     def __getattr__(self, attr):
-        return Clause(self.actions[attr])
+        return SQL(self.actions[attr])
 Action = _ActionFactory()
 
 class Constraint(Node):
@@ -458,15 +458,14 @@ class Constraint(Node):
     @constraint_builder
     def check(self, base, *expressions):
         base.append(SQL('CHECK'))
-        base.extend(*expressions)
+        base.extend(expressions)
         return base
 
     @constraint_builder
     def unique(self, base, *fields):
         base.append(SQL('UNIQUE'))
         if fields:
-            entities = [Entity(field.db_column) for field in fields]
-            base.append(ClauseList(*entities))
+            base.append(self.fields_to_entities(fields))
         return base
 
     @constraint_builder
@@ -477,13 +476,21 @@ class Constraint(Node):
     def primary_key(self, base, *fields):
         base.append(SQL('PRIMARY KEY'))
         if fields:
-            entities = [Entity(field.db_column) for field in fields]
-            base.append(ClauseList(*entities))
+            base.append(self.fields_to_entities(fields))
         return base
 
     @constraint_builder
     def foreign_key(self, base, *fields):
-        pass
+        base.append(SQL('FOREIGN KEY'))
+        base.append(self.fields_to_entities(fields))
+        base.append(SQL('REFERENCES'))
+        base.append(Entity(fields[0].rel_model._meta.db_table))
+        base.append(self.fields_to_entities([
+            field.rel_model._meta.primary_key for field in fields]))
+        return base
+
+    def fields_to_entities(self, fields):
+        return ClauseList(*[Entity(field.db_column) for field in fields])
 
 
 class ColumnBuilder(object):
@@ -853,7 +860,7 @@ class ForeignKeyField(IntegerField):
         self.on_delete = on_delete
         self.on_update = on_update
         self.extra = extra
-        super(ForeignKeyField, self).__init__(null=null, *args, **kwargs)
+        super(ForeignKeyField, self).__init__(*args, **kwargs)
 
     def clone_base(self, **kwargs):
          return super(ForeignKeyField, self).clone_base(
