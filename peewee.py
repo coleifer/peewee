@@ -1867,6 +1867,7 @@ class UpdateQuery(Query):
         super(UpdateQuery, self).__init__(model_class)
 
     def _clone_attributes(self, query):
+        query = super(UpdateQuery, self)._clone_attributes(query)
         query._update = dict(self._update)
         return query
 
@@ -1888,6 +1889,7 @@ class InsertQuery(Query):
         super(InsertQuery, self).__init__(model_class)
 
     def _clone_attributes(self, query):
+        query = super(InsertQuery, self)._clone_attributes(query)
         query._insert = dict(self._insert)
         return query
 

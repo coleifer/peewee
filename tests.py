@@ -857,6 +857,11 @@ class UpdateTestCase(BasePeeweeTestCase):
         uq = UpdateQuery(User, {User.username: 'updated'}).where(User.id == 2)
         self.assertWhere(uq, '(users."id" = ?)', [2])
 
+        uq = (UpdateQuery(User, {User.username: 'updated'})
+              .where(User.id == 2)
+              .where(User.username == 'old'))
+        self.assertWhere(uq, '((users."id" = ?) AND (users."username" = ?))', [2, 'old'])
+
 class InsertTestCase(BasePeeweeTestCase):
     def test_insert(self):
         iq = InsertQuery(User, {User.username: 'inserted'})
@@ -880,6 +885,11 @@ class DeleteTestCase(BasePeeweeTestCase):
     def test_where(self):
         dq = DeleteQuery(User).where(User.id == 2)
         self.assertWhere(dq, '(users."id" = ?)', [2])
+
+        dq = (DeleteQuery(User)
+              .where(User.id == 2)
+              .where(User.username == 'old'))
+        self.assertWhere(dq, '((users."id" = ?) AND (users."username" = ?))', [2, 'old'])
 
 class RawTestCase(BasePeeweeTestCase):
     def test_raw(self):
