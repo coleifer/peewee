@@ -391,6 +391,7 @@ class Clause(Node):
         return Clause(*self.nodes)
 
 class ClauseList(Clause):
+    """One or more Node objects joined by commas and enclosed in parens."""
     glue = ', '
 
 class Entity(Node):
@@ -406,112 +407,6 @@ class Entity(Node):
         return Entity(*self.path + (attr,))
 
 Join = namedtuple('Join', ('model_class', 'join_type', 'on'))
-
-class _ActionFactory(object):
-    actions = {
-        'cascade': 'CASCADE',
-        'no_action': 'NO ACTION',
-        'restrict': 'RESTRICT',
-        'set_default': 'SET DEFAULT',
-        'set_null': 'SET NULL',
-    }
-
-    def __getattr__(self, attr):
-        return SQL(self.actions[attr])
-Action = _ActionFactory()
-
-class Constraint(Node):
-    """
-    SQL constraint.
-
-    After column definition:
-
-    * price numeric CHECK (price > 0)
-    * price numeric CONSTRAINT positive_price CHECK (price > 0)
-    * some_column NOT NULL
-    * ssn UNIQUE
-    * id PRIMARY KEY
-    * user_id REFERENCES user (id)
-    * foo REFERENCES bar (id) ON DELETE CASCADE
-
-    * CHECK (price > discounted_price)  (inter-column)
-    * CHECK (price > discounted_price AND discounted_price > 0)
-    * UNIQUE (ssn)
-    * PRIMARY KEY (id)
-    * FOREIGN KEY (user_id) REFERENCES user (id)
-    * FOREIGN KEY (foo) REFERENCES bar (id) ON DELETE CASCADE
-    """
-    def __init__(self, name=None):
-        self._name = name
-
-    def base(self):
-        if self._name:
-            return [SQL('CONSTRAINT'), Entity(self._name)]
-        return []
-
-    def constraint_builder(fn):
-        def inner(self, *args, **kwargs):
-            base = self.base()
-            return fn(self, self.base(), *args, **kwargs)
-        return inner
-
-    @constraint_builder
-    def check(self, base, *expressions):
-        base.append(SQL('CHECK'))
-        base.extend(expressions)
-        return base
-
-    @constraint_builder
-    def unique(self, base, *fields):
-        base.append(SQL('UNIQUE'))
-        if fields:
-            base.append(self.fields_to_entities(fields))
-        return base
-
-    @constraint_builder
-    def not_null(self, base, *fields):
-        return base + [SQL('NOT NULL')]
-
-    @constraint_builder
-    def primary_key(self, base, *fields):
-        base.append(SQL('PRIMARY KEY'))
-        if fields:
-            base.append(self.fields_to_entities(fields))
-        return base
-
-    @constraint_builder
-    def foreign_key(self, base, *fields):
-        base.append(SQL('FOREIGN KEY'))
-        base.append(self.fields_to_entities(fields))
-        base.append(SQL('REFERENCES'))
-        base.append(Entity(fields[0].rel_model._meta.db_table))
-        base.append(self.fields_to_entities([
-            field.rel_model._meta.primary_key for field in fields]))
-        return base
-
-    def fields_to_entities(self, fields):
-        return ClauseList(*[Entity(field.db_column) for field in fields])
-
-
-class ColumnBuilder(object):
-    """Convert a `Field` into one or more Nodes."""
-    def build(self, field):
-        pass
-
-
-"""
-a table definition is just...
-
-<table name> (list of columns and constraints).
-
-a column definition is just...
-
-<column name> <affinity>(<modifiers>) <constraints>
-
-extra constraints are just...
-
-<constraint1>, <constraint2>
-"""
 
 class FieldDescriptor(object):
     # Fields are exposed as descriptors in order to control access to the
@@ -537,7 +432,7 @@ class Field(Node):
     def __init__(self, null=False, index=False, unique=False,
                  verbose_name=None, help_text=None, db_column=None,
                  default=None, choices=None, primary_key=False, sequence=None,
-                 *constraints):
+                 constraints=None):
         self.null = null
         self.index = index
         self.unique = unique
@@ -548,7 +443,7 @@ class Field(Node):
         self.choices = choices
         self.primary_key = primary_key
         self.sequence = sequence
-        self.constraints = list(constraints)
+        self.constraints = constraints
 
         # Used internally for recovering the order in which Fields were defined
         # on the Model class.
@@ -601,6 +496,9 @@ class Field(Node):
     def get_db_field(self):
         return self.db_field
 
+    def get_modifiers(self):
+        return None
+
     def coerce(self, value):
         return value
 
@@ -639,7 +537,7 @@ class FloatField(Field):
 class DoubleField(FloatField):
     db_field = 'double'
 
-class DecimalField(Field):  # col_type(max_digits, decimal_places)
+class DecimalField(Field):
     db_field = 'decimal'
 
     def __init__(self, max_digits=10, decimal_places=5, auto_round=False,
@@ -657,6 +555,9 @@ class DecimalField(Field):  # col_type(max_digits, decimal_places)
             auto_round=auto_round,
             rounding=rounding,
             **kwargs)
+
+    def get_modifiers(self):
+        return [self.max_digits, self.decimal_places]
 
     def db_value(self, value):
         D = decimal.Decimal
@@ -683,7 +584,6 @@ def coerce_to_unicode(s, encoding='utf-8'):
 
 class CharField(Field):
     db_field = 'string'
-    template = '%(column_type)s(%(max_length)s)'
 
     def __init__(self, max_length=255, *args, **kwargs):
         self.max_length = max_length
@@ -693,6 +593,9 @@ class CharField(Field):
         return super(CharField, self).clone_base(
             max_length=self.max_length,
             **kwargs)
+
+    def get_modifiers(self):
+        return self.max_length and [self.max_length] or None
 
     def coerce(self, value):
         return coerce_to_unicode(value or '')
@@ -922,6 +825,12 @@ class ForeignKeyField(IntegerField):
             return to_pk.get_db_field()
         return super(ForeignKeyField, self).get_db_field()
 
+    def get_modifiers(self):
+        to_pk = self.rel_model._meta.primary_key
+        if not isinstance(to_pk, PrimaryKeyField):
+            return to_pk.get_modifiers()
+        return super(ForeignKeyField, self).get_modifiers()
+
     def coerce(self, value):
         return self.rel_model._meta.primary_key.coerce(value)
 
@@ -1071,6 +980,8 @@ class QueryCompiler(object):
             sub, params = self.generate_select(clone, max_alias, alias_copy)
             sql = '(%s)' % sub
         elif isinstance(node, (list, tuple)):
+            # If you're wondering how to pass a list into your query, simply
+            # wrap it in Param().
             sql, params = self.parse_node_list(node, alias_map, conv)
             sql = '(%s)' % sql
         elif isinstance(node, Entity):
@@ -1282,6 +1193,32 @@ class QueryCompiler(object):
             params.extend(w_params)
 
         return ' '.join(parts), params
+
+    def field_definition(self, field):
+        column_type = self.get_column_type(field.get_db_field())
+        modifiers = field.get_modifiers()
+        parts = [Entity(field.name)]
+        if modifiers:
+            modifier_params = [SQL(str(param)) for param in modifiers]
+            parts.append(Func(column_type, *modifier_params))
+        else:
+            parts.append(SQL(column_type))
+        if not field.null:
+            parts.append(Constraint.not_null())
+        if field.primary_key:
+            parts.append(Constraint.primary_key())
+        if field.sequence:
+            sequence = self.quote(field.sequence)
+            parts.append(SQL("DEFAULT NEXTVAL('%s')" % sequence))
+        if isinstance(field, ForeignKeyField):
+            parts.append(Constraint.foreign_key_reference(field))
+            if field.on_delete:
+                parts.extend([SQL('ON DELETE'), field.on_delete])
+            if field.on_update:
+                parts.extend([SQL('ON UPDATE'), field.on_update])
+        if field.constraints:
+            parts.extend(field.constraints)
+        return Clause(*parts)
 
     def field_sql(self, field):
         attrs = field.attributes
@@ -2558,7 +2495,8 @@ default_database = SqliteDatabase('peewee.db')
 
 class ModelOptions(object):
     def __init__(self, cls, database=None, db_table=None, indexes=None,
-                 order_by=None, primary_key=None, table_alias=None, **kwargs):
+                 order_by=None, primary_key=None, table_alias=None,
+                 constraints=None, **kwargs):
         self.model_class = cls
         self.name = cls.__name__.lower()
         self.fields = {}
@@ -2571,6 +2509,7 @@ class ModelOptions(object):
         self.order_by = order_by
         self.primary_key = primary_key
         self.table_alias = table_alias
+        self.constraints = constraints
 
         self.auto_increment = None
         self.rel = {}
@@ -2628,7 +2567,8 @@ class ModelOptions(object):
 
 
 class BaseModel(type):
-    inheritable = set(['database', 'indexes', 'order_by', 'primary_key'])
+    inheritable = set([
+        'constraints', 'database', 'indexes', 'order_by', 'primary_key'])
 
     def __new__(cls, name, bases, attrs):
         if not bases:
