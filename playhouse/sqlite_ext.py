@@ -26,7 +26,7 @@ matching_docs = Document.select().where(match(Document.title, 'some query'))
 best_docs = (Document
              .select(Document, Document.rank('score'))
              .where(match(Document.title, 'some query'))
-             .order_by(R('score').desc()))
+             .order_by(SQL('score').desc()))
 
 # or use the shortcut method.
 best_docs = Document.match('some phrase')
@@ -36,9 +36,9 @@ import sqlite3
 import struct
 
 from peewee import *
+from peewee import Clause
 from peewee import Expression
 from peewee import QueryCompiler
-from peewee import R
 from peewee import transaction
 
 
@@ -129,7 +129,7 @@ class FTSModel(VirtualModel):
         return (cls
                 .select(cls, cls.rank().alias('score'))
                 .where(match(cls, search))
-                .order_by(R('score').desc()))
+                .order_by(SQL('score').desc()))
 
     @classmethod
     def rank(cls, alias=None):
@@ -184,7 +184,7 @@ class SqliteExtDatabase(SqliteDatabase):
     def register_collation(self, fn, name=None):
         name = name or fn.__name__
         def _collation(*args):
-            expressions = args + (R('collate %s' % name),)
+            expressions = args + (SQL('collate %s' % name),)
             return Clause(*expressions)
         fn.collation = _collation
         self._collations[name] = fn
@@ -262,7 +262,7 @@ def match(lhs, rhs):
     return Expression(lhs, OP_MATCH, rhs)
 
 # Shortcut for calculating ranks.
-Rank = lambda model: fn.rank(fn.matchinfo(R(model._meta.db_table)))
+Rank = lambda model: fn.rank(fn.matchinfo(SQL(model._meta.db_table)))
 
 def _parse_match_info(buf):
     # see http://sqlite.org/fts3.html#matchinfo

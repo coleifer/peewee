@@ -2,6 +2,7 @@ import sqlite3
 import unittest
 
 from peewee import *
+from peewee import Clause
 import sqlite_ext as sqe
 
 # use a disk-backed db since memory dbs only exist for a single connection and
@@ -157,7 +158,7 @@ class SqliteExtTestCase(unittest.TestCase):
         pq = (ModelClass
               .select(ModelClass, sqe.Rank(ModelClass).alias('score'))
               .where(matches('things'))
-              .order_by(R('score').desc()))
+              .order_by(SQL('score').desc()))
         self.assertEqual([(x.message, x.score) for x in pq], [
             (self.messages[4], 2.0 / 3),
             (self.messages[2], 1.0 / 3),
@@ -217,7 +218,7 @@ class SqliteExtTestCase(unittest.TestCase):
         for i in [1, 4, 3, 5, 2]:
             Post.create(message='p%d' % i)
 
-        pq = Post.select().order_by(Clause(Post.message, R('collate collate_reverse')))
+        pq = Post.select().order_by(Clause(Post.message, SQL('collate collate_reverse')))
         self.assertEqual([p.message for p in pq], ['p5', 'p4', 'p3', 'p2', 'p1'])
 
     def test_collation_decorator(self):

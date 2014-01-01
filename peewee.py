@@ -26,7 +26,6 @@ __all__ = [
     'BlobField',
     'BooleanField',
     'CharField',
-    'Clause',
     'CompositeKey',
     'DatabaseError',
     'DataError',
@@ -406,6 +405,11 @@ class Entity(Node):
     def __getattr__(self, attr):
         return Entity(*self.path + (attr,))
 
+class Check(SQL):
+    """Check constraint, usage: `Check('price > 10')`."""
+    def __init__(self, value):
+        super(Check, self).__init__('CHECK (%s)' % value)
+
 Join = namedtuple('Join', ('model_class', 'join_type', 'on'))
 
 class FieldDescriptor(object):
@@ -440,10 +444,10 @@ class Field(Node):
         self.help_text = help_text
         self.db_column = db_column
         self.default = default
-        self.choices = choices
+        self.choices = choices  # Used for metadata purposes, not enforced.
         self.primary_key = primary_key
-        self.sequence = sequence
-        self.constraints = constraints
+        self.sequence = sequence  # Name of sequence, e.g. foo_id_seq.
+        self.constraints = constraints  # List of column constraints.
 
         # Used internally for recovering the order in which Fields were defined
         # on the Model class.
@@ -1204,81 +1208,55 @@ class QueryCompiler(object):
         else:
             parts.append(SQL(column_type))
         if not field.null:
-            parts.append(Constraint.not_null())
+            parts.append(SQL('NOT NULL'))
         if field.primary_key:
-            parts.append(Constraint.primary_key())
+            parts.append(SQL('PRIMARY KEY'))
         if field.sequence:
             sequence = self.quote(field.sequence)
             parts.append(SQL("DEFAULT NEXTVAL('%s')" % sequence))
-        if isinstance(field, ForeignKeyField):
-            parts.append(Constraint.foreign_key_reference(field))
-            if field.on_delete:
-                parts.extend([SQL('ON DELETE'), field.on_delete])
-            if field.on_update:
-                parts.extend([SQL('ON UPDATE'), field.on_update])
         if field.constraints:
             parts.extend(field.constraints)
         return Clause(*parts)
 
-    def field_sql(self, field):
-        attrs = field.attributes
-        attrs['column_type'] = self.get_column_type(field.get_db_field())
-        template = field.get_template()
-
-        if isinstance(field, ForeignKeyField):
-            to_pk = field.rel_model._meta.primary_key
-            if not isinstance(to_pk, PrimaryKeyField):
-                template = to_pk.get_template()
-                attrs.update(to_pk.attributes)
-
-        parts = [self.quote(field.db_column), template]
-        if not field.null:
-            parts.append('NOT NULL')
-        if field.primary_key:
-            parts.append('PRIMARY KEY')
-        if field.template_extra:
-            parts.append(field.template_extra)
-        if field.sequence:
-            parts.append("DEFAULT NEXTVAL('%s')" % self.quote(field.sequence))
-        return ' '.join(p % attrs for p in parts)
-
-    def create_table_sql(self, model_class, safe=False):
-        parts = ['CREATE TABLE']
-        if safe:
-            parts.append('IF NOT EXISTS')
-        meta = model_class._meta
-        parts.append(self.quote(meta.db_table))
-        columns = [self.field_sql(field) for field in meta.get_fields()]
-        if isinstance(meta.primary_key, CompositeKey):
-            pk_cols = map(self.quote, (meta.fields[f].db_column
-                                       for f in meta.primary_key.field_names))
-            columns.append('PRIMARY KEY (%s)' % ', '.join(pk_cols))
-        for field in meta.get_fields():
-            if isinstance(field, ForeignKeyField) and not field.deferred:
-                foreign_key = ['FOREIGN KEY (%s) REFERENCES %s (%s)' % (
-                    self.quote(field.db_column),
-                    self.quote(field.rel_model._meta.db_table),
-                    self.quote(field.rel_model._meta.primary_key.db_column))]
-                if field.on_delete:
-                    foreign_key.append(field.attributes['cascade'])
-                if field.extra:
-                    foreign_key.append(field.attributes['extra'])
-                columns.append(' '.join(foreign_key))
-
-        parts.append('(%s)' % ', '.join(columns))
-        return parts
+    def foreign_key_constraint(self, field):
+        parts = [
+            SQL('FOREIGN KEY'),
+            Entity(field.db_column),
+            SQL('REFERENCES'),
+            Entity(field.rel_model._meta.db_table),
+            ClauseList(Entity(field.rel_model._meta.primary_key.db_column))]
+        if field.on_delete:
+            parts.append(SQL('ON DELETE %s' % field.on_delete))
+        if field.on_update:
+            parts.append(SQL('ON UPDATE %s' % field.on_delete))
+        return Clause(*parts)
 
     def create_table(self, model_class, safe=False):
-        return ' '.join(self.create_table_sql(model_class, safe))
+        statement = 'CREATE TABLE IF NOT EXISTS' if safe else 'CREATE TABLE'
+        meta = model_class._meta
+
+        columns, constraints = [], []
+        if isinstance(meta.primary_key, CompositeKey):
+            pk_cols = [Entity(meta.fields[f].db_column)
+                       for f in meta.primary_key.field_names]
+            constraints.append(Clause(
+                SQL('PRIMARY KEY'), ClauseList(*pk_cols)))
+        for field in meta.get_fields():
+            columns.append(self.field_definition(field))
+            if isinstance(field, ForeignKeyField) and not field.deferred:
+                constraints.append(self.foreign_key_constraint(field))
+
+        return Clause(
+            SQL(statement),
+            Entity(meta.db_table),
+            ClauseList(*(columns + constraints)))
 
     def drop_table(self, model_class, fail_silently=False, cascade=False):
-        parts = ['DROP TABLE']
-        if fail_silently:
-            parts.append('IF EXISTS')
-        parts.append(self.quote(model_class._meta.db_table))
+        statement = 'DROP TABLE IF EXISTS' if fail_silently else 'DROP TABLE'
+        parts = [SQL(statement), Entity(model_class._meta.db_table)]
         if cascade:
-            parts.append('CASCADE')
-        return ' '.join(parts)
+            parts.append(SQL('CASCADE'))
+        return Clause(*parts)
 
     def create_index_sql(self, model_class, fields, unique):
         tbl_name = model_class._meta.db_table

@@ -1,4 +1,5 @@
 from peewee import *
+from peewee import Clause
 
 
 def case(predicate, expression_tuples, default=None):
@@ -35,7 +36,7 @@ def case(predicate, expression_tuples, default=None):
             (1, "one"),
             (2, "two")), "?"))
     """
-    clauses = [R('CASE')]
+    clauses = [SQL('CASE')]
     simple_case = predicate is not None
     if simple_case:
         clauses.append(predicate)
@@ -43,8 +44,8 @@ def case(predicate, expression_tuples, default=None):
         # If this is a simple case, each tuple will contain (value, value) pair
         # since the DB will be performing an equality check automatically.
         # Otherwise, we will have (expression, value) pairs.
-        clauses.extend((R('WHEN'), expr, R('THEN'), value))
+        clauses.extend((SQL('WHEN'), expr, SQL('THEN'), value))
     if default is not None:
-        clauses.extend((R('ELSE'), default))
-    clauses.append(R('END'))
+        clauses.extend((SQL('ELSE'), default))
+    clauses.append(SQL('END'))
     return Clause(*clauses)
