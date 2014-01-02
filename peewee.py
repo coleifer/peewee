@@ -18,6 +18,7 @@ import uuid
 from collections import deque
 from collections import namedtuple
 from copy import deepcopy
+from functools import wraps
 from inspect import isclass
 
 __all__ = [
@@ -2094,6 +2095,7 @@ class Database(object):
         return transaction(self)
 
     def commit_on_success(self, func):
+        @wraps(func)
         def inner(*args, **kwargs):
             with self.transaction():
                 return func(*args, **kwargs)
