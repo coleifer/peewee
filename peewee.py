@@ -1258,23 +1258,21 @@ class QueryCompiler(object):
             parts.append(SQL('CASCADE'))
         return Clause(*parts)
 
-    def create_index_sql(self, model_class, fields, unique):
-        tbl_name = model_class._meta.db_table
-        colnames = [f.db_column for f in fields]
-        parts = ['CREATE %s' % ('UNIQUE INDEX' if unique else 'INDEX')]
-        parts.append(self.quote('%s_%s' % (tbl_name, '_'.join(colnames))))
-        parts.append('ON %s' % self.quote(tbl_name))
-        parts.append('(%s)' % ', '.join(map(self.quote, colnames)))
-        return parts
-
     def create_index(self, model_class, fields, unique):
-        return ' '.join(self.create_index_sql(model_class, fields, unique))
+        statement = 'CREATE UNIQUE INDEX' if unique else 'CREATE INDEX'
+        tbl_name = model_class._meta.db_table
+        index = '%s_%s' % (tbl_name, '_'.join(f.db_column for f in fields))
+        return Clause(
+            SQL(statement),
+            Entity(index),
+            SQL('ON'),
+            ClauseList(*[Entity(field.db_column) for field in fields]))
 
     def create_sequence(self, sequence_name):
-        return 'CREATE SEQUENCE %s;' % self.quote(sequence_name)
+        return Clause(SQL('CREATE SEQUENCE'), Entity(sequence_name))
 
     def drop_sequence(self, sequence_name):
-        return 'DROP SEQUENCE %s;' % self.quote(sequence_name)
+        return Clause(SQL('DROP SEQUENCE'), Entity(sequence_name))
 
 
 class QueryResultWrapper(object):
