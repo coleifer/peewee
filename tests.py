@@ -3158,6 +3158,72 @@ class SqliteDatePartTestCase(BasePeeweeTestCase):
         self.assertEqual(query.count(), 0)
 
 
+class AutoRollbackTestCase(ModelTestCase):
+    requires = [User, Blog]
+
+    def setUp(self):
+        test_db.autorollback = True
+        super(AutoRollbackTestCase, self).setUp()
+
+    def tearDown(self):
+        test_db.autorollback = False
+        test_db.set_autocommit(True)
+        super(AutoRollbackTestCase, self).tearDown()
+
+    def test_auto_rollback(self):
+        # Exceptions are still raised.
+        self.assertRaises(IntegrityError, Blog.create)
+
+        # The transaction should have been automatically rolled-back, allowing
+        # us to create new objects (in a new transaction).
+        u = User.create(username='u')
+        self.assertTrue(u.id)
+
+        # No-op, the previous INSERT was already committed.
+        test_db.rollback()
+
+        # Ensure we can get our user back.
+        u_db = User.get(User.username == 'u')
+        self.assertEqual(u.id, u_db.id)
+
+    def test_transaction_ctx_mgr(self):
+        'Only auto-rollback when autocommit is enabled.'
+        def create_error():
+            self.assertRaises(IntegrityError, Blog.create)
+
+        # autocommit is disabled in a transaction ctx manager.
+        with test_db.transaction():
+            # Error occurs, but exception is caught, leaving the current txn
+            # in a bad state.
+            create_error()
+
+            try:
+                create_error()
+            except Exception as exc:
+                # Subsequent call will raise an InternalError with postgres.
+                self.assertTrue(isinstance(exc, InternalError))
+            else:
+                self.assertFalse(database_class is PostgresqlDatabase)
+
+        # New transactions are not affected.
+        self.test_auto_rollback()
+
+    def test_manual(self):
+        test_db.set_autocommit(False)
+
+        # Will not be rolled back.
+        self.assertRaises(IntegrityError, Blog.create)
+
+        if database_class is PostgresqlDatabase:
+            self.assertRaises(InternalError, User.create, username='u')
+
+        test_db.rollback()
+        u = User.create(username='u')
+        test_db.commit()
+        u_db = User.get(User.username == 'u')
+        self.assertEqual(u.id, u_db.id)
+
+
 class ConnectionStateTestCase(BasePeeweeTestCase):
     def test_connection_state(self):
         conn = test_db.get_conn()
