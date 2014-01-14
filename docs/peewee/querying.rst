@@ -162,7 +162,7 @@ Here is how you might add support for ``modulo`` and ``regexp`` in SQLite:
     def regexp(lhs, rhs):
         return Expression(lhs, OP_REGEXP, rhs)
 
-    SqliteDatabase.register_ops({OP_MOD: '%', OP_REGEX: 'REGEXP'})
+    SqliteDatabase.register_ops({OP_MOD: '%', OP_REGEXP: 'REGEXP'})
 
 Now you can use these custom operators to build richer queries:
 
