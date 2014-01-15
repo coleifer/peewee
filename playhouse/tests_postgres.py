@@ -395,5 +395,30 @@ if TestingJson is not None:
             tj_db = TestingJson.get(tj.pk_expr())
             self.assertEqual(tj_db.data, data)
 
+        def assertItems(self, where, *items):
+            query = TestingJson.select().where(where).order_by(TestingJson.id)
+            self.assertEqual(
+                [item.id for item in query],
+                [item.id for item in items])
+
+        def test_lookup(self):
+            t1 = TestingJson.create(data={'k1': 'v1', 'k2': {'k3': 'v3'}})
+            t2 = TestingJson.create(data={'k1': 'x1', 'k2': {'k3': 'x3'}})
+            t3 = TestingJson.create(data={'k1': 'v1', 'j2': {'j3': 'v3'}})
+            self.assertItems((TestingJson.data['k2']['k3'] == 'v3'), t1)
+            self.assertItems((TestingJson.data['k1'] == 'v1'), t1, t3)
+
+            # Valid key, no matching value.
+            self.assertItems((TestingJson.data['k2'] == 'v1'))
+
+            # Non-existent key.
+            self.assertItems((TestingJson.data['not-here'] == 'v1'))
+
+            # Non-existent nested key.
+            self.assertItems((TestingJson.data['not-here']['xxx'] == 'v1'))
+
+            self.assertItems((TestingJson.data['k2']['xxx'] == 'v1'))
+
+
 elif TEST_VERBOSITY > 0:
     print_('Skipping postgres "Json" tests, unsupported version.')
