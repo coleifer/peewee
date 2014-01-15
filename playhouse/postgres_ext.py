@@ -16,6 +16,10 @@ from peewee import SelectQuery
 
 from psycopg2 import extensions
 from psycopg2.extras import register_hstore
+try:
+    from psycopg2.extras import Json
+except:
+    Json = None
 
 
 class ObjectSlice(Node):
@@ -105,6 +109,18 @@ class HStoreField(Field):
 
     def contains_any(self, *keys):
         return Expression(self, OP_HCONTAINS_ANY_KEY, Param(value))
+
+
+class JSONField(Field):
+    db_field = 'json'
+
+    def __init__(self, *args, **kwargs):
+        if Json is None:
+            raise Exception('Your version of psycopg2 does not support JSON.')
+        super(JSONField, self).__init__(*args, **kwargs)
+
+    def db_value(self, value):
+        return Json(value)
 
 
 class UUIDField(Field):
@@ -198,9 +214,11 @@ class ServerSideSelectQuery(SelectQuery):
 
 
 PostgresqlExtDatabase.register_fields({
-    'hash': 'hstore',
     'datetime_tz': 'timestamp with time zone',
-    'uuid': 'uuid'})
+    'hash': 'hstore',
+    'json': 'json',
+    'uuid': 'uuid',
+})
 PostgresqlExtDatabase.register_ops({
     OP_HCONTAINS_DICT: '@>',
     OP_HCONTAINS_KEYS: '?&',

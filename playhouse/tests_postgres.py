@@ -1,12 +1,16 @@
 import datetime
+import json
+import os
 import unittest
 import uuid
 
 import psycopg2
 
+from peewee import print_
 from playhouse.postgres_ext import *
 
 
+TEST_VERBOSITY = int(os.environ.get('PEEWEE_TEST_VERBOSITY') or 1)
 test_db = PostgresqlExtDatabase('peewee_test', user='postgres')
 test_ss_db = PostgresqlExtDatabase(
     'peewee_test',
@@ -24,6 +28,12 @@ class Testing(BaseModel):
 
     class Meta:
         order_by = ('name',)
+
+try:
+    class TestingJson(BaseModel):
+        data = JSONField()
+except:
+    TestingJson = None
 
 class TestingID(BaseModel):
     uniq = UUIDField()
@@ -44,7 +54,6 @@ class SSCursorModel(Model):
 class NormalModel(BaseModel):
     data = CharField()
 
-
 class PostgresExtTestCase(unittest.TestCase):
     def setUp(self):
         Testing.drop_table(True)
@@ -55,10 +64,6 @@ class PostgresExtTestCase(unittest.TestCase):
         ArrayModel.create_table(True)
         self.t1 = None
         self.t2 = None
-
-    def create(self):
-        self.t1 = Testing.create(name='t1', data={'k1': 'v1', 'k2': 'v2'})
-        self.t2 = Testing.create(name='t2', data={'k2': 'v2', 'k3': 'v3'})
 
     def test_uuid(self):
         uuid_str = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
@@ -83,6 +88,10 @@ class PostgresExtTestCase(unittest.TestCase):
 
         tz = TZModel.get(TZModel.id == tz.id)
         self.assertFalse(tz.dt.tzinfo is None)
+
+    def create(self):
+        self.t1 = Testing.create(name='t1', data={'k1': 'v1', 'k2': 'v2'})
+        self.t2 = Testing.create(name='t2', data={'k2': 'v2', 'k3': 'v3'})
 
     def test_storage(self):
         self.create()
@@ -371,3 +380,20 @@ class SSCursorTestCase(unittest.TestCase):
         # the table.
         test_ss_db.execute_sql('truncate table %s;' % tbl)
         test_ss_db.commit()
+
+if TestingJson is not None:
+    from psycopg2.extras import Json
+
+    class TestJsonField(unittest.TestCase):
+        def setUp(self):
+            TestingJson.drop_table(True)
+            TestingJson.create_table()
+
+        def test_json_field(self):
+            data = {'k1': ['a1', 'a2'], 'k2': {'k3': 'v3'}}
+            tj = TestingJson.create(data=data)
+            tj_db = TestingJson.get(tj.pk_expr())
+            self.assertEqual(tj_db.data, data)
+
+elif TEST_VERBOSITY > 0:
+    print_('Skipping postgres "Json" tests, unsupported version.')
