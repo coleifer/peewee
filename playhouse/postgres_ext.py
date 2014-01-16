@@ -53,18 +53,15 @@ class ObjectSlice(_LookupNode):
 class ArrayField(Field):
     def __init__(self, field_class=IntegerField, dimensions=1, *args,
                  **kwargs):
-        kwargs['field_class'] = field_class
-        kwargs['dimensions'] = dimensions
         self.__field = field_class(*args, **kwargs)
+        self.dimensions = dimensions
         self.db_field = self.__field.get_db_field()
         super(ArrayField, self).__init__(*args, **kwargs)
 
-    def get_template(self):
-        brackets = ('[]' * self.attributes['dimensions'])
-        return self.__field.get_template() + brackets
-
-    def field_attributes(self):
-        return self.__field.field_attributes()
+    def __ddl_column__(self, column_type):
+        sql = self.__field.__ddl_column__(column_type)
+        sql.value += '[]' * self.dimensions
+        return sql
 
     def __getitem__(self, value):
         return ObjectSlice.create(self, value)

@@ -28,7 +28,6 @@ from peewee import sort_models_topologically
 from peewee import transaction
 from peewee import UpdateQuery
 
-
 class QueryLogHandler(logging.Handler):
     def __init__(self, *args, **kwargs):
         self.queries = []
@@ -2293,10 +2292,10 @@ class CompositeKeyTestCase(ModelTestCase):
         TagPostThrough.create(tag=tags[1], post=p12)
 
     def test_create_table_query(self):
-        query = compiler.create_table_sql(TagPostThrough)
-        create, tbl, tbldefs = query
-        self.assertEqual(tbl, '"tagpostthrough"')
-        self.assertEqual(tbldefs,
+        query, params = compiler.create_table(TagPostThrough)
+        self.assertEqual(
+            query,
+            'CREATE TABLE "tagpostthrough" '
             '("tag_id" INTEGER NOT NULL, '
             '"post_id" INTEGER NOT NULL, '
             'PRIMARY KEY ("tag_id", "post_id"), '
@@ -2835,20 +2834,20 @@ class DeferredForeignKeyTestCase(ModelTestCase):
                          Snippet)
 
     def test_create_table_query(self):
-        query = compiler.create_table_sql(Snippet)
-        create, tbl, tbldefs = query
-        self.assertEqual(tbl, '"snippet"')
-        self.assertEqual(tbldefs,
+        query, params = compiler.create_table(Snippet)
+        self.assertEqual(
+            query,
+            'CREATE TABLE "snippet" '
             '("id" INTEGER NOT NULL PRIMARY KEY, '
             '"code" TEXT NOT NULL, '
             '"language_id" INTEGER NOT NULL, '
             'FOREIGN KEY ("language_id") REFERENCES "language" ("id")'
             ')')
 
-        query = compiler.create_table_sql(Language)
-        create, tbl, tbldefs = query
-        self.assertEqual(tbl, '"language"')
-        self.assertEqual(tbldefs,
+        query, params = compiler.create_table(Language)
+        self.assertEqual(
+            query,
+            'CREATE TABLE "language" '
             '("id" INTEGER NOT NULL PRIMARY KEY, '
             '"name" VARCHAR(255) NOT NULL, '
             '"selected_snippet_id" INTEGER)')

@@ -27,6 +27,7 @@ __all__ = [
     'BlobField',
     'BooleanField',
     'CharField',
+    'Clause',
     'CompositeKey',
     'DatabaseError',
     'DataError',
@@ -351,13 +352,14 @@ class Param(Node):
         return Param(self.value)
 
 class SQL(Node):
-    """An unescaped SQL string."""
-    def __init__(self, value):
+    """An unescaped SQL string, with optional parameters."""
+    def __init__(self, value, *params):
         self.value = value
+        self.params = params
         super(SQL, self).__init__()
 
     def clone_base(self):
-        return SQL(self.value)
+        return SQL(self.value, *self.params)
 R = SQL  # backwards-compat.
 
 class Func(Node):
@@ -515,6 +517,26 @@ class Field(Node):
         """Convert the database value to a pythonic value."""
         return value if value is None else self.coerce(value)
 
+    def __ddl_column__(self, column_type):
+        modifiers = self.get_modifiers()
+        if modifiers:
+            return SQL(
+                '%s(%s)' % (column_type, ', '.join(map(str, modifiers))))
+        return SQL(column_type)
+
+    def __ddl__(self, column_type):
+        ddl = [Entity(self.db_column), self.__ddl_column__(column_type)]
+        if not self.null:
+            ddl.append(SQL('NOT NULL'))
+        if self.primary_key:
+            ddl.append(SQL('PRIMARY KEY'))
+        if self.sequence:
+            sequence = self.quote(self.sequence)
+            ddl.append(SQL("DEFAULT NEXTVAL('%s')" % sequence))
+        if self.constraints:
+            ddl.extend(self.constraints)
+        return ddl
+
     def __hash__(self):
         return hash(self.name + '.' + self.model_class.__name__)
 
@@ -655,7 +677,7 @@ class DateTimeField(_BaseFormattedField):
 
     def python_value(self, value):
         if value and isinstance(value, basestring):
-            return format_date_time(value, self.attributes['formats'])
+            return format_date_time(value, self.formats)
         return value
 
     year = property(_date_part('year'))
@@ -665,7 +687,7 @@ class DateTimeField(_BaseFormattedField):
     minute = property(_date_part('minute'))
     second = property(_date_part('second'))
 
-class DateField(Field):
+class DateField(_BaseFormattedField):
     db_field = 'date'
     formats = [
         '%Y-%m-%d',
@@ -676,7 +698,7 @@ class DateField(Field):
     def python_value(self, value):
         if value and isinstance(value, basestring):
             pp = lambda x: x.date()
-            return format_date_time(value, self.attributes['formats'], pp)
+            return format_date_time(value, self.formats, pp)
         elif value and isinstance(value, datetime.datetime):
             return value.date()
         return value
@@ -698,7 +720,7 @@ class TimeField(_BaseFormattedField):
     def python_value(self, value):
         if value and isinstance(value, basestring):
             pp = lambda x: x.time()
-            return format_date_time(value, self.attributes['formats'], pp)
+            return format_date_time(value, self.formats, pp)
         elif value and isinstance(value, datetime.datetime):
             return value.time()
         return value
@@ -975,7 +997,7 @@ class QueryCompiler(object):
             unknown = True
         elif isinstance(node, SQL):
             sql = node.value
-            params = []
+            params = list(node.params)
         elif isinstance(node, SelectQuery):
             max_alias = self._max_alias(alias_map)
             alias_copy = alias_map and alias_map.copy() or None
@@ -1201,37 +1223,30 @@ class QueryCompiler(object):
 
     def field_definition(self, field):
         column_type = self.get_column_type(field.get_db_field())
-        modifiers = field.get_modifiers()
-        parts = [Entity(field.name)]
-        if modifiers:
-            modifier_params = [SQL(str(param)) for param in modifiers]
-            parts.append(Func(column_type, *modifier_params))
-        else:
-            parts.append(SQL(column_type))
-        if not field.null:
-            parts.append(SQL('NOT NULL'))
-        if field.primary_key:
-            parts.append(SQL('PRIMARY KEY'))
-        if field.sequence:
-            sequence = self.quote(field.sequence)
-            parts.append(SQL("DEFAULT NEXTVAL('%s')" % sequence))
-        if field.constraints:
-            parts.extend(field.constraints)
-        return Clause(*parts)
+        ddl = field.__ddl__(column_type)
+        return Clause(*ddl)
 
     def foreign_key_constraint(self, field):
-        parts = [
+        ddl = [
             SQL('FOREIGN KEY'),
-            Entity(field.db_column),
+            ClauseList(Entity(field.db_column)),
             SQL('REFERENCES'),
             Entity(field.rel_model._meta.db_table),
             ClauseList(Entity(field.rel_model._meta.primary_key.db_column))]
         if field.on_delete:
-            parts.append(SQL('ON DELETE %s' % field.on_delete))
+            ddl.append(SQL('ON DELETE %s' % field.on_delete))
         if field.on_update:
-            parts.append(SQL('ON UPDATE %s' % field.on_delete))
-        return Clause(*parts)
+            ddl.append(SQL('ON UPDATE %s' % field.on_delete))
+        return Clause(*ddl)
 
+    def return_parsed_node(fn):
+        # TODO: remove decorator and treat all `generate_` functions as
+        # returning clauses, instead of SQL/params.
+        def inner(self, *args, **kwargs):
+            return self.parse_node(fn(self, *args, **kwargs))
+        return inner
+
+    @return_parsed_node
     def create_table(self, model_class, safe=False):
         statement = 'CREATE TABLE IF NOT EXISTS' if safe else 'CREATE TABLE'
         meta = model_class._meta
@@ -1252,14 +1267,16 @@ class QueryCompiler(object):
             Entity(meta.db_table),
             ClauseList(*(columns + constraints)))
 
+    @return_parsed_node
     def drop_table(self, model_class, fail_silently=False, cascade=False):
         statement = 'DROP TABLE IF EXISTS' if fail_silently else 'DROP TABLE'
-        parts = [SQL(statement), Entity(model_class._meta.db_table)]
+        ddl = [SQL(statement), Entity(model_class._meta.db_table)]
         if cascade:
-            parts.append(SQL('CASCADE'))
-        return Clause(*parts)
+            ddl.append(SQL('CASCADE'))
+        return Clause(*ddl)
 
-    def create_index(self, model_class, fields, unique):
+    @return_parsed_node
+    def create_index(self, model_class, fields, unique, *extra):
         statement = 'CREATE UNIQUE INDEX' if unique else 'CREATE INDEX'
         tbl_name = model_class._meta.db_table
         index = '%s_%s' % (tbl_name, '_'.join(f.db_column for f in fields))
@@ -1267,11 +1284,15 @@ class QueryCompiler(object):
             SQL(statement),
             Entity(index),
             SQL('ON'),
-            ClauseList(*[Entity(field.db_column) for field in fields]))
+            Entity(tbl_name),
+            ClauseList(*[Entity(field.db_column) for field in fields]),
+            *extra)
 
+    @return_parsed_node
     def create_sequence(self, sequence_name):
         return Clause(SQL('CREATE SEQUENCE'), Entity(sequence_name))
 
+    @return_parsed_node
     def drop_sequence(self, sequence_name):
         return Clause(SQL('DROP SEQUENCE'), Entity(sequence_name))
 
@@ -2139,7 +2160,7 @@ class Database(object):
 
     def create_table(self, model_class, safe=False):
         qc = self.compiler()
-        return self.execute_sql(qc.create_table(model_class, safe))
+        return self.execute_sql(*qc.create_table(model_class, safe))
 
     def create_index(self, model_class, fields, unique=False):
         qc = self.compiler()
@@ -2149,7 +2170,7 @@ class Database(object):
         fobjs = [
             model_class._meta.fields[f] if isinstance(f, basestring) else f
             for f in fields]
-        return self.execute_sql(qc.create_index(model_class, fobjs, unique))
+        return self.execute_sql(*qc.create_index(model_class, fobjs, unique))
 
     def create_foreign_key(self, model_class, field, constraint=None):
         constraint = constraint or 'fk_%s_%s_refs_%s' % (
@@ -2177,16 +2198,16 @@ class Database(object):
     def create_sequence(self, seq):
         if self.sequences:
             qc = self.compiler()
-            return self.execute_sql(qc.create_sequence(seq))
+            return self.execute_sql(*qc.create_sequence(seq))
 
     def drop_table(self, model_class, fail_silently=False):
         qc = self.compiler()
-        return self.execute_sql(qc.drop_table(model_class, fail_silently))
+        return self.execute_sql(*qc.drop_table(model_class, fail_silently))
 
     def drop_sequence(self, seq):
         if self.sequences:
             qc = self.compiler()
-            return self.execute_sql(qc.drop_sequence(seq))
+            return self.execute_sql(*qc.drop_sequence(seq))
 
     def extract_date(self, date_part, date_field):
         return fn.EXTRACT(Clause(date_part, R('FROM'), date_field))
