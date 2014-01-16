@@ -1726,6 +1726,19 @@ class ModelAPITestCase(ModelTestCase):
 
         self.assertEqual(User.select().count(), 1)
 
+    def test_modify_model_cause_it_dirty(self):
+        u = User(username='u1')
+        u.save()
+        self.assertFalse(u.is_dirty())
+
+        u.username = 'u2'
+        self.assertTrue(u.is_dirty())
+        self.assertEqual(u.dirty_fields(), [User.username])
+
+        u.save()
+        self.assertFalse(u.is_dirty())
+
+
     def test_save_only(self):
         u = User.create(username='u')
         b = Blog.create(user=u, title='b1', content='ct')
