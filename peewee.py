@@ -2649,6 +2649,7 @@ class Model(with_metaclass(BaseModel)):
     def create(cls, **query):
         inst = cls(**query)
         inst.save(force_insert=True)
+        inst.prepared()
         return inst
 
     @classmethod
