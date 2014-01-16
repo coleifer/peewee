@@ -145,7 +145,9 @@ class PostgresqlIntrospector(Introspector):
             FROM information_schema.columns
             WHERE table_name=%s""", (table,))
         columns = curs.fetchall()
-
+        columns_map = {}
+        for coll in columns:
+            columns_map[coll[0]] = coll
         # Look up the actual column type for each column.  TODO: combine with
         # query above?
         curs = self.conn.execute_sql('select * from "%s" limit 1' % table)
@@ -154,7 +156,7 @@ class PostgresqlIntrospector(Introspector):
         accum = {}
         for idx, column_description in enumerate(curs.description):
             field_class = self._get_field_class(column_description.type_code)
-            name, nullable, data_type, max_length = columns[idx]
+            name, nullable, data_type, max_length = columns_map[column_description.name]
 
             kwargs = {}
             if nullable == 'YES':
