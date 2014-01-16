@@ -18,6 +18,7 @@ import uuid
 from collections import deque
 from collections import namedtuple
 from copy import deepcopy
+from functools import wraps
 from inspect import isclass
 
 __all__ = [
@@ -1984,7 +1985,7 @@ class Database(object):
         'ProgrammingError': ProgrammingError}
 
     def __init__(self, database, threadlocals=False, autocommit=True,
-                 fields=None, ops=None, **connect_kwargs):
+                 fields=None, ops=None, autorollback=False, **connect_kwargs):
         self.init(database, **connect_kwargs)
 
         if threadlocals:
@@ -1994,6 +1995,7 @@ class Database(object):
 
         self._conn_lock = threading.Lock()
         self.autocommit = autocommit
+        self.autorollback = autorollback
 
         self.field_overrides = merge_dict(self.field_overrides, fields or {})
         self.op_overrides = merge_dict(self.op_overrides, ops or {})
@@ -2074,6 +2076,8 @@ class Database(object):
                 res = cursor.execute(sql, params or ())
             except Exception as exc:
                 logger.exception('%s %s', sql, params)
+                if self.get_autocommit() and self.autorollback:
+                    self.rollback()
                 if self.sql_error_handler(exc, sql, params, require_commit):
                     raise
             else:
@@ -2113,6 +2117,7 @@ class Database(object):
         return transaction(self)
 
     def commit_on_success(self, func):
+        @wraps(func)
         def inner(*args, **kwargs):
             with self.transaction():
                 return func(*args, **kwargs)

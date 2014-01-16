@@ -117,8 +117,11 @@ The postgresql extensions module provides a number of "postgres-only" functions,
 currently:
 
 * :ref:`hstore support <hstore>`
+* :ref:`json support <pgjson>`
 * :ref:`server-side cursors <server_side_cursors>`
 * :py:class:`ArrayField` field type, for storing arrays.
+* :py:class:`HStoreField` field type, for storing key/value pairs.
+* :py:class:`JSONField` field type, for storing JSON data.
 * :py:class:`UUIDField` field type, for storing UUID objects.
 * :py:class:`DateTimeTZ` field type, a timezone-aware datetime field.
 
@@ -271,6 +274,56 @@ You can check for the existence of a key and filter rows accordingly:
 
     123 Main St 2 cars
 
+.. _pgjson:
+
+JSON Support
+^^^^^^^^^^^^
+
+peewee has basic support for Postgres' native JSON data type, in the form of
+:py:class:`JSONField`.
+
+.. warning::
+  Postgres supports a JSON data type natively as of 9.2 (full support in 9.3). In
+  order to use this functionality you must be using the correct version of Postgres
+  with `psycopg2` version 2.5 or greater.
+
+.. note::
+  You must be sure your database is an instance of :py:class:`PostgresqlExtDatabase`
+  in order to use the `JSONField`.
+
+Here is an example of how you might declare a model with a JSON field:
+
+.. code-block:: python
+
+    import json
+    import urllib2
+    from playhouse.postgres_ext import *
+
+    db = PostgresqlExtDatabase('my_database')  # note
+
+    class APIResponse(Model):
+        url = CharField()
+        response = JSONField()
+
+        class Meta:
+            database = db
+
+        @classmethod
+        def request(cls, url):
+            fh = urllib2.urlopen(url)
+            return cls.create(url=url, response=json.loads(fh.read()))
+
+    APIResponse.create_table()
+
+    # Store a JSON response.
+    offense = APIResponse.request('http://wtf.charlesleifer.com/api/offense/')
+    booking = APIResponse.request('http://wtf.charlesleifer.com/api/booking/')
+
+    # Query a JSON data structure using a nested key lookup:
+    offense_responses = APIResponse.select().where(
+      APIResponse.response['meta']['model'] == 'offense')
+
+
 .. _server_side_cursors:
 
 Server-side cursors
@@ -329,6 +382,7 @@ postgres_ext API notes
     * :ref:`server_side_cursors`
     * :py:class:`ArrayField`
     * :py:class:`DateTimeTZField`
+    * :py:class:`JSONField`
     * :py:class:`HStoreField`
     * :py:class:`UUIDField`
 
@@ -522,6 +576,45 @@ postgres_ext API notes
         :param keys: One or more keys to search for.
 
         Query rows for the existince of *any* key.
+
+.. py:class:: JSONField(*args, **kwargs)
+
+    Field class suitable for storing and querying arbitrary JSON.  When using
+    this on a model, set the field's value to a Python object (either a `dict`
+    or a `list`).  When you retrieve your value from the database it will be
+    returned as a Python data structure.
+
+    .. note:: You must be using Postgres 9.2 / psycopg2 2.5 or greater.
+
+    Example model declaration:
+
+    .. code-block:: python
+
+        db = PostgresqlExtDatabase('my_db')
+
+        class APIResponse(Model):
+            url = CharField()
+            response = JSONField()
+
+            class Meta:
+                database = db
+
+    Example of storing JSON data:
+
+    .. code-block:: python
+
+        url = 'http://foo.com/api/resource/'
+        resp = json.loads(urllib2.urlopen(url).read())
+        APIResponse.create(url=url, response=resp)
+
+        APIResponse.create(url='http://foo.com/baz/', response={'key': 'value'})
+
+    To query, use Python's ``[]`` operators to specify nested key lookups:
+
+    .. code-block:: python
+
+        APIResponse.select().where(
+            APIResponse.response['key1']['nested-key'] == 'some-value')
 
 
 .. py:class:: UUIDField(*args, **kwargs)

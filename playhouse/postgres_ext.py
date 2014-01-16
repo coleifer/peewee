@@ -16,17 +16,26 @@ from peewee import SelectQuery
 
 from psycopg2 import extensions
 from psycopg2.extras import register_hstore
+try:
+    from psycopg2.extras import Json
+except:
+    Json = None
 
 
-class ObjectSlice(Node):
+class _LookupNode(Node):
     def __init__(self, node, parts):
         self.node = node
         self.parts = parts
-        super(ObjectSlice, self).__init__()
+        super(_LookupNode, self).__init__()
 
     def clone_base(self):
-        return ObjectSlice(self.node, list(self.parts))
+        return type(self)(self.node, list(self.parts))
 
+class JsonLookup(_LookupNode):
+    def __getitem__(self, value):
+        return JsonLookup(self.node, self.parts + [value])
+
+class ObjectSlice(_LookupNode):
     @classmethod
     def create(cls, node, value):
         if isinstance(value, slice):
@@ -107,6 +116,21 @@ class HStoreField(Field):
         return Expression(self, OP_HCONTAINS_ANY_KEY, Param(value))
 
 
+class JSONField(Field):
+    db_field = 'json'
+
+    def __init__(self, *args, **kwargs):
+        if Json is None:
+            raise Exception('Your version of psycopg2 does not support JSON.')
+        super(JSONField, self).__init__(*args, **kwargs)
+
+    def db_value(self, value):
+        return Json(value)
+
+    def __getitem__(self, value):
+        return JsonLookup(self, [value])
+
+
 class UUIDField(Field):
     db_field = 'uuid'
 
@@ -137,12 +161,24 @@ class PostgresqlExtCompiler(QueryCompiler):
     def _parse(self, node, alias_map, conv):
         sql, params, unknown = super(PostgresqlExtCompiler, self)._parse(
             node, alias_map, conv)
-        if unknown and isinstance(node, ObjectSlice):
-            unknown = False
-            sql, params = self.parse_node(node.node)
-            # Postgresql uses 1-based indexes.
-            parts = [str(part + 1) for part in node.parts]
-            sql = '%s[%s]' % (sql, ':'.join(parts))
+        if unknown:
+            if isinstance(node, ObjectSlice):
+                unknown = False
+                sql, params = self.parse_node(node.node)
+                # Postgresql uses 1-based indexes.
+                parts = [str(part + 1) for part in node.parts]
+                sql = '%s[%s]' % (sql, ':'.join(parts))
+            if isinstance(node, JsonLookup):
+                unknown = False
+                sql, params = self.parse_node(node.node)
+                lookups = [sql]
+                for part in node.parts:
+                    part_sql, part_params = self.parse_node(part)
+                    lookups.append(part_sql)
+                    params.extend(part_params)
+                # The last lookup should be converted to text.
+                head, tail = lookups[:-1], lookups[-1]
+                sql = '->>'.join(('->'.join(head), tail))
         return sql, params, unknown
 
 
@@ -198,9 +234,11 @@ class ServerSideSelectQuery(SelectQuery):
 
 
 PostgresqlExtDatabase.register_fields({
-    'hash': 'hstore',
     'datetime_tz': 'timestamp with time zone',
-    'uuid': 'uuid'})
+    'hash': 'hstore',
+    'json': 'json',
+    'uuid': 'uuid',
+})
 PostgresqlExtDatabase.register_ops({
     OP_HCONTAINS_DICT: '@>',
     OP_HCONTAINS_KEYS: '?&',

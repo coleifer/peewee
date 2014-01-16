@@ -302,6 +302,18 @@ class TagPostThrough(TestModel):
     class Meta:
         primary_key = CompositeKey('tag', 'post')
 
+class Manufacturer(TestModel):
+    name = CharField()
+
+class Component(TestModel):
+    name = CharField()
+    manufacturer = ForeignKeyField(Manufacturer, null=True)
+
+class Computer(TestModel):
+    hard_drive = ForeignKeyField(Component, related_name='c1')
+    memory = ForeignKeyField(Component, related_name='c2')
+    processor = ForeignKeyField(Component, related_name='c3')
+
 # Deferred foreign keys.
 SnippetProxy = Proxy()
 
@@ -350,6 +362,9 @@ MODELS = [
     TagPostThrough,
     Language,
     Snippet,
+    Manufacturer,
+    Component,
+    Computer,
 ]
 INT = test_db.interpolation
 
@@ -1899,6 +1914,86 @@ class ModelAPITestCase(ModelTestCase):
         self.assertEqual(user.username, ustr)
 
 
+class TestMultipleForeignKey(ModelTestCase):
+    requires = [Manufacturer, Component, Computer]
+    test_values = [
+        ['3TB', '16GB', 'i7'],
+        ['128GB', '1GB', 'ARM'],
+    ]
+
+    def setUp(self):
+        super(TestMultipleForeignKey, self).setUp()
+        intel = Manufacturer.create(name='Intel')
+        amd = Manufacturer.create(name='AMD')
+        kingston = Manufacturer.create(name='Kingston')
+        for hard_drive, memory, processor in self.test_values:
+            c = Computer.create(
+                hard_drive=Component.create(name=hard_drive),
+                memory=Component.create(name=memory, manufacturer=kingston),
+                processor=Component.create(name=processor, manufacturer=intel))
+
+        # The 2nd computer has an AMD processor.
+        c.processor.manufacturer = amd
+        c.processor.save()
+
+    def test_multi_join(self):
+        query_start = len(self.queries())
+        HDD = Component.alias()
+        HDDMf = Manufacturer.alias()
+        Memory = Component.alias()
+        MemoryMf = Manufacturer.alias()
+        Processor = Component.alias()
+        ProcessorMf = Manufacturer.alias()
+        query = (Computer
+                 .select(
+                     Computer,
+                     HDD,
+                     Memory,
+                     Processor,
+                     HDDMf,
+                     MemoryMf,
+                     ProcessorMf)
+                 .join(HDD, on=(Computer.hard_drive == HDD.id))
+                 .join(
+                     HDDMf,
+                     JOIN_LEFT_OUTER,
+                     on=(HDD.manufacturer == HDDMf.id))
+                 .switch(Computer)
+                 .join(Memory, on=(Computer.memory == Memory.id))
+                 .join(
+                     MemoryMf,
+                     JOIN_LEFT_OUTER,
+                     on=(Memory.manufacturer == MemoryMf.id))
+                 .switch(Computer)
+                 .join(Processor, on=(Computer.processor == Processor.id))
+                 .join(
+                     ProcessorMf,
+                     JOIN_LEFT_OUTER,
+                     on=(Processor.manufacturer == ProcessorMf.id))
+                 .order_by(Computer.id))
+
+        vals = []
+        manufacturers = []
+        for computer in query:
+            components = [
+                computer.hard_drive,
+                computer.memory,
+                computer.processor]
+            vals.append([component.name for component in components])
+            for component in components:
+                if component.manufacturer:
+                    manufacturers.append(component.manufacturer.name)
+                else:
+                    manufacturers.append(None)
+
+        self.assertEqual(vals, self.test_values)
+        self.assertEqual(manufacturers, [
+            None, 'Kingston', 'Intel',
+            None, 'Kingston', 'AMD',
+        ])
+        self.assertEqual(len(self.queries()), query_start + 1)
+
+
 class ModelAggregateTestCase(ModelTestCase):
     requires = [OrderedModel, User, Blog]
 
@@ -3156,6 +3251,72 @@ class SqliteDatePartTestCase(BasePeeweeTestCase):
         self.assertEqual(query.count(), 1)
         query = SqDp.select().where(fn.date_part('month', SqDp.datetime_field) == 3)
         self.assertEqual(query.count(), 0)
+
+
+class AutoRollbackTestCase(ModelTestCase):
+    requires = [User, Blog]
+
+    def setUp(self):
+        test_db.autorollback = True
+        super(AutoRollbackTestCase, self).setUp()
+
+    def tearDown(self):
+        test_db.autorollback = False
+        test_db.set_autocommit(True)
+        super(AutoRollbackTestCase, self).tearDown()
+
+    def test_auto_rollback(self):
+        # Exceptions are still raised.
+        self.assertRaises(IntegrityError, Blog.create)
+
+        # The transaction should have been automatically rolled-back, allowing
+        # us to create new objects (in a new transaction).
+        u = User.create(username='u')
+        self.assertTrue(u.id)
+
+        # No-op, the previous INSERT was already committed.
+        test_db.rollback()
+
+        # Ensure we can get our user back.
+        u_db = User.get(User.username == 'u')
+        self.assertEqual(u.id, u_db.id)
+
+    def test_transaction_ctx_mgr(self):
+        'Only auto-rollback when autocommit is enabled.'
+        def create_error():
+            self.assertRaises(IntegrityError, Blog.create)
+
+        # autocommit is disabled in a transaction ctx manager.
+        with test_db.transaction():
+            # Error occurs, but exception is caught, leaving the current txn
+            # in a bad state.
+            create_error()
+
+            try:
+                create_error()
+            except Exception as exc:
+                # Subsequent call will raise an InternalError with postgres.
+                self.assertTrue(isinstance(exc, InternalError))
+            else:
+                self.assertFalse(database_class is PostgresqlDatabase)
+
+        # New transactions are not affected.
+        self.test_auto_rollback()
+
+    def test_manual(self):
+        test_db.set_autocommit(False)
+
+        # Will not be rolled back.
+        self.assertRaises(IntegrityError, Blog.create)
+
+        if database_class is PostgresqlDatabase:
+            self.assertRaises(InternalError, User.create, username='u')
+
+        test_db.rollback()
+        u = User.create(username='u')
+        test_db.commit()
+        u_db = User.get(User.username == 'u')
+        self.assertEqual(u.id, u_db.id)
 
 
 class ConnectionStateTestCase(BasePeeweeTestCase):
