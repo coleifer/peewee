@@ -418,6 +418,7 @@ class FieldDescriptor(object):
 
     def __set__(self, instance, value):
         instance._data[self.att_name] = value
+        instance._dirty.add(self.att_name)
 
 class Field(Node):
     """A column on a table."""
@@ -2611,6 +2612,7 @@ class BaseModel(type):
 class Model(with_metaclass(BaseModel)):
     def __init__(self, *args, **kwargs):
         self._data = self._meta.get_default_dict()
+        self._dirty = set()
         self._obj_cache = {} # cache of related objects
 
         for k, v in kwargs.items():
@@ -2744,6 +2746,13 @@ class Model(with_metaclass(BaseModel)):
             if ret_pk is not None:
                 pk = ret_pk
             self.set_id(pk)
+        self._dirty.clear()
+
+    def is_dirty(self):
+        return bool(self._dirty)
+
+    def dirty_fields(self):
+        return [f for f in self._meta.get_fields() if f.name in self._dirty]
 
     def dependencies(self, search_nullable=False):
         query = self.select().where(self.pk_expr())
