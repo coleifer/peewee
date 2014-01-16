@@ -273,6 +273,18 @@ Models
             user.username = 'some-user'  # does not touch the database
             user.save()  # change is persisted to the db
 
+    .. py:attribute:: dirty_fields
+
+        :rtype: A list of modified and unsaved fields.
+
+        If you just want to persist modified fields, you can call
+        ``user.save(only=user.dirty_fields)``.
+
+    .. py:method:: is_dirty()
+
+        :rtype: Boolean any fields that are implicit setted will flag
+        this model dirty.
+
     .. py:method:: delete_instance([recursive=False[, delete_nullable=False]])
 
         :param recursive: Delete this instance and anything that depends on it,
