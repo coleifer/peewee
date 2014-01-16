@@ -2751,6 +2751,7 @@ class Model(with_metaclass(BaseModel)):
     def is_dirty(self):
         return bool(self._dirty)
 
+    @property
     def dirty_fields(self):
         return [f for f in self._meta.get_fields() if f.name in self._dirty]
 

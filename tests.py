@@ -1733,7 +1733,7 @@ class ModelAPITestCase(ModelTestCase):
 
         u.username = 'u2'
         self.assertTrue(u.is_dirty())
-        self.assertEqual(u.dirty_fields(), [User.username])
+        self.assertEqual(u.dirty_fields, [User.username])
 
         u.save()
         self.assertFalse(u.is_dirty())
