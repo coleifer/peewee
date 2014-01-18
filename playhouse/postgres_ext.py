@@ -50,14 +50,22 @@ class ObjectSlice(_LookupNode):
         return ObjectSlice.create(self, value)
 
 
-class ArrayField(Field):
-    def __init__(self, field_class=IntegerField, dimensions=1, *args,
-                 **kwargs):
+class IndexedField(Field):
+    def __init__(self, index_type='GiST', *args, **kwargs):
+        kwargs.setdefault('index', True)  # By default, use an index.
+        super(IndexedField, self).__init__(*args, **kwargs)
+        self.index_type = index_type
+
+
+class ArrayField(IndexedField):
+    def __init__(self, field_class=IntegerField, dimensions=1,
+                 index_type='GIN', *args, **kwargs):
         kwargs['field_class'] = field_class
         kwargs['dimensions'] = dimensions
         self.__field = field_class(*args, **kwargs)
         self.db_field = self.__field.get_db_field()
-        super(ArrayField, self).__init__(*args, **kwargs)
+        super(ArrayField, self).__init__(
+            index_type=index_type, *args, **kwargs)
 
     def get_template(self):
         brackets = ('[]' * self.attributes['dimensions'])
@@ -74,11 +82,10 @@ class DateTimeTZField(DateTimeField):
     db_field = 'datetime_tz'
 
 
-class HStoreField(Field):
+class HStoreField(IndexedField):
     db_field = 'hash'
 
     def __init__(self, *args, **kwargs):
-        kwargs['index'] = True  # always use an Index
         super(HStoreField, self).__init__(*args, **kwargs)
 
     def keys(self):
@@ -149,13 +156,17 @@ OP_HCONTAINS_ANY_KEY = 'H||'
 
 
 class PostgresqlExtCompiler(QueryCompiler):
-    def parse_create_index(self, model_class, fields, unique=False):
-        parts = super(PostgresqlExtCompiler, self).parse_create_index(
+    def create_index_sql(self, model_class, fields, unique=False):
+        parts = super(PostgresqlExtCompiler, self).create_index_sql(
             model_class, fields, unique)
-        # If this index is on an HStoreField, be sure to specify the
-        # GIST index immediately before the column names.
-        if any(map(lambda f: isinstance(f, HStoreField), fields)):
-            parts.insert(-1, 'USING GIST')
+        # Allow fields to specify a type of index.  HStore and Array fields
+        # may want to use GiST indexes, for example.
+        index_type = None
+        for field in fields:
+            if isinstance(field, IndexedField):
+                index_type = field.index_type
+        if index_type:
+            parts.insert(-1, 'USING %s' % index_type)
         return parts
 
     def _parse(self, node, alias_map, conv):
