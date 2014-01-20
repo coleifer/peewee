@@ -498,6 +498,10 @@ class Field(Node):
     def get_database(self):
         return self.model_class._meta.database
 
+    def get_column_type(self):
+        field_type = self.get_db_field()
+        return self.get_database().compiler().get_column_type(field_type)
+
     def field_attributes(self):
         """Arbitrary default attributes, e.g. "max_length" or "precision"."""
         return {}

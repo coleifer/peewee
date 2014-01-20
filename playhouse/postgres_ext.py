@@ -15,6 +15,9 @@ from peewee import QueryCompiler
 from peewee import SelectQuery
 
 from psycopg2 import extensions
+from psycopg2.extensions import adapt
+from psycopg2.extensions import AsIs
+from psycopg2.extensions import register_adapter
 from psycopg2.extras import register_hstore
 try:
     from psycopg2.extras import Json
@@ -49,6 +52,19 @@ class ObjectSlice(_LookupNode):
     def __getitem__(self, value):
         return ObjectSlice.create(self, value)
 
+class _Array(Node):
+    def __init__(self, field, items):
+        self.field = field
+        self.items = items
+        super(_Array, self).__init__()
+
+def adapt_array(arr):
+    items = adapt(arr.items).getquoted()
+    return AsIs(items + '::%s%s' % (
+        arr.field.get_column_type(),
+        '[]'* arr.field.attributes['dimensions']))
+register_adapter(_Array, adapt_array)
+
 
 class IndexedField(Field):
     def __init__(self, index_type='GiST', *args, **kwargs):
@@ -76,6 +92,12 @@ class ArrayField(IndexedField):
 
     def __getitem__(self, value):
         return ObjectSlice.create(self, value)
+
+    def contains(self, *items):
+        return Expression(self, OP_ACONTAINS, _Array(self, list(items)))
+
+    def contains_any(self, *items):
+        return Expression(self, OP_ACONTAINS_ANY, _Array(self, list(items)))
 
 
 class DateTimeTZField(DateTimeField):
@@ -153,6 +175,8 @@ OP_HCONTAINS_DICT = 'H?&'
 OP_HCONTAINS_KEYS = 'H?'
 OP_HCONTAINS_KEY = 'H?|'
 OP_HCONTAINS_ANY_KEY = 'H||'
+OP_ACONTAINS = 'A@>'
+OP_ACONTAINS_ANY = 'A||'
 
 
 class PostgresqlExtCompiler(QueryCompiler):
@@ -256,6 +280,8 @@ PostgresqlExtDatabase.register_ops({
     OP_HCONTAINS_KEY: '?',
     OP_HCONTAINS_ANY_KEY: '?|',
     OP_HUPDATE: '||',
+    OP_ACONTAINS: '@>',
+    OP_ACONTAINS_ANY: '&&',
 })
 
 def ServerSide(select_query):

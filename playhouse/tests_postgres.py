@@ -262,6 +262,19 @@ class PostgresExtTestCase(unittest.TestCase):
         assertAM((Param('delta') == fn.Any(ArrayModel.tags)), am, am3)
         assertAM((Param('omega') == fn.Any(ArrayModel.tags)))
 
+        # Check the contains operator.
+        assertAM(SQL("tags @> ARRAY['beta']::varchar[]"), am, am2)
+
+        # Use the nicer API.
+        assertAM(ArrayModel.tags.contains('beta'), am, am2)
+        assertAM(ArrayModel.tags.contains('omega', 'delta'))
+        assertAM(ArrayModel.tags.contains('alpha', 'delta'), am)
+
+        # Check for any.
+        assertAM(ArrayModel.tags.contains_any('beta'), am, am2)
+        assertAM(ArrayModel.tags.contains_any('omega', 'delta'), am, am3)
+        assertAM(ArrayModel.tags.contains_any('alpha', 'delta'), am, am2, am3)
+
     def test_array_index_slice(self):
         self._create_am()
         res = (ArrayModel
