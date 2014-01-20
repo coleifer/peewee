@@ -246,6 +246,35 @@ class PostgresExtTestCase(unittest.TestCase):
         self.assertEqual(am_db.tags, ['alpha', 'beta', 'gamma', 'delta'])
         self.assertEqual(am_db.ints, [[1, 2], [3, 4], [5, 6]])
 
+    def test_array_search(self):
+        def assertAM(where, *instances):
+            query = (ArrayModel
+                     .select()
+                     .where(where)
+                     .order_by(ArrayModel.id))
+            self.assertEqual([x.id for x in query], [x.id for x in instances])
+
+        am = self._create_am()
+        am2 = ArrayModel.create(tags=['alpha', 'beta'], ints=[[1, 1]])
+        am3 = ArrayModel.create(tags=['delta'], ints=[[3, 4]])
+
+        assertAM((Param('beta') == fn.Any(ArrayModel.tags)), am, am2)
+        assertAM((Param('delta') == fn.Any(ArrayModel.tags)), am, am3)
+        assertAM((Param('omega') == fn.Any(ArrayModel.tags)))
+
+        # Check the contains operator.
+        assertAM(SQL("tags @> ARRAY['beta']::varchar[]"), am, am2)
+
+        # Use the nicer API.
+        assertAM(ArrayModel.tags.contains('beta'), am, am2)
+        assertAM(ArrayModel.tags.contains('omega', 'delta'))
+        assertAM(ArrayModel.tags.contains('alpha', 'delta'), am)
+
+        # Check for any.
+        assertAM(ArrayModel.tags.contains_any('beta'), am, am2)
+        assertAM(ArrayModel.tags.contains_any('omega', 'delta'), am, am3)
+        assertAM(ArrayModel.tags.contains_any('alpha', 'delta'), am, am2, am3)
+
     def test_array_index_slice(self):
         self._create_am()
         res = (ArrayModel

@@ -144,7 +144,9 @@ class PostgresqlIntrospector(Introspector):
             SELECT column_name, is_nullable, data_type, character_maximum_length
             FROM information_schema.columns
             WHERE table_name=%s""", (table,))
-        columns = curs.fetchall()
+        name_to_info = {}
+        for row in curs.fetchall():
+            name_to_info[row[0]] = row
 
         # Look up the actual column type for each column.  TODO: combine with
         # query above?
@@ -152,9 +154,10 @@ class PostgresqlIntrospector(Introspector):
 
         # Store column metadata in dictionary keyed by column name.
         accum = {}
-        for idx, column_description in enumerate(curs.description):
+        for column_description in curs.description:
             field_class = self._get_field_class(column_description.type_code)
-            name, nullable, data_type, max_length = columns[idx]
+            name, nullable, data_type, max_length = name_to_info[
+                column_description.name]
 
             kwargs = {}
             if nullable == 'YES':

@@ -302,6 +302,23 @@ Models
         the query and corresponding foreign key field.  Useful for searching dependencies
         of a model, i.e. things that would be orphaned in the event of a delete.
 
+    .. py:attribute:: dirty_fields
+
+        Return a list of fields that were manually set.
+
+        :rtype: list
+
+        .. note::
+            If you just want to persist modified fields, you can call
+            ``model.save(only=model.dirty_fields)``.
+
+    .. py:method:: is_dirty()
+
+        Return whether any fields were manually set.
+
+        :rtype: bool
+
+
 
 .. _fields-api:
 

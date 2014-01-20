@@ -15,6 +15,9 @@ from peewee import QueryCompiler
 from peewee import SelectQuery
 
 from psycopg2 import extensions
+from psycopg2.extensions import adapt
+from psycopg2.extensions import AsIs
+from psycopg2.extensions import register_adapter
 from psycopg2.extras import register_hstore
 try:
     from psycopg2.extras import Json
@@ -49,14 +52,35 @@ class ObjectSlice(_LookupNode):
     def __getitem__(self, value):
         return ObjectSlice.create(self, value)
 
+class _Array(Node):
+    def __init__(self, field, items):
+        self.field = field
+        self.items = items
+        super(_Array, self).__init__()
 
-class ArrayField(Field):
-    def __init__(self, field_class=IntegerField, dimensions=1, *args,
-                 **kwargs):
+def adapt_array(arr):
+    items = adapt(arr.items).getquoted()
+    return AsIs(items + '::%s%s' % (
+        arr.field.get_column_type(),
+        '[]'* arr.field.attributes['dimensions']))
+register_adapter(_Array, adapt_array)
+
+
+class IndexedField(Field):
+    def __init__(self, index_type='GiST', *args, **kwargs):
+        kwargs.setdefault('index', True)  # By default, use an index.
+        super(IndexedField, self).__init__(*args, **kwargs)
+        self.index_type = index_type
+
+
+class ArrayField(IndexedField):
+    def __init__(self, field_class=IntegerField, dimensions=1,
+                 index_type='GIN', *args, **kwargs):
         self.__field = field_class(*args, **kwargs)
         self.dimensions = dimensions
         self.db_field = self.__field.get_db_field()
-        super(ArrayField, self).__init__(*args, **kwargs)
+        super(ArrayField, self).__init__(
+            index_type=index_type, *args, **kwargs)
 
     def __ddl_column__(self, column_type):
         sql = self.__field.__ddl_column__(column_type)
@@ -66,16 +90,21 @@ class ArrayField(Field):
     def __getitem__(self, value):
         return ObjectSlice.create(self, value)
 
+    def contains(self, *items):
+        return Expression(self, OP_ACONTAINS, _Array(self, list(items)))
+
+    def contains_any(self, *items):
+        return Expression(self, OP_ACONTAINS_ANY, _Array(self, list(items)))
+
 
 class DateTimeTZField(DateTimeField):
     db_field = 'datetime_tz'
 
 
-class HStoreField(Field):
+class HStoreField(IndexedField):
     db_field = 'hash'
 
     def __init__(self, *args, **kwargs):
-        kwargs['index'] = True  # always use an Index
         super(HStoreField, self).__init__(*args, **kwargs)
 
     def keys(self):
@@ -143,16 +172,22 @@ OP_HCONTAINS_DICT = 'H?&'
 OP_HCONTAINS_KEYS = 'H?'
 OP_HCONTAINS_KEY = 'H?|'
 OP_HCONTAINS_ANY_KEY = 'H||'
+OP_ACONTAINS = 'A@>'
+OP_ACONTAINS_ANY = 'A||'
 
 
 class PostgresqlExtCompiler(QueryCompiler):
-    def parse_create_index(self, model_class, fields, unique=False):
-        parts = super(PostgresqlExtCompiler, self).parse_create_index(
+    def create_index_sql(self, model_class, fields, unique=False):
+        parts = super(PostgresqlExtCompiler, self).create_index_sql(
             model_class, fields, unique)
-        # If this index is on an HStoreField, be sure to specify the
-        # GIST index immediately before the column names.
-        if any(map(lambda f: isinstance(f, HStoreField), fields)):
-            parts.insert(-1, 'USING GIST')
+        # Allow fields to specify a type of index.  HStore and Array fields
+        # may want to use GiST indexes, for example.
+        index_type = None
+        for field in fields:
+            if isinstance(field, IndexedField):
+                index_type = field.index_type
+        if index_type:
+            parts.insert(-1, 'USING %s' % index_type)
         return parts
 
     def _parse(self, node, alias_map, conv):
@@ -242,6 +277,8 @@ PostgresqlExtDatabase.register_ops({
     OP_HCONTAINS_KEY: '?',
     OP_HCONTAINS_ANY_KEY: '?|',
     OP_HUPDATE: '||',
+    OP_ACONTAINS: '@>',
+    OP_ACONTAINS_ANY: '&&',
 })
 
 def ServerSide(select_query):

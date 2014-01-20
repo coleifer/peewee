@@ -456,6 +456,27 @@ postgres_ext API notes
                     .get())
         # two_tags = {'two': ['foo', 'bar']}
 
+    .. py:method:: contains(*items)
+
+        :param items: One or more items that must be in the given array field.
+
+        .. code-block:: python
+
+            # Get all blog posts that are tagged with both "python" and "django".
+            Blog.select().where(Blog.tags.contains('python', 'django'))
+
+    .. py:method:: contains_any(*items)
+
+        :param items: One or more items to search for in the given array field.
+
+        Like :py:meth:`~ArrayField.contains`, except will match rows where the
+        array contains *any* of the given items.
+
+        .. code-block:: python
+
+            # Get all blog posts that are tagged with "flask" and/or "django".
+            Blog.select().where(Blog.tags.contains_any('flask', 'django'))
+
 .. py:class:: DateTimeTZField(*args, **kwargs)
 
     A timezone-aware subclass of :py:class:`DateTimeField`.
