@@ -387,7 +387,7 @@ class Clause(Node):
 
     def __init__(self, *nodes):
         super(Clause, self).__init__()
-        self.nodes = nodes
+        self.nodes = list(nodes)
 
     def clone_base(self):
         return Clause(*self.nodes)
@@ -1248,15 +1248,15 @@ class QueryCompiler(object):
             ddl.append(SQL('ON UPDATE %s' % field.on_delete))
         return Clause(*ddl)
 
-    def return_parsed_node(fn):
+    def return_parsed_node(function_name):
         # TODO: remove decorator and treat all `generate_` functions as
         # returning clauses, instead of SQL/params.
         def inner(self, *args, **kwargs):
-            return self.parse_node(fn(self, *args, **kwargs))
+            fn = getattr(self, function_name)
+            return self.parse_node(fn(*args, **kwargs))
         return inner
 
-    @return_parsed_node
-    def create_table(self, model_class, safe=False):
+    def _create_table(self, model_class, safe=False):
         statement = 'CREATE TABLE IF NOT EXISTS' if safe else 'CREATE TABLE'
         meta = model_class._meta
 
@@ -1275,17 +1275,17 @@ class QueryCompiler(object):
             SQL(statement),
             Entity(meta.db_table),
             ClauseList(*(columns + constraints)))
+    create_table = return_parsed_node('_create_table')
 
-    @return_parsed_node
-    def drop_table(self, model_class, fail_silently=False, cascade=False):
+    def _drop_table(self, model_class, fail_silently=False, cascade=False):
         statement = 'DROP TABLE IF EXISTS' if fail_silently else 'DROP TABLE'
         ddl = [SQL(statement), Entity(model_class._meta.db_table)]
         if cascade:
             ddl.append(SQL('CASCADE'))
         return Clause(*ddl)
+    drop_table = return_parsed_node('_drop_table')
 
-    @return_parsed_node
-    def create_index(self, model_class, fields, unique, *extra):
+    def _create_index(self, model_class, fields, unique, *extra):
         statement = 'CREATE UNIQUE INDEX' if unique else 'CREATE INDEX'
         tbl_name = model_class._meta.db_table
         index = '%s_%s' % (tbl_name, '_'.join(f.db_column for f in fields))
@@ -1296,14 +1296,15 @@ class QueryCompiler(object):
             Entity(tbl_name),
             ClauseList(*[Entity(field.db_column) for field in fields]),
             *extra)
+    create_index = return_parsed_node('_create_index')
 
-    @return_parsed_node
-    def create_sequence(self, sequence_name):
+    def _create_sequence(self, sequence_name):
         return Clause(SQL('CREATE SEQUENCE'), Entity(sequence_name))
+    create_sequence = return_parsed_node('_create_sequence')
 
-    @return_parsed_node
-    def drop_sequence(self, sequence_name):
+    def _drop_sequence(self, sequence_name):
         return Clause(SQL('DROP SEQUENCE'), Entity(sequence_name))
+    drop_sequence = return_parsed_node('_drop_sequence')
 
 
 class QueryResultWrapper(object):

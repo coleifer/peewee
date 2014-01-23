@@ -62,7 +62,7 @@ def adapt_array(arr):
     items = adapt(arr.items).getquoted()
     return AsIs(items + '::%s%s' % (
         arr.field.get_column_type(),
-        '[]'* arr.field.attributes['dimensions']))
+        '[]'* arr.field.dimensions))
 register_adapter(_Array, adapt_array)
 
 
@@ -177,8 +177,8 @@ OP_ACONTAINS_ANY = 'A||'
 
 
 class PostgresqlExtCompiler(QueryCompiler):
-    def create_index_sql(self, model_class, fields, unique=False):
-        parts = super(PostgresqlExtCompiler, self).create_index_sql(
+    def _create_index(self, model_class, fields, unique=False):
+        clause = super(PostgresqlExtCompiler, self)._create_index(
             model_class, fields, unique)
         # Allow fields to specify a type of index.  HStore and Array fields
         # may want to use GiST indexes, for example.
@@ -187,8 +187,8 @@ class PostgresqlExtCompiler(QueryCompiler):
             if isinstance(field, IndexedField):
                 index_type = field.index_type
         if index_type:
-            parts.insert(-1, 'USING %s' % index_type)
-        return parts
+            clause.nodes.insert(-1, SQL('USING %s' % index_type))
+        return clause
 
     def _parse(self, node, alias_map, conv):
         sql, params, unknown = super(PostgresqlExtCompiler, self)._parse(
