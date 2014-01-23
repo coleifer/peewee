@@ -82,9 +82,11 @@ class Migrator(object):
         # make field null at first
         field_null, field.null = field.null, True
         table = self.quote(model_class._meta.db_table)
+        field_node = self.compiler.field_definition(field)
+        field_sql, _ = self.compiler.parse_node(field_node)
         self.execute(self.sql_add_column % {
             'table': table,
-            'column': self.compiler.field_sql(field)})
+            'column': field_sql})
 
         if not field_null:
             # update the new column with the provided default
