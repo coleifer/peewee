@@ -540,8 +540,7 @@ class Field(Node):
         if self.primary_key:
             ddl.append(SQL('PRIMARY KEY'))
         if self.sequence:
-            sequence = self.quote(self.sequence)
-            ddl.append(SQL("DEFAULT NEXTVAL('%s')" % sequence))
+            ddl.append(SQL("DEFAULT NEXTVAL('%s')" % self.sequence))
         if self.constraints:
             ddl.extend(self.constraints)
         return ddl
@@ -805,7 +804,8 @@ class ForeignKeyField(IntegerField):
          return super(ForeignKeyField, self).clone_base(
             rel_model=self.rel_model,
             related_name=self.related_name,
-            cascade=self.cascade,
+            on_delete=self.on_delete,
+            on_update=self.on_update,
             extra=self.extra,
             **kwargs)
 
@@ -2198,10 +2198,12 @@ class Database(object):
             field.rel_model._meta.primary_key.db_column])
 
         foreign_key = [framing % tuple(params)]
-        if field.cascade:
-            foreign_key.append(field.attributes['cascade'])
+        if field.on_delete:
+            foreign_key.append('ON DELETE %s' % field.on_delete)
+        if field.on_update:
+            foreign_key.append('ON UPDATE %s' % field.on_update)
         if field.extra:
-            foreign_key.append(field.attributes['extra'])
+            foreign_key.append(field.extra)
 
         return self.execute_sql(' '.join(foreign_key))
 
