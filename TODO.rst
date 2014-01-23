@@ -2,6 +2,5 @@ todo
 ====
 
 * Connection pooling.
-* DDL cleanup.
 * Composite foreign keys (?)
-* Support for `@>` and `&&` array operations with postgresql.
+* Convert `generate_XXX` methods on compiler to methods that generate clauses.
