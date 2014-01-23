@@ -73,10 +73,12 @@ class SqliteQueryCompiler(QueryCompiler):
             columns_constraints = clause.nodes[-1]
             for k, v in options.items():
                 if isinstance(v, Field):
-                    v = v.db_column
+                    value = Entity(v.model_class._meta.db_table, v.db_column)
                 elif inspect.isclass(v) and issubclass(v, Model):
-                    v = v._meta.db_table
-                option = Clause(SQL(k), Entity(v))
+                    value = Entity(v._meta.db_table)
+                else:
+                    value = SQL(v)
+                option = Clause(SQL(k), value)
                 option.glue = '='
                 columns_constraints.nodes.append(option)
 
