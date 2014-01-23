@@ -527,6 +527,7 @@ class Field(Node):
         return value if value is None else self.coerce(value)
 
     def __ddl_column__(self, column_type):
+        """Return the column type, e.g. VARCHAR(255) or REAL."""
         modifiers = self.get_modifiers()
         if modifiers:
             return SQL(
@@ -534,6 +535,7 @@ class Field(Node):
         return SQL(column_type)
 
     def __ddl__(self, column_type):
+        """Return a list of Node instances that defines the column."""
         ddl = [Entity(self.db_column), self.__ddl_column__(column_type)]
         if not self.null:
             ddl.append(SQL('NOT NULL'))
@@ -1249,8 +1251,8 @@ class QueryCompiler(object):
         return Clause(*ddl)
 
     def return_parsed_node(function_name):
-        # TODO: remove decorator and treat all `generate_` functions as
-        # returning clauses, instead of SQL/params.
+        # TODO: treat all `generate_` functions as returning clauses, instead
+        # of SQL/params.
         def inner(self, *args, **kwargs):
             fn = getattr(self, function_name)
             return self.parse_node(fn(*args, **kwargs))
