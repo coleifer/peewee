@@ -104,10 +104,12 @@ class SqliteExtTestCase(unittest.TestCase):
             foo = CharField()
 
         compiler = ext_db.compiler()
-        table_sql = compiler.create_table_sql(AutoInc)
-        self.assertEqual(table_sql[-1],
-                         '("id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, '
-                         '"foo" VARCHAR(255) NOT NULL)')
+        sql, params = compiler.create_table(AutoInc)
+        self.assertEqual(
+            sql,
+            'CREATE TABLE "autoinc" '
+            '("id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, '
+            '"foo" VARCHAR(255) NOT NULL)')
 
     def assertMessages(self, query, indices):
         self.assertEqual([x.message for x in query], [

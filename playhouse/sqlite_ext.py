@@ -36,7 +36,7 @@ import sqlite3
 import struct
 
 from peewee import *
-from peewee import Clause
+from peewee import Entity
 from peewee import Expression
 from peewee import QueryCompiler
 from peewee import transaction
@@ -46,41 +46,44 @@ FTS_VER = sqlite3.sqlite_version_info[:3] >= (3, 7, 4) and 'FTS4' or 'FTS3'
 
 
 class PrimaryKeyAutoIncrementField(PrimaryKeyField):
-    template_extra = 'AUTOINCREMENT'
+    def __ddl__(self, column_type):
+        ddl = super(PrimaryKeyAutoIncrementField, self).__ddl__(column_type)
+        return ddl + [SQL('AUTOINCREMENT')]
 
 class SqliteQueryCompiler(QueryCompiler):
     """
     Subclass of QueryCompiler that can be used to construct virtual tables.
     """
-    def create_table_sql(self, model_class, safe=False, options=None):
+    def _create_table(self, model_class, safe=False, options=None):
+        clause = super(SqliteQueryCompiler, self)._create_table(
+            model_class, safe=safe)
+
         if issubclass(model_class, VirtualModel):
-            parts = ['CREATE VIRTUAL TABLE']
-            using = ['USING %s' % model_class._extension]
+            statement = 'CREATE VIRTUAL TABLE'
+            # If we are using a special extension, need to insert that after the
+            # table name node.
+            clause.nodes.insert(2, SQL('USING %s' % model_class._extension))
         else:
-            parts = ['CREATE TABLE']
-            using = []
+            statement = 'CREATE TABLE'
         if safe:
-            parts.append('IF NOT EXISTS')
-        parts.append(self.quote(model_class._meta.db_table))
-        parts.extend(using)
-        fields = [self.field_sql(f) for f in model_class._meta.get_fields()]
+            statement += 'IF NOT EXISTS'
+        clause.nodes[0] = SQL(statement)  # Overwrite the statement.
+
         if options:
+            columns_constraints = clause.nodes[-1]
             for k, v in options.items():
                 if isinstance(v, Field):
-                    v = '.'.join((
-                        self.quote(v.model_class._meta.db_table),
-                        self.quote(v.name)))
+                    v = v.db_column
                 elif inspect.isclass(v) and issubclass(v, Model):
-                    v = self.quote(v._meta.db_table)
-                fields.append('%s=%s' % (k, v))
-        parts.append('(%s)' % ', '.join(fields))
-        return parts
+                    v = v._meta.db_table
+                option = Clause(SQL(k), Entity(v))
+                option.glue = '='
+                columns_constraints.nodes.append(option)
+
+        return clause
 
     def create_table(self, model_class, safe=False, options=None):
-        return ' '.join(self.create_table_sql(
-            model_class,
-            safe=safe,
-            options=options))
+        return self.parse_node(self._create_table(model_class, safe, options))
 
 class VirtualModel(Model):
     """Model class stored using a Sqlite virtual table."""
@@ -219,9 +222,8 @@ class SqliteExtDatabase(SqliteDatabase):
         self._row_factory = fn
 
     def create_table(self, model_class, safe=False, options=None):
-        qc = self.compiler()
-        create_sql = qc.create_table(model_class, safe, options)
-        return self.execute_sql(create_sql)
+        sql, params = self.compiler().create_table(model_class, safe, options)
+        return self.execute_sql(sql, params)
 
     def create_index(self, model_class, field_name, unique=False):
         if issubclass(model_class, FTSModel):
