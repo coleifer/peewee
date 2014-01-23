@@ -1256,6 +1256,20 @@ class QueryCompiler(object):
             return self.parse_node(fn(*args, **kwargs))
         return inner
 
+    def _create_foreign_key(self, model_class, field, constraint=None):
+        constraint = constraint or 'fk_%s_%s_refs_%s' % (
+            model_class._meta.db_table,
+            field.db_column,
+            field.rel_model._meta.db_table)
+        fk_clause = self.foreign_key_constraint(field)
+        return Clause(
+            SQL('ALTER TABLE'),
+            Entity(model_class._meta.db_table),
+            SQL('ADD CONSTRAINT'),
+            Entity(constraint),
+            *fk_clause.nodes)
+    create_foreign_key = return_parsed_node('_create_foreign_key')
+
     def _create_table(self, model_class, safe=False):
         statement = 'CREATE TABLE IF NOT EXISTS' if safe else 'CREATE TABLE'
         meta = model_class._meta
@@ -2183,29 +2197,9 @@ class Database(object):
         return self.execute_sql(*qc.create_index(model_class, fobjs, unique))
 
     def create_foreign_key(self, model_class, field, constraint=None):
-        constraint = constraint or 'fk_%s_%s_refs_%s' % (
-            model_class._meta.db_table,
-            field.db_column,
-            field.rel_model._meta.db_table)
-        framing = ('ALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY '
-                   '(%s) REFERENCES %s (%s)')
         qc = self.compiler()
-        params = map(qc.quote, [
-            model_class._meta.db_table,
-            constraint,
-            field.db_column,
-            field.rel_model._meta.db_table,
-            field.rel_model._meta.primary_key.db_column])
-
-        foreign_key = [framing % tuple(params)]
-        if field.on_delete:
-            foreign_key.append('ON DELETE %s' % field.on_delete)
-        if field.on_update:
-            foreign_key.append('ON UPDATE %s' % field.on_update)
-        if field.extra:
-            foreign_key.append(field.extra)
-
-        return self.execute_sql(' '.join(foreign_key))
+        return self.execute_sql(*qc.create_foreign_key(
+            model_class, field, constraint))
 
     def create_sequence(self, seq):
         if self.sequences:
