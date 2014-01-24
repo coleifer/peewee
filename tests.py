@@ -84,8 +84,12 @@ else:
 #
 
 class TestQueryCompiler(QueryCompiler):
-    def _max_alias(self, am):
-        return 0
+    def _max_alias(self, alias_map):
+        return 't0'
+
+    def _ensure_alias_set(self, model, alias_map):
+        if model not in alias_map:
+            alias_map[model] = model._meta.db_table
 
     def calculate_alias_map(self, query, start=1):
         alias_map = {query.model_class: query.model_class._meta.db_table}
@@ -806,7 +810,30 @@ class SelectTestCase(BasePeeweeTestCase):
             'GROUP BY blog_ct'))
 
     def test_from_multiple(self):
-        pass
+        q = (User
+             .select()
+             .from_(User, Blog)
+             .where(Blog.user == User.id))
+
+        sql, params = compiler.generate_select(q)
+        self.assertEqual(sql, (
+            'SELECT users."id", users."username" '
+            'FROM "users" AS users, "blog" AS blog '
+            'WHERE (blog."user_id" = users."id")'))
+
+        q = (User
+             .select()
+             .from_(User, Blog, Comment)
+             .where(
+                 (Blog.user == User.id) &
+                 (Comment.blog == Blog.pk)))
+
+        sql, params = compiler.generate_select(q)
+        self.assertEqual(sql, (
+            'SELECT users."id", users."username" '
+            'FROM "users" AS users, "blog" AS blog, "comment" AS comment '
+            'WHERE ((blog."user_id" = users."id") AND '
+            '(comment."blog_id" = blog."pk"))'))
 
     def test_paginate(self):
         sq = SelectQuery(User).paginate(1, 20)

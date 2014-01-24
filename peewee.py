@@ -977,6 +977,11 @@ class QueryCompiler(object):
                     max_alias = alias_number
         return max_alias + 1
 
+    def _ensure_alias_set(self, model, alias_map):
+        if model not in alias_map:
+            max_alias = self._max_alias(alias_map)
+            alias_map[model] = 't%d' % max_alias
+
     def _parse(self, node, alias_map, conv):
         # By default treat the incoming node as a raw value that should be
         # parameterized.
@@ -1029,8 +1034,9 @@ class QueryCompiler(object):
             sql = self.interpolation
             params = [node.get_id()]
         elif isclass(node) and issubclass(node, Model):
-            sql = self.quote(node._meta.db_table)
-            params = []
+            self._ensure_alias_set(node, alias_map)
+            entity = Entity(node._meta.db_table).alias(alias_map[node])
+            sql, params = self.parse_node(entity, alias_map, conv)
         else:
             unknown = True
         return sql, params, unknown
@@ -1751,7 +1757,12 @@ class SelectQuery(Query):
         query._explicit_selection = self._explicit_selection
         query._select = list(self._select)
         if self._from is not None:
-            query._from = [f.clone() for f in self._from]
+            query._from = []
+            for f in self._from:
+                if isinstance(f, Node):
+                    query._from.append(f.clone())
+                else:
+                    query._from.append(f)
         if self._group_by is not None:
             query._group_by = list(self._group_by)
         if self._having:

@@ -133,7 +133,7 @@ class FTSModel(VirtualModel):
     def match(cls, search):
         return (cls
                 .select(cls, cls.rank().alias('score'))
-                .where(match(cls, search))
+                .where(match(Entity(cls._meta.db_table), search))
                 .order_by(SQL('score').desc()))
 
     @classmethod
