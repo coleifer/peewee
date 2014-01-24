@@ -1604,6 +1604,12 @@ class ModelQueryTestCase(ModelTestCase):
             ['u%d' % i for i in range(5, 8)]
         )
 
+    def test_raw_fn(self):
+        self.create_users_blogs(3, 2)  # 3 users, 2 blogs each.
+        query = User.raw('select count(1) as ct from blog group by user_id')
+        results = [x.ct for x in query]
+        self.assertEqual(results, [2, 2, 2])
+
 
 class ModelAPITestCase(ModelTestCase):
     requires = [User, Blog, Category, UserCategory]

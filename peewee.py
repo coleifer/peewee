@@ -1401,6 +1401,7 @@ class ExtQueryResultWrapper(QueryResultWrapper):
         conv = []
         identity = lambda x: x
         for i in range(len(description)):
+            func = identity
             column = description[i][0]
             if column in model._meta.columns:
                 field_obj = model._meta.columns[column]
