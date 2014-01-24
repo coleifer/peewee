@@ -673,6 +673,11 @@ class SelectTestCase(BasePeeweeTestCase):
         sq = SelectQuery(User).where(fn.Lower(fn.Substr(User.username, 0, 1)) == 'a')
         self.assertWhere(sq, '(Lower(Substr(users."username", ?, ?)) = ?)', [0, 1, 'a'])
 
+    def test_where_clauses(self):
+        sq = SelectQuery(Blog).where(
+            Blog.pub_date < (fn.NOW() - SQL('INTERVAL 1 HOUR')))
+        self.assertWhere(sq, '(blog."pub_date" < (NOW() - INTERVAL 1 HOUR))', [])
+
     def test_where_r(self):
         sq = SelectQuery(Blog).where(Blog.pub_date < R('NOW() - INTERVAL 1 HOUR'))
         self.assertWhere(sq, '(blog."pub_date" < NOW() - INTERVAL 1 HOUR)', [])
@@ -780,6 +785,28 @@ class SelectTestCase(BasePeeweeTestCase):
             'SELECT users."id", users."username" '
             'FROM "users" AS users ORDER BY (users."id" * ?)',
             [5]))
+
+    def test_from_subquery(self):
+        # e.g. annotate the number of blogs per user, then annotate the number
+        # of users with that number of blogs.
+        inner = (Blog
+                 .select(fn.COUNT(Blog.id).alias('blog_ct'))
+                 .group_by(Blog.user))
+        blog_ct = SQL('blog_ct')
+        outer = (Blog
+                 .select(blog_ct, fn.COUNT(blog_ct).alias('blog_ct_n'))
+                 .from_(inner)
+                 .group_by(blog_ct))
+        sql, params = compiler.generate_select(outer)
+        self.assertEqual(sql, (
+            'SELECT blog_ct, COUNT(blog_ct) AS blog_ct_n '
+            'FROM ('
+            'SELECT COUNT("id") AS blog_ct FROM "blog" AS blog '
+            'GROUP BY blog."user_id") '
+            'GROUP BY blog_ct'))
+
+    def test_from_multiple(self):
+        pass
 
     def test_paginate(self):
         sq = SelectQuery(User).paginate(1, 20)

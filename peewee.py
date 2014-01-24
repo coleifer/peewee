@@ -1151,9 +1151,14 @@ class QueryCompiler(object):
         parts.append(select)
         params.extend(s_params)
 
-        parts.append('FROM %s AS %s' % (
-            self.quote(model._meta.db_table),
-            alias_map[model]))
+        if query._from is None:
+            from_clause = [
+                Entity(model._meta.db_table).alias(alias_map[model])]
+        else:
+            from_clause = query._from
+        from_sql, f_params = self.parse_node_list(from_clause, alias_map)
+        parts.append('FROM %s' % from_sql)
+        params.extend(f_params)
 
         joins, j_params = self.generate_joins(query._joins, model, alias_map)
         if joins:
@@ -1727,6 +1732,7 @@ class SelectQuery(Query):
         self._explicit_selection = len(selection) > 0
         selection = selection or model_class._meta.get_fields()
         self._select = self._model_shorthand(selection)
+        self._from = None
         self._group_by = None
         self._having = None
         self._order_by = None
@@ -1744,6 +1750,8 @@ class SelectQuery(Query):
         query = super(SelectQuery, self)._clone_attributes(query)
         query._explicit_selection = self._explicit_selection
         query._select = list(self._select)
+        if self._from is not None:
+            query._from = [f.clone() for f in self._from]
         if self._group_by is not None:
             query._group_by = list(self._group_by)
         if self._having:
@@ -1772,6 +1780,10 @@ class SelectQuery(Query):
             elif isclass(arg) and issubclass(arg, Model):
                 accum.extend(arg._meta.get_fields())
         return accum
+
+    @returns_clone
+    def from_(self, *args):
+        self._from = list(args)
 
     @returns_clone
     def group_by(self, *args):
