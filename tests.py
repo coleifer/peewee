@@ -891,34 +891,34 @@ class SelectTestCase(BasePeeweeTestCase):
 class UpdateTestCase(BasePeeweeTestCase):
     def test_update(self):
         uq = UpdateQuery(User, {User.username: 'updated'})
-        self.assertEqual(uq.sql(), (
+        self.assertEqual(compiler.generate_update(uq), (
             'UPDATE "users" SET "username" = ?',
             ['updated']))
 
         uq = UpdateQuery(Blog, {Blog.user: User(id=100, username='foo')})
-        self.assertEqual(uq.sql(), (
+        self.assertEqual(compiler.generate_update(uq), (
             'UPDATE "blog" SET "user_id" = ?',
             [100]))
 
         uq = UpdateQuery(User, {User.id: User.id + 5})
-        self.assertEqual(uq.sql(), (
+        self.assertEqual(compiler.generate_update(uq), (
             'UPDATE "users" SET "id" = ("id" + ?)',
             [5]))
 
         uq = UpdateQuery(User, {User.id: 5 * (3 + User.id)})
-        self.assertEqual(uq.sql(), (
+        self.assertEqual(compiler.generate_update(uq), (
             'UPDATE "users" SET "id" = (? * (? + "id"))',
             [5, 3]))
 
         # set username to the maximum id of all users -- silly, yes, but lets see what happens
         uq = UpdateQuery(User, {User.username: User.select(fn.Max(User.id).alias('maxid'))})
-        self.assertEqual(uq.sql(), (
-            'UPDATE "users" SET "username" = (SELECT Max(t1."id") AS maxid '
-            'FROM "users" AS t1)',
+        self.assertEqual(compiler.generate_update(uq), (
+            'UPDATE "users" SET "username" = (SELECT Max(users."id") AS maxid '
+            'FROM "users" AS users)',
             []))
 
         uq = UpdateQuery(Blog, {Blog.title: 'foo', Blog.content: 'bar'})
-        self.assertEqual(uq.sql(), (
+        self.assertEqual(compiler.generate_update(uq), (
             'UPDATE "blog" SET "title" = ?, "content" = ?',
             ['foo', 'bar']))
 
@@ -928,19 +928,19 @@ class UpdateTestCase(BasePeeweeTestCase):
             Blog.pub_date: pub_date,
             Blog.user: User(id=15),
             Blog.content: 'bar'})
-        self.assertEqual(uq.sql(), (
+        self.assertEqual(compiler.generate_update(uq), (
             'UPDATE "blog" SET '
             '"user_id" = ?, "title" = ?, "content" = ?, "pub_date" = ?',
             [15, 'foo', 'bar', pub_date]))
 
     def test_update_special(self):
         uq = UpdateQuery(CSVRow, {CSVRow.data: ['foo', 'bar', 'baz']})
-        self.assertEqual(uq.sql(), (
+        self.assertEqual(compiler.generate_update(uq), (
             'UPDATE "csvrow" SET "data" = ?',
             ['foo,bar,baz']))
 
         uq = UpdateQuery(CSVRow, {CSVRow.data: []})
-        self.assertEqual(uq.sql(), (
+        self.assertEqual(compiler.generate_update(uq), (
             'UPDATE "csvrow" SET "data" = ?',
             ['']))
 
@@ -956,7 +956,7 @@ class UpdateTestCase(BasePeeweeTestCase):
 class InsertTestCase(BasePeeweeTestCase):
     def test_insert(self):
         iq = InsertQuery(User, {User.username: 'inserted'})
-        self.assertEqual(iq.sql(), (
+        self.assertEqual(compiler.generate_insert(iq), (
             'INSERT INTO "users" ("username") VALUES (?)',
             ['inserted']))
 
@@ -966,19 +966,19 @@ class InsertTestCase(BasePeeweeTestCase):
             Blog.content: 'bar',
             Blog.pub_date: pub_date,
             Blog.user: User(id=10)})
-        self.assertEqual(iq.sql(), (
+        self.assertEqual(compiler.generate_insert(iq), (
             'INSERT INTO "blog" ("user_id", "title", "content", "pub_date") '
             'VALUES (?, ?, ?, ?)',
             [10, 'foo', 'bar', pub_date]))
 
     def test_insert_special(self):
         iq = InsertQuery(CSVRow, {CSVRow.data: ['foo', 'bar', 'baz']})
-        self.assertEqual(iq.sql(), (
+        self.assertEqual(compiler.generate_insert(iq), (
             'INSERT INTO "csvrow" ("data") VALUES (?)',
             ['foo,bar,baz']))
 
         iq = InsertQuery(CSVRow, {CSVRow.data: []})
-        self.assertEqual(iq.sql(), (
+        self.assertEqual(compiler.generate_insert(iq), (
             'INSERT INTO "csvrow" ("data") VALUES (?)',
             ['']))
 
