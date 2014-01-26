@@ -418,7 +418,7 @@ class Check(SQL):
     def __init__(self, value):
         super(Check, self).__init__('CHECK (%s)' % value)
 
-Join = namedtuple('Join', ('model_class', 'join_type', 'on'))
+Join = namedtuple('Join', ('dest', 'join_type', 'on'))
 
 class FieldDescriptor(object):
     # Fields are exposed as descriptors in order to control access to the
@@ -1100,9 +1100,9 @@ class QueryCompiler(object):
                 start += 1
                 alias_map[model] = make_alias(model)
             for join in joins:
-                if join.model_class not in alias_map:
+                if join.dest not in alias_map:
                     start += 1
-                    alias_map[join.model_class] = make_alias(join.model_class)
+                    alias_map[join.dest] = make_alias(join.dest)
         return alias_map
 
     def generate_joins(self, joins, model_class, alias_map):
@@ -1117,7 +1117,7 @@ class QueryCompiler(object):
             seen.add(curr)
             for join in joins[curr]:
                 src = curr
-                dest = join.model_class
+                dest = join.dest
                 if isinstance(join.on, Expression):
                     # Clear any alias on the join expression.
                     join_node = join.on.clone().alias()
@@ -1483,7 +1483,7 @@ class ModelQueryResultWrapper(QueryResultWrapper):
                 continue
 
             for join in joins[current]:
-                join_model = join.model_class
+                join_model = join.dest
                 if join_model in models:
                     fk_field = current._meta.rel_for_model(join_model)
                     if not fk_field:
@@ -1601,7 +1601,7 @@ class Query(Node):
     def ensure_join(self, lm, rm, on=None):
         ctx = self._query_ctx
         for join in self._joins.get(lm, []):
-            if join.model_class == rm:
+            if join.dest == rm:
                 return self
         query = self.switch(lm).join(rm, on=on).switch(ctx)
         return query

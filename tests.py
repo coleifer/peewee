@@ -97,8 +97,8 @@ class TestQueryCompiler(QueryCompiler):
             if model not in alias_map:
                 alias_map[model] = model._meta.db_table
             for join in joins:
-                if join.model_class not in alias_map:
-                    alias_map[join.model_class] = join.model_class._meta.db_table
+                if join.dest not in alias_map:
+                    alias_map[join.dest] = join.dest._meta.db_table
         return alias_map
 
 class TestDatabase(database_class):
