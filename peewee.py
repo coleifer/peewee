@@ -1210,7 +1210,8 @@ class QueryCompiler(object):
 
     def generate_insert(self, query):
         model = query.model_class
-        clauses = [SQL('INSERT INTO'), Entity(model._meta.db_table)]
+        statement = query._upsert and 'INSERT OR REPLACE INTO' or 'INSERT INTO'
+        clauses = [SQL(statement), Entity(model._meta.db_table)]
 
         if query._insert:
             fields = []
@@ -1967,8 +1968,10 @@ class InsertQuery(Query):
         mm = model_class._meta
         defaults = mm.get_default_dict()
         query = dict((mm.fields[f], v) for f, v in defaults.items())
-        query.update(insert)
+        if insert is not None:
+            query.update(insert)
         self._insert = query
+        self._upsert = False
         super(InsertQuery, self).__init__(model_class)
 
     def _clone_attributes(self, query):
@@ -1978,6 +1981,10 @@ class InsertQuery(Query):
 
     join = not_allowed('joining')
     where = not_allowed('where clause')
+
+    @returns_clone
+    def upsert(self, upsert=True):
+        self._upsert = upsert
 
     def sql(self):
         return self.compiler().generate_insert(self)
