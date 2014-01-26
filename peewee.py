@@ -396,10 +396,14 @@ class Clause(Node):
         clone.parens = self.parens
         return clone
 
-class ClauseList(Clause):
+class EnclosedClause(Clause):
     """One or more Node objects joined by commas and enclosed in parens."""
     glue = ', '
     parens = True
+
+class CommaClause(Clause):
+    """One or more Node objects joined by commas, no parens."""
+    glue = ', '
 
 class Entity(Node):
     """A quoted-name or entity, e.g. "table"."column"."""
@@ -903,6 +907,12 @@ class CompositeKey(object):
     def __set__(self, instance, value):
         pass
 
+"""
+TODO:
+
+Join and .join() are very model-centric, but *should* be able to accept an
+arbitrary single-source (table or select).
+"""
 
 class QueryCompiler(object):
     # Mapping of `db_type` to actual column type used by database driver.
@@ -965,7 +975,7 @@ class QueryCompiler(object):
         self._op_map = merge_dict(self.op_map, op_overrides or {})
 
     def quote(self, s):
-        return s.join((self.quote_char, self.quote_char))
+        return '%s%s%s' % (self.quote_char, s, self.quote_char)
 
     def get_column_type(self, f):
         return self._field_map[f]
@@ -1106,8 +1116,7 @@ class QueryCompiler(object):
         return alias_map
 
     def generate_joins(self, joins, model_class, alias_map):
-        sql = []
-        params = []
+        clauses = []
         seen = set()
         q = [model_class]
         while q:
@@ -1120,7 +1129,7 @@ class QueryCompiler(object):
                 dest = join.dest
                 if isinstance(join.on, Expression):
                     # Clear any alias on the join expression.
-                    join_node = join.on.clone().alias()
+                    constraint = join.on.clone().alias()
                 else:
                     field = src._meta.rel_for_model(dest, join.on)
                     if field:
@@ -1130,20 +1139,21 @@ class QueryCompiler(object):
                         field = dest._meta.rel_for_model(src, join.on)
                         left_field = src._meta.primary_key
                         right_field = field
-                    join_node = (left_field == right_field)
+                    constraint = (left_field == right_field)
 
-                join_type = join.join_type or JOIN_INNER
-                join_sql, join_params = self.parse_node(join_node, alias_map)
+                if isinstance(dest, Node):
+                    # TODO: ensure alias?
+                    dest_n = dest
+                else:
+                    q.append(dest)
+                    dest_n = Entity(dest._meta.db_table).alias(alias_map[dest])
 
-                sql.append('%s JOIN %s AS %s ON %s' % (
-                    self.join_map[join_type],
-                    self.quote(dest._meta.db_table),
-                    alias_map[dest],
-                    join_sql))
-                params.extend(join_params)
+                join_type = self.join_map[join.join_type or JOIN_INNER]
+                join_stmt = SQL('%s JOIN' % (join_type))
+                clauses.append(
+                    Clause(join_stmt, dest_n, SQL('ON'), constraint))
 
-                q.append(dest)
-        return sql, params
+        return clauses
 
     def generate_select(self, query, start=1, alias_map=None):
         model = query.model_class
@@ -1152,62 +1162,45 @@ class QueryCompiler(object):
         alias_map = alias_map or {}
         alias_map.update(self.calculate_alias_map(query, start))
 
-        parts = ['SELECT']
-        params = []
+        stmt = 'SELECT DISTINCT' if query._distinct else 'SELECT'
+        select_clause = Clause(*query._select)
+        select_clause.glue = ', '
 
-        if query._distinct:
-            parts.append('DISTINCT')
-
-        select, s_params = self.parse_node_list(query._select, alias_map)
-        parts.append(select)
-        params.extend(s_params)
-
+        clauses = [SQL(stmt), select_clause, SQL('FROM')]
         if query._from is None:
-            from_clause = [
-                Entity(model._meta.db_table).alias(alias_map[model])]
+            clauses.append(
+                Entity(model._meta.db_table).alias(alias_map[model]))
         else:
-            from_clause = query._from
-        from_sql, f_params = self.parse_node_list(from_clause, alias_map)
-        parts.append('FROM %s' % from_sql)
-        params.extend(f_params)
+            clauses.append(CommaClause(*query._from))
 
-        joins, j_params = self.generate_joins(query._joins, model, alias_map)
-        if joins:
-            parts.append(' '.join(joins))
-            params.extend(j_params)
+        join_clauses = self.generate_joins(query._joins, model, alias_map)
+        if join_clauses:
+            clauses.extend(join_clauses)
 
-        where, w_params = self.parse_query_node(query._where, alias_map)
-        if where:
-            parts.append('WHERE %s' % where)
-            params.extend(w_params)
+        if query._where is not None:
+            clauses.extend([SQL('WHERE'), query._where])
 
         if query._group_by:
-            group, g_params = self.parse_node_list(query._group_by, alias_map)
-            parts.append('GROUP BY %s' % group)
-            params.extend(g_params)
+            clauses.extend([SQL('GROUP BY'), CommaClause(*query._group_by)])
 
         if query._having:
-            having, h_params = self.parse_query_node(query._having, alias_map)
-            parts.append('HAVING %s' % having)
-            params.extend(h_params)
+            clauses.extend([SQL('HAVING'), query._having])
 
         if query._order_by:
-            order, o_params = self.parse_node_list(query._order_by, alias_map)
-            parts.append('ORDER BY %s' % order)
-            params.extend(o_params)
+            clauses.extend([SQL('ORDER BY'), CommaClause(*query._order_by)])
 
         if query._limit or (query._offset and db.limit_max):
             limit = query._limit or db.limit_max
-            parts.append('LIMIT %s' % limit)
+            clauses.append(SQL('LIMIT %s' % limit))
         if query._offset:
-            parts.append('OFFSET %s' % query._offset)
+            clauses.append(SQL('OFFSET %s' % query._offset))
+
         for_update, no_wait = query._for_update
         if for_update:
-            parts.append('FOR UPDATE')
-            if no_wait:
-                parts.append('NOWAIT')
+            stmt = 'FOR UPDATE NOWAIT' if nowait else 'FOR UPDATE'
+            clauses.append(SQL(stmt))
 
-        return ' '.join(parts), params
+        return self.parse_node(Clause(*clauses), alias_map)
 
     def generate_update(self, query):
         model = query.model_class
@@ -1256,10 +1249,10 @@ class QueryCompiler(object):
     def foreign_key_constraint(self, field):
         ddl = [
             SQL('FOREIGN KEY'),
-            ClauseList(Entity(field.db_column)),
+            EnclosedClause(Entity(field.db_column)),
             SQL('REFERENCES'),
             Entity(field.rel_model._meta.db_table),
-            ClauseList(Entity(field.rel_model._meta.primary_key.db_column))]
+            EnclosedClause(Entity(field.rel_model._meta.primary_key.db_column))]
         if field.on_delete:
             ddl.append(SQL('ON DELETE %s' % field.on_delete))
         if field.on_update:
@@ -1297,7 +1290,7 @@ class QueryCompiler(object):
             pk_cols = [Entity(meta.fields[f].db_column)
                        for f in meta.primary_key.field_names]
             constraints.append(Clause(
-                SQL('PRIMARY KEY'), ClauseList(*pk_cols)))
+                SQL('PRIMARY KEY'), EnclosedClause(*pk_cols)))
         for field in meta.get_fields():
             columns.append(self.field_definition(field))
             if isinstance(field, ForeignKeyField) and not field.deferred:
@@ -1306,7 +1299,7 @@ class QueryCompiler(object):
         return Clause(
             SQL(statement),
             Entity(meta.db_table),
-            ClauseList(*(columns + constraints)))
+            EnclosedClause(*(columns + constraints)))
     create_table = return_parsed_node('_create_table')
 
     def _drop_table(self, model_class, fail_silently=False, cascade=False):
@@ -1326,7 +1319,7 @@ class QueryCompiler(object):
             Entity(index),
             SQL('ON'),
             Entity(tbl_name),
-            ClauseList(*[Entity(field.db_column) for field in fields]),
+            EnclosedClause(*[Entity(field.db_column) for field in fields]),
             *extra)
     create_index = return_parsed_node('_create_index')
 
