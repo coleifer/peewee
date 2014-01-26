@@ -384,17 +384,22 @@ fn = Func(None)
 class Clause(Node):
     """A SQL clause, one or more Node objects joined by spaces."""
     glue = ' '
+    parens = False
 
     def __init__(self, *nodes):
         super(Clause, self).__init__()
         self.nodes = list(nodes)
 
     def clone_base(self):
-        return Clause(*self.nodes)
+        clone = Clause(*self.nodes)
+        clone.glue = self.glue
+        clone.parens = self.parens
+        return clone
 
 class ClauseList(Clause):
     """One or more Node objects joined by commas and enclosed in parens."""
     glue = ', '
+    parens = True
 
 class Entity(Node):
     """A quoted-name or entity, e.g. "table"."column"."""
@@ -1006,7 +1011,7 @@ class QueryCompiler(object):
         elif isinstance(node, Clause):
             sql, params = self.parse_node_list(
                 node.nodes, alias_map, conv, node.glue)
-            if isinstance(node, ClauseList):
+            if node.parens:
                 sql = '(%s)' % sql
         elif isinstance(node, Param):
             params = [node.value]
