@@ -421,7 +421,8 @@ class BasePeeweeTestCase(unittest.TestCase):
 
     def assertJoins(self, sq, exp_joins, compiler=compiler):
         am = compiler.calculate_alias_map(sq)
-        joins, _ = compiler.generate_joins(sq._joins, sq.model_class, am)
+        clauses = compiler.generate_joins(sq._joins, sq.model_class, am)
+        joins = [compiler.parse_node(clause, am)[0] for clause in clauses]
         self.assertEqual(sorted(joins), sorted(exp_joins))
 
     def assertDict(self, qd, expected, expected_params):

@@ -320,14 +320,15 @@ class Node(object):
 
 class Expression(Node):
     """A binary expression, e.g `foo + 1` or `bar < 7`."""
-    def __init__(self, lhs, op, rhs):
+    def __init__(self, lhs, op, rhs, flat=False):
         super(Expression, self).__init__()
         self.lhs = lhs
         self.op = op
         self.rhs = rhs
+        self.flat = flat
 
     def clone_base(self):
-        return Expression(self.lhs, self.op, self.rhs)
+        return Expression(self.lhs, self.op, self.rhs, self.flat)
 
 class DQ(Node):
     """A "django-style" filter expression, e.g. {'foo__eq': 'x'}."""
@@ -344,12 +345,13 @@ class Param(Node):
     specifically treat this value as a parameter, useful for `list` which is
     special-cased for `IN` lookups.
     """
-    def __init__(self, value):
+    def __init__(self, value, conv=None):
         self.value = value
+        self.conv = conv
         super(Param, self).__init__()
 
     def clone_base(self):
-        return Param(self.value)
+        return Param(self.value, self.conv)
 
 class SQL(Node):
     """An unescaped SQL string, with optional parameters."""
@@ -1008,7 +1010,8 @@ class QueryCompiler(object):
                 conv = node.lhs
             lhs, lparams = self.parse_node(node.lhs, alias_map, conv)
             rhs, rparams = self.parse_node(node.rhs, alias_map, conv)
-            sql = '(%s %s %s)' % (lhs, self.get_op(node.op), rhs)
+            template = '%s %s %s' if node.flat else '(%s %s %s)'
+            sql = template % (lhs, self.get_op(node.op), rhs)
             params = lparams + rparams
         elif isinstance(node, Field):
             sql = self.quote(node.db_column)
@@ -1024,7 +1027,10 @@ class QueryCompiler(object):
             if node.parens:
                 sql = '(%s)' % sql
         elif isinstance(node, Param):
-            params = [node.value]
+            if node.conv:
+                params = [node.conv(node.value)]
+            else:
+                params = [node.value]
             unknown = True
         elif isinstance(node, SQL):
             sql = node.value
@@ -1115,6 +1121,9 @@ class QueryCompiler(object):
                     alias_map[join.dest] = make_alias(join.dest)
         return alias_map
 
+    def build_query(self, clauses, alias_map=None):
+        return self.parse_node(Clause(*clauses), alias_map)
+
     def generate_joins(self, joins, model_class, alias_map):
         clauses = []
         seen = set()
@@ -1197,49 +1206,53 @@ class QueryCompiler(object):
 
         for_update, no_wait = query._for_update
         if for_update:
-            stmt = 'FOR UPDATE NOWAIT' if nowait else 'FOR UPDATE'
+            stmt = 'FOR UPDATE NOWAIT' if no_wait else 'FOR UPDATE'
             clauses.append(SQL(stmt))
 
-        return self.parse_node(Clause(*clauses), alias_map)
+        return self.build_query(clauses, alias_map)
 
     def generate_update(self, query):
         model = query.model_class
+        clauses = [SQL('UPDATE'), Entity(model._meta.db_table), SQL('SET')]
 
-        parts = ['UPDATE %s SET' % self.quote(model._meta.db_table)]
-        sets, params = self.parse_field_dict(query._update)
+        update = []
+        for field, value in query._update.items():
+            if not isinstance(value, (Node, Model)):
+                value = Param(value)
+            update.append(Expression(field, OP_EQ, value, flat=True))
+        clauses.append(CommaClause(*update))
 
-        parts.append(', '.join('%s=%s' % (f, v) for f, v in sets))
+        if query._where:
+            clauses.extend([SQL('WHERE'), query._where])
 
-        where, w_params = self.parse_query_node(query._where, None)
-        if where:
-            parts.append('WHERE %s' % where)
-            params.extend(w_params)
-        return ' '.join(parts), params
+        return self.build_query(clauses)
 
     def generate_insert(self, query):
         model = query.model_class
+        clauses = [SQL('INSERT INTO'), Entity(model._meta.db_table)]
 
-        parts = ['INSERT INTO %s' % self.quote(model._meta.db_table)]
-        sets, params = self.parse_field_dict(query._insert)
+        if query._insert:
+            fields = []
+            values = []
+            for field, value in query._insert.items():
+                if not isinstance(value, (Node, Model)):
+                    value = Param(value, conv=field.db_value)
+                fields.append(field)
+                values.append(value)
 
-        if sets:
-            parts.append('(%s)' % ', '.join(s[0] for s in sets))
-            parts.append('VALUES (%s)' % ', '.join(s[1] for s in sets))
+            clauses.extend([
+                EnclosedClause(*fields),
+                SQL('VALUES'),
+                EnclosedClause(*values)])
 
-        return ' '.join(parts), params
+        return self.build_query(clauses)
 
     def generate_delete(self, query):
         model = query.model_class
-
-        parts = ['DELETE FROM %s' % self.quote(model._meta.db_table)]
-        params = []
-
-        where, w_params = self.parse_query_node(query._where, None)
-        if where:
-            parts.append('WHERE %s' % where)
-            params.extend(w_params)
-
-        return ' '.join(parts), params
+        clauses = [SQL('DELETE FROM'), Entity(model._meta.db_table)]
+        if query._where:
+            clauses.extend([SQL('WHERE'), query._where])
+        return self.build_query(clauses)
 
     def field_definition(self, field):
         column_type = self.get_column_type(field.get_db_field())
