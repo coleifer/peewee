@@ -468,6 +468,7 @@ class Field(Node):
         # on the Model class.
         Field._field_counter += 1
         self._order = Field._field_counter
+        self._sort_key = (self.primary_key and 1 or 2), self._order
 
         self._is_bound = False  # Whether the Field is "bound" to a Model.
         super(Field, self).__init__()
@@ -985,6 +986,9 @@ class QueryCompiler(object):
     def get_op(self, q):
         return self._op_map[q]
 
+    def _sorted_fields(self, field_dict):
+        return sorted(field_dict.items(), key=lambda i: i[0]._sort_key)
+
     def _max_alias(self, alias_map):
         max_alias = 0
         if alias_map:
@@ -1084,29 +1088,6 @@ class QueryCompiler(object):
             sql.append(node_sql)
             params.extend(node_params)
         return glue.join(sql), params
-
-    def parse_field_dict(self, d):
-        sets, params = [], []
-        for field, value in d.items():
-            field_sql, _ = self.parse_node(field)
-            # Because we don't know whether to call db_value or parse_node
-            # first, we'd prefer to call parse_node since its more general, but
-            # it does special things with lists -- it treats them as if it were
-            # buliding up an IN query. For some things we don't want that, so
-            # here, if the node is *not* a special object, we'll pass thru
-            # parse_node and let db_value handle it.
-            if not isinstance(value, (Node, Model, Query)):
-                value = Param(value)  # passthru to the field's db_value func
-            val_sql, val_params = self.parse_node(value)
-            val_params = [field.db_value(vp) for vp in val_params]
-            sets.append((field_sql, val_sql))
-            params.extend(val_params)
-        return sets, params
-
-    def parse_query_node(self, node, alias_map):
-        if node is not None:
-            return self.parse_node(node, alias_map)
-        return '', []
 
     def calculate_alias_map(self, query, start=1):
         make_alias = lambda model: model._meta.table_alias or 't%s' % start
@@ -1216,7 +1197,7 @@ class QueryCompiler(object):
         clauses = [SQL('UPDATE'), Entity(model._meta.db_table), SQL('SET')]
 
         update = []
-        for field, value in query._update.items():
+        for field, value in self._sorted_fields(query._update):
             if not isinstance(value, (Node, Model)):
                 value = Param(value)
             update.append(Expression(field, OP_EQ, value, flat=True))
@@ -1234,7 +1215,7 @@ class QueryCompiler(object):
         if query._insert:
             fields = []
             values = []
-            for field, value in query._insert.items():
+            for field, value in self._sorted_fields(query._insert):
                 if not isinstance(value, (Node, Model)):
                     value = Param(value, conv=field.db_value)
                 fields.append(field)
@@ -2589,7 +2570,7 @@ class ModelOptions(object):
         return dd
 
     def get_sorted_fields(self):
-        key = lambda i: (i[1] is self.primary_key and 1 or 2, i[1]._order)
+        key = lambda i: i[1]._sort_key
         return sorted(self.fields.items(), key=key)
 
     def get_field_names(self):
