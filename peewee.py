@@ -1095,10 +1095,10 @@ class QueryCompiler(object):
     def calculate_alias_map(self, query, start=1):
         make_alias = lambda model: model._meta.table_alias or 't%s' % start
         alias_map = {query.model_class: make_alias(query.model_class)}
-        for model, joins in query._joins.items():
-            if model not in alias_map:
+        for dest, joins in query._joins.items():
+            if dest not in alias_map:
                 start += 1
-                alias_map[model] = make_alias(model)
+                alias_map[dest] = make_alias(dest)
             for join in joins:
                 if join.dest not in alias_map:
                     start += 1
