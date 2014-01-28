@@ -2304,11 +2304,12 @@ class PostgresqlDatabase(Database):
     def last_insert_id(self, cursor, model):
         seq = model._meta.primary_key.sequence
         if seq:
-            cursor.execute("SELECT CURRVAL('\"%s\"')" % (seq))
+            cursor.execute("SELECT CURRVAL('%s')" % (seq))
             return cursor.fetchone()[0]
         elif model._meta.auto_increment:
-            cursor.execute("SELECT CURRVAL('\"%s_%s_seq\"')" % (
-                model._meta.db_table, model._meta.primary_key.db_column))
+            db_table = '.'.join([model._meta.db_schema,model._meta.db_table])
+            cursor.execute("SELECT CURRVAL('%s_%s_seq')" % (
+                db_table, model._meta.primary_key.db_column))
             return cursor.fetchone()[0]
 
     def get_indexes_for_table(self, table):
