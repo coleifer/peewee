@@ -2195,7 +2195,7 @@ class SqliteDatabase(Database):
         OP_ILIKE: 'LIKE',
     }
 
-    insert_ignore = ' OR IGNORE'
+    insert_ignore = 'OR IGNORE '
 
     def _connect(self, database, **kwargs):
         if not sqlite3:
