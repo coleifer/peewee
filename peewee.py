@@ -1294,7 +1294,7 @@ class QueryCompiler(object):
 
         return Clause(
             SQL(statement),
-            Entity(meta.db_table),
+            Entity(meta.db_schema,meta.db_table),
             EnclosedClause(*(columns + constraints)))
     create_table = return_parsed_node('_create_table')
 
