@@ -1159,7 +1159,7 @@ class QueryCompiler(object):
     def generate_insert(self, query):
         model = query.model_class
 
-        parts = ['INSERT INTO %s' % self.quote(model._meta.db_table)]
+        parts = ['INSERT %sINTO %s' % (self.database.insert_ignore if query._ignore_duplicates else "", self.quote(model._meta.db_table))]
         sets, params = self.parse_field_dict(query._insert)
 
         if sets:
@@ -1886,16 +1886,18 @@ class UpdateQuery(Query):
         return self.database.rows_affected(self._execute())
 
 class InsertQuery(Query):
-    def __init__(self, model_class, insert=None):
+    def __init__(self, model_class, insert=None, ignore_duplicates=False):
         mm = model_class._meta
         defaults = mm.get_default_dict()
         query = dict((mm.fields[f], v) for f, v in defaults.items())
         query.update(insert)
         self._insert = query
+        self._ignore_duplicates = ignore_duplicates
         super(InsertQuery, self).__init__(model_class)
 
     def _clone_attributes(self, query):
         query._insert = dict(self._insert)
+        query._ignore_duplicates = self._ignore_duplicates
         return query
 
     join = not_allowed('joining')
@@ -2193,6 +2195,8 @@ class SqliteDatabase(Database):
         OP_ILIKE: 'LIKE',
     }
 
+    insert_ignore = ' OR IGNORE'
+
     def _connect(self, database, **kwargs):
         if not sqlite3:
             raise ImproperlyConfigured('sqlite3 must be installed on the system')
@@ -2309,6 +2313,8 @@ class MySQLDatabase(Database):
     }
     quote_char = '`'
     subquery_delete_same_table = False
+
+    insert_ignore = 'IGNORE '
 
     def _connect(self, database, **kwargs):
         if not mysql:
