@@ -2603,7 +2603,7 @@ class ModelOptions(object):
 
 class BaseModel(type):
     inheritable = set([
-        'constraints', 'database', 'indexes', 'order_by', 'primary_key'])
+        'constraints', 'database', 'db_schema', 'indexes', 'order_by', 'primary_key'])
 
     def __new__(cls, name, bases, attrs):
         if not bases:
