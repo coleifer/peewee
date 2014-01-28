@@ -7,19 +7,22 @@
 #      ///'
 #     //
 #    '
+from __future__ import with_statement
+
+from collections import deque, namedtuple
+from copy import deepcopy
 import datetime
 import time
 import decimal
+from inspect import isclass
 import logging
 import operator
 import re
 import sys
 import threading
 import uuid
-from collections import deque
-from collections import namedtuple
-from copy import deepcopy
-from inspect import isclass
+import time
+
 
 __all__ = [
     'BareField',
@@ -1591,8 +1594,8 @@ class Query(Node):
 
     def _execute(self):
         sql, params = self.sql()
-        cursor = self.database.execute_sql(sql, params, self.require_commit)
-        self._execution_time = cursor._execution_time
+        cursor, execution_time = self.database.execute_sql(sql, params, self.require_commit, return_time=True)
+        self._execution_time = execution_time
         return cursor
 
     def execute(self):
@@ -2049,7 +2052,7 @@ class Database(object):
             self.quote_char, self.interpolation, self.field_overrides,
             self.op_overrides)
 
-    def execute_sql(self, sql, params=None, require_commit=True):
+    def execute_sql(self, sql, params=None, require_commit=True, return_time=False):
         with self.exception_wrapper():
             cursor = self.get_cursor()
             start_time = time.time()
@@ -2070,9 +2073,12 @@ class Database(object):
             pass
         if not params:
             params = ()
-        logger.debug((sql, params, len(params), table_name, ((time.time() - start_time)*1000)))
-        cursor._execution_time = time.time() - start_time
-        return cursor
+        execution_time = time.time() - start_time
+        logger.debug((sql, params, len(params), table_name, (execution_time*1000)))
+        if return_time:
+            return cursor, execution_time
+        else:
+            return cursor
 
     def begin(self):
         pass
