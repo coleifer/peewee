@@ -411,6 +411,7 @@ class Entity(Node):
     """A quoted-name or entity, e.g. "table"."column"."""
     def __init__(self, *path):
         super(Entity, self).__init__()
+        path = [_path for _path in path if _path!='' and _path is not None]
         self.path = path
 
     def clone_base(self):
@@ -1136,7 +1137,7 @@ class QueryCompiler(object):
                     dest_n = dest
                 else:
                     q.append(dest)
-                    dest_n = Entity(dest._meta.db_table).alias(alias_map[dest])
+                    dest_n = Entity(dest._meta.db_schema,dest._meta.db_table).alias(alias_map[dest])
 
                 join_type = self.join_map[join.join_type or JOIN_INNER]
                 join_stmt = SQL('%s JOIN' % (join_type))
@@ -1159,7 +1160,7 @@ class QueryCompiler(object):
         clauses = [SQL(stmt), select_clause, SQL('FROM')]
         if query._from is None:
             clauses.append(
-                Entity(model._meta.db_table).alias(alias_map[model]))
+                Entity(model._meta.db_schema,model._meta.db_table).alias(alias_map[model]))
         else:
             clauses.append(CommaClause(*query._from))
 
@@ -1194,7 +1195,7 @@ class QueryCompiler(object):
 
     def generate_update(self, query):
         model = query.model_class
-        clauses = [SQL('UPDATE'), Entity(model._meta.db_table), SQL('SET')]
+        clauses = [SQL('UPDATE'), Entity(model._meta.db_schema,model._meta.db_table), SQL('SET')]
 
         update = []
         for field, value in self._sorted_fields(query._update):
@@ -1211,7 +1212,7 @@ class QueryCompiler(object):
     def generate_insert(self, query):
         model = query.model_class
         statement = query._upsert and 'INSERT OR REPLACE INTO' or 'INSERT INTO'
-        clauses = [SQL(statement), Entity(model._meta.db_table)]
+        clauses = [SQL(statement), Entity(model._meta.db_schema,model._meta.db_table)]
 
         if query._insert:
             fields = []
@@ -1231,7 +1232,7 @@ class QueryCompiler(object):
 
     def generate_delete(self, query):
         model = query.model_class
-        clauses = [SQL('DELETE FROM'), Entity(model._meta.db_table)]
+        clauses = [SQL('DELETE FROM'), Entity(model._meta.db_schema,model._meta.db_table)]
         if query._where:
             clauses.extend([SQL('WHERE'), query._where])
         return self.build_query(clauses)
@@ -1246,7 +1247,7 @@ class QueryCompiler(object):
             SQL('FOREIGN KEY'),
             EnclosedClause(Entity(field.db_column)),
             SQL('REFERENCES'),
-            Entity(field.rel_model._meta.db_table),
+            Entity(field.rel_model._meta.db_schema,field.rel_model._meta.db_table),
             EnclosedClause(Entity(field.rel_model._meta.primary_key.db_column))]
         if field.on_delete:
             ddl.append(SQL('ON DELETE %s' % field.on_delete))
@@ -1270,7 +1271,7 @@ class QueryCompiler(object):
         fk_clause = self.foreign_key_constraint(field)
         return Clause(
             SQL('ALTER TABLE'),
-            Entity(model_class._meta.db_table),
+            Entity(model_class._meta.db_schema,model_class._meta.db_table),
             SQL('ADD CONSTRAINT'),
             Entity(constraint),
             *fk_clause.nodes)
@@ -1299,7 +1300,7 @@ class QueryCompiler(object):
 
     def _drop_table(self, model_class, fail_silently=False, cascade=False):
         statement = 'DROP TABLE IF EXISTS' if fail_silently else 'DROP TABLE'
-        ddl = [SQL(statement), Entity(model_class._meta.db_table)]
+        ddl = [SQL(statement), Entity(model_class._meta.db_schema,model_class._meta.db_table)]
         if cascade:
             ddl.append(SQL('CASCADE'))
         return Clause(*ddl)
@@ -2527,7 +2528,7 @@ class DoesNotExist(Exception): pass
 default_database = SqliteDatabase('peewee.db')
 
 class ModelOptions(object):
-    def __init__(self, cls, database=None, db_table=None, indexes=None,
+    def __init__(self, cls, database=None, db_table=None, db_schema=None, indexes=None,
                  order_by=None, primary_key=None, table_alias=None,
                  constraints=None, **kwargs):
         self.model_class = cls
@@ -2537,6 +2538,7 @@ class ModelOptions(object):
         self.defaults = {}
 
         self.database = database or default_database
+        self.db_schema = db_schema
         self.db_table = db_table
         self.indexes = list(indexes or [])
         self.order_by = order_by
