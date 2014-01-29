@@ -2307,13 +2307,17 @@ class PostgresqlDatabase(Database):
         return conn
 
     def last_insert_id(self, cursor, model):
-        seq = model._meta.primary_key.sequence
+        meta = model._meta
+        seq = meta.primary_key.sequence
+        schema = ''
+        if meta.schema:
+            schema = '%s.' % _meta.schema
         if seq:
-            cursor.execute("SELECT CURRVAL('\"%s\"')" % (seq))
+            cursor.execute("SELECT CURRVAL('%s\"%s\"')" % (schema, seq))
             return cursor.fetchone()[0]
-        elif model._meta.auto_increment:
-            cursor.execute("SELECT CURRVAL('\"%s_%s_seq\"')" % (
-                model._meta.db_table, model._meta.primary_key.db_column))
+        elif meta.auto_increment:
+            cursor.execute("SELECT CURRVAL('%s\"%s_%s_seq\"')" % (
+                schema, meta.db_table, meta.primary_key.db_column))
             return cursor.fetchone()[0]
 
     def get_indexes_for_table(self, table):
