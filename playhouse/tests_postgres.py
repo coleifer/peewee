@@ -154,6 +154,9 @@ class PostgresExtTestCase(unittest.TestCase):
             ('t2', None),
         ])
 
+        sq = Testing.select(Testing.name).where(Testing.data['k1'] == 'v1')
+        self.assertEqual([x.name for x in sq], ['t1'])
+
     def test_filtering(self):
         self.create()
 
