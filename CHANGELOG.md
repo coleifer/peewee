@@ -6,6 +6,48 @@ releases, visit GitHub:
 https://github.com/coleifer/peewee/releases
 
 
+## 2.2.0
+
+This version contains a large refactoring of the way SQL was generated for both
+the standard query classes (`Select`, `Insert`, `Update`, `Delete`) as well as 
+for the DDL methods (`create_table`, `create_index`, etc). Instead of joining
+strings of SQL and manually quoting things, I've created `Clause` objects
+containing multiple `Node` objects to represent all parts of the query.
+
+I also changed the way peewee determins the SQL to represent a field. Now a
+field implements ``__ddl__`` and ``__ddl_column__`` methods. The former creates
+the entire field definition, e.g.:
+
+    "quoted_column_name" <result of call to __ddl_column__> [NOT NULL/PRIMARY KEY/DEFAULT NEXTVAL(...)/CONSTRAINTS...]
+
+The latter method is responsible just for the column type definition. This might
+return ``VARCHAR(255)`` or simply ``TEXT``. I've also added support for 
+arbitrary constraints on each field, so you might have:
+
+    price = DecimalField(decimal_places=2, constraints=[Check('price > 0')])
+
+### Changes in 2.2.0
+
+* Refactored query generation for both SQL queries and DDL queries.
+* Support for arbitrary column constraints.
+* `autorollback` option to the `Database` class that will roll back the
+  transaction before raising an exception.
+* Added `JSONField` type to the `postgresql_ext` module.
+* Track fields that are explicitly set, allowing faster saves (thanks @soasme).
+* Allow the `FROM` clause to be an arbitrary `Node` object (#290).
+* `schema` is a new `Model.Mketa` option and is used throughout the code.
+* Allow indexing operation on HStore fields (thanks @zdxerr, #293).
+
+### Bugs fixed
+
+* #277 (where calls not chainable with update query)
+* #278, use `wraps()`, thanks @lucasmarshall
+* #284, call `prepared()` after `create()`, thanks @soasme.
+* #286, cursor description issue with pwiz + postgres
+
+[View commits](https://github.com/coleifer/peewee/compare/2.1.7...2.2.0)
+
+
 ## 2.1.7
 
 ### Changes in 2.1.7
