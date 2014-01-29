@@ -107,7 +107,7 @@ class HStoreField(IndexedField):
     def __init__(self, *args, **kwargs):
         super(HStoreField, self).__init__(*args, **kwargs)
 
-    def __getitem(self, key):
+    def __getitem__(self, key):
         return Expression(self, OP_HKEY, Param(key))
 
     def keys(self):
