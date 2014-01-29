@@ -317,6 +317,9 @@ class Computer(TestModel):
     memory = ForeignKeyField(Component, related_name='c2')
     processor = ForeignKeyField(Component, related_name='c3')
 
+class CheckModel(TestModel):
+    value = IntegerField(constraints=[Check('value > 0')])
+
 # Deferred foreign keys.
 SnippetProxy = Proxy()
 
@@ -368,6 +371,7 @@ MODELS = [
     Manufacturer,
     Component,
     Computer,
+    CheckModel,
 ]
 INT = test_db.interpolation
 
@@ -3429,6 +3433,16 @@ class AutoRollbackTestCase(ModelTestCase):
         test_db.commit()
         u_db = User.get(User.username == 'u')
         self.assertEqual(u.id, u_db.id)
+
+
+class CheckConstraintTestCase(ModelTestCase):
+    requires = [CheckModel]
+
+    def test_check_constraint(self):
+        CheckModel.create(value=1)
+        with test_db.transaction() as txn:
+            self.assertRaises(IntegrityError, CheckModel.create, value=0)
+            txn.rollback()
 
 
 class ConnectionStateTestCase(BasePeeweeTestCase):
