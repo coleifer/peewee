@@ -27,6 +27,7 @@ __all__ = [
     'BlobField',
     'BooleanField',
     'CharField',
+    'Check',
     'Clause',
     'CompositeKey',
     'DatabaseError',
