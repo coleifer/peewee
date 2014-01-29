@@ -2312,7 +2312,7 @@ class PostgresqlDatabase(Database):
         seq = meta.primary_key.sequence
         schema = ''
         if meta.schema:
-            schema = '%s.' % _meta.schema
+            schema = '%s.' % meta.schema
         if seq:
             cursor.execute("SELECT CURRVAL('%s\"%s\"')" % (schema, seq))
             return cursor.fetchone()[0]
