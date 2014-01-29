@@ -107,6 +107,9 @@ class HStoreField(IndexedField):
     def __init__(self, *args, **kwargs):
         super(HStoreField, self).__init__(*args, **kwargs)
 
+    def __getitem__(self, key):
+        return Expression(self, OP_HKEY, Param(key))
+
     def keys(self):
         return fn.akeys(self)
 
@@ -167,6 +170,7 @@ class UUIDField(Field):
         return uuid.UUID(value)
 
 
+OP_HKEY = 'key'
 OP_HUPDATE = 'H@>'
 OP_HCONTAINS_DICT = 'H?&'
 OP_HCONTAINS_KEYS = 'H?'
@@ -276,6 +280,7 @@ PostgresqlExtDatabase.register_ops({
     OP_HCONTAINS_KEYS: '?&',
     OP_HCONTAINS_KEY: '?',
     OP_HCONTAINS_ANY_KEY: '?|',
+    OP_HKEY: '->',
     OP_HUPDATE: '||',
     OP_ACONTAINS: '@>',
     OP_ACONTAINS_ANY: '&&',
