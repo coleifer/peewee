@@ -451,7 +451,7 @@ class Field(Node):
     def __init__(self, null=False, index=False, unique=False,
                  verbose_name=None, help_text=None, db_column=None,
                  default=None, choices=None, primary_key=False, sequence=None,
-                 constraints=None):
+                 constraints=None, schema=None):
         self.null = null
         self.index = index
         self.unique = unique
@@ -463,6 +463,7 @@ class Field(Node):
         self.primary_key = primary_key
         self.sequence = sequence  # Name of sequence, e.g. foo_id_seq.
         self.constraints = constraints  # List of column constraints.
+        self.schema = schema  # Name of schema, e.g. 'public'.
 
         # Used internally for recovering the order in which Fields were defined
         # on the Model class.
@@ -486,6 +487,7 @@ class Field(Node):
             primary_key=self.primary_key,
             sequence=self.sequence,
             constraints=self.constraints,
+            schema=self.schema,
             **kwargs)
         if self._is_bound:
             inst.name = self.name
@@ -2529,7 +2531,7 @@ default_database = SqliteDatabase('peewee.db')
 class ModelOptions(object):
     def __init__(self, cls, database=None, db_table=None, indexes=None,
                  order_by=None, primary_key=None, table_alias=None,
-                 constraints=None, **kwargs):
+                 constraints=None, schema=None, **kwargs):
         self.model_class = cls
         self.name = cls.__name__.lower()
         self.fields = {}
@@ -2543,6 +2545,7 @@ class ModelOptions(object):
         self.primary_key = primary_key
         self.table_alias = table_alias
         self.constraints = constraints
+        self.schema = schema
 
         self.auto_increment = None
         self.rel = {}
@@ -2600,8 +2603,8 @@ class ModelOptions(object):
 
 
 class BaseModel(type):
-    inheritable = set([
-        'constraints', 'database', 'indexes', 'order_by', 'primary_key'])
+    inheritable = set(['constraints', 'database', 'indexes', 'order_by',
+                       'primary_key', 'schema'])
 
     def __new__(cls, name, bases, attrs):
         if not bases:
