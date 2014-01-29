@@ -540,6 +540,11 @@ class Field(Node):
         """Convert the database value to a pythonic value."""
         return value if value is None else self.coerce(value)
 
+    def _as_entity(self, with_table=False):
+        if with_table:
+            return Entity(self.model_class._meta.db_table, self.db_column)
+        return Entity(self.db_column)
+
     def __ddl_column__(self, column_type):
         """Return the column type, e.g. VARCHAR(255) or REAL."""
         modifiers = self.get_modifiers()
@@ -550,7 +555,7 @@ class Field(Node):
 
     def __ddl__(self, column_type):
         """Return a list of Node instances that defines the column."""
-        ddl = [Entity(self.db_column), self.__ddl_column__(column_type)]
+        ddl = [self._as_entity(), self.__ddl_column__(column_type)]
         if not self.null:
             ddl.append(SQL('NOT NULL'))
         if self.primary_key:
@@ -1062,7 +1067,7 @@ class QueryCompiler(object):
             params = [node.get_id()]
         elif isclass(node) and issubclass(node, Model):
             self._ensure_alias_set(node, alias_map)
-            entity = Entity(node._meta.db_table).alias(alias_map[node])
+            entity = node._as_entity().alias(alias_map[node])
             sql, params = self.parse_node(entity, alias_map, conv)
         else:
             unknown = True
@@ -1138,7 +1143,7 @@ class QueryCompiler(object):
                     dest_n = dest
                 else:
                     q.append(dest)
-                    dest_n = Entity(dest._meta.db_table).alias(alias_map[dest])
+                    dest_n = dest._as_entity().alias(alias_map[dest])
 
                 join_type = self.join_map[join.join_type or JOIN_INNER]
                 join_stmt = SQL('%s JOIN' % (join_type))
@@ -1160,8 +1165,7 @@ class QueryCompiler(object):
 
         clauses = [SQL(stmt), select_clause, SQL('FROM')]
         if query._from is None:
-            clauses.append(
-                Entity(model._meta.db_table).alias(alias_map[model]))
+            clauses.append(model._as_entity().alias(alias_map[model]))
         else:
             clauses.append(CommaClause(*query._from))
 
@@ -1196,7 +1200,7 @@ class QueryCompiler(object):
 
     def generate_update(self, query):
         model = query.model_class
-        clauses = [SQL('UPDATE'), Entity(model._meta.db_table), SQL('SET')]
+        clauses = [SQL('UPDATE'), model._as_entity(), SQL('SET')]
 
         update = []
         for field, value in self._sorted_fields(query._update):
@@ -1213,7 +1217,7 @@ class QueryCompiler(object):
     def generate_insert(self, query):
         model = query.model_class
         statement = query._upsert and 'INSERT OR REPLACE INTO' or 'INSERT INTO'
-        clauses = [SQL(statement), Entity(model._meta.db_table)]
+        clauses = [SQL(statement), model._as_entity()]
 
         if query._insert:
             fields = []
@@ -1233,7 +1237,7 @@ class QueryCompiler(object):
 
     def generate_delete(self, query):
         model = query.model_class
-        clauses = [SQL('DELETE FROM'), Entity(model._meta.db_table)]
+        clauses = [SQL('DELETE FROM'), model._as_entity()]
         if query._where:
             clauses.extend([SQL('WHERE'), query._where])
         return self.build_query(clauses)
@@ -1246,10 +1250,10 @@ class QueryCompiler(object):
     def foreign_key_constraint(self, field):
         ddl = [
             SQL('FOREIGN KEY'),
-            EnclosedClause(Entity(field.db_column)),
+            EnclosedClause(field._as_entity()),
             SQL('REFERENCES'),
-            Entity(field.rel_model._meta.db_table),
-            EnclosedClause(Entity(field.rel_model._meta.primary_key.db_column))]
+            field.rel_model._as_entity(),
+            EnclosedClause(field.rel_model._meta.primary_key._as_entity())]
         if field.on_delete:
             ddl.append(SQL('ON DELETE %s' % field.on_delete))
         if field.on_update:
@@ -1272,7 +1276,7 @@ class QueryCompiler(object):
         fk_clause = self.foreign_key_constraint(field)
         return Clause(
             SQL('ALTER TABLE'),
-            Entity(model_class._meta.db_table),
+            model_class._as_entity(),
             SQL('ADD CONSTRAINT'),
             Entity(constraint),
             *fk_clause.nodes)
@@ -1284,7 +1288,7 @@ class QueryCompiler(object):
 
         columns, constraints = [], []
         if isinstance(meta.primary_key, CompositeKey):
-            pk_cols = [Entity(meta.fields[f].db_column)
+            pk_cols = [meta.fields[f]._as_entity()
                        for f in meta.primary_key.field_names]
             constraints.append(Clause(
                 SQL('PRIMARY KEY'), EnclosedClause(*pk_cols)))
@@ -1295,13 +1299,13 @@ class QueryCompiler(object):
 
         return Clause(
             SQL(statement),
-            Entity(meta.db_table),
+            model_class._as_entity(),
             EnclosedClause(*(columns + constraints)))
     create_table = return_parsed_node('_create_table')
 
     def _drop_table(self, model_class, fail_silently=False, cascade=False):
         statement = 'DROP TABLE IF EXISTS' if fail_silently else 'DROP TABLE'
-        ddl = [SQL(statement), Entity(model_class._meta.db_table)]
+        ddl = [SQL(statement), model_class._as_entity()]
         if cascade:
             ddl.append(SQL('CASCADE'))
         return Clause(*ddl)
@@ -1316,7 +1320,7 @@ class QueryCompiler(object):
             Entity(index),
             SQL('ON'),
             Entity(tbl_name),
-            EnclosedClause(*[Entity(field.db_column) for field in fields]),
+            EnclosedClause(*[field._as_entity() for field in fields]),
             *extra)
     create_index = return_parsed_node('_create_index')
 
@@ -2789,6 +2793,12 @@ class Model(with_metaclass(BaseModel)):
     @classmethod
     def drop_table(cls, fail_silently=False):
         cls._meta.database.drop_table(cls, fail_silently)
+
+    @classmethod
+    def _as_entity(cls):
+        if cls._meta.schema:
+            return Entity(cls._meta.schema, cls._meta.db_table)
+        return Entity(cls._meta.db_table)
 
     def get_id(self):
         return getattr(self, self._meta.primary_key.name)
