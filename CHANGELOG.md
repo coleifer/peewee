@@ -9,7 +9,7 @@ https://github.com/coleifer/peewee/releases
 ## 2.2.0
 
 This version contains a large refactoring of the way SQL was generated for both
-the standard query classes (`Select`, `Insert`, `Update`, `Delete`) as well as 
+the standard query classes (`Select`, `Insert`, `Update`, `Delete`) as well as
 for the DDL methods (`create_table`, `create_index`, etc). Instead of joining
 strings of SQL and manually quoting things, I've created `Clause` objects
 containing multiple `Node` objects to represent all parts of the query.
@@ -21,7 +21,7 @@ the entire field definition, e.g.:
     "quoted_column_name" <result of call to __ddl_column__> [NOT NULL/PRIMARY KEY/DEFAULT NEXTVAL(...)/CONSTRAINTS...]
 
 The latter method is responsible just for the column type definition. This might
-return ``VARCHAR(255)`` or simply ``TEXT``. I've also added support for 
+return ``VARCHAR(255)`` or simply ``TEXT``. I've also added support for
 arbitrary constraints on each field, so you might have:
 
     price = DecimalField(decimal_places=2, constraints=[Check('price > 0')])
