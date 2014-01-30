@@ -449,6 +449,18 @@ class SelectTestCase(BasePeeweeTestCase):
         sq = SelectQuery(User, User.username, fn.Count(Blog.select().where(Blog.user == User.id)))
         self.assertSelect(sq, 'users."username", Count((SELECT blog."pk" FROM "blog" AS blog WHERE (blog."user_id" = users."id")))', [])
 
+    def test_reselect(self):
+        sq = SelectQuery(User, User.username)
+        self.assertSelect(sq, 'users."username"', [])
+
+        sq2 = sq.select()
+        self.assertSelect(sq2, 'users."id", users."username"', [])
+        self.assertTrue(id(sq) != id(sq2))
+
+        sq3 = sq2.select(User.id)
+        self.assertSelect(sq3, 'users."id"', [])
+        self.assertTrue(id(sq2) != id(sq3))
+
     def test_select_subquery(self):
         subquery = SelectQuery(Child, fn.Count(Child.id)).where(Child.parent == Parent.id).group_by(Child.parent)
         sq = SelectQuery(Parent, Parent, subquery.alias('count'))
