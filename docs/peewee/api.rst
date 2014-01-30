@@ -809,6 +809,34 @@ Query Types
             .join(Tweet)
             .group_by(User))
 
+    .. py:method:: select(*selection)
+
+        :param selection: a list of expressions, which can be model classes or fields.
+          if left blank, will default to all the fields of the given model.
+        :rtype: :py:class:`SelectQuery`
+
+        .. note::
+            Usually the selection will be specified when the instance is created.
+            This method simply exists for the case when you want to modify the
+            SELECT clause independent of instantiating a query.
+
+        .. code-block:: python
+
+            query = User.select()
+            query = query.select(User.username)
+
+    .. py:method:: from_(*args)
+
+        :param args: one or more expressions, for example :py:class:`Model`
+          or :py:class:`SelectQuery` instance(s). if left blank, will default
+          to the table of the given model.
+        :rtype: :py:class:`SelectQuery`
+
+        .. code-block:: python
+
+            # rather than a join, select from both tables and join with where.
+            query = User.select().from_(User, Blog).where(Blog.user == User.id)
+
     .. py:method:: group_by(*clauses)
 
         :param clauses: a list of expressions, which can be model classes or individual field instances
