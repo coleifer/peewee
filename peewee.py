@@ -12,16 +12,17 @@ from __future__ import with_statement
 from collections import deque, namedtuple
 from copy import deepcopy
 import datetime
-import time
 import decimal
 from inspect import isclass
 import logging
 import operator
 import re
+import sqlite3
 import sys
 import threading
-import uuid
 import time
+import time
+import uuid
 
 
 __all__ = [
@@ -106,7 +107,6 @@ else:
     raise RuntimeError('Unsupported python version.')
 
 # By default, peewee supports Sqlite, MySQL and Postgresql.
-import sqlite3
 try:
     import psycopg2
     from psycopg2 import extensions as pg_extensions
@@ -1339,6 +1339,7 @@ class ExtQueryResultWrapper(QueryResultWrapper):
         identity = lambda x: x
         for i in range(len(description)):
             column = description[i][0]
+            func = identity
             if column in model._meta.columns:
                 field_obj = model._meta.columns[column]
                 column = field_obj.name
