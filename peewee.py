@@ -2239,9 +2239,10 @@ class Database(object):
             qc = self.compiler()
             return self.execute_sql(*qc.create_sequence(seq))
 
-    def drop_table(self, model_class, fail_silently=False):
+    def drop_table(self, model_class, fail_silently=False, cascade=False):
         qc = self.compiler()
-        return self.execute_sql(*qc.drop_table(model_class, fail_silently))
+        return self.execute_sql(*qc.drop_table(
+            model_class, fail_silently, cascade))
 
     def drop_sequence(self, seq):
         if self.sequences:
@@ -2797,8 +2798,8 @@ class Model(with_metaclass(BaseModel)):
                 db.create_index(cls, fields, unique)
 
     @classmethod
-    def drop_table(cls, fail_silently=False):
-        cls._meta.database.drop_table(cls, fail_silently)
+    def drop_table(cls, fail_silently=False, cascade=False):
+        cls._meta.database.drop_table(cls, fail_silently, cascade)
 
     @classmethod
     def _as_entity(cls):
