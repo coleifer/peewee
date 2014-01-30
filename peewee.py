@@ -21,6 +21,8 @@ from copy import deepcopy
 from functools import wraps
 from inspect import isclass
 
+VERSION = '2.2.0'
+
 __all__ = [
     'BareField',
     'BigIntegerField',
