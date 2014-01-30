@@ -240,16 +240,13 @@ Models
             database.connect()
             SomeModel.create_table()  # Execute the create table query.
 
-    .. py:classmethod:: drop_table([fail_silently=False])
+    .. py:classmethod:: drop_table([fail_silently=False[, cascade=False]])
 
         :param bool fail_silently: If set to ``True``, the query will check for
           the existence of the table before attempting to remove.
+        :param bool cascade: Drop table with ``CASCADE`` option.
 
         Drop the table for the given model.
-
-        .. note::
-            Cascading deletes are not handled by this method, nor is the
-            removal of any constraints.
 
     .. py:classmethod:: table_exists()
 
@@ -1494,15 +1491,11 @@ Database and its subclasses
 
         .. note:: only works with database engines that support sequences
 
-    .. py:method:: drop_table(model_class[, fail_silently=False])
+    .. py:method:: drop_table(model_class[, fail_silently=False[, cascade=False]])
 
         :param model_class: :py:class:`Model` table to drop
-        :param fail_silently: if ``True``, query will add a ``IF EXISTS`` clause
-
-        .. note::
-            Cascading drop tables are not supported at this time, so if a constraint
-            exists that prevents a table being dropped, you will need to handle
-            that in application logic.
+        :param bool fail_silently: if ``True``, query will add a ``IF EXISTS`` clause
+        :param bool cascade: drop table with ``CASCADE`` option.
 
     .. py:method:: drop_sequence(sequence_name)
 
