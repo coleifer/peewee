@@ -1732,9 +1732,7 @@ class SelectQuery(Query):
     def __init__(self, model_class, *selection):
         super(SelectQuery, self).__init__(model_class)
         self.require_commit = self.database.commit_select
-        self._explicit_selection = len(selection) > 0
-        selection = selection or model_class._meta.get_fields()
-        self._select = self._model_shorthand(selection)
+        self.__select(*selection)
         self._from = None
         self._group_by = None
         self._having = None
@@ -1789,9 +1787,17 @@ class SelectQuery(Query):
                 accum.extend(arg._meta.get_fields())
         return accum
 
+    def __select(self, *selection):
+        self._explicit_selection = len(selection) > 0
+        selection = selection or self.model_class._meta.get_fields()
+        self._select = self._model_shorthand(selection)
+    select = returns_clone(__select)
+
     @returns_clone
     def from_(self, *args):
-        self._from = list(args)
+        self._from = None
+        if args:
+            self._from = list(args)
 
     @returns_clone
     def group_by(self, *args):
