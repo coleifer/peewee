@@ -336,15 +336,13 @@ Fields
     :param choices: an iterable of 2-tuples mapping ``value`` to ``display``
     :param bool primary_key: whether to use this as the primary key for the table
     :param string sequence: name of sequence (if backend supports it)
+    :param list constraints: a list of constraints, e.g. ``[Check('price > 0')]``.
+    :param string schema: name of schema (if backend supports it)
     :param kwargs: named attributes containing values that may pertain to specific field subclasses, such as "max_length" or "decimal_places"
 
     .. py:attribute:: db_field = '<some field type>'
 
         Attribute used to map this field to a column type, e.g. "string" or "datetime"
-
-    .. py:attribute:: template = '%(column_type)s'
-
-        A template for generating the SQL for this field
 
     .. py:attribute:: _is_bound
 
@@ -375,13 +373,6 @@ Fields
 
         :param value: arbitrary data from app or backend
         :rtype: python data type
-
-    .. py:method:: field_attributes()
-
-        This method is responsible for return a dictionary containing the default
-        field attributes for the column, e.g. ``{'max_length': 255}``
-
-        :rtype: a python dictionary
 
     .. py:method:: between(low, high)
 
@@ -586,14 +577,15 @@ Fields
 
     .. py:attribute:: db_field = 'bool'
 
-.. py:class:: ForeignKeyField(rel_model[, related_name=None[, cascade=False[, ...]]])
+.. py:class:: ForeignKeyField(rel_model[, related_name=None[, on_delete=None[, on_update=None[, ...]]]])
 
     Stores: relationship to another model
 
     :param rel_model: related :py:class:`Model` class or the string 'self' if declaring
                a self-referential foreign key
     :param string related_name: attribute to expose on related model
-    :param bool cascade: set up foreign key to do cascading deletes
+    :param string on_delete: on delete behavior, e.g. ``on_delete='CASCADE'``.
+    :param string on_update: on update behavior.
 
     .. code-block:: python
 

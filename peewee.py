@@ -521,10 +521,6 @@ class Field(Node):
         field_type = self.get_db_field()
         return self.get_database().compiler().get_column_type(field_type)
 
-    def field_attributes(self):
-        """Arbitrary default attributes, e.g. "max_length" or "precision"."""
-        return {}
-
     def get_db_field(self):
         return self.db_field
 
