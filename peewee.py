@@ -68,6 +68,16 @@ __all__ = [
     'TimeField',
 ]
 
+"""
+queries to support?
+
+- create index myidx on table (some_col COLLATE NOCASE ASC) where foo > 3
+- create temporary table (...)
+- create table <tblname> as select ...
+- create (temp) view as select...
+- union / intersect / except
+"""
+
 # All peewee-generated logs are logged to this namespace.
 logger = logging.getLogger('peewee')
 
@@ -400,14 +410,13 @@ class Clause(Node):
         clone.parens = self.parens
         return clone
 
-class EnclosedClause(Clause):
-    """One or more Node objects joined by commas and enclosed in parens."""
-    glue = ', '
-    parens = True
-
 class CommaClause(Clause):
     """One or more Node objects joined by commas, no parens."""
     glue = ', '
+
+class EnclosedClause(CommaClause):
+    """One or more Node objects joined by commas and enclosed in parens."""
+    parens = True
 
 class Entity(Node):
     """A quoted-name or entity, e.g. "table"."column"."""
@@ -1050,8 +1059,9 @@ class QueryCompiler(object):
             clone = node.clone()
             if not node._explicit_selection:
                 clone._select = (clone.model_class._meta.primary_key,)
-            sub, params = self.generate_select(clone, max_alias, alias_copy)
-            sql = '(%s)' % sub
+            sql, params = self.generate_select(clone, max_alias, alias_copy)
+            if node._parens:
+                sql = '(%s)' % sql
         elif isinstance(node, (list, tuple)):
             # If you're wondering how to pass a list into your query, simply
             # wrap it in Param().
@@ -1157,15 +1167,18 @@ class QueryCompiler(object):
         alias_map = alias_map or {}
         alias_map.update(self.calculate_alias_map(query, start))
 
-        stmt = 'SELECT DISTINCT' if query._distinct else 'SELECT'
-        select_clause = Clause(*query._select)
-        select_clause.glue = ', '
-
-        clauses = [SQL(stmt), select_clause, SQL('FROM')]
-        if query._from is None:
-            clauses.append(model._as_entity().alias(alias_map[model]))
+        if isinstance(query, CompoundSelect):
+            clauses = [query.lhs, SQL(query.operator), query.rhs]
         else:
-            clauses.append(CommaClause(*query._from))
+            stmt = 'SELECT DISTINCT' if query._distinct else 'SELECT'
+            select_clause = Clause(*query._select)
+            select_clause.glue = ', '
+
+            clauses = [SQL(stmt), select_clause, SQL('FROM')]
+            if query._from is None:
+                clauses.append(model._as_entity().alias(alias_map[model]))
+            else:
+                clauses.append(CommaClause(*query._from))
 
         join_clauses = self.generate_joins(query._joins, model, alias_map)
         if join_clauses:
@@ -1748,6 +1761,7 @@ class SelectQuery(Query):
         self._dicts = False
         self._alias = None
         self._qr = None
+        self._parens = True
 
     def _clone_attributes(self, query):
         query = super(SelectQuery, self)._clone_attributes(query)
@@ -1774,6 +1788,7 @@ class SelectQuery(Query):
         query._tuples = self._tuples
         query._dicts = self._dicts
         query._alias = self._alias
+        query._parens = self._parens
         return query
 
     def _model_shorthand(self, args):
@@ -1788,6 +1803,20 @@ class SelectQuery(Query):
             elif isclass(arg) and issubclass(arg, Model):
                 accum.extend(arg._meta.get_fields())
         return accum
+
+    def compound_op(operator):
+        def inner(self, other):
+            lhs = self._use_parens(isinstance(self, CompoundSelect))
+            rhs = other._use_parens(isinstance(self, CompoundSelect))
+            return CompoundSelect(self.model_class, lhs, operator, rhs)
+        return inner
+    __or__ = compound_op('UNION')
+    __and__ = compound_op('INTERSECT')
+    __sub__ = compound_op('EXCEPT')
+
+    def __xor__(self, rhs):
+        # Symmetric difference.
+        return (self | rhs) - (self & rhs)
 
     @returns_clone
     def from_(self, *args):
@@ -1843,6 +1872,10 @@ class SelectQuery(Query):
     @returns_clone
     def alias(self, alias=None):
         self._alias = alias
+
+    @returns_clone
+    def _use_parens(self, parens=True):
+        self._parens = parens
 
     def annotate(self, rel_model, annotation=None):
         if annotation is None:
@@ -1948,6 +1981,21 @@ class SelectQuery(Query):
             index += 1
         res.fill_cache(index)
         return res._result_cache[value]
+
+class CompoundSelect(SelectQuery):
+    def __init__(self, model_class, lhs=None, operator=None, rhs=None):
+        self.lhs = lhs
+        self.operator = operator
+        self.rhs = rhs
+        super(CompoundSelect, self).__init__(model_class, [])
+
+    def _clone_attributes(self, query):
+        query = super(CompoundSelect, self)._clone_attributes(query)
+        query.lhs = self.lhs
+        query.operator = self.operator
+        query.rhs = self.rhs
+        return query
+
 
 class UpdateQuery(Query):
     def __init__(self, model_class, update=None):
