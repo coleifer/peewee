@@ -3727,3 +3727,22 @@ if test_db.foreign_keys:
 
 elif TEST_VERBOSITY > 0:
     print_('Skipping "foreign key" tests')
+
+if test_db.drop_cascade:
+    class DropCascadeTestCase(ModelTestCase):
+        requires = [User, Blog]
+
+        def test_drop_cascade(self):
+            u1 = User.create(username='u1')
+            b1 = Blog.create(user=u1, title='b1')
+
+            User.drop_table(cascade=True)
+            self.assertFalse(User.table_exists())
+
+            # The constraint is dropped, we can create a blog for a non-
+            # existant user.
+            Blog.create(user=-1, title='b2')
+
+
+elif TEST_VERBOSITY > 0:
+    print_('Skipping "drop/cascade" tests')

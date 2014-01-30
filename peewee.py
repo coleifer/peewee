@@ -2036,6 +2036,7 @@ class ExceptionWrapper(object):
 class Database(object):
     commit_select = False
     compiler_class = QueryCompiler
+    drop_cascade = True
     field_overrides = {}
     foreign_keys = True
     for_update = False
@@ -2249,6 +2250,7 @@ class Database(object):
         return fn.EXTRACT(Clause(date_part, R('FROM'), date_field))
 
 class SqliteDatabase(Database):
+    drop_cascade = False
     foreign_keys = False
     limit_max = -1
     op_overrides = {
