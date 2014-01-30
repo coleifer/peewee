@@ -326,6 +326,8 @@ Parameters accepted by all field types and their default values:
 * ``choices = None`` -- an optional iterable containing 2-tuples of ``value``, ``display``
 * ``primary_key = False`` -- whether this field is the primary key for the table
 * ``sequence = None`` -- sequence to populate field (if backend supports it)
+* ``constraints = None`` - a list of one or more constraints, e.g. ``[Check('price > 0')]``
+* ``schema = None`` -- optional name of the schema to use, if your db supports this.
 
 
 Field types table
@@ -368,7 +370,7 @@ Some fields take special parameters...
 |                               | ``auto_round``, ``rounding``                 |
 +-------------------------------+----------------------------------------------+
 | :py:class:`ForeignKeyField`   | ``rel_model``, ``related_name``,             |
-|                               | ``cascade``, ``extra``                       |
+|                               | ``on_delete``, ``on_update``, ``extra``      |
 +-------------------------------+----------------------------------------------+
 
 
@@ -379,6 +381,8 @@ Both ``default`` and ``choices`` could be implemented at the database level as
 ``DEFAULT`` and ``CHECK CONSTRAINT`` respectively, but any application change would
 require a schema change.  Because of this, ``default`` is implemented purely in
 python and ``choices`` are not validated but exist for metadata purposes only.
+
+To add database (server-side) constraints, use the ``constraints`` parameter.
 
 
 Self-referential Foreign Keys
