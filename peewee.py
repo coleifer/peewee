@@ -1053,15 +1053,20 @@ class QueryCompiler(object):
         elif isinstance(node, SQL):
             sql = node.value
             params = list(node.params)
+        elif isinstance(node, CompoundSelect):
+            alias_copy = alias_map and alias_map.copy() or None
+            l, lp = self.generate_select(node.lhs, alias_map=alias_copy)
+            r, rp = self.generate_select(node.rhs, alias_map=alias_copy)
+            sql = '%s %s %s' % (l, node.operator, r)
+            params = lp + rp
         elif isinstance(node, SelectQuery):
             max_alias = self._max_alias(alias_map)
             alias_copy = alias_map and alias_map.copy() or None
             clone = node.clone()
             if not node._explicit_selection:
                 clone._select = (clone.model_class._meta.primary_key,)
-            sql, params = self.generate_select(clone, max_alias, alias_copy)
-            if node._parens:
-                sql = '(%s)' % sql
+            sub, params = self.generate_select(clone, max_alias, alias_copy)
+            sql = '(%s)' % sub
         elif isinstance(node, (list, tuple)):
             # If you're wondering how to pass a list into your query, simply
             # wrap it in Param().
@@ -1168,7 +1173,7 @@ class QueryCompiler(object):
         alias_map.update(self.calculate_alias_map(query, start))
 
         if isinstance(query, CompoundSelect):
-            clauses = [query.lhs, SQL(query.operator), query.rhs]
+            clauses = [query]
         else:
             stmt = 'SELECT DISTINCT' if query._distinct else 'SELECT'
             select_clause = Clause(*query._select)
@@ -1759,7 +1764,6 @@ class SelectQuery(Query):
         self._dicts = False
         self._alias = None
         self._qr = None
-        self._parens = True
 
     def _clone_attributes(self, query):
         query = super(SelectQuery, self)._clone_attributes(query)
@@ -1786,7 +1790,6 @@ class SelectQuery(Query):
         query._tuples = self._tuples
         query._dicts = self._dicts
         query._alias = self._alias
-        query._parens = self._parens
         return query
 
     def _model_shorthand(self, args):
@@ -1804,9 +1807,7 @@ class SelectQuery(Query):
 
     def compound_op(operator):
         def inner(self, other):
-            lhs = self._use_parens(isinstance(self, CompoundSelect))
-            rhs = other._use_parens(isinstance(self, CompoundSelect))
-            return CompoundSelect(self.model_class, lhs, operator, rhs)
+            return CompoundSelect(self.model_class, self, operator, other)
         return inner
     __or__ = compound_op('UNION')
     __and__ = compound_op('INTERSECT')
@@ -1814,7 +1815,9 @@ class SelectQuery(Query):
 
     def __xor__(self, rhs):
         # Symmetric difference.
-        return (self | rhs) - (self & rhs)
+        wrapped_rhs = self.model_class.select(SQL('*')).from_(self & rhs)
+        # should just be (self | rhs) - (self & rhs)
+        return (self | rhs) - wrapped_rhs
 
     def __select(self, *selection):
         self._explicit_selection = len(selection) > 0
@@ -1878,10 +1881,6 @@ class SelectQuery(Query):
     @returns_clone
     def alias(self, alias=None):
         self._alias = alias
-
-    @returns_clone
-    def _use_parens(self, parens=True):
-        self._parens = parens
 
     def annotate(self, rel_model, annotation=None):
         if annotation is None:
@@ -2001,6 +2000,17 @@ class CompoundSelect(SelectQuery):
         query.operator = self.operator
         query.rhs = self.rhs
         return query
+
+    def execute(self):
+        if self._dirty or not self._qr:
+            model_class = self.model_class
+            query_meta = [self.lhs._select, None]
+            self._qr = TuplesQueryResultWrapper(
+                model_class, self._execute(), query_meta)
+            self._dirty = False
+            return self._qr
+        else:
+            return self._qr
 
 
 class UpdateQuery(Query):
