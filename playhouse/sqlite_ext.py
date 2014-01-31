@@ -36,7 +36,6 @@ import sqlite3
 import struct
 
 from peewee import *
-from peewee import Entity
 from peewee import Expression
 from peewee import QueryCompiler
 from peewee import transaction
@@ -73,9 +72,9 @@ class SqliteQueryCompiler(QueryCompiler):
             columns_constraints = clause.nodes[-1]
             for k, v in options.items():
                 if isinstance(v, Field):
-                    value = Entity(v.model_class._meta.db_table, v.db_column)
+                    value = v._as_entity(with_table=True)
                 elif inspect.isclass(v) and issubclass(v, Model):
-                    value = Entity(v._meta.db_table)
+                    value = v._as_entity()
                 else:
                     value = SQL(v)
                 option = Clause(SQL(k), value)
@@ -133,7 +132,7 @@ class FTSModel(VirtualModel):
     def match(cls, search):
         return (cls
                 .select(cls, cls.rank().alias('score'))
-                .where(match(Entity(cls._meta.db_table), search))
+                .where(match(cls._as_entity(), search))
                 .order_by(SQL('score').desc()))
 
     @classmethod

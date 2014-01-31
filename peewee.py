@@ -21,12 +21,14 @@ from copy import deepcopy
 from functools import wraps
 from inspect import isclass
 
+__version__ = '2.2.0'
 __all__ = [
     'BareField',
     'BigIntegerField',
     'BlobField',
     'BooleanField',
     'CharField',
+    'Check',
     'Clause',
     'CompositeKey',
     'DatabaseError',
@@ -320,14 +322,15 @@ class Node(object):
 
 class Expression(Node):
     """A binary expression, e.g `foo + 1` or `bar < 7`."""
-    def __init__(self, lhs, op, rhs):
+    def __init__(self, lhs, op, rhs, flat=False):
         super(Expression, self).__init__()
         self.lhs = lhs
         self.op = op
         self.rhs = rhs
+        self.flat = flat
 
     def clone_base(self):
-        return Expression(self.lhs, self.op, self.rhs)
+        return Expression(self.lhs, self.op, self.rhs, self.flat)
 
 class DQ(Node):
     """A "django-style" filter expression, e.g. {'foo__eq': 'x'}."""
@@ -344,12 +347,13 @@ class Param(Node):
     specifically treat this value as a parameter, useful for `list` which is
     special-cased for `IN` lookups.
     """
-    def __init__(self, value):
+    def __init__(self, value, conv=None):
         self.value = value
+        self.conv = conv
         super(Param, self).__init__()
 
     def clone_base(self):
-        return Param(self.value)
+        return Param(self.value, self.conv)
 
 class SQL(Node):
     """An unescaped SQL string, with optional parameters."""
@@ -384,16 +388,25 @@ fn = Func(None)
 class Clause(Node):
     """A SQL clause, one or more Node objects joined by spaces."""
     glue = ' '
+    parens = False
 
     def __init__(self, *nodes):
         super(Clause, self).__init__()
         self.nodes = list(nodes)
 
     def clone_base(self):
-        return Clause(*self.nodes)
+        clone = Clause(*self.nodes)
+        clone.glue = self.glue
+        clone.parens = self.parens
+        return clone
 
-class ClauseList(Clause):
+class EnclosedClause(Clause):
     """One or more Node objects joined by commas and enclosed in parens."""
+    glue = ', '
+    parens = True
+
+class CommaClause(Clause):
+    """One or more Node objects joined by commas, no parens."""
     glue = ', '
 
 class Entity(Node):
@@ -413,7 +426,7 @@ class Check(SQL):
     def __init__(self, value):
         super(Check, self).__init__('CHECK (%s)' % value)
 
-Join = namedtuple('Join', ('model_class', 'join_type', 'on'))
+Join = namedtuple('Join', ('dest', 'join_type', 'on'))
 
 class FieldDescriptor(object):
     # Fields are exposed as descriptors in order to control access to the
@@ -440,7 +453,7 @@ class Field(Node):
     def __init__(self, null=False, index=False, unique=False,
                  verbose_name=None, help_text=None, db_column=None,
                  default=None, choices=None, primary_key=False, sequence=None,
-                 constraints=None):
+                 constraints=None, schema=None):
         self.null = null
         self.index = index
         self.unique = unique
@@ -452,11 +465,13 @@ class Field(Node):
         self.primary_key = primary_key
         self.sequence = sequence  # Name of sequence, e.g. foo_id_seq.
         self.constraints = constraints  # List of column constraints.
+        self.schema = schema  # Name of schema, e.g. 'public'.
 
         # Used internally for recovering the order in which Fields were defined
         # on the Model class.
         Field._field_counter += 1
         self._order = Field._field_counter
+        self._sort_key = (self.primary_key and 1 or 2), self._order
 
         self._is_bound = False  # Whether the Field is "bound" to a Model.
         super(Field, self).__init__()
@@ -474,6 +489,7 @@ class Field(Node):
             primary_key=self.primary_key,
             sequence=self.sequence,
             constraints=self.constraints,
+            schema=self.schema,
             **kwargs)
         if self._is_bound:
             inst.name = self.name
@@ -505,10 +521,6 @@ class Field(Node):
         field_type = self.get_db_field()
         return self.get_database().compiler().get_column_type(field_type)
 
-    def field_attributes(self):
-        """Arbitrary default attributes, e.g. "max_length" or "precision"."""
-        return {}
-
     def get_db_field(self):
         return self.db_field
 
@@ -526,6 +538,11 @@ class Field(Node):
         """Convert the database value to a pythonic value."""
         return value if value is None else self.coerce(value)
 
+    def _as_entity(self, with_table=False):
+        if with_table:
+            return Entity(self.model_class._meta.db_table, self.db_column)
+        return Entity(self.db_column)
+
     def __ddl_column__(self, column_type):
         """Return the column type, e.g. VARCHAR(255) or REAL."""
         modifiers = self.get_modifiers()
@@ -536,7 +553,7 @@ class Field(Node):
 
     def __ddl__(self, column_type):
         """Return a list of Node instances that defines the column."""
-        ddl = [Entity(self.db_column), self.__ddl_column__(column_type)]
+        ddl = [self._as_entity(), self.__ddl_column__(column_type)]
         if not self.null:
             ddl.append(SQL('NOT NULL'))
         if self.primary_key:
@@ -898,6 +915,12 @@ class CompositeKey(object):
     def __set__(self, instance, value):
         pass
 
+"""
+TODO:
+
+Join and .join() are very model-centric, but *should* be able to accept an
+arbitrary single-source (table or select).
+"""
 
 class QueryCompiler(object):
     # Mapping of `db_type` to actual column type used by database driver.
@@ -960,13 +983,16 @@ class QueryCompiler(object):
         self._op_map = merge_dict(self.op_map, op_overrides or {})
 
     def quote(self, s):
-        return s.join((self.quote_char, self.quote_char))
+        return '%s%s%s' % (self.quote_char, s, self.quote_char)
 
     def get_column_type(self, f):
         return self._field_map[f]
 
     def get_op(self, q):
         return self._op_map[q]
+
+    def _sorted_fields(self, field_dict):
+        return sorted(field_dict.items(), key=lambda i: i[0]._sort_key)
 
     def _max_alias(self, alias_map):
         max_alias = 0
@@ -993,7 +1019,8 @@ class QueryCompiler(object):
                 conv = node.lhs
             lhs, lparams = self.parse_node(node.lhs, alias_map, conv)
             rhs, rparams = self.parse_node(node.rhs, alias_map, conv)
-            sql = '(%s %s %s)' % (lhs, self.get_op(node.op), rhs)
+            template = '%s %s %s' if node.flat else '(%s %s %s)'
+            sql = template % (lhs, self.get_op(node.op), rhs)
             params = lparams + rparams
         elif isinstance(node, Field):
             sql = self.quote(node.db_column)
@@ -1006,10 +1033,13 @@ class QueryCompiler(object):
         elif isinstance(node, Clause):
             sql, params = self.parse_node_list(
                 node.nodes, alias_map, conv, node.glue)
-            if isinstance(node, ClauseList):
+            if node.parens:
                 sql = '(%s)' % sql
         elif isinstance(node, Param):
-            params = [node.value]
+            if node.conv:
+                params = [node.conv(node.value)]
+            else:
+                params = [node.value]
             unknown = True
         elif isinstance(node, SQL):
             sql = node.value
@@ -1035,7 +1065,7 @@ class QueryCompiler(object):
             params = [node.get_id()]
         elif isclass(node) and issubclass(node, Model):
             self._ensure_alias_set(node, alias_map)
-            entity = Entity(node._meta.db_table).alias(alias_map[node])
+            entity = node._as_entity().alias(alias_map[node])
             sql, params = self.parse_node(entity, alias_map, conv)
         else:
             unknown = True
@@ -1064,45 +1094,24 @@ class QueryCompiler(object):
             params.extend(node_params)
         return glue.join(sql), params
 
-    def parse_field_dict(self, d):
-        sets, params = [], []
-        for field, value in d.items():
-            field_sql, _ = self.parse_node(field)
-            # Because we don't know whether to call db_value or parse_node
-            # first, we'd prefer to call parse_node since its more general, but
-            # it does special things with lists -- it treats them as if it were
-            # buliding up an IN query. For some things we don't want that, so
-            # here, if the node is *not* a special object, we'll pass thru
-            # parse_node and let db_value handle it.
-            if not isinstance(value, (Node, Model, Query)):
-                value = Param(value)  # passthru to the field's db_value func
-            val_sql, val_params = self.parse_node(value)
-            val_params = [field.db_value(vp) for vp in val_params]
-            sets.append((field_sql, val_sql))
-            params.extend(val_params)
-        return sets, params
-
-    def parse_query_node(self, node, alias_map):
-        if node is not None:
-            return self.parse_node(node, alias_map)
-        return '', []
-
     def calculate_alias_map(self, query, start=1):
         make_alias = lambda model: model._meta.table_alias or 't%s' % start
         alias_map = {query.model_class: make_alias(query.model_class)}
-        for model, joins in query._joins.items():
-            if model not in alias_map:
+        for dest, joins in query._joins.items():
+            if dest not in alias_map:
                 start += 1
-                alias_map[model] = make_alias(model)
+                alias_map[dest] = make_alias(dest)
             for join in joins:
-                if join.model_class not in alias_map:
+                if join.dest not in alias_map:
                     start += 1
-                    alias_map[join.model_class] = make_alias(join.model_class)
+                    alias_map[join.dest] = make_alias(join.dest)
         return alias_map
 
+    def build_query(self, clauses, alias_map=None):
+        return self.parse_node(Clause(*clauses), alias_map)
+
     def generate_joins(self, joins, model_class, alias_map):
-        sql = []
-        params = []
+        clauses = []
         seen = set()
         q = [model_class]
         while q:
@@ -1112,10 +1121,10 @@ class QueryCompiler(object):
             seen.add(curr)
             for join in joins[curr]:
                 src = curr
-                dest = join.model_class
+                dest = join.dest
                 if isinstance(join.on, Expression):
                     # Clear any alias on the join expression.
-                    join_node = join.on.clone().alias()
+                    constraint = join.on.clone().alias()
                 else:
                     field = src._meta.rel_for_model(dest, join.on)
                     if field:
@@ -1125,20 +1134,21 @@ class QueryCompiler(object):
                         field = dest._meta.rel_for_model(src, join.on)
                         left_field = src._meta.primary_key
                         right_field = field
-                    join_node = (left_field == right_field)
+                    constraint = (left_field == right_field)
 
-                join_type = join.join_type or JOIN_INNER
-                join_sql, join_params = self.parse_node(join_node, alias_map)
+                if isinstance(dest, Node):
+                    # TODO: ensure alias?
+                    dest_n = dest
+                else:
+                    q.append(dest)
+                    dest_n = dest._as_entity().alias(alias_map[dest])
 
-                sql.append('%s JOIN %s AS %s ON %s' % (
-                    self.join_map[join_type],
-                    self.quote(dest._meta.db_table),
-                    alias_map[dest],
-                    join_sql))
-                params.extend(join_params)
+                join_type = self.join_map[join.join_type or JOIN_INNER]
+                join_stmt = SQL('%s JOIN' % (join_type))
+                clauses.append(
+                    Clause(join_stmt, dest_n, SQL('ON'), constraint))
 
-                q.append(dest)
-        return sql, params
+        return clauses
 
     def generate_select(self, query, start=1, alias_map=None):
         model = query.model_class
@@ -1147,101 +1157,88 @@ class QueryCompiler(object):
         alias_map = alias_map or {}
         alias_map.update(self.calculate_alias_map(query, start))
 
-        parts = ['SELECT']
-        params = []
+        stmt = 'SELECT DISTINCT' if query._distinct else 'SELECT'
+        select_clause = Clause(*query._select)
+        select_clause.glue = ', '
 
-        if query._distinct:
-            parts.append('DISTINCT')
-
-        select, s_params = self.parse_node_list(query._select, alias_map)
-        parts.append(select)
-        params.extend(s_params)
-
+        clauses = [SQL(stmt), select_clause, SQL('FROM')]
         if query._from is None:
-            from_clause = [
-                Entity(model._meta.db_table).alias(alias_map[model])]
+            clauses.append(model._as_entity().alias(alias_map[model]))
         else:
-            from_clause = query._from
-        from_sql, f_params = self.parse_node_list(from_clause, alias_map)
-        parts.append('FROM %s' % from_sql)
-        params.extend(f_params)
+            clauses.append(CommaClause(*query._from))
 
-        joins, j_params = self.generate_joins(query._joins, model, alias_map)
-        if joins:
-            parts.append(' '.join(joins))
-            params.extend(j_params)
+        join_clauses = self.generate_joins(query._joins, model, alias_map)
+        if join_clauses:
+            clauses.extend(join_clauses)
 
-        where, w_params = self.parse_query_node(query._where, alias_map)
-        if where:
-            parts.append('WHERE %s' % where)
-            params.extend(w_params)
+        if query._where is not None:
+            clauses.extend([SQL('WHERE'), query._where])
 
         if query._group_by:
-            group, g_params = self.parse_node_list(query._group_by, alias_map)
-            parts.append('GROUP BY %s' % group)
-            params.extend(g_params)
+            clauses.extend([SQL('GROUP BY'), CommaClause(*query._group_by)])
 
         if query._having:
-            having, h_params = self.parse_query_node(query._having, alias_map)
-            parts.append('HAVING %s' % having)
-            params.extend(h_params)
+            clauses.extend([SQL('HAVING'), query._having])
 
         if query._order_by:
-            order, o_params = self.parse_node_list(query._order_by, alias_map)
-            parts.append('ORDER BY %s' % order)
-            params.extend(o_params)
+            clauses.extend([SQL('ORDER BY'), CommaClause(*query._order_by)])
 
         if query._limit or (query._offset and db.limit_max):
             limit = query._limit or db.limit_max
-            parts.append('LIMIT %s' % limit)
+            clauses.append(SQL('LIMIT %s' % limit))
         if query._offset:
-            parts.append('OFFSET %s' % query._offset)
+            clauses.append(SQL('OFFSET %s' % query._offset))
+
         for_update, no_wait = query._for_update
         if for_update:
-            parts.append('FOR UPDATE')
-            if no_wait:
-                parts.append('NOWAIT')
+            stmt = 'FOR UPDATE NOWAIT' if no_wait else 'FOR UPDATE'
+            clauses.append(SQL(stmt))
 
-        return ' '.join(parts), params
+        return self.build_query(clauses, alias_map)
 
     def generate_update(self, query):
         model = query.model_class
+        clauses = [SQL('UPDATE'), model._as_entity(), SQL('SET')]
 
-        parts = ['UPDATE %s SET' % self.quote(model._meta.db_table)]
-        sets, params = self.parse_field_dict(query._update)
+        update = []
+        for field, value in self._sorted_fields(query._update):
+            if not isinstance(value, (Node, Model)):
+                value = Param(value)
+            update.append(Expression(field, OP_EQ, value, flat=True))
+        clauses.append(CommaClause(*update))
 
-        parts.append(', '.join('%s=%s' % (f, v) for f, v in sets))
+        if query._where:
+            clauses.extend([SQL('WHERE'), query._where])
 
-        where, w_params = self.parse_query_node(query._where, None)
-        if where:
-            parts.append('WHERE %s' % where)
-            params.extend(w_params)
-        return ' '.join(parts), params
+        return self.build_query(clauses)
 
     def generate_insert(self, query):
         model = query.model_class
+        statement = query._upsert and 'INSERT OR REPLACE INTO' or 'INSERT INTO'
+        clauses = [SQL(statement), model._as_entity()]
 
-        parts = ['INSERT INTO %s' % self.quote(model._meta.db_table)]
-        sets, params = self.parse_field_dict(query._insert)
+        if query._insert:
+            fields = []
+            values = []
+            for field, value in self._sorted_fields(query._insert):
+                if not isinstance(value, (Node, Model)):
+                    value = Param(value, conv=field.db_value)
+                fields.append(field)
+                values.append(value)
 
-        if sets:
-            parts.append('(%s)' % ', '.join(s[0] for s in sets))
-            parts.append('VALUES (%s)' % ', '.join(s[1] for s in sets))
+            clauses.extend([
+                EnclosedClause(*fields),
+                SQL('VALUES'),
+                EnclosedClause(*values)])
 
-        return ' '.join(parts), params
+        return self.build_query(clauses)
 
     def generate_delete(self, query):
         model = query.model_class
-
-        parts = ['DELETE FROM %s' % self.quote(model._meta.db_table)]
-        params = []
-
-        where, w_params = self.parse_query_node(query._where, None)
-        if where:
-            parts.append('WHERE %s' % where)
-            params.extend(w_params)
-
-        return ' '.join(parts), params
+        clauses = [SQL('DELETE FROM'), model._as_entity()]
+        if query._where:
+            clauses.extend([SQL('WHERE'), query._where])
+        return self.build_query(clauses)
 
     def field_definition(self, field):
         column_type = self.get_column_type(field.get_db_field())
@@ -1251,10 +1248,10 @@ class QueryCompiler(object):
     def foreign_key_constraint(self, field):
         ddl = [
             SQL('FOREIGN KEY'),
-            ClauseList(Entity(field.db_column)),
+            EnclosedClause(field._as_entity()),
             SQL('REFERENCES'),
-            Entity(field.rel_model._meta.db_table),
-            ClauseList(Entity(field.rel_model._meta.primary_key.db_column))]
+            field.rel_model._as_entity(),
+            EnclosedClause(field.rel_model._meta.primary_key._as_entity())]
         if field.on_delete:
             ddl.append(SQL('ON DELETE %s' % field.on_delete))
         if field.on_update:
@@ -1277,7 +1274,7 @@ class QueryCompiler(object):
         fk_clause = self.foreign_key_constraint(field)
         return Clause(
             SQL('ALTER TABLE'),
-            Entity(model_class._meta.db_table),
+            model_class._as_entity(),
             SQL('ADD CONSTRAINT'),
             Entity(constraint),
             *fk_clause.nodes)
@@ -1289,10 +1286,10 @@ class QueryCompiler(object):
 
         columns, constraints = [], []
         if isinstance(meta.primary_key, CompositeKey):
-            pk_cols = [Entity(meta.fields[f].db_column)
+            pk_cols = [meta.fields[f]._as_entity()
                        for f in meta.primary_key.field_names]
             constraints.append(Clause(
-                SQL('PRIMARY KEY'), ClauseList(*pk_cols)))
+                SQL('PRIMARY KEY'), EnclosedClause(*pk_cols)))
         for field in meta.get_fields():
             columns.append(self.field_definition(field))
             if isinstance(field, ForeignKeyField) and not field.deferred:
@@ -1300,13 +1297,13 @@ class QueryCompiler(object):
 
         return Clause(
             SQL(statement),
-            Entity(meta.db_table),
-            ClauseList(*(columns + constraints)))
+            model_class._as_entity(),
+            EnclosedClause(*(columns + constraints)))
     create_table = return_parsed_node('_create_table')
 
     def _drop_table(self, model_class, fail_silently=False, cascade=False):
         statement = 'DROP TABLE IF EXISTS' if fail_silently else 'DROP TABLE'
-        ddl = [SQL(statement), Entity(model_class._meta.db_table)]
+        ddl = [SQL(statement), model_class._as_entity()]
         if cascade:
             ddl.append(SQL('CASCADE'))
         return Clause(*ddl)
@@ -1321,7 +1318,7 @@ class QueryCompiler(object):
             Entity(index),
             SQL('ON'),
             Entity(tbl_name),
-            ClauseList(*[Entity(field.db_column) for field in fields]),
+            EnclosedClause(*[field._as_entity() for field in fields]),
             *extra)
     create_index = return_parsed_node('_create_index')
 
@@ -1478,7 +1475,7 @@ class ModelQueryResultWrapper(QueryResultWrapper):
                 continue
 
             for join in joins[current]:
-                join_model = join.model_class
+                join_model = join.dest
                 if join_model in models:
                     fk_field = current._meta.rel_for_model(join_model)
                     if not fk_field:
@@ -1596,7 +1593,7 @@ class Query(Node):
     def ensure_join(self, lm, rm, on=None):
         ctx = self._query_ctx
         for join in self._joins.get(lm, []):
-            if join.model_class == rm:
+            if join.dest == rm:
                 return self
         query = self.switch(lm).join(rm, on=on).switch(ctx)
         return query
@@ -1735,9 +1732,7 @@ class SelectQuery(Query):
     def __init__(self, model_class, *selection):
         super(SelectQuery, self).__init__(model_class)
         self.require_commit = self.database.commit_select
-        self._explicit_selection = len(selection) > 0
-        selection = selection or model_class._meta.get_fields()
-        self._select = self._model_shorthand(selection)
+        self.__select(*selection)
         self._from = None
         self._group_by = None
         self._having = None
@@ -1792,9 +1787,17 @@ class SelectQuery(Query):
                 accum.extend(arg._meta.get_fields())
         return accum
 
+    def __select(self, *selection):
+        self._explicit_selection = len(selection) > 0
+        selection = selection or self.model_class._meta.get_fields()
+        self._select = self._model_shorthand(selection)
+    select = returns_clone(__select)
+
     @returns_clone
     def from_(self, *args):
-        self._from = list(args)
+        self._from = None
+        if args:
+            self._from = list(args)
 
     @returns_clone
     def group_by(self, *args):
@@ -1975,8 +1978,10 @@ class InsertQuery(Query):
         mm = model_class._meta
         defaults = mm.get_default_dict()
         query = dict((mm.fields[f], v) for f, v in defaults.items())
-        query.update(insert)
+        if insert is not None:
+            query.update(insert)
         self._insert = query
+        self._upsert = False
         super(InsertQuery, self).__init__(model_class)
 
     def _clone_attributes(self, query):
@@ -1986,6 +1991,10 @@ class InsertQuery(Query):
 
     join = not_allowed('joining')
     where = not_allowed('where clause')
+
+    @returns_clone
+    def upsert(self, upsert=True):
+        self._upsert = upsert
 
     def sql(self):
         return self.compiler().generate_insert(self)
@@ -2033,6 +2042,7 @@ class ExceptionWrapper(object):
 class Database(object):
     commit_select = False
     compiler_class = QueryCompiler
+    drop_cascade = True
     field_overrides = {}
     foreign_keys = True
     for_update = False
@@ -2232,9 +2242,10 @@ class Database(object):
             qc = self.compiler()
             return self.execute_sql(*qc.create_sequence(seq))
 
-    def drop_table(self, model_class, fail_silently=False):
+    def drop_table(self, model_class, fail_silently=False, cascade=False):
         qc = self.compiler()
-        return self.execute_sql(*qc.drop_table(model_class, fail_silently))
+        return self.execute_sql(*qc.drop_table(
+            model_class, fail_silently, cascade))
 
     def drop_sequence(self, seq):
         if self.sequences:
@@ -2245,6 +2256,7 @@ class Database(object):
         return fn.EXTRACT(Clause(date_part, R('FROM'), date_field))
 
 class SqliteDatabase(Database):
+    drop_cascade = False
     foreign_keys = False
     limit_max = -1
     op_overrides = {
@@ -2302,13 +2314,17 @@ class PostgresqlDatabase(Database):
         return conn
 
     def last_insert_id(self, cursor, model):
-        seq = model._meta.primary_key.sequence
+        meta = model._meta
+        seq = meta.primary_key.sequence
+        schema = ''
+        if meta.schema:
+            schema = '%s.' % meta.schema
         if seq:
-            cursor.execute("SELECT CURRVAL('\"%s\"')" % (seq))
+            cursor.execute("SELECT CURRVAL('%s\"%s\"')" % (schema, seq))
             return cursor.fetchone()[0]
-        elif model._meta.auto_increment:
-            cursor.execute("SELECT CURRVAL('\"%s_%s_seq\"')" % (
-                model._meta.db_table, model._meta.primary_key.db_column))
+        elif meta.auto_increment:
+            cursor.execute("SELECT CURRVAL('%s\"%s_%s_seq\"')" % (
+                schema, meta.db_table, meta.primary_key.db_column))
             return cursor.fetchone()[0]
 
     def get_indexes_for_table(self, table):
@@ -2530,7 +2546,7 @@ default_database = SqliteDatabase('peewee.db')
 class ModelOptions(object):
     def __init__(self, cls, database=None, db_table=None, indexes=None,
                  order_by=None, primary_key=None, table_alias=None,
-                 constraints=None, **kwargs):
+                 constraints=None, schema=None, **kwargs):
         self.model_class = cls
         self.name = cls.__name__.lower()
         self.fields = {}
@@ -2544,6 +2560,7 @@ class ModelOptions(object):
         self.primary_key = primary_key
         self.table_alias = table_alias
         self.constraints = constraints
+        self.schema = schema
 
         self.auto_increment = None
         self.rel = {}
@@ -2578,7 +2595,7 @@ class ModelOptions(object):
         return dd
 
     def get_sorted_fields(self):
-        key = lambda i: (i[1] is self.primary_key and 1 or 2, i[1]._order)
+        key = lambda i: i[1]._sort_key
         return sorted(self.fields.items(), key=key)
 
     def get_field_names(self):
@@ -2601,8 +2618,8 @@ class ModelOptions(object):
 
 
 class BaseModel(type):
-    inheritable = set([
-        'constraints', 'database', 'indexes', 'order_by', 'primary_key'])
+    inheritable = set(['constraints', 'database', 'indexes', 'order_by',
+                       'primary_key', 'schema'])
 
     def __new__(cls, name, bases, attrs):
         if not bases:
@@ -2785,8 +2802,14 @@ class Model(with_metaclass(BaseModel)):
                 db.create_index(cls, fields, unique)
 
     @classmethod
-    def drop_table(cls, fail_silently=False):
-        cls._meta.database.drop_table(cls, fail_silently)
+    def drop_table(cls, fail_silently=False, cascade=False):
+        cls._meta.database.drop_table(cls, fail_silently, cascade)
+
+    @classmethod
+    def _as_entity(cls):
+        if cls._meta.schema:
+            return Entity(cls._meta.schema, cls._meta.db_table)
+        return Entity(cls._meta.db_table)
 
     def get_id(self):
         return getattr(self, self._meta.primary_key.name)

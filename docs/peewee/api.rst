@@ -240,16 +240,13 @@ Models
             database.connect()
             SomeModel.create_table()  # Execute the create table query.
 
-    .. py:classmethod:: drop_table([fail_silently=False])
+    .. py:classmethod:: drop_table([fail_silently=False[, cascade=False]])
 
         :param bool fail_silently: If set to ``True``, the query will check for
           the existence of the table before attempting to remove.
+        :param bool cascade: Drop table with ``CASCADE`` option.
 
         Drop the table for the given model.
-
-        .. note::
-            Cascading deletes are not handled by this method, nor is the
-            removal of any constraints.
 
     .. py:classmethod:: table_exists()
 
@@ -339,15 +336,13 @@ Fields
     :param choices: an iterable of 2-tuples mapping ``value`` to ``display``
     :param bool primary_key: whether to use this as the primary key for the table
     :param string sequence: name of sequence (if backend supports it)
+    :param list constraints: a list of constraints, e.g. ``[Check('price > 0')]``.
+    :param string schema: name of schema (if backend supports it)
     :param kwargs: named attributes containing values that may pertain to specific field subclasses, such as "max_length" or "decimal_places"
 
     .. py:attribute:: db_field = '<some field type>'
 
         Attribute used to map this field to a column type, e.g. "string" or "datetime"
-
-    .. py:attribute:: template = '%(column_type)s'
-
-        A template for generating the SQL for this field
 
     .. py:attribute:: _is_bound
 
@@ -378,13 +373,6 @@ Fields
 
         :param value: arbitrary data from app or backend
         :rtype: python data type
-
-    .. py:method:: field_attributes()
-
-        This method is responsible for return a dictionary containing the default
-        field attributes for the column, e.g. ``{'max_length': 255}``
-
-        :rtype: a python dictionary
 
     .. py:method:: between(low, high)
 
@@ -589,14 +577,15 @@ Fields
 
     .. py:attribute:: db_field = 'bool'
 
-.. py:class:: ForeignKeyField(rel_model[, related_name=None[, cascade=False[, ...]]])
+.. py:class:: ForeignKeyField(rel_model[, related_name=None[, on_delete=None[, on_update=None[, ...]]]])
 
     Stores: relationship to another model
 
     :param rel_model: related :py:class:`Model` class or the string 'self' if declaring
                a self-referential foreign key
     :param string related_name: attribute to expose on related model
-    :param bool cascade: set up foreign key to do cascading deletes
+    :param string on_delete: on delete behavior, e.g. ``on_delete='CASCADE'``.
+    :param string on_update: on update behavior.
 
     .. code-block:: python
 
@@ -819,6 +808,34 @@ Query Types
             User, User, fn.Count(Tweet.id).alias('count'))
             .join(Tweet)
             .group_by(User))
+
+    .. py:method:: select(*selection)
+
+        :param selection: a list of expressions, which can be model classes or fields.
+          if left blank, will default to all the fields of the given model.
+        :rtype: :py:class:`SelectQuery`
+
+        .. note::
+            Usually the selection will be specified when the instance is created.
+            This method simply exists for the case when you want to modify the
+            SELECT clause independent of instantiating a query.
+
+        .. code-block:: python
+
+            query = User.select()
+            query = query.select(User.username)
+
+    .. py:method:: from_(*args)
+
+        :param args: one or more expressions, for example :py:class:`Model`
+          or :py:class:`SelectQuery` instance(s). if left blank, will default
+          to the table of the given model.
+        :rtype: :py:class:`SelectQuery`
+
+        .. code-block:: python
+
+            # rather than a join, select from both tables and join with where.
+            query = User.select().from_(User, Blog).where(Blog.user == User.id)
 
     .. py:method:: group_by(*clauses)
 
@@ -1494,15 +1511,11 @@ Database and its subclasses
 
         .. note:: only works with database engines that support sequences
 
-    .. py:method:: drop_table(model_class[, fail_silently=False])
+    .. py:method:: drop_table(model_class[, fail_silently=False[, cascade=False]])
 
         :param model_class: :py:class:`Model` table to drop
-        :param fail_silently: if ``True``, query will add a ``IF EXISTS`` clause
-
-        .. note::
-            Cascading drop tables are not supported at this time, so if a constraint
-            exists that prevents a table being dropped, you will need to handle
-            that in application logic.
+        :param bool fail_silently: if ``True``, query will add a ``IF EXISTS`` clause
+        :param bool cascade: drop table with ``CASCADE`` option.
 
     .. py:method:: drop_sequence(sequence_name)
 

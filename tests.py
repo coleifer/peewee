@@ -97,8 +97,8 @@ class TestQueryCompiler(QueryCompiler):
             if model not in alias_map:
                 alias_map[model] = model._meta.db_table
             for join in joins:
-                if join.model_class not in alias_map:
-                    alias_map[join.model_class] = join.model_class._meta.db_table
+                if join.dest not in alias_map:
+                    alias_map[join.dest] = join.dest._meta.db_table
         return alias_map
 
 class TestDatabase(database_class):
@@ -317,6 +317,9 @@ class Computer(TestModel):
     memory = ForeignKeyField(Component, related_name='c2')
     processor = ForeignKeyField(Component, related_name='c3')
 
+class CheckModel(TestModel):
+    value = IntegerField(constraints=[Check('value > 0')])
+
 # Deferred foreign keys.
 SnippetProxy = Proxy()
 
@@ -368,6 +371,7 @@ MODELS = [
     Manufacturer,
     Component,
     Computer,
+    CheckModel,
 ]
 INT = test_db.interpolation
 
@@ -402,7 +406,9 @@ class BasePeeweeTestCase(unittest.TestCase):
 
     def parse_query(self, query, node, compiler=compiler):
         am = compiler.calculate_alias_map(query)
-        return compiler.parse_query_node(node, am)
+        if node is not None:
+            return compiler.parse_node(node, am)
+        return '', []
 
     def make_fn(fn_name, attr_name):
         def inner(self, query, expected, expected_params, compiler=compiler):
@@ -421,19 +427,9 @@ class BasePeeweeTestCase(unittest.TestCase):
 
     def assertJoins(self, sq, exp_joins, compiler=compiler):
         am = compiler.calculate_alias_map(sq)
-        joins, _ = compiler.generate_joins(sq._joins, sq.model_class, am)
+        clauses = compiler.generate_joins(sq._joins, sq.model_class, am)
+        joins = [compiler.parse_node(clause, am)[0] for clause in clauses]
         self.assertEqual(sorted(joins), sorted(exp_joins))
-
-    def assertDict(self, qd, expected, expected_params):
-        sets, params = compiler.parse_field_dict(qd)
-        self.assertEqual(sets, expected)
-        self.assertEqual(params, expected_params)
-
-    def assertUpdate(self, uq, expected, expected_params):
-        self.assertDict(uq._update, expected, expected_params)
-
-    def assertInsert(self, uq, expected, expected_params):
-        self.assertDict(uq._insert, expected, expected_params)
 
 #
 # BASIC TESTS OF QUERY TYPES AND INTERNAL DATA STRUCTURES
@@ -452,6 +448,18 @@ class SelectTestCase(BasePeeweeTestCase):
 
         sq = SelectQuery(User, User.username, fn.Count(Blog.select().where(Blog.user == User.id)))
         self.assertSelect(sq, 'users."username", Count((SELECT blog."pk" FROM "blog" AS blog WHERE (blog."user_id" = users."id")))', [])
+
+    def test_reselect(self):
+        sq = SelectQuery(User, User.username)
+        self.assertSelect(sq, 'users."username"', [])
+
+        sq2 = sq.select()
+        self.assertSelect(sq2, 'users."id", users."username"', [])
+        self.assertTrue(id(sq) != id(sq2))
+
+        sq3 = sq2.select(User.id)
+        self.assertSelect(sq3, 'users."id"', [])
+        self.assertTrue(id(sq2) != id(sq3))
 
     def test_select_subquery(self):
         subquery = SelectQuery(Child, fn.Count(Child.id)).where(Child.parent == Parent.id).group_by(Child.parent)
@@ -899,27 +907,58 @@ class SelectTestCase(BasePeeweeTestCase):
 class UpdateTestCase(BasePeeweeTestCase):
     def test_update(self):
         uq = UpdateQuery(User, {User.username: 'updated'})
-        self.assertUpdate(uq, [('"username"', '?')], ['updated'])
+        self.assertEqual(compiler.generate_update(uq), (
+            'UPDATE "users" SET "username" = ?',
+            ['updated']))
 
         uq = UpdateQuery(Blog, {Blog.user: User(id=100, username='foo')})
-        self.assertUpdate(uq, [('"user_id"', '?')], [100])
+        self.assertEqual(compiler.generate_update(uq), (
+            'UPDATE "blog" SET "user_id" = ?',
+            [100]))
 
         uq = UpdateQuery(User, {User.id: User.id + 5})
-        self.assertUpdate(uq, [('"id"', '("id" + ?)')], [5])
+        self.assertEqual(compiler.generate_update(uq), (
+            'UPDATE "users" SET "id" = ("id" + ?)',
+            [5]))
 
         uq = UpdateQuery(User, {User.id: 5 * (3 + User.id)})
-        self.assertUpdate(uq, [('"id"', '(? * (? + "id"))')], [5, 3])
+        self.assertEqual(compiler.generate_update(uq), (
+            'UPDATE "users" SET "id" = (? * (? + "id"))',
+            [5, 3]))
 
         # set username to the maximum id of all users -- silly, yes, but lets see what happens
         uq = UpdateQuery(User, {User.username: User.select(fn.Max(User.id).alias('maxid'))})
-        self.assertUpdate(uq, [('"username"', '(SELECT Max(users."id") AS maxid FROM "users" AS users)')], [])
+        self.assertEqual(compiler.generate_update(uq), (
+            'UPDATE "users" SET "username" = (SELECT Max(users."id") AS maxid '
+            'FROM "users" AS users)',
+            []))
+
+        uq = UpdateQuery(Blog, {Blog.title: 'foo', Blog.content: 'bar'})
+        self.assertEqual(compiler.generate_update(uq), (
+            'UPDATE "blog" SET "title" = ?, "content" = ?',
+            ['foo', 'bar']))
+
+        pub_date = datetime.datetime(2014, 1, 2, 3, 4)
+        uq = UpdateQuery(Blog, {
+            Blog.title: 'foo',
+            Blog.pub_date: pub_date,
+            Blog.user: User(id=15),
+            Blog.content: 'bar'})
+        self.assertEqual(compiler.generate_update(uq), (
+            'UPDATE "blog" SET '
+            '"user_id" = ?, "title" = ?, "content" = ?, "pub_date" = ?',
+            [15, 'foo', 'bar', pub_date]))
 
     def test_update_special(self):
         uq = UpdateQuery(CSVRow, {CSVRow.data: ['foo', 'bar', 'baz']})
-        self.assertUpdate(uq, [('"data"', '?')], ['foo,bar,baz'])
+        self.assertEqual(compiler.generate_update(uq), (
+            'UPDATE "csvrow" SET "data" = ?',
+            ['foo,bar,baz']))
 
         uq = UpdateQuery(CSVRow, {CSVRow.data: []})
-        self.assertUpdate(uq, [('"data"', '?')], [''])
+        self.assertEqual(compiler.generate_update(uq), (
+            'UPDATE "csvrow" SET "data" = ?',
+            ['']))
 
     def test_where(self):
         uq = UpdateQuery(User, {User.username: 'updated'}).where(User.id == 2)
@@ -933,14 +972,31 @@ class UpdateTestCase(BasePeeweeTestCase):
 class InsertTestCase(BasePeeweeTestCase):
     def test_insert(self):
         iq = InsertQuery(User, {User.username: 'inserted'})
-        self.assertInsert(iq, [('"username"', '?')], ['inserted'])
+        self.assertEqual(compiler.generate_insert(iq), (
+            'INSERT INTO "users" ("username") VALUES (?)',
+            ['inserted']))
+
+        pub_date = datetime.datetime(2014, 1, 2, 3, 4)
+        iq = InsertQuery(Blog, {
+            Blog.title: 'foo',
+            Blog.content: 'bar',
+            Blog.pub_date: pub_date,
+            Blog.user: User(id=10)})
+        self.assertEqual(compiler.generate_insert(iq), (
+            'INSERT INTO "blog" ("user_id", "title", "content", "pub_date") '
+            'VALUES (?, ?, ?, ?)',
+            [10, 'foo', 'bar', pub_date]))
 
     def test_insert_special(self):
         iq = InsertQuery(CSVRow, {CSVRow.data: ['foo', 'bar', 'baz']})
-        self.assertInsert(iq, [('"data"', '?')], ['foo,bar,baz'])
+        self.assertEqual(compiler.generate_insert(iq), (
+            'INSERT INTO "csvrow" ("data") VALUES (?)',
+            ['foo,bar,baz']))
 
         iq = InsertQuery(CSVRow, {CSVRow.data: []})
-        self.assertInsert(iq, [('"data"', '?')], [''])
+        self.assertEqual(compiler.generate_insert(iq), (
+            'INSERT INTO "csvrow" ("data") VALUES (?)',
+            ['']))
 
     def test_empty_insert(self):
         class EmptyModel(TestModel):
@@ -3391,6 +3447,16 @@ class AutoRollbackTestCase(ModelTestCase):
         self.assertEqual(u.id, u_db.id)
 
 
+class CheckConstraintTestCase(ModelTestCase):
+    requires = [CheckModel]
+
+    def test_check_constraint(self):
+        CheckModel.create(value=1)
+        with test_db.transaction() as txn:
+            self.assertRaises(IntegrityError, CheckModel.create, value=0)
+            txn.rollback()
+
+
 class ConnectionStateTestCase(BasePeeweeTestCase):
     def test_connection_state(self):
         conn = test_db.get_conn()
@@ -3673,3 +3739,22 @@ if test_db.foreign_keys:
 
 elif TEST_VERBOSITY > 0:
     print_('Skipping "foreign key" tests')
+
+if test_db.drop_cascade:
+    class DropCascadeTestCase(ModelTestCase):
+        requires = [User, Blog]
+
+        def test_drop_cascade(self):
+            u1 = User.create(username='u1')
+            b1 = Blog.create(user=u1, title='b1')
+
+            User.drop_table(cascade=True)
+            self.assertFalse(User.table_exists())
+
+            # The constraint is dropped, we can create a blog for a non-
+            # existant user.
+            Blog.create(user=-1, title='b2')
+
+
+elif TEST_VERBOSITY > 0:
+    print_('Skipping "drop/cascade" tests')

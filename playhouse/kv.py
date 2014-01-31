@@ -85,15 +85,9 @@ class KeyStore(object):
         return result
 
     def _upsert(self, key, value):
-        sets, params = self._compiler.parse_field_dict({
-            self.key: key,
-            self.value: value})
-        fields, interp = zip(*sets)
-        sql = 'INSERT OR REPLACE INTO %s (%s) VALUES (%s)' % (
-            self._compiler.quote(self.model._meta.db_table),
-            ', '.join(fields),
-            ', '.join(interp))
-        self._database.execute_sql(sql, params, True)
+        self.model.insert(**{
+            self.key.name: key,
+            self.value.name: value}).upsert().execute()
 
     def __setitem__(self, node, value):
         if isinstance(node, Node):
