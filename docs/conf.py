@@ -93,7 +93,14 @@ pygments_style = 'pastie'
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = 'default'
+
+# Integration between local sphinx build and Read the Docs
+# see: (https://github.com/snide/sphinx_rtd_theme#using-this-theme-locally-then-building-on-read-the-docs)
+on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
+if not on_rtd:
+    html_theme = 'sphinx_rtd_theme'
+
+# otherwise, readthedocs.org uses their theme by default, so no need to specify it
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -103,7 +110,7 @@ html_theme = 'default'
 #}
 
 # Add any paths that contain custom themes here, relative to this directory.
-#html_theme_path = ['_themes']
+html_theme_path = ['_themes']
 
 # The name for this set of Sphinx documents.  If None, it defaults to
 # "<project> v<release> documentation".
