@@ -1411,9 +1411,11 @@ class ExtQueryResultWrapper(QueryResultWrapper):
                 func = field_obj.python_value
             elif self.column_meta is not None:
                 select_column = self.column_meta[i]
-                # Special-case handling aggregations.
-                if (isinstance(select_column, Func) and
+                if isinstance(select_column, Field):
+                    func = select_column.python_value
+                elif (isinstance(select_column, Func) and
                         isinstance(select_column.arguments[0], Field)):
+                    # Special-case handling aggregations.
                     func = select_column.arguments[0].python_value
                 else:
                     func = identity
