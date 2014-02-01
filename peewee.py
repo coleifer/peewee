@@ -376,6 +376,19 @@ class Func(Node):
     def clone_base(self):
         return Func(self.name, *self.arguments)
 
+    def over(self, partition_by=None, order_by=None):
+        # Basic window function support.
+        over_clauses = []
+        if partition_by:
+            over_clauses.append(Clause(
+                SQL('PARTITION BY'),
+                *partition_by))
+        if order_by:
+            over_clauses.append(Clause(
+                SQL('ORDER BY'),
+                *order_by))
+        return Clause(self, SQL('OVER'), EnclosedClause(Clause(*over_clauses)))
+
     def __getattr__(self, attr):
         def dec(*args, **kwargs):
             return Func(attr, *args, **kwargs)
@@ -2050,6 +2063,7 @@ class Database(object):
     savepoints = True
     sequences = False
     subquery_delete_same_table = True
+    window_functions = False
 
     exceptions = {
         'DatabaseError': DatabaseError,
@@ -2297,6 +2311,7 @@ class PostgresqlDatabase(Database):
     interpolation = '%s'
     reserved_tables = ['user']
     sequences = True
+    window_functions = True
 
     register_unicode = True
 
