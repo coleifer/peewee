@@ -3846,5 +3846,34 @@ if test_db.window_functions:
                 (3, 100.0, 2),
             ])
 
+        def test_docs_example(self):
+            NullModel.delete().execute()  # Clear out the table.
+
+            curr_dt = datetime.datetime(2014, 1, 1)
+            one_day = datetime.timedelta(days=1)
+            for i in range(3):
+                for j in range(i + 1):
+                    NullModel.create(int_field=i, datetime_field=curr_dt)
+                curr_dt += one_day
+
+            query = (NullModel
+                     .select(
+                         NullModel.int_field,
+                         NullModel.datetime_field,
+                         fn.Count(NullModel.id).over(
+                             partition_by=[fn.date_trunc(
+                                 'day', NullModel.datetime_field)]))
+                     .order_by(NullModel.id))
+
+            self.assertEqual(list(query.tuples()), [
+                (0, datetime.datetime(2014, 1, 1), 1),
+                (1, datetime.datetime(2014, 1, 2), 2),
+                (1, datetime.datetime(2014, 1, 2), 2),
+                (2, datetime.datetime(2014, 1, 3), 3),
+                (2, datetime.datetime(2014, 1, 3), 3),
+                (2, datetime.datetime(2014, 1, 3), 3),
+            ])
+
+
 elif TEST_VERBOSITY > 0:
     print_('Skipping "window function" tests')
