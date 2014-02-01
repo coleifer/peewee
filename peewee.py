@@ -915,12 +915,6 @@ class CompositeKey(object):
     def __set__(self, instance, value):
         pass
 
-"""
-TODO:
-
-Join and .join() are very model-centric, but *should* be able to accept an
-arbitrary single-source (table or select).
-"""
 
 class QueryCompiler(object):
     # Mapping of `db_type` to actual column type used by database driver.
