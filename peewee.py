@@ -386,6 +386,19 @@ class Func(Node):
     def clone_base(self):
         return Func(self.name, *self.arguments)
 
+    def over(self, partition_by=None, order_by=None):
+        # Basic window function support.
+        over_clauses = []
+        if partition_by:
+            over_clauses.append(Clause(
+                SQL('PARTITION BY'),
+                *partition_by))
+        if order_by:
+            over_clauses.append(Clause(
+                SQL('ORDER BY'),
+                *order_by))
+        return Clause(self, SQL('OVER'), EnclosedClause(Clause(*over_clauses)))
+
     def __getattr__(self, attr):
         def dec(*args, **kwargs):
             return Func(attr, *args, **kwargs)
@@ -924,12 +937,6 @@ class CompositeKey(object):
     def __set__(self, instance, value):
         pass
 
-"""
-TODO:
-
-Join and .join() are very model-centric, but *should* be able to accept an
-arbitrary single-source (table or select).
-"""
 
 class QueryCompiler(object):
     # Mapping of `db_type` to actual column type used by database driver.
@@ -1435,9 +1442,11 @@ class ExtQueryResultWrapper(QueryResultWrapper):
                 func = field_obj.python_value
             elif self.column_meta is not None:
                 select_column = self.column_meta[i]
-                # Special-case handling aggregations.
-                if (isinstance(select_column, Func) and
+                if isinstance(select_column, Field):
+                    func = select_column.python_value
+                elif (isinstance(select_column, Func) and
                         isinstance(select_column.arguments[0], Field)):
+                    # Special-case handling aggregations.
                     func = select_column.arguments[0].python_value
                 else:
                     func = identity
@@ -2112,6 +2121,7 @@ class Database(object):
     savepoints = True
     sequences = False
     subquery_delete_same_table = True
+    window_functions = False
 
     exceptions = {
         'DatabaseError': DatabaseError,
@@ -2359,6 +2369,7 @@ class PostgresqlDatabase(Database):
     interpolation = '%s'
     reserved_tables = ['user']
     sequences = True
+    window_functions = True
 
     register_unicode = True
 

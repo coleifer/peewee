@@ -492,6 +492,37 @@ This functionality can also be used as part of the ``WHERE`` or ``HAVING`` claus
     Alton
 
 
+Window functions
+^^^^^^^^^^^^^^^^
+
+peewee comes with basic support for SQL window functions, which can be created
+by calling :py:meth:`fn.over` and passing in your partitioning or ordering
+parameters.
+
+.. code-block:: python
+
+    # Get the list of employees and the average salary for their dept.
+    query = (Employee
+             .select(
+                 Employee.name,
+                 Employee.department,
+                 Employee.salary,
+                 fn.Avg(Employee.salary).over(
+                     partition_by=[Employee.department]))
+             .order_by(Employee.name))
+
+    # Rank employees by salary.
+    query = (Employee
+             .select(
+                 Employee.name,
+                 Employee.salary,
+                 fn.rank().over(
+                     order_by=[Employee.salary])))
+
+For general information on window functions, check
+out the `postgresql docs <http://www.postgresql.org/docs/9.1/static/tutorial-window.html>`_.
+
+
 Saving Queries by Selecting Related Models
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

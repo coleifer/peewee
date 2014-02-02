@@ -297,7 +297,10 @@ class SqliteIntrospector(Introspector):
         'text': TextField,
         'time': TimeField,
     }
-    re_foreign_key = '["\[]?(.+?)["\]]?\s+.+\s+references ["\[]?(.+?)["\]]? \(["|\[]?(.+?)["|\]]?\)'
+    begin = '(?:["\[\(]+)?'
+    end = '(?:["\]\)]+)?'
+    re_foreign_key = '(?:FOREIGN KEY\s*)?{begin}(.+?){end}\s+(?:.+\s+)?references\s+{begin}(.+?){end}\s*\(["|\[]?(.+?)["|\]]?\)'.format(
+        begin=begin, end=end)
     re_varchar = r'^\s*(?:var)?char\s*\(\s*(\d+)\s*\)\s*$'
 
     def get_conn_class(self):

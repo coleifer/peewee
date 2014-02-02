@@ -1645,12 +1645,52 @@ Misc
     ``fn.Stddev(Employee.salary).alias('sdv')``  ``Stddev(t1."salary") AS sdv``
     ============================================ ============================================
 
-.. py:class:: SQL(sql)
+    .. py:method:: over([partition_by=None[, order_by=None]])
+
+        Basic support for SQL window functions.
+
+        :param list partition_by: List of :py:class:`Node` instances to partition by.
+        :param list order_by: List of :py:class:`Node` instances to use for ordering.
+
+        Examples:
+
+        .. code-block:: python
+
+            # Get the list of employees and the average salary for their dept.
+            query = (Employee
+                     .select(
+                         Employee.name,
+                         Employee.department,
+                         Employee.salary,
+                         fn.Avg(Employee.salary).over(
+                             partition_by=[Employee.department]))
+                     .order_by(Employee.name))
+
+            # Rank employees by salary.
+            query = (Employee
+                     .select(
+                         Employee.name,
+                         Employee.salary,
+                         fn.rank().over(
+                             order_by=[Employee.salary])))
+
+            # Get a list of page-views, along with avg pageviews for that day.
+            query = (PageView
+                     .select(
+                         PageView.url,
+                         PageView.timestamp,
+                         fn.Count(PageView.id).over(
+                             partition_by=[fn.date_trunc(
+                                 'day', PageView.timestamp)]))
+                     .order_by(PageView.timestamp))
+
+.. py:class:: SQL(sql, *params)
 
     Add fragments of SQL to a peewee query.  For example you might want to reference
     an aliased name.
 
     :param str sql: Arbitrary SQL string.
+    :param params: Arbitrary query parameters.
 
     .. code-block:: python
 

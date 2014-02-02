@@ -3758,3 +3758,122 @@ if test_db.drop_cascade:
 
 elif TEST_VERBOSITY > 0:
     print_('Skipping "drop/cascade" tests')
+
+
+if test_db.window_functions:
+    class WindowFunctionTestCase(ModelTestCase):
+        """Use int_field & float_field to test window queries."""
+        requires = [NullModel]
+        data = (
+            # int / float -- we'll use int for grouping.
+            (1, 10),
+            (1, 20),
+            (2, 1),
+            (2, 3),
+            (3, 100),
+        )
+
+        def setUp(self):
+            super(WindowFunctionTestCase, self).setUp()
+            for int_v, float_v in self.data:
+                NullModel.create(int_field=int_v, float_field=float_v)
+
+        def test_partition_unordered(self):
+            query = (NullModel
+                     .select(
+                         NullModel.int_field,
+                         NullModel.float_field,
+                         fn.Avg(NullModel.float_field).over(
+                             partition_by=[NullModel.int_field]))
+                     .order_by(NullModel.id))
+
+            self.assertEqual(list(query.tuples()), [
+                (1, 10.0, 15.0),
+                (1, 20.0, 15.0),
+                (2, 1.0, 2.0),
+                (2, 3.0, 2.0),
+                (3, 100.0, 100.0),
+            ])
+
+        def test_ordered_unpartitioned(self):
+            query = (NullModel
+                     .select(
+                         NullModel.int_field,
+                         NullModel.float_field,
+                         fn.rank().over(
+                             order_by=[NullModel.float_field]))
+                     .order_by(NullModel.id))
+
+            self.assertEqual(list(query.tuples()), [
+                (1, 10.0, 3),
+                (1, 20.0, 4),
+                (2, 1.0, 1),
+                (2, 3.0, 2),
+                (3, 100.0, 5),
+            ])
+
+        def test_ordered_partitioned(self):
+            query = (NullModel
+                     .select(
+                         NullModel.int_field,
+                         NullModel.float_field,
+                         fn.rank().over(
+                             partition_by=[NullModel.int_field],
+                             order_by=[NullModel.float_field.desc()]))
+                     .order_by(NullModel.id))
+
+            self.assertEqual(list(query.tuples()), [
+                (1, 10.0, 2),
+                (1, 20.0, 1),
+                (2, 1.0, 2),
+                (2, 3.0, 1),
+                (3, 100.0, 1),
+            ])
+
+        def test_empty_over(self):
+            query = (NullModel
+                     .select(
+                         NullModel.int_field,
+                         NullModel.float_field,
+                         fn.lag(NullModel.int_field, 1).over())
+                     .order_by(NullModel.id))
+
+            self.assertEqual(list(query.tuples()), [
+                (1, 10.0, None),
+                (1, 20.0, 1),
+                (2, 1.0, 1),
+                (2, 3.0, 2),
+                (3, 100.0, 2),
+            ])
+
+        def test_docs_example(self):
+            NullModel.delete().execute()  # Clear out the table.
+
+            curr_dt = datetime.datetime(2014, 1, 1)
+            one_day = datetime.timedelta(days=1)
+            for i in range(3):
+                for j in range(i + 1):
+                    NullModel.create(int_field=i, datetime_field=curr_dt)
+                curr_dt += one_day
+
+            query = (NullModel
+                     .select(
+                         NullModel.int_field,
+                         NullModel.datetime_field,
+                         fn.Count(NullModel.id).over(
+                             partition_by=[fn.date_trunc(
+                                 'day', NullModel.datetime_field)]))
+                     .order_by(NullModel.id))
+
+            self.assertEqual(list(query.tuples()), [
+                (0, datetime.datetime(2014, 1, 1), 1),
+                (1, datetime.datetime(2014, 1, 2), 2),
+                (1, datetime.datetime(2014, 1, 2), 2),
+                (2, datetime.datetime(2014, 1, 3), 3),
+                (2, datetime.datetime(2014, 1, 3), 3),
+                (2, datetime.datetime(2014, 1, 3), 3),
+            ])
+
+
+elif TEST_VERBOSITY > 0:
+    print_('Skipping "window function" tests')

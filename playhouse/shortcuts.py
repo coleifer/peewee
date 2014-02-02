@@ -1,5 +1,4 @@
 from peewee import *
-from peewee import Clause
 
 
 def case(predicate, expression_tuples, default=None):

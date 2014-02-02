@@ -256,6 +256,23 @@ on how the app is configured:
     database_proxy.initialize(database)
 
 
+Logging queries
+^^^^^^^^^^^^^^^
+
+All queries are logged to the ``peewee`` namespace using the standard library
+logging module. Queries are logged using the ``DEBUG`` level.  If you're
+interested in doing something with the queries, you can simply register a
+handler.
+
+.. code-block:: python
+
+    # Print all queries to stderr.
+    import logging
+    logger = logging.getLogger('peewee')
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(logging.StreamHandler())
+
+
 Creating, Reading, Updating and Deleting
 ----------------------------------------
 
