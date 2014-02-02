@@ -1,3 +1,4 @@
+import re
 import unittest
 
 from peewee import *
@@ -72,6 +73,33 @@ MODELS = (
     Underscores)
 
 class TestPwiz(unittest.TestCase):
+    def test_sqlite_fk_re(self):
+        user_id_tests = [
+            'FOREIGN KEY("user_id") REFERENCES "users"("id")',
+            'FOREIGN KEY(user_id) REFERENCES users(id)',
+            'FOREIGN KEY  ([user_id])  REFERENCES  [users]  ([id])',
+            '"user_id" NOT NULL REFERENCES "users" ("id")',
+            'user_id not null references users (id)',
+        ]
+        fk_pk_tests = [
+            ('"col_types_id" INTEGER NOT NULL PRIMARY KEY REFERENCES '
+             '"coltypes" ("f11")'),
+            'FOREIGN KEY ("col_types_id") REFERENCES "coltypes" ("f11")',
+        ]
+        regex = SqliteIntrospector.re_foreign_key
+
+        for test in user_id_tests:
+            match = re.search(regex, test, re.I)
+            self.assertEqual(match.groups(), (
+                'user_id', 'users', 'id',
+            ))
+
+        for test in fk_pk_tests:
+            match = re.search(regex, test, re.I)
+            self.assertEqual(match.groups(), (
+                'col_types_id', 'coltypes', 'f11',
+            ))
+
     def create_tables(self, db):
         for model in MODELS:
             model._meta.database = db
