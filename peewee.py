@@ -1062,8 +1062,14 @@ class QueryCompiler(object):
             params = list(node.params)
         elif isinstance(node, CompoundSelect):
             alias_copy = alias_map and alias_map.copy() or None
-            l, lp = self.generate_select(node.lhs, alias_map=alias_copy)
-            r, rp = self.generate_select(node.rhs, alias_map=alias_copy)
+            l, lp = self.generate_select(
+                node.lhs,
+                start=self._max_alias(alias_copy),
+                alias_map=alias_copy)
+            r, rp = self.generate_select(
+                node.rhs,
+                start=self._max_alias(alias_copy),
+                alias_map=alias_copy)
             sql = '%s %s %s' % (l, node.operator, r)
             params = lp + rp
         elif isinstance(node, SelectQuery):
@@ -2009,17 +2015,6 @@ class CompoundSelect(SelectQuery):
         query.operator = self.operator
         query.rhs = self.rhs
         return query
-
-    def execute(self):
-        if self._dirty or not self._qr:
-            model_class = self.model_class
-            query_meta = [self.lhs._select, None]
-            self._qr = TuplesQueryResultWrapper(
-                model_class, self._execute(), query_meta)
-            self._dirty = False
-            return self._qr
-        else:
-            return self._qr
 
 
 class UpdateQuery(Query):
