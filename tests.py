@@ -1377,6 +1377,9 @@ class QueryResultWrapperTestCase(ModelTestCase):
         self.assertEqual([u.username for u in users], ['u1', 'u2'])
         self.assertEqual([u.title for u in users], ['b1', 'b2'])
 
+        query = Blog.select(Blog, User).join(User).order_by(Blog.title).naive()
+        self.assertEqual(query.get().user, User.get(User.username == 'u1'))
+
     def test_tuples_dicts(self):
         u1 = User.create(username='u1')
         u2 = User.create(username='u2')
@@ -1402,8 +1405,8 @@ class QueryResultWrapperTestCase(ModelTestCase):
 
         users = User.select(User, Blog).join(Blog).order_by(User.id).dicts()
         self.assertEqual([r for r in users], [
-            {'id': u1.id, 'username': 'u1', 'pk': b1.pk, 'user_id': u1.id, 'title': 'b1', 'content': '', 'pub_date': None},
-            {'id': u2.id, 'username': 'u2', 'pk': b2.pk, 'user_id': u2.id, 'title': 'b2', 'content': '', 'pub_date': None},
+            {'id': u1.id, 'username': 'u1', 'pk': b1.pk, 'user': u1.id, 'title': 'b1', 'content': '', 'pub_date': None},
+            {'id': u2.id, 'username': 'u2', 'pk': b2.pk, 'user': u2.id, 'title': 'b2', 'content': '', 'pub_date': None},
         ])
 
     def test_slicing_dicing(self):

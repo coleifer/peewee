@@ -1450,6 +1450,7 @@ class ExtQueryResultWrapper(QueryResultWrapper):
                 select_column = self.column_meta[i]
                 if isinstance(select_column, Field):
                     func = select_column.python_value
+                    column = select_column._alias or select_column.name
                 elif (isinstance(select_column, Func) and
                         isinstance(select_column.arguments[0], Field)):
                     # Special-case handling aggregations.
