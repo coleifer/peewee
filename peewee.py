@@ -1159,7 +1159,7 @@ class QueryCompiler(object):
     def generate_insert(self, query):
         model = query.model_class
 
-        parts = ['INSERT %sINTO %s' % (self.database.insert_ignore if query._ignore_duplicates else "", self.quote(model._meta.db_table))]
+        parts = ['INSERT %sINTO %s' % (model._meta.database.insert_ignore if query._ignore_duplicates else "", self.quote(model._meta.db_table))]
         sets, params = self.parse_field_dict(query._insert)
 
         if sets:
