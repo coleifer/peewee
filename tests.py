@@ -2,7 +2,9 @@
 
 import datetime
 import decimal
+import itertools
 import logging
+import operator
 import os
 import threading
 import unittest
@@ -3172,6 +3174,81 @@ class ConcurrencyTestCase(ModelTestCase):
 
         self.assertEqual(data_queue.qsize(), self.threads * 20)
 
+
+class CompoundSelectTestCase(ModelTestCase):
+    requires = [User, UniqueModel, OrderedModel]
+    # User -> username, UniqueModel -> name, OrderedModel -> title
+    test_values = {
+        User.username: ['a', 'b', 'c', 'd'],
+        UniqueModel.name: ['b', 'd', 'e'],
+        OrderedModel.title: ['a', 'c', 'e'],
+    }
+
+    def setUp(self):
+        super(CompoundSelectTestCase, self).setUp()
+        for field, values in self.test_values.items():
+            for value in values:
+                field.model_class.create(**{field.name: value})
+
+    def assertValues(self, query, expected):
+        self.assertEqual(sorted(query.tuples()),
+                         [(x,) for x in sorted(expected)])
+
+    def assertPermutations(self, op, expected):
+        fields = {
+            User: User.username,
+            UniqueModel: UniqueModel.name,
+            OrderedModel: OrderedModel.title,
+        }
+        for key in itertools.permutations(fields.keys(), 2):
+            if key in expected:
+                left, right = key
+                query = op(left.select(fields[left]).order_by(),
+                           right.select(fields[right]).order_by())
+                # Ensure the sorted tuples returned from the query are equal
+                # to the sorted values we expected for this combination.
+                self.assertValues(query, expected[key])
+
+    def test_union(self):
+        all_letters = ['a', 'b', 'c', 'd', 'e']
+        self.assertPermutations(operator.or_, {
+            (User, UniqueModel): all_letters,
+            (User, OrderedModel): all_letters,
+            (UniqueModel, User): all_letters,
+            (UniqueModel, OrderedModel): all_letters,
+            (OrderedModel, User): all_letters,
+            (OrderedModel, UniqueModel): all_letters,
+        })
+
+    def test_intersect(self):
+        self.assertPermutations(operator.and_, {
+            (User, UniqueModel): ['b', 'd'],
+            (User, OrderedModel): ['a', 'c'],
+            (UniqueModel, User): ['b', 'd'],
+            (UniqueModel, OrderedModel): ['e'],
+            (OrderedModel, User): ['a', 'c'],
+            (OrderedModel, UniqueModel): ['e'],
+        })
+
+    def test_except(self):
+        self.assertPermutations(operator.sub, {
+            (User, UniqueModel): ['a', 'c'],
+            (User, OrderedModel): ['b', 'd'],
+            (UniqueModel, User): ['e'],
+            (UniqueModel, OrderedModel): ['b', 'd'],
+            (OrderedModel, User): ['e'],
+            (OrderedModel, UniqueModel): ['a', 'c'],
+        })
+
+    def test_symmetric_difference(self):
+        self.assertPermutations(operator.xor, {
+            (User, UniqueModel): ['a', 'c', 'e'],
+            (User, OrderedModel): ['b', 'd', 'e'],
+            (UniqueModel, User): ['a', 'c', 'e'],
+            (UniqueModel, OrderedModel): ['a', 'b', 'c', 'd'],
+            (OrderedModel, User): ['b', 'd', 'e'],
+            (OrderedModel, UniqueModel): ['a', 'b', 'c', 'd'],
+        })
 
 class ModelOptionInheritanceTestCase(BasePeeweeTestCase):
     def test_db_table(self):

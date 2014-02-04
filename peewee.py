@@ -68,16 +68,6 @@ __all__ = [
     'TimeField',
 ]
 
-"""
-queries to support?
-
-- create index myidx on table (some_col COLLATE NOCASE ASC) where foo > 3
-- create temporary table (...)
-- create table <tblname> as select ...
-- create (temp) view as select...
-- union / intersect / except
-"""
-
 # All peewee-generated logs are logged to this namespace.
 logger = logging.getLogger('peewee')
 
@@ -1061,8 +1051,10 @@ class QueryCompiler(object):
             sql = node.value
             params = list(node.params)
         elif isinstance(node, CompoundSelect):
-            l, lp = self.generate_select(node.lhs)
-            r, rp = self.generate_select(node.rhs)
+            l, lp = self.generate_select(
+                node.lhs, self._max_alias(alias_map), alias_map)
+            r, rp = self.generate_select(
+                node.rhs, self._max_alias(alias_map), alias_map)
             sql = '%s %s %s' % (l, node.operator, r)
             params = lp + rp
         elif isinstance(node, SelectQuery):
@@ -1823,10 +1815,9 @@ class SelectQuery(Query):
     __sub__ = compound_op('EXCEPT')
 
     def __xor__(self, rhs):
-        # Symmetric difference.
+        # Symmetric difference, should just be (self | rhs) - (self & rhs)...
         wrapped_rhs = self.model_class.select(SQL('*')).from_(
-            EnclosedClause(self & rhs))
-        # should just be (self | rhs) - (self & rhs)
+            EnclosedClause((self & rhs)).alias('_')).order_by()
         return (self | rhs) - wrapped_rhs
 
     def __select(self, *selection):
