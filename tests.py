@@ -3250,6 +3250,28 @@ class CompoundSelectTestCase(ModelTestCase):
             (OrderedModel, UniqueModel): ['a', 'b', 'c', 'd'],
         })
 
+    def test_model_instances(self):
+        union = (User.select(User.username) |
+                 UniqueModel.select(UniqueModel.name))
+        query = union.order_by(SQL('username').desc()).limit(3)
+        self.assertEqual([user.username for user in query],
+                         ['e', 'd', 'c'])
+
+    def test_complex(self):
+        left = User.select(User.username).where(User.username << ['a', 'b'])
+        right = UniqueModel.select(UniqueModel.name).where(
+            UniqueModel.name << ['b', 'd', 'e'])
+
+        query = (left & right).order_by(SQL('1'))
+        self.assertEqual(list(query.dicts()), [{'username': 'b'}])
+
+        query = (left | right).order_by(SQL('1'))
+        self.assertEqual(list(query.dicts()), [
+            {'username': 'a'},
+            {'username': 'b'},
+            {'username': 'd'},
+            {'username': 'e'}])
+
 class ModelOptionInheritanceTestCase(BasePeeweeTestCase):
     def test_db_table(self):
         self.assertEqual(User._meta.db_table, 'users')
