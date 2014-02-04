@@ -1061,15 +1061,8 @@ class QueryCompiler(object):
             sql = node.value
             params = list(node.params)
         elif isinstance(node, CompoundSelect):
-            alias_copy = alias_map and alias_map.copy() or None
-            l, lp = self.generate_select(
-                node.lhs,
-                start=self._max_alias(alias_copy),
-                alias_map=alias_copy)
-            r, rp = self.generate_select(
-                node.rhs,
-                start=self._max_alias(alias_copy),
-                alias_map=alias_copy)
+            l, lp = self.generate_select(node.lhs)
+            r, rp = self.generate_select(node.rhs)
             sql = '%s %s %s' % (l, node.operator, r)
             params = lp + rp
         elif isinstance(node, SelectQuery):
@@ -1831,7 +1824,8 @@ class SelectQuery(Query):
 
     def __xor__(self, rhs):
         # Symmetric difference.
-        wrapped_rhs = self.model_class.select(SQL('*')).from_(self & rhs)
+        wrapped_rhs = self.model_class.select(SQL('*')).from_(
+            EnclosedClause(self & rhs))
         # should just be (self | rhs) - (self & rhs)
         return (self | rhs) - wrapped_rhs
 
@@ -1967,10 +1961,13 @@ class SelectQuery(Query):
                 return False
         return True
 
+    def get_query_meta(self):
+        return (self._select, self._joins)
+
     def execute(self):
         if self._dirty or not self._qr:
             model_class = self.model_class
-            query_meta = [self._select, self._joins]
+            query_meta = self.get_query_meta()
             if self._tuples:
                 ResultWrapper = TuplesQueryResultWrapper
             elif self._dicts:
@@ -2016,6 +2013,9 @@ class CompoundSelect(SelectQuery):
         query.operator = self.operator
         query.rhs = self.rhs
         return query
+
+    def get_query_meta(self):
+        return self.lhs.get_query_meta()
 
 
 class UpdateQuery(Query):
