@@ -6,9 +6,27 @@ releases, visit GitHub:
 https://github.com/coleifer/peewee/releases
 
 
+## 2.2.1
+
+I've been looking forward to this release, as it contains a couple new features
+that I've been wanting to add for some time now. Hope you find them useful.
+
+### Changes in 2.2.1
+
+* Window queries using ``OVER`` syntax.
+* Compound query operations ``UNION``, ``INTERSECT``, ``EXCEPT`` as well as symmetric difference.
+
+### Bugs fixed
+
+* #300, pwiz was not correctly interpreting some foreign key constraints in SQLite.
+* #298, drop table with cascade API was missing.
+* #294, typo.
+
+[View commits](https://github.com/coleifer/peewee/compare/2.2.0...2.2.1)
+
 ## 2.2.0
 
-This version contains a large refactoring of the way SQL was generated for both
+This release contains a large refactoring of the way SQL was generated for both
 the standard query classes (`Select`, `Insert`, `Update`, `Delete`) as well as
 for the DDL methods (`create_table`, `create_index`, etc). Instead of joining
 strings of SQL and manually quoting things, I've created `Clause` objects
