@@ -772,7 +772,7 @@ Query Types
             100 # <-- there are 100 distinct URLs in the pageview table
 
 
-.. py:class:: SelectQuery(model, *selection)
+.. py:class:: SelectQuery(model_class, *selection)
 
     By far the most complex of the query classes available in peewee. It supports
     all clauses commonly associated with select queries.
@@ -1102,8 +1102,87 @@ Query Types
             for user in User.select().where(User.active == True):
                 print user.username
 
+    .. py:method:: __getitem__(value)
 
-.. py:class:: UpdateQuery(model, **kwargs)
+        :param value: Either an index or a ``slice`` object.
+
+        Return the model instance(s) at the requested indices. To get the first
+        model, for instance:
+
+        .. code-block:: python
+
+            query = User.select().order_by(User.username)
+            first_user = query[0]
+            first_five = query[:5]
+
+    .. py:method:: __or__(rhs)
+
+        :param rhs: Either a :py:class:`SelectQuery` or a :py:class:`CompoundSelect`
+        :rtype: :py:class:`CompoundSelect`
+
+        Create a ``UNION`` query with the right-hand object. The result will contain
+        all values from both the left and right queries.
+
+        .. code-block:: python
+
+            customers = Customer.select(Customer.city).where(Customer.state == 'KS')
+            stores = Store.select(Store.city).where(Store.state == 'KS')
+
+            # Get all cities in kansas where we have either a customer or a store.
+            all_cities = (customers | stores).order_by(SQL('city'))
+
+    .. py:method:: __and__(rhs)
+
+        :param rhs: Either a :py:class:`SelectQuery` or a :py:class:`CompoundSelect`
+        :rtype: :py:class:`CompoundSelect`
+
+        Create an ``INTERSECT`` query. The result will contain values that are in
+        both the left and right queries.
+
+        .. code-block:: python
+
+            customers = Customer.select(Customer.city).where(Customer.state == 'KS')
+            stores = Store.select(Store.city).where(Store.state == 'KS')
+
+            # Get all cities in kanasas where we have both customers and stores.
+            cities = (customers & stores).order_by(SQL('city'))
+
+    .. py:method:: __sub__(rhs)
+
+        :param rhs: Either a :py:class:`SelectQuery` or a :py:class:`CompoundSelect`
+        :rtype: :py:class:`CompoundSelect`
+
+        Create an ``EXCEPT`` query. The result will contain values that are in
+        the left-hand query but not in the right-hand query.
+
+        .. code-block:: python
+
+            customers = Customer.select(Customer.city).where(Customer.state == 'KS')
+            stores = Store.select(Store.city).where(Store.state == 'KS')
+
+            # Get all cities in kanasas where we have customers but no stores.
+            cities = (customers - stores).order_by(SQL('city'))
+
+    .. py:method:: __xor__(rhs)
+
+        :param rhs: Either a :py:class:`SelectQuery` or a :py:class:`CompoundSelect`
+        :rtype: :py:class:`CompoundSelect`
+
+        Create an symmetric difference query. The result will contain values
+        that are in either the left-hand query or the right-hand query, but not
+        both.
+
+        .. code-block:: python
+
+            customers = Customer.select(Customer.city).where(Customer.state == 'KS')
+            stores = Store.select(Store.city).where(Store.state == 'KS')
+
+            # Get all cities in kanasas where we have either customers with no
+            # store, or a store with no customers.
+            cities = (customers ^ stores).order_by(SQL('city'))
+
+
+.. py:class:: UpdateQuery(model_class, **kwargs)
 
     :param model: :py:class:`Model` class on which to perform update
     :param kwargs: mapping of field/value pairs containing columns and values to update
@@ -1130,7 +1209,7 @@ Query Types
         Performs the query
 
 
-.. py:class:: InsertQuery(model, **kwargs)
+.. py:class:: InsertQuery(model_class, **kwargs)
 
     Creates an ``InsertQuery`` instance for the given model where kwargs is a
     dictionary of field name to value:
@@ -1148,7 +1227,7 @@ Query Types
         Performs the query
 
 
-.. py:class:: DeleteQuery
+.. py:class:: DeleteQuery(model_class)
 
     Creates a ``DeleteQuery`` instance for the given model.
 
@@ -1169,7 +1248,7 @@ Query Types
         Performs the query
 
 
-.. py:class:: RawQuery
+.. py:class:: RawQuery(model_class, sql, *params)
 
     Allows execution of an arbitrary query and returns instances
     of the model via a :py:class:`QueryResultsWrapper`.
@@ -1213,6 +1292,17 @@ Query Types
         :rtype: a :py:class:`QueryResultWrapper` for iterating over the result set.  The results are instances of the given model.
 
         Performs the query
+
+
+.. py:class:: CompoundSelect(model_class, lhs, operator, rhs)
+
+    Compound select query.
+
+    :param model_class: The type of model to return, by default the model class
+        of the ``lhs`` query.
+    :param lhs: Left-hand query, either a :py:class:`SelectQuery` or a :py:class:`CompoundQuery`.
+    :param operator: A :py:class:`Node` instance used to join the two queries, for example ``SQL('UNION')``.
+    :param rhs: Right query, either a :py:class:`SelectQuery` or a :py:class:`CompoundQuery`.
 
 
 .. py:function:: prefetch(sq, *subqueries)
