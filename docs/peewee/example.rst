@@ -4,7 +4,7 @@ Example app
 ===========
 
 We'll be building a simple "twitter"-like site.  The source code for the example
-can be found in the ``example/`` directory.  You can also `browse the source-code <https://github.com/coleifer/peewee/tree/master/example>`_
+can be found in the ``examples/twitter`` directory.  You can also `browse the source-code <https://github.com/coleifer/peewee/tree/master/examples/twitter>`_
 on github.
 
 The example app uses the `flask <http://flask.pocoo.org/>`_ web framework which is
@@ -21,7 +21,7 @@ Running the example
 
 .. image:: tweepee.jpg
 
-After ensuring that flask is installed, ``cd`` into the example directory and
+After ensuring that flask is installed, ``cd`` into the twitter example directory and
 execute the ``run_example.py`` script:
 
 .. code-block:: console
@@ -34,7 +34,7 @@ The example app will be accessible at http://localhost:5000/
 Diving into the code
 --------------------
 
-For simplicity all example code is contained within a single module, ``example/app.py``.
+For simplicity all example code is contained within a single module, ``examples/twitter/app.py``.
 
 Models
 ^^^^^^
