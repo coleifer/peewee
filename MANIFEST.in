@@ -4,5 +4,5 @@ include README.rst
 include TODO.rst
 include runtests.py
 include tests.py
-recursive-include example *
+recursive-include examples *
 recursive-include docs *
