@@ -1324,7 +1324,7 @@ class QueryCompiler(object):
             SQL(statement),
             Entity(index),
             SQL('ON'),
-            Entity(model_class._meta.schema,tbl_name),
+            model_class._as_entity(),
             EnclosedClause(*[field._as_entity() for field in fields]),
             *extra)
     create_index = return_parsed_node('_create_index')
