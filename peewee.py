@@ -371,10 +371,17 @@ class Func(Node):
     def __init__(self, name, *arguments):
         self.name = name
         self.arguments = arguments
+        self._coerce = True
         super(Func, self).__init__()
 
+    @returns_clone
+    def coerce(self, coerce=True):
+        self._coerce = coerce
+
     def clone_base(self):
-        return Func(self.name, *self.arguments)
+        res = Func(self.name, *self.arguments)
+        res._coerce = self._coerce
+        return res
 
     def over(self, partition_by=None, order_by=None):
         # Basic window function support.
@@ -1427,21 +1434,25 @@ class ExtQueryResultWrapper(QueryResultWrapper):
         for i in range(len(description)):
             func = identity
             column = description[i][0]
-            if column in model._meta.columns:
-                field_obj = model._meta.columns[column]
-                column = field_obj.name
-                func = field_obj.python_value
-            elif self.column_meta is not None:
+            found = False
+            if self.column_meta is not None:
                 select_column = self.column_meta[i]
                 if isinstance(select_column, Field):
                     func = select_column.python_value
                     column = select_column._alias or select_column.name
+                    found = True
                 elif (isinstance(select_column, Func) and
                         isinstance(select_column.arguments[0], Field)):
-                    # Special-case handling aggregations.
-                    func = select_column.arguments[0].python_value
-                else:
-                    func = identity
+                    if select_column._coerce:
+                        # Special-case handling aggregations.
+                        func = select_column.arguments[0].python_value
+                    found = True
+
+            if not found and column in model._meta.columns:
+                field_obj = model._meta.columns[column]
+                column = field_obj.name
+                func = field_obj.python_value
+
             conv.append((i, column, func))
         self.conv = conv
 

@@ -335,6 +335,15 @@ class Snippet(TestModel):
 
 SnippetProxy.initialize(Snippet)
 
+class _UpperField(CharField):
+    def python_value(self, value):
+        return value.upper() if value else value
+
+class UpperUser(TestModel):
+    username = _UpperField()
+    class Meta:
+        db_table = User._meta.db_table
+
 
 MODELS = [
     User,
@@ -1508,6 +1517,74 @@ class QueryResultWrapperTestCase(ModelTestCase):
             self.assertEqual(b.foo, b.title)
             self.assertEqual(b.user.foo, b.user.username)
 
+
+class QueryResultCoerceTestCase(ModelTestCase):
+    requires = [User]
+
+    def setUp(self):
+        super(QueryResultCoerceTestCase, self).setUp()
+        for i in range(3):
+            User.create(username='u%d' % i)
+
+    def assertNames(self, query, expected, attr='username'):
+        id_field = query.model_class.id
+        self.assertEqual(
+            [getattr(item, attr) for item in query.order_by(id_field)],
+            expected)
+
+    def test_simple_select(self):
+        query = UpperUser.select()
+        self.assertNames(query, ['U0', 'U1', 'U2'])
+
+        query = User.select()
+        self.assertNames(query, ['u0', 'u1', 'u2'])
+
+    def test_with_alias(self):
+        # Even when aliased to a different attr, the column is coerced.
+        query = UpperUser.select(UpperUser.username.alias('foo'))
+        self.assertNames(query, ['U0', 'U1', 'U2'], 'foo')
+
+    def test_scalar(self):
+        max_username = (UpperUser
+                        .select(fn.Max(UpperUser.username))
+                        .scalar(convert=True))
+        self.assertEqual(max_username, 'U2')
+
+        max_username = (UpperUser
+                        .select(fn.Max(UpperUser.username))
+                        .scalar())
+        self.assertEqual(max_username, 'u2')
+
+    def test_function(self):
+        substr = fn.SubStr(UpperUser.username, 1, 3)
+
+        # Being the first parameter of the function, it meets the special-case
+        # criteria.
+        query = UpperUser.select(substr.alias('foo'))
+        self.assertNames(query, ['U0', 'U1', 'U2'], 'foo')
+
+        query = UpperUser.select(substr.coerce(False).alias('foo'))
+        self.assertNames(query, ['u0', 'u1', 'u2'], 'foo')
+
+        query = UpperUser.select(substr.coerce(False).alias('username'))
+        self.assertNames(query, ['u0', 'u1', 'u2'])
+
+        query = UpperUser.select(fn.Lower(UpperUser.username).alias('username'))
+        self.assertNames(query, ['U0', 'U1', 'U2'])
+
+        query = UpperUser.select(
+            fn.Lower(UpperUser.username).alias('username').coerce(False))
+        self.assertNames(query, ['u0', 'u1', 'u2'])
+
+        # Since it is aliased to an existing column, we will use that column's
+        # coerce.
+        query = UpperUser.select(
+            fn.SubStr(fn.Lower(UpperUser.username), 1, 3).alias('username'))
+        self.assertNames(query, ['U0', 'U1', 'U2'])
+
+        query = UpperUser.select(
+            fn.SubStr(fn.Lower(UpperUser.username), 1, 3).alias('foo'))
+        self.assertNames(query, ['u0', 'u1', 'u2'], 'foo')
 
 class ModelQueryResultWrapperTestCase(ModelTestCase):
     requires = [TestModelA, TestModelB, TestModelC, User, Blog]
