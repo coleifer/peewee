@@ -1278,7 +1278,7 @@ class QueryCompiler(object):
         if field.on_delete:
             ddl.append(SQL('ON DELETE %s' % field.on_delete))
         if field.on_update:
-            ddl.append(SQL('ON UPDATE %s' % field.on_delete))
+            ddl.append(SQL('ON UPDATE %s' % field.on_update))
         return Clause(*ddl)
 
     def return_parsed_node(function_name):
