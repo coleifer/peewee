@@ -17,6 +17,7 @@ from inspect import isclass
 import logging
 import operator
 import re
+import six
 import sqlite3
 import sys
 import threading
@@ -704,6 +705,7 @@ class RelationDescriptor(FieldDescriptor):
     """Foreign-key abstraction to replace a related PK with a related model."""
     def __init__(self, field, rel_model):
         self.rel_model = rel_model
+        self.to_field = field.to_field
         super(RelationDescriptor, self).__init__(field)
 
     def get_object_or_id(self, instance):
@@ -711,7 +713,7 @@ class RelationDescriptor(FieldDescriptor):
         if rel_id is not None or self.att_name in instance._obj_cache:
             if self.att_name not in instance._obj_cache:
                 obj = self.rel_model.get(
-                    self.rel_model._meta.primary_key == rel_id)
+                    self.to_field == rel_id)
                 instance._obj_cache[self.att_name] = obj
             return instance._obj_cache[self.att_name]
         elif not self.field.null:
@@ -725,7 +727,7 @@ class RelationDescriptor(FieldDescriptor):
 
     def __set__(self, instance, value):
         if isinstance(value, self.rel_model):
-            instance._data[self.att_name] = value.get_id()
+            instance._data[self.att_name] = getattr(value, self.to_field.name)
             instance._obj_cache[self.att_name] = value
         else:
             orig_value = instance._data.get(self.att_name)
@@ -738,14 +740,15 @@ class ReverseRelationDescriptor(object):
     def __init__(self, field):
         self.field = field
         self.rel_model = field.model_class
+        self.to_field = field.to_field
 
     def __get__(self, instance, instance_type=None):
         if instance is not None:
-            return self.rel_model.select().where(self.field==instance.get_id())
+            return self.rel_model.select().where(self.field==getattr(instance, self.to_field.name))
         return self
 
 class ForeignKeyField(IntegerField):
-    def __init__(self, rel_model, null=False, related_name=None, cascade=False,
+    def __init__(self, rel_model, null=False, related_name=None, to_field=None, cascade=False,
                  extra=None, *args, **kwargs):
         if rel_model != 'self' and not isinstance(rel_model, Proxy) and not \
                 issubclass(rel_model, Model):
@@ -756,6 +759,7 @@ class ForeignKeyField(IntegerField):
         self.deferred = isinstance(rel_model, Proxy)
         self.cascade = cascade
         self.extra = extra
+        self.to_field = to_field or None
 
         kwargs.update(dict(
             cascade='ON DELETE CASCADE' if self.cascade else '',
@@ -792,6 +796,10 @@ class ForeignKeyField(IntegerField):
 
         if self.rel_model == 'self':
             self.rel_model = self.model_class
+        if not self.to_field:
+            self.to_field = self.rel_model._meta.primary_key
+        elif isinstance(self.to_field, six.string_types):
+            self.to_field = self.rel_model._meta.fields[self.to_field]
         if self.related_name in self.rel_model._meta.fields:
             error = ('Foreign key: %s.%s related name "%s" collision with '
                      'model field of the same name.')
@@ -817,18 +825,22 @@ class ForeignKeyField(IntegerField):
         Overridden to ensure Foreign Keys use same column type as the primary
         key they point to.
         """
-        to_pk = self.rel_model._meta.primary_key
+        to_pk = self.to_field
         if not isinstance(to_pk, PrimaryKeyField):
             return to_pk.get_db_field()
         return super(ForeignKeyField, self).get_db_field()
 
     def coerce(self, value):
-        return self.rel_model._meta.primary_key.coerce(value)
+        return self.to_field.coerce(value)
+
+    @property
+    def db_field(self):
+        return self.to_field.db_field
 
     def db_value(self, value):
         if isinstance(value, self.rel_model):
-            value = value.get_id()
-        return self.rel_model._meta.primary_key.db_value(value)
+            value = getattr(value, self.to_field.name)
+        return self.to_field.db_value(value)
 
 
 class CompositeKey(object):

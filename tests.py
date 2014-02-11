@@ -4,29 +4,32 @@ import datetime
 import decimal
 import logging
 import os
+import sys
 import threading
 import unittest
-import sys
+
+from peewee import *
+from peewee import DeleteQuery
+from peewee import InsertQuery
+from peewee import ModelQueryResultWrapper
+from peewee import NaiveQueryResultWrapper
+from peewee import QueryCompiler
+from peewee import R
+from peewee import RawQuery
+from peewee import SelectQuery
+from peewee import UpdateQuery
+from peewee import logger
+from peewee import prefetch_add_subquery
+from peewee import print_
+from peewee import sort_models_topologically
+from peewee import transaction
+
+
 try:
     from Queue import Queue
 except ImportError:
     from queue import Queue
 
-from peewee import *
-from peewee import DeleteQuery
-from peewee import InsertQuery
-from peewee import logger
-from peewee import ModelQueryResultWrapper
-from peewee import NaiveQueryResultWrapper
-from peewee import prefetch_add_subquery
-from peewee import print_
-from peewee import QueryCompiler
-from peewee import R
-from peewee import RawQuery
-from peewee import SelectQuery
-from peewee import sort_models_topologically
-from peewee import transaction
-from peewee import UpdateQuery
 
 
 class QueryLogHandler(logging.Handler):
@@ -152,8 +155,21 @@ class Blog(TestModel):
     def prepared(self):
         self.foo = self.title
 
+class BlogToField(TestModel):
+    user = ForeignKeyField(User, to_field='username', related_name='blog_to_fields')
+    title = CharField(max_length=25)
+    content = TextField(default='')
+    pub_date = DateTimeField(null=True)
+    pk = PrimaryKeyField()
+
+    def __unicode__(self):
+        return '%s: %s' % (self.user.username, self.title)
+
+    def prepared(self):
+        self.foo = self.title
+
 class Comment(TestModel):
-    blog = ForeignKeyField(Blog, related_name='comments')
+    blog = ForeignKeyField(Blog, related_name='comments', to_field='pk')
     comment = CharField()
 
 class Relationship(TestModel):
@@ -319,6 +335,7 @@ SnippetProxy.initialize(Snippet)
 MODELS = [
     User,
     Blog,
+    BlogToField,
     Comment,
     Relationship,
     NullModel,
@@ -1582,7 +1599,7 @@ class ModelQueryTestCase(ModelTestCase):
 
 
 class ModelAPITestCase(ModelTestCase):
-    requires = [User, Blog, Category, UserCategory]
+    requires = [User, Blog, Category, UserCategory, BlogToField]
 
     def test_related_name(self):
         u1 = self.create_user('u1')
@@ -1593,6 +1610,22 @@ class ModelAPITestCase(ModelTestCase):
 
         self.assertEqual([b.title for b in u1.blog_set], ['b11', 'b12'])
         self.assertEqual([b.title for b in u2.blog_set], ['b2'])
+
+    def test_to_field_related_name(self):
+        u1 = self.create_user('u1')
+        u2 = self.create_user('u2')
+        b11 = BlogToField.create(user=u1, title='b11')
+        b12 = BlogToField.create(user=u1, title='b12')
+        b2 = BlogToField.create(user=u2, title='b2')
+
+        self.assertEqual([b.title for b in u1.blog_to_fields], ['b11', 'b12'])
+        self.assertEqual([b.title for b in u2.blog_to_fields], ['b2'])
+
+    def test_to_field(self):
+        u1 = self.create_user('u1')
+        b11 = BlogToField.create(user=u1, title='b11')
+
+        self.assertEqual(BlogToField.get(title='b11').user, u1)
 
     def test_related_name_collision(self):
         class Foo(TestModel):
