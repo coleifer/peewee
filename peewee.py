@@ -333,8 +333,6 @@ class Expression(Node):
         return Expression(self.lhs, self.op, self.rhs, self.flat)
 
     def _parse_me(self, qp, alias_map, conv):
-        sql = qp.interpolation
-        params = [self]
         unknown = False
 
         if isinstance(self.lhs, Field):
@@ -346,8 +344,6 @@ class Expression(Node):
         params = lparams + rparams
 
         return sql, params, unknown
-
-
 
 class DQ(Node):
     """A "django-style" filter expression, e.g. {'foo__eq': 'x'}."""
@@ -439,15 +435,12 @@ class Func(Node):
         return dec
 
     def _parse_me(self, qp, alias_map, conv):
-        sql = qp.interpolation
-        params = [self]
         unknown = False
 
         sql, params = qp.parse_node_list(self.arguments, alias_map, conv)
         sql = '%s(%s)' % (self.name, sql)
 
         return sql, params, unknown
-
 
 # fn is a factory for creating `Func` objects and supports a more friendly
 # API.  So instead of `Func("LOWER", param)`, `fn.LOWER(param)`.
@@ -467,9 +460,8 @@ class Clause(Node):
         clone.glue = self.glue
         clone.parens = self.parens
         return clone
+
     def _parse_me(self, qp, alias_map, conv):
-        sql = qp.interpolation
-        params = [self]
         unknown = False
 
         sql, params = qp.parse_node_list(
@@ -655,8 +647,6 @@ class Field(Node):
         return hash(self.name + '.' + self.model_class.__name__)
 
     def _parse_me(self, qp, alias_map, conv):
-        sql = qp.interpolation
-        params = [self]
         unknown = False
 
         sql = qp.quote(self.db_column)
@@ -3013,14 +3003,10 @@ class Model(with_metaclass(BaseModel)):
 
     def _parse_me(self, qp, alias_map, conv):
         sql = qp.interpolation
-        params = [self]
+        params = [self.get_id()]
         unknown = False
 
-        params = [self.get_id()]
-
         return sql, params, unknown
-
-
 
 def prefetch_add_subquery(sq, subqueries):
     fixed_queries = [(sq, None)]
