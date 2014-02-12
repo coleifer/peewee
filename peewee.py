@@ -332,6 +332,23 @@ class Expression(Node):
     def clone_base(self):
         return Expression(self.lhs, self.op, self.rhs, self.flat)
 
+    def _parse_me(self, qp, alias_map, conv):
+        sql = qp.interpolation
+        params = [self]
+        unknown = False
+
+        if isinstance(self.lhs, Field):
+            conv = self.lhs
+        lhs, lparams = qp.parse_node(self.lhs, alias_map, conv)
+        rhs, rparams = qp.parse_node(self.rhs, alias_map, conv)
+        template = '%s %s %s' if self.flat else '(%s %s %s)'
+        sql = template % (lhs, qp.get_op(self.op), rhs)
+        params = lparams + rparams
+
+        return sql, params, unknown
+
+
+
 class DQ(Node):
     """A "django-style" filter expression, e.g. {'foo__eq': 'x'}."""
     def __init__(self, **query):
@@ -355,12 +372,32 @@ class Param(Node):
     def clone_base(self):
         return Param(self.value, self.conv)
 
+    def _parse_me(self, qp, alias_map, conv):
+        sql = qp.interpolation
+        unknown = True
+
+        if self.conv:
+            params = [self.conv(self.value)]
+        else:
+            params = [self.value]
+
+        return sql, params, unknown
+
+
 class SQL(Node):
     """An unescaped SQL string, with optional parameters."""
     def __init__(self, value, *params):
         self.value = value
         self.params = params
         super(SQL, self).__init__()
+
+    def _parse_me(self, qp, alias_map, conv):
+        unknown = False
+        sql = self.value
+        params = list(self.params)
+
+        return sql, params, unknown
+
 
     def clone_base(self):
         return SQL(self.value, *self.params)
@@ -401,6 +438,17 @@ class Func(Node):
             return Func(attr, *args, **kwargs)
         return dec
 
+    def _parse_me(self, qp, alias_map, conv):
+        sql = qp.interpolation
+        params = [self]
+        unknown = False
+
+        sql, params = qp.parse_node_list(self.arguments, alias_map, conv)
+        sql = '%s(%s)' % (self.name, sql)
+
+        return sql, params, unknown
+
+
 # fn is a factory for creating `Func` objects and supports a more friendly
 # API.  So instead of `Func("LOWER", param)`, `fn.LOWER(param)`.
 fn = Func(None)
@@ -419,6 +467,17 @@ class Clause(Node):
         clone.glue = self.glue
         clone.parens = self.parens
         return clone
+    def _parse_me(self, qp, alias_map, conv):
+        sql = qp.interpolation
+        params = [self]
+        unknown = False
+
+        sql, params = qp.parse_node_list(
+            self.nodes, alias_map, conv, self.glue)
+        if self.parens:
+            sql = '(%s)' % sql
+
+        return sql, params, unknown
 
 class CommaClause(Clause):
     """One or more Node objects joined by commas, no parens."""
@@ -439,6 +498,15 @@ class Entity(Node):
 
     def __getattr__(self, attr):
         return Entity(*self.path + (attr,))
+
+    def _parse_me(self, qp, alias_map, conv):
+        unknown = False
+
+        sql = '.'.join(map(qp.quote, self.path))
+        params = []
+
+        return sql, params, unknown
+
 
 class Check(SQL):
     """Check constraint, usage: `Check('price > 10')`."""
@@ -585,6 +653,19 @@ class Field(Node):
 
     def __hash__(self):
         return hash(self.name + '.' + self.model_class.__name__)
+
+    def _parse_me(self, qp, alias_map, conv):
+        sql = qp.interpolation
+        params = [self]
+        unknown = False
+
+        sql = qp.quote(self.db_column)
+        if alias_map and self.model_class in alias_map:
+            sql = '.'.join((alias_map[self.model_class], sql))
+        params = []
+
+        return sql, params, unknown
+
 
 class BareField(Field):
     db_field = 'bare'
@@ -1027,62 +1108,15 @@ class QueryCompiler(object):
         sql = self.interpolation
         params = [node]
         unknown = False
-        if isinstance(node, Expression):
-            if isinstance(node.lhs, Field):
-                conv = node.lhs
-            lhs, lparams = self.parse_node(node.lhs, alias_map, conv)
-            rhs, rparams = self.parse_node(node.rhs, alias_map, conv)
-            template = '%s %s %s' if node.flat else '(%s %s %s)'
-            sql = template % (lhs, self.get_op(node.op), rhs)
-            params = lparams + rparams
-        elif isinstance(node, Field):
-            sql = self.quote(node.db_column)
-            if alias_map and node.model_class in alias_map:
-                sql = '.'.join((alias_map[node.model_class], sql))
-            params = []
-        elif isinstance(node, Func):
-            sql, params = self.parse_node_list(node.arguments, alias_map, conv)
-            sql = '%s(%s)' % (node.name, sql)
-        elif isinstance(node, Clause):
-            sql, params = self.parse_node_list(
-                node.nodes, alias_map, conv, node.glue)
-            if node.parens:
-                sql = '(%s)' % sql
-        elif isinstance(node, Param):
-            if node.conv:
-                params = [node.conv(node.value)]
-            else:
-                params = [node.value]
-            unknown = True
-        elif isinstance(node, SQL):
-            sql = node.value
-            params = list(node.params)
-        elif isinstance(node, CompoundSelect):
-            l, lp = self.generate_select(
-                node.lhs, self._max_alias(alias_map), alias_map)
-            r, rp = self.generate_select(
-                node.rhs, self._max_alias(alias_map), alias_map)
-            sql = '%s %s %s' % (l, node.operator, r)
-            params = lp + rp
-        elif isinstance(node, SelectQuery):
-            max_alias = self._max_alias(alias_map)
-            alias_copy = alias_map and alias_map.copy() or None
-            clone = node.clone()
-            if not node._explicit_selection:
-                clone._select = (clone.model_class._meta.primary_key,)
-            sub, params = self.generate_select(clone, max_alias, alias_copy)
-            sql = '(%s)' % sub
-        elif isinstance(node, (list, tuple)):
+
+        if hasattr(node, '_parse_me'):
+            return node._parse_me(self, alias_map, conv)
+
+        if isinstance(node, (list, tuple)):
             # If you're wondering how to pass a list into your query, simply
             # wrap it in Param().
             sql, params = self.parse_node_list(node, alias_map, conv)
             sql = '(%s)' % sql
-        elif isinstance(node, Entity):
-            sql = '.'.join(map(self.quote, node.path))
-            params = []
-        elif isinstance(node, Model):
-            sql = self.interpolation
-            params = [node.get_id()]
         elif isclass(node) and issubclass(node, Model):
             self._ensure_alias_set(node, alias_map)
             entity = node._as_entity().alias(alias_map[node])
@@ -1809,13 +1843,22 @@ class SelectQuery(Query):
         for arg in args:
             if isinstance(arg, Node):
                 accum.append(arg)
-            elif isinstance(arg, Query):
-                accum.append(arg)
             elif isinstance(arg, ModelAlias):
                 accum.extend(arg.get_proxy_fields())
             elif isclass(arg) and issubclass(arg, Model):
                 accum.extend(arg._meta.get_fields())
         return accum
+
+    def _parse_me(self, qp, alias_map, conv): 
+        max_alias = qp._max_alias(alias_map)
+        alias_copy = alias_map and alias_map.copy() or None
+        clone = self.clone()
+        if not self._explicit_selection:
+            clone._select = (clone.model_class._meta.primary_key,)
+        sub, params = qp.generate_select(clone, max_alias, alias_copy)
+        sql = '(%s)' % sub
+
+        return sql, params, False
 
     def compound_op(operator):
         def inner(self, other):
@@ -2018,6 +2061,17 @@ class CompoundSelect(SelectQuery):
 
     def get_query_meta(self):
         return self.lhs.get_query_meta()
+
+    def _parse_me(self, qp, alias_map, conv): 
+        l, lp = qp.generate_select(
+                self.lhs, qp._max_alias(alias_map), alias_map)
+        r, rp = qp.generate_select(
+                self.rhs, qp._max_alias(alias_map), alias_map)
+
+        sql = '%s %s %s' % (l, self.operator, r)
+        params = lp + rp
+
+        return sql, params, False
 
 
 class UpdateQuery(Query):
@@ -2956,6 +3010,16 @@ class Model(with_metaclass(BaseModel)):
 
     def __ne__(self, other):
         return not self == other
+
+    def _parse_me(self, qp, alias_map, conv):
+        sql = qp.interpolation
+        params = [self]
+        unknown = False
+
+        params = [self.get_id()]
+
+        return sql, params, unknown
+
 
 
 def prefetch_add_subquery(sq, subqueries):
