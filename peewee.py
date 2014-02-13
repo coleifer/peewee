@@ -789,8 +789,7 @@ class RelationDescriptor(FieldDescriptor):
         rel_id = instance._data.get(self.att_name)
         if rel_id is not None or self.att_name in instance._obj_cache:
             if self.att_name not in instance._obj_cache:
-                obj = self.rel_model.get(
-                    self.rel_model._meta.primary_key == rel_id)
+                obj = self.rel_model.get(self.field.to_field == rel_id)
                 instance._obj_cache[self.att_name] = obj
             return instance._obj_cache[self.att_name]
         elif not self.field.null:
@@ -820,12 +819,13 @@ class ReverseRelationDescriptor(object):
 
     def __get__(self, instance, instance_type=None):
         if instance is not None:
-            return self.rel_model.select().where(self.field==instance.get_id())
+            return self.rel_model.select().where(
+                self.field == getattr(instance, self.field.to_field.name))
         return self
 
 class ForeignKeyField(IntegerField):
     def __init__(self, rel_model, related_name=None, on_delete=None,
-                 on_update=None, extra=None, *args, **kwargs):
+                 on_update=None, extra=None, to_field=None, *args, **kwargs):
         if rel_model != 'self' and not isinstance(rel_model, Proxy) and not \
                 issubclass(rel_model, Model):
             raise TypeError('Unexpected value for `rel_model`.  Expected '
@@ -836,10 +836,11 @@ class ForeignKeyField(IntegerField):
         self.on_delete = on_delete
         self.on_update = on_update
         self.extra = extra
+        self.to_field = to_field
         super(ForeignKeyField, self).__init__(*args, **kwargs)
 
     def clone_base(self, **kwargs):
-         return super(ForeignKeyField, self).clone_base(
+        return super(ForeignKeyField, self).clone_base(
             rel_model=self.rel_model,
             related_name=self.related_name,
             on_delete=self.on_delete,
@@ -869,6 +870,13 @@ class ForeignKeyField(IntegerField):
 
         if self.rel_model == 'self':
             self.rel_model = self.model_class
+
+        if self.to_field is not None:
+            if not isinstance(self.to_field, Field):
+                self.to_field = getattr(self.rel_model, self.to_field)
+        else:
+            self.to_field = self.rel_model._meta.primary_key
+
         if self.related_name in self.rel_model._meta.fields:
             error = ('Foreign key: %s.%s related name "%s" collision with '
                      'model field of the same name.')
@@ -894,24 +902,22 @@ class ForeignKeyField(IntegerField):
         Overridden to ensure Foreign Keys use same column type as the primary
         key they point to.
         """
-        to_pk = self.rel_model._meta.primary_key
-        if not isinstance(to_pk, PrimaryKeyField):
-            return to_pk.get_db_field()
+        if not isinstance(self.to_field, PrimaryKeyField):
+            return self.to_field.get_db_field()
         return super(ForeignKeyField, self).get_db_field()
 
     def get_modifiers(self):
-        to_pk = self.rel_model._meta.primary_key
-        if not isinstance(to_pk, PrimaryKeyField):
-            return to_pk.get_modifiers()
+        if not isinstance(self.to_field, PrimaryKeyField):
+            return self.to_field.get_modifiers()
         return super(ForeignKeyField, self).get_modifiers()
 
     def coerce(self, value):
-        return self.rel_model._meta.primary_key.coerce(value)
+        return self.to_field.coerce(value)
 
     def db_value(self, value):
         if isinstance(value, self.rel_model):
             value = value.get_id()
-        return self.rel_model._meta.primary_key.db_value(value)
+        return self.to_field.db_value(value)
 
 
 class CompositeKey(object):
@@ -1149,10 +1155,10 @@ class QueryCompiler(object):
                     field = src._meta.rel_for_model(dest, join.on)
                     if field:
                         left_field = field
-                        right_field = dest._meta.primary_key
+                        right_field = field.to_field
                     else:
                         field = dest._meta.rel_for_model(src, join.on)
-                        left_field = src._meta.primary_key
+                        left_field = field.to_field
                         right_field = field
                     constraint = (left_field == right_field)
 
@@ -1274,7 +1280,7 @@ class QueryCompiler(object):
             EnclosedClause(field._as_entity()),
             SQL('REFERENCES'),
             field.rel_model._as_entity(),
-            EnclosedClause(field.rel_model._meta.primary_key._as_entity())]
+            EnclosedClause(field.to_field._as_entity())]
         if field.on_delete:
             ddl.append(SQL('ON DELETE %s' % field.on_delete))
         if field.on_update:
@@ -2731,27 +2737,32 @@ class BaseModel(type):
         cls._meta.indexes = list(cls._meta.indexes)
 
         # replace fields with field descriptors, calling the add_to_class hook
-        for name, attr in list(cls.__dict__.items()):
+        fields = []
+        for name, attr in cls.__dict__.items():
             if isinstance(attr, Field):
-                attr.add_to_class(cls, name)
                 if attr.primary_key and model_pk:
                     raise ValueError('primary key is overdetermined.')
                 elif attr.primary_key:
-                    model_pk = attr
+                    model_pk, pk_name = attr, name
+                else:
+                    fields.append((attr, name))
 
         if model_pk is None:
             if parent_pk:
-                model_pk, name = parent_pk, parent_pk.name
+                model_pk, pk_name = parent_pk, parent_pk.name
             else:
-                model_pk, name = PrimaryKeyField(primary_key=True), 'id'
-            model_pk.add_to_class(cls, name)
+                model_pk, pk_name = PrimaryKeyField(primary_key=True), 'id'
         elif isinstance(model_pk, CompositeKey):
-            model_pk.add_to_class(cls, '_composite_key')
+            pk_name = '_composite_key'
 
+        model_pk.add_to_class(cls, pk_name)
         cls._meta.primary_key = model_pk
         cls._meta.auto_increment = (
-            isinstance(model_pk, PrimaryKeyField) or
-            bool(model_pk.sequence))
+            isinstance(model_pk, PrimaryKeyField) or bool(model_pk.sequence))
+
+        for field, name in fields:
+            field.add_to_class(cls, name)
+
         if not cls._meta.db_table:
             cls._meta.db_table = re.sub('[^\w]+', '_', cls.__name__.lower())
 
