@@ -744,6 +744,9 @@ class ReverseRelationDescriptor(object):
 
     def __get__(self, instance, instance_type=None):
         if instance is not None:
+            rel_name = '%s_prefetch' % self.field.related_name
+            if hasattr(instance, rel_name):
+                return getattr(instance, rel_name)
             return self.rel_model.select().where(self.field==getattr(instance, self.to_field.name))
         return self
 
@@ -1526,6 +1529,29 @@ class Query(Node):
         self._joins.setdefault(self._query_ctx, [])
         self._joins[self._query_ctx].append(Join(model_class, join_type, on))
         self._query_ctx = model_class
+
+    @returns_clone
+    def prefetch_related(self, *args):
+        for field_name_group in args:
+            field_names = field_name_group.split('__')
+            queries = [(self, None)]
+            model_class = self._query_ctx
+            for field_name in field_names:
+                field = model_class._meta.rel.get(field_name, None)
+                if field:
+                    last_model = model_class
+                else:
+                    field = model_class._meta.reverse_rel[field_name]
+                    last_model = field.model_class
+                model_class = field.model_class
+                subquery = queries[-1][0]
+
+                # this is kind of hacky, but easiest way to handel to_fields since subqueries default to the primary key unless the select is explicit
+                if not isinstance(field.to_field, PrimaryKeyField):
+                    subquery._select = subquery._model_shorthand([field.to_field])
+                    subquery._explicit_selection = True
+                queries.append((last_model.select().where(field << subquery), field))
+            prefetch(self, *queries, fix_queries=False)
 
     @returns_clone
     def switch(self, model_class=None):
@@ -2818,13 +2844,13 @@ class Model(with_metaclass(BaseModel)):
 def prefetch_add_subquery(sq, subqueries):
     fixed_queries = [(sq, None)]
     for i, subquery in enumerate(subqueries):
+        fkf = None
         if not isinstance(subquery, Query) and issubclass(subquery, Model):
             subquery = subquery.select()
         subquery_model = subquery.model_class
-        fkf = None
         for j in reversed(range(i + 1)):
             last_query = fixed_queries[j][0]
-            fkf = subquery_model._meta.rel_for_model(last_query.model_class)
+            fkf = subquery_model._meta.rel_for_model(last_query.model_class, fkf)
             if fkf:
                 break
         if not fkf:
@@ -2834,10 +2860,13 @@ def prefetch_add_subquery(sq, subqueries):
 
     return fixed_queries
 
-def prefetch(sq, *subqueries):
+def prefetch(sq, *subqueries, **kwargs):
     if not subqueries:
         return sq
-    fixed_queries = prefetch_add_subquery(sq, subqueries)
+    if kwargs.get('fix_queries', True):
+        fixed_queries = prefetch_add_subquery(sq, subqueries)
+    else:
+        fixed_queries = subqueries
 
     deps = {}
     rel_map = {}
@@ -2855,7 +2884,7 @@ def prefetch(sq, *subqueries):
             if has_relations:
                 for rel_model, rel_fk in rel_map[query_model]:
                     rel_name = '%s_prefetch' % rel_fk.related_name
-                    rel_instances = deps[rel_model].get(result.get_id(), [])
+                    rel_instances = deps[rel_model].get(getattr(result, rel_fk.to_field.name), [])
                     for inst in rel_instances:
                         setattr(inst, rel_fk.name, result)
                     setattr(result, rel_name, rel_instances)
