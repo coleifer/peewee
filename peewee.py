@@ -803,7 +803,8 @@ class RelationDescriptor(FieldDescriptor):
 
     def __set__(self, instance, value):
         if isinstance(value, self.rel_model):
-            instance._data[self.att_name] = value.get_id()
+            instance._data[self.att_name] = getattr(
+                value, self.field.to_field.name)
             instance._obj_cache[self.att_name] = value
         else:
             orig_value = instance._data.get(self.att_name)
@@ -846,6 +847,7 @@ class ForeignKeyField(IntegerField):
             on_delete=self.on_delete,
             on_update=self.on_update,
             extra=self.extra,
+            to_field=self.to_field,
             **kwargs)
 
     def add_to_class(self, model_class, name):
@@ -1557,6 +1559,7 @@ class ModelQueryResultWrapper(QueryResultWrapper):
             inst = collected[lhs]
             joined_inst = collected[rhs]
 
+            # FIXME: this does not work for non-pk foreign keys.
             if joined_inst.get_id() is None and attr in inst._data:
                 joined_inst.set_id(inst._data[attr])
 
@@ -1631,8 +1634,7 @@ class Query(Node):
         for join in self._joins.get(lm, []):
             if join.dest == rm:
                 return self
-        query = self.switch(lm).join(rm, on=on).switch(ctx)
-        return query
+        return self.switch(lm).join(rm, on=on).switch(ctx)
 
     def convert_dict_to_node(self, qdict):
         accum = []
@@ -2989,6 +2991,7 @@ def prefetch_add_subquery(sq, subqueries):
     return fixed_queries
 
 def prefetch(sq, *subqueries):
+    # FIXME: non primary key FK?
     if not subqueries:
         return sq
     fixed_queries = prefetch_add_subquery(sq, subqueries)
