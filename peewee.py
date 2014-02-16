@@ -1516,6 +1516,7 @@ class ModelQueryResultWrapper(QueryResultWrapper):
                 join_model = join.dest
                 if join_model in models:
                     fk_field = current._meta.rel_for_model(join_model)
+                    to_field = None
                     if not fk_field:
                         if isinstance(join.on, Expression):
                             fk_name = join.on._alias or join.on.lhs.name
@@ -1525,9 +1526,10 @@ class ModelQueryResultWrapper(QueryResultWrapper):
                             fk_name = join_model._meta.db_table
                     else:
                         fk_name = fk_field.name
+                        to_field = fk_field.to_field.name
 
                     stack.append(join_model)
-                    join_map.append((current, fk_name, join_model))
+                    join_map.append((current, fk_name, join_model, to_field))
 
         self.column_map, self.join_map = column_map, join_map
 
@@ -1555,13 +1557,14 @@ class ModelQueryResultWrapper(QueryResultWrapper):
 
     def follow_joins(self, collected):
         prepared = [collected[self.model]]
-        for (lhs, attr, rhs) in self.join_map:
+        for (lhs, attr, rhs, to_field) in self.join_map:
             inst = collected[lhs]
             joined_inst = collected[rhs]
 
-            # FIXME: this does not work for non-pk foreign keys.
-            if joined_inst.get_id() is None and attr in inst._data:
-                joined_inst.set_id(inst._data[attr])
+            # Can we populate a value on the joined instance using the current?
+            if to_field is not None and attr in inst._data:
+                if getattr(joined_inst, to_field) is None:
+                    setattr(joined_inst, to_field, inst._data[attr])
 
             setattr(inst, attr, joined_inst)
             prepared.append(joined_inst)
