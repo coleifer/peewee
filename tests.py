@@ -344,6 +344,16 @@ class UpperUser(TestModel):
     class Meta:
         db_table = User._meta.db_table
 
+class Package(TestModel):
+    barcode = CharField(unique=True)
+
+class PackageItem(TestModel):
+    title = CharField()
+    package = ForeignKeyField(
+        Package,
+        related_name='items',
+        to_field=Package.barcode)
+
 
 MODELS = [
     User,
@@ -383,6 +393,8 @@ MODELS = [
     Component,
     Computer,
     CheckModel,
+    Package,
+    PackageItem,
 ]
 INT = test_db.interpolation
 
@@ -459,6 +471,9 @@ class SelectTestCase(BasePeeweeTestCase):
 
         sq = SelectQuery(User, User.username, fn.Count(Blog.select().where(Blog.user == User.id)))
         self.assertSelect(sq, 'users."username", Count((SELECT blog."pk" FROM "blog" AS blog WHERE (blog."user_id" = users."id")))', [])
+
+        sq = SelectQuery(Package, Package, fn.Count(PackageItem.id)).join(PackageItem)
+        self.assertSelect(sq, 'package."id", package."barcode", Count(packageitem."id")', [])
 
     def test_reselect(self):
         sq = SelectQuery(User, User.username)
@@ -564,6 +579,12 @@ class SelectTestCase(BasePeeweeTestCase):
 
         sq = SelectQuery(User).join(Relationship, JOIN_LEFT_OUTER, Relationship.to_user)
         self.assertJoins(sq, ['LEFT OUTER JOIN "relationship" AS relationship ON (users."id" = relationship."to_user_id")'])
+
+        sq = SelectQuery(Package).join(PackageItem)
+        self.assertJoins(sq, ['INNER JOIN "packageitem" AS packageitem ON (package."barcode" = packageitem."package_id")'])
+
+        sq = SelectQuery(PackageItem).join(Package)
+        self.assertJoins(sq, ['INNER JOIN "package" AS package ON (packageitem."package_id" = package."barcode")'])
 
     def test_join_self_referential(self):
         sq = SelectQuery(Category).join(Category)
@@ -671,6 +692,13 @@ class SelectTestCase(BasePeeweeTestCase):
         sq = SelectQuery(User).where(User.id < 5)
         self.assertWhere(sq, '(users."id" < ?)', [5])
 
+        sq = SelectQuery(Blog).where(Blog.user << sq)
+        self.assertWhere(sq, '(blog."user_id" IN (SELECT users."id" FROM "users" AS users WHERE (users."id" < ?)))', [5])
+
+        p = SelectQuery(Package).where(Package.id == 2)
+        sq = SelectQuery(PackageItem).where(PackageItem.package << p)
+        self.assertWhere(sq, '(packageitem."package_id" IN (SELECT package."barcode" FROM "package" AS package WHERE (package."id" = ?)))', [2])
+
     def test_where_coercion(self):
         sq = SelectQuery(User).where(User.id < '5')
         self.assertWhere(sq, '(users."id" < ?)', [5])
@@ -691,6 +719,17 @@ class SelectTestCase(BasePeeweeTestCase):
             ((Blog.pk == 3) | (Blog.pk == 4))
         ).where(User.id == 5).join(Blog)
         self.assertWhere(sq, '((((users."id" = ?) OR (users."id" = ?)) AND ((blog."pk" = ?) OR (blog."pk" = ?))) AND (users."id" = ?))', [1, 2, 3, 4, 5])
+
+    def test_where_join_non_pk_fk(self):
+        sq = (SelectQuery(Package)
+              .join(PackageItem)
+              .where(PackageItem.title == 'p1'))
+        self.assertWhere(sq, '(packageitem."title" = ?)', ['p1'])
+
+        sq = (SelectQuery(PackageItem)
+              .join(Package)
+              .where(Package.barcode == 'b1'))
+        self.assertWhere(sq, '(package."barcode" = ?)', ['b1'])
 
     def test_where_functions(self):
         sq = SelectQuery(User).where(fn.Lower(fn.Substr(User.username, 0, 1)) == 'a')
@@ -724,6 +763,9 @@ class SelectTestCase(BasePeeweeTestCase):
 
         sq = SelectQuery(Blog).where(Blog.user << [User(id=100), User(id=101)])
         self.assertWhere(sq, '(blog."user_id" IN (?, ?))', [100, 101])
+
+        sq = SelectQuery(PackageItem).where(PackageItem.package == Package(barcode='b1'))
+        self.assertWhere(sq, '(packageitem."package_id" = ?)', ['b1'])
 
     def test_where_negation(self):
         sq = SelectQuery(Blog).where(~(Blog.title == 'foo'))
@@ -881,6 +923,28 @@ class SelectTestCase(BasePeeweeTestCase):
             ('SELECT t1."id", t1."username" FROM "users" AS t1 WHERE (t1."username" = ?)', ['foo']),
             ('SELECT t1."pk", t1."user_id", t1."title", t1."content", t1."pub_date" FROM "blog" AS t1 WHERE (t1."user_id" IN (SELECT t2."id" FROM "users" AS t2 WHERE (t2."username" = ?)))', ['foo']),
         ]
+        for (query, fkf), expected in zip(fixed, fixed_sql):
+            self.assertEqual(normal_compiler.generate_select(query), expected)
+
+    def test_prefetch_non_pk_fk(self):
+        sq = SelectQuery(Package).where(Package.barcode % 'b%')
+        sq2 = SelectQuery(PackageItem).where(PackageItem.title % 'n%')
+        fixed = prefetch_add_subquery(sq, (sq2,))
+        fixed_sq = (
+            'SELECT t1."id", t1."barcode" FROM "package" AS t1 '
+            'WHERE (t1."barcode" LIKE ?)',
+            ['b%'])
+        fixed_sq2 = (
+            'SELECT t1."id", t1."title", t1."package_id" '
+            'FROM "packageitem" AS t1 '
+            'WHERE ('
+            '(t1."title" LIKE ?) AND '
+            '(t1."package_id" IN ('
+            'SELECT t2."barcode" FROM "package" AS t2 '
+            'WHERE (t2."barcode" LIKE ?))))',
+            ['n%', 'b%'])
+        fixed_sql = [fixed_sq, fixed_sq2]
+
         for (query, fkf), expected in zip(fixed, fixed_sql):
             self.assertEqual(normal_compiler.generate_select(query), expected)
 
@@ -1659,6 +1723,35 @@ class ModelQueryResultWrapperTestCase(ModelTestCase):
             ('u2', 'b-u2'),
             ('u2', 'b-u2-2')])
 
+class SelectRelatedNonPKFKTestCase(ModelTestCase):
+    requires = [Package, PackageItem]
+
+    def test_select_related(self):
+        p1 = Package.create(barcode='101')
+        p2 = Package.create(barcode='102')
+        pi11 = PackageItem.create(title='p11', package='101')
+        pi12 = PackageItem.create(title='p12', package='101')
+        pi21 = PackageItem.create(title='p21', package='102')
+        pi22 = PackageItem.create(title='p22', package='102')
+
+        # missing PackageItem.package_id.
+        qc = len(self.queries())
+        items = (PackageItem
+                 .select(PackageItem.id, PackageItem.title, Package.barcode)
+                 .join(Package)
+                 .where(Package.barcode == '101')
+                 .order_by(PackageItem.id))
+        self.assertEqual([i.package.barcode for i in items], ['101', '101'])
+        self.assertEqual(len(self.queries()) - qc, 1)
+
+        qc = len(self.queries())
+        items = (PackageItem
+                 .select(PackageItem.id, PackageItem.title, PackageItem.package, Package.id)
+                 .join(Package)
+                 .where(Package.barcode == '101')
+                 .order_by(PackageItem.id))
+        self.assertEqual([i.package.id for i in items], [p1.id, p1.id])
+        self.assertEqual(len(self.queries()) - qc, 1)
 
 class ModelQueryTestCase(ModelTestCase):
     requires = [User, Blog]
@@ -2383,8 +2476,53 @@ class PrefetchTestCase(ModelTestCase):
         ])
         self.assertEqual(len(self.queries()) - qc, 5)
 
+class TestPrefetchNonPKFK(ModelTestCase):
+    requires = [Package, PackageItem]
+    data = {
+        '101': ['a', 'b'],
+        '102': ['c'],
+        '103': [],
+        '104': ['a', 'b', 'c', 'd', 'e'],
+    }
+
+    def setUp(self):
+        super(TestPrefetchNonPKFK, self).setUp()
+        for barcode, titles in self.data.items():
+            Package.create(barcode=barcode)
+            for title in titles:
+                PackageItem.create(package=barcode, title=title)
+
+    def test_prefetch(self):
+        packages = Package.select().order_by(Package.barcode)
+        items = PackageItem.select().order_by(PackageItem.id)
+        query = prefetch(packages, items)
+
+        for package, (barcode, titles) in zip(query, sorted(self.data.items())):
+            self.assertEqual(package.barcode, barcode)
+            self.assertEqual(
+                [item.title for item in package.items_prefetch],
+                titles)
+
+        packages = (Package
+                    .select()
+                    .where(Package.barcode << ['101', '104'])
+                    .order_by(Package.id))
+        items = items.where(PackageItem.title << ['a', 'c', 'e'])
+        query = prefetch(packages, items)
+        accum = {}
+        for package in query:
+            accum[package.barcode] = [
+                item.title for item in package.items_prefetch]
+
+        self.assertEqual(accum, {
+            '101': ['a'],
+            '104': ['a', 'c','e'],
+        })
+
 class RecursiveDeleteTestCase(ModelTestCase):
-    requires = [Parent, Child, Orphan, ChildPet, OrphanPet]
+    requires = [
+        Parent, Child, Orphan, ChildPet, OrphanPet, Package, PackageItem]
+
     def setUp(self):
         super(RecursiveDeleteTestCase, self).setUp()
         p1 = Parent.create(data='p1')
@@ -2437,6 +2575,29 @@ class RecursiveDeleteTestCase(ModelTestCase):
             self.assertEqual(query.where(fk == self.p1).count(), p1_ct)
             self.assertEqual(query.where(fk == self.p2).count(), p2_ct)
             self.assertEqual(query.count(), tot)
+
+    def test_recursive_non_pk_fk(self):
+        for i in range(3):
+            Package.create(barcode=str(i))
+            for j in range(4):
+                PackageItem.create(package=str(i), title='%s-%s' % (i, j))
+
+        self.assertEqual(Package.select().count(), 3)
+        self.assertEqual(PackageItem.select().count(), 12)
+
+        Package.get(Package.barcode == '1').delete_instance(recursive=True)
+
+        self.assertEqual(Package.select().count(), 2)
+        self.assertEqual(PackageItem.select().count(), 8)
+
+        items = (PackageItem
+                 .select(PackageItem.title)
+                 .order_by(PackageItem.id)
+                 .tuples())
+        self.assertEqual([i[0] for i in items], [
+            '0-0', '0-1', '0-2', '0-3',
+            '2-0', '2-1', '2-2', '2-3',
+        ])
 
 
 class MultipleFKTestCase(ModelTestCase):
@@ -3035,6 +3196,38 @@ class PrimaryForeignKeyTestCase(ModelTestCase):
         self.assertRaises(Exception, JobExecutionRecord.create, job=job, status='success')
         test_db.rollback()
 
+
+class NonPKFKCreateTableTestCase(BasePeeweeTestCase):
+    def test_create_table(self):
+        class A(TestModel):
+            cf = CharField(max_length=100, unique=True)
+            df = DecimalField(
+                max_digits=4,
+                decimal_places=2,
+                auto_round=True,
+                unique=True)
+
+        class CF(TestModel):
+            a = ForeignKeyField(A, to_field='cf')
+
+        class DF(TestModel):
+            a = ForeignKeyField(A, to_field='df')
+
+        cf_create, _ = compiler.create_table(CF)
+        self.assertEqual(
+            cf_create,
+            'CREATE TABLE "cf" ('
+            '"id" INTEGER NOT NULL PRIMARY KEY, '
+            '"a_id" VARCHAR(100) NOT NULL, '
+            'FOREIGN KEY ("a_id") REFERENCES "a" ("cf"))')
+
+        df_create, _ = compiler.create_table(DF)
+        self.assertEqual(
+            df_create,
+            'CREATE TABLE "df" ('
+            '"id" INTEGER NOT NULL PRIMARY KEY, '
+            '"a_id" DECIMAL(4, 2) NOT NULL, '
+            'FOREIGN KEY ("a_id") REFERENCES "a" ("df"))')
 
 class DeferredForeignKeyTestCase(ModelTestCase):
     requires = [Snippet, Language]
