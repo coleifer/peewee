@@ -1753,6 +1753,30 @@ class SelectRelatedNonPKFKTestCase(ModelTestCase):
         self.assertEqual([i.package.id for i in items], [p1.id, p1.id])
         self.assertEqual(len(self.queries()) - qc, 1)
 
+class NonPKFKBasicTestCase(ModelTestCase):
+    requires = [Package, PackageItem]
+
+    def setUp(self):
+        super(NonPKFKBasicTestCase, self).setUp()
+
+        for barcode in ['101', '102']:
+            Package.create(barcode=barcode)
+            for i in range(2):
+                PackageItem.create(
+                    package=barcode,
+                    title='%s-%s' % (barcode, i))
+
+    def test_fk_resolution(self):
+        pi = PackageItem.get(PackageItem.title == '101-0')
+        self.assertEqual(pi._data['package'], '101')
+        self.assertEqual(pi.package, Package.get(Package.barcode == '101'))
+
+    def test_select_generation(self):
+        p = Package.get(Package.barcode == '101')
+        self.assertEqual(
+            [item.title for item in p.items.order_by(PackageItem.id)],
+            ['101-0', '101-1'])
+
 class ModelQueryTestCase(ModelTestCase):
     requires = [User, Blog]
 

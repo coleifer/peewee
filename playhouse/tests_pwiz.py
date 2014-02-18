@@ -1,3 +1,4 @@
+import os
 import re
 import unittest
 
@@ -5,6 +6,8 @@ from peewee import *
 from pwiz import *
 from peewee import print_
 
+
+TEST_VERBOSITY = int(os.environ.get('PEEWEE_TEST_VERBOSITY') or 1)
 
 # test databases
 sqlite_db = SqliteDatabase('tmp.db')
@@ -111,7 +114,7 @@ class TestPwiz(unittest.TestCase):
                 if database:
                     self.create_tables(database)
                     fn(self, database, db_name)
-                else:
+                elif TEST_VERBOSITY > 0:
                     print_('Skipping %s, driver not found' % db_name)
         return inner
 
