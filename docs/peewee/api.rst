@@ -577,7 +577,7 @@ Fields
 
     .. py:attribute:: db_field = 'bool'
 
-.. py:class:: ForeignKeyField(rel_model[, related_name=None[, on_delete=None[, on_update=None[, ...]]]])
+.. py:class:: ForeignKeyField(rel_model[, related_name=None[, on_delete=None[, on_update=None[, to_field=None[, ...]]]]])
 
     Stores: relationship to another model
 
@@ -586,6 +586,8 @@ Fields
     :param string related_name: attribute to expose on related model
     :param string on_delete: on delete behavior, e.g. ``on_delete='CASCADE'``.
     :param string on_update: on update behavior.
+    :param to_field: the field (or field name) on ``rel_model`` the foreign key
+        references. Defaults to the primary key field for ``rel_model``.
 
     .. code-block:: python
 
@@ -610,6 +612,9 @@ Fields
     .. note:: Foreign keys do not have a particular ``db_field`` as they will
         take their field type depending on the type of primary key on the model they are
         related to.
+
+    .. note:: If you manually specify a ``to_field``, that field must be either
+        a primary key or have a unique constraint.
 
 
 .. py:class:: CompositeKey(*fields)
