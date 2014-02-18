@@ -1077,7 +1077,11 @@ class QueryCompiler(object):
             alias_copy = alias_map and alias_map.copy() or None
             clone = node.clone()
             if not node._explicit_selection:
-                clone._select = (clone.model_class._meta.primary_key,)
+                if conv and isinstance(conv, ForeignKeyField):
+                    select_field = conv.to_field
+                else:
+                    select_field = clone.model_class._meta.primary_key
+                clone._select = (select_field,)
             sub, params = self.generate_select(clone, max_alias, alias_copy)
             sql = '(%s)' % sub
         elif isinstance(node, (list, tuple)):
@@ -1090,7 +1094,10 @@ class QueryCompiler(object):
             params = []
         elif isinstance(node, Model):
             sql = self.interpolation
-            params = [node.get_id()]
+            if conv and isinstance(conv, ForeignKeyField):
+                params = [getattr(node, conv.to_field.name)]
+            else:
+                params = [node.get_id()]
         elif isclass(node) and issubclass(node, Model):
             self._ensure_alias_set(node, alias_map)
             entity = node._as_entity().alias(alias_map[node])
@@ -2994,7 +3001,6 @@ def prefetch_add_subquery(sq, subqueries):
     return fixed_queries
 
 def prefetch(sq, *subqueries):
-    # FIXME: non primary key FK?
     if not subqueries:
         return sq
     fixed_queries = prefetch_add_subquery(sq, subqueries)
@@ -3015,7 +3021,8 @@ def prefetch(sq, *subqueries):
             if has_relations:
                 for rel_model, rel_fk in rel_map[query_model]:
                     rel_name = '%s_prefetch' % rel_fk.related_name
-                    rel_instances = deps[rel_model].get(result.get_id(), [])
+                    identifier = getattr(result, rel_fk.to_field.name)
+                    rel_instances = deps[rel_model].get(identifier, [])
                     for inst in rel_instances:
                         setattr(inst, rel_fk.name, result)
                     setattr(result, rel_name, rel_instances)
