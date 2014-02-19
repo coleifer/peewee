@@ -4,29 +4,32 @@ import datetime
 import decimal
 import logging
 import os
+import sys
 import threading
 import unittest
-import sys
+
+from peewee import *
+from peewee import DeleteQuery
+from peewee import InsertQuery
+from peewee import ModelQueryResultWrapper
+from peewee import NaiveQueryResultWrapper
+from peewee import QueryCompiler
+from peewee import R
+from peewee import RawQuery
+from peewee import SelectQuery
+from peewee import UpdateQuery
+from peewee import logger
+from peewee import prefetch_add_subquery
+from peewee import print_
+from peewee import sort_models_topologically
+from peewee import transaction
+
+
 try:
     from Queue import Queue
 except ImportError:
     from queue import Queue
 
-from peewee import *
-from peewee import DeleteQuery
-from peewee import InsertQuery
-from peewee import logger
-from peewee import ModelQueryResultWrapper
-from peewee import NaiveQueryResultWrapper
-from peewee import prefetch_add_subquery
-from peewee import print_
-from peewee import QueryCompiler
-from peewee import R
-from peewee import RawQuery
-from peewee import SelectQuery
-from peewee import sort_models_topologically
-from peewee import transaction
-from peewee import UpdateQuery
 
 
 class QueryLogHandler(logging.Handler):
@@ -153,7 +156,33 @@ class Blog(TestModel):
         self.foo = self.title
 
 class Comment(TestModel):
-    blog = ForeignKeyField(Blog, related_name='comments')
+    blog = ForeignKeyField(Blog, related_name='comments', to_field='pk')
+    comment = CharField()
+
+class UserToField(TestModel):
+    username = CharField()
+
+    class Meta:
+        db_table = 'users'
+
+    def prepared(self):
+        self.foo = self.username
+
+class BlogToField(TestModel):
+    user = ForeignKeyField(UserToField, to_field='username', related_name="blog_set")
+    title = CharField(max_length=25)
+    content = TextField(default='')
+    pub_date = DateTimeField(null=True)
+    pk = PrimaryKeyField()
+
+    def __unicode__(self):
+        return '%s: %s' % (self.user.username, self.title)
+
+    def prepared(self):
+        self.foo = self.title
+
+class CommentToField(TestModel):
+    blog = ForeignKeyField(BlogToField, related_name='comments', to_field='pk')
     comment = CharField()
 
 class Relationship(TestModel):
@@ -320,6 +349,9 @@ MODELS = [
     User,
     Blog,
     Comment,
+    UserToField,
+    BlogToField,
+    CommentToField,
     Relationship,
     NullModel,
     UniqueModel,
@@ -1582,7 +1614,7 @@ class ModelQueryTestCase(ModelTestCase):
 
 
 class ModelAPITestCase(ModelTestCase):
-    requires = [User, Blog, Category, UserCategory]
+    requires = [User, Blog, Category, UserCategory, BlogToField]
 
     def test_related_name(self):
         u1 = self.create_user('u1')
@@ -1593,6 +1625,22 @@ class ModelAPITestCase(ModelTestCase):
 
         self.assertEqual([b.title for b in u1.blog_set], ['b11', 'b12'])
         self.assertEqual([b.title for b in u2.blog_set], ['b2'])
+
+    def test_to_field_related_name(self):
+        u1 = UserToField.create(username='u1')
+        u2 = UserToField.create(username='u2')
+        b11 = BlogToField.create(user=u1, title='b11')
+        b12 = BlogToField.create(user=u1, title='b12')
+        b2 = BlogToField.create(user=u2, title='b2')
+
+        self.assertEqual([b.title for b in u1.blog_set], ['b11', 'b12'])
+        self.assertEqual([b.title for b in u2.blog_set], ['b2'])
+
+    def test_to_field(self):
+        u1 = UserToField.create(username='u1')
+        b11 = BlogToField.create(user=u1, title='b11')
+
+        self.assertEqual(BlogToField.get(title='b11').user, u1)
 
     def test_related_name_collision(self):
         class Foo(TestModel):
@@ -1943,6 +1991,9 @@ class ModelAggregateTestCase(ModelTestCase):
 
 class PrefetchTestCase(ModelTestCase):
     requires = [User, Blog, Comment, Parent, Child, Orphan, ChildPet, OrphanPet, Category]
+    blog_model = Blog
+    user_model = User
+    comment_model = Comment
     user_data = [
         ('u1', (('b1', ('b1-c1', 'b1-c2')), ('b2', ('b2-c1',)))),
         ('u2', ()),
@@ -1997,16 +2048,16 @@ class PrefetchTestCase(ModelTestCase):
                     OrphanPet.create(orphan=o, data=pet)
 
         for user, blog_comments in self.user_data:
-            u = User.create(username=user)
+            u = self.user_model.create(username=user)
             for blog, comments in blog_comments:
-                b = Blog.create(user=u, title=blog, content='')
+                b = self.blog_model.create(user=u, title=blog, content='')
                 for c in comments:
-                    Comment.create(blog=b, comment=c)
+                    self.comment_model.create(blog=b, comment=c)
 
     def test_prefetch_simple(self):
-        sq = User.select().where(User.username != 'u3')
-        sq2 = Blog.select().where(Blog.title != 'b2')
-        sq3 = Comment.select()
+        sq = self.user_model.select().where(self.user_model.username != 'u3')
+        sq2 = self.blog_model.select().where(self.blog_model.title != 'b2')
+        sq3 = self.comment_model.select()
         qc = len(self.queries())
 
         prefetch_sq = prefetch(sq, sq2, sq3)
@@ -2067,6 +2118,47 @@ class PrefetchTestCase(ModelTestCase):
             'p3', 'c6', 'c7', 'c7-p1', 'o6', 'o6-p1', 'o6-p2', 'o7', 'o7-p1',
         ])
         self.assertEqual(len(self.queries()) - qc, 5)
+
+class PrefetchRelatedTestCase(PrefetchTestCase):
+    prefetch_string = 'blog_set__comments'
+    def test_prefetch_simple(self):
+        sq = self.user_model.select().where(self.user_model.username != 'u3')
+        qc = len(self.queries())
+        
+        prefetch_sq = sq.prefetch_related('blog_set__comments')
+        results = []
+        for user in prefetch_sq:
+            results.append(user.username)
+            for blog in user.blog_set:
+                results.append(blog.title)
+                for comment in blog.comments:
+                    results.append(comment.comment)
+
+        self.assertEqual(results, [
+            'u1', 'b1', 'b1-c1', 'b1-c2', 'b2', 'b2-c1',
+            'u2',
+            'u4', 'b5', 'b5-c1', 'b5-c2', 'b6', 'b6-c1',
+        ])
+        qc2 = len(self.queries())
+        self.assertEqual(qc2 - qc, 3)
+
+        results = []
+        for user in prefetch_sq:
+            for blog in user.blog_set:
+                results.append(blog.user.username)
+                for comment in blog.comments:
+                    results.append(comment.blog.title)
+        self.assertEqual(results, [
+            'u1', 'b1', 'b1', 'u1', 'b2', 'u4', 'b5', 'b5', 'u4', 'b6',
+        ])
+        qc3 = len(self.queries())
+        self.assertEqual(qc3, qc2)
+
+class PrefetchRelatedWithToFieldTestCase(PrefetchRelatedTestCase):
+    requires = [UserToField, BlogToField, CommentToField, Parent, Child, Orphan, ChildPet, OrphanPet, Category]
+    blog_model = BlogToField
+    user_model = UserToField
+    comment_model = CommentToField
 
 class RecursiveDeleteTestCase(ModelTestCase):
     requires = [Parent, Child, Orphan, ChildPet, OrphanPet]
