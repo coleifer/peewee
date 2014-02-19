@@ -130,7 +130,7 @@ class TestPwiz(unittest.TestCase):
         expected = (
             ('coltypes', (
                 ('f1', BigIntegerField, False),
-                ('f2', BlobField, False),
+                ('f2', (BlobField, TextField), False),
                 ('f3', (BooleanField, IntegerField), False),
                 ('f4', CharField, False),
                 ('f5', DateField, False),

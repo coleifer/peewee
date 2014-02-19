@@ -182,7 +182,10 @@ class PostgresqlIntrospector(Introspector):
               AND indisprimary;""" % table)
         pks = [x[0] for x in curs.fetchall()]
         for pk in pks:
-            accum[pk].field_class = PrimaryKeyField
+            if accum[pk].field_class == IntegerField:
+                accum[pk].field_class = PrimaryKeyField
+            else:
+                accum[pk].kwargs['primary_key'] = True
 
         return accum
 
@@ -237,6 +240,8 @@ class MySQLIntrospector(Introspector):
         return MySQLDatabase
 
     def get_columns(self, table):
+        pk_col = self.get_primary_key(table)
+
         # Get basic metadata about columns.  Amazingly, this is the same query
         # as we use with postgresql.
         curs = self.conn.execute_sql("""
@@ -250,6 +255,10 @@ class MySQLIntrospector(Introspector):
         for idx, column in enumerate(curs.description):
             field_class = self.mapping.get(column[1], UnknownFieldType)
             name, nullable, data_type, max_length = columns[idx]
+            if name == pk_col and field_class is IntegerField:
+                field_class = PrimaryKeyField
+            elif name == pk_col:
+                kwargs['primary_key'] = True
 
             kwargs = {}
             if nullable == 'YES':
@@ -262,6 +271,12 @@ class MySQLIntrospector(Introspector):
                 kwargs,
                 raw_column_type=data_type)
         return accum
+
+    def get_primary_key(self, table):
+        curs = self.conn.execute_sql('SHOW INDEX FROM `%s`' % table)
+        for row in curs.fetchall():
+            if row[2] == 'PRIMARY':
+                return row[4]
 
     def get_foreign_keys(self, table):
         framing = '''
@@ -323,10 +338,13 @@ class SqliteIntrospector(Introspector):
         # cid, name, type, notnull, dflt_value, pk
         for (_, name, column_type, not_null, _, is_pk) in curs.fetchall():
             field_class, raw_column_type = self.map_col(column_type)
-            if is_pk:
-                field_class = PrimaryKeyField
-
             kwargs = {}
+
+            if is_pk and field_class == IntegerField:
+                field_class = PrimaryKeyField
+            elif is_pk:
+                kwargs['primary_key'] = True
+
             if not not_null:
                 kwargs['null'] = True
 
