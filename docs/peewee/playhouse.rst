@@ -27,6 +27,7 @@ As well as tools for working with databases:
 * :ref:`pwiz`
 * :ref:`migrate`
 * :ref:`csv_loader`
+* :ref:`read_slave`
 * :ref:`test_utils`
 
 
@@ -1569,6 +1570,57 @@ CSV Loader API
         field_names = ['amount', 'from_acct', 'to_acct', 'timestamp']
         Payments = load_csv(db, 'payments.csv', fields=fields, field_names=field_names, has_header=False)
 
+
+.. _read_slave
+
+Read Slave
+----------
+
+The ``read_slave`` module contains a :py:class:`Model` subclass that can be used
+to automatically execute ``SELECT`` queries against a different database.
+
+.. py:class:: ReadSlaveModel
+
+    Model subclass that will route ``SELECT`` queries to a different database.
+
+    Master and read-slave are specified using ``Model.Meta``:
+
+    .. code-block:: python
+
+        # Declare two databases.
+        master = PostgresqlDatabase('master')
+        read_slave = PostgresqlDatabase('read_slave')
+
+        # Declare a BaseModel, the normal best-practice.
+        class BaseModel(ReadSlaveModel):
+            class Meta:
+                database = master
+                read_slave = read_slave
+
+        # Declare your models.
+        class User(BaseModel):
+            username = CharField()
+
+    When you execute writes (or deletes), they will be executed against the
+    master database:
+
+    .. code-block:: python
+
+        User.create(username='Peewee')  # Executed against master.
+
+    When you execute a read query, it will run against the read-slave:
+
+    .. code-block:: python
+
+        users = User.select().where(User.username == 'Peewee')  # Read slave.
+
+    .. note::
+        To force a SELECT query against the master database, manually create
+        the :py:class:`SelectQuery`.
+
+        .. code-block:: python
+
+            SelectQuery(User)  # master database.
 
 .. _test_utils:
 
