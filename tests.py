@@ -1641,6 +1641,7 @@ class ModelAPITestCase(ModelTestCase):
         b11 = BlogToField.create(user=u1, title='b11')
 
         self.assertEqual(BlogToField.get(title='b11').user, u1)
+        self.assertEqual(BlogToField.get(title='b11').user_id, 'u1')
 
     def test_related_name_collision(self):
         class Foo(TestModel):
