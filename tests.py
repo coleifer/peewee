@@ -1051,6 +1051,11 @@ class InsertTestCase(BasePeeweeTestCase):
             'INSERT INTO "users" ("username") VALUES (?)',
             ['inserted']))
 
+        iq = InsertQuery(User, {'username': 'inserted'})
+        self.assertEqual(compiler.generate_insert(iq), (
+            'INSERT INTO "users" ("username") VALUES (?)',
+            ['inserted']))
+
         pub_date = datetime.datetime(2014, 1, 2, 3, 4)
         iq = InsertQuery(Blog, {
             Blog.title: 'foo',
@@ -1062,6 +1067,61 @@ class InsertTestCase(BasePeeweeTestCase):
             'VALUES (?, ?, ?, ?)',
             [10, 'foo', 'bar', pub_date]))
 
+    def test_insert_default_vals(self):
+        class DM(TestModel):
+            name = CharField(default='peewee')
+            value = IntegerField(default=1, null=True)
+            other = FloatField()
+
+        iq = InsertQuery(DM)
+        self.assertEqual(compiler.generate_insert(iq), (
+            'INSERT INTO "dm" ("name", "value") VALUES (?, ?)',
+            ['peewee', 1]))
+
+        iq = InsertQuery(DM, {'name': 'herman'})
+        self.assertEqual(compiler.generate_insert(iq), (
+            'INSERT INTO "dm" ("name", "value") VALUES (?, ?)',
+            ['herman', 1]))
+
+        iq = InsertQuery(DM, {'value': None})
+        self.assertEqual(compiler.generate_insert(iq), (
+            'INSERT INTO "dm" ("name", "value") VALUES (?, ?)',
+            ['peewee', None]))
+
+        iq = InsertQuery(DM, {DM.name: 'huey', 'other': 2.0})
+        self.assertEqual(compiler.generate_insert(iq), (
+            'INSERT INTO "dm" ("name", "value", "other") VALUES (?, ?, ?)',
+            ['huey', 1, 2.0]))
+
+    def test_insert_many(self):
+        iq = InsertQuery(User, rows=[
+            {'username': 'u1'},
+            {User.username: 'u2'},
+            {'username': 'u3'},
+        ])
+        self.assertEqual(compiler.generate_insert(iq), (
+            'INSERT INTO "users" ("username") VALUES (?), (?), (?)',
+            ['u1', 'u2', 'u3']))
+
+        iq = InsertQuery(User, rows=[{'username': 'u1'}])
+        self.assertEqual(compiler.generate_insert(iq), (
+            'INSERT INTO "users" ("username") VALUES (?)',
+            ['u1']))
+
+        iq = InsertQuery(User, rows=[])
+        self.assertEqual(compiler.generate_insert(iq), (
+            'INSERT INTO "users"', []))
+
+    def test_insert_many_gen(self):
+        def row_generator():
+            for i in range(3):
+                yield {'username': 'u%s' % i}
+
+        iq = InsertQuery(User, rows=row_generator())
+        self.assertEqual(compiler.generate_insert(iq), (
+            'INSERT INTO "users" ("username") VALUES (?), (?), (?)',
+            ['u0', 'u1', 'u2']))
+
     def test_insert_special(self):
         iq = InsertQuery(CSVRow, {CSVRow.data: ['foo', 'bar', 'baz']})
         self.assertEqual(compiler.generate_insert(iq), (
@@ -1072,6 +1132,15 @@ class InsertTestCase(BasePeeweeTestCase):
         self.assertEqual(compiler.generate_insert(iq), (
             'INSERT INTO "csvrow" ("data") VALUES (?)',
             ['']))
+
+        iq = InsertQuery(CSVRow, rows=[
+            {CSVRow.data: ['foo', 'bar', 'baz']},
+            {CSVRow.data: ['a', 'b']},
+            {CSVRow.data: ['b']},
+            {CSVRow.data: []}])
+        self.assertEqual(compiler.generate_insert(iq), (
+            'INSERT INTO "csvrow" ("data") VALUES (?), (?), (?), (?)',
+            ['foo,bar,baz', 'a,b', 'b', '']))
 
     def test_empty_insert(self):
         class EmptyModel(TestModel):
@@ -1865,6 +1934,31 @@ class ModelQueryTestCase(ModelTestCase):
 
         iq = User.insert(doesnotexist='invalid')
         self.assertRaises(KeyError, iq.execute)
+
+    def test_insert_many(self):
+        iq = User.insert_many([
+            {'username': 'u1'},
+            {'username': 'u2'},
+            {'username': 'u3'},
+            {'username': 'u4'}])
+        self.assertTrue(iq.execute() >= 4)
+        self.assertEqual(User.select().count(), 4)
+
+        sq = User.select(User.username).order_by(User.username)
+        self.assertEqual([u.username for u in sq], ['u1', 'u2', 'u3', 'u4'])
+
+        iq = User.insert_many([{'username': 'u5'}])
+        self.assertTrue(iq.execute() >= 5)
+        self.assertEqual(User.select().count(), 5)
+
+        iq = User.insert_many([
+            {User.username: 'u6'},
+            {User.username: 'u7'},
+            {'username': 'u8'}]).execute()
+
+        sq = User.select(User.username).order_by(User.username)
+        self.assertEqual([u.username for u in sq],
+                         ['u1', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7', 'u8'])
 
     def test_delete(self):
         self.create_users(5)

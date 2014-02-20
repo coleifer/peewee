@@ -2071,10 +2071,10 @@ class UpdateQuery(Query):
 class InsertQuery(Query):
     def __init__(self, model_class, field_dict=None, rows=None):
         super(InsertQuery, self).__init__(model_class)
-        if field_dict is not None:
-            self._rows = [field_dict]
-        else:
+        if rows is not None:
             self._rows = rows
+        else:
+            self._rows = [field_dict or {}]
         self._defaults = self._get_default_values()
         self._upsert = False
         self._valid_fields = (set(model_class._meta.fields.keys()) |
@@ -2854,7 +2854,7 @@ class Model(with_metaclass(BaseModel)):
         return InsertQuery(cls, insert)
 
     @classmethod
-    def insert_many(cls, *rows):
+    def insert_many(cls, rows):
         return InsertQuery(cls, rows=rows)
 
     @classmethod
