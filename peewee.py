@@ -1600,6 +1600,7 @@ class Query(Node):
 
     def clone(self):
         query = type(self)(self.model_class)
+        query.database = self.database
         return self._clone_attributes(query)
 
     def _clone_attributes(self, query):
@@ -1946,7 +1947,7 @@ class SelectQuery(Query):
 
         sql, params = clone.sql()
         wrapped = 'SELECT COUNT(1) FROM (%s) AS wrapped_select' % sql
-        rq = RawQuery(self.model_class, wrapped, *params)
+        rq = self.model_class.raw(wrapped, *params)
         return rq.scalar() or 0
 
     def exists(self):
