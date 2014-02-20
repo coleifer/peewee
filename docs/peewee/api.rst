@@ -98,6 +98,19 @@ Models
         .. code-block:: python
             User.insert(**{User.username: 'admin'}).execute()
 
+        If you have a model with a default value on one of the fields, and
+        that field is not specified in the ``insert`` parameter, the default
+        will be used:
+
+        .. code-block:: python
+
+            class User(Model):
+                username = CharField()
+                active = BooleanField(default=True)
+
+            # This INSERT query will automatically specify `active=True`:
+            User.insert(username='charlie')
+
     .. py:method:: insert_many(rows)
 
         Insert multiple rows at once. The ``rows`` parameter must be an iterable
