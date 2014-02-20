@@ -1863,7 +1863,8 @@ class ModelQueryTestCase(ModelTestCase):
         u = User.get(User.id==uid)
         self.assertEqual(u.username, 'u1')
 
-        self.assertRaises(KeyError, User.insert, doesnotexist='invalid')
+        iq = User.insert(doesnotexist='invalid')
+        self.assertRaises(KeyError, iq.execute)
 
     def test_delete(self):
         self.create_users(5)

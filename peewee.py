@@ -1255,19 +1255,30 @@ class QueryCompiler(object):
         statement = query._upsert and 'INSERT OR REPLACE INTO' or 'INSERT INTO'
         clauses = [SQL(statement), model._as_entity()]
 
-        if query._insert:
-            fields = []
-            values = []
-            for field, value in self._sorted_fields(query._insert):
-                if not isinstance(value, (Node, Model)):
-                    value = Param(value, conv=field.db_value)
-                fields.append(field)
-                values.append(value)
+        if query._rows is not None:
+            fields, value_clauses = [], []
+            have_fields = False
 
-            clauses.extend([
-                EnclosedClause(*fields),
-                SQL('VALUES'),
-                EnclosedClause(*values)])
+            for row_dict in query._iter_rows():
+                if not have_fields:
+                    fields = sorted(
+                        row_dict.keys(), key=operator.attrgetter('_sort_key'))
+                    have_fields = True
+
+                values = []
+                for field in fields:
+                    value = row_dict[field]
+                    if not isinstance(value, (Node, Model)):
+                        value = Param(value, conv=field.db_value)
+                    values.append(value)
+
+                value_clauses.append(EnclosedClause(*values))
+
+            if fields:
+                clauses.extend([
+                    EnclosedClause(*fields),
+                    SQL('VALUES'),
+                    CommaClause(*value_clauses)])
 
         return self.build_query(clauses)
 
@@ -2058,19 +2069,41 @@ class UpdateQuery(Query):
         return self.database.rows_affected(self._execute())
 
 class InsertQuery(Query):
-    def __init__(self, model_class, insert=None):
-        mm = model_class._meta
-        defaults = mm.get_default_dict()
-        query = dict((mm.fields[f], v) for f, v in defaults.items())
-        if insert is not None:
-            query.update(insert)
-        self._insert = query
-        self._upsert = False
+    def __init__(self, model_class, field_dict=None, rows=None):
         super(InsertQuery, self).__init__(model_class)
+        if field_dict is not None:
+            self._rows = [field_dict]
+        else:
+            self._rows = rows
+        self._defaults = self._get_default_values()
+        self._upsert = False
+        self._valid_fields = (set(model_class._meta.fields.keys()) |
+                              set(model_class._meta.fields.values()))
+
+    def _get_default_values(self):
+        defaults = self.model_class._meta.get_default_dict()
+        return dict(
+            (self.model_class._meta.fields[f], v) for f, v in defaults.items())
+
+    def _iter_rows(self):
+        # Convert {'field_name': value} to {FieldName: value} / apply defaults.
+        for row_dict in self._rows:
+            field_row = {}
+            field_row.update(self._defaults)
+            for key in row_dict:
+                if key not in self._valid_fields:
+                    raise KeyError('"%s" is not a recognized field.' % key)
+                elif key in self.model_class._meta.fields:
+                    field = self.model_class._meta.fields[key]
+                else:
+                    field = key
+                field_row[field] = row_dict[key]
+            yield field_row
 
     def _clone_attributes(self, query):
         query = super(InsertQuery, self)._clone_attributes(query)
-        query._insert = dict(self._insert)
+        query._rows = self._rows
+        query._upsert = self._upsert
         return query
 
     join = not_allowed('joining')
@@ -2818,8 +2851,11 @@ class Model(with_metaclass(BaseModel)):
 
     @classmethod
     def insert(cls, **insert):
-        fdict = dict((cls._meta.fields[f], v) for f, v in insert.items())
-        return InsertQuery(cls, fdict)
+        return InsertQuery(cls, insert)
+
+    @classmethod
+    def insert_many(cls, *rows):
+        return InsertQuery(cls, rows=rows)
 
     @classmethod
     def delete(cls):
