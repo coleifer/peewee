@@ -27,7 +27,7 @@ As well as tools for working with databases:
 * :ref:`pwiz`
 * :ref:`migrate`
 * :ref:`csv_loader`
-* :ref:`read_slave`
+* :ref:`read_slaves`
 * :ref:`test_utils`
 
 
@@ -1571,31 +1571,33 @@ CSV Loader API
         Payments = load_csv(db, 'payments.csv', fields=fields, field_names=field_names, has_header=False)
 
 
-.. _read_slave
+.. _read_slaves:
 
-Read Slave
-----------
+Read Slaves
+-----------
 
 The ``read_slave`` module contains a :py:class:`Model` subclass that can be used
-to automatically execute ``SELECT`` queries against a different database.
+to automatically execute ``SELECT`` queries against different database(s). This
+might be useful if you have your databases in a master / slave configuration.
 
 .. py:class:: ReadSlaveModel
 
     Model subclass that will route ``SELECT`` queries to a different database.
 
-    Master and read-slave are specified using ``Model.Meta``:
+    Master and read-slaves are specified using ``Model.Meta``:
 
     .. code-block:: python
 
-        # Declare two databases.
+        # Declare a master and two read-replicas.
         master = PostgresqlDatabase('master')
-        read_slave = PostgresqlDatabase('read_slave')
+        replica_1 = PostgresqlDatabase('replica_1')
+        replica_2 = PostgresqlDatabase('replica_2')
 
         # Declare a BaseModel, the normal best-practice.
         class BaseModel(ReadSlaveModel):
             class Meta:
                 database = master
-                read_slave = read_slave
+                read_slaves = (replica_1, replica_2)
 
         # Declare your models.
         class User(BaseModel):
@@ -1608,19 +1610,22 @@ to automatically execute ``SELECT`` queries against a different database.
 
         User.create(username='Peewee')  # Executed against master.
 
-    When you execute a read query, it will run against the read-slave:
+    When you execute a read query, it will run against one of the replicas:
 
     .. code-block:: python
 
-        users = User.select().where(User.username == 'Peewee')  # Read slave.
+        users = User.select().where(User.username == 'Peewee')
 
     .. note::
-        To force a SELECT query against the master database, manually create
+        To force a ``SELECT`` query against the master database, manually create
         the :py:class:`SelectQuery`.
 
         .. code-block:: python
 
             SelectQuery(User)  # master database.
+
+    .. note::
+        Queries will be dispatched among the ``read_slaves`` in round-robin fashion.
 
 .. _test_utils:
 
