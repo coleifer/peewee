@@ -701,6 +701,20 @@ class BooleanField(Field):
     db_field = 'bool'
     coerce = bool
 
+class RelationIdDescriptor(object):
+    def __init__(self, field):
+        self.field = field
+        self.att_name = self.field.name
+    def __get__(self, instance, instance_type=None):
+        if instance is not None:
+            return instance._data.get(self.att_name)
+        return self.field
+    def __set__(self, instance, value):
+        orig_value = instance._data.get(self.att_name)
+        instance._data[self.att_name] = value
+        if orig_value != value and self.att_name in instance._obj_cache:
+            del instance._obj_cache[self.att_name]
+
 class RelationDescriptor(FieldDescriptor):
     """Foreign-key abstraction to replace a related PK with a related model."""
     def __init__(self, field, rel_model):
@@ -817,6 +831,7 @@ class ForeignKeyField(IntegerField):
         fk_descriptor = RelationDescriptor(self, self.rel_model)
         backref_descriptor = ReverseRelationDescriptor(self)
         setattr(model_class, name, fk_descriptor)
+        setattr(model_class, name + "_id", RelationIdDescriptor(self))
         setattr(self.rel_model, self.related_name, backref_descriptor)
         self._is_bound = True
 
