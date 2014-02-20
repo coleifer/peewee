@@ -79,7 +79,11 @@ Models
 
     .. py:classmethod:: insert(**insert)
 
-        :param insert: mapping of field-name to expression
+        Insert a new row into the database. If any fields on the model have
+        default values, these values will be used if the fields are not explicitly
+        set in the ``insert`` dictionary.
+
+        :param insert: mapping of field or field-name to expression
         :rtype: an :py:class:`InsertQuery` for the given ``Model``
 
         Example showing creation of a new user:
@@ -88,6 +92,53 @@ Models
 
             q = User.insert(username='admin', active=True, registration_expired=False)
             q.execute()  # perform the insert.
+
+        You can also use :py:class:`Field` objects as the keys:
+
+        .. code-block:: python
+            User.insert(**{User.username: 'admin'}).execute()
+
+    .. py:method:: insert_many(rows)
+
+        Insert multiple rows at once. The ``rows`` parameter must be an iterable
+        that yields dictionaries. As with :py:meth:`~Model.insert`, fields that
+        are not specified in the dictionary will use their default value, if
+        one exists.
+
+        .. note::
+            Due to the nature of bulk inserts, each row must contain the same
+            fields. The following would not work:
+
+            .. code-block:: python
+
+                Person.insert_many([
+                    {'first_name': 'Peewee', 'last_name': 'Herman'},
+                    {'first_name': 'Huey'},  # Missing "last_name"!
+                ])
+
+        :param rows: An iterable containing dictionaries of field-name-to-value.
+        :rtype: an :py:class:`InsertQuery` for the given ``Model``.
+
+        Example of inserting multiple Users:
+
+        .. code-block:: python
+
+            usernames = ['charlie', 'huey', 'peewee', 'mickey']
+            row_dicts = [{'username': username} for username in usernames]
+
+            # Insert 4 new rows.
+            User.insert_many(row_dicts).execute()
+
+        Because the ``rows`` parameter can be an arbitrary iterable, you can
+        also use a generator:
+
+        .. code-block:: python
+
+            def get_usernames():
+                for username in ['charlie', 'huey', 'peewee']:
+                    yield {'username': username}
+            User.insert_many(get_usernames()).execute()
+
 
     .. py:classmethod:: delete()
 
@@ -1214,22 +1265,44 @@ Query Types
         Performs the query
 
 
-.. py:class:: InsertQuery(model_class, **kwargs)
+.. py:class:: InsertQuery(model_class[, field_dict=None[, rows=None]])
 
-    Creates an ``InsertQuery`` instance for the given model where kwargs is a
-    dictionary of field name to value:
+    Creates an ``InsertQuery`` instance for the given model.
+
+    :param dict field_dict: A mapping of either field or field-name to value.
+    :param iterable rows: An iterable of dictionaries containing a mapping of
+        field or field-name to value.
+
+    Basic example:
 
     .. code-block:: pycon
 
-        >>> iq = InsertQuery(User, username='admin', password='test', active=True)
+        >>> fields = {'username': 'admin', 'password': 'test', 'active': True}
+        >>> iq = InsertQuery(User, fields)
         >>> iq.execute()  # insert new row and return primary key
         2L
+
+    Example inserting multiple rows:
+
+    .. code-block:: python
+
+        users = [
+            {'username': 'charlie', 'active': True},
+            {'username': 'peewee', 'active': False},
+            {'username': 'huey', 'active': True}]
+        iq = InsertQuery(User, rows=users)
+        iq.execute()
 
     .. py:method:: execute()
 
         :rtype: primary key of the new row
 
         Performs the query
+
+    .. py:method:: upsert([upsert=True])
+
+        Perform an ``INSERT OR REPLACE`` query. Currently only Sqlite supports
+        this method.
 
 
 .. py:class:: DeleteQuery(model_class)

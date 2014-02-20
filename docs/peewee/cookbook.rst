@@ -909,16 +909,62 @@ key, you must set the ``primary_key`` attribute of the model options to a
             primary_key = CompositeKey('blog', 'tag')
 
 
-Bulk loading data or manually specifying primary keys
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Bulk inserts
+^^^^^^^^^^^^
 
-The fastest way to load a large number of rows is to use a transaction:
+There are a couple of ways you can load lots of data quickly. Let's look at the
+various options:
+
+The naive approach is to simply call :py:meth:`Model.create`:
 
 .. code-block:: python
 
+    for data_dict in data_source:
+        Model.create(**data_dict)
+
+The above approach is slow for a couple of reasons:
+
+1. If you are using autocommit (the default), then each call to ``create``
+   happens in its own transaction. That is going to be slow!
+2. There is a decent amount of Python logic getting in your way, and each
+   :py:class:`InsertQuery` must be generated and parsed into SQL.
+3. That's a lot of data (in terms of raw bytes) you are sending to your database
+   to parse.
+4. We are retrieving the "last insert ID", which causes an additional query to
+   be executed in some cases.
+
+You can get a *very significant* speedup by simply wrapping this in a transaction.
+
+.. code-block:: python
+
+    # This is much faster.
     with db.transaction():
-        for row in data_file:
-            User.create(username=row['username'])
+        for data_dict in data_source:
+            Model.create(**data_dict)
+
+The above code still suffers from points 2, 3 and 4. We can get another big
+boost by calling :py:meth:`Model.insert_many`. This method accepts a list of
+dictionaries to insert.
+
+.. code-block:: python
+
+    # Fastest.
+    with db.transaction():
+        Model.insert_many(data_source)
+
+Depending on the number of rows in your data source, you may need to break it
+up into chunks:
+
+.. code-block:: python
+
+    # Insert rows 1000 at a time.
+    with db.transaction():
+        for idx in range(0, len(data_source), 1000):
+            Model.insert_many(data_source[i:i+1000])
+
+
+Manually specifying primary keys
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Sometimes you do not want the database to automatically generate a primary key,
 for instance when bulk loading relational data.  To handle this on a "one-off"
@@ -1051,6 +1097,11 @@ pwiz will generate code for:
 * models that were introspected from the database tables
 
 The generated code is written to stdout.
+
+.. note::
+    pwiz is **not** a fully-automatic model generator. You may need to go
+    back through, add indexes, fix unknown column types, and resolve any
+    circular references.
 
 
 Schema migrations
