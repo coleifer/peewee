@@ -389,11 +389,11 @@ class Func(Node):
         if partition_by:
             over_clauses.append(Clause(
                 SQL('PARTITION BY'),
-                *partition_by))
+                CommaClause(*partition_by)))
         if order_by:
             over_clauses.append(Clause(
                 SQL('ORDER BY'),
-                *order_by))
+                CommaClause(*order_by)))
         return Clause(self, SQL('OVER'), EnclosedClause(Clause(*over_clauses)))
 
     def __getattr__(self, attr):
