@@ -1831,7 +1831,7 @@ Misc
         Basic support for SQL window functions.
 
         :param Node partition_by: :py:class:`Node` instance to partition by.
-        :param Node order_by: :py:class:`Node` instance to use for ordering.
+        :param list order_by: List of :py:class:`Node` instances to use for ordering.
 
         Examples:
 
@@ -1853,7 +1853,7 @@ Misc
                          Employee.name,
                          Employee.salary,
                          fn.rank().over(
-                             order_by=Employee.salary)))
+                             order_by=[Employee.salary])))
 
             # Get a list of page-views, along with avg pageviews for that day.
             query = (PageView
