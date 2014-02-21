@@ -1563,6 +1563,7 @@ class Query(Node):
 
                 # this is kind of hacky, but easiest way to handel to_fields since subqueries default to the primary key unless the select is explicit
                 if not isinstance(field.to_field, PrimaryKeyField):
+                    subquery = subquery.clone()
                     subquery._select = subquery._model_shorthand([field.to_field])
                     subquery._explicit_selection = True
                 queries.append((last_model.select().where(field << subquery), field))
