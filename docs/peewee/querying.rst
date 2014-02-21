@@ -508,7 +508,7 @@ parameters.
                  Employee.department,
                  Employee.salary,
                  fn.Avg(Employee.salary).over(
-                     partition_by=[Employee.department]))
+                     partition_by=Employee.department))
              .order_by(Employee.name))
 
     # Rank employees by salary.

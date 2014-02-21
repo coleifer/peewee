@@ -1830,7 +1830,7 @@ Misc
 
         Basic support for SQL window functions.
 
-        :param list partition_by: List of :py:class:`Node` instances to partition by.
+        :param Node partition_by: :py:class:`Node` instance to partition by.
         :param list order_by: List of :py:class:`Node` instances to use for ordering.
 
         Examples:
@@ -1844,7 +1844,7 @@ Misc
                          Employee.department,
                          Employee.salary,
                          fn.Avg(Employee.salary).over(
-                             partition_by=[Employee.department]))
+                             partition_by=Employee.department))
                      .order_by(Employee.name))
 
             # Rank employees by salary.
@@ -1861,8 +1861,8 @@ Misc
                          PageView.url,
                          PageView.timestamp,
                          fn.Count(PageView.id).over(
-                             partition_by=[fn.date_trunc(
-                                 'day', PageView.timestamp)]))
+                             partition_by=fn.date_trunc(
+                                 'day', PageView.timestamp)))
                      .order_by(PageView.timestamp))
 
 .. py:class:: SQL(sql, *params)
