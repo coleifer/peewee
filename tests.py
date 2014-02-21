@@ -4275,7 +4275,7 @@ if test_db.window_functions:
                          NullModel.int_field,
                          NullModel.float_field,
                          fn.Avg(NullModel.float_field).over(
-                             partition_by=NullModel.int_field))
+                             partition_by=[NullModel.int_field]))
                      .order_by(NullModel.id))
 
             self.assertEqual(list(query.tuples()), [
@@ -4309,7 +4309,7 @@ if test_db.window_functions:
                          NullModel.int_field,
                          NullModel.float_field,
                          fn.rank().over(
-                             partition_by=NullModel.int_field,
+                             partition_by=[NullModel.int_field],
                              order_by=[NullModel.float_field.desc()]))
                      .order_by(NullModel.id))
 
@@ -4352,8 +4352,8 @@ if test_db.window_functions:
                          NullModel.int_field,
                          NullModel.datetime_field,
                          fn.Count(NullModel.id).over(
-                             partition_by=fn.date_trunc(
-                                 'day', NullModel.datetime_field)))
+                             partition_by=[fn.date_trunc(
+                                 'day', NullModel.datetime_field)]))
                      .order_by(NullModel.id))
 
             self.assertEqual(list(query.tuples()), [

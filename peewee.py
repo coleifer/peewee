@@ -389,7 +389,7 @@ class Func(Node):
         if partition_by:
             over_clauses.append(Clause(
                 SQL('PARTITION BY'),
-                partition_by))
+                *partition_by))
         if order_by:
             over_clauses.append(Clause(
                 SQL('ORDER BY'),
