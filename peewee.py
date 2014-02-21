@@ -393,7 +393,7 @@ class Func(Node):
         if order_by:
             over_clauses.append(Clause(
                 SQL('ORDER BY'),
-                *order_by))
+                order_by))
         return Clause(self, SQL('OVER'), EnclosedClause(Clause(*over_clauses)))
 
     def __getattr__(self, attr):

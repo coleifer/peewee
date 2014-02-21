@@ -4292,7 +4292,7 @@ if test_db.window_functions:
                          NullModel.int_field,
                          NullModel.float_field,
                          fn.rank().over(
-                             order_by=[NullModel.float_field]))
+                             order_by=NullModel.float_field))
                      .order_by(NullModel.id))
 
             self.assertEqual(list(query.tuples()), [
@@ -4310,7 +4310,7 @@ if test_db.window_functions:
                          NullModel.float_field,
                          fn.rank().over(
                              partition_by=NullModel.int_field,
-                             order_by=[NullModel.float_field.desc()]))
+                             order_by=NullModel.float_field.desc()))
                      .order_by(NullModel.id))
 
             self.assertEqual(list(query.tuples()), [

@@ -517,7 +517,7 @@ parameters.
                  Employee.name,
                  Employee.salary,
                  fn.rank().over(
-                     order_by=[Employee.salary])))
+                     order_by=Employee.salary)))
 
 For general information on window functions, check
 out the `postgresql docs <http://www.postgresql.org/docs/9.1/static/tutorial-window.html>`_.
