@@ -68,9 +68,6 @@ __all__ = [
     'TimeField',
 ]
 
-# All peewee-generated logs are logged to this namespace.
-logger = logging.getLogger('peewee')
-
 # Python 2/3 compatibility helpers. These helpers are used internally and are
 # not exported.
 def with_metaclass(meta, base=object):
@@ -2165,6 +2162,7 @@ class Database(object):
     for_update = False
     interpolation = '?'
     limit_max = None
+    logger = logging.getLogger('peewee')
     op_overrides = {}
     quote_char = '"'
     reserved_tables = []
@@ -2172,7 +2170,7 @@ class Database(object):
     sequences = False
     subquery_delete_same_table = True
     window_functions = False
-
+    
     exceptions = {
         'DatabaseError': DatabaseError,
         'DataError': DataError,
@@ -2184,7 +2182,8 @@ class Database(object):
         'ProgrammingError': ProgrammingError}
 
     def __init__(self, database, threadlocals=False, autocommit=True,
-                 fields=None, ops=None, autorollback=False, **connect_kwargs):
+                 fields=None, ops=None, autorollback=False, debug=False,
+                 **connect_kwargs):
         self.init(database, **connect_kwargs)
 
         if threadlocals:
@@ -2195,6 +2194,8 @@ class Database(object):
         self._conn_lock = threading.Lock()
         self.autocommit = autocommit
         self.autorollback = autorollback
+
+        self.debug = debug
 
         self.field_overrides = merge_dict(self.field_overrides, fields or {})
         self.op_overrides = merge_dict(self.op_overrides, ops or {})
@@ -2268,13 +2269,15 @@ class Database(object):
             self.op_overrides)
 
     def execute_sql(self, sql, params=None, require_commit=True):
-        logger.debug((sql, params))
+        if self.debug:
+            self.logger.debug((sql, params))
         with self.exception_wrapper():
             cursor = self.get_cursor()
             try:
                 res = cursor.execute(sql, params or ())
             except Exception as exc:
-                logger.exception('%s %s', sql, params)
+                if self.debug:
+                    logger.exception('%s %s', sql, params)
                 if self.get_autocommit() and self.autorollback:
                     self.rollback()
                 if self.sql_error_handler(exc, sql, params, require_commit):

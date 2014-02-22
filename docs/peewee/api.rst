@@ -1468,9 +1468,10 @@ Query Types
 Database and its subclasses
 ---------------------------
 
-.. py:class:: Database(database[, threadlocals=False[, autocommit=True[, fields=None[, ops=None[, autorollback=False[, **connect_kwargs]]]]]])
+.. py:class:: Database(database[, threadlocals=False[, autocommit=True[, fields=None[, ops=None[, autorollback=False[, debug=False[, **connect_kwargs]]]]]]])
 
     :param database: the name of the database (or filename if using sqlite)
+    :param bool debug: whether to enable logging
     :param bool threadlocals: whether to store connections in a threadlocal
     :param bool autocommit: automatically commit every query executed by calling :py:meth:`~Database.execute`
     :param dict fields: a mapping of :py:attr:`~Field.db_field` to database column type, e.g. 'string' => 'varchar'
