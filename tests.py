@@ -2120,46 +2120,6 @@ class PrefetchTestCase(ModelTestCase):
         ])
         self.assertEqual(len(self.queries()) - qc, 5)
 
-class PrefetchRelatedTestCase(PrefetchTestCase):
-    prefetch_string = 'blog_set__comments'
-    def test_prefetch_simple(self):
-        sq = self.user_model.select().where(self.user_model.username != 'u3')
-        qc = len(self.queries())
-        
-        prefetch_sq = sq.prefetch_related('blog_set__comments')
-        results = []
-        for user in prefetch_sq:
-            results.append(user.username)
-            for blog in user.blog_set:
-                results.append(blog.title)
-                for comment in blog.comments:
-                    results.append(comment.comment)
-
-        self.assertEqual(results, [
-            'u1', 'b1', 'b1-c1', 'b1-c2', 'b2', 'b2-c1',
-            'u2',
-            'u4', 'b5', 'b5-c1', 'b5-c2', 'b6', 'b6-c1',
-        ])
-        qc2 = len(self.queries())
-        self.assertEqual(qc2 - qc, 3)
-
-        results = []
-        for user in prefetch_sq:
-            for blog in user.blog_set:
-                results.append(blog.user.username)
-                for comment in blog.comments:
-                    results.append(comment.blog.title)
-        self.assertEqual(results, [
-            'u1', 'b1', 'b1', 'u1', 'b2', 'u4', 'b5', 'b5', 'u4', 'b6',
-        ])
-        qc3 = len(self.queries())
-        self.assertEqual(qc3, qc2)
-
-class PrefetchRelatedWithToFieldTestCase(PrefetchRelatedTestCase):
-    requires = [UserToField, BlogToField, CommentToField, Parent, Child, Orphan, ChildPet, OrphanPet, Category]
-    blog_model = BlogToField
-    user_model = UserToField
-    comment_model = CommentToField
 
 class RecursiveDeleteTestCase(ModelTestCase):
     requires = [Parent, Child, Orphan, ChildPet, OrphanPet]
@@ -2229,7 +2189,7 @@ class MultipleFKTestCase(ModelTestCase):
         self.assertEqual(list(a.related_to), [])
 
         r_ab = Relationship.create(from_user=a, to_user=b)
-        self.assertEqual(list(a.relationships), [r_ab])
+        self.assertEqual(list(a.relationships.clone()), [r_ab])
         self.assertEqual(list(a.related_to), [])
         self.assertEqual(list(b.relationships), [])
         self.assertEqual(list(b.related_to), [r_ab])

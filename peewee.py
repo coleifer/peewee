@@ -759,10 +759,15 @@ class ReverseRelationDescriptor(object):
     def __get__(self, instance, instance_type=None):
         if instance is not None:
             rel_name = '%s_prefetch' % self.field.related_name
-            if hasattr(instance, rel_name):
-                return getattr(instance, rel_name)
-            return self.rel_model.select().where(self.field==getattr(instance, self.to_field.name))
+            if not hasattr(instance, rel_name):
+                rel_instances = self.rel_model.select().where(self.field==getattr(instance, self.to_field.name))
+                setattr(instance, rel_name, rel_instances)
+                # set the relateddescriptor so if we want to follow back we don't issue new queries
+                for inst in rel_instances:
+                    setattr(inst, self.field.name, instance)
+            return getattr(instance, rel_name)
         return self
+
 
 class ForeignKeyField(IntegerField):
     def __init__(self, rel_model, null=False, related_name=None, to_field=None, cascade=False,
