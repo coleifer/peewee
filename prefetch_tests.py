@@ -1,8 +1,13 @@
 import logging
+import sys
+
 import tests
+
 
 logger = logging.getLogger('peewee')
 logger.setLevel(logging.DEBUG)
+hndlr = logging.StreamHandler(sys.stdout)
+
 class PrefetchRelatedTestCase(tests.PrefetchTestCase):
     prefetch_string = 'blog_set__comments'
     def test_prefetch_simple(self):
