@@ -79,7 +79,7 @@ class GFKField(object):
                 if rel_obj:
                     instance._obj_cache[self.att_name] = rel_obj
             return instance._obj_cache.get(self.att_name)
-        return self.field
+        return self
 
     def __set__(self, instance, value):
         instance._obj_cache[self.att_name] = value
