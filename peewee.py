@@ -1567,7 +1567,8 @@ class Query(Node):
                 subquery = queries[-1][0]
 
                 ids = [getattr(inst, field.to_field.name) for inst in subquery]
-                queries.append((last_model.select().where(field << ids), field))
+                expr = field << ids if ids else False
+                queries.append((last_model.select().where(expr), field))
             prefetch(self, *queries, fix_queries=False)
 
     @returns_clone
