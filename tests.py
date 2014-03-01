@@ -699,6 +699,13 @@ class SelectTestCase(BasePeeweeTestCase):
         sq = SelectQuery(PackageItem).where(PackageItem.package << p)
         self.assertWhere(sq, '(packageitem."package_id" IN (SELECT package."barcode" FROM "package" AS package WHERE (package."id" = ?)))', [2])
 
+    def test_fix_null(self):
+        sq = SelectQuery(Blog).where(Blog.user == None)
+        self.assertWhere(sq, '(blog."user_id" IS ?)', [None])
+
+        sq = SelectQuery(Blog).where(Blog.user != None)
+        self.assertWhere(sq, 'NOT (blog."user_id" IS ?)', [None])
+
     def test_where_coercion(self):
         sq = SelectQuery(User).where(User.id < '5')
         self.assertWhere(sq, '(users."id" < ?)', [5])
