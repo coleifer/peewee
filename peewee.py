@@ -760,11 +760,13 @@ class ReverseRelationDescriptor(object):
         if instance is not None:
             rel_name = '%s_prefetch' % self.field.related_name
             if not hasattr(instance, rel_name):
-                rel_instances = self.rel_model.select().where(self.field==getattr(instance, self.to_field.name))
-                setattr(instance, rel_name, rel_instances)
+                rel_query = self.rel_model.select().where(self.field==getattr(instance, self.to_field.name))
+                setattr(instance, rel_name, rel_query)
                 # set the relateddescriptor so if we want to follow back we don't issue new queries
-                for inst in rel_instances:
-                    setattr(inst, self.field.name, instance)
+                def populate_foreignkey(rel_instances):
+                    for inst in rel_instances:
+                        setattr(inst, self.field.name, instance)
+                rel_query._callbacks_on_resolution.append(populate_foreignkey)
             return getattr(instance, rel_name)
         return self
 
@@ -1509,6 +1511,7 @@ class Query(Node):
         self._joins = {self.model_class: []} # Join graph as adjacency list.
         self._where = None
         self._execution_time = None
+        self._callbacks_on_resolution = []
 
     def __repr__(self):
         sql, params = self.sql()
@@ -1523,6 +1526,7 @@ class Query(Node):
             query._where = self._where.clone()
         query._joins = self._clone_joins()
         query._query_ctx = self._query_ctx
+        query._callbacks_on_resolution = self._callbacks_on_resolution
         return query
 
     def _clone_joins(self):
@@ -1902,6 +1906,8 @@ class SelectQuery(Query):
             else:
                 ResultWrapper = ModelQueryResultWrapper
             self._qr = ResultWrapper(model_class, self._execute(), query_meta)
+            for callback in self._callbacks_on_resolution:
+                callback(self._qr)
             self._dirty = False
             return self._qr
         else:
