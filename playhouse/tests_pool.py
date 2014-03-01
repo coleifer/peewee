@@ -61,11 +61,17 @@ class TestPooledDatabase(TestCase):
         threads = [threading.Thread(target=open_conn) for i in range(5)]
         for thread in threads:
             thread.start()
+
+        # Wait for all connections to be opened.
+        while db.counter < 5:
+            time.sleep(.01)
+
+        # Signal threads to close connections and join threads.
         signal.set()
         [t.join() for t in threads]
 
         self.assertEqual(db.counter, 5)
-        self.assertEqual(db.in_use, {})
+        self.assertEqual(db._in_use, {})
 
     def test_max_conns(self):
         for i in range(self.db.max_connections):
@@ -86,6 +92,18 @@ class TestPooledDatabase(TestCase):
 
         # A new connection will be returned.
         self.assertEqual(db.get_conn(), 2)
+
+    def test_manual_close(self):
+        conn = self.db.get_conn()
+        self.assertEqual(conn, 1)
+
+        self.db.manual_close()
+        conn = self.db.get_conn()
+        self.assertEqual(conn, 2)
+
+        self.db.close()
+        conn = self.db.get_conn()
+        self.assertEqual(conn, 2)
 
 
 class TestConnectionPool(TestCase):
