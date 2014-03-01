@@ -324,6 +324,15 @@ class Node(object):
     bin_and = _e(OP_BIN_AND)
     bin_or = _e(OP_BIN_OR)
 
+    # Special expressions.
+    def in_(self, *rhs):
+        return Expression(self, OP_IN, rhs)
+    def contains(self, rhs):
+        return Expression(self, OP_ILIKE, '%%%s%%' % rhs)
+    def startswith(self, rhs):
+        return Expression(self, OP_ILIKE, '%s%%' % rhs)
+    def endswith(self, rhs):
+        return Expression(self, OP_ILIKE, '%%%s' % rhs)
     def between(self, low, high):
         return Expression(self, OP_BETWEEN, Clause(low, R('AND'), high))
 

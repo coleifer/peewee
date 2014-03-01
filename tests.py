@@ -3146,6 +3146,25 @@ class FieldTypeTestCase(ModelTestCase):
         self.assertNM(field.between(2, 3), ['c2', 'c3'])
         self.assertNM(field.between(5, 300), [])
 
+    def test_in_(self):
+        self.assertNM(NullModel.int_field.in_(1, 3), ['c1', 'c3'])
+        self.assertNM(NullModel.int_field.in_(2, 5), ['c2'])
+
+    def test_contains(self):
+        self.assertNM(NullModel.char_field.contains('c2'), ['c2'])
+        self.assertNM(NullModel.char_field.contains('c'), ['c1', 'c2', 'c3'])
+        self.assertNM(NullModel.char_field.contains('1'), ['c1'])
+
+    def test_startswith(self):
+        NullModel.create(char_field='ch1')
+        self.assertNM(NullModel.char_field.startswith('c'), ['c1', 'c2', 'c3', 'ch1'])
+        self.assertNM(NullModel.char_field.startswith('ch'), ['ch1'])
+        self.assertNM(NullModel.char_field.startswith('a'), [])
+
+    def test_endswith(self):
+        NullModel.create(char_field='ch1')
+        self.assertNM(NullModel.char_field.endswith('1'), ['c1', 'ch1'])
+        self.assertNM(NullModel.char_field.endswith('4'), [])
 
 class DateTimeExtractTestCase(ModelTestCase):
     requires = [NullModel]
