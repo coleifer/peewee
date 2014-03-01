@@ -91,6 +91,19 @@ class PrefetchRelatedTestCase(tests.PrefetchTestCase):
         qc4 = len(self.queries())
         self.assertEqual(qc4, qc3)
 
+        results = []
+        for user in prefetch_sq:
+            for blog in user.blog_set.where(self.blog_model.content==''):
+                results.append(blog.user.username)
+                for comment in blog.comments:
+                    results.append(comment.blog.title)
+        self.assertEqual(results, [
+            'u1', 'b1', 'b1', 'u1', 'b2', 'u4', 'b5', 'b5', 'u4', 'b6',
+        ])
+        qc5 = len(self.queries())
+        # 3 to fetch blogs, for each of 4 blogs fetch comments
+        self.assertEqual(qc5 - qc4, 3+4)
+
 class PrefetchRelatedWithToFieldTestCase(PrefetchRelatedTestCase):
     requires = [tests.UserToField, tests.BlogToField, tests.CommentToField, tests.Parent, tests.Child, tests.Orphan, tests.ChildPet, tests.OrphanPet, tests.Category]
     blog_model = tests.BlogToField
