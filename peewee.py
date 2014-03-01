@@ -303,12 +303,19 @@ class Node(object):
     __ror__ = _e(OP_OR, inv=True)
     __rxor__ = _e(OP_XOR, inv=True)
 
-    __eq__ = _e(OP_EQ)
+    def __eq__(self, rhs):
+        if rhs is None:
+            return Expression(self, OP_IS, None)
+        return Expression(self, OP_EQ, rhs)
+    def __ne__(self, rhs):
+        if rhs is None:
+            return ~Expression(self, OP_IS, None)
+        return Expression(self, OP_NE, rhs)
+
     __lt__ = _e(OP_LT)
     __le__ = _e(OP_LTE)
     __gt__ = _e(OP_GT)
     __ge__ = _e(OP_GTE)
-    __ne__ = _e(OP_NE)
     __lshift__ = _e(OP_IN)
     __rshift__ = _e(OP_IS)
     __mod__ = _e(OP_LIKE)
@@ -623,10 +630,10 @@ class DecimalField(Field):
 
     def clone_base(self, **kwargs):
         return super(DecimalField, self).clone_base(
-            max_digits=max_digits,
-            decimal_places=decimal_places,
-            auto_round=auto_round,
-            rounding=rounding,
+            max_digits=self.max_digits,
+            decimal_places=self.decimal_places,
+            auto_round=self.auto_round,
+            rounding=self.rounding,
             **kwargs)
 
     def get_modifiers(self):
@@ -2021,7 +2028,6 @@ class SelectQuery(Query):
         return iter(self.execute().iterator())
 
     def __getitem__(self, value):
-        start = end = None
         res = self.execute()
         if isinstance(value, slice):
             index = value.stop
@@ -2272,7 +2278,7 @@ class Database(object):
         with self.exception_wrapper():
             cursor = self.get_cursor()
             try:
-                res = cursor.execute(sql, params or ())
+                cursor.execute(sql, params or ())
             except Exception as exc:
                 logger.exception('%s %s', sql, params)
                 if self.get_autocommit() and self.autorollback:
