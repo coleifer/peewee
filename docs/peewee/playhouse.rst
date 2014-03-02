@@ -28,6 +28,7 @@ As well as tools for working with databases:
 * :ref:`migrate`
 * :ref:`csv_loader`
 * :ref:`read_slaves`
+* :ref:`pool`
 * :ref:`test_utils`
 
 
@@ -1569,6 +1570,73 @@ CSV Loader API
         fields = [DecimalField(), IntegerField(), IntegerField(), DateField()]
         field_names = ['amount', 'from_acct', 'to_acct', 'timestamp']
         Payments = load_csv(db, 'payments.csv', fields=fields, field_names=field_names, has_header=False)
+
+
+.. _pool:
+
+Connection pool
+---------------
+
+.. warning:: This module should be considered experimental.
+
+The ``pool`` module contains a helper class to pool database connections, as well as implementations
+for PostgreSQL and MySQL. The pool works by overriding the methods on the :py:class:`Database` class
+that open and close connections to the backend. The pool can specify a timeout after which connections
+are recycled, as well as an upper bound on the number of open connections.
+
+If your application is single-threaded, only one connection will be opened.
+
+If your application is multi-threaded (this includes green threads) and you specify `threadlocals=True`
+when instantiating your database, then up to `max_connections` will be opened.
+
+.. note:: If you intend to open multiple concurrent connections, specify `threadlocals=True` when creating
+    your database, e.g.
+
+    .. code-block:: python
+
+        db = PooledPostgresqlDatabase(
+            'my_db',
+            max_connections=8,
+            stale_timeout=600,
+            user='postgres',
+            threadlocals=True)
+
+.. py:class:: PooledDatabase(database[, max_connections=20[, stale_timeout=None[, **kwargs]]])
+
+    Mixin class intended to be used with a subclass of :py:class:`Database`.
+
+    :param str database: The name of the database or database file.
+    :param int max_connections: Maximum number of connections. Provide ``None`` for unlimited.
+    :param int stale_timeout: Number of seconds to allow connections to be used.
+    :param kwargs: Arbitrary keyword arguments passed to database class.
+
+    .. note:: Connections will not be closed exactly when they exceed their `stale_timeout`.
+        Instead, stale connections are only closed when a new connection is requested.
+
+    .. note:: If the number of open connections exceeds `max_connections`, a `ValueError` will
+        be raised.
+
+    .. py:method:: manual_close()
+
+        Close the currently-open connection without returning it to the pool.
+
+    .. py:method:: _connect(*args, **kwargs)
+
+        Request a connection from the pool. If there are no available connections a new one will
+        be opened.
+
+    .. py:method:: _close(conn[, close_conn=False])
+
+        By default `conn` will not be closed and instead will be returned to the pool of available
+        connections. If `close_conn=True`, then `conn` will be closed and *not* be returned to the pool.
+
+.. py:class:: PooledPostgresqlDatabase
+
+    Subclass of :py:class:`PostgresqlDatabase` that mixes in the :py:class:`PooledDatabase` helper.
+
+.. py:class:: PooledMySQLDatabase
+
+    Subclass of :py:class:`MySQLDatabase` that mixes in the :py:class:`PooledDatabase` helper.
 
 
 .. _read_slaves:
