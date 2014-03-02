@@ -18,9 +18,6 @@ from peewee import PostgresqlDatabase
 
 logger = logging.getLogger('peewee.pool')
 
-def conn_key(conn):
-    return id(conn)
-
 class PooledDatabase(object):
     def __init__(self, database, max_connections=32, stale_timeout=None,
                  **kwargs):
@@ -29,25 +26,30 @@ class PooledDatabase(object):
         self._connections = []
         self._in_use = {}
         self._closed = set()
+        self.conn_key = id
 
         super(PooledDatabase, self).__init__(database, **kwargs)
 
     def _connect(self, *args, **kwargs):
-        try:
-            ts, conn = heapq.heappop(self._connections)
-            key = conn_key(conn)
-        except IndexError:
-            ts = conn = None
-            logger.debug('No connection available in pool.')
-        else:
-            if self.stale_timeout and self.is_stale(ts):
-                logger.debug('Connection %s was stale, closing.', key)
-                self._close(conn, True)
+        while True:
+            try:
+                ts, conn = heapq.heappop(self._connections)
+                key = self.conn_key(conn)
+            except IndexError:
                 ts = conn = None
-            elif key in self._closed:
-                logger.debug('Connection %s was closed.', key)
-                ts = conn = None
-                self._closed.remove(key)
+                logger.debug('No connection available in pool.')
+                break
+            else:
+                if self.stale_timeout and self.is_stale(ts):
+                    logger.debug('Connection %s was stale, closing.', key)
+                    self._close(conn, True)
+                    ts = conn = None
+                elif key in self._closed:
+                    logger.debug('Connection %s was closed.', key)
+                    ts = conn = None
+                    self._closed.remove(key)
+                else:
+                    break
 
         if conn is None:
             if self.max_connections and (
@@ -55,7 +57,7 @@ class PooledDatabase(object):
                 raise ValueError('Exceeded maximum connections.')
             conn = super(PooledDatabase, self)._connect(*args, **kwargs)
             ts = time.time()
-            key = conn_key(conn)
+            key = self.conn_key(conn)
             logger.debug('Created new connection %s.', key)
 
         self._in_use[key] = ts
@@ -65,7 +67,7 @@ class PooledDatabase(object):
         return (time.time() - timestamp) > self.stale_timeout
 
     def _close(self, conn, close_conn=False):
-        key = conn_key(conn)
+        key = self.conn_key(conn)
         if close_conn:
             self._closed.add(key)
             super(PooledDatabase, self)._close(conn)

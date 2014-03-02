@@ -1,3 +1,4 @@
+import heapq
 import psycopg2  # Trigger import error if not installed.
 import threading
 import time
@@ -23,7 +24,9 @@ class FakeDatabase(SqliteDatabase):
         self.closed_counter += 1
 
 class TestDB(PooledDatabase, FakeDatabase):
-    pass
+    def __init__(self, *args, **kwargs):
+        super(TestDB, self).__init__(*args, **kwargs)
+        self.conn_key = lambda conn: conn
 
 pooled_db = PooledPostgresqlDatabase('peewee_test')
 normal_db = PostgresqlDatabase('peewee_test')
@@ -104,6 +107,49 @@ class TestPooledDatabase(TestCase):
         self.db.close()
         conn = self.db.get_conn()
         self.assertEqual(conn, 2)
+
+    def test_stale_timeout_cascade(self):
+        now = time.time()
+        db = TestDB('testing', stale_timeout=10)
+        conns = [
+            (now - 20, 1),
+            (now - 15, 2),
+            (now - 5, 3),
+            (now, 4),
+        ]
+        for ts_conn in conns:
+            heapq.heappush(db._connections, ts_conn)
+
+        self.assertEqual(db.get_conn(), 3)
+        self.assertEqual(db._in_use, {3: now - 5})
+        self.assertEqual(db._connections, [(now, 4)])
+
+    def test_connect_cascade(self):
+        now = time.time()
+        db = TestDB('testing', stale_timeout=10)
+
+        conns = [
+            (now - 15, 1),  # Skipped due to being stale.
+            (now - 5, 2),  # In the 'closed' set.
+            (now - 3, 3),
+            (now, 4),  # In the 'closed' set.
+        ]
+        db._closed.add(2)
+        db._closed.add(4)
+        db.counter = 4  # The next connection we create will have id=5.
+        for ts_conn in conns:
+            heapq.heappush(db._connections, ts_conn)
+
+        # Conn 3 is not stale or closed, so we will get it.
+        self.assertEqual(db.get_conn(), 3)
+        self.assertEqual(db._in_use, {3: now - 3})
+        self.assertEqual(db._connections, [(now, 4)])
+
+        # Since conn 4 is closed, we will open a new conn.
+        db.connect()
+        self.assertEqual(db.get_conn(), 5)
+        self.assertEqual(sorted(db._in_use.keys()), [3, 5])
+        self.assertEqual(db._connections, [])
 
 
 class TestConnectionPool(TestCase):
