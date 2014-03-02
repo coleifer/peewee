@@ -1,12 +1,14 @@
 """
+EXPERIMENTAL
+============
+
 Lightweight connection pooling for peewee.
 
 In a single-threaded application, only one connection will be created. It will
 be continually recycled until either it exceeds the stale timeout or is closed
 explicitly (using `.manual_close()`).
 
-In a multi-threaded application, when there are no free connections, up to
-`max_connections` connections will be opened.
+In a multi-threaded application, up to `max_connections` will be opened.
 """
 import heapq
 import logging
@@ -19,7 +21,7 @@ from peewee import PostgresqlDatabase
 logger = logging.getLogger('peewee.pool')
 
 class PooledDatabase(object):
-    def __init__(self, database, max_connections=32, stale_timeout=None,
+    def __init__(self, database, max_connections=20, stale_timeout=None,
                  **kwargs):
         self.max_connections = max_connections
         self.stale_timeout = stale_timeout
@@ -40,7 +42,7 @@ class PooledDatabase(object):
                 logger.debug('No connection available in pool.')
                 break
             else:
-                if self.stale_timeout and self.is_stale(ts):
+                if self.stale_timeout and self._is_stale(ts):
                     logger.debug('Connection %s was stale, closing.', key)
                     self._close(conn, True)
                     ts = conn = None
@@ -63,7 +65,7 @@ class PooledDatabase(object):
         self._in_use[key] = ts
         return conn
 
-    def is_stale(self, timestamp):
+    def _is_stale(self, timestamp):
         return (time.time() - timestamp) > self.stale_timeout
 
     def _close(self, conn, close_conn=False):
@@ -78,11 +80,17 @@ class PooledDatabase(object):
             heapq.heappush(self._connections, (ts, conn))
 
     def manual_close(self):
+        """
+        Close the underlying connection without returning it to the pool.
+        """
         conn = self.get_conn()
         self.close()
         self._close(conn, close_conn=True)
 
     def close_all(self):
+        """
+        Close all connections managed by the pool.
+        """
         for _, conn in self._connections:
             self._close(conn, close_conn=True)
         for conn in self._in_use:
