@@ -77,7 +77,8 @@ except ImportError:
             pass
         
 # All peewee-generated logs are logged to this namespace.
-logger = logging.getLogger('peewee').addHandler(NullHandler())
+logger = logging.getLogger('peewee')
+logger.addHandler(NullHandler())
 
 # Python 2/3 compatibility helpers. These helpers are used internally and are
 # not exported.
