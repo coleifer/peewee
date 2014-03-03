@@ -68,8 +68,16 @@ __all__ = [
     'TimeField',
 ]
 
+# Set default logging handler to avoid "No handlers could be found for logger "peewee"" warnings.
+try:  # Python 2.7+
+    from logging import NullHandler
+except ImportError:
+    class NullHandler(logging.Handler):
+        def emit(self, record):
+            pass
+        
 # All peewee-generated logs are logged to this namespace.
-logger = logging.getLogger('peewee')
+logger = logging.getLogger('peewee').addHandler(NullHandler())
 
 # Python 2/3 compatibility helpers. These helpers are used internally and are
 # not exported.
