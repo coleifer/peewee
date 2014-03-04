@@ -423,7 +423,10 @@ class Func(Node):
 
     def __getattr__(self, attr):
         def dec(*args, **kwargs):
-            return Func(attr, *args, **kwargs)
+            _as = kwargs.pop('AS', None)
+            if _as is None:
+                return Func(attr, *args, **kwargs)
+            return Clause(Func(attr, *args, **kwargs), SQL('AS'), _as)
         return dec
 
 # fn is a factory for creating `Func` objects and supports a more friendly
@@ -3006,117 +3009,3 @@ class Model(with_metaclass(BaseModel)):
 
     def dependencies(self, search_nullable=False):
         query = self.select().where(self.pk_expr())
-        stack = [(type(self), query)]
-        seen = set()
-
-        while stack:
-            klass, query = stack.pop()
-            if klass in seen:
-                continue
-            seen.add(klass)
-            for rel_name, fk in klass._meta.reverse_rel.items():
-                rel_model = fk.model_class
-                node = fk << query
-                if not fk.null or search_nullable:
-                    stack.append((rel_model, rel_model.select().where(node)))
-                yield (node, fk)
-
-    def delete_instance(self, recursive=False, delete_nullable=False):
-        if recursive:
-            dependencies = self.dependencies(delete_nullable)
-            for query, fk in reversed(list(dependencies)):
-                model = fk.model_class
-                if fk.null and not delete_nullable:
-                    model.update(**{fk.name: None}).where(query).execute()
-                else:
-                    model.delete().where(query).execute()
-        return self.delete().where(self.pk_expr()).execute()
-
-    def __eq__(self, other):
-        return (
-            other.__class__ == self.__class__ and
-            self.get_id() is not None and
-            other.get_id() == self.get_id())
-
-    def __ne__(self, other):
-        return not self == other
-
-
-def prefetch_add_subquery(sq, subqueries):
-    fixed_queries = [(sq, None)]
-    for i, subquery in enumerate(subqueries):
-        if not isinstance(subquery, Query) and issubclass(subquery, Model):
-            subquery = subquery.select()
-        subquery_model = subquery.model_class
-        fkf = None
-        for j in reversed(range(i + 1)):
-            last_query = fixed_queries[j][0]
-            fkf = subquery_model._meta.rel_for_model(last_query.model_class)
-            if fkf:
-                break
-        if not fkf:
-            raise AttributeError('Error: unable to find foreign key for '
-                                 'query: %s' % subquery)
-        fixed_queries.append((subquery.where(fkf << last_query), fkf))
-
-    return fixed_queries
-
-def prefetch(sq, *subqueries):
-    if not subqueries:
-        return sq
-    fixed_queries = prefetch_add_subquery(sq, subqueries)
-
-    deps = {}
-    rel_map = {}
-    for query, foreign_key_field in reversed(fixed_queries):
-        query_model = query.model_class
-        deps[query_model] = {}
-        id_map = deps[query_model]
-        has_relations = bool(rel_map.get(query_model))
-
-        for result in query:
-            if foreign_key_field:
-                fk_val = result._data[foreign_key_field.name]
-                id_map.setdefault(fk_val, [])
-                id_map[fk_val].append(result)
-            if has_relations:
-                for rel_model, rel_fk in rel_map[query_model]:
-                    rel_name = '%s_prefetch' % rel_fk.related_name
-                    identifier = getattr(result, rel_fk.to_field.name)
-                    rel_instances = deps[rel_model].get(identifier, [])
-                    for inst in rel_instances:
-                        setattr(inst, rel_fk.name, result)
-                    setattr(result, rel_name, rel_instances)
-        if foreign_key_field:
-            rel_model = foreign_key_field.rel_model
-            rel_map.setdefault(rel_model, [])
-            rel_map[rel_model].append((query_model, foreign_key_field))
-
-    return query
-
-def create_model_tables(models, **create_table_kwargs):
-    """Create tables for all given models (in the right order)."""
-    for m in sort_models_topologically(models):
-        m.create_table(**create_table_kwargs)
-
-def drop_model_tables(models, **drop_table_kwargs):
-    """Drop tables for all given models (in the right order)."""
-    for m in reversed(sort_models_topologically(models)):
-        m.drop_table(**drop_table_kwargs)
-
-def sort_models_topologically(models):
-    """Sort models topologically so that parents will precede children."""
-    models = set(models)
-    seen = set()
-    ordering = []
-    def dfs(model):
-        if model in models and model not in seen:
-            seen.add(model)
-            for foreign_key in model._meta.reverse_rel.values():
-                dfs(foreign_key.model_class)
-            ordering.append(model)  # parent will follow descendants
-    # order models by name and table initially to guarantee a total ordering
-    names = lambda m: (m._meta.name, m._meta.db_table)
-    for m in sorted(models, key=names, reverse=True):
-        dfs(m)
-    return list(reversed(ordering))  # want parents first in output ordering
