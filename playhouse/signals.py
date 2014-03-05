@@ -36,7 +36,7 @@ class Signal(object):
         responses = []
         for name in self._receiver_list:
             r, s = self._receivers[name]
-            if s is None or sender is s:
+            if s is None or isinstance(instance, s):
                 responses.append((r, r(sender, instance, *args, **kwargs)))
         return responses
 

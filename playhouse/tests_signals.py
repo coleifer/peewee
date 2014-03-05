@@ -16,15 +16,19 @@ class ModelA(BaseSignalModel):
 class ModelB(BaseSignalModel):
     b = CharField(default='')
 
+class SubclassOfModelB(ModelB):
+    pass
 
 class SignalsTestCase(unittest.TestCase):
     def setUp(self):
         ModelA.create_table(True)
         ModelB.create_table(True)
+        SubclassOfModelB.create_table(True)
 
     def tearDown(self):
         ModelA.drop_table()
         ModelB.drop_table()
+        SubclassOfModelB.drop_table()
         signals.pre_save._flush()
         signals.post_save._flush()
         signals.pre_delete._flush()
@@ -137,3 +141,13 @@ class SignalsTestCase(unittest.TestCase):
         signals.post_save.disconnect(post_save)
         m2 = ModelA.create()
         self.assertEqual(state, [m])
+
+    def test_subclass_instance_receive_signals(self):
+        state = []
+
+        @signals.post_save(sender=ModelB)
+        def post_save(sender, instance, created):
+            state.append(instance)
+
+        m = SubclassOfModelB.create()
+        assert m in state
