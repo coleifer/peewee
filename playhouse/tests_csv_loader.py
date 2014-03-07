@@ -2,7 +2,10 @@ import csv
 import unittest
 from contextlib import contextmanager
 from datetime import date
-from StringIO import StringIO
+try:
+    from StringIO import StringIO
+except ImportError:
+    from io import StringIO
 from textwrap import dedent
 
 from playhouse.csv_loader import *
