@@ -3138,11 +3138,13 @@ class FieldTypeTestCase(ModelTestCase):
         self.assertTrue(isinstance(res.data, binary_types))
 
         self.assertEqual(len(res.data), byte_count)
+        db_data = res.data
         binary_data = binary_construct(data)
-        if res.data != binary_data and sys.version_info[:3] == (3, 3, 3):
-            binary_data = memoryview(binary_data)
 
-        self.assertEqual(res.data, binary_data)
+        if db_data != binary_data and sys.version_info[:3] == (3, 3, 3):
+            db_data = db_data.tobytes()
+
+        self.assertEqual(db_data, binary_data)
 
         # try querying the blob field
         binary_data = res.data
