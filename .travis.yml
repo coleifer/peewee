@@ -11,5 +11,6 @@ services:
   - postgres
 install: "pip install psycopg2"
 before_script:
-  - sh -c "if [ '$PEEWEE_TEST_BACKEND' = 'postgresql' ]; then psql -c 'create database peewee_test;' -U postgres; fi"
-script: "python runtests.py"
+  - sh -c "psql -c 'create database peewee_test;' -U postgres"
+  - sh -c "psql -c 'create extension hstore;' -U postgres"
+script: "python runtests.py -a"
