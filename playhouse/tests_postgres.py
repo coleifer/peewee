@@ -419,7 +419,13 @@ class SSCursorTestCase(unittest.TestCase):
         test_ss_db.execute_sql('truncate table %s;' % tbl)
         test_ss_db.commit()
 
-if TestingJson is not None:
+def json_ok():
+    if TestingJson is None:
+        return False
+    conn = test_db.get_conn()
+    return conn.server_version >= 90300
+
+if json_ok():
     from psycopg2.extras import Json
 
     class TestJsonField(unittest.TestCase):
@@ -456,7 +462,6 @@ if TestingJson is not None:
             self.assertItems((TestingJson.data['not-here']['xxx'] == 'v1'))
 
             self.assertItems((TestingJson.data['k2']['xxx'] == 'v1'))
-
 
 elif TEST_VERBOSITY > 0:
     print_('Skipping postgres "Json" tests, unsupported version.')
