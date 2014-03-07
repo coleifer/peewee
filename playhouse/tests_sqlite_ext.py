@@ -3,7 +3,7 @@ import unittest
 
 from peewee import *
 from peewee import Clause
-import sqlite_ext as sqe
+from playhouse import sqlite_ext as sqe
 
 # use a disk-backed db since memory dbs only exist for a single connection and
 # we need to share the db w/2 for the locking tests.  additionally, set the
