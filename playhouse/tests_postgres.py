@@ -362,16 +362,15 @@ class SSCursorTestCase(unittest.TestCase):
 
         # After the transaction we cannot fetch a result because the cursor
         # is dead.
-        with self.assertRaises(psycopg2.ProgrammingError):
-            qr2.cursor.fetchone()
+        self.assertRaises(psycopg2.ProgrammingError, qr2.cursor.fetchone)
 
         # Try using the helper.
         query4 = query.clone()
         self.assertList(ServerSide(query4))
 
         # Named cursor is dead.
-        with self.assertRaises(psycopg2.ProgrammingError):
-            query4._qr.cursor.fetchone()
+        self.assertRaises(
+            psycopg2.ProgrammingError, query4._qr.cursor.fetchone)
 
     def test_serverside_normal_model(self):
         query = NormalModel.select().order_by(NormalModel.data)
@@ -384,8 +383,7 @@ class SSCursorTestCase(unittest.TestCase):
         self.assertList(ServerSide(clone))
 
         # Named cursor is dead.
-        with self.assertRaises(psycopg2.ProgrammingError):
-            clone._qr.cursor.fetchone()
+        self.assertRaises(psycopg2.ProgrammingError, clone._qr.cursor.fetchone)
 
         # Ensure where clause is preserved.
         query = query.where(NormalModel.data == '2')
@@ -411,8 +409,7 @@ class SSCursorTestCase(unittest.TestCase):
 
         # Explicitly close the cursor.
         test_ss_db.commit()
-        with self.assertRaises(psycopg2.ProgrammingError):
-            cursor.fetchone()
+        self.assertRaises(psycopg2.ProgrammingError, cursor.fetchone)
 
         # This would not work is the named cursor was still holding a ref to
         # the table.
