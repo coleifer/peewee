@@ -112,6 +112,8 @@ class TestDatabase(database_class):
 
     def sql_error_handler(self, exception, sql, params, require_commit):
         self.last_error = (sql, params)
+        if TEST_VERBOSITY > 1:
+            print_(sql)
         return super(TestDatabase, self).sql_error_handler(
             exception, sql, params, require_commit)
 
