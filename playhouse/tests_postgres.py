@@ -336,7 +336,7 @@ class SSCursorTestCase(unittest.TestCase):
     def assertList(self, iterable):
         self.assertEqual(
             [x.data for x in iterable],
-            map(str, range(1, self.counter + 1)))
+            [str(i) for i in range(1, self.counter + 1)])
 
     def test_model_interaction(self):
         query = SSCursorModel.select().order_by(SSCursorModel.data)

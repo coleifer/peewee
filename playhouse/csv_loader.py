@@ -26,6 +26,9 @@ from peewee import PY3
 
 if PY3:
     basestring = str
+    decode_value = False
+else:
+    decode_value = True
 
 class _CSVReader(object):
     @contextmanager
@@ -228,7 +231,7 @@ class Loader(_CSVReader):
         else:
             self.fields = [converter.default.field() for _ in header]
         if not self.field_names:
-            self.field_names = map(self.clean_field_name, header)
+            self.field_names = [self.clean_field_name(col) for col in  header]
 
     def get_model_class(self, field_names, fields):
         if self.model:
@@ -249,9 +252,10 @@ class Loader(_CSVReader):
 
         with self.get_reader(self.file_or_name, **self.reader_kwargs) as reader:
             if not self.field_names:
-                self.field_names = map(self.clean_field_name, reader.next())
+                row = next(reader)
+                self.field_names = [self.clean_field_name(col) for col in row]
             elif self.has_header:
-                reader.next()
+                next(reader)
 
             ModelClass = self.get_model_class(self.field_names, self.fields)
 
@@ -261,7 +265,9 @@ class Loader(_CSVReader):
                     insert = {}
                     for field_name, value in zip(self.field_names, row):
                         if value:
-                            insert[field_name] = value.decode('utf-8')
+                            if decode_value:
+                                value = value.decode('utf-8')
+                            insert[field_name] = value
                     if insert:
                         ModelClass.insert(**insert).execute()
 

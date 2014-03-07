@@ -171,4 +171,4 @@ class TestConnectionPool(TestCase):
 
         self.assertEqual(
             [x.value for x in Number.select().order_by(Number.id)],
-            range(10))
+            list(range(10)))

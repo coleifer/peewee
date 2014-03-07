@@ -1,3 +1,5 @@
+from base64 import b64decode
+from base64 import b64encode
 import itertools
 import operator
 import pickle
@@ -18,10 +20,10 @@ key_value_db = KeyValueDatabase(':memory:')
 
 class PickleField(BlobField):
     def db_value(self, value):
-        return pickle.dumps(value)
+        return b64encode(pickle.dumps(value))
 
     def python_value(self, value):
-        return pickle.loads(value)
+        return pickle.loads(b64decode(value))
 
 class KeyStore(object):
     """

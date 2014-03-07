@@ -16,7 +16,7 @@ def runtests(suite, verbosity):
 def get_option_parser():
     parser = optparse.OptionParser()
     basic = optparse.OptionGroup(parser, 'Basic test options')
-    basic.add_option('-e', '--engine', dest='engine', default='sqlite', help='Database engine to test, one of [sqlite3, postgres, mysql]')
+    basic.add_option('-e', '--engine', dest='engine', help='Database engine to test, one of [sqlite, postgres, mysql]')
     basic.add_option('-v', '--verbosity', dest='verbosity', default=1, type='int', help='Verbosity of output')
 
     suite = optparse.OptionGroup(parser, 'Simple test suite options')
@@ -111,7 +111,8 @@ if __name__ == '__main__':
     parser = get_option_parser()
     options, args = parser.parse_args()
 
-    os.environ['PEEWEE_TEST_BACKEND'] = options.engine
+    if options.engine:
+        os.environ['PEEWEE_TEST_BACKEND'] = options.engine
     os.environ['PEEWEE_TEST_VERBOSITY'] = str(options.verbosity)
 
     from peewee import print_

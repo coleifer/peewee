@@ -55,6 +55,11 @@ else:
 BACKEND = os.environ.get('PEEWEE_TEST_BACKEND', 'sqlite')
 TEST_VERBOSITY = int(os.environ.get('PEEWEE_TEST_VERBOSITY') or 1)
 
+if TEST_VERBOSITY > 1:
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.ERROR)
+    logger.addHandler(handler)
+
 database_params = {}
 
 print_('TESTING USING PYTHON %s' % sys.version)
@@ -112,8 +117,6 @@ class TestDatabase(database_class):
 
     def sql_error_handler(self, exception, sql, params, require_commit):
         self.last_error = (sql, params)
-        if TEST_VERBOSITY > 1:
-            print_(sql)
         return super(TestDatabase, self).sql_error_handler(
             exception, sql, params, require_commit)
 
@@ -1945,6 +1948,12 @@ class ModelQueryTestCase(ModelTestCase):
         self.assertRaises(KeyError, iq.execute)
 
     def test_insert_many(self):
+        if test_db.insert_many:
+            self._test_insert_many()
+        elif TEST_VERBOSITY > 0:
+            print_('Skipping insert many test, not supported by database.')
+
+    def _test_insert_many(self):
         iq = User.insert_many([
             {'username': 'u1'},
             {'username': 'u2'},
@@ -3129,7 +3138,11 @@ class FieldTypeTestCase(ModelTestCase):
         self.assertTrue(isinstance(res.data, binary_types))
 
         self.assertEqual(len(res.data), byte_count)
-        self.assertEqual(res.data, binary_construct(data))
+        binary_data = binary_construct(data)
+        if res.data != binary_data and sys.version_info[:3] == (3, 3, 3):
+            binary_data = memoryview(binary_data)
+
+        self.assertEqual(res.data, binary_data)
 
         # try querying the blob field
         binary_data = res.data
@@ -4141,12 +4154,19 @@ if database_class is PostgresqlDatabase:
             conn.set_client_encoding(encoding)
 
         def test_unicode_conversion(self):
+            # Per psycopg2's documentation, in Python2, strings are returned as
+            # 8-bit str objects encoded in the client encoding. In python3,
+            # the strings are automatically decoded in the connection encoding.
+
             # Turn off unicode conversion on a per-connection basis.
             test_db.register_unicode = False
             self.reset_encoding('LATIN1')
 
             u = User.get(User.id == self.user.id)
-            self.assertFalse(u.username == self.user.username)
+            if sys.version_info[0] < 3:
+                self.assertFalse(u.username == self.user.username)
+            else:
+                self.assertTrue(u.username == self.user.username)
 
             test_db.register_unicode = True
             self.reset_encoding('LATIN1')

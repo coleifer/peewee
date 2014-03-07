@@ -75,7 +75,7 @@ except ImportError:
     class NullHandler(logging.Handler):
         def emit(self, record):
             pass
-        
+
 # All peewee-generated logs are logged to this namespace.
 logger = logging.getLogger('peewee')
 logger.addHandler(NullHandler())
@@ -2051,7 +2051,7 @@ class SelectQuery(Query):
             index = value.stop
         else:
             index = value
-        if index >= 0:
+        if index is not None and index >= 0:
             index += 1
         res.fill_cache(index)
         return res._result_cache[value]
@@ -2187,6 +2187,7 @@ class Database(object):
     field_overrides = {}
     foreign_keys = True
     for_update = False
+    insert_many = True
     interpolation = '?'
     limit_max = None
     op_overrides = {}
@@ -2400,6 +2401,7 @@ class Database(object):
 class SqliteDatabase(Database):
     drop_cascade = False
     foreign_keys = False
+    insert_many = sqlite3.sqlite_version_info >= (3, 7, 11, 0)
     limit_max = -1
     op_overrides = {
         OP_LIKE: 'GLOB',
@@ -2592,7 +2594,7 @@ class savepoint(object):
     def __init__(self, db, sid=None):
         self.db = db
         _compiler = db.compiler()
-        self.sid = sid or 's' + uuid.uuid4().get_hex()
+        self.sid = sid or 's' + uuid.uuid4().hex
         self.quoted_sid = _compiler.quote(self.sid)
 
     def _execute(self, query):

@@ -27,12 +27,19 @@ class WeightedAverage(object):
         return 0.0
 
 # test collations
+def _cmp(l, r):
+    if l < r:
+        return -1
+    elif r < l:
+        return 1
+    return 0
+
 def collate_reverse(s1, s2):
-    return -cmp(s1, s2)
+    return -_cmp(s1, s2)
 
 @ext_db.collation()
 def collate_case_insensitive(s1, s2):
-    return cmp(s1.lower(), s2.lower())
+    return _cmp(s1.lower(), s2.lower())
 
 # test function
 def title_case(s):

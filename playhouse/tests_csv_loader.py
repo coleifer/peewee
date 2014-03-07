@@ -110,8 +110,8 @@ class TestCSVConversion(unittest.TestCase):
             self.float_sal,
             fields=fields)
         self.assertEqual(
-            map(type, fields),
-            map(type, ModelClass._meta.get_fields()[1:]))
+            list(map(type, fields)),
+            list(map(type, ModelClass._meta.get_fields()[1:])))
         self.assertData(ModelClass, [
             (10, 'F1 L1', date(1983, 1, 1), 10000., 't'),
             (20, 'F2 L2', date(1983, 1, 2), 20000.5, 'f')])

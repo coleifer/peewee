@@ -82,7 +82,7 @@ if django is not None:
 
         def test_simple(self):
             P = translate(Simple)
-            self.assertEqual(P.keys(), ['Simple'])
+            self.assertEqual(list(P.keys()), ['Simple'])
             self.assertFields(P['Simple'], [
                 ('id', PrimaryKeyField),
                 ('char_field', CharField),
@@ -248,7 +248,7 @@ if django is not None:
 
         def test_inheritance(self):
             trans = translate(Parent)
-            self.assertEqual(trans.keys(), ['Parent'])
+            self.assertEqual(list(trans.keys()), ['Parent'])
             self.assertFields(trans['Parent'], [
                 ('id', PrimaryKeyField),])
 
