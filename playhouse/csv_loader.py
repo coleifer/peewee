@@ -18,7 +18,6 @@ import csv
 import datetime
 import os
 import re
-from collections import OrderedDict
 from contextlib import contextmanager
 
 from peewee import *
