@@ -17,13 +17,14 @@ from inspect import isclass
 import logging
 import operator
 import re
-import six
 import sqlite3
 import sys
 import threading
 import time
 import time
 import uuid
+
+import six
 
 
 __all__ = [
@@ -2794,7 +2795,10 @@ class Model(with_metaclass(BaseModel)):
         cls._meta.database.drop_table(cls, fail_silently)
 
     def get_id(self):
-        return getattr(self, self._meta.primary_key.name)
+        field_name = self._meta.primary_key.name
+        if isinstance(self._meta.fields.get(field_name, None), ForeignKeyField):
+            field_name += "_id"
+        return getattr(self, field_name)
 
     def set_id(self, id):
         setattr(self, self._meta.primary_key.name, id)
