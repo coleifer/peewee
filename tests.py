@@ -1861,6 +1861,14 @@ class NonPKFKBasicTestCase(ModelTestCase):
 class ModelQueryTestCase(ModelTestCase):
     requires = [User, Blog]
 
+    def setUp(self):
+        super(ModelQueryTestCase, self).setUp()
+        self._orig_db_insert_many = test_db.insert_many
+
+    def tearDown(self):
+        super(ModelQueryTestCase, self).tearDown()
+        test_db.insert_many = self._orig_db_insert_many
+
     def create_users_blogs(self, n=10, nb=5):
         for i in range(n):
             u = User.create(username='u%d' % i)
@@ -1948,18 +1956,18 @@ class ModelQueryTestCase(ModelTestCase):
         self.assertRaises(KeyError, iq.execute)
 
     def test_insert_many(self):
-        if test_db.insert_many:
-            self._test_insert_many()
-        elif TEST_VERBOSITY > 0:
-            print_('Skipping insert many test, not supported by database.')
-
-    def _test_insert_many(self):
+        qc = len(self.queries())
         iq = User.insert_many([
             {'username': 'u1'},
             {'username': 'u2'},
             {'username': 'u3'},
             {'username': 'u4'}])
         self.assertTrue(iq.execute() >= 4)
+        qc2 = len(self.queries())
+        if test_db.insert_many:
+            self.assertEqual(qc2 - qc, 1)
+        else:
+            self.assertEqual(qc2 - qc, 4)
         self.assertEqual(User.select().count(), 4)
 
         sq = User.select(User.username).order_by(User.username)
@@ -1977,6 +1985,21 @@ class ModelQueryTestCase(ModelTestCase):
         sq = User.select(User.username).order_by(User.username)
         self.assertEqual([u.username for u in sq],
                          ['u1', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7', 'u8'])
+
+    def test_insert_many_fallback(self):
+        # Simulate database not supporting multiple insert (older versions of
+        # sqlite).
+        test_db.insert_many = False
+        qc = len(self.queries())
+        iq = User.insert_many([
+            {'username': 'u1'},
+            {'username': 'u2'},
+            {'username': 'u3'},
+            {'username': 'u4'}])
+        self.assertTrue(iq.execute() >= 4)
+        qc2 = len(self.queries())
+        self.assertEqual(qc2 - qc, 4)
+        self.assertEqual(User.select().count(), 4)
 
     def test_delete(self):
         self.create_users(5)

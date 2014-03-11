@@ -2095,6 +2095,7 @@ class UpdateQuery(Query):
 class InsertQuery(Query):
     def __init__(self, model_class, field_dict=None, rows=None):
         super(InsertQuery, self).__init__(model_class)
+        self._is_multi_row_insert = rows is not None
         if rows is not None:
             self._rows = rows
         else:
@@ -2128,6 +2129,7 @@ class InsertQuery(Query):
         query = super(InsertQuery, self)._clone_attributes(query)
         query._rows = self._rows
         query._upsert = self._upsert
+        query._is_multi_row_insert = self._is_multi_row_insert
         return query
 
     join = not_allowed('joining')
@@ -2141,6 +2143,10 @@ class InsertQuery(Query):
         return self.compiler().generate_insert(self)
 
     def execute(self):
+        if not self.database.insert_many and self._is_multi_row_insert:
+            for row in self._rows:
+                last_id = InsertQuery(self.model_class, row).execute()
+            return last_id
         return self.database.last_insert_id(self._execute(), self.model_class)
 
 class DeleteQuery(Query):
