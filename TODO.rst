@@ -3,6 +3,7 @@ todo
 
 * Join and .join() are very model-centric, but *should* be able to accept an
   arbitrary single-source (table or select).
+* Clean up pwiz...it's a ghetto.
 
 Queries to support?
 
