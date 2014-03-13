@@ -8,6 +8,7 @@ peewee
 * built-in support for sqlite, mysql and postgresql and special extensions like `hstore <http://peewee.readthedocs.org/en/latest/peewee/playhouse.html#postgresql-hstore>`_
 
 .. image:: https://api.travis-ci.org/coleifer/peewee.png?branch=master
+  :target: https://travis-ci.org/coleifer/peewee
 
 For flask integration, including an admin interface and RESTful API, check
 out `flask-peewee <https://github.com/coleifer/flask-peewee/>`_.
