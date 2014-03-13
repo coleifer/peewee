@@ -2544,6 +2544,8 @@ class MySQLDatabase(Database):
             'use_unicode': True,
         }
         conn_kwargs.update(kwargs)
+        if 'password' in conn_kwargs:
+            conn_kwargs['passwd'] = conn_kwargs.pop('password')
         return mysql.connect(db=database, **conn_kwargs)
 
     def get_indexes_for_table(self, table):
