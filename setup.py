@@ -8,7 +8,7 @@ f.close()
 
 setup(
     name='peewee',
-    version='2.2.1',
+    version=__import__('peewee').__version__,
     description='a little orm',
     long_description=readme,
     author='Charles Leifer',
