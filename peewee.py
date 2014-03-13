@@ -3067,7 +3067,8 @@ def prefetch_add_subquery(sq, subqueries):
         if not fkf:
             raise AttributeError('Error: unable to find foreign key for '
                                  'query: %s' % subquery)
-        fixed_queries.append((subquery.where(fkf << last_query), fkf))
+        inner_query = last_query.select(fkf.to_field)
+        fixed_queries.append((subquery.where(fkf << inner_query), fkf))
 
     return fixed_queries
 
