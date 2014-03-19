@@ -3048,12 +3048,19 @@ class FieldTypeTestCase(ModelTestCase):
         self.assertNM(NullModel.boolean_field == False, ['f'])
         self.assertNM(NullModel.boolean_field >> None, ['n'])
 
+    def _time_to_delta(self, t):
+        micro = t.microsecond / 1000000.
+        return datetime.timedelta(
+            seconds=(3600 * t.hour) + (60 * t.minute) + t.second + micro)
+
     def test_date_and_time_fields(self):
         dt1 = datetime.datetime(2011, 1, 2, 11, 12, 13, 54321)
         dt2 = datetime.datetime(2011, 1, 2, 11, 12, 13)
         d1 = datetime.date(2011, 1, 3)
         t1 = datetime.time(11, 12, 13, 54321)
         t2 = datetime.time(11, 12, 13)
+        td1 = self._time_to_delta(t1)
+        td2 = self._time_to_delta(t2)
 
         nm1 = NullModel.create(datetime_field=dt1, date_field=d1, time_field=t1)
         nm2 = NullModel.create(datetime_field=dt2, time_field=t2)
@@ -3063,14 +3070,17 @@ class FieldTypeTestCase(ModelTestCase):
         if BACKEND == 'mysql':
             # mysql doesn't store microseconds
             self.assertEqual(nmf1.datetime_field, dt2)
-            self.assertEqual(nmf1.time_field, t2)
+            self.assertEqual(nmf1.time_field, td2)
         else:
             self.assertEqual(nmf1.datetime_field, dt1)
             self.assertEqual(nmf1.time_field, t1)
 
         nmf2 = NullModel.get(NullModel.id==nm2.id)
         self.assertEqual(nmf2.datetime_field, dt2)
-        self.assertEqual(nmf2.time_field, t2)
+        if BACKEND == 'mysql':
+            self.assertEqual(nmf2.time_field, td2)
+        else:
+            self.assertEqual(nmf2.time_field, t2)
 
     def test_various_formats(self):
         class FormatModel(Model):
