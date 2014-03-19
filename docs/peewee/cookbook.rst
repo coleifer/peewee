@@ -950,7 +950,7 @@ dictionaries to insert.
 
     # Fastest.
     with db.transaction():
-        Model.insert_many(data_source)
+        Model.insert_many(data_source).execute()
 
 Depending on the number of rows in your data source, you may need to break it
 up into chunks:
@@ -960,7 +960,7 @@ up into chunks:
     # Insert rows 1000 at a time.
     with db.transaction():
         for idx in range(0, len(data_source), 1000):
-            Model.insert_many(data_source[i:i+1000])
+            Model.insert_many(data_source[i:i+1000]).execute()
 
 
 Manually specifying primary keys
