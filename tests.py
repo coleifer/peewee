@@ -3216,6 +3216,28 @@ class FieldTypeTestCase(ModelTestCase):
         self.assertNM(NullModel.char_field.endswith('1'), ['c1', 'ch1'])
         self.assertNM(NullModel.char_field.endswith('4'), [])
 
+    def test_regexp(self):
+        values = [
+            'abcdefg',
+            'abcd',
+            'defg',
+            'gij',
+            'xx',
+        ]
+        for value in values:
+            NullModel.create(char_field=value)
+
+        def assertValues(regexp, *expected):
+            query = NullModel.select().where(
+                NullModel.char_field.regexp(regexp)).order_by(NullModel.id)
+            values = [nm.char_field for nm in query]
+            self.assertEqual(values, list(expected))
+
+        assertValues('^ab', 'abcdefg', 'abcd')
+        assertValues('d', 'abcdefg', 'abcd', 'defg')
+        assertValues('efg$', 'abcdefg', 'defg')
+        assertValues('a.+d', 'abcdefg', 'abcd')
+
 class DateTimeExtractTestCase(ModelTestCase):
     requires = [NullModel]
 

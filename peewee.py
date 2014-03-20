@@ -149,6 +149,9 @@ def _sqlite_date_part(lookup_type, datetime_string):
     dt = format_date_time(datetime_string, SQLITE_DATETIME_FORMATS)
     return getattr(dt, lookup_type)
 
+def _sqlite_regexp(regex, value):
+    return re.search(regex, value, re.I) is not None
+
 # Operators used in binary expressions.
 OP_AND = 'and'
 OP_OR = 'or'
@@ -173,6 +176,7 @@ OP_IS = 'is'
 OP_LIKE = 'like'
 OP_ILIKE = 'ilike'
 OP_BETWEEN = 'between'
+OP_REGEXP = 'regexp'
 
 # To support "django-style" double-underscore filters, create a mapping between
 # operation name and operation code, e.g. "__eq" == OP_EQ.
@@ -187,6 +191,7 @@ DJANGO_MAP = {
     'is': OP_IS,
     'like': OP_LIKE,
     'ilike': OP_ILIKE,
+    'regexp': OP_REGEXP,
 }
 
 JOIN_INNER = 'inner'
@@ -344,6 +349,8 @@ class Node(object):
         return Expression(self, OP_ILIKE, '%%%s' % rhs)
     def between(self, low, high):
         return Expression(self, OP_BETWEEN, Clause(low, R('AND'), high))
+    def regexp(self, expression):
+        return Expression(self, OP_REGEXP, expression)
 
 class Expression(Node):
     """A binary expression, e.g `foo + 1` or `bar < 7`."""
@@ -1013,6 +1020,7 @@ class QueryCompiler(object):
         OP_AND: 'AND',
         OP_OR: 'OR',
         OP_MOD: '%',
+        OP_REGEXP: 'REGEXP',
     }
 
     join_map = {
@@ -2419,6 +2427,7 @@ class SqliteDatabase(Database):
             raise ImproperlyConfigured('sqlite3 must be installed on the system')
         conn = sqlite3.connect(database, **kwargs)
         conn.create_function('date_part', 2, _sqlite_date_part)
+        conn.create_function('regexp', 2, _sqlite_regexp)
         return conn
 
     def get_indexes_for_table(self, table):
@@ -2449,6 +2458,9 @@ class PostgresqlDatabase(Database):
     }
     for_update = True
     interpolation = '%s'
+    op_overrides = {
+        OP_REGEXP: '~',
+    }
     reserved_tables = ['user']
     sequences = True
     window_functions = True
