@@ -255,12 +255,12 @@ class MySQLIntrospector(Introspector):
         for idx, column in enumerate(curs.description):
             field_class = self.mapping.get(column[1], UnknownFieldType)
             name, nullable, data_type, max_length = columns[idx]
+            kwargs = {}
             if name == pk_col and field_class is IntegerField:
                 field_class = PrimaryKeyField
             elif name == pk_col:
                 kwargs['primary_key'] = True
 
-            kwargs = {}
             if nullable == 'YES':
                 kwargs['null'] = True
             if field_class is CharField and max_length:
