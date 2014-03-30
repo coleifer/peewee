@@ -987,6 +987,8 @@ Query Types
 
         Shorthand for applying a ``LIMIT`` and ``OFFSET`` to the query.
 
+        Page indices are **1-based**, so page 1 is the first page.
+
         .. code-block:: python
 
             User.select().order_by(User.username).paginate(3, 20)  # get users 41-60

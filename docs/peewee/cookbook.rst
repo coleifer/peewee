@@ -555,7 +555,7 @@ Paginating records
 ^^^^^^^^^^^^^^^^^^
 
 The paginate method makes it easy to grab a "page" or records -- it takes two
-parameters, `page_number`, and `items_per_page`:
+parameters, `page_number`, and `items_per_page`. `page_number` is 1-based, so page 1 is the first page:
 
 .. code-block:: pycon
 
