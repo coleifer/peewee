@@ -61,7 +61,7 @@ class _Array(Node):
 def adapt_array(arr):
     items = adapt(arr.items).getquoted()
     return AsIs('%s::%s%s' % (
-        items.decode('utf-8'),
+        items,
         arr.field.get_column_type(),
         '[]'* arr.field.dimensions))
 register_adapter(_Array, adapt_array)
