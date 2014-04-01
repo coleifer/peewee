@@ -68,7 +68,8 @@ __all__ = [
     'TimeField',
 ]
 
-# Set default logging handler to avoid "No handlers could be found for logger "peewee"" warnings.
+# Set default logging handler to avoid "No handlers could be found for logger
+# "peewee"" warnings.
 try:  # Python 2.7+
     from logging import NullHandler
 except ImportError:
@@ -2316,7 +2317,6 @@ class Database(object):
             try:
                 cursor.execute(sql, params or ())
             except Exception as exc:
-                logger.exception('%s %s', sql, params)
                 if self.get_autocommit() and self.autorollback:
                     self.rollback()
                 if self.sql_error_handler(exc, sql, params, require_commit):
