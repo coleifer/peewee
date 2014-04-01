@@ -1311,6 +1311,38 @@ class CompilerTestCase(BasePeeweeTestCase):
             'INNER JOIN "person" AS person_tbl '
             'ON (pet_tbl."owner_id" = person_tbl."id")')
 
+    def test_alias_map(self):
+        class A(TestModel):
+            a = CharField()
+            class Meta:
+                table_alias = 'a_tbl'
+        class B(TestModel):
+            b = CharField()
+            a_link = ForeignKeyField(A)
+        class C(TestModel):
+            c = CharField()
+            b_link = ForeignKeyField(B)
+        class D(TestModel):
+            d = CharField()
+            c_link = ForeignKeyField(C)
+            class Meta:
+                table_alias = 'd_tbl'
+
+        sq = (D
+              .select(D.d, C.c)
+              .join(C)
+              .where(C.b_link << (
+                  B.select(B.id).join(A).where(A.a == 'a'))))
+        sql, params = normal_compiler.generate_select(sq)
+        self.assertEqual(sql, (
+            'SELECT d_tbl."d", t2."c" '
+            'FROM "d" AS d_tbl '
+            'INNER JOIN "c" AS t2 ON (d_tbl."c_link_id" = t2."id") '
+            'WHERE (t2."b_link_id" IN ('
+            'SELECT t3."id" FROM "b" AS t3 '
+            'INNER JOIN "a" AS a_tbl ON (t3."a_link_id" = a_tbl."id") '
+            'WHERE (a_tbl."a" = ?)))'))
+
 
 class ValidationTestCase(BasePeeweeTestCase):
     def test_foreign_key_validation(self):

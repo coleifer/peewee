@@ -1052,7 +1052,10 @@ class QueryCompiler(object):
         max_alias = 0
         if alias_map:
             for alias in alias_map.values():
-                alias_number = int(alias.lstrip('t'))
+                try:
+                    alias_number = int(alias.lstrip('t'))
+                except ValueError:
+                    alias_number = 0
                 if alias_number > max_alias:
                     max_alias = alias_number
         return max_alias + 1
