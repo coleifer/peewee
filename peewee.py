@@ -2961,21 +2961,44 @@ class Model(with_metaclass(BaseModel)):
         cls._create_indexes()
 
     @classmethod
-    def _create_indexes(cls):
-        db = cls._meta.database
-        for field_obj in cls._meta.fields.values():
-            if field_obj.primary_key:
+    def _fields_to_index(cls):
+        fields = []
+        for field in cls._meta.fields.values():
+            if field.primary_key:
                 continue
             requires_index = any((
-                field_obj.index,
-                field_obj.unique,
-                isinstance(field_obj, ForeignKeyField)))
+                field.index,
+                field.unique,
+                isinstance(field, ForeignKeyField)))
             if requires_index:
-                db.create_index(cls, [field_obj], field_obj.unique)
+                fields.append(field)
+        return fields
+
+    @classmethod
+    def _create_indexes(cls):
+        db = cls._meta.database
+        for field in cls._fields_to_index():
+            db.create_index(cls, [field], field.unique)
 
         if cls._meta.indexes:
             for fields, unique in cls._meta.indexes:
                 db.create_index(cls, fields, unique)
+
+    @classmethod
+    def sqlall(cls):
+        queries = []
+        compiler = cls._meta.database.compiler()
+        pk = cls._meta.primary_key
+        if cls._meta.database.sequences and pk.sequence:
+            queries.append(compiler.create_sequence(pk.sequence))
+        queries.append(compiler.create_table(cls))
+        for field in cls._fields_to_index():
+            queries.append(compiler.create_index(cls, [field], field.unique))
+        if cls._meta.indexes:
+            for field_names, unique in cls._meta.indexes:
+                fields = [cls._meta.fields[f] for f in field_names]
+                queries.append(compiler.create_index(cls, fields, unique))
+        return [sql for sql, _ in queries]
 
     @classmethod
     def drop_table(cls, fail_silently=False, cascade=False):
