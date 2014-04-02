@@ -59,9 +59,11 @@ class _Array(Node):
         super(_Array, self).__init__()
 
 def adapt_array(arr):
-    items = adapt(arr.items).getquoted()
+    conn = arr.field.model_class._meta.database.get_conn()
+    items = adapt(arr.items)
+    items.prepare(conn)
     return AsIs('%s::%s%s' % (
-        items.decode('utf-8'),
+        items,
         arr.field.get_column_type(),
         '[]'* arr.field.dimensions))
 register_adapter(_Array, adapt_array)

@@ -1,3 +1,4 @@
+#coding:utf-8
 import datetime
 import json
 import os
@@ -266,6 +267,8 @@ class PostgresExtTestCase(unittest.TestCase):
         am = self._create_am()
         am2 = ArrayModel.create(tags=['alpha', 'beta'], ints=[[1, 1]])
         am3 = ArrayModel.create(tags=['delta'], ints=[[3, 4]])
+        am4 = ArrayModel.create(tags=['中文'], ints=[[3, 4]])
+        am5 = ArrayModel.create(tags=['中文', '汉语'], ints=[[3, 4]])
 
         assertAM((Param('beta') == fn.Any(ArrayModel.tags)), am, am2)
         assertAM((Param('delta') == fn.Any(ArrayModel.tags)), am, am3)
@@ -277,10 +280,12 @@ class PostgresExtTestCase(unittest.TestCase):
         # Use the nicer API.
         assertAM(ArrayModel.tags.contains('beta'), am, am2)
         assertAM(ArrayModel.tags.contains('omega', 'delta'))
+        assertAM(ArrayModel.tags.contains('汉语'), am5)
         assertAM(ArrayModel.tags.contains('alpha', 'delta'), am)
 
         # Check for any.
         assertAM(ArrayModel.tags.contains_any('beta'), am, am2)
+        assertAM(ArrayModel.tags.contains_any('中文'), am4, am5)
         assertAM(ArrayModel.tags.contains_any('omega', 'delta'), am, am3)
         assertAM(ArrayModel.tags.contains_any('alpha', 'delta'), am, am2, am3)
 
