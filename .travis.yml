@@ -15,4 +15,4 @@ before_script:
   - sh -c "psql peewee_test -c 'create extension hstore;' -U postgres"
 script: "python runtests.py -a"
 notifications:
-  email: false
+  email: true
