@@ -2156,6 +2156,7 @@ class InsertQuery(Query):
 
     def execute(self):
         if not self.database.insert_many and self._is_multi_row_insert:
+            last_id = None
             for row in self._rows:
                 last_id = InsertQuery(self.model_class, row).execute()
             return last_id
