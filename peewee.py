@@ -151,6 +151,22 @@ def _sqlite_date_part(lookup_type, datetime_string):
     dt = format_date_time(datetime_string, SQLITE_DATETIME_FORMATS)
     return getattr(dt, lookup_type)
 
+SQLITE_DATE_TRUNC_MAPPING = {
+    'year': '%Y',
+    'month': '%Y-%m',
+    'day': '%Y-%m-%d',
+    'hour': '%Y-%m-%d %H',
+    'minute': '%Y-%m-%d %H:%M',
+    'second': '%Y-%m-%d %H:%M:%S'}
+MYSQL_DATE_TRUNC_MAPPING = SQLITE_DATE_TRUNC_MAPPING.copy()
+MYSQL_DATE_TRUNC_MAPPING['minute'] = '%Y-%m-%d %H:%i'
+MYSQL_DATE_TRUNC_MAPPING['second'] = '%Y-%m-%d %H:%i:%S'
+
+def _sqlite_date_trunc(lookup_type, datetime_string):
+    assert lookup_type in SQLITE_DATE_TRUNC_MAPPING
+    dt = format_date_time(datetime_string, SQLITE_DATETIME_FORMATS)
+    return dt.strftime(SQLITE_DATE_TRUNC_MAPPING[lookup_type])
+
 def _sqlite_regexp(regex, value):
     return re.search(regex, value, re.I) is not None
 
@@ -1647,7 +1663,7 @@ class Query(Node):
 
         self._dirty = True
         self._query_ctx = model_class
-        self._joins = {self.model_class: []} # Join graph as adjacency list.
+        self._joins = {self.model_class: []}  # Join graph as adjacency list.
         self._where = None
 
     def __repr__(self):
@@ -2424,6 +2440,9 @@ class Database(object):
     def extract_date(self, date_part, date_field):
         return fn.EXTRACT(Clause(date_part, R('FROM'), date_field))
 
+    def truncate_date(self, date_part, date_field):
+        return fn.DATE_TRUNC(SQL(date_part), date_field)
+
 class SqliteDatabase(Database):
     drop_cascade = False
     foreign_keys = False
@@ -2435,10 +2454,9 @@ class SqliteDatabase(Database):
     }
 
     def _connect(self, database, **kwargs):
-        if not sqlite3:
-            raise ImproperlyConfigured('sqlite3 must be installed on the system')
         conn = sqlite3.connect(database, **kwargs)
         conn.create_function('date_part', 2, _sqlite_date_part)
+        conn.create_function('date_trunc', 2, _sqlite_date_trunc)
         conn.create_function('regexp', 2, _sqlite_regexp)
         return conn
 
@@ -2457,6 +2475,9 @@ class SqliteDatabase(Database):
 
     def extract_date(self, date_part, date_field):
         return fn.date_part(date_part, date_field)
+
+    def truncate_date(self, date_part, date_field):
+        return fn.strftime(SQLITE_DATE_TRUNC_MAPPING[date_part], date_field)
 
 class PostgresqlDatabase(Database):
     commit_select = True
@@ -2506,11 +2527,11 @@ class PostgresqlDatabase(Database):
         res = self.execute_sql("""
             SELECT c2.relname, i.indisprimary, i.indisunique
             FROM
-                pg_catalog.pg_class c,
-                pg_catalog.pg_class c2,
-                pg_catalog.pg_index i
+            pg_catalog.pg_class c,
+            pg_catalog.pg_class c2,
+            pg_catalog.pg_index i
             WHERE
-                c.relname = %s AND c.oid = i.indrelid AND i.indexrelid = c2.oid
+            c.relname = %s AND c.oid = i.indrelid AND i.indexrelid = c2.oid
             ORDER BY i.indisprimary DESC, i.indisunique DESC, c2.relname""",
             (table,))
         return sorted([(r[0], r[1]) for r in res.fetchall()])
@@ -2582,8 +2603,10 @@ class MySQLDatabase(Database):
         return [r[0] for r in res.fetchall()]
 
     def extract_date(self, date_part, date_field):
-        assert date_part.lower() in DATETIME_LOOKUPS
         return fn.EXTRACT(Clause(R(date_part), R('FROM'), date_field))
+
+    def truncate_date(self, date_part, date_field):
+        return fn.DATE_FORMAT(date_field, MYSQL_DATE_TRUNC_MAPPING[date_part])
 
 
 class transaction(object):

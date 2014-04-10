@@ -3952,8 +3952,13 @@ class DatabaseTestCase(BasePeeweeTestCase):
         self.assertRaises(Exception, query_db.execute_sql, bad_sql)
         self.assertEqual(query_db.last_error, (bad_sql, None))
 
-class SqliteDatePartTestCase(BasePeeweeTestCase):
-    def test_sqlite_date_part(self):
+class _SqliteDateTestHelper(BasePeeweeTestCase):
+    datetimes = [
+        datetime.datetime(2000, 1, 2, 3, 4, 5),
+        datetime.datetime(2000, 2, 3, 4, 5, 6),
+    ]
+
+    def create_date_model(self, date_fn):
         dp_db = SqliteDatabase(':memory:')
         class SqDp(Model):
             datetime_field = DateTimeField()
@@ -3966,31 +3971,34 @@ class SqliteDatePartTestCase(BasePeeweeTestCase):
             @classmethod
             def date_query(cls, field, part):
                 return (SqDp
-                        .select(fn.date_part(part, field))
+                        .select(date_fn(field, part))
                         .tuples()
                         .order_by(SqDp.id))
 
         SqDp.create_table()
-        datetimes = [
-            datetime.datetime(2000, 1, 2, 3, 4, 5),
-            datetime.datetime(2000, 2, 3, 4, 5, 6),
-        ]
 
-        for d in datetimes:
+        for d in self.datetimes:
             SqDp.create(datetime_field=d, date_field=d.date(),
                         time_field=d.time())
 
+        return SqDp
+
+class SqliteDatePartTestCase(_SqliteDateTestHelper):
+    def test_sqlite_date_part(self):
+        date_fn = lambda field, part: fn.date_part(part, field)
+        SqDp = self.create_date_model(date_fn)
+
         for part in ('year', 'month', 'day', 'hour', 'minute', 'second'):
             for i, dp in enumerate(SqDp.date_query(SqDp.datetime_field, part)):
-                self.assertEqual(dp[0], getattr(datetimes[i], part))
+                self.assertEqual(dp[0], getattr(self.datetimes[i], part))
 
         for part in ('year', 'month', 'day'):
             for i, dp in enumerate(SqDp.date_query(SqDp.date_field, part)):
-                self.assertEqual(dp[0], getattr(datetimes[i], part))
+                self.assertEqual(dp[0], getattr(self.datetimes[i], part))
 
         for part in ('hour', 'minute', 'second'):
             for i, dp in enumerate(SqDp.date_query(SqDp.time_field, part)):
-                self.assertEqual(dp[0], getattr(datetimes[i], part))
+                self.assertEqual(dp[0], getattr(self.datetimes[i], part))
 
         # ensure that the where clause works
         query = SqDp.select().where(fn.date_part('year', SqDp.datetime_field) == 2000)
@@ -4000,6 +4008,26 @@ class SqliteDatePartTestCase(BasePeeweeTestCase):
         self.assertEqual(query.count(), 1)
         query = SqDp.select().where(fn.date_part('month', SqDp.datetime_field) == 3)
         self.assertEqual(query.count(), 0)
+
+
+class SqliteDateTruncTestCase(_SqliteDateTestHelper):
+    def test_sqlite_date_trunc(self):
+        date_fn = lambda field, part: fn.date_trunc(part, field)
+        SqDp = self.create_date_model(date_fn)
+
+        def assertQuery(field, part, expected):
+            values = SqDp.date_query(field, part)
+            self.assertEqual([r[0] for r in values], expected)
+
+        assertQuery(SqDp.datetime_field, 'year', ['2000', '2000'])
+        assertQuery(SqDp.datetime_field, 'month', ['2000-01', '2000-02'])
+        assertQuery(SqDp.datetime_field, 'day', ['2000-01-02', '2000-02-03'])
+        assertQuery(SqDp.datetime_field, 'hour', [
+            '2000-01-02 03', '2000-02-03 04'])
+        assertQuery(SqDp.datetime_field, 'minute', [
+            '2000-01-02 03:04', '2000-02-03 04:05'])
+        assertQuery(SqDp.datetime_field, 'second', [
+            '2000-01-02 03:04:05', '2000-02-03 04:05:06'])
 
 
 class AutoRollbackTestCase(ModelTestCase):
