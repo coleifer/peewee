@@ -9,6 +9,7 @@
 #    '
 import datetime
 import decimal
+import hashlib
 import logging
 import operator
 import re
@@ -1395,13 +1396,20 @@ class QueryCompiler(object):
         return Clause(*ddl)
     drop_table = return_parsed_node('_drop_table')
 
+    def index_name(self, table, columns):
+        index = '%s_%s' % (table, '_'.join(columns))
+        if len(index) > 64:
+            index_hash = hashlib.md5(index).hexdigest()
+            index = '%s_%s' % (table, index_hash)
+        return index
+
     def _create_index(self, model_class, fields, unique, *extra):
-        statement = 'CREATE UNIQUE INDEX' if unique else 'CREATE INDEX'
         tbl_name = model_class._meta.db_table
-        index = '%s_%s' % (tbl_name, '_'.join(f.db_column for f in fields))
+        statement = 'CREATE UNIQUE INDEX' if unique else 'CREATE INDEX'
+        index_name = self.index_name(tbl_name, [f.db_column for f in fields])
         return Clause(
             SQL(statement),
-            Entity(index),
+            Entity(index_name),
             SQL('ON'),
             model_class._as_entity(),
             EnclosedClause(*[field._as_entity() for field in fields]),
