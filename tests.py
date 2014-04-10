@@ -4078,6 +4078,66 @@ class CheckConstraintTestCase(ModelTestCase):
             txn.rollback()
 
 
+class SQLAllTestCase(BasePeeweeTestCase):
+    def setUp(self):
+        super(SQLAllTestCase, self).setUp()
+        fake_db = SqliteDatabase(':memory:')
+        UniqueModel._meta.database = fake_db
+        SeqModelA._meta.database = fake_db
+        MultiIndexModel._meta.database = fake_db
+
+    def tearDown(self):
+        super(SQLAllTestCase, self).tearDown()
+        UniqueModel._meta.database = test_db
+        SeqModelA._meta.database = test_db
+        MultiIndexModel._meta.database = test_db
+
+    def test_sqlall(self):
+        sql = UniqueModel.sqlall()
+        self.assertEqual(sql, [
+            ('CREATE TABLE "uniquemodel" ("id" INTEGER NOT NULL PRIMARY KEY, '
+             '"name" VARCHAR(255) NOT NULL)'),
+            'CREATE UNIQUE INDEX "uniquemodel_name" ON "uniquemodel" ("name")',
+        ])
+
+        sql = MultiIndexModel.sqlall()
+        self.assertEqual(sql, [
+            ('CREATE TABLE "multiindexmodel" ("id" INTEGER NOT NULL PRIMARY '
+             'KEY, "f1" VARCHAR(255) NOT NULL, "f2" VARCHAR(255) NOT NULL, '
+             '"f3" VARCHAR(255) NOT NULL)'),
+            ('CREATE UNIQUE INDEX "multiindexmodel_f1_f2" ON "multiindexmodel"'
+             ' ("f1", "f2")'),
+            ('CREATE INDEX "multiindexmodel_f2_f3" ON "multiindexmodel" '
+             '("f2", "f3")'),
+        ])
+
+        sql = SeqModelA.sqlall()
+        self.assertEqual(sql, [
+            ('CREATE TABLE "seqmodela" ("id" INTEGER NOT NULL PRIMARY KEY '
+             'DEFAULT NEXTVAL(\'just_testing_seq\'), "num" INTEGER NOT NULL)'),
+        ])
+
+
+class LongIndexTestCase(BasePeeweeTestCase):
+    def test_long_index(self):
+        class LongIndexModel(TestModel):
+            a123456789012345678901234567890 = CharField()
+            b123456789012345678901234567890 = CharField()
+            c123456789012345678901234567890 = CharField()
+
+        fields = LongIndexModel._meta.get_fields()[1:]
+        self.assertEqual(len(fields), 3)
+
+        sql, params = compiler.create_index(LongIndexModel, fields, False)
+        self.assertEqual(sql, (
+            'CREATE INDEX "longindexmodel_85c2f7db5319d3c0c124a1594087a1cb" '
+            'ON "longindexmodel" ('
+            '"a123456789012345678901234567890", '
+            '"b123456789012345678901234567890", '
+            '"c123456789012345678901234567890")'
+        ))
+
+
 class ConnectionStateTestCase(BasePeeweeTestCase):
     def test_connection_state(self):
         conn = test_db.get_conn()
