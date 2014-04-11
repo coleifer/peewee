@@ -315,6 +315,14 @@ class TagPostThrough(TestModel):
 class Manufacturer(TestModel):
     name = CharField()
 
+class CompositeKeyModel(TestModel):
+    f1 = CharField()
+    f2 = IntegerField()
+    f3 = FloatField()
+
+    class Meta:
+        primary_key = CompositeKey('f1', 'f2')
+
 class Component(TestModel):
     name = CharField()
     manufacturer = ForeignKeyField(Manufacturer, null=True)
@@ -395,6 +403,7 @@ MODELS = [
     Language,
     Snippet,
     Manufacturer,
+    CompositeKeyModel,
     Component,
     Computer,
     CheckModel,
@@ -2843,7 +2852,7 @@ class MultipleFKTestCase(ModelTestCase):
 
 
 class CompositeKeyTestCase(ModelTestCase):
-    requires = [Tag, Post, TagPostThrough]
+    requires = [Tag, Post, TagPostThrough, CompositeKeyModel]
 
     def setUp(self):
         super(CompositeKeyTestCase, self).setUp()
@@ -2900,6 +2909,40 @@ class CompositeKeyTestCase(ModelTestCase):
                 .where(Post.title == 'p12')
                 .order_by(Tag.tag))
         self.assertEqual([t.tag for t in tags], ['t1', 't2'])
+
+    def test_composite_key_model(self):
+        CKM = CompositeKeyModel
+        values = [
+            ('a', 1, 1.0),
+            ('a', 2, 2.0),
+            ('b', 1, 1.0),
+            ('b', 2, 2.0)]
+        c1, c2, c3, c4 = [
+            CKM.create(f1=f1, f2=f2, f3=f3) for f1, f2, f3 in values]
+
+        # Update a single row, giving it a new value for `f3`.
+        CKM.update(f3=3.0).where((CKM.f1 == 'a') & (CKM.f2 == 2)).execute()
+
+        c = CKM.get((CKM.f1 == 'a') & (CKM.f2 == 2))
+        self.assertEqual(c.f3, 3.0)
+
+        # Update the `f3` value and call `save()`, triggering an update.
+        c3.f3 = 4.0
+        c3.save()
+
+        c = CKM.get((CKM.f1 == 'b') & (CKM.f2 == 1))
+        self.assertEqual(c.f3, 4.0)
+
+        # Only 1 row updated.
+        query = CKM.select().where(CKM.f3 == 4.0)
+        self.assertEqual(query.wrapped_count(), 1)
+
+        # Unfortunately this does not work since the original value of the
+        # PK is lost (and hence cannot be used to update).
+        c4.f1 = 'c'
+        c4.save()
+        self.assertRaises(
+            CKM.DoesNotExist, CKM.get, (CKM.f1 == 'c') & (CKM.f2 == 2))
 
 
 class ManyToManyTestCase(ModelTestCase):

@@ -981,6 +981,7 @@ class CompositeKey(object):
 
     def add_to_class(self, model_class, name):
         self.name = name
+        self.model_class = model_class
         setattr(model_class, name, self)
 
     def __get__(self, instance, instance_type=None):
@@ -991,6 +992,11 @@ class CompositeKey(object):
 
     def __set__(self, instance, value):
         pass
+
+    def __eq__(self, other):
+        expressions = [(self.model_class._meta.fields[field] == value)
+                       for field, value in zip(self.field_names, other)]
+        return reduce(operator.and_, expressions)
 
 
 class QueryCompiler(object):
@@ -3067,7 +3073,10 @@ class Model(with_metaclass(BaseModel)):
         if only:
             field_dict = self._prune_fields(field_dict, only)
         if self.get_id() is not None and not force_insert:
-            field_dict.pop(pk.name, None)
+            if not isinstance(pk, CompositeKey):
+                field_dict.pop(pk.name, None)
+            else:
+                field_dict = self._prune_fields(field_dict, self.dirty_fields)
             self.update(**field_dict).where(self.pk_expr()).execute()
         else:
             pk = self.get_id()
