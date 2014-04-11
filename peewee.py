@@ -1421,7 +1421,7 @@ class QueryCompiler(object):
     def index_name(self, table, columns):
         index = '%s_%s' % (table, '_'.join(columns))
         if len(index) > 64:
-            index_hash = hashlib.md5(index).hexdigest()
+            index_hash = hashlib.md5(index.encode('utf-8')).hexdigest()
             index = '%s_%s' % (table, index_hash)
         return index
 
