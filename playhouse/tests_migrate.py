@@ -1,21 +1,23 @@
 import datetime
-import psycopg2
 import unittest
 
 from peewee import *
 from playhouse.migrate import *
 
 
-pg_db = PostgresqlDatabase('peewee_test')
+try:
+    import psycopg2
+    pg_db = PostgresqlDatabase('peewee_test')
+except ImportError:
+    pg_db = None
+
+sqlite_db = SqliteDatabase(':memory:')
 
 class Tag(Model):
     tag = CharField()
 
-    class Meta:
-        database = pg_db
 
-
-class PostgresqlMigrateTestCase(unittest.TestCase):
+class MigrationTestCase(unittest.TestCase):
     integrity_error = IntegrityError
 
     def setUp(self):
