@@ -4,6 +4,11 @@ import unittest
 from peewee import *
 from playhouse.migrate import *
 
+import logging
+logger = logging.getLogger('peewee')
+logger.setLevel(logging.DEBUG)
+logger.addHandler(logging.StreamHandler())
+
 
 try:
     import psycopg2
@@ -17,14 +22,16 @@ class Tag(Model):
     tag = CharField()
 
 
-class MigrationTestCase(unittest.TestCase):
-    integrity_error = IntegrityError
+class BaseMigrationTestCase(object):
+    database = None
+    migrator_class = None
 
     def setUp(self):
+        Tag._meta.database = self.database
         Tag.drop_table(True)
         Tag.create_table()
 
-        self.migrator = PostgresqlMigrator(pg_db)
+        self.migrator = self.migrator_class(self.database)
 
     def test_add_column(self):
         df = DateTimeField(null=True)
@@ -36,23 +43,46 @@ class MigrationTestCase(unittest.TestCase):
         t1 = Tag.create(tag='t1')
         t2 = Tag.create(tag='t2')
 
-        migration = Migration(
-            pg_db,
-            self.migrator.add_column('tag', 'pub_date', df),
-            self.migrator.add_column('tag', 'modified_date', df_def),
-            self.migrator.add_column('tag', 'comment', cf),
-            self.migrator.add_column('tag', 'is_public', bf),
-            self.migrator.add_column('tag', 'popularity', ff),
-        )
-        migration.run()
+        def add_column(field_name, field_obj):
+            return self.migrator.add_column('tag', field_name, field_obj)
+        add_pub_date = add_column('pub_date', df)
+        add_modified_date = add_column('modified_date', df_def)
+        add_comment = add_column('comment', cf)
+        add_is_public = add_column('is_public', bf)
+        add_popularity = add_column('popularity', ff)
 
-        curs = pg_db.execute_sql('select id, tag, pub_date, modified_date, comment, is_public, popularity from tag order by tag asc')
+        migrate(
+            self.migrator,
+            add_pub_date,
+            add_modified_date,
+            add_comment,
+            add_is_public,
+            add_popularity,
+        )
+
+        query = """
+            SELECT id, tag, pub_date, modified_date, comment, is_public, popularity
+            FROM tag
+            ORDER BY tag ASC
+        """
+        curs = self.database.execute_sql(query)
         rows = curs.fetchall()
 
         self.assertEqual(rows, [
             (t1.id, 't1', None, datetime.datetime(2012, 1, 1), '', True, 0.0),
             (t2.id, 't2', None, datetime.datetime(2012, 1, 1), '', True, 0.0),
         ])
+
+
+#class PostgresqlMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
+#    database = pg_db
+#    migrator_class = PostgresqlMigrator
+
+
+class SqliteMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
+    database = sqlite_db
+    migrator_class = SqliteMigrator
+
 
     """
     def test_rename_column(self):

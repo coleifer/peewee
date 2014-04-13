@@ -41,6 +41,7 @@ Renaming a table
     with my_db.transaction():
         migrator.rename_table(Story, 'stories')
 """
+import functools
 import re
 
 from peewee import *
@@ -51,46 +52,59 @@ from peewee import Expression
 from peewee import OP_EQ
 
 
+class Operation(object):
+    def __init__(self, migrator, *clauses):
+
+
 class SchemaMigrator(object):
     def __init__(self, database):
         self.database = database
 
-    def add_column(self, table, column_name, field):
-        if not field.null and field.default is None:
-            raise ValueError('%s is not null but has no default' % column_name)
+    def apply_default(self, table, column_name, field):
+        default = field.default
+        if callable(default):
+            default = default()
 
-        clauses = []
+        return Clause(
+            SQL('UPDATE'),
+            Entity(table),
+            SQL('SET'),
+            Expression(
+                Entity(column_name),
+                OP_EQ,
+                Param(field.db_value(default)),
+                flat=True))
 
+    def alter_add_column(self, table, column_name, field):
         # Make field null at first.
         field_null, field.null = field.null, True
         field.name = field.db_column = column_name
         field_clause = self.database.compiler().field_definition(field)
-        clauses.append(Clause(
+        field.null = field_null
+        return Clause(
             SQL('ALTER TABLE'),
             Entity(table),
             SQL('ADD COLUMN'),
-            field_clause))
+            field_clause)
+
+    def add_column(self, table, column_name, field):
+        # Adding a column is complicated by the fact that if there are rows
+        # present and the field is non-null, then we need to first add the
+        # column as a nullable field, then set the value, then add a not null
+        # constraint.
+        if not field.null and field.default is None:
+            raise ValueError('%s is not null but has no default' % column_name)
+
+        operations = [self.alter_add_column(table, column_name, field)]
 
         # In the event the field is *not* nullable, update with the default
         # value and set not null.
-        if not field_null:
-            default = field.default
-            if callable(default):
-                default = default()
+        if not field.null:
+            operations.extend([
+                self.apply_default(table, column_name, field),
+                self.add_not_null(table, column_name)])
 
-            clauses.append(Clause(
-                SQL('UPDATE'),
-                Entity(table),
-                SQL('SET'),
-                Expression(
-                    Entity(column_name),
-                    OP_EQ,
-                    Param(field.db_value(default)),
-                    flat=True)))
-
-            clauses.append(self.add_not_null(table, column_name))
-
-        return clauses
+        return operations
 
     def drop_column(self, table, column_name, cascade=True):
         nodes = [
@@ -259,31 +273,12 @@ class SqliteMigrator(SchemaMigrator):
         return self._update_column(table, column, _drop_not_null)
 
 
-class Migration(object):
-    def __init__(self, database, *operations):
-        self.database = database
-        if not operations:
-            raise ValueError('Migrations must include at least one operation.')
-        self.operations = self.flatten_operations(operations)
-
-    def flatten_operations(self, operations):
-        accum = []
-        for operation in operations:
-            if isinstance(operation, list):
-                accum.extend(self.flatten_operations(operation))
-            else:
-                accum.append(operation)
-        return accum
-
-    def run(self, in_transaction=True):
-        if in_transaction:
-            with self.database.transaction():
-                self._run()
+def migrate(migrator, *operations):
+    db = migrator.database
+    compiler = db.compiler()
+    for operation in operations:
+        if isinstance(operation, (list, tuple)):
+            migrate(migrator, *operation)
         else:
-            self._run()
-
-    def _run(self):
-        compiler = self.database.compiler()
-        for operation in self.operations:
             sql, params = compiler.parse_node(operation)
-            self.database.execute_sql(sql, params)
+            db.execute_sql(sql, params)
