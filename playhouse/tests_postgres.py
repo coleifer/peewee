@@ -441,6 +441,21 @@ if json_ok():
             tj_db = TestingJson.get(tj.pk_expr())
             self.assertEqual(tj_db.data, data)
 
+        def test_json_field_sql(self):
+            tj = TestingJson.select().where(TestingJson.data == {'foo': 'bar'})
+            sql, params = tj.sql()
+            self.assertEqual(sql, (
+                'SELECT t1."id", t1."data" '
+                'FROM "testingjson" AS t1 WHERE (t1."data" = %s)'))
+            self.assertEqual(params[0].adapted, {'foo': 'bar'})
+
+            tj = TestingJson.select().where(TestingJson.data['foo'] == 'bar')
+            sql, params = tj.sql()
+            self.assertEqual(sql, (
+                'SELECT t1."id", t1."data" '
+                'FROM "testingjson" AS t1 WHERE (t1."data"->>%s = %s)'))
+            self.assertEqual(params, ['foo', 'bar'])
+
         def assertItems(self, where, *items):
             query = TestingJson.select().where(where).order_by(TestingJson.id)
             self.assertEqual(

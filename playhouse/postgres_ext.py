@@ -203,16 +203,17 @@ class PostgresqlExtCompiler(QueryCompiler):
         if unknown:
             if isinstance(node, ObjectSlice):
                 unknown = False
-                sql, params = self.parse_node(node.node)
+                sql, params = self.parse_node(node.node, alias_map, conv)
                 # Postgresql uses 1-based indexes.
                 parts = [str(part + 1) for part in node.parts]
                 sql = '%s[%s]' % (sql, ':'.join(parts))
             if isinstance(node, JsonLookup):
                 unknown = False
-                sql, params = self.parse_node(node.node)
+                sql, params = self.parse_node(node.node, alias_map, conv)
                 lookups = [sql]
                 for part in node.parts:
-                    part_sql, part_params = self.parse_node(part)
+                    part_sql, part_params = self.parse_node(
+                        part, alias_map, conv)
                     lookups.append(part_sql)
                     params.extend(part_params)
                 # The last lookup should be converted to text.
