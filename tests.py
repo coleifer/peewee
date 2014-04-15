@@ -2550,6 +2550,38 @@ class ModelAggregateTestCase(ModelTestCase):
         self.assertEqual(max_created, models[-1].created)
 
 
+class FromMultiTableTestCase(ModelTestCase):
+    requires = [Blog, Comment, User]
+
+    def setUp(self):
+        super(FromMultiTableTestCase, self).setUp()
+
+        for u in range(2):
+            user = User.create(username='u%s' % u)
+            for i in range(3):
+                b = Blog.create(user=user, title='b%s-%s' % (u, i))
+                for j in range(i):
+                    Comment.create(blog=b, comment='c%s-%s' % (i, j))
+
+    def test_from_multi_table(self):
+        q = (Blog
+             .select(Blog, User)
+             .from_(Blog, User)
+             .where(
+                 (Blog.user == User.id) &
+                 (User.username == 'u0'))
+             .order_by(Blog.pk)
+             .naive())
+
+        qc = len(self.queries())
+        blogs = [b.title for b in q]
+        self.assertEqual(blogs, ['b0-0', 'b0-1', 'b0-2'])
+
+        usernames = [b.username for b in q]
+        self.assertEqual(usernames, ['u0', 'u0', 'u0'])
+        self.assertEqual(len(self.queries()) - qc, 1)
+
+
 class PrefetchTestCase(ModelTestCase):
     requires = [User, Blog, Comment, Parent, Child, Orphan, ChildPet, OrphanPet, Category]
     user_data = [
