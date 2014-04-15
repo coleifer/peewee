@@ -2581,6 +2581,24 @@ class FromMultiTableTestCase(ModelTestCase):
         self.assertEqual(usernames, ['u0', 'u0', 'u0'])
         self.assertEqual(len(self.queries()) - qc, 1)
 
+    def test_subselect(self):
+        inner = User.select(User.username)
+        self.assertEqual(
+            [u.username for u in inner.order_by(User.username)], ['u0', 'u1'])
+
+        # Have to manually specify the alias as "t1" because the outer query
+        # will expect that.
+        outer = (User
+                 .select(User.username)
+                 .from_(inner.alias('t1')))
+        sql, params = compiler.generate_select(outer)
+        self.assertEqual(sql, (
+            'SELECT users."username" FROM '
+            '(SELECT users."username" FROM "users" AS users) AS t1'))
+
+        self.assertEqual(
+            [u.username for u in outer.order_by(User.username)], ['u0', 'u1'])
+
 
 class PrefetchTestCase(ModelTestCase):
     requires = [User, Blog, Comment, Parent, Child, Orphan, ChildPet, OrphanPet, Category]
