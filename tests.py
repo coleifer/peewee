@@ -756,6 +756,18 @@ class SelectTestCase(BasePeeweeTestCase):
         sq = SelectQuery(User).where(fn.Lower(fn.Substr(User.username, 0, 1)) == 'a')
         self.assertWhere(sq, '(Lower(Substr(users."username", ?, ?)) = ?)', [0, 1, 'a'])
 
+    def test_where_conversion(self):
+        sq = SelectQuery(CSVRow).where(CSVRow.data == Param(['foo', 'bar']))
+        self.assertWhere(sq, '(csvrow."data" = ?)', ['foo,bar'])
+
+        sq = SelectQuery(CSVRow).where(
+            CSVRow.data == fn.FOO(Param(['foo', 'bar'])))
+        self.assertWhere(sq, '(csvrow."data" = FOO(?))', ['foo,bar'])
+
+        sq = SelectQuery(CSVRow).where(
+            CSVRow.data == fn.FOO(Param(['foo', 'bar'])).coerce(False))
+        self.assertWhere(sq, '(csvrow."data" = FOO(?))', [['foo', 'bar']])
+
     def test_where_clauses(self):
         sq = SelectQuery(Blog).where(
             Blog.pub_date < (fn.NOW() - SQL('INTERVAL 1 HOUR')))
@@ -1351,6 +1363,26 @@ class CompilerTestCase(BasePeeweeTestCase):
             'SELECT t3."id" FROM "b" AS t3 '
             'INNER JOIN "a" AS a_tbl ON (t3."a_link_id" = a_tbl."id") '
             'WHERE (a_tbl."a" = ?)))'))
+
+    def test_fn_no_coerce(self):
+        class A(TestModel):
+            i = IntegerField()
+            d = DateTimeField()
+
+        query = A.select(A.id).where(A.d == '2013-01-02')
+        sql, params = query.sql()
+        self.assertEqual(sql, (
+            'SELECT t1."id" FROM "a" AS t1 WHERE (t1."d" = ?)'))
+        self.assertEqual(params, ['2013-01-02'])
+
+        query = A.select(A.id).where(A.i == fn.Foo('test'))
+        self.assertRaises(ValueError, query.sql)
+
+        query = A.select(A.id).where(A.i == fn.Foo('test').coerce(False))
+        sql, params = query.sql()
+        self.assertEqual(sql, (
+            'SELECT t1."id" FROM "a" AS t1 WHERE (t1."i" = Foo(?))'))
+        self.assertEqual(params, ['test'])
 
 
 class ValidationTestCase(BasePeeweeTestCase):

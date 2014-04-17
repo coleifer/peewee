@@ -1109,6 +1109,7 @@ class QueryCompiler(object):
                 sql = '.'.join((alias_map[node.model_class], sql))
             params = []
         elif isinstance(node, Func):
+            conv = node._coerce and conv or None
             sql, params = self.parse_node_list(node.arguments, alias_map, conv)
             sql = '%s(%s)' % (node.name, sql)
         elif isinstance(node, Clause):
