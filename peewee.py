@@ -2519,6 +2519,7 @@ If you need to ask for an interactive passphrase, here's example code you can pu
             raise ImproperlyConfigured('pysqlcipher must be installed on the system')
         passphrase = kwargs.pop('passphrase','').strip()
         kdf_iter = kwargs.pop('kdf_iter',64000) # is this a good number?
+        kwargs.pop('threadlocals',None) # Tweak: in some test suits it "leaks" into connect_kwargs. Normaly, __init__ would "swallow" it.
         if len(passphrase)<8:
             raise ImproperlyConfigured("SqlCipherDatabase passphrase should be at least 8 character long (a lot longer, if you're serious)")
         if kdf_iter and (type(kdf_iter) != type(0) or kdf_iter<10000):
