@@ -16,7 +16,7 @@ def runtests(suite, verbosity):
 def get_option_parser():
     parser = optparse.OptionParser()
     basic = optparse.OptionGroup(parser, 'Basic test options')
-    basic.add_option('-e', '--engine', dest='engine', help='Database engine to test, one of [sqlite, postgres, mysql, pysqlcipher]')
+    basic.add_option('-e', '--engine', dest='engine', help='Database engine to test, one of [sqlite, postgres, mysql, apsw, pysqlcipher]')
     basic.add_option('-v', '--verbosity', dest='verbosity', default=1, type='int', help='Verbosity of output')
 
     suite = optparse.OptionGroup(parser, 'Simple test suite options')
