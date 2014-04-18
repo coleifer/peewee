@@ -1109,6 +1109,7 @@ class QueryCompiler(object):
                 sql = '.'.join((alias_map[node.model_class], sql))
             params = []
         elif isinstance(node, Func):
+            conv = node._coerce and conv or None
             sql, params = self.parse_node_list(node.arguments, alias_map, conv)
             sql = '%s(%s)' % (node.name, sql)
         elif isinstance(node, Clause):
@@ -1421,7 +1422,7 @@ class QueryCompiler(object):
     def index_name(self, table, columns):
         index = '%s_%s' % (table, '_'.join(columns))
         if len(index) > 64:
-            index_hash = hashlib.md5(index).hexdigest()
+            index_hash = hashlib.md5(index.encode('utf-8')).hexdigest()
             index = '%s_%s' % (table, index_hash)
         return index
 

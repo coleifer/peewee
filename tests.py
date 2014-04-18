@@ -756,6 +756,18 @@ class SelectTestCase(BasePeeweeTestCase):
         sq = SelectQuery(User).where(fn.Lower(fn.Substr(User.username, 0, 1)) == 'a')
         self.assertWhere(sq, '(Lower(Substr(users."username", ?, ?)) = ?)', [0, 1, 'a'])
 
+    def test_where_conversion(self):
+        sq = SelectQuery(CSVRow).where(CSVRow.data == Param(['foo', 'bar']))
+        self.assertWhere(sq, '(csvrow."data" = ?)', ['foo,bar'])
+
+        sq = SelectQuery(CSVRow).where(
+            CSVRow.data == fn.FOO(Param(['foo', 'bar'])))
+        self.assertWhere(sq, '(csvrow."data" = FOO(?))', ['foo,bar'])
+
+        sq = SelectQuery(CSVRow).where(
+            CSVRow.data == fn.FOO(Param(['foo', 'bar'])).coerce(False))
+        self.assertWhere(sq, '(csvrow."data" = FOO(?))', [['foo', 'bar']])
+
     def test_where_clauses(self):
         sq = SelectQuery(Blog).where(
             Blog.pub_date < (fn.NOW() - SQL('INTERVAL 1 HOUR')))
@@ -1351,6 +1363,26 @@ class CompilerTestCase(BasePeeweeTestCase):
             'SELECT t3."id" FROM "b" AS t3 '
             'INNER JOIN "a" AS a_tbl ON (t3."a_link_id" = a_tbl."id") '
             'WHERE (a_tbl."a" = ?)))'))
+
+    def test_fn_no_coerce(self):
+        class A(TestModel):
+            i = IntegerField()
+            d = DateTimeField()
+
+        query = A.select(A.id).where(A.d == '2013-01-02')
+        sql, params = query.sql()
+        self.assertEqual(sql, (
+            'SELECT t1."id" FROM "a" AS t1 WHERE (t1."d" = ?)'))
+        self.assertEqual(params, ['2013-01-02'])
+
+        query = A.select(A.id).where(A.i == fn.Foo('test'))
+        self.assertRaises(ValueError, query.sql)
+
+        query = A.select(A.id).where(A.i == fn.Foo('test').coerce(False))
+        sql, params = query.sql()
+        self.assertEqual(sql, (
+            'SELECT t1."id" FROM "a" AS t1 WHERE (t1."i" = Foo(?))'))
+        self.assertEqual(params, ['test'])
 
 
 class ValidationTestCase(BasePeeweeTestCase):
@@ -2548,6 +2580,56 @@ class ModelAggregateTestCase(ModelTestCase):
                        .select()
                        .aggregate(fn.Max(OrderedModel.created)))
         self.assertEqual(max_created, models[-1].created)
+
+
+class FromMultiTableTestCase(ModelTestCase):
+    requires = [Blog, Comment, User]
+
+    def setUp(self):
+        super(FromMultiTableTestCase, self).setUp()
+
+        for u in range(2):
+            user = User.create(username='u%s' % u)
+            for i in range(3):
+                b = Blog.create(user=user, title='b%s-%s' % (u, i))
+                for j in range(i):
+                    Comment.create(blog=b, comment='c%s-%s' % (i, j))
+
+    def test_from_multi_table(self):
+        q = (Blog
+             .select(Blog, User)
+             .from_(Blog, User)
+             .where(
+                 (Blog.user == User.id) &
+                 (User.username == 'u0'))
+             .order_by(Blog.pk)
+             .naive())
+
+        qc = len(self.queries())
+        blogs = [b.title for b in q]
+        self.assertEqual(blogs, ['b0-0', 'b0-1', 'b0-2'])
+
+        usernames = [b.username for b in q]
+        self.assertEqual(usernames, ['u0', 'u0', 'u0'])
+        self.assertEqual(len(self.queries()) - qc, 1)
+
+    def test_subselect(self):
+        inner = User.select(User.username)
+        self.assertEqual(
+            [u.username for u in inner.order_by(User.username)], ['u0', 'u1'])
+
+        # Have to manually specify the alias as "t1" because the outer query
+        # will expect that.
+        outer = (User
+                 .select(User.username)
+                 .from_(inner.alias('t1')))
+        sql, params = compiler.generate_select(outer)
+        self.assertEqual(sql, (
+            'SELECT users."username" FROM '
+            '(SELECT users."username" FROM "users" AS users) AS t1'))
+
+        self.assertEqual(
+            [u.username for u in outer.order_by(User.username)], ['u0', 'u1'])
 
 
 class PrefetchTestCase(ModelTestCase):
