@@ -81,6 +81,7 @@ elif BACKEND == 'apsw':
     database_name = 'tmp.db'
     database_params['timeout'] = 1000
 elif BACKEND == 'pysqlcipher':
+    from playhouse.sqlcipher_ext import *
     database_class = SqlCipherDatabase
     database_name = 'tmp-snakeoilpassphrase.db'
     database_params['passphrase'] = 'snakeoilpassphrase'
@@ -3780,10 +3781,6 @@ class ConcurrencyTestCase(ModelTestCase):
         self._orig_db = test_db
         kwargs = test_db.connect_kwargs
         kwargs['threadlocals'] = True
-        if isinstance(test_db, SqlCipherDatabase):
-            # Put a very large timeout in place to avoid `database is locked`
-            # when using SQLite (default is 5).
-            kwargs['timeout'] = 60
         if isinstance(test_db, SqliteDatabase):
             # Put a pretty large timeout etc.
             kwargs['timeout'] = 30
