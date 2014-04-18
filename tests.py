@@ -3779,8 +3779,11 @@ class ConcurrencyTestCase(ModelTestCase):
 
     def setUp(self):
         self._orig_db = test_db
-        kwargs = test_db.connect_kwargs
-        kwargs['threadlocals'] = True
+        kwargs = {'threadlocals': True}
+        try: # some engines need the extra kwargs
+            kwargs.update(test_db.connect_kwargs)
+        except:
+            pass
         if isinstance(test_db, SqliteDatabase):
             # Put a pretty large timeout etc.
             kwargs['timeout'] = 30
