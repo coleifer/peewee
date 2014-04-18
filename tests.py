@@ -81,6 +81,12 @@ elif BACKEND == 'apsw':
     database_class = APSWDatabase
     database_name = 'tmp.db'
     database_params['timeout'] = 1000
+elif BACKEND == 'pysqlcipher':
+    database_class = SqlCipherDatabase
+    database_name = 'tmp-snakeoilpassphrase.db'
+    database_params['passphrase'] = 'snakeoilpassphrase'
+    from pysqlcipher import dbapi2 as sqlcipher
+    print_('PYSQLCIPHER VERSION: %s' % sqlcipher.version)
 else:
     database_class = SqliteDatabase
     database_name = 'tmp.db'
@@ -3799,7 +3805,13 @@ class ConcurrencyTestCase(ModelTestCase):
 
     def setUp(self):
         self._orig_db = test_db
-        kwargs = {'threadlocals': True}
+        kwargs = test_db.connect_kwargs
+        # @@@PROBLEM: SqlCipherDatabase: doesn't have threadlocals keyword
+        # so all tests that require this will fail withe -e pysqlcipher
+        # @@@QUESTION: How do "wrap" it with a threadlocals equivalent?
+        # This is how they do concurrency:
+        # https://github.com/isislovecruft/pysqlcipher/blob/master/ext/async/README.txt
+        kwargs['threadlocals'] = True
         if isinstance(test_db, SqliteDatabase):
             # Put a very large timeout in place to avoid `database is locked`
             # when using SQLite (default is 5).
