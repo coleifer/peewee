@@ -64,6 +64,7 @@ __all__ = [
     'Proxy',
     'R',
     'SqliteDatabase',
+    'SqlCipherDatabase',
     'SQL',
     'TextField',
     'TimeField',
@@ -114,8 +115,12 @@ elif PY2:
 else:
     raise RuntimeError('Unsupported python version.')
 
-# By default, peewee supports Sqlite, MySQL and Postgresql.
+# By default, peewee supports Sqlite, MySQL, Postgresql, and pysqlcipher.
 import sqlite3
+try:
+    from pysqlcipher import dbapi2 as sqlcipher
+except ImportError:
+    sqlcipher = None
 try:
     import psycopg2
     from psycopg2 import extensions as pg_extensions
@@ -2485,6 +2490,43 @@ class SqliteDatabase(Database):
 
     def truncate_date(self, date_part, date_field):
         return fn.strftime(SQLITE_DATE_TRUNC_MAPPING[date_part], date_field)
+
+class SqlCipherDatabase(SqliteDatabase):
+    """usage: db=peewee.SqlCipherDatabase('/path/to/my.db',passphrase="don'tuseme4real"[,kdf_iter=1000000])
+       Passphrase: Should be long enough
+           (IMHO length beats vocbulary (much exponential). Forget MixedcasE, l337 and @%$^& special characters:
+           Even a lowercase-only passphrase like easytorememberyethardforotherstoguess
+           packs more noise than 8 random printable chatacters AND it's possible to remember it)
+       Kdf_iter: Should be "as much as the weakest target machine can afford".
+When opening an existing database, passphrase and kbf_iter should be identical to the ones used when creating it.
+If the passphrase is wrong, an exception will only be raised *when you access the database*.
+If you need to ask for an interactive passphrase, here's example code you can put after the "db = ..." line:
+    try:
+        db.get_tables() # just access the database so that it checks the encryption
+    except peewee.DatabaseError,e: # We're looking for a specific [somewhat cryptic] error message
+        if e.message=='file is encrypted or is not a database': # indication that passphrase is wrong
+            raise Exception('We need to prompt for a password and do "db = ..." again... Sorry.')
+        raise e # Some other DatabaseError
+    """
+    def _connect(self, database, **kwargs):
+        if not sqlcipher:
+            raise ImproperlyConfigured('pysqlcipher must be installed on the system')
+        passphrase = kwargs.pop('passphrase','').strip()
+        kdf_iter = kwargs.pop('kdf_iter',64000) # is this a good number?
+        if len(passphrase)<8:
+            raise ImproperlyConfigured("SqlCipherDatabase passphrase should be at least 8 character long (a lot longer, if you're serious)")
+        if kdf_iter and (type(kdf_iter) != type(0) or kdf_iter<10000):
+            raise ImproperlyConfigured("SqlCipherDatabase kdf_iter should be at least 10000 (a lot more, if you're serious)")
+        conn = sqlcipher.connect(database, **kwargs)
+        # begin cargo-cult repetition of whatever SqliteDatabase does here :)
+        conn.create_function('date_part', 2, _sqlite_date_part)
+        conn.create_function('date_trunc', 2, _sqlite_date_trunc)
+        conn.create_function('regexp', 2, _sqlite_regexp)
+        # end cargo-cult
+        conn.execute("PRAGMA key='{0}'".format(passphrase.replace("'","''")))
+        if kdf_iter: # if not - sqlcipher's default is probably the safest bet
+            conn.execute("PRAGMA kdf_iter={0}".format(kdf_iter))
+        return conn
 
 class PostgresqlDatabase(Database):
     commit_select = True
