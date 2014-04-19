@@ -3812,7 +3812,8 @@ class ConcurrencyTestCase(ModelTestCase):
         except:
             pass
         if isinstance(test_db, SqliteDatabase):
-            # Put a pretty large timeout etc.
+            # Put a very large timeout in place to avoid `database is locked`
+            # when using SQLite (default is 5).
             kwargs['timeout'] = 30
 
         User._meta.database = database_class(database_name, **kwargs)
