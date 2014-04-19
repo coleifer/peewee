@@ -22,27 +22,26 @@ Example usage:
      db=SqlCipherDatabase('/path/to/my.db', passphrase="don'tuseme4real",
          kdf_iter=1000000)
 
-Where:
-
-* Passphrase should be "long enough".
+* `passphrase`: should be "long enough".
   Note that *length beats vocabulary* (much exponential), and even
   a lowercase-only passphrase like easytorememberyethardforotherstoguess
   packs more noise than 8 random printable chatacters and *can* be memorized.
-* Kdf_iter: Should be "as much as the weakest target machine can afford".
+* `kdf_iter`: Should be "as much as the weakest target machine can afford".
 
-When opening an existing database, passphrase and kbf_iter should be identical
+When opening an existing database, passphrase and kdf_iter should be identical
 to the ones used when creating it.  If they're wrong, an exception will only be
 raised **when you access the database**.
+
 If you need to ask for an interactive passphrase, here's example code you can
 put after the `db = ...` line:
 
-    try:  # just access the database so that it checks the encryption
+    try:  # Just access the database so that it checks the encryption.
         db.get_tables()
-    # We're looking for a DatabaseError with a specific error message
-    except peewee.DatabaseError, e:
-        # indication that passphrase is wrong
+    # We're looking for a DatabaseError with a specific error message.
+    except peewee.DatabaseError as e:
+        # Check whether the message *means* "passphrase is wrong"
         if e.message=='file is encrypted or is not a database':
-        ### Prompt the user for a passphrase again, and redo `db = ...`
+            raise Exception('Developer should Prompt user for passphrase again.')
         else:
             # A different DatabaseError. Raise it.
             raise e
@@ -60,13 +59,14 @@ class SqlCipherDatabase(SqliteDatabase):
         kdf_iter = kwargs.pop('kdf_iter', 64000)  # Is this a good number?
         if len(passphrase)<8:
             raise ImproperlyConfigured(
-                "SqlCipherDatabase passphrase should be at least "\
-                "8 character long (a lot longer, if you're serious)")
-        if kdf_iter and (type(kdf_iter) != type(0) or kdf_iter<10000):
+                "SqlCipherDatabase passphrase should be at least "
+                "8 character long (a lot longer, if you're serious).")
+        if kdf_iter and kdf_iter<10000:
             raise ImproperlyConfigured(
-                 "SqlCipherDatabase kdf_iter should be at least "\
-                 "10000 (a lot more, if you're serious)")
+                 "SqlCipherDatabase kdf_iter should be at least "
+                 "10000 (a lot more, if you're serious).")
         conn = sqlcipher.connect(database, **kwargs)
+
         # Add the hooks SqliteDatabase needs
         self._add_conn_hooks(conn)
         conn.execute("PRAGMA key='{0}'".format(passphrase.replace("'", "''")))
