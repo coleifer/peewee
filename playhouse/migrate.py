@@ -1,22 +1,35 @@
 """
-Lightweight schema migrations, currently only support for Postgresql.
+Lightweight schema migrations.
+
+NOTE: Currently tested with SQLite and Postgresql. MySQL may be missing some
+features.
 
 Example Usage
 -------------
 
 Instantiate a migrator:
 
+    # Postgres example:
     my_db = PostgresqlDatabase(...)
-    migrator = Migrator(my_db)
+    migrator = PostgresqlMigrator(my_db)
 
-Adding a field to a model:
+    # SQLite example:
+    my_db = SqliteDatabase('my_database.db')
+    migrator = SqliteMigrator(my_db)
 
-    # declare a field instance
-    new_pubdate_field = DateTimeField(null=True)
 
-    # in a transaction, add the column to your model
-    with my_db.transaction():
-        migrator.add_column(Story, new_pubdate_field, 'pub_date')
+Add new field(s) to an existing model:
+
+    # Create your field instances. For non-null fields you must specify a
+    # default value.
+    pubdate_field = DateTimeField(null=True)
+    comment_field = TextField(default='')
+
+    # Run the migration, specifying the database table, field name and field.
+    migrate(
+        migrator.add_column('comment_tbl', 'pub_date', pubdate_field),
+        migrator.add_column('comment_tbl', 'comment', comment_field),
+    )
 
 Renaming a field:
 
@@ -49,17 +62,56 @@ from peewee import CommaClause
 from peewee import EnclosedClause
 from peewee import Entity
 from peewee import Expression
+from peewee import Node
 from peewee import OP_EQ
 
 
 class Operation(object):
-    def __init__(self, migrator, *clauses):
+    """Encapsulate a single schema altering operation."""
+    def __init__(self, migrator, method, *args, **kwargs):
+        self.migrator = migrator
+        self.method = method
+        self.args = args
+        self.kwargs = kwargs
 
+    def _parse_node(self, node):
+        compiler = self.migrator.database.compiler()
+        return compiler.parse_node(node)
+
+    def execute(self, node):
+        sql, params = self._parse_node(node)
+        self.migrator.database.execute_sql(sql, params)
+
+    def _handle_result(self, result):
+        if isinstance(result, Node):
+            self.execute(result)
+        elif isinstance(result, Operation):
+            result.run()
+        elif isinstance(result, (list, tuple)):
+            for item in result:
+                self._handle_result(item)
+
+    def run(self):
+        kwargs = self.kwargs.copy()
+        kwargs['generate'] = True
+        self._handle_result(
+            getattr(self.migrator, self.method)(*self.args, **kwargs))
+
+
+def operation(fn):
+    @functools.wraps(fn)
+    def inner(self, *args, **kwargs):
+        generate = kwargs.pop('generate', False)
+        if generate:
+            return fn(self, *args, **kwargs)
+        return Operation(self, fn.__name__, *args, **kwargs)
+    return inner
 
 class SchemaMigrator(object):
     def __init__(self, database):
         self.database = database
 
+    @operation
     def apply_default(self, table, column_name, field):
         default = field.default
         if callable(default):
@@ -75,6 +127,7 @@ class SchemaMigrator(object):
                 Param(field.db_value(default)),
                 flat=True))
 
+    @operation
     def alter_add_column(self, table, column_name, field):
         # Make field null at first.
         field_null, field.null = field.null, True
@@ -87,6 +140,7 @@ class SchemaMigrator(object):
             SQL('ADD COLUMN'),
             field_clause)
 
+    @operation
     def add_column(self, table, column_name, field):
         # Adding a column is complicated by the fact that if there are rows
         # present and the field is non-null, then we need to first add the
@@ -106,6 +160,7 @@ class SchemaMigrator(object):
 
         return operations
 
+    @operation
     def drop_column(self, table, column_name, cascade=True):
         nodes = [
             SQL('ALTER TABLE'),
@@ -116,6 +171,7 @@ class SchemaMigrator(object):
             nodes.append(SQL('CASCADE'))
         return Clause(*nodes)
 
+    @operation
     def rename_column(self, table, old_name, new_name):
         return Clause(
             SQL('ALTER TABLE'),
@@ -132,16 +188,19 @@ class SchemaMigrator(object):
             SQL('ALTER COLUMN'),
             Entity(column)]
 
+    @operation
     def add_not_null(self, table, column):
         nodes = self._alter_column(table, column)
         nodes.append(SQL('SET NOT NULL'))
         return Clause(*nodes)
 
+    @operation
     def drop_not_null(self, table, column):
         nodes = self._alter_column(table, column)
         nodes.append(SQL('DROP NOT NULL'))
         return Clause(*nodes)
 
+    @operation
     def rename_table(self, old_name, new_name):
         return Clause(
             SQL('ALTER TABLE'),
@@ -149,16 +208,18 @@ class SchemaMigrator(object):
             SQL('RENAME TO'),
             Entity(new_name))
 
+    @operation
     def add_index(self, table, columns, unique=False):
-        compiler = database.compiler()
+        compiler = self.database.compiler()
         statement = 'CREATE UNIQUE INDEX' if unique else 'CREATE INDEX'
         return Clause(
             SQL(statement),
             Entity(compiler.index_name(table, columns)),
             SQL('ON'),
             Entity(table),
-            EnclosedClause(*columns))
+            EnclosedClause(*[Entity(column) for column in columns]))
 
+    @operation
     def drop_index(self, table, index_name):
         return Clause(
             SQL('DROP INDEX'),
@@ -166,7 +227,43 @@ class SchemaMigrator(object):
 
 
 class PostgresqlMigrator(SchemaMigrator):
-    pass
+    def _primary_key_columns(self, tbl):
+        query = """
+            SELECT pg_attribute.attname
+            FROM pg_index, pg_class, pg_attribute
+            WHERE
+                pg_class.oid = '%s'::regclass AND
+                indrelid = pg_class.oid AND
+                pg_attribute.attrelid = pg_class.oid AND
+                pg_attribute.attnum = any(pg_index.indkey) AND
+                indisprimary;
+        """
+        cursor = self.database.execute_sql(query % tbl)
+        return [row[0] for row in cursor.fetchall()]
+
+    @operation
+    def rename_table(self, old_name, new_name):
+        pk_names = self._primary_key_columns(old_name)
+        ParentClass = super(PostgresqlMigrator, self)
+
+        operations = [
+            ParentClass.rename_table(old_name, new_name, generate=True)]
+
+        if len(pk_names) == 1:
+            # Check for existence of primary key sequence.
+            seq_name = '%s_%s_seq' % (old_name, pk_names[0])
+            query = """
+                SELECT 1
+                FROM information_schema.sequences
+                WHERE sequence_name = %s
+            """
+            cursor = self.database.execute_sql(query, (seq_name,))
+            if bool(cursor.fetchone()):
+                new_seq_name = '%s_%s_seq' % (new_name, pk_names[0])
+                operations.append(ParentClass.rename_table(
+                    seq_name, new_seq_name, generate=True))
+
+        return operations
 
 
 class MySQLMigrator(SchemaMigrator):
@@ -193,6 +290,7 @@ class SqliteMigrator(SchemaMigrator):
             ['table', table])
         return res.fetchone()[0]
 
+    @operation
     def _update_column(self, table, column_to_update, fn):
         # Get the SQL used to create the given table.
         create_table = self._get_create_table(table)
@@ -233,7 +331,9 @@ class SqliteMigrator(SchemaMigrator):
 
         # Create the new table.
         columns = ', '.join(new_column_defs)
-        queries = [SQL('%s (%s)' % (create.strip(), columns))]
+        queries = [
+            Clause(SQL('DROP TABLE IF EXISTS'), Entity(temp_table)),
+            SQL('%s (%s)' % (create.strip(), columns))]
 
         # Populate new table.
         populate_table = Clause(
@@ -254,31 +354,29 @@ class SqliteMigrator(SchemaMigrator):
 
         return queries
 
+    @operation
     def drop_column(self, table, column_name, cascade=True):
         return self._update_column(table, column_name, lambda a, b: None)
 
+    @operation
     def rename_column(self, table, old_name, new_name):
         def _rename(column_name, column_def):
             return column_def.replace(column_name, new_name)
         return self._update_column(table, old_name, _rename)
 
+    @operation
     def add_not_null(self, table, column):
         def _add_not_null(column_name, column_def):
             return column_def + ' NOT NULL'
         return self._update_column(table, column, _add_not_null)
 
+    @operation
     def drop_not_null(self, table, column):
         def _drop_not_null(column_name, column_def):
             return column_def.replace('NOT NULL', '')
         return self._update_column(table, column, _drop_not_null)
 
 
-def migrate(migrator, *operations):
-    db = migrator.database
-    compiler = db.compiler()
+def migrate(*operations):
     for operation in operations:
-        if isinstance(operation, (list, tuple)):
-            migrate(migrator, *operation)
-        else:
-            sql, params = compiler.parse_node(operation)
-            db.execute_sql(sql, params)
+        operation.run()
