@@ -1433,60 +1433,236 @@ The following are valid parameters for the engine:
 
 .. _migrate:
 
-Basic Schema Migrations
------------------------
+Schema Migrations
+-----------------
 
-.. note:: This module is still pretty experimental, but it provides a light
-    API for doing schema migrations with postgresql.
+Peewee now supports schema migrations, with well-tested support for both Postgresql and
+SQLite (MySQL should work, too). Unlike other schema migration tools, peewee's migrations
+do not handle introspection and database "versioning". Rather, peewee provides a number of
+helper functions for generating and running schema-altering statements. This engine provides
+the basis on which a more sophisticated tool could some day be built.
 
-Instantiate a migrator:
+Migrations can be written as simple python scripts and executed from the command-line. Since
+the migrations only depend on your applications :py:class:`Database` object, it should be
+easy to manage changing your model definitions and maintaining a set of migration scripts without
+introducing dependencies.
+
+Example usage
+^^^^^^^^^^^^^
+
+Begin by importing the helpers from the `migrate` module:
 
 .. code-block:: python
 
+    from playhouse.migrate import *
+
+Instantiate a ``migrator``. The :py:class:`SchemaMigrator` class is responsible for
+generating schema altering operations, which can then be run sequentially by the
+:py:func:`migrate` helper.
+
+.. code-block:: python
+
+    # Postgres example:
     my_db = PostgresqlDatabase(...)
-    migrator = Migrator(my_db)
+    migrator = PostgresqlMigrator(my_db)
 
-Adding a field to a model:
+    # SQLite example:
+    my_db = SqliteDatabase('my_database.db')
+    migrator = SqliteMigrator(my_db)
+
+Use :py:func:`migrate` to execute one or more operations:
+
+    title_field = CharField(default='')
+    status_field = IntegerField(null=True)
+
+    migrate(
+        migrator.add_column('some_table', 'title', title_field),
+        migrator.add_column('some_table', 'status', status_field),
+        migrator.drop_column('some_table', 'old_column'),
+    )
+
+.. warning::
+    Migrations are not run inside a transaction. If you wish the migration to run
+    in a transaction you will need to wrap the call to `migrate` in a transaction
+    block, e.g.
+
+    .. code-block:: python
+
+        with my_db.transaction():
+            migrate(...)
+
+Supported Operations
+^^^^^^^^^^^^^^^^^^^^
+
+Add new field(s) to an existing model:
 
 .. code-block:: python
 
-    # declare a field instance
-    new_pubdate_field = DateTimeField(null=True)
+    # Create your field instances. For non-null fields you must specify a
+    # default value.
+    pubdate_field = DateTimeField(null=True)
+    comment_field = TextField(default='')
 
-    # in a transaction, add the column to your model
-    with my_db.transaction():
-        migrator.add_column(Story, new_pubdate_field, 'pub_date')
+    # Run the migration, specifying the database table, field name and field.
+    migrate(
+        migrator.add_column('comment_tbl', 'pub_date', pubdate_field),
+        migrator.add_column('comment_tbl', 'comment', comment_field),
+    )
 
 Renaming a field:
 
 .. code-block:: python
 
-    # specify the original name of the field and its new name
-    with my_db.transaction():
-        migrator.rename_column(Story, 'pub_date', 'publish_date')
+    # Specify the table, original name of the column, and its new name.
+    migrate(
+        migrator.rename_column('story', 'pub_date', 'publish_date'),
+        migrator.rename_column('story', 'mod_date', 'modified_date'),
+    )
 
 Dropping a field:
 
 .. code-block:: python
 
-   # specify the field name to drop
-   with my_db.transaction():
-       migrator.drop_column(Story, 'some_old_field')
+    migrate(
+        migrator.drop_column('story', 'some_old_field'),
+    )
 
-Setting nullable / not nullable
-
-.. code-block:: python
-
-    with my_db.transaction():
-        # make pubdate not nullable
-        migrator.set_nullable(Story, Story.pub_date, False)
-
-Renaming a table
+Making a field nullable or not nullable:
 
 .. code-block:: python
 
-    with my_db.transaction():
-        migrator.rename_table(Story, 'stories')
+    # Note that when making a field not null that field must not have any
+    # NULL values present.
+    migrate(
+        # Make `pub_date` allow NULL values.
+        migrator.drop_not_null('story', 'pub_date'),
+
+        # Prevent `modified_date` from containing NULL values.
+        migrator.add_not_null('story', 'modified_date'),
+    )
+
+Renaming a table:
+
+.. code-block:: python
+
+    migrate(
+        migrator.rename_table('story', 'stories_tbl'),
+    )
+
+Adding an index:
+
+.. code-block:: python
+
+    # Specify the table, column names, and whether the index should be
+    # UNIQUE or not.
+    migrate(
+        # Create an index on the `pub_date` column.
+        migrator.add_index('story', ('pub_date',), False),
+
+        # Create a multi-column index on the `pub_date` and `status` fields.
+        migrator.add_index('story', ('pub_date', 'status'), False),
+
+        # Create a unique index on the category and title fields.
+        migrator.add_index('story', ('category_id', 'title'), True),
+    )
+
+Dropping an index:
+
+.. code-block:: python
+
+    # Specify the index name.
+    migrate(migrator.drop_index('story_pub_date_status'))
+
+
+Migrations API
+^^^^^^^^^^^^^^
+
+.. py:func:: migrate(*operations)
+
+    Execute one or more schema altering operations.
+
+    Usage:
+
+    .. code-block:: python
+
+        migrate(
+            migrator.add_column('some_table', 'new_column', CharField(default='')),
+            migrator.create_index('some_table', ('new_column',)),
+        )
+
+.. py:class:: SchemaMigrator(database)
+
+    :param database: a :py:class:`Database` instance.
+
+    The :py:class:`SchemaMigrator` is responsible for generating schema-altering
+    statements.
+
+    .. py:method:: add_column(table, column_name, field)
+
+        :param str table: Name of the table to add column to.
+        :param str column_name: Name of the new column.
+        :param Field field: A :py:class:`Field` instance.
+
+        Add a new column to the provided table. The ``field`` provided will be used
+        to generate the appropriate column definition.
+
+        .. note:: If the field is not nullable it must specify a default value.
+
+        .. note::
+            For non-null fields, the field will initially be added as a null field,
+            then an ``UPDATE`` statement will be executed to populate the column
+            with the default value. Finally, the column will be marked as not null.
+
+    .. py:method:: drop_column(table, column_name[, cascade=True])
+
+        :param str table: Name of the table to drop column from.
+        :param str column_name: Name of the column to drop.
+        :param bool cascade: Whether the column should be dropped with `CASCADE`.
+
+    .. py:method:: rename_column(table, old_name, new_name)
+
+        :param str table: Name of the table containing column to rename.
+        :param str old_name: Current name of the column.
+        :param str new_name: New name for the column.
+
+    .. py:method:: add_not_null(table, column)
+
+        :param str table: Name of table containing column.
+        :param str column: Name of the column to make not nullable.
+
+    .. py:method:: drop_not_null(table, column)
+
+        :param str table: Name of table containing column.
+        :param str column: Name of the column to make nullable.
+
+    .. py:method:: rename_table(old_name, new_name)
+
+        :param str old_name: Current name of the table.
+        :param str new_name: New name for the table.
+
+    .. py:method:: add_index(table, columns[, unique=False])
+
+        :param str table: Name of table on which to create the index.
+        :param list columns: List of columns which should be indexed.
+        :param bool unique: Whether the new index should specify a unique constraint.
+
+    .. py:method:: drop_index(index_name)
+
+        :param str index_name: Name of the index to be dropped.
+
+.. py:class:: PostgresqlMigrator(database)
+
+    Generate migrations for Postgresql databases.
+
+.. py:class:: SqliteMigrator(database)
+
+    Generate migrations for SQLite databases.
+
+.. py:class:: MySQLMigrator(database)
+
+    Generate migrations for MySQL databases.
+
+    .. warning:: The MySQL migrations are not well tested.
 
 
 .. _csv_loader:
