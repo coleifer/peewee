@@ -3699,7 +3699,7 @@ class TransactionTestCase(ModelTestCase):
 
         # open up a new connection to the database, it won't register any blogs
         # as being created
-        new_db = database_class(database_name,**database_params)
+        new_db = database_class(database_name, **database_params)
         res = new_db.execute_sql('select count(*) from users;')
         self.assertEqual(res.fetchone()[0], 0)
 
@@ -3780,7 +3780,7 @@ class ConcurrencyTestCase(ModelTestCase):
     def setUp(self):
         self._orig_db = test_db
         kwargs = {'threadlocals': True}
-        try: # some engines need the extra kwargs
+        try:  # Some engines need the extra kwargs.
             kwargs.update(test_db.connect_kwargs)
         except:
             pass
@@ -4379,7 +4379,7 @@ if test_db.for_update:
             self.assertEqual(updated, 1)
 
             # open up a new connection to the database
-            new_db = database_class(database_name,**database_params)
+            new_db = database_class(database_name, **database_params)
 
             # select the username, it will not register as being updated
             res = new_db.execute_sql('select username from users where id = %s;' % u1.id)
@@ -4405,7 +4405,7 @@ if test_db.for_update:
                     .execute())
 
             # Open up a second conn.
-            new_db = database_class(database_name,**database_params)
+            new_db = database_class(database_name, **database_params)
 
             class User2(User):
                 class Meta:
