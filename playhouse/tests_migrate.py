@@ -228,8 +228,7 @@ class BaseMigrationTestCase(object):
         self.test_add_index()
 
         # Now drop the unique index.
-        migrate(self.migrator.drop_index(
-            'person', 'person_first_name_last_name'))
+        migrate(self.migrator.drop_index('person_first_name_last_name'))
 
         Person.create(first_name='first', last_name='last')
         query = (Person
@@ -309,63 +308,3 @@ class PostgresqlMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
 class SqliteMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
     database = sqlite_db
     migrator_class = SqliteMigrator
-
-
-    """
-    def test_rename_column(self):
-        t1 = Tag.create(tag='t1')
-
-        with db.transaction():
-            self.migrator.rename_column(Tag, 'tag', 'foo')
-
-        curs = db.execute_sql('select foo from tag')
-        rows = curs.fetchall()
-
-        self.assertEqual(rows, [
-            ('t1',),
-        ])
-
-    def test_drop_column(self):
-        t1 = Tag.create(tag='t1')
-
-        with db.transaction():
-            self.migrator.drop_column(Tag, 'tag')
-
-        curs = db.execute_sql('select * from tag')
-        rows = curs.fetchall()
-
-        self.assertEqual(rows, [
-            (t1.id,),
-        ])
-
-    def test_set_nullable(self):
-        t1 = Tag.create(tag='t1')
-
-        with db.transaction():
-            self.migrator.set_nullable(Tag, Tag.tag, True)
-
-        t2 = Tag.create(tag=None)
-        tags = [t.tag for t in Tag.select().order_by(Tag.id)]
-        self.assertEqual(tags, ['t1', None])
-
-        t2.delete_instance()
-
-        with db.transaction():
-            self.migrator.set_nullable(Tag, Tag.tag, False)
-
-        with db.transaction():
-            self.assertRaises(self.integrity_error, Tag.create, tag=None)
-
-    def test_rename_table(self):
-        t1 = Tag.create(tag='t1')
-
-        self.migrator.rename_table(Tag, 'tagzz')
-        curs = db.execute_sql('select * from tagzz')
-        res = curs.fetchall()
-
-        self.assertEqual(res, [
-            (t1.id, 't1'),
-        ])
-
-        self.migrator.rename_table(Tag, 'tag')
-    """
