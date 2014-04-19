@@ -1,5 +1,6 @@
 """
 Peewee integration with pysqlcipher, "same data, nobody's business".
+WARNING!!! EXPERIMENTAL!!! If your secret leaks because of this... Sorry.
 
 Project page: https://github.com/leapcode/pysqlcipher/
 
