@@ -1370,18 +1370,18 @@ class CompilerTestCase(BasePeeweeTestCase):
             d = DateTimeField()
 
         query = A.select(A.id).where(A.d == '2013-01-02')
-        sql, params = query.sql()
+        sql, params = compiler.generate_select(query)
         self.assertEqual(sql, (
-            'SELECT t1."id" FROM "a" AS t1 WHERE (t1."d" = ?)'))
+            'SELECT a."id" FROM "a" AS a WHERE (a."d" = ?)'))
         self.assertEqual(params, ['2013-01-02'])
 
         query = A.select(A.id).where(A.i == fn.Foo('test'))
         self.assertRaises(ValueError, query.sql)
 
         query = A.select(A.id).where(A.i == fn.Foo('test').coerce(False))
-        sql, params = query.sql()
+        sql, params = compiler.generate_select(query)
         self.assertEqual(sql, (
-            'SELECT t1."id" FROM "a" AS t1 WHERE (t1."i" = Foo(?))'))
+            'SELECT a."id" FROM "a" AS a WHERE (a."i" = Foo(?))'))
         self.assertEqual(params, ['test'])
 
 
