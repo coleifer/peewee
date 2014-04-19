@@ -128,7 +128,7 @@ class BaseMigrationTestCase(object):
             first = CharField()
             last = CharField()
             dob = DateField()
-            
+
             class Meta:
                 database = self.database
                 db_table = Person._meta.db_table
@@ -163,7 +163,7 @@ class BaseMigrationTestCase(object):
         # And attempting to insert a null value results in an integrity error.
         with self.database.transaction():
             self.assertRaises(
-                IntegrityError, 
+                IntegrityError,
                 Person.create,
                 first_name='Kirby',
                 last_name='Snazebrauer')
