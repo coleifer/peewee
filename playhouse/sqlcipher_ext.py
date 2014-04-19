@@ -51,7 +51,12 @@ https://gist.github.com/thedod/11048875
 """
 from peewee import *
 
+import datetime
+import decimal
 from pysqlcipher import dbapi2 as sqlcipher
+sqlcipher.register_adapter(decimal.Decimal, str)
+sqlcipher.register_adapter(datetime.date, str)
+sqlcipher.register_adapter(datetime.time, str)
 
 class SqlCipherDatabase(SqliteDatabase):
     def _connect(self, database, **kwargs):

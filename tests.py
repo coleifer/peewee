@@ -3154,9 +3154,9 @@ class FieldTypeTestCase(ModelTestCase):
         nm_alpha = NM.create(char_field='Alpha')
         nm_bravo = NM.create(char_field='Bravo')
 
-        if BACKEND == 'sqlite':
-            # since sqlite uses "*" as the wildcard for case-sensitive lookups,
-            # need to special case
+        if BACKEND in ['sqlite','pysqlcipher']:
+            # Sqlite's sql-dialect uses "*" as case-sensitive lookup wildcard,
+            # and pysqlcipher is simply a wrapper around sqlite's engine.
             like_wildcard = '*'
         else:
             like_wildcard = '%'
