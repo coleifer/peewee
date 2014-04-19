@@ -239,6 +239,67 @@ class BaseMigrationTestCase(object):
                      (Person.last_name == 'last')))
         self.assertEqual(query.count(), 2)
 
+    def test_add_and_remove(self):
+        operations = []
+        field = CharField(default='foo')
+        for i in range(10):
+            operations.append(self.migrator.add_column('tag', 'foo', field))
+            operations.append(self.migrator.drop_column('tag', 'foo'))
+
+        migrate(*operations)
+        col_names = self.get_column_names('tag')
+        self.assertEqual(col_names, set(['id', 'tag']))
+
+    def test_multiple_operations(self):
+        self.database.execute_sql('drop table if exists person_baze;')
+        self.database.execute_sql('drop table if exists person_nugg;')
+        self._create_people()
+
+        field_n = CharField(null=True)
+        field_d = CharField(default='test')
+        operations = [
+            self.migrator.add_column('person', 'field_null', field_n),
+            self.migrator.drop_column('person', 'first_name'),
+            self.migrator.add_column('person', 'field_default', field_d),
+            self.migrator.rename_table('person', 'person_baze'),
+            self.migrator.rename_table('person_baze', 'person_nugg'),
+            self.migrator.rename_column('person_nugg', 'last_name', 'last'),
+            self.migrator.add_index('person_nugg', ('last',), True),
+        ]
+        migrate(*operations)
+
+        class PersonNugg(Model):
+            field_null = field_n
+            field_default = field_d
+            last = CharField()
+            dob = DateField(null=True)
+
+            class Meta:
+                database = self.database
+                db_table = 'person_nugg'
+
+        people = (PersonNugg
+                  .select(
+                      PersonNugg.field_null,
+                      PersonNugg.field_default,
+                      PersonNugg.last,
+                      PersonNugg.dob)
+                  .order_by(PersonNugg.last)
+                  .tuples())
+        expected = [
+            (None, 'test', 'Dog', datetime.date(2008, 6, 1)),
+            (None, 'test', 'Kitty', datetime.date(2011, 5, 1)),
+            (None, 'test', 'Leifer', None),
+        ]
+        self.assertEqual(list(people), expected)
+
+        with self.database.transaction():
+            self.assertRaises(
+                IntegrityError,
+                PersonNugg.create,
+                last='Leifer',
+                field_default='bazer')
+
 
 class PostgresqlMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
     database = pg_db
