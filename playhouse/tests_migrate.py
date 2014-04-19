@@ -321,7 +321,7 @@ class BaseMigrationTestCase(object):
         self.assertEqual(t1_db.person, p)
 
         t2_db = NewTag.get(NewTag.tag == 't2')
-        self.assertIs(t2_db.person, None)
+        self.assertEqual(t2_db.person, None)
 
 
 class PostgresqlMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
