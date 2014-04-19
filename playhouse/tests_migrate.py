@@ -299,6 +299,30 @@ class BaseMigrationTestCase(object):
                 last='Leifer',
                 field_default='bazer')
 
+    def test_add_foreign_key(self):
+        if hasattr(Person, 'newtag_set'):
+            delattr(Person, 'newtag_set')
+            del Person._meta.reverse_rel['newtag_set']
+
+        field = ForeignKeyField(Person, null=True, to_field=Person.id)
+        migrate(self.migrator.add_column('tag', 'person_id', field))
+
+        class NewTag(Tag):
+            person = field
+
+            class Meta:
+                db_table = 'tag'
+
+        p = Person.create(first_name='First', last_name='Last')
+        t1 = NewTag.create(tag='t1', person=p)
+        t2 = NewTag.create(tag='t2')
+
+        t1_db = NewTag.get(NewTag.tag == 't1')
+        self.assertEqual(t1_db.person, p)
+
+        t2_db = NewTag.get(NewTag.tag == 't2')
+        self.assertIs(t2_db.person, None)
+
 
 class PostgresqlMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
     database = pg_db

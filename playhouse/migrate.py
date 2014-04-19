@@ -194,6 +194,10 @@ class SchemaMigrator(object):
         if not field.null and field.default is None:
             raise ValueError('%s is not null but has no default' % column_name)
 
+        # Foreign key fields must explicitly specify a `to_field`.
+        if isinstance(field, ForeignKeyField) and not field.to_field:
+            raise ValueError('Foreign keys must specify a `to_field`.')
+
         operations = [self.alter_add_column(table, column_name, field)]
 
         # In the event the field is *not* nullable, update with the default
