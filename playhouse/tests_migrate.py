@@ -1,56 +1,317 @@
 import datetime
-import psycopg2
 import unittest
 
 from peewee import *
 from playhouse.migrate import *
 
+try:
+    import psycopg2
+    pg_db = PostgresqlDatabase('peewee_test')
+except ImportError:
+    pg_db = None
 
-db = PostgresqlDatabase('peewee_test')
+sqlite_db = SqliteDatabase(':memory:')
 
-class BaseModel(Model):
-    class Meta:
-        database = db
-
-class Tag(BaseModel):
+class Tag(Model):
     tag = CharField()
 
+class Person(Model):
+    first_name = CharField()
+    last_name = CharField()
+    dob = DateField(null=True)
 
-class MigrateTestCase(unittest.TestCase):
-    integrity_error = IntegrityError
+MODELS = [
+    Person,
+    Tag,
+]
+
+class BaseMigrationTestCase(object):
+    database = None
+    migrator_class = None
+
+    _person_data = [
+        ('Charlie', 'Leifer', None),
+        ('Huey', 'Kitty', datetime.date(2011, 5, 1)),
+        ('Mickey', 'Dog', datetime.date(2008, 6, 1)),
+    ]
 
     def setUp(self):
-        Tag._meta.db_table = 'tag'
-        Tag.drop_table(True)
-        Tag.create_table()
+        for model_class in MODELS:
+            model_class._meta.database = self.database
+            model_class.drop_table(True)
+            model_class.create_table()
 
-        self.migrator = Migrator(db)
+        self.migrator = self.migrator_class(self.database)
 
     def test_add_column(self):
+        # Create some fields with a variety of NULL / default values.
         df = DateTimeField(null=True)
         df_def = DateTimeField(default=datetime.datetime(2012, 1, 1))
         cf = CharField(max_length=200, default='')
         bf = BooleanField(default=True)
         ff = FloatField(default=0)
 
+        # Create two rows in the Tag table to test the handling of adding
+        # non-null fields.
         t1 = Tag.create(tag='t1')
         t2 = Tag.create(tag='t2')
 
-        with db.transaction():
-            self.migrator.add_column(Tag, df, 'pub_date')
-            self.migrator.add_column(Tag, df_def, 'modified_date')
-            self.migrator.add_column(Tag, cf, 'comment')
-            self.migrator.add_column(Tag, bf, 'is_public')
-            self.migrator.add_column(Tag, ff, 'popularity')
+        # Convenience function for generating `add_column` migrations.
+        def add_column(field_name, field_obj):
+            return self.migrator.add_column('tag', field_name, field_obj)
 
-        curs = db.execute_sql('select id, tag, pub_date, modified_date, comment, is_public, popularity from tag order by tag asc')
-        rows = curs.fetchall()
+        # Run the migration.
+        migrate(
+            add_column('pub_date', df),
+            add_column('modified_date', df_def),
+            add_column('comment', cf),
+            add_column('is_public', bf),
+            add_column('popularity', ff))
 
-        self.assertEqual(rows, [
+        # Create a new tag model to represent the fields we added.
+        class NewTag(Model):
+            tag = CharField()
+            pub_date = df
+            modified_date = df_def
+            comment = cf
+            is_public = bf
+            popularity = ff
+
+            class Meta:
+                database = self.database
+                db_table = Tag._meta.db_table
+
+        query = (NewTag
+                 .select(
+                     NewTag.id,
+                     NewTag.tag,
+                     NewTag.pub_date,
+                     NewTag.modified_date,
+                     NewTag.comment,
+                     NewTag.is_public,
+                     NewTag.popularity)
+                 .order_by(NewTag.tag.asc()))
+
+        # Verify the resulting rows are correct.
+        self.assertEqual(list(query.tuples()), [
             (t1.id, 't1', None, datetime.datetime(2012, 1, 1), '', True, 0.0),
             (t2.id, 't2', None, datetime.datetime(2012, 1, 1), '', True, 0.0),
         ])
 
+    def _create_people(self):
+        for first, last, dob in self._person_data:
+            Person.create(first_name=first, last_name=last, dob=dob)
+
+    def get_column_names(self, tbl):
+        cursor = self.database.execute_sql('select * from %s limit 1' % tbl)
+        return set([col[0] for col in cursor.description])
+
+    def test_drop_column(self):
+        self._create_people()
+        migrate(
+            self.migrator.drop_column('person', 'last_name'),
+            self.migrator.drop_column('person', 'dob'))
+
+        column_names = self.get_column_names('person')
+        self.assertEqual(column_names, set(['id', 'first_name']))
+
+    def test_rename_column(self):
+        self._create_people()
+        migrate(
+            self.migrator.rename_column('person', 'first_name', 'first'),
+            self.migrator.rename_column('person', 'last_name', 'last'))
+
+        column_names = self.get_column_names('person')
+        self.assertEqual(column_names, set(['id', 'first', 'last', 'dob']))
+
+        class NewPerson(Model):
+            first = CharField()
+            last = CharField()
+            dob = DateField()
+
+            class Meta:
+                database = self.database
+                db_table = Person._meta.db_table
+
+        query = (NewPerson
+                 .select(
+                     NewPerson.first,
+                     NewPerson.last,
+                     NewPerson.dob)
+                 .order_by(NewPerson.first))
+        self.assertEqual(list(query.tuples()), self._person_data)
+
+    def test_add_not_null(self):
+        self._create_people()
+
+        def addNotNull():
+            with self.database.transaction():
+                migrate(self.migrator.add_not_null('person', 'dob'))
+
+        # We cannot make the `dob` field not null because there is currently
+        # a null value there.
+        self.assertRaises(IntegrityError, addNotNull)
+
+        (Person
+         .update(dob=datetime.date(2000, 1, 2))
+         .where(Person.dob >> None)
+         .execute())
+
+        # Now we can make the column not null.
+        addNotNull()
+
+        # And attempting to insert a null value results in an integrity error.
+        with self.database.transaction():
+            self.assertRaises(
+                IntegrityError,
+                Person.create,
+                first_name='Kirby',
+                last_name='Snazebrauer')
+
+    def test_drop_not_null(self):
+        self._create_people()
+        migrate(
+            self.migrator.drop_not_null('person', 'first_name'),
+            self.migrator.drop_not_null('person', 'last_name'))
+
+        p = Person.create(first_name=None, last_name=None)
+        query = (Person
+                 .select()
+                 .where(
+                     (Person.first_name >> None) &
+                     (Person.last_name >> None)))
+        self.assertEqual(query.count(), 1)
+
+    def test_rename_table(self):
+        t1 = Tag.create(tag='t1')
+        t2 = Tag.create(tag='t2')
+
+        # Move the tag data into a new model/table.
+        class Tag_asdf(Tag):
+            pass
+        self.assertEqual(Tag_asdf._meta.db_table, 'tag_asdf')
+
+        # Drop the new table just to be safe.
+        Tag_asdf.drop_table(True)
+
+        # Rename the tag table.
+        migrate(self.migrator.rename_table('tag', 'tag_asdf'))
+
+        # Verify the data was moved.
+        query = (Tag_asdf
+                 .select()
+                 .order_by(Tag_asdf.tag))
+        self.assertEqual([t.tag for t in query], ['t1', 't2'])
+
+        # Verify the old table is gone.
+        with self.database.transaction():
+            self.assertRaises(
+                DatabaseError,
+                Tag.create,
+                tag='t3')
+
+    def test_add_index(self):
+        # Create a unique index on first and last names.
+        columns = ('first_name', 'last_name')
+        migrate(self.migrator.add_index('person', columns, True))
+
+        Person.create(first_name='first', last_name='last')
+        with self.database.transaction():
+            self.assertRaises(
+                IntegrityError,
+                Person.create,
+                first_name='first',
+                last_name='last')
+
+    def test_drop_index(self):
+        # Create a unique index.
+        self.test_add_index()
+
+        # Now drop the unique index.
+        migrate(self.migrator.drop_index(
+            'person', 'person_first_name_last_name'))
+
+        Person.create(first_name='first', last_name='last')
+        query = (Person
+                 .select()
+                 .where(
+                     (Person.first_name == 'first') &
+                     (Person.last_name == 'last')))
+        self.assertEqual(query.count(), 2)
+
+    def test_add_and_remove(self):
+        operations = []
+        field = CharField(default='foo')
+        for i in range(10):
+            operations.append(self.migrator.add_column('tag', 'foo', field))
+            operations.append(self.migrator.drop_column('tag', 'foo'))
+
+        migrate(*operations)
+        col_names = self.get_column_names('tag')
+        self.assertEqual(col_names, set(['id', 'tag']))
+
+    def test_multiple_operations(self):
+        self.database.execute_sql('drop table if exists person_baze;')
+        self.database.execute_sql('drop table if exists person_nugg;')
+        self._create_people()
+
+        field_n = CharField(null=True)
+        field_d = CharField(default='test')
+        operations = [
+            self.migrator.add_column('person', 'field_null', field_n),
+            self.migrator.drop_column('person', 'first_name'),
+            self.migrator.add_column('person', 'field_default', field_d),
+            self.migrator.rename_table('person', 'person_baze'),
+            self.migrator.rename_table('person_baze', 'person_nugg'),
+            self.migrator.rename_column('person_nugg', 'last_name', 'last'),
+            self.migrator.add_index('person_nugg', ('last',), True),
+        ]
+        migrate(*operations)
+
+        class PersonNugg(Model):
+            field_null = field_n
+            field_default = field_d
+            last = CharField()
+            dob = DateField(null=True)
+
+            class Meta:
+                database = self.database
+                db_table = 'person_nugg'
+
+        people = (PersonNugg
+                  .select(
+                      PersonNugg.field_null,
+                      PersonNugg.field_default,
+                      PersonNugg.last,
+                      PersonNugg.dob)
+                  .order_by(PersonNugg.last)
+                  .tuples())
+        expected = [
+            (None, 'test', 'Dog', datetime.date(2008, 6, 1)),
+            (None, 'test', 'Kitty', datetime.date(2011, 5, 1)),
+            (None, 'test', 'Leifer', None),
+        ]
+        self.assertEqual(list(people), expected)
+
+        with self.database.transaction():
+            self.assertRaises(
+                IntegrityError,
+                PersonNugg.create,
+                last='Leifer',
+                field_default='bazer')
+
+
+class PostgresqlMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
+    database = pg_db
+    migrator_class = PostgresqlMigrator
+
+
+class SqliteMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
+    database = sqlite_db
+    migrator_class = SqliteMigrator
+
+
+    """
     def test_rename_column(self):
         t1 = Tag.create(tag='t1')
 
@@ -107,3 +368,4 @@ class MigrateTestCase(unittest.TestCase):
         ])
 
         self.migrator.rename_table(Tag, 'tag')
+    """
