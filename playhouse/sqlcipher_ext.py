@@ -1,5 +1,5 @@
 """
-Peewee integration with pysqlcipher, "same data, nobody's business".
+Peewee integration with pysqlcipher.
 
 Project page: https://github.com/leapcode/pysqlcipher/
 
