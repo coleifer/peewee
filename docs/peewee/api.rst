@@ -96,6 +96,7 @@ Models
         You can also use :py:class:`Field` objects as the keys:
 
         .. code-block:: python
+
             User.insert(**{User.username: 'admin'}).execute()
 
         If you have a model with a default value on one of the fields, and

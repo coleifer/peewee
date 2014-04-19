@@ -1472,6 +1472,8 @@ generating schema altering operations, which can then be run sequentially by the
 
 Use :py:func:`migrate` to execute one or more operations:
 
+.. code-block:: python
+
     title_field = CharField(default='')
     status_field = IntegerField(null=True)
 
@@ -1577,7 +1579,7 @@ Dropping an index:
 Migrations API
 ^^^^^^^^^^^^^^
 
-.. py:func:: migrate(*operations)
+.. py:function:: migrate(*operations)
 
     Execute one or more schema altering operations.
 
