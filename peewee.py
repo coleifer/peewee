@@ -2237,6 +2237,7 @@ class Database(object):
     field_overrides = {}
     foreign_keys = True
     for_update = False
+    for_update_nowait = False
     insert_many = True
     interpolation = '?'
     limit_max = None
@@ -2497,6 +2498,7 @@ class PostgresqlDatabase(Database):
         'primary_key': 'SERIAL',
     }
     for_update = True
+    for_update_nowait = True
     interpolation = '%s'
     op_overrides = {
         OP_REGEXP: '~',
@@ -2578,6 +2580,7 @@ class MySQLDatabase(Database):
         'text': 'LONGTEXT',
     }
     for_update = True
+    for_update_nowait = False
     interpolation = '%s'
     limit_max = 2 ** 64 - 1  # MySQL quirk
     op_overrides = {

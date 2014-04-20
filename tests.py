@@ -4387,6 +4387,17 @@ if test_db.for_update:
             username = res.fetchone()[0]
             self.assertEqual(username, 'u1_edited')
 
+
+elif TEST_VERBOSITY > 0:
+    print_('Skipping "for update" tests')
+
+if test_db.for_update_nowait:
+    class ForUpdateNoWaitTestCase(ModelTestCase):
+        requires = [User]
+
+        def tearDown(self):
+            test_db.set_autocommit(True)
+
         def test_for_update_exc(self):
             u1 = self.create_user('u1')
             test_db.set_autocommit(False)
@@ -4417,7 +4428,7 @@ if test_db.for_update:
 
 
 elif TEST_VERBOSITY > 0:
-    print_('Skipping "for update" tests')
+    print_('Skipping "for update + nowait" tests')
 
 if test_db.sequences:
     class SequenceTestCase(ModelTestCase):
