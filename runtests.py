@@ -25,6 +25,7 @@ def get_option_parser():
 
     cases = optparse.OptionGroup(parser, 'Individual test module options')
     cases.add_option('--apsw', dest='apsw', default=False, action='store_true', help='apsw tests (requires apsw)')
+    cases.add_option('--pysqlcipher', dest='pysqlcipher', default=False, action='store_true', help='pysqlcipher tests (requires pysqlcipher)')
     cases.add_option('--csv', dest='csv', default=False, action='store_true', help='csv tests')
     cases.add_option('--djpeewee', dest='djpeewee', default=False, action='store_true', help='djpeewee tests')
     cases.add_option('--gfk', dest='gfk', default=False, action='store_true', help='gfk tests')
@@ -53,6 +54,12 @@ def collect_modules(options):
             modules.append(tests_apsw)
         except ImportError:
             print_('Unable to import apsw tests, skipping')
+    if xtra(options.pysqlcipher):
+        try:
+            from playhouse import tests_pysqlcipher
+            modules.append(tests_pysqlcipher)
+        except ImportError:
+            print_('Unable to import pysqlcipher tests, skipping')
     if xtra(options.csv):
         from playhouse import tests_csv_loader
         modules.append(tests_csv_loader)
