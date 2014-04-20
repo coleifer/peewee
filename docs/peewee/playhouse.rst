@@ -1573,7 +1573,7 @@ Dropping an index:
 .. code-block:: python
 
     # Specify the index name.
-    migrate(migrator.drop_index('story_pub_date_status'))
+    migrate(migrator.drop_index('story', 'story_pub_date_status'))
 
 
 Migrations API
@@ -1648,8 +1648,9 @@ Migrations API
         :param list columns: List of columns which should be indexed.
         :param bool unique: Whether the new index should specify a unique constraint.
 
-    .. py:method:: drop_index(index_name)
+    .. py:method:: drop_index(table, index_name)
 
+        :param str table Name of the table containing the index to be dropped.
         :param str index_name: Name of the index to be dropped.
 
 .. py:class:: PostgresqlMigrator(database)
