@@ -3070,22 +3070,24 @@ class Model(with_metaclass(BaseModel)):
 
     def save(self, force_insert=False, only=None):
         field_dict = dict(self._data)
-        pk = self._meta.primary_key
+        pk_field = self._meta.primary_key
         if only:
             field_dict = self._prune_fields(field_dict, only)
         if self.get_id() is not None and not force_insert:
-            if not isinstance(pk, CompositeKey):
-                field_dict.pop(pk.name, None)
+            if not isinstance(pk_field, CompositeKey):
+                field_dict.pop(pk_field.name, None)
             else:
                 field_dict = self._prune_fields(field_dict, self.dirty_fields)
-            self.update(**field_dict).where(self.pk_expr()).execute()
+            rows = self.update(**field_dict).where(self.pk_expr()).execute()
         else:
             pk = self.get_id()
-            ret_pk = self.insert(**field_dict).execute()
-            if ret_pk is not None:
-                pk = ret_pk
-            self.set_id(pk)
+            pk_from_cursor = self.insert(**field_dict).execute()
+            if pk_from_cursor is not None:
+                pk = pk_from_cursor
+            self.set_id(pk)  # Do not overwrite current ID with a None value.
+            rows = 1
         self._dirty.clear()
+        return rows
 
     def is_dirty(self):
         return bool(self._dirty)

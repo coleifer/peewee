@@ -2244,10 +2244,13 @@ class ModelAPITestCase(ModelTestCase):
         self.assertEqual(User.select().count(), 0)
 
         u = User(username='u1')
-        u.save()
-        u.save()
+        self.assertEqual(u.save(), 1)
+        self.assertEqual(u.save(), 1)
 
         self.assertEqual(User.select().count(), 1)
+
+        u.delete_instance()
+        self.assertEqual(u.save(), 0)
 
     def test_modify_model_cause_it_dirty(self):
         u = User(username='u1')
