@@ -2035,7 +2035,8 @@ class ModelQueryTestCase(ModelTestCase):
             {'username': 'u2'},
             {'username': 'u3'},
             {'username': 'u4'}])
-        self.assertTrue(iq.execute() >= 4)
+        self.assertTrue(iq.execute())
+
         qc2 = len(self.queries())
         if test_db.insert_many:
             self.assertEqual(qc2 - qc, 1)
@@ -2047,7 +2048,7 @@ class ModelQueryTestCase(ModelTestCase):
         self.assertEqual([u.username for u in sq], ['u1', 'u2', 'u3', 'u4'])
 
         iq = User.insert_many([{'username': 'u5'}])
-        self.assertTrue(iq.execute() >= 5)
+        self.assertTrue(iq.execute())
         self.assertEqual(User.select().count(), 5)
 
         iq = User.insert_many([
@@ -2069,7 +2070,7 @@ class ModelQueryTestCase(ModelTestCase):
             {'username': 'u2'},
             {'username': 'u3'},
             {'username': 'u4'}])
-        self.assertTrue(iq.execute() >= 4)
+        self.assertTrue(iq.execute())
         qc2 = len(self.queries())
         self.assertEqual(qc2 - qc, 4)
         self.assertEqual(User.select().count(), 4)
