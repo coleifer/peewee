@@ -1,16 +1,27 @@
 import datetime
+import os
 import unittest
 
 from peewee import *
+from peewee import print_
 from playhouse.migrate import *
 
 try:
     import psycopg2
-    pg_db = PostgresqlDatabase('peewee_test')
 except ImportError:
-    pg_db = None
+    psycopg2 = None
+
+try:
+    import MySQLdb as mysql
+except ImportError:
+    try:
+        import pymysql as mysql
+    except ImportError:
+        mysql = None
 
 sqlite_db = SqliteDatabase(':memory:')
+
+TEST_VERBOSITY = int(os.environ.get('PEEWEE_TEST_VERBOSITY') or 1)
 
 class Tag(Model):
     tag = CharField()
@@ -324,11 +335,25 @@ class BaseMigrationTestCase(object):
         self.assertEqual(t2_db.person, None)
 
 
-class PostgresqlMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
-    database = pg_db
-    migrator_class = PostgresqlMigrator
-
-
 class SqliteMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
     database = sqlite_db
     migrator_class = SqliteMigrator
+
+
+if psycopg2:
+    pg_db = PostgresqlDatabase('peewee_test')
+
+    class PostgresqlMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
+        database = pg_db
+        migrator_class = PostgresqlMigrator
+elif TEST_VERBOSITY > 0:
+    print_('Skipping postgres migrations, driver not found.')
+
+if mysql:
+    mysql_db = MySQLDatabase('peewee_test')
+
+    class MySQLMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
+        database = mysql_db
+        migrator_class = MySQLMigrator
+elif TEST_VERBOSITY > 0:
+    print_('Skipping mysql migrations, driver not found.')
