@@ -4231,9 +4231,13 @@ class CheckConstraintTestCase(ModelTestCase):
 
     def test_check_constraint(self):
         CheckModel.create(value=1)
-        with test_db.transaction() as txn:
-            self.assertRaises(IntegrityError, CheckModel.create, value=0)
-            txn.rollback()
+        if isinstance(test_db, MySQLDatabase):
+            # MySQL silently ignores all check constraints.
+            CheckModel.create(value=0)
+        else:
+            with test_db.transaction() as txn:
+                self.assertRaises(IntegrityError, CheckModel.create, value=0)
+                txn.rollback()
 
 
 class SQLAllTestCase(BasePeeweeTestCase):
