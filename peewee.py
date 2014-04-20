@@ -2571,6 +2571,7 @@ class PostgresqlDatabase(Database):
 
 class MySQLDatabase(Database):
     commit_select = True
+    drop_cascade = False
     field_overrides = {
         'bool': 'BOOL',
         'decimal': 'NUMERIC',
