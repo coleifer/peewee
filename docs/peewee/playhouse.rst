@@ -1436,8 +1436,8 @@ The following are valid parameters for the engine:
 Schema Migrations
 -----------------
 
-Peewee now supports schema migrations, with well-tested support for both Postgresql and
-SQLite (MySQL should work, too). Unlike other schema migration tools, peewee's migrations
+Peewee now supports schema migrations, with well-tested support for Postgresql,
+SQLite and MySQL. Unlike other schema migration tools, peewee's migrations
 do not handle introspection and database "versioning". Rather, peewee provides a number of
 helper functions for generating and running schema-altering statements. This engine provides
 the basis on which a more sophisticated tool could some day be built.
