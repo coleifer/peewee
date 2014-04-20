@@ -99,6 +99,7 @@ Dropping an index:
     # Specify the index name.
     migrate(migrator.drop_index('story_pub_date_status'))
 """
+from collections import namedtuple
 import functools
 import re
 
@@ -316,6 +317,43 @@ class PostgresqlMigrator(SchemaMigrator):
 
 
 class MySQLMigrator(SchemaMigrator):
+    class Column(namedtuple('_Column', ('name', 'definition', 'null',
+                                        'pk', 'extra'))):
+        @property
+        def is_pk(self):
+            return self.pk == 'PRI'
+
+        @property
+        def is_unique(self):
+            return self.pk == 'UNI'
+
+        @property
+        def is_null(self):
+            return self.null == 'YES'
+
+        def sql(self):
+            parts = [
+                Entity(self.name),
+                SQL(self.definition)]
+            if self.is_unique:
+                parts.append(SQL('UNIQUE'))
+            if not self.is_null:
+                parts.append(SQL('NOT NULL'))
+            if self.is_pk:
+                parts.append(SQL('PRIMARY KEY'))
+            if self.extra:
+                parts.append(SQL(extra))
+            return Clause(*parts)
+
+    def _get_column_definition(self, table, column_name):
+        cursor = self.database.execute_sql('DESCRIBE %s;' % table)
+        rows = cursor.fetchall()
+        for row in rows:
+            column = Column(*row)
+            if column.name == column_name:
+                return column
+        return False
+
     def rename_column(self, table, old_name, new_name):
         raise NotImplementedError
 
