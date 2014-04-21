@@ -22,7 +22,7 @@ from copy import deepcopy
 from functools import wraps
 from inspect import isclass
 
-__version__ = '2.2.2'
+__version__ = '2.2.3'
 __all__ = [
     'BareField',
     'BigIntegerField',
