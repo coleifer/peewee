@@ -5,6 +5,29 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.2.3
+
+This release contains a new migrations module in addition to a number of small features and bug fixes.
+
+### Changes in 2.2.1
+
+* New migrations module.
+* Added a return value to `Model.save()` indicating number of rows affected.
+* Added a `date_trunc()` method that works for Sqlite.
+* Added a `Model.sqlall()` class-method to return all the SQL to generate the model / indices.
+
+### Bugs fixed
+
+* #342, allow functions to not coerce parameters automatically.
+* #338, fixed unaliased columns when using Array and Json fields with postgres, thanks @mtwesley.
+* #331, corrected issue with the way unicode arrays were adapted with psycopg2.
+* #328, pwiz / mysql bug.
+* #326, fixed calculation of the alias_map when using subqueries.
+* #324, bug with `prefetch()` not selecting the correct primary key.
+
+
+[View commits](https://github.com/coleifer/peewee/compare/2.2.2...2.2.3)
+
 
 ## 2.2.1
 

@@ -40,6 +40,9 @@ class BaseMigrationTestCase(object):
     database = None
     migrator_class = None
 
+    # Each database behaves slightly differently.
+    _exception_add_not_null = True
+
     _person_data = [
         ('Charlie', 'Leifer', None),
         ('Huey', 'Kitty', datetime.date(2011, 5, 1)),
@@ -161,7 +164,8 @@ class BaseMigrationTestCase(object):
 
         # We cannot make the `dob` field not null because there is currently
         # a null value there.
-        self.assertRaises(IntegrityError, addNotNull)
+        if self._exception_add_not_null:
+            self.assertRaises(IntegrityError, addNotNull)
 
         (Person
          .update(dob=datetime.date(2000, 1, 2))
@@ -177,7 +181,8 @@ class BaseMigrationTestCase(object):
                 IntegrityError,
                 Person.create,
                 first_name='Kirby',
-                last_name='Snazebrauer')
+                last_name='Snazebrauer',
+                dob=None)
 
     def test_drop_not_null(self):
         self._create_people()
@@ -239,7 +244,8 @@ class BaseMigrationTestCase(object):
         self.test_add_index()
 
         # Now drop the unique index.
-        migrate(self.migrator.drop_index('person_first_name_last_name'))
+        migrate(
+            self.migrator.drop_index('person', 'person_first_name_last_name'))
 
         Person.create(first_name='first', last_name='last')
         query = (Person
@@ -355,5 +361,9 @@ if mysql:
     class MySQLMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
         database = mysql_db
         migrator_class = MySQLMigrator
+
+        # MySQL does not raise an exception when adding a not null constraint
+        # to a column that contains NULL values.
+        _exception_add_not_null = False
 elif TEST_VERBOSITY > 0:
     print_('Skipping mysql migrations, driver not found.')

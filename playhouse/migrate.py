@@ -99,6 +99,7 @@ Dropping an index:
     # Specify the index name.
     migrate(migrator.drop_index('story_pub_date_status'))
 """
+from collections import namedtuple
 import functools
 import re
 
@@ -269,7 +270,7 @@ class SchemaMigrator(object):
             EnclosedClause(*[Entity(column) for column in columns]))
 
     @operation
-    def drop_index(self, index_name):
+    def drop_index(self, table, index_name):
         return Clause(
             SQL('DROP INDEX'),
             Entity(index_name))
@@ -314,10 +315,85 @@ class PostgresqlMigrator(SchemaMigrator):
 
         return operations
 
+_column_attributes = ('name', 'definition', 'null', 'pk', 'default', 'extra')
+
+class MySQLColumn(namedtuple('_Column', _column_attributes)):
+    @property
+    def is_pk(self):
+        return self.pk == 'PRI'
+
+    @property
+    def is_unique(self):
+        return self.pk == 'UNI'
+
+    @property
+    def is_null(self):
+        return self.null == 'YES'
+
+    def sql(self, column_name=None, is_null=None):
+        if is_null is None:
+            is_null = self.is_null
+        if column_name is None:
+            column_name = self.name
+        parts = [
+            Entity(column_name),
+            SQL(self.definition)]
+        if self.is_unique:
+            parts.append(SQL('UNIQUE'))
+        if not is_null:
+            parts.append(SQL('NOT NULL'))
+        if self.is_pk:
+            parts.append(SQL('PRIMARY KEY'))
+        if self.extra:
+            parts.append(SQL(extra))
+        return Clause(*parts)
+
 
 class MySQLMigrator(SchemaMigrator):
+    def _get_column_definition(self, table, column_name):
+        cursor = self.database.execute_sql('DESCRIBE %s;' % table)
+        rows = cursor.fetchall()
+        for row in rows:
+            column = MySQLColumn(*row)
+            if column.name == column_name:
+                return column
+        return False
+
+    @operation
+    def add_not_null(self, table, column):
+        column = self._get_column_definition(table, column)
+        return Clause(
+            SQL('ALTER TABLE'),
+            Entity(table),
+            SQL('MODIFY'),
+            column.sql(is_null=False))
+
+    @operation
+    def drop_not_null(self, table, column):
+        column = self._get_column_definition(table, column)
+        return Clause(
+            SQL('ALTER TABLE'),
+            Entity(table),
+            SQL('MODIFY'),
+            column.sql(is_null=True))
+
+    @operation
     def rename_column(self, table, old_name, new_name):
-        raise NotImplementedError
+        column = self._get_column_definition(table, old_name)
+        return Clause(
+            SQL('ALTER TABLE'),
+            Entity(table),
+            SQL('CHANGE'),
+            Entity(old_name),
+            column.sql(column_name=new_name))
+
+    @operation
+    def drop_index(self, table, index_name):
+        return Clause(
+            SQL('DROP INDEX'),
+            Entity(index_name),
+            SQL('ON'),
+            Entity(table))
 
 
 class SqliteMigrator(SchemaMigrator):

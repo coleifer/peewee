@@ -2042,7 +2042,8 @@ class ModelQueryTestCase(ModelTestCase):
             {'username': 'u2'},
             {'username': 'u3'},
             {'username': 'u4'}])
-        self.assertTrue(iq.execute() >= 4)
+        self.assertTrue(iq.execute())
+
         qc2 = len(self.queries())
         if test_db.insert_many:
             self.assertEqual(qc2 - qc, 1)
@@ -2054,7 +2055,7 @@ class ModelQueryTestCase(ModelTestCase):
         self.assertEqual([u.username for u in sq], ['u1', 'u2', 'u3', 'u4'])
 
         iq = User.insert_many([{'username': 'u5'}])
-        self.assertTrue(iq.execute() >= 5)
+        self.assertTrue(iq.execute())
         self.assertEqual(User.select().count(), 5)
 
         iq = User.insert_many([
@@ -2076,7 +2077,7 @@ class ModelQueryTestCase(ModelTestCase):
             {'username': 'u2'},
             {'username': 'u3'},
             {'username': 'u4'}])
-        self.assertTrue(iq.execute() >= 4)
+        self.assertTrue(iq.execute())
         qc2 = len(self.queries())
         self.assertEqual(qc2 - qc, 4)
         self.assertEqual(User.select().count(), 4)
@@ -2251,10 +2252,14 @@ class ModelAPITestCase(ModelTestCase):
         self.assertEqual(User.select().count(), 0)
 
         u = User(username='u1')
-        u.save()
-        u.save()
+        self.assertEqual(u.save(), 1)
+        u.username = 'u2'
+        self.assertEqual(u.save(), 1)
 
         self.assertEqual(User.select().count(), 1)
+
+        self.assertEqual(u.delete_instance(), 1)
+        self.assertEqual(u.save(), 0)
 
     def test_modify_model_cause_it_dirty(self):
         u = User(username='u1')
@@ -4237,9 +4242,13 @@ class CheckConstraintTestCase(ModelTestCase):
 
     def test_check_constraint(self):
         CheckModel.create(value=1)
-        with test_db.transaction() as txn:
-            self.assertRaises(IntegrityError, CheckModel.create, value=0)
-            txn.rollback()
+        if isinstance(test_db, MySQLDatabase):
+            # MySQL silently ignores all check constraints.
+            CheckModel.create(value=0)
+        else:
+            with test_db.transaction() as txn:
+                self.assertRaises(IntegrityError, CheckModel.create, value=0)
+                txn.rollback()
 
 
 class SQLAllTestCase(BasePeeweeTestCase):
@@ -4394,6 +4403,17 @@ if test_db.for_update:
             username = res.fetchone()[0]
             self.assertEqual(username, 'u1_edited')
 
+
+elif TEST_VERBOSITY > 0:
+    print_('Skipping "for update" tests')
+
+if test_db.for_update_nowait:
+    class ForUpdateNoWaitTestCase(ModelTestCase):
+        requires = [User]
+
+        def tearDown(self):
+            test_db.set_autocommit(True)
+
         def test_for_update_exc(self):
             u1 = self.create_user('u1')
             test_db.set_autocommit(False)
@@ -4424,7 +4444,7 @@ if test_db.for_update:
 
 
 elif TEST_VERBOSITY > 0:
-    print_('Skipping "for update" tests')
+    print_('Skipping "for update + nowait" tests')
 
 if test_db.sequences:
     class SequenceTestCase(ModelTestCase):
