@@ -19,8 +19,8 @@ are widely used crypto modules, we can expect "short zero days" there.
 Example usage:
 
      from peewee.playground.ciphersql_ext import SqlCipherDatabase
-     db = SqlCipherDatabase('/path/to/my.db',
-         passphrase="don'tuseme4real", kdf_iter=1000000)
+     db = SqlCipherDatabase('/path/to/my.db', passphrase="don'tuseme4real",
+                            kdf_iter=1000000)
 
 * `passphrase`: should be "long enough".
   Note that *length beats vocabulary* (much exponential), and even
@@ -58,7 +58,9 @@ sqlcipher.register_adapter(decimal.Decimal, str)
 sqlcipher.register_adapter(datetime.date, str)
 sqlcipher.register_adapter(datetime.time, str)
 
+
 class SqlCipherDatabase(SqliteDatabase):
+
     def _connect(self, database, **kwargs):
         passphrase = kwargs.pop('passphrase', '')
         kdf_iter = kwargs.pop('kdf_iter', 64000)  # Is this a good number?
@@ -71,7 +73,6 @@ class SqlCipherDatabase(SqliteDatabase):
                  "SqlCipherDatabase kdf_iter should be at least "
                  "10000 (a lot more, if you're serious).")
         conn = sqlcipher.connect(database, **kwargs)
-
         # Add the hooks SqliteDatabase needs
         self._add_conn_hooks(conn)
         conn.execute("PRAGMA key='{0}'".format(passphrase.replace("'", "''")))
