@@ -63,7 +63,7 @@ class SqlCipherDatabase(SqliteDatabase):
 
     def _connect(self, database, **kwargs):
         passphrase = kwargs.pop('passphrase', '')
-        kdf_iter = kwargs.pop('kdf_iter', 64000)  # Is this a good number?
+        kdf_iter = kwargs.pop('kdf_iter', 64000)
         if len(passphrase) < 8:
             raise ImproperlyConfigured(
                 "SqlCipherDatabase passphrase should be at least "

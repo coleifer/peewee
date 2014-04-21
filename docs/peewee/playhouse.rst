@@ -13,6 +13,7 @@ specific functionality:
 * :ref:`apsw`
 * :ref:`postgres_ext`
 * :ref:`sqlite_ext`
+* :ref:`sqlcipher_ext`
 
 Modules which expose higher-level python constructs:
 
@@ -880,6 +881,112 @@ sqlite_ext API notes
 
         The above code is exactly what the :py:meth:`match` function
         provides.
+
+.. _sqlcipher_ext:
+
+Sqlcipher backend
+-----------------
+
+**WARNING!!! EXPERIMENTAL!!!**
+
+* Although this extention's code is short, it has not been propery
+  peer-reviewed yet and may have introduced vulnerabilities.
+* The code contains minimum values for `passphrase` length and
+  `kdf_iter`, as well as a default value for the later.
+  **Do not** regard these numbers as advice. Consult the docs at
+  http://sqlcipher.net/sqlcipher-api/ and security experts.
+
+Also note that this code relies on pysqlcipher_ and sqlcipher_, and
+the code there might have vulnerabilities as well, but since these
+are widely used crypto modules, we can expect "short zero days" there.
+
+..  _pysqlcipher: https://pypi.python.org/pypi/pysqlcipher
+..  _sqlcipher: http://sqlcipher.net
+
+sqlcipher_ext API notes
+^^^^^^^^^^^^^^^^^^^^^^^
+
+.. py:class:: SqlCipherDatabase(database, passphrase, kdf_iter=64000, **kwargs)
+
+    Subclass of :py:class:`SqliteDatabase` that stores the database
+    encrypted. Instead of the standard ``sqlite3`` backend, it uses pysqlcipher_:
+    a python wrapper for sqlcipher_, which -- in turn -- is an encrypted wrapper
+    around ``sqlite3``, so the API is *identical* to :py:class:`SqliteDatabase`'s,
+    except for object construction parameters:
+
+    :param database: Path to encrypted database filename to open [or create].
+    :param passphrase: Database encryption passphrase: should be at least 8 character
+        long (or an error is raised), but it is *strongly advised* to enforce better
+        `passphrase strength`_ criteria in your implementation.
+    :param kdf_iter: [Optional] number of PBKDF2_ iterations.
+
+    * If the ``database`` file doesn't exist, it will be *created* with
+      encryption by a key derived from ``passhprase`` with ``kdf_iter``
+      PBKDF2_ iterations.
+    * When trying to open an existing database, ``passhprase`` and ``kdf_iter``
+      should be *identical* to the ones used when it was created.
+
+.. _PBKDF2: https://en.wikipedia.org/wiki/PBKDF2
+.. _passphrase strength: https://en.wikipedia.org/wiki/Password_strength
+
+Notes:
+
+    * [Hopefully] there's no way to tell whether the passphrase is wrong
+      or the file is corrupt.
+      In both cases -- *the first time we try to acces the database* -- a
+      :py:class:`DatabaseError` error is raised,
+      with the *exact* message: ``"file is encrypted or is not a database"``.
+    
+      As mentioned above, this only happens when you *access* the databse,
+      so if you need to know *right away* whether the passphrase was correct,
+      you can trigger this check by calling [e.g.]
+      :py:meth:`~Database.get_tables()` (see example below).
+    
+    * Most applications can expect failed attempts to open the database
+      (common case: prompting the user for ``passphrase``), so
+      the database can't be hardwired into the :py:class:`Meta` of
+      model classes, and a :py:class:`Proxy` should be used instead.
+
+Example:
+
+.. code-block:: python
+
+    db_proxy = peewee.Proxy()
+
+    class Model(peewee.Model):
+        """Parent for all app's models"""
+        class Meta:
+            # We won't have a valid db until user enters passhrase,
+            # so we use a Proxy() instead.
+            database = db_proxy
+
+    # Derive our model subclasses
+    class Person(Model):
+        name = peewee.CharField(primary_key=True)
+        # other fields ...
+
+    # other Model subclasses...
+
+    right_passphrase = False
+    while not right_passphrase:
+        passphrase = None
+        db = SqlCipherDatabase('testsqlcipher.db',
+                               get_passphrase_from_user())
+        try:  # Error only gets triggered when we access the db
+            db.get_tables()
+            right_passphrase = True
+        except peewee.DatabaseError as e:
+            # We only allow a specific [somewhat cryptic] error message.
+            if e.message != 'file is encrypted or is not a database':
+                raise e  # That's a "real" error. Raise it.
+        tell_user_the_passphrase_was_wrong()
+
+    # If we're here, db is ok, we can connect it to Model subclasses
+    db_proxy.initialize(db)
+
+    # now we can use Model methods: e.g. Person.select()
+
+See also: a slightly more elaborate `example <https://gist.github.com/thedod/11048875#file-testpeeweesqlcipher-py>`_.
 
 .. _djpeewee:
 
