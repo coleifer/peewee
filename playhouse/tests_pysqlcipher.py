@@ -1,5 +1,5 @@
-import unittest
 import os
+import unittest
 
 from playhouse.sqlcipher_ext import *
 
@@ -19,12 +19,7 @@ class SqlCipherTestCase(unittest.TestCase):
             os.remove('sqlciphertest.db')
         except OSError:
             pass
-
-    def tearDown(self):
-        self.setUp()
-
     def test_good_and_bad_passphrases(self):
-
         # This will create the database, because setUp() has deleted
         # the file. This means it should be encrypted with
         # 'thisisthegoodpassphrase'

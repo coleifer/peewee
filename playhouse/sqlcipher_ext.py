@@ -40,7 +40,7 @@ put after the `db = ...` line:
     # We're looking for a DatabaseError with a specific error message.
     except peewee.DatabaseError as e:
         # Check whether the message *means* "passphrase is wrong"
-        if e.message=='file is encrypted or is not a database':
+        if e.message == 'file is encrypted or is not a database':
             raise Exception('Developer should Prompt user for passphrase again.')
         else:
             # A different DatabaseError. Raise it.
@@ -60,13 +60,13 @@ sqlcipher.register_adapter(datetime.time, str)
 
 class SqlCipherDatabase(SqliteDatabase):
     def _connect(self, database, **kwargs):
-        passphrase = kwargs.pop('passphrase', '').strip()
+        passphrase = kwargs.pop('passphrase', '')
         kdf_iter = kwargs.pop('kdf_iter', 64000)  # Is this a good number?
         if len(passphrase) < 8:
             raise ImproperlyConfigured(
                 "SqlCipherDatabase passphrase should be at least "
                 "8 character long (a lot longer, if you're serious).")
-        if kdf_iter and kdf_iter<10000:
+        if kdf_iter and kdf_iter < 10000:
             raise ImproperlyConfigured(
                  "SqlCipherDatabase kdf_iter should be at least "
                  "10000 (a lot more, if you're serious).")
