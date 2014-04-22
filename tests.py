@@ -13,6 +13,7 @@ try:
     from Queue import Queue
 except ImportError:
     from queue import Queue
+from functools import wraps
 
 from peewee import *
 from peewee import DeleteQuery
@@ -3839,6 +3840,18 @@ class CompoundSelectTestCase(ModelTestCase):
             for value in values:
                 field.model_class.create(**{field.name: value})
 
+    def requires_op(op):
+        def decorator(fn):
+            @wraps(fn)
+            def inner(self):
+                if op in test_db.compound_operations:
+                    return fn(self)
+                elif TEST_VERBOSITY > 0:
+                    print_('"%s" not supported, skipping %s' %
+                           (op, fn.__name__))
+            return inner
+        return decorator
+
     def assertValues(self, query, expected):
         self.assertEqual(sorted(query.tuples()),
                          [(x,) for x in sorted(expected)])
@@ -3858,6 +3871,7 @@ class CompoundSelectTestCase(ModelTestCase):
                 # to the sorted values we expected for this combination.
                 self.assertValues(query, expected[key])
 
+    @requires_op('UNION')
     def test_union(self):
         all_letters = ['a', 'b', 'c', 'd', 'e']
         self.assertPermutations(operator.or_, {
@@ -3869,6 +3883,7 @@ class CompoundSelectTestCase(ModelTestCase):
             (OrderedModel, UniqueModel): all_letters,
         })
 
+    @requires_op('INTERSECT')
     def test_intersect(self):
         self.assertPermutations(operator.and_, {
             (User, UniqueModel): ['b', 'd'],
@@ -3879,6 +3894,7 @@ class CompoundSelectTestCase(ModelTestCase):
             (OrderedModel, UniqueModel): ['e'],
         })
 
+    @requires_op('EXCEPT')
     def test_except(self):
         self.assertPermutations(operator.sub, {
             (User, UniqueModel): ['a', 'c'],
@@ -3889,6 +3905,8 @@ class CompoundSelectTestCase(ModelTestCase):
             (OrderedModel, UniqueModel): ['a', 'c'],
         })
 
+    @requires_op('INTERSECT')
+    @requires_op('EXCEPT')
     def test_symmetric_difference(self):
         self.assertPermutations(operator.xor, {
             (User, UniqueModel): ['a', 'c', 'e'],
@@ -3906,6 +3924,8 @@ class CompoundSelectTestCase(ModelTestCase):
         self.assertEqual([user.username for user in query],
                          ['e', 'd', 'c'])
 
+    @requires_op('UNION')
+    @requires_op('INTERSECT')
     def test_complex(self):
         left = User.select(User.username).where(User.username << ['a', 'b'])
         right = UniqueModel.select(UniqueModel.name).where(
