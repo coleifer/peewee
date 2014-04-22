@@ -9,7 +9,7 @@ https://github.com/coleifer/peewee/releases
 
 This release contains a new migrations module in addition to a number of small features and bug fixes.
 
-### Changes in 2.2.1
+### Changes in 2.2.3
 
 * New migrations module.
 * Added a return value to `Model.save()` indicating number of rows affected.

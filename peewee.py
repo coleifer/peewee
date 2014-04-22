@@ -1917,6 +1917,10 @@ class SelectQuery(Query):
 
     def compound_op(operator):
         def inner(self, other):
+            supported_ops = self.model_class._meta.database.compound_operations
+            if operator not in supported_ops:
+                raise ValueError(
+                    'Your database does not support %s' % operator)
             return CompoundSelect(self.model_class, self, operator, other)
         return inner
     __or__ = compound_op('UNION')
@@ -2233,6 +2237,7 @@ class ExceptionWrapper(object):
 class Database(object):
     commit_select = False
     compiler_class = QueryCompiler
+    compound_operations = ['UNION', 'INTERSECT', 'EXCEPT']
     drop_cascade = True
     field_overrides = {}
     foreign_keys = True
@@ -2574,6 +2579,7 @@ class PostgresqlDatabase(Database):
 
 class MySQLDatabase(Database):
     commit_select = True
+    compound_operations = ['UNION']
     drop_cascade = False
     field_overrides = {
         'bool': 'BOOL',
