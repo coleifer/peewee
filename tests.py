@@ -324,6 +324,13 @@ class CompositeKeyModel(TestModel):
     class Meta:
         primary_key = CompositeKey('f1', 'f2')
 
+class UserThing(TestModel):
+    thing = CharField()
+    user = ForeignKeyField(User, related_name='things')
+
+    class Meta:
+        primary_key = CompositeKey('thing', 'user')
+
 class Component(TestModel):
     name = CharField()
     manufacturer = ForeignKeyField(Manufacturer, null=True)
@@ -405,6 +412,7 @@ MODELS = [
     Snippet,
     Manufacturer,
     CompositeKeyModel,
+    UserThing,
     Component,
     Computer,
     CheckModel,
@@ -2940,7 +2948,7 @@ class MultipleFKTestCase(ModelTestCase):
 
 
 class CompositeKeyTestCase(ModelTestCase):
-    requires = [Tag, Post, TagPostThrough, CompositeKeyModel]
+    requires = [Tag, Post, TagPostThrough, CompositeKeyModel, User, UserThing]
 
     def setUp(self):
         super(CompositeKeyTestCase, self).setUp()
@@ -3031,6 +3039,17 @@ class CompositeKeyTestCase(ModelTestCase):
         c4.save()
         self.assertRaises(
             CKM.DoesNotExist, CKM.get, (CKM.f1 == 'c') & (CKM.f2 == 2))
+
+    def test_delete_instance(self):
+        u1, u2 = [User.create(username='u%s' % i) for i in range(2)]
+        ut1 = UserThing.create(thing='t1', user=u1)
+        ut2 = UserThing.create(thing='t2', user=u1)
+        ut3 = UserThing.create(thing='t1', user=u2)
+        ut4 = UserThing.create(thing='t3', user=u2)
+
+        res = ut1.delete_instance()
+        self.assertEqual(res, 1)
+        self.assertEqual(UserThing.select().count(), 3)
 
 
 class ManyToManyTestCase(ModelTestCase):
