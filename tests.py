@@ -3049,7 +3049,9 @@ class CompositeKeyTestCase(ModelTestCase):
 
         res = ut1.delete_instance()
         self.assertEqual(res, 1)
-        self.assertEqual(UserThing.select().count(), 3)
+        self.assertEqual(
+            [x.thing for x in UserThing.select().order_by(UserThing.thing)],
+            ['t1', 't2', 't3'])
 
 
 class ManyToManyTestCase(ModelTestCase):
