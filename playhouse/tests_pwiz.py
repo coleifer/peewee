@@ -191,7 +191,7 @@ class TestPwiz(unittest.TestCase):
                 if not isinstance(field_class, (list, tuple)):
                     field_class = (field_class,)
                 column = introspected_columns[field_name]
-                self.assertIn(column.field_class, field_class)
+                self.assertTrue(column.field_class in field_class)
                 self.assertEqual(column.nullable, is_null)
 
     @generative_test
