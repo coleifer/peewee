@@ -3,6 +3,9 @@ import re
 import unittest
 
 from peewee import *
+from peewee import create_model_tables
+from peewee import drop_model_tables
+from peewee import mysql
 from pwiz import *
 from peewee import print_
 
@@ -11,21 +14,15 @@ TEST_VERBOSITY = int(os.environ.get('PEEWEE_TEST_VERBOSITY') or 1)
 
 # test databases
 sqlite_db = SqliteDatabase('tmp.db')
-try:
-    import MySQLdb
+if mysql:
     mysql_db = MySQLDatabase('peewee_test')
-except ImportError:
+else:
     mysql_db = None
 try:
     import psycopg2
     postgres_db = PostgresqlDatabase('peewee_test')
 except ImportError:
     postgres_db = None
-
-DATABASES = (
-    ('Sqlite', sqlite_db),
-    ('MySQL', mysql_db),
-    ('Postgres', postgres_db))
 
 class BaseModel(Model):
     class Meta:
@@ -35,7 +32,7 @@ class ColTypes(BaseModel):
     f1 = BigIntegerField()
     f2 = BlobField()
     f3 = BooleanField()
-    f4 = CharField()
+    f4 = CharField(max_length=50)
     f5 = DateField()
     f6 = DateTimeField()
     f7 = DecimalField()
@@ -63,10 +60,9 @@ class Underscores(BaseModel):
 
 
 DATABASES = (
-    (sqlite_db, 'sqlite'),
-    (mysql_db, 'mysql'),
-    (postgres_db, 'postgres'),
-)
+    ('sqlite', sqlite_db),
+    ('mysql', mysql_db),
+    ('postgres', postgres_db))
 
 MODELS = (
     ColTypes,
@@ -89,7 +85,7 @@ class TestPwiz(unittest.TestCase):
              '"coltypes" ("f11")'),
             'FOREIGN KEY ("col_types_id") REFERENCES "coltypes" ("f11")',
         ]
-        regex = SqliteIntrospector.re_foreign_key
+        regex = SqliteMetadata.re_foreign_key
 
         for test in user_id_tests:
             match = re.search(regex, test, re.I)
@@ -103,30 +99,63 @@ class TestPwiz(unittest.TestCase):
                 'col_types_id', 'coltypes', 'f11',
             ))
 
+    def get_introspector(self):
+        return Introspector(SqliteMetadata(sqlite_db))
+
+    def test_make_column_name(self):
+        introspector = self.get_introspector()
+        tests = (
+            ('Column', 'column'),
+            ('Foo_iD', 'foo'),
+            ('foo_id', 'foo'),
+            ('foo_id_id', 'foo_id'),
+            ('foo', 'foo'),
+            ('_id', '_id'),
+            ('a123', 'a123'),
+            ('and', 'and_'),
+            ('Class', 'class_'),
+            ('Class_ID', 'class_'),
+        )
+        for col_name, expected in tests:
+            self.assertEqual(
+                introspector.make_column_name(col_name), expected)
+
+    def test_make_model_name(self):
+        introspector = self.get_introspector()
+        tests = (
+            ('Table', 'Table'),
+            ('table', 'Table'),
+            ('table_baz', 'TableBaz'),
+            ('foo__bar__baz2', 'FooBarBaz2'),
+            ('foo12_3', 'Foo123'),
+        )
+        for table_name, expected in tests:
+            self.assertEqual(
+                introspector.make_model_name(table_name), expected)
+
     def create_tables(self, db):
         for model in MODELS:
             model._meta.database = db
-            model.create_table(True)
+
+        drop_model_tables(MODELS, fail_silently=True)
+        create_model_tables(MODELS)
 
     def generative_test(fn):
         def inner(self):
-            for database, db_name in DATABASES:
+            for database_type, database in DATABASES:
                 if database:
+                    introspector = make_introspector(
+                        database_type,
+                        database.database)
                     self.create_tables(database)
-                    fn(self, database, db_name)
+                    fn(self, introspector)
                 elif TEST_VERBOSITY > 0:
-                    print_('Skipping %s, driver not found' % db_name)
+                    print_('Skipping %s, driver not found' % database_type)
         return inner
 
-    def introspect(self, database, db_name):
-        db = get_introspector(db_name, database.database)
-        return introspect(db, None)
-
     @generative_test
-    def test_col_types(self, database, db_name):
-        models, _, _, _ = self.introspect(database, db_name)
-        coltypes = models['coltypes']
-
+    def test_col_types(self, introspector):
+        columns, foreign_keys, model_names = introspector.introspect()
         expected = (
             ('coltypes', (
                 ('f1', BigIntegerField, False),
@@ -155,61 +184,109 @@ class TestPwiz(unittest.TestCase):
                 ('_name', CharField, False))),
         )
 
-        for table, table_cols in expected:
-            data = models[table]
-            for field, klass, nullable in table_cols:
-                if not isinstance(klass, (list, tuple)):
-                    klass = (klass,)
-                column_info = data[field]
-                self.assertTrue(
-                    column_info.field_class in klass,
-                    '[%s] %s %s not in %s' % (
-                        db_name, table, column_info.field_class, klass))
-                self.assertEqual(
-                    column_info.kwargs.get('null', False),
-                    nullable)
+        for table_name, expected_columns in expected:
+            introspected_columns = columns[table_name]
+
+            for field_name, field_class, is_null in expected_columns:
+                if not isinstance(field_class, (list, tuple)):
+                    field_class = (field_class,)
+                column = introspected_columns[field_name]
+                self.assertIn(column.field_class, field_class)
+                self.assertEqual(column.nullable, is_null)
 
     @generative_test
-    def test_foreign_keys(self, database, db_name):
-        _, _, table_fks, _ = self.introspect(database, db_name)
-        self.assertEqual(table_fks['coltypes'], [])
+    def test_foreign_keys(self, introspector):
+        columns, foreign_keys, model_names = introspector.introspect()
+        self.assertEqual(foreign_keys['coltypes'], [])
 
-        rm = table_fks['relmodel']
-        self.assertEqual(len(rm), 2)
+        rel_model = foreign_keys['relmodel']
+        self.assertEqual(len(rel_model), 2)
 
-        fkpk = table_fks['fkpk']
+        fkpk = foreign_keys['fkpk']
         self.assertEqual(len(fkpk), 1)
+
         fkpk_fk = fkpk[0]
+        self.assertEqual(fkpk_fk.table, 'fkpk')
         self.assertEqual(fkpk_fk.column, 'col_types_id')
-        self.assertEqual(fkpk_fk.table, 'coltypes')
-        self.assertEqual(fkpk_fk.pk, 'f11')
+        self.assertEqual(fkpk_fk.dest_table, 'coltypes')
+        self.assertEqual(fkpk_fk.dest_column, 'f11')
 
     @generative_test
-    def test_table_names(self, database, db_name):
-        _, table_to_model, _, _ = self.introspect(database, db_name)
+    def test_table_names(self, introspector):
+        columns, foreign_keys, model_names = introspector.introspect()
         names = (
             ('coltypes', 'Coltypes'),
             ('nullable', 'Nullable'),
             ('relmodel', 'Relmodel'),
             ('fkpk', 'Fkpk'))
         for k, v in names:
-            self.assertEqual(table_to_model[k], v)
+            self.assertEqual(model_names[k], v)
 
     @generative_test
-    def test_column_meta(self, database, db_name):
-        _, _, _, col_meta = self.introspect(database, db_name)
-        rm_meta = col_meta['relmodel']
+    def test_column_meta(self, introspector):
+        columns, foreign_keys, model_names = introspector.introspect()
+        rel_model = columns['relmodel']
 
-        self.assertEqual(rm_meta['col_types_id'], {
+        col_types_id = rel_model['col_types_id']
+        self.assertEqual(col_types_id.get_field_parameters(), {
             'db_column': "'col_types_id'",
-            'rel_model': 'Coltypes'})
-        self.assertEqual(rm_meta['col_types_nullable_id'], {
-            'db_column': "'col_types_nullable_id'",
             'rel_model': 'Coltypes',
-            'null': True})
+        })
 
-        fkpk_meta = col_meta['fkpk']
-        self.assertEqual(fkpk_meta['col_types_id'], {
+        col_types_nullable_id = rel_model['col_types_nullable_id']
+        self.assertEqual(col_types_nullable_id.get_field_parameters(), {
+            'db_column': "'col_types_nullable_id'",
+            'null': True,
+            'rel_model': 'Coltypes',
+        })
+
+        fkpk = columns['fkpk']
+        self.assertEqual(fkpk['col_types_id'].get_field_parameters(), {
             'db_column': "'col_types_id'",
             'rel_model': 'Coltypes',
             'primary_key': True})
+
+    @generative_test
+    def test_get_field(self, introspector):
+        columns, foreign_keys, model_names = introspector.introspect()
+        expected = (
+            ('coltypes', (
+                ('f1', 'f1 = BigIntegerField()'),
+                #('f2', 'f2 = BlobField()'),
+                ('f4', 'f4 = CharField(max_length=50)'),
+                ('f5', 'f5 = DateField()'),
+                ('f6', 'f6 = DateTimeField()'),
+                ('f7', 'f7 = DecimalField()'),
+                ('f10', 'f10 = IntegerField()'),
+                ('f11', 'f11 = PrimaryKeyField()'),
+                ('f12', 'f12 = TextField()'),
+                ('f13', 'f13 = TimeField()'),
+            )),
+            ('nullable', (
+                ('nullable_cf', 'nullable_cf = '
+                 'CharField(max_length=255, null=True)'),
+                ('nullable_if', 'nullable_if = IntegerField(null=True)'),
+            )),
+            ('fkpk', (
+                ('col_types_id', 'col_types = ForeignKeyField('
+                 'db_column=\'col_types_id\', primary_key=True, '
+                 'rel_model=Coltypes)'),
+            )),
+            ('relmodel', (
+                ('col_types_id', 'col_types = ForeignKeyField('
+                 'db_column=\'col_types_id\', rel_model=Coltypes)'),
+                ('col_types_nullable_id', 'col_types_nullable = '
+                 'ForeignKeyField(db_column=\'col_types_nullable_id\', '
+                 'null=True, rel_model=Coltypes)'),
+            )),
+            ('underscores', (
+                ('_id', '_id = PrimaryKeyField()'),
+                ('_name', '_name = CharField(max_length=255)'),
+            )),
+        )
+
+        for table, field_data in expected:
+            for field_name, field_str in field_data:
+                self.assertEqual(
+                    columns[table][field_name].get_field(),
+                    field_str)

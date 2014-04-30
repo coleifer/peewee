@@ -1,24 +1,6 @@
 #!/usr/bin/env python
-"""
-            .----.
-           ===(_)==   THIS WONT HURT A BIT...
-          // 6  6 \\  /
-          (    7   )
-           \ '--' /
-            \_ ._/
-           __)  (__
-        /"`/`\`V/`\`\
-       /   \  `Y _/_ \
-      / [DR]\_ |/ / /\
-      |     ( \/ / / /
-       \  \  \      /
-        \  `-/`  _.`
-         `=. `=./
-            `"`
-"""
-from collections import namedtuple
-from optparse import OptionParser
 
+from optparse import OptionParser
 import re
 import sys
 
@@ -34,9 +16,6 @@ except ImportError:
         FIELD_TYPE = None
 
 
-class UnknownFieldType(object):
-    pass
-
 RESERVED_WORDS = set([
     'and', 'as', 'assert', 'break', 'class', 'continue', 'def', 'del', 'elif',
     'else', 'except', 'exec', 'finally', 'for', 'from', 'global', 'if', 'import',
@@ -44,75 +23,144 @@ RESERVED_WORDS = set([
     'while', 'with', 'yield',
 ])
 
-class ColumnInfo(object):
-    """
-    Store metadata about a given column.
-    """
-    __slots__ = ['field_class', 'kwargs', 'is_pk', 'raw_column_type']
+TEMPLATE = """from peewee import *
 
-    def __init__(self, field_class, kwargs=None, is_pk=False,
-                 raw_column_type=None):
+database = %s('%s', **%s)
+
+class UnknownField(object):
+    pass
+
+class BaseModel(Model):
+    class Meta:
+        database = database
+"""
+
+class UnknownField(object):
+    pass
+
+
+class Column(object):
+    """
+    Store metadata about a database column.
+    """
+    primary_key_types = (IntegerField, PrimaryKeyField)
+
+    def __init__(self, name, field_class, raw_column_type, nullable,
+                 primary_key=False, max_length=None, db_column=None):
+        self.name = name
         self.field_class = field_class
-        self.kwargs = kwargs
-        self.is_pk = is_pk
         self.raw_column_type = raw_column_type
+        self.nullable = nullable
+        self.primary_key = primary_key
+        self.max_length = max_length
+        self.db_column = db_column
 
-ForeignKeyMapping = namedtuple('ForeignKeyMapping', ('column', 'table', 'pk'))
+    def __repr__(self):
+        attrs = [
+            'field_class',
+            'raw_column_type',
+            'nullable',
+            'primary_key',
+            'max_length',
+            'db_column']
+        keyword_args = ', '.join(
+            '%s=%s' % (attr, getattr(self, attr))
+            for attr in attrs)
+        return 'Column(%s, %s)' % (self.name, keyword_args)
 
-class Introspector(object):
-    conn = None
-    peewee_mapping = {}
+    def get_field_parameters(self):
+        params = {}
 
-    def get_conn_class(self):
-        raise NotImplementedError
+        # Set up default attributes.
+        if self.nullable:
+            params['null'] = True
+        if self.field_class is CharField and self.max_length:
+            params['max_length'] = self.max_length
+        if self.field_class is ForeignKeyField or self.name != self.db_column:
+            params['db_column'] = "'%s'" % self.db_column
+        if self.primary_key and not self.field_class is PrimaryKeyField:
+            params['primary_key'] = True
 
-    def get_columns(self, table):
-        """
-        Get the names, field type and attributes for the columns in the
-        given table.
+        # Handle ForeignKeyField-specific attributes.
+        if self.field_class is ForeignKeyField:
+            params['rel_model'] = self.rel_model
 
-        Arguments:
-            table str: the name of the table to introspect
+        return params
 
-        Returns:
-            A dictionary keyed by the column name, mapped to a ColumnInfo
-            object.
-        """
-        raise NotImplementedError
+    def is_primary_key(self):
+        return self.field_class is PrimaryKeyField or self.primary_key
 
-    def get_foreign_keys(self, table):
-        """
-        Get the foreign keys from the given table to other tables/columns.
+    def set_foreign_key(self, foreign_key, model_names):
+        self.field_class = ForeignKeyField
+        if foreign_key.dest_table == foreign_key.table:
+            self.rel_model = "'self'"
+        else:
+            self.rel_model = model_names[foreign_key.dest_table]
+        self.to_field = foreign_key.dest_column
 
-        Arguments:
-            table str: the name of the table to introspect
+    def get_field(self):
+        # Generate the field definition for this column.
+        field_params = self.get_field_parameters()
+        param_str = ', '.join('%s=%s' % (k, v)
+                              for k, v in sorted(field_params.items()))
+        field = '%s = %s(%s)' % (
+            self.name,
+            self.field_class.__name__,
+            param_str)
 
-        Returns:
-            A list of `ForeignKeyMapping`s
-        """
-        raise NotImplementedError
+        if self.field_class is UnknownField:
+            field = '%s  # %s' % (field, self.raw_column_type)
+
+        return field
+
+
+class ForeignKeyMapping(object):
+    def __init__(self, table, column, dest_table, dest_column):
+        self.table = table
+        self.column = column
+        self.dest_table = dest_table
+        self.dest_column = dest_column
+
+    def __repr__(self):
+        return 'ForeignKeyMapping(%s.%s -> %s.%s)' % (
+            self.table,
+            self.column,
+            self.dest_table,
+            self.dest_column)
+
+
+class Metadata(object):
+    column_map = {}
+    database_class = None
+
+    def __init__(self, database, **kwargs):
+        self._conn = self.connect(database, **kwargs)
+        self.database = database
+        self.database_kwargs = kwargs
+
+    def execute(self, sql, *params):
+        return self._conn.execute_sql(sql, params)
+
+    def set_search_path(self, *path):
+        self._conn.set_search_path(*path)
+
+    def connect(self, database, **kwargs):
+        return self.database_class(database, **kwargs)
 
     def get_tables(self):
         """Returns a list of table names."""
-        return self.conn.get_tables()
+        return self._conn.get_tables()
 
-    def connect(self, database, **connect):
-        """
-        Open a connection to the given database, passing along any keyword
-        arguments.
-        """
-        conn_class = self.get_conn_class()
-        self.conn = conn_class(database, **connect)
-        try:
-            self.conn.connect()
-        except:
-            err('error connecting to %s' % database)
-            raise
+    def get_columns(self, table):
+        pass
+
+    def get_foreign_keys(self, table, schema=None):
+        pass
 
 
-class PostgresqlIntrospector(Introspector):
+class PostgresqlMetadata(Metadata):
     # select oid, typname from pg_type;
-    mapping = {
+    column_map = {
         16: BooleanField,
         17: BlobField,
         20: BigIntegerField,
@@ -131,47 +179,38 @@ class PostgresqlIntrospector(Introspector):
         1700: DecimalField,
         2950: TextField, # UUID
     }
-
-    def get_conn_class(self):
-        return PostgresqlDatabase
-
-    def _get_field_class(self, oid):
-        return self.mapping.get(oid, UnknownFieldType)
+    database_class = PostgresqlDatabase
 
     def get_columns(self, table):
         # Get basic metadata about columns.
-        curs = self.conn.execute_sql("""
-            SELECT column_name, is_nullable, data_type, character_maximum_length
+        cursor = self.execute("""
+            SELECT
+                column_name, is_nullable, data_type, character_maximum_length
             FROM information_schema.columns
-            WHERE table_name=%s""", (table,))
+            WHERE table_name=%s""", table)
         name_to_info = {}
-        for row in curs.fetchall():
-            name_to_info[row[0]] = row
+        for row in cursor.fetchall():
+            name_to_info[row[0]] = {
+                'db_column': row[0],
+                'nullable': row[1] == 'YES',
+                'raw_column_type': row[2],
+                'max_length': row[3],
+                'primary_key': False,
+            }
 
-        # Look up the actual column type for each column.  TODO: combine with
-        # query above?
-        curs = self.conn.execute_sql('select * from "%s" limit 1' % table)
+        # Look up the actual column type for each column.
+        cursor = self.execute('SELECT * FROM "%s" LIMIT 1' % table)
 
         # Store column metadata in dictionary keyed by column name.
-        accum = {}
-        for column_description in curs.description:
-            field_class = self._get_field_class(column_description.type_code)
-            name, nullable, data_type, max_length = name_to_info[
-                column_description.name]
-
-            kwargs = {}
-            if nullable == 'YES':
-                kwargs['null'] = True
-            if field_class is CharField and max_length:
-                kwargs['max_length'] = max_length
-
-            accum[name] = ColumnInfo(
-                field_class,
-                kwargs,
-                raw_column_type=data_type)
+        for column_description in cursor.description:
+            field_class = self.column_map.get(
+                column_description.type_code,
+                UnknownField)
+            column = column_description.name
+            name_to_info[column]['field_class'] = field_class
 
         # Look up the primary keys.
-        curs = self.conn.execute_sql("""
+        cursor = self.execute("""
             SELECT pg_attribute.attname
             FROM pg_index, pg_class, pg_attribute
             WHERE
@@ -180,17 +219,28 @@ class PostgresqlIntrospector(Introspector):
               pg_attribute.attrelid = pg_class.oid AND
               pg_attribute.attnum = any(pg_index.indkey)
               AND indisprimary;""" % table)
-        pks = [x[0] for x in curs.fetchall()]
-        for pk in pks:
-            if accum[pk].field_class == IntegerField:
-                accum[pk].field_class = PrimaryKeyField
-            else:
-                accum[pk].kwargs['primary_key'] = True
+        pk_names = [row[0] for row in cursor.fetchall()]
+        for pk_name in pk_names:
+            name_to_info[pk_name]['primary_key'] = True
+            if name_to_info[pk_name]['field_class'] is IntegerField:
+                name_to_info[pk_name]['field_class'] = PrimaryKeyField
 
-        return accum
+        columns = {}
+        for name, column_info in name_to_info.items():
+            columns[name] = Column(
+                name,
+                field_class=column_info['field_class'],
+                raw_column_type=column_info['raw_column_type'],
+                nullable=column_info['nullable'],
+                primary_key=column_info['primary_key'],
+                max_length=column_info['max_length'],
+                db_column=name)
 
-    def get_foreign_keys(self, table, schema='public'):
-        sql = '''
+        return columns
+
+    def get_foreign_keys(self, table, schema=None):
+        schema = schema or 'public'
+        sql = """
             SELECT
                 kcu.column_name, ccu.table_name, ccu.column_name
             FROM information_schema.table_constraints AS tc
@@ -203,17 +253,18 @@ class PostgresqlIntrospector(Introspector):
             WHERE
                 tc.constraint_type = 'FOREIGN KEY' AND
                 tc.table_name = %s AND
-                tc.table_schema = %s
-        '''
-        result = self.conn.execute_sql(sql, (table, schema))
-        return [ForeignKeyMapping(*row) for row in result]
+                tc.table_schema = %s"""
+        cursor = self.execute(sql, table, schema)
+        return [
+            ForeignKeyMapping(table, column, dest_table, dest_column)
+            for column, dest_table, dest_column in cursor]
 
 
-class MySQLIntrospector(Introspector):
+class MySQLMetadata(Metadata):
     if FIELD_TYPE is None:
-        mapping = {}
+        column_map = {}
     else:
-        mapping = {
+        column_map = {
             FIELD_TYPE.BLOB: TextField,
             FIELD_TYPE.CHAR: CharField,
             FIELD_TYPE.DATE: DateField,
@@ -235,64 +286,83 @@ class MySQLIntrospector(Introspector):
             FIELD_TYPE.TINY: IntegerField,
             FIELD_TYPE.VAR_STRING: CharField,
         }
+    database_class = MySQLDatabase
 
-    def get_conn_class(self):
-        return MySQLDatabase
+    def __init__(self, database, **kwargs):
+        if 'password' in kwargs:
+            kwargs['passwd'] = kwargs.pop('password')
+        super(MySQLMetadata, self).__init__(database, **kwargs)
 
     def get_columns(self, table):
-        pk_col = self.get_primary_key(table)
+        pk_name = self.get_primary_key(table)
 
-        # Get basic metadata about columns.  Amazingly, this is the same query
-        # as we use with postgresql.
-        curs = self.conn.execute_sql("""
-            SELECT column_name, is_nullable, data_type, character_maximum_length
+        # Get basic metadata about columns.
+        cursor = self.execute("""
+            SELECT
+                column_name, is_nullable, data_type, character_maximum_length
             FROM information_schema.columns
-            WHERE table_name=%s""", (table,))
-        columns = curs.fetchall()
+            WHERE table_name=%s""", table)
+        name_to_info = {}
+        for row in cursor.fetchall():
+            name_to_info[row[0]] = {
+                'db_column': row[0],
+                'nullable': row[1] == 'YES',
+                'raw_column_type': row[2],
+                'max_length': row[3],
+                'primary_key': False,
+            }
 
-        curs = self.conn.execute_sql('select * from `%s` limit 1' % table)
-        accum = {}
-        for idx, column in enumerate(curs.description):
-            field_class = self.mapping.get(column[1], UnknownFieldType)
-            name, nullable, data_type, max_length = columns[idx]
-            kwargs = {}
-            if name == pk_col and field_class is IntegerField:
-                field_class = PrimaryKeyField
-            elif name == pk_col:
-                kwargs['primary_key'] = True
+        # Look up the actual column type for each column.
+        cursor = self.execute('SELECT * FROM `%s` LIMIT 1' % table)
 
-            if nullable == 'YES':
-                kwargs['null'] = True
-            if field_class is CharField and max_length:
-                kwargs['max_length'] = max_length
+        # Store column metadata in dictionary keyed by column name.
+        for column_description in cursor.description:
+            name, type_code = column_description[:2]
+            field_class = self.column_map.get(type_code, UnknownField)
 
-            accum[name] = ColumnInfo(
-                field_class,
-                kwargs,
-                raw_column_type=data_type)
-        return accum
+            if name == pk_name:
+                name_to_info[name]['primary_key'] = True
+                if field_class is IntegerField:
+                    field_class = PrimaryKeyField
+
+            name_to_info[name]['field_class'] = field_class
+
+        columns = {}
+        for name, column_info in name_to_info.items():
+            columns[name] = Column(
+                name,
+                field_class=column_info['field_class'],
+                raw_column_type=column_info['raw_column_type'],
+                nullable=column_info['nullable'],
+                primary_key=column_info['primary_key'],
+                max_length=column_info['max_length'],
+                db_column=name)
+
+        return columns
 
     def get_primary_key(self, table):
-        curs = self.conn.execute_sql('SHOW INDEX FROM `%s`' % table)
-        for row in curs.fetchall():
+        cursor = self.execute('SHOW INDEX FROM `%s`' % table)
+        for row in cursor.fetchall():
             if row[2] == 'PRIMARY':
                 return row[4]
 
-    def get_foreign_keys(self, table):
-        framing = '''
+    def get_foreign_keys(self, table, schema=None):
+        framing = """
             SELECT column_name, referenced_table_name, referenced_column_name
             FROM information_schema.key_column_usage
             WHERE table_name = %s
                 AND table_schema = DATABASE()
                 AND referenced_table_name IS NOT NULL
                 AND referenced_column_name IS NOT NULL
-        '''
-        cursor = self.conn.execute_sql(framing, (table,))
-        return [ForeignKeyMapping(*row) for row in cursor]
+        """
+        cursor = self.execute(framing, table)
+        return [
+            ForeignKeyMapping(table, column, dest_table, dest_column)
+            for column, dest_table, dest_column in cursor]
 
 
-class SqliteIntrospector(Introspector):
-    mapping = {
+class SqliteMetadata(Metadata):
+    column_map = {
         'bigint': BigIntegerField,
         'blob': BlobField,
         'bool': BooleanField,
@@ -312,57 +382,69 @@ class SqliteIntrospector(Introspector):
         'text': TextField,
         'time': TimeField,
     }
+    database_class = SqliteDatabase
+
     begin = '(?:["\[\(]+)?'
     end = '(?:["\]\)]+)?'
-    re_foreign_key = '(?:FOREIGN KEY\s*)?{begin}(.+?){end}\s+(?:.+\s+)?references\s+{begin}(.+?){end}\s*\(["|\[]?(.+?)["|\]]?\)'.format(
-        begin=begin, end=end)
+    re_foreign_key = (
+        '(?:FOREIGN KEY\s*)?'
+        '{begin}(.+?){end}\s+(?:.+\s+)?'
+        'references\s+{begin}(.+?){end}'
+        '\s*\(["|\[]?(.+?)["|\]]?\)').format(begin=begin, end=end)
     re_varchar = r'^\s*(?:var)?char\s*\(\s*(\d+)\s*\)\s*$'
 
-    def get_conn_class(self):
-        return SqliteDatabase
-
-    def map_col(self, column_type):
-        column_type = column_type.lower()
-        if column_type in self.mapping:
-            column_class = self.mapping[column_type]
-        elif re.search(self.re_varchar, column_type):
-            column_class = CharField
+    def _map_col(self, column_type):
+        raw_column_type = column_type.lower()
+        if raw_column_type in self.column_map:
+            field_class = self.column_map[raw_column_type]
+        elif re.search(self.re_varchar, raw_column_type):
+            field_class = CharField
         else:
-            column_type = re.sub('\(.+\)', '', column_type)
-            column_class = self.mapping.get(column_type, UnknownFieldType)
-        return column_class, column_type
+            column_type = re.sub('\(.+\)', '', raw_column_type)
+            field_class = self.column_map.get(column_type, UnknownField)
+        return field_class, raw_column_type
 
     def get_columns(self, table):
-        curs = self.conn.execute_sql('pragma table_info("%s")' % table)
-        accum = {}
-        # cid, name, type, notnull, dflt_value, pk
-        for (_, name, column_type, not_null, _, is_pk) in curs.fetchall():
-            field_class, raw_column_type = self.map_col(column_type)
-            kwargs = {}
+        columns = {}
+
+        # Column ID, Name, Column Type, Not Null?, Default, Is Primary Key?
+        cursor = self.execute('PRAGMA table_info("%s")' % table)
+
+        for (_, name, column_type, not_null, _, is_pk) in cursor.fetchall():
+            field_class, raw_column_type = self._map_col(column_type)
 
             if is_pk and field_class == IntegerField:
                 field_class = PrimaryKeyField
-            elif is_pk:
-                kwargs['primary_key'] = True
 
-            if not not_null:
-                kwargs['null'] = True
+            max_length = None
+            if field_class is CharField:
+                match = re.match('\w+\((\d+)\)', column_type)
+                if match:
+                    max_length, = match.groups()
 
-            accum[name] = ColumnInfo(
-                field_class,
-                kwargs,
-                is_pk=is_pk,
-                raw_column_type=raw_column_type)
-        return accum
+            columns[name] = Column(
+                name,
+                field_class=field_class,
+                raw_column_type=raw_column_type,
+                nullable=not not_null,
+                primary_key=is_pk,
+                max_length=max_length,
+                db_column=name)
 
-    def get_foreign_keys(self, table):
-        curs = self.conn.execute_sql("SELECT sql FROM sqlite_master WHERE tbl_name = ? AND type = ?", [table, "table"])
-        table_def = curs.fetchone()[0].strip()
+        return columns
+
+    def get_foreign_keys(self, table, schema=None):
+        query = """
+            SELECT sql
+            FROM sqlite_master
+            WHERE (tbl_name = ? AND type = ?)"""
+        cursor = self.execute(query, table, 'table')
+        table_definition = cursor.fetchone()[0].strip()
 
         try:
-            columns = re.search('\((.+)\)', table_def).groups()[0]
+            columns = re.search('\((.+)\)', table_definition).groups()[0]
         except AttributeError:
-            err('Unable to read table definition for "%s"' % table)
+            print_('Unable to read table definition for "%s"' % table)
             return []
 
         fks = []
@@ -372,154 +454,134 @@ class SqliteIntrospector(Introspector):
             if not match:
                 continue
 
-            fk_column, rel_table, rel_pk = [s.strip('"') for s in match.groups()]
-            fks.append(ForeignKeyMapping(fk_column, rel_table, rel_pk))
+            column, dest_table, dest_column = [
+                s.strip('"') for s in match.groups()]
+            fks.append(ForeignKeyMapping(
+                table=table,
+                column=column,
+                dest_table=dest_table,
+                dest_column=dest_column))
 
         return fks
 
 
-TEMPLATE = '''from peewee import *
-
-database = %s('%s', **%s)
-
-class UnknownFieldType(object):
-    pass
-
-class BaseModel(Model):
-    class Meta:
-        database = database
-'''
-
-ENGINE_MAPPING = {
-    'postgresql': PostgresqlIntrospector,
-    'postgres': PostgresqlIntrospector,
-    'sqlite': SqliteIntrospector,
-    'mysql': MySQLIntrospector,
+DATABASE_ALIASES = {
+    SqliteMetadata: ['sqlite', 'sqlite3'],
+    MySQLMetadata: ['mysql', 'mysqldb'],
+    PostgresqlMetadata: ['postgres', 'postgresql'],
 }
+DATABASE_MAP = dict((value, key)
+                    for key in DATABASE_ALIASES
+                    for value in DATABASE_ALIASES[key])
 
-def get_introspector(engine, database, **connect):
-    if engine not in ENGINE_MAPPING:
-        err('Unsupported engine: "%s"' % engine)
+
+def make_introspector(database_type, database, **kwargs):
+    if database_type not in DATABASE_MAP:
+        err('Unrecognized database, must be one of: %s' %
+            ', '.join(DATABASE_MAP.keys()))
         sys.exit(1)
 
-    introspector = ENGINE_MAPPING[engine]()
-    schema = connect.pop('schema', None)
-    introspector.connect(database, **connect)
+    schema = kwargs.pop('schema', None)
+    metadata = DATABASE_MAP[database_type](database, **kwargs)
 
     if schema:
-        introspector.conn.set_search_path(*schema.split(','))
-    return introspector
+        metadata.set_search_path(*schema.split(','))
 
-def introspect(db, schema=None):
-    tables = db.get_tables()
+    return Introspector(metadata, schema=schema)
 
-    table_columns = {}
-    table_to_model = {}
-    table_fks = {}
 
-    # first pass, just raw column names and peewee type
-    for table in tables:
-        table_columns[table] = db.get_columns(table)
-        table_to_model[table] = tn(table)
-        if schema:
-            table_fks[table] = db.get_foreign_keys(table, schema)
-        else:
-            table_fks[table] = db.get_foreign_keys(table)
+class Introspector(object):
+    pk_classes = [PrimaryKeyField, IntegerField]
 
-    # second pass, convert foreign keys, assign primary keys, and mark
-    # explicit column names where they don't match the "pythonic" ones
-    column_metadata = {}
-    for table in tables:
-        column_metadata[table] = {}
-        for column, rel_table, rel_pk in table_fks[table]:
-            is_pk = table_columns[table][column].field_class is PrimaryKeyField
-            table_columns[table][column].field_class = ForeignKeyField
-            table_columns[rel_table][rel_pk].field_class = PrimaryKeyField
-            if rel_table == table:
-                ttm = "'self'"
-            else:
-                ttm = table_to_model[rel_table]
-            column_metadata[table][column] = {'rel_model': ttm}
-            if is_pk:
-                column_metadata[table][column]['primary_key'] = True
+    def __init__(self, metadata, schema=None):
+        self.metadata = metadata
+        self.schema = schema
 
-        for col_name, column_info in table_columns[table].items():
-            column_metadata[table].setdefault(col_name, {})
-            column_metadata[table][col_name].update(column_info.kwargs)
-            requires_db_column = any((
-                column_info.field_class is ForeignKeyField,
-                col_name != cn(col_name),
-                cn(col_name) in RESERVED_WORDS))
-            if requires_db_column:
-                column_metadata[table][col_name]['db_column'] = "'%s'" % col_name
+    def make_model_name(self, table):
+        model = re.sub('[^\w]+', '', table)
+        return ''.join(sub.title() for sub in model.split('_'))
 
-    return table_columns, table_to_model, table_fks, column_metadata
+    def make_column_name(self, column):
+        column = re.sub('_id$', '', column.lower()) or column.lower()
+        if column in RESERVED_WORDS:
+            column += '_'
+        return column
 
-def print_models(engine, database, tables, **connect):
-    schema = connect.get('schema')
-    db = get_introspector(engine, database, **connect)
+    def introspect(self):
+        # Retrieve all the tables in the database.
+        tables = self.metadata.get_tables()
 
-    models, table_to_model, table_fks, col_meta = introspect(db, schema)
+        # Store a mapping of table name -> dictionary of columns.
+        columns = {}
 
-    # write generated code to standard out
-    print_(TEMPLATE % (db.get_conn_class().__name__, database, repr(connect)))
-    pk_classes = (IntegerField, PrimaryKeyField)
+        # Store a mapping of table -> foreign keys.
+        foreign_keys = {}
 
-    # print the models
-    def print_model(model, seen, accum=None):
-        accum = accum or []
+        # Store a mapping of table name -> model name.
+        model_names = {}
 
-        for _, rel_table, _ in table_fks[model]:
-            if rel_table in accum and model not in accum:
-                print_('# POSSIBLE REFERENCE CYCLE: %s' % table_to_model[rel_table])
+        # Gather the columns for each table.
+        for table in tables:
+            columns[table] = self.metadata.get_columns(table)
+            foreign_keys[table] = self.metadata.get_foreign_keys(
+                table, self.schema)
+            model_names[table] = self.make_model_name(table)
 
-            if rel_table not in seen and rel_table not in accum:
-                seen.add(rel_table)
-                if rel_table != model:
-                    print_model(rel_table, seen, accum + [model])
+        # On the second pass convert all foreign keys.
+        for table in tables:
+            for foreign_key in foreign_keys[table]:
+                src = columns[foreign_key.table][foreign_key.column]
+                src.set_foreign_key(foreign_key, model_names)
 
-        ttm = table_to_model[model]
-        print_('class %s(BaseModel):' % ttm)
-        cols = models[model]
-        for column, column_info in ds(cols):
-            if column == 'id' and column_info.field_class in pk_classes:
-                continue
+            for column_name, column in columns[table].items():
+                column.name = self.make_column_name(column_name)
 
-            field_params = ', '.join([
-                '%s=%s' % (k, v) for k, v in col_meta[model][column].items()
-            ])
-            colname = cn(column)
-            if colname in RESERVED_WORDS:
-                print_('    # FIXME: "%s" is a reserved word, renamed.' % colname)
-                colname = colname + '_'
+        return columns, foreign_keys, model_names
 
-            comments = ''
-            if column_info.field_class is UnknownFieldType:
-                comments = '  # %s' % column_info.raw_column_type
+    def print_models(self, tables=None):
+        columns, foreign_keys, model_names = self.introspect()
+        print_(TEMPLATE % (
+            self.metadata.database_class.__name__,
+            self.metadata.database,
+            repr(self.metadata.database_kwargs)))
 
-            print_('    %s = %s(%s)%s' % (
-                colname,
-                column_info.field_class.__name__,
-                field_params,
-                comments))
+        def _print_table(table, seen, accum=None):
+            accum = accum or []
+            for foreign_key in foreign_keys[table]:
+                dest = foreign_key.dest_table
 
-        print_('')
+                # In the event the destination table has already been pushed
+                # for printing, then we have a reference cycle.
+                if dest in accum and table not in accum:
+                    print_('# Possible reference cycle: %s' % foreign_key)
 
-        print_('    class Meta:')
-        print_('        db_table = \'%s\'' % model)
-        print_('')
-        seen.add(model)
+                # If this is not a self-referential foreign key, and we have
+                # not already processed the destination table, do so now.
+                if dest not in seen and dest not in accum:
+                    seen.add(dest)
+                    if dest != table:
+                        _print_table(dest, seen, accum + [table])
 
-    seen = set()
-    for model, cols in ds(models):
-        if model not in seen:
-            if not tables or model in tables:
-                print_model(model, seen)
+            print_('class %s(BaseModel):' % model_names[table])
+            for name, column in sorted(columns[table].items()):
+                if name == 'id' and column.field_class in self.pk_classes:
+                    continue
 
-# misc
-tn = lambda t: re.sub('[^\w]+', '', t.title())
-cn = lambda c: re.sub('_id$', '', c.lower()) or c.lower()
-ds = lambda d: sorted(d.items(), key=lambda t:t[0])
+                print_('    %s' % column.get_field())
+
+            print_('')
+            print_('    class Meta:')
+            print_('        db_table = \'%s\'' % table)
+            print_('')
+
+            seen.add(table)
+
+        seen = set()
+        for table in sorted(model_names.keys()):
+            if table not in seen:
+                if not tables or table in tables:
+                    _print_table(table, seen)
+
 
 def err(msg):
     sys.stderr.write('\033[91m%s\033[0m\n' % msg)
@@ -542,17 +604,15 @@ if __name__ == '__main__':
     connect = dict((o, getattr(options, o)) for o in ops if getattr(options, o))
 
     if len(args) < 1:
-        print_('error: missing required parameter "database"')
+        err('Missing required parameter "database"')
         parser.print_help()
         sys.exit(1)
 
     database = args[-1]
 
-    if options.engine == 'mysql' and 'password' in connect:
-        connect['passwd'] = connect.pop('password', None)
-
+    tables = None
     if options.tables:
         tables = [x for x in options.tables.split(',') if x]
-    else:
-        tables = []
-    print_models(options.engine, database, tables, **connect)
+
+    introspector = make_introspector(options.engine, database, **connect)
+    introspector.print_models(tables)
