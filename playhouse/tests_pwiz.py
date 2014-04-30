@@ -58,6 +58,10 @@ class Underscores(BaseModel):
     _id = PrimaryKeyField()
     _name = CharField()
 
+class Category(BaseModel):
+    name = CharField(max_length=10)
+    parent = ForeignKeyField('self', null=True)
+
 
 DATABASES = (
     ('sqlite', sqlite_db),
@@ -69,7 +73,8 @@ MODELS = (
     Nullable,
     RelModel,
     FKPK,
-    Underscores)
+    Underscores,
+    Category)
 
 class TestPwiz(unittest.TestCase):
     def test_sqlite_fk_re(self):
@@ -182,6 +187,9 @@ class TestPwiz(unittest.TestCase):
             ('underscores', (
                 ('_id', PrimaryKeyField, False),
                 ('_name', CharField, False))),
+            ('category', (
+                ('name', CharField, False),
+                ('parent_id', ForeignKeyField, True))),
         )
 
         for table_name, expected_columns in expected:
@@ -210,6 +218,15 @@ class TestPwiz(unittest.TestCase):
         self.assertEqual(fkpk_fk.column, 'col_types_id')
         self.assertEqual(fkpk_fk.dest_table, 'coltypes')
         self.assertEqual(fkpk_fk.dest_column, 'f11')
+
+        category = foreign_keys['category']
+        self.assertEqual(len(category), 1)
+
+        category_fk = category[0]
+        self.assertEqual(category_fk.table, 'category')
+        self.assertEqual(category_fk.column, 'parent_id')
+        self.assertEqual(category_fk.dest_table, 'category')
+        self.assertEqual(category_fk.dest_column, 'id')
 
     @generative_test
     def test_table_names(self, introspector):
@@ -282,6 +299,11 @@ class TestPwiz(unittest.TestCase):
             ('underscores', (
                 ('_id', '_id = PrimaryKeyField()'),
                 ('_name', '_name = CharField(max_length=255)'),
+            )),
+            ('category', (
+                ('name', 'name = CharField(max_length=10)'),
+                ('parent_id', 'parent = ForeignKeyField('
+                 'db_column=\'parent_id\', null=True, rel_model=\'self\')'),
             )),
         )
 
