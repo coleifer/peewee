@@ -81,7 +81,7 @@ elif BACKEND == 'apsw':
     database_class = APSWDatabase
     database_name = 'tmp.db'
     database_params['timeout'] = 1000
-elif BACKEND == 'pysqlcipher':
+elif BACKEND == 'sqlcipher':
     from playhouse.sqlcipher_ext import *
     database_class = SqlCipherDatabase
     database_name = 'tmp-snakeoilpassphrase.db'
@@ -3181,7 +3181,7 @@ class FieldTypeTestCase(ModelTestCase):
         nm_alpha = NM.create(char_field='Alpha')
         nm_bravo = NM.create(char_field='Bravo')
 
-        if BACKEND in ['sqlite', 'pysqlcipher']:
+        if BACKEND in ['sqlite', 'sqlcipher']:
             # Sqlite's sql-dialect uses "*" as case-sensitive lookup wildcard,
             # and pysqlcipher is simply a wrapper around sqlite's engine.
             like_wildcard = '*'

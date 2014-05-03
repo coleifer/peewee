@@ -67,13 +67,12 @@ class SqlCipherDatabase(SqliteDatabase):
 
         if len(passphrase) < 8:
             raise ImproperlyConfigured(
-                'SqlCipherDatabase passphrase should be at least '
-                '8 character long (a lot longer, if you're serious).')
+                'SqlCipherDatabase passphrase should be at least eight '
+                'character long.')
 
         if kdf_iter and kdf_iter < 10000:
             raise ImproperlyConfigured(
-                 'SqlCipherDatabase kdf_iter should be at least '
-                 '10000 (a lot more, if you're serious).')
+                 'SqlCipherDatabase kdf_iter should be at least 10000.')
 
         conn = sqlcipher.connect(database, **kwargs)
         self._add_conn_hooks(conn)

@@ -26,10 +26,18 @@ class SqlCipherTestCase(unittest.TestCase):
 
         # Try to open db with wrong passphrase
         secure = False
-        bad_db = SqlCipherDatabase(DB_FILE, pass_phrase=PASSPHRASE + 'x')
+        bad_db = SqlCipherDatabase(DB_FILE, passphrase=PASSPHRASE + 'x')
 
         self.assertRaises(DatabaseError, bad_db.get_tables)
 
         # Assert that we can still access the data with the good passphrase.
         query = Thing.select().order_by(Thing.name)
         self.assertEqual([t.name for t in query], ['t1', 't2', 't3'])
+
+    def test_passphrase_length(self):
+        db = SqlCipherDatabase(DB_FILE, passphrase='x')
+        self.assertRaises(ImproperlyConfigured, db.connect)
+
+    def test_kdf_iter(self):
+        db = SqlCipherDatabase(DB_FILE, passphrase=PASSPHRASE, kdf_iter=9999)
+        self.assertRaises(ImproperlyConfigured, db.connect)

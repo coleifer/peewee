@@ -16,7 +16,7 @@ def runtests(suite, verbosity):
 def get_option_parser():
     parser = optparse.OptionParser()
     basic = optparse.OptionGroup(parser, 'Basic test options')
-    basic.add_option('-e', '--engine', dest='engine', help='Database engine to test, one of [sqlite, postgres, mysql, apsw, pysqlcipher]')
+    basic.add_option('-e', '--engine', dest='engine', help='Database engine to test, one of [sqlite, postgres, mysql, apsw, sqlcipher]')
     basic.add_option('-v', '--verbosity', dest='verbosity', default=1, type='int', help='Verbosity of output')
 
     suite = optparse.OptionGroup(parser, 'Simple test suite options')
@@ -25,7 +25,6 @@ def get_option_parser():
 
     cases = optparse.OptionGroup(parser, 'Individual test module options')
     cases.add_option('--apsw', dest='apsw', default=False, action='store_true', help='apsw tests (requires apsw)')
-    cases.add_option('--pysqlcipher', dest='pysqlcipher', default=False, action='store_true', help='pysqlcipher tests (requires pysqlcipher)')
     cases.add_option('--csv', dest='csv', default=False, action='store_true', help='csv tests')
     cases.add_option('--djpeewee', dest='djpeewee', default=False, action='store_true', help='djpeewee tests')
     cases.add_option('--gfk', dest='gfk', default=False, action='store_true', help='gfk tests')
@@ -37,6 +36,7 @@ def get_option_parser():
     cases.add_option('--read-slave', dest='read_slave', default=False, action='store_true', help='read_slave tests')
     cases.add_option('--signals', dest='signals', default=False, action='store_true', help='signals tests')
     cases.add_option('--shortcuts', dest='shortcuts', default=False, action='store_true', help='shortcuts tests')
+    cases.add_option('--sqlcipher-ext', dest='sqlcipher', default=False, action='store_true', help='sqlcipher_ext tests (requires pysqlcipher)')
     cases.add_option('--sqlite-ext', dest='sqlite_ext', default=False, action='store_true', help='sqlite_ext tests')
     cases.add_option('--test-utils', dest='test_utils', default=False, action='store_true', help='test_utils tests')
 
@@ -54,10 +54,10 @@ def collect_modules(options):
             modules.append(tests_apsw)
         except ImportError:
             print_('Unable to import apsw tests, skipping')
-    if xtra(options.pysqlcipher):
+    if xtra(options.sqlcipher):
         try:
-            from playhouse import tests_pysqlcipher
-            modules.append(tests_pysqlcipher)
+            from playhouse import tests_sqlcipher_ext
+            modules.append(tests_sqlcipher_ext)
         except ImportError:
             print_('Unable to import pysqlcipher tests, skipping')
     if xtra(options.csv):
