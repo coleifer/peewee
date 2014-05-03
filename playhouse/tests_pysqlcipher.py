@@ -1,10 +1,11 @@
-import os
 import unittest
 
 from playhouse.sqlcipher_ext import *
 
-db = SqlCipherDatabase('sqlciphertest.db',
-    passphrase='thisisthegoodpassphrase')
+DB_FILE = 'test_sqlcipher.db'
+PASSPHRASE = 'test1234'
+db = SqlCipherDatabase(DB_FILE, passphrase=PASSPHRASE)
+
 
 class BaseModel(Model):
     class Meta:
@@ -15,29 +16,20 @@ class Thing(BaseModel):
 
 class SqlCipherTestCase(unittest.TestCase):
     def setUp(self):
-        try:
-            os.remove('sqlciphertest.db')
-        except OSError:
-            pass
-    def test_good_and_bad_passphrases(self):
-        # This will create the database, because setUp() has deleted
-        # the file. This means it should be encrypted with
-        # 'thisisthegoodpassphrase'
+        Thing.drop_table(True)
         Thing.create_table()
+
+    def test_good_and_bad_passphrases(self):
         things = ('t1', 't2', 't3')
         for thing in things:
             Thing.create(name=thing)
 
         # Try to open db with wrong passphrase
         secure = False
-        bad_db = SqlCipherDatabase('sqlciphertest.db',
-            passphrase='some other passphrase')
-        try:
-            bad_db.get_tables()
-        except DatabaseError as e:
-            if e.message=='file is encrypted or is not a database':
-                secure = True  # Got the vague "probably bad passphrase" error.
-        self.assertTrue(secure)
+        bad_db = SqlCipherDatabase(DB_FILE, pass_phrase=PASSPHRASE + 'x')
+
+        self.assertRaises(DatabaseError, bad_db.get_tables)
 
         # Assert that we can still access the data with the good passphrase.
-        self.assertEqual([t.name for t in Thing.select()], ['t1', 't2', 't3'])
+        query = Thing.select().order_by(Thing.name)
+        self.assertEqual([t.name for t in query], ['t1', 't2', 't3'])

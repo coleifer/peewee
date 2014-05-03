@@ -2468,13 +2468,13 @@ class SqliteDatabase(Database):
 
     def _connect(self, database, **kwargs):
         conn = sqlite3.connect(database, **kwargs)
-        return self._add_conn_hooks(conn)
+        self._add_conn_hooks(conn)
+        return conn
 
-    def _add_conn_hooks(self,conn):
+    def _add_conn_hooks(self, conn):
         conn.create_function('date_part', 2, _sqlite_date_part)
         conn.create_function('date_trunc', 2, _sqlite_date_trunc)
         conn.create_function('regexp', 2, _sqlite_regexp)
-        return conn
 
     def get_indexes_for_table(self, table):
         res = self.execute_sql('PRAGMA index_list(%s);' % self.quote(table))

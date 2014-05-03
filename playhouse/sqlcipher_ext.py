@@ -49,32 +49,34 @@ put after the `db = ...` line:
 See a more elaborate example with this code at
 https://gist.github.com/thedod/11048875
 """
-from peewee import *
-
 import datetime
 import decimal
+
+from peewee import *
 from pysqlcipher import dbapi2 as sqlcipher
+
 sqlcipher.register_adapter(decimal.Decimal, str)
 sqlcipher.register_adapter(datetime.date, str)
 sqlcipher.register_adapter(datetime.time, str)
 
 
 class SqlCipherDatabase(SqliteDatabase):
-
     def _connect(self, database, **kwargs):
         passphrase = kwargs.pop('passphrase', '')
         kdf_iter = kwargs.pop('kdf_iter', 64000)
+
         if len(passphrase) < 8:
             raise ImproperlyConfigured(
-                "SqlCipherDatabase passphrase should be at least "
-                "8 character long (a lot longer, if you're serious).")
+                'SqlCipherDatabase passphrase should be at least '
+                '8 character long (a lot longer, if you're serious).')
+
         if kdf_iter and kdf_iter < 10000:
             raise ImproperlyConfigured(
-                 "SqlCipherDatabase kdf_iter should be at least "
-                 "10000 (a lot more, if you're serious).")
+                 'SqlCipherDatabase kdf_iter should be at least '
+                 '10000 (a lot more, if you're serious).')
+
         conn = sqlcipher.connect(database, **kwargs)
-        # Add the hooks SqliteDatabase needs
         self._add_conn_hooks(conn)
-        conn.execute("PRAGMA key='{0}'".format(passphrase.replace("'", "''")))
-        conn.execute("PRAGMA kdf_iter={0:d}".format(kdf_iter))
+        conn.execute('PRAGMA key=\'{0}\''.format(passphrase.replace("'", "''")))
+        conn.execute('PRAGMA kdf_iter={0:d}'.format(kdf_iter))
         return conn

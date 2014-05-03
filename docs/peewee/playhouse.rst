@@ -887,7 +887,7 @@ sqlite_ext API notes
 Sqlcipher backend
 -----------------
 
-**WARNING!!! EXPERIMENTAL!!!**
+.. warning:: This module is experimental.
 
 * Although this extention's code is short, it has not been propery
   peer-reviewed yet and may have introduced vulnerabilities.
@@ -936,12 +936,12 @@ Notes:
       In both cases -- *the first time we try to acces the database* -- a
       :py:class:`DatabaseError` error is raised,
       with the *exact* message: ``"file is encrypted or is not a database"``.
-    
+
       As mentioned above, this only happens when you *access* the databse,
       so if you need to know *right away* whether the passphrase was correct,
       you can trigger this check by calling [e.g.]
       :py:meth:`~Database.get_tables()` (see example below).
-    
+
     * Most applications can expect failed attempts to open the database
       (common case: prompting the user for ``passphrase``), so
       the database can't be hardwired into the :py:class:`Meta` of
@@ -953,7 +953,7 @@ Example:
 
     db_proxy = peewee.Proxy()
 
-    class Model(peewee.Model):
+    class BaseModel(Model):
         """Parent for all app's models"""
         class Meta:
             # We won't have a valid db until user enters passhrase,
@@ -961,11 +961,8 @@ Example:
             database = db_proxy
 
     # Derive our model subclasses
-    class Person(Model):
-        name = peewee.CharField(primary_key=True)
-        # other fields ...
-
-    # other Model subclasses...
+    class Person(BaseModel):
+        name = CharField(primary_key=True)
 
     right_passphrase = False
     while not right_passphrase:
@@ -975,16 +972,14 @@ Example:
         try:  # Error only gets triggered when we access the db
             db.get_tables()
             right_passphrase = True
-        except peewee.DatabaseError as e:
+        except DatabaseError as exc:
             # We only allow a specific [somewhat cryptic] error message.
-            if e.message != 'file is encrypted or is not a database':
-                raise e  # That's a "real" error. Raise it.
+            if exc.message != 'file is encrypted or is not a database':
+                raise exc
         tell_user_the_passphrase_was_wrong()
 
     # If we're here, db is ok, we can connect it to Model subclasses
     db_proxy.initialize(db)
-
-    # now we can use Model methods: e.g. Person.select()
 
 See also: a slightly more elaborate `example <https://gist.github.com/thedod/11048875#file-testpeeweesqlcipher-py>`_.
 
