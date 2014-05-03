@@ -81,6 +81,13 @@ elif BACKEND == 'apsw':
     database_class = APSWDatabase
     database_name = 'tmp.db'
     database_params['timeout'] = 1000
+elif BACKEND == 'pysqlcipher':
+    from playhouse.sqlcipher_ext import *
+    database_class = SqlCipherDatabase
+    database_name = 'tmp-snakeoilpassphrase.db'
+    database_params['passphrase'] = 'snakeoilpassphrase'
+    from pysqlcipher import dbapi2 as sqlcipher
+    print_('PYSQLCIPHER VERSION: %s' % sqlcipher.version)
 else:
     database_class = SqliteDatabase
     database_name = 'tmp.db'
@@ -3174,9 +3181,9 @@ class FieldTypeTestCase(ModelTestCase):
         nm_alpha = NM.create(char_field='Alpha')
         nm_bravo = NM.create(char_field='Bravo')
 
-        if BACKEND == 'sqlite':
-            # since sqlite uses "*" as the wildcard for case-sensitive lookups,
-            # need to special case
+        if BACKEND in ['sqlite', 'pysqlcipher']:
+            # Sqlite's sql-dialect uses "*" as case-sensitive lookup wildcard,
+            # and pysqlcipher is simply a wrapper around sqlite's engine.
             like_wildcard = '*'
         else:
             like_wildcard = '%'
@@ -3719,7 +3726,7 @@ class TransactionTestCase(ModelTestCase):
 
         # open up a new connection to the database, it won't register any blogs
         # as being created
-        new_db = database_class(database_name)
+        new_db = database_class(database_name, **database_params)
         res = new_db.execute_sql('select count(*) from users;')
         self.assertEqual(res.fetchone()[0], 0)
 
@@ -3800,6 +3807,10 @@ class ConcurrencyTestCase(ModelTestCase):
     def setUp(self):
         self._orig_db = test_db
         kwargs = {'threadlocals': True}
+        try:  # Some engines need the extra kwargs.
+            kwargs.update(test_db.connect_kwargs)
+        except:
+            pass
         if isinstance(test_db, SqliteDatabase):
             # Put a very large timeout in place to avoid `database is locked`
             # when using SQLite (default is 5).
@@ -4418,7 +4429,7 @@ if test_db.for_update:
             self.assertEqual(updated, 1)
 
             # open up a new connection to the database
-            new_db = database_class(database_name)
+            new_db = database_class(database_name, **database_params)
 
             # select the username, it will not register as being updated
             res = new_db.execute_sql('select username from users where id = %s;' % u1.id)
@@ -4455,7 +4466,7 @@ if test_db.for_update_nowait:
                     .execute())
 
             # Open up a second conn.
-            new_db = database_class(database_name)
+            new_db = database_class(database_name, **database_params)
 
             class User2(User):
                 class Meta:

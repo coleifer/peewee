@@ -2468,6 +2468,9 @@ class SqliteDatabase(Database):
 
     def _connect(self, database, **kwargs):
         conn = sqlite3.connect(database, **kwargs)
+        return self._add_conn_hooks(conn)
+
+    def _add_conn_hooks(self,conn):
         conn.create_function('date_part', 2, _sqlite_date_part)
         conn.create_function('date_trunc', 2, _sqlite_date_trunc)
         conn.create_function('regexp', 2, _sqlite_regexp)
