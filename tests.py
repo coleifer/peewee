@@ -3358,7 +3358,7 @@ class FieldTypeTestCase(ModelTestCase):
         db_data = res.data
         binary_data = binary_construct(data)
 
-        if db_data != binary_data and sys.version_info[:3] == (3, 3, 3):
+        if db_data != binary_data and sys.version_info[:3] >= (3, 3, 3):
             db_data = db_data.tobytes()
 
         self.assertEqual(db_data, binary_data)
