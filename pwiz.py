@@ -301,7 +301,7 @@ class MySQLMetadata(Metadata):
             SELECT
                 column_name, is_nullable, data_type, character_maximum_length
             FROM information_schema.columns
-            WHERE table_name=%s""", table)
+            WHERE table_name=%s AND table_schema=DATABASE()""", table)
         name_to_info = {}
         for row in cursor.fetchall():
             name_to_info[row[0]] = {
