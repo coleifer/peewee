@@ -2035,7 +2035,7 @@ class SelectQuery(Query):
 
     def exists(self):
         clone = self.paginate(1, 1)
-        clone._select = [self.model_class._meta.primary_key]
+        clone._select = [SQL('1')]
         return bool(clone.scalar())
 
     def get(self):
