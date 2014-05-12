@@ -2,7 +2,6 @@ import sqlite3
 import unittest
 
 from peewee import *
-from peewee import Clause
 from playhouse import sqlite_ext as sqe
 
 # use a disk-backed db since memory dbs only exist for a single connection and
@@ -78,10 +77,20 @@ class ManagedDoc(sqe.FTSModel):
     class Meta:
         database = ext_db
 
+class MultiColumn(sqe.FTSModel):
+    c1 = CharField(default='')
+    c2 = CharField(default='')
+    c3 = CharField(default='')
+    c4 = IntegerField()
+
+    class Meta:
+        database = ext_db
+
 class Values(BaseExtModel):
     klass = IntegerField()
     value = FloatField()
     weight = FloatField()
+
 
 
 class SqliteExtTestCase(unittest.TestCase):
@@ -98,8 +107,10 @@ class SqliteExtTestCase(unittest.TestCase):
         ManagedDoc.drop_table(True)
         FTSPost.drop_table(True)
         Post.drop_table(True)
+        MultiColumn.drop_table(True)
         Values.drop_table(True)
         Values.create_table()
+        MultiColumn.create_table(tokenize='porter')
         Post.create_table()
         FTSPost.create_table(tokenize='porter', content=Post)
         ManagedDoc.create_table(tokenize='porter', content=Post.message)
@@ -137,6 +148,45 @@ class SqliteExtTestCase(unittest.TestCase):
             (self.messages[4], 2.0 / 3),
             (self.messages[2], 1.0 / 3),
         ])
+
+    def test_fts_multi_column(self):
+        values = [
+            ('aaaaa bbbbb ccccc ddddd', 'aaaaa ccccc', 'zzzzz zzzzz', 1),
+            ('bbbbb ccccc ddddd eeeee', 'bbbbb', 'zzzzz', 2),
+            ('ccccc ccccc ddddd fffff', 'ccccc', 'yyyyy', 3),
+            ('ddddd', 'ccccc', 'xxxxx', 4),
+        ]
+        def assertResults(term, expected):
+            results = [(x.c4, round(x.score, 2)) for x in MultiColumn.match(term)]
+            self.assertEqual(results, expected)
+
+        for c1, c2, c3, c4 in values:
+            MultiColumn.create(c1=c1, c2=c2, c3=c3, c4=c4)
+
+        # `bbbbb` appears two times in `c1`, one time in `c2`.
+        assertResults('bbbbb', [
+            (2, 1.5),  # 1/2 + 1/1
+            (1, 0.5),  # 1/2
+        ])
+
+        # `ccccc` appears four times in `c1`, three times in `c2`.
+        assertResults('ccccc', [
+            (3, .83),  # 2/4 + 1/3
+            (1, .58), # 1/4 + 1/3
+            (4, .33), # 1/3
+            (2, .25), # 1/4
+        ])
+
+        # `zzzzz` appears three times in c3.
+        assertResults('zzzzz', [
+            (1, .67),
+            (2, .33),
+        ])
+
+        self.assertEqual(
+            [x.score for x in MultiColumn.match('ddddd')],
+            [.25, .25, .25, .25])
+
 
     def _test_fts_auto(self, ModelClass):
         matches = lambda s: sqe.match(ModelClass.message, s)
