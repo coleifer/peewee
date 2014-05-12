@@ -273,19 +273,17 @@ def _parse_match_info(buf):
     return [struct.unpack('@I', buf[i:i+4])[0] for i in range(0, bufsize, 4)]
 
 # Ranking implementation, which parse matchinfo.
-def rank(match_info):
+def rank(raw_match_info):
     # handle match_info called w/default args 'pcx' - based on the example rank
     # function http://sqlite.org/fts3.html#appendix_a
-    info = _parse_match_info(match_info)
+    match_info = _parse_match_info(raw_match_info)
     score = 0.0
-    phrase_ct = info[0]
-    col_ct = info[1]
-    for phrase in range(phrase_ct):
-        phrase_info_idx = 2 + (phrase * col_ct * 3)
-        for col in range(0, col_ct):
-            col_idx = phrase_info_idx + (col * 3)
-            hit_count = info[col_idx]
-            global_hit_count = info[col_idx + 1]
-            if hit_count > 0:
-                score += float(hit_count) / global_hit_count
+    p, c = match_info[:2]
+    for phrase_num in range(p):
+        phrase_info_idx = 2 + (phrase_num * c * 3)
+        for col_num in range(c):
+            col_idx = phrase_info_idx + (col_num * 3)
+            x1, x2 = match_info[col_idx:col_idx + 2]
+            if x1 > 0:
+                score += float(x1) / x2
     return score
