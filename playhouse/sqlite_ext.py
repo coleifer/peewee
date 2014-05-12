@@ -265,7 +265,7 @@ def match(lhs, rhs):
     return Expression(lhs, OP_MATCH, rhs)
 
 # Shortcut for calculating ranks.
-Rank = lambda model: fn.rank(fn.matchinfo(SQL(model._meta.db_table)))
+Rank = lambda model: fn.rank(fn.matchinfo(model._as_entity()))
 
 def _parse_match_info(buf):
     # see http://sqlite.org/fts3.html#matchinfo
