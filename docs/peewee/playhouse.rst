@@ -917,6 +917,8 @@ sqlite_ext API notes
             will be used. Failing either of those conditions, the last overall
             field on the model will be used.
 
+        .. note:: BM25 only works with FTS4 tables.
+
         .. code-block:: python
 
             docs = Document.search_bm25('search term')
@@ -962,6 +964,8 @@ sqlite_ext API notes
                 .select(Document, BM25(Document, 2).alias('score'))
                 .where(Document.match('search term'))
                 .order_by(SQL('score').desc()))
+
+    .. note:: BM25 only works with FTS4 tables.
 
 
 .. _sqlcipher_ext:
