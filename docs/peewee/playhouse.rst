@@ -824,7 +824,7 @@ sqlite_ext API notes
         best = (Document
                 .select(
                     Document,
-                    BM25(Document, Document.content).alias('score'))
+                    Document.bm25(Document.content).alias('score'))
                 .where(Document.match('some query'))
                 .order_by(SQL('score').desc()))
 
@@ -886,10 +886,48 @@ sqlite_ext API notes
             for doc in query:
                 print 'match: ', doc.title
 
+    .. py:classmethod:: rank()
+
+        Calculate the rank based on the quality of the match.
+
+        .. code-block:: python
+
+            query = (Document
+                     .select(Document, Document.rank().alias('score'))
+                     .where(Document.match('search phrase'))
+                     .order_by(SQL('score').desc()))
+
+            for search_result in query:
+                print search_result.title, search_result.score
+
+    .. py:classmethod:: bm25([field=None[, k=1.2[, b=0.75]]])
+
+        Calculate the rank based on the quality of the match using the
+        BM25 algorithm.
+
+        .. note::
+            If no field is specified, then the first `TextField` on the model
+            will be used. If no `TextField` is present, the first `CharField`
+            will be used. Failing either of those conditions, the last overall
+            field on the model will be used.
+
+        .. code-block:: python
+
+            query = (Document
+                     .select(
+                         Document,
+                         Document.bm25(Document.content).alias('score'))
+                     .where(Document.match('search phrase'))
+                     .order_by(SQL('score').desc()))
+
+            for search_result in query:
+                print search_result.title, search_result.score
+
     .. py:classmethod:: search(term[, alias='score'])
 
         Shorthand way of searching for a term and sorting results by the
-        quality of the match.
+        quality of the match. This is equivalent to the :py:meth:`~FTSModel.rank`
+        example code presented above.
 
         :param str term: Search term to use.
         :param str alias: Alias to use for the calculated rank score.
@@ -903,7 +941,8 @@ sqlite_ext API notes
     .. py:classmethod:: search_bm25(term[, field=None[, k=1.2[, b=0.75[, alias='score']]]])
 
         Shorthand way of searching for a term and sorting results by the
-        quality of the match, as determined by the BM25 algorithm.
+        quality of the match, as determined by the BM25 algorithm. This is
+        equivalent to the :py:meth:`~FTSModel.bm25` example code presented above.
 
         :param str term: Search term to use.
         :param Field field: A field on the model.

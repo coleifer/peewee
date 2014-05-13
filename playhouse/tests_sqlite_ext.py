@@ -221,6 +221,18 @@ class SqliteExtTestCase(unittest.TestCase):
             (3, 0.3),
         ])
 
+        # Use helpers.
+        query = (MultiColumn
+                 .select(
+                     MultiColumn.c4, 
+                     MultiColumn.bm25(MultiColumn.c1).alias('score'))
+                 .where(MultiColumn.match('aaaaa'))
+                 .order_by(SQL('score').desc()))
+        self.assertEqual([(mc.c4, round(mc.score, 2)) for mc in query], [
+            (5, 0.39),
+            (1, 0.3),
+        ])
+
     def test_bm25_alt_corpus(self):
         for message in self.messages:
             FTSDoc.create(message=message)

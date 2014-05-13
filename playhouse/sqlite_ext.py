@@ -137,10 +137,22 @@ class FTSModel(VirtualModel):
         return match(cls._as_entity(), term)
 
     @classmethod
+    def rank(cls):
+        return Rank(cls)
+
+    @classmethod
+    def bm25(cls, field=None, k=1.2, b=0.75):
+        if field is None:
+            field = find_best_search_field(cls)
+        field_idx = cls._meta.get_field_index(field)
+        match_info = fn.matchinfo(cls._as_entity(), 'pcxnal')
+        return fn.bm25(match_info, field_idx, k, b)
+
+    @classmethod
     def search(cls, term, alias='score'):
         """Full-text search using selected `term`."""
         return (cls
-                .select(cls, Rank(cls).alias(alias))
+                .select(cls, cls.rank().alias(alias))
                 .where(cls.match(term))
                 .order_by(SQL(alias).desc()))
 
@@ -148,17 +160,9 @@ class FTSModel(VirtualModel):
     def search_bm25(cls, term, field=None, k=1.2, b=0.75, alias='score'):
         """Full-text search for selected `term` using BM25 algorithm."""
         if field is None:
-            def find_best_field():
-                for field_class in [TextField, CharField]:
-                    for model_field in cls._meta.get_fields():
-                        if isinstance(model_field, field_class):
-                            return model_field
-                return cls._meta.get_fields()[-1]
-            field = find_best_field()
-        idx = cls._meta.get_field_index(field)
-        rank = fn.bm25(fn.matchinfo(cls._as_entity(), 'pcxnal'), idx, k, b)
+            field = find_best_search_field(cls)
         return (cls
-                .select(cls, rank.alias(alias))
+                .select(cls, cls.bm25(field, k, b).alias(alias))
                 .where(cls.match(term))
                 .order_by(SQL(alias).desc()))
 
@@ -288,6 +292,13 @@ def match(lhs, rhs):
 # Shortcut for calculating ranks.
 Rank = lambda model: fn.rank(fn.matchinfo(model._as_entity()))
 BM25 = lambda mc, idx: fn.bm25(fn.matchinfo(mc._as_entity(), 'pcxnal'), idx)
+
+def find_best_search_field(model_class):
+    for field_class in [TextField, CharField]:
+        for model_field in model_class._meta.get_fields():
+            if isinstance(model_field, field_class):
+                return model_field
+    return model_class._meta.get_fields()[-1]
 
 def _parse_match_info(buf):
     # see http://sqlite.org/fts3.html#matchinfo
