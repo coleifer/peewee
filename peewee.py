@@ -2824,6 +2824,12 @@ class ModelOptions(object):
     def get_fields(self):
         return [f[1] for f in self.get_sorted_fields()]
 
+    def get_field_index(self, field):
+        for i, (field_name, field_obj) in enumerate(self.get_sorted_fields()):
+            if field_name == field.name:
+                return i
+        return -1
+
     def rel_for_model(self, model, field_obj=None):
         for field in self.get_fields():
             if isinstance(field, ForeignKeyField) and field.rel_model == model:
