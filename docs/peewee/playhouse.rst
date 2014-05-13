@@ -654,9 +654,9 @@ The SQLite extensions module provides support for some interesting sqlite-only
 features:
 
 * Define custom aggregates, collations and functions.
-* Basic support for virtual tables.
-* Basic support for FTS3/4 (sqlite full-text search).
+* Support for FTS3/4 (sqlite full-text search).
 * Specify isolation level in transactions.
+* Basic support for virtual tables.
 
 
 sqlite_ext API notes
@@ -807,16 +807,33 @@ sqlite_ext API notes
             Document.create(title=doc['title'], content=doc['content'])
 
         # use the "match" operation for FTS queries.
-        matching_docs = Document.select().where(match(Document.title, 'some query'))
+        matching_docs = (Document
+                         .select()
+                         .where(Document.match('some query')))
 
         # to sort by best match, use the custom "rank" function.
         best = (Document
-                .select(Document, Document.rank('score'))
-                .where(match(Document.title, 'some query'))
+                .select(Document, Rank(Document).alias('score'))
+                .where(Document.match('some query'))
                 .order_by(SQL('score').desc()))
 
         # or use the shortcut method:
-        best = Document.match('some phrase')
+        best = Document.search('some phrase')
+
+        # you can also use the BM25 algorithm to rank documents:
+        best = (Document
+                .select(
+                    Document,
+                    BM25(Document, Document.content).alias('score'))
+                .where(Document.match('some query'))
+                .order_by(SQL('score').desc()))
+
+        # There is a shortcut method for bm25 as well:
+        best_bm25 = Document.search_bm25('some phrase')
+
+        # BM25 allows you to specify a column if your FTS model contains
+        # multiple fields.
+        best_bm25 = Document.search_bm25('some phrase', Document.content)
 
     If you have an existing table and would like to add search for a column
     on that table, you can specify it using the ``content`` option:
@@ -859,28 +876,93 @@ sqlite_ext API notes
 
         Optimize the search index.
 
-    .. py:classmethod:: match(search_phrase)
+    .. py:classmethod:: match(term)
 
-        Shorthand way of performing a search for a given phrase.  Example:
+        Shorthand for generating a `MATCH` expression for the given term.
 
         .. code-block:: python
 
-            for doc in Document.match('search phrase'):
+            query = Document.select().where(Document.match('search phrase'))
+            for doc in query:
                 print 'match: ', doc.title
 
-    .. py:classmethod:: rank([alias])
+    .. py:classmethod:: search(term[, alias='score'])
 
-        Shorthand way of sorting search results by the quality of their match.
+        Shorthand way of searching for a term and sorting results by the
+        quality of the match.
+
+        :param str term: Search term to use.
+        :param str alias: Alias to use for the calculated rank score.
 
         .. code-block:: python
 
-            docs = (Document
-                    .select(Document, Document.rank().alias('score'))
-                    .where(match(Document, search))
-                    .order_by(SQL('score').desc()))
+            docs = Document.search('search term')
+            for result in docs:
+                print result.title, result.score
 
-        The above code is exactly what the :py:meth:`match` function
-        provides.
+    .. py:classmethod:: search_bm25(term[, field=None[, k=1.2[, b=0.75[, alias='score']]]])
+
+        Shorthand way of searching for a term and sorting results by the
+        quality of the match, as determined by the BM25 algorithm.
+
+        :param str term: Search term to use.
+        :param Field field: A field on the model.
+        :param float k: Parameter for BM25
+        :param float b: Parameter for BM25
+        :param str alias: Alias to use for the calculated rank score.
+
+        .. note::
+            If no field is specified, then the first `TextField` on the model
+            will be used. If no `TextField` is present, the first `CharField`
+            will be used. Failing either of those conditions, the last overall
+            field on the model will be used.
+
+        .. code-block:: python
+
+            docs = Document.search_bm25('search term')
+            for result in docs:
+                print result.title, result.score
+
+
+.. py:func:: match(lhs, rhs)
+
+    Generate a SQLite `MATCH` expression for use in full-text searches.
+
+    .. code-block:: python
+
+        Document.select().where(match(Document.content, 'search term'))
+
+.. py:func:: Rank(model_class)
+
+    Calculate the rank of the search results, for use with `FTSModel` queries
+    using the `MATCH` operator.
+
+    .. code-block:: python
+
+        # Search for documents and return results ordered by quality
+        # of match.
+        docs = (Document
+                .select(Document, Rank(Document).alias('score'))
+                .where(Document.match('some search term'))
+                .order_by(SQL('score').desc()))
+
+.. py:func:: BM25(model_class, field_index)
+
+    Calculate the rank of the search results, for use with `FTSModel` queries
+    using the `MATCH` operator.
+
+    :param Model model_class: The `FTSModel` on which the query is being performed.
+    :param int field_index: The 0-based index of the field being queried.
+
+    .. code-block:: python
+
+        # Assuming the `content` field has index=2 (0=pk, 1=title, 2=content),
+        # calculate the BM25 score for each result.
+        docs = (Document
+                .select(Document, BM25(Document, 2).alias('score'))
+                .where(Document.match('search term'))
+                .order_by(SQL('score').desc()))
+
 
 .. _sqlcipher_ext:
 
