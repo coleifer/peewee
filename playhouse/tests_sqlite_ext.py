@@ -162,7 +162,7 @@ class SqliteExtTestCase(unittest.TestCase):
     def test_fts_multi_column(self):
         def assertResults(term, expected):
             results = [
-                (x.c4, round(x.score, 2)) 
+                (x.c4, round(x.score, 2))
                 for x in MultiColumn.search(term)]
             self.assertEqual(results, expected)
 
@@ -222,14 +222,6 @@ class SqliteExtTestCase(unittest.TestCase):
         ])
 
     def test_bm25_alt_corpus(self):
-        """
-        'A faith is a necessity to a man. Woe to him who believes in nothing.',
-        'All who call on God in true faith, earnestly from the heart, will '
-        'certainly be heard, and will receive what they have asked and desired.',
-        'Be faithful in small things because it is in them that your strength lies.',
-        'Faith consists in believing when it is beyond the power of reason to believe.',
-        'Faith has to do with things that are not seen and hope with things that are not at hand.',
-        """
         for message in self.messages:
             FTSDoc.create(message=message)
 
