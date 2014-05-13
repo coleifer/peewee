@@ -926,7 +926,7 @@ sqlite_ext API notes
                 print result.title, result.score
 
 
-.. py:func:: match(lhs, rhs)
+.. py:function:: match(lhs, rhs)
 
     Generate a SQLite `MATCH` expression for use in full-text searches.
 
@@ -934,7 +934,7 @@ sqlite_ext API notes
 
         Document.select().where(match(Document.content, 'search term'))
 
-.. py:func:: Rank(model_class)
+.. py:function:: Rank(model_class)
 
     Calculate the rank of the search results, for use with `FTSModel` queries
     using the `MATCH` operator.
@@ -948,7 +948,7 @@ sqlite_ext API notes
                 .where(Document.match('some search term'))
                 .order_by(SQL('score').desc()))
 
-.. py:func:: BM25(model_class, field_index)
+.. py:function:: BM25(model_class, field_index)
 
     Calculate the rank of the search results, for use with `FTSModel` queries
     using the `MATCH` operator.
