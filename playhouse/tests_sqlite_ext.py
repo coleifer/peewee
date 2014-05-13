@@ -1,4 +1,4 @@
-import sqlite3
+import sqlite3; sqlite3.enable_callback_tracebacks(True)
 import unittest
 
 from peewee import *
@@ -102,6 +102,13 @@ class SqliteExtTestCase(unittest.TestCase):
         'Faith consists in believing when it is beyond the power of reason to believe.',
         'Faith has to do with things that are not seen and hope with things that are not at hand.',
     ]
+    values = [
+        ('aaaaa bbbbb ccccc ddddd', 'aaaaa ccccc', 'zzzzz zzzzz', 1),
+        ('bbbbb ccccc ddddd eeeee', 'bbbbb', 'zzzzz', 2),
+        ('ccccc ccccc ddddd fffff', 'ccccc', 'yyyyy', 3),
+        ('ddddd', 'ccccc', 'xxxxx', 4),
+    ]
+
     def setUp(self):
         FTSDoc.drop_table(True)
         ManagedDoc.drop_table(True)
@@ -134,34 +141,32 @@ class SqliteExtTestCase(unittest.TestCase):
             self.messages[i] for i in indices])
 
     def test_fts_manual(self):
-        matches = lambda s: sqe.match(FTSDoc.message, s)
         messages = [FTSDoc.create(message=msg) for msg in self.messages]
 
-        q = FTSDoc.select().where(matches('believe')).order_by(FTSDoc.id)
+        q = FTSDoc.select().where(FTSDoc.match('believe')).order_by(FTSDoc.id)
         self.assertMessages(q, [0, 3])
 
-        q = FTSDoc.match('believe')
+        q = FTSDoc.search('believe')
         self.assertMessages(q, [3, 0])
 
-        q = FTSDoc.match('things')
+        q = FTSDoc.search('things')
         self.assertEqual([(x.message, x.score) for x in q], [
             (self.messages[4], 2.0 / 3),
             (self.messages[2], 1.0 / 3),
         ])
 
+    def _create_multi_column(self):
+        for c1, c2, c3, c4 in self.values:
+            MultiColumn.create(c1=c1, c2=c2, c3=c3, c4=c4)
+
     def test_fts_multi_column(self):
-        values = [
-            ('aaaaa bbbbb ccccc ddddd', 'aaaaa ccccc', 'zzzzz zzzzz', 1),
-            ('bbbbb ccccc ddddd eeeee', 'bbbbb', 'zzzzz', 2),
-            ('ccccc ccccc ddddd fffff', 'ccccc', 'yyyyy', 3),
-            ('ddddd', 'ccccc', 'xxxxx', 4),
-        ]
         def assertResults(term, expected):
-            results = [(x.c4, round(x.score, 2)) for x in MultiColumn.match(term)]
+            results = [
+                (x.c4, round(x.score, 2)) 
+                for x in MultiColumn.search(term)]
             self.assertEqual(results, expected)
 
-        for c1, c2, c3, c4 in values:
-            MultiColumn.create(c1=c1, c2=c2, c3=c3, c4=c4)
+        self._create_multi_column()
 
         # `bbbbb` appears two times in `c1`, one time in `c2`.
         assertResults('bbbbb', [
@@ -184,50 +189,120 @@ class SqliteExtTestCase(unittest.TestCase):
         ])
 
         self.assertEqual(
-            [x.score for x in MultiColumn.match('ddddd')],
+            [x.score for x in MultiColumn.search('ddddd')],
             [.25, .25, .25, .25])
 
+    def test_bm25(self):
+        def assertResults(term, col_idx, expected):
+            query = MultiColumn.search_bm25(term, MultiColumn.c1)
+            self.assertEqual(
+                [(mc.c4, round(mc.score, 2)) for mc in query],
+                expected)
+
+        self._create_multi_column()
+        MultiColumn.create(c1='aaaaa fffff', c4=5)
+
+        assertResults('aaaaa', 1, [
+            (5, 0.39),
+            (1, 0.3),
+        ])
+        assertResults('fffff', 1, [
+            (5, 0.39),
+            (3, 0.3),
+        ])
+        assertResults('eeeee', 1, [
+            (2, 0.97),
+        ])
+
+        # No column specified, use the first text field.
+        query = MultiColumn.search_bm25('fffff')
+        self.assertEqual([(mc.c4, round(mc.score, 2)) for mc in query], [
+            (5, 0.39),
+            (3, 0.3),
+        ])
+
+    def test_bm25_alt_corpus(self):
+        """
+        'A faith is a necessity to a man. Woe to him who believes in nothing.',
+        'All who call on God in true faith, earnestly from the heart, will '
+        'certainly be heard, and will receive what they have asked and desired.',
+        'Be faithful in small things because it is in them that your strength lies.',
+        'Faith consists in believing when it is beyond the power of reason to believe.',
+        'Faith has to do with things that are not seen and hope with things that are not at hand.',
+        """
+        for message in self.messages:
+            FTSDoc.create(message=message)
+
+        def assertResults(term, expected):
+            query = FTSDoc.search_bm25(term)
+            cleaned = [
+                (round(doc.score, 2), ' '.join(doc.message.split()[:2]))
+                for doc in query]
+            self.assertEqual(cleaned, expected)
+
+        assertResults('things', [
+            (0.45, 'Faith has'),
+            (0.36, 'Be faithful'),
+        ])
+
+        # Indeterminate order since all are 0.0. All phrases contain the word
+        # faith, so there is no meaningful score.
+        results = [x.score for x in FTSDoc.search_bm25('faith')]
+        self.assertEqual(results, [0., 0., 0., 0., 0.])
 
     def _test_fts_auto(self, ModelClass):
-        matches = lambda s: sqe.match(ModelClass.message, s)
         posts = []
         for message in self.messages:
             posts.append(Post.create(message=message))
 
         # Nothing matches, index is not built.
-        pq = ModelClass.select().where(matches('faith'))
+        pq = ModelClass.select().where(ModelClass.match('faith'))
         self.assertEqual(list(pq), [])
 
         ModelClass.rebuild()
         ModelClass.optimize()
 
         # it will stem faithful -> faith b/c we use the porter tokenizer
-        pq = ModelClass.select().where(matches('faith')).order_by(ModelClass.id)
+        pq = (ModelClass
+              .select()
+              .where(ModelClass.match('faith'))
+              .order_by(ModelClass.id))
         self.assertMessages(pq, range(len(self.messages)))
 
-        pq = ModelClass.select().where(matches('believe')).order_by(ModelClass.id)
+        pq = (ModelClass
+              .select()
+              .where(ModelClass.match('believe'))
+              .order_by(ModelClass.id))
         self.assertMessages(pq, [0, 3])
 
-        pq = ModelClass.select().where(matches('thin*')).order_by(ModelClass.id)
+        pq = (ModelClass
+              .select()
+              .where(ModelClass.match('thin*'))
+              .order_by(ModelClass.id))
         self.assertMessages(pq, [2, 4])
 
-        pq = ModelClass.select().where(matches('"it is"')).order_by(ModelClass.id)
+        pq = (ModelClass
+              .select()
+              .where(ModelClass.match('"it is"'))
+              .order_by(ModelClass.id))
         self.assertMessages(pq, [2, 3])
 
-        pq = (ModelClass
-              .select(ModelClass, sqe.Rank(ModelClass).alias('score'))
-              .where(matches('things'))
-              .order_by(SQL('score').desc()))
+        pq = ModelClass.search('things')
         self.assertEqual([(x.message, x.score) for x in pq], [
             (self.messages[4], 2.0 / 3),
             (self.messages[2], 1.0 / 3),
         ])
 
-        pq = ModelClass.select(sqe.Rank(ModelClass)).where(matches('faithful')).tuples()
+        pq = (ModelClass
+              .select(sqe.Rank(ModelClass))
+              .where(ModelClass.match('faithful'))
+              .tuples())
         self.assertEqual([x[0] for x in pq], [.2] * 5)
 
-        pq = ModelClass.select(ModelClass.rank()).where(matches('faithful')).tuples()
-        self.assertEqual([x[0] for x in pq], [.2] * 5)
+        pq = (ModelClass
+              .search('faithful')
+              .dicts())
+        self.assertEqual([x['score'] for x in pq], [.2] * 5)
 
     def test_fts_auto_model(self):
         self._test_fts_auto(FTSPost)

@@ -32,6 +32,7 @@ best_docs = (Document
 best_docs = Document.match('some phrase')
 """
 import inspect
+import math
 import sqlite3
 import struct
 
@@ -129,18 +130,37 @@ class FTSModel(VirtualModel):
         return cls._fts_cmd('automerge=%s' % (state and '1' or '0'))
 
     @classmethod
-    def match(cls, search):
-        return (cls
-                .select(cls, cls.rank().alias('score'))
-                .where(match(cls._as_entity(), search))
-                .order_by(SQL('score').desc()))
+    def match(cls, term):
+        """
+        Generate a `MATCH` expression appropriate for searching this table.
+        """
+        return match(cls._as_entity(), term)
 
     @classmethod
-    def rank(cls, alias=None):
-        rank_fn = Rank(cls)
-        if alias:
-            return rank_fn.alias(alias)
-        return rank_fn
+    def search(cls, term, alias='score'):
+        """Full-text search using selected `term`."""
+        return (cls
+                .select(cls, Rank(cls).alias(alias))
+                .where(cls.match(term))
+                .order_by(SQL(alias).desc()))
+
+    @classmethod
+    def search_bm25(cls, term, field=None, k=1.2, b=0.75, alias='score'):
+        """Full-text search for selected `term` using BM25 algorithm."""
+        if field is None:
+            def find_best_field():
+                for field_class in [TextField, CharField]:
+                    for model_field in cls._meta.get_fields():
+                        if isinstance(model_field, field_class):
+                            return model_field
+                return cls._meta.get_fields()[-1]
+            field = find_best_field()
+        idx = cls._meta.get_field_index(field)
+        rank = fn.bm25(fn.matchinfo(cls._as_entity(), 'pcxnal'), idx, k, b)
+        return (cls
+                .select(cls, rank.alias(alias))
+                .where(cls.match(term))
+                .order_by(SQL(alias).desc()))
 
 
 class SqliteExtDatabase(SqliteDatabase):
@@ -160,6 +180,7 @@ class SqliteExtDatabase(SqliteDatabase):
         self._functions = {}
         self._row_factory = None
         self.register_function(rank, 'rank', 1)
+        self.register_function(bm25, 'bm25', -1)
 
     def _connect(self, database, **kwargs):
         conn = super(SqliteExtDatabase, self)._connect(database, **kwargs)
@@ -266,6 +287,7 @@ def match(lhs, rhs):
 
 # Shortcut for calculating ranks.
 Rank = lambda model: fn.rank(fn.matchinfo(model._as_entity()))
+BM25 = lambda mc, idx: fn.bm25(fn.matchinfo(mc._as_entity(), 'pcxnal'), idx)
 
 def _parse_match_info(buf):
     # see http://sqlite.org/fts3.html#matchinfo
@@ -286,4 +308,69 @@ def rank(raw_match_info):
             x1, x2 = match_info[col_idx:col_idx + 2]
             if x1 > 0:
                 score += float(x1) / x2
+    return score
+
+# Okapi BM25 ranking implementation (FTS4 only).
+def bm25(raw_match_info, column_index, k1=1.2, b=0.75):
+    """
+    Usage:
+
+        # Format string *must* be pcxnal
+        # Second parameter to bm25 specifies the index of the column, on
+        # the table being queries.
+        bm25(matchinfo(document_tbl, 'pcxnal'), 1) AS rank
+    """
+    match_info = _parse_match_info(raw_match_info)
+    score = 0.0
+    # p, 1 --> num terms
+    # c, 1 --> num cols
+    # x, (3 * p * c) --> for each phrase/column,
+    #     term_freq for this column
+    #     term_freq for all columns
+    #     total documents containing this term
+    # n, 1 --> total rows in table
+    # a, c --> for each column, avg number of tokens in this column
+    # l, c --> for each column, length of value for this column (in this row)
+    # s, c --> ignore
+    p, c = match_info[:2]
+    n_idx = 2 + (3 * p * c)
+    a_idx = n_idx + 1
+    l_idx = a_idx + c
+    n = match_info[n_idx]
+    a = match_info[a_idx: a_idx + c]
+    l = match_info[l_idx: l_idx + c]
+
+    total_docs = n
+    avg_length = float(a[column_index])
+    doc_length = float(l[column_index])
+    if avg_length == 0:
+        D = 0
+    else:
+        D = 1 - b + (b * (doc_length / avg_length))
+
+    for phrase in range(p):
+        # p, c, p0c01, p0c02, p0c03, p0c11, p0c12, p0c13, p1c01, p1c02, p1c03..
+        # So if we're interested in column <i>, the counts will be at indexes
+        x_idx = 2 + (3 * column_index * (phrase + 1))
+        term_freq = float(match_info[x_idx])
+        term_matches = float(match_info[x_idx + 2])
+
+        # The `max` check here is based on a suggestion in the Wikipedia
+        # article. For terms that are common to a majority of documents, the
+        # idf function can return negative values. Applying the max() here
+        # weeds out those values.
+        idf = max(
+            math.log(
+                (total_docs - term_matches + 0.5) /
+                (term_matches + 0.5)),
+            0)
+
+        denom = term_freq + (k1 * D)
+        if denom == 0:
+            rhs = 0
+        else:
+            rhs = (term_freq * (k1 + 1)) / denom
+
+        score += (idf * rhs)
+
     return score
