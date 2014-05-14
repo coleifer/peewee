@@ -7,10 +7,11 @@ https://github.com/coleifer/peewee/releases
 
 ## 2.2.4
 
-This release contains some improvements to the SQLite extension, including support for the BM25 ranking algorithm for full-text searches. I also merged support for sqlcipher, an encrypted SQLite database with many thanks to @thedod!
+This release contains a complete rewrite of `pwiz` as well as some improvements to the SQLite extension, including support for the BM25 ranking algorithm for full-text searches. I also merged support for sqlcipher, an encrypted SQLite database with many thanks to @thedod!
 
 ### Changes in 2.2.4
 
+* Rewrite of `pwiz`, schema introspection utility.
 * `Model.save()` returns a value indicating the number of modified rows.
 * Fixed bug with `PostgresqlDatabase.last_insert_id()` leaving a transaction open in autocommit mode (#353).
 * Added BM25 ranking algorithm for full-text searches with SQLite.
