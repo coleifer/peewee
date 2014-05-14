@@ -2532,13 +2532,17 @@ class PostgresqlDatabase(Database):
         schema = ''
         if meta.schema:
             schema = '%s.' % meta.schema
+        result = None
         if seq:
             cursor.execute("SELECT CURRVAL('%s\"%s\"')" % (schema, seq))
-            return cursor.fetchone()[0]
+            result = cursor.fetchone()[0]
         elif meta.auto_increment:
             cursor.execute("SELECT CURRVAL('%s\"%s_%s_seq\"')" % (
                 schema, meta.db_table, meta.primary_key.db_column))
-            return cursor.fetchone()[0]
+            result = cursor.fetchone()[0]
+        if self.get_autocommit():
+            self.get_conn().commit()
+        return result
 
     def get_indexes_for_table(self, table):
         res = self.execute_sql("""

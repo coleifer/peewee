@@ -224,7 +224,7 @@ class SqliteExtTestCase(unittest.TestCase):
         # Use helpers.
         query = (MultiColumn
                  .select(
-                     MultiColumn.c4, 
+                     MultiColumn.c4,
                      MultiColumn.bm25(MultiColumn.c1).alias('score'))
                  .where(MultiColumn.match('aaaaa'))
                  .order_by(SQL('score').desc()))
