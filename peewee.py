@@ -2528,21 +2528,23 @@ class PostgresqlDatabase(Database):
 
     def last_insert_id(self, cursor, model):
         meta = model._meta
-        seq = meta.primary_key.sequence
         schema = ''
         if meta.schema:
             schema = '%s.' % meta.schema
-        result = None
+
+        if meta.primary_key.sequence:
+            seq = meta.primary_key.sequence
+        elif meta.auto_increment:
+            seq = '%s_%s_seq' % (meta.db_table, meta.primary_key.db_column)
+        else:
+            seq = None
+
         if seq:
             cursor.execute("SELECT CURRVAL('%s\"%s\"')" % (schema, seq))
             result = cursor.fetchone()[0]
-        elif meta.auto_increment:
-            cursor.execute("SELECT CURRVAL('%s\"%s_%s_seq\"')" % (
-                schema, meta.db_table, meta.primary_key.db_column))
-            result = cursor.fetchone()[0]
-        if self.get_autocommit():
-            self.commit()
-        return result
+            if self.get_autocommit():
+                self.commit()
+            return result
 
     def get_indexes_for_table(self, table):
         res = self.execute_sql("""
