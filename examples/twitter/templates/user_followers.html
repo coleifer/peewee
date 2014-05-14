@@ -2,7 +2,7 @@
 {% block body %}
   <h2>Followers</h2>
   <ul>
-    {% for user in session.user.followers() %}
+    {% for user in current_user.followers() %}
       <li><a href="{{ url_for('user_detail', username=user.username) }}">{{ user.username }}</a></li>
     {% endfor %}
   </ul>

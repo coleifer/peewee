@@ -34,7 +34,7 @@ class BaseModel(Model):
 
 # the user model specifies its fields (or columns) declaratively, like django
 class User(BaseModel):
-    username = CharField()
+    username = CharField(unique=True)
     password = CharField()
     email = CharField()
     join_date = DateTimeField()
@@ -99,9 +99,14 @@ def create_tables():
 # mark a user as being logged-in by setting some values in the session data:
 def auth_user(user):
     session['logged_in'] = True
-    session['user'] = user
+    session['user_id'] = user.id
     session['username'] = user.username
     flash('You are logged in as %s' % (user.username))
+
+# get the user from the session
+def get_current_user():
+    if session.get('logged_in'):
+        return User.get(User.id == session['user_id'])
 
 # view decorator which indicates that the requesting user must be authenticated
 # before they can access the view.  it checks the session to see if they're
@@ -169,7 +174,7 @@ def private_timeline():
     # the private timeline exemplifies the use of a subquery -- we are asking for
     # messages where the person who created the message is someone the current
     # user is following.  these messages are then ordered newest-first.
-    user = session['user']
+    user = get_current_user()
     messages = Message.select().where(
         Message.user << user.following()
     )
@@ -185,21 +190,23 @@ def public_timeline():
 def join():
     if request.method == 'POST' and request.form['username']:
         try:
-            # use the .get() method to quickly see if a user with that name exists
-            user = User.get(username=request.form['username'])
-            flash('That username is already taken')
-        except User.DoesNotExist:
-            # if not, create the user and store the form data on the new model
-            user = User.create(
-                username=request.form['username'],
-                password=md5(request.form['password']).hexdigest(),
-                email=request.form['email'],
-                join_date=datetime.datetime.now()
-            )
+            with database.transaction():
+                # if not, create the user and store the form data on the new model
+                user = User.create(
+                    username=request.form['username'],
+                    password=md5(request.form['password']).hexdigest(),
+                    email=request.form['email'],
+                    join_date=datetime.datetime.now()
+                )
 
             # mark the user as being 'authenticated' by setting the session vars
             auth_user(user)
             return redirect(url_for('homepage'))
+
+        except IntegrityError:
+            # use the .get() method to quickly see if a user with that name exists
+            user = User.get(username=request.form['username'])
+            flash('That username is already taken')
 
     return render_template('join.html')
 
@@ -228,13 +235,13 @@ def logout():
 @app.route('/following/')
 @login_required
 def following():
-    user = session['user']
+    user = get_current_user()
     return object_list('user_following.html', user.following(), 'user_list')
 
 @app.route('/followers/')
 @login_required
 def followers():
-    user = session['user']
+    user = get_current_user()
     return object_list('user_followers.html', user.followers(), 'user_list')
 
 @app.route('/users/')
@@ -259,7 +266,7 @@ def user_detail(username):
 def user_follow(username):
     user = get_object_or_404(User, username=username)
     Relationship.get_or_create(
-        from_user=session['user'],
+        from_user=get_current_user(),
         to_user=user,
     )
     flash('You are now following %s' % user.username)
@@ -270,7 +277,7 @@ def user_follow(username):
 def user_unfollow(username):
     user = get_object_or_404(User, username=username)
     Relationship.delete().where(
-        (Relationship.from_user == session['user']) &
+        (Relationship.from_user == get_current_user()) &
         (Relationship.to_user == user)
     ).execute()
     flash('You are no longer following %s' % user.username)
@@ -279,7 +286,7 @@ def user_unfollow(username):
 @app.route('/create/', methods=['GET', 'POST'])
 @login_required
 def create():
-    user = session['user']
+    user = get_current_user()
     if request.method == 'POST' and request.form['content']:
         message = Message.create(
             user=user,
@@ -291,6 +298,9 @@ def create():
 
     return render_template('create.html')
 
+@app.context_processor
+def _inject_user():
+    return {'current_user': get_current_user()}
 
 # allow running from the command line
 if __name__ == '__main__':
