@@ -2541,7 +2541,7 @@ class PostgresqlDatabase(Database):
                 schema, meta.db_table, meta.primary_key.db_column))
             result = cursor.fetchone()[0]
         if self.get_autocommit():
-            self.get_conn().commit()
+            self.commit()
         return result
 
     def get_indexes_for_table(self, table):
