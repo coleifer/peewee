@@ -3047,6 +3047,24 @@ class CompositeKeyTestCase(ModelTestCase):
         self.assertRaises(
             CKM.DoesNotExist, CKM.get, (CKM.f1 == 'c') & (CKM.f2 == 2))
 
+    def test_count_composite_key(self):
+        CKM = CompositeKeyModel
+        values = [
+            ('a', 1, 1.0),
+            ('a', 2, 2.0),
+            ('b', 1, 1.0),
+            ('b', 2, 1.0)]
+        for f1, f2, f3 in values:
+            CKM.create(f1=f1, f2=f2, f3=f3)
+
+        self.assertEqual(CKM.select().wrapped_count(), 4)
+        self.assertTrue(CKM.select().where(
+            (CKM.f1 == 'a') &
+            (CKM.f2 == 1)).exists())
+        self.assertFalse(CKM.select().where(
+            (CKM.f1 == 'a') &
+            (CKM.f2 == 3)).exists())
+
     def test_delete_instance(self):
         u1, u2 = [User.create(username='u%s' % i) for i in range(2)]
         ut1 = UserThing.create(thing='t1', user=u1)
