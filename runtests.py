@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import optparse
 import os
+import shutil
 import sys
 import unittest
 
@@ -16,7 +17,12 @@ def runtests(suite, verbosity):
 def get_option_parser():
     parser = optparse.OptionParser()
     basic = optparse.OptionGroup(parser, 'Basic test options')
-    basic.add_option('-e', '--engine', dest='engine', help='Database engine to test, one of [sqlite, postgres, mysql, apsw, sqlcipher]')
+    basic.add_option(
+        '-e',
+        '--engine',
+        dest='engine',
+        help=('Database engine to test, one of '
+              '[sqlite, postgres, mysql, apsw, sqlcipher, berkeleydb]'))
     basic.add_option('-v', '--verbosity', dest='verbosity', default=1, type='int', help='Verbosity of output')
 
     suite = optparse.OptionGroup(parser, 'Simple test suite options')
@@ -25,6 +31,7 @@ def get_option_parser():
 
     cases = optparse.OptionGroup(parser, 'Individual test module options')
     cases.add_option('--apsw', dest='apsw', default=False, action='store_true', help='apsw tests (requires apsw)')
+    cases.add_option('--berkeleydb', dest='berkeleydb', default=False, action='store_true', help='berkeleydb tests (requires pysqlite compiled against berkeleydb)')
     cases.add_option('--csv', dest='csv', default=False, action='store_true', help='csv tests')
     cases.add_option('--djpeewee', dest='djpeewee', default=False, action='store_true', help='djpeewee tests')
     cases.add_option('--gfk', dest='gfk', default=False, action='store_true', help='gfk tests')
@@ -54,12 +61,12 @@ def collect_modules(options):
             modules.append(tests_apsw)
         except ImportError:
             print_('Unable to import apsw tests, skipping')
-    if xtra(options.sqlcipher):
+    if xtra(options.berkeleydb):
         try:
-            from playhouse import tests_sqlcipher_ext
-            modules.append(tests_sqlcipher_ext)
+            from playhouse import tests_berkeleydb
+            modules.append(tests_berkeleydb)
         except ImportError:
-            print_('Unable to import pysqlcipher tests, skipping')
+            print_('Unable to import berkeleydb tests, skipping')
     if xtra(options.csv):
         from playhouse import tests_csv_loader
         modules.append(tests_csv_loader)
@@ -69,6 +76,9 @@ def collect_modules(options):
     if xtra(options.gfk):
         from playhouse import tests_gfk
         modules.append(tests_gfk)
+    if xtra(options.kv):
+        from playhouse import tests_kv
+        modules.append(tests_kv)
     if xtra(options.migrations):
         try:
             from playhouse import tests_migrate
@@ -99,12 +109,15 @@ def collect_modules(options):
     if xtra(options.shortcuts):
         from playhouse import tests_shortcuts
         modules.append(tests_shortcuts)
+    if xtra(options.sqlcipher):
+        try:
+            from playhouse import tests_sqlcipher_ext
+            modules.append(tests_sqlcipher_ext)
+        except ImportError:
+            print_('Unable to import pysqlcipher tests, skipping')
     if xtra(options.sqlite_ext):
         from playhouse import tests_sqlite_ext
         modules.append(tests_sqlite_ext)
-    if xtra(options.kv):
-        from playhouse import tests_kv
-        modules.append(tests_kv)
     if xtra(options.test_utils):
         from playhouse import tests_test_utils
         modules.append(tests_test_utils)
@@ -135,4 +148,14 @@ if __name__ == '__main__':
         sys.exit(2)
     elif failures:
         sys.exit(1)
+
+    files_to_delete = ['tmp.db', 'tmp.bdb.db']
+    paths_to_delete = ['tmp.bdb.db-journal']
+    for filename in files_to_delete:
+        if os.path.exists(filename):
+            os.unlink(filename)
+    for path in paths_to_delete:
+        if os.path.exists(path):
+            shutil.rmtree(path)
+
     sys.exit(0)

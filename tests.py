@@ -65,7 +65,8 @@ database_params = {}
 
 print_('TESTING USING PYTHON %s' % sys.version)
 
-if BACKEND == 'postgresql':
+BerkeleyDatabase = None
+if BACKEND in ('postgresql', 'postgres', 'pg'):
     database_class = PostgresqlDatabase
     database_name = 'peewee_test'
     import psycopg2
@@ -80,6 +81,11 @@ elif BACKEND == 'apsw':
     from playhouse.apsw_ext import *
     database_class = APSWDatabase
     database_name = 'tmp.db'
+    database_params['timeout'] = 1000
+elif BACKEND in ('berkeleydb', 'berkeley', 'bdb'):
+    from playhouse.berkeleydb import *
+    database_class = BerkeleyDatabase
+    database_name = 'tmp.bdb.db'
     database_params['timeout'] = 1000
 elif BACKEND == 'sqlcipher':
     from playhouse.sqlcipher_ext import *
@@ -2304,7 +2310,7 @@ class ModelAPITestCase(ModelTestCase):
         self.assertEqual(b_db.content, '')
 
     def test_zero_id(self):
-        if BACKEND == 'mysql':
+        if isinstance(test_db, MySQLDatabase):
             # Need to explicitly tell MySQL it's OK to use zero.
             test_db.execute_sql("SET SESSION sql_mode='NO_AUTO_VALUE_ON_ZERO'")
         query = 'insert into users (id, username) values (%s, %s)' % (
@@ -3199,7 +3205,7 @@ class FieldTypeTestCase(ModelTestCase):
         nm_alpha = NM.create(char_field='Alpha')
         nm_bravo = NM.create(char_field='Bravo')
 
-        if BACKEND in ['sqlite', 'sqlcipher']:
+        if isinstance(test_db, SqliteDatabase):
             # Sqlite's sql-dialect uses "*" as case-sensitive lookup wildcard,
             # and pysqlcipher is simply a wrapper around sqlite's engine.
             like_wildcard = '*'
@@ -3276,7 +3282,7 @@ class FieldTypeTestCase(ModelTestCase):
 
         nmf1 = NullModel.get(NullModel.id==nm1.id)
         self.assertEqual(nmf1.date_field, d1)
-        if BACKEND == 'mysql':
+        if isinstance(test_db, MySQLDatabase):
             # mysql doesn't store microseconds
             self.assertEqual(nmf1.datetime_field, dt2)
             self.assertEqual(nmf1.time_field, td2)
@@ -3286,7 +3292,7 @@ class FieldTypeTestCase(ModelTestCase):
 
         nmf2 = NullModel.get(NullModel.id==nm2.id)
         self.assertEqual(nmf2.datetime_field, dt2)
-        if BACKEND == 'mysql':
+        if isinstance(test_db, MySQLDatabase):
             self.assertEqual(nmf2.time_field, td2)
         else:
             self.assertEqual(nmf2.time_field, t2)
@@ -3737,6 +3743,11 @@ class TransactionTestCase(ModelTestCase):
         test_db.set_autocommit(True)
 
     def test_autocommit(self):
+        if database_class is BerkeleyDatabase:
+            if TEST_VERBOSITY > 0:
+                print_('Skipping `test_autocommit` for berkeleydb.')
+            return
+
         test_db.set_autocommit(False)
 
         u1 = User.create(username='u1')
