@@ -1,10 +1,13 @@
+import os
 import shutil
 import unittest
 
+from peewee import IntegrityError
 from peewee import sort_models_topologically
 from playhouse.berkeleydb import *
 
-database = BerkeleyDatabase('tmp.bdb.db')
+DATABASE_FILE = 'tmp.bdb.db'
+database = BerkeleyDatabase(DATABASE_FILE)
 
 class BaseModel(Model):
     class Meta:
@@ -28,14 +31,16 @@ DROP = reversed(CREATE)
 
 class TestBerkeleyDatabase(unittest.TestCase):
     def setUp(self):
-        for model_class in DROP:
-            model_class.drop_table(True)
-        for model_class in CREATE:
-            model_class.create_table(True)
+        with database.transaction():
+            for model_class in DROP:
+                model_class.drop_table(True)
+            for model_class in CREATE:
+                model_class.create_table(True)
 
     def tearDown(self):
         database.close()
-        shutil.rmtree('tmp.bdb.db-journal')
+        os.unlink(DATABASE_FILE)
+        shutil.rmtree('%s-journal' % DATABASE_FILE)
 
     def test_storage_retrieval(self):
         pc = Person.create(name='charlie')
@@ -50,3 +55,16 @@ class TestBerkeleyDatabase(unittest.TestCase):
             [msg.body for msg in pc.messages.order_by(Message.id)],
             ['message-0', 'message-1', 'message-2'])
         self.assertEqual(list(ph.messages), [])
+
+    def test_transaction(self):
+        with database.transaction():
+            Person.create(name='charlie')
+
+        self.assertEqual(Person.select().count(), 1)
+
+        @database.commit_on_success
+        def rollback():
+            Person.create(name='charlie')
+
+        self.assertRaises(IntegrityError, rollback)
+        self.assertEqual(Person.select().count(), 1)
