@@ -279,7 +279,7 @@ class Database(object):
             return func(self, *args, **kwargs)
         return inner
 
-    def __init__(self, adapter, database, threadlocals=False, autocommit=True, **connect_kwargs):
+    def __init__(self, adapter, database, threadlocals=False, autocommit=True, reconnect=False, **connect_kwargs):
         self.adapter = adapter
         self.init(database, **connect_kwargs)
 
@@ -290,6 +290,7 @@ class Database(object):
 
         self._conn_lock = threading.Lock()
         self.autocommit = autocommit
+        self.reconnect = reconnect
 
     def init(self, database, **connect_kwargs):
         self.deferred = database is None
@@ -319,11 +320,25 @@ class Database(object):
         return self.get_conn().cursor()
 
     def execute(self, sql, params=None):
-        cursor = self.get_cursor()
-        res = cursor.execute(sql, params or ())
-        if self.get_autocommit():
-            self.commit()
-        logger.debug((sql, params))
+
+        cursor = None
+
+        def inner_execute(self, sql, params=None):
+            cursor = self.get_cursor()
+            res = cursor.execute(sql, params or ())
+            if self.get_autocommit():
+                self.commit()
+            logger.debug((sql, params))
+            return cursor
+
+        try:
+            cursor = inner_execute(self, sql, params)
+        except Exception as e:
+            if self.reconnect: # one more try. Can be timeout.
+                self.connect()
+                cursor = inner_execute(self, sql, params)
+            else:
+                raise e
         return cursor
 
     def commit(self):
@@ -1279,7 +1294,6 @@ class BaseQuery(object):
 
     def raw_execute(self, query, params):
         return self.database.execute(query, params)
-
 
 class RawQuery(BaseQuery):
     def __init__(self, model, query, *params):
