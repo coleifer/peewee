@@ -1545,6 +1545,44 @@ class QueryResultWrapperTestCase(ModelTestCase):
         qc2 = len(self.queries())
         self.assertEqual(qc2 - qc1, 0)
 
+    def test_iterator_extended(self):
+        self.create_users(10)
+        for i in range(1, 4):
+            for j in range(i):
+                Blog.create(
+                    title='blog-%s-%s' % (i, j),
+                    user=User.get(User.username == 'u%s' % i))
+
+        qc = len(self.queries())
+
+        qr = (User
+              .select(
+                  User.username,
+                  fn.Count(Blog.pk).alias('ct'))
+              .join(Blog)
+              .where(User.username << ['u1', 'u2', 'u3'])
+              .group_by(User)
+              .order_by(User.id)
+              .naive())
+
+        accum = []
+        for user in qr.iterator():
+            accum.append((user.username, user.ct))
+
+        self.assertEqual(accum, [
+            ('u1', 1),
+            ('u2', 2),
+            ('u3', 3)])
+
+        qr = (User
+              .select(fn.Count(User.id).alias('ct'))
+              .group_by(User.username << ['u1', 'u2', 'u3'])
+              .order_by(fn.Count(User.id).desc()))
+        accum = []
+        for ct, in qr.tuples().iterator():
+            accum.append(ct)
+        self.assertEqual(accum, [7, 3])
+
     def test_fill_cache(self):
         def assertUsernames(qr, n):
             self.assertEqual([u.username for u in qr._result_cache], ['u%d' % i for i in range(1, n+1)])
