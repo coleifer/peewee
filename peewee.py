@@ -435,6 +435,8 @@ class Func(Node):
         return res
 
     def over(self, partition_by=None, order_by=None, window=None):
+        if isinstance(partition_by, Window) and window is None:
+            window = partition_by
         if window is None:
             sql = Window(
                 partition_by=partition_by, order_by=order_by).__sql__()

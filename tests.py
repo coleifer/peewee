@@ -4795,12 +4795,12 @@ if test_db.window_functions:
             ])
 
         def test_named_window(self):
-            window = Window(partition_by=[NullModel.int_field]).alias('w')
+            window = Window(partition_by=[NullModel.int_field])
             query = (NullModel
                      .select(
                          NullModel.int_field,
                          NullModel.float_field,
-                         fn.Avg(NullModel.float_field).over(window=window))
+                         fn.Avg(NullModel.float_field).over(window))
                      .window(window)
                      .order_by(NullModel.id))
 
