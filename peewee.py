@@ -67,6 +67,7 @@ __all__ = [
     'SQL',
     'TextField',
     'TimeField',
+    'Window',
 ]
 
 # Set default logging handler to avoid "No handlers could be found for logger
@@ -433,18 +434,13 @@ class Func(Node):
         res._coerce = self._coerce
         return res
 
-    def over(self, partition_by=None, order_by=None):
-        # Basic window function support.
-        over_clauses = []
-        if partition_by:
-            over_clauses.append(Clause(
-                SQL('PARTITION BY'),
-                CommaClause(*partition_by)))
-        if order_by:
-            over_clauses.append(Clause(
-                SQL('ORDER BY'),
-                CommaClause(*order_by)))
-        return Clause(self, SQL('OVER'), EnclosedClause(Clause(*over_clauses)))
+    def over(self, partition_by=None, order_by=None, window=None):
+        if window is None:
+            sql = Window(
+                partition_by=partition_by, order_by=order_by).__sql__()
+        else:
+            sql = SQL(window._alias)
+        return Clause(self, SQL('OVER'), sql)
 
     def __getattr__(self, attr):
         def dec(*args, **kwargs):
@@ -454,6 +450,28 @@ class Func(Node):
 # fn is a factory for creating `Func` objects and supports a more friendly
 # API.  So instead of `Func("LOWER", param)`, `fn.LOWER(param)`.
 fn = Func(None)
+
+class Window(Node):
+    def __init__(self, partition_by=None, order_by=None):
+        super(Window, self).__init__()
+        self.partition_by = partition_by
+        self.order_by = order_by
+        self._alias = self._alias or 'w'
+
+    def __sql__(self):
+        over_clauses = []
+        if self.partition_by:
+            over_clauses.append(Clause(
+                SQL('PARTITION BY'),
+                CommaClause(*self.partition_by)))
+        if self.order_by:
+            over_clauses.append(Clause(
+                SQL('ORDER BY'),
+                CommaClause(*self.order_by)))
+        return EnclosedClause(Clause(*over_clauses))
+
+    def clone_base(self):
+        return Window(self.partition_by, self.order_by)
 
 class Clause(Node):
     """A SQL clause, one or more Node objects joined by spaces."""
@@ -1272,6 +1290,15 @@ class QueryCompiler(object):
             else:
                 clauses.append(CommaClause(*query._from))
 
+        if query._windows is not None:
+            clauses.append(SQL('WINDOW'))
+            clauses.append(CommaClause(*[
+                Clause(
+                    SQL(window._alias),
+                    SQL('AS'),
+                    window.__sql__())
+                for window in query._windows]))
+
         join_clauses = self.generate_joins(query._joins, model, alias_map)
         if join_clauses:
             clauses.extend(join_clauses)
@@ -1871,6 +1898,7 @@ class SelectQuery(Query):
         self._group_by = None
         self._having = None
         self._order_by = None
+        self._windows = None
         self._limit = None
         self._offset = None
         self._distinct = False
@@ -1898,6 +1926,8 @@ class SelectQuery(Query):
             query._having = self._having.clone()
         if self._order_by is not None:
             query._order_by = list(self._order_by)
+        if self._windows is not None:
+            query._windows = list(self._windows)
         query._limit = self._limit
         query._offset = self._offset
         query._distinct = self._distinct
@@ -1962,6 +1992,10 @@ class SelectQuery(Query):
     @returns_clone
     def order_by(self, *args):
         self._order_by = list(args)
+
+    @returns_clone
+    def window(self, *windows):
+        self._windows = list(windows)
 
     @returns_clone
     def limit(self, lim):

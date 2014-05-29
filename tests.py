@@ -4794,6 +4794,63 @@ if test_db.window_functions:
                 (3, 100.0, 100.0),
             ])
 
+        def test_named_window(self):
+            window = Window(partition_by=[NullModel.int_field]).alias('w')
+            query = (NullModel
+                     .select(
+                         NullModel.int_field,
+                         NullModel.float_field,
+                         fn.Avg(NullModel.float_field).over(window=window))
+                     .window(window)
+                     .order_by(NullModel.id))
+
+            self.assertEqual(list(query.tuples()), [
+                (1, 10.0, 15.0),
+                (1, 20.0, 15.0),
+                (2, 1.0, 2.0),
+                (2, 3.0, 2.0),
+                (3, 100.0, 100.0),
+            ])
+
+            window = Window(
+                partition_by=[NullModel.int_field],
+                order_by=[NullModel.float_field.desc()])
+            query = (NullModel
+                     .select(
+                         NullModel.int_field,
+                         NullModel.float_field,
+                         fn.rank().over(window=window))
+                     .window(window)
+                     .order_by(NullModel.id))
+
+            self.assertEqual(list(query.tuples()), [
+                (1, 10.0, 2),
+                (1, 20.0, 1),
+                (2, 1.0, 2),
+                (2, 3.0, 1),
+                (3, 100.0, 1),
+            ])
+
+        def test_multi_window(self):
+            w1 = Window(partition_by=[NullModel.int_field]).alias('w1')
+            w2 = Window(order_by=[NullModel.int_field]).alias('w2')
+            query = (NullModel
+                     .select(
+                         NullModel.int_field,
+                         NullModel.float_field,
+                         fn.Avg(NullModel.float_field).over(window=w1),
+                         fn.Rank().over(window=w2))
+                     .window(w1, w2)
+                     .order_by(NullModel.id))
+
+            self.assertEqual(list(query.tuples()), [
+                (1, 10.0, 15.0, 1),
+                (1, 20.0, 15.0, 1),
+                (2, 1.0, 2.0, 3),
+                (2, 3.0, 2.0, 3),
+                (3, 100.0, 100.0, 5),
+            ])
+
         def test_ordered_unpartitioned(self):
             query = (NullModel
                      .select(
