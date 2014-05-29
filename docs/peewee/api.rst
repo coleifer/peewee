@@ -972,6 +972,23 @@ Query Types
                 .group_by(User)
                 .order_by(tweet_ct.desc(), User.username))
 
+    .. py:method:: window(*windows)
+
+        :param Window windows: One or more :py:class:`Window` instances.
+
+        Add one or more window definitions to this query.
+
+        .. code-block:: python
+
+            window = Window(partition_by=[fn.date_trunc('day', PageView.timestamp)])
+            query = (PageView
+                     .select(
+                         PageView.url,
+                         PageView.timestamp,
+                         fn.Count(PageView.id).over(window=window))
+                     .window(window)
+                     .order_by(PageView.timestamp))
+
     .. py:method:: limit(num)
 
         :param int num: limit results to ``num`` rows
@@ -1837,12 +1854,13 @@ Misc
     ``fn.Stddev(Employee.salary).alias('sdv')``  ``Stddev(t1."salary") AS sdv``
     ============================================ ============================================
 
-    .. py:method:: over([partition_by=None[, order_by=None]])
+    .. py:method:: over([partition_by=None[, order_by=None[, window=None]]])
 
         Basic support for SQL window functions.
 
         :param list partition_by: List of :py:class:`Node` instances to partition by.
         :param list order_by: List of :py:class:`Node` instances to use for ordering.
+        :param Window window: A :py:class:`Window` instance to use for this aggregate.
 
         Examples:
 
@@ -1876,6 +1894,16 @@ Misc
                                  'day', PageView.timestamp)]))
                      .order_by(PageView.timestamp))
 
+            # Same as above but using a window class.
+            window = Window(partition_by=[fn.date_trunc('day', PageView.timestamp)])
+            query = (PageView
+                     .select(
+                         PageView.url,
+                         PageView.timestamp,
+                         fn.Count(PageView.id).over(window=window))
+                     .window(window)  # Need to include our Window here.
+                     .order_by(PageView.timestamp))
+
 .. py:class:: SQL(sql, *params)
 
     Add fragments of SQL to a peewee query.  For example you might want to reference
@@ -1896,6 +1924,27 @@ Misc
         # Sort the users by number of tweets.
         query = query.order_by(SQL('ct DESC'))
 
+.. py:class:: Window([partition_by=None[, order_by=None]])
+
+    Create a ``WINDOW`` definition.
+
+    :param list partition_by: List of :py:class:`Node` instances to partition by.
+    :param list order_by: List of :py:class:`Node` instances to use for ordering.
+
+    Examples:
+
+    .. code-block:: python
+
+        # Get the list of employees and the average salary for their dept.
+        window = Window(partition_by=[Employee.department]).alias('dept_w')
+        query = (Employee
+                 .select(
+                     Employee.name,
+                     Employee.department,
+                     Employee.salary,
+                     fn.Avg(Employee.salary).over(window))
+                 .window(window)
+                 .order_by(Employee.name))
 
 .. py:class:: Proxy()
 
