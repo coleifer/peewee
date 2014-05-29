@@ -511,6 +511,25 @@ class SelectTestCase(BasePeeweeTestCase):
         sq = SelectQuery(Package, Package, fn.Count(PackageItem.id)).join(PackageItem)
         self.assertSelect(sq, 'package."id", package."barcode", Count(packageitem."id")', [])
 
+    def test_select_distinct(self):
+        sq = SelectQuery(User).distinct()
+        self.assertEqual(
+            compiler.generate_select(sq),
+            ('SELECT DISTINCT users."id", users."username" '
+             'FROM "users" AS users', []))
+
+        sq = sq.distinct(False)
+        self.assertEqual(
+            compiler.generate_select(sq),
+            ('SELECT users."id", users."username" FROM "users" AS users', []))
+
+        sq = SelectQuery(User).distinct([User.username])
+        self.assertEqual(
+            compiler.generate_select(sq),
+            ('SELECT DISTINCT ON (users."username") users."id", '
+             'users."username" '
+             'FROM "users" AS users', []))
+
     def test_reselect(self):
         sq = SelectQuery(User, User.username)
         self.assertSelect(sq, 'users."username"', [])
