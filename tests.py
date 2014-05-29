@@ -4857,3 +4857,44 @@ if test_db.window_functions:
 
 elif TEST_VERBOSITY > 0:
     print_('Skipping "window function" tests')
+
+if test_db.distinct_on:
+    class DistinctOnTestCase(ModelTestCase):
+        requires = [User, Blog]
+
+        def test_distinct_on(self):
+            for i in range(1, 4):
+                u = User.create(username='u%s' % i)
+                for j in range(i):
+                    Blog.create(user=u, title='b-%s-%s' % (i, j))
+
+            query = (Blog
+                     .select(User.username, Blog.title)
+                     .join(User)
+                     .order_by(User.username, Blog.title)
+                     .distinct([User.username])
+                     .tuples())
+            self.assertEqual(list(query), [
+                ('u1', 'b-1-0'),
+                ('u2', 'b-2-0'),
+                ('u3', 'b-3-0')])
+
+            query = (Blog
+                     .select(
+                         fn.Distinct(User.username),
+                         User.username,
+                         Blog.title)
+                     .join(User)
+                     .order_by(Blog.title)
+                     .tuples())
+            self.assertEqual(list(query), [
+                ('u1', 'u1', 'b-1-0'),
+                ('u2', 'u2', 'b-2-0'),
+                ('u2', 'u2', 'b-2-1'),
+                ('u3', 'u3', 'b-3-0'),
+                ('u3', 'u3', 'b-3-1'),
+                ('u3', 'u3', 'b-3-2'),
+            ])
+
+elif TEST_VERBOSITY > 0:
+    print_('Skipping "distinct on" tests')

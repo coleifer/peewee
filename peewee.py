@@ -1256,11 +1256,17 @@ class QueryCompiler(object):
         if isinstance(query, CompoundSelect):
             clauses = [query]
         else:
-            stmt = 'SELECT DISTINCT' if query._distinct else 'SELECT'
+            if not query._distinct:
+                clauses = [SQL('SELECT')]
+            else:
+                clauses = [SQL('SELECT DISTINCT')]
+                if query._distinct not in (True, False):
+                    clauses += [SQL('ON'), EnclosedClause(*query._distinct)]
+
             select_clause = Clause(*query._select)
             select_clause.glue = ', '
 
-            clauses = [SQL(stmt), select_clause, SQL('FROM')]
+            clauses.extend((select_clause, SQL('FROM')))
             if query._from is None:
                 clauses.append(model._as_entity().alias(alias_map[model]))
             else:
@@ -2238,6 +2244,7 @@ class Database(object):
     commit_select = False
     compiler_class = QueryCompiler
     compound_operations = ['UNION', 'INTERSECT', 'EXCEPT']
+    distinct_on = False
     drop_cascade = True
     field_overrides = {}
     foreign_keys = True
@@ -2497,6 +2504,7 @@ class SqliteDatabase(Database):
 
 class PostgresqlDatabase(Database):
     commit_select = True
+    distinct_on = True
     field_overrides = {
         'blob': 'BYTEA',
         'bool': 'BOOLEAN',
