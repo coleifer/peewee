@@ -994,12 +994,20 @@ Query Types
 
             User.select().order_by(User.username).paginate(3, 20)  # get users 41-60
 
-    .. py:method:: distinct()
+    .. py:method:: distinct([is_distinct=True])
 
+        :param is_distinct: See notes.
         :rtype: :py:class:`SelectQuery`
 
-        indicates that this query should only return distinct rows.  results in a
+        Indicates that this query should only return distinct rows. Results in a
         ``SELECT DISTINCT`` query.
+
+        .. note::
+            The value for ``is_distinct`` should either be a boolean, in which
+            case the query will (or won't) be `DISTINCT`.
+
+            You can specify a list of one or more expressions to generate a
+            ``DISTINCT ON`` query, e.g. ``.distinct([Model.col1, Model.col2])``.
 
     .. py:method:: for_update([for_update=True[, nowait=False]])
 
