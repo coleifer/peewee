@@ -116,7 +116,10 @@ else:
     raise RuntimeError('Unsupported python version.')
 
 # By default, peewee supports Sqlite, MySQL and Postgresql.
-import sqlite3
+try:
+    import sqlite3
+except ImportError:
+    sqlite3 = None
 try:
     import psycopg2
     from psycopg2 import extensions as pg_extensions
@@ -130,9 +133,10 @@ except ImportError:
     except ImportError:
         mysql = None
 
-sqlite3.register_adapter(decimal.Decimal, str)
-sqlite3.register_adapter(datetime.date, str)
-sqlite3.register_adapter(datetime.time, str)
+if sqlite3 is not None:
+    sqlite3.register_adapter(decimal.Decimal, str)
+    sqlite3.register_adapter(datetime.date, str)
+    sqlite3.register_adapter(datetime.time, str)
 
 DATETIME_PARTS = ['year', 'month', 'day', 'hour', 'minute', 'second']
 DATETIME_LOOKUPS = set(DATETIME_PARTS)
@@ -2502,7 +2506,8 @@ class Database(object):
 class SqliteDatabase(Database):
     drop_cascade = False
     foreign_keys = False
-    insert_many = sqlite3.sqlite_version_info >= (3, 7, 11, 0)
+    if sqlite3 is not None:
+        insert_many = sqlite3.sqlite_version_info >= (3, 7, 11, 0)
     limit_max = -1
     op_overrides = {
         OP_LIKE: 'GLOB',
@@ -2811,8 +2816,6 @@ class ModelAlias(object):
 
 class DoesNotExist(Exception): pass
 
-default_database = SqliteDatabase('peewee.db')
-
 class ModelOptions(object):
     def __init__(self, cls, database=None, db_table=None, indexes=None,
                  order_by=None, primary_key=None, table_alias=None,
@@ -2823,7 +2826,7 @@ class ModelOptions(object):
         self.columns = {}
         self.defaults = {}
 
-        self.database = database or default_database
+        self.database = database
         self.db_table = db_table
         self.indexes = list(indexes or [])
         self.order_by = order_by
