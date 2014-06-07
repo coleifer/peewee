@@ -4001,6 +4001,19 @@ class CompoundSelectTestCase(ModelTestCase):
             (OrderedModel, UniqueModel): all_letters,
         })
 
+    @requires_op('UNION')
+    def test_union_count(self):
+        a = User.select().where(User.username == 'a')
+        c_and_d = User.select().where(User.username << ['c', 'd'])
+        self.assertEqual(a.count(), 1)
+        self.assertEqual(c_and_d.count(), 2)
+
+        union = a | c_and_d
+        self.assertEqual(union.wrapped_count(), 3)
+
+        overlapping = User.select() | c_and_d
+        self.assertEqual(overlapping.wrapped_count(), 4)
+
     @requires_op('INTERSECT')
     def test_intersect(self):
         self.assertPermutations(operator.and_, {
