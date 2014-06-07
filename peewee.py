@@ -2816,6 +2816,9 @@ class ModelAlias(object):
 
 class DoesNotExist(Exception): pass
 
+if sqlite3 is not None:
+    default_database = SqliteDatabase('peewee.db')
+
 class ModelOptions(object):
     def __init__(self, cls, database=None, db_table=None, indexes=None,
                  order_by=None, primary_key=None, table_alias=None,
@@ -2826,7 +2829,10 @@ class ModelOptions(object):
         self.columns = {}
         self.defaults = {}
 
-        self.database = database
+        if sqlite3 is not None:
+            self.database = database or default_database
+        else:
+            self.database = database
         self.db_table = db_table
         self.indexes = list(indexes or [])
         self.order_by = order_by
