@@ -138,16 +138,24 @@ project.
 Google Cloud SQL
 ^^^^^^^^^^^^^^^^
 
-`Code shared on a GitHub issue <https://github.com/coleifer/peewee/issues/183>`_:
+Google recommends using MySQLdb whenever possible over their rdms driver. See the
+`Using Google Cloud SQL with App Engine <https://developers.google.com/appengine/docs/python/cloud-sql/>`_
+documentation page. In order to get peewee to work in development using a local MySQL
+server and once deployed to production use the code below.
 
 .. code-block:: python
 
-    from google.appengine.api import rdbms
-    from peewee import *
+    if (os.getenv('SERVER_SOFTWARE') and
+            os.getenv('SERVER_SOFTWARE').startswith('Google App Engine/')):
+        db = MySQLDatabase('<db_name>', unix_socket='/cloudsql/<instance_name>', user='root')
+    else:
+        db = MySQLDatabase('<db_name>', user='user', passwd='password')
 
-    class AppEngineDatabase(MySQLDatabase):
-        def _connect(self, database, **kwargs):
-            if 'instance' not in kwargs:
-                raise ImproperlyConfigured(
-                    'Missing "instance" keyword to connect to database')
-            return rdbms.connect(database=database, **kwargs)
+You will also want to add MySQLdb to the list of libraries in your app.yaml
+file and install this library locally if you do not have it.
+
+.. code-block:: yaml
+
+    libraries:
+    - name: MySQLdb
+      version: "latest"
