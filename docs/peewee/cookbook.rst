@@ -960,7 +960,7 @@ up into chunks:
     # Insert rows 1000 at a time.
     with db.transaction():
         for idx in range(0, len(data_source), 1000):
-            Model.insert_many(data_source[i:i+1000]).execute()
+            Model.insert_many(data_source[idx:idx+1000]).execute()
 
 
 Manually specifying primary keys
