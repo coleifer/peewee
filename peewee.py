@@ -2057,7 +2057,7 @@ class SelectQuery(Query):
 
     def _aggregate(self, aggregation=None):
         if aggregation is None:
-            aggregation = fn.Count(self.model_class._meta.primary_key)
+            aggregation = fn.Count(SQL('*'))
         query = self.order_by()
         query._select = [aggregation]
         return query
@@ -2066,10 +2066,7 @@ class SelectQuery(Query):
         return self._aggregate(aggregation).scalar(convert=convert)
 
     def count(self):
-        has_composite_pk = isinstance(
-            self.model_class._meta.primary_key,
-            CompositeKey)
-        if self._distinct or self._group_by or has_composite_pk:
+        if self._distinct or self._group_by:
             return self.wrapped_count()
 
         # defaults to a count() of the primary key
