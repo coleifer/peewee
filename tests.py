@@ -3145,30 +3145,26 @@ class CompositeKeyTestCase(ModelTestCase):
 class ManyToManyTestCase(ModelTestCase):
     requires = [User, Category, UserCategory]
 
+    def setUp(self):
+        super(ManyToManyTestCase, self).setUp()
+        users = ['u1', 'u2', 'u3']
+        categories = ['c1', 'c2', 'c3', 'c12', 'c23']
+        user_to_cat = {
+            'u1': ['c1', 'c12'],
+            'u2': ['c2', 'c12', 'c23'],
+        }
+        for u in users:
+            User.create(username=u)
+        for c in categories:
+            Category.create(name=c)
+        for user, categories in user_to_cat.items():
+            user = User.get(User.username == user)
+            for category in categories:
+                UserCategory.create(
+                    user=user,
+                    category=Category.get(Category.name == category))
+
     def test_m2m(self):
-        u1 = User.create(username='u1')
-        u2 = User.create(username='u2')
-        u3 = User.create(username='u3')
-
-        c1 = Category.create(name='c1')
-        c2 = Category.create(name='c2')
-        c3 = Category.create(name='c3')
-
-        # extras
-        c12 = Category.create(name='c12')
-        c23 = Category.create(name='c23')
-
-        umap = (
-            (u1, c1),
-            (u2, c2),
-            (u1, c12),
-            (u2, c12),
-            (u2, c23),
-        )
-
-        for u, c in umap:
-            UserCategory.create(user=u, category=c)
-
         def aU(q, exp):
             self.assertEqual([u.username for u in q.order_by(User.username)], exp)
         def aC(q, exp):
@@ -3198,6 +3194,17 @@ class ManyToManyTestCase(ModelTestCase):
             Category.name << ['c1', 'c2', 'c3']
         )
         aC(cats, ['c1', 'c2', 'c3'])
+
+    def test_many_to_many_prefetch(self):
+        categories = Category.select()
+        users = User.select()
+        # Unfortunately this is not working.
+        self.assertRaises(
+            AttributeError,
+            prefetch,
+            categories,
+            UserCategory,
+            users)
 
 
 class FieldTypeTestCase(ModelTestCase):
@@ -4987,3 +4994,7 @@ if test_db.distinct_on:
 
 elif TEST_VERBOSITY > 0:
     print_('Skipping "distinct on" tests')
+
+
+if __name__ == '__main__':
+    unittest.main(argv=sys.argv)
