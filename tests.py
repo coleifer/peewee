@@ -3121,6 +3121,7 @@ class CompositeKeyTestCase(ModelTestCase):
             CKM.create(f1=f1, f2=f2, f3=f3)
 
         self.assertEqual(CKM.select().wrapped_count(), 4)
+        self.assertEqual(CKM.select().count(), 4)
         self.assertTrue(CKM.select().where(
             (CKM.f1 == 'a') &
             (CKM.f2 == 1)).exists())

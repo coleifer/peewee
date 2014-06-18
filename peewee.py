@@ -2066,7 +2066,10 @@ class SelectQuery(Query):
         return self._aggregate(aggregation).scalar(convert=convert)
 
     def count(self):
-        if self._distinct or self._group_by:
+        has_composite_pk = isinstance(
+            self.model_class._meta.primary_key,
+            CompositeKey)
+        if self._distinct or self._group_by or has_composite_pk:
             return self.wrapped_count()
 
         # defaults to a count() of the primary key
