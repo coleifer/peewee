@@ -2057,7 +2057,7 @@ class SelectQuery(Query):
 
     def _aggregate(self, aggregation=None):
         if aggregation is None:
-            aggregation = fn.Count(self.model_class._meta.primary_key)
+            aggregation = fn.Count(SQL('*')) # self.model_class._meta.primary_key)
         query = self.order_by()
         query._select = [aggregation]
         return query

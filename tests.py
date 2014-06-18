@@ -1328,7 +1328,7 @@ class SugarTestCase(BasePeeweeTestCase):
 
     def test_aggregate(self):
         sq = User.select().where(User.id < 10)._aggregate()
-        self.assertSelect(sq, 'Count(users."id")', [])
+        self.assertSelect(sq, 'Count(*)', [])
         self.assertWhere(sq, '(users."id" < ?)', [10])
 
         sq = User.select()._aggregate(fn.Sum(User.id).alias('baz'))
