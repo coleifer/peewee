@@ -3229,7 +3229,13 @@ def prefetch_add_subquery(sq, subqueries):
             raise AttributeError('Error: unable to find foreign key for '
                                  'query: %s' % subquery)
         inner_query = last_query.select(fkf.to_field)
-        fixed_queries.append((subquery.where(fkf << inner_query), fkf))
+        if inner_query.limit and isinstance(inner_query.model_class._meta.database, MySQLDatabase):
+            query_results = []
+            for inner_query_result in inner_query:
+                query_results.append(getattr(inner_query_result, fkf.to_field.name))
+            fixed_queries.append((subquery.where(fkf << query_results), fkf))
+        else:
+            fixed_queries.append((subquery.where(fkf << inner_query), fkf))
 
     return fixed_queries
 
