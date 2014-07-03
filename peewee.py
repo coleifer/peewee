@@ -869,6 +869,20 @@ class ForeignKeyField(IntegerField):
         return self.to_field.db_value(value)
 
 
+class CompositeKeyIdDescriptor(object):
+    def __init__(self, field):
+        self.field = field
+
+    def __get__(self, instance, instance_type=None):
+        if instance is not None:
+            return [getattr(instance, field_name + ("_id" if isinstance(instance._meta.fields.get(field_name, None), ForeignKeyField) else ""))
+                    for field_name in self.field.field_names]
+        return self.field
+
+    def __set__(self, instance, value):
+        pass
+
+
 class CompositeKey(object):
     """A primary key composed of multiple columns."""
     sequence = None
@@ -879,6 +893,7 @@ class CompositeKey(object):
     def add_to_class(self, model_class, name):
         self.name = name
         setattr(model_class, name, self)
+        setattr(model_class, name + "_id", CompositeKeyIdDescriptor(self))
 
     def __get__(self, instance, instance_type=None):
         if instance is not None:
@@ -2796,7 +2811,7 @@ class Model(with_metaclass(BaseModel)):
 
     def get_id(self):
         field_name = self._meta.primary_key.name
-        if isinstance(self._meta.fields.get(field_name, None), ForeignKeyField):
+        if isinstance(self._meta.fields.get(field_name, None), ForeignKeyField) or field_name == "_composite_key":
             field_name += "_id"
         return getattr(self, field_name)
 
