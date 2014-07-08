@@ -5,6 +5,21 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.2.5
+
+This is a small release and contains a handful of fixes.
+
+### Changes in 2.2.5
+
+* Added a `Window` object for creating reusable window definitions.
+* Added support for `DISTINCT ON (...)`.
+* Added a BerkeleyDB-backed sqlite `Database` and build script.
+* Fixed how the `UUIDField` handles `None` values (thanks @alexlatchford).
+* Fixed various things in the example app.
+* Added 3.4 to the travis build (thanks @frewsxcv).
+
+[View commits](https://github.com/coleifer/peewee/compare/2.2.4...2.2.5)
+
 ## 2.2.4
 
 This release contains a complete rewrite of `pwiz` as well as some improvements to the SQLite extension, including support for the BM25 ranking algorithm for full-text searches. I also merged support for sqlcipher, an encrypted SQLite database with many thanks to @thedod!
