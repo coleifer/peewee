@@ -888,6 +888,7 @@ class RelationDescriptor(FieldDescriptor):
             instance._data[self.att_name] = value
             if orig_value != value and self.att_name in instance._obj_cache:
                 del instance._obj_cache[self.att_name]
+        instance._dirty.add(self.att_name)
 
 class ReverseRelationDescriptor(object):
     """Back-reference to expose related objects as a `SelectQuery`."""

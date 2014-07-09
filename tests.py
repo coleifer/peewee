@@ -2345,6 +2345,12 @@ class ModelAPITestCase(ModelTestCase):
         u.save()
         self.assertFalse(u.is_dirty())
 
+        b = Blog.create(user=u, title='b1')
+        self.assertFalse(b.is_dirty())
+
+        b.user = u
+        self.assertTrue(b.is_dirty())
+        self.assertEqual(b.dirty_fields, [Blog.user])
 
     def test_save_only(self):
         u = User.create(username='u')
