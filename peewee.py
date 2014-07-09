@@ -282,10 +282,18 @@ class Proxy(object):
             raise AttributeError('Cannot set attribute on proxy.')
         return super(Proxy, self).__setattr__(attr, value)
 
+class _CDescriptor(object):
+    def __get__(self, instance, instance_type=None):
+        if instance is not None:
+            return Entity(instance._alias)
+        return self
+
 # Classes representing the query tree.
 
 class Node(object):
     """Base-class for any part of a query which shall be composable."""
+    c = _CDescriptor()
+
     def __init__(self):
         self._negated = False
         self._alias = None
@@ -515,7 +523,7 @@ class Entity(Node):
         return Entity(*self.path)
 
     def __getattr__(self, attr):
-        return Entity(*self.path + (attr,))
+        return Entity(*filter(None, self.path + (attr,)))
 
 class Check(SQL):
     """Check constraint, usage: `Check('price > 10')`."""
@@ -1024,6 +1032,14 @@ class CompositeKey(object):
         expressions = [(self.model_class._meta.fields[field] == value)
                        for field, value in zip(self.field_names, other)]
         return reduce(operator.and_, expressions)
+
+
+class QueryContext(object):
+    """
+    Provide a "scope" for a query.
+    """
+    def __init__(self):
+        self._alias_map = {}
 
 
 class QueryCompiler(object):
