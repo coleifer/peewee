@@ -444,8 +444,9 @@ class SqliteMigrator(SchemaMigrator):
                     new_column_names.append(column_name)
             else:
                 new_column_defs.append(column_def)
-                new_column_names.append(column_name)
-                original_column_names.append(column_name)
+                if not column_name.lower().startswith(('foreign', 'primary')):
+                    new_column_names.append(column_name)
+                    original_column_names.append(column_name)
 
         # Update the name of the new CREATE TABLE query.
         temp_table = table + '__tmp__'

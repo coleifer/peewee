@@ -3,6 +3,8 @@ import os
 import unittest
 
 from peewee import *
+from peewee import create_model_tables
+from peewee import drop_model_tables
 from peewee import print_
 from playhouse.migrate import *
 
@@ -18,6 +20,7 @@ except ImportError:
         import pymysql as mysql
     except ImportError:
         mysql = None
+mysql = None
 
 sqlite_db = SqliteDatabase(':memory:')
 
@@ -31,9 +34,18 @@ class Person(Model):
     last_name = CharField()
     dob = DateField(null=True)
 
+class User(Model):
+    id = CharField(primary_key=True, max_length=20)
+
+class Page(Model):
+    name = TextField(unique=True, null=True)
+    user = ForeignKeyField(User, null=True, related_name='pages')
+
 MODELS = [
     Person,
     Tag,
+    User,
+    Page,
 ]
 
 class BaseMigrationTestCase(object):
@@ -52,10 +64,14 @@ class BaseMigrationTestCase(object):
     def setUp(self):
         for model_class in MODELS:
             model_class._meta.database = self.database
-            model_class.drop_table(True)
-            model_class.create_table()
 
+        drop_model_tables(MODELS, fail_silently=True)
+        create_model_tables(MODELS)
         self.migrator = self.migrator_class(self.database)
+
+        if 'newpages' in User._meta.reverse_rel:
+            del User._meta.reverse_rel['newpages']
+            delattr(User, 'newpages')
 
     def test_add_column(self):
         # Create some fields with a variety of NULL / default values.
@@ -154,6 +170,35 @@ class BaseMigrationTestCase(object):
                      NewPerson.dob)
                  .order_by(NewPerson.first))
         self.assertEqual(list(query.tuples()), self._person_data)
+
+    def test_rename_gh380(self):
+        u1 = User.create(id='charlie')
+        u2 = User.create(id='huey')
+        p1 = Page.create(name='p1-1', user=u1)
+        p2 = Page.create(name='p2-1', user=u1)
+        p3 = Page.create(name='p3-2', user=u2)
+
+        migrate(self.migrator.rename_column('page', 'name', 'title'))
+
+        column_names = self.get_column_names('page')
+        self.assertEqual(column_names, set(['id', 'title', 'user_id']))
+
+        class NewPage(Model):
+            title = TextField(unique=True, null=True)
+            user = ForeignKeyField(User, null=True, related_name='newpages')
+
+            class Meta:
+                database = self.database
+                db_table = Page._meta.db_table
+
+        query = (NewPage
+                 .select(
+                     NewPage.title,
+                     NewPage.user)
+                 .order_by(NewPage.title))
+        self.assertEqual(
+            [(np.title, np.user.id) for np in query],
+            [('p1-1', 'charlie'), ('p2-1', 'charlie'), ('p3-2', 'huey')])
 
     def test_add_not_null(self):
         self._create_people()
