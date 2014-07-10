@@ -16,6 +16,7 @@ except ImportError:
 from functools import wraps
 
 from peewee import *
+from peewee import AliasMap
 from peewee import DeleteQuery
 from peewee import InsertQuery
 from peewee import logger
@@ -104,23 +105,12 @@ else:
 # TEST-ONLY QUERY COMPILER USED TO CREATE "predictable" QUERIES
 #
 
+class TestAliasMap(AliasMap):
+    def add(self, obj, alias=None):
+        self._alias_map[obj] = obj._meta.db_table
+
 class TestQueryCompiler(QueryCompiler):
-    def _max_alias(self, alias_map):
-        return 't0'
-
-    def _ensure_alias_set(self, model, alias_map):
-        if model not in alias_map:
-            alias_map[model] = model._meta.db_table
-
-    def calculate_alias_map(self, query, start=1):
-        alias_map = {query.model_class: query.model_class._meta.db_table}
-        for model, joins in query._joins.items():
-            if model not in alias_map:
-                alias_map[model] = model._meta.db_table
-            for join in joins:
-                if join.dest not in alias_map:
-                    alias_map[join.dest] = join.dest._meta.db_table
-        return alias_map
+    alias_map_class = TestAliasMap
 
 class TestDatabase(database_class):
     compiler_class = TestQueryCompiler
