@@ -4576,7 +4576,7 @@ if test_db.for_update_nowait:
             def try_lock():
                 user2 = (User2
                          .select()
-                         .where(User.username == 'u1')
+                         .where(User2.username == 'u1')
                          .for_update(nowait=True)
                          .execute())
             self.assertRaises(OperationalError, try_lock)
