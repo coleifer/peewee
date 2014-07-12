@@ -2726,6 +2726,18 @@ class FromMultiTableTestCase(ModelTestCase):
         query = outer.order_by(inner.c.name.desc())
         self.assertEqual([u[0] for u in query.tuples()], ['u1', 'u0'])
 
+    def test_subselect_with_join(self):
+        inner = User.select(User.id, User.username).alias('q1')
+        outer = (Blog
+                 .select(inner.c.id, inner.c.username)
+                 .from_(inner)
+                 .join(Comment, on=(inner.c.id == Comment.id)))
+        sql, params = compiler.generate_select(outer)
+        self.assertEqual(sql, (
+            'SELECT "q1"."id", "q1"."username" FROM ('
+            'SELECT users."id", users."username" FROM "users" AS users) AS q1 '
+            'INNER JOIN "comment" AS comment ON ("q1"."id" = comment."id")'))
+
 
 class PrefetchTestCase(ModelTestCase):
     requires = [User, Blog, Comment, Parent, Child, Orphan, ChildPet, OrphanPet, Category]
