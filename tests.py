@@ -2713,6 +2713,19 @@ class FromMultiTableTestCase(ModelTestCase):
         self.assertEqual(
             [u.username for u in outer.order_by(User.username)], ['u0', 'u1'])
 
+    def test_subselect_with_column(self):
+        inner = User.select(User.username.alias('name')).alias('t1')
+        outer = (User
+                 .select(inner.c.name)
+                 .from_(inner))
+        sql, params = compiler.generate_select(outer)
+        self.assertEqual(sql, (
+            'SELECT "t1"."name" FROM '
+            '(SELECT users."username" AS name FROM "users" AS users) AS t1'))
+
+        query = outer.order_by(inner.c.name.desc())
+        self.assertEqual([u[0] for u in query.tuples()], ['u1', 'u0'])
+
 
 class PrefetchTestCase(ModelTestCase):
     requires = [User, Blog, Comment, Parent, Child, Orphan, ChildPet, OrphanPet, Category]
