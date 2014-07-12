@@ -1144,7 +1144,11 @@ class QueryCompiler(object):
         self.interpolation = interpolation
         self._field_map = merge_dict(self.field_map, field_overrides or {})
         self._op_map = merge_dict(self.op_map, op_overrides or {})
-        self._parse_map = {
+        self._parse_map = self.get_parse_map()
+        self._unknown_types = set(['param'])
+
+    def get_parse_map(self):
+        return {
             'expression': self._parse_expression,
             'param': self._parse_param,
             'func': self._parse_func,
@@ -1155,7 +1159,6 @@ class QueryCompiler(object):
             'select_query': self._parse_select_query,
             'compound_select_query': self._parse_compound_select_query,
         }
-        self._unknown_types = set(['param'])
 
     def quote(self, s):
         return '%s%s%s' % (self.quote_char, s, self.quote_char)
