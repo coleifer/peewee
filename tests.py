@@ -919,7 +919,7 @@ class SelectTestCase(BasePeeweeTestCase):
         # e.g. annotate the number of blogs per user, then annotate the number
         # of users with that number of blogs.
         inner = (Blog
-                 .select(fn.COUNT(Blog.id).alias('blog_ct'))
+                 .select(fn.COUNT(Blog.pk).alias('blog_ct'))
                  .group_by(Blog.user))
         blog_ct = SQL('blog_ct')
         outer = (Blog
@@ -930,7 +930,7 @@ class SelectTestCase(BasePeeweeTestCase):
         self.assertEqual(sql, (
             'SELECT blog_ct, COUNT(blog_ct) AS blog_ct_n '
             'FROM ('
-            'SELECT COUNT("id") AS blog_ct FROM "blog" AS blog '
+            'SELECT COUNT(blog."pk") AS blog_ct FROM "blog" AS blog '
             'GROUP BY blog."user_id") '
             'GROUP BY blog_ct'))
 
@@ -1030,7 +1030,9 @@ class SelectTestCase(BasePeeweeTestCase):
             self.assertEqual(normal_compiler.generate_select(query), expected)
 
     def test_outer_inner_alias(self):
-        expected = 'SELECT t1."id", t1."username", (SELECT Sum(t2."id") FROM "users" AS t2 WHERE (t2."id" = t1."id")) AS xxx FROM "users" AS t1'
+        expected = ('SELECT t1."id", t1."username", '
+                    '(SELECT Sum(t2."id") FROM "users" AS t2 '
+                    'WHERE (t2."id" = t1."id")) AS xxx FROM "users" AS t1')
         UA = User.alias()
         inner = SelectQuery(UA, fn.Sum(UA.id)).where(UA.id == User.id)
         query = User.select(User, inner.alias('xxx'))
@@ -2629,7 +2631,7 @@ class ModelAggregateTestCase(ModelTestCase):
 
     def test_annotate_int(self):
         users = self.create_user_blogs()
-        annotated = User.select().annotate(Blog, fn.Count(Blog.id).alias('ct'))
+        annotated = User.select().annotate(Blog, fn.Count(Blog.pk).alias('ct'))
         for i, user in enumerate(annotated):
             self.assertEqual(user.ct, 2)
             self.assertEqual(user.username, 'u-%d' % i)
