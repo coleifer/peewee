@@ -4202,6 +4202,31 @@ class ModelOptionInheritanceTestCase(BasePeeweeTestCase):
         ])
         self.assertTrue(isinstance(GrandChildModel2._meta.fields['special_field'], TextField))
 
+    def test_order_by_inheritance(self):
+        class Base(TestModel):
+            created = DateTimeField()
+
+            class Meta:
+                order_by = ('-created',)
+
+        class Foo(Base):
+            data = CharField()
+
+        class Bar(Base):
+            val = IntegerField()
+            class Meta:
+                order_by = ('-val',)
+
+        foo_order_by = Foo._meta.order_by[0]
+        self.assertTrue(isinstance(foo_order_by, Field))
+        self.assertTrue(foo_order_by.model_class is Foo)
+        self.assertEqual(foo_order_by.name, 'created')
+
+        bar_order_by = Bar._meta.order_by[0]
+        self.assertTrue(isinstance(bar_order_by, Field))
+        self.assertTrue(bar_order_by.model_class is Bar)
+        self.assertEqual(bar_order_by.name, 'val')
+
 
 class ModelInheritanceTestCase(ModelTestCase):
     requires = [Blog, BlogTwo, User]

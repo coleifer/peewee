@@ -2934,9 +2934,12 @@ class ModelOptions(object):
 
         if self.order_by:
             norm_order_by = []
-            for clause in self.order_by:
-                field = self.fields[clause.lstrip('-')]
-                if clause.startswith('-'):
+            for item in self.order_by:
+                if isinstance(item, Field):
+                    prefix = '-' if item._ordering == 'DESC' else ''
+                    item = prefix + item.name
+                field = self.fields[item.lstrip('-')]
+                if item.startswith('-'):
                     norm_order_by.append(field.desc())
                 else:
                     norm_order_by.append(field.asc())
