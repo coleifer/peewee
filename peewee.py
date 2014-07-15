@@ -1802,15 +1802,21 @@ class Query(Node):
         return dict(
             (mc, list(j)) for mc, j in self._joins.items())
 
-    def _add_query_clauses(self, initial, expressions):
+    def _add_query_clauses(self, initial, expressions, conjunction=None):
         reduced = reduce(operator.and_, expressions)
         if initial is None:
             return reduced
-        return initial & reduced
+        conjunction = conjunction or operator.and_
+        return conjunction(initial, reduced)
 
     @returns_clone
     def where(self, *expressions):
         self._where = self._add_query_clauses(self._where, expressions)
+
+    @returns_clone
+    def orwhere(self, *expressions):
+        self._where = self._add_query_clauses(
+            self._where, expressions, operator.or_)
 
     @returns_clone
     def join(self, model_class, join_type=None, on=None):
