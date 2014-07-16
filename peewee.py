@@ -1250,7 +1250,9 @@ class QueryCompiler(object):
         elif isinstance(node, Model):
             sql = self.interpolation
             if conv and isinstance(conv, ForeignKeyField):
-                params = [getattr(node, conv.to_field.name)]
+                params = [
+                    conv.to_field.db_value(getattr(node, conv.to_field.name))
+                ]
             else:
                 params = [node.get_id()]
         elif isclass(node) and issubclass(node, Model):
