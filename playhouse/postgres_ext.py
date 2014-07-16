@@ -174,7 +174,7 @@ class UUIDField(Field):
         return None if value is None else str(value)
 
     def python_value(self, value):
-        return uuid.UUID(value)
+        return None if value is None else uuid.UUID(value)
 
 
 OP_HKEY = 'key'

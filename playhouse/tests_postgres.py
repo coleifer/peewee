@@ -7,6 +7,8 @@ import uuid
 
 import psycopg2
 
+from peewee import create_model_tables
+from peewee import drop_model_tables
 from peewee import print_
 from playhouse.postgres_ext import *
 
@@ -39,6 +41,14 @@ except:
 class TestingID(BaseModel):
     uniq = UUIDField()
 
+class UUIDData(BaseModel):
+    id = UUIDField(primary_key=True)
+    data = CharField()
+
+class UUIDRelatedModel(BaseModel):
+    data = ForeignKeyField(UUIDData, null=True, related_name='related_models')
+    value = IntegerField(default=0)
+
 class TZModel(BaseModel):
     dt = DateTimeTZField()
 
@@ -55,14 +65,18 @@ class SSCursorModel(Model):
 class NormalModel(BaseModel):
     data = CharField()
 
+MODELS = [
+    Testing,
+    TestingID,
+    UUIDData,
+    UUIDRelatedModel,
+    ArrayModel,
+]
+
 class PostgresExtTestCase(unittest.TestCase):
     def setUp(self):
-        Testing.drop_table(True)
-        Testing.create_table()
-        TestingID.drop_table(True)
-        TestingID.create_table()
-        ArrayModel.drop_table(True)
-        ArrayModel.create_table(True)
+        drop_model_tables(MODELS, fail_silently=True)
+        create_model_tables(MODELS)
         self.t1 = None
         self.t2 = None
 
@@ -76,6 +90,31 @@ class PostgresExtTestCase(unittest.TestCase):
 
         t2 = TestingID.get(TestingID.uniq == uuid_obj)
         self.assertEqual(t1, t2)
+
+    def test_uuid_foreign_keys(self):
+        data_a = UUIDData.create(id=uuid.uuid4(), data='a')
+        data_b = UUIDData.create(id=uuid.uuid4(), data='b')
+
+        rel_a1 = UUIDRelatedModel.create(data=data_a, value=1)
+        rel_a2 = UUIDRelatedModel.create(data=data_a, value=2)
+        rel_none = UUIDRelatedModel.create(data=None, value=3)
+
+        db_a = UUIDData.get(UUIDData.id == data_a.id)
+        self.assertEqual(db_a.id, data_a.id)
+        self.assertEqual(db_a.data, 'a')
+
+        values = [rm.value
+                  for rm in db_a.related_models.order_by(UUIDRelatedModel.id)]
+        self.assertEqual(values, [1, 2])
+
+        rnone = UUIDRelatedModel.get(UUIDRelatedModel.data >> None)
+        self.assertEqual(rnone.value, 3)
+
+        ra = (UUIDRelatedModel
+              .select()
+              .where(UUIDRelatedModel.data == data_a)
+              .order_by(UUIDRelatedModel.value.desc()))
+        self.assertEqual([r.value for r in ra], [2, 1])
 
     def test_tz_field(self):
         TZModel.drop_table(True)
