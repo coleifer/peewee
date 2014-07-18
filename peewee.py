@@ -2612,6 +2612,10 @@ class SqliteDatabase(Database):
         OP_ILIKE: 'LIKE',
     }
 
+    def __init__(self, *args, **kwargs):
+        self._journal_mode = kwargs.pop('journal_mode', None)
+        super(SqliteDatabase, self).__init__(*args, **kwargs)
+
     def _connect(self, database, **kwargs):
         conn = sqlite3.connect(database, **kwargs)
         self._add_conn_hooks(conn)
@@ -2621,6 +2625,8 @@ class SqliteDatabase(Database):
         conn.create_function('date_part', 2, _sqlite_date_part)
         conn.create_function('date_trunc', 2, _sqlite_date_trunc)
         conn.create_function('regexp', 2, _sqlite_regexp)
+        if self._journal_mode:
+            self.execute_sql('PRAGMA journal_mode=%s;' % journal_mode)
 
     def get_indexes_for_table(self, table):
         res = self.execute_sql('PRAGMA index_list(%s);' % self.quote(table))
