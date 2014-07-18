@@ -1447,6 +1447,25 @@ class CompilerTestCase(BasePeeweeTestCase):
             'SELECT a."id" FROM "a" AS a WHERE (a."i" = Foo(?))'))
         self.assertEqual(params, ['test'])
 
+    def test_strip_parentheses(self):
+        tests = (
+            ('x = 1', 'x = 1'),
+            ('(x = 1)', 'x = 1'),
+            ('(((((x = 1)))))', 'x = 1'),
+            ('(((((x = (1))))))', 'x = (1)'),
+            ('(((((x) = 1))))', '(x) = 1'),
+            ('(x = (y = 2))', 'x = (y = 2)'),
+            ('(((x = 1)', '((x = 1'),
+            ('(x = 1)))', 'x = 1))'),
+            ('x = 1))', 'x = 1))'),
+            ('((x = 1', '((x = 1'),
+            ('(((()))', '('),
+            ('((())))', ')'),
+            ('', ''),
+            ('(((())))', ''))
+        for s, expected in tests:
+            self.assertEqual(compiler._clean_extra_parens(s), expected)
+
 
 class ValidationTestCase(BasePeeweeTestCase):
     def test_foreign_key_validation(self):
