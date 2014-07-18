@@ -1640,17 +1640,21 @@ class ExtQueryResultWrapper(QueryResultWrapper):
             column = description[i][0]
             found = False
             if self.column_meta is not None:
-                select_column = self.column_meta[i]
-                if isinstance(select_column, Field):
-                    func = select_column.python_value
-                    column = select_column._alias or select_column.name
-                    found = True
-                elif (isinstance(select_column, Func) and
-                        isinstance(select_column.arguments[0], Field)):
-                    if select_column._coerce:
-                        # Special-case handling aggregations.
-                        func = select_column.arguments[0].python_value
-                    found = True
+                try:
+                    select_column = self.column_meta[i]
+                except IndexError:
+                    pass
+                else:
+                    if isinstance(select_column, Field):
+                        func = select_column.python_value
+                        column = select_column._alias or select_column.name
+                        found = True
+                    elif (isinstance(select_column, Func) and
+                            isinstance(select_column.arguments[0], Field)):
+                        if select_column._coerce:
+                            # Special-case handling aggregations.
+                            func = select_column.arguments[0].python_value
+                        found = True
 
             if not found and column in model._meta.columns:
                 field_obj = model._meta.columns[column]

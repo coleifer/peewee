@@ -2041,6 +2041,18 @@ class ModelQueryTestCase(ModelTestCase):
         users = User.select().paginate(2, 3)
         self.assertEqual([u.username for u in users], ['u3', 'u4', 'u5'])
 
+    def test_select_all(self):
+        self.create_users_blogs(2, 2)
+        all_cols = SQL('*')
+        query = Blog.select(all_cols)
+        blogs = [blog for blog in query.order_by(Blog.pk)]
+        self.assertEqual(
+            [b.title for b in blogs],
+            ['b-0-0', 'b-0-1', 'b-1-0', 'b-1-1'])
+        self.assertEqual(
+            [b.user.username for b in blogs],
+            ['u0', 'u0', 'u1', 'u1'])
+
     def test_select_subquery(self):
         # 10 users, 5 blogs each
         self.create_users_blogs(5, 3)
