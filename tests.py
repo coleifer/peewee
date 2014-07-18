@@ -496,7 +496,7 @@ class SelectTestCase(BasePeeweeTestCase):
         self.assertSelect(sq, 'Lower(Substr(users."username", ?, ?)) AS lu, Count(blog."pk")', [0, 1])
 
         sq = SelectQuery(User, User.username, fn.Count(Blog.select().where(Blog.user == User.id)))
-        self.assertSelect(sq, 'users."username", Count((SELECT blog."pk" FROM "blog" AS blog WHERE (blog."user_id" = users."id")))', [])
+        self.assertSelect(sq, 'users."username", Count(SELECT blog."pk" FROM "blog" AS blog WHERE (blog."user_id" = users."id"))', [])
 
         sq = SelectQuery(Package, Package, fn.Count(PackageItem.id)).join(PackageItem)
         self.assertSelect(sq, 'package."id", package."barcode", Count(packageitem."id")', [])
@@ -1051,6 +1051,29 @@ class SelectTestCase(BasePeeweeTestCase):
         query = User.select(User, inner.alias('xxx'))
         sql, _ = normal_compiler.generate_select(query)
         self.assertEqual(sql, expected)
+
+    def test_parentheses_cleaning(self):
+        query = (User
+                 .select(
+                     User.username,
+                     fn.Count(
+                         Blog
+                         .select(Blog.pk)
+                         .where(Blog.user == User.id)).alias('blog_ct')))
+        sql, params = query.sql()
+        self.assertEqual(sql, (
+            'SELECT t1."username", '
+            'Count('
+            'SELECT t2."pk" FROM "blog" AS t2 '
+            'WHERE (t2."user_id" = t1."id")) AS blog_ct FROM "users" AS t1'))
+
+        query = (User
+                 .select(User.username)
+                 .where(fn.Exists(fn.Exists(User.select(User.id)))))
+        self.assertEqual(query.sql()[0], (
+            'SELECT t1."username" FROM "users" AS t1 '
+            'WHERE Exists(Exists('
+            'SELECT t2."id" FROM "users" AS t2))'))
 
 class UpdateTestCase(BasePeeweeTestCase):
     def test_update(self):
