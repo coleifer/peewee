@@ -2425,6 +2425,20 @@ class ModelAPITestCase(ModelTestCase):
         self.assertEqual(b_db.title, 'b2')
         self.assertEqual(b_db.content, '')
 
+    def test_save_conditional(self):
+        self.assertEqual(User.select().count(), 0)
+
+        u = User(username='u1')
+        self.assertEqual(u.save(), 1)
+        u.username = 'u2'
+        self.assertEqual(u.save(conditions=[User.username=="u1"]), 1)
+        self.assertEqual(u.save(conditions=[User.username=="u1"]), 0)
+
+        self.assertEqual(User.select().count(), 1)
+
+        self.assertEqual(u.delete_instance(), 1)
+        self.assertEqual(u.save(), 0)
+
     def test_zero_id(self):
         if isinstance(test_db, MySQLDatabase):
             # Need to explicitly tell MySQL it's OK to use zero.

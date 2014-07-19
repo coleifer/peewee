@@ -3246,7 +3246,7 @@ class Model(with_metaclass(BaseModel)):
                 new_data[field.name] = field_dict[field.name]
         return new_data
 
-    def save(self, force_insert=False, only=None):
+    def save(self, force_insert=False, only=None, conditions=[]):
         field_dict = dict(self._data)
         pk_field = self._meta.primary_key
         if only:
@@ -3256,7 +3256,7 @@ class Model(with_metaclass(BaseModel)):
                 field_dict.pop(pk_field.name, None)
             else:
                 field_dict = self._prune_fields(field_dict, self.dirty_fields)
-            rows = self.update(**field_dict).where(self.pk_expr()).execute()
+            rows = self.update(**field_dict).where(self.pk_expr(), *conditions).execute()
         else:
             pk = self.get_id()
             pk_from_cursor = self.insert(**field_dict).execute()
