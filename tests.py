@@ -3954,6 +3954,15 @@ class TransactionTestCase(ModelTestCase):
         self.assertEqual(User.select().count(), 1)
         self.assertEqual(Blog.select().count(), 1)
 
+        def do_manual_rollback():
+            with test_db.transaction() as txn:
+                User.create(username='u2')
+                txn.rollback()
+
+        do_manual_rollback()
+        self.assertEqual(User.select().count(), 1)
+        self.assertEqual(Blog.select().count(), 1)
+
     def test_nesting_transactions(self):
         @test_db.commit_on_success
         def outer(should_fail=False):
