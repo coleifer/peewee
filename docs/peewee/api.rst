@@ -317,15 +317,18 @@ Models
 
         :rtype: Boolean whether the table for this model exists in the database
 
-    .. py:method:: save([force_insert=False[, only=None]])
+    .. py:method:: save([force_insert=False[, only=None[, conditions=[]]]])
 
         :param bool force_insert: Whether to force execution of an insert
         :param list only: A list of fields to persist -- when supplied, only the given
             fields will be persisted.
+        :param list conditions: A list of conditions to append to the ``where`` statement
+            when updating existing record.
 
         Save the given instance, creating or updating depending on whether it has a
         primary key.  If ``force_insert=True`` an ``INSERT`` will be issued regardless
-        of whether or not the primary key exists.
+        of whether or not the primary key exists. If extra ``conditions`` are not met,
+        record will not be updated. This is useful to detect write conflicts.
 
         Example showing saving a model instance:
 
