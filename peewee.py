@@ -67,6 +67,7 @@ __all__ = [
     'SQL',
     'TextField',
     'TimeField',
+    'UUIDField',
     'Window',
 ]
 
