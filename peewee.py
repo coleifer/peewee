@@ -787,6 +787,15 @@ class BlobField(Field):
             return binary_construct(value)
         return value
 
+class UUIDField(Field):
+    db_field = 'uuid'
+
+    def db_value(self, value):
+        return None if value is None else str(value)
+
+    def python_value(self, value):
+        return None if value is None else uuid.UUID(value)
+
 def format_date_time(value, formats, post_process=None):
     post_process = post_process or (lambda x: x)
     for fmt in formats:
@@ -2657,6 +2666,7 @@ class PostgresqlDatabase(Database):
         'decimal': 'NUMERIC',
         'double': 'DOUBLE PRECISION',
         'primary_key': 'SERIAL',
+        'uuid': 'UUID',
     }
     for_update = True
     for_update_nowait = True

@@ -10,6 +10,7 @@ import psycopg2
 from peewee import create_model_tables
 from peewee import drop_model_tables
 from peewee import print_
+from peewee import UUIDField
 from playhouse.postgres_ext import *
 
 

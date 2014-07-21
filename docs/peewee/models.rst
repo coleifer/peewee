@@ -350,6 +350,7 @@ Field Type            Sqlite              Postgresql          MySQL
 ``DateField``         date                date                date
 ``TimeField``         time                time                time
 ``BlobField``         blob                bytea               blob
+``UUIDField``         not supported       uuid                not supported
 ===================   =================   =================   =================
 
 Some fields take special parameters...

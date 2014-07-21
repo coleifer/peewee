@@ -125,7 +125,6 @@ currently:
 * :py:class:`ArrayField` field type, for storing arrays.
 * :py:class:`HStoreField` field type, for storing key/value pairs.
 * :py:class:`JSONField` field type, for storing JSON data.
-* :py:class:`UUIDField` field type, for storing UUID objects.
 * :py:class:`DateTimeTZ` field type, a timezone-aware datetime field.
 
 In the future I would like to add support for more of postgresql's features.
@@ -387,7 +386,6 @@ postgres_ext API notes
     * :py:class:`DateTimeTZField`
     * :py:class:`JSONField`
     * :py:class:`HStoreField`
-    * :py:class:`UUIDField`
 
     :param str database: Name of database to connect to.
     :param bool server_side_cursors: Whether ``SELECT`` queries should utilize
@@ -640,10 +638,6 @@ postgres_ext API notes
         APIResponse.select().where(
             APIResponse.response['key1']['nested-key'] == 'some-value')
 
-
-.. py:class:: UUIDField(*args, **kwargs)
-
-    A field for storing and retrieving ``UUID`` objects.
 
 .. _sqlite_ext:
 

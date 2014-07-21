@@ -564,6 +564,14 @@ Fields
 
         Same as :py:attr:`~DateTimeField.year`, except extract second..
 
+.. py:class:: BlobField
+
+    Store arbitrary binary data.
+
+.. py:class:: UUIDField
+
+    Store ``UUID`` values. Currently only supported by :py:class:`PostgresqlDatabase`.
+
 .. py:class:: DateField
 
     Stores: python ``datetime.date`` instances

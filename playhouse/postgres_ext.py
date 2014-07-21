@@ -2,7 +2,6 @@
 Collection of postgres-specific extensions, currently including:
 
 * Support for hstore, a key/value type storage
-* Support for UUID field
 """
 import uuid
 
@@ -13,6 +12,7 @@ from peewee import Node
 from peewee import Param
 from peewee import QueryCompiler
 from peewee import SelectQuery
+from peewee import UUIDField  # For backwards-compatibility.
 
 from psycopg2 import extensions
 from psycopg2.extensions import adapt
@@ -167,16 +167,6 @@ class JSONField(Field):
         return JsonLookup(self, [value])
 
 
-class UUIDField(Field):
-    db_field = 'uuid'
-
-    def db_value(self, value):
-        return None if value is None else str(value)
-
-    def python_value(self, value):
-        return None if value is None else uuid.UUID(value)
-
-
 OP_HKEY = 'key'
 OP_HUPDATE = 'H@>'
 OP_HCONTAINS_DICT = 'H?&'
@@ -284,7 +274,6 @@ PostgresqlExtDatabase.register_fields({
     'datetime_tz': 'timestamp with time zone',
     'hash': 'hstore',
     'json': 'json',
-    'uuid': 'uuid',
 })
 PostgresqlExtDatabase.register_ops({
     OP_HCONTAINS_DICT: '@>',
