@@ -10,6 +10,7 @@ from peewee import Expression
 from peewee import logger
 from peewee import Node
 from peewee import Param
+from peewee import Func
 from peewee import QueryCompiler
 from peewee import SelectQuery
 from peewee import UUIDField  # For backwards-compatibility.
@@ -166,6 +167,41 @@ class JSONField(Field):
     def __getitem__(self, value):
         return JsonLookup(self, [value])
 
+class PgCryptoFunc(Func):
+    pass
+
+class EncryptedField(TextField):
+    db_field = 'bytea'
+
+    pgcrypto_key = None
+    pgcrypto_iv = None
+    pgcrypto_alg = None
+
+    def __init__(self, pgcrypto_key=None, pgcrypto_iv=None, pgcrypto_alg='aes',
+                 *args, **kwargs):
+        self.pgcrypto_key = pgcrypto_key
+        self.pgcrypto_iv = pgcrypto_iv
+        self.pgcrypto_alg = pgcrypto_alg
+        super(EncryptedField, self).__init__(*args, **kwargs)
+
+    def coerce(self, value):
+        return value
+
+    def db_value(self, value):
+        return PgCryptoFunc('encrypt_iv', value, self.pgcrypto_key,
+                            self.pgcrypto_iv, self.pgcrypto_alg)
+
+    def python_value(self, value):
+        return PgCryptoFunc('decrypt_iv', value, self.pgcrypto_key,
+                           self.pgcrypto_iv, self.pgcrypto_alg)
+
+def adapt_pgcrypto_func(pgcrypto_func):
+    args = [pgcrypto_func.name]
+    args.extend(pgcrypto_func.arguments)
+    func_call = "{0}('{1}', '{2}', '{3}', '{4}')".format(*args)
+    return AsIs(func_call)
+register_adapter(PgCryptoFunc, adapt_pgcrypto_func)
+
 
 OP_HKEY = 'key'
 OP_HUPDATE = 'H@>'
@@ -274,6 +310,7 @@ PostgresqlExtDatabase.register_fields({
     'datetime_tz': 'timestamp with time zone',
     'hash': 'hstore',
     'json': 'json',
+    'bytea': 'bytea'
 })
 PostgresqlExtDatabase.register_ops({
     OP_HCONTAINS_DICT: '@>',

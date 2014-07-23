@@ -66,12 +66,16 @@ class SSCursorModel(Model):
 class NormalModel(BaseModel):
     data = CharField()
 
+class EncryptedModel(BaseModel):
+    data = EncryptedField(pgcrypto_key='_key', pgcrypto_iv='_iv')
+
 MODELS = [
     Testing,
     TestingID,
     UUIDData,
     UUIDRelatedModel,
     ArrayModel,
+    EncryptedModel
 ]
 
 class PostgresExtTestCase(unittest.TestCase):
@@ -80,6 +84,44 @@ class PostgresExtTestCase(unittest.TestCase):
         create_model_tables(MODELS)
         self.t1 = None
         self.t2 = None
+
+    def test_encrypted_model(self):
+        value = 'TEST-DATA'
+        enc_mod = EncryptedModel.create(data=value)
+
+        sql = 'select data from {0} where id={1}'.format(
+            enc_mod._meta.db_table, enc_mod.id)
+        cur = test_db.get_cursor()
+        cur.execute(sql)
+        enc_data = cur.fetchone()
+
+        sql = "select encrypt_iv('{0}', '{1}', '{2}', '{3}')".format(
+            value, EncryptedModel.data.pgcrypto_key,
+            EncryptedModel.data.pgcrypto_iv,
+            EncryptedModel.data.pgcrypto_alg)
+        cur = test_db.get_cursor()
+        cur.execute(sql)
+        enc_func_call = cur.fetchone()
+
+        self.assertEqual(enc_mod.data, value)
+        self.assertFalse(str(enc_data[0]) == value)
+        self.assertEqual(str(enc_data[0]), str(enc_func_call[0]))
+
+    def test_encrypted_model_update(self):
+        value = 'TEST-DATA'
+        enc_mod = EncryptedModel.create(data=value)
+
+        model = EncryptedModel.get(EncryptedModel.id == enc_mod.id)
+        self.assertEqual(model.data, enc_mod.data)
+        self.assertEqual(model.data, value)
+
+        new_value = value + '-UPDATED'
+        enc_mod.data = new_value
+        enc_mod.save()
+
+        model = EncryptedModel.get(EncryptedModel.id == enc_mod.id)
+        self.assertEqual(model.data, enc_mod.data)
+        self.assertEqual(model.data, new_value)
 
     def test_uuid(self):
         uuid_str = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
