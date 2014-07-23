@@ -5,7 +5,7 @@ peewee
 
 * a small, expressive orm
 * written in python (2.6+, 3.2+)
-* built-in support for sqlite, mysql and postgresql and special extensions like `hstore <http://peewee.readthedocs.org/en/latest/peewee/playhouse.html#postgresql-hstore>`_
+* built-in support for sqlite, mysql and postgresql and special extensions like `hstore <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#postgresql-hstore>`_
 
 .. image:: https://api.travis-ci.org/coleifer/peewee.png?branch=master
   :target: https://travis-ci.org/coleifer/peewee
@@ -13,7 +13,7 @@ peewee
 For flask integration, including an admin interface and RESTful API, check
 out `flask-peewee <https://github.com/coleifer/flask-peewee/>`_.
 
-For notes on the upgrade from 1.0 to 2.0, check out `the upgrade docs <http://peewee.readthedocs.org/en/latest/peewee/upgrading.html>`_.
+For notes on the upgrade from 1.0 to 2.0, check out `the upgrade docs <http://docs.peewee-orm.com/en/latest/peewee/upgrading.html>`_.
 
 Check out the `quickstart IPython notebook <http://nbviewer.ipython.org/d3faf30bbff67ce5f70c>`_.
 
@@ -56,16 +56,16 @@ Example queries::
     )
 
 
-Check out the `quick start <http://peewee.readthedocs.org/en/latest/peewee/quickstart.html>`_ for more!
+Check out the `quick start <http://docs.peewee-orm.com/en/latest/peewee/quickstart.html>`_ for more!
 
 
 Learning more
 -------------
 
-the official `peewee cookbook <http://peewee.readthedocs.org/en/latest/peewee/cookbook.html>`_
+the official `peewee cookbook <http://docs.peewee-orm.com/en/latest/peewee/cookbook.html>`_
 has recipes for common operations and is a good place to get started.
 
-check the `documentation <http://peewee.readthedocs.org/>`_ for more
+check the `documentation <http://docs.peewee-orm.com/>`_ for more
 examples.
 
 specific question?  come hang out in the #peewee channel on freenode.irc.net,
@@ -237,4 +237,4 @@ you can now use MySQL::
 what now?
 ---------
 
-Check out the `quick start <http://peewee.readthedocs.org/en/latest/peewee/quickstart.html>`_
+Check out the `quick start <http://docs.peewee-orm.com/en/latest/peewee/quickstart.html>`_
