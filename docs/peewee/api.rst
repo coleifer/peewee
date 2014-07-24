@@ -1128,9 +1128,15 @@ Query Types
         return a scalar value, such as the count of all rows or the average
         value of a particular column.
 
-    .. py:method:: count()
+    .. py:method:: count([clear_limit=False])
 
+        :param bool clear_limit: Remove any limit or offset clauses from the query before counting.
         :rtype: an integer representing the number of rows in the current query
+
+        .. note::
+            If the query has a GROUP BY, DISTINCT, LIMIT, or OFFSET
+            clause, then the :py:meth:`~SelectQuery.wrapped_count` method
+            will be used instead.
 
         >>> sq = SelectQuery(Tweet)
         >>> sq.count()
@@ -1139,7 +1145,7 @@ Query Types
         >>> sq.count()
         3  # number of tweets that are marked as deleted
 
-    .. py:method:: wrapped_count([clear_limit=True])
+    .. py:method:: wrapped_count([clear_limit=False])
 
         :param bool clear_limit: Remove any limit or offset clauses from the query before counting.
         :rtype: an integer representing the number of rows in the current query

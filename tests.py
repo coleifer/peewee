@@ -2534,6 +2534,16 @@ class ModelAPITestCase(ModelTestCase):
         uc = User.select().where(User.username == 'u1').join(Blog).distinct().count()
         self.assertEqual(uc, 1)
 
+        uc = User.select().join(Blog).distinct().count()
+        self.assertEqual(uc, 2)
+
+        # Test with clear limit = True.
+        self.assertEqual(User.select().limit(1).count(clear_limit=True), 2)
+        self.assertEqual(
+            User.select().limit(1).wrapped_count(clear_limit=True), 2)
+
+        # Test with clear limit = False.
+        self.assertEqual(User.select().limit(1).count(clear_limit=False), 1)
         self.assertEqual(
             User.select().limit(1).wrapped_count(clear_limit=False), 1)
 

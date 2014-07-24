@@ -2169,14 +2169,14 @@ class SelectQuery(Query):
     def aggregate(self, aggregation=None, convert=True):
         return self._aggregate(aggregation).scalar(convert=convert)
 
-    def count(self):
-        if self._distinct or self._group_by:
-            return self.wrapped_count()
+    def count(self, clear_limit=False):
+        if self._distinct or self._group_by or self._limit or self._offset:
+            return self.wrapped_count(clear_limit=clear_limit)
 
         # defaults to a count() of the primary key
         return self.aggregate(convert=False) or 0
 
-    def wrapped_count(self, clear_limit=True):
+    def wrapped_count(self, clear_limit=False):
         clone = self.order_by()
         if clear_limit:
             clone._limit = clone._offset = None
