@@ -238,3 +238,5 @@ what now?
 ---------
 
 Check out the `quick start <http://docs.peewee-orm.com/en/latest/peewee/quickstart.html>`_
+
+.. image:: http://media.charlesleifer.com/playground/notes/img/im-97f3e42c02.jpg
