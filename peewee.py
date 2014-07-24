@@ -1709,8 +1709,11 @@ class DictQueryResultWrapper(ExtQueryResultWrapper):
 
 class ModelQueryResultWrapper(QueryResultWrapper):
     def initialize(self, description):
+        self.column_map, model_set = self.generate_column_map()
+        self.join_map = self.generate_join_map(model_set)
+
+    def generate_column_map(self):
         column_map = []
-        join_map = []
         models = set([self.model])
         for i, node in enumerate(self.column_meta):
             attr = conv = None
@@ -1729,6 +1732,10 @@ class ModelQueryResultWrapper(QueryResultWrapper):
             column_map.append((key, constructor, attr, conv))
             models.add(key)
 
+        return column_map, models
+
+    def generate_join_map(self, models):
+        join_map = []
         joins = self.join_meta
         stack = [self.model]
         while stack:
@@ -1736,26 +1743,106 @@ class ModelQueryResultWrapper(QueryResultWrapper):
             if current not in joins:
                 continue
 
+            meta = current._meta
             for join in joins[current]:
                 join_model = join.dest
                 if join_model in models:
-                    fk_field = current._meta.rel_for_model(join_model)
-                    to_field = None
-                    if not fk_field:
+                    fk_field = meta.rel_for_model(join_model)
+                    related_name = to_field = None
+                    if fk_field is not None:
+                        fk_name = fk_field.name
+                        to_field = fk_field.to_field.name
+                    else:
+                        fk_field = meta.reverse_rel_for_model(join_model)
+                        if fk_field is not None:
+                            related_name = fk_field.related_name
                         if isinstance(join.on, Expression):
                             fk_name = join.on._alias or join.on.lhs.name
                         else:
                             # Patch the joined model using the name of the
                             # database table.
                             fk_name = join_model._meta.db_table
-                    else:
-                        fk_name = fk_field.name
-                        to_field = fk_field.to_field.name
 
                     stack.append(join_model)
-                    join_map.append((current, fk_name, join_model, to_field))
+                    join_map.append((
+                        current, fk_name, join_model, to_field, related_name))
 
-        self.column_map, self.join_map = column_map, join_map
+        return join_map
+
+    def process_row(self, row):
+        collected = self.construct_instance(row)
+        instances = self.follow_joins(collected)
+        for i in instances:
+            i.prepared()
+        return instances[0]
+
+    def construct_instance(self, row):
+        collected_models = {}
+        for i, (key, constructor, attr, conv) in enumerate(self.column_map):
+            value = row[i]
+            if key not in collected_models:
+                collected_models[key] = constructor()
+            instance = collected_models[key]
+            if attr is None:
+                attr = self.cursor.description[i][0]
+            if conv is not None:
+                value = conv(value)
+            setattr(instance, attr, value)
+
+        return collected_models
+
+    def follow_joins(self, collected):
+        prepared = [collected[self.model]]
+        for (lhs, attr, rhs, to_field, related_name) in self.join_map:
+            inst = collected[lhs]
+            joined_inst = collected[rhs]
+
+            # Can we populate a value on the joined instance using the current?
+            if to_field is not None and attr in inst._data:
+                if getattr(joined_inst, to_field) is None:
+                    setattr(joined_inst, to_field, inst._data[attr])
+
+            setattr(inst, attr, joined_inst)
+            prepared.append(joined_inst)
+
+        return prepared
+
+
+class AggregateQueryResultWrapper(ModelQueryResultWrapper):
+    def __init__(self, *args, **kwargs):
+        self._deque = deque()
+        super(AggregateQueryResultWrapper, self).__init__(*args, **kwargs)
+
+    def initialize(self):
+        super(AggregateQueryResultWrapper, self).initialize()
+
+        # Prepare data structure for analyzing unique rows.
+
+    def iterate(self):
+        # If the deque is empty, then pull from the cursor.
+        if len(self._deque):
+            row = self._deque.pop()
+        else:
+            row = self.cursor.fetchone()
+
+        if not row:
+            self._populated = True
+            raise StopIteration
+        elif not self._initialized:
+            self.initialize(self.cursor.description)
+            self._initialized = True
+        return self.process_row(row)
+
+    """
+    def iterate(self):
+        row = self.cursor.fetchone()
+        if not row:
+            self._populated = True
+            raise StopIteration
+        elif not self._initialized:
+            self.initialize(self.cursor.description)
+            self._initialized = True
+        return self.process_row(row)
 
     def process_row(self, row):
         collected = self.construct_instance(row)
@@ -1794,6 +1881,7 @@ class ModelQueryResultWrapper(QueryResultWrapper):
             prepared.append(joined_inst)
 
         return prepared
+    """
 
 
 class Query(Node):
@@ -2019,6 +2107,7 @@ class SelectQuery(Query):
         self._naive = False
         self._tuples = False
         self._dicts = False
+        self._aggregate_rows = False
         self._alias = None
         self._qr = None
 
@@ -2048,6 +2137,7 @@ class SelectQuery(Query):
         query._naive = self._naive
         query._tuples = self._tuples
         query._dicts = self._dicts
+        query._aggregate_rows = self._aggregate_rows
         query._alias = self._alias
         return query
 
@@ -2146,6 +2236,10 @@ class SelectQuery(Query):
         self._dicts = dicts
 
     @returns_clone
+    def aggregate_rows(self, aggregate_rows=True):
+        self._aggregate_rows = aggregate_rows
+
+    @returns_clone
     def alias(self, alias=None):
         self._alias = alias
 
@@ -2231,6 +2325,8 @@ class SelectQuery(Query):
                 ResultWrapper = DictQueryResultWrapper
             elif self._naive or not self._joins or self.verify_naive():
                 ResultWrapper = NaiveQueryResultWrapper
+            elif self._aggregate_rows:
+                ResultWrapper = AggregateQueryResultWrapper
             else:
                 ResultWrapper = ModelQueryResultWrapper
             self._qr = ResultWrapper(model_class, self._execute(), query_meta)

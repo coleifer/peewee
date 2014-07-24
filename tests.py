@@ -2941,6 +2941,49 @@ class PrefetchTestCase(ModelTestCase):
         ])
         self.assertEqual(len(self.queries()) - qc, 5)
 
+    def test_prefetch_no_aggregate(self):
+        qc = len(self.queries())
+        query = (User
+                 .select(User, Blog)
+                 .join(Blog, JOIN_LEFT_OUTER)
+                 .order_by(User.username, Blog.title))
+        results = []
+        for user in query:
+            results.append((
+                user.username,
+                user.blog.title))
+
+        self.assertEqual(results, [
+            ('u1', 'b1'),
+            ('u1', 'b2'),
+            ('u2', None),
+            ('u3', 'b3'),
+            ('u3', 'b4'),
+            ('u4', 'b5'),
+            ('u4', 'b6'),
+        ])
+        self.assertEqual(len(self.queries()) - qc, 1)
+
+    def test_prefetch_aggregate(self):
+        query = (User
+                 .select(User, Blog)
+                 .join(Blog)
+                 .order_by(User.username, Blog.title)
+                 .aggregate_rows())
+        results = []
+        for user in query:
+            results.append((
+                user.username,
+                [blog.title for blog in user.blog]))
+
+        self.assertEqual(results, [
+            ('u1', ['b1', 'b2']),
+            #('u2', []),
+            ('u3', ['b3', 'b4']),
+            ('u4', ['b5', 'b6']),
+        ])
+
+
 class TestPrefetchNonPKFK(ModelTestCase):
     requires = [Package, PackageItem]
     data = {
