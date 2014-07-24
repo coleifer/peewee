@@ -1813,13 +1813,33 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
         self._deque = deque()
         super(AggregateQueryResultWrapper, self).__init__(*args, **kwargs)
 
-    def initialize(self):
-        super(AggregateQueryResultWrapper, self).initialize()
+    def initialize(self, description):
+        super(AggregateQueryResultWrapper, self).initialize(description)
 
         # Prepare data structure for analyzing unique rows.
+        models_with_aggregate = set()
+        for (src_model, _, _, _, related_name) in self.join_map:
+            if related_name:
+                models_with_aggregate.add(src_model)
+
+        cols_to_hash = {}
+        for idx, (_, model_class, col_name, _) in enumerate(self.column_map):
+            if model_class in models_with_aggregate:
+                cols_to_hash.setdefault(model_class, [])
+                cols_to_hash[model_class].append((idx, col_name))
+        self.cols_to_hash = cols_to_hash
+
+    def read_model_data(self, row):
+        models = {}
+        for model_class, column_data in self.cols_to_hash.items():
+            models[model_class] = []
+            for idx, col_name in column_data:
+                models[model_class].append((col_name, row[idx]))
+        return models
 
     def iterate(self):
         # If the deque is empty, then pull from the cursor.
+        # 1.
         if len(self._deque):
             row = self._deque.pop()
         else:
@@ -1831,57 +1851,63 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
         elif not self._initialized:
             self.initialize(self.cursor.description)
             self._initialized = True
-        return self.process_row(row)
 
-    """
-    def iterate(self):
-        row = self.cursor.fetchone()
-        if not row:
-            self._populated = True
-            raise StopIteration
-        elif not self._initialized:
-            self.initialize(self.cursor.description)
-            self._initialized = True
-        return self.process_row(row)
+        # 2.
+        instances = dict(
+            (model_class, [instance])
+            for model_class, instance in self.construct_instance(row).items())
 
-    def process_row(self, row):
-        collected = self.construct_instance(row)
-        instances = self.follow_joins(collected)
-        for i in instances:
-            i.prepared()
-        return instances[0]
+        # 3.
+        model_data = self.read_model_data(row)
 
-    def construct_instance(self, row):
-        collected_models = {}
-        for i, (key, constructor, attr, conv) in enumerate(self.column_map):
-            value = row[i]
-            if key not in collected_models:
-                collected_models[key] = constructor()
-            instance = collected_models[key]
-            if attr is None:
-                attr = self.cursor.description[i][0]
-            if conv is not None:
-                value = conv(value)
-            setattr(instance, attr, value)
+        # 4.
+        while True:
+            # 5.
+            cur_row = self.cursor.fetchone()
+            if cur_row is None:
+                break
 
-        return collected_models
+            # Load up the row data for the 1->n models.
+            cur_row_data = self.read_model_data(cur_row)
+            cur_instances = self.construct_instance(cur_row)
+
+            skip_models = set()
+            for model_class, data in cur_row_data.items():
+                if model_data[model_class] == data:
+                    skip_models.add(model_class)
+
+            if not skip_models:
+                self._deque.append(cur_row)
+                break
+
+            for model_class, instance in cur_instances.items():
+                if model_class not in skip_models:
+                    instances[model_class].append(instance)
+
+        return self.follow_joins(instances)
 
     def follow_joins(self, collected):
-        prepared = [collected[self.model]]
-        for (lhs, attr, rhs, to_field) in self.join_map:
-            inst = collected[lhs]
-            joined_inst = collected[rhs]
+        prepared = collected[self.model]
+        for (lhs, attr, rhs, to_field, related_name) in self.join_map:
+            instances = collected[lhs]
+            joined_instances = collected[rhs]
 
             # Can we populate a value on the joined instance using the current?
             if to_field is not None and attr in inst._data:
                 if getattr(joined_inst, to_field) is None:
                     setattr(joined_inst, to_field, inst._data[attr])
 
-            setattr(inst, attr, joined_inst)
-            prepared.append(joined_inst)
+            for inst in instances:
+                if related_name:
+                    setattr(inst, related_name, joined_instances)
+                else:
+                    setattr(inst, attr, joined_instances)
+            prepared.extend(joined_instances)
 
-        return prepared
-    """
+        for i in prepared:
+            i.prepared()
+
+        return prepared[0]
 
 
 class Query(Node):
