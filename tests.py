@@ -2534,6 +2534,10 @@ class ModelAPITestCase(ModelTestCase):
         uc = User.select().where(User.username == 'u1').join(Blog).distinct().count()
         self.assertEqual(uc, 1)
 
+        self.assertEqual(Blog.select().limit(4).offset(3).count(), 4)
+        self.assertEqual(Blog.select().limit(4).offset(3).count(True), 10)
+
+        # Calling `distinct()` will result in a call to wrapped_count().
         uc = User.select().join(Blog).distinct().count()
         self.assertEqual(uc, 2)
 
