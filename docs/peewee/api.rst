@@ -1139,8 +1139,9 @@ Query Types
         >>> sq.count()
         3  # number of tweets that are marked as deleted
 
-    .. py:method:: wrapped_count()
+    .. py:method:: wrapped_count([clear_limit=True])
 
+        :param bool clear_limit: Remove any limit or offset clauses from the query before counting.
         :rtype: an integer representing the number of rows in the current query
 
         Wrap the count query in a subquery.  Additional overhead but will give
