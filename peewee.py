@@ -1710,7 +1710,7 @@ class DictQueryResultWrapper(ExtQueryResultWrapper):
 class ModelQueryResultWrapper(QueryResultWrapper):
     def initialize(self, description):
         self.column_map, model_set = self.generate_column_map()
-        self.join_map = self.generate_join_map(model_set)
+        self.join_list, self.join_dict = self.generate_join_map(model_set)
 
     def generate_column_map(self):
         column_map = []
@@ -1735,7 +1735,8 @@ class ModelQueryResultWrapper(QueryResultWrapper):
         return column_map, models
 
     def generate_join_map(self, models):
-        join_map = []
+        join_list = []
+        join_dict = {}
         joins = self.join_meta
         stack = [self.model]
         while stack:
@@ -1764,10 +1765,12 @@ class ModelQueryResultWrapper(QueryResultWrapper):
                             fk_name = join_model._meta.db_table
 
                     stack.append(join_model)
-                    join_map.append((
+                    join_list.append((
                         current, fk_name, join_model, to_field, related_name))
+                    join_dict.setdefault(current, [])
+                    join_dict[current].append((join_model, related_name))
 
-        return join_map
+        return join_list, join_dict
 
     def process_row(self, row):
         collected = self.construct_instance(row)
@@ -1793,7 +1796,7 @@ class ModelQueryResultWrapper(QueryResultWrapper):
 
     def follow_joins(self, collected):
         prepared = [collected[self.model]]
-        for (lhs, attr, rhs, to_field, related_name) in self.join_map:
+        for (lhs, attr, rhs, to_field, related_name) in self.join_list:
             inst = collected[lhs]
             joined_inst = collected[rhs]
 
@@ -1818,9 +1821,20 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
 
         # Prepare data structure for analyzing unique rows.
         models_with_aggregate = set()
-        for (src_model, _, _, _, related_name) in self.join_map:
+        for (src_model, _, _, _, related_name) in self.join_list:
             if related_name:
                 models_with_aggregate.add(src_model)
+
+        stack = list(models_with_aggregate)
+        while stack:
+            curr = stack.pop()
+            if curr not in self.join_dict:
+                continue
+
+            for (dest, related_name) in self.join_dict[curr]:
+                if not related_name and dest not in models_with_aggregate:
+                    models_with_aggregate.add(dest)
+                    stack.append(dest)
 
         cols_to_hash = {}
         for idx, (_, model_class, col_name, _) in enumerate(self.column_map):
@@ -1856,9 +1870,20 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
         instances = dict(
             (model_class, [instance])
             for model_class, instance in self.construct_instance(row).items())
+        """
+        {User: [<u1>],
+         Account: [<a1>],
+         Post: [<p1-1>],
+         Comment: [<c1>]}
+        """
+        import ipdb; ipdb.set_trace()
 
         # 3.
         model_data = self.read_model_data(row)
+        """
+        {User: [(1, 'u1')],
+         Post: [(..., 'p1-1')]}
+        """
 
         # 4.
         while True:
