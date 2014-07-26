@@ -1818,19 +1818,20 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
     def initialize(self, description):
         super(AggregateQueryResultWrapper, self).initialize(description)
 
+        # Collect the set of all models queried.
         self.all_models = set()
         for key, _, _, _ in self.column_map:
             self.all_models.add(key)
 
         # Prepare data structure for analyzing unique rows.
-        models_with_aggregate = set()
-        self.aggregate_map = {}
+        self.models_with_aggregate = set()
+        self.back_references = {}
         for (src_model, _, dest_model, _, related_name) in self.join_list:
             if related_name:
-                models_with_aggregate.add(src_model)
-                self.aggregate_map[dest_model] = (src_model, related_name)
+                self.models_with_aggregate.add(src_model)
+                self.back_references[dest_model] = (src_model, related_name)
 
-        stack = list(models_with_aggregate)
+        stack = list(self.models_with_aggregate)
         while stack:
             current = stack.pop()
             if current not in self.join_meta:
@@ -1838,23 +1839,19 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
 
             for join in self.join_meta[current]:
                 join_model = join.dest
-                if join_model in models_with_aggregate:
+                if join_model in self.models_with_aggregate:
                     continue
 
                 fk_field = current._meta.rel_for_model(join_model)
                 if fk_field:
                     stack.append(join_model)
-                    models_with_aggregate.add(join_model)
+                    self.models_with_aggregate.add(join_model)
 
-        # This set contains all model rows which may repeat due to 1->n joins.
-        self.models_with_aggregate = models_with_aggregate
-
-        cols_to_hash = {}
+        self.cols_to_hash = {}
         for idx, (_, model_class, col_name, _) in enumerate(self.column_map):
-            if model_class in models_with_aggregate:
-                cols_to_hash.setdefault(model_class, [])
-                cols_to_hash[model_class].append((idx, col_name))
-        self.cols_to_hash = cols_to_hash
+            if model_class in self.models_with_aggregate:
+                self.cols_to_hash.setdefault(model_class, [])
+                self.cols_to_hash[model_class].append((idx, col_name))
 
     def read_model_data(self, row):
         models = {}
@@ -1942,7 +1939,7 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
             # them with the correct instances.
             new_instances = self.construct_instances(cur_row, different_models)
             for model_class, instance in new_instances.items():
-                dest_model, related_name = self.aggregate_map[model_class]
+                dest_model, related_name = self.back_references[model_class]
                 rel_inst = instances[dest_model]
                 rel_attr = getattr(rel_inst, related_name)
                 if isinstance(rel_attr, SelectQuery):
