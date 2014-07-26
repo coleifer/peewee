@@ -1710,7 +1710,7 @@ class DictQueryResultWrapper(ExtQueryResultWrapper):
 class ModelQueryResultWrapper(QueryResultWrapper):
     def initialize(self, description):
         self.column_map, model_set = self.generate_column_map()
-        self.join_list, self.join_dict = self.generate_join_map(model_set)
+        self.join_list = self.generate_join_list(model_set)
 
     def generate_column_map(self):
         column_map = []
@@ -1734,9 +1734,8 @@ class ModelQueryResultWrapper(QueryResultWrapper):
 
         return column_map, models
 
-    def generate_join_map(self, models):
+    def generate_join_list(self, models):
         join_list = []
-        join_dict = {}
         joins = self.join_meta
         stack = [self.model]
         while stack:
@@ -1767,21 +1766,21 @@ class ModelQueryResultWrapper(QueryResultWrapper):
                     stack.append(join_model)
                     join_list.append((
                         current, fk_name, join_model, to_field, related_name))
-                    join_dict.setdefault(current, [])
-                    join_dict[current].append((join_model, related_name))
 
-        return join_list, join_dict
+        return join_list
 
     def process_row(self, row):
-        collected = self.construct_instance(row)
+        collected = self.construct_instances(row)
         instances = self.follow_joins(collected)
         for i in instances:
             i.prepared()
         return instances[0]
 
-    def construct_instance(self, row):
+    def construct_instances(self, row, keys=None):
         collected_models = {}
         for i, (key, constructor, attr, conv) in enumerate(self.column_map):
+            if keys is not None and key not in keys:
+                continue
             value = row[i]
             if key not in collected_models:
                 collected_models[key] = constructor()
@@ -1819,22 +1818,36 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
     def initialize(self, description):
         super(AggregateQueryResultWrapper, self).initialize(description)
 
+        self.all_models = set()
+        for key, _, _, _ in self.column_map:
+            self.all_models.add(key)
+
         # Prepare data structure for analyzing unique rows.
         models_with_aggregate = set()
-        for (src_model, _, _, _, related_name) in self.join_list:
+        self.aggregate_map = {}
+        for (src_model, _, dest_model, _, related_name) in self.join_list:
             if related_name:
                 models_with_aggregate.add(src_model)
+                self.aggregate_map[dest_model] = (src_model, related_name)
 
         stack = list(models_with_aggregate)
         while stack:
-            curr = stack.pop()
-            if curr not in self.join_dict:
+            current = stack.pop()
+            if current not in self.join_meta:
                 continue
 
-            for (dest, related_name) in self.join_dict[curr]:
-                if not related_name and dest not in models_with_aggregate:
-                    models_with_aggregate.add(dest)
-                    stack.append(dest)
+            for join in self.join_meta[current]:
+                join_model = join.dest
+                if join_model in models_with_aggregate:
+                    continue
+
+                fk_field = current._meta.rel_for_model(join_model)
+                if fk_field:
+                    stack.append(join_model)
+                    models_with_aggregate.add(join_model)
+
+        # This set contains all model rows which may repeat due to 1->n joins.
+        self.models_with_aggregate = models_with_aggregate
 
         cols_to_hash = {}
         for idx, (_, model_class, col_name, _) in enumerate(self.column_map):
@@ -1848,8 +1861,28 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
         for model_class, column_data in self.cols_to_hash.items():
             models[model_class] = []
             for idx, col_name in column_data:
-                models[model_class].append((col_name, row[idx]))
+                models[model_class].append(row[idx])
         return models
+
+    def construct_graph(self, instances):
+        for (lhs, attr, rhs, to_field, related_name) in self.join_list:
+            src = instances[lhs]
+            dest = instances[rhs]
+
+            # Can we populate a value on the joined instance using the current?
+            if to_field is not None and attr in src._data:
+                if getattr(dest, to_field) is None:
+                    setattr(dest, to_field, src._data[attr])
+
+            if related_name:
+                val = getattr(src, related_name)
+                if isinstance(val, SelectQuery):
+                    setattr(src, related_name, [])
+                getattr(src, related_name).append(dest)
+            else:
+                setattr(src, attr, dest)
+
+        return instances[self.model]
 
     def iterate(self):
         # If the deque is empty, then pull from the cursor.
@@ -1867,22 +1900,22 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
             self._initialized = True
 
         # 2.
-        instances = dict(
-            (model_class, [instance])
-            for model_class, instance in self.construct_instance(row).items())
-        """
-        {User: [<u1>],
-         Account: [<a1>],
-         Post: [<p1-1>],
-         Comment: [<c1>]}
-        """
-        import ipdb; ipdb.set_trace()
+        instances = self.construct_instances(row)
+        model = self.construct_graph(instances)
 
         # 3.
         model_data = self.read_model_data(row)
+
         """
-        {User: [(1, 'u1')],
-         Post: [(..., 'p1-1')]}
+        U P |  uid un  | aid an  | pid ptitle  | cid comment
+        ====+----------+---------+-------------+-------------
+        A A |  1   u1  | 1   a1  | 1   p1-1    | 1   c1
+        A A |  1   u1  | 1   a1  | 2   p1-1    | 2   c2
+        A B |  1   u1  | 1   a1  | 3   p1-2    | 3   c3
+        A C |  1   u1  | 1   a1  | 4   p1-3    | N   N
+        B   |  2   u2  | 2   a2  | 5   N       | N   N
+        ----+----------+---------+-------------+-------------
+               agg        agg       sub-agg
         """
 
         # 4.
@@ -1892,47 +1925,33 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
             if cur_row is None:
                 break
 
-            # Load up the row data for the 1->n models.
             cur_row_data = self.read_model_data(cur_row)
-            cur_instances = self.construct_instance(cur_row)
 
-            skip_models = set()
+            duplicate_models = set()
             for model_class, data in cur_row_data.items():
                 if model_data[model_class] == data:
-                    skip_models.add(model_class)
+                    duplicate_models.add(model_class)
 
-            if not skip_models:
+            if not duplicate_models:
                 self._deque.append(cur_row)
                 break
 
-            for model_class, instance in cur_instances.items():
-                if model_class not in skip_models:
-                    instances[model_class].append(instance)
+            different_models = self.all_models - duplicate_models
 
-        return self.follow_joins(instances)
-
-    def follow_joins(self, collected):
-        prepared = collected[self.model]
-        for (lhs, attr, rhs, to_field, related_name) in self.join_map:
-            instances = collected[lhs]
-            joined_instances = collected[rhs]
-
-            # Can we populate a value on the joined instance using the current?
-            if to_field is not None and attr in inst._data:
-                if getattr(joined_inst, to_field) is None:
-                    setattr(joined_inst, to_field, inst._data[attr])
-
-            for inst in instances:
-                if related_name:
-                    setattr(inst, related_name, joined_instances)
+            # Now we need to take the different models and somehow associate
+            # them with the correct instances.
+            new_instances = self.construct_instances(cur_row, different_models)
+            for model_class, instance in new_instances.items():
+                dest_model, related_name = self.aggregate_map[model_class]
+                rel_inst = instances[dest_model]
+                rel_attr = getattr(rel_inst, related_name)
+                if isinstance(rel_attr, SelectQuery):
+                    setattr(rel_inst, related_name, [instance])
                 else:
-                    setattr(inst, attr, joined_instances)
-            prepared.extend(joined_instances)
+                    getattr(rel_inst, related_name).append(instance)
+                instances[model_class] = instance
 
-        for i in prepared:
-            i.prepared()
-
-        return prepared[0]
+        return model
 
 
 class Query(Node):
