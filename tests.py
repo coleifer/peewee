@@ -2964,23 +2964,66 @@ class PrefetchTestCase(ModelTestCase):
         ])
         self.assertEqual(len(self.queries()) - qc, 1)
 
-    def test_prefetch_aggregate(self):
+    def test_aggregate_users(self):
+        qc = len(self.queries())
         query = (User
-                 .select(User, Blog)
-                 .join(Blog)
-                 .order_by(User.username, Blog.title)
+                 .select(User, Blog, Comment)
+                 .join(Blog, JOIN_LEFT_OUTER)
+                 .join(Comment, JOIN_LEFT_OUTER)
+                 .order_by(User.username, Blog.title, Comment.id)
                  .aggregate_rows())
+
         results = []
         for user in query:
             results.append((
                 user.username,
-                [blog.title for blog in user.blog]))
+                [(blog.title, [comment.comment for comment in blog.comments])
+                 for blog in user.blog_set]))
+
+        qc2 = len(self.queries())
+        self.assertEqual(qc2 - qc, 1)
 
         self.assertEqual(results, [
-            ('u1', ['b1', 'b2']),
-            #('u2', []),
-            ('u3', ['b3', 'b4']),
-            ('u4', ['b5', 'b6']),
+            ('u1', [
+                ('b1', ['b1-c1', 'b1-c2']),
+                ('b2', ['b2-c1'])]),
+            ('u2', []),
+            ('u3', [
+                ('b3', ['b3-c1', 'b3-c2']),
+                ('b4', [])]),
+            ('u4', [
+                ('b5', ['b5-c1', 'b5-c2']),
+                ('b6', ['b6-c1'])]),
+        ])
+
+    def test_aggregate_blogs(self):
+        qc = len(self.queries())
+        query = (Blog
+                 .select(Blog, User, Comment)
+                 .join(User)
+                 .switch(Blog)
+                 .join(Comment, JOIN_LEFT_OUTER)
+                 .order_by(Blog.title, User.username, Comment.id)
+                 .aggregate_rows())
+
+        results = []
+        for blog in query:
+            results.append((
+                blog.user.username,
+                blog.title,
+                [comment.comment for comment in blog.comments]))
+
+        qc2 = len(self.queries())
+        self.assertEqual(qc2 - qc, 1)
+        import ipdb; ipdb.set_trace()
+
+        self.assertEqual(results, [
+            ('u1', 'b1', ['b1-c1', 'b1-c2']),
+            ('u1', 'b2', ['b2-c1']),
+            ('u3', 'b3', ['b3-c1', 'b3-c2']),
+            ('u3', 'b4', []),
+            ('u4', 'b5', ['b5-c1', 'b5-c2']),
+            ('u4', 'b6', ['b6-c1']),
         ])
 
 

@@ -1812,7 +1812,7 @@ class ModelQueryResultWrapper(QueryResultWrapper):
 
 class AggregateQueryResultWrapper(ModelQueryResultWrapper):
     def __init__(self, *args, **kwargs):
-        self._deque = deque()
+        self._row = []
         super(AggregateQueryResultWrapper, self).__init__(*args, **kwargs)
 
     def initialize(self, description):
@@ -1831,7 +1831,7 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
                 self.models_with_aggregate.add(src_model)
                 self.back_references[dest_model] = (src_model, related_name)
 
-        stack = list(self.models_with_aggregate)
+        stack = []#list(self.models_with_aggregate)
         while stack:
             current = stack.pop()
             if current not in self.join_meta:
@@ -1847,45 +1847,23 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
                     stack.append(join_model)
                     self.models_with_aggregate.add(join_model)
 
-        self.cols_to_hash = {}
+        self.columns_to_compare = {}
         for idx, (_, model_class, col_name, _) in enumerate(self.column_map):
             if model_class in self.models_with_aggregate:
-                self.cols_to_hash.setdefault(model_class, [])
-                self.cols_to_hash[model_class].append((idx, col_name))
+                self.columns_to_compare.setdefault(model_class, [])
+                self.columns_to_compare[model_class].append((idx, col_name))
 
     def read_model_data(self, row):
         models = {}
-        for model_class, column_data in self.cols_to_hash.items():
+        for model_class, column_data in self.columns_to_compare.items():
             models[model_class] = []
             for idx, col_name in column_data:
                 models[model_class].append(row[idx])
         return models
 
-    def construct_graph(self, instances):
-        for (lhs, attr, rhs, to_field, related_name) in self.join_list:
-            src = instances[lhs]
-            dest = instances[rhs]
-
-            # Can we populate a value on the joined instance using the current?
-            if to_field is not None and attr in src._data:
-                if getattr(dest, to_field) is None:
-                    setattr(dest, to_field, src._data[attr])
-
-            if related_name:
-                val = getattr(src, related_name)
-                if isinstance(val, SelectQuery):
-                    setattr(src, related_name, [])
-                getattr(src, related_name).append(dest)
-            else:
-                setattr(src, attr, dest)
-
-        return instances[self.model]
-
     def iterate(self):
-        # If the deque is empty, then pull from the cursor.
-        # 1.
-        if len(self._deque):
-            row = self._deque.pop()
+        if self._row:
+            row = self._row.pop()
         else:
             row = self.cursor.fetchone()
 
@@ -1896,59 +1874,69 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
             self.initialize(self.cursor.description)
             self._initialized = True
 
-        # 2.
-        instances = self.construct_instances(row)
-        model = self.construct_graph(instances)
+        identity_map = {}
+        for model_class, instance in self.construct_instances(row).items():
+            identity_map[model_class] = {instance.get_id(): instance}
 
-        # 3.
         model_data = self.read_model_data(row)
-
-        """
-        U P |  uid un  | aid an  | pid ptitle  | cid comment
-        ====+----------+---------+-------------+-------------
-        A A |  1   u1  | 1   a1  | 1   p1-1    | 1   c1
-        A A |  1   u1  | 1   a1  | 2   p1-1    | 2   c2
-        A B |  1   u1  | 1   a1  | 3   p1-2    | 3   c3
-        A C |  1   u1  | 1   a1  | 4   p1-3    | N   N
-        B   |  2   u2  | 2   a2  | 5   N       | N   N
-        ----+----------+---------+-------------+-------------
-               agg        agg       sub-agg
-        """
-
-        # 4.
         while True:
-            # 5.
             cur_row = self.cursor.fetchone()
             if cur_row is None:
                 break
 
-            cur_row_data = self.read_model_data(cur_row)
-
             duplicate_models = set()
+            cur_row_data = self.read_model_data(cur_row)
             for model_class, data in cur_row_data.items():
                 if model_data[model_class] == data:
                     duplicate_models.add(model_class)
 
             if not duplicate_models:
-                self._deque.append(cur_row)
+                self._row.append(cur_row)
                 break
 
             different_models = self.all_models - duplicate_models
 
-            # Now we need to take the different models and somehow associate
-            # them with the correct instances.
             new_instances = self.construct_instances(cur_row, different_models)
             for model_class, instance in new_instances.items():
-                dest_model, related_name = self.back_references[model_class]
-                rel_inst = instances[dest_model]
-                rel_attr = getattr(rel_inst, related_name)
-                if isinstance(rel_attr, SelectQuery):
-                    setattr(rel_inst, related_name, [instance])
-                else:
-                    getattr(rel_inst, related_name).append(instance)
-                instances[model_class] = instance
+                # Do not include any instances which are comprised solely of
+                # NULL values.
+                if [val for val in instance._data.values() if val is not None]:
+                    identity_map[model_class][instance.get_id()] = instance
 
-        return model
+        stack = [self.model]
+        while stack:
+            current = stack.pop()
+            if current not in self.join_meta:
+                continue
+
+            for join in self.join_meta[current]:
+                foreign_key = current._meta.rel_for_model(join.dest)
+                if foreign_key:
+                    for pk, instance in identity_map[current].items():
+                        joined_inst = identity_map[join.dest][
+                            instance._data[foreign_key.name]]
+                        setattr(instance, foreign_key.name, joined_inst)
+                else:
+                    backref = current._meta.reverse_rel_for_model(join.dest)
+                    if not backref:
+                        continue
+
+                    attr_name = backref.related_name
+                    for instance in identity_map[current].values():
+                        setattr(instance, attr_name, [])
+
+                    for pk, instance in identity_map[join.dest].items():
+                        try:
+                            joined_inst = identity_map[current][
+                                instance._data[backref.name]]
+                        except KeyError:
+                            continue
+
+                        getattr(joined_inst, attr_name).append(instance)
+
+                stack.append(join.dest)
+
+        return identity_map[self.model].values()[0]
 
 
 class Query(Node):
