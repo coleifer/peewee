@@ -3015,7 +3015,6 @@ class PrefetchTestCase(ModelTestCase):
 
         qc2 = len(self.queries())
         self.assertEqual(qc2 - qc, 1)
-        import ipdb; ipdb.set_trace()
 
         self.assertEqual(results, [
             ('u1', 'b1', ['b1-c1', 'b1-c2']),

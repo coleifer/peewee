@@ -1831,22 +1831,6 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
                 self.models_with_aggregate.add(src_model)
                 self.back_references[dest_model] = (src_model, related_name)
 
-        stack = []#list(self.models_with_aggregate)
-        while stack:
-            current = stack.pop()
-            if current not in self.join_meta:
-                continue
-
-            for join in self.join_meta[current]:
-                join_model = join.dest
-                if join_model in self.models_with_aggregate:
-                    continue
-
-                fk_field = current._meta.rel_for_model(join_model)
-                if fk_field:
-                    stack.append(join_model)
-                    self.models_with_aggregate.add(join_model)
-
         self.columns_to_compare = {}
         for idx, (_, model_class, col_name, _) in enumerate(self.column_map):
             if model_class in self.models_with_aggregate:
