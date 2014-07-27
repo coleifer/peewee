@@ -567,7 +567,55 @@ normally.
 
 This works for following objects "up" the chain, i.e. following foreign key relationships.
 To accomplish the reverse, i.e. list users and prefetch all related tweets, you will need
-to use the :py:func:`prefetch` API discussed in the next secion.
+to use either :py:meth:`SelectQuery.aggregate_rows` or the :py:func:`prefetch` API discussed in the next secion.
+
+.. _aggregate_rows:
+
+Aggregating rows
+^^^^^^^^^^^^^^^^
+
+Let's say you want to build a page that shows several users and all of their tweets.
+This situation is similar to the previous example, but there is one important
+difference: when we selected tweets, they only have a single associated user, so
+we could directly assign the foreign key. The reverse is not true, however, as one
+user may have any number of tweets (or none at all).
+
+Peewee provides two approaches to avoiding O(n) queries in this situation. We can
+either:
+
+* Fetch both users and tweets in a single query. User data will be duplicated, so
+  we will manually de-dupe it and aggregate the tweets as we go.
+* Fetch users first, then fetch all the tweets associated with those users. Once
+  we have the big list of tweets, we will assign them out, matching them with the
+  appropriate user.
+
+Each solution has its place and, depending on the size and shape of the data you
+are querying, one may be more performant than the other.
+
+Let's look at the first approach, since it is more general and can work with
+arbitrarily complex queries. We will use a special flag, :py:meth:`SelectQuery.aggregate_rows`,
+when creating our query. This method tells peewee to de-duplicate any rows that,
+due to the structure of the JOINs, may be duplicated.
+
+.. code-block:: python
+
+    query = (User
+             .select(User, Tweet)  # As in the previous example, we select both tables.
+             .join(Tweet, JOIN_LEFT_OUTER)
+             .order_by(User.username)  # We need to specify an ordering here.
+             .aggregate_rows())
+    for user in query:
+        print user.username
+        for tweet in user.tweets:
+            print '  ', tweet.message
+
+Ordinarily, ``user.tweets`` would be a :py:class:`SelectQuery` and iterating over it
+would trigger an additional query. By using :py:meth:`~SelectQuery.aggregate_rows`,
+though, ``user.tweets`` is a Python ``list`` and no additional query occurs.
+
+.. note::
+    We used a ``LEFT OUTER`` join to ensure that users with zero tweets would
+    also be included in the result set.
 
 .. _prefetch:
 
@@ -575,8 +623,8 @@ Pre-fetching related instances
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 As a corollary to the previous section in which we selected models going "up" the
-chain, in this section I will show you to select models going "down" the chain
-in a 1 -> many relationship.  For example, selecting users and all of their tweets.
+chain, we can use :py:func:`prefetch` to efficiently select models going "down" the
+chain in a 1 -> many relationship.  For example, selecting users and all of their tweets.
 
 Assume you want to display a list of users and all of their tweets:
 
@@ -587,8 +635,8 @@ Assume you want to display a list of users and all of their tweets:
         for tweet in user.tweets:
             print tweet.message
 
-This will generate N queries, however - 1 for the users, and then N for each user's
-tweets.  Instead of doing N queries, we can do 2 instead:
+This will ordinarily generate N queries: 1 for the users and then N for each
+user's tweets.
 
 1. One for all the users
 2. One for all the tweets for the users selected in (1)
