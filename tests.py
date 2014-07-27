@@ -3025,6 +3025,54 @@ class PrefetchTestCase(ModelTestCase):
             ('u4', 'b6', ['b6-c1']),
         ])
 
+    def test_aggregate_parent_child(self):
+        qc = len(self.queries())
+        query = (Parent
+                 .select(Parent, Child, Orphan, ChildPet, OrphanPet)
+                 .join(Child, JOIN_LEFT_OUTER)
+                 .join(ChildPet, JOIN_LEFT_OUTER)
+                 .switch(Parent)
+                 .join(Orphan, JOIN_LEFT_OUTER)
+                 .join(OrphanPet, JOIN_LEFT_OUTER)
+                 .order_by(
+                     Parent.data,
+                     Child.data,
+                     ChildPet.id,
+                     Orphan.data,
+                     OrphanPet.id)
+                 .aggregate_rows())
+
+        results = []
+        for parent in query:
+            results.append((
+                parent.data,
+                [(child.data, [pet.data for pet in child.childpet_set])
+                 for child in parent.child_set],
+                [(orphan.data, [pet.data for pet in orphan.orphanpet_set])
+                 for orphan in parent.orphan_set]
+            ))
+
+        # Without the `.aggregate_rows()` call, this would be 289!!
+        self.assertEqual(len(self.queries()) - qc, 1)
+        self.assertEqual(results, [
+            ('p1',
+             [('c1', ['c1-p1', 'c1-p2']),
+              ('c2', ['c2-p1']),
+              ('c3', ['c3-p1']),
+              ('c4', [])],
+             [('o1', ['o1-p1', 'o1-p2']),
+              ('o2', ['o2-p1']),
+              ('o3', ['o3-p1']),
+              ('o4', [])],
+            ),
+            ('p2', [], []),
+            ('p3',
+             [('c6', []),
+              ('c7', ['c7-p1'])],
+             [('o6', ['o6-p1', 'o6-p2']),
+              ('o7', ['o7-p1'])],)
+        ])
+
 
 class TestPrefetchNonPKFK(ModelTestCase):
     requires = [Package, PackageItem]
