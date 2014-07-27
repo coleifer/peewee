@@ -1859,7 +1859,9 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
             self._initialized = True
 
         identity_map = {}
-        for model_class, instance in self.construct_instances(row).items():
+        _constructed = self.construct_instances(row)
+        primary_instance = _constructed[self.model]
+        for model_class, instance in _constructed.items():
             identity_map[model_class] = {instance.get_id(): instance}
 
         model_data = self.read_model_data(row)
@@ -1920,7 +1922,7 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
 
                 stack.append(join.dest)
 
-        return identity_map[self.model].values()[0]
+        return primary_instance
 
 
 class Query(Node):
