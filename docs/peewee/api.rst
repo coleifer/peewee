@@ -1091,6 +1091,72 @@ Query Types
         This method is useful when you either do not want or do not need full model
         instances.
 
+    .. py:method:: aggregate_rows()
+
+        :rtype: :py:class:`SelectQuery`
+
+        This method provides one way to avoid the **N+1** query problem.
+
+        Consider a webpage where you wish to display a list of users and all of their
+        associated tweets. You could approach this problem by listing the users, then
+        for each user executing a separate query to retrieve their tweets. This is the
+        **N+1** behavior, because the number of queries varies depending on the number
+        of users. Conventional wisdom is that it is preferable to execute fewer queries.
+        Peewee provides several ways to avoid this problem.
+
+        You can use the :py:func:`prefetch` helper, which uses ``IN`` clauses to retrieve
+        the tweets for the listed users.
+
+        Another method is to select both the user and the tweet data in a single query,
+        then de-dupe the users, aggregating the tweets in the process.
+
+        The raw column data might appear like this:
+
+        .. code-block:: python
+
+            # user.id, user.username, tweet.id, tweet.user_id, tweet.message
+            [1,        'charlie',     1,        1,             'hello'],
+            [1,        'charlie',     2,        1,             'goodbye'],
+            [2,        'no-tweets',   NULL,     NULL,          NULL],
+            [3,        'huey',        3,        3,             'meow'],
+            [3,        'huey',        4,        3,             'purr'],
+            [3,        'huey',        5,        3,             'hiss'],
+
+        We can infer from the ``JOIN`` clause that the user data will be duplicated, and
+        therefore by de-duping the users, we can collect their tweets in one go and iterate
+        over the users and tweets transparently.
+
+        .. code-block:: python
+
+            query = (User
+                     .select(User, Tweet)
+                     .join(Tweet, JOIN_LEFT_OUTER)
+                     .order_by(User.username, Tweet.id)
+                     .aggregate_rows())  # .aggregate_rows() tells peewee to de-dupe the rows.
+            for user in query:
+                print user.username
+                for tweet in user.tweets:
+                    print '  ', tweet.message
+
+            # Producing the following output:
+            charlie
+               hello
+               goodbye
+            huey
+               meow
+               purr
+               hiss
+            no-tweets
+
+        .. note::
+            Be sure that you specify an ``ORDER BY`` clause that ensures duplicated data
+            will appear in consecutive rows.
+
+        .. note::
+            You can specify arbitrarily complex joins, though for more complex queries
+            it may be more efficient to use :py:func:`prefetch`. In short, try both and
+            see what works best for your data-set.
+
     .. py:method:: annotate(related_model, aggregation=None)
 
         :param related_model: related :py:class:`Model` on which to perform aggregation,
