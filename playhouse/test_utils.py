@@ -67,11 +67,11 @@ class count_queries(object):
 def assert_query_count(expected, only_select=False):
     def decorator(fn):
         @wraps(fn)
-        def inner(self, *args, **kwargs):
+        def inner(*args, **kwargs):
             with count_queries(only_select=only_select) as counter:
-                ret = fn(self, *args, **kwargs)
+                ret = fn(*args, **kwargs)
 
-            self.assertEqual(counter.count, expected)
+            assert counter.count == expected
             return ret
         return inner
 

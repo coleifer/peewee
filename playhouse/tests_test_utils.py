@@ -199,6 +199,25 @@ class TestQueryCounter(BaseTestCase):
 
         self.assertEqual(count.count, 4)
 
+    def test_assert_query_count(self):
+        @assert_query_count(2)
+        def will_fail_under():
+            Data.create(key='x')
+
+        @assert_query_count(2)
+        def will_fail_over():
+            for i in range(3):
+                Data.create(key=str(i))
+
+        @assert_query_count(4)
+        def will_succeed():
+            for i in range(4):
+                Data.create(key=str(i + 100))
+
+        will_succeed()
+        self.assertRaises(AssertionError, will_fail_under)
+        self.assertRaises(AssertionError, will_fail_over)
+
     @assert_query_count(3)
     def test_only_three(self):
         for i in range(3):
