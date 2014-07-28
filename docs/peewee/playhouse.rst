@@ -2177,8 +2177,6 @@ Contains utilities helpful when testing peewee projects.
     number of queries executed in the decorated function does not equal the
     expected number.
 
-    This decorator can be used in test-cases as well.
-
     .. code-block:: python
 
         class TestMyApp(unittest.TestCase):
@@ -2188,3 +2186,12 @@ Contains utilities helpful when testing peewee projects.
                 self.assertEqual(
                     [blog.title for blog in popular_blogs],
                     ["Peewee's Playhouse!", "All About Huey", "Mickey's Adventures"])
+
+    This function can also be used as a context manager:
+
+    .. code-block:: python
+
+        class TestMyApp(unittest.TestCase):
+            def test_expensive_operation(self):
+                with assert_query_count(1):
+                    perform_expensive_operation()
