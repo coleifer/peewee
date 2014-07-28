@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+from functools import wraps
 import logging
 
 from peewee import create_model_tables
@@ -61,3 +62,17 @@ class count_queries(object):
                               if q.msg[0].startswith('SELECT ')])
         else:
             self.count = len(self._handler.queries)
+
+
+def assert_query_count(expected, only_select=False):
+    def decorator(fn):
+        @wraps(fn)
+        def inner(self, *args, **kwargs):
+            with count_queries(only_select=only_select) as counter:
+                ret = fn(self, *args, **kwargs)
+
+            self.assertEqual(counter.count, expected)
+            return ret
+        return inner
+
+    return decorator

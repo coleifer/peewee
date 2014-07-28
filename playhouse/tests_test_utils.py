@@ -2,6 +2,7 @@ import functools
 import unittest
 
 from peewee import *
+from playhouse.test_utils import assert_query_count
 from playhouse.test_utils import count_queries
 from playhouse.test_utils import test_database
 
@@ -197,3 +198,8 @@ class TestQueryCounter(BaseTestCase):
             self.assertEqual(items, ['0', '2', '4', '6', '8'])
 
         self.assertEqual(count.count, 4)
+
+    @assert_query_count(3)
+    def test_only_three(self):
+        for i in range(3):
+            Data.create(key=str(i))
