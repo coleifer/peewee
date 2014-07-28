@@ -2773,7 +2773,7 @@ class SqliteDatabase(Database):
         conn.create_function('date_trunc', 2, _sqlite_date_trunc)
         conn.create_function('regexp', 2, _sqlite_regexp)
         if self._journal_mode:
-            self.execute_sql('PRAGMA journal_mode=%s;' % journal_mode)
+            self.execute_sql('PRAGMA journal_mode=%s;' % self._journal_mode)
 
     def get_indexes_for_table(self, table):
         res = self.execute_sql('PRAGMA index_list(%s);' % self.quote(table))
