@@ -2144,3 +2144,28 @@ Contains utilities helpful when testing peewee projects.
                     self.assertEqual(Tweet.timeline('user-0') [...])
 
                 # once we exit the context manager, we're back to using the normal database
+
+
+.. py:class:: count_queries([only_select=False])
+
+    Context manager that will count the number of queries executed within
+    the context.
+
+    :param bool only_select: Only count *SELECT* queries.
+
+    .. code-block:: python
+
+        with count_queries() as counter:
+            huey = User.get(User.username == 'huey')
+            huey_tweets = [tweet.message for tweet in huey.tweets]
+
+        assert counter.count == 2
+
+    .. py:attribute:: count
+
+        The number of queries executed.
+
+    .. py:method:: get_queries()
+
+        Return a list of 2-tuples consisting of the SQL query and a list of
+        parameters.
