@@ -2169,3 +2169,22 @@ Contains utilities helpful when testing peewee projects.
 
         Return a list of 2-tuples consisting of the SQL query and a list of
         parameters.
+
+
+.. py:func:: assert_query_count(expected[, only_select=False])
+
+    Function or method decorator that will raise an ``AssertionError`` if the
+    number of queries executed in the decorated function does not equal the
+    expected number.
+
+    This decorator can be used in test-cases as well.
+
+    .. code-block:: python
+
+        class TestMyApp(unittest.TestCase):
+            @assert_query_count(1)
+            def test_get_popular_blogs(self):
+                popular_blogs = Blog.get_popular()
+                self.assertEqual(
+                    [blog.title for blog in popular_blogs],
+                    ["Peewee's Playhouse!", "All About Huey", "Mickey's Adventures"])
