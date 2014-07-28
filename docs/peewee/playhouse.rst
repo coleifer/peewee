@@ -2171,7 +2171,7 @@ Contains utilities helpful when testing peewee projects.
         parameters.
 
 
-.. py:func:: assert_query_count(expected[, only_select=False])
+.. py:function:: assert_query_count(expected[, only_select=False])
 
     Function or method decorator that will raise an ``AssertionError`` if the
     number of queries executed in the decorated function does not equal the
