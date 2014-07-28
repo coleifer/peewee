@@ -2,6 +2,7 @@ import functools
 import unittest
 
 from peewee import *
+from playhouse.test_utils import count_queries
 from playhouse.test_utils import test_database
 
 
@@ -27,10 +28,20 @@ class DataItem(BaseModel):
     class Meta:
         order_by = ('value',)
 
-class TestTestDatabaseCtxMgr(unittest.TestCase):
+class BaseTestCase(unittest.TestCase):
     def setUp(self):
+        DataItem.drop_table(True)
+        Data.drop_table(True)
         Data.create_table()
         DataItem.create_table()
+
+    def tearDown(self):
+        DataItem.drop_table()
+        Data.drop_table()
+
+class TestTestDatabaseCtxMgr(BaseTestCase):
+    def setUp(self):
+        super(TestTestDatabaseCtxMgr, self).setUp()
         a = Data.create(key='a')
         b = Data.create(key='b')
         DataItem.create(data=a, value='a1')
@@ -38,10 +49,7 @@ class TestTestDatabaseCtxMgr(unittest.TestCase):
         DataItem.create(data=b, value='b1')
 
     def tearDown(self):
-        # Drop tables from db1.
-        DataItem.drop_table()
-        Data.drop_table()
-
+        super(TestTestDatabaseCtxMgr, self).tearDown()
         # Drop tables from db2.
         db2.execute_sql('drop table if exists dataitem;')
         db2.execute_sql('drop table if exists data;')
@@ -154,3 +162,38 @@ class TestTestDatabaseCtxMgr(unittest.TestCase):
             self.assertEqual([x.value for x in c.items], ['a1', 'a2'])
             for item in c.items:
                 self.assertEqual(item.data.key, 'c')
+
+
+class TestQueryCounter(BaseTestCase):
+    def test_count(self):
+        with count_queries() as count:
+            Data.create(key='k1')
+            Data.create(key='k2')
+
+        self.assertEqual(count.count, 2)
+
+        with count_queries() as count:
+            items = [item.key for item in Data.select().order_by(Data.key)]
+            self.assertEqual(items, ['k1', 'k2'])
+
+            Data.get(Data.key == 'k1')
+            Data.get(Data.key == 'k2')
+
+        self.assertEqual(count.count, 3)
+
+    def test_only_select(self):
+        with count_queries(only_select=True) as count:
+            for i in range(10):
+                Data.create(key=str(i))
+
+            items = [item.key for item in Data.select()]
+            Data.get(Data.key == '0')
+            Data.get(Data.key == '9')
+
+            Data.delete().where(
+                Data.key << ['1', '3', '5', '7', '9']).execute()
+
+            items = [item.key for item in Data.select().order_by(Data.key)]
+            self.assertEqual(items, ['0', '2', '4', '6', '8'])
+
+        self.assertEqual(count.count, 4)
