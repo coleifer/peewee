@@ -1232,4 +1232,28 @@ The generated code is written to stdout.
 Schema migrations
 -----------------
 
-Currently peewee does not have support for automatic schema migrations.
+Currently peewee does not have support for *automatic* schema migrations, but
+you can use the :ref:`migrate` module to create simple migration scripts. The
+schema migrations module works with SQLite, MySQL and Postgres, and will even
+allow you to do things like drop or rename columns in SQLite!
+
+Here is an example of how you might write a migration script:
+
+.. code-block:: python
+
+    from playhouse.migrate import *
+
+    my_db = SqliteDatabase('my_database.db')
+    migrator = SqliteMigrator(my_db)
+
+    title_field = CharField(default='')
+    status_field = IntegerField(null=True)
+
+    with my_db.transaction():
+        migrate(
+            migrator.add_column('some_table', 'title', title_field),
+            migrator.add_column('some_table', 'status', status_field),
+            migrator.drop_column('some_table', 'old_column'),
+        )
+
+Check the :ref:`migrate` documentation for more details.
