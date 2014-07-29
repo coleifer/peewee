@@ -74,6 +74,12 @@ class Relationship(BaseModel):
     from_user = ForeignKeyField(User, related_name='relationships')
     to_user = ForeignKeyField(User, related_name='related_to')
 
+    class Meta:
+        indexes = (
+            # Specify a unique multi-column index on from/to-user.
+            (('from_user', 'to_user'), True),
+        )
+
 
 # a dead simple one-to-many relationship: one user has 0..n messages, exposed by
 # the foreign key.  because we didn't specify, a users messages will be accessible
@@ -264,11 +270,15 @@ def user_detail(username):
 @login_required
 def user_follow(username):
     user = get_object_or_404(User, username=username)
-    Relationship.get_or_create(
-        from_user=get_current_user(),
-        to_user=user,
-    )
-    flash('You are now following %s' % user.username)
+    try:
+        with database.transaction():
+            Relationship.create(
+                from_user=get_current_user(),
+                to_user=user)
+    except IntegrityError:
+        pass
+
+    flash('You are following %s' % user.username)
     return redirect(url_for('user_detail', username=user.username))
 
 @app.route('/users/<username>/unfollow/', methods=['POST'])
