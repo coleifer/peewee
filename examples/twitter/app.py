@@ -191,7 +191,8 @@ def join():
     if request.method == 'POST' and request.form['username']:
         try:
             with database.transaction():
-                # if not, create the user and store the form data on the new model
+                # Attempt to create the user. If the username is taken, due to the
+                # unique constraint, the database will raise an IntegrityError.
                 user = User.create(
                     username=request.form['username'],
                     password=md5(request.form['password']).hexdigest(),
@@ -204,8 +205,6 @@ def join():
             return redirect(url_for('homepage'))
 
         except IntegrityError:
-            # use the .get() method to quickly see if a user with that name exists
-            user = User.get(username=request.form['username'])
             flash('That username is already taken')
 
     return render_template('join.html')
