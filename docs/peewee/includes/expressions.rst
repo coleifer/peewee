@@ -1,8 +1,7 @@
 Expressions
 -----------
 
-Peewee was designed to provide a simple, expressive, and pythonic way of executing
-queries.  This section will provide a quick overview of some common types of expressions.
+Peewee is designed to provide a simple, expressive, and pythonic way of constructing SQL queries. This section will provide a quick overview of some common types of expressions.
 
 There are two primary types of objects that can be composed to create expressions:
 
@@ -33,15 +32,14 @@ Comparisons use the :ref:`column-lookups`:
     # user has logged in less than 5 times
     User.login_count < 5
 
-Comparisons can be combined using bitwise "and" and "or".  Operator precedence
-is controlled by python and comparisons can be nested to an arbitrary depth:
+Comparisons can be combined using bitwise *and* and *or*.  Operator precedence is controlled by python and comparisons can be nested to an arbitrary depth:
 
 .. code-block:: python
 
-    # user is both and admin and has logged in today
+    # User is both and admin and has logged in today
     (User.is_admin == True) & (User.last_login >= today)
 
-    # user's username is either charlie or charles
+    # User's username is either charlie or charles
     (User.username == 'charlie') | (User.username == 'charles')
 
 Comparisons can be used with functions as well:

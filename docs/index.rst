@@ -43,7 +43,6 @@ Contents:
    peewee/database
    peewee/api
    peewee/playhouse
-   peewee/upgrading
 
 Note
 ----
