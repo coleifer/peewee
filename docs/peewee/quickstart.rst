@@ -14,8 +14,6 @@ This document presents a brief, high-level overview of Peewee's primary features
     :ref:`creating a "twitter"-style web app <example-app>` using peewee and the
     Flask framework.
 
-If you'd like, you can find this guide as an `IPython notebook <http://nbviewer.ipython.org/d3faf30bbff67ce5f70c>`_.
-
 I recommend opening an interactive shell session and running the code. That way you can get a feel for typing in queries.
 
 .. _model-definition:
@@ -23,7 +21,7 @@ I recommend opening an interactive shell session and running the code. That way 
 Model Definition
 -----------------
 
-Each Model class maps directly to a database table:
+Each Model class maps directly to a database table, and each field maps to a column on that table.
 
 .. code-block:: python
 
@@ -39,7 +37,7 @@ Each Model class maps directly to a database table:
         class Meta:
             database = db # This model uses the "people.db" database.
 
-There are lots of :ref:`field types <fields>` suitable for storing various types of data. Peewee handles converting between "pythonic" values those used by the database, so you don't have to worry about it.
+There are lots of :ref:`field types <fields>` suitable for storing various types of data. Peewee handles converting between *pythonic* values those used by the database, so you don't have to worry about it.
 
 Things get interesting when we set up relationships between models using foreign keys. This is easy to do with peewee:
 
@@ -53,7 +51,6 @@ Things get interesting when we set up relationships between models using foreign
         class Meta:
             database = db # this model uses the people database
 
-
 Now that we have our models, let's create the tables in the database that will store our data. This will create the tables with the appropriate columns, indexes, sequences, and foreign key constraints:
 
 .. code-block:: pycon
@@ -66,7 +63,7 @@ Now that we have our models, let's create the tables in the database that will s
 Storing data
 ------------
 
-Let's store some people to the database, and then we'll give them some pets.
+Let's begin by populating the database with some people. We will use the :py:meth:`~Model.save` and :py:meth:`~Model.create` methods to add and update people's records.
 
 .. code-block:: pycon
 
@@ -75,16 +72,16 @@ Let's store some people to the database, and then we'll give them some pets.
     >>> uncle_bob.save() # bob is now stored in the database
     1
 
-When you call :py:meth:`Model.save`, the number of rows modified is returned.
+.. note:: When you call :py:meth:`~Model.save`, the number of rows modified is returned.
 
-You can also add a person by calling the :py:meth:`Model.create` method. When you call :py:meth:`~Model.create`, peewee will return an instance of the model class.
+You can also add a person by calling the :py:meth:`~Model.create` method, which returns a model instance:
 
 .. code-block:: pycon
 
     >>> grandma = Person.create(name='Grandma', birthday=date(1935, 3, 1), is_relative=True)
     >>> herb = Person.create(name='Herb', birthday=date(1950, 5, 5), is_relative=False)
 
-Let's say we want to change Grandma's name to be a little more specific:
+To update a value, modify it and call :py:meth:`~Model.save` to persist the changes. Here we will change Grandma's name and then save the changes in the database:
 
 .. code-block:: pycon
 
@@ -92,7 +89,7 @@ Let's say we want to change Grandma's name to be a little more specific:
     >>> grandma.save()  # Update grandma's name in the database.
     1
 
-Now we have stored 3 people in the database. Let's give them some pets. Grandma doesn't like animals in the house, so she won't have any, but Herb has a lot of pets:
+Now we have stored 3 people in the database. Let's give them some pets. Grandma doesn't like animals in the house, so she won't have any, but Herb is an animal lover:
 
 .. code-block:: pycon
 
@@ -101,14 +98,14 @@ Now we have stored 3 people in the database. Let's give them some pets. Grandma 
     >>> herb_mittens = Pet.create(owner=herb, name='Mittens', animal_type='cat')
     >>> herb_mittens_jr = Pet.create(owner=herb, name='Mittens Jr', animal_type='cat')
 
-Let's pretend that, after a long full life, Mittens gets sick and dies. We need to remove him from the database:
+After a long full life, Mittens sickens and dies. We need to remove him from the database:
 
 .. code-block:: pycon
 
     >>> herb_mittens.delete_instance() # he had a great life
     1
 
-You might notice that it printed "1" -- whenever you call :py:meth:`Model.delete_instance` it will return the number of rows removed from the database.
+.. note:: The return value of :py:meth:`~Model.delete_instance` is the number of rows removed from the database.
 
 Uncle Bob decides that too many animals have been dying at Herb's house, so he adopts Fido:
 
@@ -123,7 +120,7 @@ Uncle Bob decides that too many animals have been dying at Herb's house, so he a
 Retrieving Data
 ---------------
 
-The real power of our database comes when we want to retrieve data. Relational databases are a great tool for making ad-hoc queries.
+The real strength of our database is in how it allows us to retrieve data through *queries*. Relational databases are excellent for making ad-hoc queries.
 
 Getting single records
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -158,6 +155,19 @@ Let's list all the cats and their owner's name:
 
 .. code-block:: pycon
 
+    >>> query = Pet.select().where(Pet.animal_type == 'cat')
+    >>> for pet in query:
+    ...     print pet.name, pet.owner.name
+    ...
+    Kitty Bob
+    Mittens Jr Herb
+
+There is a big problem with the previous query: because we are accessing ``pet.owner.name`` and we did not select this value in our original query, peewee will have to perform an additional query to retrieve the pet's owner. This behavior is referred to as :py:ref:`N+1 <nplusone>` and it should generally be avoided.
+
+We can avoid the extra queries by selecting both ``Pet`` and ``Person``, and adding a *join*.
+
+.. code-block:: pycon
+
     >>> query = (Pet
     ...          .select(Pet, Person)
     ...          .join(Person)
@@ -185,7 +195,7 @@ We can do another cool thing here to get bob's pets. Since we already have an ob
     >>> for pet in Pet.select().where(Pet.owner == uncle_bob):
     ...     print pet.name
 
-Let's make sure these are sorted alphabetically. To do that add an :py:meth:`SelectQuery.order_by` clause:
+Let's make sure these are sorted alphabetically by adding an :py:meth:`~SelectQuery.order_by` clause:
 
 .. code-block:: pycon
 
@@ -222,7 +232,7 @@ Now let's list all the people *and* some info about their pets:
     Herb 1 pets
         Mittens Jr cat
 
-You may notice that the previous code snippet is a classic example of the :ref:`N+1 <nplusone>` query behavior. We can avoid this by performing a *JOIN* and aggregating the records:
+Once again we've run into a classic example of :ref:`N+1 <nplusone>` query behavior. We can avoid this by performing a *JOIN* and aggregating the records:
 
 .. code-block:: pycon
 
@@ -232,7 +242,7 @@ You may notice that the previous code snippet is a classic example of the :ref:`
     ...          .join(Pet, JOIN_LEFT_OUTER)
     ...          .order_by(Person.name))
 
-    >>> for person in query.aggregate_rows():
+    >>> for person in query.aggregate_rows():  # Note the `aggregate_rows()` call.
     ...     print person.name, person.pet_count, 'pets'
     ...     for pet in person.pets:
     ...         print '    ', pet.name, pet.animal_type
@@ -256,7 +266,11 @@ either:
 
     >>> d1940 = date(1940, 1, 1)
     >>> d1960 = date(1960, 1, 1)
-    >>> for person in Person.select().where((Person.birthday < d1940) | (Person.birthday > d1960)):
+    >>> query = (Person
+    ...          .select()
+    ...          .where((Person.birthday < d1940) | (Person.birthday > d1960)))
+    ...
+    >>> for person in query:
     ...     print person.name
     ...
     Bob
@@ -266,7 +280,11 @@ Now let's do the opposite. People whose birthday is between 1940 and 1960:
 
 .. code-block:: pycon
 
-    >>> for person in Person.select().where((Person.birthday > d1940) & (Person.birthday < d1960)):
+    >>> query = (Person
+    ...          .select()
+    ...          .where((Person.birthday > d1940) & (Person.birthday < d1960)))
+    ...
+    >>> for person in query:
     ...     print person.name
     ...
     Herb
@@ -275,25 +293,30 @@ One last query. This will use a SQL function to find all people whose names star
 
 .. code-block:: pycon
 
-    >>> for person in Person.select().where(fn.Lower(fn.Substr(Person.name, 1, 1)) == 'g'):
+    >>> expression = (fn.Lower(fn.Substr(Person.name, 1, 1)) == 'g')
+    >>> for person in Person.select().where(expression):
     ...     print person.name
     ...
     Grandma L.
 
-This is just the basics!  You can make your queries as complex as you like.
+This is just the basics! You can make your queries as complex as you like.
 
 All the other SQL clauses are available as well, such as:
 
-* :py:meth:`SelectQuery.group_by`
-* :py:meth:`SelectQuery.having`
-* :py:meth:`SelectQuery.limit` and :py:meth:`SelectQuery.offset`
+* :py:meth:`~SelectQuery.group_by`
+* :py:meth:`~SelectQuery.having`
+* :py:meth:`~SelectQuery.limit` and :py:meth:`~SelectQuery.offset`
 
 Check the documentation on :ref:`querying` for more info.
 
-Do you have a legacy database?
-------------------------------
+Working with existing databases
+-------------------------------
 
-If you already have a database, you can autogenerate peewee models using :ref:`pwiz` which is part of the :ref:`playhouse`.
+If you already have a database, you can autogenerate peewee models using :ref:`pwiz`. For instance, if I have a postgresql database named ``charles_blog``, I might run:
+
+.. code-block:: console
+
+    pwiz.py -e postgresql charles_blog > blog_models.py
 
 What next?
 ----------

@@ -8,261 +8,54 @@ with peewee.
 
 Examples will use the following models:
 
-.. code-block:: python
-
-    from peewee import *
-
-    class User(Model):
-        username = CharField()
-
-    class Tweet(Model):
-        user = ForeignKeyField(User, related_name='tweets')
-        message = TextField()
-        created_date = DateTimeField(default=datetime.datetime.now)
-        is_published = BooleanField(default=True)
-
+.. include:: includes/user_tweet.rst
 
 Database and Connection Recipes
 -------------------------------
 
-Creating a database connection and tables
+This section describes ways to configure and connect to various databases.
+
+.. include:: includes/databases.rst
+
+Generating Models from Existing Databases
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-While it is not necessary to explicitly connect to the database before using it,
-managing connections explicitly is a good practice.  This way if the connection
-fails, the exception can be caught during the "connect" step, rather than some
-arbitrary time later when a query is executed.
+If you'd like to generate peewee model definitions for an existing database, you can try out the database introspection tool :ref:`pwiz` that comes with peewee. *pwiz* is capable of introspecting Postgresql, MySQL and SQLite databases.
 
-.. code-block:: python
+Introspecting a Postgresql database:
 
-    >>> database = SqliteDatabase('stats.db')
-    >>> database.connect()
+.. code-block:: console
 
+    pwiz.py --engine=postgresql my_postgresql_database
 
-To use this database with your models, specify it in an inner "Meta" class:
+Introspecting a SQLite database:
 
-.. code-block:: python
+.. code-block:: console
 
-    class MyModel(Model):
-        some_field = CharField()
+    pwiz.py --engine=sqlite test.db
 
-        class Meta:
-            database = database
+pwiz will generate:
 
+* Database connection object
+* A *BaseModel* class to use with the database
+* *Model* classes for each table in the database.
 
-It is possible to use multiple databases (provided that you don't try and mix
-models from each):
+The generated code is written to stdout, and can easily be redirected to a file:
 
-.. code-block:: python
+.. code-block:: console
 
-    >>> custom_db = SqliteDatabase('custom.db')
+    pwiz.py -e postgresql my_postgresql_db > models.py
 
-    >>> class CustomModel(Model):
-    ...     whatev = CharField()
-    ...
-    ...     class Meta:
-    ...         database = custom_db
-    ...
-
-    >>> custom_db.connect()
-    >>> CustomModel.create_table()
-
-
-**Best practice:** define a base model class that points at the database object
-you wish to use, and then all your models will extend it:
-
-.. code-block:: python
-
-    custom_db = SqliteDatabase('custom.db')
-
-    class CustomModel(Model):
-        class Meta:
-            database = custom_db
-
-    class User(CustomModel):
-        username = CharField()
-
-    class Tweet(CustomModel):
-        # etc, etc
-
-.. note:: Remember to specify a database in a model class (or its parent class),
-    otherwise peewee will fall back to a default sqlite database named "peewee.db".
-
-
-.. _postgresql:
-
-Using with Postgresql
-^^^^^^^^^^^^^^^^^^^^^
-
-Point models at an instance of :py:class:`PostgresqlDatabase`.
-
-.. code-block:: python
-
-    psql_db = PostgresqlDatabase('my_database', user='code')
-    # if your Postgres template doesn't use UTF8, you can set the connection encoding like so:
-    psql_db.get_conn().set_client_encoding('UTF8')
-
-
-    class PostgresqlModel(Model):
-        """A base model that will use our Postgresql database"""
-        class Meta:
-            database = psql_db
-
-    class User(PostgresqlModel):
-        username = CharField()
-        # etc, etc
-
-
-.. _mysql:
-
-Using with MySQL
-^^^^^^^^^^^^^^^^
-
-Point models at an instance of :py:class:`MySQLDatabase`.
-
-.. code-block:: python
-
-    mysql_db = MySQLDatabase('my_database', user='code')
-
-
-    class MySQLModel(Model):
-        """A base model that will use our MySQL database"""
-        class Meta:
-            database = mysql_db
-
-    class User(MySQLModel):
-        username = CharField()
-        # etc, etc
-
-
-    # when you're ready to start querying, remember to connect
-    mysql_db.connect()
-
-
-.. _sqlite:
-
-Using with SQLite
-^^^^^^^^^^^^^^^^^
-
-Point models at an instance of :py:class:`SqliteDatabase`.  See also :ref:`Alternate Python SQLite Driver <apsw>`,
-it's really neat.
-
-
-.. code-block:: python
-
-    sqlite_db = SqliteDatabase('sq.db')
-
-
-    class SqliteModel(Model):
-        """A base model that will use our Sqlite database"""
-        class Meta:
-            database = sqlite_db
-
-    class User(SqliteModel):
-        username = CharField()
-        # etc, etc
-
-
-    # when you're ready to start querying, remember to connect
-    sqlite_db.connect()
-
-
-Multi-threaded applications
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Some database engines may not allow a connection to be shared across threads, notably
-sqlite.  If you would like peewee to maintain a single connection per-thread,
-instantiate your database with ``threadlocals=True`` (*recommended*):
-
-.. code-block:: python
-
-    concurrent_db = SqliteDatabase('stats.db', threadlocals=True)
-
-With the above peewee stores connection state in a thread local; each thread gets its
-own separate connection.
-
-Alternatively, Python sqlite3 module can share a connection across different threads,
-but you have to disable runtime checks to reuse the single connection:
-
-.. code-block:: python
-
-    concurrent_db = SqliteDatabase('stats.db', check_same_thread=False)
-
-
-.. _deferring_initialization:
-
-Deferring initialization
-^^^^^^^^^^^^^^^^^^^^^^^^
-
-Sometimes the database information is not known until run-time, when it might
-be loaded from a configuration file/etc.  In this case, you can "defer" the initialization
-of the database by passing in ``None`` as the database_name.
-
-.. code-block:: python
-
-    deferred_db = SqliteDatabase(None)
-
-    class SomeModel(Model):
-        class Meta:
-            database = deferred_db
-
-If you try to connect or issue any queries while your database is uninitialized
-you will get an exception:
-
-.. code-block:: python
-
-    >>> deferred_db.connect()
-    Exception: Error, database not properly initialized before opening connection
-
-To initialize your database, you simply call the ``init`` method with the database_name
-and any additional kwargs:
-
-.. code-block:: python
-
-    database_name = raw_input('What is the name of the db? ')
-    deferred_db.init(database_name)
-
-.. _dynamic_db:
-
-Dynamically defining a database
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-For even more control over how your database is defined/initialized, you can
-use the :py:class:`Proxy` helper, which is included as part of peewee.  You
-can use the proxy as a "placeholder", and then at run-time swap it out for a
-different object.  In the example below, we will swap out the database depending
-on how the app is configured:
-
-.. code-block:: python
-
-    database_proxy = Proxy()  # Create a proxy for our db.
-
-    class BaseModel(Model):
-        class Meta:
-            database = database_proxy  # Use proxy for our DB.
-
-    class User(BaseModel):
-        username = CharField()
-
-    # Based on configuration, use a different database.
-    if app.config['DEBUG']:
-        database = SqliteDatabase('local.db')
-    elif app.config['TESTING']:
-        database = SqliteDatabase(':memory:')
-    else:
-        database = PostgresqlDatabase('mega_production_db')
-
-    # Configure our proxy to use the db we specified in config.
-    database_proxy.initialize(database)
-
+.. note::
+    pwiz generally works quite well with even large and complex database
+    schemas, but in some cases it will not be able to introspect a column.
+    You may need to go through the generated code to add indexes, fix unrecognized
+    column types, and resolve any circular references that were found.
 
 Logging queries
 ^^^^^^^^^^^^^^^
 
-All queries are logged to the ``peewee`` namespace using the standard library
-logging module. Queries are logged using the ``DEBUG`` level.  If you're
-interested in doing something with the queries, you can simply register a
-handler.
+All queries are logged to the *peewee* namespace using the standard library ``logging`` module. Queries are logged using the *DEBUG* level.  If you're interested in doing something with the queries, you can simply register a handler.
 
 .. code-block:: python
 
@@ -1195,39 +988,6 @@ Here is how to create the tables:
 
     # Now that both tables exist, we can create the foreign key from User -> Tweet:
     db.create_foreign_key(User, User.favorite_tweet)
-
-
-Introspecting databases
------------------------
-
-If you'd like to generate some models for an existing database, you can try
-out the database introspection tool "pwiz" that comes with peewee.
-
-Usage:
-
-.. code-block:: console
-
-    python pwiz.py my_postgresql_database
-
-It works with postgresql, mysql and sqlite:
-
-.. code-block:: console
-
-    python pwiz.py test.db --engine=sqlite
-
-pwiz will generate code for:
-
-* database connection object
-* a base model class to use this connection
-* models that were introspected from the database tables
-
-The generated code is written to stdout.
-
-.. note::
-    pwiz is **not** a fully-automatic model generator. You may need to go
-    back through, add indexes, fix unknown column types, and resolve any
-    circular references.
-
 
 Schema migrations
 -----------------

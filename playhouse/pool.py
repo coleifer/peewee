@@ -101,3 +101,11 @@ class PooledMySQLDatabase(PooledDatabase, MySQLDatabase):
 
 class PooledPostgresqlDatabase(PooledDatabase, PostgresqlDatabase):
     pass
+
+try:
+    from playhouse.postgres_ext import PostgresqlExtDatabase
+
+    class PooledPostgresqlExtDatabase(PooledDatabase, PostgresqlExtDatabase):
+        pass
+except ImportError:
+    pass

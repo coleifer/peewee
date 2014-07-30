@@ -414,6 +414,8 @@ postgres_ext API notes
 
         # At this point server side resources are released.
 
+.. _pgarrays:
+
 .. py:class:: ArrayField([field_class=IntegerField[, dimensions=1]])
 
     Field capable of storing arrays of the provided `field_class`.
@@ -772,6 +774,7 @@ sqlite_ext API notes
 
     .. py:attribute:: _extension = 'name of sqlite extension'
 
+.. _sqlite_fts:
 
 .. py:class:: FTSModel
 
@@ -2033,6 +2036,12 @@ when instantiating your database, then up to `max_connections` will be opened.
 .. py:class:: PooledPostgresqlDatabase
 
     Subclass of :py:class:`PostgresqlDatabase` that mixes in the :py:class:`PooledDatabase` helper.
+
+.. py:class:: PooledPostgresqlExtDatabase
+
+    Subclass of :py:class:`PostgresqlExtDatabase` that mixes in the :py:class:`PooledDatabase` helper. The :py:class:`PostgresqlExtDatabase` is a part of the
+    :ref:`postgres_ext` module and provides support for many Postgres-specific
+    features.
 
 .. py:class:: PooledMySQLDatabase
 
