@@ -1089,12 +1089,12 @@ class UpdateTestCase(BasePeeweeTestCase):
 
         uq = UpdateQuery(User, {User.id: User.id + 5})
         self.assertEqual(compiler.generate_update(uq), (
-            'UPDATE "users" SET "id" = ("id" + ?)',
+            'UPDATE "users" SET "id" = (users."id" + ?)',
             [5]))
 
         uq = UpdateQuery(User, {User.id: 5 * (3 + User.id)})
         self.assertEqual(compiler.generate_update(uq), (
-            'UPDATE "users" SET "id" = (? * (? + "id"))',
+            'UPDATE "users" SET "id" = (? * (? + users."id"))',
             [5, 3]))
 
         # set username to the maximum id of all users -- silly, yes, but lets see what happens
@@ -2147,6 +2147,26 @@ class ModelQueryTestCase(ModelTestCase):
         self.assertEqual([u.username for u in User.select().order_by(User.id)], ['u-edited', 'u-edited', 'u-edited', 'u4', 'u5'])
 
         self.assertRaises(KeyError, User.update, doesnotexist='invalid')
+
+    def test_update_subquery(self):
+        self.create_users(3)
+        u1, u2, u3 = [user for user in User.select().order_by(User.id)]
+        for i in range(4):
+            Blog.create(title='b%s' % i, user=u1)
+        for i in range(2):
+            Blog.create(title='b%s' % i, user=u3)
+
+        subquery = Blog.select(fn.COUNT(Blog.pk)).where(Blog.user == User.id)
+        query = User.update(username=subquery)
+        sql, params = normal_compiler.generate_update(query)
+        self.assertEqual(sql, (
+            'UPDATE "users" SET "username" = ('
+            'SELECT COUNT(t2."pk") FROM "blog" AS t2 '
+            'WHERE (t2."user_id" = users."id"))'))
+        self.assertEqual(query.execute(), 3)
+
+        usernames = [u.username for u in User.select().order_by(User.id)]
+        self.assertEqual(usernames, ['4', '0', '2'])
 
     def test_insert(self):
         iq = User.insert(username='u1')

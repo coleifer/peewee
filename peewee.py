@@ -1431,19 +1431,25 @@ class QueryCompiler(object):
 
     def generate_update(self, query):
         model = query.model_class
+        alias_map = self.alias_map_class()
+        alias_map.add(model, model._meta.db_table)
         clauses = [SQL('UPDATE'), model._as_entity(), SQL('SET')]
 
         update = []
         for field, value in self._sorted_fields(query._update):
             if not isinstance(value, (Node, Model)):
-                value = Param(value)
-            update.append(Expression(field, OP_EQ, value, flat=True))
+                value = Param(value, conv=field.db_value)
+            update.append(Expression(
+                field._as_entity(with_table=False),
+                OP_EQ,
+                value,
+                flat=True))
         clauses.append(CommaClause(*update))
 
         if query._where:
             clauses.extend([SQL('WHERE'), query._where])
 
-        return self.build_query(clauses)
+        return self.build_query(clauses, alias_map)
 
     def generate_insert(self, query):
         model = query.model_class
