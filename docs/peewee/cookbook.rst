@@ -66,127 +66,182 @@ All queries are logged to the *peewee* namespace using the standard library ``lo
     logger.addHandler(logging.StreamHandler())
 
 
-Creating, Reading, Updating and Deleting
-----------------------------------------
+Basic CRUD operations
+---------------------
+
+This section will cover the basic CRUD operations commonly performed on a relational database:
+
+* :py:meth`Model.create`, for executing *INSERT* queries.
+* :py:meth:`Model.save` and :py:meth:`Model.update`, for executing *UPDATE* queries.
+* :py:meth:`Model.delete_instance` and :py:meth:`Model.delete`, for executing *DELETE* queries.
+* :py:meth:`Model.select`, for executing *SELECT* queries.
 
 Creating a new record
 ^^^^^^^^^^^^^^^^^^^^^
 
-You can use the :py:meth:`Model.create` method on the model:
+You can use :py:meth:`Model.create` to create a new model instance. This method accepts keyword arguments, where the keys correspond to the names of the model's fields. A new instance is returned and a row is added to the table.
 
 .. code-block:: pycon
 
     >>> User.create(username='Charlie')
     <__main__.User object at 0x2529350>
 
-This will ``INSERT`` a new row into the database.  The primary key will automatically
-be retrieved and stored on the model instance.
+This will *INSERT* a new row into the database. The primary key will automatically be retrieved and stored on the model instance.
 
-Alternatively, you can build up a model instance programmatically and then
-save it:
+Alternatively, you can build up a model instance programmatically and then call :py:meth:`~Model.save`:
 
 .. code-block:: pycon
 
-    >>> user = User()
-    >>> user.username = 'Charlie'
-    >>> user.save()
+    >>> user = User(username='Charlie')
+    >>> user.save()  # save() returns the number of rows modified.
+    1
     >>> user.id
     1
+    >>> peewee = User()
+    >>> peewee.username = 'Peewee'
+    >>> peewee.save()
+    1
+    >>> peewee.id
+    2
 
-See also :py:meth:`Model.save`, :py:meth:`Model.insert` and :py:class:`InsertQuery`
+When a model has a foreign key, you can directly assign a model instance to the foreign key field when creating a new record.
 
+.. code-block:: pycon
+
+    >>> tweet = Tweet.create(user=peewee, message='Hello!')
+
+You can also use the value of the related object's primary key:
+
+.. code-block:: pycon
+
+    >>> tweet = Tweet.create(user=2, message='Hello again!')
+
+If you simply wish to insert data and do not need to create a model instance, you can use :py:meth:`Model.insert`:
+
+.. code-block:: pycon
+
+    >>> User.insert(username='Huey').execute()
+    3
+
+After executing the insert query, the primary key of the new row is returned.
+
+.. note::
+    There are several ways you can speed up bulk insert operations. Check out
+    the :ref:`bulk_insert` recipe section for more information.
 
 Updating existing records
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Once a model instance has a primary key, any attempt to re-save it will result
-in an ``UPDATE`` rather than another ``INSERT``:
+Once a model instance has a primary key, any subsequent call to :py:meth:`~Model.save` will result in an *UPDATE* rather than another *INSERT*. The model's primary key will not change:
 
 .. code-block:: pycon
 
-    >>> user.save()
+    >>> user.save()  # save() returns the number of rows modified.
+    1
     >>> user.id
     1
     >>> user.save()
     >>> user.id
     1
+    >>> peewee.save()
+    1
+    >>> peewee.id
+    2
 
-If you want to update multiple records, issue an ``UPDATE`` query.  The following
-example will update all ``Entry`` objects, marking them as "published", if their
-pub_date is less than today's date.
+If you want to update multiple records, issue an *UPDATE* query. The following example will update all ``Tweet`` objects, marking them as *published*, if they were created before today. :py:meth:`Model.update` accepts keyword arguments where the keys correspond to the model's field names:
 
 .. code-block:: pycon
 
     >>> today = datetime.today()
-    >>> update_query = Tweet.update(is_published=True).where(Tweet.creation_date < today)
-    >>> update_query.execute()
+    >>> query = Tweet.update(is_published=True).where(Tweet.creation_date < today)
+    >>> query.execute()
     4 # <--- number of rows updated
 
-For more information, see the documentation on :py:class:`UpdateQuery`.
+For more information, see the documentation on :py:meth:`Model.update` and :py:class:`UpdateQuery`.
 
+.. note::
+    If you would like more information on performing atomic updates (such as
+    incrementing the value of a column), check out the :ref:`atomic update <atomic_updates>`
+    recipes.
 
 Deleting a record
 ^^^^^^^^^^^^^^^^^
 
-To delete a single model instance, you can use the :py:meth:`Model.delete_instance`
-shortcut:
+To delete a single model instance, you can use the :py:meth:`Model.delete_instance` shortcut. :py:meth:`~Model.delete_instance` will delete the given model instance and can optionally delete any dependent objects recursively (by specifying `recursive=True`).
 
 .. code-block:: pycon
 
     >>> user = User.get(User.id == 1)
-    >>> user.delete_instance()
-    1 # <--- number of rows deleted
+    >>> user.delete_instance()  # Returns the number of rows deleted.
+    1
 
     >>> User.get(User.id == 1)
     UserDoesNotExist: instance matching query does not exist:
     SQL: SELECT t1."id", t1."username" FROM "user" AS t1 WHERE t1."id" = ?
     PARAMS: [1]
 
-To delete an arbitrary group of records, you can issue a ``DELETE`` query.  The
-following will delete all ``Tweet`` objects that are a year old.
+To delete an arbitrary set of rows, you can issue a *DELETE* query. The following will delete all ``Tweet`` objects that are over one year old:
 
 .. code-block:: pycon
 
-    >>> delete_query = Tweet.delete().where(Tweet.pub_date < one_year_ago)
-    >>> delete_query.execute()
-    7 # <--- number of rows deleted
+    >>> query = Tweet.delete().where(Tweet.creation_date < one_year_ago)
+    >>> query.execute()  # Returns the number of rows deleted.
+    7
 
-For more information, see the documentation on :py:class:`DeleteQuery`.
+For more information, see the documentation on:
 
+* :py:meth:`Model.delete_instance`
+* :py:meth:`Model.delete`
+* :py:class:`DeleteQuery`
 
 Selecting a single record
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-You can use the :py:meth:`Model.get` method to retrieve a single instance matching
-the given query.
+You can use the :py:meth:`Model.get` method to retrieve a single instance matching the given query.
 
-This method is a shortcut that calls :py:meth:`Model.select` with the given query,
-but limits the result set to 1.  Additionally, if no model matches the given query,
-a ``DoesNotExist`` exception will be raised.
+This method is a shortcut that calls :py:meth:`Model.select` with the given query, but limits the result set to a single row. Additionally, if no model matches the given query, a ``DoesNotExist`` exception will be raised.
 
 .. code-block:: pycon
 
     >>> User.get(User.id == 1)
-    <__main__.Blog object at 0x25294d0>
+    <__main__.User object at 0x25294d0>
 
     >>> User.get(User.id == 1).username
     u'Charlie'
 
     >>> User.get(User.username == 'Charlie')
-    <__main__.Blog object at 0x2529410>
+    <__main__.User object at 0x2529410>
 
     >>> User.get(User.username == 'nobody')
     UserDoesNotExist: instance matching query does not exist:
     SQL: SELECT t1."id", t1."username" FROM "user" AS t1 WHERE t1."username" = ?
     PARAMS: ['nobody']
 
-For more information see notes on :py:class:`SelectQuery` and :ref:`querying` in general.
+For more advanced operations, you can use :py:meth:`SelectQuery.get`. The following query retrieves the latest tweet from the user named *charlie*:
 
+.. code-block:: pycon
+
+    >>> (Tweet
+    ...  .select()
+    ...  .join(User)
+    ...  .where(User.username == 'charlie')
+    ...  .order_by(Tweet.created_date.desc())
+    ...  .get())
+    <__main__.Tweet object at 0x2623410>
+
+For more information, see the documentation on:
+
+* :ref:`querying`
+* :py:meth:`Model.get`
+* :py:meth:`Model.select`
+* :py:meth:`SelectQuery.get`
 
 Selecting multiple records
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-To simply get all instances in a table, call the :py:meth:`Model.select` method:
+As we saw in the previous section, we can use :py:meth:`Model.select` to retrieve rows from the table. When you construct a *SELECT* query, the database will return any rows that correspond to your query. Peewee allows you to iterate over these rows, as well as use indexing and slicing operations.
+
+In the following example, we will simply call :py:meth:`~Model.select` and iterate over the return value, which is an instance of :py:class:`SelectQuery`. This will return all the rows in the *User* table:
 
 .. code-block:: pycon
 
@@ -194,17 +249,31 @@ To simply get all instances in a table, call the :py:meth:`Model.select` method:
     ...     print user.username
     ...
     Charlie
-    Peewee Herman
+    Huey
+    Peewee
 
-When you iterate over a :py:class:`SelectQuery`, it will automatically execute
-it and start returning results from the database cursor.  Subsequent iterations
-of the same query will not hit the database as the results are cached.
+.. note::
+    Subsequent iterations of the same query will not hit the database as
+    the results are cached. To disable this behavior (to reduce memory), call
+    :py:meth:`SelectQuery.iterator` when iterating.
 
-Another useful note is that you can retrieve instances related by :py:class:`ForeignKeyField`
-by iterating.  To get all the related instances for an object, you can query the related name.
-Looking at the example models, we have Users and Tweets.  Tweet has a foreign key to User,
-meaning that any given user may have 0..n tweets.  A user's related tweets are exposed
-using a :py:class:`SelectQuery`, and can be iterated the same as any other SelectQuery:
+When iterating over a model that contains a foreign key, be careful with the way you access values on related models. Accidentally resolving a foreign key or iterating over a back-reference can cause :ref:`N+1 query behavior <nplusone>`.
+
+When you create a foreign key, such as ``Tweet.user``, you can use the
+*related_name* to create a back-reference (``User.tweets``). Back-references
+are exposed as :py:class:`SelectQuery` instances:
+
+.. code-block:: pycon
+
+    >>> tweet = Tweet.get()
+    >>> tweet.user  # Accessing a foreign key returns the related model.
+    <tw.User at 0x7f3ceb017f50>
+
+    >>> user = User.get()
+    >>> user.tweets  # Accessing a back-reference returns a query.
+    <SelectQuery> SELECT t1."id", t1."user_id", t1."message", t1."created_date", t1."is_published" FROM "tweet" AS t1 WHERE (t1."user_id" = ?) [1]
+
+You can iterate over the ``user.tweets`` back-reference just like any other :py:class:`SelectQuery`:
 
 .. code-block:: pycon
 
@@ -214,19 +283,6 @@ using a :py:class:`SelectQuery`, and can be iterated the same as any other Selec
     hello world
     this is fun
     look at this picture of my food
-
-The ``tweets`` attribute is just another select query and any methods available
-to :py:class:`SelectQuery` are available:
-
-.. code-block:: pycon
-
-    >>> for tweet in user.tweets.order_by(Tweet.created_date.desc()):
-    ...     print tweet.message
-    ...
-    look at this picture of my food
-    this is fun
-    hello world
-
 
 Filtering records
 ^^^^^^^^^^^^^^^^^
@@ -412,6 +468,7 @@ query method.  See the documentation for details on this optimization.
     for stat in stats_qr.iterator():
         serializer.serialize_object(stat)
 
+.. _atomic_updates:
 
 Performing atomic updates
 ^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -826,6 +883,7 @@ key, you must set the ``primary_key`` attribute of the model options to a
         class Meta:
             primary_key = CompositeKey('blog', 'tag')
 
+.. _bulk_inserts:
 
 Bulk inserts
 ^^^^^^^^^^^^

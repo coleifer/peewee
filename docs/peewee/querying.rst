@@ -7,6 +7,8 @@ Querying
 
 .. include:: expressions.rst
 
+.. include:: includes/nplusone.rst
+
 Constructing queries
 --------------------
 
