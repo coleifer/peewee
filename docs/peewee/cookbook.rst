@@ -129,6 +129,57 @@ After executing the insert query, the primary key of the new row is returned.
     There are several ways you can speed up bulk insert operations. Check out
     the :ref:`bulk_insert` recipe section for more information.
 
+.. _bulk_inserts:
+
+Bulk inserts
+^^^^^^^^^^^^
+
+There are a couple of ways you can load lots of data quickly. The naive approach is to simply call :py:meth:`Model.create` in a loop:
+
+.. code-block:: python
+
+    data_source = [
+        {'field1': 'val1-1', 'field2': 'val1-2'},
+        {'field1': 'val2-1', 'field2': 'val2-2'},
+        # ...
+    ]
+
+    for data_dict in data_source:
+        Model.create(**data_dict)
+
+The above approach is slow for a couple of reasons:
+
+1. If you are using autocommit (the default), then each call to :py:meth:`~Model.create` happens in its own transaction. That is going to be slow!
+2. There is a decent amount of Python logic getting in your way, and each :py:class:`InsertQuery` must be generated and parsed into SQL.
+3. That's a lot of data (in terms of raw bytes) you are sending to your database to parse.
+4. We are retrieving the *last insert id*, which causes an additional query to be executed in some cases.
+
+You can get a **very significant speedup** by simply wrapping this in a :py:meth:`~Database.transaction`.
+
+.. code-block:: python
+
+    # This is much faster.
+    with db.transaction():
+        for data_dict in data_source:
+            Model.create(**data_dict)
+
+The above code still suffers from points 2, 3 and 4. We can get another big boost by calling :py:meth:`~Model.insert_many`. This method accepts a list of dictionaries to insert.
+
+.. code-block:: python
+
+    # Fastest.
+    with db.transaction():
+        Model.insert_many(data_source).execute()
+
+Depending on the number of rows in your data source, you may need to break it up into chunks:
+
+.. code-block:: python
+
+    # Insert rows 1000 at a time.
+    with db.transaction():
+        for idx in range(0, len(data_source), 1000):
+            Model.insert_many(data_source[idx:idx+1000]).execute()
+
 Updating existing records
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -163,6 +214,43 @@ For more information, see the documentation on :py:meth:`Model.update` and :py:c
     If you would like more information on performing atomic updates (such as
     incrementing the value of a column), check out the :ref:`atomic update <atomic_updates>`
     recipes.
+
+.. _atomic_updates:
+
+Performing atomic updates
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Peewee allows you to perform atomic updates. Let's suppose we need to update some counters. The naive approach would be to write something like this:
+
+.. code-block:: pycon
+
+    >>> for stat in Stat.select().where(Stat.url == request.url):
+    ...     stat.counter += 1
+    ...     stat.save()
+
+**Do not do this!** Not only is this slow, but it is also vulnerable to race conditions if multiple processes are updating the counter at the same time.
+
+Instead, you can update the counters atomically using :py:meth:`~Model.update`:
+
+.. code-block:: pycon
+
+    >>> query = Stat.update(counter=Stat.counter + 1).where(Stat.url == request.url)
+    >>> query.update()
+
+You can make these update statements as complex as you like. Let's give all our employees a bonus equal to their previous bonus plus 10% of their salary:
+
+.. code-block:: pycon
+
+    >>> query = Employee.update(bonus=(Employee.bonus + (Employee.salary * .1)))
+    >>> query.execute()  # Give everyone a bonus!
+
+We can even use a subquery to update the value of a column. Suppose we had a denormalized column on the ``User`` model that stored the number of tweets a user had made, and we updated this value periodically. Here is how you might write such a query:
+
+.. code-block:: pycon
+
+    >>> subquery = Tweet.select(fn.COUNT(Tweet.id)).where(Tweet.user == User.id)
+    >>> update = User.update(num_tweets=subquery)
+    >>> update.execute()
 
 Deleting a record
 ^^^^^^^^^^^^^^^^^
@@ -467,15 +555,6 @@ query method.  See the documentation for details on this optimization.
 
     for stat in stats_qr.iterator():
         serializer.serialize_object(stat)
-
-.. _atomic_updates:
-
-Performing atomic updates
-^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. code-block:: python
-
-    >>> Stat.update(counter=Stat.counter + 1).where(Stat.url == request.url).execute()
 
 
 Aggregating records
@@ -883,60 +962,6 @@ key, you must set the ``primary_key`` attribute of the model options to a
         class Meta:
             primary_key = CompositeKey('blog', 'tag')
 
-.. _bulk_inserts:
-
-Bulk inserts
-^^^^^^^^^^^^
-
-There are a couple of ways you can load lots of data quickly. Let's look at the
-various options:
-
-The naive approach is to simply call :py:meth:`Model.create`:
-
-.. code-block:: python
-
-    for data_dict in data_source:
-        Model.create(**data_dict)
-
-The above approach is slow for a couple of reasons:
-
-1. If you are using autocommit (the default), then each call to ``create``
-   happens in its own transaction. That is going to be slow!
-2. There is a decent amount of Python logic getting in your way, and each
-   :py:class:`InsertQuery` must be generated and parsed into SQL.
-3. That's a lot of data (in terms of raw bytes) you are sending to your database
-   to parse.
-4. We are retrieving the "last insert ID", which causes an additional query to
-   be executed in some cases.
-
-You can get a *very significant* speedup by simply wrapping this in a transaction.
-
-.. code-block:: python
-
-    # This is much faster.
-    with db.transaction():
-        for data_dict in data_source:
-            Model.create(**data_dict)
-
-The above code still suffers from points 2, 3 and 4. We can get another big
-boost by calling :py:meth:`Model.insert_many`. This method accepts a list of
-dictionaries to insert.
-
-.. code-block:: python
-
-    # Fastest.
-    with db.transaction():
-        Model.insert_many(data_source).execute()
-
-Depending on the number of rows in your data source, you may need to break it
-up into chunks:
-
-.. code-block:: python
-
-    # Insert rows 1000 at a time.
-    with db.transaction():
-        for idx in range(0, len(data_source), 1000):
-            Model.insert_many(data_source[idx:idx+1000]).execute()
 
 
 Manually specifying primary keys
