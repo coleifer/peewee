@@ -1163,6 +1163,20 @@ class InsertTestCase(BasePeeweeTestCase):
             'VALUES (?, ?, ?, ?)',
             [10, 'foo', 'bar', pub_date]))
 
+        subquery = Blog.select(Blog.title)
+        iq = InsertQuery(User, fields=[User.username], query=subquery)
+        sql, params = normal_compiler.generate_insert(iq)
+        self.assertEqual(sql, (
+            'INSERT INTO "users" ("username") '
+            'SELECT t2."title" FROM "blog" AS t2'))
+
+        subquery = Blog.select(Blog.pk, Blog.title)
+        iq = InsertQuery(User, query=subquery)
+        sql, params = normal_compiler.generate_insert(iq)
+        self.assertEqual(sql, (
+            'INSERT INTO "users" '
+            'SELECT t2."pk", t2."title" FROM "blog" AS t2'))
+
     def test_insert_default_vals(self):
         class DM(TestModel):
             name = CharField(default='peewee')
@@ -2179,6 +2193,24 @@ class ModelQueryTestCase(ModelTestCase):
 
         iq = User.insert(doesnotexist='invalid')
         self.assertRaises(KeyError, iq.execute)
+
+    def test_insert_from(self):
+        u0, u1, u2 = [User.create(username='U%s' % i) for i in range(3)]
+
+        subquery = (User
+                    .select(fn.LOWER(User.username))
+                    .where(User.username << ['U0', 'U2']))
+        iq = User.insert_from([User.username], subquery)
+        sql, params = normal_compiler.generate_insert(iq)
+        self.assertEqual(sql, (
+            'INSERT INTO "users" ("username") '
+            'SELECT LOWER(t2."username") FROM "users" AS t2 '
+            'WHERE (t2."username" IN (?, ?))'))
+        self.assertEqual(params, ['U0', 'U2'])
+
+        iq.execute()
+        usernames = sorted([u.username for u in User.select()])
+        self.assertEqual(usernames, ['U0', 'U1', 'U2', 'u0', 'u2'])
 
     def test_insert_many(self):
         qc = len(self.queries())
