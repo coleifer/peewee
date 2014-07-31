@@ -1089,12 +1089,12 @@ class UpdateTestCase(BasePeeweeTestCase):
 
         uq = UpdateQuery(User, {User.id: User.id + 5})
         self.assertEqual(compiler.generate_update(uq), (
-            'UPDATE "users" SET "id" = ("id" + ?)',
+            'UPDATE "users" SET "id" = (users."id" + ?)',
             [5]))
 
         uq = UpdateQuery(User, {User.id: 5 * (3 + User.id)})
         self.assertEqual(compiler.generate_update(uq), (
-            'UPDATE "users" SET "id" = (? * (? + "id"))',
+            'UPDATE "users" SET "id" = (? * (? + users."id"))',
             [5, 3]))
 
         # set username to the maximum id of all users -- silly, yes, but lets see what happens
@@ -1162,6 +1162,20 @@ class InsertTestCase(BasePeeweeTestCase):
             'INSERT INTO "blog" ("user_id", "title", "content", "pub_date") '
             'VALUES (?, ?, ?, ?)',
             [10, 'foo', 'bar', pub_date]))
+
+        subquery = Blog.select(Blog.title)
+        iq = InsertQuery(User, fields=[User.username], query=subquery)
+        sql, params = normal_compiler.generate_insert(iq)
+        self.assertEqual(sql, (
+            'INSERT INTO "users" ("username") '
+            'SELECT t2."title" FROM "blog" AS t2'))
+
+        subquery = Blog.select(Blog.pk, Blog.title)
+        iq = InsertQuery(User, query=subquery)
+        sql, params = normal_compiler.generate_insert(iq)
+        self.assertEqual(sql, (
+            'INSERT INTO "users" '
+            'SELECT t2."pk", t2."title" FROM "blog" AS t2'))
 
     def test_insert_default_vals(self):
         class DM(TestModel):
@@ -2148,6 +2162,26 @@ class ModelQueryTestCase(ModelTestCase):
 
         self.assertRaises(KeyError, User.update, doesnotexist='invalid')
 
+    def test_update_subquery(self):
+        self.create_users(3)
+        u1, u2, u3 = [user for user in User.select().order_by(User.id)]
+        for i in range(4):
+            Blog.create(title='b%s' % i, user=u1)
+        for i in range(2):
+            Blog.create(title='b%s' % i, user=u3)
+
+        subquery = Blog.select(fn.COUNT(Blog.pk)).where(Blog.user == User.id)
+        query = User.update(username=subquery)
+        sql, params = normal_compiler.generate_update(query)
+        self.assertEqual(sql, (
+            'UPDATE "users" SET "username" = ('
+            'SELECT COUNT(t2."pk") FROM "blog" AS t2 '
+            'WHERE (t2."user_id" = users."id"))'))
+        self.assertEqual(query.execute(), 3)
+
+        usernames = [u.username for u in User.select().order_by(User.id)]
+        self.assertEqual(usernames, ['4', '0', '2'])
+
     def test_insert(self):
         iq = User.insert(username='u1')
         self.assertEqual(User.select().count(), 0)
@@ -2159,6 +2193,24 @@ class ModelQueryTestCase(ModelTestCase):
 
         iq = User.insert(doesnotexist='invalid')
         self.assertRaises(KeyError, iq.execute)
+
+    def test_insert_from(self):
+        u0, u1, u2 = [User.create(username='U%s' % i) for i in range(3)]
+
+        subquery = (User
+                    .select(fn.LOWER(User.username))
+                    .where(User.username << ['U0', 'U2']))
+        iq = User.insert_from([User.username], subquery)
+        sql, params = normal_compiler.generate_insert(iq)
+        self.assertEqual(sql, (
+            'INSERT INTO "users" ("username") '
+            'SELECT LOWER(t2."username") FROM "users" AS t2 '
+            'WHERE (t2."username" IN (?, ?))'))
+        self.assertEqual(params, ['U0', 'U2'])
+
+        iq.execute()
+        usernames = sorted([u.username for u in User.select()])
+        self.assertEqual(usernames, ['U0', 'U1', 'U2', 'u0', 'u2'])
 
     def test_insert_many(self):
         qc = len(self.queries())

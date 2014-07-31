@@ -1,3 +1,11 @@
+# May you do good and not evil
+# May you find forgiveness for yourself and forgive others
+# May you share freely, never taking more than you give.  -- SQLite source code
+#
+# As we enjoy great advantages from the inventions of others, we should be glad
+# of an opportunity to serve others by an invention of ours, and this we should
+# do freely and generously.  -- Ben Franklin
+#
 #     (\
 #     (  \  /(o)\     caw!
 #     (   \/  ()/ /)
@@ -7,6 +15,7 @@
 #      ///'
 #     //
 #    '
+
 import datetime
 import decimal
 import hashlib
@@ -544,6 +553,13 @@ class Check(SQL):
     """Check constraint, usage: `Check('price > 10')`."""
     def __init__(self, value):
         super(Check, self).__init__('CHECK (%s)' % value)
+
+class _StripParens(Node):
+    _node_type = 'strip_parens'
+
+    def __init__(self, node):
+        super(_StripParens, self).__init__()
+        self.node = node
 
 Join = namedtuple('Join', ('dest', 'join_type', 'on'))
 
@@ -1168,6 +1184,7 @@ class QueryCompiler(object):
             'sql': self._parse_sql,
             'select_query': self._parse_select_query,
             'compound_select_query': self._parse_compound_select_query,
+            'strip_parens': self._parse_strip_parens,
         }
 
     def quote(self, s):
@@ -1257,6 +1274,10 @@ class QueryCompiler(object):
             clone._select = (select_field,)
         sub, params = self.generate_select(clone, alias_map)
         return '(%s)' % self._clean_extra_parens(sub), params
+
+    def _parse_strip_parens(self, node, alias_map, conv):
+        sql, params = self.parse_node(node.node, alias_map, conv)
+        return self._clean_extra_parens(sql), params
 
     def _parse(self, node, alias_map, conv):
         # By default treat the incoming node as a raw value that should be
@@ -1431,26 +1452,43 @@ class QueryCompiler(object):
 
     def generate_update(self, query):
         model = query.model_class
+        alias_map = self.alias_map_class()
+        alias_map.add(model, model._meta.db_table)
         clauses = [SQL('UPDATE'), model._as_entity(), SQL('SET')]
 
         update = []
         for field, value in self._sorted_fields(query._update):
             if not isinstance(value, (Node, Model)):
-                value = Param(value)
-            update.append(Expression(field, OP_EQ, value, flat=True))
+                value = Param(value, conv=field.db_value)
+            update.append(Expression(
+                field._as_entity(with_table=False),
+                OP_EQ,
+                value,
+                flat=True))
         clauses.append(CommaClause(*update))
 
         if query._where:
             clauses.extend([SQL('WHERE'), query._where])
 
-        return self.build_query(clauses)
+        return self.build_query(clauses, alias_map)
+
+    def _get_field_clause(self, fields):
+        return EnclosedClause(*[
+            field._as_entity(with_table=False) for field in fields])
 
     def generate_insert(self, query):
         model = query.model_class
+        alias_map = self.alias_map_class()
+        alias_map.add(model, model._meta.db_table)
         statement = query._upsert and 'INSERT OR REPLACE INTO' or 'INSERT INTO'
         clauses = [SQL(statement), model._as_entity()]
 
-        if query._rows is not None:
+        if query._query is not None:
+            if query._fields:
+                clauses.append(self._get_field_clause(query._fields))
+            clauses.append(_StripParens(query._query))
+
+        elif query._rows is not None:
             fields, value_clauses = [], []
             have_fields = False
 
@@ -1471,11 +1509,11 @@ class QueryCompiler(object):
 
             if fields:
                 clauses.extend([
-                    EnclosedClause(*fields),
+                    self._get_field_clause(fields),
                     SQL('VALUES'),
                     CommaClause(*value_clauses)])
 
-        return self.build_query(clauses)
+        return self.build_query(clauses, alias_map)
 
     def generate_delete(self, query):
         model = query.model_class
@@ -2432,17 +2470,24 @@ class UpdateQuery(Query):
         return self.database.rows_affected(self._execute())
 
 class InsertQuery(Query):
-    def __init__(self, model_class, field_dict=None, rows=None):
+    def __init__(self, model_class, field_dict=None, rows=None,
+                 fields=None, query=None):
         super(InsertQuery, self).__init__(model_class)
-        self._is_multi_row_insert = rows is not None
+
+        self._upsert = False
+        self._is_multi_row_insert = rows is not None or query is not None
         if rows is not None:
             self._rows = rows
         else:
             self._rows = [field_dict or {}]
-        self._defaults = self._get_default_values()
-        self._upsert = False
-        self._valid_fields = (set(model_class._meta.fields.keys()) |
-                              set(model_class._meta.fields.values()))
+
+        if query is None:
+            self._defaults = self._get_default_values()
+            self._valid_fields = (set(model_class._meta.fields.keys()) |
+                                  set(model_class._meta.fields.values()))
+
+        self._fields = fields
+        self._query = query
 
     def _get_default_values(self):
         defaults = self.model_class._meta.get_default_dict()
@@ -2469,6 +2514,8 @@ class InsertQuery(Query):
         query._rows = self._rows
         query._upsert = self._upsert
         query._is_multi_row_insert = self._is_multi_row_insert
+        query._fields = self._fields
+        query._query = self._query
         return query
 
     join = not_allowed('joining')
@@ -2482,11 +2529,12 @@ class InsertQuery(Query):
         return self.compiler().generate_insert(self)
 
     def execute(self):
-        if not self.database.insert_many and self._is_multi_row_insert:
-            last_id = None
-            for row in self._rows:
-                last_id = InsertQuery(self.model_class, row).execute()
-            return last_id
+        if self._is_multi_row_insert and self._query is None:
+            if not self.database.insert_many:
+                last_id = None
+                for row in self._rows:
+                    last_id = InsertQuery(self.model_class, row).execute()
+                return last_id
         return self.database.last_insert_id(self._execute(), self.model_class)
 
 class DeleteQuery(Query):
@@ -3276,6 +3324,10 @@ class Model(with_metaclass(BaseModel)):
     @classmethod
     def insert_many(cls, rows):
         return InsertQuery(cls, rows=rows)
+
+    @classmethod
+    def insert_from(cls, fields, query):
+        return InsertQuery(cls, fields=fields, query=query)
 
     @classmethod
     def delete(cls):
