@@ -399,6 +399,7 @@ relation:
         name = CharField()
         parent = ForeignKeyField('self', related_name='children', null=True)
 
+.. _manytomany:
 
 Implementing Many to Many
 -------------------------

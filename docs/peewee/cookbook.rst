@@ -6,6 +6,8 @@ Peewee Cookbook
 Below are outlined some of the ways to perform typical database-related tasks
 with peewee.
 
+.. _user_and_tweet_models:
+
 Examples will use the following models:
 
 .. include:: includes/user_tweet.rst
@@ -65,13 +67,33 @@ All queries are logged to the *peewee* namespace using the standard library ``lo
     logger.setLevel(logging.DEBUG)
     logger.addHandler(logging.StreamHandler())
 
+Generating skeleton code
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+For writing quick scripts, peewee comes with a helper script :ref:`pskel` which generates database connection and model boilerplate code. If you find yourself frequently writing small programs, :ref:`pskel` can really save you time.
+
+To generate a script, you can simply run:
+
+.. code-block:: console
+
+    pskel User Tweet SomeModel AnotherModel > my_script.py
+
+``pskel`` will generate code to connect to an in-memory SQLite database, as well as blank model definitions for the model names specified on the command line.
+
+Here is a more complete example, which will use the :py:class:`PostgresqlExtDatabase` with query logging enabled:
+
+.. code-block:: console
+
+    pskel -l -e postgres_ext -d my_database User Tweet > my_script.py
+
+You can now fill in the model definitions and get to hacking!
 
 Basic CRUD operations
 ---------------------
 
 This section will cover the basic CRUD operations commonly performed on a relational database:
 
-* :py:meth`Model.create`, for executing *INSERT* queries.
+* :py:meth:`Model.create`, for executing *INSERT* queries.
 * :py:meth:`Model.save` and :py:meth:`Model.update`, for executing *UPDATE* queries.
 * :py:meth:`Model.delete_instance` and :py:meth:`Model.delete`, for executing *DELETE* queries.
 * :py:meth:`Model.select`, for executing *SELECT* queries.
@@ -149,9 +171,9 @@ There are a couple of ways you can load lots of data quickly. The naive approach
 
 The above approach is slow for a couple of reasons:
 
-1. If you are using autocommit (the default), then each call to :py:meth:`~Model.create` happens in its own transaction. That is going to be slow!
+1. If you are using autocommit (the default), then each call to :py:meth:`~Model.create` happens in its own transaction. That is going to be really slow!
 2. There is a decent amount of Python logic getting in your way, and each :py:class:`InsertQuery` must be generated and parsed into SQL.
-3. That's a lot of data (in terms of raw bytes) you are sending to your database to parse.
+3. That's a lot of data (in terms of raw bytes of SQL) you are sending to your database to parse.
 4. We are retrieving the *last insert id*, which causes an additional query to be executed in some cases.
 
 You can get a **very significant speedup** by simply wrapping this in a :py:meth:`~Database.transaction`.
@@ -180,6 +202,17 @@ Depending on the number of rows in your data source, you may need to break it up
         for idx in range(0, len(data_source), 1000):
             Model.insert_many(data_source[idx:idx+1000]).execute()
 
+If the data you would like to bulk load is stored in another table, you can also create *INSERT* queries whose source is a *SELECT* query. Use the :py:meth:`Model.insert_from` method:
+
+.. code-block:: python
+
+    query = (TweetArchive
+             .insert_from(
+                 fields=[Tweet.user, Tweet.message],
+                 query=Tweet.select(Tweet.user, Tweet.message))
+             .execute())
+
+
 Updating existing records
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -205,8 +238,8 @@ If you want to update multiple records, issue an *UPDATE* query. The following e
 
     >>> today = datetime.today()
     >>> query = Tweet.update(is_published=True).where(Tweet.creation_date < today)
-    >>> query.execute()
-    4 # <--- number of rows updated
+    >>> query.execute()  # Returns the number of rows that were updated.
+    4
 
 For more information, see the documentation on :py:meth:`Model.update` and :py:class:`UpdateQuery`.
 
@@ -217,8 +250,8 @@ For more information, see the documentation on :py:meth:`Model.update` and :py:c
 
 .. _atomic_updates:
 
-Performing atomic updates
-^^^^^^^^^^^^^^^^^^^^^^^^^
+Atomic updates
+^^^^^^^^^^^^^^
 
 Peewee allows you to perform atomic updates. Let's suppose we need to update some counters. The naive approach would be to write something like this:
 
@@ -324,10 +357,26 @@ For more information, see the documentation on:
 * :py:meth:`Model.select`
 * :py:meth:`SelectQuery.get`
 
+Get or create
+^^^^^^^^^^^^^
+
+While peewee has a :py:meth:`~Model.get_or_create` method, this should really not be used outside of tests as it is vulnerable to a race condition. The proper way to perform a *get or create* with peewee is to rely on the database to enforce a constraint.
+
+Let's say we wish to implement registering a new user account using the :ref:`example User model <user_and_tweet_models>`. The *User* model has a *unique* constraint on the username field, so we will rely on the database's integrity guarantees to ensure we don't end up with duplicate usernames:
+
+.. code-block:: python
+
+    try:
+        with db.transaction():
+            user = User.create(username=username)
+        return 'Success'
+    except peewee.IntegrityError:
+        return 'Failure: %s is already in use' % username
+
 Selecting multiple records
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-As we saw in the previous section, we can use :py:meth:`Model.select` to retrieve rows from the table. When you construct a *SELECT* query, the database will return any rows that correspond to your query. Peewee allows you to iterate over these rows, as well as use indexing and slicing operations.
+We can use :py:meth:`Model.select` to retrieve rows from the table. When you construct a *SELECT* query, the database will return any rows that correspond to your query. Peewee allows you to iterate over these rows, as well as use indexing and slicing operations.
 
 In the following example, we will simply call :py:meth:`~Model.select` and iterate over the return value, which is an instance of :py:class:`SelectQuery`. This will return all the rows in the *User* table:
 
@@ -341,15 +390,11 @@ In the following example, we will simply call :py:meth:`~Model.select` and itera
     Peewee
 
 .. note::
-    Subsequent iterations of the same query will not hit the database as
-    the results are cached. To disable this behavior (to reduce memory), call
-    :py:meth:`SelectQuery.iterator` when iterating.
+    Subsequent iterations of the same query will not hit the database as the results are cached. To disable this behavior (to reduce memory usage), call :py:meth:`SelectQuery.iterator` when iterating.
 
-When iterating over a model that contains a foreign key, be careful with the way you access values on related models. Accidentally resolving a foreign key or iterating over a back-reference can cause :ref:`N+1 query behavior <nplusone>`.
+When iterating over a model that contains a foreign key, be careful with the way you access values on related models. Accidentally resolving a foreign key or iterating over a back-reference can cause :ref:`N+1 query behavior <cookbook_nplusone>`.
 
-When you create a foreign key, such as ``Tweet.user``, you can use the
-*related_name* to create a back-reference (``User.tweets``). Back-references
-are exposed as :py:class:`SelectQuery` instances:
+When you create a foreign key, such as ``Tweet.user``, you can use the *related_name* to create a back-reference (``User.tweets``). Back-references are exposed as :py:class:`SelectQuery` instances:
 
 .. code-block:: pycon
 
@@ -375,7 +420,7 @@ You can iterate over the ``user.tweets`` back-reference just like any other :py:
 Filtering records
 ^^^^^^^^^^^^^^^^^
 
-You can filter for particular records using normal python operators.
+You can filter for particular records using normal python operators. Peewee supports a :ref:`wide variety of operations <column-lookups>`.
 
 .. code-block:: pycon
 
@@ -401,8 +446,7 @@ You can also filter across joins:
     this is fun
     look at this picture of my food
 
-If you want to express a complex query, use parentheses and python's bitwise "or" and "and"
-operators:
+If you want to express a complex query, use parentheses and python's bitwise *or* and *and* operators:
 
 .. code-block:: pycon
 
@@ -411,16 +455,15 @@ operators:
     ...     (User.username == 'Peewee Herman')
     ... )
 
-Check out :ref:`the table of query operations <column-lookups>` to see what types of
-queries are possible.
+Check out :ref:`the table of query operations <column-lookups>` to see what types of queries are possible.
 
 .. note::
 
     A lot of fun things can go in the where clause of a query, such as:
 
-    * a field expression, e.g. ``User.username == 'Charlie'``
-    * a function expression, e.g. ``fn.Lower(fn.Substr(User.username, 1, 1)) == 'a'``
-    * a comparison of one column to another, e.g. ``Employee.salary < (Employee.tenure * 1000) + 40000``
+    * A field expression, e.g. ``User.username == 'Charlie'``
+    * A function expression, e.g. ``fn.Lower(fn.Substr(User.username, 1, 1)) == 'a'``
+    * A comparison of one column to another, e.g. ``Employee.salary < (Employee.tenure * 1000) + 40000``
 
     You can also nest queries, for example tweets by users whose username starts with "a":
 
@@ -432,11 +475,75 @@ queries are possible.
         # the "<<" operator signifies an "IN" query
         a_user_tweets = Tweet.select().where(Tweet.user << a_users)
 
-Check :ref:`the docs <query_compare>` for some more example queries.
+Check :ref:`the query operations document <query_compare>` for some more example queries.
 
+Joining tables
+^^^^^^^^^^^^^^
+
+Use the :py:meth:`~SelectQuery.join` method to *JOIN* additional tables. When a foreign key exists between the source model and the join model, you do not need to specify any additional parameters:
+
+.. code-block:: pycon
+
+    >>> my_tweets = Tweet.select().join(User).where(User.username == 'charlie')
+
+By default peewee will use an *INNER* join, but you can use *LEFT OUTER* or *FULL* joins as well:
+
+.. code-block:: python
+
+    users = (User
+             .select(User, fn.Count(Tweet.id).alias('num_tweets'))
+             .join(Tweet, JOIN_LEFT_OUTER)
+             .group_by(User)
+             .order_by(fn.Count(Tweet.id).desc()))
+    for user in users:
+        print user.username, 'has created', user.num_tweets, 'tweet(s).'
+
+If a foreign key does not exist between two tables you can still perform a join, but you must manually specify the join condition.
+
+.. note:: By specifying an alias on the join condition, you can control the attribute peewee will assign the joined instance to.
+
+.. code-block:: python
+
+    user_log = (User
+                .select(User, ActivityLog)
+                .join(
+                    ActivityLog,
+                    on=(User.id == ActivityLog.object_id).alias('log'))
+                .where(
+                    (ActivityLog.activity_type == 'user_activity') &
+                    (User.username == 'charlie')))
+
+    for user in user_log:
+        print user.username, user.log.description
+
+    #### Print something like ####
+    charlie logged in
+    charlie posted a tweet
+    charlie retweeted
+    charlie posted a tweet
+    charlie logged out
+
+When calling :py:meth:`~SelectQuery.join`, peewee will use the *last joined table* as the source table. For example:
+
+.. code-block:: python
+
+    User.join(Tweet).join(Comment)
+
+This query will result in a join from *User* to *Tweet*, and another join from *Tweet* to *Comment*.
+
+If you would like to join the same table twice, use the :py:meth:`~SelectQuery.switch` method:
+
+.. code-block:: python
+
+    # Join the Artist table on both `Ablum` and `Genre`.
+    Artist.join(Album).switch(Artist).join(Genre)
+
+.. attention:: The :ref:`cookbook_nplusone` docs discuss ways to use joins to avoid N+1 query behavior.
 
 Sorting records
 ^^^^^^^^^^^^^^^
+
+To return rows in order, use the :py:meth:`~SelectQuery.order_by` method:
 
 .. code-block:: pycon
 
@@ -454,8 +561,7 @@ Sorting records
     2011-06-07 14:08:48
     2010-01-01 00:00:00
 
-You can also order across joins.  Assuming you want
-to order tweets by the username of the author, then by created_date:
+You can also order across joins. Assuming you want to order tweets by the username of the author, then by created_date:
 
 .. code-block:: pycon
 
@@ -463,36 +569,38 @@ to order tweets by the username of the author, then by created_date:
 
 .. code-block:: sql
 
-    -- generates --
     SELECT t1."id", t1."user_id", t1."message", t1."is_published", t1."created_date"
-    FROM "tweet" AS t1 INNER JOIN "user" AS t2 ON t1."user_id" = t2."id"
+    FROM "tweet" AS t1
+    INNER JOIN "user" AS t2
+      ON t1."user_id" = t2."id"
     ORDER BY t2."username", t1."created_date" DESC
-
 
 Getting random records
 ^^^^^^^^^^^^^^^^^^^^^^
 
-Occasionally you may want to pull a random record from the database.  You can accomplish
-this by ordering by the ``random`` or ``rand`` function:
+Occasionally you may want to pull a random record from the database. You can accomplish this by ordering by the *random* or *rand* function (depending on your database):
 
-Postgresql and Sqlite:
-
-.. code-block:: python
-
-    LotteryNumber.select().order_by(fn.Random()).limit(5) # pick 5 lucky winners
-
-MySQL:
+Postgresql and Sqlite use the *Random* function:
 
 .. code-block:: python
 
-    LotterNumber.select().order_by(fn.Rand()).limit(5) # pick 5 lucky winners
+    # Pick 5 lucky winners:
+    LotteryNumber.select().order_by(fn.Random()).limit(5)
 
+MySQL uses *Rand*:
+
+.. code-block:: python
+
+    # Pick 5 lucky winners:
+    LotterNumber.select().order_by(fn.Rand()).limit(5)
 
 Paginating records
 ^^^^^^^^^^^^^^^^^^
 
-The paginate method makes it easy to grab a "page" or records -- it takes two
-parameters, `page_number`, and `items_per_page`. `page_number` is 1-based, so page 1 is the first page:
+The :py:meth:`~SelectQuery.paginate` method makes it easy to grab a *page* or records. :py:meth:`~SelectQuery.paginate` takes two parameters, ``page_number``, and ``items_per_page``.
+
+.. attention::
+    Page numbers are 1-based, so the first page of results will be page 1.
 
 .. code-block:: pycon
 
@@ -510,6 +618,7 @@ parameters, `page_number`, and `items_per_page`. `page_number` is 1-based, so pa
     tweet 18
     tweet 19
 
+If you would like more granular control, you can always use :py:meth:`~SelectQuery.limit` and :py:meth:`~SelectQuery.offset`.
 
 Counting records
 ^^^^^^^^^^^^^^^^
@@ -523,78 +632,74 @@ You can count the number of rows in any select query:
     >>> Tweet.select().where(Tweet.id > 50).count()
     50
 
+In some cases it may be necessary to wrap your query and apply a count to the rows of the inner query (such as when using *DISTINCT* or *GROUP BY*). Peewee will usually do this automatically, but in some cases you may need to manually call :py:meth:`~SelectQuery.wrapped_count` instead.
 
 Iterating over lots of rows
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-To limit the amount of memory used by peewee when iterating over a lot of rows (i.e.
-you may be dumping data to csv), use the ``iterator()`` method on the :py:class:`QueryResultWrapper`.
-This method allows you to iterate without caching each model returned, using much less
-memory when iterating over large result sets:
+By default peewee will cache the rows returned when iterating of a :py:class:`SelectQuery`. This is an optimization to allow multiple iterations as well as indexing and slicing without causing additional queries. This caching can be problematic, however, when you plan to iterate over a large number of rows.
+
+To reduce the amount of memory used by peewee when iterating over a query, use the :py:meth:`~SelectQuery.iterator` method. This method allows you to iterate without caching each model returned, using much less memory when iterating over large result sets.
 
 .. code-block:: python
 
-    # let's assume we've got 1M stat objects to dump to csv
-    stats_qr = Stat.select().execute()
+    # Let's assume we've got 10 million stat objects to dump to a csv file.
+    stats = Stat.select()
 
-    # our imaginary serializer class
+    # Our imaginary serializer class
     serializer = CSVSerializer()
 
-    # loop over all the stats and serialize
-    for stat in stats_qr.iterator():
+    # Loop over all the stats and serialize.
+    for stat in stats.iterator():
         serializer.serialize_object(stat)
 
-
-For simple queries you can see further speed improvements by using the :py:meth:`SelectQuery.naive`
-query method.  See the documentation for details on this optimization.
+For simple queries you can see further speed improvements by using the :py:meth:`~SelectQuery.naive` method. This method speeds up the construction of peewee model instances from raw cursor data. See the :py:meth:`~SelectQuery.naive` documentation for more details on this optimization.
 
 .. code-block:: python
 
-    stats_query = Stat.select().naive() # note we are calling "naive()"
-    stats_qr = stats_query.execute()
-
-    for stat in stats_qr.iterator():
+    for stat in stats.naive().iterator():
         serializer.serialize_object(stat)
 
+You can also see performance improvements by using the :py:meth:`~SelectQuery.dicts` and :py:meth:`~SelectQuery.tuples` methods.
 
 Aggregating records
 ^^^^^^^^^^^^^^^^^^^
 
-Suppose you have some users and want to get a list of them along with the count
-of tweets in each.  First I will show you the shortcut:
+Suppose you have some users and want to get a list of them along with the count of tweets in each. The :py:meth:`~SelectQuery.annotate` method provides a short-hand for creating these types of queries:
 
 .. code-block:: python
 
     query = User.select().annotate(Tweet)
 
-This is equivalent to the following:
+The above query is equivalent to:
 
 .. code-block:: python
 
-    query = User.select(
-        User, fn.Count(Tweet.id).alias('count')
-    ).join(Tweet).group_by(User)
+    query = (User
+             .select(User, fn.Count(Tweet.id).alias('count'))
+             .join(Tweet)
+             .group_by(User))
 
-
-The resulting query will return User objects with all their normal attributes
-plus an additional attribute 'count' which will contain the number of tweets.
-By default it uses an inner join if the foreign key is not nullable, which means
-blogs without entries won't appear in the list.  To remedy this, manually specify
-the type of join to include users with 0 tweets:
+The resulting query will return *User* objects with all their normal attributes plus an additional attribute *count* which will contain the count of tweets for each user. By default it uses an inner join if the foreign key is not nullable, which means users without tweets won't appear in the list. To remedy this, manually specify the type of join to include users with 0 tweets:
 
 .. code-block:: python
 
-    query = User.select().join(Tweet, JOIN_LEFT_OUTER).annotate(Tweet)
+    query = (User
+             .select()
+             .join(Tweet, JOIN_LEFT_OUTER)
+             .annotate(Tweet))
 
-You can also specify a custom aggregator:
+You can also specify a custom aggregator, such as *MIN* or *MAX*:
 
 .. code-block:: python
 
-    query = User.select().annotate(Tweet, fn.Max(Tweet.created_date).alias('latest'))
+    query = (User
+             .select()
+             .annotate(
+                 Tweet,
+                 fn.Max(Tweet.created_date).alias('latest_tweet_date')))
 
-Let's assume you have a tagging application and want to find tags that have a
-certain number of related objects.  For this example we'll use some different
-models in a Many-To-Many configuration:
+Let's assume you have a tagging application and want to find tags that have a certain number of related objects. For this example we'll use some different models in a :ref:`many-to-many <manytomany>` configuration:
 
 .. code-block:: python
 
@@ -612,9 +717,14 @@ Now say we want to find tags that have at least 5 photos associated with them:
 
 .. code-block:: python
 
-    >>> Tag.select().join(PhotoTag).join(Photo).group_by(Tag).having(fn.Count(Photo.id) > 5)
+    query = (Tag
+             .select()
+             .join(PhotoTag)
+             .join(Photo)
+             .group_by(Tag)
+             .having(fn.Count(Photo.id) > 5))
 
-Yields the following:
+This query is equivalent to the following SQL:
 
 .. code-block:: sql
 
@@ -629,20 +739,22 @@ Suppose we want to grab the associated count and store it on the tag:
 
 .. code-block:: python
 
-    >>> Tag.select(
-    ...     Tag, fn.Count(Photo.id).alias('count')
-    ... ).join(PhotoTag).join(Photo).group_by(Tag).having(fn.Count(Photo.id) > 5)
-
+    query = (Tag
+             .select(Tag, fn.Count(Photo.id).alias('count'))
+             .join(PhotoTag)
+             .join(Photo)
+             .group_by(Tag)
+             .having(fn.Count(Photo.id) > 5))
 
 Retrieving Scalar Values
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-You can retrieve scalar values by calling :py:meth:`Query.scalar`.  For instance:
+You can retrieve scalar values by calling :py:meth:`Query.scalar`. For instance:
 
 .. code-block:: python
 
     >>> PageView.select(fn.Count(fn.Distinct(PageView.url))).scalar()
-    100 # <-- there are 100 distinct URLs in the PageView table
+    100
 
 You can retrieve multiple scalar values by passing ``as_tuple=True``:
 
@@ -653,48 +765,39 @@ You can retrieve multiple scalar values by passing ``as_tuple=True``:
     ... ).scalar(as_tuple=True)
     (30000, 50000)
 
-
 SQL Functions, Subqueries and "Raw expressions"
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Suppose you need to want to get a list of all users whose username begins with "a".
-There are a couple ways to do this, but one method might be to use some SQL functions
-like ``LOWER`` and ``SUBSTR``.  To use arbitrary SQL functions, use the special :py:func:`fn`
-function to construct queries:
+Suppose you need to want to get a list of all users whose username begins with *a*. There are a couple ways to do this, but one method might be to use some SQL functions like *LOWER* and *SUBSTR*. To use arbitrary SQL functions, use the special :py:func:`fn` object to construct queries:
 
 .. code-block:: python
 
-    # select the users' id, username and the first letter of their username, lower-cased
+    # Select the user's id, username and the first letter of their username, lower-cased
     query = User.select(User, fn.Lower(fn.Substr(User.username, 1, 1)).alias('first_letter'))
 
-    # alternatively we could select only users whose username begins with 'a'
+    # Alternatively we could select only users whose username begins with 'a'
     a_users = User.select().where(fn.Lower(fn.Substr(User.username, 1, 1)) == 'a')
 
     >>> for user in a_users:
     ...    print user.username
 
-There are times when you may want to simply pass in some arbitrary sql.  You can do
-this using the special :py:class:`SQL` class.  One use-case is when referencing an
-alias:
+There are times when you may want to simply pass in some arbitrary sql. You can do this using the special :py:class:`SQL` class. One use-case is when referencing an alias:
 
 .. code-block:: python
 
-    # we'll query the user table and annotate it with a count of tweets for
+    # We'll query the user table and annotate it with a count of tweets for
     # the given user
     query = User.select(User, fn.Count(Tweet.id).alias('ct')).join(Tweet).group_by(User)
 
-    # now we will order by the count, which was aliased to "ct"
+    # Now we will order by the count, which was aliased to "ct"
     query = query.order_by(SQL('ct'))
 
 To execute custom SQL, please refer to :ref:`using_sql`.
 
-
 Retrieving raw tuples / dictionaries
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Sometimes you do not need the overhead of creating model instances and simply want
-to iterate over the row tuples.  To do this, call :py:meth:`SelectQuery.tuples` or
-:py:meth:`RawQuery.tuples`:
+Sometimes you do not need the overhead of creating model instances and simply want to iterate over the row tuples. To do this, call :py:meth:`SelectQuery.tuples` or :py:meth:`RawQuery.tuples`:
 
 .. code-block:: python
 
@@ -704,8 +807,7 @@ to iterate over the row tuples.  To do this, call :py:meth:`SelectQuery.tuples` 
     for stat_url, stat_count in stats:
         print stat_url, stat_count
 
-Similarly, you can return the rows from the cursor as dictionaries using :py:meth:`SelectQuery.dicts`
-or :py:meth:`RawQuery.dicts`:
+Similarly, you can return the rows from the cursor as dictionaries using :py:meth:`SelectQuery.dicts` or :py:meth:`RawQuery.dicts`:
 
 .. code-block:: python
 
@@ -715,200 +817,19 @@ or :py:meth:`RawQuery.dicts`:
     for stat in stats:
         print stat['url'], stat['ct']
 
-
-.. _nplusone:
+.. _cookbook_nplusone:
 
 Avoiding N+1 queries
 --------------------
 
-Peewee provides several APIs for mitigating the dreaded N+1 query behavior. Recollecting
-the models at the top of this document (``User`` and ``Tweet``), this section will try to outline
-some common N+1 scenarios, and how you can avoid them with peewee.
-
-List recent tweets
-^^^^^^^^^^^^^^^^^^
-
-The twitter timeline displays a list of tweets from multiple users. In addition
-to the tweet's content, the author of the tweet is also displayed. The N+1 scenario
-here would be:
-
-1. Fetch the 10 most recent tweets.
-2. For each tweet, select the author (10 queries).
-
-Simply by selecting both tables and using a ``JOIN``, peewee makes it possible to
-accomplish this in a single query:
-
-.. code-block:: python
-
-    query = (Tweet
-             .select(Tweet, User)  # Note that we are selecting both models.
-             .join(User)
-             .order_by(Tweet.id.desc())  # Get the most recent tweets.
-             .limit(10))
-
-    for tweet in query:
-        print tweet.user.username, '-', tweet.message
-
-Without the ``JOIN``, accessing ``tweet.user.username`` would trigger a query to
-resolve the foreign key (``tweet.user_id``) and retrieve the associated user. But
-since we have selected and joined on ``User``, peewee will automatically resolve the
-foreign-key for us.
-
-List users and all their tweets
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Let's say you want to build a page that shows several users and all of their tweets.
-The N+1 scenario would be:
-
-1. Fetch some users.
-2. For each user, fetch their tweets.
-
-This situation is similar to the previous example, but there is one important
-difference: when we selected tweets, they only have a single associated user, so
-we could directly assign the foreign key. The reverse is not true, however, as one
-user may have any number of tweets (or none at all).
-
-Peewee provides two approaches to avoiding O(n) queries in this situation. We can
-either:
-
-* Fetch both users and tweets in a single query. User data will be duplicated, so
-  we will manually de-dupe it and aggregate the tweets as we go.
-* Fetch users first, then fetch all the tweets associated with those users. Once
-  we have the big list of tweets, we will assign them out, matching them with the
-  appropriate user.
-
-Each solution has its place and, depending on the size and shape of the data you
-are querying, one may be more performant than the other.
-
-Let's look at the first approach, since it is more general and can work with
-arbitrarily complex queries. We will use a special flag, :py:meth:`SelectQuery.aggregate_rows`,
-when creating our query. This method tells peewee to de-duplicate any rows that,
-due to the structure of the JOINs, may be duplicated.
-
-.. code-block:: python
-
-    query = (User
-             .select(User, Tweet)  # As in the previous example, we select both tables.
-             .join(Tweet, JOIN_LEFT_OUTER)
-             .order_by(User.username)  # We need to specify an ordering here.
-             .aggregate_rows())
-    for user in query:
-        print user.username
-        for tweet in user.tweets:
-            print '  ', tweet.message
-
-Ordinarily, ``user.tweets`` would be a :py:class:`SelectQuery` and iterating over it
-would trigger an additional query. By using :py:meth:`~SelectQuery.aggregate_rows`,
-though, ``user.tweets`` is a Python ``list`` and no additional query occurs.
-
-.. note::
-    We used a ``LEFT OUTER`` join to ensure that users with zero tweets would
-    also be included in the result set.
-
-The second approach requires the use of a special API, :py:func:`prefetch`. Pre-fetch,
-as its name indicates, will eagerly load the appropriate tweets for the given users.
-This means instead of O(n) queries for ``n`` rows, we will do O(k) queries for ``k``
-tables.
-
-Here is an example of how we might fetch several users and any tweets they created
-within the past week.
-
-.. code-block:: python
-
-    week_ago = datetime.date.today() - datetime.timedelta(days=7)
-    users = User.select()
-    tweets = (Tweet
-              .select()
-              .where(
-                  (Tweet.is_published == True) &
-                  (Tweet.created_date >= week_ago)))
-
-    # This will perform two queries.
-    users_with_tweets = prefetch(users, tweets)
-
-    for user in users_with_tweets:
-        print user.username
-        for tweet in user.tweets_prefetch:
-            print '  ', tweet.message
-
-.. note::
-    Note that neither the ``User`` query, nor the ``Tweet`` query contained a
-    JOIN clause. When using :py:func:`prefetch` you do not need to specify the
-    join.
-
-As with :py:meth:`~SelectQuery.aggregate_rows`, you can use :py:func:`prefetch`
-to query an arbitrary number of tables. Check the API documentation for more
-examples.
+.. include:: includes/nplusone.rst
 
 .. _working_with_transactions:
 
 Working with transactions
 -------------------------
 
-Context manager
-^^^^^^^^^^^^^^^
-
-You can execute queries within a transaction using the ``transaction`` context manager,
-which will issue a commit if all goes well, or a rollback if an exception is raised:
-
-.. code-block:: python
-
-    db = SqliteDatabase(':memory:')
-
-    with db.transaction():
-        user.delete_instance(recursive=True) # delete user and associated tweets
-
-
-Decorator
-^^^^^^^^^
-
-Similar to the context manager, you can decorate functions with the ``commit_on_success``
-decorator:
-
-.. code-block:: python
-
-    db = SqliteDatabase(':memory:')
-
-    @db.commit_on_success
-    def delete_user(user):
-        user.delete_instance(recursive=True)
-
-
-Changing autocommit behavior
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-By default, databases are initialized with ``autocommit=True``, you can turn this
-on and off at runtime if you like.  The behavior below is roughly the same as the
-context manager and decorator:
-
-.. code-block:: python
-
-    db.set_autocommit(False)
-    try:
-        user.delete_instance(recursive=True)
-    except:
-        db.rollback()
-        raise
-    else:
-        try:
-            db.commit()
-        except:
-            db.rollback()
-            raise
-    finally:
-        db.set_autocommit(True)
-
-
-If you would like to manually control *every* transaction, simply turn autocommit
-off when instantiating your database:
-
-.. code-block:: python
-
-    db = SqliteDatabase(':memory:', autocommit=False)
-
-    User.create(username='somebody')
-    db.commit()
-
+.. include:: includes/transactions.rst
 
 .. _non_integer_primary_keys:
 
@@ -918,39 +839,36 @@ Non-integer Primary Keys, Composite Keys and other Tricks
 Non-integer primary keys
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-If you would like use a non-integer primary key (which I generally don't recommend),
-you can specify ``primary_key=True``.
+If you would like use a non-integer primary key (which I generally don't recommend), you can specify ``primary_key=True`` when creating a field. When you wish to create a new instance for a model using a non-autoincrementing primary key, you need to be sure you :py:meth:`~Model.save` specifying ``force_insert=True``.
 
 .. code-block:: python
 
     from peewee import *
 
     class UUIDModel(Model):
-        id = CharField(primary_key=True)
+        id = UUIDField(primary_key=True)
 
+    # This works because .create() will specify `force_insert=True`.
+    obj1 = UUIDModel.create(id=uuid.uuid4())
 
-    inst = UUIDModel(id=str(uuid.uuid4()))
-    inst.save() # <-- WRONG!!  this will try to do an update
+    # This will not work, however. Peewee will attempt to do an update:
+    obj2 = UUIDModel(id=uuid.uuid4())
+    obj2.save() # WRONG
 
-    inst.save(force_insert=True) # <-- CORRECT
+    obj2.save(force_insert=True) # CORRECT
 
-    # to update the instance after it has been saved once
-    inst.save()
+    # Once the object has been created, you can call save() normally.
+    obj2.save()
 
 .. note::
-    Any foreign keys to a model with a non-integer primary key will have the
-    ``ForeignKeyField`` use the same underlying storage type as the primary key
-    they are related to.
+    Any foreign keys to a model with a non-integer primary key will have a ``ForeignKeyField`` use the same underlying storage type as the primary key they are related to.
 
-See full documentation on :ref:`non-integer primary keys <non_int_pks>`.
-
+For more information, see the :ref:`non-integer primary keys <non_int_pks>` document.
 
 Composite primary keys
 ^^^^^^^^^^^^^^^^^^^^^^
 
-Peewee has very basic support for composite keys.  In order to use a composite
-key, you must set the ``primary_key`` attribute of the model options to a
-:py:class:`CompositeKey` instance:
+Peewee has very basic support for composite keys.  In order to use a composite key, you must set the ``primary_key`` attribute of the model options to a :py:class:`CompositeKey` instance:
 
 .. code-block:: python
 
@@ -962,15 +880,10 @@ key, you must set the ``primary_key`` attribute of the model options to a
         class Meta:
             primary_key = CompositeKey('blog', 'tag')
 
-
-
 Manually specifying primary keys
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Sometimes you do not want the database to automatically generate a primary key,
-for instance when bulk loading relational data.  To handle this on a "one-off"
-basis, you can simply tell peewee to turn off ``auto_increment`` during the
-import:
+Sometimes you do not want the database to automatically generate a value for the primary key, for instance when bulk loading relational data. To handle this on a *one-off* basis, you can simply tell peewee to turn off ``auto_increment`` during the import:
 
 .. code-block:: python
 
@@ -984,8 +897,7 @@ import:
 
     User._meta.auto_increment = True
 
-If you *always* want to have control over the primary key, simply do not use
-the ``PrimaryKeyField`` type:
+If you *always* want to have control over the primary key, simply do not use the :py:class:`PrimaryKeyField` field type, but use a normal :py:class:`IntegerField` (or other column type):
 
 .. code-block:: python
 
@@ -1002,10 +914,7 @@ the ``PrimaryKeyField`` type:
 Self-referential foreign keys
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-When creating a heirarchical structure it is necessary to create a self-referential
-foreign key which links a child object to its parent.  Because the model class is not
-defined at the time you instantiate the self-referential foreign key, use the special
-string ``'self'`` to indicate a self-referential foreign key:
+When creating a heirarchical structure it is necessary to create a self-referential foreign key which links a child object to its parent.  Because the model class is not defined at the time you instantiate the self-referential foreign key, use the special string ``'self'`` to indicate a self-referential foreign key:
 
 .. code-block:: python
 
@@ -1013,25 +922,32 @@ string ``'self'`` to indicate a self-referential foreign key:
         name = CharField()
         parent = ForeignKeyField('self', null=True, related_name='children')
 
-As you can see, the foreign key points "upward" to the parent object and the
-back-reference is named "children".
+As you can see, the foreign key points *upward* to the parent object and the back-reference is named *children*.
 
-.. note:: Self-referential foreign-keys should always be ``null=True``.
+.. attention:: Self-referential foreign-keys should always be ``null=True``.
 
+When querying against a model that contains a self-referential foreign key you may sometimes need to perform a self-join. In those cases you can use :py:meth:`Model.alias` to create a table reference. Here is how you might query the category and parent model using a self-join:
+
+.. code-block:: python
+
+    Parent = Category.alias()
+    GrandParent = Category.alias()
+    query = (Category
+             .select(Category, Parent)
+             .join(Parent, on=(Category.parent == Parent.id))
+             .join(GrandParent, on=(Parent.parent == GrandParent.id))
+             .where(GrandParent.name == 'some category')
+             .order_by(Category.name))
 
 Circular foreign key dependencies
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Sometimes it happens that you will create a circular dependency between two
-tables.
+Sometimes it happens that you will create a circular dependency between two tables.
 
 .. note::
-  My personal opinion is that circular foreign keys are a code smell and should
-  be refactored (by adding an intermediary table, for instance).
+  My personal opinion is that circular foreign keys are a code smell and should be refactored (by adding an intermediary table, for instance).
 
-Adding circular foreign keys with peewee is a bit tricky because at the time you
-are defining either foreign key, the model it points to will not have been defined
-yet, causing a ``NameError``.
+Adding circular foreign keys with peewee is a bit tricky because at the time you are defining either foreign key, the model it points to will not have been defined yet, causing a ``NameError``.
 
 By using :py:class:`Proxy` we can get around the problem, though:
 
@@ -1052,10 +968,7 @@ By using :py:class:`Proxy` we can get around the problem, though:
     # Now that Tweet is defined, we can initialize the proxy object.
     TweetProxy.initialize(Tweet)
 
-After initializing the proxy the foreign key fields are now correctly set up.
-There is one more quirk to watch out for, though.  When you call :py:class:`~Model.create_table`
-we will again encounter the same issue.  For this reason peewee will not automatically
-create a foreign key constraint for any "deferred" foreign keys.
+After initializing the proxy the foreign key fields are now correctly set up. There is one more quirk to watch out for, though. When you call :py:class:`~Model.create_table` we will again encounter the same issue. For this reason peewee will not automatically create a foreign key constraint for any *deferred* foreign keys.
 
 Here is how to create the tables:
 
@@ -1075,10 +988,7 @@ Here is how to create the tables:
 Schema migrations
 -----------------
 
-Currently peewee does not have support for *automatic* schema migrations, but
-you can use the :ref:`migrate` module to create simple migration scripts. The
-schema migrations module works with SQLite, MySQL and Postgres, and will even
-allow you to do things like drop or rename columns in SQLite!
+Currently peewee does not have support for *automatic* schema migrations, but you can use the :ref:`migrate` module to create simple migration scripts. The schema migrations module works with SQLite, MySQL and Postgres, and will even allow you to do things like drop or rename columns in SQLite!
 
 Here is an example of how you might write a migration script:
 
