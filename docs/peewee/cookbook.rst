@@ -8,7 +8,7 @@ with peewee.
 
 .. _user_and_tweet_models:
 
-Examples will use the following models:
+Throughout this document we will use the following example models:
 
 .. include:: includes/user_tweet.rst
 
