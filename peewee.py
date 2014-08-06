@@ -2761,6 +2761,9 @@ class Database(object):
         qc = self.compiler()
         return self.execute_sql(*qc.create_table(model_class, safe))
 
+    def create_tables(self, models, safe=False):
+        create_model_tables(models, fail_silently=safe)
+
     def create_index(self, model_class, fields, unique=False):
         qc = self.compiler()
         if not isinstance(fields, (list, tuple)):
@@ -2785,6 +2788,9 @@ class Database(object):
         qc = self.compiler()
         return self.execute_sql(*qc.drop_table(
             model_class, fail_silently, cascade))
+
+    def drop_tables(self, models, safe=False, cascade=False):
+        drop_model_tables(models, fail_silently=safe, cascade=cascade)
 
     def drop_sequence(self, seq):
         if self.sequences:

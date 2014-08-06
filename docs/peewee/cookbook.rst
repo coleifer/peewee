@@ -149,7 +149,7 @@ After executing the insert query, the primary key of the new row is returned.
 
 .. note::
     There are several ways you can speed up bulk insert operations. Check out
-    the :ref:`bulk_insert` recipe section for more information.
+    the :ref:`bulk_inserts` recipe section for more information.
 
 .. _bulk_inserts:
 
@@ -523,7 +523,7 @@ If a foreign key does not exist between two tables you can still perform a join,
     charlie posted a tweet
     charlie logged out
 
-When calling :py:meth:`~SelectQuery.join`, peewee will use the *last joined table* as the source table. For example:
+When calling :py:meth:`~Query.join`, peewee will use the *last joined table* as the source table. For example:
 
 .. code-block:: python
 
@@ -531,7 +531,7 @@ When calling :py:meth:`~SelectQuery.join`, peewee will use the *last joined tabl
 
 This query will result in a join from *User* to *Tweet*, and another join from *Tweet* to *Comment*.
 
-If you would like to join the same table twice, use the :py:meth:`~SelectQuery.switch` method:
+If you would like to join the same table twice, use the :py:meth:`~Query.switch` method:
 
 .. code-block:: python
 
@@ -818,9 +818,6 @@ Similarly, you can return the rows from the cursor as dictionaries using :py:met
         print stat['url'], stat['ct']
 
 .. _cookbook_nplusone:
-
-Avoiding N+1 queries
---------------------
 
 .. include:: includes/nplusone.rst
 

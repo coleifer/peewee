@@ -5,7 +5,7 @@ Querying
 
 .. _expressions:
 
-.. include:: expressions.rst
+.. include:: includes/expressions.rst
 
 .. include:: includes/nplusone.rst
 

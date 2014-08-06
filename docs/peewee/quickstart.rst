@@ -14,7 +14,7 @@ This document presents a brief, high-level overview of Peewee's primary features
     :ref:`creating a "twitter"-style web app <example-app>` using peewee and the
     Flask framework.
 
-I recommend opening an interactive shell session and running the code. That way you can get a feel for typing in queries.
+I **strongly** recommend opening an interactive shell session and running the code. That way you can get a feel for typing in queries.
 
 .. _model-definition:
 
@@ -37,7 +37,7 @@ Each Model class maps directly to a database table, and each field maps to a col
         class Meta:
             database = db # This model uses the "people.db" database.
 
-There are lots of :ref:`field types <fields>` suitable for storing various types of data. Peewee handles converting between *pythonic* values those used by the database, so you don't have to worry about it.
+There are lots of :ref:`field types <fields>` suitable for storing various types of data. Peewee handles converting between *pythonic* values those used by the database, so you can use Python objects in your code without having to worry.
 
 Things get interesting when we set up relationships between models using foreign keys. This is easy to do with peewee:
 
@@ -55,8 +55,7 @@ Now that we have our models, let's create the tables in the database that will s
 
 .. code-block:: pycon
 
-    >>> Person.create_table()
-    >>> Pet.create_table()
+    >>> db.create_tables([Person, Pet])
 
 .. _storing-data:
 
@@ -162,7 +161,7 @@ Let's list all the cats and their owner's name:
     Kitty Bob
     Mittens Jr Herb
 
-There is a big problem with the previous query: because we are accessing ``pet.owner.name`` and we did not select this value in our original query, peewee will have to perform an additional query to retrieve the pet's owner. This behavior is referred to as :py:ref:`N+1 <nplusone>` and it should generally be avoided.
+There is a big problem with the previous query: because we are accessing ``pet.owner.name`` and we did not select this value in our original query, peewee will have to perform an additional query to retrieve the pet's owner. This behavior is referred to as :ref:`N+1 <cookbook_nplusone>` and it should generally be avoided.
 
 We can avoid the extra queries by selecting both ``Pet`` and ``Person``, and adding a *join*.
 
@@ -232,7 +231,7 @@ Now let's list all the people *and* some info about their pets:
     Herb 1 pets
         Mittens Jr cat
 
-Once again we've run into a classic example of :ref:`N+1 <nplusone>` query behavior. We can avoid this by performing a *JOIN* and aggregating the records:
+Once again we've run into a classic example of :ref:`N+1 <cookbook_nplusone>` query behavior. We can avoid this by performing a *JOIN* and aggregating the records:
 
 .. code-block:: pycon
 
