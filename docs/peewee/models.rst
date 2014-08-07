@@ -3,7 +3,7 @@
 Model and Fields
 ================
 
-Also of possible interest:
+This document describes how to work with database models. For the full API documentation, see:
 
 * :ref:`Models API reference <model-api>`
 * :ref:`Fields API reference <fields-api>`
@@ -11,45 +11,23 @@ Also of possible interest:
 Models
 ------
 
-Models and their fields map directly to database tables and columns.  Consider
-the following:
+:py:class:`Model` classes and their associated :py:class:`Field` instances provide a direct mapping to database tables and columns. Model instances correspond to rows in the database table, and their attributes are the column values for the given row.
+
+The following code shows the typical way you will define your database connection and model classes.
 
 .. _blog-models:
 
-.. code-block:: python
+.. include:: includes/user_tweet_with_db
 
-    from peewee import *
-
-    db = SqliteDatabase('test.db')
-
-    # create a base model class that our application's models will extend
-    class BaseModel(Model):
-        class Meta:
-            database = db
-
-    class User(BaseModel):
-        username = CharField()
-
-    class Tweet(BaseModel):
-        user = ForeignKeyField(User, related_name='tweets')
-        message = TextField()
-        created_date = DateTimeField(default=datetime.datetime.now)
-        is_published = BooleanField(default=True)
-
-
-This is a typical example of how to specify models with peewee.  There are several
-things going on:
-
-1. Create an instance of a :py:class:`Database`
+1. Create an instance of a :py:class:`Database`.
 
     .. code-block:: python
 
-        db = SqliteDatabase('test.db')
+        db = SqliteDatabase('my_app.db')
 
-    This establishes an object, ``db``, which is used by the models to connect to and
-    query the database.
+    The ``db`` object will be used to manage the connections to the Sqlite database. In this example we're using :py:class:`SqliteDatabase`, but you could also use one of the other :ref:`database engines <database_cookbook>`_.
 
-2. Create a base model class which specifies our database
+2. Create a base model class which specifies our database.
 
     .. code-block:: python
 
@@ -57,83 +35,72 @@ things going on:
             class Meta:
                 database = db
 
-    Model configuration is kept namespaced in a special class called ``Meta`` -- this
-    convention is borrowed from Django.  ``Meta`` configuration
-    is passed on to subclasses, so our project's models will all subclass ``BaseModel``.
+    It is good practice to define a base model class which establishes the database connection. This makes your code DRY as you will not have to specify the database for subsequent models.
 
-3. Create a model
+    Model configuration is kept namespaced in a special class called ``Meta``. This convention is borrowed from Django.  ``Meta`` configuration is passed on to subclasses, so our project's models will all subclass ``BaseModel``. There are :ref:`many different attributes <model-options>` you can configure using *Model.Meta*.
+
+3. Define a model class.
 
     .. code-block:: python
 
         class User(BaseModel):
-            username = CharField()
+            username = CharField(unique=True)
 
-    Model definition is pretty similar to django or sqlalchemy -- you subclass :py:class:`Model`
-    and add :py:class:`Field` instances as class attributes.
+    Model definition uses the declarative style seen in other popular ORMs like SQLAlchemy or Django. Note that we are extending the *BaseModel* class so the *User* model will inherit the database connection.
 
-    Models provide methods for creating/reading/updating/deleting rows in the
-    database.
+    We have explicitly defined a single *username* column with a unique constraint. Because we have not specified a primary key, peewee will automatically add an auto-incrementing integer primary key field named *id*.
 
+.. note::
+    If you would like to start using peewee with an existing database, you can use :ref:`pwiz` to automatically generate model definitions.
 
 Creating tables
 ---------------
 
-In order to start using these models, its necessary to open a connection to the
-database and create the tables first:
+In order to start using these models, its necessary to open a connection to the database and create the tables first. Peewee will run the necessary *CREATE TABLE* queries, additionally creating any constraints and indexes.
 
 .. code-block:: python
 
-    # connect to our database
+    # Connect to our database.
     db.connect()
 
-    # create the tables
-    User.create_table()
-    Tweet.create_table()
+    # Create the tables.
+    db.create_tables([User, Tweet])
 
 .. note::
-    Strictly speaking, it is not necessary to call :py:meth:`~Database.connect` but
-    it is good practice to be explicit.  That way if something goes wrong, the error
-    occurs at the connect step, rather than some arbitrary time later.
+    Strictly speaking, it is not necessary to call :py:meth:`~Database.connect` but it is good practice to be explicit. That way if something goes wrong, the error occurs at the connect step, rather than some arbitrary time later.
 
+.. note::
+    Peewee can determine if your tables already exist, and conditionally create them:
+
+    .. code-block:: python
+
+        # Only create the tables if they do not exist.
+        db.create_tables([User, Tweet], safe=True)
+
+After you have created your tables, if you choose to modify your database schema (by adding, removing or otherwise changing the columns) you will need to either:
+
+* Drop the table and re-create it.
+* Run one or more *ALTER TABLE* queries. Peewee comes with a schema migration tool which can greatly simplify this. Check the :ref:`schema migrations <migrate>` docs for details.
 
 Model instances
 ---------------
 
-Creating models in the interactive interpreter is a snap.
-
-You can use the :py:meth:`Model.create` classmethod:
-
-    .. code-block:: python
-
-        >>> user = User.create(username='charlie')
-        >>> tweet = Tweet.create(
-        ...     message='http://www.youtube.com/watch?v=xdhLQCYQ-nQ',
-        ...     user=user)
-
-        >>> tweet.user.username
-        'charlie'
-
-Or you can build up the instance programmatically:
-
-    .. code-block:: python
-
-        >>> user = User()
-        >>> user.username = 'charlie'
-        >>> user.save()
-
+.. include:: includes/crud
 
 Traversing foriegn keys
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-As you can see from above, the foreign key from ``Tweet`` to ``User`` can be
-traversed automatically:
+Referring back to the :ref:`User and Tweet models <blog-models>`, note that there is a :py:class:`ForeignKeyField` from *Tweet* to *User*. The foreign key can be traversed, allowing you access to the associated user instance:
 
-.. code-block:: python
+.. code-block:: pycon
 
     >>> tweet.user.username
     'charlie'
 
-The reverse is also true, we can iterate a ``User`` objects associated ``Tweets``:
+.. note::
+    Unless the *User* model was explicitly selected when retrieving the *Tweet*, an additional query will be required to load the *User* data. To learn how to avoid the extra query, see the :ref:`N+1 query documentation <nplusone>`.
+
+The reverse is also true, and we can iterate over the tweets associated with a given *User* instance:
 
 .. code-block:: python
 
@@ -142,21 +109,17 @@ The reverse is also true, we can iterate a ``User`` objects associated ``Tweets`
     ...
     http://www.youtube.com/watch?v=xdhLQCYQ-nQ
 
-Under the hood, the ``tweets`` attribute is just a :py:class:`SelectQuery` with
-the where clause prepopulated to point at the right ``User`` instance:
+Under the hood, the *tweets* attribute is just a :py:class:`SelectQuery` with the *WHERE* clause pre-populated to point to the given *User* instance:
 
 .. code-block:: python
 
     >>> user.tweets
-    <peewee.SelectQuery object at 0x151f510>
-
+    <class 'twx.Tweet'> SELECT t1."id", t1."user_id", t1."message", ...
 
 Model options and table metadata
 --------------------------------
 
-In order not to pollute the model namespace, model-specific configuration is
-placed in a special class called ``Meta``, which is a convention borrowed from
-the django framework:
+In order not to pollute the model namespace, model-specific configuration is placed in a special class called *Meta* (a convention borrowed from the django framework):
 
 .. code-block:: python
 
@@ -170,16 +133,39 @@ the django framework:
         class Meta:
             database = contacts_db
 
-
-This instructs peewee that whenever a query is executed on ``Person`` to use
-the contacts database.
+This instructs peewee that whenever a query is executed on *Person* to use the contacts database.
 
 .. note::
-    Take a look at :ref:`the sample models <blog-models>` - you will notice that
-    we created a ``BaseModel`` that defined the database, and then extended.  This
-    is the preferred way to define a database and create models.
+    Take a look at :ref:`the sample models <blog-models>` - you will notice that we created a ``BaseModel`` that defined the database, and then extended. This is the preferred way to define a database and create models.
 
-There are several options you can specify as ``Meta`` attributes:
+Once the class is defined, you should not access ``ModelClass.Meta``, but instead use ``ModelClass._meta``:
+
+.. code-block:: pycon
+
+    >>> Person.Meta
+    Traceback (most recent call last):
+      File "<stdin>", line 1, in <module>
+    AttributeError: type object 'Preson' has no attribute 'Meta'
+
+    >>> Person._meta
+    <peewee.ModelOptions object at 0x7f51a2f03790>
+
+The :py:class:`ModelOptions` class implements several methods which may be of use for retrieving model metadata (such as lists of fields, foreign key relationships, and more).
+
+.. code-block:: pycon
+
+    >>> Person._meta.fields
+    {'id': <peewee.PrimaryKeyField object at 0x7f51a2e92750>, 'name': <peewee.CharField object at 0x7f51a2f0a510>}
+
+    >>> Person._meta.primary_key
+    <peewee.PrimaryKeyField object at 0x7f51a2e92750>
+
+    >>> Person._meta.database
+    <peewee.SqliteDatabase object at 0x7f519bff6dd0>
+
+.. _model-options:
+
+There are several options you can specify as ``Meta`` attributes. While most options are inheritable, some are table-specific and will not be inherited by subclasses.
 
 ===================   ==============================================   ============
 Option                Meaning                                          Inheritable?
@@ -192,15 +178,40 @@ Option                Meaning                                          Inheritab
 ``table_alias``       an alias to use for the table in queries         no
 ===================   ==============================================   ============
 
+Here is an example showing inheritable versus non-inheritable attributes:
+
+.. code-block:: pycon
+
+    >>> db = SqliteDatabase(':memory:')
+    >>> class ModelOne(Model):
+    ...     class Meta:
+    ...         database = db
+    ...         db_table = 'model_one_tbl'
+    ...
+    >>> class ModelTwo(ModelOne):
+    ...     pass
+    ...
+    >>> ModelOne._meta.database is ModelTwo._meta.database
+    True
+    >>> ModelOne._meta.db_table == ModelTwo._meta.db_table
+    False
 
 .. _model_indexes:
 
 Specifying indexes for a model
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Indexes are stored in a nested tuple.  Each index is a 2-tuple, the first part
-of which is another tuple of the names of the fields, the second part a boolean
-indicating whether the index should be unique.
+Peewee can create indexes on single or multiple columns, optionally including a *UNIQUE* constraint.
+
+Single column indexes are defined using field initialization parameters. The following example adds a unique index on the *username* field, and a normal index on the *email* field:
+
+.. code-block:: python
+
+    class User(Model):
+        username = CharField(unique=True)
+        email = CharField(index=True)
+
+Multi-column indexes are defined as *Meta* attributes using a nested tuple. Each database index is a 2-tuple, the first part of which is a tuple of the names of the fields, the second part a boolean indicating whether the index should be unique.
 
 .. code-block:: python
 
@@ -219,12 +230,10 @@ indicating whether the index should be unique.
                 (('from_acct', 'to_acct'), False),
             )
 
-
 Specifying a default ordering
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-You can specify a default ordering for your models.  It is simply a tuple of
-field names. If a field should be ordered descending, prefix it with a dash ("-").
+You can specify a default sort-order for your models. It is simply a tuple of field names. If a field should be ordered descending, prefix it with a dash ("-").
 
 .. code-block:: python
 
@@ -238,13 +247,12 @@ field names. If a field should be ordered descending, prefix it with a dash ("-"
 
 .. note:: This can be overridden at any time by calling :py:meth:`SelectQuery.order_by`.
 
+This feature is provided for users familiar with the Django framework and, while it may seem convenient, I would caution against using this as it can sometimes lead to subtle bugs.
 
 Inheriting model metadata
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Some options are "inheritable" (see table above), which means that you can define a
-database on one model, then subclass that model and the child models will use
-the same database.
+Some options are *inheritable* (see :ref:`model options table <model-options>`), which means that you can define a database on one model, then subclass that model and the child models will use the same database.
 
 .. code-block:: python
 
@@ -262,19 +270,14 @@ the same database.
             # no need to define database again since it will be inherited from
             # the BaseModel
 
-
 .. _fields:
 
 Fields
 ------
 
-The :py:class:`Field` class is used to describe the mapping of :py:class:`Model`
-attributes to database columns.  Each field type has a corresponding SQL storage
-class (i.e. varchar, int), and conversion between python data types and underlying
-storage is handled transparently.
+The :py:class:`Field` class is used to describe the mapping of :py:class:`Model` attributes to database columns. Each field type has a corresponding SQL storage class (i.e. varchar, int), and conversion between python data types and underlying storage is handled transparently.
 
-When creating a :py:class:`Model` class, fields are defined as class-level attributes.
-This should look familiar to users of the django framework.  Here's an example:
+When creating a :py:class:`Model` class, fields are defined as class-level attributes. This should look familiar to users of the django framework. Here's an example:
 
 .. code-block:: python
 
