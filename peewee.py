@@ -1299,7 +1299,8 @@ class QueryCompiler(object):
                     conv.to_field.db_value(getattr(node, conv.to_field.name))]
             else:
                 params = [node.get_id()]
-        elif isclass(node) and issubclass(node, Model):
+        elif (isclass(node) and issubclass(node, Model)) or \
+                isinstance(node, ModelAlias):
             entity = node._as_entity().alias(alias_map[node])
             sql, params = self.parse_node(entity, alias_map, conv)
         else:
