@@ -37,10 +37,10 @@ Contents:
    peewee/installation
    peewee/quickstart
    peewee/example
-   peewee/cookbook
+   peewee/database
    peewee/models
    peewee/querying
-   peewee/database
+   peewee/transactions
    peewee/api
    peewee/playhouse
 
