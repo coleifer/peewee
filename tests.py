@@ -3801,6 +3801,27 @@ class FieldTypeTestCase(ModelTestCase):
         assertValues('efg$', 'abcdefg', 'defg')
         assertValues('a.+d', 'abcdefg', 'abcd')
 
+    def test_concat(self):
+        if database_class is MySQLDatabase:
+            if TEST_VERBOSITY > 0:
+                print_('Skipping `concat` for mysql.')
+            return
+
+        NullModel.create(char_field='foo')
+        NullModel.create(char_field='bar')
+
+        values = (NullModel
+                  .select(
+                      NullModel.char_field.concat('-nuggets').alias('nugs'))
+                  .order_by(NullModel.id)
+                  .dicts())
+        self.assertEqual(list(values), [
+            {'nugs': 'c1-nuggets'},
+            {'nugs': 'c2-nuggets'},
+            {'nugs': 'c3-nuggets'},
+            {'nugs': 'foo-nuggets'},
+            {'nugs': 'bar-nuggets'}])
+
 class DateTimeExtractTestCase(ModelTestCase):
     requires = [NullModel]
 

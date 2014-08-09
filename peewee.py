@@ -213,6 +213,7 @@ OP_LIKE = 'like'
 OP_ILIKE = 'ilike'
 OP_BETWEEN = 'between'
 OP_REGEXP = 'regexp'
+OP_CONCAT = '||'
 
 # To support "django-style" double-underscore filters, create a mapping between
 # operation name and operation code, e.g. "__eq" == OP_EQ.
@@ -397,6 +398,8 @@ class Node(object):
         return Expression(self, OP_BETWEEN, Clause(low, R('AND'), high))
     def regexp(self, expression):
         return Expression(self, OP_REGEXP, expression)
+    def concat(self, rhs):
+        return Expression(self, OP_CONCAT, rhs)
 
 class Expression(Node):
     """A binary expression, e.g `foo + 1` or `bar < 7`."""
@@ -1154,6 +1157,7 @@ class QueryCompiler(object):
         OP_OR: 'OR',
         OP_MOD: '%',
         OP_REGEXP: 'REGEXP',
+        OP_CONCAT: '||',
     }
 
     join_map = {
