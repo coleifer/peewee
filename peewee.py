@@ -3072,7 +3072,7 @@ class savepoint_sqlite(savepoint):
             conn.isolation_level = None
         else:
             self._orig_isolation_level = None
-        super(savepoint_sqlite, self).__enter__()
+        return super(savepoint_sqlite, self).__enter__()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         try:
