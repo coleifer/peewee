@@ -22,7 +22,7 @@ app.config.from_object(__name__)
 
 # create a peewee database instance -- our models will use this database to
 # persist information
-database = SqliteDatabase(DATABASE)
+database = SqliteDatabase(DATABASE, threadlocals=True)
 
 # model definitions -- the standard "pattern" is to define a base model class
 # that specifies which database to use.  then, any subclasses will automatically
@@ -96,9 +96,7 @@ class Message(BaseModel):
 # simple utility function to create tables
 def create_tables():
     database.connect()
-    User.create_table()
-    Relationship.create_table()
-    Message.create_table()
+    database.create_tables([User, Relationship, Message])
 
 # flask provides a "session" object, which allows us to store information across
 # requests (stored by default in a secure cookie).  this function allows us to
@@ -139,9 +137,9 @@ def object_list(template_name, qr, var_name='object_list', **kwargs):
 # shortcut "get" method on model, which retrieves a single object or raises a
 # DoesNotExist exception if no matching object exists
 # http://charlesleifer.com/docs/peewee/peewee/models.html#Model.get)
-def get_object_or_404(model, **kwargs):
+def get_object_or_404(model, *expressions):
     try:
-        return model.get(**kwargs)
+        return model.get(*expressions)
     except model.DoesNotExist:
         abort(404)
 
@@ -181,9 +179,7 @@ def private_timeline():
     # messages where the person who created the message is someone the current
     # user is following.  these messages are then ordered newest-first.
     user = get_current_user()
-    messages = Message.select().where(
-        Message.user << user.following()
-    )
+    messages = Message.select().where(Message.user << user.following())
     return object_list('private_messages.html', messages, 'message_list')
 
 @app.route('/public/')
@@ -203,8 +199,7 @@ def join():
                     username=request.form['username'],
                     password=md5(request.form['password']).hexdigest(),
                     email=request.form['email'],
-                    join_date=datetime.datetime.now()
-                )
+                    join_date=datetime.datetime.now())
 
             # mark the user as being 'authenticated' by setting the session vars
             auth_user(user)
@@ -221,8 +216,7 @@ def login():
         try:
             user = User.get(
                 username=request.form['username'],
-                password=md5(request.form['password']).hexdigest()
-            )
+                password=md5(request.form['password']).hexdigest())
         except User.DoesNotExist:
             flash('The password entered is incorrect')
         else:
@@ -258,7 +252,7 @@ def user_list():
 def user_detail(username):
     # using the "get_object_or_404" shortcut here to get a user with a valid
     # username or short-circuit and display a 404 if no user exists in the db
-    user = get_object_or_404(User, username=username)
+    user = get_object_or_404(User, User.username == username)
 
     # get all the users messages ordered newest-first -- note how we're accessing
     # the messages -- user.message_set.  could also have written it as:
@@ -269,7 +263,7 @@ def user_detail(username):
 @app.route('/users/<username>/follow/', methods=['POST'])
 @login_required
 def user_follow(username):
-    user = get_object_or_404(User, username=username)
+    user = get_object_or_404(User, User.username == username)
     try:
         with database.transaction():
             Relationship.create(
@@ -284,7 +278,7 @@ def user_follow(username):
 @app.route('/users/<username>/unfollow/', methods=['POST'])
 @login_required
 def user_unfollow(username):
-    user = get_object_or_404(User, username=username)
+    user = get_object_or_404(User, User.username == username)
     Relationship.delete().where(
         (Relationship.from_user == get_current_user()) &
         (Relationship.to_user == user)
@@ -300,8 +294,7 @@ def create():
         message = Message.create(
             user=user,
             content=request.form['content'],
-            pub_date=datetime.datetime.now()
-        )
+            pub_date=datetime.datetime.now())
         flash('Your message has been created')
         return redirect(url_for('user_detail', username=user.username))
 

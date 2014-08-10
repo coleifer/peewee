@@ -13,6 +13,7 @@ specific functionality:
 * :ref:`apsw`
 * :ref:`postgres_ext`
 * :ref:`sqlite_ext`
+* :ref:`berkeleydb`
 * :ref:`sqlcipher_ext`
 
 Modules which expose higher-level python constructs:
@@ -31,6 +32,7 @@ As well as tools for working with databases:
 * :ref:`read_slaves`
 * :ref:`pool`
 * :ref:`test_utils`
+* :ref:`pskel`
 
 
 .. _apsw:
@@ -414,6 +416,8 @@ postgres_ext API notes
 
         # At this point server side resources are released.
 
+.. _pgarrays:
+
 .. py:class:: ArrayField([field_class=IntegerField[, dimensions=1]])
 
     Field capable of storing arrays of the provided `field_class`.
@@ -772,6 +776,7 @@ sqlite_ext API notes
 
     .. py:attribute:: _extension = 'name of sqlite extension'
 
+.. _sqlite_fts:
 
 .. py:class:: FTSModel
 
@@ -1000,6 +1005,12 @@ sqlite_ext API notes
 
     .. note:: BM25 only works with FTS4 tables.
 
+.. _berkeleydb:
+
+BerkeleyDB backend
+------------------
+
+Sorry, these docs are not yet written.
 
 .. _sqlcipher_ext:
 
@@ -2034,6 +2045,12 @@ when instantiating your database, then up to `max_connections` will be opened.
 
     Subclass of :py:class:`PostgresqlDatabase` that mixes in the :py:class:`PooledDatabase` helper.
 
+.. py:class:: PooledPostgresqlExtDatabase
+
+    Subclass of :py:class:`PostgresqlExtDatabase` that mixes in the :py:class:`PooledDatabase` helper. The :py:class:`PostgresqlExtDatabase` is a part of the
+    :ref:`postgres_ext` module and provides support for many Postgres-specific
+    features.
+
 .. py:class:: PooledMySQLDatabase
 
     Subclass of :py:class:`MySQLDatabase` that mixes in the :py:class:`PooledDatabase` helper.
@@ -2195,3 +2212,10 @@ Contains utilities helpful when testing peewee projects.
             def test_expensive_operation(self):
                 with assert_query_count(1):
                     perform_expensive_operation()
+
+.. _pskel:
+
+pskel
+-----
+
+Sorry, these docs are not yet written.

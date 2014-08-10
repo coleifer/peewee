@@ -7,7 +7,7 @@ peewee
 ======
 
 * a small, expressive orm
-* written in python (2.6+, 3.2+)
+* written in python (2.6+ or 3.2+)
 
 .. image:: postgresql.png
     :target: peewee/cookbook.html#using-with-postgresql
@@ -21,11 +21,9 @@ peewee
     :target: peewee/cookbook.html#using-with-sqlite
     :alt: sqlite
 
-`Code hosted on GitHub <https://github.com/coleifer/peewee>`_.
+Peewee's source code hosted on `GitHub <https://github.com/coleifer/peewee>`_.
 
-New to peewee? Check out the `getting started IPython notebook <http://nbviewer.ipython.org/d3faf30bbff67ce5f70c>`_.
-
-See notes on :ref:`notes on upgrading and changes from 1.0 <upgrading>`
+New to peewee? Check out the :ref:`quickstart`!
 
 Contents:
 ---------
@@ -37,21 +35,17 @@ Contents:
    peewee/installation
    peewee/quickstart
    peewee/example
-   peewee/cookbook
+   peewee/database
    peewee/models
    peewee/querying
-   peewee/database
+   peewee/transactions
    peewee/api
    peewee/playhouse
-   peewee/upgrading
 
 Note
 ----
 
-Hi, I'm Charlie the author of peewee.  I hope that you enjoy using this library
-as much as I've enjoyed writing it.  Peewee wouldn't be anywhere near as useful
-without people like you, so thank you.  If you find any bugs, odd behavior, or
-have an idea for a new feature please don't hesitate to `open an issue <https://github.com/coleifer/peewee/issues?state=open>`_ on GitHub.
+Hi, I'm Charlie the author of peewee. I hope that you enjoy using this library as much as I've enjoyed writing it. Peewee wouldn't be anywhere near as useful without people like you, so thank you. If you find any bugs, odd behavior, or have an idea for a new feature please don't hesitate to `open an issue <https://github.com/coleifer/peewee/issues?state=open>`_ on GitHub or `contact me <http://charlesleifer.com/contact/>`_.
 
 Indices and tables
 ==================

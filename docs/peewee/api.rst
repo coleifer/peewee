@@ -1,10 +1,6 @@
 API Reference
 =============
 
-.. _expressions-api:
-
-.. include:: expressions.rst
-
 .. _model-api:
 
 Models
@@ -12,7 +8,7 @@ Models
 
 .. py:class:: Model(**kwargs)
 
-    Models provide a 1-to-1 mapping to database tables.  Subclasses of
+    Models provide a 1-to-1 mapping to database tables. Subclasses of
     ``Model`` declare any number of :py:class:`Field` instances as class
     attributes.  These fields correspond to columns on the table.
 
@@ -37,7 +33,7 @@ Models
     .. py:classmethod:: select(*selection)
 
         :param selection: a list of model classes, field instances, functions
-          or :ref:`expressions <expressions>`
+          or expressions.
         :rtype: a :py:class:`SelectQuery` for the given ``Model``
 
         Examples of selecting all columns (default):
@@ -718,7 +714,7 @@ Query Types
 
     .. py:method:: where(*expressions)
 
-        :param expressions: a list of one or more :ref:`expressions <expressions>`
+        :param expressions: a list of one or more expressions
         :rtype: a :py:class:`Query` instance
 
         Example selection users where the username is equal to 'somebody':
@@ -935,7 +931,7 @@ Query Types
 
     .. py:method:: having(*expressions)
 
-        :param expressions: a list of one or more :ref:`expressions <expressions>`
+        :param expressions: a list of one or more expressions
         :rtype: :py:class:`SelectQuery`
 
         Here is the above example selecting users and tweet counts, but restricting
@@ -951,7 +947,7 @@ Query Types
 
     .. py:method:: order_by(*clauses)
 
-        :param clauses: a list of fields, calls to ``field.[asc|desc]()`` or one or more :ref:`expressions <expressions>`
+        :param clauses: a list of fields, calls to ``field.[asc|desc]()`` or one or more expressions
         :rtype: :py:class:`SelectQuery`
 
         Example of ordering users by username:
