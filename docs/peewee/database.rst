@@ -100,8 +100,7 @@ If you would like to use these awesome features, use the :py:class:`PostgresqlEx
 Using SQLite
 ------------
 
-To connect to a SQLite database, we will use :py:class:`SqliteDatabase`. The first parameter is the filename containing the database, or the string *:memory:* to create an in-memory database.
-
+To connect to a SQLite database, we will use :py:class:`SqliteDatabase`. The first parameter is the filename containing the database, or the string *:memory:* to create an in-memory database. After the database filename, you can specify arbitrary `sqlite3 parameters <https://docs.python.org/2/library/sqlite3.html#sqlite3.connect>`_.
 
 .. code-block:: python
 
@@ -197,7 +196,7 @@ To connect to a MySQL database, we will use :py:class:`MySQLDatabase`. After the
 Multi-threaded applications
 ---------------------------
 
-Some database engines may not allow a connection to be shared across threads, notably SQLite. If you would like peewee to maintain a single connection per-thread, instantiate your database with ``threadlocals=True`` (*recommended*):
+Some database engines may not allow a connection to be shared across threads, notably SQLite. If you would like peewee to maintain a connection-per-thread, instantiate your database with ``threadlocals=True`` (*recommended*):
 
 .. code-block:: python
 
