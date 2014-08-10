@@ -21,7 +21,7 @@ I **strongly** recommend opening an interactive shell session and running the co
 Model Definition
 -----------------
 
-Each Model class maps directly to a database table, and each field maps to a column on that table.
+Each Model class maps directly to a database table, and each field maps to a column on that table. Each model instance corresponds to a row in the table.
 
 .. code-block:: python
 
@@ -37,7 +37,7 @@ Each Model class maps directly to a database table, and each field maps to a col
         class Meta:
             database = db # This model uses the "people.db" database.
 
-There are lots of :ref:`field types <fields>` suitable for storing various types of data. Peewee handles converting between *pythonic* values those used by the database, so you can use Python objects in your code without having to worry.
+There are lots of :ref:`field types <fields>` suitable for storing various types of data. Peewee handles converting between *pythonic* values those used by the database, so you can use Python types in your code without having to worry.
 
 Things get interesting when we set up relationships between models using foreign keys. This is easy to do with peewee:
 
@@ -80,7 +80,7 @@ You can also add a person by calling the :py:meth:`~Model.create` method, which 
     >>> grandma = Person.create(name='Grandma', birthday=date(1935, 3, 1), is_relative=True)
     >>> herb = Person.create(name='Herb', birthday=date(1950, 5, 5), is_relative=False)
 
-To update a value, modify it and call :py:meth:`~Model.save` to persist the changes. Here we will change Grandma's name and then save the changes in the database:
+To update a row, modify the model instance and call :py:meth:`~Model.save` to persist the changes. Here we will change Grandma's name and then save the changes in the database:
 
 .. code-block:: pycon
 
@@ -130,7 +130,7 @@ Let's retrieve Grandma's record from the database. To get a single record from t
 
     >>> grandma = Person.select().where(Person.name == 'Grandma L.').get()
 
-We can also use the equivalent shorthand:
+We can also use the equivalent shorthand :py:meth:`Model.get`:
 
 .. code-block:: pycon
 
@@ -161,9 +161,9 @@ Let's list all the cats and their owner's name:
     Kitty Bob
     Mittens Jr Herb
 
-There is a big problem with the previous query: because we are accessing ``pet.owner.name`` and we did not select this value in our original query, peewee will have to perform an additional query to retrieve the pet's owner. This behavior is referred to as :ref:`N+1 <cookbook_nplusone>` and it should generally be avoided.
+There is a big problem with the previous query: because we are accessing ``pet.owner.name`` and we did not select this value in our original query, peewee will have to perform an additional query to retrieve the pet's owner. This behavior is referred to as :ref:`N+1 <nplusone>` and it should generally be avoided.
 
-We can avoid the extra queries by selecting both ``Pet`` and ``Person``, and adding a *join*.
+We can avoid the extra queries by selecting both *Pet* and *Person*, and adding a *join*.
 
 .. code-block:: pycon
 
@@ -231,7 +231,7 @@ Now let's list all the people *and* some info about their pets:
     Herb 1 pets
         Mittens Jr cat
 
-Once again we've run into a classic example of :ref:`N+1 <cookbook_nplusone>` query behavior. We can avoid this by performing a *JOIN* and aggregating the records:
+Once again we've run into a classic example of :ref:`N+1 <nplusone>` query behavior. We can avoid this by performing a *JOIN* and aggregating the records:
 
 .. code-block:: pycon
 
@@ -288,7 +288,7 @@ Now let's do the opposite. People whose birthday is between 1940 and 1960:
     ...
     Herb
 
-One last query. This will use a SQL function to find all people whose names start with either an upper or lower-case "G":
+One last query. This will use a SQL function to find all people whose names start with either an upper or lower-case *G*:
 
 .. code-block:: pycon
 
@@ -311,7 +311,7 @@ Check the documentation on :ref:`querying` for more info.
 Working with existing databases
 -------------------------------
 
-If you already have a database, you can autogenerate peewee models using :ref:`pwiz`. For instance, if I have a postgresql database named ``charles_blog``, I might run:
+If you already have a database, you can autogenerate peewee models using :ref:`pwiz`. For instance, if I have a postgresql database named *charles_blog*, I might run:
 
 .. code-block:: console
 
@@ -321,5 +321,3 @@ What next?
 ----------
 
 That's it for the quickstart. If you want to look at a full web-app, check out the :ref:`example-app`.
-
-Got a specific problem to solve? Check the :ref:`cookbook` for common recipes.

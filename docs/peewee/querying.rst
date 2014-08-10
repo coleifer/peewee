@@ -31,18 +31,18 @@ Alternatively, you can build up a model instance programmatically and then call 
     1
     >>> user.id
     1
-    >>> peewee = User()
-    >>> peewee.username = 'Peewee'
-    >>> peewee.save()
+    >>> huey = User()
+    >>> huey.username = 'Huey'
+    >>> huey.save()
     1
-    >>> peewee.id
+    >>> huey.id
     2
 
 When a model has a foreign key, you can directly assign a model instance to the foreign key field when creating a new record.
 
 .. code-block:: pycon
 
-    >>> tweet = Tweet.create(user=peewee, message='Hello!')
+    >>> tweet = Tweet.create(user=huey, message='Hello!')
 
 You can also use the value of the related object's primary key:
 
@@ -54,7 +54,7 @@ If you simply wish to insert data and do not need to create a model instance, yo
 
 .. code-block:: pycon
 
-    >>> User.insert(username='Huey').execute()
+    >>> User.insert(username='Mickey').execute()
     3
 
 After executing the insert query, the primary key of the new row is returned.
@@ -138,9 +138,9 @@ Once a model instance has a primary key, any subsequent call to :py:meth:`~Model
     >>> user.save()
     >>> user.id
     1
-    >>> peewee.save()
+    >>> huey.save()
     1
-    >>> peewee.id
+    >>> huey.id
     2
 
 If you want to update multiple records, issue an *UPDATE* query. The following example will update all ``Tweet`` objects, marking them as *published*, if they were created before today. :py:meth:`Model.update` accepts keyword arguments where the keys correspond to the model's field names:
@@ -263,7 +263,6 @@ For more advanced operations, you can use :py:meth:`SelectQuery.get`. The follow
 
 For more information, see the documentation on:
 
-* :ref:`querying`
 * :py:meth:`Model.get`
 * :py:meth:`Model.select`
 * :py:meth:`SelectQuery.get`
@@ -303,7 +302,7 @@ In the following example, we will simply call :py:meth:`~Model.select` and itera
 .. note::
     Subsequent iterations of the same query will not hit the database as the results are cached. To disable this behavior (to reduce memory usage), call :py:meth:`SelectQuery.iterator` when iterating.
 
-When iterating over a model that contains a foreign key, be careful with the way you access values on related models. Accidentally resolving a foreign key or iterating over a back-reference can cause :ref:`N+1 query behavior <cookbook_nplusone>`.
+When iterating over a model that contains a foreign key, be careful with the way you access values on related models. Accidentally resolving a foreign key or iterating over a back-reference can cause :ref:`N+1 query behavior <nplusone>`.
 
 When you create a foreign key, such as ``Tweet.user``, you can use the *related_name* to create a back-reference (``User.tweets``). Back-references are exposed as :py:class:`SelectQuery` instances:
 
@@ -331,7 +330,7 @@ You can iterate over the ``user.tweets`` back-reference just like any other :py:
 Filtering records
 -----------------
 
-You can filter for particular records using normal python operators. Peewee supports a :ref:`wide variety of operations <column-lookups>`.
+You can filter for particular records using normal python operators. Peewee supports a wide variety of :ref:`query operators <query-operators>`.
 
 .. code-block:: pycon
 
@@ -366,7 +365,7 @@ If you want to express a complex query, use parentheses and python's bitwise *or
     ...     (User.username == 'Peewee Herman')
     ... )
 
-Check out :ref:`the table of query operations <column-lookups>` to see what types of queries are possible.
+Check out :ref:`the table of query operations <query-operators>` to see what types of queries are possible.
 
 .. note::
 
@@ -722,6 +721,8 @@ Similarly, you can return the rows from the cursor as dictionaries using :py:met
     for stat in stats:
         print stat['url'], stat['ct']
 
+.. _query-operators:
+
 Query operators
 ===============
 
@@ -777,7 +778,7 @@ Here is how you might use some of these query operators:
     percent-sign.  **If you are using SQLite and want case-sensitive partial
     string matching, remember to use asterisks for the wildcard (``*``).**
 
-.. _custom-lookups:
+.. _custom-operators:
 
 Adding user-defined operators
 -----------------------------
@@ -831,7 +832,7 @@ It looks like this:
         failed_logins = IntegerField()
 
 
-Comparisons use the :ref:`column-lookups`:
+Comparisons use the :ref:`query-operators`:
 
 .. code-block:: python
 
@@ -879,6 +880,8 @@ Expressions can be used in all parts of a query, so experiment!
 Foreign Keys
 ============
 
+Foreign keys are created using a special field class :py:class:`ForeignKeyField`. Each foreign key also creates a back-reference on the related model using the specified *related_name*.
+
 Traversing foriegn keys
 -----------------------
 
@@ -911,7 +914,7 @@ Under the hood, the *tweets* attribute is just a :py:class:`SelectQuery` with th
 Joining tables
 --------------
 
-Use the :py:meth:`~SelectQuery.join` method to *JOIN* additional tables. When a foreign key exists between the source model and the join model, you do not need to specify any additional parameters:
+Use the :py:meth:`~Query.join` method to *JOIN* additional tables. When a foreign key exists between the source model and the join model, you do not need to specify any additional parameters:
 
 .. code-block:: pycon
 
@@ -969,17 +972,12 @@ If you would like to join the same table twice, use the :py:meth:`~Query.switch`
     # Join the Artist table on both `Ablum` and `Genre`.
     Artist.join(Album).switch(Artist).join(Genre)
 
-.. attention:: The :ref:`cookbook_nplusone` docs discuss ways to use joins to avoid N+1 query behavior.
-
 .. _manytomany:
 
 Implementing Many to Many
 -------------------------
 
-Peewee does not provide a "field" for many to many relationships the way that
-django does -- this is because the "field" really is hiding an intermediary
-table.  To implement many-to-many with peewee, you will therefore create the
-intermediary table yourself and query through it:
+Peewee does not provide a *field* for many to many relationships the way that django does -- this is because the field really is hiding an intermediary table.  To implement many-to-many with peewee, you will therefore create the intermediary table yourself and query through it:
 
 .. code-block:: python
 
@@ -997,7 +995,12 @@ To query, let's say we want to find students who are enrolled in math class:
 
 .. code-block:: python
 
-    for student in Student.select().join(StudentCourse).join(Course).where(Course.name == 'math'):
+    query = (Student
+             .select()
+             .join(StudentCourse)
+             .join(Course)
+             .where(Course.name == 'math'))
+    for student in query:
         print student.name
 
 To query what classes a given student is enrolled in:
@@ -1013,9 +1016,7 @@ To query what classes a given student is enrolled in:
     for course in courses:
         print course.name
 
-To efficiently iterate over a many-to-many relation, i.e., list all students
-and their respective courses, we will query the "through" model ``StudentCourse``
-and "precompute" the Student and Course:
+To efficiently iterate over a many-to-many relation, i.e., list all students and their respective courses, we will query the *through* model ``StudentCourse`` and *precompute* the Student and Course:
 
 .. code-block:: python
 
@@ -1038,12 +1039,16 @@ To print a list of students and their courses you might do the following:
             print 'Student: %s' % student.name
         print '    - %s' % student_course.course.name
 
-Since we selected all fields from ``Student`` and ``Course`` in the ``select``
+Since we selected all fields from ``Student`` and ``Course`` in the *select*
 clause of the query, these foreign key traversals are "free" and we've done the
 whole iteration with just 1 query.
 
 Performance Techniques
 ======================
+
+This section outlines some techniques for improving performance when using peewee.
+
+.. _nplusone:
 
 Avoiding N+1 queries
 --------------------
@@ -1194,3 +1199,13 @@ For simple queries you can see further speed improvements by using the :py:meth:
         serializer.serialize_object(stat)
 
 You can also see performance improvements by using the :py:meth:`~SelectQuery.dicts` and :py:meth:`~SelectQuery.tuples` methods.
+
+When iterating over a large number of rows that contain columns from multiple tables, peewee will reconstruct the model graph for each row returned. This operation can be slow for complex graphs. To speed up model creation, you can:
+
+* Call :py:meth:`~SelectQuery.naive`, which will not construct a graph and simply patch all attributes from the row directly onto a model instance.
+* Use :py:meth:`~SelectQuery.dicts` or :py:meth:`~SelectQuery.tuples`.
+
+Speeding up Bulk Inserts
+------------------------
+
+See the :ref:`bulk_inserts` section for details on speeding up bulk insert operations.

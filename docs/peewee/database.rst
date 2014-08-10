@@ -3,9 +3,7 @@
 Managing your Database
 ======================
 
-Below are outlined some of the ways to perform typical database-related tasks with peewee.
-
-Throughout this document we will use the following example models:
+This document describes how to perform typical database-related tasks with peewee. Throughout this document we will use the following example models:
 
 .. code-block:: python
 
@@ -23,14 +21,14 @@ Throughout this document we will use the following example models:
 Creating a database connection and tables
 -----------------------------------------
 
-While it is not necessary to explicitly connect to the database before using it, managing connections explicitly is a good practice.  This way if the connection fails, the exception can be caught during the "connect" step, rather than some arbitrary time later when a query is executed.
+While it is not necessary to explicitly connect to the database before using it, managing connections explicitly is a good practice. This way if the connection fails, the exception can be caught during the *connect* step, rather than some arbitrary time later when a query is executed.
 
 .. code-block:: python
 
     >>> database = SqliteDatabase('my_app.db')
     >>> database.connect()
 
-To use this database with your models, set the ``database`` attribute on an inner *Meta* class:
+To use this database with your models, set the ``database`` attribute on an inner :ref:`Meta <model-options>` class:
 
 .. code-block:: python
 
@@ -64,10 +62,10 @@ To use this database with your models, set the ``database`` attribute on an inne
 
 .. _using_postgresql:
 
-Connecting to Postgresql
-^^^^^^^^^^^^^^^^^^^^^^^^
+Using Postgresql
+----------------
 
-To connect to a postgresql database, we will use :py:class:`PostgresqlDatabase`. The first parameter is always the name of the database, and after that you can specify arbitrary `psycopg2 parameters <http://initd.org/psycopg/docs/module.html#psycopg2.connect>`_.
+To connect to a Postgresql database, we will use :py:class:`PostgresqlDatabase`. The first parameter is always the name of the database, and after that you can specify arbitrary `psycopg2 parameters <http://initd.org/psycopg/docs/module.html#psycopg2.connect>`_.
 
 .. code-block:: python
 
@@ -81,7 +79,7 @@ To connect to a postgresql database, we will use :py:class:`PostgresqlDatabase`.
     class User(BaseModel):
         username = CharField()
 
-The :ref:`playhouse` contains a :ref:`PostgreSQL extension module <postgres_ext>` which provides many postgres-specific features such as:
+The :ref:`playhouse` contains a :ref:`Postgresql extension module <postgres_ext>` which provides many postgres-specific features such as:
 
 * :ref:`Arrays <pgarrays>`
 * :ref:`HStore <hstore>`
@@ -99,8 +97,8 @@ If you would like to use these awesome features, use the :py:class:`PostgresqlEx
 
 .. _using_sqlite:
 
-Using with SQLite
-^^^^^^^^^^^^^^^^^
+Using SQLite
+------------
 
 To connect to a SQLite database, we will use :py:class:`SqliteDatabase`. The first parameter is the filename containing the database, or the string *:memory:* to create an in-memory database.
 
@@ -152,8 +150,8 @@ If you would like to use APSW, use the :py:class:`APSWDatabase` from the `apsw_e
 
 .. _using_berkeleydb:
 
-Using with BerkeleyDB
-^^^^^^^^^^^^^^^^^^^^^
+Using BerkeleyDB
+----------------
 
 The :ref:`playhouse <playhouse>` contains a special extension module for using a :ref:`BerkeleyDB database <berkeleydb>`. BerkeleyDB can be compiled with a SQLite-compatible API, then the python SQLite driver can be compiled to use the Berkeley version of SQLite.
 
@@ -178,8 +176,8 @@ To connect to a BerkeleyDB database, we will use :py:class:`BerkeleyDatabase`. L
 
 .. _using_mysql:
 
-Connecting to MySQL
-^^^^^^^^^^^^^^^^^^^
+Using MySQL
+-----------
 
 To connect to a MySQL database, we will use :py:class:`MySQLDatabase`. After the database name, you can specify arbitrary connection parameters that will be passed back to the driver (either MySQLdb or pymysql).
 
@@ -213,7 +211,7 @@ Alternatively, Python sqlite3 module can share a connection across different thr
 
     database = SqliteDatabase('stats.db', check_same_thread=False)
 
-.. attention::
+.. note::
     For web applications or any multi-threaded (including green threads!) app,
     it is best to set ``threadlocals=True`` when instantiating your database.
 
@@ -222,11 +220,11 @@ Alternatively, Python sqlite3 module can share a connection across different thr
 Deferring initialization
 ------------------------
 
-Sometimes the database information is not known until run-time, when it might be loaded from a configuration file or the environment. In these cases, you can *defer* the initialization of the database by specifying ``None`` as the database_name.
+Sometimes the database connection settings are not known until run-time, when these values may be loaded from a configuration file or the environment. In these cases, you can *defer* the initialization of the database by specifying ``None`` as the database_name.
 
 .. code-block:: python
 
-    database = SqliteDatabase(None)  # Our database will be created, but is un-initialized.
+    database = SqliteDatabase(None)  # Un-initialized database.
 
     class SomeModel(Model):
         class Meta:

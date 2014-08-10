@@ -1,10 +1,6 @@
 API Reference
 =============
 
-.. _expressions-api:
-
-.. include:: expressions.rst
-
 .. _model-api:
 
 Models
@@ -12,7 +8,7 @@ Models
 
 .. py:class:: Model(**kwargs)
 
-    Models provide a 1-to-1 mapping to database tables.  Subclasses of
+    Models provide a 1-to-1 mapping to database tables. Subclasses of
     ``Model`` declare any number of :py:class:`Field` instances as class
     attributes.  These fields correspond to columns on the table.
 

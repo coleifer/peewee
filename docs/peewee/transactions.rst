@@ -3,24 +3,36 @@
 Transactions
 ============
 
+Peewee provides several interfaces for working with transactions.
+
 Context manager
 ---------------
 
-You can execute queries within a transaction using the ``transaction`` context manager,
-which will issue a commit if all goes well, or a rollback if an exception is raised:
+You can execute queries within a transaction using the :py:meth:`Database.transaction` context manager, which will issue a commit if all goes well, or a rollback if an exception is raised:
 
 .. code-block:: python
 
     db = SqliteDatabase(':memory:')
 
     with db.transaction():
-        user.delete_instance(recursive=True) # delete user and associated tweets
+        # Delete the user and their associated tweets.
+        user.delete_instance(recursive=True)
+
+You can use the transaction to perform *get or create* operations as well:
+
+.. code-block:: python
+
+    try:
+        with db.transaction():
+            user = User.create(username=username)
+        return 'Success'
+    except peewee.IntegrityError:
+        return 'Failure: %s is already in use' % username
 
 Decorator
 ---------
 
-Similar to the context manager, you can decorate functions with the ``commit_on_success``
-decorator:
+Similar to the context manager, you can decorate functions with the :py:meth:`~Database.commit_on_success` decorator. This decorator will commit if the function returns normally, otherwise the transaction will be rolled back and the exception re-raised.
 
 .. code-block:: python
 
@@ -33,9 +45,7 @@ decorator:
 Autocommit Mode
 ---------------
 
-By default, databases are initialized with ``autocommit=True``, you can turn this
-on and off at runtime if you like.  The behavior below is roughly the same as the
-context manager and decorator:
+By default, databases are initialized with ``autocommit=True``, you can turn this on and off at runtime if you like. The behavior below is roughly the same as the context manager and decorator:
 
 .. code-block:: python
 
@@ -54,8 +64,7 @@ context manager and decorator:
     finally:
         db.set_autocommit(True)
 
-If you would like to manually control *every* transaction, simply turn autocommit
-off when instantiating your database:
+If you would like to manually control *every* transaction, simply turn autocommit off when instantiating your database:
 
 .. code-block:: python
 
@@ -63,3 +72,24 @@ off when instantiating your database:
 
     User.create(username='somebody')
     db.commit()
+
+Nesting Transactions
+--------------------
+
+If you attempt to nest transactions with peewee, only the outer-most transaction will be used:
+
+.. code-block:: python
+
+    with db.transaction() as txn:
+        User.create(username='charlie')
+        with db.transaction() as txn2:
+            User.create(username='peewee')
+
+        # Even though the inner transaction appears to have been committed,
+        # in reality only the outer transaction exists. Thus, the rollback will
+        # affect both rows.
+        txn.rollback()
+
+    assert User.select().count() == 0
+
+Peewee supports nested transactions through the use of :py:meth:`~Database.savepoint`. See the API documentation for details on using savepoints.
