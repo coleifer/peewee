@@ -272,7 +272,7 @@ Get or create
 
 While peewee has a :py:meth:`~Model.get_or_create` method, this should really not be used outside of tests as it is vulnerable to a race condition. The proper way to perform a *get or create* with peewee is to rely on the database to enforce a constraint.
 
-Let's say we wish to implement registering a new user account using the :ref:`example User model <user_and_tweet_models>`. The *User* model has a *unique* constraint on the username field, so we will rely on the database's integrity guarantees to ensure we don't end up with duplicate usernames:
+Let's say we wish to implement registering a new user account using the :ref:`example User model <blog-models>`. The *User* model has a *unique* constraint on the username field, so we will rely on the database's integrity guarantees to ensure we don't end up with duplicate usernames:
 
 .. code-block:: python
 
@@ -745,9 +745,9 @@ Comparison       Meaning
 
 Because I ran out of operators to override, there are some additional query operations available as methods:
 
-=====================   ===============================================
+======================= ===============================================
 Method                  Meaning
-=====================   ===============================================
+======================= ===============================================
 ``.contains(substr)``   Wild-card search for substring.
 ``.startswith(prefix)`` Search for values beginning with ``prefix``.
 ``.endswith(suffix)``   Search for values ending with ``suffix``.
@@ -756,7 +756,7 @@ Method                  Meaning
 ``.bin_and(value)``     Binary AND.
 ``.bin_or(value)``      Binary OR.
 ``.in_(value)``         IN lookup (identical to ``<<``).
-=====================   ===============================================
+======================= ===============================================
 
 Here is how you might use some of these query operators:
 

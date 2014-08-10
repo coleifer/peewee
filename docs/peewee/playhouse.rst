@@ -13,6 +13,7 @@ specific functionality:
 * :ref:`apsw`
 * :ref:`postgres_ext`
 * :ref:`sqlite_ext`
+* :ref:`berkeleydb`
 * :ref:`sqlcipher_ext`
 
 Modules which expose higher-level python constructs:
@@ -31,6 +32,7 @@ As well as tools for working with databases:
 * :ref:`read_slaves`
 * :ref:`pool`
 * :ref:`test_utils`
+* :ref:`pskel`
 
 
 .. _apsw:
@@ -1003,6 +1005,12 @@ sqlite_ext API notes
 
     .. note:: BM25 only works with FTS4 tables.
 
+.. _berkeleydb:
+
+BerkeleyDB backend
+------------------
+
+Sorry, these docs are not yet written.
 
 .. _sqlcipher_ext:
 
@@ -2204,3 +2212,10 @@ Contains utilities helpful when testing peewee projects.
             def test_expensive_operation(self):
                 with assert_query_count(1):
                     perform_expensive_operation()
+
+.. _pskel:
+
+pskel
+-----
+
+Sorry, these docs are not yet written.

@@ -166,10 +166,7 @@ Some fields take special parameters...
 +--------------------------------+------------------------------------------------+
 
 .. note::
-    Both ``default`` and ``choices`` could be implemented at the database level as
-*DEFAULT* and *CHECK CONSTRAINT* respectively, but any application change would
-require a schema change. Because of this, ``default`` is implemented purely in
-python and ``choices`` are not validated but exist for metadata purposes only.
+    Both ``default`` and ``choices`` could be implemented at the database level as *DEFAULT* and *CHECK CONSTRAINT* respectively, but any application change would require a schema change. Because of this, ``default`` is implemented purely in python and ``choices`` are not validated but exist for metadata purposes only.
 
     To add database (server-side) constraints, use the ``constraints`` parameter.
 

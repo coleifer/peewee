@@ -149,7 +149,7 @@ Peewee provides a helper method :py:meth:`Database.create_tables` which will res
     either drop the table and re-create it or manually add the columns
     using an *ALTER TABLE* query.
 
-    Alternatively, you can use the :ref:`schema migrations <migrations>` extension
+    Alternatively, you can use the :ref:`schema migrations <migrate>` extension
     to alter your database schema using Python.
 
 .. note::

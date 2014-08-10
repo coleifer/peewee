@@ -309,12 +309,12 @@ The following pooled database classes are available:
 .. note::
     If you have a multi-threaded application (including green threads), be sure to specify ``threadlocals=True`` when instantiating your pooled database.
 
-.. _using_read_slaves
+.. _using_read_slaves:
 
 Read Slaves
 -----------
 
-Peewee can automatically run *SELECT* queries against one or more read replicas. The :ref:`read_slave module <read_slave>`, included in the :ref:`playhouse` extensions library, contains a :py:class:`Model` subclass which provides this behavior.
+Peewee can automatically run *SELECT* queries against one or more read replicas. The :ref:`read_slave module <read_slaves>`, included in the :ref:`playhouse` extensions library, contains a :py:class:`Model` subclass which provides this behavior.
 
 Here is how you might use the :py:class:`ReadSlaveModel`:
 
