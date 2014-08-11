@@ -10,11 +10,12 @@ Models
 
     Models provide a 1-to-1 mapping to database tables. Subclasses of
     ``Model`` declare any number of :py:class:`Field` instances as class
-    attributes.  These fields correspond to columns on the table.
+    attributes. These fields correspond to columns on the table.
 
-    Table-level operations, such as select/update/insert/delete queries, are
-    implemented as classmethods.  Row-level operations such as saving or
-    deleting individual instances are implemented as instancemethods.
+    Table-level operations, such as :py:meth:`~Model.select`, :py:meth:`~Model.update`,
+    :py:meth:`~Model.insert`, and :py:meth:`~Model.delete`, are implemented
+    as classmethods. Row-level operations such as :py:meth:`~Model.save` and
+    :py:meth:`~Model.delete_instance` are implemented as instancemethods.
 
     :param kwargs: Initialize the model, assigning the given key/values to the
         appropriate fields.
@@ -25,16 +26,17 @@ Models
 
         class User(Model):
             username = CharField()
-            join_date = DateTimeField()
+            join_date = DateTimeField(default=datetime.datetime.now)
             is_admin = BooleanField()
 
         u = User(username='charlie', is_admin=True)
 
     .. py:classmethod:: select(*selection)
 
-        :param selection: a list of model classes, field instances, functions
-          or expressions.
-        :rtype: a :py:class:`SelectQuery` for the given ``Model``
+        :param selection: A list of model classes, field instances, functions
+          or expressions. If no argument is provided, all columns for the given model
+          will be selected.
+        :rtype: a :py:class:`SelectQuery` for the given :py:class:`Model`.
 
         Examples of selecting all columns (default):
 
@@ -42,9 +44,10 @@ Models
 
             User.select().where(User.active == True).order_by(User.username)
 
-        Example of selecting all columns on ``Tweet`` *and* the parent model,
-        ``User``.  When the ``user`` foreign key is accessed on a ``Tweet``
-        instance no additional query will be needed:
+        Example of selecting all columns on *Tweet* and the parent model,
+        *User*. When the ``user`` foreign key is accessed on a *Tweet*
+        instance no additional query will be needed (see :ref:`N+1 <nplusone>`
+        for more details):
 
         .. code-block:: python
 
@@ -56,7 +59,7 @@ Models
     .. py:classmethod:: update(**update)
 
         :param update: mapping of field-name to expression
-        :rtype: an :py:class:`UpdateQuery` for the given ``Model``
+        :rtype: an :py:class:`UpdateQuery` for the given :py:class:`Model`
 
         Example showing users being marked inactive if their registration
         expired:
@@ -64,7 +67,7 @@ Models
         .. code-block:: python
 
             q = User.update(active=False).where(User.registration_expired == True)
-            q.execute()  # execute the query, updating the database.
+            q.execute()  # Execute the query, updating the database.
 
         Example showing an atomic update:
 
@@ -73,14 +76,16 @@ Models
             q = PageView.update(count=PageView.count + 1).where(PageView.url == url)
             q.execute()  # execute the query, updating the database.
 
+        .. note:: When an update query is executed, the number of rows modified will be returned.
+
     .. py:classmethod:: insert(**insert)
 
         Insert a new row into the database. If any fields on the model have
         default values, these values will be used if the fields are not explicitly
         set in the ``insert`` dictionary.
 
-        :param insert: mapping of field or field-name to expression
-        :rtype: an :py:class:`InsertQuery` for the given ``Model``
+        :param insert: mapping of field or field-name to expression.
+        :rtype: an :py:class:`InsertQuery` for the given :py:class:`Model`.
 
         Example showing creation of a new user:
 
@@ -108,6 +113,8 @@ Models
             # This INSERT query will automatically specify `active=True`:
             User.insert(username='charlie')
 
+        .. note:: When an insert query is executed on a table with an auto-incrementing primary key, the primary key of the new row will be returned.
+
     .. py:method:: insert_many(rows)
 
         Insert multiple rows at once. The ``rows`` parameter must be an iterable
@@ -117,7 +124,7 @@ Models
 
         .. note::
             Due to the nature of bulk inserts, each row must contain the same
-            fields. The following would not work:
+            fields. The following will not work:
 
             .. code-block:: python
 
@@ -127,14 +134,14 @@ Models
                 ])
 
         :param rows: An iterable containing dictionaries of field-name-to-value.
-        :rtype: an :py:class:`InsertQuery` for the given ``Model``.
+        :rtype: an :py:class:`InsertQuery` for the given :py:class:`Model`.
 
         Example of inserting multiple Users:
 
         .. code-block:: python
 
             usernames = ['charlie', 'huey', 'peewee', 'mickey']
-            row_dicts = [{'username': username} for username in usernames]
+            row_dicts = ({'username': username} for username in usernames)
 
             # Insert 4 new rows.
             User.insert_many(row_dicts).execute()
@@ -149,10 +156,30 @@ Models
                     yield {'username': username}
             User.insert_many(get_usernames()).execute()
 
+    .. py:classmethod:: insert_from(fields, query)
+
+        Insert rows into the table using a query as the data source. This API should
+        be used for *INSERT INTO...SELECT FROM* queries.
+
+        :param fields: The field objects to map the selected data into.
+        :param query: The source of the new rows.
+        :rtype: an :py:class:`InsertQuery` for the given :py:class:`Model`.
+
+        Example of inserting data across tables for denormalization purposes:
+
+        .. code-block:: python
+
+            source = (User
+                      .select(User.username, fn.COUNT(Tweet.id))
+                      .join(Tweet, JOIN_LEFT_OUTER)
+                      .group_by(User.username))
+            UserTweetDenorm.insert_from(
+                [UserTweetDenorm.username, UserTweetDenorm.num_tweets],
+                source).execute()
 
     .. py:classmethod:: delete()
 
-        :rtype: a :py:class:`DeleteQuery` for the given ``Model``
+        :rtype: a :py:class:`DeleteQuery` for the given :py:class:`Model`.
 
         Example showing the deletion of all inactive users:
 
@@ -162,7 +189,7 @@ Models
             q.execute()  # remove the rows
 
         .. warning::
-            This method performs a delete on the *entire table*.  To delete a
+            This method performs a delete on the *entire table*. To delete a
             single instance, see :py:meth:`Model.delete_instance`.
 
     .. py:classmethod:: raw(sql, *params)
@@ -181,7 +208,7 @@ Models
 
         .. note::
             Generally the use of ``raw`` is reserved for those cases where you
-            can significantly optimize a select query.  It is useful for select
+            can significantly optimize a select query. It is useful for select
             queries since it will return instances of the model.
 
     .. py:classmethod:: create(**attributes)
@@ -199,10 +226,9 @@ Models
         .. note::
             The create() method is a shorthand for instantiate-then-save.
 
-    .. py:classmethod:: get(*args, **kwargs)
+    .. py:classmethod:: get(*args)
 
         :param args: a list of query expressions, e.g. ``User.username == 'foo'``
-        :param kwargs: a mapping of column + lookup to value, e.g. "age__gt=55"
         :rtype: :py:class:`Model` instance or raises ``DoesNotExist`` exception
 
         Get a single row from the database that matches the given query.
@@ -219,61 +245,24 @@ Models
 
             active = User.select().where(User.active == True)
             try:
-                users = active.where(User.username == username, User.password == password)
-                user = users.get()
+                user = active.where(
+                    (User.username == username) &
+                    (User.password == password)
+                ).get()
             except User.DoesNotExist:
                 user = None
 
         .. note::
-            The ``get()`` method is shorthand for selecting with a limit of 1. It
+            The :py:meth:`~Model.get` method is shorthand for selecting with a limit of 1. It
             has the added behavior of raising an exception when no matching row is
-            found.  If more than one row is found, the first row returned by the
+            found. If more than one row is found, the first row returned by the
             database cursor will be used.
-
-        .. warning:: the "kwargs" style syntax is provided for compatibility with
-            version 1.0.  The expression-style syntax is preferable.
-
-    .. py:classmethod:: get_or_create(**attributes)
-
-        .. deprecated:: 2.0
-            Because this relies of "django-style" expressions, it has been deprecated
-            as of 2.0.  Use :py:meth:`Model.get` and :py:meth:`Model.create` explicitly.
-
-        :param attributes: key/value pairs of model attributes
-        :rtype: a :py:class:`Model` instance
-
-        Get the instance with the given attributes set.  If the instance
-        does not exist it will be created.
-
-        Example showing get/create an object cached in the database:
-
-        .. code-block:: python
-
-            CachedObj.get_or_create(key=key, val=some_val)
-
-    .. py:classmethod:: filter(*args, **kwargs)
-
-        .. deprecated:: 2.0
-           Use :py:class:`~Model.select` instead.
-
-        :param args: a list of :py:class:`DQ` or expression objects
-        :param kwargs: a mapping of column + lookup to value, e.g. "age__gt=55"
-        :rtype: :py:class:`SelectQuery` with appropriate ``WHERE`` clauses
-
-        Provides a django-like syntax for building a query. The key difference
-        between :py:meth:`~Model.filter` and :py:meth:`SelectQuery.where`
-        is that :py:meth:`~Model.filter` supports traversing joins using
-        django's "double-underscore" syntax:
-
-        .. code-block:: python
-
-            sq = Entry.filter(blog__title='Some Blog')
 
     .. py:classmethod:: alias()
 
         :rtype: :py:class:`ModelAlias` instance
 
-        The alias() method is used to build queries that use self-joins.
+        The :py:meth:`alias` method is used to create self-joins.
 
         Example:
 
@@ -281,11 +270,11 @@ Models
 
             Parent = Category.alias()
             sq = (Category
-              .select(Category, Parent)
-              .join(Parent, on=(Category.parent == Parent.id))
-              .where(Parent.name == 'parent category'))
+                  .select(Category, Parent)
+                  .join(Parent, on=(Category.parent == Parent.id))
+                  .where(Parent.name == 'parent category'))
 
-        .. note:: You must explicitly specify which columns to join on
+        .. note:: When using a :py:class:`ModelAlias` in a join, you must explicitly specify the join condition.
 
     .. py:classmethod:: create_table([fail_silently=False])
 
@@ -313,6 +302,10 @@ Models
 
         :rtype: Boolean whether the table for this model exists in the database
 
+    .. py:classmethod:: sqlall()
+
+        :returns: A list of queries required to create the table and indexes.
+
     .. py:method:: save([force_insert=False[, only=None]])
 
         :param bool force_insert: Whether to force execution of an insert
@@ -320,7 +313,7 @@ Models
             fields will be persisted.
 
         Save the given instance, creating or updating depending on whether it has a
-        primary key.  If ``force_insert=True`` an ``INSERT`` will be issued regardless
+        primary key.  If ``force_insert=True`` an *INSERT* will be issued regardless
         of whether or not the primary key exists.
 
         Example showing saving a model instance:
@@ -376,6 +369,10 @@ Models
 
         :rtype: bool
 
+    .. py:method:: prepared()
+
+        This method provides a hook for performing model initialization *after*
+        the row data has been populated.
 
 
 .. _fields-api:
@@ -383,7 +380,7 @@ Models
 Fields
 ------
 
-.. py:class:: Field(null=False, index=False, unique=False, verbose_name=None, help_text=None, db_column=None, default=None, choices=None, *args, **kwargs)
+.. py:class:: Field(null=False, index=False, unique=False, verbose_name=None, help_text=None, db_column=None, default=None, choices=None, primary_key=False, sequence=None, constraints=None, schema=None, **kwargs):
 
     The base class from which all other field types extend.
 
@@ -435,17 +432,6 @@ Fields
         :param value: arbitrary data from app or backend
         :rtype: python data type
 
-    .. py:method:: between(low, high)
-
-        Return an expression suitable for performing "BETWEEN" queries.
-
-        :rtype: an ``Expression`` object.
-
-        .. code-block:: python
-
-            # select employees making between $50 and $60
-            Employee.select().where(Employee.salary.between(50, 60))
-
 .. py:class:: IntegerField
 
     Stores: integers
@@ -491,8 +477,6 @@ Fields
 
     .. py:attribute:: db_field = 'decimal'
 
-    .. py:attribute:: template = '%(column_type)s(%(max_digits)d, %(decimal_places)d)'
-
 .. py:class:: CharField
 
     Stores: small strings (0-255 bytes)
@@ -504,8 +488,6 @@ Fields
     ================  =========================
 
     .. py:attribute:: db_field = 'string'
-
-    .. py:attribute:: template = '%(column_type)s(%(max_length)s)'
 
 .. py:class:: TextField
 
@@ -542,31 +524,23 @@ Fields
 
     .. py:attribute:: month
 
-        Same as :py:attr:`~DateTimeField.year`, except extract month.
+        An expression suitable for extracting the month from a stored date.
 
     .. py:attribute:: day
 
-        Same as :py:attr:`~DateTimeField.year`, except extract day.
+        An expression suitable for extracting the day from a stored date.
 
     .. py:attribute:: hour
 
-        Same as :py:attr:`~DateTimeField.year`, except extract hour.
+        An expression suitable for extracting the hour from a stored time.
 
     .. py:attribute:: minute
 
-        Same as :py:attr:`~DateTimeField.year`, except extract minute.
+        An expression suitable for extracting the minute from a stored time.
 
     .. py:attribute:: second
 
-        Same as :py:attr:`~DateTimeField.year`, except extract second..
-
-.. py:class:: BlobField
-
-    Store arbitrary binary data.
-
-.. py:class:: UUIDField
-
-    Store ``UUID`` values. Currently only supported by :py:class:`PostgresqlDatabase`.
+        An expression suitable for extracting the second from a stored time.
 
 .. py:class:: DateField
 
@@ -646,12 +620,19 @@ Fields
 
     .. py:attribute:: db_field = 'bool'
 
+.. py:class:: BlobField
+
+    Store arbitrary binary data.
+
+.. py:class:: UUIDField
+
+    Store ``UUID`` values. Currently only supported by :py:class:`PostgresqlDatabase`.
+
 .. py:class:: ForeignKeyField(rel_model[, related_name=None[, on_delete=None[, on_update=None[, to_field=None[, ...]]]]])
 
     Stores: relationship to another model
 
-    :param rel_model: related :py:class:`Model` class or the string 'self' if declaring
-               a self-referential foreign key
+    :param rel_model: related :py:class:`Model` class or the string 'self' if declaring a self-referential foreign key
     :param string related_name: attribute to expose on related model
     :param string on_delete: on delete behavior, e.g. ``on_delete='CASCADE'``.
     :param string on_update: on update behavior.
@@ -685,7 +666,6 @@ Fields
     .. note:: If you manually specify a ``to_field``, that field must be either
         a primary key or have a unique constraint.
 
-
 .. py:class:: CompositeKey(*fields)
 
     Specify a composite primary key for a model.  Unlike the other fields, a
@@ -708,9 +688,11 @@ Fields
 Query Types
 -----------
 
-.. py:class:: Query
+.. py:class:: Query()
 
-    The parent class from which all other query classes are drived.
+    The parent class from which all other query classes are drived. While you
+    will not deal with :py:class:`Query` directly in your code, it implements some
+    methods that are common across all query types.
 
     .. py:method:: where(*expressions)
 
@@ -785,33 +767,6 @@ Query Types
         .. code-block:: python
 
             sq = SelectQuery(Blog).join(Entry).switch(Blog).join(User)
-
-    .. py:method:: filter(*args, **kwargs)
-
-        .. deprecated:: 2.0
-            Use instead :py:meth:`Query.where`
-
-        :param args: a list of :py:class:`DQ` or :py:class:`Node` objects
-        :param kwargs: a mapping of column + lookup to value, e.g. "age__gt=55"
-        :rtype: :py:class:`SelectQuery` with appropriate ``WHERE`` clauses
-
-        Provides a django-like syntax for building a query. The key difference
-        between :py:meth:`~Model.filter` and :py:meth:`SelectQuery.where`
-        is that :py:meth:`~Model.filter` supports traversing joins using
-        django's "double-underscore" syntax:
-
-        .. code-block:: python
-
-            sq = Entry.filter(blog__title='Some Blog')
-
-        This method is chainable:
-
-        .. code-block:: python
-
-            base_q = User.filter(active=True)
-            some_user = base_q.filter(username='charlie')
-
-        .. note:: this method is provided for compatibility with peewee 1.
 
     .. py:method:: alias(alias=None)
 
@@ -1385,13 +1340,15 @@ Query Types
         Performs the query
 
 
-.. py:class:: InsertQuery(model_class[, field_dict=None[, rows=None]])
+.. py:class:: InsertQuery(model_class[, field_dict=None[, rows=None[, fields=None[, query=None]]]])
 
     Creates an ``InsertQuery`` instance for the given model.
 
     :param dict field_dict: A mapping of either field or field-name to value.
     :param iterable rows: An iterable of dictionaries containing a mapping of
         field or field-name to value.
+    :param list fields: A list of field objects to insert data into (only used in combination with the ``query`` parameter).
+    :param query: A :py:class:`SelectQuery` to use as the source of data.
 
     Basic example:
 
@@ -1413,6 +1370,20 @@ Query Types
         iq = InsertQuery(User, rows=users)
         iq.execute()
 
+    Example inserting using a query as the data source:
+
+    .. code-block:: python
+
+        query = (User
+                 .select(User.username, fn.COUNT(Tweet.id))
+                 .join(Tweet, JOIN_LEFT_OUTER)
+                 .group_by(User.username))
+        iq = InsertQuery(
+            UserTweetDenorm,
+            fields=[UserTweetDenorm.username, UserTweetDenorm.num_tweets],
+            query=query)
+        iq.execute()
+
     .. py:method:: execute()
 
         :rtype: primary key of the new row
@@ -1421,13 +1392,12 @@ Query Types
 
     .. py:method:: upsert([upsert=True])
 
-        Perform an ``INSERT OR REPLACE`` query. Currently only Sqlite supports
+        Perform an *INSERT OR REPLACE* query. Currently only Sqlite supports
         this method.
-
 
 .. py:class:: DeleteQuery(model_class)
 
-    Creates a ``DeleteQuery`` instance for the given model.
+    Creates a *DELETE* query for the given model.
 
     .. note::
         DeleteQuery will *not* traverse foreign keys or ensure that constraints
@@ -1813,6 +1783,33 @@ Database and its subclasses
 
         .. note:: only works with database engines that support sequences
 
+    .. py:method:: create_tables(models[, safe=False])
+
+        :param list models: A list of models.
+        :param bool safe: Check first whether the table exists before attempting to create it.
+
+        This method should be used for creating tables as it will resolve the model dependency graph and ensure the tables are created in the correct order.
+
+        Usage:
+
+        .. code-block:: python
+
+            db.create_tables([User, Tweet, Something], safe=True)
+
+    .. py:method:: drop_tables(models[, safe=False[, cascade=False]])
+
+        :param list models: A list of models.
+        :param bool safe: Check the table exists before attempting to drop it.
+        :param bool cascade: drop table with ``CASCADE`` option.
+
+        This method should be used for dropping tables, as it will resolve the model dependency graph and ensure the tables are dropped in the correct order.
+
+        Usage:
+
+        .. code-block:: python
+
+            db.drop_tables([User, Tweet, Something], safe=True)
+
     .. py:method:: transaction()
 
         Return a context manager that executes statements in a transaction.  If an
@@ -1911,10 +1908,8 @@ Database and its subclasses
 
     :py:class:`Database` subclass that works with the "psycopg2" driver
 
-
 Misc
 ----
-
 
 .. py:class:: fn()
 
@@ -2063,3 +2058,67 @@ Misc
 
         Once initialized, the attributes and methods on ``obj`` can be accessed
         directly via the :py:class:`Proxy` instance.
+
+.. py:class:: Node()
+
+    The :py:class:`Node` class is the parent class for all composable parts of a query, and forms the basis of peewee's expression API. The following classes extend :py:class:`Node`:
+
+    * :py:class:`SelectQuery`, :py:class:`UpdateQuery`, :py:class:`InsertQuery`, :py:class:`DeleteQuery`, and :py:class:`RawQuery`.
+    * :py:class:`Field`
+    * :py:class:`Func` (and :py:func:`fn`)
+    * :py:class:`SQL`
+    * :py:class:`Expression`
+    * :py:class:`Param`
+    * :py:class:`Window`
+    * :py:class:`Clause`
+    * :py:class:`Entity`
+    * :py:class:`Check`
+
+    Overridden operators:
+
+    * Bitwise and- and or- (``&`` and ``|``): combine multiple nodes using the given conjunction.
+    * ``+``, ``-``, ``*``, ``/`` and ``^`` (add, subtract, multiply, divide and exclusive-or).
+    * ``==``, ``!=``, ``<``, ``<=``, ``>``, ``>=``: create a binary expression using the given comparator.
+    * ``<<``: create an *IN* expression.
+    * ``>>``: create an *IS* expression.
+    * ``%`` and ``**``: *LIKE* and *ILIKE*.
+
+    .. py:method:: contains(rhs)
+
+        Create a binary expression using case-insensitive string search.
+
+    .. py:method:: startswith(rhs)
+
+        Create a binary expression using case-insensitive prefix search.
+
+    .. py:method:: endswith(rhs)
+
+        Create a binary expression using case-insensitive suffix search.
+
+    .. py:method:: between(low, high)
+
+        Create an expression that will match values between ``low`` and ``high``.
+
+    .. py:method:: regexp(expression)
+
+        Match based on regular expression.
+
+    .. py:method:: ocncat(rhs)
+
+        Concatenate the current node with the provided ``rhs``.
+
+    .. py:method:: __invert__()
+
+        Negate the node. This translates roughly into *NOT (<node>)*.
+
+    .. py:method:: alias([name=None])
+
+        Apply an alias to the given node. This translates into *<node> AS <name>*.
+
+    .. py:method:: asc()
+
+        Apply ascending ordering to the given node. This translates into *<node> ASC*.
+
+    .. py:method:: desc()
+
+        Apply descending ordering to the given node. This translates into *<node> DESC*.
