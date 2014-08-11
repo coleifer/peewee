@@ -62,23 +62,18 @@ Check out the `quick start <http://docs.peewee-orm.com/en/latest/peewee/quicksta
 Learning more
 -------------
 
-the official `peewee cookbook <http://docs.peewee-orm.com/en/latest/peewee/cookbook.html>`_
-has recipes for common operations and is a good place to get started.
-
-check the `documentation <http://docs.peewee-orm.com/>`_ for more
+Check the `documentation <http://docs.peewee-orm.com/>`_ for more
 examples.
 
-specific question?  come hang out in the #peewee channel on freenode.irc.net,
+Specific question? Come hang out in the #peewee channel on freenode.irc.net,
 or post to the mailing list, http://groups.google.com/group/peewee-orm
 
-lastly, peewee runs on python 2.6+ or 3.2+.
+Lastly, peewee runs on python 2.6+ or 3.2+.
 
 Still want more info?
 ---------------------
 
 .. image:: http://media.charlesleifer.com/blog/photos/wat.jpg
-
-
 
 Why?
 ----
@@ -88,7 +83,6 @@ lots of queries and wanting a very simple abstraction on top of the sql.  I had
 so much fun working on it that I kept adding features. peewee is small enough that
 its my hope anyone with an interest in orms will be able to understand the code
 without much trouble.
-
 
 model definitions and schema creation
 -------------------------------------
