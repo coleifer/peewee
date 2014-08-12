@@ -1898,7 +1898,13 @@ Database and its subclasses
 
 .. py:class:: SqliteDatabase(Database)
 
-    :py:class:`Database` subclass that works with the "sqlite3" driver
+    :py:class:`Database` subclass that works with the "sqlite3" driver. In addition to the default database parameters, :py:class:`SqliteDatabase` also accepts a *journal_mode* parameter which will configure the journaling mode.
+
+    To use write-ahead log and connection-per-thread:
+
+    .. code-block:: python
+
+        db = SqliteDatabase('my_app.db', threadlocals=True, journal_mode='WAL')
 
 .. py:class:: MySQLDatabase(Database)
 
@@ -2103,7 +2109,7 @@ Misc
 
         Match based on regular expression.
 
-    .. py:method:: ocncat(rhs)
+    .. py:method:: concat(rhs)
 
         Concatenate the current node with the provided ``rhs``.
 

@@ -128,7 +128,7 @@ If you would like to use these awesome features, use the :py:class:`SqliteExtDat
 
     from playhouse.sqlite_ext import SqliteExtDatabase
 
-    sqlite_db = SqliteExtDatabase('my_app.db')
+    sqlite_db = SqliteExtDatabase('my_app.db', journal_mode='WAL')
 
 Peewee also comes with an alternate SQLite database that uses :ref:`apsw`, an advanced Python SQLite driver. More information on APSW can be obtained on the `APSW project website <https://code.google.com/p/apsw/>`_. APSW provides special features like:
 
