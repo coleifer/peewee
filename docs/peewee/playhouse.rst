@@ -2280,6 +2280,7 @@ Example::
 This will print the following code to *stdout* (which you can redirect into a file using ``>``):
 
 .. code-block:: python
+
     #!/usr/bin/env python
 
     import logging
