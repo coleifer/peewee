@@ -1010,7 +1010,46 @@ sqlite_ext API notes
 BerkeleyDB backend
 ------------------
 
-Sorry, these docs are not yet written.
+BerkeleyDB provides a `SQLite-compatible API <http://www.oracle.com/technetwork/database/database-technologies/berkeleydb/overview/sql-160887.html>`_. BerkeleyDB's SQL API has many advantages over SQLite:
+
+* Higher transactions-per-second in multi-threaded environments.
+* Built-in replication and hot backup.
+* Fewer system calls, less resource utilization.
+* Multi-version concurrency control.
+
+For more details, Oracle has published a short `technical overview <http://www.oracle.com/technetwork/database/berkeleydb/learnmore/bdbvssqlite-wp-186779.pdf>`_.
+
+In order to use peewee with BerkeleyDB, you need to compile BerkeleyDB with the SQL API enabled. Then compile the Python SQLite driver against BerkeleyDB's sqlite replacement.
+
+Begin by downloading and compiling BerkeleyDB:
+
+.. code-block:: console
+
+    wget http://download.oracle.com/berkeley-db/db-6.0.30.tar.gz
+    tar xzf db-6.0.30.tar.gz
+    cd db-6.0.30/build_unix
+    export CFLAGS='-DSQLITE_ENABLE_FTS3=1 -DSQLITE_ENABLE_RTREE=1 -fPIC'
+    ../dist/configure --enable-static --disable-shared --enable-sql --enable-sql-compat
+    make
+    sudo make prefix=/usr/local/ install
+
+Then get a copy of the standard library SQLite driver and build it against BerkeleyDB:
+
+.. code-block:: console
+
+    git clone https://github.com/ghaering/pysqlite
+    cd pysqlite
+    sed -i "s|#||g" setup.cfg
+    python setup.py build
+    sudo python setup.py install
+
+To simplify this process, peewee comes with a script that will automatically build the appropriate libraries for you. The ``berkeley_build.sh`` script can be found in the ``playhouse`` directory (or you can `view the source online <https://github.com/coleifer/peewee/blob/master/playhouse/berkeley_build.sh>`_).
+
+You can also find `step by step instructions <http://charlesleifer.com/blog/building-the-python-sqlite-driver-for-use-with-berkeleydb/>`_ on my blog.
+
+.. py:class:: BerkeleyDatabase(database, **kwargs)
+
+    Subclass of the :py:class:`SqliteExtDatabase` that supports connecting to BerkeleyDB-backed version of SQLite.
 
 .. _sqlcipher_ext:
 
@@ -2218,4 +2257,50 @@ Contains utilities helpful when testing peewee projects.
 pskel
 -----
 
-Sorry, these docs are not yet written.
+I often find myself writing very small scripts with peewee. *pskel* will generate the boilerplate code for a basic peewee script.
+
+Usage::
+
+    pskel [options] model1 model2 ...
+
+*pskel* accepts the following options:
+
+-----------------  -------------  ---------------------------------------
+Option             Default        Description
+-----------------  -------------  ---------------------------------------
+``-l,--logging``   False          Log all queries to stdout.
+``-e,--engine``    sqlite         Database driver to use.
+``-d,--database``  ``:memory:``   Database to connect to.
+-----------------  -------------  ---------------------------------------
+
+Example::
+
+    $ pskel -e postgres -d my_database User Tweet
+
+This will print the following code to *stdout* (which you can redirect into a file using ``>``):
+
+.. code-block:: python
+    #!/usr/bin/env python
+
+    import logging
+
+    from peewee import *
+    from peewee import create_model_tables
+
+    db = PostgresqlDatabase('my_database')
+
+    class BaseModel(Model):
+        class Meta:
+            database = db
+
+    class User(BaseModel):
+        pass
+
+    class Tweet(BaseModel):
+        pass
+
+    def main():
+        create_model_tables([User, Tweet], fail_silently=True)
+
+    if __name__ == '__main__':
+        main()
