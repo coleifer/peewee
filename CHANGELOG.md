@@ -5,6 +5,38 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.3.0
+
+This release contains a number of bugfixes, enhancements and a rewrite of much of the documentation.
+
+### Changes in 2.3.0
+
+* [New and improved documentation](http://docs.peewee-orm.com/)
+* Added [aggregate_rows()](http://docs.peewee-orm.com/en/latest/peewee/querying.html#list-users-and-all-their-tweets) method for mitigating N+1 queries.
+* Query compiler performance improvements and rewrite of table alias internals (51d82fcd and d8d55df04).
+* Added context-managers and decorators for [counting queries](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#count_queries) and [asserting query counts](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#assert_query_count).
+* Allow `UPDATE` queries to contain subqueries for values ([example](http://docs.peewee-orm.com/en/latest/peewee/querying.html#atomic-updates)).
+* Support for `INSERT INTO / SELECT FROM` queries ([docs](http://docs.peewee-orm.com/en/latest/peewee/api.html?highlight=insert_from#Model.insert_from)).
+* Allow `SqliteDatabase` to set the database's journal mode.
+* Added method for concatenation ([docs]()).
+* Moved ``UUIDField`` out of the playhouse and into peewee
+* Added [pskel](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#pskel) script.
+* Documentation for [BerkeleyDB](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#berkeleydb).
+
+### Bugs fixed
+
+* #340, allow inner query values to be used in outer query joins.
+* #380, fixed foreign key handling in SQLite migrations.
+* #389, mark foreign keys as dirty on assignment.
+* #391, added an ``orwhere()`` method.
+* #392, fixed ``order_by`` meta option inheritance bug.
+* #394, fixed UUID and conversion of foreign key values (thanks @alexlatchford).
+* #395, allow selecting all columns using ``SQL('*')``.
+* #396, fixed query compiler bug that was adding unnecessary parentheses around expressions.
+* #405, fixed behavior of ``count()`` when query has a limit or offset.
+
+[View commits](https://github.com/coleifer/peewee/compare/2.2.5...2.3.0)
+
 ## 2.2.5
 
 This is a small release and contains a handful of fixes.
