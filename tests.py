@@ -490,49 +490,49 @@ class BasePeeweeTestCase(unittest.TestCase):
 class SelectTestCase(BasePeeweeTestCase):
     def test_selection(self):
         sq = SelectQuery(User)
-        self.assertSelect(sq, 'users."id", users."username"', [])
+        self.assertSelect(sq, '"users"."id", "users"."username"', [])
 
         sq = SelectQuery(Blog, Blog.pk, Blog.title, Blog.user, User.username).join(User)
-        self.assertSelect(sq, 'blog."pk", blog."title", blog."user_id", users."username"', [])
+        self.assertSelect(sq, '"blog"."pk", "blog"."title", "blog"."user_id", "users"."username"', [])
 
         sq = SelectQuery(User, fn.Lower(fn.Substr(User.username, 0, 1)).alias('lu'), fn.Count(Blog.pk)).join(Blog)
-        self.assertSelect(sq, 'Lower(Substr(users."username", ?, ?)) AS lu, Count(blog."pk")', [0, 1])
+        self.assertSelect(sq, 'Lower(Substr("users"."username", ?, ?)) AS lu, Count("blog"."pk")', [0, 1])
 
         sq = SelectQuery(User, User.username, fn.Count(Blog.select().where(Blog.user == User.id)))
-        self.assertSelect(sq, 'users."username", Count(SELECT blog."pk" FROM "blog" AS blog WHERE (blog."user_id" = users."id"))', [])
+        self.assertSelect(sq, '"users"."username", Count(SELECT "blog"."pk" FROM "blog" AS blog WHERE ("blog"."user_id" = "users"."id"))', [])
 
         sq = SelectQuery(Package, Package, fn.Count(PackageItem.id)).join(PackageItem)
-        self.assertSelect(sq, 'package."id", package."barcode", Count(packageitem."id")', [])
+        self.assertSelect(sq, '"package"."id", "package"."barcode", Count("packageitem"."id")', [])
 
     def test_select_distinct(self):
         sq = SelectQuery(User).distinct()
         self.assertEqual(
             compiler.generate_select(sq),
-            ('SELECT DISTINCT users."id", users."username" '
+            ('SELECT DISTINCT "users"."id", "users"."username" '
              'FROM "users" AS users', []))
 
         sq = sq.distinct(False)
         self.assertEqual(
             compiler.generate_select(sq),
-            ('SELECT users."id", users."username" FROM "users" AS users', []))
+            ('SELECT "users"."id", "users"."username" FROM "users" AS users', []))
 
         sq = SelectQuery(User).distinct([User.username])
         self.assertEqual(
             compiler.generate_select(sq),
-            ('SELECT DISTINCT ON (users."username") users."id", '
-             'users."username" '
+            ('SELECT DISTINCT ON ("users"."username") "users"."id", '
+             '"users"."username" '
              'FROM "users" AS users', []))
 
     def test_reselect(self):
         sq = SelectQuery(User, User.username)
-        self.assertSelect(sq, 'users."username"', [])
+        self.assertSelect(sq, '"users"."username"', [])
 
         sq2 = sq.select()
-        self.assertSelect(sq2, 'users."id", users."username"', [])
+        self.assertSelect(sq2, '"users"."id", "users"."username"', [])
         self.assertTrue(id(sq) != id(sq2))
 
         sq3 = sq2.select(User.id)
-        self.assertSelect(sq3, 'users."id"', [])
+        self.assertSelect(sq3, '"users"."id"', [])
         self.assertTrue(id(sq2) != id(sq3))
 
     def test_select_subquery(self):
@@ -541,9 +541,9 @@ class SelectTestCase(BasePeeweeTestCase):
 
         sql = compiler.generate_select(sq)
         self.assertEqual(sql, (
-            'SELECT parent."id", parent."data", ' + \
-            '(SELECT Count(child."id") FROM "child" AS child ' + \
-            'WHERE (child."parent_id" = parent."id") GROUP BY child."parent_id") ' + \
+            'SELECT "parent"."id", "parent"."data", ' + \
+            '(SELECT Count("child"."id") FROM "child" AS child ' + \
+            'WHERE ("child"."parent_id" = "parent"."id") GROUP BY "child"."parent_id") ' + \
             'AS count FROM "parent" AS parent', []
         ))
 
@@ -560,20 +560,20 @@ class SelectTestCase(BasePeeweeTestCase):
 
         sql1, params1 = normal_compiler.generate_select(sq1)
         self.assertEqual(sql1, (
-            'SELECT t1."id", t1."blog_id", t1."comment" FROM "comment" AS t1 '
-            'WHERE ((t1."id" IN ('
-            'SELECT t2."id" FROM "comment" AS t2 '
-            'INNER JOIN "blog" AS t3 ON (t2."blog_id" = t3."pk") '
-            'WHERE (t3."pk" = ?))) OR (t1."comment" = ?))'))
+            'SELECT "t1"."id", "t1"."blog_id", "t1"."comment" FROM "comment" AS t1 '
+            'WHERE (("t1"."id" IN ('
+            'SELECT "t2"."id" FROM "comment" AS t2 '
+            'INNER JOIN "blog" AS t3 ON ("t2"."blog_id" = "t3"."pk") '
+            'WHERE ("t3"."pk" = ?))) OR ("t1"."comment" = ?))'))
         self.assertEqual(params1, [1, '*'])
 
         sql2, params2 = normal_compiler.generate_select(sq2)
         self.assertEqual(sql2, (
-            'SELECT t1."id", t1."blog_id", t1."comment" FROM "comment" AS t1 '
-            'WHERE ((t1."comment" = ?) OR (t1."id" IN ('
-            'SELECT t2."id" FROM "comment" AS t2 '
-            'INNER JOIN "blog" AS t3 ON (t2."blog_id" = t3."pk") '
-            'WHERE (t3."pk" = ?))))'))
+            'SELECT "t1"."id", "t1"."blog_id", "t1"."comment" FROM "comment" AS t1 '
+            'WHERE (("t1"."comment" = ?) OR ("t1"."id" IN ('
+            'SELECT "t2"."id" FROM "comment" AS t2 '
+            'INNER JOIN "blog" AS t3 ON ("t2"."blog_id" = "t3"."pk") '
+            'WHERE ("t3"."pk" = ?))))'))
         self.assertEqual(params2, ['*', 1])
 
     def test_multiple_subquery(self):
@@ -587,15 +587,15 @@ class SelectTestCase(BasePeeweeTestCase):
         )
         sql, params = normal_compiler.generate_select(sq)
         self.assertEqual(sql, (
-            'SELECT t1."id", t1."blog_id", t1."comment" '
+            'SELECT "t1"."id", "t1"."blog_id", "t1"."comment" '
             'FROM "comment" AS t1 '
-            'WHERE (t1."id" IN ('
-            'SELECT t2."id" FROM "comment" AS t2 '
-            'INNER JOIN "blog" AS t3 ON (t2."blog_id" = t3."pk") '
-            'WHERE ((t2."comment" = ?) AND (t2."id" IN ('
-            'SELECT t4."id" FROM "comment" AS t4 '
-            'INNER JOIN "blog" AS t5 ON (t4."blog_id" = t5."pk") '
-            'WHERE (t4."comment" = ?)'
+            'WHERE ("t1"."id" IN ('
+            'SELECT "t2"."id" FROM "comment" AS t2 '
+            'INNER JOIN "blog" AS t3 ON ("t2"."blog_id" = "t3"."pk") '
+            'WHERE (("t2"."comment" = ?) AND ("t2"."id" IN ('
+            'SELECT "t4"."id" FROM "comment" AS t4 '
+            'INNER JOIN "blog" AS t5 ON ("t4"."blog_id" = "t5"."pk") '
+            'WHERE ("t4"."comment" = ?)'
             ')))))'))
         self.assertEqual(params, ['1', '2'])
 
@@ -605,78 +605,78 @@ class SelectTestCase(BasePeeweeTestCase):
             Blog, JOIN_LEFT_OUTER).group_by(User).order_by(ct.desc())
         sql = compiler.generate_select(sq)
         self.assertEqual(sql, (
-            'SELECT users."id", users."username", users."id" AS extra_id, Count(blog."pk") AS blog_ct ' + \
-            'FROM "users" AS users LEFT OUTER JOIN "blog" AS blog ON (users."id" = blog."user_id") ' + \
-            'GROUP BY users."id", users."username" ' + \
-            'ORDER BY Count(blog."pk") DESC', []
+            'SELECT "users"."id", "users"."username", "users"."id" AS extra_id, Count("blog"."pk") AS blog_ct ' + \
+            'FROM "users" AS users LEFT OUTER JOIN "blog" AS blog ON ("users"."id" = "blog"."user_id") ' + \
+            'GROUP BY "users"."id", "users"."username" ' + \
+            'ORDER BY Count("blog"."pk") DESC', []
         ))
         self.assertEqual(User.id._alias, None)
 
     def test_joins(self):
         sq = SelectQuery(User).join(Blog)
-        self.assertJoins(sq, ['INNER JOIN "blog" AS blog ON (users."id" = blog."user_id")'])
+        self.assertJoins(sq, ['INNER JOIN "blog" AS blog ON ("users"."id" = "blog"."user_id")'])
 
         sq = SelectQuery(Blog).join(User, JOIN_LEFT_OUTER)
-        self.assertJoins(sq, ['LEFT OUTER JOIN "users" AS users ON (blog."user_id" = users."id")'])
+        self.assertJoins(sq, ['LEFT OUTER JOIN "users" AS users ON ("blog"."user_id" = "users"."id")'])
 
         sq = SelectQuery(User).join(Relationship)
-        self.assertJoins(sq, ['INNER JOIN "relationship" AS relationship ON (users."id" = relationship."from_user_id")'])
+        self.assertJoins(sq, ['INNER JOIN "relationship" AS relationship ON ("users"."id" = "relationship"."from_user_id")'])
 
         sq = SelectQuery(User).join(Relationship, on=Relationship.to_user)
-        self.assertJoins(sq, ['INNER JOIN "relationship" AS relationship ON (users."id" = relationship."to_user_id")'])
+        self.assertJoins(sq, ['INNER JOIN "relationship" AS relationship ON ("users"."id" = "relationship"."to_user_id")'])
 
         sq = SelectQuery(User).join(Relationship, JOIN_LEFT_OUTER, Relationship.to_user)
-        self.assertJoins(sq, ['LEFT OUTER JOIN "relationship" AS relationship ON (users."id" = relationship."to_user_id")'])
+        self.assertJoins(sq, ['LEFT OUTER JOIN "relationship" AS relationship ON ("users"."id" = "relationship"."to_user_id")'])
 
         sq = SelectQuery(Package).join(PackageItem)
-        self.assertJoins(sq, ['INNER JOIN "packageitem" AS packageitem ON (package."barcode" = packageitem."package_id")'])
+        self.assertJoins(sq, ['INNER JOIN "packageitem" AS packageitem ON ("package"."barcode" = "packageitem"."package_id")'])
 
         sq = SelectQuery(PackageItem).join(Package)
-        self.assertJoins(sq, ['INNER JOIN "package" AS package ON (packageitem."package_id" = package."barcode")'])
+        self.assertJoins(sq, ['INNER JOIN "package" AS package ON ("packageitem"."package_id" = "package"."barcode")'])
 
         sq = (SelectQuery(TestModelA)
               .join(TestModelB, on=(TestModelA.data == TestModelB.data))
               .join(TestModelC, on=(TestModelC.field == TestModelB.field)))
         self.assertJoins(sq, [
-            'INNER JOIN "testmodelb" AS testmodelb ON (testmodela."data" = testmodelb."data")',
-            'INNER JOIN "testmodelc" AS testmodelc ON (testmodelc."field" = testmodelb."field")',
+            'INNER JOIN "testmodelb" AS testmodelb ON ("testmodela"."data" = "testmodelb"."data")',
+            'INNER JOIN "testmodelc" AS testmodelc ON ("testmodelc"."field" = "testmodelb"."field")',
         ])
 
         inner = SelectQuery(User).alias('j1')
         sq = SelectQuery(Blog).join(inner, on=(Blog.user == inner.c.id))
         join = ('INNER JOIN ('
-                'SELECT users."id" FROM "users" AS users) AS j1 '
-                'ON (blog."user_id" = "j1"."id")')
+                'SELECT "users"."id" FROM "users" AS users) AS j1 '
+                'ON ("blog"."user_id" = "j1"."id")')
         self.assertJoins(sq, [join])
 
         inner_2 = SelectQuery(Comment).alias('j2')
         sq = sq.join(inner_2, on=(Blog.pk == inner_2.c.blog_id))
         join_2 = ('INNER JOIN ('
-                  'SELECT comment."id" FROM "comment" AS comment) AS j2 '
-                  'ON (blog."pk" = "j2"."blog_id")')
+                  'SELECT "comment"."id" FROM "comment" AS comment) AS j2 '
+                  'ON ("blog"."pk" = "j2"."blog_id")')
         self.assertJoins(sq, [join, join_2])
 
         sq = sq.join(Comment)
         self.assertJoins(sq, [
             join,
             join_2,
-            'INNER JOIN "comment" AS comment ON (blog."pk" = comment."blog_id")'])
+            'INNER JOIN "comment" AS comment ON ("blog"."pk" = "comment"."blog_id")'])
 
     def test_join_self_referential(self):
         sq = SelectQuery(Category).join(Category)
-        self.assertJoins(sq, ['INNER JOIN "category" AS category ON (category."parent_id" = category."id")'])
+        self.assertJoins(sq, ['INNER JOIN "category" AS category ON ("category"."parent_id" = "category"."id")'])
 
     def test_join_self_referential_alias(self):
         Parent = Category.alias()
         sq = SelectQuery(Category, Category, Parent).join(Parent, on=(Category.parent == Parent.id)).where(
             Parent.name == 'parent name'
         ).order_by(Parent.name)
-        self.assertSelect(sq, 't1."id", t1."parent_id", t1."name", t2."id", t2."parent_id", t2."name"', [], normal_compiler)
+        self.assertSelect(sq, '"t1"."id", "t1"."parent_id", "t1"."name", "t2"."id", "t2"."parent_id", "t2"."name"', [], normal_compiler)
         self.assertJoins(sq, [
-            'INNER JOIN "category" AS t2 ON (t1."parent_id" = t2."id")',
+            'INNER JOIN "category" AS t2 ON ("t1"."parent_id" = "t2"."id")',
         ], normal_compiler)
-        self.assertWhere(sq, '(t2."name" = ?)', ['parent name'], normal_compiler)
-        self.assertOrderBy(sq, 't2."name"', [], normal_compiler)
+        self.assertWhere(sq, '("t2"."name" = ?)', ['parent name'], normal_compiler)
+        self.assertOrderBy(sq, '"t2"."name"', [], normal_compiler)
 
         Grandparent = Category.alias()
         sq = SelectQuery(Category, Category, Parent, Grandparent).join(
@@ -684,24 +684,24 @@ class SelectTestCase(BasePeeweeTestCase):
         ).join(
             Grandparent, on=(Parent.parent == Grandparent.id)
         ).where(Grandparent.name == 'g1')
-        self.assertSelect(sq, 't1."id", t1."parent_id", t1."name", t2."id", t2."parent_id", t2."name", t3."id", t3."parent_id", t3."name"', [], normal_compiler)
+        self.assertSelect(sq, '"t1"."id", "t1"."parent_id", "t1"."name", "t2"."id", "t2"."parent_id", "t2"."name", "t3"."id", "t3"."parent_id", "t3"."name"', [], normal_compiler)
         self.assertJoins(sq, [
-            'INNER JOIN "category" AS t2 ON (t1."parent_id" = t2."id")',
-            'INNER JOIN "category" AS t3 ON (t2."parent_id" = t3."id")',
+            'INNER JOIN "category" AS t2 ON ("t1"."parent_id" = "t2"."id")',
+            'INNER JOIN "category" AS t3 ON ("t2"."parent_id" = "t3"."id")',
         ], normal_compiler)
-        self.assertWhere(sq, '(t3."name" = ?)', ['g1'], normal_compiler)
+        self.assertWhere(sq, '("t3"."name" = ?)', ['g1'], normal_compiler)
 
     def test_join_both_sides(self):
         sq = SelectQuery(Blog).join(Comment).switch(Blog).join(User)
         self.assertJoins(sq, [
-            'INNER JOIN "comment" AS comment ON (blog."pk" = comment."blog_id")',
-            'INNER JOIN "users" AS users ON (blog."user_id" = users."id")',
+            'INNER JOIN "comment" AS comment ON ("blog"."pk" = "comment"."blog_id")',
+            'INNER JOIN "users" AS users ON ("blog"."user_id" = "users"."id")',
         ])
 
         sq = SelectQuery(Blog).join(User).switch(Blog).join(Comment)
         self.assertJoins(sq, [
-            'INNER JOIN "users" AS users ON (blog."user_id" = users."id")',
-            'INNER JOIN "comment" AS comment ON (blog."pk" = comment."blog_id")',
+            'INNER JOIN "users" AS users ON ("blog"."user_id" = "users"."id")',
+            'INNER JOIN "comment" AS comment ON ("blog"."pk" = "comment"."blog_id")',
         ])
 
     def test_join_switching(self):
@@ -726,23 +726,23 @@ class SelectTestCase(BasePeeweeTestCase):
             track = ForeignKeyField(Track)
 
         multiple_first = Track.select().join(ReleaseTrack).join(Release).switch(Track).join(Artist).switch(Track).join(TrackGenre).join(Genre)
-        self.assertSelect(multiple_first, 'track."id", track."artist_id"', [])
+        self.assertSelect(multiple_first, '"track"."id", "track"."artist_id"', [])
         self.assertJoins(multiple_first, [
-            'INNER JOIN "artist" AS artist ON (track."artist_id" = artist."id")',
-            'INNER JOIN "genre" AS genre ON (trackgenre."genre_id" = genre."id")',
-            'INNER JOIN "release" AS release ON (releasetrack."release_id" = release."id")',
-            'INNER JOIN "releasetrack" AS releasetrack ON (track."id" = releasetrack."track_id")',
-            'INNER JOIN "trackgenre" AS trackgenre ON (track."id" = trackgenre."track_id")',
+            'INNER JOIN "artist" AS artist ON ("track"."artist_id" = "artist"."id")',
+            'INNER JOIN "genre" AS genre ON ("trackgenre"."genre_id" = "genre"."id")',
+            'INNER JOIN "release" AS release ON ("releasetrack"."release_id" = "release"."id")',
+            'INNER JOIN "releasetrack" AS releasetrack ON ("track"."id" = "releasetrack"."track_id")',
+            'INNER JOIN "trackgenre" AS trackgenre ON ("track"."id" = "trackgenre"."track_id")',
         ])
 
         single_first = Track.select().join(Artist).switch(Track).join(ReleaseTrack).join(Release).switch(Track).join(TrackGenre).join(Genre)
-        self.assertSelect(single_first, 'track."id", track."artist_id"', [])
+        self.assertSelect(single_first, '"track"."id", "track"."artist_id"', [])
         self.assertJoins(single_first, [
-            'INNER JOIN "artist" AS artist ON (track."artist_id" = artist."id")',
-            'INNER JOIN "genre" AS genre ON (trackgenre."genre_id" = genre."id")',
-            'INNER JOIN "release" AS release ON (releasetrack."release_id" = release."id")',
-            'INNER JOIN "releasetrack" AS releasetrack ON (track."id" = releasetrack."track_id")',
-            'INNER JOIN "trackgenre" AS trackgenre ON (track."id" = trackgenre."track_id")',
+            'INNER JOIN "artist" AS artist ON ("track"."artist_id" = "artist"."id")',
+            'INNER JOIN "genre" AS genre ON ("trackgenre"."genre_id" = "genre"."id")',
+            'INNER JOIN "release" AS release ON ("releasetrack"."release_id" = "release"."id")',
+            'INNER JOIN "releasetrack" AS releasetrack ON ("track"."id" = "releasetrack"."track_id")',
+            'INNER JOIN "trackgenre" AS trackgenre ON ("track"."id" = "trackgenre"."track_id")',
         ])
 
     def test_joining_expr(self):
@@ -758,199 +758,199 @@ class SelectTestCase(BasePeeweeTestCase):
         ).join(
             C, on=(B.uniq_b == C.uniq_bc)
         )
-        self.assertSelect(sq, 'a."uniq_a", b."uniq_ab", b."uniq_b", c."uniq_bc"', [])
+        self.assertSelect(sq, '"a"."uniq_a", "b"."uniq_ab", "b"."uniq_b", "c"."uniq_bc"', [])
         self.assertJoins(sq, [
-            'INNER JOIN "b" AS b ON (a."uniq_a" = b."uniq_ab")',
-            'INNER JOIN "c" AS c ON (b."uniq_b" = c."uniq_bc")',
+            'INNER JOIN "b" AS b ON ("a"."uniq_a" = "b"."uniq_ab")',
+            'INNER JOIN "c" AS c ON ("b"."uniq_b" = "c"."uniq_bc")',
         ])
 
     def test_where(self):
         sq = SelectQuery(User).where(User.id < 5)
-        self.assertWhere(sq, '(users."id" < ?)', [5])
+        self.assertWhere(sq, '("users"."id" < ?)', [5])
 
         sq = SelectQuery(Blog).where(Blog.user << sq)
-        self.assertWhere(sq, '(blog."user_id" IN (SELECT users."id" FROM "users" AS users WHERE (users."id" < ?)))', [5])
+        self.assertWhere(sq, '("blog"."user_id" IN (SELECT "users"."id" FROM "users" AS users WHERE ("users"."id" < ?)))', [5])
 
         p = SelectQuery(Package).where(Package.id == 2)
         sq = SelectQuery(PackageItem).where(PackageItem.package << p)
-        self.assertWhere(sq, '(packageitem."package_id" IN (SELECT package."barcode" FROM "package" AS package WHERE (package."id" = ?)))', [2])
+        self.assertWhere(sq, '("packageitem"."package_id" IN (SELECT "package"."barcode" FROM "package" AS package WHERE ("package"."id" = ?)))', [2])
 
     def test_orwhere(self):
         sq = SelectQuery(User).orwhere(User.id < 5)
-        self.assertWhere(sq, '(users."id" < ?)', [5])
+        self.assertWhere(sq, '("users"."id" < ?)', [5])
 
         sq = sq.orwhere(User.id > 10)
-        self.assertWhere(sq, '((users."id" < ?) OR (users."id" > ?))', [5, 10])
+        self.assertWhere(sq, '(("users"."id" < ?) OR ("users"."id" > ?))', [5, 10])
 
     def test_fix_null(self):
         sq = SelectQuery(Blog).where(Blog.user == None)
-        self.assertWhere(sq, '(blog."user_id" IS ?)', [None])
+        self.assertWhere(sq, '("blog"."user_id" IS ?)', [None])
 
         sq = SelectQuery(Blog).where(Blog.user != None)
-        self.assertWhere(sq, 'NOT (blog."user_id" IS ?)', [None])
+        self.assertWhere(sq, 'NOT ("blog"."user_id" IS ?)', [None])
 
     def test_where_coercion(self):
         sq = SelectQuery(User).where(User.id < '5')
-        self.assertWhere(sq, '(users."id" < ?)', [5])
+        self.assertWhere(sq, '("users"."id" < ?)', [5])
 
         sq = SelectQuery(User).where(User.id < (User.id - '5'))
-        self.assertWhere(sq, '(users."id" < (users."id" - ?))', [5])
+        self.assertWhere(sq, '("users"."id" < ("users"."id" - ?))', [5])
 
     def test_where_lists(self):
         sq = SelectQuery(User).where(User.username << ['u1', 'u2'])
-        self.assertWhere(sq, '(users."username" IN (?, ?))', ['u1', 'u2'])
+        self.assertWhere(sq, '("users"."username" IN (?, ?))', ['u1', 'u2'])
 
         sq = SelectQuery(User).where((User.username << ['u1', 'u2']) | (User.username << ['u3', 'u4']))
-        self.assertWhere(sq, '((users."username" IN (?, ?)) OR (users."username" IN (?, ?)))', ['u1', 'u2', 'u3', 'u4'])
+        self.assertWhere(sq, '(("users"."username" IN (?, ?)) OR ("users"."username" IN (?, ?)))', ['u1', 'u2', 'u3', 'u4'])
 
     def test_where_joins(self):
         sq = SelectQuery(User).where(
             ((User.id == 1) | (User.id == 2)) &
             ((Blog.pk == 3) | (Blog.pk == 4))
         ).where(User.id == 5).join(Blog)
-        self.assertWhere(sq, '((((users."id" = ?) OR (users."id" = ?)) AND ((blog."pk" = ?) OR (blog."pk" = ?))) AND (users."id" = ?))', [1, 2, 3, 4, 5])
+        self.assertWhere(sq, '(((("users"."id" = ?) OR ("users"."id" = ?)) AND (("blog"."pk" = ?) OR ("blog"."pk" = ?))) AND ("users"."id" = ?))', [1, 2, 3, 4, 5])
 
     def test_where_join_non_pk_fk(self):
         sq = (SelectQuery(Package)
               .join(PackageItem)
               .where(PackageItem.title == 'p1'))
-        self.assertWhere(sq, '(packageitem."title" = ?)', ['p1'])
+        self.assertWhere(sq, '("packageitem"."title" = ?)', ['p1'])
 
         sq = (SelectQuery(PackageItem)
               .join(Package)
               .where(Package.barcode == 'b1'))
-        self.assertWhere(sq, '(package."barcode" = ?)', ['b1'])
+        self.assertWhere(sq, '("package"."barcode" = ?)', ['b1'])
 
     def test_where_functions(self):
         sq = SelectQuery(User).where(fn.Lower(fn.Substr(User.username, 0, 1)) == 'a')
-        self.assertWhere(sq, '(Lower(Substr(users."username", ?, ?)) = ?)', [0, 1, 'a'])
+        self.assertWhere(sq, '(Lower(Substr("users"."username", ?, ?)) = ?)', [0, 1, 'a'])
 
     def test_where_conversion(self):
         sq = SelectQuery(CSVRow).where(CSVRow.data == Param(['foo', 'bar']))
-        self.assertWhere(sq, '(csvrow."data" = ?)', ['foo,bar'])
+        self.assertWhere(sq, '("csvrow"."data" = ?)', ['foo,bar'])
 
         sq = SelectQuery(CSVRow).where(
             CSVRow.data == fn.FOO(Param(['foo', 'bar'])))
-        self.assertWhere(sq, '(csvrow."data" = FOO(?))', ['foo,bar'])
+        self.assertWhere(sq, '("csvrow"."data" = FOO(?))', ['foo,bar'])
 
         sq = SelectQuery(CSVRow).where(
             CSVRow.data == fn.FOO(Param(['foo', 'bar'])).coerce(False))
-        self.assertWhere(sq, '(csvrow."data" = FOO(?))', [['foo', 'bar']])
+        self.assertWhere(sq, '("csvrow"."data" = FOO(?))', [['foo', 'bar']])
 
     def test_where_clauses(self):
         sq = SelectQuery(Blog).where(
             Blog.pub_date < (fn.NOW() - SQL('INTERVAL 1 HOUR')))
-        self.assertWhere(sq, '(blog."pub_date" < (NOW() - INTERVAL 1 HOUR))', [])
+        self.assertWhere(sq, '("blog"."pub_date" < (NOW() - INTERVAL 1 HOUR))', [])
 
     def test_where_r(self):
         sq = SelectQuery(Blog).where(Blog.pub_date < R('NOW() - INTERVAL 1 HOUR'))
-        self.assertWhere(sq, '(blog."pub_date" < NOW() - INTERVAL 1 HOUR)', [])
+        self.assertWhere(sq, '("blog"."pub_date" < NOW() - INTERVAL 1 HOUR)', [])
 
         sq = SelectQuery(Blog).where(Blog.pub_date < (fn.Now() - R('INTERVAL 1 HOUR')))
-        self.assertWhere(sq, '(blog."pub_date" < (Now() - INTERVAL 1 HOUR))', [])
+        self.assertWhere(sq, '("blog"."pub_date" < (Now() - INTERVAL 1 HOUR))', [])
 
     def test_where_subqueries(self):
         sq = SelectQuery(User).where(User.id << User.select().where(User.username=='u1'))
-        self.assertWhere(sq, '(users."id" IN (SELECT users."id" FROM "users" AS users WHERE (users."username" = ?)))', ['u1'])
+        self.assertWhere(sq, '("users"."id" IN (SELECT "users"."id" FROM "users" AS users WHERE ("users"."username" = ?)))', ['u1'])
 
         sq = SelectQuery(User).where(User.username << User.select(User.username).where(User.username=='u1'))
-        self.assertWhere(sq, '(users."username" IN (SELECT users."username" FROM "users" AS users WHERE (users."username" = ?)))', ['u1'])
+        self.assertWhere(sq, '("users"."username" IN (SELECT "users"."username" FROM "users" AS users WHERE ("users"."username" = ?)))', ['u1'])
 
         sq = SelectQuery(Blog).where((Blog.pk == 3) | (Blog.user << User.select().where(User.username << ['u1', 'u2'])))
-        self.assertWhere(sq, '((blog."pk" = ?) OR (blog."user_id" IN (SELECT users."id" FROM "users" AS users WHERE (users."username" IN (?, ?)))))', [3, 'u1', 'u2'])
+        self.assertWhere(sq, '(("blog"."pk" = ?) OR ("blog"."user_id" IN (SELECT "users"."id" FROM "users" AS users WHERE ("users"."username" IN (?, ?)))))', [3, 'u1', 'u2'])
 
     def test_where_fk(self):
         sq = SelectQuery(Blog).where(Blog.user == User(id=100))
-        self.assertWhere(sq, '(blog."user_id" = ?)', [100])
+        self.assertWhere(sq, '("blog"."user_id" = ?)', [100])
 
         sq = SelectQuery(Blog).where(Blog.user << [User(id=100), User(id=101)])
-        self.assertWhere(sq, '(blog."user_id" IN (?, ?))', [100, 101])
+        self.assertWhere(sq, '("blog"."user_id" IN (?, ?))', [100, 101])
 
         sq = SelectQuery(PackageItem).where(PackageItem.package == Package(barcode='b1'))
-        self.assertWhere(sq, '(packageitem."package_id" = ?)', ['b1'])
+        self.assertWhere(sq, '("packageitem"."package_id" = ?)', ['b1'])
 
     def test_where_negation(self):
         sq = SelectQuery(Blog).where(~(Blog.title == 'foo'))
-        self.assertWhere(sq, 'NOT (blog."title" = ?)', ['foo'])
+        self.assertWhere(sq, 'NOT ("blog"."title" = ?)', ['foo'])
 
         sq = SelectQuery(Blog).where(~((Blog.title == 'foo') | (Blog.title == 'bar')))
-        self.assertWhere(sq, 'NOT ((blog."title" = ?) OR (blog."title" = ?))', ['foo', 'bar'])
+        self.assertWhere(sq, 'NOT (("blog"."title" = ?) OR ("blog"."title" = ?))', ['foo', 'bar'])
 
         sq = SelectQuery(Blog).where(~((Blog.title == 'foo') & (Blog.title == 'bar')) & (Blog.title == 'baz'))
-        self.assertWhere(sq, '(NOT ((blog."title" = ?) AND (blog."title" = ?)) AND (blog."title" = ?))', ['foo', 'bar', 'baz'])
+        self.assertWhere(sq, '(NOT (("blog"."title" = ?) AND ("blog"."title" = ?)) AND ("blog"."title" = ?))', ['foo', 'bar', 'baz'])
 
         sq = SelectQuery(Blog).where(~((Blog.title == 'foo') & (Blog.title == 'bar')) & ((Blog.title == 'baz') & (Blog.title == 'fizz')))
-        self.assertWhere(sq, '(NOT ((blog."title" = ?) AND (blog."title" = ?)) AND ((blog."title" = ?) AND (blog."title" = ?)))', ['foo', 'bar', 'baz', 'fizz'])
+        self.assertWhere(sq, '(NOT (("blog"."title" = ?) AND ("blog"."title" = ?)) AND (("blog"."title" = ?) AND ("blog"."title" = ?)))', ['foo', 'bar', 'baz', 'fizz'])
 
     def test_where_chaining_collapsing(self):
         sq = SelectQuery(User).where(User.id == 1).where(User.id == 2).where(User.id == 3)
-        self.assertWhere(sq, '(((users."id" = ?) AND (users."id" = ?)) AND (users."id" = ?))', [1, 2, 3])
+        self.assertWhere(sq, '((("users"."id" = ?) AND ("users"."id" = ?)) AND ("users"."id" = ?))', [1, 2, 3])
 
         sq = SelectQuery(User).where((User.id == 1) & (User.id == 2)).where(User.id == 3)
-        self.assertWhere(sq, '(((users."id" = ?) AND (users."id" = ?)) AND (users."id" = ?))', [1, 2, 3])
+        self.assertWhere(sq, '((("users"."id" = ?) AND ("users"."id" = ?)) AND ("users"."id" = ?))', [1, 2, 3])
 
         sq = SelectQuery(User).where((User.id == 1) | (User.id == 2)).where(User.id == 3)
-        self.assertWhere(sq, '(((users."id" = ?) OR (users."id" = ?)) AND (users."id" = ?))', [1, 2, 3])
+        self.assertWhere(sq, '((("users"."id" = ?) OR ("users"."id" = ?)) AND ("users"."id" = ?))', [1, 2, 3])
 
         sq = SelectQuery(User).where(User.id == 1).where((User.id == 2) & (User.id == 3))
-        self.assertWhere(sq, '((users."id" = ?) AND ((users."id" = ?) AND (users."id" = ?)))', [1, 2, 3])
+        self.assertWhere(sq, '(("users"."id" = ?) AND (("users"."id" = ?) AND ("users"."id" = ?)))', [1, 2, 3])
 
         sq = SelectQuery(User).where(User.id == 1).where((User.id == 2) | (User.id == 3))
-        self.assertWhere(sq, '((users."id" = ?) AND ((users."id" = ?) OR (users."id" = ?)))', [1, 2, 3])
+        self.assertWhere(sq, '(("users"."id" = ?) AND (("users"."id" = ?) OR ("users"."id" = ?)))', [1, 2, 3])
 
         sq = SelectQuery(User).where(~(User.id == 1)).where(User.id == 2).where(~(User.id == 3))
-        self.assertWhere(sq, '((NOT (users."id" = ?) AND (users."id" = ?)) AND NOT (users."id" = ?))', [1, 2, 3])
+        self.assertWhere(sq, '((NOT ("users"."id" = ?) AND ("users"."id" = ?)) AND NOT ("users"."id" = ?))', [1, 2, 3])
 
     def test_grouping(self):
         sq = SelectQuery(User).group_by(User.id)
-        self.assertGroupBy(sq, 'users."id"', [])
+        self.assertGroupBy(sq, '"users"."id"', [])
 
         sq = SelectQuery(User).group_by(User)
-        self.assertGroupBy(sq, 'users."id", users."username"', [])
+        self.assertGroupBy(sq, '"users"."id", "users"."username"', [])
 
     def test_having(self):
         sq = SelectQuery(User, fn.Count(Blog.pk)).join(Blog).group_by(User).having(
             fn.Count(Blog.pk) > 2
         )
-        self.assertHaving(sq, '(Count(blog."pk") > ?)', [2])
+        self.assertHaving(sq, '(Count("blog"."pk") > ?)', [2])
 
         sq = SelectQuery(User, fn.Count(Blog.pk)).join(Blog).group_by(User).having(
             (fn.Count(Blog.pk) > 10) | (fn.Count(Blog.pk) < 2)
         )
-        self.assertHaving(sq, '((Count(blog."pk") > ?) OR (Count(blog."pk") < ?))', [10, 2])
+        self.assertHaving(sq, '((Count("blog"."pk") > ?) OR (Count("blog"."pk") < ?))', [10, 2])
 
     def test_ordering(self):
         sq = SelectQuery(User).join(Blog).order_by(Blog.title)
-        self.assertOrderBy(sq, 'blog."title"', [])
+        self.assertOrderBy(sq, '"blog"."title"', [])
 
         sq = SelectQuery(User).join(Blog).order_by(Blog.title.asc())
-        self.assertOrderBy(sq, 'blog."title" ASC', [])
+        self.assertOrderBy(sq, '"blog"."title" ASC', [])
 
         sq = SelectQuery(User).join(Blog).order_by(Blog.title.desc())
-        self.assertOrderBy(sq, 'blog."title" DESC', [])
+        self.assertOrderBy(sq, '"blog"."title" DESC', [])
 
         sq = SelectQuery(User).join(Blog).order_by(User.username.desc(), Blog.title.asc())
-        self.assertOrderBy(sq, 'users."username" DESC, blog."title" ASC', [])
+        self.assertOrderBy(sq, '"users"."username" DESC, "blog"."title" ASC', [])
 
         base_sq = SelectQuery(User, User.username, fn.Count(Blog.pk).alias('count')).join(Blog).group_by(User.username)
         sq = base_sq.order_by(fn.Count(Blog.pk).desc())
-        self.assertOrderBy(sq, 'Count(blog."pk") DESC', [])
+        self.assertOrderBy(sq, 'Count("blog"."pk") DESC', [])
 
         sq = base_sq.order_by(R('count'))
         self.assertOrderBy(sq, 'count', [])
 
         sq = OrderedModel.select()
-        self.assertOrderBy(sq, 'orderedmodel."created" DESC', [])
+        self.assertOrderBy(sq, '"orderedmodel"."created" DESC', [])
 
         sq = OrderedModel.select().order_by(OrderedModel.id.asc())
-        self.assertOrderBy(sq, 'orderedmodel."id" ASC', [])
+        self.assertOrderBy(sq, '"orderedmodel"."id" ASC', [])
 
         sq = User.select().order_by(User.id * 5)
-        self.assertOrderBy(sq, '(users."id" * ?)', [5])
+        self.assertOrderBy(sq, '("users"."id" * ?)', [5])
         sql = compiler.generate_select(sq)
         self.assertEqual(sql, (
-            'SELECT users."id", users."username" '
-            'FROM "users" AS users ORDER BY (users."id" * ?)',
+            'SELECT "users"."id", "users"."username" '
+            'FROM "users" AS users ORDER BY ("users"."id" * ?)',
             [5]))
 
     def test_from_subquery(self):
@@ -968,8 +968,8 @@ class SelectTestCase(BasePeeweeTestCase):
         self.assertEqual(sql, (
             'SELECT blog_ct, COUNT(blog_ct) AS blog_ct_n '
             'FROM ('
-            'SELECT COUNT(blog."pk") AS blog_ct FROM "blog" AS blog '
-            'GROUP BY blog."user_id") '
+            'SELECT COUNT("blog"."pk") AS blog_ct FROM "blog" AS blog '
+            'GROUP BY "blog"."user_id") '
             'GROUP BY blog_ct'))
 
     def test_from_multiple(self):
@@ -980,9 +980,9 @@ class SelectTestCase(BasePeeweeTestCase):
 
         sql, params = compiler.generate_select(q)
         self.assertEqual(sql, (
-            'SELECT users."id", users."username" '
+            'SELECT "users"."id", "users"."username" '
             'FROM "users" AS users, "blog" AS blog '
-            'WHERE (blog."user_id" = users."id")'))
+            'WHERE ("blog"."user_id" = "users"."id")'))
 
         q = (User
              .select()
@@ -993,10 +993,10 @@ class SelectTestCase(BasePeeweeTestCase):
 
         sql, params = compiler.generate_select(q)
         self.assertEqual(sql, (
-            'SELECT users."id", users."username" '
+            'SELECT "users"."id", "users"."username" '
             'FROM "users" AS users, "blog" AS blog, "comment" AS comment '
-            'WHERE ((blog."user_id" = users."id") AND '
-            '(comment."blog_id" = blog."pk"))'))
+            'WHERE (("blog"."user_id" = "users"."id") AND '
+            '("comment"."blog_id" = "blog"."pk"))'))
 
     def test_paginate(self):
         sq = SelectQuery(User).paginate(1, 20)
@@ -1013,17 +1013,17 @@ class SelectTestCase(BasePeeweeTestCase):
         sq3 = SelectQuery(Comment).where(Comment.comment == 'baz')
         fixed = prefetch_add_subquery(sq, (sq2, sq3))
         fixed_sql = [
-            ('SELECT t1."id", t1."username" FROM "users" AS t1 WHERE (t1."username" = ?)', ['foo']),
-            ('SELECT t1."pk", t1."user_id", t1."title", t1."content", t1."pub_date" FROM "blog" AS t1 WHERE ((t1."title" = ?) AND (t1."user_id" IN (SELECT t2."id" FROM "users" AS t2 WHERE (t2."username" = ?))))', ['bar', 'foo']),
-            ('SELECT t1."id", t1."blog_id", t1."comment" FROM "comment" AS t1 WHERE ((t1."comment" = ?) AND (t1."blog_id" IN (SELECT t2."pk" FROM "blog" AS t2 WHERE ((t2."title" = ?) AND (t2."user_id" IN (SELECT t3."id" FROM "users" AS t3 WHERE (t3."username" = ?)))))))', ['baz', 'bar', 'foo']),
+            ('SELECT "t1"."id", "t1"."username" FROM "users" AS t1 WHERE ("t1"."username" = ?)', ['foo']),
+            ('SELECT "t1"."pk", "t1"."user_id", "t1"."title", "t1"."content", "t1"."pub_date" FROM "blog" AS t1 WHERE (("t1"."title" = ?) AND ("t1"."user_id" IN (SELECT "t2"."id" FROM "users" AS t2 WHERE ("t2"."username" = ?))))', ['bar', 'foo']),
+            ('SELECT "t1"."id", "t1"."blog_id", "t1"."comment" FROM "comment" AS t1 WHERE (("t1"."comment" = ?) AND ("t1"."blog_id" IN (SELECT "t2"."pk" FROM "blog" AS t2 WHERE (("t2"."title" = ?) AND ("t2"."user_id" IN (SELECT "t3"."id" FROM "users" AS t3 WHERE ("t3"."username" = ?)))))))', ['baz', 'bar', 'foo']),
         ]
         for (query, fkf), expected in zip(fixed, fixed_sql):
             self.assertEqual(normal_compiler.generate_select(query), expected)
 
         fixed = prefetch_add_subquery(sq, (Blog,))
         fixed_sql = [
-            ('SELECT t1."id", t1."username" FROM "users" AS t1 WHERE (t1."username" = ?)', ['foo']),
-            ('SELECT t1."pk", t1."user_id", t1."title", t1."content", t1."pub_date" FROM "blog" AS t1 WHERE (t1."user_id" IN (SELECT t2."id" FROM "users" AS t2 WHERE (t2."username" = ?)))', ['foo']),
+            ('SELECT "t1"."id", "t1"."username" FROM "users" AS t1 WHERE ("t1"."username" = ?)', ['foo']),
+            ('SELECT "t1"."pk", "t1"."user_id", "t1"."title", "t1"."content", "t1"."pub_date" FROM "blog" AS t1 WHERE ("t1"."user_id" IN (SELECT "t2"."id" FROM "users" AS t2 WHERE ("t2"."username" = ?)))', ['foo']),
         ]
         for (query, fkf), expected in zip(fixed, fixed_sql):
             self.assertEqual(normal_compiler.generate_select(query), expected)
@@ -1033,17 +1033,17 @@ class SelectTestCase(BasePeeweeTestCase):
         sq2 = SelectQuery(PackageItem).where(PackageItem.title % 'n%')
         fixed = prefetch_add_subquery(sq, (sq2,))
         fixed_sq = (
-            'SELECT t1."id", t1."barcode" FROM "package" AS t1 '
-            'WHERE (t1."barcode" LIKE ?)',
+            'SELECT "t1"."id", "t1"."barcode" FROM "package" AS t1 '
+            'WHERE ("t1"."barcode" LIKE ?)',
             ['b%'])
         fixed_sq2 = (
-            'SELECT t1."id", t1."title", t1."package_id" '
+            'SELECT "t1"."id", "t1"."title", "t1"."package_id" '
             'FROM "packageitem" AS t1 '
             'WHERE ('
-            '(t1."title" LIKE ?) AND '
-            '(t1."package_id" IN ('
-            'SELECT t2."barcode" FROM "package" AS t2 '
-            'WHERE (t2."barcode" LIKE ?))))',
+            '("t1"."title" LIKE ?) AND '
+            '("t1"."package_id" IN ('
+            'SELECT "t2"."barcode" FROM "package" AS t2 '
+            'WHERE ("t2"."barcode" LIKE ?))))',
             ['n%', 'b%'])
         fixed_sql = [fixed_sq, fixed_sq2]
 
@@ -1058,19 +1058,19 @@ class SelectTestCase(BasePeeweeTestCase):
         sq5 = OrphanPet.select()
         fixed = prefetch_add_subquery(sq, (sq2, sq3, sq4, sq5))
         fixed_sql = [
-            ('SELECT t1."id", t1."data" FROM "parent" AS t1', []),
-            ('SELECT t1."id", t1."parent_id", t1."data" FROM "child" AS t1 WHERE (t1."parent_id" IN (SELECT t2."id" FROM "parent" AS t2))', []),
-            ('SELECT t1."id", t1."parent_id", t1."data" FROM "orphan" AS t1 WHERE (t1."parent_id" IN (SELECT t2."id" FROM "parent" AS t2))', []),
-            ('SELECT t1."id", t1."child_id", t1."data" FROM "childpet" AS t1 WHERE (t1."child_id" IN (SELECT t2."id" FROM "child" AS t2 WHERE (t2."parent_id" IN (SELECT t3."id" FROM "parent" AS t3))))', []),
-            ('SELECT t1."id", t1."orphan_id", t1."data" FROM "orphanpet" AS t1 WHERE (t1."orphan_id" IN (SELECT t2."id" FROM "orphan" AS t2 WHERE (t2."parent_id" IN (SELECT t3."id" FROM "parent" AS t3))))', []),
+            ('SELECT "t1"."id", "t1"."data" FROM "parent" AS t1', []),
+            ('SELECT "t1"."id", "t1"."parent_id", "t1"."data" FROM "child" AS t1 WHERE ("t1"."parent_id" IN (SELECT "t2"."id" FROM "parent" AS t2))', []),
+            ('SELECT "t1"."id", "t1"."parent_id", "t1"."data" FROM "orphan" AS t1 WHERE ("t1"."parent_id" IN (SELECT "t2"."id" FROM "parent" AS t2))', []),
+            ('SELECT "t1"."id", "t1"."child_id", "t1"."data" FROM "childpet" AS t1 WHERE ("t1"."child_id" IN (SELECT "t2"."id" FROM "child" AS t2 WHERE ("t2"."parent_id" IN (SELECT "t3"."id" FROM "parent" AS t3))))', []),
+            ('SELECT "t1"."id", "t1"."orphan_id", "t1"."data" FROM "orphanpet" AS t1 WHERE ("t1"."orphan_id" IN (SELECT "t2"."id" FROM "orphan" AS t2 WHERE ("t2"."parent_id" IN (SELECT "t3"."id" FROM "parent" AS t3))))', []),
         ]
         for (query, fkf), expected in zip(fixed, fixed_sql):
             self.assertEqual(normal_compiler.generate_select(query), expected)
 
     def test_outer_inner_alias(self):
-        expected = ('SELECT t1."id", t1."username", '
-                    '(SELECT Sum(t2."id") FROM "users" AS t2 '
-                    'WHERE (t2."id" = t1."id")) AS xxx FROM "users" AS t1')
+        expected = ('SELECT "t1"."id", "t1"."username", '
+                    '(SELECT Sum("t2"."id") FROM "users" AS t2 '
+                    'WHERE ("t2"."id" = "t1"."id")) AS xxx FROM "users" AS t1')
         UA = User.alias()
         inner = SelectQuery(UA, fn.Sum(UA.id)).where(UA.id == User.id)
         query = User.select(User, inner.alias('xxx'))
@@ -1093,18 +1093,18 @@ class SelectTestCase(BasePeeweeTestCase):
                          .where(Blog.user == User.id)).alias('blog_ct')))
         sql, params = query.sql()
         self.assertEqual(sql, (
-            'SELECT t1."username", '
+            'SELECT "t1"."username", '
             'Count('
-            'SELECT t2."pk" FROM "blog" AS t2 '
-            'WHERE (t2."user_id" = t1."id")) AS blog_ct FROM "users" AS t1'))
+            'SELECT "t2"."pk" FROM "blog" AS t2 '
+            'WHERE ("t2"."user_id" = "t1"."id")) AS blog_ct FROM "users" AS t1'))
 
         query = (User
                  .select(User.username)
                  .where(fn.Exists(fn.Exists(User.select(User.id)))))
         self.assertEqual(query.sql()[0], (
-            'SELECT t1."username" FROM "users" AS t1 '
+            'SELECT "t1"."username" FROM "users" AS t1 '
             'WHERE Exists(Exists('
-            'SELECT t2."id" FROM "users" AS t2))'))
+            'SELECT "t2"."id" FROM "users" AS t2))'))
 
 class UpdateTestCase(BasePeeweeTestCase):
     def test_update(self):
@@ -1120,18 +1120,18 @@ class UpdateTestCase(BasePeeweeTestCase):
 
         uq = UpdateQuery(User, {User.id: User.id + 5})
         self.assertEqual(compiler.generate_update(uq), (
-            'UPDATE "users" SET "id" = (users."id" + ?)',
+            'UPDATE "users" SET "id" = ("users"."id" + ?)',
             [5]))
 
         uq = UpdateQuery(User, {User.id: 5 * (3 + User.id)})
         self.assertEqual(compiler.generate_update(uq), (
-            'UPDATE "users" SET "id" = (? * (? + users."id"))',
+            'UPDATE "users" SET "id" = (? * (? + "users"."id"))',
             [5, 3]))
 
         # set username to the maximum id of all users -- silly, yes, but lets see what happens
         uq = UpdateQuery(User, {User.username: User.select(fn.Max(User.id).alias('maxid'))})
         self.assertEqual(compiler.generate_update(uq), (
-            'UPDATE "users" SET "username" = (SELECT Max(users."id") AS maxid '
+            'UPDATE "users" SET "username" = (SELECT Max("users"."id") AS maxid '
             'FROM "users" AS users)',
             []))
 
@@ -1164,12 +1164,12 @@ class UpdateTestCase(BasePeeweeTestCase):
 
     def test_where(self):
         uq = UpdateQuery(User, {User.username: 'updated'}).where(User.id == 2)
-        self.assertWhere(uq, '(users."id" = ?)', [2])
+        self.assertWhere(uq, '("users"."id" = ?)', [2])
 
         uq = (UpdateQuery(User, {User.username: 'updated'})
               .where(User.id == 2)
               .where(User.username == 'old'))
-        self.assertWhere(uq, '((users."id" = ?) AND (users."username" = ?))', [2, 'old'])
+        self.assertWhere(uq, '(("users"."id" = ?) AND ("users"."username" = ?))', [2, 'old'])
 
 class InsertTestCase(BasePeeweeTestCase):
     def test_insert(self):
@@ -1199,14 +1199,14 @@ class InsertTestCase(BasePeeweeTestCase):
         sql, params = normal_compiler.generate_insert(iq)
         self.assertEqual(sql, (
             'INSERT INTO "users" ("username") '
-            'SELECT t2."title" FROM "blog" AS t2'))
+            'SELECT "t2"."title" FROM "blog" AS t2'))
 
         subquery = Blog.select(Blog.pk, Blog.title)
         iq = InsertQuery(User, query=subquery)
         sql, params = normal_compiler.generate_insert(iq)
         self.assertEqual(sql, (
             'INSERT INTO "users" '
-            'SELECT t2."pk", t2."title" FROM "blog" AS t2'))
+            'SELECT "t2"."pk", "t2"."title" FROM "blog" AS t2'))
 
     def test_insert_default_vals(self):
         class DM(TestModel):
@@ -1293,12 +1293,12 @@ class InsertTestCase(BasePeeweeTestCase):
 class DeleteTestCase(BasePeeweeTestCase):
     def test_where(self):
         dq = DeleteQuery(User).where(User.id == 2)
-        self.assertWhere(dq, '(users."id" = ?)', [2])
+        self.assertWhere(dq, '("users"."id" = ?)', [2])
 
         dq = (DeleteQuery(User)
               .where(User.id == 2)
               .where(User.username == 'old'))
-        self.assertWhere(dq, '((users."id" = ?) AND (users."username" = ?))', [2, 'old'])
+        self.assertWhere(dq, '(("users"."id" = ?) AND ("users"."username" = ?))', [2, 'old'])
 
 class RawTestCase(BasePeeweeTestCase):
     def test_raw(self):
@@ -1311,95 +1311,95 @@ class SugarTestCase(BasePeeweeTestCase):
     def test_filter(self):
         sq = User.filter(username='u1')
         self.assertJoins(sq, [])
-        self.assertWhere(sq, '(users."username" = ?)', ['u1'])
+        self.assertWhere(sq, '("users"."username" = ?)', ['u1'])
 
         sq = Blog.filter(user__username='u1')
-        self.assertJoins(sq, ['INNER JOIN "users" AS users ON (blog."user_id" = users."id")'])
-        self.assertWhere(sq, '(users."username" = ?)', ['u1'])
+        self.assertJoins(sq, ['INNER JOIN "users" AS users ON ("blog"."user_id" = "users"."id")'])
+        self.assertWhere(sq, '("users"."username" = ?)', ['u1'])
 
         sq = Blog.filter(user__username__in=['u1', 'u2'], comments__comment='hurp')
         self.assertJoins(sq, [
-            'INNER JOIN "comment" AS comment ON (blog."pk" = comment."blog_id")',
-            'INNER JOIN "users" AS users ON (blog."user_id" = users."id")',
+            'INNER JOIN "comment" AS comment ON ("blog"."pk" = "comment"."blog_id")',
+            'INNER JOIN "users" AS users ON ("blog"."user_id" = "users"."id")',
         ])
-        self.assertWhere(sq, '((comment."comment" = ?) AND (users."username" IN (?, ?)))', ['hurp', 'u1', 'u2'])
+        self.assertWhere(sq, '(("comment"."comment" = ?) AND ("users"."username" IN (?, ?)))', ['hurp', 'u1', 'u2'])
 
         sq = Blog.filter(user__username__in=['u1', 'u2']).filter(comments__comment='hurp')
         self.assertJoins(sq, [
-            'INNER JOIN "users" AS users ON (blog."user_id" = users."id")',
-            'INNER JOIN "comment" AS comment ON (blog."pk" = comment."blog_id")',
+            'INNER JOIN "users" AS users ON ("blog"."user_id" = "users"."id")',
+            'INNER JOIN "comment" AS comment ON ("blog"."pk" = "comment"."blog_id")',
         ])
-        self.assertWhere(sq, '((users."username" IN (?, ?)) AND (comment."comment" = ?))', ['u1', 'u2', 'hurp'])
+        self.assertWhere(sq, '(("users"."username" IN (?, ?)) AND ("comment"."comment" = ?))', ['u1', 'u2', 'hurp'])
 
     def test_filter_dq(self):
         sq = User.filter(DQ(username='u1') | DQ(username='u2'))
         self.assertJoins(sq, [])
-        self.assertWhere(sq, '((users."username" = ?) OR (users."username" = ?))', ['u1', 'u2'])
+        self.assertWhere(sq, '(("users"."username" = ?) OR ("users"."username" = ?))', ['u1', 'u2'])
 
         sq = Comment.filter(DQ(blog__user__username='u1') | DQ(blog__title='b1'), DQ(comment='c1'))
         self.assertJoins(sq, [
-            'INNER JOIN "blog" AS blog ON (comment."blog_id" = blog."pk")',
-            'INNER JOIN "users" AS users ON (blog."user_id" = users."id")',
+            'INNER JOIN "blog" AS blog ON ("comment"."blog_id" = "blog"."pk")',
+            'INNER JOIN "users" AS users ON ("blog"."user_id" = "users"."id")',
         ])
-        self.assertWhere(sq, '(((users."username" = ?) OR (blog."title" = ?)) AND (comment."comment" = ?))', ['u1', 'b1', 'c1'])
+        self.assertWhere(sq, '((("users"."username" = ?) OR ("blog"."title" = ?)) AND ("comment"."comment" = ?))', ['u1', 'b1', 'c1'])
 
         sq = Blog.filter(DQ(user__username='u1') | DQ(comments__comment='c1'))
         self.assertJoins(sq, [
-            'INNER JOIN "comment" AS comment ON (blog."pk" = comment."blog_id")',
-            'INNER JOIN "users" AS users ON (blog."user_id" = users."id")',
+            'INNER JOIN "comment" AS comment ON ("blog"."pk" = "comment"."blog_id")',
+            'INNER JOIN "users" AS users ON ("blog"."user_id" = "users"."id")',
         ])
-        self.assertWhere(sq, '((users."username" = ?) OR (comment."comment" = ?))', ['u1', 'c1'])
+        self.assertWhere(sq, '(("users"."username" = ?) OR ("comment"."comment" = ?))', ['u1', 'c1'])
 
         sq = Blog.filter(~DQ(user__username='u1') | DQ(user__username='b2'))
         self.assertJoins(sq, [
-            'INNER JOIN "users" AS users ON (blog."user_id" = users."id")',
+            'INNER JOIN "users" AS users ON ("blog"."user_id" = "users"."id")',
         ])
-        self.assertWhere(sq, '(NOT (users."username" = ?) OR (users."username" = ?))', ['u1', 'b2'])
+        self.assertWhere(sq, '(NOT ("users"."username" = ?) OR ("users"."username" = ?))', ['u1', 'b2'])
 
         sq = Blog.filter(~(
             DQ(user__username='u1') |
             ~DQ(title='b1', pk=3)))
         self.assertJoins(sq, [
-            'INNER JOIN "users" AS users ON (blog."user_id" = users."id")',
+            'INNER JOIN "users" AS users ON ("blog"."user_id" = "users"."id")',
         ])
-        self.assertWhere(sq, 'NOT ((users."username" = ?) OR NOT ((blog."pk" = ?) AND (blog."title" = ?)))', ['u1', 3, 'b1'])
+        self.assertWhere(sq, 'NOT (("users"."username" = ?) OR NOT (("blog"."pk" = ?) AND ("blog"."title" = ?)))', ['u1', 3, 'b1'])
 
     def test_annotate(self):
         sq = User.select().annotate(Blog)
-        self.assertSelect(sq, 'users."id", users."username", Count(blog."pk") AS count', [])
-        self.assertJoins(sq, ['INNER JOIN "blog" AS blog ON (users."id" = blog."user_id")'])
+        self.assertSelect(sq, '"users"."id", "users"."username", Count("blog"."pk") AS count', [])
+        self.assertJoins(sq, ['INNER JOIN "blog" AS blog ON ("users"."id" = "blog"."user_id")'])
         self.assertWhere(sq, '', [])
-        self.assertGroupBy(sq, 'users."id", users."username"', [])
+        self.assertGroupBy(sq, '"users"."id", "users"."username"', [])
 
         sq = User.select(User.username).annotate(Blog, fn.Sum(Blog.pk).alias('sum')).where(User.username == 'foo')
-        self.assertSelect(sq, 'users."username", Sum(blog."pk") AS sum', [])
-        self.assertJoins(sq, ['INNER JOIN "blog" AS blog ON (users."id" = blog."user_id")'])
-        self.assertWhere(sq, '(users."username" = ?)', ['foo'])
-        self.assertGroupBy(sq, 'users."username"', [])
+        self.assertSelect(sq, '"users"."username", Sum("blog"."pk") AS sum', [])
+        self.assertJoins(sq, ['INNER JOIN "blog" AS blog ON ("users"."id" = "blog"."user_id")'])
+        self.assertWhere(sq, '("users"."username" = ?)', ['foo'])
+        self.assertGroupBy(sq, '"users"."username"', [])
 
         sq = User.select(User.username).annotate(Blog).annotate(Blog, fn.Max(Blog.pk).alias('mx'))
-        self.assertSelect(sq, 'users."username", Count(blog."pk") AS count, Max(blog."pk") AS mx', [])
-        self.assertJoins(sq, ['INNER JOIN "blog" AS blog ON (users."id" = blog."user_id")'])
+        self.assertSelect(sq, '"users"."username", Count("blog"."pk") AS count, Max("blog"."pk") AS mx', [])
+        self.assertJoins(sq, ['INNER JOIN "blog" AS blog ON ("users"."id" = "blog"."user_id")'])
         self.assertWhere(sq, '', [])
-        self.assertGroupBy(sq, 'users."username"', [])
+        self.assertGroupBy(sq, '"users"."username"', [])
 
         sq = User.select().annotate(Blog).order_by(R('count DESC'))
-        self.assertSelect(sq, 'users."id", users."username", Count(blog."pk") AS count', [])
+        self.assertSelect(sq, '"users"."id", "users"."username", Count("blog"."pk") AS count', [])
         self.assertOrderBy(sq, 'count DESC', [])
 
         sq = User.select().join(Blog, JOIN_LEFT_OUTER).switch(User).annotate(Blog)
-        self.assertSelect(sq, 'users."id", users."username", Count(blog."pk") AS count', [])
-        self.assertJoins(sq, ['LEFT OUTER JOIN "blog" AS blog ON (users."id" = blog."user_id")'])
+        self.assertSelect(sq, '"users"."id", "users"."username", Count("blog"."pk") AS count', [])
+        self.assertJoins(sq, ['LEFT OUTER JOIN "blog" AS blog ON ("users"."id" = "blog"."user_id")'])
         self.assertWhere(sq, '', [])
-        self.assertGroupBy(sq, 'users."id", users."username"', [])
+        self.assertGroupBy(sq, '"users"."id", "users"."username"', [])
 
     def test_aggregate(self):
         sq = User.select().where(User.id < 10)._aggregate()
         self.assertSelect(sq, 'Count(*)', [])
-        self.assertWhere(sq, '(users."id" < ?)', [10])
+        self.assertWhere(sq, '("users"."id" < ?)', [10])
 
         sq = User.select()._aggregate(fn.Sum(User.id).alias('baz'))
-        self.assertSelect(sq, 'Sum(users."id") AS baz', [])
+        self.assertSelect(sq, 'Sum("users"."id") AS baz', [])
 
 
 class CompilerTestCase(BasePeeweeTestCase):
@@ -1427,18 +1427,18 @@ class CompilerTestCase(BasePeeweeTestCase):
         sql = normal_compiler.generate_select(sq)
         self.assertEqual(
             sql[0],
-            'SELECT person_tbl."id", person_tbl."name" FROM "person" AS '
-            'person_tbl WHERE (person_tbl."name" = ?)')
+            'SELECT "person_tbl"."id", "person_tbl"."name" FROM "person" AS '
+            'person_tbl WHERE ("person_tbl"."name" = ?)')
 
         sq = Pet.select(Pet, Person.name).join(Person)
         sql = normal_compiler.generate_select(sq)
         self.assertEqual(
             sql[0],
-            'SELECT pet_tbl."id", pet_tbl."name", pet_tbl."owner_id", '
-            'person_tbl."name" '
+            'SELECT "pet_tbl"."id", "pet_tbl"."name", "pet_tbl"."owner_id", '
+            '"person_tbl"."name" '
             'FROM "pet" AS pet_tbl '
             'INNER JOIN "person" AS person_tbl '
-            'ON (pet_tbl."owner_id" = person_tbl."id")')
+            'ON ("pet_tbl"."owner_id" = "person_tbl"."id")')
 
     def test_alias_map(self):
         class A(TestModel):
@@ -1464,13 +1464,13 @@ class CompilerTestCase(BasePeeweeTestCase):
                   B.select(B.id).join(A).where(A.a == 'a'))))
         sql, params = normal_compiler.generate_select(sq)
         self.assertEqual(sql, (
-            'SELECT d_tbl."d", t2."c" '
+            'SELECT "d_tbl"."d", "t2"."c" '
             'FROM "d" AS d_tbl '
-            'INNER JOIN "c" AS t2 ON (d_tbl."c_link_id" = t2."id") '
-            'WHERE (t2."b_link_id" IN ('
-            'SELECT t3."id" FROM "b" AS t3 '
-            'INNER JOIN "a" AS a_tbl ON (t3."a_link_id" = a_tbl."id") '
-            'WHERE (a_tbl."a" = ?)))'))
+            'INNER JOIN "c" AS t2 ON ("d_tbl"."c_link_id" = "t2"."id") '
+            'WHERE ("t2"."b_link_id" IN ('
+            'SELECT "t3"."id" FROM "b" AS t3 '
+            'INNER JOIN "a" AS a_tbl ON ("t3"."a_link_id" = "a_tbl"."id") '
+            'WHERE ("a_tbl"."a" = ?)))'))
 
     def test_fn_no_coerce(self):
         class A(TestModel):
@@ -1480,7 +1480,7 @@ class CompilerTestCase(BasePeeweeTestCase):
         query = A.select(A.id).where(A.d == '2013-01-02')
         sql, params = compiler.generate_select(query)
         self.assertEqual(sql, (
-            'SELECT a."id" FROM "a" AS a WHERE (a."d" = ?)'))
+            'SELECT "a"."id" FROM "a" AS a WHERE ("a"."d" = ?)'))
         self.assertEqual(params, ['2013-01-02'])
 
         query = A.select(A.id).where(A.i == fn.Foo('test'))
@@ -1489,7 +1489,7 @@ class CompilerTestCase(BasePeeweeTestCase):
         query = A.select(A.id).where(A.i == fn.Foo('test').coerce(False))
         sql, params = compiler.generate_select(query)
         self.assertEqual(sql, (
-            'SELECT a."id" FROM "a" AS a WHERE (a."i" = Foo(?))'))
+            'SELECT "a"."id" FROM "a" AS a WHERE ("a"."i" = Foo(?))'))
         self.assertEqual(params, ['test'])
 
     def test_strip_parentheses(self):
@@ -2206,8 +2206,8 @@ class ModelQueryTestCase(ModelTestCase):
         sql, params = normal_compiler.generate_update(query)
         self.assertEqual(sql, (
             'UPDATE "users" SET "username" = ('
-            'SELECT COUNT(t2."pk") FROM "blog" AS t2 '
-            'WHERE (t2."user_id" = users."id"))'))
+            'SELECT COUNT("t2"."pk") FROM "blog" AS t2 '
+            'WHERE ("t2"."user_id" = "users"."id"))'))
         self.assertEqual(query.execute(), 3)
 
         usernames = [u.username for u in User.select().order_by(User.id)]
@@ -2235,8 +2235,8 @@ class ModelQueryTestCase(ModelTestCase):
         sql, params = normal_compiler.generate_insert(iq)
         self.assertEqual(sql, (
             'INSERT INTO "users" ("username") '
-            'SELECT LOWER(t2."username") FROM "users" AS t2 '
-            'WHERE (t2."username" IN (?, ?))'))
+            'SELECT LOWER("t2"."username") FROM "users" AS t2 '
+            'WHERE ("t2"."username" IN (?, ?))'))
         self.assertEqual(params, ['U0', 'U2'])
 
         iq.execute()
@@ -2865,8 +2865,8 @@ class FromMultiTableTestCase(ModelTestCase):
                  .from_(inner.alias('t1')))
         sql, params = compiler.generate_select(outer)
         self.assertEqual(sql, (
-            'SELECT users."username" FROM '
-            '(SELECT users."username" FROM "users" AS users) AS t1'))
+            'SELECT "users"."username" FROM '
+            '(SELECT "users"."username" FROM "users" AS users) AS t1'))
 
         self.assertEqual(
             [u.username for u in outer.order_by(User.username)], ['u0', 'u1'])
@@ -2879,7 +2879,7 @@ class FromMultiTableTestCase(ModelTestCase):
         sql, params = compiler.generate_select(outer)
         self.assertEqual(sql, (
             'SELECT "t1"."name" FROM '
-            '(SELECT users."username" AS name FROM "users" AS users) AS t1'))
+            '(SELECT "users"."username" AS name FROM "users" AS users) AS t1'))
 
         query = outer.order_by(inner.c.name.desc())
         self.assertEqual([u[0] for u in query.tuples()], ['u1', 'u0'])
@@ -2893,8 +2893,8 @@ class FromMultiTableTestCase(ModelTestCase):
         sql, params = compiler.generate_select(outer)
         self.assertEqual(sql, (
             'SELECT "q1"."id", "q1"."username" FROM ('
-            'SELECT users."id", users."username" FROM "users" AS users) AS q1 '
-            'INNER JOIN "comment" AS comment ON ("q1"."id" = comment."id")'))
+            'SELECT "users"."id", "users"."username" FROM "users" AS users) AS q1 '
+            'INNER JOIN "comment" AS comment ON ("q1"."id" = "comment"."id")'))
 
     def test_join_on_query(self):
         u0 = User.get(User.username == 'u0')
@@ -4131,13 +4131,13 @@ class DBColumnTestCase(ModelTestCase):
 
     def test_select(self):
         sq = DBUser.select().where(DBUser.username == 'u1')
-        self.assertSelect(sq, 'dbuser."db_user_id", dbuser."db_username"', [])
-        self.assertWhere(sq, '(dbuser."db_username" = ?)', ['u1'])
+        self.assertSelect(sq, '"dbuser"."db_user_id", "dbuser"."db_username"', [])
+        self.assertWhere(sq, '("dbuser"."db_username" = ?)', ['u1'])
 
         sq = DBUser.select(DBUser.user_id).join(DBBlog).where(DBBlog.title == 'b1')
-        self.assertSelect(sq, 'dbuser."db_user_id"', [])
-        self.assertJoins(sq, ['INNER JOIN "dbblog" AS dbblog ON (dbuser."db_user_id" = dbblog."db_user")'])
-        self.assertWhere(sq, '(dbblog."db_title" = ?)', ['b1'])
+        self.assertSelect(sq, '"dbuser"."db_user_id"', [])
+        self.assertJoins(sq, ['INNER JOIN "dbblog" AS dbblog ON ("dbuser"."db_user_id" = "dbblog"."db_user")'])
+        self.assertWhere(sq, '("dbblog"."db_title" = ?)', ['b1'])
 
     def test_db_column(self):
         u1 = DBUser.create(username='u1')

@@ -144,11 +144,11 @@ if django is not None:
             sql, params = query.sql()
             self.assertEqual(
                 sql,
-                'SELECT t1."id", t1."username" FROM "user_tbl" AS t1 '
+                'SELECT "t1"."id", "t1"."username" FROM "user_tbl" AS t1 '
                 'INNER JOIN "playhouse_post" AS t2 '
-                'ON (t1."id" = t2."author_id") '
+                'ON ("t1"."id" = "t2"."author_id") '
                 'INNER JOIN "playhouse_comment" AS t3 '
-                'ON (t2."id" = t3."post_id") WHERE (t3."comment" = %s)')
+                'ON ("t2"."id" = "t3"."post_id") WHERE ("t3"."comment" = %s)')
             self.assertEqual(params, ['test'])
 
         def test_m2m_query(self):
@@ -165,12 +165,12 @@ if django is not None:
             sql, params = query.sql()
             self.assertEqual(
                 sql,
-                'SELECT t1."id", t1."author_id", t1."content" '
+                'SELECT "t1"."id", "t1"."author_id", "t1"."content" '
                 'FROM "playhouse_post" AS t1 '
                 'INNER JOIN "playhouse_tag_posts" AS t2 '
-                'ON (t1."id" = t2."post_id") '
+                'ON ("t1"."id" = "t2"."post_id") '
                 'INNER JOIN "playhouse_tag" AS t3 '
-                'ON (t2."tag_id" = t3."id") WHERE (t3."tag" = %s)')
+                'ON ("t2"."tag_id" = "t3"."id") WHERE ("t3"."tag" = %s)')
             self.assertEqual(params, ['test'])
 
         def test_docs_example(self):
@@ -184,9 +184,9 @@ if django is not None:
             sql, params = query.sql()
             self.assertEqual(
                 sql,
-                'SELECT t1."id", t1."start_time", t1."end_time", t1."title" '
+                'SELECT "t1"."id", "t1"."start_time", "t1"."end_time", "t1"."title" '
                 'FROM "events_tbl" AS t1 '
-                'WHERE ((t1."end_time" - t1."start_time") > %s)')
+                'WHERE (("t1"."end_time" - "t1"."start_time") > %s)')
             self.assertEqual(params, [hour])
 
         def test_self_referential(self):
