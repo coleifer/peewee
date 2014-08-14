@@ -1345,7 +1345,10 @@ class QueryCompiler(object):
         for src_model, joined_models in query._joins.items():
             new_map.add(src_model, src_model._meta.table_alias)
             for join_obj in joined_models:
-                new_map.add(join_obj.dest, join_obj.dest._meta.table_alias)
+                if isinstance(join_obj.dest, Node):
+                    new_map.add(join_obj.dest, join_obj.dest.alias)
+                else:
+                    new_map.add(join_obj.dest, join_obj.dest._meta.table_alias)
 
         return new_map.update(alias_map)
 
@@ -2020,15 +2023,19 @@ class Query(Node):
             self._where, expressions, operator.or_)
 
     @returns_clone
-    def join(self, model_class, join_type=None, on=None):
-        if not self._query_ctx._meta.rel_exists(model_class) and on is None:
-            raise ValueError('No foreign key between %s and %s' % (
-                self._query_ctx, model_class))
-        if on and isinstance(on, basestring):
+    def join(self, dest, join_type=None, on=None):
+        if not on:
+            require_join_condition = [
+                isinstance(dest, SelectQuery),
+                (isclass(dest) and not self._query_ctx._meta.rel_exists(dest))]
+            if any(require_join_condition):
+                raise ValueError('A join condition must be specified.')
+        elif isinstance(on, basestring):
             on = self._query_ctx._meta.fields[on]
         self._joins.setdefault(self._query_ctx, [])
-        self._joins[self._query_ctx].append(Join(model_class, join_type, on))
-        self._query_ctx = model_class
+        self._joins[self._query_ctx].append(Join(dest, join_type, on))
+        if not isinstance(dest, SelectQuery):
+            self._query_ctx = dest
 
     @returns_clone
     def switch(self, model_class=None):

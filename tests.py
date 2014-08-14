@@ -107,7 +107,10 @@ else:
 
 class TestAliasMap(AliasMap):
     def add(self, obj, alias=None):
-        self._alias_map[obj] = obj._meta.db_table
+        if isinstance(obj, SelectQuery):
+            self._alias_map[obj] = obj._alias
+        else:
+            self._alias_map[obj] = obj._meta.db_table
 
 class TestQueryCompiler(QueryCompiler):
     alias_map_class = TestAliasMap
@@ -630,6 +633,34 @@ class SelectTestCase(BasePeeweeTestCase):
 
         sq = SelectQuery(PackageItem).join(Package)
         self.assertJoins(sq, ['INNER JOIN "package" AS package ON (packageitem."package_id" = package."barcode")'])
+
+        sq = (SelectQuery(TestModelA)
+              .join(TestModelB, on=(TestModelA.data == TestModelB.data))
+              .join(TestModelC, on=(TestModelC.field == TestModelB.field)))
+        self.assertJoins(sq, [
+            'INNER JOIN "testmodelb" AS testmodelb ON (testmodela."data" = testmodelb."data")',
+            'INNER JOIN "testmodelc" AS testmodelc ON (testmodelc."field" = testmodelb."field")',
+        ])
+
+        inner = SelectQuery(User).alias('j1')
+        sq = SelectQuery(Blog).join(inner, on=(Blog.user == inner.c.id))
+        join = ('INNER JOIN ('
+                'SELECT users."id" FROM "users" AS users) AS j1 '
+                'ON (blog."user_id" = "j1"."id")')
+        self.assertJoins(sq, [join])
+
+        inner_2 = SelectQuery(Comment).alias('j2')
+        sq = sq.join(inner_2, on=(Blog.pk == inner_2.c.blog_id))
+        join_2 = ('INNER JOIN ('
+                  'SELECT comment."id" FROM "comment" AS comment) AS j2 '
+                  'ON (blog."pk" = "j2"."blog_id")')
+        self.assertJoins(sq, [join, join_2])
+
+        sq = sq.join(Comment)
+        self.assertJoins(sq, [
+            join,
+            join_2,
+            'INNER JOIN "comment" AS comment ON (blog."pk" = comment."blog_id")'])
 
     def test_join_self_referential(self):
         sq = SelectQuery(Category).join(Category)
@@ -2864,6 +2895,25 @@ class FromMultiTableTestCase(ModelTestCase):
             'SELECT "q1"."id", "q1"."username" FROM ('
             'SELECT users."id", users."username" FROM "users" AS users) AS q1 '
             'INNER JOIN "comment" AS comment ON ("q1"."id" = comment."id")'))
+
+    def test_join_on_query(self):
+        u0 = User.get(User.username == 'u0')
+        u1 = User.get(User.username == 'u1')
+
+        inner = User.select().alias('j1')
+        outer = (Blog
+                 .select(Blog.title, Blog.user)
+                 .join(inner, on=(Blog.user == inner.c.id))
+                 .order_by(Blog.pk))
+        res = [row for row in outer.tuples()]
+        self.assertEqual(res, [
+            ('b0-0', u0.id),
+            ('b0-1', u0.id),
+            ('b0-2', u0.id),
+            ('b1-0', u1.id),
+            ('b1-1', u1.id),
+            ('b1-2', u1.id),
+        ])
 
 
 class PrefetchTestCase(ModelTestCase):
