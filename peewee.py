@@ -2443,6 +2443,10 @@ class SelectQuery(Query):
         res.fill_cache(index)
         return res._result_cache[value]
 
+    if PY3:
+        def __hash__(self):
+            return id(self)
+
 class CompoundSelect(SelectQuery):
     _node_type = 'compound_select_query'
 
