@@ -1257,7 +1257,8 @@ class QueryCompiler(object):
     def _parse_field(self, node, alias_map, conv):
         if alias_map:
             sql = '.'.join((
-                alias_map[node.model_class], self.quote(node.db_column)))
+                self.quote(alias_map[node.model_class]),
+                self.quote(node.db_column)))
         else:
             sql = self.quote(node.db_column)
         return sql, []
