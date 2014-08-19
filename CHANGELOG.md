@@ -5,6 +5,16 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.3.1
+
+This release contains a fix for a bug introducted in 2.3.0. Table names are included, unquoted, in update queries now, which is causing some problems when the table name is a keyword.
+
+### Changes in 2.3.1
+
+* [Quote table name / alias](https://github.com/coleifer/peewee/issues/414)
+
+[View commits](https://github.com/coleifer/peewee/compare/2.3.0...2.3.1)
+
 ## 2.3.0
 
 This release contains a number of bugfixes, enhancements and a rewrite of much of the documentation.
