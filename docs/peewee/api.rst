@@ -1160,8 +1160,8 @@ Query Types
         >>> sq = SelectQuery(Tweet)
         >>> sq.count()
         45  # number of tweets
-        >>> sq.where(Tweet.status == DELETED)
-        >>> sq.count()
+        >>> deleted_tweets = sq.where(Tweet.status == DELETED)
+        >>> deleted_tweets.count()
         3  # number of tweets that are marked as deleted
 
     .. py:method:: wrapped_count([clear_limit=True])
