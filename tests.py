@@ -1106,6 +1106,10 @@ class SelectTestCase(BasePeeweeTestCase):
             'WHERE Exists(Exists('
             'SELECT "t2"."id" FROM "users" AS t2))'))
 
+    def test_division(self):
+        query = User.select(User.id / 2)
+        self.assertSelect(query, '("users"."id" / ?)', [2])
+
 class UpdateTestCase(BasePeeweeTestCase):
     def test_update(self):
         uq = UpdateQuery(User, {User.username: 'updated'})
