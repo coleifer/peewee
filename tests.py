@@ -4431,6 +4431,27 @@ class CompoundSelectTestCase(ModelTestCase):
                          ['e', 'd', 'c'])
 
     @requires_op('UNION')
+    def test_union_sql(self):
+        union = (User.select(User.username) |
+                 UniqueModel.select(UniqueModel.name))
+        sql, params = compiler.generate_select(union)
+        self.assertEqual(sql, (
+            'SELECT "users"."username" FROM "users" AS users UNION '
+            'SELECT "uniquemodel"."name" FROM "uniquemodel" AS uniquemodel'))
+
+    @requires_op('UNION')
+    def test_union_subquery(self):
+        union = (User.select(User.username) |
+                 UniqueModel.select(UniqueModel.name))
+        query = User.select().where(User.username << union)
+        sql, params = compiler.generate_select(query)
+        self.assertEqual(sql, (
+            'SELECT "users"."id", "users"."username" '
+            'FROM "users" AS users WHERE ("users"."username" IN '
+            '(SELECT "users"."username" FROM "users" AS users UNION '
+            'SELECT "uniquemodel"."name" FROM "uniquemodel" AS uniquemodel))'))
+
+    @requires_op('UNION')
     @requires_op('INTERSECT')
     def test_complex(self):
         left = User.select(User.username).where(User.username << ['a', 'b'])

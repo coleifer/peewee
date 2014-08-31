@@ -1266,7 +1266,7 @@ class QueryCompiler(object):
     def _parse_compound_select_query(self, node, alias_map, conv):
         l, lp = self.generate_select(node.lhs, alias_map)
         r, rp = self.generate_select(node.rhs, alias_map)
-        sql = '%s %s %s' % (l, node.operator, r)
+        sql = '(%s %s %s)' % (l, node.operator, r)
         return sql, lp + rp
 
     def _parse_select_query(self, node, alias_map, conv):
@@ -1403,7 +1403,7 @@ class QueryCompiler(object):
         alias_map = self.calculate_alias_map(query, alias_map)
 
         if isinstance(query, CompoundSelect):
-            clauses = [query]
+            clauses = [_StripParens(query)]
         else:
             if not query._distinct:
                 clauses = [SQL('SELECT')]
