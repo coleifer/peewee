@@ -14,4 +14,5 @@ install: "pip install psycopg2"
 before_script:
   - sh -c "psql -c 'create database peewee_test;' -U postgres"
   - sh -c "psql peewee_test -c 'create extension hstore;' -U postgres"
+  - sh -c "psql peewee_test -c 'create extension pgcrypto;' -U postgres"
 script: "python runtests.py -a"
