@@ -155,13 +155,15 @@ class HStoreField(IndexedField):
 class JSONField(Field):
     db_field = 'json'
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, dumps=None, *args, **kwargs):
         if Json is None:
             raise Exception('Your version of psycopg2 does not support JSON.')
+
+        self.dumps = dumps
         super(JSONField, self).__init__(*args, **kwargs)
 
     def db_value(self, value):
-        return Json(value)
+        return Json(value, dumps=self.dumps)
 
     def __getitem__(self, value):
         return JsonLookup(self, [value])

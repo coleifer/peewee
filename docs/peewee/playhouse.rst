@@ -603,12 +603,14 @@ postgres_ext API notes
 
         Query rows for the existince of *any* key.
 
-.. py:class:: JSONField(*args, **kwargs)
+.. py:class:: JSONField(dumps=None, *args, **kwargs)
 
     Field class suitable for storing and querying arbitrary JSON.  When using
     this on a model, set the field's value to a Python object (either a `dict`
     or a `list`).  When you retrieve your value from the database it will be
     returned as a Python data structure.
+
+    :param dumps: The default is to call json.dumps() or the dumps function. You can override this method to create a customized JSON wrapper.
 
     .. note:: You must be using Postgres 9.2 / psycopg2 2.5 or greater.
 
