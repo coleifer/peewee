@@ -1178,6 +1178,8 @@ class QueryCompiler(object):
         self._unknown_types = set(['param'])
 
     def get_parse_map(self):
+        # To avoid O(n) lookups when parsing nodes, use a lookup table for
+        # common node types O(1).
         return {
             'expression': self._parse_expression,
             'param': self._parse_param,
@@ -1357,6 +1359,8 @@ class QueryCompiler(object):
         return self.parse_node(Clause(*clauses), alias_map)
 
     def generate_joins(self, joins, model_class, alias_map):
+        # Joins are implemented as an adjancency-list graph. Perform a
+        # depth-first search of the graph to generate all the necessary JOINs.
         clauses = []
         seen = set()
         q = [model_class]
@@ -1473,7 +1477,7 @@ class QueryCompiler(object):
                 field._as_entity(with_table=False),
                 OP_EQ,
                 value,
-                flat=True))
+                flat=True))  # No outer parens, no table alias.
         clauses.append(CommaClause(*update))
 
         if query._where:
@@ -1493,6 +1497,7 @@ class QueryCompiler(object):
         clauses = [SQL(statement), model._as_entity()]
 
         if query._query is not None:
+            # This INSERT query is of the form INSERT INTO ... SELECT FROM.
             if query._fields:
                 clauses.append(self._get_field_clause(query._fields))
             clauses.append(_StripParens(query._query))

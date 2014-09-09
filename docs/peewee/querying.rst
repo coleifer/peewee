@@ -741,6 +741,7 @@ Comparison       Meaning
 ``>>``           x IS y, where y is None/NULL
 ``%``            x LIKE y where y may contain wildcards
 ``**``           x ILIKE y where y may contain wildcards
+``~``            Negation
 ================ =======================================
 
 Because I ran out of operators to override, there are some additional query operations available as methods:
@@ -770,6 +771,14 @@ Here is how you might use some of these query operators:
     Employee.select().where(Employee.name.startswith('C'))
 
     Blog.select().where(Blog.title.contains(search_string))
+
+To accomplish negation, for example ``NOT IN``, you would write:
+
+.. code-block:: python
+
+    friends = User.select().where(User.username << ['charlie', 'huey', 'mickey'])
+    strangers = User.select().where(
+        ~(User.id << friends))
 
 .. note::
     Because SQLite's ``LIKE`` operation is case-insensitive by default,
