@@ -1726,6 +1726,7 @@ class ExtQueryResultWrapper(QueryResultWrapper):
                         column = select_column._alias or select_column.name
                         found = True
                     elif (isinstance(select_column, Func) and
+                            len(select_column.arguments) and
                             isinstance(select_column.arguments[0], Field)):
                         if select_column._coerce:
                             # Special-case handling aggregations.
