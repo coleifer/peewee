@@ -248,6 +248,7 @@ class TestPwiz(unittest.TestCase):
         self.assertEqual(col_types_id.get_field_parameters(), {
             'db_column': "'col_types_id'",
             'rel_model': 'Coltypes',
+            'to_field': "'f11'",
         })
 
         col_types_nullable_id = rel_model['col_types_nullable_id']
@@ -255,13 +256,25 @@ class TestPwiz(unittest.TestCase):
             'db_column': "'col_types_nullable_id'",
             'null': True,
             'rel_model': 'Coltypes',
+            'to_field': "'f11'",
         })
 
         fkpk = columns['fkpk']
         self.assertEqual(fkpk['col_types_id'].get_field_parameters(), {
             'db_column': "'col_types_id'",
             'rel_model': 'Coltypes',
-            'primary_key': True})
+            'primary_key': True,
+            'to_field': "'f11'"})
+
+        category = columns['category']
+
+        parent_id = category['parent_id']
+        self.assertEqual(parent_id.get_field_parameters(), {
+            'db_column': "'parent_id'",
+            'null': True,
+            'rel_model': "'self'",
+            'to_field': "'id'",
+        })
 
     @generative_test
     def test_get_field(self, introspector):
@@ -287,14 +300,15 @@ class TestPwiz(unittest.TestCase):
             ('fkpk', (
                 ('col_types_id', 'col_types = ForeignKeyField('
                  'db_column=\'col_types_id\', primary_key=True, '
-                 'rel_model=Coltypes)'),
+                 'rel_model=Coltypes, to_field=\'f11\')'),
             )),
             ('relmodel', (
                 ('col_types_id', 'col_types = ForeignKeyField('
-                 'db_column=\'col_types_id\', rel_model=Coltypes)'),
+                 'db_column=\'col_types_id\', rel_model=Coltypes, '
+                 'to_field=\'f11\')'),
                 ('col_types_nullable_id', 'col_types_nullable = '
                  'ForeignKeyField(db_column=\'col_types_nullable_id\', '
-                 'null=True, rel_model=Coltypes)'),
+                 'null=True, rel_model=Coltypes, to_field=\'f11\')'),
             )),
             ('underscores', (
                 ('_id', '_id = PrimaryKeyField()'),
@@ -303,7 +317,8 @@ class TestPwiz(unittest.TestCase):
             ('category', (
                 ('name', 'name = CharField(max_length=10)'),
                 ('parent_id', 'parent = ForeignKeyField('
-                 'db_column=\'parent_id\', null=True, rel_model=\'self\')'),
+                 'db_column=\'parent_id\', null=True, rel_model=\'self\', '
+                 'to_field=\'id\')'),
             )),
         )
 

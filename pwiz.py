@@ -84,19 +84,21 @@ class Column(object):
         # Handle ForeignKeyField-specific attributes.
         if self.field_class is ForeignKeyField:
             params['rel_model'] = self.rel_model
+            if self.to_field:
+                params['to_field'] = "'%s'" % self.to_field
 
         return params
 
     def is_primary_key(self):
         return self.field_class is PrimaryKeyField or self.primary_key
 
-    def set_foreign_key(self, foreign_key, model_names):
+    def set_foreign_key(self, foreign_key, model_names, dest=None):
         self.field_class = ForeignKeyField
         if foreign_key.dest_table == foreign_key.table:
             self.rel_model = "'self'"
         else:
             self.rel_model = model_names[foreign_key.dest_table]
-        self.to_field = foreign_key.dest_column
+        self.to_field = dest and dest.name or None
 
     def get_field(self):
         # Generate the field definition for this column.
@@ -442,10 +444,16 @@ class SqliteMetadata(Metadata):
         table_definition = cursor.fetchone()[0].strip()
 
         try:
-            columns = re.search('\((.+)\)', table_definition).groups()[0]
+            columns = re.search(
+                '\((.+)\)',
+                table_definition,
+                re.MULTILINE | re.DOTALL).groups()[0]
         except AttributeError:
             print_('Unable to read table definition for "%s"' % table)
             return []
+
+        # Replace any new-lines or other junk with whitespace.
+        columns = re.sub('[\s\n\r]+', ' ', columns).strip()
 
         fks = []
         for column_def in columns.split(','):
@@ -529,12 +537,21 @@ class Introspector(object):
 
         # On the second pass convert all foreign keys.
         for table in tables:
-            for foreign_key in foreign_keys[table]:
-                src = columns[foreign_key.table][foreign_key.column]
-                src.set_foreign_key(foreign_key, model_names)
-
             for column_name, column in columns[table].items():
                 column.name = self.make_column_name(column_name)
+
+            for foreign_key in foreign_keys[table]:
+                src = columns[foreign_key.table][foreign_key.column]
+                try:
+                    dest = columns[foreign_key.dest_table][
+                        foreign_key.dest_column]
+                except KeyError:
+                    dest = None
+
+                src.set_foreign_key(
+                    foreign_key,
+                    model_names,
+                    dest)
 
         return columns, foreign_keys, model_names
 
