@@ -3298,10 +3298,12 @@ class BaseModel(type):
         elif isinstance(model_pk, CompositeKey):
             pk_name = '_composite_key'
 
-        model_pk.add_to_class(cls, pk_name)
-        cls._meta.primary_key = model_pk
-        cls._meta.auto_increment = (
-            isinstance(model_pk, PrimaryKeyField) or bool(model_pk.sequence))
+        if model_pk is not False:
+            model_pk.add_to_class(cls, pk_name)
+            cls._meta.primary_key = model_pk
+            cls._meta.auto_increment = (
+                isinstance(model_pk, PrimaryKeyField) or
+                bool(model_pk.sequence))
 
         for field, name in fields:
             field.add_to_class(cls, name)
