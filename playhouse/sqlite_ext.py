@@ -66,7 +66,7 @@ class SqliteQueryCompiler(QueryCompiler):
         else:
             statement = 'CREATE TABLE'
         if safe:
-            statement += 'IF NOT EXISTS'
+            statement += ' IF NOT EXISTS'
         clause.nodes[0] = SQL(statement)  # Overwrite the statement.
 
         if options:
