@@ -827,6 +827,8 @@ complex.
     * Use ``&`` instead of ``and``
     * Use ``|`` instead of ``or``
     * Use ``~`` instead of ``not``
+    * Don't forget to wrap your comparisons in parentheses when using logical
+      operators.
 
 For more examples, see the :ref:`expressions` section.
 
