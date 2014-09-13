@@ -759,11 +759,24 @@ Method                  Meaning
 ``.in_(value)``         IN lookup (identical to ``<<``).
 ======================= ===============================================
 
+To combine clauses using logical operators, use:
+
+================ ==================== ======================================================
+Operator         Meaning              Example
+================ ==================== ======================================================
+``&``            AND                  ``(User.is_active == True) & (User.is_admin == True)``
+``|`` (pipe)     OR                   ``(User.is_admin) | (User.is_superuser)``
+``~``            NOT (unary negation) ``~(User.username << ['foo', 'bar', 'baz'])``
+================ ==================== ======================================================
+
 Here is how you might use some of these query operators:
 
 .. code-block:: python
 
+    # Find the user whose username is "charlie".
     User.select().where(User.username == 'charlie')
+
+    # Find the users whose username is in [charlie, huey, mickey]
     User.select().where(User.username << ['charlie', 'huey', 'mickey'])
 
     Employee.select().where(Employee.salary.between(50000, 60000))
@@ -772,20 +785,59 @@ Here is how you might use some of these query operators:
 
     Blog.select().where(Blog.title.contains(search_string))
 
-To accomplish negation, for example ``NOT IN``, you would write:
+Here is how you might combine expressions. Comparisons can be arbitrarily
+complex.
+
+.. note::
+  Note that the actual comparisons are wrapped in parentheses. Python's operator
+  precedence necessitates that comparisons be wrapped in parentheses.
 
 .. code-block:: python
 
-    friends = User.select().where(User.username << ['charlie', 'huey', 'mickey'])
-    strangers = User.select().where(
-        ~(User.id << friends))
+    # Find any users who are active administrations.
+    User.select().where(
+      (User.is_admin == True) &
+      (User.is_active == True))
 
-.. note::
-    Because SQLite's ``LIKE`` operation is case-insensitive by default,
-    peewee will use the SQLite ``GLOB`` operation for case-sensitive searches.
-    The glob operation uses asterisks for wildcards as opposed to the usual
-    percent-sign.  If you are using SQLite and want case-sensitive partial
-    string matching, remember to use asterisks for the wildcard.
+    # Find any users who are either administrators or super-users.
+    User.select().where(
+      (User.is_admin == True) |
+      (User.is_superuser == True))
+
+    # Find any Tweets by users who are not admins (NOT IN).
+    admins = User.select().where(User.is_admin == True)
+    non_admin_tweets = Tweet.select().where(
+      ~(Tweet.user << admins))
+
+    # Find any users who are not my friends (strangers).
+    friends = User.select().where(
+      User.username << ['charlie', 'huey', 'mickey'])
+    strangers = User.select().where(~(User.id << friends))
+
+.. warning::
+    Although you may be tempted to use python's ``in``, ``and``, ``or`` and
+    ``not`` operators in your query expressions, these **will not work.** The
+    return value of an ``in`` expression is always coerced to a boolean value.
+    Similarly, ``and``, ``or`` and ``not`` all treat their arguments as boolean
+    values and cannot be overloaded.
+
+    So just remember:
+
+    * Use ``<<`` instead of ``in``
+    * Use ``&`` instead of ``and``
+    * Use ``|`` instead of ``or``
+    * Use ``~`` instead of ``not``
+
+For more examples, see the :ref:`expressions` section.
+
+LIKE and ILIKE with SQLite
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Because SQLite's ``LIKE`` operation is case-insensitive by default,
+peewee will use the SQLite ``GLOB`` operation for case-sensitive searches.
+The glob operation uses asterisks for wildcards as opposed to the usual
+percent-sign. If you are using SQLite and want case-sensitive partial
+string matching, remember to use asterisks for the wildcard.
 
 .. _custom-operators:
 
@@ -816,6 +868,8 @@ Now you can use these custom operators to build richer queries:
     User.select().where(mod(User.id, 2) == 0)
 
 For more examples check out the source to the ``playhouse.postgresql_ext`` module, as it contains numerous operators specific to postgresql's hstore.
+
+.. _expressions:
 
 Expressions
 -----------
