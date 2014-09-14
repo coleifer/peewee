@@ -327,6 +327,20 @@ Here is an example of how you might declare a model with a JSON field:
     offense_responses = APIResponse.select().where(
       APIResponse.response['meta']['model'] == 'offense')
 
+    # Retrieve a sub-key for each APIResponse. By calling .as_json(), the
+    # data at the sub-key will be returned as Python objects (dicts, lists,
+    # etc) instead of serialized JSON.
+    q = (APIResponse
+         .select(
+           APIResponse.data['booking']['person'].as_json().alias('person'))
+         .where(
+           APIResponse.data['meta']['model'] == 'booking'))
+
+    for result in q:
+        print result.person['name'], result.person['dob']
+
+For more examples, see the :py:class:`JSONField` API documentation below.
+
 
 .. _server_side_cursors:
 
@@ -637,12 +651,69 @@ postgres_ext API notes
 
         APIResponse.create(url='http://foo.com/baz/', response={'key': 'value'})
 
-    To query, use Python's ``[]`` operators to specify nested key lookups:
+    To query, use Python's ``[]`` operators to specify nested key or array lookups:
 
     .. code-block:: python
 
         APIResponse.select().where(
             APIResponse.response['key1']['nested-key'] == 'some-value')
+
+    To illustrate the use of the ``[]`` operators, imagine we have the following data stored in an ``APIResponse``:
+
+    .. code-block:: javascript
+
+        {
+          "foo": {
+            "bar": ["i1", "i2", "i3"],
+            "baz": {
+              "huey": "mickey",
+              "peewee": "nugget"
+            }
+          }
+        }
+
+    Here are the results of a few queries:
+
+    .. code-block:: python
+
+        def get_data(expression):
+            # Helper function to just retrieve the results of a
+            # particular expression.
+            query = (APIResponse
+                     .select(expression.alias('my_data'))
+                     .dicts()
+                     .get())
+            return query['my_data']
+
+        # Accessing the foo -> bar subkey will return a JSON
+        # representation of the list.
+        get_data(APIResponse.data['foo']['bar'])
+        # '["i1", "i2", "i3"]'
+
+        # In order to retrieve this list as a Python list,
+        # we will call .as_json() on the expression.
+        get_data(APIResponse.data['foo']['bar'].as_json())
+        # ['i1', 'i2', 'i3']
+
+        # Similarly, accessing the foo -> baz subkey will
+        # return a JSON representation of the dictionary.
+        get_data(APIResponse.data['foo']['baz'])
+        # '{"huey": "mickey", "peewee": "nugget"}'
+
+        # Again, calling .as_json() will return an actual
+        # python dictionary.
+        get_data(APIResponse.data['foo']['baz'].as_json())
+        # {'huey': 'mickey', 'peewee': 'nugget'}
+
+        # When dealing with simple values, either way works as
+        # you expect.
+        get_data(APIResponse.data['foo']['bar'][0])
+        # 'i1'
+
+        # Calling .as_json() when the result is a simple value
+        # will return the same thing as the previous example.
+        get_data(APIResponse.data['foo']['bar'][0].as_json())
+        # 'i1'
 
 
 .. _sqlite_ext:
