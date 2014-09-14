@@ -10,6 +10,7 @@ from peewee import Expression
 from peewee import logger
 from peewee import Node
 from peewee import Param
+from peewee import returns_clone
 from peewee import QueryCompiler
 from peewee import SelectQuery
 from peewee import UUIDField  # For backwards-compatibility.
@@ -37,8 +38,20 @@ class _LookupNode(Node):
 class JsonLookup(_LookupNode):
     _node_type = 'json_lookup'
 
+    def __init__(self, node, parts, as_json=False):
+        super(JsonLookup, self).__init__(node, parts)
+        self._as_json = as_json
+
+    def clone_base(self):
+        return type(self)(self.node, list(self.parts), self._as_json)
+
+    @returns_clone
+    def as_json(self, as_json=True):
+        self._as_json = as_json
+
     def __getitem__(self, value):
-        return JsonLookup(self.node, self.parts + [value])
+        return JsonLookup(self.node, self.parts + [value], self._as_json)
+
 
 class ObjectSlice(_LookupNode):
     _node_type = 'object_slice'
@@ -208,9 +221,14 @@ class PostgresqlExtCompiler(QueryCompiler):
                 part, alias_map, conv)
             lookups.append(part_sql)
             params.extend(part_params)
-        # The last lookup should be converted to text.
-        head, tail = lookups[:-1], lookups[-1]
-        sql = '->>'.join(('->'.join(head), tail))
+
+        if node._as_json:
+            sql = '->'.join(lookups)
+        else:
+            # The last lookup should be converted to text.
+            head, tail = lookups[:-1], lookups[-1]
+            sql = '->>'.join(('->'.join(head), tail))
+
         return sql, params
 
     def get_parse_map(self):

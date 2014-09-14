@@ -481,6 +481,43 @@ if json_ok():
             tj_db = TestingJson.get(tj.pk_expr())
             self.assertEqual(tj_db.data, data)
 
+        def test_retrieve_json(self):
+            data = {
+                'gp1': {
+                    'p1': {'c1': 'foo'},
+                    'p2': {'c2': 'bar'},
+                },
+                'gp2': {}}
+            tj = TestingJson.create(data=data)
+
+            def assertLookup(lookup, expected):
+                query = (TestingJson
+                         .select(lookup)
+                         .where(tj.pk_expr())
+                         .dicts())
+                self.assertEqual(query.get(), expected)
+
+            expr = TestingJson.data['gp1']['p1'].alias('pdata')
+            assertLookup(expr, {'pdata': '{"c1": "foo"}'})
+            assertLookup(expr.as_json(), {'pdata': {'c1': 'foo'}})
+
+            expr = TestingJson.data['gp1']['p1']['c1'].alias('cdata')
+            assertLookup(expr, {'cdata': 'foo'})
+            assertLookup(expr.as_json(), {'cdata': 'foo'})
+
+            tj.data = [
+                {'i1': ['foo', 'bar', 'baze']},
+                ['nugget', 'mickey']]
+            tj.save()
+
+            expr = TestingJson.data[0]['i1'].alias('idata')
+            assertLookup(expr, {'idata': '["foo", "bar", "baze"]'})
+            assertLookup(expr.as_json(), {'idata': ['foo', 'bar', 'baze']})
+
+            expr = TestingJson.data[1][1].alias('ldata')
+            assertLookup(expr, {'ldata': 'mickey'})
+            assertLookup(expr.as_json(), {'ldata': 'mickey'})
+
         def test_json_field_sql(self):
             tj = TestingJson.select().where(TestingJson.data == {'foo': 'bar'})
             sql, params = tj.sql()
