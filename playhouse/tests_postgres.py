@@ -481,7 +481,7 @@ if json_ok():
             tj_db = TestingJson.get(tj.pk_expr())
             self.assertEqual(tj_db.data, data)
 
-        def test_retrieve_json(self):
+        def test_json_lookup_methods(self):
             data = {
                 'gp1': {
                     'p1': {'c1': 'foo'},
@@ -517,6 +517,30 @@ if json_ok():
             expr = TestingJson.data[1][1].alias('ldata')
             assertLookup(expr, {'ldata': 'mickey'})
             assertLookup(expr.as_json(), {'ldata': 'mickey'})
+
+        def test_json_path(self):
+            data = {
+                'foo': {
+                    'baz': {
+                        'bar': ['i1', 'i2', 'i3'],
+                        'baze': ['j1', 'j2'],
+                    }}}
+            tj = TestingJson.create(data=data)
+
+            def assertPath(path, expected):
+                query = (TestingJson
+                         .select(path)
+                         .where(tj.pk_expr())
+                         .dicts())
+                self.assertEqual(query.get(), expected)
+
+            expr = TestingJson.data.path('foo', 'baz', 'bar').alias('p')
+            assertPath(expr, {'p': '["i1", "i2", "i3"]'})
+            assertPath(expr.as_json(), {'p': ['i1', 'i2', 'i3']})
+
+            expr = TestingJson.data.path('foo', 'baz', 'baze', 1).alias('p')
+            assertPath(expr, {'p': 'j2'})
+            assertPath(expr.as_json(), {'p': 'j2'})
 
         def test_json_field_sql(self):
             tj = TestingJson.select().where(TestingJson.data == {'foo': 'bar'})

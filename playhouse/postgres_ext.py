@@ -35,11 +35,9 @@ class _LookupNode(Node):
     def clone_base(self):
         return type(self)(self.node, list(self.parts))
 
-class JsonLookup(_LookupNode):
-    _node_type = 'json_lookup'
-
+class _JsonLookupBase(_LookupNode):
     def __init__(self, node, parts, as_json=False):
-        super(JsonLookup, self).__init__(node, parts)
+        super(_JsonLookupBase, self).__init__(node, parts)
         self._as_json = as_json
 
     def clone_base(self):
@@ -49,9 +47,14 @@ class JsonLookup(_LookupNode):
     def as_json(self, as_json=True):
         self._as_json = as_json
 
+class JsonLookup(_JsonLookupBase):
+    _node_type = 'json_lookup'
+
     def __getitem__(self, value):
         return JsonLookup(self.node, self.parts + [value], self._as_json)
 
+class JsonPath(_JsonLookupBase):
+    _node_type = 'json_path'
 
 class ObjectSlice(_LookupNode):
     _node_type = 'object_slice'
@@ -181,6 +184,9 @@ class JSONField(Field):
     def __getitem__(self, value):
         return JsonLookup(self, [value])
 
+    def path(self, *keys):
+        return JsonPath(self, keys)
+
 
 OP_HKEY = 'key'
 OP_HUPDATE = 'H@>'
@@ -231,11 +237,21 @@ class PostgresqlExtCompiler(QueryCompiler):
 
         return sql, params
 
+    def _parse_json_path(self, node, alias_map, conv):
+        sql, params = self.parse_node(node.node, alias_map, conv)
+        if node._as_json:
+            operand = '#>'
+        else:
+            operand = '#>>'
+        params.append('{%s}' % ','.join(map(str, node.parts)))
+        return operand.join((sql, self.interpolation)), params
+
     def get_parse_map(self):
         parse_map = super(PostgresqlExtCompiler, self).get_parse_map()
         parse_map.update(
             object_slice=self._parse_object_slice,
-            json_lookup=self._parse_json_lookup)
+            json_lookup=self._parse_json_lookup,
+            json_path=self._parse_json_path)
         return parse_map
 
 
