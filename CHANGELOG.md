@@ -5,6 +5,20 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.3.2
+
+This release contains mostly bugfixes.
+
+### Changes in 2.3.2
+
+* Fixed #421, allowing division operations to work correctly in py3k.
+* Added support for custom json.dumps command, thanks to @alexlatchford.
+* Fixed some foreign key generation bugs with pwiz in #426.
+* Fixed a parentheses bug with UNION queries, #422.
+* Added support for returning partial JSON data-structures from postgresql.
+
+[View commits](https://github.com/coleifer/peewee/compare/2.3.1...2.3.2)
+
 ## 2.3.1
 
 This release contains a fix for a bug introducted in 2.3.0. Table names are included, unquoted, in update queries now, which is causing some problems when the table name is a keyword.
