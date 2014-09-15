@@ -832,14 +832,14 @@ complex.
 
 For more examples, see the :ref:`expressions` section.
 
-LIKE and ILIKE with SQLite
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. note::
+  **LIKE and ILIKE with SQLite**
 
-Because SQLite's ``LIKE`` operation is case-insensitive by default,
-peewee will use the SQLite ``GLOB`` operation for case-sensitive searches.
-The glob operation uses asterisks for wildcards as opposed to the usual
-percent-sign. If you are using SQLite and want case-sensitive partial
-string matching, remember to use asterisks for the wildcard.
+  Because SQLite's ``LIKE`` operation is case-insensitive by default,
+  peewee will use the SQLite ``GLOB`` operation for case-sensitive searches.
+  The glob operation uses asterisks for wildcards as opposed to the usual
+  percent-sign. If you are using SQLite and want case-sensitive partial
+  string matching, remember to use asterisks for the wildcard.
 
 .. _custom-operators:
 
