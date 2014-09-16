@@ -2504,38 +2504,45 @@ class InsertQuery(Query):
         else:
             self._rows = [field_dict or {}]
 
-        if query is None:
-            self._defaults, self._callables = {}, {}
-            for field, default in model_class._meta.defaults.items():
-                if callable(default):
-                    self._callables[field] = default
-                else:
-                    self._defaults[field] = default
-            self._valid_fields = (set(model_class._meta.fields.keys()) |
-                                  set(model_class._meta.fields.values()))
-
         self._fields = fields
         self._query = query
 
     def _iter_rows(self):
-        defaults, callables = self._defaults, self._callables
-        valid_fields = self._valid_fields
+        model_meta = self.model_class._meta
+        valid_fields = (set(model_meta.fields.keys()) |
+                        set(model_meta.fields.values()))
+        def validate_field(field):
+            if field not in valid_fields:
+                raise KeyError('"%s" is not a recognized field.' % field)
+
+        if self._is_multi_row_insert:
+            defaults, callables = {}, {}
+            for field, default in model_meta.defaults.items():
+                if callable(default):
+                    callables[field] = default
+                else:
+                    defaults[field] = default
+        else:
+            defaults = dict(
+                (model_meta.fields[field], value)
+                for field, value in model_meta.get_default_dict().items())
+            callables = None
+
         for row_dict in self._rows:
-            field_row = {}
-            field_row.update(defaults)
+            field_row = dict(defaults)
             seen = set()
             for key in row_dict:
-                if key not in valid_fields:
-                    raise KeyError('"%s" is not a recognized field.' % key)
-                elif key in self.model_class._meta.fields:
-                    field = self.model_class._meta.fields[key]
+                validate_field(key)
+                if key in model_meta.fields:
+                    field = model_meta.fields[key]
                 else:
                     field = key
                 field_row[field] = row_dict[key]
                 seen.add(field)
-            for field in callables:
-                if field not in seen:
-                    field_row[field] = callables[field]()
+            if callables:
+                for field in callables:
+                    if field not in seen:
+                        field_row[field] = callables[field]()
             yield field_row
 
     def _clone_attributes(self, query):
