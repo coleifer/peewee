@@ -1299,11 +1299,12 @@ class InsertTestCase(BasePeeweeTestCase):
 
         iq = InsertQuery(DM, rows=[
             {DM.name: 'u3', DM.cd: 99},
-            {DM.name: 'u4', DM.pd: -2}])
+            {DM.name: 'u4', DM.pd: -2},
+            {DM.name: 'u5'}])
         self.assertEqual(compiler.generate_insert(iq), (
             'INSERT INTO "dm" ("cd", "pd", "name") VALUES '
-            '(?, ?, ?), (?, ?, ?)',
-            [99, -1, 'u3', 3, -2, 'u4']))
+            '(?, ?, ?), (?, ?, ?), (?, ?, ?)',
+            [99, -1, 'u3', 3, -2, 'u4', 4, -1, 'u5']))
 
     def test_insert_many_gen(self):
         def row_generator():
