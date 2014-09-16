@@ -2515,12 +2515,8 @@ class InsertQuery(Query):
             if field not in valid_fields:
                 raise KeyError('"%s" is not a recognized field.' % field)
 
-        defaults, callables = {}, {}
-        for field, default in model_meta.defaults.items():
-            if callable(default):
-                callables[field] = default
-            else:
-                defaults[field] = default
+        defaults = model_meta._default_dict
+        callables = model_meta._default_callables
 
         for row_dict in self._rows:
             field_row = dict(defaults)
@@ -3166,6 +3162,8 @@ class ModelOptions(object):
         self.fields = {}
         self.columns = {}
         self.defaults = {}
+        self._default_dict = {}
+        self._default_callables = {}
 
         self.database = database or default_database
         self.db_table = db_table
@@ -3188,6 +3186,10 @@ class ModelOptions(object):
         for field in self.fields.values():
             if field.default is not None:
                 self.defaults[field] = field.default
+                if callable(field.default):
+                    self._default_callables[field] = field.default
+                else:
+                    self._default_dict[field] = field.default
 
         if self.order_by:
             norm_order_by = []
@@ -3204,11 +3206,10 @@ class ModelOptions(object):
 
     def get_default_dict(self):
         dd = {}
-        for field, default in self.defaults.items():
-            if callable(default):
-                dd[field.name] = default()
-            else:
-                dd[field.name] = default
+        for field, default in self._default_dict.items():
+            dd[field.name] = default
+        for field, default in self._default_callables.items():
+            dd[field.name] = default()
         return dd
 
     def get_sorted_fields(self):
