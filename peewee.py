@@ -2519,7 +2519,7 @@ class InsertQuery(Query):
         callables = model_meta._default_callables
 
         for row_dict in self._rows:
-            field_row = dict(defaults)
+            field_row = defaults.copy()
             seen = set()
             for key in row_dict:
                 validate_field(key)
@@ -3162,6 +3162,7 @@ class ModelOptions(object):
         self.fields = {}
         self.columns = {}
         self.defaults = {}
+        self._default_by_name = {}
         self._default_dict = {}
         self._default_callables = {}
 
@@ -3190,6 +3191,7 @@ class ModelOptions(object):
                     self._default_callables[field] = field.default
                 else:
                     self._default_dict[field] = field.default
+                    self._default_by_name[field.name] = field.default
 
         if self.order_by:
             norm_order_by = []
@@ -3205,11 +3207,10 @@ class ModelOptions(object):
             self.order_by = norm_order_by
 
     def get_default_dict(self):
-        dd = {}
-        for field, default in self._default_dict.items():
-            dd[field.name] = default
-        for field, default in self._default_callables.items():
-            dd[field.name] = default()
+        dd = self._default_by_name.copy()
+        if self._default_callables:
+            for field, default in self._default_callables.items():
+                dd[field.name] = default()
         return dd
 
     def get_sorted_fields(self):
