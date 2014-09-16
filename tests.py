@@ -1238,6 +1238,24 @@ class InsertTestCase(BasePeeweeTestCase):
             'INSERT INTO "dm" ("name", "value", "other") VALUES (?, ?, ?)',
             ['huey', 1, 2.0]))
 
+    def test_insert_default_callable(self):
+        def default_fn():
+            return -1
+
+        class DM(TestModel):
+            name = CharField()
+            value = IntegerField(default=default_fn)
+
+        iq = InsertQuery(DM, {DM.name: 'u1'})
+        self.assertEqual(compiler.generate_insert(iq), (
+            'INSERT INTO "dm" ("name", "value") VALUES (?, ?)',
+            ['u1', -1]))
+
+        iq = InsertQuery(DM, {'name': 'u2', 'value': 1})
+        self.assertEqual(compiler.generate_insert(iq), (
+            'INSERT INTO "dm" ("name", "value") VALUES (?, ?)',
+            ['u2', 1]))
+
     def test_insert_many(self):
         iq = InsertQuery(User, rows=[
             {'username': 'u1'},
@@ -1256,6 +1274,36 @@ class InsertTestCase(BasePeeweeTestCase):
         iq = InsertQuery(User, rows=[])
         self.assertEqual(compiler.generate_insert(iq), (
             'INSERT INTO "users"', []))
+
+    def test_insert_many_defaults(self):
+        class DefaultGenerator(object):
+            def __init__(self):
+                self.i = 0
+
+            def __call__(self):
+                self.i += 1
+                return self.i
+
+        default_gen = DefaultGenerator()
+
+        class DM(TestModel):
+            cd = IntegerField(default=default_gen)
+            pd = IntegerField(default=-1)
+            name = CharField()
+
+        iq = InsertQuery(DM, rows=[{'name': 'u1'}, {'name': 'u2'}])
+        self.assertEqual(compiler.generate_insert(iq), (
+            'INSERT INTO "dm" ("cd", "pd", "name") VALUES '
+            '(?, ?, ?), (?, ?, ?)',
+            [1, -1, 'u1', 2, -1, 'u2']))
+
+        iq = InsertQuery(DM, rows=[
+            {DM.name: 'u3', DM.cd: 99},
+            {DM.name: 'u4', DM.pd: -2}])
+        self.assertEqual(compiler.generate_insert(iq), (
+            'INSERT INTO "dm" ("cd", "pd", "name") VALUES '
+            '(?, ?, ?), (?, ?, ?)',
+            [99, -1, 'u3', 3, -2, 'u4']))
 
     def test_insert_many_gen(self):
         def row_generator():

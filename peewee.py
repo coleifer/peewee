@@ -2505,31 +2505,37 @@ class InsertQuery(Query):
             self._rows = [field_dict or {}]
 
         if query is None:
-            self._defaults = self._get_default_values()
+            self._defaults, self._callables = {}, {}
+            for field, default in model_class._meta.defaults.items():
+                if callable(default):
+                    self._callables[field] = default
+                else:
+                    self._defaults[field] = default
             self._valid_fields = (set(model_class._meta.fields.keys()) |
                                   set(model_class._meta.fields.values()))
 
         self._fields = fields
         self._query = query
 
-    def _get_default_values(self):
-        defaults = self.model_class._meta.get_default_dict()
-        return dict(
-            (self.model_class._meta.fields[f], v) for f, v in defaults.items())
-
     def _iter_rows(self):
-        # Convert {'field_name': value} to {FieldName: value} / apply defaults.
+        defaults, callables = self._defaults, self._callables
+        valid_fields = self._valid_fields
         for row_dict in self._rows:
             field_row = {}
-            field_row.update(self._defaults)
+            field_row.update(defaults)
+            seen = set()
             for key in row_dict:
-                if key not in self._valid_fields:
+                if key not in valid_fields:
                     raise KeyError('"%s" is not a recognized field.' % key)
                 elif key in self.model_class._meta.fields:
                     field = self.model_class._meta.fields[key]
                 else:
                     field = key
                 field_row[field] = row_dict[key]
+                seen.add(field)
+            for field in callables:
+                if field not in seen:
+                    field_row[field] = callables[field]()
             yield field_row
 
     def _clone_attributes(self, query):
