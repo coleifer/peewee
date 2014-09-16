@@ -2529,7 +2529,7 @@ class InsertQuery(Query):
                     field = self.model_class._meta.fields[key]
                 else:
                     field = key
-                field_row[field] = row_dict[key]
+                field_row[field] = field.db_value(row_dict[key])
             yield field_row
 
     def _clone_attributes(self, query):
