@@ -2515,18 +2515,12 @@ class InsertQuery(Query):
             if field not in valid_fields:
                 raise KeyError('"%s" is not a recognized field.' % field)
 
-        if self._is_multi_row_insert:
-            defaults, callables = {}, {}
-            for field, default in model_meta.defaults.items():
-                if callable(default):
-                    callables[field] = default
-                else:
-                    defaults[field] = default
-        else:
-            defaults = dict(
-                (model_meta.fields[field], value)
-                for field, value in model_meta.get_default_dict().items())
-            callables = None
+        defaults, callables = {}, {}
+        for field, default in model_meta.defaults.items():
+            if callable(default):
+                callables[field] = default
+            else:
+                defaults[field] = default
 
         for row_dict in self._rows:
             field_row = dict(defaults)
