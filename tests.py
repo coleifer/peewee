@@ -319,6 +319,10 @@ class TagPostThrough(TestModel):
     class Meta:
         primary_key = CompositeKey('tag', 'post')
 
+class TagPostThroughAlt(TestModel):
+    tag = ForeignKeyField(Tag, related_name='posts_alt')
+    post = ForeignKeyField(Post, related_name='tags_alt')
+
 class Manufacturer(TestModel):
     name = CharField()
 
@@ -414,6 +418,7 @@ MODELS = [
     Tag,
     Post,
     TagPostThrough,
+    TagPostThroughAlt,
     Language,
     Snippet,
     Manufacturer,
@@ -2970,7 +2975,21 @@ class FromMultiTableTestCase(ModelTestCase):
 
 
 class PrefetchTestCase(ModelTestCase):
-    requires = [User, Blog, Comment, Parent, Child, Orphan, ChildPet, OrphanPet, Category]
+    requires = [
+        User,
+        Blog,
+        Comment,
+        Parent,
+        Child,
+        Orphan,
+        ChildPet,
+        OrphanPet,
+        Category,
+        Post,
+        Tag,
+        TagPostThroughAlt,
+    ]
+
     user_data = [
         ('u1', (('b1', ('b1-c1', 'b1-c2')), ('b2', ('b2-c1',)))),
         ('u2', ()),
@@ -3178,6 +3197,44 @@ class PrefetchTestCase(ModelTestCase):
             ('u3', 'b4', []),
             ('u4', 'b5', ['b5-c1', 'b5-c2']),
             ('u4', 'b6', ['b6-c1']),
+        ])
+
+    def test_aggregate_manytomany(self):
+        p1 = Post.create(title='p1')
+        p2 = Post.create(title='p2')
+        Post.create(title='p3')
+        p4 = Post.create(title='p4')
+        t1 = Tag.create(tag='t1')
+        t2 = Tag.create(tag='t2')
+        t3 = Tag.create(tag='t3')
+        TagPostThroughAlt.create(tag=t1, post=p1)
+        TagPostThroughAlt.create(tag=t2, post=p1)
+        TagPostThroughAlt.create(tag=t2, post=p2)
+        TagPostThroughAlt.create(tag=t3, post=p2)
+        TagPostThroughAlt.create(tag=t1, post=p4)
+        TagPostThroughAlt.create(tag=t2, post=p4)
+        TagPostThroughAlt.create(tag=t3, post=p4)
+
+        qc = len(self.queries())
+        query = (Post
+                 .select(Post, TagPostThroughAlt, Tag)
+                 .join(TagPostThroughAlt, JOIN_LEFT_OUTER)
+                 .join(Tag, JOIN_LEFT_OUTER)
+                 .order_by(Post.id, TagPostThroughAlt.post, Tag.id)
+                 .aggregate_rows())
+        results = []
+        for post in query:
+            post_data = [post.title]
+            for tpt in post.tags_alt:
+                post_data.append(tpt.tag.tag)
+            results.append(post_data)
+
+        self.assertEqual(len(self.queries()) - qc, 1)
+        self.assertEqual(results, [
+            ['p1', 't1', 't2'],
+            ['p2', 't2', 't3'],
+            ['p3'],
+            ['p4', 't1', 't2', 't3'],
         ])
 
     def test_aggregate_parent_child(self):
