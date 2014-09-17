@@ -394,7 +394,7 @@ class TestTSVectorField(BasePostgresqlExtTestCase):
     def assertMessages(self, expr, expected):
         query = FTSModel.select().where(expr).order_by(FTSModel.id)
         titles = [row.title for row in query]
-        self.assertEqual(map(int, titles), expected)
+        self.assertEqual(list(map(int, titles)), expected)
 
     def test_sql(self):
         query = FTSModel.select().where(Match(FTSModel.data, 'foo bar'))
