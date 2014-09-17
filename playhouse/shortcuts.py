@@ -1,4 +1,5 @@
 from peewee import *
+from peewee import Field
 
 
 def case(predicate, expression_tuples, default=None):
@@ -120,3 +121,43 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
             data[related_name] = accum
 
     return data
+
+
+def dict_to_model(model_class, data, ignore_unknown=False):
+    instance = model_class()
+    meta = model_class._meta
+    for key, value in data.items():
+        if key in meta.fields:
+            field = meta.fields[key]
+            is_backref = False
+        elif key in model_class._meta.reverse_rel:
+            field = meta.reverse_rel[key]
+            is_backref = True
+        elif ignore_unknown:
+            setattr(instance, key, value)
+            continue
+        else:
+            raise AttributeError('Unrecognized attribute "%s" for model '
+                                 'class %s.' % (key, model_class))
+
+        is_foreign_key = isinstance(field, ForeignKeyField)
+
+        if not is_backref and is_foreign_key and isinstance(value, dict):
+            setattr(
+                instance,
+                field.name,
+                dict_to_model(field.rel_model, value, ignore_unknown))
+        elif is_backref and isinstance(value, (list, tuple)):
+            instances = [
+                dict_to_model(
+                    field.model_class,
+                    row_data,
+                    ignore_unknown)
+                for row_data in value]
+            for rel_instance in instances:
+                setattr(rel_instance, field.name, instance)
+            setattr(instance, field.related_name, instances)
+        else:
+            setattr(instance, field.name, value)
+
+    return instance

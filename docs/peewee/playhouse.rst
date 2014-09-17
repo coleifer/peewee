@@ -1705,6 +1705,44 @@ be somewhat verbose or cumbersome using peewee's APIs.
         >>> model_to_dict(t2, recurse=False)
         {'id': 1, 'message': 'tweet-2', 'user': 1}
 
+.. py:function:: dict_to_model(model_class, data[, ignore_unknown=False])
+
+    Convert a dictionary of data to a model instance, creating related
+    instances where appropriate.
+
+    :param Model model_class: The model class to construct.
+    :param dict data: A dictionary of data. Foreign keys can be included as nested dictionaries, and back-references as lists of dictionaries.
+    :param bool ignore_unknown: Whether to allow unrecognized (non-field) attributes.
+
+    Examples:
+
+    .. code-block:: pycon
+
+        >>> user_data = {'id': 1, 'username': 'charlie'}
+        >>> user = dict_to_model(User, user_data)
+        >>> user
+        <__main__.User at 0x7fea8fa4d490>
+
+        >>> user.username
+        'charlie'
+
+        >>> note_data = {'id': 2, 'text': 'note text', 'user': user_data}
+        >>> note = dict_to_model(Note, note_data)
+        >>> note.text
+        'note text'
+        >>> note.user.username
+        'charlie'
+
+        >>> user_with_notes = {
+        ...     'id': 1,
+        ...     'username': 'charlie',
+        ...     'notes': [{'id': 1, 'text': 'note-1'}, {'id': 2, 'text': 'note-2'}]}
+        >>> user = dict_to_model(User, user_with_notes)
+        >>> user.notes[0].text
+        'note-1'
+        >>> user.notes[0].user.username
+        'charlie'
+
 
 .. _signals:
 

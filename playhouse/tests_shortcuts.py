@@ -295,3 +295,80 @@ class TestModelToDict(unittest.TestCase):
                 backrefs=True,
                 exclude=[User.id, Note.notetag_set, Note.id]),
             {'text': note.text, 'user': {'username': self.user.username}})
+
+
+class TestDictToModel(unittest.TestCase):
+    def setUp(self):
+        db.drop_tables(MODELS, safe=True)
+        db.create_tables(MODELS)
+        self.user = User.create(username='charlie')
+
+    def test_simple(self):
+        data = {'username': 'charlie', 'id': self.user.id}
+        inst = dict_to_model(User, data)
+        self.assertTrue(isinstance(inst, User))
+        self.assertEqual(inst.username, 'charlie')
+        self.assertEqual(inst.id, self.user.id)
+
+    def test_related(self):
+        data = {
+            'id': 2,
+            'text': 'note-1',
+            'user': {
+                'id': self.user.id,
+                'username': 'charlie'}}
+
+        with assert_query_count(0):
+            inst = dict_to_model(Note, data)
+            self.assertTrue(isinstance(inst, Note))
+            self.assertEqual(inst.id, 2)
+            self.assertEqual(inst.text, 'note-1')
+            self.assertTrue(isinstance(inst.user, User))
+            self.assertEqual(inst.user.id, self.user.id)
+            self.assertEqual(inst.user.username, 'charlie')
+
+        data['user'] = self.user.id
+
+        with assert_query_count(0):
+            inst = dict_to_model(Note, data)
+
+        with assert_query_count(1):
+            self.assertEqual(inst.user, self.user)
+
+    def test_backrefs(self):
+        data = {
+            'id': self.user.id,
+            'username': 'charlie',
+            'notes': [
+                {'id': 1, 'text': 'note-1'},
+                {'id': 2, 'text': 'note-2'},
+            ]}
+
+        with assert_query_count(0):
+            inst = dict_to_model(User, data)
+            self.assertEqual(inst.id, self.user.id)
+            self.assertEqual(inst.username, 'charlie')
+            self.assertTrue(isinstance(inst.notes, list))
+
+            note_1, note_2 = inst.notes
+            self.assertEqual(note_1.id, 1)
+            self.assertEqual(note_1.text, 'note-1')
+            self.assertEqual(note_1.user, self.user)
+
+            self.assertEqual(note_2.id, 2)
+            self.assertEqual(note_2.text, 'note-2')
+            self.assertEqual(note_2.user, self.user)
+
+    def test_unknown_attributes(self):
+        data = {
+            'id': self.user.id,
+            'username': 'peewee',
+            'xx': 'does not exist'}
+        self.assertRaises(
+            AttributeError,
+            dict_to_model,
+            User,
+            data)
+
+        inst = dict_to_model(User, data, ignore_unknown=True)
+        self.assertEqual(inst.xx, 'does not exist')
