@@ -48,3 +48,75 @@ def case(predicate, expression_tuples, default=None):
         clauses.extend((SQL('ELSE'), default))
     clauses.append(SQL('END'))
     return Clause(*clauses)
+
+def _clone_set(s):
+    if s:
+        return set(s)
+    return set()
+
+def model_to_dict(model, recurse=True, backrefs=False, only=None,
+                  exclude=None, seen=None):
+    """
+    Convert a model instance (and any related objects) to a dictionary.
+
+    :param bool recurse: Whether foreign-keys should be recursed.
+    :param bool backrefs: Whether lists of related objects should be recursed.
+    :param only: A list (or set) of field instances indicating which fields
+        should be included.
+    :param exclude: A list (or set) of field instances that should be
+        excluded from the dictionary.
+    """
+    data = {}
+    only = _clone_set(only)
+    exclude = _clone_set(exclude)
+    seen = _clone_set(seen)
+    exclude |= seen
+    model_class = type(model)
+
+    for field in model._meta.get_fields():
+        if field in exclude or (only and (field not in only)):
+            continue
+
+        field_data = model._data.get(field.name)
+        if isinstance(field, ForeignKeyField) and recurse:
+            if field_data:
+                seen.add(field)
+                rel_obj = getattr(model, field.name)
+                field_data = model_to_dict(
+                    rel_obj,
+                    recurse=recurse,
+                    backrefs=backrefs,
+                    only=only,
+                    exclude=exclude,
+                    seen=seen)
+            else:
+                field_data = {}
+
+        data[field.name] = field_data
+
+    if backrefs:
+        for related_name, foreign_key in model._meta.reverse_rel.items():
+            descriptor = getattr(model_class, related_name)
+            if descriptor in exclude or foreign_key in exclude:
+                continue
+            if only and (descriptor not in only or foreign_key not in only):
+                continue
+
+            accum = []
+            exclude.add(foreign_key)
+            related_query = getattr(
+                model,
+                related_name + '_prefetch',
+                getattr(model, related_name))
+
+            for rel_obj in related_query:
+                accum.append(model_to_dict(
+                    rel_obj,
+                    recurse=recurse,
+                    backrefs=backrefs,
+                    only=only,
+                    exclude=exclude))
+
+            data[related_name] = accum
+
+    return data
