@@ -1656,6 +1656,53 @@ be somewhat verbose or cumbersome using peewee's APIs.
           (2, "two")), "?").alias("id_string"))
 
 
+.. py:function:: model_to_dict(model[, recurse=True[, backrefs=False[, only=None[, exclude=None]]]])
+
+    Convert a model instance (and optionally any related instances) to
+    a dictionary.
+
+    :param bool recurse: Whether foreign-keys should be recursed.
+    :param bool backrefs: Whether lists of related objects should be recursed.
+    :param only: A list (or set) of field instances which should be included in the result dictionary.
+    :param exclude: A list (or set) of field instances which should be excluded from the result dictionary.
+
+    Examples:
+
+    .. code-block:: pycon
+
+        >>> user = User.create(username='charlie')
+        >>> model_to_dict(user)
+        {'id': 1, 'username': 'charlie'}
+
+        >>> model_to_dict(user, backrefs=True)
+        {'id': 1, 'tweets': [], 'username': 'charlie'}
+
+        >>> t1 = Tweet.create(user=user, message='tweet-1')
+        >>> t2 = Tweet.create(user=user, message='tweet-2')
+        >>> model_to_dict(user, backrefs=True)
+        {
+          'id': 1,
+          'tweets': [
+            {'id': 1, 'message': 'tweet-1'},
+            {'id': 2, 'message': 'tweet-2'},
+          ],
+          'username': 'charlie'
+        }
+
+        >>> model_to_dict(t1)
+        {
+          'id': 1,
+          'message': 'tweet-1',
+          'user': {
+            'id': 1,
+            'username': 'charlie'
+          }
+        }
+
+        >>> model_to_dict(t2, recurse=False)
+        {'id': 1, 'message': 'tweet-2', 'user': 1}
+
+
 .. _signals:
 
 Signal support
