@@ -124,9 +124,11 @@ currently:
 * :ref:`hstore support <hstore>`
 * :ref:`json support <pgjson>`
 * :ref:`server-side cursors <server_side_cursors>`
+* :ref:`full-text search <pg_fts>`
 * :py:class:`ArrayField` field type, for storing arrays.
 * :py:class:`HStoreField` field type, for storing key/value pairs.
 * :py:class:`JSONField` field type, for storing JSON data.
+* :py:class:`TSVectorField` field type, for storing full-text search data.
 * :py:class:`DateTimeTZ` field type, a timezone-aware datetime field.
 
 In the future I would like to add support for more of postgresql's features.
@@ -390,6 +392,48 @@ cursor, you can specify this when creating your :py:class:`PostgresqlExtDatabase
     call to ``iterator()`` will be handled transparently.
 
 
+.. _pg_fts:
+
+Full-text search
+^^^^^^^^^^^^^^^^
+
+Postgresql provides `sophisticated full-text search <http://www.postgresql.org/docs/9.3/static/textsearch.html>`_ using special data-types (``tsvector`` and ``tsquery``). Documents should be stored or converted to the ``tsvector`` type, and search queries should be converted to ``tsquery``.
+
+For simple cases, you can simply use the :py:func:`Match` function, which will automatically perform the appropriate conversions, and requires no schema changes:
+
+.. code-block:: python
+
+    def blog_search(query):
+        return Blog.select().where(
+            (Blog.status == Blog.STATUS_PUBLISHED) &
+            Match(Blog.content, query))
+
+The :py:func:`Match` function will automatically convert the left-hand operand to a ``tsvector``, and the right-hand operand to a ``tsquery``. For better performance, it is recommended you create a ``GIN`` index on the column you plan to search:
+
+.. code-block:: sql
+
+    CREATE INDEX blog_full_text_search ON blog USING gin(to_tsvector(content));
+
+Alternatively, you can use the :py:class:`TSVectorField` to maintain a dedicated column for storing ``tsvector`` data:
+
+.. code-block:: python
+
+    class Blog(Model):
+        content = TextField()
+        search_content = TSVectorField()
+
+You will need to explicitly convert the incoming text data to ``tsvector`` when inserting or updating the ``search_content`` field:
+
+.. code-block:: python
+
+    content = 'Excellent blog post about peewee ORM.'
+    blog_entry = Blog.create(
+        content=content,
+        search_content=fn.to_tsvector(content))
+
+.. note:: If you are using the :py:class:`TSVectorField`, it will automatically be created with a GIN index.
+
+
 postgres_ext API notes
 ^^^^^^^^^^^^^^^^^^^^^^
 
@@ -402,6 +446,7 @@ postgres_ext API notes
     * :py:class:`DateTimeTZField`
     * :py:class:`JSONField`
     * :py:class:`HStoreField`
+    * :py:class:`TSVectorField`
 
     :param str database: Name of database to connect to.
     :param bool server_side_cursors: Whether ``SELECT`` queries should utilize
@@ -714,6 +759,39 @@ postgres_ext API notes
         # will return the same thing as the previous example.
         get_data(APIResponse.data['foo']['bar'][0].as_json())
         # 'i1'
+
+.. py:function:: Match(field, query)
+
+    Generate a full-text search expression, automatically converting the left-hand operand to a ``tsvector``, and the right-hand operand to a ``tsquery``.
+
+    Example:
+
+    .. code-block:: python
+
+        def blog_search(query):
+            return Blog.select().where(
+                (Blog.status == Blog.STATUS_PUBLISHED) &
+                Match(Blog.content, query))
+
+.. py:class:: TSVectorField
+
+    Field type suitable for storing ``tsvector`` data. This field will automatically be created with a ``GIN`` index for improved search performance.
+
+    .. note::
+        Data stored in this field will still need to be manually converted to the ``tsvector`` type.
+
+     Example usage:
+
+     .. code-block:: python
+
+          class Blog(Model):
+              content = TextField()
+              search_content = TSVectorField()
+
+          content = 'this is a sample blog entry.'
+          blog_entry = Blog.create(
+              content=content,
+              search_content=fn.to_tsvector(content))  # Note `to_tsvector()`.
 
 
 .. _sqlite_ext:

@@ -66,21 +66,27 @@ class SSCursorModel(Model):
 class NormalModel(BaseModel):
     data = CharField()
 
+class FTSModel(BaseModel):
+    title = CharField()
+    data = TextField()
+    fts_data = TSVectorField()
+
 MODELS = [
     Testing,
     TestingID,
     UUIDData,
     UUIDRelatedModel,
     ArrayModel,
+    FTSModel,
 ]
 
-class PostgresExtTestCase(unittest.TestCase):
+class BasePostgresqlExtTestCase(unittest.TestCase):
     def setUp(self):
         drop_model_tables(MODELS, fail_silently=True)
         create_model_tables(MODELS)
-        self.t1 = None
-        self.t2 = None
 
+
+class TestUUIDField(BasePostgresqlExtTestCase):
     def test_uuid(self):
         uuid_str = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
         uuid_obj = uuid.UUID(uuid_str)
@@ -117,6 +123,8 @@ class PostgresExtTestCase(unittest.TestCase):
               .order_by(UUIDRelatedModel.value.desc()))
         self.assertEqual([r.value for r in ra], [2, 1])
 
+
+class TestTZField(BasePostgresqlExtTestCase):
     def test_tz_field(self):
         TZModel.drop_table(True)
         TZModel.create_table()
@@ -130,11 +138,18 @@ class PostgresExtTestCase(unittest.TestCase):
         tz = TZModel.get(TZModel.id == tz.id)
         self.assertFalse(tz.dt.tzinfo is None)
 
+
+class TestHStoreField(BasePostgresqlExtTestCase):
+    def setUp(self):
+        super(TestHStoreField, self).setUp()
+        self.t1 = None
+        self.t2 = None
+
     def create(self):
         self.t1 = Testing.create(name='t1', data={'k1': 'v1', 'k2': 'v2'})
         self.t2 = Testing.create(name='t2', data={'k2': 'v2', 'k3': 'v3'})
 
-    def test_storage(self):
+    def test_hstore_storage(self):
         self.create()
         self.assertEqual(Testing.get(name='t1').data, {'k1': 'v1', 'k2': 'v2'})
         self.assertEqual(Testing.get(name='t2').data, {'k2': 'v2', 'k3': 'v3'})
@@ -146,7 +161,7 @@ class PostgresExtTestCase(unittest.TestCase):
         t = Testing.create(name='t3', data={})
         self.assertEqual(Testing.get(name='t3').data, {})
 
-    def test_selecting(self):
+    def test_hstore_selecting(self):
         self.create()
 
         sq = Testing.select(Testing.name, Testing.data.keys().alias('keys'))
@@ -198,7 +213,7 @@ class PostgresExtTestCase(unittest.TestCase):
         sq = Testing.select(Testing.name).where(Testing.data['k1'] == 'v1')
         self.assertEqual([x.name for x in sq], ['t1'])
 
-    def test_filtering(self):
+    def test_hstore_filtering(self):
         self.create()
 
         sq = Testing.select().where(Testing.data == {'k1': 'v1', 'k2': 'v2'})
@@ -228,7 +243,7 @@ class PostgresExtTestCase(unittest.TestCase):
         sq = Testing.select().where(Testing.data.contains({'k2': 'v3'}))
         self.assertEqual([x.name for x in sq], [])
 
-    def test_filter_functions(self):
+    def test_hstore_filter_functions(self):
         self.create()
 
         sq = Testing.select().where(Testing.data.exists('k2') == True)
@@ -243,7 +258,7 @@ class PostgresExtTestCase(unittest.TestCase):
         sq = Testing.select().where(Testing.data.defined('k3') == True)
         self.assertEqual([x.name for x in sq], ['t2'])
 
-    def test_update_functions(self):
+    def test_hstore_update_functions(self):
         self.create()
 
         rc = Testing.update(data=Testing.data.update(k4='v4')).where(
@@ -285,6 +300,8 @@ class PostgresExtTestCase(unittest.TestCase):
             {'k3': 'v3', 'k6': 'v6'}
         ])
 
+
+class TestArrayField(BasePostgresqlExtTestCase):
     def _create_am(self):
         return ArrayModel.create(
             tags=['alpha', 'beta', 'gamma', 'delta'],
@@ -354,6 +371,57 @@ class PostgresExtTestCase(unittest.TestCase):
                .dicts()
                .get())
         self.assertEqual(res['ints'], [[3], [5]])
+
+
+class TestTSVectorField(BasePostgresqlExtTestCase):
+    messages = [
+        'A faith is a necessity to a man. Woe to him who believes in nothing.',
+        'All who call on God in true faith, earnestly from the heart, will '
+        'certainly be heard, and will receive what they have asked and desired.',
+        'Be faithful in small things because it is in them that your strength lies.',
+        'Faith consists in believing when it is beyond the power of reason to believe.',
+        'Faith has to do with things that are not seen and hope with things that are not at hand.',
+    ]
+
+    def setUp(self):
+        super(TestTSVectorField, self).setUp()
+        for idx, msg in enumerate(self.messages):
+            FTSModel.create(
+                title=str(idx),
+                data=msg,
+                fts_data=fn.to_tsvector(msg))
+
+    def assertMessages(self, expr, expected):
+        query = FTSModel.select().where(expr).order_by(FTSModel.id)
+        titles = [row.title for row in query]
+        self.assertEqual(map(int, titles), expected)
+
+    def test_sql(self):
+        query = FTSModel.select().where(Match(FTSModel.data, 'foo bar'))
+        self.assertEqual(query.sql(), (
+            'SELECT "t1"."id", "t1"."title", "t1"."data", "t1"."fts_data" '
+            'FROM "ftsmodel" AS t1 '
+            'WHERE (to_tsvector("t1"."data") @@ to_tsquery(%s))',
+            ['foo bar']
+        ))
+
+    def test_match_function(self):
+        self.assertMessages(Match(FTSModel.data, 'heart'), [1])
+        self.assertMessages(Match(FTSModel.data, 'god'), [1])
+        self.assertMessages(Match(FTSModel.data, 'faith'), [0, 1, 2, 3, 4])
+        self.assertMessages(Match(FTSModel.data, 'thing'), [2, 4])
+        self.assertMessages(Match(FTSModel.data, 'faith & things'), [2, 4])
+        self.assertMessages(Match(FTSModel.data, 'god | things'), [1, 2, 4])
+        self.assertMessages(Match(FTSModel.data, 'god & things'), [])
+
+    def test_tsvector_field(self):
+        self.assertMessages(FTSModel.fts_data.match('heart'), [1])
+        self.assertMessages(FTSModel.fts_data.match('god'), [1])
+        self.assertMessages(FTSModel.fts_data.match('faith'), [0, 1, 2, 3, 4])
+        self.assertMessages(FTSModel.fts_data.match('thing'), [2, 4])
+        self.assertMessages(FTSModel.fts_data.match('faith & things'), [2, 4])
+        self.assertMessages(FTSModel.fts_data.match('god | things'), [1, 2, 4])
+        self.assertMessages(FTSModel.fts_data.match('god & things'), [])
 
 
 class SSCursorTestCase(unittest.TestCase):

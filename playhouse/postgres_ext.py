@@ -6,6 +6,7 @@ Collection of postgres-specific extensions, currently including:
 import uuid
 
 from peewee import *
+from peewee import coerce_to_unicode
 from peewee import Expression
 from peewee import logger
 from peewee import Node
@@ -90,20 +91,23 @@ register_adapter(_Array, adapt_array)
 
 
 class IndexedField(Field):
-    def __init__(self, index_type='GiST', *args, **kwargs):
+    default_index_type = 'GiST'
+
+    def __init__(self, index_type=None, *args, **kwargs):
         kwargs.setdefault('index', True)  # By default, use an index.
         super(IndexedField, self).__init__(*args, **kwargs)
-        self.index_type = index_type
+        self.index_type = index_type or self.default_index_type
 
 
 class ArrayField(IndexedField):
-    def __init__(self, field_class=IntegerField, dimensions=1,
-                 index_type='GIN', *args, **kwargs):
+    default_index_type = 'GIN'
+
+    def __init__(self, field_class=IntegerField, dimensions=1, *args,
+                 **kwargs):
         self.__field = field_class(*args, **kwargs)
         self.dimensions = dimensions
         self.db_field = self.__field.get_db_field()
-        super(ArrayField, self).__init__(
-            index_type=index_type, *args, **kwargs)
+        super(ArrayField, self).__init__(*args, **kwargs)
 
     def __ddl_column__(self, column_type):
         sql = self.__field.__ddl_column__(column_type)
@@ -126,9 +130,6 @@ class DateTimeTZField(DateTimeField):
 
 class HStoreField(IndexedField):
     db_field = 'hash'
-
-    def __init__(self, *args, **kwargs):
-        super(HStoreField, self).__init__(*args, **kwargs)
 
     def __getitem__(self, key):
         return Expression(self, OP_HKEY, Param(key))
@@ -188,6 +189,21 @@ class JSONField(Field):
         return JsonPath(self, keys)
 
 
+class TSVectorField(IndexedField):
+    db_field = 'tsvector'
+    default_index_type = 'GIN'
+
+    def coerce(self, value):
+        return coerce_to_unicode(value or '')
+
+    def match(self, query):
+        return Expression(self, OP_TS_MATCH, fn.to_tsquery(query))
+
+
+def Match(field, query):
+    return Expression(fn.to_tsvector(field), OP_TS_MATCH, fn.to_tsquery(query))
+
+
 OP_HKEY = 'key'
 OP_HUPDATE = 'H@>'
 OP_HCONTAINS_DICT = 'H?&'
@@ -196,6 +212,7 @@ OP_HCONTAINS_KEY = 'H?|'
 OP_HCONTAINS_ANY_KEY = 'H||'
 OP_ACONTAINS = 'A@>'
 OP_ACONTAINS_ANY = 'A||'
+OP_TS_MATCH = 'T@@'
 
 
 class PostgresqlExtCompiler(QueryCompiler):
@@ -310,6 +327,7 @@ PostgresqlExtDatabase.register_fields({
     'datetime_tz': 'timestamp with time zone',
     'hash': 'hstore',
     'json': 'json',
+    'tsvector': 'tsvector',
 })
 PostgresqlExtDatabase.register_ops({
     OP_HCONTAINS_DICT: '@>',
@@ -320,6 +338,7 @@ PostgresqlExtDatabase.register_ops({
     OP_HUPDATE: '||',
     OP_ACONTAINS: '@>',
     OP_ACONTAINS_ANY: '&&',
+    OP_TS_MATCH: '@@',
 })
 
 def ServerSide(select_query):
