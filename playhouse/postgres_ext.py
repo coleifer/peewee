@@ -277,6 +277,7 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
 
     def __init__(self, *args, **kwargs):
         self.server_side_cursors = kwargs.pop('server_side_cursors', False)
+        self.register_hstore = kwargs.pop('register_hstore', True)
         super(PostgresqlExtDatabase, self).__init__(*args, **kwargs)
 
     def get_cursor(self, name=None):
@@ -307,7 +308,8 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
 
     def _connect(self, database, **kwargs):
         conn = super(PostgresqlExtDatabase, self)._connect(database, **kwargs)
-        register_hstore(conn, globally=True)
+        if self.register_hstore:
+            register_hstore(conn, globally=True)
         return conn
 
 

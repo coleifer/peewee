@@ -437,7 +437,7 @@ You will need to explicitly convert the incoming text data to ``tsvector`` when 
 postgres_ext API notes
 ^^^^^^^^^^^^^^^^^^^^^^
 
-.. py:class:: PostgresqlExtDatabase(database[, server_side_cursors=False[,...]])
+.. py:class:: PostgresqlExtDatabase(database[, server_side_cursors=False[, register_hstore=True[, ...]]])
 
     Identical to :py:class:`PostgresqlDatabase` but required in order to support:
 
@@ -451,9 +451,12 @@ postgres_ext API notes
     :param str database: Name of database to connect to.
     :param bool server_side_cursors: Whether ``SELECT`` queries should utilize
         server-side cursors.
+    :param bool register_hstore: Register the HStore extension with the connection.
 
     If using ``server_side_cursors``, also be sure to wrap your queries with
     :py:func:`ServerSide`.
+
+    If you do not wish to use the HStore extension, you can specify ``register_hstore=False``.
 
 .. py:function:: ServerSide(select_query)
 
