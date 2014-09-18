@@ -2697,7 +2697,7 @@ class ModelAPITestCase(ModelTestCase):
         u2 = User.create(username='u2')
         u3 = User.create(username='u2')
         users = User.select().order_by(User.username.desc(), User.id.desc())
-        self.assertEqual([u.get_id() for u in users], [u3.id, u2.id, u1.id])
+        self.assertEqual([u._get_pk_value() for u in users], [u3.id, u2.id, u1.id])
 
     def test_count_transaction(self):
         for i in range(10):
@@ -3499,11 +3499,11 @@ class CompositeKeyTestCase(ModelTestCase):
 
         tag = Tag.select().where(Tag.tag == 't1').get()
         post = Post.select().where(Post.title == 'p1').get()
-        self.assertEqual(tpt.get_id(), [tag, post])
+        self.assertEqual(tpt._get_pk_value(), [tag, post])
 
         # set_id is a no-op.
-        tpt.set_id(None)
-        self.assertEqual(tpt.get_id(), [tag, post])
+        tpt._set_pk_value(None)
+        self.assertEqual(tpt._get_pk_value(), [tag, post])
 
     def test_querying(self):
         posts = (Post.select()
@@ -4253,12 +4253,12 @@ class DBColumnTestCase(ModelTestCase):
     def test_db_column(self):
         u1 = DBUser.create(username='u1')
         u2 = DBUser.create(username='u2')
-        u2_db = DBUser.get(DBUser.user_id==u2.get_id())
+        u2_db = DBUser.get(DBUser.user_id==u2._get_pk_value())
         self.assertEqual(u2_db.username, 'u2')
 
         b1 = DBBlog.create(user=u1, title='b1')
         b2 = DBBlog.create(user=u2, title='b2')
-        b2_db = DBBlog.get(DBBlog.blog_id==b2.get_id())
+        b2_db = DBBlog.get(DBBlog.blog_id==b2._get_pk_value())
         self.assertEqual(b2_db.user.user_id, u2.user_id)
         self.assertEqual(b2_db.title, 'b2')
 

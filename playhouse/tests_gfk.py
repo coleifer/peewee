@@ -84,7 +84,7 @@ class GFKTestCase(unittest.TestCase):
         t.save()
 
         t_db = Tag.get(Tag.id == t.id)
-        self.assertEqual(t_db.object_id, t_db.get_id())
+        self.assertEqual(t_db.object_id, t_db._get_pk_value())
         self.assertEqual(t_db.object_type, 'tag')
         self.assertEqual(t_db.object, t_db)
 

@@ -546,7 +546,7 @@ if json_ok():
         def test_json_field(self):
             data = {'k1': ['a1', 'a2'], 'k2': {'k3': 'v3'}}
             tj = TestingJson.create(data=data)
-            tj_db = TestingJson.get(tj.pk_expr())
+            tj_db = TestingJson.get(tj._pk_expr())
             self.assertEqual(tj_db.data, data)
 
         def test_json_lookup_methods(self):
@@ -561,7 +561,7 @@ if json_ok():
             def assertLookup(lookup, expected):
                 query = (TestingJson
                          .select(lookup)
-                         .where(tj.pk_expr())
+                         .where(tj._pk_expr())
                          .dicts())
                 self.assertEqual(query.get(), expected)
 
@@ -598,7 +598,7 @@ if json_ok():
             def assertPath(path, expected):
                 query = (TestingJson
                          .select(path)
-                         .where(tj.pk_expr())
+                         .where(tj._pk_expr())
                          .dicts())
                 self.assertEqual(query.get(), expected)
 

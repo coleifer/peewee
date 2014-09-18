@@ -41,7 +41,7 @@ class SignalsTestCase(unittest.TestCase):
 
         @signals.pre_save()
         def pre_save(sender, instance, created):
-            state.append((sender, instance, instance.get_id(), created))
+            state.append((sender, instance, instance._get_pk_value(), created))
         m = ModelA()
         m.save()
         self.assertEqual(state, [(ModelA, m, None, True)])
@@ -55,7 +55,7 @@ class SignalsTestCase(unittest.TestCase):
 
         @signals.post_save()
         def post_save(sender, instance, created):
-            state.append((sender, instance, instance.get_id(), created))
+            state.append((sender, instance, instance._get_pk_value(), created))
         m = ModelA()
         m.save()
 

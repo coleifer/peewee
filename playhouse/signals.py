@@ -63,7 +63,8 @@ class Model(_Model):
         post_init.send(self)
 
     def save(self, *args, **kwargs):
-        created = kwargs.get('force_insert', False) or not bool(self.get_id())
+        pk_value = self._get_pk_value()
+        created = kwargs.get('force_insert', False) or not bool(pk_value)
         pre_save.send(self, created=created)
         super(Model, self).save(*args, **kwargs)
         post_save.send(self, created=created)

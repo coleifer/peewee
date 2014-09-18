@@ -1048,7 +1048,7 @@ class ForeignKeyField(IntegerField):
 
     def db_value(self, value):
         if isinstance(value, self.rel_model):
-            value = value.get_id()
+            value = value._get_pk_value()
         return self.to_field.db_value(value)
 
 
@@ -1305,7 +1305,7 @@ class QueryCompiler(object):
                 params = [
                     conv.to_field.db_value(getattr(node, conv.to_field.name))]
             else:
-                params = [node.get_id()]
+                params = [node._get_pk_value()]
         elif (isclass(node) and issubclass(node, Model)) or \
                 isinstance(node, ModelAlias):
             entity = node._as_entity().alias(alias_map[node])
@@ -1915,7 +1915,7 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
         _constructed = self.construct_instances(row)
         primary_instance = _constructed[self.model]
         for model_class, instance in _constructed.items():
-            identity_map[model_class] = {instance.get_id(): instance}
+            identity_map[model_class] = {instance._get_pk_value(): instance}
 
         model_data = self.read_model_data(row)
         while True:
@@ -1939,8 +1939,9 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
             for model_class, instance in new_instances.items():
                 # Do not include any instances which are comprised solely of
                 # NULL values.
+                pk_value = instance._get_pk_value()
                 if [val for val in instance._data.values() if val is not None]:
-                    identity_map[model_class][instance.get_id()] = instance
+                    identity_map[model_class][pk_value] = instance
 
         stack = [self.model]
         while stack:
@@ -3473,14 +3474,16 @@ class Model(with_metaclass(BaseModel)):
             return Entity(cls._meta.schema, cls._meta.db_table)
         return Entity(cls._meta.db_table)
 
-    def get_id(self):
+    def _get_pk_value(self):
         return getattr(self, self._meta.primary_key.name)
+    get_id = _get_pk_value  # Backwards-compatibility.
 
-    def set_id(self, id):
-        setattr(self, self._meta.primary_key.name, id)
+    def _set_pk_value(self, value):
+        setattr(self, self._meta.primary_key.name, value)
+    set_id = _set_pk_value  # Backwards-compatibility.
 
-    def pk_expr(self):
-        return self._meta.primary_key == self.get_id()
+    def _pk_expr(self):
+        return self._meta.primary_key == self._get_pk_value()
 
     def prepared(self):
         pass
@@ -3497,18 +3500,18 @@ class Model(with_metaclass(BaseModel)):
         pk_field = self._meta.primary_key
         if only:
             field_dict = self._prune_fields(field_dict, only)
-        if self.get_id() is not None and not force_insert:
+        if self._get_pk_value() is not None and not force_insert:
             if not isinstance(pk_field, CompositeKey):
                 field_dict.pop(pk_field.name, None)
             else:
                 field_dict = self._prune_fields(field_dict, self.dirty_fields)
-            rows = self.update(**field_dict).where(self.pk_expr()).execute()
+            rows = self.update(**field_dict).where(self._pk_expr()).execute()
         else:
-            pk = self.get_id()
+            pk = self._get_pk_value()
             pk_from_cursor = self.insert(**field_dict).execute()
             if pk_from_cursor is not None:
                 pk = pk_from_cursor
-            self.set_id(pk)  # Do not overwrite current ID with a None value.
+            self._set_pk_value(pk)  # Do not overwrite current ID with None.
             rows = 1
         self._dirty.clear()
         return rows
@@ -3521,7 +3524,7 @@ class Model(with_metaclass(BaseModel)):
         return [f for f in self._meta.get_fields() if f.name in self._dirty]
 
     def dependencies(self, search_nullable=False):
-        query = self.select().where(self.pk_expr())
+        query = self.select().where(self._pk_expr())
         stack = [(type(self), query)]
         seen = set()
 
@@ -3546,13 +3549,13 @@ class Model(with_metaclass(BaseModel)):
                     model.update(**{fk.name: None}).where(query).execute()
                 else:
                     model.delete().where(query).execute()
-        return self.delete().where(self.pk_expr()).execute()
+        return self.delete().where(self._pk_expr()).execute()
 
     def __eq__(self, other):
         return (
             other.__class__ == self.__class__ and
-            self.get_id() is not None and
-            other.get_id() == self.get_id())
+            self._get_pk_value() is not None and
+            other._get_pk_value() == self._get_pk_value())
 
     def __ne__(self, other):
         return not self == other

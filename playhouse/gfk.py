@@ -84,7 +84,7 @@ class GFKField(object):
     def __set__(self, instance, value):
         instance._obj_cache[self.att_name] = value
         instance._data[self.model_type_field] = value._meta.db_table
-        instance._data[self.model_id_field] = value.get_id()
+        instance._data[self.model_id_field] = value._get_pk_value()
 
 class ReverseGFK(object):
     def __init__(self, model, model_type_field='object_type',
@@ -97,7 +97,7 @@ class ReverseGFK(object):
         if instance:
             return self.model_class.select().where(
                 (self.model_type_field == instance._meta.db_table) &
-                (self.model_id_field == instance.get_id())
+                (self.model_id_field == instance._get_pk_value())
             )
         else:
             return self.model_class.select().where(
@@ -106,7 +106,7 @@ class ReverseGFK(object):
 
     def __set__(self, instance, value):
         mtv = instance._meta.db_table
-        miv = instance.get_id()
+        miv = instance._get_pk_value()
         if (isinstance(value, SelectQuery) and
                 value.model_class == self.model_class):
             uq = UpdateQuery(self.model_class, {
