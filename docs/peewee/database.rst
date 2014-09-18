@@ -196,7 +196,7 @@ To connect to a MySQL database, we will use :py:class:`MySQLDatabase`. After the
 Multi-threaded applications
 ---------------------------
 
-Some database engines may not allow a connection to be shared across threads, notably SQLite. If you would like peewee to maintain a connection-per-thread, instantiate your database with ``threadlocals=True`` (*recommended*):
+Some database engines may not allow a connection to be shared across threads, notably SQLite. As of version 2.3.3, peewee's default behavior is to maintain a connection-per-thread. For earlier versions, instantiate your database with ``threadlocals=True``:
 
 .. code-block:: python
 
@@ -204,7 +204,7 @@ Some database engines may not allow a connection to be shared across threads, no
 
 The above code will cause peewee to store the connection state in a thread local; each thread gets its own separate connection.
 
-Alternatively, Python sqlite3 module can share a connection across different threads, but you have to disable runtime checks to reuse the single connection:
+Alternatively, Python sqlite3 module can share a connection across different threads, but you have to disable runtime checks to reuse the single connection. This behavior can lead to subtle bugs regarding nested transactions when not used with care, so typically I do not recommend using this option.
 
 .. code-block:: python
 
@@ -213,6 +213,9 @@ Alternatively, Python sqlite3 module can share a connection across different thr
 .. note::
     For web applications or any multi-threaded (including green threads!) app,
     it is best to set ``threadlocals=True`` when instantiating your database.
+
+    As of version 2.3.3, this is the default behavior when instantiating your
+    database, but for earlier versions you will need to specify this manually.
 
 .. _deferring_initialization:
 
@@ -306,7 +309,7 @@ The following pooled database classes are available:
 * :py:class:`PooledMySQLDatabase`
 
 .. note::
-    If you have a multi-threaded application (including green threads), be sure to specify ``threadlocals=True`` when instantiating your pooled database.
+    If you have a multi-threaded application (including green threads), be sure to specify ``threadlocals=True`` when instantiating your pooled database. As of versoin 2.3.3, this is the default behavior.
 
 .. _using_read_slaves:
 

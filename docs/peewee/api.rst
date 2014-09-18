@@ -1547,7 +1547,7 @@ Query Types
 Database and its subclasses
 ---------------------------
 
-.. py:class:: Database(database[, threadlocals=False[, autocommit=True[, fields=None[, ops=None[, autorollback=False[, **connect_kwargs]]]]]])
+.. py:class:: Database(database[, threadlocals=True[, autocommit=True[, fields=None[, ops=None[, autorollback=False[, **connect_kwargs]]]]]])
 
     :param database: the name of the database (or filename if using sqlite)
     :param bool threadlocals: whether to store connections in a threadlocal

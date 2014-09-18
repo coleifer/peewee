@@ -22,7 +22,7 @@ app.config.from_object(__name__)
 
 # create a peewee database instance -- our models will use this database to
 # persist information
-database = SqliteDatabase(DATABASE, threadlocals=True)
+database = SqliteDatabase(DATABASE)
 
 # model definitions -- the standard "pattern" is to define a base model class
 # that specifies which database to use.  then, any subclasses will automatically

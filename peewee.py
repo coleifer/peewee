@@ -2631,7 +2631,7 @@ class Database(object):
         'OperationalError': OperationalError,
         'ProgrammingError': ProgrammingError}
 
-    def __init__(self, database, threadlocals=False, autocommit=True,
+    def __init__(self, database, threadlocals=True, autocommit=True,
                  fields=None, ops=None, autorollback=False, **connect_kwargs):
         self.init(database, **connect_kwargs)
 

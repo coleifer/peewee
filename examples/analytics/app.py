@@ -51,8 +51,7 @@ app.config.from_object(__name__)
 
 database = PostgresqlExtDatabase(
     DATABASE_NAME,
-    user='postgres',
-    threadlocals=True)
+    user='postgres')
 
 class BaseModel(Model):
     class Meta:

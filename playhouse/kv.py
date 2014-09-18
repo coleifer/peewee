@@ -8,15 +8,15 @@ from peewee import Node
 
 try:
     from playhouse.apsw_ext import APSWDatabase
-    def KeyValueDatabase(db_name):
-        return APSWDatabase(db_name)
+    def KeyValueDatabase(db_name, **kwargs):
+        return APSWDatabase(db_name, **kwargs)
 except ImportError:
-    def KeyValueDatabase(db_name):
-        return SqliteDatabase(db_name, check_same_thread=False)
+    def KeyValueDatabase(db_name, **kwargs):
+        return SqliteDatabase(db_name, check_same_thread=False, **kwargs)
 
 Sentinel = type('Sentinel', (object,), {})
 
-key_value_db = KeyValueDatabase(':memory:')
+key_value_db = KeyValueDatabase(':memory:', threadlocals=False)
 
 class PickleField(BlobField):
     def db_value(self, value):

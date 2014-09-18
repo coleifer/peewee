@@ -2987,6 +2987,7 @@ class PrefetchTestCase(ModelTestCase):
         Category,
         Post,
         Tag,
+        TagPostThrough,
         TagPostThroughAlt,
     ]
 
@@ -4373,7 +4374,7 @@ class ConcurrencyTestCase(ModelTestCase):
 
     def setUp(self):
         self._orig_db = test_db
-        kwargs = {'threadlocals': True}
+        kwargs = {}
         try:  # Some engines need the extra kwargs.
             kwargs.update(test_db.connect_kwargs)
         except:

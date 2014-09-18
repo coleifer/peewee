@@ -52,7 +52,7 @@ class TestPooledDatabase(TestCase):
         self.assertEqual(self.db.get_conn(), 1)
 
     def test_concurrent_connections(self):
-        db = TestDB('testing', threadlocals=True)
+        db = TestDB('testing')
         signal = threading.Event()
 
         def open_conn():

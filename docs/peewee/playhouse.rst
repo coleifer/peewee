@@ -2276,19 +2276,7 @@ are recycled, as well as an upper bound on the number of open connections.
 If your application is single-threaded, only one connection will be opened.
 
 If your application is multi-threaded (this includes green threads) and you specify `threadlocals=True`
-when instantiating your database, then up to `max_connections` will be opened.
-
-.. note:: If you intend to open multiple concurrent connections, specify `threadlocals=True` when creating
-    your database, e.g.
-
-    .. code-block:: python
-
-        db = PooledPostgresqlDatabase(
-            'my_db',
-            max_connections=8,
-            stale_timeout=600,
-            user='postgres',
-            threadlocals=True)
+when instantiating your database, then up to `max_connections` will be opened. As of version 2.3.3, this is the default behavior.
 
 .. py:class:: PooledDatabase(database[, max_connections=20[, stale_timeout=None[, **kwargs]]])
 
