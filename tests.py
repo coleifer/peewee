@@ -4773,6 +4773,7 @@ class _SqliteDateTestHelper(BasePeeweeTestCase):
             datetime_field = DateTimeField()
             date_field = DateField()
             time_field = TimeField()
+            null_datetime_field = DateTimeField(null=True)
 
             class Meta:
                 database = dp_db
@@ -4818,6 +4819,16 @@ class SqliteDatePartTestCase(_SqliteDateTestHelper):
         query = SqDp.select().where(fn.date_part('month', SqDp.datetime_field) == 3)
         self.assertEqual(query.count(), 0)
 
+        null_sqdp = SqDp.create(
+            datetime_field=datetime.datetime.now(),
+            date_field=datetime.date.today(),
+            time_field=datetime.time(0, 0),
+            null_datetime_field=datetime.datetime(2014, 1, 1))
+        query = SqDp.select().where(
+            fn.date_part('year', SqDp.null_datetime_field) == 2014)
+        self.assertEqual(query.count(), 1)
+        self.assertEqual(list(query), [null_sqdp])
+
 
 class SqliteDateTruncTestCase(_SqliteDateTestHelper):
     def test_sqlite_date_trunc(self):
@@ -4837,6 +4848,13 @@ class SqliteDateTruncTestCase(_SqliteDateTestHelper):
             '2000-01-02 03:04', '2000-02-03 04:05'])
         assertQuery(SqDp.datetime_field, 'second', [
             '2000-01-02 03:04:05', '2000-02-03 04:05:06'])
+
+        null_sqdp = SqDp.create(
+            datetime_field=datetime.datetime.now(),
+            date_field=datetime.date.today(),
+            time_field=datetime.time(0, 0),
+            null_datetime_field=datetime.datetime(2014, 1, 1))
+        assertQuery(SqDp.null_datetime_field, 'year', [None, None, '2014'])
 
 
 class AutoRollbackTestCase(ModelTestCase):
