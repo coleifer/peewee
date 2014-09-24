@@ -535,11 +535,11 @@ class Introspector(object):
                 table, self.schema)
             model_names[table] = self.make_model_name(table)
 
-        # On the second pass convert all foreign keys.
-        for table in tables:
             for column_name, column in columns[table].items():
                 column.name = self.make_column_name(column_name)
 
+        # On the second pass convert all foreign keys.
+        for table in tables:
             for foreign_key in foreign_keys[table]:
                 src = columns[foreign_key.table][foreign_key.column]
                 try:
