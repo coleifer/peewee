@@ -101,13 +101,13 @@ get_bsddb3_source () {
 build_bsddb3 () {
   BSDDB3_SRC_DIR=`ls $PYBSDDB3_DIR | head -1`
   cd "${PYBSDDB3_DIR}/${BSDDB3_SRC_DIR}"
-  YES_I_HAVE_THE_RIGHT_TO_USE_THIS_BERKELEY_DB_VERSION=1 BERKELEY_DB_DIR=$BDB_BUILD_DIR python setup.py build
+  YES_I_HAVE_THE_RIGHT_TO_USE_THIS_BERKELEY_DB_VERSION=1 python setup.py build --berkeley-db=$BDB_BUILD_DIR
 }
 
 install_bsddb3 () {
   BSDDB3_SRC_DIR=`ls $PYBSDDB3_DIR | head -1`
   cd "${PYBSDDB3_DIR}/${BSDDB3_SRC_DIR}"
-  python setup.py install
+  YES_I_HAVE_THE_RIGHT_TO_USE_THIS_BERKELEY_DB_VERSION=1 python setup.py install --berkeley-db=$BDB_BUILD_DIR
 }
 
 if [[ ! -d $BDB_SRC_DIR ]]; then
