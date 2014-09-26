@@ -2100,6 +2100,43 @@ class ModelQueryResultWrapperTestCase(ModelTestCase):
             ('u2', 'b-u2'),
             ('u2', 'b-u2-2')])
 
+
+class TestModelQueryResultForeignKeys(ModelTestCase):
+    requires = [Parent, Child]
+
+    def test_foreign_key_assignment(self):
+        parent = Parent.create(data='p1')
+        child = Child.create(parent=parent, data='c1')
+        ParentAlias = Parent.alias()
+
+        query = Child.select(Child, ParentAlias)
+
+        ljoin = (ParentAlias.id == Child.parent)
+        rjoin = (Child.parent == ParentAlias.id)
+
+        lhs_alias = query.join(ParentAlias, on=ljoin)
+        rhs_alias = query.join(ParentAlias, on=rjoin)
+
+        self.assertJoins(lhs_alias, [
+            'INNER JOIN "parent" AS parent '
+            'ON ("parent"."id" = "child"."parent_id")'])
+
+        self.assertJoins(rhs_alias, [
+            'INNER JOIN "parent" AS parent '
+            'ON ("child"."parent_id" = "parent"."id")'])
+
+        query_count = len(self.queries())
+        lchild = lhs_alias.get()
+        self.assertEqual(lchild.id, child.id)
+        self.assertEqual(lchild.parent.id, parent.id)
+        self.assertEqual(len(self.queries()) - query_count, 1)
+
+        query_count = len(self.queries())
+        rchild = rhs_alias.get()
+        self.assertEqual(rchild.id, child.id)
+        self.assertEqual(rchild.parent.id, parent.id)
+        self.assertEqual(len(self.queries()) - query_count, 1)
+
 class SelectRelatedNonPKFKTestCase(ModelTestCase):
     requires = [Package, PackageItem]
 
