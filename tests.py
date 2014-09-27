@@ -1904,50 +1904,39 @@ class QueryResultWrapperTestCase(ModelTestCase):
             self.assertEqual([u.username for u in users], ['u%d' % i for i in nums])
 
         self.create_users(10)
-        qc = len(self.queries())
 
-        uq = User.select().order_by(User.id)
+        with self.assertQueryCount(1):
+            uq = User.select().order_by(User.id)
+            for i in range(2):
+                res = uq[0]
+                self.assertEqual(res.username, 'u1')
 
-        for i in range(2):
-            res = uq[0]
-            self.assertEqual(res.username, 'u1')
+        with self.assertQueryCount(0):
+            for i in range(2):
+                res = uq[1]
+                self.assertEqual(res.username, 'u2')
 
-        qc2 = len(self.queries())
-        self.assertEqual(qc2 - qc, 1)
+        with self.assertQueryCount(0):
+            for i in range(2):
+                res = uq[:3]
+                assertUsernames(res, [1, 2, 3])
 
-        for i in range(2):
-            res = uq[1]
-            self.assertEqual(res.username, 'u2')
+        with self.assertQueryCount(0):
+            for i in range(2):
+                res = uq[2:5]
+                assertUsernames(res, [3, 4, 5])
 
-        qc2 = len(self.queries())
-        self.assertEqual(qc2 - qc, 1)
-
-        for i in range(2):
-            res = uq[:3]
-            assertUsernames(res, [1, 2, 3])
-
-        qc2 = len(self.queries())
-        self.assertEqual(qc2 - qc, 1)
-
-        for i in range(2):
-            res = uq[2:5]
-            assertUsernames(res, [3, 4, 5])
-
-        qc2 = len(self.queries())
-        self.assertEqual(qc2 - qc, 1)
-
-        for i in range(2):
-            res = uq[5:]
-            assertUsernames(res, [6, 7, 8, 9, 10])
-
-        qc2 = len(self.queries())
-        self.assertEqual(qc2 - qc, 1)
+        with self.assertQueryCount(0):
+            for i in range(2):
+                res = uq[5:]
+                assertUsernames(res, [6, 7, 8, 9, 10])
 
         self.assertRaises(IndexError, uq.__getitem__, 10)
         self.assertRaises(ValueError, uq.__getitem__, -1)
 
-        res = uq[10:]
-        self.assertEqual(res, [])
+        with self.assertQueryCount(0):
+            res = uq[10:]
+            self.assertEqual(res, [])
 
     def test_indexing_fill_cache(self):
         def assertUser(query_or_qr, idx):
@@ -1955,18 +1944,18 @@ class QueryResultWrapperTestCase(ModelTestCase):
 
         self.create_users(10)
         uq = User.select().order_by(User.id)
-        qc = len(self.queries())
 
-        # Ensure we can grab the first 5 users and that it only costs 1 query.
-        for i in range(5):
-            assertUser(uq, i)
-        self.assertEqual(len(self.queries()) - qc, 1)
+        with self.assertQueryCount(1):
+            # Ensure we can grab the first 5 users in 1 query.
+            for i in range(5):
+                assertUser(uq, i)
 
         # Iterate in reverse and ensure only costs 1 query.
         uq = User.select().order_by(User.id)
-        for i in reversed(range(10)):
-            assertUser(uq, i)
-        self.assertEqual(len(self.queries()) - qc, 2)
+
+        with self.assertQueryCount(1):
+            for i in reversed(range(10)):
+                assertUser(uq, i)
 
         # Execute the query and get reference to result wrapper.
         query = User.select().order_by(User.id)
@@ -2105,30 +2094,22 @@ class ModelQueryResultWrapperTestCase(ModelTestCase):
         sq = get_query()
         self.assertEqual(sq.count(), 2)
 
-        qc = len(self.queries())
-
-        results = list(sq)
-        expected = (('b1', 'c1'), ('b2', 'c2'))
-        for i, (b_data, c_data) in enumerate(expected):
-            self.assertEqual(results[i].rel_b.data, b_data)
-            self.assertEqual(results[i].rel_b.field.data, c_data)
-
-        qc2 = len(self.queries())
-        self.assertEqual(qc2 - qc, 1)
+        with self.assertQueryCount(1):
+            results = list(sq)
+            expected = (('b1', 'c1'), ('b2', 'c2'))
+            for i, (b_data, c_data) in enumerate(expected):
+                self.assertEqual(results[i].rel_b.data, b_data)
+                self.assertEqual(results[i].rel_b.field.data, c_data)
 
         sq = get_query(JOIN_LEFT_OUTER)
         self.assertEqual(sq.count(), 3)
 
-        qc = len(self.queries())
-
-        results = list(sq)
-        expected = (('b1', 'c1'), ('b2', 'c2'), ('b3', None))
-        for i, (b_data, c_data) in enumerate(expected):
-            self.assertEqual(results[i].rel_b.data, b_data)
-            self.assertEqual(results[i].rel_b.field.data, c_data)
-
-        qc2 = len(self.queries())
-        self.assertEqual(qc2 - qc, 1)
+        with self.assertQueryCount(1):
+            results = list(sq)
+            expected = (('b1', 'c1'), ('b2', 'c2'), ('b3', None))
+            for i, (b_data, c_data) in enumerate(expected):
+                self.assertEqual(results[i].rel_b.data, b_data)
+                self.assertEqual(results[i].rel_b.field.data, c_data)
 
     def test_backward_join(self):
         u1 = User.create(username='u1')
@@ -2218,17 +2199,15 @@ class TestModelQueryResultForeignKeys(ModelTestCase):
             'INNER JOIN "parent" AS parent '
             'ON ("child"."parent_id" = "parent"."id")'])
 
-        query_count = len(self.queries())
-        lchild = lhs_alias.get()
-        self.assertEqual(lchild.id, child.id)
-        self.assertEqual(lchild.parent.id, parent.id)
-        self.assertEqual(len(self.queries()) - query_count, 1)
+        with self.assertQueryCount(1):
+            lchild = lhs_alias.get()
+            self.assertEqual(lchild.id, child.id)
+            self.assertEqual(lchild.parent.id, parent.id)
 
-        query_count = len(self.queries())
-        rchild = rhs_alias.get()
-        self.assertEqual(rchild.id, child.id)
-        self.assertEqual(rchild.parent.id, parent.id)
-        self.assertEqual(len(self.queries()) - query_count, 1)
+        with self.assertQueryCount(1):
+            rchild = rhs_alias.get()
+            self.assertEqual(rchild.id, child.id)
+            self.assertEqual(rchild.parent.id, parent.id)
 
 class SelectRelatedNonPKFKTestCase(ModelTestCase):
     requires = [Package, PackageItem]
@@ -2242,23 +2221,25 @@ class SelectRelatedNonPKFKTestCase(ModelTestCase):
         pi22 = PackageItem.create(title='p22', package='102')
 
         # missing PackageItem.package_id.
-        qc = len(self.queries())
-        items = (PackageItem
-                 .select(PackageItem.id, PackageItem.title, Package.barcode)
-                 .join(Package)
-                 .where(Package.barcode == '101')
-                 .order_by(PackageItem.id))
-        self.assertEqual([i.package.barcode for i in items], ['101', '101'])
-        self.assertEqual(len(self.queries()) - qc, 1)
+        with self.assertQueryCount(1):
+            items = (PackageItem
+                     .select(
+                         PackageItem.id, PackageItem.title, Package.barcode)
+                     .join(Package)
+                     .where(Package.barcode == '101')
+                     .order_by(PackageItem.id))
+            self.assertEqual(
+                [i.package.barcode for i in items],
+                ['101', '101'])
 
-        qc = len(self.queries())
-        items = (PackageItem
-                 .select(PackageItem.id, PackageItem.title, PackageItem.package, Package.id)
-                 .join(Package)
-                 .where(Package.barcode == '101')
-                 .order_by(PackageItem.id))
-        self.assertEqual([i.package.id for i in items], [p1.id, p1.id])
-        self.assertEqual(len(self.queries()) - qc, 1)
+        with self.assertQueryCount(1):
+            items = (PackageItem
+                     .select(
+                         PackageItem.id, PackageItem.title, PackageItem.package, Package.id)
+                     .join(Package)
+                     .where(Package.barcode == '101')
+                     .order_by(PackageItem.id))
+            self.assertEqual([i.package.id for i in items], [p1.id, p1.id])
 
 class NonPKFKBasicTestCase(ModelTestCase):
     requires = [Package, PackageItem]
@@ -2467,15 +2448,14 @@ class ModelQueryTestCase(ModelTestCase):
         # Simulate database not supporting multiple insert (older versions of
         # sqlite).
         test_db.insert_many = False
-        qc = len(self.queries())
-        iq = User.insert_many([
-            {'username': 'u1'},
-            {'username': 'u2'},
-            {'username': 'u3'},
-            {'username': 'u4'}])
-        self.assertTrue(iq.execute())
-        qc2 = len(self.queries())
-        self.assertEqual(qc2 - qc, 4)
+        with self.assertQueryCount(4):
+            iq = User.insert_many([
+                {'username': 'u1'},
+                {'username': 'u2'},
+                {'username': 'u3'},
+                {'username': 'u4'}])
+            self.assertTrue(iq.execute())
+
         self.assertEqual(User.select().count(), 4)
 
     def test_delete(self):
@@ -2489,15 +2469,18 @@ class ModelQueryTestCase(ModelTestCase):
     def test_raw(self):
         self.create_users(3)
 
-        qc = len(self.queries())
-        rq = User.raw('select * from users where username IN (%s,%s)' % (INT,INT), 'u1', 'u3')
-        self.assertEqual([u.username for u in rq], ['u1', 'u3'])
+        with self.assertQueryCount(1):
+            rq = User.raw(
+                'select * from users where username IN (%s,%s)' % (INT,INT),
+                'u1', 'u3')
+            self.assertEqual([u.username for u in rq], ['u1', 'u3'])
 
-        # iterate again
-        self.assertEqual([u.username for u in rq], ['u1', 'u3'])
-        self.assertEqual(len(self.queries()) - qc, 1)
+            # iterate again
+            self.assertEqual([u.username for u in rq], ['u1', 'u3'])
 
-        rq = User.raw('select id, username, %s as secret from users where username = %s' % (INT,INT), 'sh', 'u2')
+        rq = User.raw(
+            'select id, username, %s as secret from users where username = %s' % (INT,INT),
+            'sh', 'u2')
         self.assertEqual([u.secret for u in rq], ['sh'])
         self.assertEqual([u.username for u in rq], ['u2'])
 
@@ -2578,18 +2561,17 @@ class ModelAPITestCase(ModelTestCase):
         b = Blog.create(user=u1, title='b')
 
         blog = Blog.get(Blog.pk == b)
-        qc = len(self.queries())
-        self.assertEqual(blog.user.id, u1.id)
-        self.assertEqual(len(self.queries()), qc + 1)
+        with self.assertQueryCount(1):
+            self.assertEqual(blog.user.id, u1.id)
 
         blog.user = u2.id
-        self.assertEqual(blog.user.id, u2.id)
-        self.assertEqual(len(self.queries()), qc + 2)
+        with self.assertQueryCount(1):
+            self.assertEqual(blog.user.id, u2.id)
 
         # No additional query.
         blog.user = u2.id
-        self.assertEqual(blog.user.id, u2.id)
-        self.assertEqual(len(self.queries()), qc + 2)
+        with self.assertQueryCount(0):
+            self.assertEqual(blog.user.id, u2.id)
 
     def test_fk_ints(self):
         c1 = Category.create(name='c1')
@@ -2601,13 +2583,12 @@ class ModelAPITestCase(ModelTestCase):
         c1 = Category.create(name='c1')
         c2 = Category.create(name='c2', parent=c1)
         c2_db = Category.get(Category.id == c2.id)
-        qc = len(self.queries())
 
-        parent = c2_db.parent
-        self.assertEqual(parent, c1)
+        with self.assertQueryCount(1):
+            parent = c2_db.parent
+            self.assertEqual(parent, c1)
 
-        parent = c2_db.parent
-        self.assertEqual(len(self.queries()) - qc, 1)
+            parent = c2_db.parent
 
     def test_category_select_related_alias(self):
         g1 = Category.create(name='g1')
@@ -2620,25 +2601,19 @@ class ModelAPITestCase(ModelTestCase):
         c11 = Category.create(name='c11', parent=p1)
         c2 = Category.create(name='c2', parent=p2)
 
-        qc = len(self.queries())
+        with self.assertQueryCount(1):
+            Grandparent = Category.alias()
+            Parent = Category.alias()
+            sq = (Category
+                  .select(Category, Parent, Grandparent)
+                  .join(Parent, on=(Category.parent == Parent.id))
+                  .join(Grandparent, on=(Parent.parent == Grandparent.id))
+                  .where(Grandparent.name == 'g1')
+                  .order_by(Category.name))
 
-        Grandparent = Category.alias()
-        Parent = Category.alias()
-        sq = Category.select(Category, Parent, Grandparent).join(
-            Parent, on=(Category.parent == Parent.id)
-        ).join(
-            Grandparent, on=(Parent.parent == Grandparent.id)
-        ).where(
-            Grandparent.name == 'g1'
-        ).order_by(Category.name)
-
-        self.assertEqual([(c.name, c.parent.name, c.parent.parent.name) for c in sq], [
-            ('c1', 'p1', 'g1'),
-            ('c11', 'p1', 'g1'),
-        ])
-
-        qc2 = len(self.queries())
-        self.assertEqual(qc2 - qc, 1)
+            self.assertEqual(
+                [(c.name, c.parent.name, c.parent.parent.name) for c in sq],
+                [('c1', 'p1', 'g1'), ('c11', 'p1', 'g1')])
 
     def test_creation(self):
         self.create_users(10)
@@ -2743,39 +2718,32 @@ class ModelAPITestCase(ModelTestCase):
 
     def test_first(self):
         users = self.create_users(5)
-        qc = len(self.queries())
 
-        sq = User.select().order_by(User.username)
-        qr = sq.execute()
+        with self.assertQueryCount(1):
+            sq = User.select().order_by(User.username)
+            qr = sq.execute()
 
-        # call it once
-        first = sq.first()
-        self.assertEqual(first.username, 'u1')
+            # call it once
+            first = sq.first()
+            self.assertEqual(first.username, 'u1')
 
-        # check the result cache
-        self.assertEqual(len(qr._result_cache), 1)
+            # check the result cache
+            self.assertEqual(len(qr._result_cache), 1)
 
-        # call it again and we get the same result, but not an
-        # extra query
-        self.assertEqual(sq.first().username, 'u1')
+            # call it again and we get the same result, but not an
+            # extra query
+            self.assertEqual(sq.first().username, 'u1')
 
-        qc2 = len(self.queries())
-        self.assertEqual(qc2 - qc, 1)
+        with self.assertQueryCount(0):
+            usernames = [u.username for u in sq]
+            self.assertEqual(usernames, ['u1', 'u2', 'u3', 'u4', 'u5'])
 
-        usernames = [u.username for u in sq]
-        self.assertEqual(usernames, ['u1', 'u2', 'u3', 'u4', 'u5'])
+        with self.assertQueryCount(0):
+            # call after iterating
+            self.assertEqual(sq.first().username, 'u1')
 
-        qc3 = len(self.queries())
-        self.assertEqual(qc3, qc2)
-
-        # call after iterating
-        self.assertEqual(sq.first().username, 'u1')
-
-        usernames = [u.username for u in sq]
-        self.assertEqual(usernames, ['u1', 'u2', 'u3', 'u4', 'u5'])
-
-        qc3 = len(self.queries())
-        self.assertEqual(qc3, qc2)
+            usernames = [u.username for u in sq]
+            self.assertEqual(usernames, ['u1', 'u2', 'u3', 'u4', 'u5'])
 
         # call it with an empty result
         sq = User.select().where(User.username == 'not-here')
@@ -2901,7 +2869,6 @@ class TestMultipleForeignKey(ModelTestCase):
         c.processor.save()
 
     def test_multi_join(self):
-        query_start = len(self.queries())
         HDD = Component.alias()
         HDDMf = Manufacturer.alias()
         Memory = Component.alias()
@@ -2939,26 +2906,26 @@ class TestMultipleForeignKey(ModelTestCase):
                      on=(Processor.manufacturer == ProcessorMf.id))
                  .order_by(Computer.id))
 
-        vals = []
-        manufacturers = []
-        for computer in query:
-            components = [
-                computer.hard_drive,
-                computer.memory,
-                computer.processor]
-            vals.append([component.name for component in components])
-            for component in components:
-                if component.manufacturer:
-                    manufacturers.append(component.manufacturer.name)
-                else:
-                    manufacturers.append(None)
+        with self.assertQueryCount(1):
+            vals = []
+            manufacturers = []
+            for computer in query:
+                components = [
+                    computer.hard_drive,
+                    computer.memory,
+                    computer.processor]
+                vals.append([component.name for component in components])
+                for component in components:
+                    if component.manufacturer:
+                        manufacturers.append(component.manufacturer.name)
+                    else:
+                        manufacturers.append(None)
 
-        self.assertEqual(vals, self.test_values)
-        self.assertEqual(manufacturers, [
-            None, 'Kingston', 'Intel',
-            None, 'Kingston', 'AMD',
-        ])
-        self.assertEqual(len(self.queries()), query_start + 1)
+            self.assertEqual(vals, self.test_values)
+            self.assertEqual(manufacturers, [
+                None, 'Kingston', 'Intel',
+                None, 'Kingston', 'AMD',
+            ])
 
 
 class ModelAggregateTestCase(ModelTestCase):
@@ -3036,13 +3003,12 @@ class FromMultiTableTestCase(ModelTestCase):
              .order_by(Blog.pk)
              .naive())
 
-        qc = len(self.queries())
-        blogs = [b.title for b in q]
-        self.assertEqual(blogs, ['b0-0', 'b0-1', 'b0-2'])
+        with self.assertQueryCount(1):
+            blogs = [b.title for b in q]
+            self.assertEqual(blogs, ['b0-0', 'b0-1', 'b0-2'])
 
-        usernames = [b.username for b in q]
-        self.assertEqual(usernames, ['u0', 'u0', 'u0'])
-        self.assertEqual(len(self.queries()) - qc, 1)
+            usernames = [b.username for b in q]
+            self.assertEqual(usernames, ['u0', 'u0', 'u0'])
 
     def test_subselect(self):
         inner = User.select(User.username)
@@ -3188,36 +3154,33 @@ class PrefetchTestCase(ModelTestCase):
         sq = User.select().where(User.username != 'u3')
         sq2 = Blog.select().where(Blog.title != 'b2')
         sq3 = Comment.select()
-        qc = len(self.queries())
 
-        prefetch_sq = prefetch(sq, sq2, sq3)
-        results = []
-        for user in prefetch_sq:
-            results.append(user.username)
-            for blog in user.blog_set_prefetch:
-                results.append(blog.title)
-                for comment in blog.comments_prefetch:
-                    results.append(comment.comment)
+        with self.assertQueryCount(3):
+            prefetch_sq = prefetch(sq, sq2, sq3)
+            results = []
+            for user in prefetch_sq:
+                results.append(user.username)
+                for blog in user.blog_set_prefetch:
+                    results.append(blog.title)
+                    for comment in blog.comments_prefetch:
+                        results.append(comment.comment)
 
-        self.assertEqual(results, [
-            'u1', 'b1', 'b1-c1', 'b1-c2',
-            'u2',
-            'u4', 'b5', 'b5-c1', 'b5-c2', 'b6', 'b6-c1',
-        ])
-        qc2 = len(self.queries())
-        self.assertEqual(qc2 - qc, 3)
+            self.assertEqual(results, [
+                'u1', 'b1', 'b1-c1', 'b1-c2',
+                'u2',
+                'u4', 'b5', 'b5-c1', 'b5-c2', 'b6', 'b6-c1',
+            ])
 
-        results = []
-        for user in prefetch_sq:
-            for blog in user.blog_set_prefetch:
-                results.append(blog.user.username)
-                for comment in blog.comments_prefetch:
-                    results.append(comment.blog.title)
-        self.assertEqual(results, [
-            'u1', 'b1', 'b1', 'u4', 'b5', 'b5', 'u4', 'b6',
-        ])
-        qc3 = len(self.queries())
-        self.assertEqual(qc3, qc2)
+        with self.assertQueryCount(0):
+            results = []
+            for user in prefetch_sq:
+                for blog in user.blog_set_prefetch:
+                    results.append(blog.user.username)
+                    for comment in blog.comments_prefetch:
+                        results.append(comment.blog.title)
+            self.assertEqual(results, [
+                'u1', 'b1', 'b1', 'u4', 'b5', 'b5', 'u4', 'b6',
+            ])
 
     def test_prefetch_multi_depth(self):
         sq = Parent.select()
@@ -3225,71 +3188,67 @@ class PrefetchTestCase(ModelTestCase):
         sq3 = Orphan.select()
         sq4 = ChildPet.select()
         sq5 = OrphanPet.select()
-        qc = len(self.queries())
 
-        prefetch_sq = prefetch(sq, sq2, sq3, sq4, sq5)
-        results = []
-        for parent in prefetch_sq:
-            results.append(parent.data)
-            for child in parent.child_set_prefetch:
-                results.append(child.data)
-                for pet in child.childpet_set_prefetch:
-                    results.append(pet.data)
+        with self.assertQueryCount(5):
+            prefetch_sq = prefetch(sq, sq2, sq3, sq4, sq5)
+            results = []
+            for parent in prefetch_sq:
+                results.append(parent.data)
+                for child in parent.child_set_prefetch:
+                    results.append(child.data)
+                    for pet in child.childpet_set_prefetch:
+                        results.append(pet.data)
 
-            for orphan in parent.orphan_set_prefetch:
-                results.append(orphan.data)
-                for pet in orphan.orphanpet_set_prefetch:
-                    results.append(pet.data)
+                for orphan in parent.orphan_set_prefetch:
+                    results.append(orphan.data)
+                    for pet in orphan.orphanpet_set_prefetch:
+                        results.append(pet.data)
 
-        self.assertEqual(results, [
-            'p1', 'c1', 'c1-p1', 'c1-p2', 'c2', 'c2-p1', 'c3', 'c3-p1', 'c4',
-                  'o1', 'o1-p1', 'o1-p2', 'o2', 'o2-p1', 'o3', 'o3-p1', 'o4',
-            'p2',
-            'p3', 'c6', 'c7', 'c7-p1', 'o6', 'o6-p1', 'o6-p2', 'o7', 'o7-p1',
-        ])
-        self.assertEqual(len(self.queries()) - qc, 5)
+            self.assertEqual(results, [
+                'p1', 'c1', 'c1-p1', 'c1-p2', 'c2', 'c2-p1', 'c3', 'c3-p1', 'c4',
+                      'o1', 'o1-p1', 'o1-p2', 'o2', 'o2-p1', 'o3', 'o3-p1', 'o4',
+                'p2',
+                'p3', 'c6', 'c7', 'c7-p1', 'o6', 'o6-p1', 'o6-p2', 'o7', 'o7-p1',
+            ])
 
     def test_prefetch_no_aggregate(self):
-        qc = len(self.queries())
-        query = (User
-                 .select(User, Blog)
-                 .join(Blog, JOIN_LEFT_OUTER)
-                 .order_by(User.username, Blog.title))
-        results = []
-        for user in query:
-            results.append((
-                user.username,
-                user.blog.title))
+        with self.assertQueryCount(1):
+            query = (User
+                     .select(User, Blog)
+                     .join(Blog, JOIN_LEFT_OUTER)
+                     .order_by(User.username, Blog.title))
+            results = []
+            for user in query:
+                results.append((
+                    user.username,
+                    user.blog.title))
 
-        self.assertEqual(results, [
-            ('u1', 'b1'),
-            ('u1', 'b2'),
-            ('u2', None),
-            ('u3', 'b3'),
-            ('u3', 'b4'),
-            ('u4', 'b5'),
-            ('u4', 'b6'),
-        ])
-        self.assertEqual(len(self.queries()) - qc, 1)
+            self.assertEqual(results, [
+                ('u1', 'b1'),
+                ('u1', 'b2'),
+                ('u2', None),
+                ('u3', 'b3'),
+                ('u3', 'b4'),
+                ('u4', 'b5'),
+                ('u4', 'b6'),
+            ])
 
     def test_aggregate_users(self):
-        qc = len(self.queries())
-        query = (User
-                 .select(User, Blog, Comment)
-                 .join(Blog, JOIN_LEFT_OUTER)
-                 .join(Comment, JOIN_LEFT_OUTER)
-                 .order_by(User.username, Blog.title, Comment.id)
-                 .aggregate_rows())
+        with self.assertQueryCount(1):
+            query = (User
+                     .select(User, Blog, Comment)
+                     .join(Blog, JOIN_LEFT_OUTER)
+                     .join(Comment, JOIN_LEFT_OUTER)
+                     .order_by(User.username, Blog.title, Comment.id)
+                     .aggregate_rows())
 
-        results = []
-        for user in query:
-            results.append((
-                user.username,
-                [(blog.title, [comment.comment for comment in blog.comments])
-                 for blog in user.blog_set]))
-
-        qc2 = len(self.queries())
-        self.assertEqual(qc2 - qc, 1)
+            results = []
+            for user in query:
+                results.append((
+                    user.username,
+                    [(blog.title,
+                      [comment.comment for comment in blog.comments])
+                     for blog in user.blog_set]))
 
         self.assertEqual(results, [
             ('u1', [
@@ -3305,24 +3264,21 @@ class PrefetchTestCase(ModelTestCase):
         ])
 
     def test_aggregate_blogs(self):
-        qc = len(self.queries())
-        query = (Blog
-                 .select(Blog, User, Comment)
-                 .join(User)
-                 .switch(Blog)
-                 .join(Comment, JOIN_LEFT_OUTER)
-                 .order_by(Blog.title, User.username, Comment.id)
-                 .aggregate_rows())
+        with self.assertQueryCount(1):
+            query = (Blog
+                     .select(Blog, User, Comment)
+                     .join(User)
+                     .switch(Blog)
+                     .join(Comment, JOIN_LEFT_OUTER)
+                     .order_by(Blog.title, User.username, Comment.id)
+                     .aggregate_rows())
 
-        results = []
-        for blog in query:
-            results.append((
-                blog.user.username,
-                blog.title,
-                [comment.comment for comment in blog.comments]))
-
-        qc2 = len(self.queries())
-        self.assertEqual(qc2 - qc, 1)
+            results = []
+            for blog in query:
+                results.append((
+                    blog.user.username,
+                    blog.title,
+                    [comment.comment for comment in blog.comments]))
 
         self.assertEqual(results, [
             ('u1', 'b1', ['b1-c1', 'b1-c2']),
@@ -3349,21 +3305,20 @@ class PrefetchTestCase(ModelTestCase):
         TagPostThroughAlt.create(tag=t2, post=p4)
         TagPostThroughAlt.create(tag=t3, post=p4)
 
-        qc = len(self.queries())
-        query = (Post
-                 .select(Post, TagPostThroughAlt, Tag)
-                 .join(TagPostThroughAlt, JOIN_LEFT_OUTER)
-                 .join(Tag, JOIN_LEFT_OUTER)
-                 .order_by(Post.id, TagPostThroughAlt.post, Tag.id)
-                 .aggregate_rows())
-        results = []
-        for post in query:
-            post_data = [post.title]
-            for tpt in post.tags_alt:
-                post_data.append(tpt.tag.tag)
-            results.append(post_data)
+        with self.assertQueryCount(1):
+            query = (Post
+                     .select(Post, TagPostThroughAlt, Tag)
+                     .join(TagPostThroughAlt, JOIN_LEFT_OUTER)
+                     .join(Tag, JOIN_LEFT_OUTER)
+                     .order_by(Post.id, TagPostThroughAlt.post, Tag.id)
+                     .aggregate_rows())
+            results = []
+            for post in query:
+                post_data = [post.title]
+                for tpt in post.tags_alt:
+                    post_data.append(tpt.tag.tag)
+                results.append(post_data)
 
-        self.assertEqual(len(self.queries()) - qc, 1)
         self.assertEqual(results, [
             ['p1', 't1', 't2'],
             ['p2', 't2', 't3'],
@@ -3372,34 +3327,33 @@ class PrefetchTestCase(ModelTestCase):
         ])
 
     def test_aggregate_parent_child(self):
-        qc = len(self.queries())
-        query = (Parent
-                 .select(Parent, Child, Orphan, ChildPet, OrphanPet)
-                 .join(Child, JOIN_LEFT_OUTER)
-                 .join(ChildPet, JOIN_LEFT_OUTER)
-                 .switch(Parent)
-                 .join(Orphan, JOIN_LEFT_OUTER)
-                 .join(OrphanPet, JOIN_LEFT_OUTER)
-                 .order_by(
-                     Parent.data,
-                     Child.data,
-                     ChildPet.id,
-                     Orphan.data,
-                     OrphanPet.id)
-                 .aggregate_rows())
+        with self.assertQueryCount(1):
+            query = (Parent
+                     .select(Parent, Child, Orphan, ChildPet, OrphanPet)
+                     .join(Child, JOIN_LEFT_OUTER)
+                     .join(ChildPet, JOIN_LEFT_OUTER)
+                     .switch(Parent)
+                     .join(Orphan, JOIN_LEFT_OUTER)
+                     .join(OrphanPet, JOIN_LEFT_OUTER)
+                     .order_by(
+                         Parent.data,
+                         Child.data,
+                         ChildPet.id,
+                         Orphan.data,
+                         OrphanPet.id)
+                     .aggregate_rows())
 
-        results = []
-        for parent in query:
-            results.append((
-                parent.data,
-                [(child.data, [pet.data for pet in child.childpet_set])
-                 for child in parent.child_set],
-                [(orphan.data, [pet.data for pet in orphan.orphanpet_set])
-                 for orphan in parent.orphan_set]
-            ))
+            results = []
+            for parent in query:
+                results.append((
+                    parent.data,
+                    [(child.data, [pet.data for pet in child.childpet_set])
+                     for child in parent.child_set],
+                    [(orphan.data, [pet.data for pet in orphan.orphanpet_set])
+                     for orphan in parent.orphan_set]
+                ))
 
         # Without the `.aggregate_rows()` call, this would be 289!!
-        self.assertEqual(len(self.queries()) - qc, 1)
         self.assertEqual(results, [
             ('p1',
              [('c1', ['c1-p1', 'c1-p2']),
