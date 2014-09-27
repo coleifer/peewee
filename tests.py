@@ -2067,20 +2067,30 @@ class ModelQueryResultWrapperTestCase(ModelTestCase):
         sq = get_query()
         self.assertEqual(sq.count(), 2)
 
+        qc = len(self.queries())
+
         results = list(sq)
         expected = (('b1', 'c1'), ('b2', 'c2'))
         for i, (b_data, c_data) in enumerate(expected):
             self.assertEqual(results[i].rel_b.data, b_data)
             self.assertEqual(results[i].rel_b.field.data, c_data)
 
+        qc2 = len(self.queries())
+        self.assertEqual(qc2 - qc, 1)
+
         sq = get_query(JOIN_LEFT_OUTER)
         self.assertEqual(sq.count(), 3)
+
+        qc = len(self.queries())
 
         results = list(sq)
         expected = (('b1', 'c1'), ('b2', 'c2'), ('b3', None))
         for i, (b_data, c_data) in enumerate(expected):
             self.assertEqual(results[i].rel_b.data, b_data)
             self.assertEqual(results[i].rel_b.field.data, c_data)
+
+        qc2 = len(self.queries())
+        self.assertEqual(qc2 - qc, 1)
 
     def test_backward_join(self):
         u1 = User.create(username='u1')
@@ -2824,19 +2834,22 @@ class TestMultipleForeignKey(ModelTestCase):
                      HDDMf,
                      MemoryMf,
                      ProcessorMf)
-                 .join(HDD, on=(Computer.hard_drive == HDD.id))
+                 .join(HDD, on=(
+                     Computer.hard_drive == HDD.id).alias('hard_drive'))
                  .join(
                      HDDMf,
                      JOIN_LEFT_OUTER,
                      on=(HDD.manufacturer == HDDMf.id))
                  .switch(Computer)
-                 .join(Memory, on=(Computer.memory == Memory.id))
+                 .join(Memory, on=(
+                     Computer.memory == Memory.id).alias('memory'))
                  .join(
                      MemoryMf,
                      JOIN_LEFT_OUTER,
                      on=(Memory.manufacturer == MemoryMf.id))
                  .switch(Computer)
-                 .join(Processor, on=(Computer.processor == Processor.id))
+                 .join(Processor, on=(
+                     Computer.processor == Processor.id).alias('processor'))
                  .join(
                      ProcessorMf,
                      JOIN_LEFT_OUTER,

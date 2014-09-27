@@ -568,7 +568,49 @@ class _StripParens(Node):
         super(_StripParens, self).__init__()
         self.node = node
 
-Join = namedtuple('Join', ('dest', 'join_type', 'on'))
+JoinMetadata = namedtuple('JoinMetadata', (
+    'source', 'target_attr', 'dest', 'to_field', 'related_name'))
+
+class Join(namedtuple('_Join', ('dest', 'join_type', 'on'))):
+    def get_foreign_key(self, source, dest):
+        fk_field = source._meta.rel_for_model(dest)
+        if fk_field is not None:
+            return fk_field, False
+        reverse_rel = source._meta.reverse_rel_for_model(dest)
+        if reverse_rel is not None:
+            return reverse_rel, True
+        return None, None
+
+    def join_metadata(self, source):
+        is_model_alias = isinstance(self.dest, ModelAlias)
+        if is_model_alias:
+            dest = self.dest.model_class
+        else:
+            dest = self.dest
+
+        is_expr = isinstance(self.on, Expression)
+        join_alias = is_expr and self.on._alias or None
+
+        target_attr = to_field = related_name = None
+        fk_field, is_backref = self.get_foreign_key(source, dest)
+        if fk_field is not None:
+            if is_backref:
+                target_attr = dest._meta.db_table
+                related_name = fk_field.related_name
+            else:
+                target_attr = fk_field.name
+                to_field = fk_field.to_field.name
+        elif is_expr:
+            target_attr = self.on.lhs.name
+        else:
+            target_attr = dest._meta.db_table
+
+        return JoinMetadata(
+            source,
+            join_alias or target_attr,
+            self.dest,
+            to_field,
+            related_name)
 
 class FieldDescriptor(object):
     # Fields are exposed as descriptors in order to control access to the
@@ -1800,29 +1842,10 @@ class ModelQueryResultWrapper(QueryResultWrapper):
             if current not in joins:
                 continue
 
-            meta = current._meta
             for join in joins[current]:
-                join_model = join.dest
-                if join_model in models:
-                    fk_field = meta.rel_for_model(join_model)
-                    related_name = to_field = None
-                    if fk_field is not None:
-                        fk_name = fk_field.name
-                        to_field = fk_field.to_field.name
-                    else:
-                        fk_field = meta.reverse_rel_for_model(join_model)
-                        if fk_field is not None:
-                            related_name = fk_field.related_name
-                        if isinstance(join.on, Expression):
-                            fk_name = join.on._alias or join.on.lhs.name
-                        else:
-                            # Patch the joined model using the name of the
-                            # database table.
-                            fk_name = join_model._meta.db_table
-
-                    stack.append(join_model)
-                    join_list.append((
-                        current, fk_name, join_model, to_field, related_name))
+                if join.dest in models:
+                    join_list.append(join.join_metadata(current))
+                    stack.append(join.dest)
 
         return join_list
 
