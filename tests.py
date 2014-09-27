@@ -13,6 +13,7 @@ try:
     from Queue import Queue
 except ImportError:
     from queue import Queue
+from contextlib import contextmanager
 from functools import wraps
 
 from peewee import *
@@ -456,6 +457,12 @@ class BasePeeweeTestCase(unittest.TestCase):
 
     def queries(self):
         return [x.msg for x in self.qh.queries]
+
+    @contextmanager
+    def assertQueryCount(self, num):
+        qc = len(self.queries())
+        yield
+        self.assertEqual(len(self.queries()) - qc, num)
 
     def parse_node(self, query, expr_list, compiler=compiler):
         am = compiler.calculate_alias_map(query)
@@ -1671,42 +1678,35 @@ class QueryResultWrapperTestCase(ModelTestCase):
 
     def test_iterator(self):
         self.create_users(10)
-        qc = len(self.queries())
 
-        qr = User.select().execute()
-        usernames = [u.username for u in qr.iterator()]
-        self.assertEqual(usernames, ['u%d' % i for i in range(1, 11)])
-
-        qc1 = len(self.queries())
-        self.assertEqual(qc1 - qc, 1)
+        with self.assertQueryCount(1):
+            qr = User.select().execute()
+            usernames = [u.username for u in qr.iterator()]
+            self.assertEqual(usernames, ['u%d' % i for i in range(1, 11)])
 
         self.assertTrue(qr._populated)
         self.assertEqual(qr._result_cache, [])
 
-        again = [u.username for u in qr]
-        self.assertEqual(again, [])
-        qc2 = len(self.queries())
-        self.assertEqual(qc2 - qc1, 0)
+        with self.assertQueryCount(0):
+            again = [u.username for u in qr]
+            self.assertEqual(again, [])
 
-        qr = User.select().where(User.username == 'xxx').execute()
-        usernames = [u.username for u in qr.iterator()]
-        self.assertEqual(usernames, [])
+        with self.assertQueryCount(1):
+            qr = User.select().where(User.username == 'xxx').execute()
+            usernames = [u.username for u in qr.iterator()]
+            self.assertEqual(usernames, [])
 
     def test_iterator_query_method(self):
         self.create_users(10)
-        qc = len(self.queries())
 
-        qr = User.select()
-        usernames = [u.username for u in qr.iterator()]
-        self.assertEqual(usernames, ['u%d' % i for i in range(1, 11)])
+        with self.assertQueryCount(1):
+            qr = User.select()
+            usernames = [u.username for u in qr.iterator()]
+            self.assertEqual(usernames, ['u%d' % i for i in range(1, 11)])
 
-        qc1 = len(self.queries())
-        self.assertEqual(qc1 - qc, 1)
-
-        again = [u.username for u in qr]
-        self.assertEqual(again, [])
-        qc2 = len(self.queries())
-        self.assertEqual(qc2 - qc1, 0)
+        with self.assertQueryCount(0):
+            again = [u.username for u in qr]
+            self.assertEqual(again, [])
 
     def test_iterator_extended(self):
         self.create_users(10)
@@ -1715,8 +1715,6 @@ class QueryResultWrapperTestCase(ModelTestCase):
                 Blog.create(
                     title='blog-%s-%s' % (i, j),
                     user=User.get(User.username == 'u%s' % i))
-
-        qc = len(self.queries())
 
         qr = (User
               .select(
@@ -1729,8 +1727,9 @@ class QueryResultWrapperTestCase(ModelTestCase):
               .naive())
 
         accum = []
-        for user in qr.iterator():
-            accum.append((user.username, user.ct))
+        with self.assertQueryCount(1):
+            for user in qr.iterator():
+                accum.append((user.username, user.ct))
 
         self.assertEqual(accum, [
             ('u1', 1),
@@ -1742,8 +1741,11 @@ class QueryResultWrapperTestCase(ModelTestCase):
               .group_by(User.username << ['u1', 'u2', 'u3'])
               .order_by(fn.Count(User.id).desc()))
         accum = []
-        for ct, in qr.tuples().iterator():
-            accum.append(ct)
+
+        with self.assertQueryCount(1):
+            for ct, in qr.tuples().iterator():
+                accum.append(ct)
+
         self.assertEqual(accum, [7, 3])
 
     def test_fill_cache(self):
@@ -1751,30 +1753,27 @@ class QueryResultWrapperTestCase(ModelTestCase):
             self.assertEqual([u.username for u in qr._result_cache], ['u%d' % i for i in range(1, n+1)])
 
         self.create_users(20)
-        qc = len(self.queries())
 
-        qr = User.select().execute()
+        with self.assertQueryCount(1):
+            qr = User.select().execute()
 
-        qr.fill_cache(5)
-        self.assertFalse(qr._populated)
-        assertUsernames(qr, 5)
+            qr.fill_cache(5)
+            self.assertFalse(qr._populated)
+            assertUsernames(qr, 5)
 
-        # a subsequent call will not "over-fill"
-        qr.fill_cache(5)
-        self.assertFalse(qr._populated)
-        assertUsernames(qr, 5)
+            # a subsequent call will not "over-fill"
+            qr.fill_cache(5)
+            self.assertFalse(qr._populated)
+            assertUsernames(qr, 5)
 
-        # ask for one more and ye shall receive
-        qr.fill_cache(6)
-        self.assertFalse(qr._populated)
-        assertUsernames(qr, 6)
+            # ask for one more and ye shall receive
+            qr.fill_cache(6)
+            self.assertFalse(qr._populated)
+            assertUsernames(qr, 6)
 
-        qr.fill_cache(21)
-        self.assertTrue(qr._populated)
-        assertUsernames(qr, 20)
-
-        qc2 = len(self.queries())
-        self.assertEqual(qc2 - qc, 1)
+            qr.fill_cache(21)
+            self.assertTrue(qr._populated)
+            assertUsernames(qr, 20)
 
     def test_select_related(self):
         u1 = User.create(username='u1')
@@ -2110,6 +2109,51 @@ class ModelQueryResultWrapperTestCase(ModelTestCase):
             ('u2', 'b-u2'),
             ('u2', 'b-u2-2')])
 
+    def test_joins_with_aliases(self):
+        u1 = User.create(username='u1')
+        u2 = User.create(username='u2')
+        b1_1 = Blog.create(user=u1, title='b1-1')
+        b1_2 = Blog.create(user=u1, title='b1-2')
+        b2_1 = Blog.create(user=u2, title='b2-1')
+
+        UserAlias = User.alias()
+        BlogAlias = Blog.alias()
+
+        def assertExpectedQuery(query, is_user_query):
+            accum = []
+
+            with self.assertQueryCount(1):
+                if is_user_query:
+                    for user in query:
+                        accum.append((user.username, user.blog.title))
+                else:
+                    for blog in query:
+                        accum.append((blog.user.username, blog.title))
+
+            self.assertEqual(accum, [
+                ('u1', 'b1-1'),
+                ('u1', 'b1-2'),
+                ('u2', 'b2-1'),
+            ])
+
+        combinations = [
+            (User, BlogAlias, User.id == BlogAlias.user, True),
+            (User, BlogAlias, BlogAlias.user == User.id, True),
+            (User, Blog, User.id == Blog.user, True),
+            (User, Blog, Blog.user == User.id, True),
+            (User, Blog, None, True),
+            (Blog, UserAlias, UserAlias.id == Blog.user, False),
+            (Blog, UserAlias, Blog.user == UserAlias.id, False),
+            (Blog, User, User.id == Blog.user, False),
+            (Blog, User, Blog.user == User.id, False),
+            (Blog, User, None, False),
+        ]
+        for Src, JoinModel, predicate, is_user_query in combinations:
+            query = (Src
+                     .select(Src, JoinModel)
+                     .join(JoinModel, on=predicate)
+                     .order_by(SQL('1, 2')))
+            assertExpectedQuery(query, is_user_query)
 
 class TestModelQueryResultForeignKeys(ModelTestCase):
     requires = [Parent, Child]
