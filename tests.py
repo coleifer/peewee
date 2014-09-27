@@ -499,6 +499,34 @@ class BasePeeweeTestCase(unittest.TestCase):
 # BASIC TESTS OF QUERY TYPES AND INTERNAL DATA STRUCTURES
 #
 
+
+class HelperMethodTestCase(BasePeeweeTestCase):
+    def test_assert_query_count(self):
+        def execute_queries(n):
+            for i in range(n):
+                test_db.execute_sql('select 1;')
+
+        with self.assertQueryCount(0):
+            pass
+
+        with self.assertQueryCount(1):
+            execute_queries(1)
+
+        with self.assertQueryCount(2):
+            execute_queries(2)
+
+        def fails_low():
+            with self.assertQueryCount(2):
+                execute_queries(1)
+
+        def fails_high():
+            with self.assertQueryCount(1):
+                execute_queries(2)
+
+        self.assertRaises(AssertionError, fails_low)
+        self.assertRaises(AssertionError, fails_high)
+
+
 class SelectTestCase(BasePeeweeTestCase):
     def test_selection(self):
         sq = SelectQuery(User)
@@ -1656,25 +1684,22 @@ class QueryResultWrapperTestCase(ModelTestCase):
 
     def test_iteration(self):
         self.create_users(10)
-        query_start = len(self.queries())
-        sq = User.select()
-        qr = sq.execute()
+        with self.assertQueryCount(1):
+            sq = User.select()
+            qr = sq.execute()
 
-        first_five = []
-        for i, u in enumerate(qr):
-            first_five.append(u.username)
-            if i == 4:
-                break
-        self.assertEqual(first_five, ['u1', 'u2', 'u3', 'u4', 'u5'])
+            first_five = []
+            for i, u in enumerate(qr):
+                first_five.append(u.username)
+                if i == 4:
+                    break
+            self.assertEqual(first_five, ['u1', 'u2', 'u3', 'u4', 'u5'])
 
-        another_iter = [u.username for u in qr]
-        self.assertEqual(another_iter, ['u%d' % i for i in range(1, 11)])
+            another_iter = [u.username for u in qr]
+            self.assertEqual(another_iter, ['u%d' % i for i in range(1, 11)])
 
-        another_iter = [u.username for u in qr]
-        self.assertEqual(another_iter, ['u%d' % i for i in range(1, 11)])
-
-        # only 1 query for these iterations
-        self.assertEqual(len(self.queries()) - query_start, 1)
+            another_iter = [u.username for u in qr]
+            self.assertEqual(another_iter, ['u%d' % i for i in range(1, 11)])
 
     def test_iterator(self):
         self.create_users(10)
@@ -1786,31 +1811,45 @@ class QueryResultWrapperTestCase(ModelTestCase):
         c22 = Comment.create(blog=b2, comment='c22')
 
         # missing comment.blog_id
-        qc = len(self.queries())
-        comments = Comment.select(Comment.id, Comment.comment, Blog.pk, Blog.title).join(Blog).where(Blog.title == 'b1').order_by(Comment.id)
-        self.assertEqual([c.blog.title for c in comments], ['b1', 'b1'])
-        self.assertEqual(len(self.queries()) - qc, 1)
+        comments = (Comment
+                    .select(Comment.id, Comment.comment, Blog.pk, Blog.title)
+                    .join(Blog)
+                    .where(Blog.title == 'b1')
+                    .order_by(Comment.id))
+        with self.assertQueryCount(1):
+            self.assertEqual([c.blog.title for c in comments], ['b1', 'b1'])
 
         # missing blog.pk
-        qc = len(self.queries())
-        comments = Comment.select(Comment.id, Comment.comment, Comment.blog, Blog.title).join(Blog).where(Blog.title == 'b2').order_by(Comment.id)
-        self.assertEqual([c.blog.title for c in comments], ['b2', 'b2'])
-        self.assertEqual(len(self.queries()) - qc, 1)
+        comments = (Comment
+                    .select(Comment.id, Comment.comment, Comment.blog, Blog.title)
+                    .join(Blog)
+                    .where(Blog.title == 'b2')
+                    .order_by(Comment.id))
+        with self.assertQueryCount(1):
+            self.assertEqual([c.blog.title for c in comments], ['b2', 'b2'])
 
         # both but going up 2 levels
-        qc = len(self.queries())
-        comments = Comment.select(Comment, Blog, User).join(Blog).join(User).where(User.username == 'u1').order_by(Comment.id)
-        self.assertEqual([c.comment for c in comments], ['c11', 'c12'])
-        self.assertEqual([c.blog.title for c in comments], ['b1', 'b1'])
-        self.assertEqual([c.blog.user.username for c in comments], ['u1', 'u1'])
-        self.assertEqual(len(self.queries()) - qc, 1)
+        comments = (Comment
+                    .select(Comment, Blog, User)
+                    .join(Blog)
+                    .join(User)
+                    .where(User.username == 'u1')
+                    .order_by(Comment.id))
+        with self.assertQueryCount(1):
+            self.assertEqual([c.comment for c in comments], ['c11', 'c12'])
+            self.assertEqual([c.blog.title for c in comments], ['b1', 'b1'])
+            self.assertEqual([c.blog.user.username for c in comments], ['u1', 'u1'])
 
         self.assertTrue(isinstance(comments._qr, ModelQueryResultWrapper))
 
-        qc = len(self.queries())
-        comments = Comment.select().join(Blog).join(User).where(User.username == 'u1').order_by(Comment.id)
-        self.assertEqual([c.blog.user.username for c in comments], ['u1', 'u1'])
-        self.assertEqual(len(self.queries()) - qc, 5)
+        comments = (Comment
+                    .select()
+                    .join(Blog)
+                    .join(User)
+                    .where(User.username == 'u1')
+                    .order_by(Comment.id))
+        with self.assertQueryCount(5):
+            self.assertEqual([c.blog.user.username for c in comments], ['u1', 'u1'])
 
         self.assertTrue(isinstance(comments._qr, NaiveQueryResultWrapper))
 
