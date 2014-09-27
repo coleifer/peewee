@@ -1853,6 +1853,18 @@ class QueryResultWrapperTestCase(ModelTestCase):
 
         self.assertTrue(isinstance(comments._qr, NaiveQueryResultWrapper))
 
+        # Go up two levels and use aliases for the joined instances.
+        comments = (Comment
+                    .select(Comment, Blog, User)
+                    .join(Blog, on=(Comment.blog == Blog.pk).alias('bx'))
+                    .join(User, on=(Blog.user == User.id).alias('ux'))
+                    .where(User.username == 'u1')
+                    .order_by(Comment.id))
+        with self.assertQueryCount(1):
+            self.assertEqual([c.comment for c in comments], ['c11', 'c12'])
+            self.assertEqual([c.bx.title for c in comments], ['b1', 'b1'])
+            self.assertEqual([c.bx.ux.username for c in comments], ['u1', 'u1'])
+
     def test_naive(self):
         u1 = User.create(username='u1')
         u2 = User.create(username='u2')
