@@ -29,6 +29,8 @@ Diving into the code
 
 For simplicity all example code is contained within a single module, ``examples/twitter/app.py``. For a guide on structuring larger Flask apps with peewee, check out `Structuring Flask Apps <http://charlesleifer.com/blog/structuring-flask-apps-a-how-to-for-those-coming-from-django/>`_.
 
+.. _example-app-models:
+
 Models
 ^^^^^^
 

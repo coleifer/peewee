@@ -997,9 +997,51 @@ By default peewee will use an *INNER* join, but you can use *LEFT OUTER* or *FUL
     for user in users:
         print user.username, 'has created', user.num_tweets, 'tweet(s).'
 
-If a foreign key does not exist between two tables you can still perform a join, but you must manually specify the join condition.
+Multiple Foreign Keys to the Same Model
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. note:: By specifying an alias on the join condition, you can control the attribute peewee will assign the joined instance to.
+When there are multiple foreign keys to the same model, it is good practice to explicitly specify which field you are joining on.
+
+Referring back to the :ref:`example app's models <example-app-models>`, consider the *Relationship* model, which is used to denote when one user follows another. Here is the model definition:
+
+.. code-block:: python
+
+    class Relationship(BaseModel):
+        from_user = ForeignKeyField(User, related_name='relationships')
+        to_user = ForeignKeyField(User, related_name='related_to')
+
+        class Meta:
+            indexes = (
+                # Specify a unique multi-column index on from/to-user.
+                (('from_user', 'to_user'), True),
+            )
+
+Since there are two foreign keys to *User*, we should always specify which field we are using in a join.
+
+For example, to determine which users I am following, I would write:
+
+.. code-block:: python
+
+    (User
+    .select()
+    .join(Relationship, on=Relationship.to_user)
+    .where(Relationship.from_user == charlie))
+
+On the other hand, if I wanted to determine which users are following me, I would instead join on the *from_user* column and filter on the relationship's *to_user*:
+
+.. code-block:: python
+
+    (User
+    .select()
+    .join(Relationship, on=Relationship.from_user)
+    .where(Relationship.to_user == charlie))
+
+Joining on arbitrary fields
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If a foreign key does not exist between two tables you can still perform a join, but you must manually specify the join predicate.
+
+In the following example, there is no explicit foreign-key between *User* and *ActivityLog*, but there is an implied relationship between the *ActivityLog.object_id* field and *User.id*. Rather than joining on a specific :py:class:`Field`, we will join using an :py:class:`Expression`.
 
 .. code-block:: python
 
@@ -1021,6 +1063,23 @@ If a foreign key does not exist between two tables you can still perform a join,
     charlie retweeted
     charlie posted a tweet
     charlie logged out
+
+.. note::
+    By specifying an alias on the join condition, you can control the attribute peewee will assign the joined instance to. In the previous example, we used the following *join*:
+
+    .. code-block:: python
+
+        (User.id == ActivityLog.object_id).alias('log')
+
+    Then when iterating over the query, we were able to directly access the joined *ActivityLog* without incurring an additional query:
+
+    .. code-block:: python
+
+        for user in user_log:
+            print user.username, user.log.description
+
+Joining on Multiple Tables
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 When calling :py:meth:`~Query.join`, peewee will use the *last joined table* as the source table. For example:
 
