@@ -603,6 +603,7 @@ class Join(namedtuple('_Join', ('dest', 'join_type', 'on'))):
         elif is_expr:
             target_attr = self.on.lhs.name
         else:
+            # FIXME: This does not currently execute.
             target_attr = dest._meta.db_table
 
         return JoinMetadata(
