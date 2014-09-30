@@ -14,6 +14,8 @@ setup(
     author='Charles Leifer',
     author_email='coleifer@gmail.com',
     url='http://github.com/coleifer/peewee/',
+    package_data = {
+        'playhouse': ['berkeley_build.sh']},
     packages=['playhouse'],
     py_modules=['peewee', 'pwiz'],
     classifiers=[
