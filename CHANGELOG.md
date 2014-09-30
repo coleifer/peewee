@@ -5,6 +5,33 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.3.3
+
+This release contains a lot of improvements to the documentation and a mixed bag of other new features and bugfixes.
+
+### Backwards-incompatible changes
+
+As of 2.3.3, all peewee `Database` instances have a default of `True` for the `threadlocals` parameter. This means that a connection is opened for each thread. It seemed to me that by sharing connections across threads caused a lot of confusion to users who weren't aware of (or familiar with) the `threadlocals` parameter. For single-threaded apps the behavior will not be affected, but for multi-threaded applications, if you wish to share your connection across threads you must now specify `threadlocals=False`. For more information, see the [documentation](http://docs.peewee-orm.com/en/latest/peewee/api.html#Database).
+
+I also renamed the `Model.get_id()` and `Model.set_id()` convenience methods so as not to conflict with Flask-Login. These methods should have probably been private anyways, and the new methods are named `_get_pk_value()` and `_set_pk_value()`.
+
+### New features
+
+* Basic support for [Postgresql full-text search](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#pg-fts).
+* Helper functions for converting models to dictionaries and unpacking dictionaries into model instances. See [docs](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#model_to_dict).
+
+### Bugs fixed
+
+* Fixed #428, documentation formatting error.
+* Fixed #429, which fixes the way default values are initialized for bulk inserts.
+* Fixed #432, making the HStore extension optional when using `PostgresqlExtDatabase`.
+* Fixed #435, allowing peewee to be used with Flask-Login.
+* Fixed #436, allowing the SQLite date_part and date_trunc functions to correctly handle NULL values.
+* Fixed #438, in which the ordering of clauses in a Join expression were causing unpredictable behavior when selecting related instances.
+* Updated the `berkeley_build.sh` script, which was incompatible with the newest version of `bsddb3`.
+
+[View commits](https://github.com/coleifer/peewee/compare/2.3.2...2.3.3)
+
 ## 2.3.2
 
 This release contains mostly bugfixes.
