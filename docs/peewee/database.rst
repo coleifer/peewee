@@ -130,6 +130,38 @@ If you would like to use these awesome features, use the :py:class:`SqliteExtDat
 
     sqlite_db = SqliteExtDatabase('my_app.db', journal_mode='WAL')
 
+Common Pitfalls with SQLite
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Use care when committing transactions while iterating over a cursor with SQLite. Depending on your installed version of pysqlite (or ``sqlite3``), when a transaction is committed it might `reset all statements *and cursors* open on that connection <http://article.gmane.org/gmane.comp.python.db.pysqlite.user/2217>`_. Consider the following code:
+
+.. code-block:: python
+
+    for user in User.select():
+        Tweet.create(user=user, message='hello!')
+
+Because the outer select query is lazily evaluated, the cursor is held open for the duration of the loop. If the database is in autocommit mode (default behavior), the call to *Tweet.create* will call *commit()* on the underlying connection, resetting the outer-loop's cursor. As a result, it may happen that the first *two* users actually receive duplicate tweets.
+
+Here are some ways to work around the issue:
+
+.. code-block:: python
+
+    # By running in a transaction, the new tweets will not be committed
+    # immediately, and the outer SELECT will not be reset.
+    with database.transaction():
+        for user in User.select():
+            Tweet.create(user=user, message='hello!')
+
+    # By consuming the cursor immediately (by coercing to a list), the
+    # inner COMMITs will not affect the iteration.
+    for user in list(User.select()):
+        Tweet.create(user=user, message='hello!')
+
+Many, many thanks to @tmoertel for `his excellent comment <https://github.com/coleifer/peewee/issues/12#issuecomment-5614404>`_ explaining this behavior.
+
+APSW, an Advanced SQLite Driver
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 Peewee also comes with an alternate SQLite database that uses :ref:`apsw`, an advanced Python SQLite driver. More information on APSW can be obtained on the `APSW project website <https://code.google.com/p/apsw/>`_. APSW provides special features like:
 
 * Virtual tables, virtual file-systems, Blob I/O, backups and file control.
