@@ -1797,7 +1797,7 @@ class NaiveQueryResultWrapper(ExtQueryResultWrapper):
         instance = self.model()
         for i, column, func in self.conv:
             setattr(instance, column, func(row[i]))
-        instance.prepared()
+        instance._prepare_instance()
         return instance
 
 class DictQueryResultWrapper(ExtQueryResultWrapper):
@@ -1854,7 +1854,7 @@ class ModelQueryResultWrapper(QueryResultWrapper):
         collected = self.construct_instances(row)
         instances = self.follow_joins(collected)
         for i in instances:
-            i.prepared()
+            i._prepare_instance()
         return instances[0]
 
     def construct_instances(self, row, keys=None):
@@ -1972,6 +1972,7 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
                     identity_map[model_class][pk_value] = instance
 
         stack = [self.model]
+        instances = [primary_instance]
         while stack:
             current = stack.pop()
             if current not in self.join_meta:
@@ -1984,6 +1985,7 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
                         joined_inst = identity_map[join.dest][
                             instance._data[foreign_key.name]]
                         setattr(instance, foreign_key.name, joined_inst)
+                        instances.append(joined_inst)
                 else:
                     backref = current._meta.reverse_rel_for_model(join.dest)
                     if not backref:
@@ -1994,6 +1996,8 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
                         setattr(instance, attr_name, [])
 
                     for pk, instance in identity_map[join.dest].items():
+                        if pk is None:
+                            continue
                         try:
                             joined_inst = identity_map[current][
                                 instance._data[backref.name]]
@@ -2001,8 +2005,12 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
                             continue
 
                         getattr(joined_inst, attr_name).append(instance)
+                        instances.append(instance)
 
                 stack.append(join.dest)
+
+        for instance in instances:
+            instance._prepare_instance()
 
         return primary_instance
 
@@ -3410,7 +3418,7 @@ class Model(with_metaclass(BaseModel)):
     def create(cls, **query):
         inst = cls(**query)
         inst.save(force_insert=True)
-        inst.prepared()
+        inst._prepare_instance()
         return inst
 
     @classmethod
@@ -3512,6 +3520,10 @@ class Model(with_metaclass(BaseModel)):
 
     def _pk_expr(self):
         return self._meta.primary_key == self._get_pk_value()
+
+    def _prepare_instance(self):
+        self._dirty.clear()
+        self.prepared()
 
     def prepared(self):
         pass

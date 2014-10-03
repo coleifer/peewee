@@ -2663,6 +2663,42 @@ class ModelAPITestCase(ModelTestCase):
         self.assertTrue(b.is_dirty())
         self.assertEqual(b.dirty_fields, [Blog.user])
 
+    def test_dirty_from_query(self):
+        u1 = User.create(username='u1')
+        b1 = Blog.create(title='b1', user=u1)
+        b2 = Blog.create(title='b2', user=u1)
+
+        u_db = User.get()
+        self.assertFalse(u_db.is_dirty())
+
+        b_with_u = (Blog
+                    .select(Blog, User)
+                    .join(User)
+                    .where(Blog.title == 'b2')
+                    .get())
+        self.assertFalse(b_with_u.is_dirty())
+        self.assertFalse(b_with_u.user.is_dirty())
+
+        u_with_blogs = (User
+                        .select(User, Blog)
+                        .join(Blog)
+                        .order_by(Blog.title)
+                        .aggregate_rows())[0]
+        self.assertFalse(u_with_blogs.is_dirty())
+        for blog in u_with_blogs.blog_set:
+            self.assertFalse(blog.is_dirty())
+
+        b_with_users = (Blog
+                        .select(Blog, User)
+                        .join(User)
+                        .order_by(Blog.title)
+                        .aggregate_rows())
+        b1, b2 = b_with_users
+        self.assertFalse(b1.is_dirty())
+        self.assertFalse(b1.user.is_dirty())
+        self.assertFalse(b2.is_dirty())
+        self.assertFalse(b2.user.is_dirty())
+
     def test_save_only(self):
         u = User.create(username='u')
         b = Blog.create(user=u, title='b1', content='ct')
