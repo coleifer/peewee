@@ -16,6 +16,7 @@ For flask integration, check out `flask-peewee <http://flask-peewee.readthedocs.
 Defining models is similar to Django or SQLAlchemy::
 
     from peewee import *
+    import datetime
 
     db = SqliteDatabase('my_database.db', threadlocals=True)
 
