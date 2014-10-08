@@ -194,6 +194,8 @@ class NullModel(TestModel):
 
 class UniqueModel(TestModel):
     name = CharField(unique=True)
+    field_a = CharField(default='')
+    field_b = IntegerField(default=0)
 
 class OrderedModel(TestModel):
     title = CharField()
@@ -2529,7 +2531,7 @@ class ModelQueryTestCase(ModelTestCase):
 
 
 class ModelAPITestCase(ModelTestCase):
-    requires = [User, Blog, Category, UserCategory]
+    requires = [User, Blog, Category, UserCategory, UniqueModel, NonIntModel]
 
     def test_related_name(self):
         u1 = self.create_user('u1')
@@ -2763,6 +2765,106 @@ class ModelAPITestCase(ModelTestCase):
         u1_x = User.get_or_create(username='u1')
         self.assertEqual(u1.id, u1_x.id)
         self.assertEqual(User.select().count(), 1)
+
+    def test_create_or_get(self):
+        # Test with a normal model.
+        with self.assertQueryCount(1):
+            user = User.create_or_get(username='charlie')
+        self.assertTrue(user.id is not None)
+
+        with self.assertQueryCount(2):
+            user_get = User.create_or_get(username='peewee', id=user.id)
+        self.assertEqual(user_get.id, user.id)
+        self.assertEqual(user_get.username, 'charlie')
+        self.assertEqual(User.select().count(), 1)
+
+        # Test with a unique model.
+        with self.assertQueryCount(1):
+            um = UniqueModel.create_or_get(
+                name='baby huey',
+                field_a='fielda',
+                field_b=1)
+        self.assertEqual(um.name, 'baby huey')
+        self.assertEqual(um.field_a, 'fielda')
+        self.assertEqual(um.field_b, 1)
+
+        with self.assertQueryCount(2):
+            um_get = UniqueModel.create_or_get(
+                name='baby huey',
+                field_a='fielda-modified',
+                field_b=2)
+
+        self.assertEqual(um_get.id, um.id)
+        self.assertEqual(um_get.name, um.name)
+        self.assertEqual(um_get.field_a, um.field_a)
+        self.assertEqual(um_get.field_b, um.field_b)
+        self.assertEqual(UniqueModel.select().count(), 1)
+
+        # Test with a non-integer primary key model.
+        with self.assertQueryCount(1):
+            nm = NonIntModel.create_or_get(
+                pk='1337',
+                data='sweet mickey')
+        self.assertEqual(nm.pk, '1337')
+        self.assertEqual(nm.data, 'sweet mickey')
+
+        with self.assertQueryCount(2):
+            nm_get = NonIntModel.create_or_get(
+                pk='1337',
+                data='michael-nuggie')
+
+        self.assertEqual(nm_get.pk, nm.pk)
+        self.assertEqual(nm_get.data, nm.data)
+        self.assertEqual(NonIntModel.select().count(), 1)
+
+    def test_insert_or_update(self):
+        # Test with a normal model.
+        with self.assertQueryCount(1):
+            user_id = User.insert_or_update(username='charlie')
+        self.assertEqual(User.select().count(), 1)
+        self.assertEqual(User.get().username, 'charlie')
+
+        with self.assertQueryCount(2):
+            User.insert_or_update(username='peewee', id=user_id)
+        self.assertEqual(User.select().count(), 1)
+        self.assertEqual(User.get().username, 'peewee')
+
+        # Test with a unique model.
+        with self.assertQueryCount(1):
+            um_id = UniqueModel.insert_or_update(
+                name='u1', field_a='a', field_b=3)
+        self.assertEqual(UniqueModel.select().count(), 1)
+        um = UniqueModel.get()
+        self.assertEqual(um.name, 'u1')
+        self.assertEqual(um.field_a, 'a')
+        self.assertEqual(um.field_b, 3)
+
+        with self.assertQueryCount(2):
+            UniqueModel.insert_or_update(
+                name='u1', field_a='xx', field_b=9)
+        self.assertEqual(UniqueModel.select().count(), 1)
+        um = UniqueModel.get()
+        self.assertEqual(um.name, 'u1')
+        self.assertEqual(um.field_a, 'xx')
+        self.assertEqual(um.field_b, 9)
+
+        # Test with a non-integer primary key model.
+        with self.assertQueryCount(1):
+            NonIntModel.insert_or_update(
+                pk='1337',
+                data='sweet mickey')
+        self.assertEqual(NonIntModel.select().count(), 1)
+        nm = NonIntModel.get()
+        self.assertEqual(nm.pk, '1337')
+        self.assertEqual(nm.data, 'sweet mickey')
+
+        with self.assertQueryCount(2):
+            NonIntModel.insert_or_update(
+                pk='1337',
+                data='michael-nuggie')
+        self.assertEqual(NonIntModel.select().count(), 1)
+        nm = NonIntModel.get()
+        self.assertEqual(nm.data, 'michael-nuggie')
 
     def test_first(self):
         users = self.create_users(5)
@@ -5090,7 +5192,9 @@ class SQLAllTestCase(BasePeeweeTestCase):
         sql = UniqueModel.sqlall()
         self.assertEqual(sql, [
             ('CREATE TABLE "uniquemodel" ("id" INTEGER NOT NULL PRIMARY KEY, '
-             '"name" VARCHAR(255) NOT NULL)'),
+             '"name" VARCHAR(255) NOT NULL, '
+             '"field_a" VARCHAR(255) NOT NULL, '
+             '"field_b" INTEGER NOT NULL)'),
             'CREATE UNIQUE INDEX "uniquemodel_name" ON "uniquemodel" ("name")',
         ])
 
