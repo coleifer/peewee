@@ -46,10 +46,10 @@ class PooledDatabase(object):
                     logger.debug('Connection %s was stale, closing.', key)
                     self._close(conn, True)
                     ts = conn = None
-                elif key in self._closed:
+                elif key in self._closed or self._is_closed(conn):
                     logger.debug('Connection %s was closed.', key)
                     ts = conn = None
-                    self._closed.remove(key)
+                    self._closed.discard(key)
                 else:
                     break
 
@@ -67,6 +67,10 @@ class PooledDatabase(object):
 
     def _is_stale(self, timestamp):
         return (time.time() - timestamp) > self.stale_timeout
+
+    def _is_closed(self, conn):
+        """Check to see if the server closed the connection"""
+        raise NotImplementedError # Needs to be implemented for MySQL separately to Postgres..
 
     def _close(self, conn, close_conn=False):
         key = self.conn_key(conn)
@@ -96,16 +100,23 @@ class PooledDatabase(object):
         for conn in self._in_use:
             self._close(conn, close_conn=True)
 
+class PooledPostgresDatabase(PooledDatabase):
+
+    def _is_closed(self, conn):
+        # Grab a new connection if this one was closed by the server :)
+        return conn.closed != 0
+
+
 class PooledMySQLDatabase(PooledDatabase, MySQLDatabase):
     pass
 
-class PooledPostgresqlDatabase(PooledDatabase, PostgresqlDatabase):
+class PooledPostgresqlDatabase(PooledPostgresDatabase, PostgresqlDatabase):
     pass
 
 try:
     from playhouse.postgres_ext import PostgresqlExtDatabase
 
-    class PooledPostgresqlExtDatabase(PooledDatabase, PostgresqlExtDatabase):
+    class PooledPostgresqlExtDatabase(PooledPostgresDatabase, PostgresqlExtDatabase):
         pass
 except ImportError:
     pass
