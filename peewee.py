@@ -3439,32 +3439,6 @@ class Model(with_metaclass(BaseModel)):
             return cls.create(**kwargs)
 
     @classmethod
-    def create_or_get(cls, **kwargs):
-        try:
-            with cls._meta.database.transaction():
-                return cls.create(**kwargs)
-        except IntegrityError:
-            query = []
-            for field_name, value in kwargs.items():
-                field = cls._meta.fields[field_name]
-                if field.unique or field.primary_key:  # TODO: multi-fields.
-                    query.append(field == value)
-            return cls.get(*query)
-
-    @classmethod
-    def insert_or_update(cls, **kwargs):
-        try:
-            with cls._meta.database.transaction():
-                return cls.insert(**kwargs).execute()
-        except IntegrityError:
-            query = []
-            for field_name, value in list(kwargs.items()):
-                field = cls._meta.fields[field_name]
-                if field.unique or field.primary_key:  # TODO: multi-fields.
-                    query.append(field == kwargs.pop(field_name))
-            return cls.update(**kwargs).where(*query).execute()
-
-    @classmethod
     def filter(cls, *dq, **query):
         return cls.select().filter(*dq, **query)
 
