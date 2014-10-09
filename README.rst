@@ -3,15 +3,24 @@
 peewee
 ======
 
+Peewee is a simple and small ORM. It has few (but expressive) concepts, making it easy to learn and intuitive to use.
+
 * A small, expressive ORM
 * Written in python with support for versions 2.6+ and 3.2+.
 * built-in support for sqlite, mysql and postgresql
 * tons of extensions available in the `playhouse <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html>`_ (postgres hstore/json/arrays, sqlite full-text-search, schema migrations, and much more).
 
-.. image:: https://api.travis-ci.org/coleifer/peewee.png?branch=master
-  :target: https://travis-ci.org/coleifer/peewee
+New to peewee? Here is a list of documents you might find most helpful when getting
+started:
+
+* `Quickstart guide <http://docs.peewee-orm.com/en/latest/peewee/quickstart.html#quickstart>`_ -- this guide covers all the bare essentials. It will take you between 5 and 10 minutes to go through it.
+* `Guide to the various query operators <http://docs.peewee-orm.com/en/latest/peewee/querying.html#query-operators>`_ describes how to construct queries and combine expressions.
+* `Field types table <http://docs.peewee-orm.com/en/latest/peewee/models.html#field-types-table>`_ lists the various field types peewee supports and the parameters they accept.
 
 For flask integration, check out `flask-peewee <http://flask-peewee.readthedocs.org/>`_, which includes and admin interface, RESTful APIs, authentication, and more. You can also use peewee with the popular extension `flask-admin <http://flask-admin.readthedocs.org/en/latest/>`_.
+
+Examples
+--------
 
 Defining models is similar to Django or SQLAlchemy::
 
@@ -102,11 +111,14 @@ Still want more info?
 
 .. image:: http://media.charlesleifer.com/blog/photos/wat.jpg
 
-Why does peewee exist?
-----------------------
+I've written a number of blog posts about building applications and web-services with peewee (and usually Flask). If you'd like to see some real-life applications that use peewee, the following resources may be useful:
 
-peewee began when I was working on a small app in flask and found myself writing lots of queries and wanting a very simple abstraction on top of the sql.  I had so much fun working on it that I kept adding features. peewee is small enough that its my hope anyone with an interest in orms will be able to understand the code without much trouble.
-
-I hope you enjoy using peewee as much as I've enjoyed working on it!
-
-.. image:: http://media.charlesleifer.com/playground/notes/img/im-97f3e42c02.jpg
+* `Building a note-taking app with Flask and Peewee <http://charlesleifer.com/blog/saturday-morning-hack-a-little-note-taking-app-with-flask/>`_ as well as `Part 2 <http://charlesleifer.com/blog/saturday-morning-hacks-revisiting-the-notes-app/>`_ and `Part 3 <http://charlesleifer.com/blog/saturday-morning-hacks-adding-full-text-search-to-the-flask-note-taking-app/>`_.
+* `Analytics web service built with Flask and Peewee <http://charlesleifer.com/blog/saturday-morning-hacks-building-an-analytics-app-with-flask/>`_.
+* `Personalized news digest (with a boolean query parser!) <http://charlesleifer.com/blog/saturday-morning-hack-personalized-news-digest-with-boolean-query-parser/>`_.
+* `Using peewee to explore CSV files <http://charlesleifer.com/blog/using-peewee-to-explore-csv-files/>`_.
+* `Structuring Flask apps with Peewee <http://charlesleifer.com/blog/structuring-flask-apps-a-how-to-for-those-coming-from-django/>`_.
+* `Creating a lastpass clone with Flask and Peewee <http://charlesleifer.com/blog/creating-a-personal-password-manager/>`_.
+* `Building a web-based encrypted file manager with Flask, peewee and S3 <http://charlesleifer.com/blog/web-based-encrypted-file-storage-using-flask-and-aws/>`_.
+* `Creating a bookmarking web-service that takes screenshots of your bookmarks <http://charlesleifer.com/blog/building-bookmarking-service-python-and-phantomjs/>`_.
+* `Building a pastebin, wiki and a bookmarking service using Flask and Peewee <http://charlesleifer.com/blog/dont-sweat-small-stuff-use-flask-blueprints/>`_.
