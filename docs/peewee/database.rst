@@ -225,6 +225,17 @@ To connect to a MySQL database, we will use :py:class:`MySQLDatabase`. After the
         username = CharField()
         # etc, etc
 
+Connecting using a Database URL
+-------------------------------
+
+The playhouse module :ref:`db_url` provides a helper :py:func:`connect` function that accepts a database URL and returns a :py:class:`Database` instance.
+
+Examples:
+
+* *sqlite:///my_database.db* will create a :py:class:`SqliteDatabase` instance for the file ``my_database.db`` in the current directory.
+* *postgresql://postgres:my_password@localhost:5432/my_database* will create a :py:class:`PostgresqlDatabase` instance. A username and password are provided, as well as the host and port to connect to.
+* *mysql:///my_db* will create a :py:class:`MySQLDatabase` instance for the local MySQL database *my_db*.
+
 Multi-threaded applications
 ---------------------------
 
