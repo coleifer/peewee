@@ -1,4 +1,5 @@
 import csv
+import datetime
 import unittest
 from contextlib import contextmanager
 from datetime import date
@@ -8,7 +9,7 @@ except ImportError:
     from io import StringIO
 from textwrap import dedent
 
-from playhouse.csv_loader import *
+from playhouse.csv_utils import *
 
 
 class TestRowConverter(RowConverter):
@@ -30,6 +31,20 @@ class TestLoader(Loader):
             sample_size=self.sample_size)
 
 db = SqliteDatabase(':memory:')
+
+class BaseModel(Model):
+    class Meta:
+        database = db
+
+class User(BaseModel):
+    username = CharField()
+
+class Note(BaseModel):
+    user = ForeignKeyField(User)
+    content = TextField()
+    timestamp = DateTimeField(default=datetime.datetime.now)
+    is_published = BooleanField(default=True)
+
 
 class TestCSVConversion(unittest.TestCase):
     header = 'id,name,dob,salary,is_admin'
@@ -115,3 +130,90 @@ class TestCSVConversion(unittest.TestCase):
         self.assertData(ModelClass, [
             (10, 'F1 L1', date(1983, 1, 1), 10000., 't'),
             (20, 'F2 L2', date(1983, 1, 2), 20000.5, 'f')])
+
+
+class TestCSVDump(unittest.TestCase):
+    def setUp(self):
+        Note.drop_table(True)
+        User.drop_table(True)
+        User.create_table()
+        Note.create_table()
+
+        self.users = []
+        for i in range(3):
+            user = User.create(username='user-%s' % i)
+            for j in range(i * 3):
+                Note.create(
+                    user=user,
+                    content='note-%s-%s' % (i, j),
+                    timestamp=datetime.datetime(2014, 1 + i, 1 + j),
+                    is_published=j % 2 == 0)
+            self.users.append(user)
+
+    def assertCSV(self, query, csv_lines, **kwargs):
+        buf = StringIO()
+        kwargs['close_file'] = False  # Do not close the StringIO object.
+        final_buf = dump_csv(query, buf, **kwargs)
+        self.assertEqual(final_buf.getvalue().splitlines(), csv_lines)
+
+    def test_dump_simple(self):
+        expected = [
+            'id,username',
+            '%s,user-0' % self.users[0].id,
+            '%s,user-1' % self.users[1].id,
+            '%s,user-2' % self.users[2].id]
+
+        self.assertCSV(User.select().order_by(User.id), expected)
+        self.assertCSV(
+            User.select().order_by(User.id),
+            expected[1:],
+            include_header=False)
+
+        user_0_id = self.users[0].id
+        self.users[0].username = '"herps", derp'
+        self.users[0].save()
+        query = User.select().where(User.id == user_0_id)
+        self.assertCSV(query, [
+            'id,username',
+            '%s,"""herps"", derp"' % user_0_id])
+
+    def test_dump_functions(self):
+        query = (User
+                 .select(User.username, fn.COUNT(Note.id))
+                 .join(Note, JOIN_LEFT_OUTER)
+                 .group_by(User.username)
+                 .order_by(User.id))
+        expected = [
+            'username,COUNT',
+            'user-0,0',
+            'user-1,3',
+            'user-2,6']
+        self.assertCSV(query, expected)
+
+        query = query.select(
+            User.username.alias('name'),
+            fn.COUNT(Note.id).alias('num_notes'))
+        expected[0] = 'name,num_notes'
+        self.assertCSV(query, expected)
+
+    def test_dump_field_types(self):
+        query = (Note
+                 .select(
+                     User.username,
+                     Note.content,
+                     Note.timestamp,
+                     Note.is_published)
+                 .join(User)
+                 .order_by(Note.id))
+        expected = [
+            'username,content,timestamp,is_published',
+            'user-1,note-1-0,2014-02-01 00:00:00,True',
+            'user-1,note-1-1,2014-02-02 00:00:00,False',
+            'user-1,note-1-2,2014-02-03 00:00:00,True',
+            'user-2,note-2-0,2014-03-01 00:00:00,True',
+            'user-2,note-2-1,2014-03-02 00:00:00,False',
+            'user-2,note-2-2,2014-03-03 00:00:00,True',
+            'user-2,note-2-3,2014-03-04 00:00:00,False',
+            'user-2,note-2-4,2014-03-05 00:00:00,True',
+            'user-2,note-2-5,2014-03-06 00:00:00,False']
+        self.assertCSV(query, expected)

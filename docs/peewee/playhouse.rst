@@ -28,7 +28,7 @@ As well as tools for working with databases:
 
 * :ref:`pwiz`
 * :ref:`migrate`
-* :ref:`csv_loader`
+* :ref:`csv_utils`
 * :ref:`read_slaves`
 * :ref:`pool`
 * :ref:`test_utils`
@@ -2178,18 +2178,14 @@ Migrations API
     .. warning:: The MySQL migrations are not well tested.
 
 
-.. _csv_loader:
+.. _csv_utils:
 
-CSV Loader
-----------
+CSV Utils
+---------
 
-This module contains helpers for loading CSV data into a database.  CSV files can
-be introspected to generate an appropriate model class for working with the data.
-This makes it really easy to explore the data in a CSV file using Peewee and SQL.
+This module contains helpers for dumping queries into CSV, and for loading CSV data into a database.  CSV files can be introspected to generate an appropriate model class for working with the data. This makes it really easy to explore the data in a CSV file using Peewee and SQL.
 
-Here is how you would load a CSV file into an in-memory SQLite database.  The
-call to :py:func:`load_csv` returns a :py:class:`Model` instance suitable for
-working with the CSV data:
+Here is how you would load a CSV file into an in-memory SQLite database.  The call to :py:func:`load_csv` returns a :py:class:`Model` instance suitable for working with the CSV data:
 
 .. code-block:: python
 
@@ -2212,7 +2208,6 @@ Now we can run queries using the new model.
     [66044, 66045, 66046, 66047, 66049]
 
 For more information and examples check out this `blog post <http://charlesleifer.com/blog/using-peewee-to-explore-csv-files/>`_.
-
 
 CSV Loader API
 ^^^^^^^^^^^^^^
@@ -2259,6 +2254,26 @@ CSV Loader API
         fields = [DecimalField(), IntegerField(), IntegerField(), DateField()]
         field_names = ['amount', 'from_acct', 'to_acct', 'timestamp']
         Payments = load_csv(db, 'payments.csv', fields=fields, field_names=field_names, has_header=False)
+
+Dumping CSV
+^^^^^^^^^^^
+
+.. py:function:: dump_csv(query, file_or_name[, include_header=True[, close_file=True[, append=True[, csv_writer=None]]]])
+
+    :param query: A peewee :py:class:`SelectQuery` to dump as CSV.
+    :param file_or_name: Either a filename or a file-like object.
+    :param include_header: Whether to generate a CSV header row consisting of the names of the selected columns.
+    :param close_file: Whether the file should be closed after writing the query data.
+    :param append: Whether new data should be appended to the end of the file.
+    :param csv_writer: A python ``csv.writer`` instance to use.
+
+    Example usage:
+
+    .. code-block:: python
+
+        with open('account-export.csv', 'w') as fh:
+            query = Account.select().order_by(Account.id)
+            dump_csv(query, fh)
 
 
 .. _pool:

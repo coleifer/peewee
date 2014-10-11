@@ -68,8 +68,8 @@ def collect_modules(options):
         except ImportError:
             print_('Unable to import berkeleydb tests, skipping')
     if xtra(options.csv):
-        from playhouse import tests_csv_loader
-        modules.append(tests_csv_loader)
+        from playhouse import tests_csv_utils
+        modules.append(tests_csv_utils)
     if xtra(options.djpeewee):
         from playhouse import tests_djpeewee
         modules.append(tests_djpeewee)
