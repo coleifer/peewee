@@ -28,6 +28,7 @@ As well as tools for working with databases:
 
 * :ref:`pwiz`
 * :ref:`migrate`
+* :ref:`db_url`
 * :ref:`csv_utils`
 * :ref:`read_slaves`
 * :ref:`pool`
@@ -2176,6 +2177,34 @@ Migrations API
     Generate migrations for MySQL databases.
 
     .. warning:: The MySQL migrations are not well tested.
+
+.. _db_url:
+
+Database URL
+------------
+
+This module contains a helper function to generate a database connection from a URL connection string.
+
+.. py:function:: connect(url)
+
+    Create a :py:class:`Database` instance from the given connection URL.
+
+    Examples:
+
+    * *sqlite:///my_database.db* will create a :py:class:`SqliteDatabase` instance for the file ``my_database.db`` in the current directory.
+    * *postgresql://postgres:my_password@localhost:5432/my_database* will create a :py:class:`PostgresqlDatabase` instance. A username and password are provided, as well as the host and port to connect to.
+    * *mysql:///my_db* will create a :py:class:`MySQLDatabase` instance for the local MySQL database *my_db*.
+
+    Usage:
+
+    .. code-block:: python
+
+        import os
+        from playhouse.db_url import connect
+
+        # Connect to the database URL defined in the environment, falling
+        # back to a local Sqlite database if no database URL is specified.
+        db = connect(os.environ.get('DATABASE') or 'sqlite:///default.db')
 
 
 .. _csv_utils:
