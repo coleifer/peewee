@@ -40,8 +40,9 @@ def get_option_parser():
     cases.add_option('--migrations', dest='migrations', default=False, action='store_true', help='migration helper tests (requires psycopg2)')
     cases.add_option('--pool', dest='pool', default=False, action='store_true', help='connection pool tests')
     cases.add_option('--postgres-ext', dest='postgres_ext', default=False, action='store_true', help='postgres_ext tests (requires psycopg2)')
-    cases.add_option('--pwiz', dest='pwiz', default=False, action='store_true', help='pwiz, schema introspector and model generator')
+    cases.add_option('--pwiz', dest='pwiz', default=False, action='store_true', help='pwiz, model code generator')
     cases.add_option('--read-slave', dest='read_slave', default=False, action='store_true', help='read_slave tests')
+    cases.add_option('--reflection', dest='reflection', default=False, action='store_true', help='reflection schema introspector')
     cases.add_option('--signals', dest='signals', default=False, action='store_true', help='signals tests')
     cases.add_option('--shortcuts', dest='shortcuts', default=False, action='store_true', help='shortcuts tests')
     cases.add_option('--sqlcipher-ext', dest='sqlcipher', default=False, action='store_true', help='sqlcipher_ext tests (requires pysqlcipher)')
@@ -107,6 +108,9 @@ def collect_modules(options):
     if xtra(options.read_slave):
         from playhouse import tests_read_slave
         modules.append(tests_read_slave)
+    if xtra(options.reflection):
+        from playhouse import tests_reflection
+        modules.append(tests_reflection)
     if xtra(options.signals):
         from playhouse import tests_signals
         modules.append(tests_signals)
