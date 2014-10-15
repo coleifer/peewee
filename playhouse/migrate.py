@@ -157,6 +157,15 @@ class SchemaMigrator(object):
     def __init__(self, database):
         self.database = database
 
+    @classmethod
+    def from_database(cls, database):
+        if isinstance(database, PostgresqlDatabase):
+            return PostgresqlMigrator(database)
+        elif isinstance(database, MySQLDatabase):
+            return MySQLMigrator(database)
+        else:
+            return SqliteMigrator(database)
+
     @operation
     def apply_default(self, table, column_name, field):
         default = field.default
