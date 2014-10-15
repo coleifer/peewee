@@ -75,7 +75,15 @@ class Column(object):
     def is_primary_key(self):
         return self.field_class is PrimaryKeyField or self.primary_key
 
+    def is_foreign_key(self):
+        return self.field_class is ForeignKeyField
+
+    def is_self_referential_fk(self):
+        return (self.field_class is ForeignKeyField and
+                self.rel_model == "'self'")
+
     def set_foreign_key(self, foreign_key, model_names, dest=None):
+        self.foreign_key = foreign_key
         self.field_class = ForeignKeyField
         if foreign_key.dest_table == foreign_key.table:
             self.rel_model = "'self'"
@@ -530,6 +538,51 @@ class Introspector(object):
                     dest)
 
         return columns, foreign_keys, model_names
+
+    def generate_models(self):
+        columns, foreign_keys, model_names = self.introspect()
+        models = {}
+
+        class BaseModel(Model):
+            class Meta:
+                database = self.metadata.database
+
+        def _create_model(table, models):
+            for foreign_key in foreign_keys[table]:
+                dest = foreign_key.dest_table
+
+                if dest not in models and dest != table:
+                    _create_model(dest, models)
+
+            attrs = {}
+            for db_column, column in columns[table].items():
+                FieldClass = column.field_class
+                params = {
+                    'db_column': db_column,
+                    'null': column.nullable}
+                if FieldClass is CharField and column.max_length:
+                    params['max_length'] = int(column.max_length)
+                if column.primary_key and not FieldClass is PrimaryKeyField:
+                    params['primary_key'] = True
+                if FieldClass is ForeignKeyField:
+                    if column.is_self_referential_fk():
+                        params['rel_model'] = 'self'
+                    else:
+                        dest_table = column.foreign_key.dest_table
+                        params['rel_model'] = models[dest_table]
+                    if column.to_field:
+                        params['to_field'] = column.to_field
+
+                attrs[column.name] = FieldClass(**params)
+
+            models[table] = type(table.encode('utf-8'), (BaseModel,), attrs)
+
+        # Actually generate Model classes.
+        for table, model in sorted(model_names.items()):
+            if table not in models:
+                _create_model(table, models)
+
+        return models
 
 
 def introspect(database, schema=None):
