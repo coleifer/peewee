@@ -1,3 +1,4 @@
+import os
 from StringIO import StringIO
 import sys
 import unittest
@@ -69,9 +70,14 @@ class Note(BaseModel):
 
 class TestPwiz(unittest.TestCase):
     def setUp(self):
-        db.drop_tables([User, Note, Category], safe=True)
+        if os.path.exists('tmp.db'):
+            os.unlink('tmp.db')
+        db.connect()
         db.create_tables([User, Note, Category])
         self.introspector = Introspector.from_database(db)
+
+    def tearDown(self):
+        db.close()
 
     def test_print_models(self):
         with capture_output() as output:

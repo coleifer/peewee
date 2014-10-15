@@ -77,6 +77,14 @@ MODELS = (
     Category)
 
 class TestReflection(unittest.TestCase):
+    def setUp(self):
+        if os.path.exists('tmp.db'):
+            os.unlink('tmp.db')
+        sqlite_db.connect()
+
+    def tearDown(self):
+        sqlite_db.close()
+
     def test_sqlite_fk_re(self):
         user_id_tests = [
             'FOREIGN KEY("user_id") REFERENCES "users"("id")',
