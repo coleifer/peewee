@@ -82,8 +82,58 @@ class TestReflection(unittest.TestCase):
             os.unlink('tmp.db')
         sqlite_db.connect()
 
+        for model in MODELS:
+            model._meta.database = sqlite_db
+
     def tearDown(self):
         sqlite_db.close()
+
+    def test_generate_models(self):
+        introspector = self.get_introspector()
+        self.assertEqual(introspector.generate_models(), {})
+
+        for model in MODELS:
+            model.create_table()
+
+        models = introspector.generate_models()
+        self.assertEqual(sorted(models.keys()), [
+            'category',
+            'coltypes',
+            'fkpk',
+            'nullable',
+            'relmodel',
+            'underscores'])
+
+        def assertIsInstance(obj, klass):
+            self.assertTrue(isinstance(obj, klass))
+
+        category = models['category']
+        self.assertEqual(
+            sorted(category._meta.fields),
+            ['id', 'name', 'parent'])
+        assertIsInstance(category.id, PrimaryKeyField)
+        assertIsInstance(category.name, CharField)
+        assertIsInstance(category.parent, ForeignKeyField)
+        self.assertEqual(category.parent.rel_model, category)
+
+        fkpk = models['fkpk']
+        self.assertEqual(sorted(fkpk._meta.fields), ['col_types'])
+        assertIsInstance(fkpk.col_types, ForeignKeyField)
+        self.assertEqual(fkpk.col_types.rel_model, models['coltypes'])
+        self.assertTrue(fkpk.col_types.primary_key)
+
+        relmodel = models['relmodel']
+        self.assertEqual(
+            sorted(relmodel._meta.fields),
+            ['col_types', 'col_types_nullable', 'id'])
+        assertIsInstance(relmodel.col_types, ForeignKeyField)
+        assertIsInstance(relmodel.col_types_nullable, ForeignKeyField)
+        self.assertFalse(relmodel.col_types.null)
+        self.assertTrue(relmodel.col_types_nullable.null)
+        self.assertEqual(relmodel.col_types.rel_model,
+                         models['coltypes'])
+        self.assertEqual(relmodel.col_types_nullable.rel_model,
+                         models['coltypes'])
 
     def test_sqlite_fk_re(self):
         user_id_tests = [

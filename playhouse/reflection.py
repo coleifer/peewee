@@ -573,6 +573,9 @@ class Introspector(object):
                     if column.to_field:
                         params['to_field'] = column.to_field
 
+                    # Generate a unique related name.
+                    params['related_name'] = '%s_%s_rel' % (table, db_column)
+
                 attrs[column.name] = FieldClass(**params)
 
             models[table] = type(table.encode('utf-8'), (BaseModel,), attrs)
