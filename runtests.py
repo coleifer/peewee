@@ -33,6 +33,7 @@ def get_option_parser():
     cases.add_option('--apsw', dest='apsw', default=False, action='store_true', help='apsw tests (requires apsw)')
     cases.add_option('--berkeleydb', dest='berkeleydb', default=False, action='store_true', help='berkeleydb tests (requires pysqlite compiled against berkeleydb)')
     cases.add_option('--csv', dest='csv', default=False, action='store_true', help='csv tests')
+    cases.add_option('--dataset', dest='dataset', default=False, action='store_true', help='dataset tests')
     cases.add_option('--db-url', dest='db_url', default=False, action='store_true', help='db url tests')
     cases.add_option('--djpeewee', dest='djpeewee', default=False, action='store_true', help='djpeewee tests')
     cases.add_option('--gfk', dest='gfk', default=False, action='store_true', help='gfk tests')
@@ -72,6 +73,9 @@ def collect_modules(options):
     if xtra(options.csv):
         from playhouse import tests_csv_utils
         modules.append(tests_csv_utils)
+    if xtra(options.dataset):
+        from playhouse import tests_dataset
+        modules.append(tests_dataset)
     if xtra(options.db_url):
         from playhouse import tests_db_url
         modules.append(tests_db_url)
