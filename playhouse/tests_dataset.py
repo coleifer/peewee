@@ -261,3 +261,10 @@ class TestDataSet(unittest.TestCase):
             'username',
             'charlie',
             'huey'])
+
+    def test_creating_tables(self):
+        new_table = self.dataset['new_table']
+        new_table.insert(data='foo')
+
+        ref2 = self.dataset['new_table']
+        self.assertEqual(list(ref2.all()), [{'id': 1, 'data': 'foo'}])

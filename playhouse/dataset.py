@@ -111,6 +111,8 @@ class Table(object):
         self.name = name
         if model_class is None:
             model_class = self._create_model()
+            model_class.create_table()
+            self.dataset._models[name] = model_class
 
         self.model_class = model_class
 
