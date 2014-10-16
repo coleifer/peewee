@@ -1,5 +1,7 @@
+import csv
 import datetime
 from decimal import Decimal
+import json
 import operator
 try:
     from urlparse import urlparse
@@ -37,9 +39,15 @@ class DataSet(object):
             class Meta:
                 database = self._database
         self._base_model = BaseModel
+        self._export_formats = self.get_export_formats()
 
     def __repr__(self):
         return '<DataSet: %s>' % self._database_path
+
+    def get_export_formats(self):
+        return {
+            'csv': CSVExporter,
+            'json': JSONExporter}
 
     def __getitem__(self, table):
         return Table(self, table, self._models.get(table))
@@ -70,6 +78,28 @@ class DataSet(object):
             return self._database.transaction()
         else:
             return self._database.savepoint()
+
+    def freeze(self, query, format='csv', filename=None, file_obj=None,
+               **kwargs):
+        if filename and file_obj:
+            raise ValueError('file is over-specified. Please use either '
+                             'filename or file_obj, but not both.')
+        if not filename and not file_obj:
+            raise ValueError('A filename or file-like object must be '
+                             'specified.')
+        if format not in self._export_formats:
+            valid_formats = ', '.join(sorted(self._export_formats.keys()))
+            raise ValueError('Unsupported format "%s". Use one of %s.' % (
+                format, valid_formats))
+
+        if filename:
+            file_obj = open(filename, 'w')
+
+        exporter = self._export_formats[format](query)
+        exporter.export(file_obj, **kwargs)
+
+        if filename:
+            file_obj.close()
 
 
 class Table(object):
@@ -167,3 +197,37 @@ class Table(object):
 
     def delete(self, **query):
         return self._apply_where(self.model_class.delete(), query).execute()
+
+
+class Exporter(object):
+    def __init__(self, query):
+        self.query = query
+
+    def export(self, file_obj):
+        raise NotImplementedError
+
+
+class JSONExporter(Exporter):
+    @staticmethod
+    def default(o):
+        if isinstance(o, (datetime.datetime, datetime.date, datetime.time)):
+            return o.isoformat()
+        elif isinstance(o, Decimal):
+            return str(o)
+        raise TypeError('Unable to serialize %r as JSON.' % o)
+
+    def export(self, file_obj, **kwargs):
+        json.dump(
+            list(self.query),
+            file_obj,
+            default=JSONExporter.default,
+            **kwargs)
+
+
+class CSVExporter(Exporter):
+    def export(self, file_obj, header=True, **kwargs):
+        writer = csv.writer(file_obj, **kwargs)
+        if header:
+            writer.writerow([field.name for field in self.query._select])
+        for row in self.query.tuples():
+            writer.writerow(row)

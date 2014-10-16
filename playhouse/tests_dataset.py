@@ -1,6 +1,10 @@
 import datetime
 import operator
 import os
+try:
+    from StringIO import StringIO
+except ImportError:
+    from io import StringIO
 import unittest
 
 from peewee import *
@@ -241,3 +245,19 @@ class TestDataSet(unittest.TestCase):
             {'username': 'u7'},
             {'username': 'u8'},
         ], 'username')
+
+    def test_export(self):
+        self.create_users()
+        user = self.dataset['user']
+
+        buf = StringIO()
+        self.dataset.freeze(user.all(), 'json', file_obj=buf)
+        self.assertEqual(buf.getvalue(), (
+            '[{"username": "charlie"}, {"username": "huey"}]'))
+
+        buf = StringIO()
+        self.dataset.freeze(user.all(), 'csv', file_obj=buf)
+        self.assertEqual(buf.getvalue().splitlines(), [
+            'username',
+            'charlie',
+            'huey'])
