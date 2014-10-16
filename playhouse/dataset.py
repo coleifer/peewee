@@ -73,6 +73,9 @@ class DataSet(object):
         if not self._database.is_closed():
             self.close()
 
+    def query(self, sql, params=None, commit=True):
+        return self._database.execute_sql(sql, params, commit)
+
     def transaction(self):
         if self._database.transaction_depth() == 0:
             return self._database.transaction()
@@ -122,6 +125,12 @@ class Table(object):
 
     def _create_model(self):
         return type(str(self.name), (self.dataset._base_model,), {})
+
+    def create_index(self, columns, unique=False):
+        self.dataset._database.create_index(
+            self.model_class,
+            columns,
+            unique=unique)
 
     def _guess_field_type(self, value):
         if isinstance(value, basestring):
