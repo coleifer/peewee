@@ -1314,6 +1314,259 @@ See also: a slightly more elaborate `example <https://gist.github.com/thedod/110
 DataSet
 -------
 
+The *dataset* module contains a high-level API for working with databases modeled after the popular `project of the same name <https://dataset.readthedocs.org/en/latest/index.html>`_. The aims of the *dataset* module are to provide:
+
+* A simplified API for working with relational data, along the lines of working with JSON.
+* An easy way to export relational data.
+
+A minimal data-loading script might look like this:
+
+.. code-block:: python
+
+    from playhouse.dataset import DataSet
+
+    db = DataSet('sqlite:///:memory:')
+
+    table = db['sometable']
+    table.insert(name='Huey', age=3)
+    table.insert(name='Mickey', age=5, gender='male')
+
+    huey = table.find_one(name='Huey')
+    print huey
+    # {'age': 3, 'gender': None, 'id': 1, 'name': 'Huey'}
+
+    for obj in table:
+        print obj
+    # {'age': 3, 'gender': None, 'id': 1, 'name': 'Huey'}
+    # {'age': 5, 'gender': 'male', 'id': 2, 'name': 'Mickey'}
+
+Getting started
+^^^^^^^^^^^^^^^
+
+:py:class:`DataSet` objects are initialized by passing in a database URL of the format ``dialect://user:password@host/dbname``. See the :ref:`db_url` section for examples of connecting to various databases.
+
+.. code-block:: python
+
+    # Create an in-memory SQLite database.
+    db = DataSet('sqlite:///:memory:')
+
+Storing data
+^^^^^^^^^^^^
+
+To store data, we must first obtain a reference to a table. If the table does not exist, it will be created automatically:
+
+.. code-block:: python
+
+    # Get a table reference, creating the table if it does not exist.
+    table = db['users']
+
+We can now :py:meth:`~Table.insert` new rows into the table. If the columns do not exist, they will be created automatically:
+
+.. code-block:: python
+
+    table.insert(name='Huey', age=3, color='white')
+    table.insert(name='Mickey', age=5, gender='male')
+
+To update existing entries in the table, pass in a dictionary containing the new values and filter conditions. The list of columns to use as filters is specified in the *columns* argument. If no filter columns are specified, then all rows will be updated.
+
+.. code-block:: python
+
+    # Update the gender for "Huey".
+    table.update(name='Huey', gender='male', columns=['name'])
+
+    # Update all records. If the column does not exist, it will be created.
+    table.update(favorite_orm='peewee')
+
+Using transactions
+^^^^^^^^^^^^^^^^^^
+
+DataSet supports nesting transactions using a simple context manager.
+
+.. code-block:: python
+
+    table = db['users']
+    with db.transaction() as txn:
+        table.insert(name='Charlie')
+
+        with db.transaction() as nested_txn:
+            # Set Charlie's favorite ORM to Django.
+            table.update(name='Charlie', favorite_orm='django', columns=['name'])
+
+            # jk/lol
+            nested_txn.rollback()
+
+Inspecting the database
+^^^^^^^^^^^^^^^^^^^^^^^
+
+You can use the :py:meth:`tables` method to list the tables in the current database:
+
+.. code-block:: pycon
+
+    >>> print db.tables
+    ['sometable', 'user']
+
+And for a given table, you can print the columns:
+
+.. code-block:: pycon
+
+    >>> table = db['user']
+    >>> print table.columns
+    ['id', 'age', 'name', 'gender', 'favorite_orm']
+
+We can also find out how many rows are in a table:
+
+.. code-block:: pycon
+
+    >>> print len(db['user'])
+    3
+
+Reading data
+^^^^^^^^^^^^
+
+To retrieve all rows, you can use the :py:meth:`~Table.all` method:
+
+.. code-block:: python
+
+    # Retrieve all the users.
+    users = db['user'].all()
+
+    # We can iterate over all rows without calling `.all()`
+    for user in db['user']:
+        print user['name']
+
+Specific objects can be retrieved using :py:meth:`~Table.find` and :py:meth:`~Table.find_one`.
+
+.. code-block:: python
+
+    # Find all the users who like peewee.
+    peewee_users = db['user'].find(favorite_orm='peewee')
+
+    # Find Huey.
+    huey = db['user'].find_one(name='Huey')
+
+To export data, use the :py:meth:`~DataSet.freeze` method, passing in the query you wish to export:
+
+.. code-block:: python
+
+    peewee_users = db['user'].find(favorite_orm='peewee')
+    db.freeze(peewee_users, format='json', filename='peewee_users.json')
+
+API
+^^^
+
+.. py:class:: DataSet(url)
+
+    The *DataSet* class provides a high-level API for working with relational databases.
+
+    :param str url: A database URL. See :ref:`db_url` for examples.
+
+    .. py:attribute:: tables
+
+        Return a list of tables stored in the database. This list is computed dynamically each time it is accessed.
+
+    .. py:method:: __getitem__(table_name)
+
+        Provide a :py:class:`Table` reference to the specified table. If the table does not exist, it will be created.
+
+    .. py:method:: query(sql[, params=None[, commit=True]])
+
+        :param str sql: A SQL query.
+        :param list params: Optional parameters for the query.
+        :param bool commit: Whether the query should be committed upon execution.
+        :return: A database cursor.
+
+        Execute the provided query against the database.
+
+    .. py:method:: transaction()
+
+        Create a context manager representing a new transaction (or savepoint).
+
+    .. py:method:: freeze(query[, format='csv'[, filename=None[, file_obj=None[, **kwargs]]]])
+
+        :param query: A :py:class:`SelectQuery`, generated using :py:meth:`~Table.all` or `~Table.find`.
+        :param format: Output format. By default, *csv* and *json* are supported.
+        :param filename: Filename to write output to.
+        :param file_obj: File-like object to write output to.
+        :param kwargs: Arbitrary parameters for export-specific functionality.
+
+    .. py:method:: connect()
+
+        Open a connection to the underlying database. If a connection is not opened explicitly, one will be opened the first time a query is executed.
+
+    .. py:method:: close()
+
+        Close the connection to the underlying database.
+
+.. py:class:: Table(dataset, name, model_class)
+
+    The *Table* class provides a high-level API for working with rows in a given table.
+
+    .. py:attribute:: columns
+
+        Return a list of columns in the given table.
+
+    .. py:attribute:: model_class
+
+        A dynamically-created :py:class:`Model` class.
+
+    .. py:method:: create_index(columns[, unique=False])
+
+        Create an index on the given columns:
+
+        .. code-block:: python
+
+            # Create a unique index on the `username` column.
+            db['users'].create_index(['username'], unique=True)
+
+    .. py:method:: insert(**data)
+
+        Insert the given data dictionary into the table, creating new columns as needed.
+
+    .. py:method:: update(columns=None, conjunction=None, **data)
+
+        Update the table using the provided data. If one or more columns are specified in the *columns* parameter, then those columns' values in the *data* dictionary will be used to determine which rows to update.
+
+        .. code-block:: python
+
+            # Update all rows.
+            db['users'].update(favorite_orm='peewee')
+
+            # Only update Huey's record, setting his age to 3.
+            db['users'].update(name='Huey', age=3, columns=['name'])
+
+    .. py:method:: find(**query)
+
+        Query the table for rows matching the specified equality conditions. If no query is specified, then all rows are returned.
+
+        .. code-block:: python
+
+            peewee_users = db['users'].find(favorite_orm='peewee')
+
+    .. py:method:: find_one(**query)
+
+        Return a single row matching the specified equality conditions. If no matching row is found then ``None`` will be returned.
+
+        .. code-block:: python
+
+            huey = db['users'].find_one(name='Huey')
+
+    .. py:method:: all()
+
+        Return all rows in the given table.
+
+    .. py:method:: delete(**query)
+
+        Delete all rows matching the given equality conditions. If no query is provided, then all rows will be deleted.
+
+        .. code-block:: python
+
+            # Adios, Django!
+            db['users'].delete(favorite_orm='Django')
+
+            # Delete all the secret messages.
+            db['secret_messages'].delete()
+
+
 .. _djpeewee:
 
 Django Integration
@@ -2195,7 +2448,7 @@ The reflection module contains helpers for introspecting existing databases. Thi
 
 .. py:class:: Introspector(metadata[, schema=None])
 
-    Metadata can be extracted from a database by instantiating an :py:class:`Introspector`. Rather than instantiating this class directly, it is recommended to use the factory method :py:classmethod:`~Introspector.from_database`.
+    Metadata can be extracted from a database by instantiating an :py:class:`Introspector`. Rather than instantiating this class directly, it is recommended to use the factory method :py:meth:`~Introspector.from_database`.
 
     .. py:classmethod:: from_database(database[, schema=None])
 
