@@ -578,7 +578,7 @@ class Introspector(object):
 
                 attrs[column.name] = FieldClass(**params)
 
-            models[table] = type(table.encode('utf-8'), (BaseModel,), attrs)
+            models[table] = type(str(table), (BaseModel,), attrs)
 
         # Actually generate Model classes.
         for table, model in sorted(model_names.items()):

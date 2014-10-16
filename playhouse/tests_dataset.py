@@ -86,7 +86,7 @@ class TestDataSet(unittest.TestCase):
             user.find_one(username='mickey'),
             {'username': 'mickey', 'age': 5})
 
-        self.assertIsNone(user.find_one(username='xx'))
+        self.assertTrue(user.find_one(username='xx') is None)
 
     def test_update(self):
         user = self.dataset['user']

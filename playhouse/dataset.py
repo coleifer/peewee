@@ -91,7 +91,7 @@ class Table(object):
         return iter(self.find().iterator())
 
     def _create_model(self):
-        return type(self.name.encode('utf-8'), (self.dataset._base_model,), {})
+        return type(str(self.name), (self.dataset._base_model,), {})
 
     def _guess_field_type(self, value):
         if isinstance(value, basestring):
