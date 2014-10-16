@@ -18,6 +18,7 @@ specific functionality:
 
 Modules which expose higher-level python constructs:
 
+* :ref:`dataset`
 * :ref:`djpeewee`
 * :ref:`gfk`
 * :ref:`kv`
@@ -28,6 +29,7 @@ As well as tools for working with databases:
 
 * :ref:`pwiz`
 * :ref:`migrate`
+* :ref:`reflection`
 * :ref:`db_url`
 * :ref:`csv_utils`
 * :ref:`read_slaves`
@@ -1307,6 +1309,11 @@ Example:
 
 See also: a slightly more elaborate `example <https://gist.github.com/thedod/11048875#file-testpeeweesqlcipher-py>`_.
 
+.. _dataset:
+
+DataSet
+-------
+
 .. _djpeewee:
 
 Django Integration
@@ -2177,6 +2184,45 @@ Migrations API
     Generate migrations for MySQL databases.
 
     .. warning:: The MySQL migrations are not well tested.
+
+
+.. _reflection:
+
+Reflection
+----------
+
+The reflection module contains helpers for introspecting existing databases. This module is used internally by several other modules in the playhouse, including :ref:`dataset` and :ref:`pwiz`.
+
+.. py:class:: Introspector(metadata[, schema=None])
+
+    Metadata can be extracted from a database by instantiating an :py:class:`Introspector`. Rather than instantiating this class directly, it is recommended to use the factory method :py:classmethod:`~Introspector.from_database`.
+
+    .. py:classmethod:: from_database(database[, schema=None])
+
+        Creates an :py:class:`Introspector` instance suitable for use with the given database.
+
+        :param database: a :py:class:`Database` instance.
+        :param str schema: an optional schema (supported by some databases).
+
+        Usage:
+
+        .. code-block:: python
+
+            db = SqliteDatabase('my_app.db')
+            introspector = Introspector.from_database(db)
+            models = introspector.generate_models()
+
+            # User and Tweet (assumed to exist in the database) are
+            # peewee Model classes generated from the database schema.
+            User = models['user']
+            Tweet = models['tweet']
+
+    .. py:method:: generate_models()
+
+        Introspect the database, reading in the tables, columns, and foreign key constraints, then generate a dictionary mapping each database table to a dynamically-generated :py:class:`Model` class.
+
+        :return: A dictionary mapping table-names to model classes.
+
 
 .. _db_url:
 
