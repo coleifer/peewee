@@ -1,7 +1,6 @@
 import re
 
 from peewee import *
-
 try:
     from MySQLdb.constants import FIELD_TYPE
 except ImportError:
@@ -9,6 +8,10 @@ except ImportError:
         from pymysql.constants import FIELD_TYPE
     except ImportError:
         FIELD_TYPE = None
+try:
+    from playhouse import postgres_ext
+except ImportError:
+    postgres_ext = None
 
 RESERVED_WORDS = set([
     'and', 'as', 'assert', 'break', 'class', 'continue', 'def', 'del', 'elif',
@@ -166,6 +169,22 @@ class PostgresqlMetadata(Metadata):
         1700: DecimalField,
         2950: TextField, # UUID
     }
+
+    def __init__(self, database):
+        super(PostgresqlMetadata, self).__init__(database)
+
+        if postgres_ext is not None:
+            # Attempt to add types like HStore and JSON.
+            cursor = self.execute('select oid, typname from pg_type;')
+            results = cursor.fetchall()
+
+            for oid, typname in results:
+                if 'json' in typname:
+                    self.column_map[oid] = postgres_ext.JSONField
+                elif 'hstore' in typname:
+                    self.column_map[oid] = postgres_ext.HStoreField
+                elif 'tsvector' in typname:
+                    self.column_map[oid] = postgres_ext.TSVectorField
 
     def get_columns(self, table):
         # Get basic metadata about columns.
