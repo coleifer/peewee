@@ -557,6 +557,9 @@ class Introspector(object):
             attrs = {}
             for db_column, column in columns[table].items():
                 FieldClass = column.field_class
+                if FieldClass is UnknownField:
+                    continue
+
                 params = {
                     'db_column': db_column,
                     'null': column.nullable}
