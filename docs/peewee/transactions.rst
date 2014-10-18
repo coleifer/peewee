@@ -76,7 +76,19 @@ If you would like to manually control *every* transaction, simply turn autocommi
 Nesting Transactions
 --------------------
 
-If you attempt to nest transactions with peewee, only the outer-most transaction will be used:
+For transparent nesting of transactions, you can use the :py:meth:`~Database.atomic` context manager. When using :py:meth:`~Database.atomic`, the outer-most call will be wrapped in a transaction, and any nested calls will use savepoints.
+
+.. code-block:: python
+
+    with db.atomic() as txn:
+        perform_operation()
+
+        with db.atomic() as nested_txn:
+            perform_another_operation()
+
+Peewee supports nested transactions through the use of savepoints (for more information, see :py:meth:`~Database.savepoint`).
+
+If you attempt to nest transactions with peewee using the :py:meth:`~Database.transaction` context manager, only the outer-most transaction will be used:
 
 .. code-block:: python
 
@@ -91,5 +103,3 @@ If you attempt to nest transactions with peewee, only the outer-most transaction
         txn.rollback()
 
     assert User.select().count() == 0
-
-Peewee supports nested transactions through the use of :py:meth:`~Database.savepoint`. See the API documentation for details on using savepoints.

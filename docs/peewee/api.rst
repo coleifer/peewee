@@ -1853,6 +1853,12 @@ Database and its subclasses
 
         :param str sid: A string identifier for the savepoint.
 
+    .. py:method:: atomic()
+
+        Return a context manager that executes statements in either a transaction
+        or a savepoint. The outer-most call to *atomic* will use a transaction,
+        and any subsequent nested calls will use savepoints.
+
     .. py:classmethod:: register_fields(fields)
 
         Register a mapping of field overrides for the database class.  Used
