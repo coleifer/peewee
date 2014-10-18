@@ -5,6 +5,30 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.4.0
+
+This release contains a number of enhancements to the `playhouse` collection of extensions.
+
+### Backwards-incompatible changes
+
+As of 2.4.0, most of the introspection logic was moved out of the ``pwiz`` module and into ``playhouse.reflection``.
+
+### New features
+
+* Created a new [reflection](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#reflection) extension for introspecting databases. The *reflection* module additionally can generate actual peewee Model classes dynamically.
+* Created a [dataset](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#dataset) library (based on the [SQLAlchemy project](http://dataset.readthedocs.org/) of the same name). For more info check out the blog post [announcing playhouse.dataset](http://charlesleifer.com/blog/saturday-morning-hacks-dataset-for-peewee/).
+* Added a [db_url](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#database-url) module which creates `Database` objects from a connection string.
+* Added [csv dump](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#dumping-csv) functionality to the [CSV utils](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#csv-utils) extension.
+* Added an [atomic](http://docs.peewee-orm.com/en/latest/peewee/transactions.html#nesting-transactions) context manager to support nested transactions.
+* Added support for HStore, JSON and TSVector to the `reflection` module.
+* More documentation updates.
+
+### Bugs fixed
+
+* Fixed #440, which fixes a bug where `Model.dirty_fields` did not return an empty set for some subclasses of `QueryResultWrapper`.
+
+[View commits](https://github.com/coleifer/peewee/compare/2.3.3...2.4.0)
+
 ## 2.3.3
 
 This release contains a lot of improvements to the documentation and a mixed bag of other new features and bugfixes.
