@@ -5377,6 +5377,32 @@ if test_db.savepoints:
                     ValueError, self._outer, fail_outer=True, fail_inner=True)
                 self.assertEqual(User.select().count(), 0)
 
+    class TestAtomic(ModelTestCase):
+        requires = [User]
+
+        def test_atomic(self):
+            with test_db.atomic():
+                User.create(username='u1')
+                with test_db.atomic():
+                    User.create(username='u2')
+                    with test_db.atomic() as txn3:
+                        User.create(username='u3')
+                        txn3.rollback()
+
+                    with test_db.atomic():
+                        User.create(username='u4')
+
+                with test_db.atomic() as txn5:
+                    User.create(username='u5')
+                    txn5.rollback()
+
+                User.create(username='u6')
+
+            query = User.select().order_by(User.username)
+            self.assertEqual(
+                [u.username for u in query],
+                ['u1', 'u2', 'u4', 'u6'])
+
 
 elif TEST_VERBOSITY > 0:
     print_('Skipping "savepoint" tests')

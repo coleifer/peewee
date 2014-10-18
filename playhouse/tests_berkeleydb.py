@@ -52,7 +52,7 @@ class TestBerkeleyDatabase(unittest.TestCase):
         self.assertEqual(Message.select().count(), 3)
         self.assertEqual(Person.select().count(), 2)
         self.assertEqual(
-            [msg.body for msg in pc.messages.order_by(Message.id)],
+            [msg.body for msg in pc.messages.order_by(Message.body)],
             ['message-0', 'message-1', 'message-2'])
         self.assertEqual(list(ph.messages), [])
 

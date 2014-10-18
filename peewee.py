@@ -2811,6 +2811,12 @@ class Database(object):
             raise NotImplementedError
         return savepoint(self, sid)
 
+    def atomic(self):
+        if self.transaction_depth() == 0:
+            return self.transaction()
+        else:
+            return self.savepoint()
+
     def get_tables(self):
         raise NotImplementedError
 
