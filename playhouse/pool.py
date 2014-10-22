@@ -46,10 +46,10 @@ class PooledDatabase(object):
                     logger.debug('Connection %s was stale, closing.', key)
                     self._close(conn, True)
                     ts = conn = None
-                elif key in self._closed:
+                elif self._is_closed(key):
                     logger.debug('Connection %s was closed.', key)
                     ts = conn = None
-                    self._closed.remove(key)
+                    self._closed.discard(key)
                 else:
                     break
 
@@ -67,6 +67,9 @@ class PooledDatabase(object):
 
     def _is_stale(self, timestamp):
         return (time.time() - timestamp) > self.stale_timeout
+
+    def _is_closed(self, key):
+        return key in self._closed
 
     def _close(self, conn, close_conn=False):
         key = self.conn_key(conn)
