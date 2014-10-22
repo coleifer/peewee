@@ -179,7 +179,7 @@ Instead, you can update the counters atomically using :py:meth:`~Model.update`:
 .. code-block:: pycon
 
     >>> query = Stat.update(counter=Stat.counter + 1).where(Stat.url == request.url)
-    >>> query.update()
+    >>> query.execute()
 
 You can make these update statements as complex as you like. Let's give all our employees a bonus equal to their previous bonus plus 10% of their salary:
 
