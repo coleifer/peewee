@@ -278,10 +278,11 @@ Let's say we wish to implement registering a new user account using the :ref:`ex
 
     try:
         with db.transaction():
-            user = User.create(username=username)
-        return 'Success'
+            return User.create(username=username)
     except peewee.IntegrityError:
-        return 'Failure: %s is already in use' % username
+        # `username` is a unique column, so this username already exists,
+        # making it safe to call .get().
+        return User.get(User.username == username)
 
 Selecting multiple records
 --------------------------
