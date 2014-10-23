@@ -386,6 +386,11 @@ class PackageItem(TestModel):
         related_name='items',
         to_field=Package.barcode)
 
+class PGSchema(TestModel):
+    data = CharField()
+    class Meta:
+        schema = 'huey'
+
 
 MODELS = [
     User,
@@ -430,6 +435,7 @@ MODELS = [
     CheckModel,
     Package,
     PackageItem,
+    PGSchema,
 ]
 INT = test_db.interpolation
 
@@ -1398,6 +1404,19 @@ class RawTestCase(BasePeeweeTestCase):
         q = 'SELECT * FROM "users" WHERE id=?'
         rq = RawQuery(User, q, 100)
         self.assertEqual(rq.sql(), (q, [100]))
+
+class SchemaTestCase(BasePeeweeTestCase):
+    def test_schema(self):
+        class WithSchema(TestModel):
+            data = CharField()
+            class Meta:
+                schema = 'huey'
+        query = WithSchema.select().where(WithSchema.data == 'mickey')
+        sql, params = compiler.generate_select(query)
+        self.assertEqual(sql, (
+            'SELECT "withschema"."id", "withschema"."data" FROM '
+            '"huey"."withschema" AS withschema '
+            'WHERE ("withschema"."data" = ?)'))
 
 class SugarTestCase(BasePeeweeTestCase):
     # test things like filter, annotate, aggregate
@@ -5327,6 +5346,22 @@ if database_class is PostgresqlDatabase:
 
             u = User.get(User.id == self.user.id)
             self.assertEqual(u.username, self.user.username)
+
+    class TestPostgresqlSchema(ModelTestCase):
+        requires = [PGSchema]
+
+        def setUp(self):
+            test_db.execute_sql('CREATE SCHEMA huey;')
+            super(TestPostgresqlSchema,self).setUp()
+
+        def tearDown(self):
+            super(TestPostgresqlSchema,self).tearDown()
+            test_db.execute_sql('DROP SCHEMA huey;')
+
+        def test_pg_schema(self):
+            pgs = PGSchema.create(data='huey')
+            pgs_db = PGSchema.get(PGSchema.data == 'huey')
+            self.assertEqual(pgs.id, pgs_db.id)
 
 if test_db.savepoints:
     class TestSavepoints(ModelTestCase):
