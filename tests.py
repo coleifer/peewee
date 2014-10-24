@@ -71,6 +71,13 @@ BerkeleyDatabase = None
 if BACKEND in ('postgresql', 'postgres', 'pg'):
     database_class = PostgresqlDatabase
     database_name = 'peewee_test'
+
+    try:
+        from psycopg2cffi import compat
+        compat.register()
+    except ImportError:
+        pass
+
     import psycopg2
 elif BACKEND == 'mysql':
     database_class = MySQLDatabase

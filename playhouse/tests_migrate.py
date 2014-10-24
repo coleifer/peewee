@@ -9,6 +9,12 @@ from peewee import print_
 from playhouse.migrate import *
 
 try:
+    from psycopg2cffi import compat
+    compat.register()
+except ImportError:
+    pass
+
+try:
     import psycopg2
 except ImportError:
     psycopg2 = None

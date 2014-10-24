@@ -133,6 +133,13 @@ except ImportError:
         from pysqlite2 import dbapi2 as sqlite3
     except ImportError:
         sqlite3 = None
+
+try:
+    from psycopg2cffi import compat
+    compat.register()
+except ImportError:
+    pass
+
 try:
     import psycopg2
     from psycopg2 import extensions as pg_extensions
