@@ -102,21 +102,20 @@ class PooledDatabase(object):
 class PooledMySQLDatabase(PooledDatabase, MySQLDatabase):
     pass
 
-class PooledPostgresDatabase(PooledDatabase):
-
+class _PooledPostgresqlDatabase(PooledDatabase):
     def _is_closed(self, key, conn):
-        is_closed = super(PooledPostgresDatabase, self)._is_closed(key, conn)
-        # Test whether the server forcibly closed the connection
-        is_closed |= (conn.closed != 0)
+        is_closed = super(_PooledPostgresqlDatabase, self)._is_closed(key, conn)
+        if not is_closed:
+            is_closed = bool(conn.closed)
         return is_closed
 
-class PooledPostgresqlDatabase(PooledPostgresDatabase, PostgresqlDatabase):
+class PooledPostgresqlDatabase(_PooledPostgresqlDatabase, PostgresqlDatabase):
     pass
 
 try:
     from playhouse.postgres_ext import PostgresqlExtDatabase
 
-    class PooledPostgresqlExtDatabase(PooledPostgresDatabase, PostgresqlExtDatabase):
+    class PooledPostgresqlExtDatabase(_PooledPostgresqlDatabase, PostgresqlExtDatabase):
         pass
 except ImportError:
     pass
