@@ -50,7 +50,7 @@ def connect(url):
     if parsed.hostname:
         connect_kwargs['host'] = parsed.hostname
     if parsed.port:
-        connect_kwargs['post'] = parsed.port
+        connect_kwargs['port'] = parsed.port
 
     # Adjust parameters for MySQL.
     if database_class is MySQLDatabase and 'password' in connect_kwargs:
