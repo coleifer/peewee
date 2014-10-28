@@ -5,6 +5,18 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.4.1
+
+This release contains a few small bugfixes.
+
+### Bugs fixed
+
+* #448, add hook to the connection pool for detecting closed connections.
+* #229, fix join attribute detection.
+* #447, fixed documentation typo.
+
+[View commits](https://github.com/coleifer/peewee/compare/2.4.0...2.4.1)
+
 ## 2.4.0
 
 This release contains a number of enhancements to the `playhouse` collection of extensions.
