@@ -140,7 +140,9 @@ class BaseMigrationTestCase(object):
 
     def get_column_names(self, tbl):
         cursor = self.database.execute_sql('select * from %s limit 1' % tbl)
-        return set([col[0] for col in cursor.description])
+        columns = set([col[0] for col in cursor.description])
+        cursor.close()
+        return columns
 
     def test_drop_column(self):
         self._create_people()
