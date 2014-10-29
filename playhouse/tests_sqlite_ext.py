@@ -1,4 +1,3 @@
-import sqlite3; sqlite3.enable_callback_tracebacks(True)
 import unittest
 import sqlite3
 
