@@ -4,6 +4,7 @@ import json
 import os
 import unittest
 import uuid
+import sys
 
 import psycopg2
 
@@ -455,6 +456,12 @@ class SSCursorTestCase(unittest.TestCase):
         query = SSCursorModel.select().order_by(SSCursorModel.data)
         self.assertList(query)
 
+        # Apparently psycopg2cffi uses a differnt exception type
+        if 'PyPy' in sys.version:
+            exceptionClass = psycopg2.OperationalError
+        else:
+            exceptionClass = psycopg2.ProgrammingError
+
         query2 = query.clone()
         qr = query2.execute()
         self.assertList(qr)
@@ -475,19 +482,24 @@ class SSCursorTestCase(unittest.TestCase):
 
         # After the transaction we cannot fetch a result because the cursor
         # is dead.
-        self.assertRaises(psycopg2.ProgrammingError, qr2.cursor.fetchone)
+        self.assertRaises(exceptionClass, qr2.cursor.fetchone)
 
         # Try using the helper.
         query4 = query.clone()
         self.assertList(ServerSide(query4))
 
         # Named cursor is dead.
-        self.assertRaises(
-            psycopg2.ProgrammingError, query4._qr.cursor.fetchone)
+        self.assertRaises(exceptionClass, query4._qr.cursor.fetchone)
 
     def test_serverside_normal_model(self):
         query = NormalModel.select().order_by(NormalModel.data)
         self.assertList(query)
+
+        # Apparently psycopg2cffi uses a differnt exception type
+        if 'PyPy' in sys.version:
+            exceptionClass = psycopg2.OperationalError
+        else:
+            exceptionClass = psycopg2.ProgrammingError
 
         # We can ask for more results from a normal query.
         self.assertEqual(query._qr.cursor.fetchone(), None)
@@ -496,7 +508,7 @@ class SSCursorTestCase(unittest.TestCase):
         self.assertList(ServerSide(clone))
 
         # Named cursor is dead.
-        self.assertRaises(psycopg2.ProgrammingError, clone._qr.cursor.fetchone)
+        self.assertRaises(exceptionClass, clone._qr.cursor.fetchone)
 
         # Ensure where clause is preserved.
         query = query.where(NormalModel.data == '2')
@@ -506,6 +518,12 @@ class SSCursorTestCase(unittest.TestCase):
     def test_ss_cursor(self):
         tbl = SSCursorModel._meta.db_table
         name = str(uuid.uuid1())
+
+        # Apparently psycopg2cffi uses a differnt exception type
+        if 'PyPy' in sys.version:
+            exceptionClass = psycopg2.OperationalError
+        else:
+            exceptionClass = psycopg2.ProgrammingError
 
         # Get a named cursor and execute a select query.
         cursor = test_ss_db.get_cursor(name=name)
@@ -522,7 +540,7 @@ class SSCursorTestCase(unittest.TestCase):
 
         # Explicitly close the cursor.
         test_ss_db.commit()
-        self.assertRaises(psycopg2.ProgrammingError, cursor.fetchone)
+        self.assertRaises(exceptionClass, cursor.fetchone)
 
         # This would not work is the named cursor was still holding a ref to
         # the table.
