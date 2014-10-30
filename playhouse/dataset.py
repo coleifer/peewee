@@ -238,7 +238,7 @@ class JSONExporter(Exporter):
 class CSVExporter(Exporter):
     def export(self, file_obj, header=True, **kwargs):
         writer = csv.writer(file_obj, **kwargs)
-        if header:
+        if header and hasattr(self.query, '_select'):
             writer.writerow([field.name for field in self.query._select])
         for row in self.query.tuples():
             writer.writerow(row)
