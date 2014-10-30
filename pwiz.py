@@ -41,7 +41,9 @@ def make_introspector(database_type, database_name, **kwargs):
     return Introspector.from_database(db, schema=schema)
 
 def print_models(introspector, tables=None):
-    columns, foreign_keys, model_names = introspector.introspect()
+    columns, primary_keys, foreign_keys, model_names =\
+            introspector.introspect()
+
     print_(TEMPLATE % (
         introspector.get_database_class().__name__,
         introspector.get_database_name(),
@@ -74,6 +76,12 @@ def print_models(introspector, tables=None):
         print_('')
         print_('    class Meta:')
         print_('        db_table = \'%s\'' % table)
+        if len(primary_keys[table]) > 1:
+            pk_field_names = sorted([
+                field.name for col, field in columns[table].items()
+                if col in primary_keys[table]])
+            pk_list = ', '.join("'%s'" % pk for pk in pk_field_names)
+            print_('        primary_key = CompositeKey(%s)' % pk_list)
         print_('')
 
         seen.add(table)

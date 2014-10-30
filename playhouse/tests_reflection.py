@@ -216,7 +216,9 @@ class TestReflection(unittest.TestCase):
 
     @generative_test
     def test_col_types(self, introspector):
-        columns, foreign_keys, model_names = introspector.introspect()
+        columns, primary_keys, foreign_keys, model_names =\
+                introspector.introspect()
+
         expected = (
             ('coltypes', (
                 ('f1', BigIntegerField, False),
@@ -260,7 +262,9 @@ class TestReflection(unittest.TestCase):
 
     @generative_test
     def test_foreign_keys(self, introspector):
-        columns, foreign_keys, model_names = introspector.introspect()
+        columns, primary_keys, foreign_keys, model_names =\
+                introspector.introspect()
+
         self.assertEqual(foreign_keys['coltypes'], [])
 
         rel_model = foreign_keys['relmodel']
@@ -286,7 +290,9 @@ class TestReflection(unittest.TestCase):
 
     @generative_test
     def test_table_names(self, introspector):
-        columns, foreign_keys, model_names = introspector.introspect()
+        columns, primary_keys, foreign_keys, model_names =\
+                introspector.introspect()
+
         names = (
             ('coltypes', 'Coltypes'),
             ('nullable', 'Nullable'),
@@ -297,7 +303,9 @@ class TestReflection(unittest.TestCase):
 
     @generative_test
     def test_column_meta(self, introspector):
-        columns, foreign_keys, model_names = introspector.introspect()
+        columns, primary_keys, foreign_keys, model_names =\
+                introspector.introspect()
+
         rel_model = columns['relmodel']
 
         col_types_id = rel_model['col_types_id']
@@ -334,7 +342,9 @@ class TestReflection(unittest.TestCase):
 
     @generative_test
     def test_get_field(self, introspector):
-        columns, foreign_keys, model_names = introspector.introspect()
+        columns, primary_keys, foreign_keys, model_names =\
+                introspector.introspect()
+
         expected = (
             ('coltypes', (
                 ('f1', 'f1 = BigIntegerField()'),

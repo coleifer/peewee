@@ -144,6 +144,9 @@ class Metadata(object):
     def get_columns(self, table):
         pass
 
+    def get_primary_keys(self, table, schema=None):
+        pass
+
     def get_foreign_keys(self, table, schema=None):
         pass
 
@@ -215,20 +218,12 @@ class PostgresqlMetadata(Metadata):
             name_to_info[column]['field_class'] = field_class
 
         # Look up the primary keys.
-        cursor = self.execute("""
-            SELECT pg_attribute.attname
-            FROM pg_index, pg_class, pg_attribute
-            WHERE
-              pg_class.oid = '%s'::regclass AND
-              indrelid = pg_class.oid AND
-              pg_attribute.attrelid = pg_class.oid AND
-              pg_attribute.attnum = any(pg_index.indkey)
-              AND indisprimary;""" % table)
-        pk_names = [row[0] for row in cursor.fetchall()]
-        for pk_name in pk_names:
-            name_to_info[pk_name]['primary_key'] = True
-            if name_to_info[pk_name]['field_class'] is IntegerField:
-                name_to_info[pk_name]['field_class'] = PrimaryKeyField
+        pk_names = self.get_primary_keys(table)
+        if len(pk_names) == 1:
+            for pk_name in pk_names:
+                name_to_info[pk_name]['primary_key'] = True
+                if name_to_info[pk_name]['field_class'] is IntegerField:
+                    name_to_info[pk_name]['field_class'] = PrimaryKeyField
 
         columns = {}
         for name, column_info in name_to_info.items():
@@ -242,6 +237,18 @@ class PostgresqlMetadata(Metadata):
                 db_column=name)
 
         return columns
+
+    def get_primary_keys(self, table, schema=None):
+        cursor = self.execute("""
+            SELECT pg_attribute.attname
+            FROM pg_index, pg_class, pg_attribute
+            WHERE
+              pg_class.oid = '%s'::regclass AND
+              indrelid = pg_class.oid AND
+              pg_attribute.attrelid = pg_class.oid AND
+              pg_attribute.attnum = any(pg_index.indkey)
+              AND indisprimary;""" % table)
+        return set(row[0] for row in cursor.fetchall())
 
     def get_foreign_keys(self, table, schema=None):
         schema = schema or 'public'
@@ -298,7 +305,7 @@ class MySQLMetadata(Metadata):
         super(MySQLMetadata, self).__init__(database, **kwargs)
 
     def get_columns(self, table):
-        pk_name = self.get_primary_key(table)
+        primary_keys = self.get_primary_keys(table)
 
         # Get basic metadata about columns.
         cursor = self.execute("""
@@ -324,7 +331,7 @@ class MySQLMetadata(Metadata):
             name, type_code = column_description[:2]
             field_class = self.column_map.get(type_code, UnknownField)
 
-            if name == pk_name:
+            if name in primary_keys and len(primary_keys) == 1:
                 name_to_info[name]['primary_key'] = True
                 if field_class is IntegerField:
                     field_class = PrimaryKeyField
@@ -344,11 +351,10 @@ class MySQLMetadata(Metadata):
 
         return columns
 
-    def get_primary_key(self, table):
+    def get_primary_keys(self, table, schema=None):
+        primary_keys = set()
         cursor = self.execute('SHOW INDEX FROM `%s`' % table)
-        for row in cursor.fetchall():
-            if row[2] == 'PRIMARY':
-                return row[4]
+        return set(row[4] for row in cursor.fetchall() if row[2] == 'PRIMARY')
 
     def get_foreign_keys(self, table, schema=None):
         framing = """
@@ -408,15 +414,19 @@ class SqliteMetadata(Metadata):
         return field_class, raw_column_type
 
     def get_columns(self, table):
+        pks = self.get_primary_keys(table)
         columns = {}
 
         # Column ID, Name, Column Type, Not Null?, Default, Is Primary Key?
         cursor = self.execute('PRAGMA table_info("%s")' % table)
+        results = cursor.fetchall()
 
-        for (_, name, column_type, not_null, _, is_pk) in cursor.fetchall():
+        for (_, name, column_type, not_null, _, is_pk) in results:
             field_class, raw_column_type = self._map_col(column_type)
 
-            if is_pk and field_class == IntegerField:
+            if is_pk and len(pks) > 1:
+                is_pk = False
+            elif is_pk and field_class == IntegerField:
                 field_class = PrimaryKeyField
 
             max_length = None
@@ -435,6 +445,10 @@ class SqliteMetadata(Metadata):
                 db_column=name)
 
         return columns
+
+    def get_primary_keys(self, table, schema=None):
+        cursor = self.execute('PRAGMA table_info("%s")' % table)
+        return set(row[1] for row in cursor.fetchall() if row[-1])
 
     def get_foreign_keys(self, table, schema=None):
         query = """
@@ -520,6 +534,9 @@ class Introspector(object):
         # Store a mapping of table name -> dictionary of columns.
         columns = {}
 
+        # Store a mapping of table name -> set of primary key columns.
+        primary_keys = {}
+
         # Store a mapping of table -> foreign keys.
         foreign_keys = {}
 
@@ -541,6 +558,9 @@ class Introspector(object):
             for column_name, column in columns[table].items():
                 column.name = self.make_column_name(column_name)
 
+            primary_keys[table] = self.metadata.get_primary_keys(
+                table, self.schema)
+
         # On the second pass convert all foreign keys.
         for table in tables:
             for foreign_key in foreign_keys[table]:
@@ -556,10 +576,10 @@ class Introspector(object):
                     model_names,
                     dest)
 
-        return columns, foreign_keys, model_names
+        return columns, primary_keys, foreign_keys, model_names
 
     def generate_models(self):
-        columns, foreign_keys, model_names = self.introspect()
+        columns, primary_keys, foreign_keys, model_names = self.introspect()
         models = {}
 
         class BaseModel(Model):
@@ -572,6 +592,15 @@ class Introspector(object):
 
                 if dest not in models and dest != table:
                     _create_model(dest, models)
+
+            primary_keys = []
+            for db_column, column in columns[table].items():
+                if column.primary_key:
+                    primary_keys.append(column.name)
+
+            # Fix models with multi-column primary keys.
+            if len(primary_keys) > 1:
+                pass
 
             attrs = {}
             for db_column, column in columns[table].items():
