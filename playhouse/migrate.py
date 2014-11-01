@@ -433,13 +433,13 @@ class SqliteMigrator(SchemaMigrator):
             [table, 'index'])
         index_to_sql = dict(cursor.fetchall())
         indexed_columns = {}
-        for index_name in index_to_sql:
+        for index_name in sorted(index_to_sql):
             cursor = self.database.execute_sql(
                 'PRAGMA index_info("%s")' % index_name)
             indexed_columns[index_name] = [row[2] for row in cursor.fetchall()]
 
         return [_IndexMetadata(key, index_to_sql[key], indexed_columns[key])
-                for key in sorted(index_to_sql.keys())]
+                for key in sorted(index_to_sql)]
 
     @operation
     def _update_column(self, table, column_to_update, fn):
