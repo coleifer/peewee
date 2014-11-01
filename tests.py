@@ -4638,6 +4638,26 @@ class CompoundSelectTestCase(ModelTestCase):
         })
 
     @requires_op('UNION')
+    def test_union_from(self):
+        uq = User.select(User.username).where(User.username << ['a', 'b', 'd'])
+        oq = (OrderedModel
+              .select(OrderedModel.title)
+              .where(OrderedModel.title << ['a', 'b'])
+              .order_by())
+        union = uq | oq
+
+        query = User.select(SQL('1')).from_(union)
+        sql, params = compiler.generate_select(query)
+        self.assertEqual(sql, (
+            'SELECT 1 FROM ('
+            'SELECT "users"."username" FROM "users" AS users '
+            'WHERE ("users"."username" IN (?, ?, ?)) '
+            'UNION '
+            'SELECT "orderedmodel"."title" FROM "orderedmodel" AS orderedmodel'
+            ' WHERE ("orderedmodel"."title" IN (?, ?)))'))
+        self.assertEqual(params, ['a', 'b', 'd', 'a', 'b'])
+
+    @requires_op('UNION')
     def test_union_count(self):
         a = User.select().where(User.username == 'a')
         c_and_d = User.select().where(User.username << ['c', 'd'])
