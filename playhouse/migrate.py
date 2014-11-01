@@ -439,7 +439,7 @@ class SqliteMigrator(SchemaMigrator):
             indexed_columns[index_name] = [row[2] for row in cursor.fetchall()]
 
         return [_IndexMetadata(key, index_to_sql[key], indexed_columns[key])
-                for key in sorted(index_to_sql)]
+                for key in sorted(index_to_sql.keys())]
 
     @operation
     def _update_column(self, table, column_to_update, fn):
