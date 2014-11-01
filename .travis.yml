@@ -6,12 +6,13 @@ python:
   - "3.3"
   - "3.4"
   - "pypy"
+  - "pypy3"
 env:
   - PEEWEE_TEST_BACKEND=sqlite
   - PEEWEE_TEST_BACKEND=postgresql
 services:
   - postgres
-install: " if hash pypy 2>/dev/null; then pip install psycopg2cffi; else pip install psycopg2; fi "
+install: ' if [[ "$TRAVIS_PYTHON_VERSION" == *pypy* ]]; then pip install psycopg2cffi; else pip install psycopg2; fi '
 before_script:
   - sh -c "psql -c 'create database peewee_test;' -U postgres"
   - sh -c "psql peewee_test -c 'create extension hstore;' -U postgres"
