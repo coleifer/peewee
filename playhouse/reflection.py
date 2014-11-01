@@ -598,11 +598,18 @@ class Introspector(object):
                 if column.primary_key:
                     primary_keys.append(column.name)
 
-            # Fix models with multi-column primary keys.
-            if len(primary_keys) > 1:
+            class Meta:
                 pass
 
-            attrs = {}
+            # Fix models with multi-column primary keys.
+            if len(primary_keys) == 0:
+                primary_keys = columns[table].keys()
+            if len(primary_keys) > 1:
+                Meta.primary_key = CompositeKey([
+                    field.name for col, field in columns[table].items()
+                    if col in primary_keys])
+
+            attrs = {'Meta': Meta}
             for db_column, column in columns[table].items():
                 FieldClass = column.field_class
                 if FieldClass is UnknownField:
