@@ -405,6 +405,8 @@ class MySQLMigrator(SchemaMigrator):
             Entity(table))
 
 
+_IndexMetadata = namedtuple('_IndexMetadata', ('name', 'sql', 'columns'))
+
 class SqliteMigrator(SchemaMigrator):
     """
     SQLite supports a subset of ALTER TABLE queries, view the docs for the
@@ -424,10 +426,28 @@ class SqliteMigrator(SchemaMigrator):
             ['table', table])
         return res.fetchone()[0]
 
+    def _get_indexes(self, table):
+        cursor = self.database.execute_sql(
+            'SELECT name, sql FROM sqlite_master '
+            'WHERE tbl_name = ? AND type = ?',
+            [table, 'index'])
+        index_to_sql = dict(cursor.fetchall())
+        indexed_columns = {}
+        for index_name in index_to_sql:
+            cursor = self.database.execute_sql(
+                'PRAGMA index_info("%s")' % index_name)
+            indexed_columns[index_name] = [row[2] for row in cursor.fetchall()]
+
+        return [_IndexMetadata(key, index_to_sql[key], indexed_columns[key])
+                for key in index_to_sql]
+
     @operation
     def _update_column(self, table, column_to_update, fn):
         # Get the SQL used to create the given table.
         create_table = self._get_create_table(table)
+
+        # Get the indexes and SQL to re-create indexes.
+        indexes = self._get_indexes(table)
 
         # Parse out the `CREATE TABLE` and column list portions of the query.
         raw_create, raw_columns = self.column_re.search(create_table).groups()
@@ -486,6 +506,17 @@ class SqliteMigrator(SchemaMigrator):
             SQL('DROP TABLE'),
             Entity(table)))
         queries.append(self.rename_table(temp_table, table))
+
+        # Re-create indexes.
+        original_to_new = dict(zip(original_column_names, new_column_names))
+        new_column = original_to_new.get(column_to_update)
+
+        for index in indexes:
+            if column_to_update in index.columns and new_column:
+                queries.append(
+                    SQL(index.sql.replace(column_to_update, new_column)))
+            else:
+                queries.append(SQL(index.sql))
 
         return queries
 

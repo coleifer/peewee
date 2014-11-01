@@ -7,6 +7,7 @@ from peewee import create_model_tables
 from peewee import drop_model_tables
 from peewee import print_
 from playhouse.migrate import *
+from playhouse.test_utils import count_queries
 
 try:
     import psycopg2
@@ -40,6 +41,17 @@ class User(Model):
 class Page(Model):
     name = TextField(unique=True, null=True)
     user = ForeignKeyField(User, null=True, related_name='pages')
+
+class IndexModel(Model):
+    first_name = CharField()
+    last_name = CharField()
+    data = IntegerField(unique=True)
+
+    class Meta:
+        database = sqlite_db
+        indexes = (
+            (('first_name', 'last_name'), True),
+        )
 
 MODELS = [
     Person,
@@ -389,6 +401,60 @@ class BaseMigrationTestCase(object):
 class SqliteMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
     database = sqlite_db
     migrator_class = SqliteMigrator
+
+    def setUp(self):
+        super(SqliteMigrationTestCase, self).setUp()
+        IndexModel.drop_table(True)
+        IndexModel.create_table()
+
+    def test_index_preservation(self):
+        with count_queries() as qc:
+            migrate(self.migrator.rename_column(
+                'indexmodel',
+                'first_name',
+                'first'))
+
+        queries = [log.msg for log in qc.get_queries()]
+        self.assertEqual(queries, [
+            # Get the table definition.
+            ('select sql from sqlite_master where type=? and name=? limit 1',
+             ['table', 'indexmodel']),
+
+            # Get the indexes and indexed columns for the table.
+            ('SELECT name, sql FROM sqlite_master '
+             'WHERE tbl_name = ? AND type = ?',
+             ['indexmodel', 'index']),
+            ('PRAGMA index_info("indexmodel_data")', None),
+            ('PRAGMA index_info("indexmodel_first_name_last_name")', None),
+
+            # Drop any temporary table, if it exists.
+            ('DROP TABLE IF EXISTS "indexmodel__tmp__"', []),
+
+            # Create a temporary table with the renamed column.
+            ('CREATE TABLE "indexmodel__tmp__" ('
+             '"id" INTEGER NOT NULL PRIMARY KEY, '
+             '"first" VARCHAR(255) NOT NULL, '
+             '"last_name" VARCHAR(255) NOT NULL, '
+             '"data" INTEGER NOT NULL)', []),
+
+            # Copy data from original table into temporary table.
+            ('INSERT INTO "indexmodel__tmp__" '
+             '("id", "first", "last_name", "data") '
+             'SELECT "id", "first_name", "last_name", "data" '
+             'FROM "indexmodel"', []),
+
+            # Drop the original table.
+            ('DROP TABLE "indexmodel"', []),
+
+            # Rename the temporary table, replacing the original.
+            ('ALTER TABLE "indexmodel__tmp__" RENAME TO "indexmodel"', []),
+
+            # Re-create the indexes.
+            ('CREATE UNIQUE INDEX "indexmodel_data" '
+             'ON "indexmodel" ("data")', []),
+            ('CREATE UNIQUE INDEX "indexmodel_first_last_name" '
+             'ON "indexmodel" ("first", "last_name")', [])
+        ])
 
 
 if psycopg2:
