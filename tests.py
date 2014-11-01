@@ -4644,7 +4644,8 @@ class CompoundSelectTestCase(ModelTestCase):
               .select(OrderedModel.title)
               .where(OrderedModel.title << ['a', 'b'])
               .order_by())
-        union = uq | oq
+        iq = UniqueModel.select(UniqueModel.name)
+        union = uq | oq | iq
 
         query = User.select(SQL('1')).from_(union)
         sql, params = compiler.generate_select(query)
@@ -4654,7 +4655,10 @@ class CompoundSelectTestCase(ModelTestCase):
             'WHERE ("users"."username" IN (?, ?, ?)) '
             'UNION '
             'SELECT "orderedmodel"."title" FROM "orderedmodel" AS orderedmodel'
-            ' WHERE ("orderedmodel"."title" IN (?, ?)))'))
+            ' WHERE ("orderedmodel"."title" IN (?, ?)) '
+            'UNION '
+            'SELECT "uniquemodel"."name" FROM "uniquemodel" AS uniquemodel'
+            ')'))
         self.assertEqual(params, ['a', 'b', 'd', 'a', 'b'])
 
     @requires_op('UNION')
