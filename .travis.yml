@@ -7,6 +7,9 @@ python:
   - "3.4"
   - "pypy"
   - "pypy3"
+matrix:
+  allow_failures:
+    - python: pypy3
 env:
   - PEEWEE_TEST_BACKEND=sqlite
   - PEEWEE_TEST_BACKEND=postgresql
