@@ -1988,6 +1988,8 @@ class QueryResultWrapperTestCase(ModelTestCase):
             for i in range(5):
                 assertUser(uq, i)
 
+        uq._qr.cursor.close()
+
         # Iterate in reverse and ensure only costs 1 query.
         uq = User.select().order_by(User.id)
 
