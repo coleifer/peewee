@@ -19,7 +19,6 @@ class Entry(Model):
     class Meta:
         database = db
 
-
 def initialize(passphrase):
     db.init('diary.db', passphrase=passphrase, kdf_iter=64000)
     Entry.create_table(True)
