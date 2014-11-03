@@ -236,7 +236,7 @@ Models
 
         .. code-block:: python
 
-            user = User.get(User.username == username, User.password == password)
+            user = User.get(User.username == username, User.active == True)
 
         This method is also exposed via the :py:class:`SelectQuery`, though it
         takes no parameters:
@@ -247,7 +247,7 @@ Models
             try:
                 user = active.where(
                     (User.username == username) &
-                    (User.password == password)
+                    (User.active == True)
                 ).get()
             except User.DoesNotExist:
                 user = None
@@ -1185,7 +1185,7 @@ Query Types
         .. code-block:: python
 
             sq = User.select().where(User.active == True)
-            if sq.where(User.username == username, User.password == password).exists():
+            if sq.where(User.username == username, User.active == True).exists():
                 authenticated = True
 
     .. py:method:: get()
