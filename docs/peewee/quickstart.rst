@@ -315,7 +315,7 @@ If you already have a database, you can autogenerate peewee models using :ref:`p
 
 .. code-block:: console
 
-    pwiz.py -e postgresql charles_blog > blog_models.py
+    python -m pwiz -e postgresql charles_blog > blog_models.py
 
 What next?
 ----------

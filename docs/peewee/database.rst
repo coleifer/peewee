@@ -392,13 +392,13 @@ Introspecting a Postgresql database:
 
 .. code-block:: console
 
-    pwiz.py --engine=postgresql my_postgresql_database
+    python -m pwiz --engine=postgresql my_postgresql_database
 
 Introspecting a SQLite database:
 
 .. code-block:: console
 
-    pwiz.py --engine=sqlite test.db
+    python -m pwiz --engine=sqlite test.db
 
 pwiz will generate:
 
@@ -410,7 +410,7 @@ The generated code is written to stdout, and can easily be redirected to a file:
 
 .. code-block:: console
 
-    pwiz.py -e postgresql my_postgresql_db > models.py
+    python -m pwiz -e postgresql my_postgresql_db > models.py
 
 .. note::
     pwiz generally works quite well with even large and complex database

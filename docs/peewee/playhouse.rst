@@ -2167,13 +2167,13 @@ and you can just run:
 .. highlight:: console
 .. code-block:: console
 
-    pwiz.py -e postgresql -u postgres my_postgres_db
+    python -m pwiz -e postgresql -u postgres my_postgres_db
 
 This will print a bunch of models to standard output.  So you can do this:
 
 .. code-block:: console
 
-    pwiz.py -e postgresql my_postgres_db > mymodels.py
+    python -m pwiz -e postgresql my_postgres_db > mymodels.py
     python # <-- fire up an interactive shell
 
 
