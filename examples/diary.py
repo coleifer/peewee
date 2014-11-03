@@ -21,16 +21,12 @@ class Entry(Model):
 
 def initialize(passphrase):
     db.init('diary.db', passphrase=passphrase, kdf_iter=64000)
-    Entry.create_table(True)
-
-def main():
-    while menu_loop():
-        pass
+    Entry.create_table(fail_silently=True)
 
 def menu_loop():
     while True:
         for key, value in menu.items():
-            print '%s) %s' % (key, value.__doc__)
+            print('%s) %s' % (key, value.__doc__))
         choice = raw_input('Action: ').lower().strip()
         if choice in menu:
             menu[choice]()
@@ -85,4 +81,4 @@ if __name__ == '__main__':
 
     # Initialize the database.
     initialize(passphrase)
-    main()
+    menu_loop()
