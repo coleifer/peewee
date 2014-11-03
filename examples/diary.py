@@ -24,7 +24,8 @@ def initialize(passphrase):
     Entry.create_table(fail_silently=True)
 
 def menu_loop():
-    while True:
+    choice = None
+    while choice != 'q':
         for key, value in menu.items():
             print('%s) %s' % (key, value.__doc__))
         choice = raw_input('Action: ').lower().strip()
@@ -59,15 +60,10 @@ def search_entries():
     """Search entries"""
     view_entries(raw_input('Search query: '))
 
-def quit():
-    """Quit"""
-    sys.exit(0)
-
 menu = OrderedDict([
     ('a', add_entry),
     ('v', view_entries),
     ('s', search_entries),
-    ('q', quit),
 ])
 
 if __name__ == '__main__':
