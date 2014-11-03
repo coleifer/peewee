@@ -3960,6 +3960,11 @@ class FieldTypeTestCase(ModelTestCase):
         else:
             self.assertEqual(nmf2.time_field, t2)
 
+    def test_date_as_string(self):
+        nm1 = NullModel.create(date_field='2014-01-02')
+        nm1_db = NullModel.get(NullModel.id == nm1.id)
+        self.assertEqual(nm1_db.date_field, datetime.date(2014, 1, 2))
+
     def test_various_formats(self):
         class FormatModel(Model):
             dtf = DateTimeField()
