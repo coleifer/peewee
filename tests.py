@@ -71,6 +71,13 @@ BerkeleyDatabase = None
 if BACKEND in ('postgresql', 'postgres', 'pg'):
     database_class = PostgresqlDatabase
     database_name = 'peewee_test'
+
+    try:
+        from psycopg2cffi import compat
+        compat.register()
+    except ImportError:
+        pass
+
     import psycopg2
 elif BACKEND == 'mysql':
     database_class = MySQLDatabase
@@ -1980,6 +1987,8 @@ class QueryResultWrapperTestCase(ModelTestCase):
             # Ensure we can grab the first 5 users in 1 query.
             for i in range(5):
                 assertUser(uq, i)
+
+        uq._qr.cursor.close()
 
         # Iterate in reverse and ensure only costs 1 query.
         uq = User.select().order_by(User.id)

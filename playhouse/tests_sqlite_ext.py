@@ -1,5 +1,10 @@
-import sqlite3; sqlite3.enable_callback_tracebacks(True)
 import unittest
+import sqlite3
+
+try:
+    sqlite3.enable_callback_tracebacks(True)
+except AttributeError:
+    pass
 
 from peewee import *
 from playhouse import sqlite_ext as sqe

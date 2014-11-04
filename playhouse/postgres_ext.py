@@ -16,6 +16,12 @@ from peewee import QueryCompiler
 from peewee import SelectQuery
 from peewee import UUIDField  # For backwards-compatibility.
 
+try:
+    from psycopg2cffi import compat
+    compat.register()
+except ImportError:
+    pass
+
 from psycopg2 import extensions
 from psycopg2.extensions import adapt
 from psycopg2.extensions import AsIs
