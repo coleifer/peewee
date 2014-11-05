@@ -489,8 +489,8 @@ class SSCursorTestCase(unittest.TestCase):
         query = NormalModel.select().order_by(NormalModel.data)
         self.assertList(query)
 
-        # We can ask for more results from a normal query.
-        self.assertEqual(query._qr.cursor.fetchone(), None)
+        # The cursor is closed.
+        self.assertTrue(query._qr.cursor.closed)
 
         clone = query.clone()
         self.assertList(ServerSide(clone))
@@ -502,6 +502,9 @@ class SSCursorTestCase(unittest.TestCase):
         query = query.where(NormalModel.data == '2')
         data = [x.data for x in ServerSide(query)]
         self.assertEqual(data, ['2'])
+
+        # The cursor is open.
+        self.assertFalse(query._qr.cursor.closed)
 
     def test_ss_cursor(self):
         tbl = SSCursorModel._meta.db_table

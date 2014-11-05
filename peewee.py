@@ -1718,6 +1718,8 @@ class QueryResultWrapper(object):
         row = self.cursor.fetchone()
         if not row:
             self._populated = True
+            if not getattr(self.cursor, 'name', None):
+                self.cursor.close()
             raise StopIteration
         elif not self._initialized:
             self.initialize(self.cursor.description)
