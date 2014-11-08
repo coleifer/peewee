@@ -161,7 +161,7 @@ if __name__ == '__main__':
     elif failures:
         sys.exit(1)
 
-    files_to_delete = ['tmp.db', 'tmp.bdb.db']
+    files_to_delete = ['tmp.db', 'tmp.bdb.db', 'test_sqlcipher.db']
     paths_to_delete = ['tmp.bdb.db-journal']
     for filename in files_to_delete:
         if os.path.exists(filename):

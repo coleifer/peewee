@@ -1317,7 +1317,8 @@ DataSet
 The *dataset* module contains a high-level API for working with databases modeled after the popular `project of the same name <https://dataset.readthedocs.org/en/latest/index.html>`_. The aims of the *dataset* module are to provide:
 
 * A simplified API for working with relational data, along the lines of working with JSON.
-* An easy way to export relational data.
+* An easy way to export relational data as JSON or CSV.
+* An easy way to import JSON or CSV data into a relational database.
 
 A minimal data-loading script might look like this:
 
@@ -1339,6 +1340,18 @@ A minimal data-loading script might look like this:
         print obj
     # {'age': 3, 'gender': None, 'id': 1, 'name': 'Huey'}
     # {'age': 5, 'gender': 'male', 'id': 2, 'name': 'Mickey'}
+
+You can export or import data using :py:meth:`~DataSet.freeze` and :py:meth:`~DataSet.thaw`:
+
+.. code-block:: python
+
+    # Export table content to the `users.json` file.
+    db.freeze(table.all(), format='json', filename='users.json')
+
+    # Import data from a CSV file into a new table. Columns will be automatically
+    # created for each field in the CSV file.
+    new_table = db['stats']
+    new_table.thaw(format='csv', filename='monthly_stats.csv')
 
 Getting started
 ^^^^^^^^^^^^^^^
@@ -1376,6 +1389,24 @@ To update existing entries in the table, pass in a dictionary containing the new
 
     # Update all records. If the column does not exist, it will be created.
     table.update(favorite_orm='peewee')
+
+Importing data
+^^^^^^^^^^^^^^
+
+To import data from an external source, such as a JSON or CSV file, you can use the :py:meth:`~Table.thaw` method. By default, new columns will be created for any attributes encountered. If you wish to only populate columns that are already defined on a table, you can pass in ``strict=True``.
+
+.. code-block:: python
+
+    # Load data from a JSON file containing a list of objects.
+    table = dataset['stock_prices']
+    table.thaw(filename='stocks.json', format='json')
+    table.all()[:3]
+
+    # Might print...
+    [{'id': 1, 'ticker': 'GOOG', 'price': 703},
+     {'id': 2, 'ticker': 'AAPL', 'price': 109},
+     {'id': 3, 'ticker': 'AMZN', 'price': 300}]
+
 
 Using transactions
 ^^^^^^^^^^^^^^^^^^
@@ -1444,6 +1475,9 @@ Specific objects can be retrieved using :py:meth:`~Table.find` and :py:meth:`~Ta
     # Find Huey.
     huey = db['user'].find_one(name='Huey')
 
+Exporting data
+^^^^^^^^^^^^^^
+
 To export data, use the :py:meth:`~DataSet.freeze` method, passing in the query you wish to export:
 
 .. code-block:: python
@@ -1488,6 +1522,15 @@ API
         :param filename: Filename to write output to.
         :param file_obj: File-like object to write output to.
         :param kwargs: Arbitrary parameters for export-specific functionality.
+
+    .. py:method:: thaw(table[, format='csv'[, filename=None[, file_obj=None[, strict=False[, **kwargs]]]]])
+
+        :param str table: The name of the table to load data into.
+        :param format: Input format. By default, *csv* and *json* are supported.
+        :param filename: Filename to read data from.
+        :param file_obj: File-like object to read data from.
+        :param bool strict: Whether to store values for columns that do not already exist on the table.
+        :param kwargs: Arbitrary parameters for import-specific functionality.
 
     .. py:method:: connect()
 
@@ -1565,6 +1608,21 @@ API
 
             # Delete all the secret messages.
             db['secret_messages'].delete()
+
+    .. py:method:: freeze([format='csv'[, filename=None[, file_obj=None[, **kwargs]]]])
+
+        :param format: Output format. By default, *csv* and *json* are supported.
+        :param filename: Filename to write output to.
+        :param file_obj: File-like object to write output to.
+        :param kwargs: Arbitrary parameters for export-specific functionality.
+
+    .. py:method:: thaw([format='csv'[, filename=None[, file_obj=None[, strict=False[, **kwargs]]]]])
+
+        :param format: Input format. By default, *csv* and *json* are supported.
+        :param filename: Filename to read data from.
+        :param file_obj: File-like object to read data from.
+        :param bool strict: Whether to store values for columns that do not already exist on the table.
+        :param kwargs: Arbitrary parameters for import-specific functionality.
 
 
 .. _djpeewee:

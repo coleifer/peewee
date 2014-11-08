@@ -40,6 +40,7 @@ class DataSet(object):
                 database = self._database
         self._base_model = BaseModel
         self._export_formats = self.get_export_formats()
+        self._import_formats = self.get_import_formats()
 
     def __repr__(self):
         return '<DataSet: %s>' % self._database_path
@@ -48,6 +49,11 @@ class DataSet(object):
         return {
             'csv': CSVExporter,
             'json': JSONExporter}
+
+    def get_import_formats(self):
+        return {
+            'csv': CSVImporter,
+            'json': JSONImporter}
 
     def __getitem__(self, table):
         return Table(self, table, self._models.get(table))
@@ -82,19 +88,21 @@ class DataSet(object):
         else:
             return self._database.savepoint()
 
-    def freeze(self, query, format='csv', filename=None, file_obj=None,
-               **kwargs):
+    def _check_arguments(self, filename, file_obj, format, format_dict):
         if filename and file_obj:
             raise ValueError('file is over-specified. Please use either '
                              'filename or file_obj, but not both.')
         if not filename and not file_obj:
             raise ValueError('A filename or file-like object must be '
                              'specified.')
-        if format not in self._export_formats:
-            valid_formats = ', '.join(sorted(self._export_formats.keys()))
+        if format not in format_dict:
+            valid_formats = ', '.join(sorted(format_dict.keys()))
             raise ValueError('Unsupported format "%s". Use one of %s.' % (
                 format, valid_formats))
 
+    def freeze(self, query, format='csv', filename=None, file_obj=None,
+               **kwargs):
+        self._check_arguments(filename, file_obj, format, self._export_formats)
         if filename:
             file_obj = open(filename, 'w')
 
@@ -103,6 +111,20 @@ class DataSet(object):
 
         if filename:
             file_obj.close()
+
+    def thaw(self, table, format='csv', filename=None, file_obj=None,
+             strict=False, **kwargs):
+        self._check_arguments(filename, file_obj, format, self._export_formats)
+        if filename:
+            file_obj = open(filename, 'r')
+
+        importer = self._import_formats[format](self[table], strict)
+        count = importer.load(file_obj, **kwargs)
+
+        if filename:
+            file_obj.close()
+
+        return count
 
 
 class Table(object):
@@ -209,6 +231,12 @@ class Table(object):
     def delete(self, **query):
         return self._apply_where(self.model_class.delete(), query).execute()
 
+    def freeze(self, *args, **kwargs):
+        return self.dataset.freeze(self.all(), *args, **kwargs)
+
+    def thaw(self, *args, **kwargs):
+        return self.dataset.thaw(self.name, *args, **kwargs)
+
 
 class Exporter(object):
     def __init__(self, query):
@@ -242,3 +270,76 @@ class CSVExporter(Exporter):
             writer.writerow([field.name for field in self.query._select])
         for row in self.query.tuples():
             writer.writerow(row)
+
+
+class Importer(object):
+    def __init__(self, table, strict=False):
+        self.table = table
+        self.strict = strict
+
+        model = self.table.model_class
+        self.columns = model._meta.columns
+        self.columns.update(model._meta.fields)
+
+    def load(self, file_obj):
+        raise NotImplementedError
+
+
+class JSONImporter(Importer):
+    def load(self, file_obj, **kwargs):
+        data = json.load(file_obj, **kwargs)
+        count = 0
+        valid_columns = set(self.columns)
+
+        for row in data:
+            if self.strict:
+                obj = {}
+                for key in row:
+                    field = self.columns.get(key)
+                    if field is not None:
+                        obj[field.name] = field.python_value(row[key])
+            else:
+                obj = row
+
+            if obj:
+                self.table.insert(**obj)
+                count += 1
+
+        return count
+
+
+class CSVImporter(Importer):
+    def load(self, file_obj, header=True, **kwargs):
+        count = 0
+        reader = csv.reader(file_obj, **kwargs)
+        if header:
+            try:
+                header_keys = next(reader)
+            except StopIteration:
+                return count
+
+            if self.strict:
+                header_fields = []
+                for idx, key in enumerate(header_keys):
+                    if key in self.columns:
+                        header_fields.append((idx, self.columns[key]))
+            else:
+                header_fields = list(enumerate(header_keys))
+        else:
+            header_fields = list(enumerate(self.model._meta.get_fields()))
+
+        if not header_fields:
+            return count
+
+        for row in reader:
+            obj = {}
+            for idx, field in header_fields:
+                if self.strict:
+                    obj[field.name] = field.python_value(row[idx])
+                else:
+                    obj[field] = row[idx]
+
+            self.table.insert(**obj)
+            count += 1
+
+        return count

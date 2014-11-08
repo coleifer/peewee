@@ -1,4 +1,6 @@
+import csv
 import datetime
+import json
 import operator
 import os
 try:
@@ -261,6 +263,119 @@ class TestDataSet(unittest.TestCase):
             'username',
             'charlie',
             'huey'])
+
+    def test_table_column_creation(self):
+        table = self.dataset['people']
+        table.insert(name='charlie')
+        self.assertEqual(table.columns, ['id', 'name'])
+        self.assertEqual(list(table.all()), [{'id': 1, 'name': 'charlie'}])
+
+    def test_import_json(self):
+        table = self.dataset['people']
+        table.insert(name='charlie')
+
+        data = [
+            {'name': 'zaizee', 'foo': 1},
+            {'name': 'huey'},
+            {'name': 'mickey', 'foo': 2},
+            {'bar': None}]
+        buf = StringIO()
+        json.dump(data, buf)
+        buf.seek(0)
+
+        # All rows but the last will be inserted.
+        count = self.dataset.thaw('people', 'json', file_obj=buf, strict=True)
+        self.assertEqual(count, 3)
+
+        names = [row['name'] for row in self.dataset['people'].all()]
+        self.assertEqual(
+            set(names),
+            set(['charlie', 'huey', 'mickey', 'zaizee']))
+
+        # The columns have not changed.
+        self.assertEqual(table.columns, ['id', 'name'])
+
+        # No rows are inserted because no column overlap between `user` and the
+        # provided data.
+        buf.seek(0)
+        count = self.dataset.thaw('user', 'json', file_obj=buf, strict=True)
+        self.assertEqual(count, 0)
+
+        # Create a new table and load all data into it.
+        table = self.dataset['more_people']
+
+        # All rows and columns will be inserted.
+        buf.seek(0)
+        count = self.dataset.thaw('more_people', 'json', file_obj=buf)
+        self.assertEqual(count, 4)
+
+        self.assertEqual(
+            set(table.columns),
+            set(['id', 'name', 'bar', 'foo']))
+        self.assertEqual(sorted(table.all(), key=lambda row: row['id']), [
+            {'id': 1, 'name': 'zaizee', 'foo': 1, 'bar': None},
+            {'id': 2, 'name': 'huey', 'foo': None, 'bar': None},
+            {'id': 3, 'name': 'mickey', 'foo': 2, 'bar': None},
+            {'id': 4, 'name': None, 'foo': None, 'bar': None},
+        ])
+
+    def test_import_csv(self):
+        table = self.dataset['people']
+        table.insert(name='charlie')
+
+        data = [
+            ('zaizee', 1, None),
+            ('huey', 2, 'foo'),
+            ('mickey', 3, 'baze')]
+        buf = StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(['name', 'foo', 'bar'])
+        writer.writerows(data)
+
+        buf.seek(0)
+        count = self.dataset.thaw('people', 'csv', file_obj=buf, strict=True)
+        self.assertEqual(count, 3)
+
+        names = [row['name'] for row in self.dataset['people'].all()]
+        self.assertEqual(
+            set(names),
+            set(['charlie', 'huey', 'mickey', 'zaizee']))
+
+        # The columns have not changed.
+        self.assertEqual(table.columns, ['id', 'name'])
+
+        # No rows are inserted because no column overlap between `user` and the
+        # provided data.
+        buf.seek(0)
+        count = self.dataset.thaw('user', 'csv', file_obj=buf, strict=True)
+        self.assertEqual(count, 0)
+
+        # Create a new table and load all data into it.
+        table = self.dataset['more_people']
+
+        # All rows and columns will be inserted.
+        buf.seek(0)
+        count = self.dataset.thaw('more_people', 'csv', file_obj=buf)
+        self.assertEqual(count, 3)
+
+        self.assertEqual(
+            set(table.columns),
+            set(['id', 'name', 'bar', 'foo']))
+        self.assertEqual(sorted(table.all(), key=lambda row: row['id']), [
+            {'id': 1, 'name': 'zaizee', 'foo': '1', 'bar': ''},
+            {'id': 2, 'name': 'huey', 'foo': '2', 'bar': 'foo'},
+            {'id': 3, 'name': 'mickey', 'foo': '3', 'bar': 'baze'},
+        ])
+
+    def test_table_thaw(self):
+        table = self.dataset['people']
+        data = json.dumps([{'name': 'charlie'}, {'name': 'huey', 'color': 'white'}])
+        self.assertEqual(table.thaw(file_obj=StringIO(data), format='json'), 2)
+        self.assertEqual(list(table.all()), [
+            {'id': 1, 'name': 'charlie', 'color': None},
+            {'id': 2, 'name': 'huey', 'color': 'white'},
+        ])
+
 
     def test_creating_tables(self):
         new_table = self.dataset['new_table']
