@@ -5,6 +5,25 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.4.2
+
+This release contains a number of improvements to the `reflection` and `migrate` extension modules. I also added an encrypted *diary* app to the [examples](https://github.com/coleifer/peewee/tree/master/examples) directory.
+
+### Bugs fixed
+
+* #449, typo in the db_url extension, thanks to @malea for the fix.
+* #457 and #458, fixed documentation deficiences.
+
+### New features
+
+* Added support for [importing data](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#importing-data) when using the [DataSet extension](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#dataset).
+* Added an encrypted diary app to the examples.
+* Better index reconstruction when altering columns on SQLite databases with the [migrate](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#migrate) module.
+* Support for multi-column primary keys in the [reflection](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#reflection) module.
+* Close cursors more aggressively when executing SELECT queries.
+
+[View commits](https://github.com/coleifer/peewee/compare/2.4.1...2.4.2)
+
 ## 2.4.1
 
 This release contains a few small bugfixes.
