@@ -141,7 +141,7 @@ class Metadata(object):
         """Returns a list of table names."""
         return self.database.get_tables()
 
-    def get_columns(self, table):
+    def get_columns(self, table, schema=None):
         pass
 
     def get_primary_keys(self, table, schema=None):
@@ -189,13 +189,16 @@ class PostgresqlMetadata(Metadata):
                 elif 'tsvector' in typname:
                     self.column_map[oid] = postgres_ext.TSVectorField
 
-    def get_columns(self, table):
+    def get_columns(self, table, schema=None):
+        schema = schema or 'public'
+
         # Get basic metadata about columns.
-        cursor = self.execute("""
-            SELECT
-                column_name, is_nullable, data_type, character_maximum_length
-            FROM information_schema.columns
-            WHERE table_name=%s""", table)
+        query = ('SELECT column_name, is_nullable, data_type, '
+                 'character_maximum_length '
+                 'FROM information_schema.columns '
+                 'WHERE table_name = %s AND table_schema = %s')
+        cursor = self.execute(query, table, schema)
+
         name_to_info = {}
         for row in cursor.fetchall():
             name_to_info[row[0]] = {
@@ -207,7 +210,8 @@ class PostgresqlMetadata(Metadata):
             }
 
         # Look up the actual column type for each column.
-        cursor = self.execute('SELECT * FROM "%s" LIMIT 1' % table)
+        identifier = (schema, table)
+        cursor = self.execute('SELECT * FROM "%s"."%s" LIMIT 1' % identifier)
 
         # Store column metadata in dictionary keyed by column name.
         for column_description in cursor.description:
@@ -239,15 +243,21 @@ class PostgresqlMetadata(Metadata):
         return columns
 
     def get_primary_keys(self, table, schema=None):
-        cursor = self.execute("""
-            SELECT pg_attribute.attname
-            FROM pg_index, pg_class, pg_attribute
+        schema = schema or 'public'
+        cursor = self.execute(
+            """
+            SELECT kc.column_name
+            FROM information_schema.table_constraints AS tc
+            INNER JOIN information_schema.key_column_usage AS kc ON (
+                tc.table_name = kc.table_name AND
+                tc.table_schema = kc.table_schema AND
+                tc.constraint_name = kc.constraint_name)
             WHERE
-              pg_class.oid = '%s'::regclass AND
-              indrelid = pg_class.oid AND
-              pg_attribute.attrelid = pg_class.oid AND
-              pg_attribute.attnum = any(pg_index.indkey)
-              AND indisprimary;""" % table)
+                tc.constraint_type = %s AND
+                tc.table_name = %s AND
+                tc.table_schema = %s
+            """, 'PRIMARY KEY', table, schema)
+
         return set(row[0] for row in cursor.fetchall())
 
     def get_foreign_keys(self, table, schema=None):
@@ -304,7 +314,7 @@ class MySQLMetadata(Metadata):
             kwargs['passwd'] = kwargs.pop('password')
         super(MySQLMetadata, self).__init__(database, **kwargs)
 
-    def get_columns(self, table):
+    def get_columns(self, table, schema=None):
         primary_keys = self.get_primary_keys(table)
 
         # Get basic metadata about columns.
@@ -413,7 +423,7 @@ class SqliteMetadata(Metadata):
             field_class = self.column_map.get(column_type, UnknownField)
         return field_class, raw_column_type
 
-    def get_columns(self, table):
+    def get_columns(self, table, schema=None):
         pks = self.get_primary_keys(table)
         columns = {}
 

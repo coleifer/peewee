@@ -1,6 +1,8 @@
 todo
 ====
 
+* support for view objects?
+
 Queries to support?
 
 * create index <myidx> on table (some_col COLLATE NOCASE ASC) where foo > 3
