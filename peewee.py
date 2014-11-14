@@ -2611,6 +2611,17 @@ class DeleteQuery(Query):
         return self.database.rows_affected(self._execute())
 
 
+IndexMetadata = namedtuple(
+    'IndexMetadata',
+    ('name', 'sql', 'columns', 'unique'))
+ColumnMetadata = namedtuple(
+    'ColumnMetadata',
+    ('name', 'data_type', 'null', 'primary_key'))
+ForeignKeyMetadata = namedtuple(
+    'ForeignKeyMetadata',
+    ('column', 'dest_table', 'dest_column'))
+
+
 class PeeweeException(Exception): pass
 class ImproperlyConfigured(PeeweeException): pass
 class DatabaseError(PeeweeException): pass
@@ -2821,7 +2832,13 @@ class Database(object):
     def get_tables(self):
         raise NotImplementedError
 
-    def get_indexes_for_table(self, table):
+    def get_indexes(self, table):
+        raise NotImplementedError
+
+    def get_columns(self, table):
+        raise NotImplementedError
+
+    def get_foreign_keys(self, table):
         raise NotImplementedError
 
     def sequence_exists(self, seq):
@@ -2907,9 +2924,49 @@ class SqliteDatabase(Database):
         return rows
 
     def get_tables(self):
-        res = self.execute_sql('select name from sqlite_master where '
-                               'type="table" order by name;')
-        return [r[0] for r in res.fetchall()]
+        cursor = self.execute_sql('SELECT name FROM sqlite_master WHERE '
+                                  'type = ? ORDER BY name;', ('table',))
+        return [row[0] for row in cursor.fetchall()]
+
+    def get_indexes(self, table):
+        cursor = self.execute_sql(
+            'SELECT name, sql FROM sqlite_master '
+            'WHERE tbl_name = ? AND type = ? '
+            'ORDER BY name ASC',
+            [table, 'index'])
+        index_to_sql = dict(cursor.fetchall())
+
+        # Determine which indexes have a unique constraint.
+        unique_indexes = set()
+        cursor = self.execute_sql('PRAGMA index_list("%s")' % table)
+        for _, name, is_unique in cursor.fetchall():
+            if is_unique:
+                unique_indexes.add(name)
+
+        # Retrieve the indexed columns.
+        index_columns = {}
+        for index_name in index_to_sql:
+            cursor = self.execute_sql('PRAGMA index_info("%s")' % index_name)
+            index_columns[index_name] = [row[2] for row in cursor.fetchall()]
+
+        return [
+            IndexMetadata(
+                name,
+                index_to_sql[name],
+                index_columns[name],
+                name in unique_indexes)
+            for name in sorted(index_to_sql)]
+
+    def get_columns(self, table):
+        cursor = self.query('PRAGMA table_info("%s")' % table)
+        return [ColumnMetadata(row[1], row[2], not row[3], row[5])
+                for row in cursor.fetchall()]
+
+    def get_foreign_keys(self, table):
+        cursor = self.execute_sql('PRAGMA foreign_key_list("%s")' % table)
+        return [
+            ForeignKeyMetadata(row[3], row[2], row[4])
+            for row in cursor.fetchall()]
 
     def savepoint(self, sid=None):
         return savepoint_sqlite(self, sid)
@@ -2973,34 +3030,41 @@ class PostgresqlDatabase(Database):
                 self.commit()
             return result
 
-    def get_indexes_for_table(self, table):
-        res = self.execute_sql("""
-            SELECT c2.relname, i.indisprimary, i.indisunique
-            FROM
-            pg_catalog.pg_class c,
-            pg_catalog.pg_class c2,
-            pg_catalog.pg_index i
-            WHERE
-            c.relname = %s AND c.oid = i.indrelid AND i.indexrelid = c2.oid
-            ORDER BY i.indisprimary DESC, i.indisunique DESC, c2.relname""",
-            (table,))
-        return sorted([(r[0], r[1]) for r in res.fetchall()])
+    def get_tables(self, schema='public'):
+        cursor = self.execute_sql(
+            'SELECT tablename FROM pg_catalog.pg_tables '
+            'WHERE schemaname = %s ORDER BY tablename;', (schema,))
+        return [row[0] for row in cursor.fetchall()]
 
-    def get_tables(self):
-        res = self.execute_sql("""
-            SELECT c.relname
-            FROM pg_catalog.pg_class c
-            LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-            WHERE c.relkind IN ('r', 'v', '')
-                AND n.nspname NOT IN ('pg_catalog', 'pg_toast')
-                AND pg_catalog.pg_table_is_visible(c.oid)
-            ORDER BY c.relname""")
-        return [row[0] for row in res.fetchall()]
+    def get_indexes(self, table, schema='public'):
+        cursor = self.execute_sql("""
+            SELECT
+                i.relname, idxs.indexdef, idx.indisunique,
+                array_to_string(array_agg(cols.attname), ',')
+            FROM pg_catalog.pg_class AS t
+            INNER JOIN pg_catalog.pg_index AS idx ON t.oid = idx.indrelid
+            INNER JOIN pg_catalog.pg_class AS i ON idx.indexrelid = i.oid
+            INNER JOIN pg_catalog.pg_indexes AS idxs ON
+                (idxs.tablename = t.relname AND idxs.indexname = i.relname)
+            LEFT OUTER JOIN pg_catalog.pg_attribute AS cols ON
+                (cols.attrelid = t.oid AND a.attnum = ANY(idx.indkey))
+            WHERE t.relname = %s AND t.relkind = %s AND idxs.schemaname = %s
+            GROUP BY i.relname, idxs.indexdef, idx.indisunique,
+            ORDER BY idx.indisunique DESC, i.relname;
+            """, (table, 'r', schema))
+        return [IndexMetadata(row[0], row[1], row[3].split(','), row[2])
+                for row in cursor.fetchall()]
+
+    def get_columns(self, table):
+        #('name', 'data_type', 'null', 'primary_key'))
+        raise NotImplementedError
+
+    def get_foreign_keys(self, table):
+        raise NotImplementedError
 
     def sequence_exists(self, sequence):
         res = self.execute_sql("""
-            SELECT COUNT(*)
-            FROM pg_class, pg_namespace
+            SELECT COUNT(*) FROM pg_class, pg_namespace
             WHERE relkind='S'
                 AND pg_class.relnamespace = pg_namespace.oid
                 AND relname=%s""", (sequence,))
