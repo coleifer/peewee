@@ -2954,13 +2954,13 @@ class SqliteDatabase(Database):
             for name in sorted(index_to_sql)]
 
     def get_columns(self, table):
-        cursor = self.query('PRAGMA table_info("%s")' % table)
-        return [ColumnMetadata(row[1], row[2], not row[3], row[5])
+        cursor = self.execute_sql('PRAGMA table_info("%s")' % table)
+        return [ColumnMetadata(row[1], row[2], not row[3], bool(row[5]))
                 for row in cursor.fetchall()]
 
     def get_primary_keys(self, table, schema=None):
-        cursor = self.execute('PRAGMA table_info("%s")' % table)
-        return set(row[1] for row in cursor.fetchall() if row[-1])
+        cursor = self.execute_sql('PRAGMA table_info("%s")' % table)
+        return [row[1] for row in cursor.fetchall() if row[-1]]
 
     def get_foreign_keys(self, table):
         cursor = self.execute_sql('PRAGMA foreign_key_list("%s")' % table)
@@ -3045,9 +3045,9 @@ class PostgresqlDatabase(Database):
             INNER JOIN pg_catalog.pg_indexes AS idxs ON
                 (idxs.tablename = t.relname AND idxs.indexname = i.relname)
             LEFT OUTER JOIN pg_catalog.pg_attribute AS cols ON
-                (cols.attrelid = t.oid AND a.attnum = ANY(idx.indkey))
+                (cols.attrelid = t.oid AND cols.attnum = ANY(idx.indkey))
             WHERE t.relname = %s AND t.relkind = %s AND idxs.schemaname = %s
-            GROUP BY i.relname, idxs.indexdef, idx.indisunique,
+            GROUP BY i.relname, idxs.indexdef, idx.indisunique
             ORDER BY idx.indisunique DESC, i.relname;"""
         cursor = self.execute_sql(query, (table, 'r', schema))
         return [IndexMetadata(row[0], row[1], row[3].split(','), row[2])
@@ -3093,7 +3093,7 @@ class PostgresqlDatabase(Database):
                 tc.constraint_type = 'FOREIGN KEY' AND
                 tc.table_name = %s AND
                 tc.table_schema = %s"""
-        cursor = self.execute_sql(query, (table, schema))
+        cursor = self.execute_sql(sql, (table, schema))
         return [ForeignKeyMetadata(*row) for row in cursor.fetchall()]
 
     def sequence_exists(self, sequence):
@@ -3152,25 +3152,25 @@ class MySQLDatabase(Database):
         unique = set()
         indexes = {}
         for row in cursor.fetchall():
-            if row[1]:
-                unique_indexes.add(row[2])
+            if not row[1]:
+                unique.add(row[2])
             indexes.setdefault(row[2], [])
             indexes[row[2]].append(row[4])
         return [IndexMetadata(name, None, indexes[name], name in unique)
                 for name in indexes]
 
     def get_columns(self, table):
-        query = """
+        sql = """
             SELECT column_name, is_nullable, data_type
             FROM information_schema.columns
             WHERE table_name = %s AND table_schema = DATABASE()"""
-        cursor = self.execute_sql(query, (table, schema))
+        cursor = self.execute_sql(sql, (table,))
         pks = set(self.get_primary_keys(table))
         return [ColumnMetadata(name, data_type, null == 'YES', name in pks)
                 for name, null, data_type in cursor.fetchall()]
 
     def get_primary_keys(self, table):
-        cursor = self.execute('SHOW INDEX FROM `%s`' % table)
+        cursor = self.execute_sql('SHOW INDEX FROM `%s`' % table)
         return [row[4] for row in cursor.fetchall() if row[2] == 'PRIMARY']
 
     def get_foreign_keys(self, table):
