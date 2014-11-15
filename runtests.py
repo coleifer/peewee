@@ -156,10 +156,6 @@ if __name__ == '__main__':
         suite.addTest(module_suite)
 
     failures, errors = runtests(suite, options.verbosity)
-    if errors:
-        sys.exit(2)
-    elif failures:
-        sys.exit(1)
 
     files_to_delete = ['tmp.db', 'tmp.bdb.db', 'test_sqlcipher.db']
     paths_to_delete = ['tmp.bdb.db-journal']
@@ -169,5 +165,10 @@ if __name__ == '__main__':
     for path in paths_to_delete:
         if os.path.exists(path):
             shutil.rmtree(path)
+
+    if errors:
+        sys.exit(2)
+    elif failures:
+        sys.exit(1)
 
     sys.exit(0)
