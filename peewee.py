@@ -2838,6 +2838,9 @@ class Database(object):
     def get_columns(self, table):
         raise NotImplementedError
 
+    def get_primary_keys(self, table):
+        raise NotImplementedError
+
     def get_foreign_keys(self, table):
         raise NotImplementedError
 
@@ -2918,22 +2921,15 @@ class SqliteDatabase(Database):
         if self._journal_mode:
             self.execute_sql('PRAGMA journal_mode=%s;' % self._journal_mode)
 
-    def get_indexes_for_table(self, table):
-        res = self.execute_sql('PRAGMA index_list(%s);' % self.quote(table))
-        rows = sorted([(r[1], r[2] == 1) for r in res.fetchall()])
-        return rows
-
     def get_tables(self):
         cursor = self.execute_sql('SELECT name FROM sqlite_master WHERE '
                                   'type = ? ORDER BY name;', ('table',))
         return [row[0] for row in cursor.fetchall()]
 
     def get_indexes(self, table):
-        cursor = self.execute_sql(
-            'SELECT name, sql FROM sqlite_master '
-            'WHERE tbl_name = ? AND type = ? '
-            'ORDER BY name ASC',
-            [table, 'index'])
+        query = ('SELECT name, sql FROM sqlite_master '
+                 'WHERE tbl_name = ? AND type = ? ORDER BY name')
+        cursor = self.execute_sql(query, (table, 'index'))
         index_to_sql = dict(cursor.fetchall())
 
         # Determine which indexes have a unique constraint.
@@ -2962,11 +2958,14 @@ class SqliteDatabase(Database):
         return [ColumnMetadata(row[1], row[2], not row[3], row[5])
                 for row in cursor.fetchall()]
 
+    def get_primary_keys(self, table, schema=None):
+        cursor = self.execute('PRAGMA table_info("%s")' % table)
+        return set(row[1] for row in cursor.fetchall() if row[-1])
+
     def get_foreign_keys(self, table):
         cursor = self.execute_sql('PRAGMA foreign_key_list("%s")' % table)
-        return [
-            ForeignKeyMetadata(row[3], row[2], row[4])
-            for row in cursor.fetchall()]
+        return [ForeignKeyMetadata(row[3], row[2], row[4])
+                for row in cursor.fetchall()]
 
     def savepoint(self, sid=None):
         return savepoint_sqlite(self, sid)
@@ -3031,13 +3030,12 @@ class PostgresqlDatabase(Database):
             return result
 
     def get_tables(self, schema='public'):
-        cursor = self.execute_sql(
-            'SELECT tablename FROM pg_catalog.pg_tables '
-            'WHERE schemaname = %s ORDER BY tablename;', (schema,))
-        return [row[0] for row in cursor.fetchall()]
+        query = ('SELECT tablename FROM pg_catalog.pg_tables '
+                 'WHERE schemaname = %s ORDER BY tablename')
+        return [r for r, in self.execute_sql(query, (schema,)).fetchall()]
 
     def get_indexes(self, table, schema='public'):
-        cursor = self.execute_sql("""
+        query = """
             SELECT
                 i.relname, idxs.indexdef, idx.indisunique,
                 array_to_string(array_agg(cols.attname), ',')
@@ -3050,17 +3048,53 @@ class PostgresqlDatabase(Database):
                 (cols.attrelid = t.oid AND a.attnum = ANY(idx.indkey))
             WHERE t.relname = %s AND t.relkind = %s AND idxs.schemaname = %s
             GROUP BY i.relname, idxs.indexdef, idx.indisunique,
-            ORDER BY idx.indisunique DESC, i.relname;
-            """, (table, 'r', schema))
+            ORDER BY idx.indisunique DESC, i.relname;"""
+        cursor = self.execute_sql(query, (table, 'r', schema))
         return [IndexMetadata(row[0], row[1], row[3].split(','), row[2])
                 for row in cursor.fetchall()]
 
-    def get_columns(self, table):
-        #('name', 'data_type', 'null', 'primary_key'))
-        raise NotImplementedError
+    def get_columns(self, table, schema='public'):
+        query = """
+            SELECT column_name, is_nullable, data_type
+            FROM information_schema.columns
+            WHERE table_name = %s AND table_schema = %s"""
+        cursor = self.execute_sql(query, (table, schema))
+        pks = set(self.get_primary_keys(table, schema))
+        return [ColumnMetadata(name, data_type, null == 'YES', name in pks)
+                for name, null, data_type in cursor.fetchall()]
 
-    def get_foreign_keys(self, table):
-        raise NotImplementedError
+    def get_primary_keys(self, table, schema='public'):
+        query = """
+            SELECT kc.column_name
+            FROM information_schema.table_constraints AS tc
+            INNER JOIN information_schema.key_column_usage AS kc ON (
+                tc.table_name = kc.table_name AND
+                tc.table_schema = kc.table_schema AND
+                tc.constraint_name = kc.constraint_name)
+            WHERE
+                tc.constraint_type = %s AND
+                tc.table_name = %s AND
+                tc.table_schema = %s"""
+        cursor = self.execute_sql(query, ('PRIMARY KEY', table, schema))
+        return [row for row, in cursor.fetchall()]
+
+    def get_foreign_keys(self, table, schema='public'):
+        sql = """
+            SELECT
+                kcu.column_name, ccu.table_name, ccu.column_name
+            FROM information_schema.table_constraints AS tc
+            JOIN information_schema.key_column_usage AS kcu
+                ON (tc.constraint_name = kcu.constraint_name AND
+                    tc.constraint_schema = kcu.constraint_schema)
+            JOIN information_schema.constraint_column_usage AS ccu
+                ON (ccu.constraint_name = tc.constraint_name AND
+                    ccu.constraint_schema = tc.constraint_schema)
+            WHERE
+                tc.constraint_type = 'FOREIGN KEY' AND
+                tc.table_name = %s AND
+                tc.table_schema = %s"""
+        cursor = self.execute_sql(query, (table, schema))
+        return [ForeignKeyMetadata(*row) for row in cursor.fetchall()]
 
     def sequence_exists(self, sequence):
         res = self.execute_sql("""
@@ -3110,14 +3144,47 @@ class MySQLDatabase(Database):
             conn_kwargs['passwd'] = conn_kwargs.pop('password')
         return mysql.connect(db=database, **conn_kwargs)
 
-    def get_indexes_for_table(self, table):
-        res = self.execute_sql('SHOW INDEXES IN `%s`;' % table)
-        rows = sorted([(r[2], r[1] == 0) for r in res.fetchall()])
-        return rows
-
     def get_tables(self):
-        res = self.execute_sql('SHOW TABLES;')
-        return [r[0] for r in res.fetchall()]
+        return [row for row, in self.execute_sql('SHOW TABLES')]
+
+    def get_indexes(self, table):
+        cursor = self.execute_sql('SHOW INDEX FROM `%s`' % table)
+        unique = set()
+        indexes = {}
+        for row in cursor.fetchall():
+            if row[1]:
+                unique_indexes.add(row[2])
+            indexes.setdefault(row[2], [])
+            indexes[row[2]].append(row[4])
+        return [IndexMetadata(name, None, indexes[name], name in unique)
+                for name in indexes]
+
+    def get_columns(self, table):
+        query = """
+            SELECT column_name, is_nullable, data_type
+            FROM information_schema.columns
+            WHERE table_name = %s AND table_schema = DATABASE()"""
+        cursor = self.execute_sql(query, (table, schema))
+        pks = set(self.get_primary_keys(table))
+        return [ColumnMetadata(name, data_type, null == 'YES', name in pks)
+                for name, null, data_type in cursor.fetchall()]
+
+    def get_primary_keys(self, table):
+        cursor = self.execute('SHOW INDEX FROM `%s`' % table)
+        return [row[4] for row in cursor.fetchall() if row[2] == 'PRIMARY']
+
+    def get_foreign_keys(self, table):
+        query = """
+            SELECT column_name, referenced_table_name, referenced_column_name
+            FROM information_schema.key_column_usage
+            WHERE table_name = %s
+                AND table_schema = DATABASE()
+                AND referenced_table_name IS NOT NULL
+                AND referenced_column_name IS NOT NULL"""
+        cursor = self.execute_sql(query, (table,))
+        return [
+            ForeignKeyMetadata(column, dest_table, dest_column)
+            for column, dest_table, dest_column in cursor.fetchall()]
 
     def extract_date(self, date_part, date_field):
         return fn.EXTRACT(Clause(R(date_part), R('FROM'), date_field))
