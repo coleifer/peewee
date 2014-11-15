@@ -1706,14 +1706,6 @@ Database and its subclasses
         .. warning::
             Not implemented -- implementations exist in subclasses
 
-    .. py:method:: get_indexes_for_table(table)
-
-        :param table: the name of table to introspect
-        :rtype: a list of ``(index_name, is_unique)`` tuples
-
-        .. warning::
-            Not implemented -- implementations exist in subclasses
-
     .. py:method:: sequence_exists(sequence_name)
 
         :rtype boolean:

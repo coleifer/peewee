@@ -2821,9 +2821,6 @@ class Database(object):
     def get_tables(self):
         raise NotImplementedError
 
-    def get_indexes_for_table(self, table):
-        raise NotImplementedError
-
     def sequence_exists(self, seq):
         raise NotImplementedError
 
@@ -2901,11 +2898,6 @@ class SqliteDatabase(Database):
         if self._journal_mode:
             self.execute_sql('PRAGMA journal_mode=%s;' % self._journal_mode)
 
-    def get_indexes_for_table(self, table):
-        res = self.execute_sql('PRAGMA index_list(%s);' % self.quote(table))
-        rows = sorted([(r[1], r[2] == 1) for r in res.fetchall()])
-        return rows
-
     def get_tables(self):
         res = self.execute_sql('select name from sqlite_master where '
                                'type="table" order by name;')
@@ -2973,19 +2965,6 @@ class PostgresqlDatabase(Database):
                 self.commit()
             return result
 
-    def get_indexes_for_table(self, table):
-        res = self.execute_sql("""
-            SELECT c2.relname, i.indisprimary, i.indisunique
-            FROM
-            pg_catalog.pg_class c,
-            pg_catalog.pg_class c2,
-            pg_catalog.pg_index i
-            WHERE
-            c.relname = %s AND c.oid = i.indrelid AND i.indexrelid = c2.oid
-            ORDER BY i.indisprimary DESC, i.indisunique DESC, c2.relname""",
-            (table,))
-        return sorted([(r[0], r[1]) for r in res.fetchall()])
-
     def get_tables(self):
         res = self.execute_sql("""
             SELECT c.relname
@@ -2998,12 +2977,10 @@ class PostgresqlDatabase(Database):
         return [row[0] for row in res.fetchall()]
 
     def sequence_exists(self, sequence):
-        res = self.execute_sql("""
-            SELECT COUNT(*)
-            FROM pg_class, pg_namespace
-            WHERE relkind='S'
-                AND pg_class.relnamespace = pg_namespace.oid
-                AND relname=%s""", (sequence,))
+        res = self.execute_sql(
+            'SELECT COUNT(*) FROM pg_class c, pg_namespace n WHERE '
+            'relkind=%s AND c.relnamespace = n.oid AND relname=%s',
+            ('S', sequence,))
         return bool(res.fetchone()[0])
 
     def set_search_path(self, *search_path):
@@ -3045,11 +3022,6 @@ class MySQLDatabase(Database):
         if 'password' in conn_kwargs:
             conn_kwargs['passwd'] = conn_kwargs.pop('password')
         return mysql.connect(db=database, **conn_kwargs)
-
-    def get_indexes_for_table(self, table):
-        res = self.execute_sql('SHOW INDEXES IN `%s`;' % table)
-        rows = sorted([(r[2], r[1] == 0) for r in res.fetchall()])
-        return rows
 
     def get_tables(self):
         res = self.execute_sql('SHOW TABLES;')

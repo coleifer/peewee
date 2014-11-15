@@ -491,11 +491,6 @@ The :py:class:`Database` provides a higher-level API and is responsible for exec
             res = self.execute('SHOW TABLES;')
             return [r[0] for r in res.fetchall()]
 
-        def get_indexes_for_table(self, table):
-            res = self.execute('SHOW INDEXES IN %s;' % self.quote_name(table))
-            rows = sorted([(r[2], r[1] == 0) for r in res.fetchall()])
-            return rows
-
 Other things the database handles that are not covered here include:
 
 * :py:meth:`~Database.last_insert_id` and :py:meth:`~Database.rows_affected`
