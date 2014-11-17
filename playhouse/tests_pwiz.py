@@ -50,14 +50,14 @@ class BaseModel(Model):
         database = database
 
 class Category(BaseModel):
-    name = CharField(max_length=255)
+    name = CharField()
     parent = ForeignKeyField(db_column='parent_id', null=True, rel_model='self', to_field='id')
 
     class Meta:
         db_table = 'category'
 
 class User(BaseModel):
-    username = CharField(max_length=255, primary_key=True)
+    username = CharField(primary_key=True)
 
     class Meta:
         db_table = 'user'
