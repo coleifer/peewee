@@ -349,7 +349,7 @@ class TestReflection(unittest.TestCase):
             ('coltypes', (
                 ('f1', 'f1 = BigIntegerField()'),
                 #('f2', 'f2 = BlobField()'),
-                ('f4', 'f4 = CharField(max_length=50)'),
+                ('f4', 'f4 = CharField()'),
                 ('f5', 'f5 = DateField()'),
                 ('f6', 'f6 = DateTimeField()'),
                 ('f7', 'f7 = DecimalField()'),
@@ -360,7 +360,7 @@ class TestReflection(unittest.TestCase):
             )),
             ('nullable', (
                 ('nullable_cf', 'nullable_cf = '
-                 'CharField(max_length=255, null=True)'),
+                 'CharField(null=True)'),
                 ('nullable_if', 'nullable_if = IntegerField(null=True)'),
             )),
             ('fkpk', (
@@ -378,10 +378,10 @@ class TestReflection(unittest.TestCase):
             )),
             ('underscores', (
                 ('_id', '_id = PrimaryKeyField()'),
-                ('_name', '_name = CharField(max_length=255)'),
+                ('_name', '_name = CharField()'),
             )),
             ('category', (
-                ('name', 'name = CharField(max_length=10)'),
+                ('name', 'name = CharField()'),
                 ('parent_id', 'parent = ForeignKeyField('
                  'db_column=\'parent_id\', null=True, rel_model=\'self\', '
                  'to_field=\'id\')'),

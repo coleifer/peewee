@@ -5263,6 +5263,7 @@ class TestMetadataIntrospection(ModelTestCase):
         idx_f2f3 = indexes['multiindexmodel_f2_f3']
         self.assertEqual(sorted(idx_f2f3.columns), ['f2', 'f3'])
         self.assertFalse(idx_f2f3.unique)
+        self.assertEqual(idx_f2f3.table, 'multiindexmodel')
 
         # SQLite *will* create an index here, so we will always have one.
         indexes = test_db.get_indexes(CompositeKeyModel._meta.db_table)
@@ -5281,6 +5282,7 @@ class TestMetadataIntrospection(ModelTestCase):
             self.assertEqual(sorted(columns), col_names)
             for column, metadata in columns.items():
                 self.assertEqual(metadata.null, column in nullable)
+                self.assertEqual(metadata.table, model._meta.db_table)
                 self.assertEqual(metadata.primary_key, column in pks)
 
         assertColumns(User, ['id', 'username'], [], ['id'])

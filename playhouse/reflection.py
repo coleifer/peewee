@@ -32,13 +32,12 @@ class Column(object):
     primary_key_types = (IntegerField, PrimaryKeyField)
 
     def __init__(self, name, field_class, raw_column_type, nullable,
-                 primary_key=False, max_length=None, db_column=None):
+                 primary_key=False, db_column=None):
         self.name = name
         self.field_class = field_class
         self.raw_column_type = raw_column_type
         self.nullable = nullable
         self.primary_key = primary_key
-        self.max_length = max_length
         self.db_column = db_column
 
     def __repr__(self):
@@ -47,7 +46,6 @@ class Column(object):
             'raw_column_type',
             'nullable',
             'primary_key',
-            'max_length',
             'db_column']
         keyword_args = ', '.join(
             '%s=%s' % (attr, getattr(self, attr))
@@ -60,8 +58,6 @@ class Column(object):
         # Set up default attributes.
         if self.nullable:
             params['null'] = True
-        if self.field_class is CharField and self.max_length:
-            params['max_length'] = self.max_length
         if self.field_class is ForeignKeyField or self.name != self.db_column:
             params['db_column'] = "'%s'" % self.db_column
         if self.primary_key and not self.field_class is PrimaryKeyField:
@@ -110,21 +106,6 @@ class Column(object):
         return field
 
 
-class ForeignKeyMapping(object):
-    def __init__(self, table, column, dest_table, dest_column):
-        self.table = table
-        self.column = column
-        self.dest_table = dest_table
-        self.dest_column = dest_column
-
-    def __repr__(self):
-        return 'ForeignKeyMapping(%s.%s -> %s.%s)' % (
-            self.table,
-            self.column,
-            self.dest_table,
-            self.dest_column)
-
-
 class Metadata(object):
     column_map = {}
 
@@ -134,25 +115,44 @@ class Metadata(object):
     def execute(self, sql, *params):
         return self.database.execute_sql(sql, params)
 
-    def set_search_path(self, *path):
-        self.database.set_search_path(*path)
-
-    def get_tables(self):
-        """Returns a list of table names."""
-        return self.database.get_tables()
-
     def get_columns(self, table, schema=None):
-        pass
+        metadata = dict(
+            (metadata.name, metadata)
+            for metadata in self.database.get_columns(table, schema))
 
-    def get_primary_keys(self, table, schema=None):
-        pass
+        # Look up the actual column type for each column.
+        column_types = self.get_column_types(table, schema)
+
+        # Look up the primary keys.
+        pk_names = self.get_primary_keys(table, schema)
+        if len(pk_names) == 1:
+            pk = pk_names[0]
+            if column_types[pk] is IntegerField:
+                column_types[pk] = PrimaryKeyField
+
+        columns = {}
+        for name, column_data in metadata.items():
+            columns[name] = Column(
+                name,
+                field_class=column_types[name],
+                raw_column_type=column_data.data_type,
+                nullable=column_data.null,
+                primary_key=column_data.primary_key,
+                db_column=name)
+
+        return columns
+
+    def get_column_types(self, table, schema=None):
+        raise NotImplementedError
 
     def get_foreign_keys(self, table, schema=None):
-        pass
+        return self.database.get_foreign_keys(table, schema)
+
+    def get_primary_keys(self, table, schema=None):
+        return self.database.get_primary_keys(table, schema)
 
 
 class PostgresqlMetadata(Metadata):
-    # select oid, typname from pg_type;
     column_map = {
         16: BooleanField,
         17: BlobField,
@@ -189,97 +189,32 @@ class PostgresqlMetadata(Metadata):
                 elif 'tsvector' in typname:
                     self.column_map[oid] = postgres_ext.TSVectorField
 
-    def get_columns(self, table, schema=None):
-        schema = schema or 'public'
-
-        # Get basic metadata about columns.
-        query = ('SELECT column_name, is_nullable, data_type, '
-                 'character_maximum_length '
-                 'FROM information_schema.columns '
-                 'WHERE table_name = %s AND table_schema = %s')
-        cursor = self.execute(query, table, schema)
-
-        name_to_info = {}
-        for row in cursor.fetchall():
-            name_to_info[row[0]] = {
-                'db_column': row[0],
-                'nullable': row[1] == 'YES',
-                'raw_column_type': row[2],
-                'max_length': row[3],
-                'primary_key': False,
-            }
+    def get_column_types(self, table, schema):
+        column_types = {}
 
         # Look up the actual column type for each column.
-        identifier = (schema, table)
-        cursor = self.execute('SELECT * FROM "%s"."%s" LIMIT 1' % identifier)
+        identifier = '"%s"."%s"' % (schema, table)
+        cursor = self.execute('SELECT * FROM %s LIMIT 1' % identifier)
 
         # Store column metadata in dictionary keyed by column name.
         for column_description in cursor.description:
-            field_class = self.column_map.get(
+            column_types[column_description.name] = self.column_map.get(
                 column_description.type_code,
                 UnknownField)
-            column = column_description.name
-            name_to_info[column]['field_class'] = field_class
 
-        # Look up the primary keys.
-        pk_names = self.get_primary_keys(table)
-        if len(pk_names) == 1:
-            for pk_name in pk_names:
-                name_to_info[pk_name]['primary_key'] = True
-                if name_to_info[pk_name]['field_class'] is IntegerField:
-                    name_to_info[pk_name]['field_class'] = PrimaryKeyField
+        return column_types
 
-        columns = {}
-        for name, column_info in name_to_info.items():
-            columns[name] = Column(
-                name,
-                field_class=column_info['field_class'],
-                raw_column_type=column_info['raw_column_type'],
-                nullable=column_info['nullable'],
-                primary_key=column_info['primary_key'],
-                max_length=column_info['max_length'],
-                db_column=name)
-
-        return columns
-
-    def get_primary_keys(self, table, schema=None):
+    def get_columns(self, table, schema=None):
         schema = schema or 'public'
-        cursor = self.execute(
-            """
-            SELECT kc.column_name
-            FROM information_schema.table_constraints AS tc
-            INNER JOIN information_schema.key_column_usage AS kc ON (
-                tc.table_name = kc.table_name AND
-                tc.table_schema = kc.table_schema AND
-                tc.constraint_name = kc.constraint_name)
-            WHERE
-                tc.constraint_type = %s AND
-                tc.table_name = %s AND
-                tc.table_schema = %s
-            """, 'PRIMARY KEY', table, schema)
-
-        return set(row[0] for row in cursor.fetchall())
+        return super(PostgresqlMetadata, self).get_columns(table, schema)
 
     def get_foreign_keys(self, table, schema=None):
         schema = schema or 'public'
-        sql = """
-            SELECT
-                kcu.column_name, ccu.table_name, ccu.column_name
-            FROM information_schema.table_constraints AS tc
-            JOIN information_schema.key_column_usage AS kcu
-                ON (tc.constraint_name = kcu.constraint_name AND
-                    tc.constraint_schema = kcu.constraint_schema)
-            JOIN information_schema.constraint_column_usage AS ccu
-                ON (ccu.constraint_name = tc.constraint_name AND
-                    ccu.constraint_schema = tc.constraint_schema)
-            WHERE
-                tc.constraint_type = 'FOREIGN KEY' AND
-                tc.table_name = %s AND
-                tc.table_schema = %s"""
-        cursor = self.execute(sql, table, schema)
-        return [
-            ForeignKeyMapping(table, column, dest_table, dest_column)
-            for column, dest_table, dest_column in cursor]
+        return super(PostgresqlMetadata, self).get_foreign_keys(table, schema)
+
+    def get_primary_keys(self, table, schema=None):
+        schema = schema or 'public'
+        return super(PostgresqlMetadata, self).get_primary_keys(table, schema)
 
 
 class MySQLMetadata(Metadata):
@@ -314,24 +249,8 @@ class MySQLMetadata(Metadata):
             kwargs['passwd'] = kwargs.pop('password')
         super(MySQLMetadata, self).__init__(database, **kwargs)
 
-    def get_columns(self, table, schema=None):
-        primary_keys = self.get_primary_keys(table)
-
-        # Get basic metadata about columns.
-        cursor = self.execute("""
-            SELECT
-                column_name, is_nullable, data_type, character_maximum_length
-            FROM information_schema.columns
-            WHERE table_name=%s AND table_schema=DATABASE()""", table)
-        name_to_info = {}
-        for row in cursor.fetchall():
-            name_to_info[row[0]] = {
-                'db_column': row[0],
-                'nullable': row[1] == 'YES',
-                'raw_column_type': row[2],
-                'max_length': row[3],
-                'primary_key': False,
-            }
+    def get_column_types(self, table, schema=None):
+        column_types = {}
 
         # Look up the actual column type for each column.
         cursor = self.execute('SELECT * FROM `%s` LIMIT 1' % table)
@@ -339,46 +258,9 @@ class MySQLMetadata(Metadata):
         # Store column metadata in dictionary keyed by column name.
         for column_description in cursor.description:
             name, type_code = column_description[:2]
-            field_class = self.column_map.get(type_code, UnknownField)
+            column_types[name] = self.column_map.get(type_code, UnknownField)
 
-            if name in primary_keys and len(primary_keys) == 1:
-                name_to_info[name]['primary_key'] = True
-                if field_class is IntegerField:
-                    field_class = PrimaryKeyField
-
-            name_to_info[name]['field_class'] = field_class
-
-        columns = {}
-        for name, column_info in name_to_info.items():
-            columns[name] = Column(
-                name,
-                field_class=column_info['field_class'],
-                raw_column_type=column_info['raw_column_type'],
-                nullable=column_info['nullable'],
-                primary_key=column_info['primary_key'],
-                max_length=column_info['max_length'],
-                db_column=name)
-
-        return columns
-
-    def get_primary_keys(self, table, schema=None):
-        primary_keys = set()
-        cursor = self.execute('SHOW INDEX FROM `%s`' % table)
-        return set(row[4] for row in cursor.fetchall() if row[2] == 'PRIMARY')
-
-    def get_foreign_keys(self, table, schema=None):
-        framing = """
-            SELECT column_name, referenced_table_name, referenced_column_name
-            FROM information_schema.key_column_usage
-            WHERE table_name = %s
-                AND table_schema = DATABASE()
-                AND referenced_table_name IS NOT NULL
-                AND referenced_column_name IS NOT NULL
-        """
-        cursor = self.execute(framing, table)
-        return [
-            ForeignKeyMapping(table, column, dest_table, dest_column)
-            for column, dest_table, dest_column in cursor]
+        return column_types
 
 
 class SqliteMetadata(Metadata):
@@ -421,81 +303,16 @@ class SqliteMetadata(Metadata):
         else:
             column_type = re.sub('\(.+\)', '', raw_column_type)
             field_class = self.column_map.get(column_type, UnknownField)
-        return field_class, raw_column_type
+        return field_class
 
-    def get_columns(self, table, schema=None):
-        pks = self.get_primary_keys(table)
-        columns = {}
+    def get_column_types(self, table, schema=None):
+        column_types = {}
+        columns = self.database.get_columns(table)
 
-        # Column ID, Name, Column Type, Not Null?, Default, Is Primary Key?
-        cursor = self.execute('PRAGMA table_info("%s")' % table)
-        results = cursor.fetchall()
+        for column in columns:
+            column_types[column.name] = self._map_col(column.data_type)
 
-        for (_, name, column_type, not_null, _, is_pk) in results:
-            field_class, raw_column_type = self._map_col(column_type)
-
-            if is_pk and len(pks) > 1:
-                is_pk = False
-            elif is_pk and field_class == IntegerField:
-                field_class = PrimaryKeyField
-
-            max_length = None
-            if field_class is CharField:
-                match = re.match('\w+\((\d+)\)', column_type)
-                if match:
-                    max_length, = match.groups()
-
-            columns[name] = Column(
-                name,
-                field_class=field_class,
-                raw_column_type=raw_column_type,
-                nullable=not not_null,
-                primary_key=is_pk,
-                max_length=max_length,
-                db_column=name)
-
-        return columns
-
-    def get_primary_keys(self, table, schema=None):
-        cursor = self.execute('PRAGMA table_info("%s")' % table)
-        return set(row[1] for row in cursor.fetchall() if row[-1])
-
-    def get_foreign_keys(self, table, schema=None):
-        query = """
-            SELECT sql
-            FROM sqlite_master
-            WHERE (tbl_name = ? AND type = ?)"""
-        cursor = self.execute(query, table, 'table')
-        table_definition = cursor.fetchone()[0].strip()
-
-        try:
-            columns = re.search(
-                '\((.+)\)',
-                table_definition,
-                re.MULTILINE | re.DOTALL).groups()[0]
-        except AttributeError:
-            raise ValueError(
-                'Unable to read table definition for "%s"' % table)
-
-        # Replace any new-lines or other junk with whitespace.
-        columns = re.sub('[\s\n\r]+', ' ', columns).strip()
-
-        fks = []
-        for column_def in columns.split(','):
-            column_def = column_def.strip()
-            match = re.search(self.re_foreign_key, column_def, re.I)
-            if not match:
-                continue
-
-            column, dest_table, dest_column = [
-                s.strip('"') for s in match.groups()]
-            fks.append(ForeignKeyMapping(
-                table=table,
-                column=column,
-                dest_table=dest_table,
-                dest_column=dest_column))
-
-        return fks
+        return column_types
 
 
 class Introspector(object):
@@ -539,7 +356,7 @@ class Introspector(object):
 
     def introspect(self):
         # Retrieve all the tables in the database.
-        tables = self.metadata.get_tables()
+        tables = self.metadata.database.get_tables()
 
         # Store a mapping of table name -> dictionary of columns.
         columns = {}
@@ -628,8 +445,6 @@ class Introspector(object):
                 params = {
                     'db_column': db_column,
                     'null': column.nullable}
-                if FieldClass is CharField and column.max_length:
-                    params['max_length'] = int(column.max_length)
                 if column.primary_key and not FieldClass is PrimaryKeyField:
                     params['primary_key'] = True
                 if FieldClass is ForeignKeyField:

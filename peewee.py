@@ -2613,13 +2613,13 @@ class DeleteQuery(Query):
 
 IndexMetadata = namedtuple(
     'IndexMetadata',
-    ('name', 'sql', 'columns', 'unique'))
+    ('name', 'sql', 'columns', 'unique', 'table'))
 ColumnMetadata = namedtuple(
     'ColumnMetadata',
-    ('name', 'data_type', 'null', 'primary_key'))
+    ('name', 'data_type', 'null', 'primary_key', 'table'))
 ForeignKeyMetadata = namedtuple(
     'ForeignKeyMetadata',
-    ('column', 'dest_table', 'dest_column'))
+    ('column', 'dest_table', 'dest_column', 'table'))
 
 
 class PeeweeException(Exception): pass
@@ -2829,19 +2829,19 @@ class Database(object):
         else:
             return self.savepoint()
 
-    def get_tables(self):
+    def get_tables(self, schema=None):
         raise NotImplementedError
 
-    def get_indexes(self, table):
+    def get_indexes(self, table, schema=None):
         raise NotImplementedError
 
-    def get_columns(self, table):
+    def get_columns(self, table, schema=None):
         raise NotImplementedError
 
-    def get_primary_keys(self, table):
+    def get_primary_keys(self, table, schema=None):
         raise NotImplementedError
 
-    def get_foreign_keys(self, table):
+    def get_foreign_keys(self, table, schema=None):
         raise NotImplementedError
 
     def sequence_exists(self, seq):
@@ -2921,12 +2921,12 @@ class SqliteDatabase(Database):
         if self._journal_mode:
             self.execute_sql('PRAGMA journal_mode=%s;' % self._journal_mode)
 
-    def get_tables(self):
+    def get_tables(self, schema=None):
         cursor = self.execute_sql('SELECT name FROM sqlite_master WHERE '
                                   'type = ? ORDER BY name;', ('table',))
         return [row[0] for row in cursor.fetchall()]
 
-    def get_indexes(self, table):
+    def get_indexes(self, table, schema=None):
         query = ('SELECT name, sql FROM sqlite_master '
                  'WHERE tbl_name = ? AND type = ? ORDER BY name')
         cursor = self.execute_sql(query, (table, 'index'))
@@ -2950,21 +2950,22 @@ class SqliteDatabase(Database):
                 name,
                 index_to_sql[name],
                 index_columns[name],
-                name in unique_indexes)
+                name in unique_indexes,
+                table)
             for name in sorted(index_to_sql)]
 
-    def get_columns(self, table):
+    def get_columns(self, table, schema=None):
         cursor = self.execute_sql('PRAGMA table_info("%s")' % table)
-        return [ColumnMetadata(row[1], row[2], not row[3], bool(row[5]))
+        return [ColumnMetadata(row[1], row[2], not row[3], bool(row[5]), table)
                 for row in cursor.fetchall()]
 
     def get_primary_keys(self, table, schema=None):
         cursor = self.execute_sql('PRAGMA table_info("%s")' % table)
         return [row[1] for row in cursor.fetchall() if row[-1]]
 
-    def get_foreign_keys(self, table):
+    def get_foreign_keys(self, table, schema=None):
         cursor = self.execute_sql('PRAGMA foreign_key_list("%s")' % table)
-        return [ForeignKeyMetadata(row[3], row[2], row[4])
+        return [ForeignKeyMetadata(row[3], row[2], row[4], table)
                 for row in cursor.fetchall()]
 
     def savepoint(self, sid=None):
@@ -3050,7 +3051,7 @@ class PostgresqlDatabase(Database):
             GROUP BY i.relname, idxs.indexdef, idx.indisunique
             ORDER BY idx.indisunique DESC, i.relname;"""
         cursor = self.execute_sql(query, (table, 'r', schema))
-        return [IndexMetadata(row[0], row[1], row[3].split(','), row[2])
+        return [IndexMetadata(row[0], row[1], row[3].split(','), row[2], table)
                 for row in cursor.fetchall()]
 
     def get_columns(self, table, schema='public'):
@@ -3060,8 +3061,8 @@ class PostgresqlDatabase(Database):
             WHERE table_name = %s AND table_schema = %s"""
         cursor = self.execute_sql(query, (table, schema))
         pks = set(self.get_primary_keys(table, schema))
-        return [ColumnMetadata(name, data_type, null == 'YES', name in pks)
-                for name, null, data_type in cursor.fetchall()]
+        return [ColumnMetadata(name, dt, null == 'YES', name in pks, table)
+                for name, null, dt in cursor.fetchall()]
 
     def get_primary_keys(self, table, schema='public'):
         query = """
@@ -3094,7 +3095,8 @@ class PostgresqlDatabase(Database):
                 tc.table_name = %s AND
                 tc.table_schema = %s"""
         cursor = self.execute_sql(sql, (table, schema))
-        return [ForeignKeyMetadata(*row) for row in cursor.fetchall()]
+        return [ForeignKeyMetadata(row[0], row[1], row[2], table)
+                for row in cursor.fetchall()]
 
     def sequence_exists(self, sequence):
         res = self.execute_sql("""
@@ -3144,10 +3146,10 @@ class MySQLDatabase(Database):
             conn_kwargs['passwd'] = conn_kwargs.pop('password')
         return mysql.connect(db=database, **conn_kwargs)
 
-    def get_tables(self):
+    def get_tables(self, schema=None):
         return [row for row, in self.execute_sql('SHOW TABLES')]
 
-    def get_indexes(self, table):
+    def get_indexes(self, table, schema=None):
         cursor = self.execute_sql('SHOW INDEX FROM `%s`' % table)
         unique = set()
         indexes = {}
@@ -3156,24 +3158,24 @@ class MySQLDatabase(Database):
                 unique.add(row[2])
             indexes.setdefault(row[2], [])
             indexes[row[2]].append(row[4])
-        return [IndexMetadata(name, None, indexes[name], name in unique)
+        return [IndexMetadata(name, None, indexes[name], name in unique, table)
                 for name in indexes]
 
-    def get_columns(self, table):
+    def get_columns(self, table, schema=None):
         sql = """
             SELECT column_name, is_nullable, data_type
             FROM information_schema.columns
             WHERE table_name = %s AND table_schema = DATABASE()"""
         cursor = self.execute_sql(sql, (table,))
         pks = set(self.get_primary_keys(table))
-        return [ColumnMetadata(name, data_type, null == 'YES', name in pks)
-                for name, null, data_type in cursor.fetchall()]
+        return [ColumnMetadata(name, dt, null == 'YES', name in pks, table)
+                for name, null, dt in cursor.fetchall()]
 
-    def get_primary_keys(self, table):
+    def get_primary_keys(self, table, schema=None):
         cursor = self.execute_sql('SHOW INDEX FROM `%s`' % table)
         return [row[4] for row in cursor.fetchall() if row[2] == 'PRIMARY']
 
-    def get_foreign_keys(self, table):
+    def get_foreign_keys(self, table, schema=None):
         query = """
             SELECT column_name, referenced_table_name, referenced_column_name
             FROM information_schema.key_column_usage
@@ -3183,7 +3185,7 @@ class MySQLDatabase(Database):
                 AND referenced_column_name IS NOT NULL"""
         cursor = self.execute_sql(query, (table,))
         return [
-            ForeignKeyMetadata(column, dest_table, dest_column)
+            ForeignKeyMetadata(column, dest_table, dest_column, table)
             for column, dest_table, dest_column in cursor.fetchall()]
 
     def extract_date(self, date_part, date_field):
