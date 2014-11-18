@@ -32,7 +32,7 @@ class DataSet(object):
 
         # Introspect the database and generate models.
         self._introspector = Introspector.from_database(self._database)
-        self._models = self._introspector.generate_models()
+        self._models = self._introspector.generate_models(skip_invalid=True)
         self._migrator = SchemaMigrator.from_database(self._database)
 
         class BaseModel(Model):

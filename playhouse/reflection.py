@@ -405,7 +405,7 @@ class Introspector(object):
 
         return columns, primary_keys, foreign_keys, model_names
 
-    def generate_models(self):
+    def generate_models(self, skip_invalid=False):
         columns, primary_keys, foreign_keys, model_names = self.introspect()
         models = {}
 
@@ -461,7 +461,11 @@ class Introspector(object):
 
                 attrs[column.name] = FieldClass(**params)
 
-            models[table] = type(str(table), (BaseModel,), attrs)
+            try:
+                models[table] = type(str(table), (BaseModel,), attrs)
+            except ValueError:
+                if not skip_invalid:
+                    raise
 
         # Actually generate Model classes.
         for table, model in sorted(model_names.items()):
