@@ -134,6 +134,11 @@ except ImportError:
     except ImportError:
         sqlite3 = None
 try:
+    from psycopg2cffi import compat
+    compat.register()
+except ImportError:
+    pass
+try:
     import psycopg2
     from psycopg2 import extensions as pg_extensions
 except ImportError:

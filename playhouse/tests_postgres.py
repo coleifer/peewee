@@ -2,6 +2,7 @@
 import datetime
 import json
 import os
+import sys
 import unittest
 import uuid
 
@@ -14,6 +15,7 @@ from peewee import UUIDField
 from playhouse.postgres_ext import *
 
 
+PYPY = 'PyPy' in sys.version
 TEST_VERBOSITY = int(os.environ.get('PEEWEE_TEST_VERBOSITY') or 1)
 test_db = PostgresqlExtDatabase('peewee_test', user='postgres')
 test_ss_db = PostgresqlExtDatabase(
@@ -436,6 +438,10 @@ class SSCursorTestCase(unittest.TestCase):
         self.counter = 0
         for i in range(3):
             self.create()
+        if PYPY:
+            self.ExceptionClass = psycopg2.OperationalError
+        else:
+            self.ExceptionClass = psycopg2.ProgrammingError
 
     def create(self):
         self.counter += 1
@@ -475,15 +481,14 @@ class SSCursorTestCase(unittest.TestCase):
 
         # After the transaction we cannot fetch a result because the cursor
         # is dead.
-        self.assertRaises(psycopg2.ProgrammingError, qr2.cursor.fetchone)
+        self.assertRaises(self.ExceptionClass, qr2.cursor.fetchone)
 
         # Try using the helper.
         query4 = query.clone()
         self.assertList(ServerSide(query4))
 
         # Named cursor is dead.
-        self.assertRaises(
-            psycopg2.ProgrammingError, query4._qr.cursor.fetchone)
+        self.assertRaises(self.ExceptionClass, query4._qr.cursor.fetchone)
 
     def test_serverside_normal_model(self):
         query = NormalModel.select().order_by(NormalModel.data)
@@ -496,7 +501,7 @@ class SSCursorTestCase(unittest.TestCase):
         self.assertList(ServerSide(clone))
 
         # Named cursor is dead.
-        self.assertRaises(psycopg2.ProgrammingError, clone._qr.cursor.fetchone)
+        self.assertRaises(self.ExceptionClass, clone._qr.cursor.fetchone)
 
         # Ensure where clause is preserved.
         query = query.where(NormalModel.data == '2')
@@ -525,7 +530,7 @@ class SSCursorTestCase(unittest.TestCase):
 
         # Explicitly close the cursor.
         test_ss_db.commit()
-        self.assertRaises(psycopg2.ProgrammingError, cursor.fetchone)
+        self.assertRaises(self.ExceptionClass, cursor.fetchone)
 
         # This would not work is the named cursor was still holding a ref to
         # the table.

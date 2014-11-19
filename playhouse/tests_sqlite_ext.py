@@ -1,4 +1,8 @@
-import sqlite3; sqlite3.enable_callback_tracebacks(True)
+import sqlite3
+try:
+    sqlite3.enable_callback_tracebacks(True)
+except AttributeError:
+    pass
 import unittest
 
 from peewee import *
