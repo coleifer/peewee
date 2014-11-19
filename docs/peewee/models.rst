@@ -335,16 +335,18 @@ The :py:class:`ModelOptions` class implements several methods which may be of us
 
 There are several options you can specify as ``Meta`` attributes. While most options are inheritable, some are table-specific and will not be inherited by subclasses.
 
-===================   ==============================================   ============
-Option                Meaning                                          Inheritable?
-===================   ==============================================   ============
-``database``          database for model                               yes
-``db_table``          name of the table to store data                  no
-``indexes``           a list of fields to index                        yes
-``order_by``          a list of fields to use for default ordering     yes
-``primary_key``       a :py:class:`CompositeKey` instance              yes
-``table_alias``       an alias to use for the table in queries         no
-===================   ==============================================   ============
+=====================   ====================================================== ============
+Option                  Meaning                                                Inheritable?
+=====================   ====================================================== ============
+``database``            database for model                                     yes
+``db_table``            name of the table to store data                        no
+``indexes``             a list of fields to index                              yes
+``order_by``            a list of fields to use for default ordering           yes
+``primary_key``         a :py:class:`CompositeKey` instance                    yes
+``table_alias``         an alias to use for the table in queries               no
+``schema``              the database schema for the model                      yes
+``validate_backrefs``   ensure backrefs do not conflict with other attributes. yes
+=====================   ====================================================== ============
 
 Here is an example showing inheritable versus non-inheritable attributes:
 

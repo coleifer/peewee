@@ -1060,16 +1060,17 @@ class ForeignKeyField(IntegerField):
         else:
             self.to_field = self.rel_model._meta.primary_key
 
-        if self.related_name in self.rel_model._meta.fields:
-            error = ('Foreign key: %s.%s related name "%s" collision with '
-                     'model field of the same name.')
-            params = self.model_class._meta.name, self.name, self.related_name
-            raise AttributeError(error % params)
-        if self.related_name in self.rel_model._meta.reverse_rel:
-            error = ('Foreign key: %s.%s related name "%s" collision with '
-                     'foreign key using same related_name.')
-            params = self.model_class._meta.name, self.name, self.related_name
-            raise AttributeError(error % params)
+        if model_class._meta.validate_backrefs:
+            if self.related_name in self.rel_model._meta.fields:
+                error = ('Foreign key: %s.%s related name "%s" collision with '
+                         'model field of the same name.')
+                raise AttributeError(error % (
+                    self.model_class._meta.name, self.name, self.related_name))
+            if self.related_name in self.rel_model._meta.reverse_rel:
+                error = ('Foreign key: %s.%s related name "%s" collision with '
+                         'foreign key using same related_name.')
+                raise AttributeError(error % (
+                    self.model_class._meta.name, self.name, self.related_name))
 
         fk_descriptor = RelationDescriptor(self, self.rel_model)
         backref_descriptor = ReverseRelationDescriptor(self)
@@ -3342,7 +3343,8 @@ else:
 class ModelOptions(object):
     def __init__(self, cls, database=None, db_table=None, indexes=None,
                  order_by=None, primary_key=None, table_alias=None,
-                 constraints=None, schema=None, **kwargs):
+                 constraints=None, schema=None, validate_backrefs=True,
+                 **kwargs):
         self.model_class = cls
         self.name = cls.__name__.lower()
         self.fields = {}
@@ -3360,6 +3362,7 @@ class ModelOptions(object):
         self.table_alias = table_alias
         self.constraints = constraints
         self.schema = schema
+        self.validate_backrefs = validate_backrefs
 
         self.auto_increment = None
         self.rel = {}
@@ -3430,7 +3433,7 @@ class ModelOptions(object):
 
 class BaseModel(type):
     inheritable = set(['constraints', 'database', 'indexes', 'order_by',
-                       'primary_key', 'schema'])
+                       'primary_key', 'schema', 'validate_backrefs'])
 
     def __new__(cls, name, bases, attrs):
         if not bases:

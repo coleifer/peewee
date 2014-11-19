@@ -1644,6 +1644,28 @@ class ValidationTestCase(BasePeeweeTestCase):
         for val in vals_to_try:
             self.assertRaises(TypeError, declare_bad, val)
 
+    def test_backref_conflicts(self):
+        class Note(TestModel):
+            pass
+
+        def declare_bad(related_name=None, backrefs=True):
+            class Backref(Model):
+                note = ForeignKeyField(Note, related_name=related_name)
+
+                class Meta:
+                    validate_backrefs = backrefs
+
+        # First call succeeds since related_name is not taken, second will
+        # fail with AttributeError.
+        declare_bad()
+        self.assertRaises(AttributeError, declare_bad)
+
+        # We can specify a new related_name and it will be accepted.
+        declare_bad(related_name='valid_backref_name')
+
+        # We can also silence any validation errors.
+        declare_bad(backrefs=False)
+
 
 class ProxyTestCase(BasePeeweeTestCase):
     def test_proxy(self):
