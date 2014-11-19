@@ -1063,7 +1063,7 @@ class SelectTestCase(BasePeeweeTestCase):
             ('SELECT "t1"."pk", "t1"."user_id", "t1"."title", "t1"."content", "t1"."pub_date" FROM "blog" AS t1 WHERE (("t1"."title" = ?) AND ("t1"."user_id" IN (SELECT "t2"."id" FROM "users" AS t2 WHERE ("t2"."username" = ?))))', ['bar', 'foo']),
             ('SELECT "t1"."id", "t1"."blog_id", "t1"."comment" FROM "comment" AS t1 WHERE (("t1"."comment" = ?) AND ("t1"."blog_id" IN (SELECT "t2"."pk" FROM "blog" AS t2 WHERE (("t2"."title" = ?) AND ("t2"."user_id" IN (SELECT "t3"."id" FROM "users" AS t3 WHERE ("t3"."username" = ?)))))))', ['baz', 'bar', 'foo']),
         ]
-        for (query, fkf), expected in zip(fixed, fixed_sql):
+        for (query, fkf, backref), expected in zip(fixed, fixed_sql):
             self.assertEqual(normal_compiler.generate_select(query), expected)
 
         fixed = prefetch_add_subquery(sq, (Blog,))
@@ -1071,7 +1071,7 @@ class SelectTestCase(BasePeeweeTestCase):
             ('SELECT "t1"."id", "t1"."username" FROM "users" AS t1 WHERE ("t1"."username" = ?)', ['foo']),
             ('SELECT "t1"."pk", "t1"."user_id", "t1"."title", "t1"."content", "t1"."pub_date" FROM "blog" AS t1 WHERE ("t1"."user_id" IN (SELECT "t2"."id" FROM "users" AS t2 WHERE ("t2"."username" = ?)))', ['foo']),
         ]
-        for (query, fkf), expected in zip(fixed, fixed_sql):
+        for (query, fkf, backref), expected in zip(fixed, fixed_sql):
             self.assertEqual(normal_compiler.generate_select(query), expected)
 
     def test_prefetch_non_pk_fk(self):
@@ -1093,7 +1093,7 @@ class SelectTestCase(BasePeeweeTestCase):
             ['n%', 'b%'])
         fixed_sql = [fixed_sq, fixed_sq2]
 
-        for (query, fkf), expected in zip(fixed, fixed_sql):
+        for (query, fkf, backref), expected in zip(fixed, fixed_sql):
             self.assertEqual(normal_compiler.generate_select(query), expected)
 
     def test_prefetch_subquery_same_depth(self):
@@ -1110,7 +1110,7 @@ class SelectTestCase(BasePeeweeTestCase):
             ('SELECT "t1"."id", "t1"."child_id", "t1"."data" FROM "childpet" AS t1 WHERE ("t1"."child_id" IN (SELECT "t2"."id" FROM "child" AS t2 WHERE ("t2"."parent_id" IN (SELECT "t3"."id" FROM "parent" AS t3))))', []),
             ('SELECT "t1"."id", "t1"."orphan_id", "t1"."data" FROM "orphanpet" AS t1 WHERE ("t1"."orphan_id" IN (SELECT "t2"."id" FROM "orphan" AS t2 WHERE ("t2"."parent_id" IN (SELECT "t3"."id" FROM "parent" AS t3))))', []),
         ]
-        for (query, fkf), expected in zip(fixed, fixed_sql):
+        for (query, fkf, backref), expected in zip(fixed, fixed_sql):
             self.assertEqual(normal_compiler.generate_select(query), expected)
 
     def test_outer_inner_alias(self):
@@ -3813,15 +3813,24 @@ class ManyToManyTestCase(ModelTestCase):
         aC(cats, ['c1', 'c2', 'c3'])
 
     def test_many_to_many_prefetch(self):
-        categories = Category.select()
-        users = User.select()
-        # Unfortunately this is not working.
-        self.assertRaises(
-            AttributeError,
-            prefetch,
-            categories,
-            UserCategory,
-            users)
+        categories = Category.select().order_by(Category.name)
+        user_categories = UserCategory.select().order_by(UserCategory.id)
+        users = User.select().order_by(User.username)
+        with self.assertQueryCount(3):
+            query = prefetch(categories, user_categories, users)
+            results = []
+            for category in query:
+                results.append(category.name)
+                for user_category in category.usercategory_set_prefetch:
+                    results.append(user_category.user.username)
+
+        self.assertEqual(results, [
+            'c1', 'u1',
+            'c12', 'u1', 'u2',
+            'c2', 'u2',
+            'c23', 'u2',
+            'c3',
+        ])
 
 
 class FieldTypeTestCase(ModelTestCase):
