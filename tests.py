@@ -3821,21 +3821,27 @@ class ManyToManyTestCase(ModelTestCase):
         categories = Category.select().order_by(Category.name)
         user_categories = UserCategory.select().order_by(UserCategory.id)
         users = User.select().order_by(User.username)
+        results = {}
+        result_list = []
         with self.assertQueryCount(3):
             query = prefetch(categories, user_categories, users)
-            results = []
             for category in query:
-                results.append(category.name)
+                results.setdefault(category.name, set())
+                result_list.append(category.name)
                 for user_category in category.usercategory_set_prefetch:
-                    results.append(user_category.user.username)
+                    results[category.name].add(user_category.user.username)
+                    result_list.append(user_category.user.username)
 
-        self.assertEqual(results, [
-            'c1', 'u1',
-            'c12', 'u1', 'u2',
-            'c2', 'u2',
-            'c23', 'u2',
-            'c3',
-        ])
+        self.assertEqual(results, {
+            'c1': set(['u1']),
+            'c12': set(['u1', 'u2']),
+            'c2': set(['u2']),
+            'c23': set(['u2']),
+            'c3': set(),
+        })
+        self.assertEqual(
+            sorted(result_list),
+            ['c1', 'c12', 'c2', 'c23', 'c3', 'u1', 'u1', 'u2', 'u2', 'u2'])
 
 
 class FieldTypeTestCase(ModelTestCase):
