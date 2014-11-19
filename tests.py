@@ -3249,6 +3249,24 @@ class PrefetchTestCase(ModelTestCase):
                 'u1', 'b1', 'b1', 'u4', 'b5', 'b5', 'u4', 'b6',
             ])
 
+    def test_prefetch_reverse(self):
+        sq = User.select()
+        sq2 = Blog.select().where(Blog.title != 'b2').order_by(Blog.pk)
+
+        with self.assertQueryCount(2):
+            prefetch_sq = prefetch(sq2, sq)
+            results = []
+            for blog in prefetch_sq:
+                results.append(blog.title)
+                results.append(blog.user.username)
+
+        self.assertEqual(results, [
+            'b1', 'u1',
+            'b3', 'u3',
+            'b4', 'u3',
+            'b5', 'u4',
+            'b6', 'u4'])
+
     def test_prefetch_multi_depth(self):
         sq = Parent.select()
         sq2 = Child.select()

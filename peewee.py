@@ -3746,22 +3746,36 @@ class Model(with_metaclass(BaseModel)):
 
 
 def prefetch_add_subquery(sq, subqueries):
-    fixed_queries = [(sq, None)]
+    fixed_queries = [(sq, None, None)]
     for i, subquery in enumerate(subqueries):
         if not isinstance(subquery, Query) and issubclass(subquery, Model):
             subquery = subquery.select()
         subquery_model = subquery.model_class
-        fkf = None
+        fkf = backref = None
         for j in reversed(range(i + 1)):
             last_query = fixed_queries[j][0]
-            fkf = subquery_model._meta.rel_for_model(last_query.model_class)
-            if fkf:
+            last_model = last_query.model_class
+            fkf = subquery_model._meta.rel_for_model(last_model)
+            backref = last_model._meta.rel_for_model(subquery_model)
+            if fkf or backref:
                 break
-        if not fkf:
+
+        if not (fkf or backref):
             raise AttributeError('Error: unable to find foreign key for '
                                  'query: %s' % subquery)
-        inner_query = last_query.select(fkf.to_field)
-        fixed_queries.append((subquery.where(fkf << inner_query), fkf))
+
+        if fkf:
+            inner_query = last_query.select(fkf.to_field)
+            fixed_queries.append((
+                subquery.where(fkf << inner_query),
+                fkf,
+                False))
+        elif backref:
+            inner_query = last_query.select(backref)
+            fixed_queries.append((
+                subquery.where(backref.to_field << inner_query),
+                backref,
+                True))
 
     return fixed_queries
 
@@ -3772,29 +3786,54 @@ def prefetch(sq, *subqueries):
 
     deps = {}
     rel_map = {}
-    for query, foreign_key_field in reversed(fixed_queries):
-        query_model = query.model_class
-        deps[query_model] = {}
+    for query, foreign_key_field, is_backref in reversed(fixed_queries):
+        query_model = query.model_class  # User or Comment
+
+        if foreign_key_field:
+            if is_backref:
+                # query = User.select(), fkf = Blog.user
+                rel_model = foreign_key_field.model_class  # Blog
+                fk_attr_name = foreign_key_field.to_field.name  # id (user.id)
+                src = foreign_key_field.name  # user (blog.user)
+                dest = foreign_key_field.name  # user (blog.user)
+            else:
+                rel_model = foreign_key_field.rel_model  # Blog
+                fk_attr_name = foreign_key_field.name  # blog (comment.blog)
+                src = foreign_key_field.to_field.name  # pk (blog.pk)
+                dest = '%s_prefetch' % foreign_key_field.related_name  # comments_prefetch
+
+            rel_map.setdefault(rel_model, [])
+            rel_map[rel_model].append((
+                query_model,
+                fk_attr_name,
+                src,
+                dest,
+                is_backref))
+
+        deps[query_model] = {}  # deps[User][user_id1] = user1
         id_map = deps[query_model]
-        has_relations = bool(rel_map.get(query_model))
+        has_relations = bool(rel_map.get(query_model))  # any deps on user?
 
         for result in query:
             if foreign_key_field:
-                fk_val = result._data[foreign_key_field.name]
-                id_map.setdefault(fk_val, [])
-                id_map[fk_val].append(result)
+                identity = result._data[fk_attr_name]
+                if is_backref:
+                    id_map[identity] = result  # id_map[1] = u1
+                else:
+                    id_map.setdefault(identity, [])
+                    id_map[identity].append(result)  # id_map[1] = u1
+
             if has_relations:
-                for rel_model, rel_fk in rel_map[query_model]:
-                    rel_name = '%s_prefetch' % rel_fk.related_name
-                    identifier = getattr(result, rel_fk.to_field.name)
-                    rel_instances = deps[rel_model].get(identifier, [])
-                    for inst in rel_instances:
-                        setattr(inst, rel_fk.name, result)
-                    setattr(result, rel_name, rel_instances)
-        if foreign_key_field:
-            rel_model = foreign_key_field.rel_model
-            rel_map.setdefault(rel_model, [])
-            rel_map[rel_model].append((query_model, foreign_key_field))
+                for model, attname, src, dest, backref, in rel_map[query_model]:
+                    identifier = result._data[src]
+                    if backref:
+                        if identifier in deps[model]:
+                            setattr(result, src, deps[model][identifier])
+                    else:
+                        rel_instances = deps[model].get(identifier, [])
+                        for inst in rel_instances:
+                            setattr(inst, attname, result)
+                        setattr(result, dest, rel_instances)
 
     return query
 
