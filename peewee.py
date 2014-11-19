@@ -3746,7 +3746,7 @@ class Model(with_metaclass(BaseModel)):
 
 
 def prefetch_add_subquery(sq, subqueries):
-    fixed_queries = [(sq, None, None)]
+    fixed_queries = [PrefetchResult(sq, None, None)]
     for i, subquery in enumerate(subqueries):
         if not isinstance(subquery, Query) and issubclass(subquery, Model):
             subquery = subquery.select()
@@ -3766,18 +3766,55 @@ def prefetch_add_subquery(sq, subqueries):
 
         if fkf:
             inner_query = last_query.select(fkf.to_field)
-            fixed_queries.append((
-                subquery.where(fkf << inner_query),
-                fkf,
-                False))
+            fixed_queries.append(
+                PrefetchResult(subquery.where(fkf << inner_query), fkf, False))
         elif backref:
-            inner_query = last_query.select(backref)
-            fixed_queries.append((
-                subquery.where(backref.to_field << inner_query),
-                backref,
-                True))
+            q = subquery.where(backref.to_field << last_query.select(backref))
+            fixed_queries.append(PrefetchResult(q, backref, True))
 
     return fixed_queries
+
+class PrefetchResult(namedtuple('_prefetched', ('query', 'field', 'backref'))):
+    @property
+    def rel_model(self):
+        if self.backref:
+            return self.field.model_class
+        else:
+            return self.field.rel_model
+
+    @property
+    def foreign_key_attr(self):
+        if self.backref:
+            return self.field.to_field.name
+        else:
+            return self.field.name
+
+    @property
+    def model(self):
+        return self.query.model_class
+
+    def populate_instance(self, instance, id_map):
+        if self.backref:
+            identifier = instance._data[self.field.name]
+            if identifier in id_map:
+                setattr(instance, self.field.name, id_map[identifier])
+        else:
+            identifier = instance._data[self.field.to_field.name]
+            rel_instances = id_map.get(identifier, [])
+            attname = self.foreign_key_attr
+            dest = '%s_prefetch' % self.field.related_name
+            for inst in rel_instances:
+                setattr(inst, attname, instance)
+            setattr(instance, dest, rel_instances)
+
+    def store_instance(self, instance, id_map):
+        identity = instance._data[self.foreign_key_attr]
+        if self.backref:
+            id_map[identity] = instance
+        else:
+            id_map.setdefault(identity, [])
+            id_map[identity].append(instance)
+
 
 def prefetch(sq, *subqueries):
     if not subqueries:
@@ -3786,56 +3823,25 @@ def prefetch(sq, *subqueries):
 
     deps = {}
     rel_map = {}
-    for query, foreign_key_field, is_backref in reversed(fixed_queries):
-        query_model = query.model_class  # User or Comment
+    for prefetch_result in reversed(fixed_queries):
+        query_model = prefetch_result.model
+        if prefetch_result.field:
+            rel_map.setdefault(prefetch_result.rel_model, [])
+            rel_map[prefetch_result.rel_model].append(prefetch_result)
 
-        if foreign_key_field:
-            if is_backref:
-                # query = User.select(), fkf = Blog.user
-                rel_model = foreign_key_field.model_class  # Blog
-                fk_attr_name = foreign_key_field.to_field.name  # id (user.id)
-                src = foreign_key_field.name  # user (blog.user)
-                dest = foreign_key_field.name  # user (blog.user)
-            else:
-                rel_model = foreign_key_field.rel_model  # Blog
-                fk_attr_name = foreign_key_field.name  # blog (comment.blog)
-                src = foreign_key_field.to_field.name  # pk (blog.pk)
-                dest = '%s_prefetch' % foreign_key_field.related_name  # comments_prefetch
-
-            rel_map.setdefault(rel_model, [])
-            rel_map[rel_model].append((
-                query_model,
-                fk_attr_name,
-                src,
-                dest,
-                is_backref))
-
-        deps[query_model] = {}  # deps[User][user_id1] = user1
+        deps[query_model] = {}
         id_map = deps[query_model]
-        has_relations = bool(rel_map.get(query_model))  # any deps on user?
+        has_relations = bool(rel_map.get(query_model))
 
-        for result in query:
-            if foreign_key_field:
-                identity = result._data[fk_attr_name]
-                if is_backref:
-                    id_map[identity] = result  # id_map[1] = u1
-                else:
-                    id_map.setdefault(identity, [])
-                    id_map[identity].append(result)  # id_map[1] = u1
+        for instance in prefetch_result.query:
+            if prefetch_result.field:
+                prefetch_result.store_instance(instance, id_map)
 
             if has_relations:
-                for model, attname, src, dest, backref, in rel_map[query_model]:
-                    identifier = result._data[src]
-                    if backref:
-                        if identifier in deps[model]:
-                            setattr(result, src, deps[model][identifier])
-                    else:
-                        rel_instances = deps[model].get(identifier, [])
-                        for inst in rel_instances:
-                            setattr(inst, attname, result)
-                        setattr(result, dest, rel_instances)
+                for rel in rel_map[query_model]:
+                    rel.populate_instance(instance, deps[rel.model])
 
-    return query
+    return prefetch_result.query
 
 def create_model_tables(models, **create_table_kwargs):
     """Create tables for all given models (in the right order)."""
