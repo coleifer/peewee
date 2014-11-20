@@ -1068,16 +1068,20 @@ class SelectTestCase(BasePeeweeTestCase):
             ('SELECT "t1"."pk", "t1"."user_id", "t1"."title", "t1"."content", "t1"."pub_date" FROM "blog" AS t1 WHERE (("t1"."title" = ?) AND ("t1"."user_id" IN (SELECT "t2"."id" FROM "users" AS t2 WHERE ("t2"."username" = ?))))', ['bar', 'foo']),
             ('SELECT "t1"."id", "t1"."blog_id", "t1"."comment" FROM "comment" AS t1 WHERE (("t1"."comment" = ?) AND ("t1"."blog_id" IN (SELECT "t2"."pk" FROM "blog" AS t2 WHERE (("t2"."title" = ?) AND ("t2"."user_id" IN (SELECT "t3"."id" FROM "users" AS t3 WHERE ("t3"."username" = ?)))))))', ['baz', 'bar', 'foo']),
         ]
-        for (query, fkf, backref), expected in zip(fixed, fixed_sql):
-            self.assertEqual(normal_compiler.generate_select(query), expected)
+        for prefetch_result, expected in zip(fixed, fixed_sql):
+            self.assertEqual(
+                normal_compiler.generate_select(prefetch_result.query),
+                expected)
 
         fixed = prefetch_add_subquery(sq, (Blog,))
         fixed_sql = [
             ('SELECT "t1"."id", "t1"."username" FROM "users" AS t1 WHERE ("t1"."username" = ?)', ['foo']),
             ('SELECT "t1"."pk", "t1"."user_id", "t1"."title", "t1"."content", "t1"."pub_date" FROM "blog" AS t1 WHERE ("t1"."user_id" IN (SELECT "t2"."id" FROM "users" AS t2 WHERE ("t2"."username" = ?)))', ['foo']),
         ]
-        for (query, fkf, backref), expected in zip(fixed, fixed_sql):
-            self.assertEqual(normal_compiler.generate_select(query), expected)
+        for prefetch_result, expected in zip(fixed, fixed_sql):
+            self.assertEqual(
+                normal_compiler.generate_select(prefetch_result.query),
+                expected)
 
     def test_prefetch_non_pk_fk(self):
         sq = SelectQuery(Package).where(Package.barcode % 'b%')
@@ -1098,8 +1102,10 @@ class SelectTestCase(BasePeeweeTestCase):
             ['n%', 'b%'])
         fixed_sql = [fixed_sq, fixed_sq2]
 
-        for (query, fkf, backref), expected in zip(fixed, fixed_sql):
-            self.assertEqual(normal_compiler.generate_select(query), expected)
+        for prefetch_result, expected in zip(fixed, fixed_sql):
+            self.assertEqual(
+                normal_compiler.generate_select(prefetch_result.query),
+                expected)
 
     def test_prefetch_subquery_same_depth(self):
         sq = Parent.select()
@@ -1115,8 +1121,10 @@ class SelectTestCase(BasePeeweeTestCase):
             ('SELECT "t1"."id", "t1"."child_id", "t1"."data" FROM "childpet" AS t1 WHERE ("t1"."child_id" IN (SELECT "t2"."id" FROM "child" AS t2 WHERE ("t2"."parent_id" IN (SELECT "t3"."id" FROM "parent" AS t3))))', []),
             ('SELECT "t1"."id", "t1"."orphan_id", "t1"."data" FROM "orphanpet" AS t1 WHERE ("t1"."orphan_id" IN (SELECT "t2"."id" FROM "orphan" AS t2 WHERE ("t2"."parent_id" IN (SELECT "t3"."id" FROM "parent" AS t3))))', []),
         ]
-        for (query, fkf, backref), expected in zip(fixed, fixed_sql):
-            self.assertEqual(normal_compiler.generate_select(query), expected)
+        for prefetch_result, expected in zip(fixed, fixed_sql):
+            self.assertEqual(
+                normal_compiler.generate_select(prefetch_result.query),
+                expected)
 
     def test_outer_inner_alias(self):
         expected = ('SELECT "t1"."id", "t1"."username", '

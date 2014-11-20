@@ -3754,7 +3754,7 @@ class Model(with_metaclass(BaseModel)):
 
 
 def prefetch_add_subquery(sq, subqueries):
-    fixed_queries = [PrefetchResult(sq, None, None)]
+    fixed_queries = [PrefetchResult(sq)]
     for i, subquery in enumerate(subqueries):
         if not isinstance(subquery, Query) and issubclass(subquery, Model):
             subquery = subquery.select()
@@ -3782,24 +3782,22 @@ def prefetch_add_subquery(sq, subqueries):
 
     return fixed_queries
 
-class PrefetchResult(namedtuple('_prefetched', ('query', 'field', 'backref'))):
-    @property
-    def rel_model(self):
-        if self.backref:
-            return self.field.model_class
-        else:
-            return self.field.rel_model
+__prefetched = namedtuple('__prefetched', (
+    'query', 'field', 'backref', 'rel_model', 'foreign_key_attr', 'model'))
 
-    @property
-    def foreign_key_attr(self):
-        if self.backref:
-            return self.field.to_field.name
-        else:
-            return self.field.name
-
-    @property
-    def model(self):
-        return self.query.model_class
+class PrefetchResult(__prefetched):
+    def __new__(cls, query, field=None, backref=None, rel_model=None,
+                foreign_key_attr=None, model=None):
+        if field:
+            if backref:
+                rel_model = field.model_class
+                foreign_key_attr = field.to_field.name
+            else:
+                rel_model = field.rel_model
+                foreign_key_attr = field.name
+        model = query.model_class
+        return super(PrefetchResult, cls).__new__(
+            cls, query, field, backref, rel_model, foreign_key_attr, model)
 
     def populate_instance(self, instance, id_map):
         if self.backref:
