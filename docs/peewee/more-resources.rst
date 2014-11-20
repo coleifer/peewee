@@ -15,3 +15,4 @@ I've written a number of blog posts about building applications and web-services
 * `Creating a bookmarking web-service that takes screenshots of your bookmarks <http://charlesleifer.com/blog/building-bookmarking-service-python-and-phantomjs/>`_.
 * `Building a pastebin, wiki and a bookmarking service using Flask and Peewee <http://charlesleifer.com/blog/dont-sweat-small-stuff-use-flask-blueprints/>`_.
 * `Encrypted databases with Python and SQLCipher <http://charlesleifer.com/blog/encrypted-sqlite-databases-with-python-and-sqlcipher/>`_.
+* `Dear Diary, an Encrypted Command-Line Diary <http://charlesleifer.com/blog/dear-diary-an-encrypted-command-line-diary-with-python/>`_.
