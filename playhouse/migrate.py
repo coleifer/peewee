@@ -479,11 +479,10 @@ class SqliteMigrator(SchemaMigrator):
 
         # Update the name of the new CREATE TABLE query.
         temp_table = table + '__tmp__'
-        create = re.sub(
-            '("?)%s("?)' % table,
+        rgx = re.compile('("?)%s("?)' % table, re.I)
+        create = rgx.sub(
             '\\1%s\\2' % temp_table,
-            raw_create,
-            flags=re.I)
+            raw_create)
 
         # Create the new table.
         columns = ', '.join(new_column_defs)
