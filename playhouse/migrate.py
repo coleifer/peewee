@@ -422,15 +422,15 @@ class SqliteMigrator(SchemaMigrator):
 
     def _get_create_table(self, table):
         res = self.database.execute_sql(
-            'select sql from sqlite_master where type=? and name=? limit 1',
-            ['table', table])
+            'select sql from sqlite_master where type=? and LOWER(name)=?',
+            ['table', table.lower()])
         return res.fetchone()[0]
 
     def _get_indexes(self, table):
         cursor = self.database.execute_sql(
             'SELECT name, sql FROM sqlite_master '
-            'WHERE tbl_name = ? AND type = ?',
-            [table, 'index'])
+            'WHERE LOWER(tbl_name) = ? AND type = ?',
+            [table.lower(), 'index'])
         index_to_sql = dict(cursor.fetchall())
         indexed_columns = {}
         for index_name in sorted(index_to_sql):
@@ -482,7 +482,8 @@ class SqliteMigrator(SchemaMigrator):
         create = re.sub(
             '("?)%s("?)' % table,
             '\\1%s\\2' % temp_table,
-            raw_create)
+            raw_create,
+            flags=re.I)
 
         # Create the new table.
         columns = ', '.join(new_column_defs)

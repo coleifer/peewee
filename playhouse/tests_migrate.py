@@ -413,6 +413,21 @@ class SqliteMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
         IndexModel.drop_table(True)
         IndexModel.create_table()
 
+    def test_table_case_insensitive(self):
+        migrate(self.migrator.drop_column('PaGe', 'name'))
+        column_names = self.get_column_names('page')
+        self.assertEqual(column_names, set(['id', 'user_id']))
+
+        testing_field = CharField(default='xx')
+        migrate(self.migrator.add_column('pAGE', 'testing', testing_field))
+        column_names = self.get_column_names('page')
+        self.assertEqual(column_names, set(['id', 'user_id', 'testing']))
+
+        migrate(self.migrator.drop_column('indeXmOdel', 'first_name'))
+        indexes = self.migrator._get_indexes('indeXModel')
+        self.assertEqual(len(indexes), 1)
+        self.assertEqual(indexes[0].name, 'indexmodel_data')
+
     def test_index_preservation(self):
         with count_queries() as qc:
             migrate(self.migrator.rename_column(
@@ -423,12 +438,12 @@ class SqliteMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
         queries = [log.msg for log in qc.get_queries()]
         self.assertEqual(queries, [
             # Get the table definition.
-            ('select sql from sqlite_master where type=? and name=? limit 1',
+            ('select sql from sqlite_master where type=? and LOWER(name)=?',
              ['table', 'indexmodel']),
 
             # Get the indexes and indexed columns for the table.
             ('SELECT name, sql FROM sqlite_master '
-             'WHERE tbl_name = ? AND type = ?',
+             'WHERE LOWER(tbl_name) = ? AND type = ?',
              ['indexmodel', 'index']),
             ('PRAGMA index_info("indexmodel_data")', None),
             ('PRAGMA index_info("indexmodel_first_name_last_name")', None),
