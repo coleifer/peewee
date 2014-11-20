@@ -1,6 +1,9 @@
 todo
 ====
 
+* refactor migrate to use new db reflection helpers.
+* cache invalidation for DataSet models when schema changes.
+
 * support for view objects?
 
 Queries to support?
