@@ -424,7 +424,7 @@ class SqliteMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
         self.assertEqual(column_names, set(['id', 'user_id', 'testing']))
 
         migrate(self.migrator.drop_column('indeXmOdel', 'first_name'))
-        indexes = self.migrator._get_indexes('indeXModel')
+        indexes = self.migrator._get_indexes('indexmodel')
         self.assertEqual(len(indexes), 1)
         self.assertEqual(indexes[0].name, 'indexmodel_data')
 
@@ -438,13 +438,15 @@ class SqliteMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
         queries = [log.msg for log in qc.get_queries()]
         self.assertEqual(queries, [
             # Get the table definition.
-            ('select sql from sqlite_master where type=? and LOWER(name)=?',
+            ('select name, sql from sqlite_master '
+             'where type=? and LOWER(name)=?',
              ['table', 'indexmodel']),
 
             # Get the indexes and indexed columns for the table.
             ('SELECT name, sql FROM sqlite_master '
-             'WHERE LOWER(tbl_name) = ? AND type = ?',
-             ['indexmodel', 'index']),
+             'WHERE tbl_name = ? AND type = ? ORDER BY name',
+             ('indexmodel', 'index')),
+            ('PRAGMA index_list("indexmodel")', None),
             ('PRAGMA index_info("indexmodel_data")', None),
             ('PRAGMA index_info("indexmodel_first_name_last_name")', None),
 

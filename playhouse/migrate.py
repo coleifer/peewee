@@ -314,7 +314,7 @@ class PostgresqlMigrator(SchemaMigrator):
             query = """
                 SELECT 1
                 FROM information_schema.sequences
-                WHERE sequence_name = %s
+                WHERE LOWER(sequence_name) = LOWER(%s)
             """
             cursor = self.database.execute_sql(query, (seq_name,))
             if bool(cursor.fetchone()):
@@ -404,9 +404,6 @@ class MySQLMigrator(SchemaMigrator):
             SQL('ON'),
             Entity(table))
 
-
-_IndexMetadata = namedtuple('_IndexMetadata', ('name', 'sql', 'columns'))
-
 class SqliteMigrator(SchemaMigrator):
     """
     SQLite supports a subset of ALTER TABLE queries, view the docs for the
@@ -422,29 +419,18 @@ class SqliteMigrator(SchemaMigrator):
 
     def _get_create_table(self, table):
         res = self.database.execute_sql(
-            'select sql from sqlite_master where type=? and LOWER(name)=?',
+            ('select name, sql from sqlite_master '
+             'where type=? and LOWER(name)=?'),
             ['table', table.lower()])
-        return res.fetchone()[0]
+        return res.fetchone()
 
     def _get_indexes(self, table):
-        cursor = self.database.execute_sql(
-            'SELECT name, sql FROM sqlite_master '
-            'WHERE LOWER(tbl_name) = ? AND type = ?',
-            [table.lower(), 'index'])
-        index_to_sql = dict(cursor.fetchall())
-        indexed_columns = {}
-        for index_name in sorted(index_to_sql):
-            cursor = self.database.execute_sql(
-                'PRAGMA index_info("%s")' % index_name)
-            indexed_columns[index_name] = [row[2] for row in cursor.fetchall()]
-
-        return [_IndexMetadata(key, index_to_sql[key], indexed_columns[key])
-                for key in sorted(index_to_sql)]
+        return self.database.get_indexes(table)
 
     @operation
     def _update_column(self, table, column_to_update, fn):
         # Get the SQL used to create the given table.
-        create_table = self._get_create_table(table)
+        table, create_table = self._get_create_table(table)
 
         # Get the indexes and SQL to re-create indexes.
         indexes = self._get_indexes(table)
