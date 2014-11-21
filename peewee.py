@@ -2949,7 +2949,7 @@ class SqliteDatabase(Database):
 
         # Retrieve the indexed columns.
         index_columns = {}
-        for index_name in index_to_sql:
+        for index_name in sorted(index_to_sql):
             cursor = self.execute_sql('PRAGMA index_info("%s")' % index_name)
             index_columns[index_name] = [row[2] for row in cursor.fetchall()]
 
