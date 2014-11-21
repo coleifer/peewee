@@ -458,6 +458,38 @@ You can also order across joins. Assuming you want to order tweets by the userna
       ON t1."user_id" = t2."id"
     ORDER BY t2."username", t1."created_date" DESC
 
+When sorting on a calculated value, you can either include the necessary SQL expressions, or reference the alias assigned to the value. Here are two examples illustrating these methods:
+
+.. code-block:: python
+
+    # Let's start with our base query. We want to get all usernames and the number of
+    # tweets they've made. We wish to sort this list from users with most tweets to
+    # users with fewest tweets.
+    query = (User
+             .select(User.username, fn.COUNT(Tweet.id).alias('num_tweets'))
+             .join(Tweet, JOIN_LEFT_OUTER)
+             .group_by(User.username))
+
+You can order using the same COUNT expression used in the ``select`` clause. In the example below we are ordering by the ``COUNT()`` of tweet ids descending:
+
+.. code-block:: python
+
+    query = (User
+             .select(User.username, fn.COUNT(Tweet.id).alias('num_tweets'))
+             .join(Tweet, JOIN_LEFT_OUTER)
+             .group_by(User.username)
+             .order_by(fn.COUNT(Tweet.id).desc()))
+
+Alternatively, you can reference the alias assigned to the calculated value in the ``select`` clause. This method has the benefit of being a bit easier to read. Note that we are not referring to the named alias directly, but are wrapping it using the :py:class:`SQL` helper:
+
+.. code-block:: python
+
+    query = (User
+             .select(User.username, fn.COUNT(Tweet.id).alias('num_tweets'))
+             .join(Tweet, JOIN_LEFT_OUTER)
+             .group_by(User.username)
+             .order_by(SQL('num_tweets').desc()))
+
 Getting random records
 ----------------------
 
