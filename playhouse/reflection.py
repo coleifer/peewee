@@ -354,9 +354,11 @@ class Introspector(object):
             column += '_'
         return column
 
-    def introspect(self):
+    def introspect(self, table_names=None):
         # Retrieve all the tables in the database.
         tables = self.metadata.database.get_tables()
+        if table_names is not None:
+            tables = [table for table in tables if table in table_names]
 
         # Store a mapping of table name -> dictionary of columns.
         columns = {}
@@ -405,8 +407,9 @@ class Introspector(object):
 
         return columns, primary_keys, foreign_keys, model_names
 
-    def generate_models(self, skip_invalid=False):
-        columns, primary_keys, foreign_keys, model_names = self.introspect()
+    def generate_models(self, skip_invalid=False, table_names=None):
+        columns, primary_keys, foreign_keys, model_names = self.introspect(
+            table_names=table_names)
         models = {}
 
         class BaseModel(Model):

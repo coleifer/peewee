@@ -135,6 +135,17 @@ class TestReflection(unittest.TestCase):
         self.assertEqual(relmodel.col_types_nullable.rel_model,
                          models['coltypes'])
 
+    def test_table_subset(self):
+        for model in MODELS:
+            model.create_table()
+
+        introspector = self.get_introspector()
+        models = introspector.generate_models(table_names=[
+            'category',
+            'coltypes',
+            'foobarbaz'])
+        self.assertEqual(sorted(models.keys()), ['category', 'coltypes'])
+
     def test_sqlite_fk_re(self):
         user_id_tests = [
             'FOREIGN KEY("user_id") REFERENCES "users"("id")',
