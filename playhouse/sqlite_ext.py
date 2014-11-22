@@ -75,7 +75,7 @@ class SqliteQueryCompiler(QueryCompiler):
 
         if table_options:
             columns_constraints = clause.nodes[-1]
-            for k, v in table_options.items():
+            for k, v in sorted(table_options.items()):
                 if isinstance(v, Field):
                     value = v._as_entity(with_table=True)
                 elif inspect.isclass(v) and issubclass(v, Model):

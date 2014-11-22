@@ -96,6 +96,18 @@ class Values(BaseExtModel):
     weight = FloatField()
 
 
+class TestVirtualModel(sqe.VirtualModel):
+    _extension = 'test_ext'
+    class Meta:
+        database = ext_db
+        options = {
+            'foo': 'bar',
+            'baze': 'nugget'}
+        primary_key = False
+
+class TestVirtualModelChild(TestVirtualModel):
+    pass
+
 
 class SqliteExtTestCase(unittest.TestCase):
     messages = [
@@ -126,6 +138,29 @@ class SqliteExtTestCase(unittest.TestCase):
         FTSPost.create_table(tokenize='porter', content=Post)
         ManagedDoc.create_table(tokenize='porter', content=Post.message)
         FTSDoc.create_table(tokenize='porter')
+
+    def test_virtual_model_options(self):
+        compiler = ext_db.compiler()
+        sql, params = compiler.create_table(TestVirtualModel)
+        self.assertEqual(sql, (
+            'CREATE VIRTUAL TABLE "testvirtualmodel" USING test_ext '
+            '(baze=nugget, foo=bar)'))
+        self.assertEqual(params, [])
+
+        sql, params = compiler.create_table(TestVirtualModelChild)
+        self.assertEqual(sql, (
+            'CREATE VIRTUAL TABLE "testvirtualmodelchild" USING test_ext '
+            '("id" INTEGER NOT NULL PRIMARY KEY, baze=nugget, foo=bar)'))
+        self.assertEqual(params, [])
+
+        test_options = {'baze': 'nugz', 'huey': 'mickey'}
+        sql, params = compiler.create_table(
+            TestVirtualModel,
+            options=test_options)
+        self.assertEqual(sql, (
+            'CREATE VIRTUAL TABLE "testvirtualmodel" USING test_ext '
+            '(baze=nugz, foo=bar, huey=mickey)'))
+        self.assertEqual(params, [])
 
     def test_pk_autoincrement(self):
         class AutoInc(Model):
