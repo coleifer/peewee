@@ -170,6 +170,48 @@ class FTSModel(VirtualModel):
                 .where(cls.match(term))
                 .order_by(SQL(alias).desc()))
 
+class _MockFieldMixin(object):
+    def add_to_class(self, model_class, name):
+        super(_MockFieldMixin, self).add_to_class(model_class, name)
+        del model_class._meta.fields[self.name]
+        del model_class._meta.columns[self.db_column]
+
+class _MockIntegerField(_MockFieldMixin, IntegerField):
+    pass
+
+class _MockCharField(_MockFieldMixin, CharField):
+    pass
+
+def ClosureTable(model_class, foreign_key=None):
+    """Model factory for the transitive closure extension."""
+    if foreign_key is None:
+        for field_obj in model_class._meta.rel.values():
+            if field_obj.rel_model is model_class:
+                foreign_key = field_obj
+                break
+        else:
+            raise ValueError('Unable to find self-referential foreign key.')
+
+    class Meta:
+        database = model_class._meta.database
+        options = {
+            'tablename': model_class._meta.db_table,
+            'idcolumn': model_class._meta.primary_key.db_column,
+            'parentcolumn': foreign_key.db_column}
+        primary_key = False
+
+    attrs = {
+        '_extension': 'transitive_closure',
+        'depth': _MockIntegerField(),
+        'id': _MockIntegerField(),
+        'idcolumn': _MockIntegerField(),
+        'parentcolumn': _MockIntegerField(),
+        'root': _MockIntegerField(),
+        'tablename': _MockCharField(),
+        'Meta': Meta}
+    name = '%sClosure' % model_class.__name__
+    return type(name, (VirtualModel,), attrs)
+
 
 class SqliteExtDatabase(SqliteDatabase):
     """
