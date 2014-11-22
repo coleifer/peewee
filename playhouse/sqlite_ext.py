@@ -69,9 +69,13 @@ class SqliteQueryCompiler(QueryCompiler):
             statement += ' IF NOT EXISTS'
         clause.nodes[0] = SQL(statement)  # Overwrite the statement.
 
+        table_options = getattr(model_class._meta, 'options', None) or {}
         if options:
+            table_options.update(options)
+
+        if table_options:
             columns_constraints = clause.nodes[-1]
-            for k, v in options.items():
+            for k, v in table_options.items():
                 if isinstance(v, Field):
                     value = v._as_entity(with_table=True)
                 elif inspect.isclass(v) and issubclass(v, Model):
