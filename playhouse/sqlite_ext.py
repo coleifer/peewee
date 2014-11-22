@@ -228,6 +228,7 @@ class SqliteExtDatabase(SqliteDatabase):
         self._aggregates = {}
         self._collations = {}
         self._functions = {}
+        self._extensions = set([])
         self._row_factory = None
         self.register_function(rank, 'rank', 1)
         self.register_function(bm25, 'bm25', -1)
@@ -242,6 +243,10 @@ class SqliteExtDatabase(SqliteDatabase):
             conn.create_function(name, num_params, fn)
         if self._row_factory:
             conn.row_factory = self._row_factory
+        if self._extensions:
+            conn.enable_load_extension(True)
+            for extension in self._extensions:
+                conn.load_extension(extension)
         return conn
 
     def _argc(self, fn):
@@ -281,6 +286,9 @@ class SqliteExtDatabase(SqliteDatabase):
             return fn
         return decorator
 
+    def load_extension(self, extension):
+        self._extensions.add(extension)
+
     def unregister_aggregate(self, name):
         del(self._aggregates[name])
 
@@ -289,6 +297,9 @@ class SqliteExtDatabase(SqliteDatabase):
 
     def unregister_function(self, name):
         del(self._functions[name])
+
+    def unload_extension(self, extension):
+        self._extensions.remove(extension)
 
     def row_factory(self, fn):
         self._row_factory = fn
