@@ -5,6 +5,34 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.4.3
+
+This release contains numerous improvements, particularly around the built-in database introspection utilities. Peewee should now also be compatible with PyPy.
+
+### Bugs fixed
+
+* #466, table names are case sensitive in the SQLite migrations module.
+* #465, added option to disable backref validation.
+* #462, use the schema name consistently with postgres reflection.
+
+### New features
+
+* New model *Meta* option to disable backref validation. [See validate_backrefs](http://docs.peewee-orm.com/en/latest/peewee/models.html#model-options-and-table-metadata).
+* Added documentation on ordering by calculated values.
+* Added basic PyPy compatibility.
+* Added logic to close cursors after they have been exhausted.
+* Structured and consolidated database metadata introspection, including improvements for introspecting indexes.
+* Added support to [prefetch](http://docs.peewee-orm.com/en/latest/peewee/api.html?highlight=prefetch#prefetch) for traversing *up* the query tree.
+* Added introspection option to skip invalid models while introspecting.
+* Added option to limit the tables introspected.
+* Added closed connection detection to the MySQL connection pool.
+* Enhancements to passing options to creating virtual tables with SQLite.
+* Added factory method for generating Closure tables for use with the `transitive_closure` SQLite extension.
+* Added support for loading SQLite extensions.
+* Numerous test-suite enhancements and new test-cases.
+
+[View commits](https://github.com/coleifer/peewee/compare/2.4.2...2.4.3)
+
 ## 2.4.2
 
 This release contains a number of improvements to the `reflection` and `migrate` extension modules. I also added an encrypted *diary* app to the [examples](https://github.com/coleifer/peewee/tree/master/examples) directory.
