@@ -204,29 +204,36 @@ def ClosureTable(model_class, foreign_key=None):
         tablename = _MockCharField()
 
         @classmethod
-        def descendants(cls, node, depth=None):
+        def descendants(cls, node, depth=None, include_node=False):
             query = (model_class
                      .select()
                      .join(cls, on=(primary_key == cls.id))
                      .where(cls.root == node))
             if depth is not None:
                 query = query.where(cls.depth == depth)
+            elif not include_node:
+                query = query.where(cls.depth > 0)
             return query
 
         @classmethod
-        def ancestors(cls, node, depth=None):
+        def ancestors(cls, node, depth=None, include_node=False):
             query = (model_class
                      .select()
                      .join(cls, on=(primary_key == cls.root))
                      .where(cls.id == node))
             if depth:
                 query = query.where(cls.depth == depth)
+            elif not include_node:
+                query = query.where(cls.depth > 0)
             return query
 
         @classmethod
-        def siblings(cls, node):
+        def siblings(cls, node, include_node=False):
             fk_value = node._data.get(foreign_key.name)
-            return model_class.select().where(foreign_key == fk_value)
+            query = model_class.select().where(foreign_key == fk_value)
+            if not include_node:
+                query = query.where(primary_key != node)
+            return query
 
     class Meta:
         database = model_class._meta.database

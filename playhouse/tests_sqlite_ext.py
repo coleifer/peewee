@@ -580,7 +580,7 @@ if CLOSURE_EXTENSION:
             books = Category.g('books')
             self.assertNodes(
                 Closure.descendants(books),
-                'books', 'fiction', 'scifi', 'hard scifi', 'dystopian',
+                'fiction', 'scifi', 'hard scifi', 'dystopian',
                 'westerns', 'classics', 'non-fiction', 'biographies', 'essays')
 
             self.assertNodes(Closure.descendants(books, 0), 'books')
@@ -595,14 +595,19 @@ if CLOSURE_EXTENSION:
             fiction = Category.g('fiction')
             self.assertNodes(
                 Closure.descendants(fiction),
-                'fiction', 'scifi', 'hard scifi', 'dystopian', 'westerns',
-                'classics')
+                'scifi', 'hard scifi', 'dystopian', 'westerns', 'classics')
             self.assertNodes(
                 Closure.descendants(fiction, 1),
                 'scifi', 'westerns', 'classics')
             self.assertNodes(
                 Closure.descendants(fiction, 2), 'hard scifi', 'dystopian')
 
+            self.assertNodes(
+                Closure.descendants(Category.g('scifi')),
+                'hard scifi', 'dystopian')
+            self.assertNodes(
+                Closure.descendants(Category.g('scifi'), include_node=True),
+                'scifi', 'hard scifi', 'dystopian')
             self.assertNodes(Closure.descendants(Category.g('hard scifi'), 1))
 
         def test_ancestors(self):
@@ -611,32 +616,40 @@ if CLOSURE_EXTENSION:
             hard_scifi = Category.g('hard scifi')
             self.assertNodes(
                 Closure.ancestors(hard_scifi),
+                'scifi', 'fiction', 'books')
+            self.assertNodes(
+                Closure.ancestors(hard_scifi, include_node=True),
                 'hard scifi', 'scifi', 'fiction', 'books')
             self.assertNodes(Closure.ancestors(hard_scifi, 2), 'fiction')
             self.assertNodes(Closure.ancestors(hard_scifi, 3), 'books')
 
             non_fiction = Category.g('non-fiction')
-            self.assertNodes(
-                Closure.ancestors(non_fiction),
-                'non-fiction', 'books')
+            self.assertNodes(Closure.ancestors(non_fiction), 'books')
+            self.assertNodes(Closure.ancestors(non_fiction, include_node=True),
+                             'non-fiction', 'books')
             self.assertNodes(Closure.ancestors(non_fiction, 1), 'books')
 
             books = Category.g('books')
-            self.assertNodes(Closure.ancestors(books), 'books')
+            self.assertNodes(Closure.ancestors(books, include_node=True),
+                             'books')
+            self.assertNodes(Closure.ancestors(books))
             self.assertNodes(Closure.ancestors(books, 1))
 
         def test_siblings(self):
             Category, Closure = self.initialize_models()
 
             self.assertNodes(
-                Closure.siblings(Category.g('hard scifi')),
+                Closure.siblings(Category.g('hard scifi')), 'dystopian')
+            self.assertNodes(
+                Closure.siblings(Category.g('hard scifi'), include_node=True),
                 'hard scifi', 'dystopian')
             self.assertNodes(
-                Closure.siblings(Category.g('classics')),
-                'classics', 'scifi', 'westerns')
+                Closure.siblings(Category.g('classics')), 'scifi', 'westerns')
             self.assertNodes(
-                Closure.siblings(Category.g('fiction')),
-                'fiction', 'non-fiction')
+                Closure.siblings(Category.g('classics'), include_node=True),
+                'scifi', 'westerns', 'classics')
+            self.assertNodes(
+                Closure.siblings(Category.g('fiction')), 'non-fiction')
 
         def test_tree_changes(self):
             Category, Closure = self.initialize_models()
