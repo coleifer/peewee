@@ -1191,7 +1191,7 @@ sqlite_ext API notes
            class Category(Model):
                name = CharField()
                metadata = TextField()
-               parent = ForeignKeyField('self', null=True)  # Need for closure.
+               parent = ForeignKeyField('self', index=True, null=True)  # Required.
 
            # Generate a model for the closure virtual table.
            CategoryClosure = ClosureTable(Category)
@@ -1207,6 +1207,8 @@ sqlite_ext API notes
     :param foreign_key: The self-referential parent-node field on the model class. If not provided, peewee will introspect the model to find a suitable key.
     :return: Returns a :py:class:`VirtualModel` for working with a closure table.
 
+    .. warning:: There are two caveats you should be aware of when using the ``transitive_closure`` extension. First, it requires that your *source model* have an integer primary key. Second, it is strongly recommended that you create an index on the self-referential foreign key.
+
     Example code:
 
     .. code-block:: python
@@ -1216,7 +1218,7 @@ sqlite_ext API notes
 
         class Category(Model):
             name = CharField()
-            parent = ForiegnKeyField('self', index=True, null=True)
+            parent = ForiegnKeyField('self', index=True, null=True)  # Required.
 
             class Meta:
                 database = db
@@ -1235,7 +1237,6 @@ sqlite_ext API notes
         for parent in Closure.ancestors(laptops):
             print parent.name
 
-        # Might print...
         # Computer Hardware
         # Computers
         # Electronics
@@ -1246,7 +1247,6 @@ sqlite_ext API notes
         for node in Closure.descendants(hardware):
             print node.name
 
-        # Might print...
         # Laptops
         # Desktops
         # Hard-drives
