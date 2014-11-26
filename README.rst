@@ -1,4 +1,4 @@
-.. image:: http://i.imgur.com/zhcoT.png
+.. image:: http://media.charlesleifer.com/blog/photos/peewee-logo.png
 
 peewee
 ======
