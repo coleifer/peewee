@@ -123,3 +123,5 @@ I've written a number of blog posts about building applications and web-services
 * `Creating a bookmarking web-service that takes screenshots of your bookmarks <http://charlesleifer.com/blog/building-bookmarking-service-python-and-phantomjs/>`_.
 * `Building a pastebin, wiki and a bookmarking service using Flask and Peewee <http://charlesleifer.com/blog/dont-sweat-small-stuff-use-flask-blueprints/>`_.
 * `Encrypted databases with Python and SQLCipher <http://charlesleifer.com/blog/encrypted-sqlite-databases-with-python-and-sqlcipher/>`_.
+* `Dear Diary: An Encrypted, Command-Line Diary with Peewee <http://charlesleifer.com/blog/dear-diary-an-encrypted-command-line-diary-with-python/>`_.
+* `Query Tree Structures in SQLite using Peewee and the Transitive Closure Extension <http://charlesleifer.com/blog/querying-tree-structures-in-sqlite-using-python-and-the-transitive-closure-extension/>`_.
