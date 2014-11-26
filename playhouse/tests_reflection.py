@@ -29,7 +29,7 @@ class BaseModel(Model):
         database = sqlite_db
 
 class ColTypes(BaseModel):
-    f1 = BigIntegerField()
+    f1 = BigIntegerField(index=True)
     f2 = BlobField()
     f3 = BooleanField()
     f4 = CharField(max_length=50)
@@ -38,10 +38,16 @@ class ColTypes(BaseModel):
     f7 = DecimalField()
     f8 = DoubleField()
     f9 = FloatField()
-    f10 = IntegerField()
+    f10 = IntegerField(unique=True)
     f11 = PrimaryKeyField()
     f12 = TextField()
     f13 = TimeField()
+
+    class Meta:
+        indexes = (
+            (('f10', 'f11'), True),
+            (('f11', 'f12', 'f13'), False),
+        )
 
 class Nullable(BaseModel):
     nullable_cf = CharField(null=True)
@@ -134,6 +140,31 @@ class TestReflection(unittest.TestCase):
                          models['coltypes'])
         self.assertEqual(relmodel.col_types_nullable.rel_model,
                          models['coltypes'])
+
+    def test_generate_models_indexes(self):
+        introspector = self.get_introspector()
+        self.assertEqual(introspector.generate_models(), {})
+
+        for model in MODELS:
+            model.create_table()
+
+        models = introspector.generate_models()
+
+        self.assertEqual(models['fkpk']._meta.indexes, [])
+        self.assertEqual(models['relmodel']._meta.indexes, [])
+        self.assertEqual(models['category']._meta.indexes, [])
+
+        col_types = models['coltypes']
+        indexed = set(['f1'])
+        unique = set(['f10'])
+        for field in col_types._meta.get_fields():
+            self.assertEqual(field.index, field.name in indexed)
+            self.assertEqual(field.unique, field.name in unique)
+        indexes = col_types._meta.indexes
+        self.assertEqual(sorted(indexes), [
+            (['f10', 'f11'], True),
+            (['f11', 'f12', 'f13'], False),
+        ])
 
     def test_table_subset(self):
         for model in MODELS:
@@ -358,13 +389,13 @@ class TestReflection(unittest.TestCase):
 
         expected = (
             ('coltypes', (
-                ('f1', 'f1 = BigIntegerField()'),
+                ('f1', 'f1 = BigIntegerField(index=True)'),
                 #('f2', 'f2 = BlobField()'),
                 ('f4', 'f4 = CharField()'),
                 ('f5', 'f5 = DateField()'),
                 ('f6', 'f6 = DateTimeField()'),
                 ('f7', 'f7 = DecimalField()'),
-                ('f10', 'f10 = IntegerField()'),
+                ('f10', 'f10 = IntegerField(unique=True)'),
                 ('f11', 'f11 = PrimaryKeyField()'),
                 ('f12', 'f12 = TextField()'),
                 ('f13', 'f13 = TimeField()'),

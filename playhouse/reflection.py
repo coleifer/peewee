@@ -33,13 +33,15 @@ class Column(object):
     primary_key_types = (IntegerField, PrimaryKeyField)
 
     def __init__(self, name, field_class, raw_column_type, nullable,
-                 primary_key=False, db_column=None):
+                 primary_key=False, db_column=None, index=False, unique=False):
         self.name = name
         self.field_class = field_class
         self.raw_column_type = raw_column_type
         self.nullable = nullable
         self.primary_key = primary_key
         self.db_column = db_column
+        self.index = index
+        self.unique = unique
 
     def __repr__(self):
         attrs = [
@@ -65,10 +67,17 @@ class Column(object):
             params['primary_key'] = True
 
         # Handle ForeignKeyField-specific attributes.
-        if self.field_class is ForeignKeyField:
+        if self.is_foreign_key():
             params['rel_model'] = self.rel_model
             if self.to_field:
                 params['to_field'] = "'%s'" % self.to_field
+
+        # Handle indexes on column.
+        if not self.is_primary_key():
+            if self.unique:
+                params['unique'] = 'True'
+            elif self.index and not self.is_foreign_key():
+                params['index'] = 'True'
 
         return params
 
@@ -219,6 +228,10 @@ class PostgresqlMetadata(Metadata):
     def get_primary_keys(self, table, schema=None):
         schema = schema or 'public'
         return super(PostgresqlMetadata, self).get_primary_keys(table, schema)
+
+    def get_indexes(self, table, schema=None):
+        schema = schema or 'public'
+        return super(PostgresqlMetadata, self).get_indexes(table, schema)
 
 
 class MySQLMetadata(Metadata):
@@ -389,7 +402,8 @@ class Introspector(object):
 
         # Gather the columns for each table.
         for table in tables:
-            columns[table] = self.metadata.get_columns(table)
+            table_indexes = self.metadata.get_indexes(table, self.schema)
+            table_columns = self.metadata.get_columns(table, self.schema)
             try:
                 foreign_keys[table] = self.metadata.get_foreign_keys(
                     table, self.schema)
@@ -399,12 +413,20 @@ class Introspector(object):
 
             model_names[table] = self.make_model_name(table)
 
-            for column_name, column in columns[table].items():
+            for column_name, column in table_columns.items():
                 column.name = self.make_column_name(column_name)
+
+            for index in table_indexes:
+                if len(index.columns) == 1:
+                    column = index.columns[0]
+                    if column in table_columns:
+                        table_columns[column].unique = index.unique
+                        table_columns[column].index = True
 
             primary_keys[table] = self.metadata.get_primary_keys(
                 table, self.schema)
-            indexes[table] = self.metadata.get_indexes(table, self.schema)
+            columns[table] = table_columns
+            indexes[table] = table_indexes
 
         # On the second pass convert all foreign keys.
         for table in tables:
@@ -449,8 +471,19 @@ class Introspector(object):
                 if column.primary_key:
                     primary_keys.append(column.name)
 
+            multi_column_indexes = []
+            column_indexes = {}
+            indexes = database.indexes[table]
+            for index in indexes:
+                if len(index.columns) > 1:
+                    field_names = [columns[column].name
+                                   for column in index.columns]
+                    multi_column_indexes.append((field_names, index.unique))
+                elif len(index.columns) == 1:
+                    column_indexes[index.columns[0]] = index.unique
+
             class Meta:
-                pass
+                indexes = multi_column_indexes
 
             # Fix models with multi-column primary keys.
             if len(primary_keys) == 0:
@@ -471,7 +504,7 @@ class Introspector(object):
                     'null': column.nullable}
                 if column.primary_key and not FieldClass is PrimaryKeyField:
                     params['primary_key'] = True
-                if FieldClass is ForeignKeyField:
+                if column.is_foreign_key():
                     if column.is_self_referential_fk():
                         params['rel_model'] = 'self'
                     else:
@@ -482,6 +515,11 @@ class Introspector(object):
 
                     # Generate a unique related name.
                     params['related_name'] = '%s_%s_rel' % (table, db_column)
+                if db_column in column_indexes and not column.is_primary_key():
+                    if column_indexes[db_column]:
+                        params['unique'] = True
+                    elif not column.is_foreign_key():
+                        params['index'] = True
 
                 attrs[column.name] = FieldClass(**params)
 

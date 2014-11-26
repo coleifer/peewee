@@ -21,10 +21,10 @@ class User(BaseModel):
 
 class Note(BaseModel):
     user = ForeignKeyField(User)
-    text = TextField()
+    text = TextField(index=True)
 
 class Category(BaseModel):
-    name = CharField()
+    name = CharField(unique=True)
     parent = ForeignKeyField('self', null=True)
 
 class capture_output(object):
@@ -50,7 +50,7 @@ class BaseModel(Model):
         database = database
 
 class Category(BaseModel):
-    name = CharField()
+    name = CharField(unique=True)
     parent = ForeignKeyField(db_column='parent_id', null=True, rel_model='self', to_field='id')
 
     class Meta:
@@ -63,7 +63,7 @@ class User(BaseModel):
         db_table = 'user'
 
 class Note(BaseModel):
-    text = TextField()
+    text = TextField(index=True)
     user = ForeignKeyField(db_column='user_id', rel_model=User, to_field='username')
 
     class Meta:
