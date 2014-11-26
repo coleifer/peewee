@@ -1,3 +1,4 @@
+from collections import namedtuple
 import re
 
 from peewee import *
@@ -150,6 +151,9 @@ class Metadata(object):
 
     def get_primary_keys(self, table, schema=None):
         return self.database.get_primary_keys(table, schema)
+
+    def get_indexes(self, table, schema=None):
+        return self.database.get_indexes(table, schema)
 
 
 class PostgresqlMetadata(Metadata):
@@ -315,6 +319,14 @@ class SqliteMetadata(Metadata):
         return column_types
 
 
+DatabaseMetadata = namedtuple('DatabaseMetadata', (
+    'columns',
+    'primary_keys',
+    'foreign_keys',
+    'model_names',
+    'indexes'))
+
+
 class Introspector(object):
     pk_classes = [PrimaryKeyField, IntegerField]
 
@@ -372,6 +384,9 @@ class Introspector(object):
         # Store a mapping of table name -> model name.
         model_names = {}
 
+        # Store a mapping of table name -> indexes.
+        indexes = {}
+
         # Gather the columns for each table.
         for table in tables:
             columns[table] = self.metadata.get_columns(table)
@@ -389,6 +404,7 @@ class Introspector(object):
 
             primary_keys[table] = self.metadata.get_primary_keys(
                 table, self.schema)
+            indexes[table] = self.metadata.get_indexes(table, self.schema)
 
         # On the second pass convert all foreign keys.
         for table in tables:
@@ -405,11 +421,15 @@ class Introspector(object):
                     model_names,
                     dest)
 
-        return columns, primary_keys, foreign_keys, model_names
+        return DatabaseMetadata(
+            columns,
+            primary_keys,
+            foreign_keys,
+            model_names,
+            indexes)
 
     def generate_models(self, skip_invalid=False, table_names=None):
-        columns, primary_keys, foreign_keys, model_names = self.introspect(
-            table_names=table_names)
+        database = self.introspect(table_names=table_names)
         models = {}
 
         class BaseModel(Model):
@@ -417,14 +437,15 @@ class Introspector(object):
                 database = self.metadata.database
 
         def _create_model(table, models):
-            for foreign_key in foreign_keys[table]:
+            for foreign_key in database.foreign_keys[table]:
                 dest = foreign_key.dest_table
 
                 if dest not in models and dest != table:
                     _create_model(dest, models)
 
             primary_keys = []
-            for db_column, column in columns[table].items():
+            columns = database.columns[table]
+            for db_column, column in columns.items():
                 if column.primary_key:
                     primary_keys.append(column.name)
 
@@ -433,14 +454,14 @@ class Introspector(object):
 
             # Fix models with multi-column primary keys.
             if len(primary_keys) == 0:
-                primary_keys = columns[table].keys()
+                primary_keys = columns.keys()
             if len(primary_keys) > 1:
                 Meta.primary_key = CompositeKey([
-                    field.name for col, field in columns[table].items()
+                    field.name for col, field in columns.items()
                     if col in primary_keys])
 
             attrs = {'Meta': Meta}
-            for db_column, column in columns[table].items():
+            for db_column, column in columns.items():
                 FieldClass = column.field_class
                 if FieldClass is UnknownField:
                     FieldClass = BareField
@@ -471,7 +492,7 @@ class Introspector(object):
                     raise
 
         # Actually generate Model classes.
-        for table, model in sorted(model_names.items()):
+        for table, model in sorted(database.model_names.items()):
             if table not in models:
                 _create_model(table, models)
 
