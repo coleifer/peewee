@@ -3,6 +3,7 @@ todo
 
 * refactor migrate to use new db reflection helpers.
 * cache invalidation for DataSet models when schema changes.
+* introspect indexes in pwiz
 
 * support for view objects?
 
