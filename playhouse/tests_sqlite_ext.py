@@ -116,19 +116,22 @@ class TestVirtualModelChild(TestVirtualModel):
 
 class SqliteExtTestCase(unittest.TestCase):
     messages = [
-        'A faith is a necessity to a man. Woe to him who believes in nothing.',
-        'All who call on God in true faith, earnestly from the heart, will '
-        'certainly be heard, and will receive what they have asked and desired.',
-        'Be faithful in small things because it is in them that your strength lies.',
-        'Faith consists in believing when it is beyond the power of reason to believe.',
-        'Faith has to do with things that are not seen and hope with things that are not at hand.',
-    ]
+        ('A faith is a necessity to a man. Woe to him who believes in '
+         'nothing.'),
+        ('All who call on God in true faith, earnestly from the heart, will '
+         'certainly be heard, and will receive what they have asked and '
+         'desired.'),
+        ('Be faithful in small things because it is in them that your '
+         'strength lies.'),
+        ('Faith consists in believing when it is beyond the power of reason '
+         'to believe.'),
+        ('Faith has to do with things that are not seen and hope with things '
+         'that are not at hand.')]
     values = [
         ('aaaaa bbbbb ccccc ddddd', 'aaaaa ccccc', 'zzzzz zzzzz', 1),
         ('bbbbb ccccc ddddd eeeee', 'bbbbb', 'zzzzz', 2),
         ('ccccc ccccc ddddd fffff', 'ccccc', 'yyyyy', 3),
-        ('ddddd', 'ccccc', 'xxxxx', 4),
-    ]
+        ('ddddd', 'ccccc', 'xxxxx', 4)]
 
     def setUp(self):
         FTSDoc.drop_table(True)
@@ -198,6 +201,40 @@ class SqliteExtTestCase(unittest.TestCase):
             (self.messages[4], 2.0 / 3),
             (self.messages[2], 1.0 / 3),
         ])
+
+    def test_fts_delete_row(self):
+        posts = [Post.create(message=message) for message in self.messages]
+        FTSPost.rebuild()
+        query = (FTSPost
+                 .select(FTSPost, FTSPost.rank().alias('score'))
+                 .where(FTSPost.match('believe'))
+                 .order_by(FTSPost.id))
+        self.assertMessages(query, [0, 3])
+
+        fts_posts = FTSPost.select().order_by(FTSPost.id)
+        for fts_post in fts_posts:
+            self.assertEqual(fts_post.delete_instance(), 1)
+
+        for post in posts:
+            self.assertEqual(
+                (FTSPost.delete()
+                 .where(FTSPost.message == post.message).execute()),
+                1)
+
+        # None of the deletes went through. This is because the table is
+        # managed.
+        self.assertEqual(FTSPost.select().count(), 5)
+
+        fts_docs = [FTSDoc.create(message=message)
+                    for message in self.messages]
+        self.assertEqual(FTSDoc.select().count(), 5)
+
+        for fts_doc in fts_docs:
+            self.assertEqual(FTSDoc.delete().where(
+                FTSDoc.message == fts_doc.message).execute(),
+                1)
+
+        self.assertEqual(FTSDoc.select().count(), 0)
 
     def _create_multi_column(self):
         for c1, c2, c3, c4 in self.values:

@@ -206,7 +206,7 @@ def ClosureTable(model_class, foreign_key=None):
         @classmethod
         def descendants(cls, node, depth=None, include_node=False):
             query = (model_class
-                     .select()
+                     .select(model_class, cls.depth.alias('depth'))
                      .join(cls, on=(primary_key == cls.id))
                      .where(cls.root == node))
             if depth is not None:
@@ -218,7 +218,7 @@ def ClosureTable(model_class, foreign_key=None):
         @classmethod
         def ancestors(cls, node, depth=None, include_node=False):
             query = (model_class
-                     .select()
+                     .select(model_class, cls.depth.alias('depth'))
                      .join(cls, on=(primary_key == cls.root))
                      .where(cls.id == node))
             if depth:
