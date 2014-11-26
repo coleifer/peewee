@@ -1,4 +1,4 @@
-.. image:: http://media.charlesleifer.com/blog/photos/peewee-logo.png
+.. image:: http://media.charlesleifer.com/blog/photos/peewee-logo-bold.png
 
 peewee
 ======
