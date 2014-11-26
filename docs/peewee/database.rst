@@ -318,6 +318,11 @@ For even more control over how your database is defined/initialized, you can use
     # Configure our proxy to use the db we specified in config.
     database_proxy.initialize(database)
 
+.. warning::
+    Only use this method if your actual database driver varies at run-time. For instance, if your tests and local dev environment run on SQLite, but your deployed app uses PostgreSQL, you can use the :py:class:`Proxy` to swap out engines at run-time.
+
+    However, if it is only connection values that vary at run-time, such as the path to the database file, or the database host, you should instead use :py:meth:`Database.init`. See :ref:`deferring_initialization` for more details.
+
 .. _connection_pooling:
 
 Connection Pooling
