@@ -3430,6 +3430,21 @@ class ModelOptions(object):
     def rel_exists(self, model):
         return self.rel_for_model(model) or self.reverse_rel_for_model(model)
 
+    def related_models(self, backrefs=False):
+        models = []
+        stack = [self.model_class]
+        while stack:
+            model = stack.pop()
+            if model in models:
+                continue
+            models.append(model)
+            for fk in model._meta.rel.values():
+                stack.append(fk.rel_model)
+            if backrefs:
+                for fk in model._meta.reverse_rel.values():
+                    stack.append(fk.model_class)
+        return models
+
 
 class BaseModel(type):
     inheritable = set(['constraints', 'database', 'indexes', 'order_by',

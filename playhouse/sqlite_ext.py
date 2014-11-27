@@ -170,16 +170,23 @@ class FTSModel(VirtualModel):
                 .where(cls.match(term))
                 .order_by(SQL(alias).desc()))
 
-class _MockFieldMixin(object):
+class _VirtualFieldMixin(object):
+    """
+    Field mixin to support virtual table attributes that may not correspond
+    to actual columns in the database.
+    """
     def add_to_class(self, model_class, name):
-        super(_MockFieldMixin, self).add_to_class(model_class, name)
+        super(_VirtualFieldMixin, self).add_to_class(model_class, name)
         del model_class._meta.fields[self.name]
         del model_class._meta.columns[self.db_column]
 
-class _MockIntegerField(_MockFieldMixin, IntegerField):
+class VirtualIntegerField(_VirtualFieldMixin, IntegerField):
     pass
 
-class _MockCharField(_MockFieldMixin, CharField):
+class VirtualCharField(_VirtualFieldMixin, CharField):
+    pass
+
+class VirtualFloatField(_VirtualFieldMixin, FloatField):
     pass
 
 def ClosureTable(model_class, foreign_key=None):
@@ -196,12 +203,12 @@ def ClosureTable(model_class, foreign_key=None):
     class BaseClosureTable(VirtualModel):
         _extension = 'transitive_closure'
 
-        depth = _MockIntegerField()
-        id = _MockIntegerField()
-        idcolumn = _MockIntegerField()
-        parentcolumn = _MockIntegerField()
-        root = _MockIntegerField()
-        tablename = _MockCharField()
+        depth = VirtualIntegerField()
+        id = VirtualIntegerField()
+        idcolumn = VirtualIntegerField()
+        parentcolumn = VirtualIntegerField()
+        root = VirtualIntegerField()
+        tablename = VirtualCharField()
 
         @classmethod
         def descendants(cls, node, depth=None, include_node=False):
