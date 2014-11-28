@@ -2773,6 +2773,18 @@ class ModelAPITestCase(ModelTestCase):
         self.assertEqual(b_db.title, 'b2')
         self.assertEqual(b_db.content, '')
 
+    def test_save_only_dirty_fields(self):
+        u = User.create(username='u1')
+        b = Blog.create(title='b1', user=u, content='huey')
+        b_db = Blog.get(Blog.pk == b.pk)
+        b.title = 'baby huey'
+        b.save(only=b.dirty_fields)
+        b_db.content = 'mickey-nugget'
+        b_db.save(only=b_db.dirty_fields)
+        saved = Blog.get(Blog.pk == b.pk)
+        self.assertEqual(saved.title, 'baby huey')
+        self.assertEqual(saved.content, 'mickey-nugget')
+
     def test_zero_id(self):
         if isinstance(test_db, MySQLDatabase):
             # Need to explicitly tell MySQL it's OK to use zero.
