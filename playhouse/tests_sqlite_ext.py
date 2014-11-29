@@ -58,8 +58,8 @@ def rstrip(s, n):
     return s.rstrip(n)
 
 # register test aggregates / collations / functions
-ext_db.register_aggregate(WeightedAverage, 1, 'weighted_avg')
-ext_db.register_aggregate(WeightedAverage, 2, 'weighted_avg2')
+ext_db.register_aggregate(WeightedAverage, 'weighted_avg', 1)
+ext_db.register_aggregate(WeightedAverage, 'weighted_avg2', 2)
 ext_db.register_collation(collate_reverse)
 ext_db.register_function(title_case)
 

@@ -293,12 +293,12 @@ class SqliteExtDatabase(SqliteDatabase):
     def _argc(self, fn):
         return len(inspect.getargspec(fn).args)
 
-    def register_aggregate(self, klass, num_params, name=None):
+    def register_aggregate(self, klass, name=None, num_params=-1):
         self._aggregates[name or klass.__name__.lower()] = (klass, num_params)
 
-    def aggregate(self, num_params, name=None):
+    def aggregate(self, name=None, num_params=-1):
         def decorator(klass):
-            self.register_aggregate(klass, num_params, name)
+            self.register_aggregate(klass, name, num_params)
             return klass
         return decorator
 

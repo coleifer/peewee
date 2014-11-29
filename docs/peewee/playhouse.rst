@@ -827,18 +827,16 @@ sqlite_ext API notes
     * Specify a row factory
     * Advanced transactions (specify isolation level)
 
-    .. py:method:: aggregate(num_params[, name])
+    .. py:method:: aggregate([name=None[, num_params=-1]])
 
         Class-decorator for registering custom aggregation functions.
 
-        :param num_params: integer representing number of parameters the
-            aggregate function accepts.
-        :param name: string name for the aggregate, defaults to the name of
-            the class.
+        :param name: string name for the aggregate, defaults to the name of the class.
+        :param num_params: integer representing number of parameters the aggregate function accepts. The default value, ``-1``, indicates the aggregate can accept any number of parameters.
 
         .. code-block:: python
 
-            @db.aggregate(1, 'product')
+            @db.aggregate('product', 1)
             class Product(object):
                 """Like sum, except calculate the product of a series of numbers."""
                 def __init__(self):
