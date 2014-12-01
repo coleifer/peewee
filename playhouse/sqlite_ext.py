@@ -276,12 +276,9 @@ class SqliteExtDatabase(SqliteDatabase):
 
     def _connect(self, database, **kwargs):
         conn = super(SqliteExtDatabase, self)._connect(database, **kwargs)
-        for name, (klass, num_params) in self._aggregates.items():
-            conn.create_aggregate(name, num_params, klass)
-        for name, fn in self._collations.items():
-            conn.create_collation(name, fn)
-        for name, (fn, num_params) in self._functions.items():
-            conn.create_function(name, num_params, fn)
+        self._load_aggregates(conn)
+        self._load_collations(conn)
+        self._load_functions(conn)
         if self._row_factory:
             conn.row_factory = self._row_factory
         if self._extensions:
@@ -290,11 +287,22 @@ class SqliteExtDatabase(SqliteDatabase):
                 conn.load_extension(extension)
         return conn
 
-    def _argc(self, fn):
-        return len(inspect.getargspec(fn).args)
+    def _load_aggregates(self, conn):
+        for name, (klass, num_params) in self._aggregates.items():
+            conn.create_aggregate(name, num_params, klass)
+
+    def _load_collations(self, conn):
+        for name, fn in self._collations.items():
+            conn.create_collation(name, fn)
+
+    def _load_functions(self, conn):
+        for name, (fn, num_params) in self._functions.items():
+            conn.create_function(name, num_params, fn)
 
     def register_aggregate(self, klass, name=None, num_params=-1):
         self._aggregates[name or klass.__name__.lower()] = (klass, num_params)
+        if not self.is_closed():
+            self._load_aggregates(self.get_conn())
 
     def aggregate(self, name=None, num_params=-1):
         def decorator(klass):
@@ -309,6 +317,8 @@ class SqliteExtDatabase(SqliteDatabase):
             return Clause(*expressions)
         fn.collation = _collation
         self._collations[name] = fn
+        if not self.is_closed():
+            self._load_collations(self.get_conn())
 
     def collation(self, name=None):
         def decorator(fn):
@@ -316,12 +326,12 @@ class SqliteExtDatabase(SqliteDatabase):
             return fn
         return decorator
 
-    def register_function(self, fn, name=None, num_params=None):
-        if num_params is None:
-            num_params = self._argc(fn)
+    def register_function(self, fn, name=None, num_params=-1):
         self._functions[name or fn.__name__] = (fn, num_params)
+        if not self.is_closed():
+            self._load_functions(self.get_conn())
 
-    def func(self, name=None, num_params=None):
+    def func(self, name=None, num_params=-1):
         def decorator(fn):
             self.register_function(fn, name, num_params)
             return fn
