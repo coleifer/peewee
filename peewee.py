@@ -3708,10 +3708,11 @@ class Model(with_metaclass(BaseModel)):
         if only:
             field_dict = self._prune_fields(field_dict, only)
         if self._get_pk_value() is not None and not force_insert:
-            if not isinstance(pk_field, CompositeKey):
-                field_dict.pop(pk_field.name, None)
+            if isinstance(pk_field, CompositeKey):
+                for pk_part_name in pk_field.field_names:
+                    field_dict.pop(pk_part_name, None)
             else:
-                field_dict = self._prune_fields(field_dict, self.dirty_fields)
+                field_dict.pop(pk_field.name, None)
             rows = self.update(**field_dict).where(self._pk_expr()).execute()
         else:
             pk = self._get_pk_value()
