@@ -1996,7 +1996,7 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
                         setattr(instance, foreign_key.name, joined_inst)
                         instances.append(joined_inst)
                 else:
-                    backref = current._meta.reverse_rel_for_model(join.dest)
+                    backref = current._meta.reverse_rel_for_model(join.dest, join.on)
                     if not backref:
                         continue
 
@@ -3424,8 +3424,8 @@ class ModelOptions(object):
                 if field_obj is None or field_obj.name == field.name:
                     return field
 
-    def reverse_rel_for_model(self, model):
-        return model._meta.rel_for_model(self.model_class)
+    def reverse_rel_for_model(self, model, field_obj=None):
+        return model._meta.rel_for_model(self.model_class, field_obj)
 
     def rel_exists(self, model):
         return self.rel_for_model(model) or self.reverse_rel_for_model(model)
