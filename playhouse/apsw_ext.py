@@ -28,6 +28,12 @@ from peewee import logger
 from peewee import PY3
 from peewee import TimeField as _TimeField
 from peewee import transaction as _transaction
+from playhouse.sqlite_ext import SqliteExtDatabase
+from playhouse.sqlite_ext import VirtualCharField
+from playhouse.sqlite_ext import VirtualField
+from playhouse.sqlite_ext import VirtualFloatField
+from playhouse.sqlite_ext import VirtualIntegerField
+from playhouse.sqlite_ext import VirtualModel
 
 
 class transaction(_transaction):
@@ -39,7 +45,29 @@ class transaction(_transaction):
         self.db.begin(self.lock_type)
 
 
-class APSWDatabase(SqliteDatabase):
+class _execute_wrapper(object):
+    def __init__(self, database, cursor, wrap=False):
+        self.database = database
+        self.cursor = cursor
+        self.wrap = wrap
+
+    def __enter__(self):
+        if self.wrap:
+            self.cursor.execute('begin;')
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type and self.wrap:
+            if self.database.get_autocommit() and self.database.autorollback:
+                self.cursor.execute('rollback;')
+                if not self.database.sql_error_handler(exc, sql, params,
+                                                       require_commit):
+                    return False
+        elif self.wrap:
+            self.cursor.execute('commit;')
+
+
+class APSWDatabase(SqliteExtDatabase):
     def __init__(self, database, timeout=None, **kwargs):
         self.timeout = timeout
         self._modules = {}
@@ -57,29 +85,43 @@ class APSWDatabase(SqliteDatabase):
             conn.setbusytimeout(self.timeout)
         conn.createscalarfunction('date_part', _sqlite_date_part, 2)
         conn.createscalarfunction('date_trunc', _sqlite_date_trunc, 2)
+        self._load_aggregates(conn)
+        self._load_collations(conn)
+        self._load_functions(conn)
+        self._load_modules(conn)
+        return conn
+
+    def _load_modules(self, conn):
         for mod_name, mod_inst in self._modules.items():
             conn.createmodule(mod_name, mod_inst)
         return conn
+
+    def _load_aggregates(self, conn):
+        for name, (klass, num_params) in self._aggregates.items():
+            def make_aggregate():
+                instance = klass()
+                return (instance, instance.step, instance.finalize)
+            conn.createaggregatefunction(name, make_aggregate)
+
+    def _load_collations(self, conn):
+        for name, fn in self._collations.items():
+            conn.createcollation(name, fn)
+
+    def _load_functions(self, conn):
+        for name, (fn, num_params) in self._functions.items():
+            conn.createscalarfunction(name, fn, num_params)
 
     def _execute_sql(self, cursor, sql, params):
         cursor.execute(sql, params or ())
         return cursor
 
     def execute_sql(self, sql, params=None, require_commit=True):
-        cursor = self.get_cursor()
-        wrap_transaction = require_commit and self.get_autocommit()
-        if wrap_transaction:
-            cursor.execute('begin;')
-            try:
-                self._execute_sql(cursor, sql, params)
-            except:
-                cursor.execute('rollback;')
-                raise
-            else:
-                cursor.execute('commit;')
-        else:
-            cursor = self._execute_sql(cursor, sql, params)
         logger.debug((sql, params))
+        with self.exception_wrapper():
+            cursor = self.get_cursor()
+            wrap_transaction = require_commit and self.get_autocommit()
+            with _execute_wrapper(self, cursor, wrap_transaction):
+                self._execute_sql(cursor, sql, params)
         return cursor
 
     def last_insert_id(self, cursor, model):

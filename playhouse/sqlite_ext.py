@@ -180,6 +180,9 @@ class _VirtualFieldMixin(object):
         del model_class._meta.fields[self.name]
         del model_class._meta.columns[self.db_column]
 
+class VirtualField(_VirtualFieldMixin, BareField):
+    pass
+
 class VirtualIntegerField(_VirtualFieldMixin, IntegerField):
     pass
 
