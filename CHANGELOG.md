@@ -5,6 +5,39 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.4.4
+
+Biggest news: peewee has a new logo!
+
+![](http://media.charlesleifer.com/blog/photos/peewee-logo-bold.png)
+
+* Small documentation updates here and there.
+
+### Backwards-incompatible changes
+
+* The argument signature for the `SqliteExtDatabase.aggregate()` decorator changed so that the aggregate name is the first parameter, and the number of parameters is the second parameter. If no values are specified, peewee will choose the name of the class and an un-specified number of arguments (`-1`).
+* The logic for saving a model with a composite key changed slightly. Previously, if a model had a composite primary key and you called `save()`, only the dirty fields would be saved.
+
+### Bugs fixed
+
+* #462
+* #465, add hook for disabling backref validation.
+* #466, fix case-sensitive table names with migration module.
+* #469, save only dirty fields.
+
+### New features
+
+* Lots of enhancements and cleanup to the `playhouse.apsw_ext` module.
+* The `playhouse.reflection` module now supports introspecting indexes.
+* Added a model option for disabling backref validation.
+* Added support for the SQLite [closure table extension](http://charlesleifer.com/blog/querying-tree-structures-in-sqlite-using-python-and-the-transitive-closure-extension/).
+* Added support for *virtual fields*, which act on dynamically-created virtual table fields.
+* Added a new example: a virtual table implementation that exposes Redis as a relational database table.
+* Added a module `playhouse.sqlite_aggregates` that contains a handful of aggregates you may find useful when developing with SQLite.
+
+
+[View commits](https://github.com/coleifer/peewee/compare/2.4.3...2.4.4)
+
 ## 2.4.3
 
 This release contains numerous improvements, particularly around the built-in database introspection utilities. Peewee should now also be compatible with PyPy.
