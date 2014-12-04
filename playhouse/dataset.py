@@ -71,6 +71,14 @@ class DataSet(object):
     def close(self):
         self._database.close()
 
+    def update_cache(self, table):
+        model_class = self._models[table]
+        dependencies = model_class._meta.related_models(backrefs=True)
+        updated = self._introspector.generate_models(
+            skip_invalid=True,
+            table_names=[related._meta.db_table for related in dependencies])
+        self._models.update(updated)
+
     def __enter__(self):
         self.connect()
         return self
@@ -136,7 +144,9 @@ class Table(object):
             model_class.create_table()
             self.dataset._models[name] = model_class
 
-        self.model_class = model_class
+    @property
+    def model_class(self):
+        return self.dataset._models[self.name]
 
     def __repr__(self):
         return '<Table: %s>' % self.name
@@ -187,6 +197,8 @@ class Table(object):
                 field.add_to_class(self.model_class, key)
 
             migrate(*operations)
+
+            self.dataset.update_cache(self.name)
 
     def insert(self, **data):
         self._migrate_new_columns(data)
