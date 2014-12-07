@@ -1996,7 +1996,8 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
                         setattr(instance, foreign_key.name, joined_inst)
                         instances.append(joined_inst)
                 else:
-                    backref = current._meta.reverse_rel_for_model(join.dest, join.on)
+                    backref = current._meta.reverse_rel_for_model(
+                        join.dest, join.on)
                     if not backref:
                         continue
 
@@ -3144,7 +3145,7 @@ class MySQLDatabase(Database):
 
     def _connect(self, database, **kwargs):
         if not mysql:
-            raise ImproperlyConfigured('Either MySQLdb or PyMySQL must be installed.')
+            raise ImproperlyConfigured('MySQLdb or PyMySQL must be installed.')
         conn_kwargs = {
             'charset': 'utf8',
             'use_unicode': True,
@@ -3540,7 +3541,7 @@ class Model(with_metaclass(BaseModel)):
     def __init__(self, *args, **kwargs):
         self._data = self._meta.get_default_dict()
         self._dirty = set()
-        self._obj_cache = {} # cache of related objects
+        self._obj_cache = {}
 
         for k, v in kwargs.items():
             setattr(self, k, v)
