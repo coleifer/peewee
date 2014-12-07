@@ -71,9 +71,12 @@ class DataSet(object):
     def close(self):
         self._database.close()
 
-    def update_cache(self, table):
-        model_class = self._models[table]
-        dependencies = model_class._meta.related_models(backrefs=True)
+    def update_cache(self, table=None):
+        if table:
+            model_class = self._models[table]
+            dependencies = model_class._meta.related_models(backrefs=True)
+        else:
+            dependencies = None  # Update all tables.
         updated = self._introspector.generate_models(
             skip_invalid=True,
             table_names=[related._meta.db_table for related in dependencies])
