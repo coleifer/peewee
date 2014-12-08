@@ -2111,6 +2111,27 @@ Misc
 
         Concatenate the current node with the provided ``rhs``.
 
+    .. py:method:: is_null([is_null=True])
+
+        Create an expression testing whether the ``Node`` is (or is not) ``NULL``.
+
+        .. code-block:: python
+
+            # Find all categories whose parent column is NULL.
+            root_nodes = Category.select().where(Category.parent.is_null())
+
+            # Find all categores whose parent is NOT NULL.
+            child_nodes = Category.select().where(Category.parent.is_null(False))
+
+        To simplify things, peewee will generate the correct SQL for equality and inequality. The :py:meth:`~Node.is_null` method is provided simply for readability.
+
+        .. code-block:: python
+
+            # Equivalent to the previous queries -- peewee will translate these
+            # into `IS NULL` and `IS NOT NULL`:
+            root_nodes = Category.select().where(Category.parent == None)
+            child_nodes = Category.select().where(Category.parent != None)
+
     .. py:method:: __invert__()
 
         Negate the node. This translates roughly into *NOT (<node>)*.

@@ -218,6 +218,7 @@ OP_GTE = '>='
 OP_NE = '!='
 OP_IN = 'in'
 OP_IS = 'is'
+OP_IS_NOT = 'is not'
 OP_LIKE = 'like'
 OP_ILIKE = 'ilike'
 OP_BETWEEN = 'between'
@@ -379,7 +380,7 @@ class Node(object):
         return Expression(self, OP_EQ, rhs)
     def __ne__(self, rhs):
         if rhs is None:
-            return ~Expression(self, OP_IS, None)
+            return Expression(self, OP_IS_NOT, None)
         return Expression(self, OP_NE, rhs)
 
     __lt__ = _e(OP_LT)
@@ -397,6 +398,10 @@ class Node(object):
     # Special expressions.
     def in_(self, *rhs):
         return Expression(self, OP_IN, rhs)
+    def is_null(self, is_null=True):
+        if is_null:
+            return Expression(self, OP_IS, None)
+        return Expression(self, OP_IS_NOT, None)
     def contains(self, rhs):
         return Expression(self, OP_ILIKE, '%%%s%%' % rhs)
     def startswith(self, rhs):
@@ -1195,6 +1200,7 @@ class QueryCompiler(object):
         OP_NE: '!=',
         OP_IN: 'IN',
         OP_IS: 'IS',
+        OP_IS_NOT: 'IS NOT',
         OP_BIN_AND: '&',
         OP_BIN_OR: '|',
         OP_LIKE: 'LIKE',

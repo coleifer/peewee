@@ -838,7 +838,23 @@ class SelectTestCase(BasePeeweeTestCase):
         self.assertWhere(sq, '("blog"."user_id" IS ?)', [None])
 
         sq = SelectQuery(Blog).where(Blog.user != None)
+        self.assertWhere(sq, '("blog"."user_id" IS NOT ?)', [None])
+
+        sq = SelectQuery(Blog).where(~(Blog.user == None))
         self.assertWhere(sq, 'NOT ("blog"."user_id" IS ?)', [None])
+
+    def test_is_null(self):
+        sq = SelectQuery(Blog).where(Blog.user.is_null())
+        self.assertWhere(sq, '("blog"."user_id" IS ?)', [None])
+
+        sq = SelectQuery(Blog).where(Blog.user.is_null(False))
+        self.assertWhere(sq, '("blog"."user_id" IS NOT ?)', [None])
+
+        sq = SelectQuery(Blog).where(~(Blog.user.is_null()))
+        self.assertWhere(sq, 'NOT ("blog"."user_id" IS ?)', [None])
+
+        sq = SelectQuery(Blog).where(~(Blog.user.is_null(False)))
+        self.assertWhere(sq, 'NOT ("blog"."user_id" IS NOT ?)', [None])
 
     def test_where_coercion(self):
         sq = SelectQuery(User).where(User.id < '5')
