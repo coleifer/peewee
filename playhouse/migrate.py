@@ -97,7 +97,7 @@ Adding an index:
 Dropping an index:
 
     # Specify the index name.
-    migrate(migrator.drop_index('story_pub_date_status'))
+    migrate(migrator.drop_index('story', 'story_pub_date_status'))
 """
 from collections import namedtuple
 import functools
