@@ -189,11 +189,18 @@ class SchemaMigrator(object):
         field.name = field.db_column = column_name
         field_clause = self.database.compiler().field_definition(field)
         field.null = field_null
-        return Clause(
+        parts = [
             SQL('ALTER TABLE'),
             Entity(table),
             SQL('ADD COLUMN'),
-            field_clause)
+            field_clause]
+        if isinstance(field, ForeignKeyField):
+            parts.extend([
+                SQL('REFERENCES'),
+                Entity(field.rel_model._meta.db_table),
+                EnclosedClause(Entity(field.to_field.db_column))
+            ])
+        return Clause(*parts)
 
     @operation
     def add_column(self, table, column_name, field):

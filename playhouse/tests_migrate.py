@@ -384,6 +384,9 @@ class BaseMigrationTestCase(object):
             delattr(Person, 'newtag_set')
             del Person._meta.reverse_rel['newtag_set']
 
+        # Ensure no foreign keys are present at the beginning of the test.
+        self.assertEqual(self.database.get_foreign_keys('tag'), [])
+
         field = ForeignKeyField(Person, null=True, to_field=Person.id)
         migrate(self.migrator.add_column('tag', 'person_id', field))
 
@@ -402,6 +405,13 @@ class BaseMigrationTestCase(object):
 
         t2_db = NewTag.get(NewTag.tag == 't2')
         self.assertEqual(t2_db.person, None)
+
+        foreign_keys = self.database.get_foreign_keys('tag')
+        self.assertEqual(len(foreign_keys), 1)
+        foreign_key = foreign_keys[0]
+        self.assertEqual(foreign_key.column, 'person_id')
+        self.assertEqual(foreign_key.dest_column, 'id')
+        self.assertEqual(foreign_key.dest_table, 'person')
 
     def test_drop_foreign_key(self):
         migrate(self.migrator.drop_column('page', 'user_id'))
