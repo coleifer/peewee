@@ -1725,6 +1725,25 @@ class ProxyTestCase(BasePeeweeTestCase):
         self.assertEqual(DummyModel.get().test_field, 'foo')
         DummyModel.drop_table()
 
+    def test_proxy_callbacks(self):
+        p = Proxy()
+        state = {}
+
+        def cb1(obj):
+            state['cb1'] = obj
+        p.attach_callback(cb1)
+
+        @p.attach_callback
+        def cb2(obj):
+            state['cb2'] = 'called'
+
+        self.assertEqual(state, {})
+        p.initialize('test')
+        self.assertEqual(state, {
+            'cb1': 'test',
+            'cb2': 'called',
+        })
+
 #
 # TEST CASE USED TO PROVIDE ACCESS TO DATABASE
 # FOR EXECUTION OF "LIVE" QUERIES

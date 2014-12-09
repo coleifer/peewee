@@ -293,6 +293,7 @@ class Proxy(object):
 
     def attach_callback(self, callback):
         self._callbacks.append(callback)
+        return callback
 
     def __getattr__(self, attr):
         if self.obj is None:
