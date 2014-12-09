@@ -406,7 +406,9 @@ class BaseMigrationTestCase(object):
     def test_drop_foreign_key(self):
         migrate(self.migrator.drop_column('page', 'user_id'))
         columns = self.database.get_columns('page')
-        self.assertEqual([column.name for column in columns], ['id', 'name'])
+        self.assertEqual(
+            sorted(column.name for column in columns),
+            ['id', 'name'])
         self.assertEqual(self.database.get_foreign_keys('page'), [])
 
     def test_rename_foreign_key(self):
