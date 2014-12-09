@@ -403,6 +403,26 @@ class BaseMigrationTestCase(object):
         t2_db = NewTag.get(NewTag.tag == 't2')
         self.assertEqual(t2_db.person, None)
 
+    def test_drop_foreign_key(self):
+        migrate(self.migrator.drop_column('page', 'user_id'))
+        columns = self.database.get_columns('page')
+        self.assertEqual([column.name for column in columns], ['id', 'name'])
+        self.assertEqual(self.database.get_foreign_keys('page'), [])
+
+    def test_rename_foreign_key(self):
+        migrate(self.migrator.rename_column('page', 'user_id', 'huey_id'))
+        columns = self.database.get_columns('page')
+        self.assertEqual(
+            sorted(column.name for column in columns),
+            ['huey_id', 'id', 'name'])
+
+        foreign_keys = self.database.get_foreign_keys('page')
+        self.assertEqual(len(foreign_keys), 1)
+        foreign_key = foreign_keys[0]
+        self.assertEqual(foreign_key.column, 'huey_id')
+        self.assertEqual(foreign_key.dest_column, 'id')
+        self.assertEqual(foreign_key.dest_table, 'user')
+
 
 class SqliteMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
     database = sqlite_db
@@ -412,6 +432,17 @@ class SqliteMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
         super(SqliteMigrationTestCase, self).setUp()
         IndexModel.drop_table(True)
         IndexModel.create_table()
+
+    def test_valid_column_required(self):
+        self.assertRaises(
+            ValueError,
+            migrate,
+            self.migrator.drop_column('page', 'column_does_not_exist'))
+
+        self.assertRaises(
+            ValueError,
+            migrate,
+            self.migrator.rename_column('page', 'xx', 'yy'))
 
     def test_table_case_insensitive(self):
         migrate(self.migrator.drop_column('PaGe', 'name'))
@@ -424,7 +455,7 @@ class SqliteMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
         self.assertEqual(column_names, set(['id', 'user_id', 'testing']))
 
         migrate(self.migrator.drop_column('indeXmOdel', 'first_name'))
-        indexes = self.migrator._get_indexes('indexmodel')
+        indexes = self.migrator.database.get_indexes('indexmodel')
         self.assertEqual(len(indexes), 1)
         self.assertEqual(indexes[0].name, 'indexmodel_data')
 
@@ -437,6 +468,9 @@ class SqliteMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
 
         queries = [log.msg for log in qc.get_queries()]
         self.assertEqual(queries, [
+            # Get all the columns.
+            ('PRAGMA table_info("indexmodel")', None),
+
             # Get the table definition.
             ('select name, sql from sqlite_master '
              'where type=? and LOWER(name)=?',
@@ -449,6 +483,9 @@ class SqliteMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
             ('PRAGMA index_list("indexmodel")', None),
             ('PRAGMA index_info("indexmodel_data")', None),
             ('PRAGMA index_info("indexmodel_first_name_last_name")', None),
+
+            # Get foreign keys.
+            ('PRAGMA foreign_key_list("indexmodel")', None),
 
             # Drop any temporary table, if it exists.
             ('DROP TABLE IF EXISTS "indexmodel__tmp__"', []),
