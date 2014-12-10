@@ -532,6 +532,11 @@ class SqliteMigrator(SchemaMigrator):
 
         # Re-create indexes.
         for index in indexes:
+            # Auto-generated indexes in SQLite will not have associated SQL,
+            # so pass over them.
+            if not index.sql:
+                continue
+
             if column_to_update in index.columns:
                 if new_column:
                     queries.append(

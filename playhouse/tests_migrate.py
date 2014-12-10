@@ -43,6 +43,10 @@ class Person(Model):
 
 class User(Model):
     id = CharField(primary_key=True, max_length=20)
+    password = CharField(default='secret')
+
+    class Meta:
+        db_table = 'users'
 
 class Page(Model):
     name = TextField(unique=True, null=True)
@@ -162,6 +166,17 @@ class BaseMigrationTestCase(object):
 
         column_names = self.get_column_names('person')
         self.assertEqual(column_names, set(['id', 'first_name']))
+
+        User.create(id='charlie', password='12345')
+        User.create(id='huey', password='meow')
+        migrate(self.migrator.drop_column('users', 'password'))
+
+        column_names = self.get_column_names('users')
+        self.assertEqual(column_names, set(['id']))
+        data = [row for row in User.select(User.id).order_by(User.id).tuples()]
+        self.assertEqual(data, [
+            ('charlie',),
+            ('huey',),])
 
     def test_rename_column(self):
         self._create_people()
@@ -433,7 +448,7 @@ class BaseMigrationTestCase(object):
         foreign_key = foreign_keys[0]
         self.assertEqual(foreign_key.column, 'huey_id')
         self.assertEqual(foreign_key.dest_column, 'id')
-        self.assertEqual(foreign_key.dest_table, 'user')
+        self.assertEqual(foreign_key.dest_table, 'users')
 
 
 class SqliteMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
