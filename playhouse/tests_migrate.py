@@ -95,6 +95,12 @@ class BaseMigrationTestCase(object):
             del User._meta.reverse_rel['newpages']
             delattr(User, 'newpages')
 
+    def tearDown(self):
+        for model_class in MODELS:
+            model_class._meta.database = self.database
+
+        drop_model_tables(MODELS, fail_silently=True)
+
     def test_add_column(self):
         # Create some fields with a variety of NULL / default values.
         df = DateTimeField(null=True)
