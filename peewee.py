@@ -1959,7 +1959,10 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
         _constructed = self.construct_instances(row)
         primary_instance = _constructed[self.model]
         for model_class, instance in _constructed.items():
-            identity_map[model_class] = {instance._get_pk_value(): instance}
+            pk_value = instance._get_pk_value()
+            if isinstance(pk_value, list):
+                pk_value = '-'.join([str(v) for v in pk_value])
+            identity_map[model_class] = {pk_value: instance}
 
         model_data = self.read_model_data(row)
         while True:
@@ -1984,6 +1987,8 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
                 # Do not include any instances which are comprised solely of
                 # NULL values.
                 pk_value = instance._get_pk_value()
+                if isinstance(pk_value, list):
+                    pk_value = '-'.join([str(v) for v in pk_value])
                 if [val for val in instance._data.values() if val is not None]:
                     identity_map[model_class][pk_value] = instance
 
