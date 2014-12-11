@@ -2363,7 +2363,7 @@ class NonPKFKBasicTestCase(ModelTestCase):
     def test_select_generation(self):
         p = Package.get(Package.barcode == '101')
         self.assertEqual(
-            [item.title for item in p.items.order_by(PackageItem.id)],
+            [item.title for item in p.items.order_by(PackageItem.title)],
             ['101-0', '101-1'])
 
 class ModelQueryTestCase(ModelTestCase):
@@ -2627,8 +2627,12 @@ class ModelAPITestCase(ModelTestCase):
         b12 = Blog.create(user=u1, title='b12')
         b2 = Blog.create(user=u2, title='b2')
 
-        self.assertEqual([b.title for b in u1.blog_set], ['b11', 'b12'])
-        self.assertEqual([b.title for b in u2.blog_set], ['b2'])
+        self.assertEqual(
+            [b.title for b in u1.blog_set.order_by(Blog.title)],
+            ['b11', 'b12'])
+        self.assertEqual(
+            [b.title for b in u2.blog_set.order_by(Blog.title)],
+            ['b2'])
 
     def test_related_name_collision(self):
         class Foo(TestModel):
@@ -3753,11 +3757,11 @@ class CompositeKeyTestCase(ModelTestCase):
 
         tag = Tag.select().where(Tag.tag == 't1').get()
         post = Post.select().where(Post.title == 'p1').get()
-        self.assertEqual(tpt._get_pk_value(), [tag, post])
+        self.assertEqual(tpt._get_pk_value(), (tag, post))
 
         # set_id is a no-op.
         tpt._set_pk_value(None)
-        self.assertEqual(tpt._get_pk_value(), [tag, post])
+        self.assertEqual(tpt._get_pk_value(), (tag, post))
 
     def test_querying(self):
         posts = (Post.select()
