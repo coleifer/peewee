@@ -4574,6 +4574,30 @@ class TransactionTestCase(ModelTestCase):
         res = new_db.execute_sql('select count(*) from users;')
         self.assertEqual(res.fetchone()[0], 2)
 
+    def test_transactions(self):
+        def transaction_generator():
+            with test_db.transaction():
+                User.create(username='u1')
+                yield
+                User.create(username='u2')
+
+        gen = transaction_generator()
+        next(gen)
+
+        conn2 = database_class(database_name, **database_params)
+        res = conn2.execute_sql('select count(*) from users;').fetchone()
+        self.assertEqual(res[0], 0)
+
+        self.assertEqual(User.select().count(), 1)
+
+        # Consume the rest of the generator.
+        for _ in gen:
+            pass
+
+        self.assertEqual(User.select().count(), 2)
+        res = conn2.execute_sql('select count(*) from users;').fetchone()
+        self.assertEqual(res[0], 2)
+
     def test_commit_on_success(self):
         self.assertTrue(test_db.get_autocommit())
 
