@@ -20,12 +20,14 @@ import apsw
 from peewee import *
 from peewee import _sqlite_date_part
 from peewee import _sqlite_date_trunc
+from peewee import _sqlite_regexp
 from peewee import BooleanField as _BooleanField
 from peewee import DateField as _DateField
 from peewee import DateTimeField as _DateTimeField
 from peewee import DecimalField as _DecimalField
 from peewee import logger
 from peewee import PY3
+from peewee import savepoint
 from peewee import TimeField as _TimeField
 from peewee import transaction as _transaction
 from playhouse.sqlite_ext import SqliteExtDatabase
@@ -46,9 +48,11 @@ class transaction(_transaction):
 
 
 class _execute_wrapper(object):
-    def __init__(self, database, cursor, wrap=False):
+    def __init__(self, database, cursor, sql, params, wrap=False):
         self.database = database
         self.cursor = cursor
+        self.sql = sql
+        self.params = params
         self.wrap = wrap
 
     def __enter__(self):
@@ -60,9 +64,13 @@ class _execute_wrapper(object):
         if exc_type and self.wrap:
             if self.database.get_autocommit() and self.database.autorollback:
                 self.cursor.execute('rollback;')
-                if not self.database.sql_error_handler(exc, sql, params,
-                                                       require_commit):
-                    return False
+            error_result = self.database.sql_error_handler(
+                exc_val,
+                self.sql,
+                self.params,
+                self.wrap)
+            if not error_result:
+                return False
         elif self.wrap:
             self.cursor.execute('commit;')
 
@@ -85,6 +93,7 @@ class APSWDatabase(SqliteExtDatabase):
             conn.setbusytimeout(self.timeout)
         conn.createscalarfunction('date_part', _sqlite_date_part, 2)
         conn.createscalarfunction('date_trunc', _sqlite_date_trunc, 2)
+        conn.createscalarfunction('regexp', _sqlite_regexp, 2)
         self._load_aggregates(conn)
         self._load_collations(conn)
         self._load_functions(conn)
@@ -119,8 +128,10 @@ class APSWDatabase(SqliteExtDatabase):
         logger.debug((sql, params))
         with self.exception_wrapper():
             cursor = self.get_cursor()
+            require_commit = sql.lower().startswith(
+                ('insert', 'delete', 'update'))
             wrap_transaction = require_commit and self.get_autocommit()
-            with _execute_wrapper(self, cursor, wrap_transaction):
+            with _execute_wrapper(self, cursor, sql, params, wrap_transaction):
                 self._execute_sql(cursor, sql, params)
         return cursor
 
@@ -141,6 +152,9 @@ class APSWDatabase(SqliteExtDatabase):
 
     def transaction(self, lock_type='deferred'):
         return transaction(self, lock_type)
+
+    def savepoint(self, sid=None):
+        return savepoint(self, sid)
 
 
 def nh(s, v):
