@@ -5718,6 +5718,40 @@ if test_db.savepoints:
                 [u.username for u in query],
                 ['u1', 'u2', 'u4', 'u6'])
 
+        def test_atomic_second_connection(self):
+            def test_separate_conn(expected):
+                new_db = database_class(database_name, **database_params)
+                cursor = new_db.execute_sql('select username from users;')
+                usernames = sorted(row[0] for row in cursor.fetchall())
+                self.assertEqual(usernames, expected)
+                new_db.close()
+
+            with test_db.atomic():
+                User.create(username='u1')
+                test_separate_conn([])
+
+                with test_db.atomic():
+                    User.create(username='u2')
+
+                with test_db.atomic() as tx3:
+                    User.create(username='u3')
+                    tx3.rollback()
+
+                # For some reason when SQLite commits the savepoint, other
+                # connections can view the objects that were committed.
+                if not isinstance(test_db, SqliteDatabase):
+                    test_separate_conn([])
+
+                users = User.select(User.username).order_by(User.username)
+                self.assertEqual(
+                    [user.username for user in users],
+                    ['u1', 'u2'])
+
+            users = User.select(User.username).order_by(User.username)
+            self.assertEqual(
+                [user.username for user in users],
+                ['u1', 'u2'])
+
 
 elif TEST_VERBOSITY > 0:
     print_('Skipping "savepoint" tests')
