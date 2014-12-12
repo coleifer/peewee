@@ -2928,6 +2928,7 @@ class SqliteDatabase(Database):
 
     def _connect(self, database, **kwargs):
         conn = sqlite3.connect(database, **kwargs)
+        conn.isolation_level = None
         self._add_conn_hooks(conn)
         return conn
 
@@ -2937,6 +2938,9 @@ class SqliteDatabase(Database):
         conn.create_function('regexp', 2, _sqlite_regexp)
         if self._journal_mode:
             self.execute_sql('PRAGMA journal_mode=%s;' % self._journal_mode)
+
+    def begin(self, lock_type='DEFERRED'):
+        self.execute_sql('BEGIN %s' % lock_type, require_commit=False)
 
     def get_tables(self, schema=None):
         cursor = self.execute_sql('SELECT name FROM sqlite_master WHERE '

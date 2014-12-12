@@ -379,17 +379,8 @@ class granular_transaction(transaction):
         self.conn = self.db.get_conn()
         self.lock_type = lock_type
 
-    def __enter__(self):
-        self._orig_isolation = self.conn.isolation_level
-        self.conn.isolation_level = self.lock_type
-        return super(granular_transaction, self).__enter__()
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        try:
-            super(granular_transaction, self).__exit__(
-                exc_type, exc_val, exc_tb)
-        finally:
-            self.conn.isolation_level = self._orig_isolation
+    def _begin(self):
+        self.db.begin(self.lock_type)
 
 
 OP_MATCH = 'match'

@@ -4557,6 +4557,7 @@ class TransactionTestCase(ModelTestCase):
             return
 
         test_db.set_autocommit(False)
+        test_db.begin()
 
         u1 = User.create(username='u1')
         u2 = User.create(username='u2')
@@ -5737,10 +5738,7 @@ if test_db.savepoints:
                     User.create(username='u3')
                     tx3.rollback()
 
-                # For some reason when SQLite commits the savepoint, other
-                # connections can view the objects that were committed.
-                if not isinstance(test_db, SqliteDatabase):
-                    test_separate_conn([])
+                test_separate_conn([])
 
                 users = User.select(User.username).order_by(User.username)
                 self.assertEqual(
