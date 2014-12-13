@@ -130,34 +130,41 @@ If you would like to use these awesome features, use the :py:class:`SqliteExtDat
 
     sqlite_db = SqliteExtDatabase('my_app.db', journal_mode='WAL')
 
-Common Pitfalls with SQLite
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+SQLite and Autocommit
+^^^^^^^^^^^^^^^^^^^^^
 
-Use care when committing transactions while iterating over a cursor with SQLite. Depending on your installed version of pysqlite (or ``sqlite3``), when a transaction is committed it might `reset all statements *and cursors* open on that connection <http://article.gmane.org/gmane.comp.python.db.pysqlite.user/2217>`_. Consider the following code:
+In version 2.4.5, the default isolation level for SQLite databases is ``None``, which equates to *autocommit*. The reason for this change has to do with some idiosyncracies of ``pysqlite`` (or the standard library ``sqlite3``).
+
+If you are using your database in autocommit mode (the default) then you should not need to make any changes to your code.
+
+If you are using ``autocommit=False``, you will need to explicitly call :py:meth:`~Database.begin` before executing queries.
+
+.. note::
+    This does not apply to code executed within a :py:meth:`~Database.transaction` context manager or a function decorated with :py:meth:`~Database.commit_on_success`.
+
+.. warning::
+    If you are using peewee with autocommit disabled, you must explicitly call :py:meth:`~Database.begin`, otherwise statements will be executed in autocommit mode.
+
+Example code:
 
 .. code-block:: python
 
-    for user in User.select():
-        Tweet.create(user=user, message='hello!')
+    # Define a database with autocommit turned off.
+    db = SqliteDatabase('my_app.db', autocommit=False)
 
-Because the outer select query is lazily evaluated, the cursor is held open for the duration of the loop. If the database is in autocommit mode (default behavior), the call to *Tweet.create* will call *commit()* on the underlying connection, resetting the outer-loop's cursor. As a result, it may happen that the first *two* users actually receive duplicate tweets.
+    # You must call begin()
+    db.begin()
+    User.create(username='charlie')
+    db.commit()
 
-Here are some ways to work around the issue:
+    # If using a transaction, then no changes are necessary.
+    with db.transaction():
+        User.create(username='huey')
 
-.. code-block:: python
-
-    # By running in a transaction, the new tweets will not be committed
-    # immediately, and the outer SELECT will not be reset.
-    with database.transaction():
-        for user in User.select():
-            Tweet.create(user=user, message='hello!')
-
-    # By consuming the cursor immediately (by coercing to a list), the
-    # inner COMMITs will not affect the iteration.
-    for user in list(User.select()):
-        Tweet.create(user=user, message='hello!')
-
-Many, many thanks to @tmoertel for `his excellent comment <https://github.com/coleifer/peewee/issues/12#issuecomment-5614404>`_ explaining this behavior.
+    # If using a function decorated by commit_on_success, no changes are necessary.
+    @db.commit_on_success
+    def create_user(username):
+        User.create(username=username)
 
 APSW, an Advanced SQLite Driver
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

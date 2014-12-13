@@ -6064,6 +6064,11 @@ if isinstance(test_db, SqliteDatabase):
             for user in User.select():
                 Blog.create(user=user, title='b-%s' % user.username)
 
+            # These statements are auto-committed.
+            new_db = self.new_connection()
+            count = new_db.execute_sql('select count(*) from blog;').fetchone()
+            self.assertEqual(count[0], 3)
+
             self.assertEqual(Blog.select().count(), 3)
             blog_titles = [b.title for b in Blog.select().order_by(Blog.title)]
             self.assertEqual(blog_titles, ['b-u1', 'b-u2', 'b-u3'])
@@ -6077,6 +6082,7 @@ if isinstance(test_db, SqliteDatabase):
             for user in User.select():
                 Blog.create(user=user, title='b-%s' % user.username)
 
+            # These statements have not been committed.
             new_db = self.new_connection()
             count = new_db.execute_sql('select count(*) from blog;').fetchone()
             self.assertEqual(count[0], 0)
