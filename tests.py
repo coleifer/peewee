@@ -506,6 +506,9 @@ class BasePeeweeTestCase(unittest.TestCase):
         joins = [compiler.parse_node(clause, am)[0] for clause in clauses]
         self.assertEqual(sorted(joins), sorted(exp_joins))
 
+    def new_connection(self):
+        return database_class(database_name, **database_params)
+
 #
 # BASIC TESTS OF QUERY TYPES AND INTERNAL DATA STRUCTURES
 #
@@ -4564,7 +4567,7 @@ class TransactionTestCase(ModelTestCase):
 
         # open up a new connection to the database, it won't register any blogs
         # as being created
-        new_db = database_class(database_name, **database_params)
+        new_db = self.new_connection()
         res = new_db.execute_sql('select count(*) from users;')
         self.assertEqual(res.fetchone()[0], 0)
 
@@ -4585,7 +4588,7 @@ class TransactionTestCase(ModelTestCase):
         gen = transaction_generator()
         next(gen)
 
-        conn2 = database_class(database_name, **database_params)
+        conn2 = self.new_connection()
         res = conn2.execute_sql('select count(*) from users;').fetchone()
         self.assertEqual(res[0], 0)
 
@@ -4687,7 +4690,7 @@ class ConcurrencyTestCase(ModelTestCase):
             # when using SQLite (default is 5).
             kwargs['timeout'] = 30
 
-        User._meta.database = database_class(database_name, **kwargs)
+        User._meta.database = self.new_connection()
         super(ConcurrencyTestCase, self).setUp()
 
     def tearDown(self):
@@ -5509,7 +5512,7 @@ if test_db.for_update:
             self.assertEqual(updated, 1)
 
             # open up a new connection to the database
-            new_db = database_class(database_name, **database_params)
+            new_db = self.new_connection()
 
             # select the username, it will not register as being updated
             res = new_db.execute_sql('select username from users where id = %s;' % u1.id)
@@ -5546,7 +5549,7 @@ if test_db.for_update_nowait:
                     .execute())
 
             # Open up a second conn.
-            new_db = database_class(database_name, **database_params)
+            new_db = self.new_connection()
 
             class User2(User):
                 class Meta:
@@ -5721,7 +5724,7 @@ if test_db.savepoints:
 
         def test_atomic_second_connection(self):
             def test_separate_conn(expected):
-                new_db = database_class(database_name, **database_params)
+                new_db = self.new_connection()
                 cursor = new_db.execute_sql('select username from users;')
                 usernames = sorted(row[0] for row in cursor.fetchall())
                 self.assertEqual(usernames, expected)
@@ -6041,6 +6044,50 @@ if test_db.distinct_on:
 
 elif TEST_VERBOSITY > 0:
     print_('Skipping "distinct on" tests')
+
+
+if isinstance(test_db, SqliteDatabase):
+    class TestOuterLoopInnerCommit(ModelTestCase):
+        requires = [User, Blog]
+
+        def tearDown(self):
+            test_db.set_autocommit(True)
+            super(TestOuterLoopInnerCommit, self).tearDown()
+
+        def test_outer_loop_inner_commit(self):
+            # By default we are in autocommit mode (isolation_level=None).
+            self.assertEqual(test_db.get_conn().isolation_level, None)
+
+            for username in ['u1', 'u2', 'u3']:
+                User.create(username=username)
+
+            for user in User.select():
+                Blog.create(user=user, title='b-%s' % user.username)
+
+            self.assertEqual(Blog.select().count(), 3)
+            blog_titles = [b.title for b in Blog.select().order_by(Blog.title)]
+            self.assertEqual(blog_titles, ['b-u1', 'b-u2', 'b-u3'])
+
+            self.assertEqual(Blog.delete().execute(), 3)
+
+            # If we disable autocommit, we need to explicitly call begin().
+            test_db.set_autocommit(False)
+            test_db.begin()
+
+            for user in User.select():
+                Blog.create(user=user, title='b-%s' % user.username)
+
+            new_db = self.new_connection()
+            count = new_db.execute_sql('select count(*) from blog;').fetchone()
+            self.assertEqual(count[0], 0)
+
+            self.assertEqual(Blog.select().count(), 3)
+            blog_titles = [b.title for b in Blog.select().order_by(Blog.title)]
+            self.assertEqual(blog_titles, ['b-u1', 'b-u2', 'b-u3'])
+
+            test_db.commit()
+            count = new_db.execute_sql('select count(*) from blog;').fetchone()
+            self.assertEqual(count[0], 3)
 
 
 if __name__ == '__main__':
