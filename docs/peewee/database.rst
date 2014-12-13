@@ -133,6 +133,8 @@ If you would like to use these awesome features, use the :py:class:`SqliteExtDat
 SQLite and Autocommit
 ^^^^^^^^^^^^^^^^^^^^^
 
+.. versionchanged:: 2.4.5
+
 In version 2.4.5, the default isolation level for SQLite databases is ``None``, which equates to *autocommit*. The reason for this change has to do with some idiosyncracies of ``pysqlite`` (or the standard library ``sqlite3``).
 
 If you are using your database in autocommit mode (the default) then you should not need to make any changes to your code.
