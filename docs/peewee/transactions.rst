@@ -18,6 +18,28 @@ You can execute queries within a transaction using the :py:meth:`Database.transa
         # Delete the user and their associated tweets.
         user.delete_instance(recursive=True)
 
+Transactions can be explicitly committed or rolled-back within the wrapped block, in which case a new transaction will be opened.
+
+.. code-block:: python
+
+    with db.transaction() as txn:
+        User.create(username='mickey')
+        txn.commit()  # Changes are saved and a new transaction begins.
+        User.create(username='huey')
+
+        # Roll back. "huey" will not be saved, but since "mickey" was already
+        # committed, that row will remain in the database.
+        txn.rollback()
+
+    with db.transaction() as txn:
+        User.create(username='whiskers')
+        # Roll back changes, which removes "whiskers".
+        txn.rollback()
+
+        # Create a new row for "mr. whiskers" which will be implicitly committed
+        # at the end of the `with` block.
+        User.create(username='mr. whiskers')
+
 You can use the transaction to perform *get or create* operations as well:
 
 .. code-block:: python
@@ -88,18 +110,4 @@ For transparent nesting of transactions, you can use the :py:meth:`~Database.ato
 
 Peewee supports nested transactions through the use of savepoints (for more information, see :py:meth:`~Database.savepoint`).
 
-If you attempt to nest transactions with peewee using the :py:meth:`~Database.transaction` context manager, only the outer-most transaction will be used:
-
-.. code-block:: python
-
-    with db.transaction() as txn:
-        User.create(username='charlie')
-        with db.transaction() as txn2:
-            User.create(username='peewee')
-
-        # Even though the inner transaction appears to have been committed,
-        # in reality only the outer transaction exists. Thus, the rollback will
-        # affect both rows.
-        txn.rollback()
-
-    assert User.select().count() == 0
+If you attempt to nest transactions with peewee using the :py:meth:`~Database.transaction` context manager, only the outer-most transaction will be used. However if an exception occurs in a nested block, this can lead to unpredictable behavior, so it is strongly recommended that you use :py:meth:`~Database.atomic`.

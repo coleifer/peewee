@@ -4618,6 +4618,28 @@ class TransactionTestCase(ModelTestCase):
         res = conn2.execute_sql('select count(*) from users;').fetchone()
         self.assertEqual(res[0], 2)
 
+    def test_manual_commit_rollback(self):
+        def assertUsers(expected):
+            query = User.select(User.username).order_by(User.username)
+            self.assertEqual(
+                [username for username, in query.tuples()],
+                expected)
+
+        with test_db.transaction() as txn:
+            User.create(username='charlie')
+            txn.commit()
+            User.create(username='huey')
+            txn.rollback()
+
+        assertUsers(['charlie'])
+
+        with test_db.transaction() as txn:
+            User.create(username='huey')
+            txn.rollback()
+            User.create(username='zaizee')
+
+        assertUsers(['charlie', 'zaizee'])
+
     def test_commit_on_success(self):
         self.assertTrue(test_db.get_autocommit())
 
