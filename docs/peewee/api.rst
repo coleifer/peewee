@@ -626,7 +626,9 @@ Fields
 
 .. py:class:: UUIDField
 
-    Store ``UUID`` values. Currently only supported by :py:class:`PostgresqlDatabase`.
+    Store ``UUID`` values.
+
+    .. note:: Currently this field is only supported by :py:class:`PostgresqlDatabase`.
 
 .. py:class:: ForeignKeyField(rel_model[, related_name=None[, on_delete=None[, on_update=None[, to_field=None[, ...]]]]])
 
@@ -1558,18 +1560,21 @@ Database and its subclasses
     :param connect_kwargs: any arbitrary parameters to pass to the database driver when connecting
 
     .. note::
-        if your database name is not known when the class is declared, you can pass
+        If your database name is not known when the class is declared, you can pass
         ``None`` in as the database name which will mark the database as "deferred"
         and any attempt to connect while in this state will raise an exception.  To
         initialize your database, call the :py:meth:`Database.init` method with
-        the database name
+        the database name.
 
-    A high-level api for working with the supported database engines.  ``Database``
-    provides a wrapper around some of the functions performed by the ``Adapter``,
-    in addition providing support for:
+        For an in-depth discussion of run-time database configuration, see the :ref:`deferring_initialization` section.
 
-    - execution of SQL queries
-    - creating and dropping tables and indexes
+    A high-level API for working with the supported database engines. The database class:
+
+    * Manages the underlying database connection.
+    * Executes queries.
+    * Manage transactions and savepoints.
+    * Create and drop tables and indexes.
+    * Introspect the database.
 
     .. py:attribute:: commit_select = False
 
@@ -1579,6 +1584,18 @@ Database and its subclasses
     .. py:attribute:: compiler_class = QueryCompiler
 
         A class suitable for compiling queries
+
+    .. py:attribute:: compound_operations = ['UNION', 'INTERSECT', 'EXCEPT']
+
+        Supported compound query operations.
+
+    .. py:attribute:: distinct_on = False
+
+        Whether the database supports ``DISTINCT ON`` statements.
+
+    .. py:attribute:: drop_cascade = True
+
+        Whether the database supports cascading drop table queries.
 
     .. py:attribute:: field_overrides = {}
 
@@ -1591,6 +1608,14 @@ Database and its subclasses
     .. py:attribute:: for_update = False
 
         Whether the given backend supports selecting rows for update
+
+    .. py:attribute:: for_update_nowait = False
+
+        Whether the given backend supports selecting rows for update
+
+    .. py:attribute:: insert_many = True
+
+        Whether the database supports multiple ``VALUES`` clauses for ``INSERT`` queries.
 
     .. py:attribute:: interpolation = '?'
 
@@ -1609,6 +1634,10 @@ Database and its subclasses
         Table names that are reserved by the backend -- if encountered in the
         application a warning will be issued.
 
+    .. py:attribute:: savepoints = True
+
+        Whether the given backend supports savepoints.
+
     .. py:attribute:: sequences = False
 
         Whether the given backend supports sequences
@@ -1617,6 +1646,10 @@ Database and its subclasses
 
         Whether the given backend supports deleting rows using a subquery
         that selects from the same table
+
+    .. py:attribute:: window_functions = False
+
+        Whether the given backend supports window functions.
 
     .. py:method:: init(database[, **connect_kwargs])
 
@@ -1632,9 +1665,7 @@ Database and its subclasses
         Establishes a connection to the database
 
         .. note::
-            If you initialized with ``threadlocals=True``, then this will store
-            the connection inside a threadlocal, ensuring that connections are not
-            shared across threads.
+            By default, connections will be stored on a threadlocal, ensuring connections are not shared across threads. To disable this behavior, initialize the database with ``threadlocals=False``.
 
     .. py:method:: close()
 
@@ -1699,12 +1730,25 @@ Database and its subclasses
 
         :rtype: a boolean value indicating whether autocommit is on **for the current connection**
 
-    .. py:method:: get_tables()
+    .. py:method:: get_tables([schema=None])
 
         :rtype: a list of table names in the database
 
-        .. warning::
-            Not implemented -- implementations exist in subclasses
+    .. py:method:: get_indexes(table, [schema=None])
+
+        :rtype: a list of :py:class:`IndexMetadata` instances, representing the indexes for the given table.
+
+    .. py:method:: get_columns(table, [schema=None])
+
+        :rtype: a list of :py:class:`ColumnMetadata` instances, representing the columns for the given table.
+
+    .. py:method:: get_primary_keys(table, [schema=None])
+
+        :rtype: a list containing the primary key column name(s) for the given table.
+
+    .. py:method:: get_foreign_keys(table, [schema=None])
+
+        :rtype: a list of :py:class:`ForeignKeyMetadata` instances, representing the foreign keys for the given table.
 
     .. py:method:: sequence_exists(sequence_name)
 
@@ -1851,6 +1895,22 @@ Database and its subclasses
         or a savepoint. The outer-most call to *atomic* will use a transaction,
         and any subsequent nested calls will use savepoints.
 
+    .. py:method:: session([with_transaction=True])
+
+        Return a context manager that represents a session for working with the database. When the context manager is entered, a connection is opened and optionally a transaction will be started.
+
+        When the context manager exits, the database connection will be closed. If the session was instantiated with ``with_transaction=True``, then the transaction will also be either committed or rolled back, depending on whether an exception occurred within the wrapped block.
+
+        Example:
+
+        .. code-block:: python
+
+            with db.session() as session:
+                # Connection is opened and transaction started.
+                User.create(username='charlie')
+
+            # Transaction has been committed and connection closed.
+
     .. py:classmethod:: register_fields(fields)
 
         Register a mapping of field overrides for the database class.  Used
@@ -1898,19 +1958,50 @@ Database and its subclasses
 
     :py:class:`Database` subclass that works with the "sqlite3" driver. In addition to the default database parameters, :py:class:`SqliteDatabase` also accepts a *journal_mode* parameter which will configure the journaling mode.
 
-    To use write-ahead log and connection-per-thread:
+    To use write-ahead log:
 
     .. code-block:: python
 
-        db = SqliteDatabase('my_app.db', threadlocals=True, journal_mode='WAL')
+        db = SqliteDatabase('my_app.db', journal_mode='WAL')
+
+    .. py:attribute:: drop_cascade = False
+
+    .. py:attribute:: insert_many = True *if* using SQLite 3.7.11.0 or newer.
+
 
 .. py:class:: MySQLDatabase(Database)
 
     :py:class:`Database` subclass that works with either "MySQLdb" or "pymysql".
 
+    .. py:attribute:: commit_select = True
+
+    .. py:attribute:: compound_operations = ['UNION']
+
+    .. py:attribute:: drop_cascade = False
+
+    .. py:attribute:: for_update = True
+
+    .. py:attribute:: subquery_delete_same_table = False
+
 .. py:class:: PostgresqlDatabase(Database)
 
     :py:class:`Database` subclass that works with the "psycopg2" driver
+
+    .. py:attribute:: commit_select = True
+
+    .. py:attribute:: distinct_on = True
+
+    .. py:attribute:: for_update = True
+
+    .. py:attribute:: for_update_nowait = True
+
+    .. py:attribute:: sequences = True
+
+    .. py:attribute:: window_functions = True
+
+    .. py:attribute:: register_unicode = True
+
+        Control whether the ``UNICODE`` and ``UNICODEARRAY`` psycopg2 extensions are loaded automatically.
 
 Misc
 ----

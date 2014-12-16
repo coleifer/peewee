@@ -3167,7 +3167,6 @@ class MySQLDatabase(Database):
         'text': 'LONGTEXT',
     }
     for_update = True
-    for_update_nowait = False
     interpolation = '%s'
     limit_max = 2 ** 64 - 1  # MySQL quirk
     op_overrides = {

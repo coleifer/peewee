@@ -335,7 +335,7 @@ There are a couple other neat things going on in the example app that are worth 
 More examples
 -------------
 
-There are more examples included in the peewee `examples directory <https://github.com/coleifer/peewee/blob/master/examples/`_, including:
+There are more examples included in the peewee `examples directory <https://github.com/coleifer/peewee/blob/master/examples/>`_, including:
 
 * `An encrypted command-line diary <https://github.com/coleifer/peewee/blob/master/examples/diary.py>`_. There is a `companion blog post <http://charlesleifer.com/blog/dear-diary-an-encrypted-command-line-diary-with-python/>`_ you might enjoy as well.
 * `Analytics web-service <https://github.com/coleifer/peewee/tree/master/examples/analytics>`_ (like a lite version of Google Analytics). Also check out the `companion blog post <http://charlesleifer.com/blog/saturday-morning-hacks-building-an-analytics-app-with-flask/>`_.
