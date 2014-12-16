@@ -96,8 +96,6 @@ class PooledDatabase(object):
         """
         for _, conn in self._connections:
             self._close(conn, close_conn=True)
-        for conn in self._in_use:
-            self._close(conn, close_conn=True)
 
 class PooledMySQLDatabase(PooledDatabase, MySQLDatabase):
     def _is_closed(self, key, conn):
