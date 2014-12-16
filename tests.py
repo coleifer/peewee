@@ -1645,15 +1645,31 @@ class CompilerTestCase(BasePeeweeTestCase):
             ('(((((x) = 1))))', '(x) = 1'),
             ('(x = (y = 2))', 'x = (y = 2)'),
             ('(((x = 1)', '((x = 1'),
-            ('(x = 1)))', 'x = 1))'),
+            ('(x = 1)))', '(x = 1)))'),
             ('x = 1))', 'x = 1))'),
             ('((x = 1', '((x = 1'),
             ('(((()))', '('),
             ('((())))', ')'),
             ('', ''),
-            ('(((())))', ''))
+            ('(((())))', ''),
+            ('((x), ((x) y))', '(x), ((x) y)'),
+            ('(F(x) x), F(x)', '(F(x) x), F(x)'),
+            ('((F(x) x) x), (F(x) F(x))', '((F(x) x) x), (F(x) F(x))'),
+            ('(((F(x) x) x), (F(x) F(x)))', '((F(x) x) x), (F(x) F(x))'),
+            ('((((F(x) x) x), (F(x) F(x))))', '((F(x) x) x), (F(x) F(x))'),
+        )
         for s, expected in tests:
             self.assertEqual(compiler._clean_extra_parens(s), expected)
+
+    def test_parens_in_queries(self):
+        query = User.select(
+            fn.MAX(
+                fn.IFNULL(1, 10) * 151,
+                fn.IFNULL(None, 10)))
+        self.assertSelect(
+            query,
+            'MAX((IFNULL(?, ?) * ?), IFNULL(?, ?))',
+            [1, 10, 151, None, 10])
 
 
 class ValidationTestCase(BasePeeweeTestCase):
