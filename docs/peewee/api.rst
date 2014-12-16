@@ -1895,6 +1895,18 @@ Database and its subclasses
         or a savepoint. The outer-most call to *atomic* will use a transaction,
         and any subsequent nested calls will use savepoints.
 
+        .. code-block:: python
+
+            with db.atomic() as txn:
+                perform_some_operations()
+
+                with db.atomic() as nested_txn:
+                    do_other_things()
+                    if something_bad_happened():
+                        # Roll back these changes, but preserve the changes
+                        # made in the outer block.
+                        nested_txn.rollback()
+
     .. py:method:: session([with_transaction=True])
 
         Return a context manager that represents a session for working with the database. When the context manager is entered, a connection is opened and optionally a transaction will be started.
