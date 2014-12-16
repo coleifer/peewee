@@ -4690,6 +4690,70 @@ class TransactionTestCase(ModelTestCase):
         self.assertEqual(test_db.transaction_depth(), 0)
 
 
+class SessionTestCase(ModelTestCase):
+    requires = [User, UniqueModel]
+
+    def test_session(self):
+        def assertUsers(expected):
+            with test_db.session():
+                query = User.select(User.username).order_by(User.username)
+                users = [username for username, in query.tuples()]
+                self.assertEqual(users, expected)
+
+        with test_db.session():
+            User.create(username='huey')
+            User.create(username='mickey')
+
+        assertUsers(['huey', 'mickey'])
+
+        with test_db.session() as session:
+            User.create(username='zaizee')
+            session.rollback()
+
+        assertUsers(['huey', 'mickey'])
+
+        with test_db.session() as session:
+            User.create(username='zaizee')
+            session.commit()
+            User.create(username='nuggie')
+            session.rollback()
+
+        assertUsers(['huey', 'mickey', 'zaizee'])
+
+        with test_db.session() as session:
+            User.create(username='graygree')
+            session.rollback()
+            User.create(username='scoutie')
+            session.commit()
+
+        assertUsers(['huey', 'mickey', 'scoutie', 'zaizee'])
+
+        with test_db.session(False) as session:
+            User.create(username='beanie')
+            session.commit()
+            User.create(username='nuggie')
+            # Because we are not in a transaction, this rollback will have
+            # no effect.
+            session.rollback()
+
+        assertUsers([
+            'beanie', 'huey', 'mickey', 'nuggie', 'scoutie', 'zaizee'])
+
+    def test_session_transactions(self):
+        def integrity_error(with_transaction):
+            with test_db.session(with_transaction):
+                UniqueModel.create(name='a')
+                UniqueModel.create(name='a')
+
+        self.assertRaises(IntegrityError, integrity_error, True)
+        with test_db.session():
+            self.assertEqual(UniqueModel.select().count(), 0)
+
+        self.assertRaises(IntegrityError, integrity_error, False)
+        with test_db.session():
+            self.assertEqual(UniqueModel.select().count(), 1)
+
+
 class ConcurrencyTestCase(ModelTestCase):
     requires = [User]
     threads = 4
