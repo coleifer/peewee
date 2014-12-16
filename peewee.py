@@ -2690,7 +2690,7 @@ class Database(object):
     compiler_class = QueryCompiler
     compound_operations = ['UNION', 'INTERSECT', 'EXCEPT']
     distinct_on = False
-    drop_cascade = True
+    drop_cascade = False
     field_overrides = {}
     foreign_keys = True
     for_update = False
@@ -2934,7 +2934,6 @@ class Database(object):
         return fn.DATE_TRUNC(SQL(date_part), date_field)
 
 class SqliteDatabase(Database):
-    drop_cascade = False
     foreign_keys = False
     insert_many = sqlite3 and sqlite3.sqlite_version_info >= (3, 7, 11, 0)
     limit_max = -1
@@ -3024,6 +3023,7 @@ class SqliteDatabase(Database):
 class PostgresqlDatabase(Database):
     commit_select = True
     distinct_on = True
+    drop_cascade = True
     field_overrides = {
         'blob': 'BYTEA',
         'bool': 'BOOLEAN',
@@ -3157,7 +3157,6 @@ class PostgresqlDatabase(Database):
 class MySQLDatabase(Database):
     commit_select = True
     compound_operations = ['UNION']
-    drop_cascade = False
     field_overrides = {
         'bool': 'BOOL',
         'decimal': 'NUMERIC',
@@ -3270,11 +3269,15 @@ class transaction(object):
     def _begin(self):
         self.db.begin()
 
-    def commit(self):
+    def commit(self, begin=True):
         self.db.commit()
+        if begin:
+            self._begin()
 
-    def rollback(self):
+    def rollback(self, begin=True):
         self.db.rollback()
+        if begin:
+            self._begin()
 
     def __enter__(self):
         self._orig = self.db.get_autocommit()
@@ -3287,12 +3290,12 @@ class transaction(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         try:
             if exc_type:
-                self.rollback()
+                self.rollback(False)
             elif self.db.transaction_depth() == 1:
                 try:
-                    self.commit()
+                    self.commit(False)
                 except:
-                    self.rollback()
+                    self.rollback(False)
                     raise
         finally:
             self.db.set_autocommit(self._orig)

@@ -1542,7 +1542,7 @@ Query Types
         and will not warn you if you are doing something dangerous, so it is up
         to you to know when to use it.  Additionally, because of the semantics of
         subquerying, there may be some cases when prefetch does not act as you
-        expect (for instnace, when applying a ``LIMIT`` to subqueries, but there
+        expect (for instance, when applying a ``LIMIT`` to subqueries, but there
         may be others) -- please report anything you think is a bug to `github <https://github.com/coleifer/peewee/issues>`_.
 
 
@@ -1593,7 +1593,7 @@ Database and its subclasses
 
         Whether the database supports ``DISTINCT ON`` statements.
 
-    .. py:attribute:: drop_cascade = True
+    .. py:attribute:: drop_cascade = False
 
         Whether the database supports cascading drop table queries.
 
@@ -1653,9 +1653,7 @@ Database and its subclasses
 
     .. py:method:: init(database[, **connect_kwargs])
 
-        If the database was instantiated with ``database=None``, the database is said to be in
-        a 'deferred' state (see :ref:`notes <deferring_initialization>`) -- if this is the case,
-        you can initialize it at any time by calling the ``init`` method.
+        This method is used to initialize a deferred database. For details on configuring your database at run-time, see the :ref:`deferring_initialization` section.
 
         :param database: the name of the database (or filename if using sqlite)
         :param connect_kwargs: any arbitrary parameters to pass to the database driver when connecting
@@ -1715,24 +1713,23 @@ Database and its subclasses
 
     .. py:method:: commit()
 
-        Call ``commit()`` on the active connection, committing the current transaction
+        Call ``commit()`` on the active connection, committing the current transaction.
 
     .. py:method:: rollback()
 
-        Call ``rollback()`` on the active connection, rolling back the current transaction
+        Call ``rollback()`` on the active connection, rolling back the current transaction.
 
     .. py:method:: set_autocommit(autocommit)
 
-        :param autocommit: a boolean value indicating whether to turn on/off autocommit
-            **for the current connection**
+        :param autocommit: a boolean value indicating whether to turn on/off autocommit.
 
     .. py:method:: get_autocommit()
 
-        :rtype: a boolean value indicating whether autocommit is on **for the current connection**
+        :rtype: a boolean value indicating whether autocommit is enabled.
 
     .. py:method:: get_tables([schema=None])
 
-        :rtype: a list of table names in the database
+        :rtype: a list of table names in the database.
 
     .. py:method:: get_indexes(table, [schema=None])
 
@@ -1754,12 +1751,10 @@ Database and its subclasses
 
         :rtype boolean:
 
-        .. warning::
-            Not implemented -- implementations exist in subclasses
+    .. py:method:: create_table(model_class[, safe=True])
 
-    .. py:method:: create_table(model_class)
-
-        :param model_class: :py:class:`Model` class to create table for
+        :param model_class: :py:class:`Model` class.
+        :param bool safe: If `True`, the table will not be created if it already exists.
 
     .. py:method:: create_index(model_class, fields[, unique=False])
 
@@ -1850,7 +1845,7 @@ Database and its subclasses
 
         Return a context manager that executes statements in a transaction.  If an
         error is raised inside the context manager, the transaction will be rolled
-        back, otherwise statements are committed when exiting.
+        back, otherwise statements are committed when exiting. Transactions can also be explicitly rolled back or committed within the transaction block by calling :py:meth:`~transaction.rollback` or :py:meth:`~transaction.commit`.
 
         .. code-block:: python
 
@@ -1858,6 +1853,14 @@ Database and its subclasses
             # do so within a transaction
             with database.transaction():
                 blog.delete_instance(recursive=True)
+
+
+            # Explicitly roll back a transaction.
+            with database.transaction() as txn:
+                do_some_stuff()
+                if something_bad_happened():
+                    # Roll back any changes made within this block.
+                    txn.rollback()
 
     .. py:method:: commit_on_success(func)
 
@@ -1883,17 +1886,34 @@ Database and its subclasses
 
         Return a context manager that executes statements in a savepoint.  If an
         error is raised inside the context manager, the savepoint will be rolled
-        back, otherwise statements are committed when exiting.
+        back, otherwise statements are committed when exiting. Like :py:meth:`~Database.transaction`, a savepoint can also be explicitly rolled-back or committed by calling :py:meth:`~savepoint.rollback` or :py:meth:`~savepoint.commit`.
 
         Savepoints can be thought of as nested transactions.
 
         :param str sid: A string identifier for the savepoint.
+
+        .. code-block:: python
+
+            with db.transaction() as txn:
+                do_some_stuff()
+                with db.savepoint() as sp1:
+                    do_more_things()
+
+                with db.savepoint() as sp2:
+                    even_more()
+                    # Oops, something bad happened, roll back
+                    # just the changes made in this block.
+                    if something_bad_happened():
+                        sp2.rollback()
 
     .. py:method:: atomic()
 
         Return a context manager that executes statements in either a transaction
         or a savepoint. The outer-most call to *atomic* will use a transaction,
         and any subsequent nested calls will use savepoints.
+
+        .. note::
+            For most use-cases, it makes the most sense to always use :py:meth:`~Database.atomic` when you wish to execute queries in a transaction. The benefit of using ``atomic`` is that you do not need to manually keep track of the transaction stack depth, as this will be managed for you.
 
         .. code-block:: python
 
@@ -1976,8 +1996,6 @@ Database and its subclasses
 
         db = SqliteDatabase('my_app.db', journal_mode='WAL')
 
-    .. py:attribute:: drop_cascade = False
-
     .. py:attribute:: insert_many = True *if* using SQLite 3.7.11.0 or newer.
 
 
@@ -1988,8 +2006,6 @@ Database and its subclasses
     .. py:attribute:: commit_select = True
 
     .. py:attribute:: compound_operations = ['UNION']
-
-    .. py:attribute:: drop_cascade = False
 
     .. py:attribute:: for_update = True
 
@@ -2014,6 +2030,128 @@ Database and its subclasses
     .. py:attribute:: register_unicode = True
 
         Control whether the ``UNICODE`` and ``UNICODEARRAY`` psycopg2 extensions are loaded automatically.
+
+Session, Transaction and Savepoint
+----------------------------------
+
+.. py:class:: Session(database[, with_transaction=True])
+
+    Context manager that encapsulates:
+
+    1. Open a connection.
+    2. (optional) Begin a transaction.
+    3. Yield to caller.
+    4. (optional) Commit transaction or roll-back if an error occurred.
+    5. Close the connection.
+
+    .. note:: In practice you should not create :py:class:`Session` objects directly, but rather use the :py:meth:`Database.session` method.
+
+    :param bool with_transaction: Boolean indicating whether a transaction should be opened along with the connection.
+
+    .. py:method:: commit()
+
+        Explicitly commit the transaction and open a new transaction.
+
+    .. py:method:: rollback()
+
+        Explicitly roll back any changes in the transaction and begin a new transaction.
+
+.. py:class:: transaction(database)
+
+    Context manager that encapsulates a database transaction. Statements executed within the wrapped block will be committed at the end of the block unless an exception occurs, in which case any changes will be rolled back.
+
+    .. warning:: Transactions should not be nested as this could lead to unpredictable behavior in the event of an exception in a nested block. If you wish to use nested transactions, use the :py:meth:`~Database.atomic` method, which will create a transaction at the outer-most layer and use savepoints for nested blocks.
+
+    .. note:: In practice you should not create :py:class:`transaction` objects directly, but rather use the :py:meth:`Database.transaction` method.
+
+    .. py:method:: commit()
+
+        Manually commit any pending changes and begin a new transaction.
+
+    .. py:method:: rollback()
+
+        Manually roll-back any pending changes and begin a new transaction.
+
+.. py:class:: savepoint(database[, sid=None])
+
+    Context manager that encapsulates a savepoint (nested transaction). Statements executed within the wrapped block will be committed at the end of the block unless an exception occurs, in which case any changes will be rolled back.
+
+    .. warning:: Savepoints must be created within a transaction. It is recommended that you use :py:meth:`~Database.atomic` instead of manually managing the transaction+savepoint stack.
+
+    .. note:: In practice you should not create :py:class:`savepoint` objects directly, but rather use the :py:meth:`Database.savepoint` method.
+
+    .. py:method:: commit()
+
+        Manually commit any pending changes. If the savepoint is manually committed and additional changes are made, they will be executed in the context of the outer block.
+
+    .. py:method:: rollback()
+
+        Manually roll-back any pending changes. If the savepoint is manually rolled-back and additional changes are made, they will be executed in the context of the outer block.
+
+Metadata Types
+--------------
+
+.. py:class:: IndexMetadata(name, sql, columns, unique, table)
+
+    .. py:attribute:: name
+
+        The name of the index.
+
+    .. py:attribute:: sql
+
+        The SQL query used to generate the index.
+
+    .. py:attribute:: columns
+
+        A list of columns that are covered by the index.
+
+    .. py:attribute:: unique
+
+        A boolean value indicating whether the index has a unique constraint.
+
+    .. py:attribute:: table
+
+        The name of the table containing this index.
+
+.. py:class:: ColumnMetadata(name, data_type, null, primary_key, table)
+
+    .. py:attribute:: name
+
+        The name of the column.
+
+    .. py:attribute:: data_type
+
+        The data type of the column
+
+    .. py:attribute:: null
+
+        A boolean value indicating whether ``NULL``s are permitted in this column.
+
+    .. py:attribute:: primary_key
+
+        A boolean value indicating whether this column is a primary key.
+
+    .. py:attribute:: table
+
+        The name of the table containing this column.
+
+.. py:class:: ForeignKeyMetadata(column, dest_table, dest_column, table)
+
+    .. py:attribute:: column
+
+        The column containing the foreign key (the "source").
+
+    .. py:attribute:: dest_table
+
+        The table referenced by the foreign key.
+
+    .. py:attribute:: dest_column
+
+        The column referenced by the foreign key (on ``dest_table``).
+
+    .. py:attribute:: table
+
+        The name of the table containing this foreign key.
 
 Misc
 ----
