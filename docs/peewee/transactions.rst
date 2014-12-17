@@ -76,8 +76,6 @@ Nesting Transactions
 
 Peewee supports nested transactions through the use of savepoints (for more information, see :py:meth:`~Database.savepoint`).
 
-.. note:: If you attempt to nest transactions with peewee using the :py:meth:`~Database.transaction` context manager, only the outer-most transaction will be used. However if an exception occurs in a nested block, this can lead to unpredictable behavior, so it is strongly recommended that you use :py:meth:`~Database.atomic`.
-
 Explicit transaction
 --------------------
 
@@ -115,6 +113,8 @@ Transactions can be explicitly committed or rolled-back within the wrapped block
         # at the end of the `with` block.
         User.create(username='mr. whiskers')
 
+.. note:: If you attempt to nest transactions with peewee using the :py:meth:`~Database.transaction` context manager, only the outer-most transaction will be used. However if an exception occurs in a nested block, this can lead to unpredictable behavior, so it is strongly recommended that you use :py:meth:`~Database.atomic`.
+
 Autocommit Mode
 ---------------
 
@@ -123,6 +123,7 @@ By default, databases are initialized with ``autocommit=True``, you can turn thi
 .. code-block:: python
 
     db.set_autocommit(False)
+    db.begin()
     try:
         user.delete_instance(recursive=True)
     except:
@@ -143,5 +144,6 @@ If you would like to manually control *every* transaction, simply turn autocommi
 
     db = SqliteDatabase(':memory:', autocommit=False)
 
+    db.begin()
     User.create(username='somebody')
     db.commit()

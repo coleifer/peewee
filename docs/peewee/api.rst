@@ -1841,44 +1841,11 @@ Database and its subclasses
 
             db.drop_tables([User, Tweet, Something], safe=True)
 
-    .. py:method:: atomic()
-
-        Execute statements in either a transaction or a savepoint. The outer-most call to *atomic* will use a transaction,
-        and any subsequent nested calls will use savepoints.
-
-        ``atomic`` can be used as either a context manager or a decorator.
-
-        .. note::
-            For most use-cases, it makes the most sense to always use :py:meth:`~Database.atomic` when you wish to execute queries in a transaction. The benefit of using ``atomic`` is that you do not need to manually keep track of the transaction stack depth, as this will be managed for you.
-
-        Context manager example code:
-
-        .. code-block:: python
-
-            with db.atomic() as txn:
-                perform_some_operations()
-
-                with db.atomic() as nested_txn:
-                    do_other_things()
-                    if something_bad_happened():
-                        # Roll back these changes, but preserve the changes
-                        # made in the outer block.
-                        nested_txn.rollback()
-
-        Decorator example code:
-
-        .. code-block:: python
-
-            @db.atomic()
-            def create_user(username):
-                # This function will execute in a transaction/savepoint.
-                return User.create(username=username)
-
     .. py:method:: transaction()
 
         Execute statements in a transaction using either a context manager or decorator. If an
         error is raised inside the wrapped block, the transaction will be rolled
-        back, otherwise statements are committed when exiting. Transactions can also be explicitly rolled back or committed within the transaction block by calling :py:meth:`~transaction.rollback` or :py:meth:`~transaction.commit`.
+        back, otherwise statements are committed when exiting. Transactions can also be explicitly rolled back or committed within the transaction block by calling :py:meth:`~transaction.rollback` or :py:meth:`~transaction.commit`. If you manually commit or roll back, a new transaction will be started automatically.
 
         Nested blocks can be wrapped with ``transaction`` - the database
         will keep a stack and only commit when it reaches the end of the outermost
@@ -1919,7 +1886,7 @@ Database and its subclasses
 
         Execute statements in a savepoint using either a context manager or decorator.  If an
         error is raised inside the wrapped block, the savepoint will be rolled
-        back, otherwise statements are committed when exiting. Like :py:meth:`~Database.transaction`, a savepoint can also be explicitly rolled-back or committed by calling :py:meth:`~savepoint.rollback` or :py:meth:`~savepoint.commit`.
+        back, otherwise statements are committed when exiting. Like :py:meth:`~Database.transaction`, a savepoint can also be explicitly rolled-back or committed by calling :py:meth:`~savepoint.rollback` or :py:meth:`~savepoint.commit`. If you manually commit or roll back, a new savepoint **will not** be created.
 
         Savepoints can be thought of as nested transactions.
 
@@ -1940,6 +1907,39 @@ Database and its subclasses
                     # just the changes made in this block.
                     if something_bad_happened():
                         sp2.rollback()
+
+    .. py:method:: atomic()
+
+        Execute statements in either a transaction or a savepoint. The outer-most call to *atomic* will use a transaction,
+        and any subsequent nested calls will use savepoints.
+
+        ``atomic`` can be used as either a context manager or a decorator.
+
+        .. note::
+            For most use-cases, it makes the most sense to always use :py:meth:`~Database.atomic` when you wish to execute queries in a transaction. The benefit of using ``atomic`` is that you do not need to manually keep track of the transaction stack depth, as this will be managed for you.
+
+        Context manager example code:
+
+        .. code-block:: python
+
+            with db.atomic() as txn:
+                perform_some_operations()
+
+                with db.atomic() as nested_txn:
+                    do_other_things()
+                    if something_bad_happened():
+                        # Roll back these changes, but preserve the changes
+                        # made in the outer block.
+                        nested_txn.rollback()
+
+        Decorator example code:
+
+        .. code-block:: python
+
+            @db.atomic()
+            def create_user(username):
+                # This function will execute in a transaction/savepoint.
+                return User.create(username=username)
 
     .. py:method:: session([with_transaction=True])
 
