@@ -3234,7 +3234,15 @@ class MySQLDatabase(Database):
         return fn.DATE_FORMAT(date_field, MYSQL_DATE_TRUNC_MAPPING[date_part])
 
 
-class Session(object):
+class _callable_context_manager(object):
+    def __call__(self, fn):
+        @wraps(fn)
+        def inner(*args, **kwargs):
+            with self:
+                return fn(*args, **kwargs)
+        return inner
+
+class Session(_callable_context_manager):
     def __init__(self, database, with_transaction=True):
         self.database = database
         self.with_transaction = with_transaction
@@ -3258,14 +3266,6 @@ class Session(object):
     def commit(self):
         self.database.commit()
         self.database.begin()
-
-class _callable_context_manager(object):
-    def __call__(self, fn):
-        @wraps(fn)
-        def inner(*args, **kwargs):
-            with self as txn:
-                return fn(*args, **kwargs)
-        return inner
 
 class _atomic(_callable_context_manager):
     def __init__(self, db):
