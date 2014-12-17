@@ -4640,6 +4640,14 @@ class TransactionTestCase(ModelTestCase):
 
         assertUsers(['charlie', 'zaizee'])
 
+    def test_transaction_decorator(self):
+        @test_db.transaction()
+        def create_user(username):
+            User.create(username=username)
+
+        create_user('charlie')
+        self.assertEqual(User.select().count(), 1)
+
     def test_commit_on_success(self):
         self.assertTrue(test_db.get_autocommit())
 
@@ -5799,7 +5807,7 @@ if test_db.savepoints:
                 self.assertEqual(User.select().count(), 0)
 
     class TestAtomic(ModelTestCase):
-        requires = [User]
+        requires = [User, UniqueModel]
 
         def test_atomic(self):
             with test_db.atomic():
@@ -5854,6 +5862,38 @@ if test_db.savepoints:
             self.assertEqual(
                 [user.username for user in users],
                 ['u1', 'u2'])
+
+        def test_atomic_decorator(self):
+            @test_db.atomic()
+            def create_user(username):
+                User.create(username=username)
+
+            create_user('charlie')
+            self.assertEqual(User.select().count(), 1)
+
+        def test_atomic_decorator_nesting(self):
+            @test_db.atomic()
+            def create_unique(name):
+                UniqueModel.create(name=name)
+
+            @test_db.atomic()
+            def create_both(username):
+                User.create(username=username)
+                try:
+                    create_unique(username)
+                except IntegrityError:
+                    pass
+
+            create_unique('huey')
+            self.assertEqual(UniqueModel.select().count(), 1)
+
+            create_both('charlie')
+            self.assertEqual(User.select().count(), 1)
+            self.assertEqual(UniqueModel.select().count(), 2)
+
+            create_both('huey')
+            self.assertEqual(User.select().count(), 2)
+            self.assertEqual(UniqueModel.select().count(), 2)
 
 
 elif TEST_VERBOSITY > 0:

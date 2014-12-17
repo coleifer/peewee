@@ -2861,10 +2861,7 @@ class Database(object):
         return savepoint(self, sid)
 
     def atomic(self):
-        if self.transaction_depth() == 0:
-            return self.transaction()
-        else:
-            return self.savepoint()
+        return _atomic(self)
 
     def session(self, with_transaction=True):
         return Session(self, with_transaction)
@@ -3262,7 +3259,29 @@ class Session(object):
         self.database.commit()
         self.database.begin()
 
-class transaction(object):
+class _callable_context_manager(object):
+    def __call__(self, fn):
+        @wraps(fn)
+        def inner(*args, **kwargs):
+            with self as txn:
+                return fn(*args, **kwargs)
+        return inner
+
+class _atomic(_callable_context_manager):
+    def __init__(self, db):
+        self.db = db
+
+    def __enter__(self):
+        if self.db.transaction_depth() == 0:
+            self._helper = self.db.transaction()
+        else:
+            self._helper = self.db.savepoint()
+        return self._helper.__enter__()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return self._helper.__exit__(exc_type, exc_val, exc_tb)
+
+class transaction(_callable_context_manager):
     def __init__(self, db):
         self.db = db
 
@@ -3301,7 +3320,7 @@ class transaction(object):
             self.db.set_autocommit(self._orig)
             self.db.pop_transaction()
 
-class savepoint(object):
+class savepoint(_callable_context_manager):
     def __init__(self, db, sid=None):
         self.db = db
         _compiler = db.compiler()
