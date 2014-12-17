@@ -1841,11 +1841,50 @@ Database and its subclasses
 
             db.drop_tables([User, Tweet, Something], safe=True)
 
+    .. py:method:: atomic()
+
+        Execute statements in either a transaction or a savepoint. The outer-most call to *atomic* will use a transaction,
+        and any subsequent nested calls will use savepoints.
+
+        ``atomic`` can be used as either a context manager or a decorator.
+
+        .. note::
+            For most use-cases, it makes the most sense to always use :py:meth:`~Database.atomic` when you wish to execute queries in a transaction. The benefit of using ``atomic`` is that you do not need to manually keep track of the transaction stack depth, as this will be managed for you.
+
+        Context manager example code:
+
+        .. code-block:: python
+
+            with db.atomic() as txn:
+                perform_some_operations()
+
+                with db.atomic() as nested_txn:
+                    do_other_things()
+                    if something_bad_happened():
+                        # Roll back these changes, but preserve the changes
+                        # made in the outer block.
+                        nested_txn.rollback()
+
+        Decorator example code:
+
+        .. code-block:: python
+
+            @db.atomic()
+            def create_user(username):
+                # This function will execute in a transaction/savepoint.
+                return User.create(username=username)
+
     .. py:method:: transaction()
 
-        Return a context manager that executes statements in a transaction.  If an
-        error is raised inside the context manager, the transaction will be rolled
+        Execute statements in a transaction using either a context manager or decorator. If an
+        error is raised inside the wrapped block, the transaction will be rolled
         back, otherwise statements are committed when exiting. Transactions can also be explicitly rolled back or committed within the transaction block by calling :py:meth:`~transaction.rollback` or :py:meth:`~transaction.commit`.
+
+        Nested blocks can be wrapped with ``transaction`` - the database
+        will keep a stack and only commit when it reaches the end of the outermost
+        function / block.
+
+        Context manager example code:
 
         .. code-block:: python
 
@@ -1862,35 +1901,31 @@ Database and its subclasses
                     # Roll back any changes made within this block.
                     txn.rollback()
 
-    .. py:method:: commit_on_success(func)
-
-        Decorator that wraps the given function in a single transaction, which,
-        upon success will be committed.  If an error is raised inside the function,
-        the transaction will be rolled back and the error will be re-raised.
-
-        Nested functions can be wrapped with ``commit_on_success`` - the database
-        will keep a stack and only commit when it reaches the end of the outermost
-        function.
-
-        :param func: function to decorate
+        Decorator example code:
 
         .. code-block:: python
 
-            @database.commit_on_success
+            @database.transaction()
             def transfer_money(from_acct, to_acct, amt):
                 from_acct.charge(amt)
                 to_acct.pay(amt)
                 return amt
 
+    .. py:method:: commit_on_success(func)
+
+        .. note:: Use :py:meth:`~Database.atomic` or :py:meth:`~Database.transaction` instead.
+
     .. py:method:: savepoint([sid=None])
 
-        Return a context manager that executes statements in a savepoint.  If an
-        error is raised inside the context manager, the savepoint will be rolled
+        Execute statements in a savepoint using either a context manager or decorator.  If an
+        error is raised inside the wrapped block, the savepoint will be rolled
         back, otherwise statements are committed when exiting. Like :py:meth:`~Database.transaction`, a savepoint can also be explicitly rolled-back or committed by calling :py:meth:`~savepoint.rollback` or :py:meth:`~savepoint.commit`.
 
         Savepoints can be thought of as nested transactions.
 
-        :param str sid: A string identifier for the savepoint.
+        :param str sid: An optional string identifier for the savepoint.
+
+        Context manager example code:
 
         .. code-block:: python
 
@@ -1906,32 +1941,13 @@ Database and its subclasses
                     if something_bad_happened():
                         sp2.rollback()
 
-    .. py:method:: atomic()
-
-        Return a context manager that executes statements in either a transaction
-        or a savepoint. The outer-most call to *atomic* will use a transaction,
-        and any subsequent nested calls will use savepoints.
-
-        .. note::
-            For most use-cases, it makes the most sense to always use :py:meth:`~Database.atomic` when you wish to execute queries in a transaction. The benefit of using ``atomic`` is that you do not need to manually keep track of the transaction stack depth, as this will be managed for you.
-
-        .. code-block:: python
-
-            with db.atomic() as txn:
-                perform_some_operations()
-
-                with db.atomic() as nested_txn:
-                    do_other_things()
-                    if something_bad_happened():
-                        # Roll back these changes, but preserve the changes
-                        # made in the outer block.
-                        nested_txn.rollback()
-
     .. py:method:: session([with_transaction=True])
 
         Return a context manager that represents a session for working with the database. When the context manager is entered, a connection is opened and optionally a transaction will be started.
 
         When the context manager exits, the database connection will be closed. If the session was instantiated with ``with_transaction=True``, then the transaction will also be either committed or rolled back, depending on whether an exception occurred within the wrapped block.
+
+        .. note:: :py:meth:`~Database.session` can also be used as a decorator.
 
         Example:
 
