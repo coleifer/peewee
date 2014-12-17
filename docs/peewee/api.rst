@@ -2125,7 +2125,7 @@ Metadata Types
 
     .. py:attribute:: null
 
-        A boolean value indicating whether ``NULL``s are permitted in this column.
+        A boolean value indicating whether ``NULL`` is permitted in this column.
 
     .. py:attribute:: primary_key
 
