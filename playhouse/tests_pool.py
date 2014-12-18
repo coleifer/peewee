@@ -5,12 +5,29 @@ import time
 from unittest import TestCase
 
 from peewee import *
+from peewee import transaction
 from playhouse.pool import *
+
+class FakeTransaction(transaction):
+    def _add_history(self, message):
+        self.db.transaction_history.append(
+            '%s%s' % (message, self._conn))
+
+    def __enter__(self):
+        self._conn = self.db.get_conn()
+        self._add_history('O')
+
+    def commit(self, begin=True):
+        self._add_history('C')
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._add_history('X')
 
 class FakeDatabase(SqliteDatabase):
     def __init__(self, *args, **kwargs):
         self.counter = 0
         self.closed_counter = 0
+        self.transaction_history = []
         super(FakeDatabase, self).__init__(*args, **kwargs)
 
     def _connect(self, *args, **kwargs):
@@ -22,6 +39,9 @@ class FakeDatabase(SqliteDatabase):
 
     def _close(self, conn):
         self.closed_counter += 1
+
+    def transaction(self):
+        return FakeTransaction(self)
 
 class TestDB(PooledDatabase, FakeDatabase):
     def __init__(self, *args, **kwargs):
@@ -150,6 +170,151 @@ class TestPooledDatabase(TestCase):
         self.assertEqual(db.get_conn(), 5)
         self.assertEqual(sorted(db._in_use.keys()), [3, 5])
         self.assertEqual(db._connections, [])
+
+    def test_execution_context(self):
+        self.assertEqual(self.db.get_conn(), 1)
+        with self.db.execution_context():
+            self.assertEqual(self.db.get_conn(), 2)
+            self.assertEqual(self.db.transaction_history, ['O2'])
+
+        self.assertEqual(self.db.get_conn(), 1)
+        self.assertEqual(self.db.transaction_history, ['O2', 'C2', 'X2'])
+
+        with self.db.execution_context(with_transaction=False):
+            self.assertEqual(self.db.get_conn(), 2)
+            self.assertEqual(self.db.transaction_history, ['O2', 'C2', 'X2'])
+
+        self.assertEqual(self.db.get_conn(), 1)
+        self.assertEqual(self.db.transaction_history, ['O2', 'C2', 'X2'])
+        self.assertEqual(len(self.db._connections), 1)
+        self.assertEqual(len(self.db._in_use), 1)
+
+    def test_execution_context_nested(self):
+        def assertInUse(n):
+            self.assertEqual(len(self.db._in_use), n)
+
+        def assertFree(n):
+            self.assertEqual(len(self.db._connections), n)
+
+        def assertHistory(history):
+            self.assertEqual(self.db.transaction_history, history)
+
+        @self.db.execution_context()
+        def subroutine():
+            pass
+
+        self.assertEqual(self.db.get_conn(), 1)
+        assertFree(0)
+        assertInUse(1)
+
+        with self.db.execution_context(False):
+            self.assertEqual(self.db.get_conn(), 2)
+            assertFree(0)
+            assertInUse(2)
+            assertHistory([])
+
+            with self.db.execution_context():
+                self.assertEqual(self.db.get_conn(), 3)
+                assertFree(0)
+                assertInUse(3)
+                assertHistory(['O3'])
+
+                subroutine()
+                assertFree(1)
+                assertInUse(3)
+                assertHistory(['O3', 'O4', 'C4', 'X4'])
+
+            assertFree(2)
+            assertInUse(2)
+            assertHistory(['O3', 'O4', 'C4', 'X4', 'C3', 'X3'])
+
+            # Since conn 3 has been returned to the pool, the subroutine
+            # will use conn3 this time.
+            subroutine()
+            assertFree(2)
+            assertInUse(2)
+            assertHistory(
+                ['O3', 'O4', 'C4', 'X4', 'C3', 'X3', 'O3', 'C3', 'X3'])
+
+        self.assertEqual(self.db.get_conn(), 1)
+        assertFree(3)
+        assertInUse(1)
+        assertHistory(['O3', 'O4', 'C4', 'X4', 'C3', 'X3', 'O3', 'C3', 'X3'])
+
+    def test_execution_context_threads(self):
+        signal = threading.Event()
+
+        def create_context():
+            with self.db.execution_context():
+                signal.wait()
+
+        # Simulate 5 concurrent connections.
+        threads = [threading.Thread(target=create_context) for i in range(5)]
+        for thread in threads:
+            thread.start()
+
+        # Wait for all connections to be opened.
+        while self.db.counter < 5:
+            time.sleep(.01)
+
+        # Signal threads to close connections and join threads.
+        signal.set()
+        [t.join() for t in threads]
+
+        self.assertEqual(self.db.counter, 5)
+        self.assertEqual(len(self.db._connections), 5)
+        self.assertEqual(len(self.db._in_use), 0)
+        self.assertEqual(
+            self.db.transaction_history[:5],
+            ['O1', 'O2', 'O3', 'O4', 'O5'])
+        rest = sorted(self.db.transaction_history[5:])
+        self.assertEqual(
+            rest,
+            ['C1', 'C2', 'C3', 'C4', 'C5', 'X1', 'X2', 'X3', 'X4', 'X5'])
+
+    def test_execution_context_mixed_thread(self):
+        sig_sub = threading.Event()
+        sig_ctx = threading.Event()
+        sig_in_sub = threading.Event()
+        sig_in_ctx = threading.Event()
+        self.assertEqual(self.db.get_conn(), 1)
+
+        @self.db.execution_context()
+        def subroutine():
+            sig_in_sub.set()
+            sig_sub.wait()
+
+        def target():
+            with self.db.execution_context():
+                subroutine()
+                sig_in_ctx.set()
+                sig_ctx.wait()
+
+        t = threading.Thread(target=target)
+        t.start()
+
+        sig_in_sub.wait()
+        self.assertEqual(len(self.db._in_use), 3)
+        self.assertEqual(len(self.db._connections), 0)
+        self.assertEqual(self.db.transaction_history, ['O2', 'O3'])
+
+        sig_sub.set()
+        sig_in_ctx.wait()
+
+        self.assertEqual(len(self.db._in_use), 2)
+        self.assertEqual(len(self.db._connections), 1)
+        self.assertEqual(
+            self.db.transaction_history,
+            ['O2', 'O3', 'C3', 'X3'])
+
+        sig_ctx.set()
+        t.join()
+
+        self.assertEqual(len(self.db._in_use), 1)
+        self.assertEqual(len(self.db._connections), 2)
+        self.assertEqual(
+            self.db.transaction_history,
+            ['O2', 'O3', 'C3', 'X3', 'C2', 'X2'])
 
 
 class TestConnectionPool(TestCase):
