@@ -2863,9 +2863,6 @@ class Database(object):
     def atomic(self):
         return _atomic(self)
 
-    def session(self, with_transaction=True):
-        return Session(self, with_transaction)
-
     def get_tables(self, schema=None):
         raise NotImplementedError
 
@@ -3241,31 +3238,6 @@ class _callable_context_manager(object):
             with self:
                 return fn(*args, **kwargs)
         return inner
-
-class Session(_callable_context_manager):
-    def __init__(self, database, with_transaction=True):
-        self.database = database
-        self.with_transaction = with_transaction
-
-    def __enter__(self):
-        self.database.get_conn()
-        if self.with_transaction:
-            self.txn = self.database.transaction()
-            self.txn.__enter__()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.with_transaction:
-            self.txn.__exit__(exc_type, exc_val, exc_tb)
-        self.database.close()
-
-    def rollback(self):
-        self.database.rollback()
-        self.database.begin()
-
-    def commit(self):
-        self.database.commit()
-        self.database.begin()
 
 class _atomic(_callable_context_manager):
     def __init__(self, db):

@@ -1941,24 +1941,6 @@ Database and its subclasses
                 # This function will execute in a transaction/savepoint.
                 return User.create(username=username)
 
-    .. py:method:: session([with_transaction=True])
-
-        Return a context manager that represents a session for working with the database. When the context manager is entered, a connection is opened and optionally a transaction will be started.
-
-        When the context manager exits, the database connection will be closed. If the session was instantiated with ``with_transaction=True``, then the transaction will also be either committed or rolled back, depending on whether an exception occurred within the wrapped block.
-
-        .. note:: :py:meth:`~Database.session` can also be used as a decorator.
-
-        Example:
-
-        .. code-block:: python
-
-            with db.session() as session:
-                # Connection is opened and transaction started.
-                User.create(username='charlie')
-
-            # Transaction has been committed and connection closed.
-
     .. py:classmethod:: register_fields(fields)
 
         Register a mapping of field overrides for the database class.  Used
@@ -2047,30 +2029,8 @@ Database and its subclasses
 
         Control whether the ``UNICODE`` and ``UNICODEARRAY`` psycopg2 extensions are loaded automatically.
 
-Session, Transaction and Savepoint
-----------------------------------
-
-.. py:class:: Session(database[, with_transaction=True])
-
-    Context manager that encapsulates:
-
-    1. Open a connection.
-    2. (optional) Begin a transaction.
-    3. Yield to caller.
-    4. (optional) Commit transaction or roll-back if an error occurred.
-    5. Close the connection.
-
-    .. note:: In practice you should not create :py:class:`Session` objects directly, but rather use the :py:meth:`Database.session` method.
-
-    :param bool with_transaction: Boolean indicating whether a transaction should be opened along with the connection.
-
-    .. py:method:: commit()
-
-        Explicitly commit the transaction and open a new transaction.
-
-    .. py:method:: rollback()
-
-        Explicitly roll back any changes in the transaction and begin a new transaction.
+Transaction and Savepoint
+-------------------------
 
 .. py:class:: transaction(database)
 
