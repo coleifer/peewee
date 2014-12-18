@@ -81,17 +81,17 @@ class ExecutionContext(_callable_context_manager):
             self.connection = self.database._connect(
                 self.database.database,
                 **self.database.connect_kwargs)
-        if self.with_transaction:
-            self.txn = self.database.transaction()
-            self.txn.__enter__()
+            if self.with_transaction:
+                self.txn = self.database.transaction()
+                self.txn.__enter__()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.with_transaction:
-            if not exc_type:
-                self.txn.commit(False)
-            self.txn.__exit__(exc_type, exc_val, exc_tb)
         with self.database._conn_lock:
+            if self.with_transaction:
+                if not exc_type:
+                    self.txn.commit(False)
+                self.txn.__exit__(exc_type, exc_val, exc_tb)
             self.database._context_stack.pop()
             self.database._close(self.connection)
 
