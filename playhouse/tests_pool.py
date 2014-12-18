@@ -255,7 +255,7 @@ class TestPooledDatabase(TestCase):
             thread.start()
 
         # Wait for all connections to be opened.
-        while self.db.counter < 5:
+        while len(self.db.transaction_history) < 5:
             time.sleep(.01)
 
         # Signal threads to close connections and join threads.
