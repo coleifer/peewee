@@ -5,6 +5,7 @@ import time
 from unittest import TestCase
 
 from peewee import *
+from peewee import savepoint
 from peewee import transaction
 from playhouse.pool import *
 
@@ -337,3 +338,30 @@ class TestConnectionPool(TestCase):
         self.assertEqual(
             [x.value for x in Number.select().order_by(Number.id)],
             list(range(10)))
+
+    def test_execution_context(self):
+        with pooled_db.execution_context():
+            Number.create(value=1)
+            with pooled_db.atomic() as sp:
+                self.assertTrue(isinstance(sp, savepoint))
+                Number.create(value=2)
+                sp.rollback()
+
+            with pooled_db.atomic() as sp:
+                self.assertTrue(isinstance(sp, savepoint))
+                Number.create(value=3)
+
+        with pooled_db.execution_context(with_transaction=False):
+            with pooled_db.atomic() as txn:
+                self.assertTrue(isinstance(txn, transaction))
+                Number.create(value=4)
+
+            # Executed in autocommit mode.
+            Number.create(value=5)
+
+        with pooled_db.execution_context():
+            numbers = [
+                number.value
+                for number in Number.select().order_by(Number.value)]
+
+        self.assertEqual(numbers, [1, 3, 4, 5])
