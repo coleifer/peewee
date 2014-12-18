@@ -31,10 +31,10 @@ As well as tools for working with databases:
 * :ref:`migrate`
 * :ref:`reflection`
 * :ref:`db_url`
-* :ref:`csv_utils`
-* :ref:`read_slaves`
 * :ref:`pool`
+* :ref:`read_slaves`
 * :ref:`test_utils`
+* :ref:`csv_utils`
 * :ref:`pskel`
 
 
@@ -2816,15 +2816,56 @@ Connection pool
 
 .. warning:: This module should be considered experimental.
 
-The ``pool`` module contains a helper class to pool database connections, as well as implementations
-for PostgreSQL and MySQL. The pool works by overriding the methods on the :py:class:`Database` class
-that open and close connections to the backend. The pool can specify a timeout after which connections
-are recycled, as well as an upper bound on the number of open connections.
+The ``pool`` module contains a number of :py:class:`Database` classes that provide connection pooling for PostgreSQL and MySQL databases. The pool works by overriding the methods on the :py:class:`Database` class that open and close connections to the backend. The pool can specify a timeout after which connections are recycled, as well as an upper bound on the number of open connections.
 
-If your application is single-threaded, only one connection will be opened.
+In a multi-threaded application, up to `max_connections` will be opened. Each thread (or, if using gevent, greenlet) will have it's own connection.
 
-If your application is multi-threaded (this includes green threads) and you specify `threadlocals=True`
-when instantiating your database, then up to `max_connections` will be opened. As of version 2.3.3, this is the default behavior.
+In a single-threaded application, only one connection will be created. It will be continually recycled until either it exceeds the stale timeout or is closed explicitly (using `.manual_close()`).
+
+By default, all your application needs to do is ensure that connections are closed when you are finished with them, and they will be returned to the pool. For web applications, this typically means that at the beginning of a request, you will open a connection, and when you return a response, you will close the connection.
+
+Simple Postgres pool example code:
+
+.. code-block:: python
+
+    # Use the special postgresql extensions.
+    from playhouse.pool import PooledPostgresqlExtDatabase
+
+    db = PooledPostgresqlExtDatabase(
+        'my_app',
+        max_connections=32,
+        stale_timeout=300,  # 5 minutes.
+        user='postgres')
+
+    class BaseModel(Model):
+        class Meta:
+            database = db
+
+That's it!
+
+In some situations you may want to manage your connections more explicitly. Since peewee stores the active connection in a threadlocal, this typically would mean that there could only ever be one connection open per thread. For most applications this is desirable, but if you would like to manually manage multiple connections you can create an :py:class:`ExecutionContext`.
+
+Execution contexts allow finer-grained control over managing multiple connections to the database. When an execution context is initialized (either as a context manager or as a decorated function), a separate connection will be used for the duration of the wrapped block. You can also choose whether to wrap the block in a transaction.
+
+Execution context examples (using above ``db`` instance):
+
+.. code-block:: python
+
+    with db.execution_context() as ctx:
+        # A new connection will be opened or pulled from the pool of available
+        # connections. Additionally, a transaction will be started.
+        user = User.create(username='charlie')
+
+    # When the block ends, the transaction will be committed and the connection
+    # will be returned to the pool.
+
+    @db.execution_context(with_transaction=False)
+    def do_something(foo, bar):
+        # When this function is called, a separate connection is made and will
+        # be closed when the function returns.
+
+Pool APIs
+^^^^^^^^^
 
 .. py:class:: PooledDatabase(database[, max_connections=20[, stale_timeout=None[, **kwargs]]])
 
@@ -2835,25 +2876,27 @@ when instantiating your database, then up to `max_connections` will be opened. A
     :param int stale_timeout: Number of seconds to allow connections to be used.
     :param kwargs: Arbitrary keyword arguments passed to database class.
 
-    .. note:: Connections will not be closed exactly when they exceed their `stale_timeout`.
-        Instead, stale connections are only closed when a new connection is requested.
+    .. note:: Connections will not be closed exactly when they exceed their `stale_timeout`. Instead, stale connections are only closed when a new connection is requested.
 
-    .. note:: If the number of open connections exceeds `max_connections`, a `ValueError` will
-        be raised.
+    .. note:: If the number of open connections exceeds `max_connections`, a `ValueError` will be raised.
+
+    .. py:method:: _connect(*args, **kwargs)
+
+        Request a connection from the pool. If there are no available connections a new one will be opened.
+
+    .. py:method:: _close(conn[, close_conn=False])
+
+        By default `conn` will not be closed and instead will be returned to the pool of available connections. If `close_conn=True`, then `conn` will be closed and *not* be returned to the pool.
 
     .. py:method:: manual_close()
 
         Close the currently-open connection without returning it to the pool.
 
-    .. py:method:: _connect(*args, **kwargs)
+    .. py:method:: execution_context([with_transaction=True])
 
-        Request a connection from the pool. If there are no available connections a new one will
-        be opened.
+        Create an :py:class:`ExecutionContext` context manager or decorator. Blocks wrapped with an *ExecutionContext* will run using their own connection. By default, the wrapped block will also run in a transaction, although this can be disabled specifyin ``with_transaction=False``.
 
-    .. py:method:: _close(conn[, close_conn=False])
-
-        By default `conn` will not be closed and instead will be returned to the pool of available
-        connections. If `close_conn=True`, then `conn` will be closed and *not* be returned to the pool.
+        .. warning:: ExecutionContext is very new and has not been tested extensively.
 
 .. py:class:: PooledPostgresqlDatabase
 
