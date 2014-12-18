@@ -142,10 +142,10 @@ If you are using your database in autocommit mode (the default) then you should 
 If you are using ``autocommit=False``, you will need to explicitly call :py:meth:`~Database.begin` before executing queries.
 
 .. note::
-    This does not apply to code executed within a :py:meth:`~Database.transaction` context manager or a function decorated with :py:meth:`~Database.commit_on_success`.
+    This does not apply to code executed within :py:meth:`~Database.transaction` or :py:meth:`~Database.atomic`.
 
 .. warning::
-    If you are using peewee with autocommit disabled, you must explicitly call :py:meth:`~Database.begin`, otherwise statements will be executed in autocommit mode.
+    If you are using peewee with autocommit disabled, you must explicitly call :py:meth:`~Database.begin`, otherwise statements **will** be executed in autocommit mode.
 
 Example code:
 
@@ -271,8 +271,8 @@ Alternatively, Python sqlite3 module can share a connection across different thr
 
 .. _deferring_initialization:
 
-Deferring initialization
-------------------------
+Run-time database configuration
+-------------------------------
 
 Sometimes the database connection settings are not known until run-time, when these values may be loaded from a configuration file or the environment. In these cases, you can *defer* the initialization of the database by specifying ``None`` as the database_name.
 
@@ -297,6 +297,8 @@ To initialize your database, call the :py:meth:`~Database.init` method with the 
 
     database_name = raw_input('What is the name of the db? ')
     database.init(database_name, host='localhost', user='postgres')
+
+For even more control over initializing your database, see the next section, :ref:`dynamic_db`.
 
 .. _dynamic_db:
 
@@ -365,8 +367,8 @@ The following pooled database classes are available:
 * :py:class:`PooledPostgresqlExtDatabase`
 * :py:class:`PooledMySQLDatabase`
 
-.. note::
-    If you have a multi-threaded application (including green threads), be sure to specify ``threadlocals=True`` when instantiating your pooled database. As of versoin 2.3.3, this is the default behavior.
+.. warning::
+    If you are using version 2.3.2 or lower, be sure to specify ``threadlocals=True`` when instantiating your pooled database.
 
 .. _using_read_slaves:
 
@@ -396,6 +398,32 @@ Here is how you might use the :py:class:`ReadSlaveModel`:
         username = CharField()
 
 Now when you execute writes (or deletes), they will be run on the master, while all read-only queries will be executed against one of the replicas. Queries are dispatched among the read slaves in round-robin fashion.
+
+Schema migrations
+-----------------
+
+Currently peewee does not have support for *automatic* schema migrations, but you can use the :ref:`migrate` module to create simple migration scripts. The schema migrations module works with SQLite, MySQL and Postgres, and will even allow you to do things like drop or rename columns in SQLite!
+
+Here is an example of how you might write a migration script:
+
+.. code-block:: python
+
+    from playhouse.migrate import *
+
+    my_db = SqliteDatabase('my_database.db')
+    migrator = SqliteMigrator(my_db)
+
+    title_field = CharField(default='')
+    status_field = IntegerField(null=True)
+
+    with my_db.transaction():
+        migrate(
+            migrator.add_column('some_table', 'title', title_field),
+            migrator.add_column('some_table', 'status', status_field),
+            migrator.drop_column('some_table', 'old_column'),
+        )
+
+Check the :ref:`migrate` documentation for more details.
 
 Generating Models from Existing Databases
 -----------------------------------------
@@ -532,29 +560,3 @@ Our new database can be used just like any of the other database subclasses:
         title = CharField()
         contents = TextField()
         pub_date = DateTimeField()
-
-Schema migrations
------------------
-
-Currently peewee does not have support for *automatic* schema migrations, but you can use the :ref:`migrate` module to create simple migration scripts. The schema migrations module works with SQLite, MySQL and Postgres, and will even allow you to do things like drop or rename columns in SQLite!
-
-Here is an example of how you might write a migration script:
-
-.. code-block:: python
-
-    from playhouse.migrate import *
-
-    my_db = SqliteDatabase('my_database.db')
-    migrator = SqliteMigrator(my_db)
-
-    title_field = CharField(default='')
-    status_field = IntegerField(null=True)
-
-    with my_db.transaction():
-        migrate(
-            migrator.add_column('some_table', 'title', title_field),
-            migrator.add_column('some_table', 'status', status_field),
-            migrator.drop_column('some_table', 'old_column'),
-        )
-
-Check the :ref:`migrate` documentation for more details.

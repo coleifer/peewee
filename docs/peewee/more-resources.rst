@@ -3,7 +3,7 @@
 Additional Resources
 ====================
 
-I've written a number of blog posts about building applications and web-services with peewee (and usually Flask). If you'd like to see some real-life applications that use peewee, the following resources may be useful:
+I've written a number of blog posts about building applications and web-services with peewee (and usually Flask). If you'd like to see some "real-life" applications that use peewee, the following resources may be useful:
 
 * `Building a note-taking app with Flask and Peewee <http://charlesleifer.com/blog/saturday-morning-hack-a-little-note-taking-app-with-flask/>`_ as well as `Part 2 <http://charlesleifer.com/blog/saturday-morning-hacks-revisiting-the-notes-app/>`_ and `Part 3 <http://charlesleifer.com/blog/saturday-morning-hacks-adding-full-text-search-to-the-flask-note-taking-app/>`_.
 * `Analytics web service built with Flask and Peewee <http://charlesleifer.com/blog/saturday-morning-hacks-building-an-analytics-app-with-flask/>`_.

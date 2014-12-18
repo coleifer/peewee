@@ -1358,6 +1358,9 @@ Below is an example of how we might fetch several users and any tweets they crea
         for tweet in user.tweets:
             print '  ', tweet.message
 
+.. note::
+    Do not mix calls to :py:meth:`~SelectQuery.aggregate_rows` with :py:meth:`~SelectQuery.get`. The latter applies a ``LIMIT 1`` SQL clause, and since the aggregate result set may contain more than one item, this can lead to incorrect behavior.
+
 Using prefetch
 ^^^^^^^^^^^^^^
 

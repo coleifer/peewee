@@ -3,7 +3,15 @@
 Models and Fields
 =================
 
-:py:class:`Model` classes and their associated :py:class:`Field` instances provide a direct mapping to database tables and columns. Model instances correspond to rows in the database table, and their attributes are the column values for the given row.
+:py:class:`Model` classes, :py:class:`Field` instances and model instances all map to database concepts:
+
+================= =================================
+Thing             Corresponds to...
+================= =================================
+Model class       Database table
+Field instance    Column on a table
+Model instance    Row in a database table
+================= =================================
 
 The following code shows the typical way you will define your database connection and model classes.
 

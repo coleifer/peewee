@@ -21,7 +21,17 @@ I **strongly** recommend opening an interactive shell session and running the co
 Model Definition
 -----------------
 
-Each Model class maps directly to a database table, and each field maps to a column on that table. Each model instance corresponds to a row in the table.
+Model classes, fields and model instances all map to database concepts:
+
+================= =================================
+Thing             Corresponds to...
+================= =================================
+Model class       Database table
+Field instance    Column on a table
+Model instance    Row in a database table
+================= =================================
+
+When starting to a project with peewee, it's typically best to begin with your data model, by defining one or more :py:class:`Model` classes:
 
 .. code-block:: python
 
@@ -39,7 +49,7 @@ Each Model class maps directly to a database table, and each field maps to a col
 
 There are lots of :ref:`field types <fields>` suitable for storing various types of data. Peewee handles converting between *pythonic* values those used by the database, so you can use Python types in your code without having to worry.
 
-Things get interesting when we set up relationships between models using foreign keys. This is easy to do with peewee:
+Things get interesting when we set up relationships between models using `foreign keys (wikipedia) <http://en.wikipedia.org/wiki/Foreign_key>`_. This is easy to do with peewee:
 
 .. code-block:: python
 
