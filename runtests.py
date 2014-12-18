@@ -55,6 +55,16 @@ def get_option_parser():
     parser.add_option_group(cases)
     return parser
 
+def ensure_mock():
+    try:
+        from unittest import mock
+    except ImportError:
+        try:
+            import mock
+        except ImportError:
+            cur_dir = os.path.dirname(__file__)
+            sys.path.append(os.path.join(cur_dir, 'libs'))
+
 def collect_modules(options):
     modules = []
     xtra = lambda op: op or options.extra or options.all
@@ -149,6 +159,7 @@ if __name__ == '__main__':
 
     from peewee import print_
 
+    ensure_mock()
     suite = unittest.TestSuite()
     for module in collect_modules(options):
         print_('Adding tests for "%s"' % module.__name__)

@@ -16,6 +16,11 @@ except ImportError:
 from contextlib import contextmanager
 from functools import wraps
 
+try:
+    from unittest.mock import patch
+except ImportError:
+    from mock import patch
+
 from peewee import *
 from peewee import AliasMap
 from peewee import DeleteQuery
