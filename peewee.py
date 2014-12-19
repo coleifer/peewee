@@ -2684,6 +2684,16 @@ class ExceptionWrapper(object):
             new_type = self.exceptions[exc_type.__name__]
             reraise(new_type, new_type(*exc_value.args), traceback)
 
+class _BaseConnectionLocal(object):
+    def __init__(self, **kwargs):
+        super(_BaseConnectionLocal, self).__init__(**kwargs)
+        self.autocommit = None
+        self.closed = True
+        self.conn = None
+        self.transactions = []
+
+class _ConnectionLocal(_BaseConnectionLocal, threading.local):
+    pass
 
 class Database(object):
     commit_select = False
@@ -2722,9 +2732,9 @@ class Database(object):
         self.init(database, **connect_kwargs)
 
         if threadlocals:
-            self.__local = threading.local()
+            self.__local = _ConnectionLocal()
         else:
-            self.__local = type('DummyLocal', (object,), {})
+            self.__local = _BaseConnectionLocal()
 
         self._conn_lock = threading.Lock()
         self._context_stack = []
@@ -2765,12 +2775,12 @@ class Database(object):
     def get_conn(self):
         if self._context_stack:
             return self._context_stack[-1].connection
-        if not hasattr(self.__local, 'closed') or self.__local.closed:
+        if self.__local.closed:
             self.connect()
         return self.__local.conn
 
     def is_closed(self):
-        return getattr(self.__local, 'closed', True)
+        return self.__local.closed
 
     def get_cursor(self):
         return self.get_conn().cursor()
@@ -2833,7 +2843,7 @@ class Database(object):
         self.__local.autocommit = autocommit
 
     def get_autocommit(self):
-        if not hasattr(self.__local, 'autocommit'):
+        if self.__local.autocommit is None:
             self.set_autocommit(self.autocommit)
         return self.__local.autocommit
 
@@ -2841,15 +2851,13 @@ class Database(object):
         return ExecutionContext(self, with_transaction=with_transaction)
 
     def push_transaction(self, transaction):
-        if not hasattr(self.__local, 'transactions'):
-            self.__local.transactions = []
         self.__local.transactions.append(transaction)
 
     def pop_transaction(self):
         self.__local.transactions.pop()
 
     def transaction_depth(self):
-        return len(getattr(self.__local, 'transactions', ()))
+        return len(self.__local.transactions)
 
     def transaction(self):
         return transaction(self)
