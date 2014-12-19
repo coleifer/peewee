@@ -1841,6 +1841,39 @@ Database and its subclasses
 
             db.drop_tables([User, Tweet, Something], safe=True)
 
+    .. py:method:: atomic()
+
+        Execute statements in either a transaction or a savepoint. The outer-most call to *atomic* will use a transaction,
+        and any subsequent nested calls will use savepoints.
+
+        ``atomic`` can be used as either a context manager or a decorator.
+
+        .. note::
+            For most use-cases, it makes the most sense to always use :py:meth:`~Database.atomic` when you wish to execute queries in a transaction. The benefit of using ``atomic`` is that you do not need to manually keep track of the transaction stack depth, as this will be managed for you.
+
+        Context manager example code:
+
+        .. code-block:: python
+
+            with db.atomic() as txn:
+                perform_some_operations()
+
+                with db.atomic() as nested_txn:
+                    do_other_things()
+                    if something_bad_happened():
+                        # Roll back these changes, but preserve the changes
+                        # made in the outer block.
+                        nested_txn.rollback()
+
+        Decorator example code:
+
+        .. code-block:: python
+
+            @db.atomic()
+            def create_user(username):
+                # This function will execute in a transaction/savepoint.
+                return User.create(username=username)
+
     .. py:method:: transaction()
 
         Execute statements in a transaction using either a context manager or decorator. If an
@@ -1908,38 +1941,13 @@ Database and its subclasses
                     if something_bad_happened():
                         sp2.rollback()
 
-    .. py:method:: atomic()
+    .. py:method:: execution_context([with_transaction=True])
 
-        Execute statements in either a transaction or a savepoint. The outer-most call to *atomic* will use a transaction,
-        and any subsequent nested calls will use savepoints.
+        Create an :py:class:`ExecutionContext` context manager or decorator. Blocks wrapped with an *ExecutionContext* will run using their own connection. By default, the wrapped block will also run in a transaction, although this can be disabled specifyin ``with_transaction=False``.
 
-        ``atomic`` can be used as either a context manager or a decorator.
+        For more explanation of :py:class:`ExecutionContext`, see the :ref:`advanced_connection_management` section.
 
-        .. note::
-            For most use-cases, it makes the most sense to always use :py:meth:`~Database.atomic` when you wish to execute queries in a transaction. The benefit of using ``atomic`` is that you do not need to manually keep track of the transaction stack depth, as this will be managed for you.
-
-        Context manager example code:
-
-        .. code-block:: python
-
-            with db.atomic() as txn:
-                perform_some_operations()
-
-                with db.atomic() as nested_txn:
-                    do_other_things()
-                    if something_bad_happened():
-                        # Roll back these changes, but preserve the changes
-                        # made in the outer block.
-                        nested_txn.rollback()
-
-        Decorator example code:
-
-        .. code-block:: python
-
-            @db.atomic()
-            def create_user(username):
-                # This function will execute in a transaction/savepoint.
-                return User.create(username=username)
+        .. warning:: ExecutionContext is very new and has not been tested extensively.
 
     .. py:classmethod:: register_fields(fields)
 
@@ -2029,8 +2037,18 @@ Database and its subclasses
 
         Control whether the ``UNICODE`` and ``UNICODEARRAY`` psycopg2 extensions are loaded automatically.
 
-Transaction and Savepoint
--------------------------
+Transaction, Savepoint and ExecutionContext
+-------------------------------------------
+
+The easiest way to create transactions and savepoints is to use :py:meth:`Database.atomic`. The :py:meth:`~Database.atomic` method will create a transaction or savepoint depending on the level of nesting.
+
+.. code-block:: python
+
+    with db.atomic() as txn:
+        # The outer-most call will be a transaction.
+        with db.atomic() as sp:
+            # Nested calls will be savepoints instead.
+            execute_some_statements()
 
 .. py:class:: transaction(database)
 
@@ -2063,6 +2081,33 @@ Transaction and Savepoint
     .. py:method:: rollback()
 
         Manually roll-back any pending changes. If the savepoint is manually rolled-back and additional changes are made, they will be executed in the context of the outer block.
+
+.. py:class:: ExecutionContext(database[, with_transaction=True])
+
+    ExecutionContext provides a way to explicitly run statements in a dedicated connection. Typically a single database connection is maintained per-thread, but in some situations you may wish to explicitly force a new, separate connection. To accomplish this, you can create an :py:class:`ExecutionContext`. Statements executed in the wrapped block will be run in a transaction by default, though you can disable this by specifying ``with_transaction=False``.
+
+    .. note:: Rather than instantiating ``ExecutionContext`` directly, use :py:meth:`Database.execution_context`.
+
+    Example code:
+
+    .. code-block:: python
+
+        # This will return the connection associated with the current thread.
+        conn = db.get_conn()
+
+        with db.execution_context():
+            # This will be a new connection object. If you are using the
+            # connection pool, it may be an unused connection from the pool.
+            ctx_conn = db.get_conn()
+
+            # This statement is executed using the new `ctx_conn`.
+            User.create(username='huey')
+
+        # At the end of the wrapped block, the connection will be closed and the
+        # transaction, if one exists, will be committed.
+
+        # This statement is executed using the regular `conn`.
+        User.create(username='mickey')
 
 Metadata Types
 --------------

@@ -60,40 +60,12 @@ Execution context examples (using above `db` instance):
 """
 import heapq
 import logging
-import threading
 import time
 
 from peewee import MySQLDatabase
 from peewee import PostgresqlDatabase
-from peewee import _callable_context_manager
 
 logger = logging.getLogger('peewee.pool')
-
-
-class ExecutionContext(_callable_context_manager):
-    def __init__(self, database, with_transaction=True):
-        self.database = database
-        self.with_transaction = with_transaction
-
-    def __enter__(self):
-        with self.database._conn_lock:
-            self.database._context_stack.append(self)
-            self.connection = self.database._connect(
-                self.database.database,
-                **self.database.connect_kwargs)
-            if self.with_transaction:
-                self.txn = self.database.transaction()
-                self.txn.__enter__()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        with self.database._conn_lock:
-            if self.with_transaction:
-                if not exc_type:
-                    self.txn.commit(False)
-                self.txn.__exit__(exc_type, exc_val, exc_tb)
-            self.database._context_stack.pop()
-            self.database._close(self.connection)
 
 
 class PooledDatabase(object):
@@ -105,12 +77,8 @@ class PooledDatabase(object):
         self._in_use = {}
         self._closed = set()
         self.conn_key = id
-        self._context_stack = []
 
         super(PooledDatabase, self).__init__(database, **kwargs)
-
-    def execution_context(self, with_transaction=True):
-        return ExecutionContext(self, with_transaction=with_transaction)
 
     def _connect(self, *args, **kwargs):
         while True:
@@ -144,11 +112,6 @@ class PooledDatabase(object):
 
         self._in_use[key] = ts
         return conn
-
-    def get_conn(self):
-        if self._context_stack:
-            return self._context_stack[-1].connection
-        return super(PooledDatabase, self).get_conn()
 
     def _is_stale(self, timestamp):
         return (time.time() - timestamp) > self.stale_timeout

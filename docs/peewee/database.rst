@@ -473,6 +473,34 @@ The generated code is written to stdout, and can easily be redirected to a file:
     You may need to go through the generated code to add indexes, fix unrecognized
     column types, and resolve any circular references that were found.
 
+.. _advanced_connection_management:
+
+Advanced Connection Management
+------------------------------
+
+In some situations you may want to manage your connections more explicitly. Since peewee stores the active connection in a threadlocal, this typically would mean that there could only ever be one connection open per thread. For most applications this is desirable, but if you would like to manually manage multiple connections you can create an :py:class:`ExecutionContext`.
+
+Execution contexts allow finer-grained control over managing multiple connections to the database. When an execution context is initialized (either as a context manager or as a decorated function), a separate connection will be used for the duration of the wrapped block. You can also choose whether to wrap the block in a transaction.
+
+Execution context examples:
+
+.. code-block:: python
+
+    with db.execution_context() as ctx:
+        # A new connection will be opened or pulled from the pool of available
+        # connections. Additionally, a transaction will be started.
+        user = User.create(username='charlie')
+
+    # When the block ends, the transaction will be committed and the connection
+    # will be returned to the pool.
+
+    @db.execution_context(with_transaction=False)
+    def do_something(foo, bar):
+        # When this function is called, a separate connection is made and will
+        # be closed when the function returns.
+
+If you are using the peewee connection pool, then the new connections used by the :py:class:`ExecutionContext` will be pulled from the pool of available connections and recycled appropriately.
+
 Logging queries
 ---------------
 
