@@ -163,8 +163,8 @@ Example code:
     with db.transaction():
         User.create(username='huey')
 
-    # If using a function decorated by commit_on_success, no changes are necessary.
-    @db.commit_on_success
+    # If using a function decorated by transaction, no changes are necessary.
+    @db.transaction()
     def create_user(username):
         User.create(username=username)
 
@@ -487,12 +487,13 @@ Execution context examples:
 .. code-block:: python
 
     with db.execution_context() as ctx:
-        # A new connection will be opened or pulled from the pool of available
-        # connections. Additionally, a transaction will be started.
+        # A new connection will be opened or, if using a connection pool,
+        # pulled from the pool of available connections. Additionally, a
+        # transaction will be started.
         user = User.create(username='charlie')
 
     # When the block ends, the transaction will be committed and the connection
-    # will be returned to the pool.
+    # will be closed (or returned to the pool).
 
     @db.execution_context(with_transaction=False)
     def do_something(foo, bar):
