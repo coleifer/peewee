@@ -2015,7 +2015,7 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
                 continue
 
             for join in self.join_meta[current]:
-                foreign_key = current._meta.rel_for_model(join.dest)
+                foreign_key = current._meta.rel_for_model(join.dest, join.on)
                 if join.dest not in identity_map:
                     continue
 
@@ -3525,9 +3525,15 @@ class ModelOptions(object):
         return -1
 
     def rel_for_model(self, model, field_obj=None):
+        is_field = isinstance(field_obj, Field)
+        is_node = not is_field and isinstance(field_obj, Node)
         for field in self.get_fields():
             if isinstance(field, ForeignKeyField) and field.rel_model == model:
-                if field_obj is None or field_obj.name == field.name:
+                is_match = any((
+                    field_obj is None,
+                    is_field and field_obj.name == field.name,
+                    is_node and field_obj._alias == field.name))
+                if is_match:
                     return field
 
     def reverse_rel_for_model(self, model, field_obj=None):

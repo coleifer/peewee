@@ -819,6 +819,27 @@ class TestPrefetch(ModelTestCase):
             ('u4', 'b6', ['b6-c1']),
         ])
 
+    def test_aggregate_on_expression_join(self):
+        with self.assertQueryCount(1):
+            join_expr = (User.id == Blog.user).alias('user')
+            query = (User
+                     .select(User, Blog)
+                     .join(Blog, JOIN_LEFT_OUTER, on=join_expr)
+                     .order_by(User.username, Blog.title)
+                     .aggregate_rows())
+            results = []
+            for user in query:
+                results.append((
+                    user.username,
+                    [blog.title for blog in user.blog_set]))
+
+        self.assertEqual(results, [
+            ('u1', ['b1', 'b2']),
+            ('u2', []),
+            ('u3', ['b3', 'b4']),
+            ('u4', ['b5', 'b6']),
+        ])
+
     def test_aggregate_unselected_join(self):
         cat_1 = Category.create(name='category 1')
         cat_2 = Category.create(name='category 2')
