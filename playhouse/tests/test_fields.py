@@ -11,7 +11,7 @@ from playhouse.tests.base import test_db
 from playhouse.tests.models import *
 
 
-class FieldTypeTestCase(ModelTestCase):
+class TestFieldTypes(ModelTestCase):
     requires = [NullModel, BlobModel]
 
     _dt = datetime.datetime
@@ -26,7 +26,7 @@ class FieldTypeTestCase(ModelTestCase):
     )
 
     def setUp(self):
-        super(FieldTypeTestCase, self).setUp()
+        super(TestFieldTypes, self).setUp()
         self.field_data = {}
 
         headers = self._data[0]
@@ -347,7 +347,7 @@ class FieldTypeTestCase(ModelTestCase):
             {'nugs': 'foo-nuggets'},
             {'nugs': 'bar-nuggets'}])
 
-class DateTimeExtractTestCase(ModelTestCase):
+class TestDateTimeExtract(ModelTestCase):
     requires = [NullModel]
 
     test_datetimes = [
@@ -361,7 +361,7 @@ class DateTimeExtractTestCase(ModelTestCase):
     time_parts = datetime_parts[3:]
 
     def setUp(self):
-        super(DateTimeExtractTestCase, self).setUp()
+        super(TestDateTimeExtract, self).setUp()
 
         self.nms = []
         for dt in self.test_datetimes:
@@ -443,7 +443,7 @@ class DateTimeExtractTestCase(ModelTestCase):
         self.assertPKs(sq.where(f.second == 8), [])
 
 
-class UniqueTestCase(ModelTestCase):
+class TestUniqueColumnConstraint(ModelTestCase):
     requires = [UniqueModel, MultiIndexModel]
 
     def test_unique(self):
@@ -462,7 +462,7 @@ class UniqueTestCase(ModelTestCase):
 
         mi3 = MultiIndexModel.create(f1='a', f2='b', f3='b')
 
-class NonIntPKTestCase(ModelTestCase):
+class TestNonIntegerPrimaryKey(ModelTestCase):
     requires = [NonIntModel, NonIntRelModel]
 
     def test_non_int_pk(self):
@@ -504,7 +504,7 @@ class NonIntPKTestCase(ModelTestCase):
         self.assertEqual([r.id for r in sq], [rni21.id])
 
 
-class PrimaryForeignKeyTestCase(ModelTestCase):
+class TestPrimaryKeyIsForeignKey(ModelTestCase):
     requires = [Job, JobExecutionRecord]
 
     def test_primary_foreign_key(self):
@@ -523,7 +523,7 @@ class PrimaryForeignKeyTestCase(ModelTestCase):
         test_db.rollback()
 
 
-class DBColumnTestCase(ModelTestCase):
+class TestFieldDatabaseColumn(ModelTestCase):
     requires = [DBUser, DBBlog]
 
     def test_select(self):
@@ -582,7 +582,7 @@ class _SqliteDateTestHelper(PeeweeTestCase):
 
         return SqDp
 
-class SqliteDatePartTestCase(_SqliteDateTestHelper):
+class TestSQLiteDatePart(_SqliteDateTestHelper):
     def test_sqlite_date_part(self):
         date_fn = lambda field, part: fn.date_part(part, field)
         SqDp = self.create_date_model(date_fn)
@@ -619,7 +619,7 @@ class SqliteDatePartTestCase(_SqliteDateTestHelper):
         self.assertEqual(list(query), [null_sqdp])
 
 
-class SqliteDateTruncTestCase(_SqliteDateTestHelper):
+class TestSQLiteDateTrunc(_SqliteDateTestHelper):
     def test_sqlite_date_trunc(self):
         date_fn = lambda field, part: fn.date_trunc(part, field)
         SqDp = self.create_date_model(date_fn)
@@ -646,7 +646,7 @@ class SqliteDateTruncTestCase(_SqliteDateTestHelper):
         assertQuery(SqDp.null_datetime_field, 'year', [None, None, '2014'])
 
 
-class CheckConstraintTestCase(ModelTestCase):
+class TestCheckConstraints(ModelTestCase):
     requires = [CheckModel]
 
     def test_check_constraint(self):

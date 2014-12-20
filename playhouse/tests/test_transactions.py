@@ -10,11 +10,11 @@ from playhouse.tests.base import test_db
 from playhouse.tests.models import *
 
 
-class TransactionTestCase(ModelTestCase):
+class TestTransaction(ModelTestCase):
     requires = [User, Blog]
 
     def tearDown(self):
-        super(TransactionTestCase, self).tearDown()
+        super(TestTransaction, self).tearDown()
         test_db.set_autocommit(True)
 
     def test_autocommit(self):
@@ -237,17 +237,17 @@ class TestExecutionContext(ModelTestCase):
             ['u0', 'u1', 'u2', 'u3', 'u4'])
 
 
-class AutoRollbackTestCase(ModelTestCase):
+class TestAutoRollback(ModelTestCase):
     requires = [User, Blog]
 
     def setUp(self):
         test_db.autorollback = True
-        super(AutoRollbackTestCase, self).setUp()
+        super(TestAutoRollback, self).setUp()
 
     def tearDown(self):
         test_db.autorollback = False
         test_db.set_autocommit(True)
-        super(AutoRollbackTestCase, self).tearDown()
+        super(TestAutoRollback, self).tearDown()
 
     def test_auto_rollback(self):
         # Exceptions are still raised.

@@ -16,15 +16,15 @@ from playhouse.tests.base import ulit
 from playhouse.tests.models import *
 
 
-class ModelQueryTestCase(ModelTestCase):
+class TestQueryingModels(ModelTestCase):
     requires = [User, Blog]
 
     def setUp(self):
-        super(ModelQueryTestCase, self).setUp()
+        super(TestQueryingModels, self).setUp()
         self._orig_db_insert_many = test_db.insert_many
 
     def tearDown(self):
-        super(ModelQueryTestCase, self).tearDown()
+        super(TestQueryingModels, self).tearDown()
         test_db.insert_many = self._orig_db_insert_many
 
     def create_users_blogs(self, n=10, nb=5):
@@ -270,7 +270,7 @@ class ModelQueryTestCase(ModelTestCase):
         self.assertEqual(results, [2, 2, 2])
 
 
-class ModelAPITestCase(ModelTestCase):
+class TestModelAPIs(ModelTestCase):
     requires = [User, Blog, Category, UserCategory]
 
     def test_related_name(self):
@@ -652,7 +652,7 @@ class ModelAPITestCase(ModelTestCase):
         self.assertEqual(user.username, ustr)
 
 
-class ModelAggregateTestCase(ModelTestCase):
+class TestAggregatesWithModels(ModelTestCase):
     requires = [OrderedModel, User, Blog]
 
     def create_ordered_models(self):
@@ -704,11 +704,11 @@ class ModelAggregateTestCase(ModelTestCase):
         self.assertEqual(max_created, models[-1].created)
 
 
-class FromMultiTableTestCase(ModelTestCase):
+class TestMultiTableFromClause(ModelTestCase):
     requires = [Blog, Comment, User]
 
     def setUp(self):
-        super(FromMultiTableTestCase, self).setUp()
+        super(TestMultiTableFromClause, self).setUp()
 
         for u in range(2):
             user = User.create(username='u%s' % u)
@@ -796,12 +796,12 @@ class FromMultiTableTestCase(ModelTestCase):
             ('b1-2', u1.id),
         ])
 
-class RecursiveDeleteTestCase(ModelTestCase):
+class TestDeleteRecursive(ModelTestCase):
     requires = [
         Parent, Child, Orphan, ChildPet, OrphanPet, Package, PackageItem]
 
     def setUp(self):
-        super(RecursiveDeleteTestCase, self).setUp()
+        super(TestDeleteRecursive, self).setUp()
         p1 = Parent.create(data='p1')
         p2 = Parent.create(data='p2')
         c11 = Child.create(parent=p1)
@@ -877,11 +877,11 @@ class RecursiveDeleteTestCase(ModelTestCase):
         ])
 
 
-class ManyToManyTestCase(ModelTestCase):
+class TestManyToMany(ModelTestCase):
     requires = [User, Category, UserCategory]
 
     def setUp(self):
-        super(ManyToManyTestCase, self).setUp()
+        super(TestManyToMany, self).setUp()
         users = ['u1', 'u2', 'u3']
         categories = ['c1', 'c2', 'c3', 'c12', 'c23']
         user_to_cat = {
@@ -957,7 +957,7 @@ class ManyToManyTestCase(ModelTestCase):
             ['c1', 'c12', 'c2', 'c23', 'c3', 'u1', 'u1', 'u2', 'u2', 'u2'])
 
 
-class ModelOptionInheritanceTestCase(PeeweeTestCase):
+class TestModelOptionInheritance(PeeweeTestCase):
     def test_db_table(self):
         self.assertEqual(User._meta.db_table, 'users')
 
@@ -1075,7 +1075,7 @@ class ModelOptionInheritanceTestCase(PeeweeTestCase):
         self.assertEqual(bar_order_by.name, 'val')
 
 
-class ModelInheritanceTestCase(ModelTestCase):
+class TestModelInheritance(ModelTestCase):
     requires = [Blog, BlogTwo, User]
 
     def test_model_inheritance_attrs(self):

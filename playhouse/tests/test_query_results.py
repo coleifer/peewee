@@ -7,7 +7,7 @@ from playhouse.tests.base import ModelTestCase
 from playhouse.tests.models import *
 
 
-class QueryResultWrapperTestCase(ModelTestCase):
+class TestQueryResultWrapper(ModelTestCase):
     requires = [User, Blog, Comment]
 
     def test_iteration(self):
@@ -326,11 +326,11 @@ class QueryResultWrapperTestCase(ModelTestCase):
             self.assertEqual(b.user.foo, b.user.username)
 
 
-class QueryResultCoerceTestCase(ModelTestCase):
+class TestQueryResultTypeConversion(ModelTestCase):
     requires = [User]
 
     def setUp(self):
-        super(QueryResultCoerceTestCase, self).setUp()
+        super(TestQueryResultTypeConversion, self).setUp()
         for i in range(3):
             User.create(username='u%d' % i)
 
@@ -394,7 +394,7 @@ class QueryResultCoerceTestCase(ModelTestCase):
             fn.SubStr(fn.Lower(UpperUser.username), 1, 3).alias('foo'))
         self.assertNames(query, ['u0', 'u1', 'u2'], 'foo')
 
-class ModelQueryResultWrapperTestCase(ModelTestCase):
+class TestModelQueryResultWrapper(ModelTestCase):
     requires = [TestModelA, TestModelB, TestModelC, User, Blog]
 
     data = (
@@ -412,7 +412,7 @@ class ModelQueryResultWrapperTestCase(ModelTestCase):
     )
 
     def setUp(self):
-        super(ModelQueryResultWrapperTestCase, self).setUp()
+        super(TestModelQueryResultWrapper, self).setUp()
         for model_class, model_data in self.data:
             for pk, data in model_data:
                 model_class.create(field=pk, data=data)
@@ -549,7 +549,7 @@ class TestModelQueryResultForeignKeys(ModelTestCase):
             self.assertEqual(rchild.id, child.id)
             self.assertEqual(rchild.parent.id, parent.id)
 
-class SelectRelatedNonPKFKTestCase(ModelTestCase):
+class TestSelectRelatedForeignKeyToNonPrimaryKey(ModelTestCase):
     requires = [Package, PackageItem]
 
     def test_select_related(self):
@@ -582,7 +582,7 @@ class SelectRelatedNonPKFKTestCase(ModelTestCase):
             self.assertEqual([i.package.id for i in items], [p1.id, p1.id])
 
 
-class PrefetchTestCase(ModelTestCase):
+class TestPrefetch(ModelTestCase):
     requires = [
         User,
         Blog,
@@ -638,7 +638,7 @@ class PrefetchTestCase(ModelTestCase):
     ]
 
     def setUp(self):
-        super(PrefetchTestCase, self).setUp()
+        super(TestPrefetch, self).setUp()
         for parent, (children, orphans) in self.parent_data:
             p = Parent.create(data=parent)
             for child_pets in children:

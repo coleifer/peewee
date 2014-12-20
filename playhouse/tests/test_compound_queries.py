@@ -10,7 +10,7 @@ from playhouse.tests.base import test_db
 from playhouse.tests.models import *
 
 
-class CompoundSelectTestCase(ModelTestCase):
+class TestCompoundSelectQueries(ModelTestCase):
     requires = [User, UniqueModel, OrderedModel]
     # User -> username, UniqueModel -> name, OrderedModel -> title
     test_values = {
@@ -20,7 +20,7 @@ class CompoundSelectTestCase(ModelTestCase):
     }
 
     def setUp(self):
-        super(CompoundSelectTestCase, self).setUp()
+        super(TestCompoundSelectQueries, self).setUp()
         for field, values in self.test_values.items():
             for value in values:
                 field.model_class.create(**{field.name: value})

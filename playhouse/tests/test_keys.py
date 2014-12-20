@@ -9,11 +9,11 @@ from playhouse.tests.base import test_db
 from playhouse.tests.models import *
 
 
-class NonPKFKBasicTestCase(ModelTestCase):
+class TestForeignKeyToNonPrimaryKey(ModelTestCase):
     requires = [Package, PackageItem]
 
     def setUp(self):
-        super(NonPKFKBasicTestCase, self).setUp()
+        super(TestForeignKeyToNonPrimaryKey, self).setUp()
 
         for barcode in ['101', '102']:
             Package.create(barcode=barcode)
@@ -116,7 +116,7 @@ class TestMultipleForeignKey(ModelTestCase):
             ])
 
 
-class MultipleFKTestCase(ModelTestCase):
+class TestMultipleForeignKeysJoining(ModelTestCase):
     requires = [User, Relationship]
 
     def test_multiple_fks(self):
@@ -166,11 +166,11 @@ class MultipleFKTestCase(ModelTestCase):
         self.assertEqual(list(followers), [b])
 
 
-class CompositeKeyTestCase(ModelTestCase):
+class TestCompositePrimaryKey(ModelTestCase):
     requires = [Tag, Post, TagPostThrough, CompositeKeyModel, User, UserThing]
 
     def setUp(self):
-        super(CompositeKeyTestCase, self).setUp()
+        super(TestCompositePrimaryKey, self).setUp()
         tags = [Tag.create(tag='t%d' % i) for i in range(1, 4)]
         posts = [Post.create(title='p%d' % i) for i in range(1, 4)]
         p12 = Post.create(title='p12')
@@ -292,7 +292,7 @@ class CompositeKeyTestCase(ModelTestCase):
             ['t1', 't2', 't3'])
 
 
-class NonPKFKCreateTableTestCase(PeeweeTestCase):
+class TestForeignKeyNonPrimaryKeyCreateTable(PeeweeTestCase):
     def test_create_table(self):
         class A(TestModel):
             cf = CharField(max_length=100, unique=True)
@@ -325,18 +325,18 @@ class NonPKFKCreateTableTestCase(PeeweeTestCase):
             'FOREIGN KEY ("a_id") REFERENCES "a" ("df"))')
 
 
-class DeferredForeignKeyTestCase(ModelTestCase):
+class TestDeferredForeignKey(ModelTestCase):
     #requires = [Language, Snippet]
 
     def setUp(self):
-        super(DeferredForeignKeyTestCase, self).setUp()
+        super(TestDeferredForeignKey, self).setUp()
         Snippet.drop_table(True)
         Language.drop_table(True)
         Language.create_table()
         Snippet.create_table()
 
     def tearDown(self):
-        super(DeferredForeignKeyTestCase, self).tearDown()
+        super(TestDeferredForeignKey, self).tearDown()
         Snippet.drop_table(True)
         Language.drop_table(True)
 
@@ -384,7 +384,7 @@ class DeferredForeignKeyTestCase(ModelTestCase):
 
 
 @skip_if(lambda: not test_db.foreign_keys)
-class ForeignKeyConstraintTestCase(ModelTestCase):
+class TestForeignKeyConstraints(ModelTestCase):
     requires = [User, Blog]
 
     def test_constraint_exists(self):

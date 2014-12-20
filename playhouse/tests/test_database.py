@@ -16,7 +16,7 @@ from playhouse.tests.base import ulit
 from playhouse.tests.models import *
 
 
-class ConcurrencyTestCase(ModelTestCase):
+class TestMultiThreadedQueries(ModelTestCase):
     requires = [User]
     threads = 4
 
@@ -33,11 +33,11 @@ class ConcurrencyTestCase(ModelTestCase):
             kwargs['timeout'] = 30
 
         User._meta.database = self.new_connection()
-        super(ConcurrencyTestCase, self).setUp()
+        super(TestMultiThreadedQueries, self).setUp()
 
     def tearDown(self):
         User._meta.database = self._orig_db
-        super(ConcurrencyTestCase, self).tearDown()
+        super(TestMultiThreadedQueries, self).tearDown()
 
     def test_multiple_writers(self):
         def create_user_thread(low, hi):
@@ -73,7 +73,7 @@ class ConcurrencyTestCase(ModelTestCase):
         self.assertEqual(data_queue.qsize(), self.threads * 20)
 
 
-class DatabaseTestCase(PeeweeTestCase):
+class TestDeferredDatabase(PeeweeTestCase):
     def test_deferred_database(self):
         deferred_db = SqliteDatabase(None)
         self.assertTrue(deferred_db.deferred)
@@ -105,16 +105,16 @@ class DatabaseTestCase(PeeweeTestCase):
 
 
 
-class SQLAllTestCase(PeeweeTestCase):
+class TestSQLAll(PeeweeTestCase):
     def setUp(self):
-        super(SQLAllTestCase, self).setUp()
+        super(TestSQLAll, self).setUp()
         fake_db = SqliteDatabase(':memory:')
         UniqueModel._meta.database = fake_db
         SeqModelA._meta.database = fake_db
         MultiIndexModel._meta.database = fake_db
 
     def tearDown(self):
-        super(SQLAllTestCase, self).tearDown()
+        super(TestSQLAll, self).tearDown()
         UniqueModel._meta.database = test_db
         SeqModelA._meta.database = test_db
         MultiIndexModel._meta.database = test_db
@@ -145,7 +145,7 @@ class SQLAllTestCase(PeeweeTestCase):
         ])
 
 
-class LongIndexTestCase(PeeweeTestCase):
+class TestLongIndexName(PeeweeTestCase):
     def test_long_index(self):
         class LongIndexModel(TestModel):
             a123456789012345678901234567890 = CharField()
@@ -165,7 +165,7 @@ class LongIndexTestCase(PeeweeTestCase):
         ))
 
 
-class ConnectionStateTestCase(PeeweeTestCase):
+class TestConnectionState(PeeweeTestCase):
     def test_connection_state(self):
         conn = test_db.get_conn()
         self.assertFalse(test_db.is_closed())
@@ -176,7 +176,7 @@ class ConnectionStateTestCase(PeeweeTestCase):
 
 
 @skip_if(lambda: not test_db.drop_cascade)
-class DropCascadeTestCase(ModelTestCase):
+class TestDropTableCascade(ModelTestCase):
     requires = [User, Blog]
 
     def test_drop_cascade(self):
@@ -192,7 +192,7 @@ class DropCascadeTestCase(ModelTestCase):
 
 
 @skip_if(lambda: not test_db.sequences)
-class SequenceTestCase(ModelTestCase):
+class TestDatabaseSequences(ModelTestCase):
     requires = [SeqModelA, SeqModelB]
 
     def test_sequence_shared(self):

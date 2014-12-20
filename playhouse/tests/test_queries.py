@@ -1241,7 +1241,7 @@ class TestProxy(PeeweeTestCase):
 
 
 @skip_if(lambda: not test_db.window_functions)
-class WindowFunctionTestCase(ModelTestCase):
+class TestWindowFunctions(ModelTestCase):
     """Use int_field & float_field to test window queries."""
     requires = [NullModel]
     data = (
@@ -1254,7 +1254,7 @@ class WindowFunctionTestCase(ModelTestCase):
     )
 
     def setUp(self):
-        super(WindowFunctionTestCase, self).setUp()
+        super(TestWindowFunctions, self).setUp()
         for int_v, float_v in self.data:
             NullModel.create(int_field=int_v, float_field=float_v)
 
@@ -1413,7 +1413,7 @@ class WindowFunctionTestCase(ModelTestCase):
 
 
 @skip_if(lambda: not test_db.distinct_on)
-class DistinctOnTestCase(ModelTestCase):
+class TestDistinctOn(ModelTestCase):
     requires = [User, Blog]
 
     def test_distinct_on(self):
@@ -1452,7 +1452,7 @@ class DistinctOnTestCase(ModelTestCase):
 
 
 @skip_if(lambda: not test_db.for_update)
-class ForUpdateTestCase(ModelTestCase):
+class TestForUpdate(ModelTestCase):
     requires = [User]
 
     def tearDown(self):
@@ -1488,7 +1488,7 @@ class ForUpdateTestCase(ModelTestCase):
 
 
 @skip_if(lambda: not test_db.for_update_nowait)
-class ForUpdateNoWaitTestCase(ModelTestCase):
+class TestForUpdateNoWait(ModelTestCase):
     requires = [User]
 
     def tearDown(self):
