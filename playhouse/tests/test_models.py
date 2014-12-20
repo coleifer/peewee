@@ -1,3 +1,6 @@
+# encoding=utf-8
+
+from playhouse.tests.base import ulit
 
 
 class ModelQueryTestCase(ModelTestCase):

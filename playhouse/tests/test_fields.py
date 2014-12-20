@@ -1,3 +1,5 @@
+from playhouse.tests.base import binary_construct
+from playhouse.tests.base import binary_types
 
 
 class FieldTypeTestCase(ModelTestCase):

@@ -24,6 +24,17 @@ else:
     except ImportError:
         pass
 
+# Python 2/3 compatibility.
+if sys.version_info[0] < 3:
+    import codecs
+    ulit = lambda s: codecs.unicode_escape_decode(s)[0]
+    binary_construct = buffer
+    binary_types = buffer
+else:
+    ulit = lambda s: s
+    binary_construct = lambda s: bytes(s.encode('raw_unicode_escape'))
+    binary_types = (bytes, memoryview)
+
 
 TEST_BACKEND = os.environ.get('PEEWEE_TEST_BACKEND') or 'sqlite'
 TEST_DATABASE = os.environ.get('PEEWEE_TEST_DATABASE') or 'peewee_test'
