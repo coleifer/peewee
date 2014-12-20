@@ -1224,3 +1224,298 @@ class TestProxy(PeeweeTestCase):
             'cb1': 'test',
             'cb2': 'called',
         })
+
+if test_db.window_functions:
+    class WindowFunctionTestCase(ModelTestCase):
+        """Use int_field & float_field to test window queries."""
+        requires = [NullModel]
+        data = (
+            # int / float -- we'll use int for grouping.
+            (1, 10),
+            (1, 20),
+            (2, 1),
+            (2, 3),
+            (3, 100),
+        )
+
+        def setUp(self):
+            super(WindowFunctionTestCase, self).setUp()
+            for int_v, float_v in self.data:
+                NullModel.create(int_field=int_v, float_field=float_v)
+
+        def test_partition_unordered(self):
+            query = (NullModel
+                     .select(
+                         NullModel.int_field,
+                         NullModel.float_field,
+                         fn.Avg(NullModel.float_field).over(
+                             partition_by=[NullModel.int_field]))
+                     .order_by(NullModel.id))
+
+            self.assertEqual(list(query.tuples()), [
+                (1, 10.0, 15.0),
+                (1, 20.0, 15.0),
+                (2, 1.0, 2.0),
+                (2, 3.0, 2.0),
+                (3, 100.0, 100.0),
+            ])
+
+        def test_named_window(self):
+            window = Window(partition_by=[NullModel.int_field])
+            query = (NullModel
+                     .select(
+                         NullModel.int_field,
+                         NullModel.float_field,
+                         fn.Avg(NullModel.float_field).over(window))
+                     .window(window)
+                     .order_by(NullModel.id))
+
+            self.assertEqual(list(query.tuples()), [
+                (1, 10.0, 15.0),
+                (1, 20.0, 15.0),
+                (2, 1.0, 2.0),
+                (2, 3.0, 2.0),
+                (3, 100.0, 100.0),
+            ])
+
+            window = Window(
+                partition_by=[NullModel.int_field],
+                order_by=[NullModel.float_field.desc()])
+            query = (NullModel
+                     .select(
+                         NullModel.int_field,
+                         NullModel.float_field,
+                         fn.rank().over(window=window))
+                     .window(window)
+                     .order_by(NullModel.id))
+
+            self.assertEqual(list(query.tuples()), [
+                (1, 10.0, 2),
+                (1, 20.0, 1),
+                (2, 1.0, 2),
+                (2, 3.0, 1),
+                (3, 100.0, 1),
+            ])
+
+        def test_multi_window(self):
+            w1 = Window(partition_by=[NullModel.int_field]).alias('w1')
+            w2 = Window(order_by=[NullModel.int_field]).alias('w2')
+            query = (NullModel
+                     .select(
+                         NullModel.int_field,
+                         NullModel.float_field,
+                         fn.Avg(NullModel.float_field).over(window=w1),
+                         fn.Rank().over(window=w2))
+                     .window(w1, w2)
+                     .order_by(NullModel.id))
+
+            self.assertEqual(list(query.tuples()), [
+                (1, 10.0, 15.0, 1),
+                (1, 20.0, 15.0, 1),
+                (2, 1.0, 2.0, 3),
+                (2, 3.0, 2.0, 3),
+                (3, 100.0, 100.0, 5),
+            ])
+
+        def test_ordered_unpartitioned(self):
+            query = (NullModel
+                     .select(
+                         NullModel.int_field,
+                         NullModel.float_field,
+                         fn.rank().over(
+                             order_by=[NullModel.float_field]))
+                     .order_by(NullModel.id))
+
+            self.assertEqual(list(query.tuples()), [
+                (1, 10.0, 3),
+                (1, 20.0, 4),
+                (2, 1.0, 1),
+                (2, 3.0, 2),
+                (3, 100.0, 5),
+            ])
+
+        def test_ordered_partitioned(self):
+            query = (NullModel
+                     .select(
+                         NullModel.int_field,
+                         NullModel.float_field,
+                         fn.rank().over(
+                             partition_by=[NullModel.int_field],
+                             order_by=[NullModel.float_field.desc()]))
+                     .order_by(NullModel.id))
+
+            self.assertEqual(list(query.tuples()), [
+                (1, 10.0, 2),
+                (1, 20.0, 1),
+                (2, 1.0, 2),
+                (2, 3.0, 1),
+                (3, 100.0, 1),
+            ])
+
+        def test_empty_over(self):
+            query = (NullModel
+                     .select(
+                         NullModel.int_field,
+                         NullModel.float_field,
+                         fn.lag(NullModel.int_field, 1).over())
+                     .order_by(NullModel.id))
+
+            self.assertEqual(list(query.tuples()), [
+                (1, 10.0, None),
+                (1, 20.0, 1),
+                (2, 1.0, 1),
+                (2, 3.0, 2),
+                (3, 100.0, 2),
+            ])
+
+        def test_docs_example(self):
+            NullModel.delete().execute()  # Clear out the table.
+
+            curr_dt = datetime.datetime(2014, 1, 1)
+            one_day = datetime.timedelta(days=1)
+            for i in range(3):
+                for j in range(i + 1):
+                    NullModel.create(int_field=i, datetime_field=curr_dt)
+                curr_dt += one_day
+
+            query = (NullModel
+                     .select(
+                         NullModel.int_field,
+                         NullModel.datetime_field,
+                         fn.Count(NullModel.id).over(
+                             partition_by=[fn.date_trunc(
+                                 'day', NullModel.datetime_field)]))
+                     .order_by(NullModel.id))
+
+            self.assertEqual(list(query.tuples()), [
+                (0, datetime.datetime(2014, 1, 1), 1),
+                (1, datetime.datetime(2014, 1, 2), 2),
+                (1, datetime.datetime(2014, 1, 2), 2),
+                (2, datetime.datetime(2014, 1, 3), 3),
+                (2, datetime.datetime(2014, 1, 3), 3),
+                (2, datetime.datetime(2014, 1, 3), 3),
+            ])
+
+
+elif TEST_VERBOSITY > 0:
+    print_('Skipping "window function" tests')
+
+if test_db.distinct_on:
+    class DistinctOnTestCase(ModelTestCase):
+        requires = [User, Blog]
+
+        def test_distinct_on(self):
+            for i in range(1, 4):
+                u = User.create(username='u%s' % i)
+                for j in range(i):
+                    Blog.create(user=u, title='b-%s-%s' % (i, j))
+
+            query = (Blog
+                     .select(User.username, Blog.title)
+                     .join(User)
+                     .order_by(User.username, Blog.title)
+                     .distinct([User.username])
+                     .tuples())
+            self.assertEqual(list(query), [
+                ('u1', 'b-1-0'),
+                ('u2', 'b-2-0'),
+                ('u3', 'b-3-0')])
+
+            query = (Blog
+                     .select(
+                         fn.Distinct(User.username),
+                         User.username,
+                         Blog.title)
+                     .join(User)
+                     .order_by(Blog.title)
+                     .tuples())
+            self.assertEqual(list(query), [
+                ('u1', 'u1', 'b-1-0'),
+                ('u2', 'u2', 'b-2-0'),
+                ('u2', 'u2', 'b-2-1'),
+                ('u3', 'u3', 'b-3-0'),
+                ('u3', 'u3', 'b-3-1'),
+                ('u3', 'u3', 'b-3-2'),
+            ])
+
+elif TEST_VERBOSITY > 0:
+    print_('Skipping "distinct on" tests')
+
+
+if test_db.for_update:
+    class ForUpdateTestCase(ModelTestCase):
+        requires = [User]
+
+        def tearDown(self):
+            test_db.set_autocommit(True)
+
+        def test_for_update(self):
+            u1 = self.create_user('u1')
+            u2 = self.create_user('u2')
+            u3 = self.create_user('u3')
+
+            test_db.set_autocommit(False)
+
+            # select a user for update
+            users = User.select().where(User.username == 'u1').for_update()
+            updated = User.update(username='u1_edited').where(User.username == 'u1').execute()
+            self.assertEqual(updated, 1)
+
+            # open up a new connection to the database
+            new_db = self.new_connection()
+
+            # select the username, it will not register as being updated
+            res = new_db.execute_sql('select username from users where id = %s;' % u1.id)
+            username = res.fetchone()[0]
+            self.assertEqual(username, 'u1')
+
+            # committing will cause the lock to be released
+            test_db.commit()
+
+            # now we get the update
+            res = new_db.execute_sql('select username from users where id = %s;' % u1.id)
+            username = res.fetchone()[0]
+            self.assertEqual(username, 'u1_edited')
+
+
+elif TEST_VERBOSITY > 0:
+    print_('Skipping "for update" tests')
+
+if test_db.for_update_nowait:
+    class ForUpdateNoWaitTestCase(ModelTestCase):
+        requires = [User]
+
+        def tearDown(self):
+            test_db.set_autocommit(True)
+
+        def test_for_update_exc(self):
+            u1 = self.create_user('u1')
+            test_db.set_autocommit(False)
+
+            user = (User
+                    .select()
+                    .where(User.username == 'u1')
+                    .for_update(nowait=True)
+                    .execute())
+
+            # Open up a second conn.
+            new_db = self.new_connection()
+
+            class User2(User):
+                class Meta:
+                    database = new_db
+                    db_table = User._meta.db_table
+
+            # Select the username -- it will raise an error.
+            def try_lock():
+                user2 = (User2
+                         .select()
+                         .where(User2.username == 'u1')
+                         .for_update(nowait=True)
+                         .execute())
+            self.assertRaises(OperationalError, try_lock)
+            test_db.rollback()
+
+
+elif TEST_VERBOSITY > 0:
+    print_('Skipping "for update + nowait" tests')
