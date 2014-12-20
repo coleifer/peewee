@@ -1,3 +1,15 @@
+import sys
+import threading
+import unittest
+
+from peewee import transaction
+from playhouse.tests.base import database_class
+from playhouse.tests.base import ModelTestCase
+from playhouse.tests.base import skip_if
+from playhouse.tests.base import test_db
+from playhouse.tests.models import *
+
+
 class TransactionTestCase(ModelTestCase):
     requires = [User, Blog]
 
@@ -6,11 +18,6 @@ class TransactionTestCase(ModelTestCase):
         test_db.set_autocommit(True)
 
     def test_autocommit(self):
-        if database_class is BerkeleyDatabase:
-            if TEST_VERBOSITY > 0:
-                print_('Skipping `test_autocommit` for berkeleydb.')
-            return
-
         test_db.set_autocommit(False)
         test_db.begin()
 
@@ -296,144 +303,144 @@ class AutoRollbackTestCase(ModelTestCase):
         self.assertEqual(u.id, u_db.id)
 
 
-if test_db.savepoints:
-    class TestSavepoints(ModelTestCase):
-        requires = [User]
+@skip_if(lambda: not test_db.savepoints)
+class TestSavepoints(ModelTestCase):
+    requires = [User]
 
-        def _outer(self, fail_outer=False, fail_inner=False):
-            with test_db.savepoint():
-                User.create(username='outer')
-                try:
-                    self._inner(fail_inner)
-                except ValueError:
-                    pass
-                if fail_outer:
-                    raise ValueError
+    def _outer(self, fail_outer=False, fail_inner=False):
+        with test_db.savepoint():
+            User.create(username='outer')
+            try:
+                self._inner(fail_inner)
+            except ValueError:
+                pass
+            if fail_outer:
+                raise ValueError
 
-        def _inner(self, fail_inner):
-            with test_db.savepoint():
-                User.create(username='inner')
-                if fail_inner:
-                    raise ValueError('failing')
+    def _inner(self, fail_inner):
+        with test_db.savepoint():
+            User.create(username='inner')
+            if fail_inner:
+                raise ValueError('failing')
 
-        def assertNames(self, expected):
-            query = User.select().order_by(User.username)
-            self.assertEqual([u.username for u in query], expected)
+    def assertNames(self, expected):
+        query = User.select().order_by(User.username)
+        self.assertEqual([u.username for u in query], expected)
 
-        def test_success(self):
-            with test_db.transaction():
-                self._outer()
-                self.assertEqual(User.select().count(), 2)
-            self.assertNames(['inner', 'outer'])
+    def test_success(self):
+        with test_db.transaction():
+            self._outer()
+            self.assertEqual(User.select().count(), 2)
+        self.assertNames(['inner', 'outer'])
 
-        def test_inner_failure(self):
-            with test_db.transaction():
-                self._outer(fail_inner=True)
-                self.assertEqual(User.select().count(), 1)
-            self.assertNames(['outer'])
+    def test_inner_failure(self):
+        with test_db.transaction():
+            self._outer(fail_inner=True)
+            self.assertEqual(User.select().count(), 1)
+        self.assertNames(['outer'])
 
-        def test_outer_failure(self):
-            # Because the outer savepoint is rolled back, we'll lose the
-            # inner savepoint as well.
-            with test_db.transaction():
-                self.assertRaises(ValueError, self._outer, fail_outer=True)
-                self.assertEqual(User.select().count(), 0)
+    def test_outer_failure(self):
+        # Because the outer savepoint is rolled back, we'll lose the
+        # inner savepoint as well.
+        with test_db.transaction():
+            self.assertRaises(ValueError, self._outer, fail_outer=True)
+            self.assertEqual(User.select().count(), 0)
 
-        def test_failure(self):
-            with test_db.transaction():
-                self.assertRaises(
-                    ValueError, self._outer, fail_outer=True, fail_inner=True)
-                self.assertEqual(User.select().count(), 0)
+    def test_failure(self):
+        with test_db.transaction():
+            self.assertRaises(
+                ValueError, self._outer, fail_outer=True, fail_inner=True)
+            self.assertEqual(User.select().count(), 0)
 
-    class TestAtomic(ModelTestCase):
-        requires = [User, UniqueModel]
+class TestAtomic(ModelTestCase):
+    requires = [User, UniqueModel]
 
-        def test_atomic(self):
+    def test_atomic(self):
+        with test_db.atomic():
+            User.create(username='u1')
             with test_db.atomic():
-                User.create(username='u1')
-                with test_db.atomic():
-                    User.create(username='u2')
-                    with test_db.atomic() as txn3:
-                        User.create(username='u3')
-                        txn3.rollback()
-
-                    with test_db.atomic():
-                        User.create(username='u4')
-
-                with test_db.atomic() as txn5:
-                    User.create(username='u5')
-                    txn5.rollback()
-
-                User.create(username='u6')
-
-            query = User.select().order_by(User.username)
-            self.assertEqual(
-                [u.username for u in query],
-                ['u1', 'u2', 'u4', 'u6'])
-
-        def test_atomic_second_connection(self):
-            def test_separate_conn(expected):
-                new_db = self.new_connection()
-                cursor = new_db.execute_sql('select username from users;')
-                usernames = sorted(row[0] for row in cursor.fetchall())
-                self.assertEqual(usernames, expected)
-                new_db.close()
-
-            with test_db.atomic():
-                User.create(username='u1')
-                test_separate_conn([])
-
-                with test_db.atomic():
-                    User.create(username='u2')
-
-                with test_db.atomic() as tx3:
+                User.create(username='u2')
+                with test_db.atomic() as txn3:
                     User.create(username='u3')
-                    tx3.rollback()
+                    txn3.rollback()
 
-                test_separate_conn([])
+                with test_db.atomic():
+                    User.create(username='u4')
 
-                users = User.select(User.username).order_by(User.username)
-                self.assertEqual(
-                    [user.username for user in users],
-                    ['u1', 'u2'])
+            with test_db.atomic() as txn5:
+                User.create(username='u5')
+                txn5.rollback()
+
+            User.create(username='u6')
+
+        query = User.select().order_by(User.username)
+        self.assertEqual(
+            [u.username for u in query],
+            ['u1', 'u2', 'u4', 'u6'])
+
+    def test_atomic_second_connection(self):
+        def test_separate_conn(expected):
+            new_db = self.new_connection()
+            cursor = new_db.execute_sql('select username from users;')
+            usernames = sorted(row[0] for row in cursor.fetchall())
+            self.assertEqual(usernames, expected)
+            new_db.close()
+
+        with test_db.atomic():
+            User.create(username='u1')
+            test_separate_conn([])
+
+            with test_db.atomic():
+                User.create(username='u2')
+
+            with test_db.atomic() as tx3:
+                User.create(username='u3')
+                tx3.rollback()
+
+            test_separate_conn([])
 
             users = User.select(User.username).order_by(User.username)
             self.assertEqual(
                 [user.username for user in users],
                 ['u1', 'u2'])
 
-        def test_atomic_decorator(self):
-            @test_db.atomic()
-            def create_user(username):
-                User.create(username=username)
+        users = User.select(User.username).order_by(User.username)
+        self.assertEqual(
+            [user.username for user in users],
+            ['u1', 'u2'])
 
-            create_user('charlie')
-            self.assertEqual(User.select().count(), 1)
+    def test_atomic_decorator(self):
+        @test_db.atomic()
+        def create_user(username):
+            User.create(username=username)
 
-        def test_atomic_decorator_nesting(self):
-            @test_db.atomic()
-            def create_unique(name):
-                UniqueModel.create(name=name)
+        create_user('charlie')
+        self.assertEqual(User.select().count(), 1)
 
-            @test_db.atomic()
-            def create_both(username):
-                User.create(username=username)
-                try:
-                    create_unique(username)
-                except IntegrityError:
-                    pass
+    def test_atomic_decorator_nesting(self):
+        @test_db.atomic()
+        def create_unique(name):
+            UniqueModel.create(name=name)
 
-            create_unique('huey')
-            self.assertEqual(UniqueModel.select().count(), 1)
+        @test_db.atomic()
+        def create_both(username):
+            User.create(username=username)
+            try:
+                create_unique(username)
+            except IntegrityError:
+                pass
 
-            create_both('charlie')
-            self.assertEqual(User.select().count(), 1)
-            self.assertEqual(UniqueModel.select().count(), 2)
+        create_unique('huey')
+        self.assertEqual(UniqueModel.select().count(), 1)
 
-            create_both('huey')
-            self.assertEqual(User.select().count(), 2)
-            self.assertEqual(UniqueModel.select().count(), 2)
+        create_both('charlie')
+        self.assertEqual(User.select().count(), 1)
+        self.assertEqual(UniqueModel.select().count(), 2)
+
+        create_both('huey')
+        self.assertEqual(User.select().count(), 2)
+        self.assertEqual(UniqueModel.select().count(), 2)
 
 
-elif TEST_VERBOSITY > 0:
-    print_('Skipping "savepoint" tests')
+if __name__ == '__main__':
+    unittest.main(argv=sys.argv)

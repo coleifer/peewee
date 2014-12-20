@@ -326,7 +326,19 @@ class NonPKFKCreateTableTestCase(PeeweeTestCase):
 
 
 class DeferredForeignKeyTestCase(ModelTestCase):
-    requires = [Snippet, Language]
+    #requires = [Language, Snippet]
+
+    def setUp(self):
+        super(DeferredForeignKeyTestCase, self).setUp()
+        Snippet.drop_table(True)
+        Language.drop_table(True)
+        Language.create_table()
+        Snippet.create_table()
+
+    def tearDown(self):
+        super(DeferredForeignKeyTestCase, self).tearDown()
+        Snippet.drop_table(True)
+        Language.drop_table(True)
 
     def test_field_definitions(self):
         self.assertEqual(Snippet._meta.fields['language'].rel_model, Language)

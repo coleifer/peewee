@@ -1,9 +1,17 @@
+import sys
+import unittest
+
+from peewee import ModelQueryResultWrapper
+from peewee import NaiveQueryResultWrapper
+from playhouse.tests.base import ModelTestCase
+from playhouse.tests.models import *
+
 
 class QueryResultWrapperTestCase(ModelTestCase):
     requires = [User, Blog, Comment]
 
     def test_iteration(self):
-        self.create_users(10)
+        User.create_users(10)
         with self.assertQueryCount(1):
             sq = User.select()
             qr = sq.execute()
@@ -22,7 +30,7 @@ class QueryResultWrapperTestCase(ModelTestCase):
             self.assertEqual(another_iter, ['u%d' % i for i in range(1, 11)])
 
     def test_iterator(self):
-        self.create_users(10)
+        User.create_users(10)
 
         with self.assertQueryCount(1):
             qr = User.select().execute()
@@ -42,7 +50,7 @@ class QueryResultWrapperTestCase(ModelTestCase):
             self.assertEqual(usernames, [])
 
     def test_iterator_query_method(self):
-        self.create_users(10)
+        User.create_users(10)
 
         with self.assertQueryCount(1):
             qr = User.select()
@@ -54,7 +62,7 @@ class QueryResultWrapperTestCase(ModelTestCase):
             self.assertEqual(again, [])
 
     def test_iterator_extended(self):
-        self.create_users(10)
+        User.create_users(10)
         for i in range(1, 4):
             for j in range(i):
                 Blog.create(
@@ -97,7 +105,7 @@ class QueryResultWrapperTestCase(ModelTestCase):
         def assertUsernames(qr, n):
             self.assertEqual([u.username for u in qr._result_cache], ['u%d' % i for i in range(1, n+1)])
 
-        self.create_users(20)
+        User.create_users(20)
 
         with self.assertQueryCount(1):
             qr = User.select().execute()
@@ -235,7 +243,7 @@ class QueryResultWrapperTestCase(ModelTestCase):
         def assertUsernames(users, nums):
             self.assertEqual([u.username for u in users], ['u%d' % i for i in nums])
 
-        self.create_users(10)
+        User.create_users(10)
 
         with self.assertQueryCount(1):
             uq = User.select().order_by(User.id)
@@ -274,7 +282,7 @@ class QueryResultWrapperTestCase(ModelTestCase):
         def assertUser(query_or_qr, idx):
             self.assertEqual(query_or_qr[idx].username, 'u%d' % (idx + 1))
 
-        self.create_users(10)
+        User.create_users(10)
         uq = User.select().order_by(User.id)
 
         with self.assertQueryCount(1):
@@ -935,3 +943,7 @@ class TestPrefetchNonPKFK(ModelTestCase):
             '101': ['a'],
             '104': ['a', 'c','e'],
         })
+
+
+if __name__ == '__main__':
+    unittest.main(argv=sys.argv)
