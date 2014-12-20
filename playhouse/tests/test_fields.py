@@ -1,5 +1,14 @@
+import decimal
+import sys
+import unittest
+
 from playhouse.tests.base import binary_construct
 from playhouse.tests.base import binary_types
+from playhouse.tests.base import database_class
+from playhouse.tests.base import ModelTestCase
+from playhouse.tests.base import PeeweeTestCase
+from playhouse.tests.base import test_db
+from playhouse.tests.models import *
 
 
 class FieldTypeTestCase(ModelTestCase):
@@ -541,7 +550,7 @@ class DBColumnTestCase(ModelTestCase):
 
         self.assertEqual([b.title for b in u2.dbblog_set], ['b2'])
 
-class _SqliteDateTestHelper(BasePeeweeTestCase):
+class _SqliteDateTestHelper(PeeweeTestCase):
     datetimes = [
         datetime.datetime(2000, 1, 2, 3, 4, 5),
         datetime.datetime(2000, 2, 3, 4, 5, 6),
@@ -649,3 +658,7 @@ class CheckConstraintTestCase(ModelTestCase):
             with test_db.transaction() as txn:
                 self.assertRaises(IntegrityError, CheckModel.create, value=0)
                 txn.rollback()
+
+
+if __name__ == '__main__':
+    unittest.main(argv=sys.argv)

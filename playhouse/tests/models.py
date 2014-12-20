@@ -13,6 +13,11 @@ class User(TestModel):
     def prepared(self):
         self.foo = self.username
 
+    @classmethod
+    def create_users(cls, n):
+        for i in range(n):
+            cls.create(username='u%d' % (i + 1))
+
 
 class Blog(TestModel):
     user = ForeignKeyField(User)

@@ -1,3 +1,12 @@
+import sys
+import unittest
+
+from playhouse.tests.base import compiler
+from playhouse.tests.base import ModelTestCase
+from playhouse.tests.base import PeeweeTestCase
+from playhouse.tests.base import skip_if
+from playhouse.tests.base import test_db
+from playhouse.tests.models import *
 
 
 class NonPKFKBasicTestCase(ModelTestCase):
@@ -283,7 +292,7 @@ class CompositeKeyTestCase(ModelTestCase):
             ['t1', 't2', 't3'])
 
 
-class NonPKFKCreateTableTestCase(BasePeeweeTestCase):
+class NonPKFKCreateTableTestCase(PeeweeTestCase):
     def test_create_table(self):
         class A(TestModel):
             cf = CharField(max_length=100, unique=True)
@@ -314,6 +323,7 @@ class NonPKFKCreateTableTestCase(BasePeeweeTestCase):
             '"id" INTEGER NOT NULL PRIMARY KEY, '
             '"a_id" DECIMAL(4, 2) NOT NULL, '
             'FOREIGN KEY ("a_id") REFERENCES "a" ("df"))')
+
 
 class DeferredForeignKeyTestCase(ModelTestCase):
     requires = [Snippet, Language]
@@ -361,55 +371,54 @@ class DeferredForeignKeyTestCase(ModelTestCase):
             Language.get(Language.id == javascript.id).selected_snippet, None)
 
 
-if test_db.foreign_keys:
-    class ForeignKeyConstraintTestCase(ModelTestCase):
-        requires = [User, Blog]
+@skip_if(lambda: not test_db.foreign_keys)
+class ForeignKeyConstraintTestCase(ModelTestCase):
+    requires = [User, Blog]
 
-        def test_constraint_exists(self):
-            # IntegrityError is raised when we specify a non-existent user_id.
-            max_id = User.select(fn.Max(User.id)).scalar() or 0
+    def test_constraint_exists(self):
+        # IntegrityError is raised when we specify a non-existent user_id.
+        max_id = User.select(fn.Max(User.id)).scalar() or 0
 
-            def will_fail():
-                with test_db.transaction() as txn:
-                    Blog.create(user=max_id + 1, title='testing')
-
-            self.assertRaises(IntegrityError, will_fail)
-
-        def test_constraint_creation(self):
-            class FKC_a(TestModel):
-                name = CharField()
-
-            fkc_proxy = Proxy()
-
-            class FKC_b(TestModel):
-                fkc_a = ForeignKeyField(fkc_proxy)
-
-            fkc_proxy.initialize(FKC_a)
-
+        def will_fail():
             with test_db.transaction() as txn:
-                FKC_b.drop_table(True)
-                FKC_a.drop_table(True)
-                FKC_a.create_table()
-                FKC_b.create_table()
+                Blog.create(user=max_id + 1, title='testing')
 
-                # Foreign key constraint is not enforced.
-                fb = FKC_b.create(fkc_a=-1000)
-                fb.delete_instance()
+        self.assertRaises(IntegrityError, will_fail)
 
-                # Add constraint.
-                test_db.create_foreign_key(FKC_b, FKC_b.fkc_a)
+    def test_constraint_creation(self):
+        class FKC_a(TestModel):
+            name = CharField()
 
-                def _trigger_exc():
-                    with test_db.savepoint() as s1:
-                        fb = FKC_b.create(fkc_a=-1000)
+        fkc_proxy = Proxy()
 
-                self.assertRaises(IntegrityError, _trigger_exc)
+        class FKC_b(TestModel):
+            fkc_a = ForeignKeyField(fkc_proxy)
 
-                fa = FKC_a.create(name='fa')
-                fb = FKC_b.create(fkc_a=fa)
-                txn.rollback()
+        fkc_proxy.initialize(FKC_a)
+
+        with test_db.transaction() as txn:
+            FKC_b.drop_table(True)
+            FKC_a.drop_table(True)
+            FKC_a.create_table()
+            FKC_b.create_table()
+
+            # Foreign key constraint is not enforced.
+            fb = FKC_b.create(fkc_a=-1000)
+            fb.delete_instance()
+
+            # Add constraint.
+            test_db.create_foreign_key(FKC_b, FKC_b.fkc_a)
+
+            def _trigger_exc():
+                with test_db.savepoint() as s1:
+                    fb = FKC_b.create(fkc_a=-1000)
+
+            self.assertRaises(IntegrityError, _trigger_exc)
+
+            fa = FKC_a.create(name='fa')
+            fb = FKC_b.create(fkc_a=fa)
+            txn.rollback()
 
 
-elif TEST_VERBOSITY > 0:
-    print_('Skipping "foreign key" tests')
-
+if __name__ == '__main__':
+    unittest.main(argv=sys.argv)

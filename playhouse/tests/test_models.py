@@ -1,6 +1,19 @@
 # encoding=utf-8
 
+import sys
+import unittest
+
 from playhouse.tests.base import ulit
+from playhouse.tests.base import compiler
+#from playhouse.tests.base import database_class
+from playhouse.tests.base import ModelTestCase
+from playhouse.tests.base import normal_compiler
+from playhouse.tests.base import PeeweeTestCase
+#from playhouse.tests.base import query_db
+#from playhouse.tests.base import skip_if
+from playhouse.tests.base import test_db
+from playhouse.tests.base import ulit
+from playhouse.tests.models import *
 
 
 class ModelQueryTestCase(ModelTestCase):
@@ -66,7 +79,7 @@ class ModelQueryTestCase(ModelTestCase):
         ])
 
     def test_scalar(self):
-        self.create_users(5)
+        User.create_users(5)
 
         users = User.select(fn.Count(User.id)).scalar()
         self.assertEqual(users, 5)
@@ -91,7 +104,7 @@ class ModelQueryTestCase(ModelTestCase):
         self.assertEqual(users, 6)
 
     def test_update(self):
-        self.create_users(5)
+        User.create_users(5)
         uq = User.update(username='u-edited').where(User.username << ['u1', 'u2', 'u3'])
         self.assertEqual([u.username for u in User.select().order_by(User.id)], ['u1', 'u2', 'u3', 'u4', 'u5'])
 
@@ -101,7 +114,7 @@ class ModelQueryTestCase(ModelTestCase):
         self.assertRaises(KeyError, User.update, doesnotexist='invalid')
 
     def test_update_subquery(self):
-        self.create_users(3)
+        User.create_users(3)
         u1, u2, u3 = [user for user in User.select().order_by(User.id)]
         for i in range(4):
             Blog.create(title='b%s' % i, user=u1)
@@ -197,7 +210,7 @@ class ModelQueryTestCase(ModelTestCase):
         self.assertEqual(User.select().count(), 4)
 
     def test_delete(self):
-        self.create_users(5)
+        User.create_users(5)
         dq = User.delete().where(User.username << ['u1', 'u2', 'u3'])
         self.assertEqual(User.select().count(), 5)
         nr = dq.execute()
@@ -205,19 +218,22 @@ class ModelQueryTestCase(ModelTestCase):
         self.assertEqual([u.username for u in User.select()], ['u4', 'u5'])
 
     def test_raw(self):
-        self.create_users(3)
+        User.create_users(3)
+        interpolation = test_db.interpolation
 
         with self.assertQueryCount(1):
-            rq = User.raw(
-                'select * from users where username IN (%s,%s)' % (INT,INT),
-                'u1', 'u3')
+            query = 'select * from users where username IN (%s, %s)' % (
+                interpolation, interpolation)
+            rq = User.raw(query, 'u1', 'u3')
             self.assertEqual([u.username for u in rq], ['u1', 'u3'])
 
             # iterate again
             self.assertEqual([u.username for u in rq], ['u1', 'u3'])
 
+        query = ('select id, username, %s as secret '
+                 'from users where username = %s')
         rq = User.raw(
-            'select id, username, %s as secret from users where username = %s' % (INT,INT),
+            query % (interpolation, interpolation),
             'sh', 'u2')
         self.assertEqual([u.secret for u in rq], ['sh'])
         self.assertEqual([u.username for u in rq], ['u2'])
@@ -232,7 +248,7 @@ class ModelQueryTestCase(ModelTestCase):
 
     def test_limits_offsets(self):
         for i in range(10):
-            self.create_user(username='u%d' % i)
+            User.create(username='u%d' % i)
         sq = User.select().order_by(User.id)
 
         offset_no_lim = sq.offset(3)
@@ -258,8 +274,8 @@ class ModelAPITestCase(ModelTestCase):
     requires = [User, Blog, Category, UserCategory]
 
     def test_related_name(self):
-        u1 = self.create_user('u1')
-        u2 = self.create_user('u2')
+        u1 = User.create(username='u1')
+        u2 = User.create(username='u2')
         b11 = Blog.create(user=u1, title='b11')
         b12 = Blog.create(user=u1, title='b12')
         b2 = Blog.create(user=u2, title='b2')
@@ -290,7 +306,7 @@ class ModelAPITestCase(ModelTestCase):
         c2_db = Category.get(Category.id == c2.id)
         self.assertEqual(c2_db.parent, c1)
 
-        u = self.create_user('u1')
+        u = User.create(username='u1')
         b = Blog.create(user=u, title='b')
         b2 = Blog(title='b2')
 
@@ -298,8 +314,8 @@ class ModelAPITestCase(ModelTestCase):
         self.assertRaises(User.DoesNotExist, getattr, b2, 'user')
 
     def test_fk_cache_invalidated(self):
-        u1 = self.create_user('u1')
-        u2 = self.create_user('u2')
+        u1 = User.create(username='u1')
+        u2 = User.create(username='u2')
         b = Blog.create(user=u1, title='b')
 
         blog = Blog.get(Blog.pk == b)
@@ -358,7 +374,7 @@ class ModelAPITestCase(ModelTestCase):
                 [('c1', 'p1', 'g1'), ('c11', 'p1', 'g1')])
 
     def test_creation(self):
-        self.create_users(10)
+        User.create_users(10)
         self.assertEqual(User.select().count(), 10)
 
     def test_saving(self):
@@ -490,8 +506,8 @@ class ModelAPITestCase(ModelTestCase):
         self.assertEqual(b2.pub_date, None)
 
     def test_reading(self):
-        u1 = self.create_user('u1')
-        u2 = self.create_user('u2')
+        u1 = User.create(username='u1')
+        u2 = User.create(username='u2')
 
         self.assertEqual(u1, User.get(username='u1'))
         self.assertEqual(u2, User.get(username='u2'))
@@ -507,7 +523,7 @@ class ModelAPITestCase(ModelTestCase):
         self.assertEqual(User.select().count(), 1)
 
     def test_first(self):
-        users = self.create_users(5)
+        users = User.create_users(5)
 
         with self.assertQueryCount(1):
             sq = User.select().order_by(User.username)
@@ -540,8 +556,8 @@ class ModelAPITestCase(ModelTestCase):
         self.assertEqual(sq.first(), None)
 
     def test_deleting(self):
-        u1 = self.create_user('u1')
-        u2 = self.create_user('u2')
+        u1 = User.create(username='u1')
+        u2 = User.create(username='u2')
 
         self.assertEqual(User.select().count(), 2)
         u1.delete_instance()
@@ -589,14 +605,14 @@ class ModelAPITestCase(ModelTestCase):
 
     def test_count_transaction(self):
         for i in range(10):
-            self.create_user(username='u%d' % i)
+            User.create(username='u%d' % i)
 
-        with transaction(test_db):
-            for user in SelectQuery(User):
+        with test_db.transaction():
+            for user in User.select():
                 for i in range(20):
                     Blog.create(user=user, title='b-%d-%d' % (user.id, i))
 
-        count = SelectQuery(Blog).count()
+        count = Blog.select().count()
         self.assertEqual(count, 200)
 
     def test_exists(self):
@@ -607,7 +623,7 @@ class ModelAPITestCase(ModelTestCase):
     def test_unicode(self):
         # create a unicode literal
         ustr = ulit('Lýðveldið Ísland')
-        u = self.create_user(username=ustr)
+        u = User.create(username=ustr)
 
         # query using the unicode literal
         u_db = User.get(User.username == ustr)
@@ -622,7 +638,7 @@ class ModelAPITestCase(ModelTestCase):
         utf8_str = ustr.encode('utf-8')
 
         # create using the utf8 string
-        u2 = self.create_user(username=utf8_str)
+        u2 = User.create(username=utf8_str)
 
         # query using unicode literal
         u2_db = User.get(User.username == ustr)
@@ -941,7 +957,7 @@ class ManyToManyTestCase(ModelTestCase):
             ['c1', 'c12', 'c2', 'c23', 'c3', 'u1', 'u1', 'u2', 'u2', 'u2'])
 
 
-class ModelOptionInheritanceTestCase(BasePeeweeTestCase):
+class ModelOptionInheritanceTestCase(PeeweeTestCase):
     def test_db_table(self):
         self.assertEqual(User._meta.db_table, 'users')
 
@@ -1097,3 +1113,5 @@ class ModelInheritanceTestCase(ModelTestCase):
         self.assertEqual(b2_from_db.extra_field, 'foo')
 
 
+if __name__ == '__main__':
+    unittest.main(argv=sys.argv)
