@@ -2016,6 +2016,9 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
 
             for join in self.join_meta[current]:
                 foreign_key = current._meta.rel_for_model(join.dest)
+                if join.dest not in identity_map:
+                    continue
+
                 if foreign_key:
                     for pk, instance in identity_map[current].items():
                         joined_inst = identity_map[join.dest][

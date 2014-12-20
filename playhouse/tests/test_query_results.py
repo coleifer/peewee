@@ -4,6 +4,7 @@ import unittest
 from peewee import ModelQueryResultWrapper
 from peewee import NaiveQueryResultWrapper
 from playhouse.tests.base import ModelTestCase
+from playhouse.tests.base import test_db
 from playhouse.tests.models import *
 
 
@@ -597,6 +598,8 @@ class TestPrefetch(ModelTestCase):
         Tag,
         TagPostThrough,
         TagPostThroughAlt,
+        Category,
+        UserCategory,
     ]
 
     user_data = [
@@ -814,6 +817,39 @@ class TestPrefetch(ModelTestCase):
             ('u3', 'b4', []),
             ('u4', 'b5', ['b5-c1', 'b5-c2']),
             ('u4', 'b6', ['b6-c1']),
+        ])
+
+    def test_aggregate_unselected_join(self):
+        cat_1 = Category.create(name='category 1')
+        cat_2 = Category.create(name='category 2')
+        with test_db.transaction():
+            for i, user in enumerate(User.select().order_by(User.username)):
+                if i % 2 == 0:
+                    category = cat_2
+                else:
+                    category = cat_1
+                UserCategory.create(user=user, category=category)
+
+        with self.assertQueryCount(1):
+            query = (User
+                     .select(User, Blog)
+                     .join(Blog, JOIN_LEFT_OUTER)
+                     .switch(User)
+                     .join(UserCategory)
+                     .join(Category)
+                     .where(Category.name == cat_1.name)
+                     .order_by(User.username, Blog.title)
+                     .aggregate_rows())
+
+            results = []
+            for user in query:
+                results.append((
+                    user.username,
+                    [blog.title for blog in user.blog_set]))
+
+        self.assertEqual(results, [
+            ('u2', []),
+            ('u4', ['b5', 'b6']),
         ])
 
     def test_aggregate_manytomany(self):
