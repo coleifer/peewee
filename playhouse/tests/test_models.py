@@ -5,12 +5,9 @@ import unittest
 
 from playhouse.tests.base import ulit
 from playhouse.tests.base import compiler
-#from playhouse.tests.base import database_class
 from playhouse.tests.base import ModelTestCase
 from playhouse.tests.base import normal_compiler
 from playhouse.tests.base import PeeweeTestCase
-#from playhouse.tests.base import query_db
-#from playhouse.tests.base import skip_if
 from playhouse.tests.base import test_db
 from playhouse.tests.base import ulit
 from playhouse.tests.models import *

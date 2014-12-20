@@ -159,7 +159,6 @@ if __name__ == '__main__':
 
     files_to_delete = ['tmp.db', 'tmp.bdb.db', 'test_sqlcipher.db']
     paths_to_delete = ['tmp.bdb.db-journal']
-    os.chdir('playhouse/tests')
     for filename in files_to_delete:
         if os.path.exists(filename):
             os.unlink(filename)
