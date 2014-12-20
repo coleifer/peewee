@@ -7,11 +7,13 @@ try:
     from StringIO import StringIO
 except ImportError:
     from io import StringIO
+import sys
 import unittest
 
 from peewee import *
 from playhouse.dataset import DataSet
 from playhouse.dataset import Table
+from playhouse.tests.base import PeeweeTestCase
 
 
 db = SqliteDatabase('tmp.db')
@@ -33,7 +35,7 @@ class Category(BaseModel):
     parent = ForeignKeyField('self', null=True)
 
 
-class TestDataSet(unittest.TestCase):
+class TestDataSet(PeeweeTestCase):
     names = ['charlie', 'huey', 'peewee', 'mickey', 'zaizee']
 
     def setUp(self):
@@ -383,3 +385,7 @@ class TestDataSet(unittest.TestCase):
 
         ref2 = self.dataset['new_table']
         self.assertEqual(list(ref2.all()), [{'id': 1, 'data': 'foo'}])
+
+
+if __name__ == '__main__':
+    unittest.main(argv=sys.argv)

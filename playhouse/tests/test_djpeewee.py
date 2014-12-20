@@ -1,8 +1,10 @@
 from datetime import timedelta
+import sys
 import unittest
 
 from peewee import *
 from peewee import print_
+from playhouse.tests.base import PeeweeTestCase
 try:
     import django
 except ImportError:
@@ -72,7 +74,7 @@ if django is not None:
         pass
 
 
-    class TestDjPeewee(unittest.TestCase):
+    class TestDjPeewee(PeeweeTestCase):
         def assertFields(self, model, expected):
             self.assertEqual(len(model._meta.fields), len(expected))
             zipped = zip(model._meta.get_fields(), expected)
@@ -259,6 +261,9 @@ if django is not None:
                 ('id', PrimaryKeyField),
                 ('parent_ptr', ForeignKeyField)])
 
-
 else:
     print_('Skipping djpeewee tests, Django not found.')
+
+
+if __name__ == '__main__':
+    unittest.main(argv=sys.argv)

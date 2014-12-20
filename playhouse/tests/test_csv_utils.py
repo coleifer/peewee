@@ -1,5 +1,6 @@
 import csv
 import datetime
+import sys
 import unittest
 from contextlib import contextmanager
 from datetime import date
@@ -10,6 +11,8 @@ except ImportError:
 from textwrap import dedent
 
 from playhouse.csv_utils import *
+from playhouse.tests.base import ModelTestCase
+from playhouse.tests.base import PeeweeTestCase
 
 
 class TestRowConverter(RowConverter):
@@ -46,7 +49,7 @@ class Note(BaseModel):
     is_published = BooleanField(default=True)
 
 
-class TestCSVConversion(unittest.TestCase):
+class TestCSVConversion(PeeweeTestCase):
     header = 'id,name,dob,salary,is_admin'
     simple = '10,"F1 L1",1983-01-01,10000,t'
     float_sal = '20,"F2 L2",1983-01-02,20000.5,f'
@@ -54,6 +57,7 @@ class TestCSVConversion(unittest.TestCase):
     mismatch = 'foo,F4 L4,dob,sal,x'
 
     def setUp(self):
+        super(TestCSVConversion, self).setUp()
         db.execute_sql('drop table if exists csv_test;')
 
     def build_csv(self, *lines):
@@ -132,12 +136,11 @@ class TestCSVConversion(unittest.TestCase):
             (20, 'F2 L2', date(1983, 1, 2), 20000.5, 'f')])
 
 
-class TestCSVDump(unittest.TestCase):
+class TestCSVDump(ModelTestCase):
+    requires = [Note, User]
+
     def setUp(self):
-        Note.drop_table(True)
-        User.drop_table(True)
-        User.create_table()
-        Note.create_table()
+        super(TestCSVDump, self).setUp()
 
         self.users = []
         for i in range(3):
@@ -217,3 +220,7 @@ class TestCSVDump(unittest.TestCase):
             'user-2,note-2-4,2014-03-05 00:00:00,True',
             'user-2,note-2-5,2014-03-06 00:00:00,False']
         self.assertCSV(query, expected)
+
+
+if __name__ == '__main__':
+    unittest.main(argv=sys.argv)

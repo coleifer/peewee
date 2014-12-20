@@ -1,5 +1,6 @@
 import datetime
 import os
+import sys
 import unittest
 
 from peewee import *
@@ -571,3 +572,7 @@ if mysql:
         _exception_add_not_null = False
 elif TEST_VERBOSITY > 0:
     print_('Skipping mysql migrations, driver not found.')
+
+
+if __name__ == '__main__':
+    unittest.main(argv=sys.argv)

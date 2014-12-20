@@ -157,7 +157,8 @@ if __name__ == '__main__':
 
     failures, errors = runtests(suite, options.verbosity)
 
-    files_to_delete = ['tmp.db', 'tmp.bdb.db', 'test_sqlcipher.db']
+    files_to_delete = [
+        'peewee_test.db', 'tmp.db', 'tmp.bdb.db', 'test_sqlcipher.db']
     paths_to_delete = ['tmp.bdb.db-journal']
     for filename in files_to_delete:
         if os.path.exists(filename):

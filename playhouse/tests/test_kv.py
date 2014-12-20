@@ -1,13 +1,17 @@
+import sys
 import threading
 import unittest
 
 from peewee import *
 from playhouse.kv import PickledKeyStore
 from playhouse.kv import KeyStore
+from playhouse.tests.base import PeeweeTestCase
+from playhouse.tests.base import skip_if
 
 
-class KeyStoreTestCase(unittest.TestCase):
+class KeyStoreTestCase(PeeweeTestCase):
     def setUp(self):
+        super(KeyStoreTestCase, self).setUp()
         self.kv = KeyStore(CharField())
         self.ordered_kv = KeyStore(CharField(), ordered=True)
         self.pickled_kv = PickledKeyStore(ordered=True)
@@ -124,18 +128,24 @@ try:
 except ImportError:
     psycopg2 = None
 
-if psycopg2 is not None:
-    db = PostgresqlDatabase('peewee_test')
+@skip_if(lambda: psycopg2 is None)
+class PostgresqlKeyStoreTestCase(PeeweeTestCase):
+    def setUp(self):
+        self.db = PostgresqlDatabase('peewee_test')
+        self.kv = KeyStore(CharField(), ordered=True, database=self.db)
+        self.kv.clear()
 
-    class PostgresqlKeyStoreTestCase(unittest.TestCase):
-        def setUp(self):
-            self.kv = KeyStore(CharField(), ordered=True, database=db)
-            self.kv.clear()
+    def tearDown(self):
+        self.db.close()
 
-        def test_non_native_upsert(self):
-            self.kv['a'] = 'A'
-            self.kv['b'] = 'B'
-            self.assertEqual(self.kv['a'], 'A')
+    def test_non_native_upsert(self):
+        self.kv['a'] = 'A'
+        self.kv['b'] = 'B'
+        self.assertEqual(self.kv['a'], 'A')
 
-            self.kv['a'] = 'C'
-            self.assertEqual(self.kv['a'], 'C')
+        self.kv['a'] = 'C'
+        self.assertEqual(self.kv['a'], 'C')
+
+
+if __name__ == '__main__':
+    unittest.main(argv=sys.argv)
