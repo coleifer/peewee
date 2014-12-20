@@ -1,6 +1,13 @@
+import sys
+import unittest
+
+from peewee import *
+from peewee import sort_models_topologically
+from playhouse.tests.base import PeeweeTestCase
+from playhouse.tests.base import test_db
 
 
-class HelperMethodTestCase(BasePeeweeTestCase):
+class TestHelperMethods(PeeweeTestCase):
     def test_assert_query_count(self):
         def execute_queries(n):
             for i in range(n):
@@ -27,8 +34,7 @@ class HelperMethodTestCase(BasePeeweeTestCase):
         self.assertRaises(AssertionError, fails_high)
 
 
-
-class TopologicalSortTestCase(unittest.TestCase):
+class TestTopologicalSorting(PeeweeTestCase):
     def test_topological_sort_fundamentals(self):
         FKF = ForeignKeyField
         # we will be topo-sorting the following models
@@ -63,7 +69,6 @@ class TopologicalSortTestCase(unittest.TestCase):
         assert_precedes(A, E)
 
 
-
 def permutations(xs):
     if not xs:
         yield []
@@ -75,3 +80,7 @@ def permutations(xs):
 def selections(xs):
     for i in range(len(xs)):
         yield (xs[i], xs[:i] + xs[i + 1:])
+
+
+if __name__ == '__main__':
+    unittest.main(argv=sys.argv)
