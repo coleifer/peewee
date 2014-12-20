@@ -60,78 +60,78 @@ def collect_modules(options):
     xtra = lambda op: op or options.extra or options.all
     if xtra(options.apsw):
         try:
-            from playhouse import tests_apsw
+            from playhouse.tests import test_apsw
             modules.append(tests_apsw)
         except ImportError:
             print_('Unable to import apsw tests, skipping')
     if xtra(options.berkeleydb):
         try:
-            from playhouse import tests_berkeleydb
+            from playhouse.tests import test_berkeleydb
             modules.append(tests_berkeleydb)
         except ImportError:
             print_('Unable to import berkeleydb tests, skipping')
     if xtra(options.csv):
-        from playhouse import tests_csv_utils
+        from playhouse.tests import test_csv_utils
         modules.append(tests_csv_utils)
     if xtra(options.dataset):
-        from playhouse import tests_dataset
+        from playhouse.tests import test_dataset
         modules.append(tests_dataset)
     if xtra(options.db_url):
-        from playhouse import tests_db_url
+        from playhouse.tests import test_db_url
         modules.append(tests_db_url)
     if xtra(options.djpeewee):
-        from playhouse import tests_djpeewee
+        from playhouse.tests import test_djpeewee
         modules.append(tests_djpeewee)
     if xtra(options.gfk):
-        from playhouse import tests_gfk
+        from playhouse.tests import test_gfk
         modules.append(tests_gfk)
     if xtra(options.kv):
-        from playhouse import tests_kv
+        from playhouse.tests import test_kv
         modules.append(tests_kv)
     if xtra(options.migrations):
         try:
-            from playhouse import tests_migrate
+            from playhouse.tests import test_migrate
             modules.append(tests_migrate)
         except ImportError:
             print_('Unable to import migration tests, skipping')
     if xtra(options.pool):
         try:
-            from playhouse import tests_pool
+            from playhouse.tests import test_pool
             modules.append(tests_pool)
         except ImportError:
             print_('Unable to import connection pool tests, skipping')
     if xtra(options.postgres_ext):
         try:
-            from playhouse import tests_postgres
+            from playhouse.tests import test_postgres
             modules.append(tests_postgres)
         except ImportError:
             print_('Unable to import postgres-ext tests, skipping')
     if xtra(options.pwiz):
-        from playhouse import tests_pwiz
+        from playhouse.tests import test_pwiz
         modules.append(tests_pwiz)
     if xtra(options.read_slave):
-        from playhouse import tests_read_slave
+        from playhouse.tests import test_read_slave
         modules.append(tests_read_slave)
     if xtra(options.reflection):
-        from playhouse import tests_reflection
+        from playhouse.tests import test_reflection
         modules.append(tests_reflection)
     if xtra(options.signals):
-        from playhouse import tests_signals
+        from playhouse.tests import test_signals
         modules.append(tests_signals)
     if xtra(options.shortcuts):
-        from playhouse import tests_shortcuts
+        from playhouse.tests import test_shortcuts
         modules.append(tests_shortcuts)
     if xtra(options.sqlcipher):
         try:
-            from playhouse import tests_sqlcipher_ext
+            from playhouse.tests import test_sqlcipher_ext
             modules.append(tests_sqlcipher_ext)
         except ImportError:
             print_('Unable to import pysqlcipher tests, skipping')
     if xtra(options.sqlite_ext):
-        from playhouse import tests_sqlite_ext
+        from playhouse.tests import test_sqlite_ext
         modules.append(tests_sqlite_ext)
     if xtra(options.test_utils):
-        from playhouse import tests_test_utils
+        from playhouse.tests import test_test_utils
         modules.append(tests_test_utils)
 
     if not modules or options.all:
@@ -159,7 +159,7 @@ if __name__ == '__main__':
 
     files_to_delete = ['tmp.db', 'tmp.bdb.db', 'test_sqlcipher.db']
     paths_to_delete = ['tmp.bdb.db-journal']
-    os.cwd('playhouse/tests')
+    os.chdir('playhouse/tests')
     for filename in files_to_delete:
         if os.path.exists(filename):
             os.unlink(filename)
