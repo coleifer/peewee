@@ -3527,7 +3527,11 @@ class ModelOptions(object):
     def rel_for_model(self, model, field_obj=None):
         for field in self.get_fields():
             if isinstance(field, ForeignKeyField) and field.rel_model == model:
-                if field_obj is None or field_obj.name == field.name:
+                if (
+                    field_obj is None or
+                    (isinstance(field_obj, Field) and field_obj.name == field.name) or
+                    (isinstance(field_obj, Expression) and field_obj._alias == field.name)
+                ):
                     return field
 
     def reverse_rel_for_model(self, model, field_obj=None):
