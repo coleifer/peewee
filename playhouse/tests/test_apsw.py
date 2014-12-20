@@ -1,8 +1,10 @@
 import apsw
 import datetime
 import unittest
+import sys
 
 from playhouse.apsw_ext import *
+from playhouse.tests.base import ModelTestCase
 
 
 db = APSWDatabase(':memory:')
@@ -21,12 +23,8 @@ class Message(BaseModel):
     published = BooleanField()
 
 
-class APSWTestCase(unittest.TestCase):
-    def setUp(self):
-        Message.drop_table(True)
-        User.drop_table(True)
-        User.create_table()
-        Message.create_table()
+class APSWTestCase(ModelTestCase):
+    requires = [Message, User]
 
     def test_select_insert(self):
         users = ('u1', 'u2', 'u3')
@@ -101,3 +99,7 @@ class APSWTestCase(unittest.TestCase):
         create_success()
         self.assertEqual(User.select().count(), 2)
         self.assertEqual(Message.select().count(), 2)
+
+
+if __name__ == '__main__':
+    unittest.main(argv=sys.argv)

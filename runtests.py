@@ -61,78 +61,78 @@ def collect_modules(options):
     if xtra(options.apsw):
         try:
             from playhouse.tests import test_apsw
-            modules.append(tests_apsw)
+            modules.append(test_apsw)
         except ImportError:
             print_('Unable to import apsw tests, skipping')
     if xtra(options.berkeleydb):
         try:
             from playhouse.tests import test_berkeleydb
-            modules.append(tests_berkeleydb)
+            modules.append(test_berkeleydb)
         except ImportError:
             print_('Unable to import berkeleydb tests, skipping')
     if xtra(options.csv):
         from playhouse.tests import test_csv_utils
-        modules.append(tests_csv_utils)
+        modules.append(test_csv_utils)
     if xtra(options.dataset):
         from playhouse.tests import test_dataset
-        modules.append(tests_dataset)
+        modules.append(test_dataset)
     if xtra(options.db_url):
         from playhouse.tests import test_db_url
-        modules.append(tests_db_url)
+        modules.append(test_db_url)
     if xtra(options.djpeewee):
         from playhouse.tests import test_djpeewee
-        modules.append(tests_djpeewee)
+        modules.append(test_djpeewee)
     if xtra(options.gfk):
         from playhouse.tests import test_gfk
-        modules.append(tests_gfk)
+        modules.append(test_gfk)
     if xtra(options.kv):
         from playhouse.tests import test_kv
-        modules.append(tests_kv)
+        modules.append(test_kv)
     if xtra(options.migrations):
         try:
             from playhouse.tests import test_migrate
-            modules.append(tests_migrate)
+            modules.append(test_migrate)
         except ImportError:
             print_('Unable to import migration tests, skipping')
     if xtra(options.pool):
         try:
             from playhouse.tests import test_pool
-            modules.append(tests_pool)
+            modules.append(test_pool)
         except ImportError:
             print_('Unable to import connection pool tests, skipping')
     if xtra(options.postgres_ext):
         try:
             from playhouse.tests import test_postgres
-            modules.append(tests_postgres)
+            modules.append(test_postgres)
         except ImportError:
             print_('Unable to import postgres-ext tests, skipping')
     if xtra(options.pwiz):
         from playhouse.tests import test_pwiz
-        modules.append(tests_pwiz)
+        modules.append(test_pwiz)
     if xtra(options.read_slave):
         from playhouse.tests import test_read_slave
-        modules.append(tests_read_slave)
+        modules.append(test_read_slave)
     if xtra(options.reflection):
         from playhouse.tests import test_reflection
-        modules.append(tests_reflection)
+        modules.append(test_reflection)
     if xtra(options.signals):
         from playhouse.tests import test_signals
-        modules.append(tests_signals)
+        modules.append(test_signals)
     if xtra(options.shortcuts):
         from playhouse.tests import test_shortcuts
-        modules.append(tests_shortcuts)
+        modules.append(test_shortcuts)
     if xtra(options.sqlcipher):
         try:
             from playhouse.tests import test_sqlcipher_ext
-            modules.append(tests_sqlcipher_ext)
+            modules.append(test_sqlcipher_ext)
         except ImportError:
             print_('Unable to import pysqlcipher tests, skipping')
     if xtra(options.sqlite_ext):
         from playhouse.tests import test_sqlite_ext
-        modules.append(tests_sqlite_ext)
+        modules.append(test_sqlite_ext)
     if xtra(options.test_utils):
         from playhouse.tests import test_test_utils
-        modules.append(tests_test_utils)
+        modules.append(test_test_utils)
 
     if not modules or options.all:
         import tests
