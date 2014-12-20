@@ -163,8 +163,8 @@ Example code:
     with db.transaction():
         User.create(username='huey')
 
-    # If using a function decorated by commit_on_success, no changes are necessary.
-    @db.commit_on_success
+    # If using a function decorated by transaction, no changes are necessary.
+    @db.transaction()
     def create_user(username):
         User.create(username=username)
 
@@ -239,7 +239,24 @@ Connecting using a Database URL
 
 The playhouse module :ref:`db_url` provides a helper :py:func:`connect` function that accepts a database URL and returns a :py:class:`Database` instance.
 
-Examples:
+Example code:
+
+.. code-block:: python
+
+      import os
+
+      from peewee import *
+      from playhouse.db_url import connect
+
+      # Connect to the database URL defined in the environment, falling
+      # back to a local Sqlite database if no database URL is specified.
+      db = connect(os.environ.get('DATABASE') or 'sqlite:///default.db')
+
+      class BaseModel(Model):
+          class Meta:
+              database = db
+
+Example database URLs:
 
 * *sqlite:///my_database.db* will create a :py:class:`SqliteDatabase` instance for the file ``my_database.db`` in the current directory.
 * *postgresql://postgres:my_password@localhost:5432/my_database* will create a :py:class:`PostgresqlDatabase` instance. A username and password are provided, as well as the host and port to connect to.
@@ -252,15 +269,10 @@ Some database engines may not allow a connection to be shared across threads, no
 
 .. code-block:: python
 
+    # If using 2.3.2 or lower, you must specify `threadlocals=True`.
     database = SqliteDatabase('my_app.db', threadlocals=True)
 
 The above code will cause peewee to store the connection state in a thread local; each thread gets its own separate connection.
-
-Alternatively, Python sqlite3 module can share a connection across different threads, but you have to disable runtime checks to reuse the single connection. This behavior can lead to subtle bugs regarding nested transactions when not used with care, so typically I do not recommend using this option.
-
-.. code-block:: python
-
-    database = SqliteDatabase('stats.db', check_same_thread=False)
 
 .. note::
     For web applications or any multi-threaded (including green threads!) app,
@@ -348,13 +360,12 @@ The connection pool module comes with support for Postgres and MySQL (though add
 
 .. code-block:: python
 
-    from playhouse.pool import PooledPostgresqlDatabase
+    from playhouse.pool import PooledPostgresqlExtDatabase
 
-    db = PooledPostgresqlDatabase(
+    db = PooledPostgresqlExtDatabase(
         'my_database',
         max_connections=8,
         stale_timeout=300,
-        threadlocals=True,
         user='postgres')
 
     class BaseModel(Model):
@@ -366,6 +377,8 @@ The following pooled database classes are available:
 * :py:class:`PooledPostgresqlDatabase`
 * :py:class:`PooledPostgresqlExtDatabase`
 * :py:class:`PooledMySQLDatabase`
+
+For an in-depth discussion of peewee's connection pool, see the :ref:`pool` section of the :ref:`playhouse` documentation.
 
 .. warning::
     If you are using version 2.3.2 or lower, be sure to specify ``threadlocals=True`` when instantiating your pooled database.
@@ -459,6 +472,35 @@ The generated code is written to stdout, and can easily be redirected to a file:
     schemas, but in some cases it will not be able to introspect a column.
     You may need to go through the generated code to add indexes, fix unrecognized
     column types, and resolve any circular references that were found.
+
+.. _advanced_connection_management:
+
+Advanced Connection Management
+------------------------------
+
+In some situations you may want to manage your connections more explicitly. Since peewee stores the active connection in a threadlocal, this typically would mean that there could only ever be one connection open per thread. For most applications this is desirable, but if you would like to manually manage multiple connections you can create an :py:class:`ExecutionContext`.
+
+Execution contexts allow finer-grained control over managing multiple connections to the database. When an execution context is initialized (either as a context manager or as a decorated function), a separate connection will be used for the duration of the wrapped block. You can also choose whether to wrap the block in a transaction.
+
+Execution context examples:
+
+.. code-block:: python
+
+    with db.execution_context() as ctx:
+        # A new connection will be opened or, if using a connection pool,
+        # pulled from the pool of available connections. Additionally, a
+        # transaction will be started.
+        user = User.create(username='charlie')
+
+    # When the block ends, the transaction will be committed and the connection
+    # will be closed (or returned to the pool).
+
+    @db.execution_context(with_transaction=False)
+    def do_something(foo, bar):
+        # When this function is called, a separate connection is made and will
+        # be closed when the function returns.
+
+If you are using the peewee connection pool, then the new connections used by the :py:class:`ExecutionContext` will be pulled from the pool of available connections and recycled appropriately.
 
 Logging queries
 ---------------

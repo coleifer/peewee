@@ -31,10 +31,10 @@ As well as tools for working with databases:
 * :ref:`migrate`
 * :ref:`reflection`
 * :ref:`db_url`
-* :ref:`csv_utils`
-* :ref:`read_slaves`
 * :ref:`pool`
+* :ref:`read_slaves`
 * :ref:`test_utils`
+* :ref:`csv_utils`
 * :ref:`pskel`
 
 
@@ -2814,17 +2814,35 @@ Dumping CSV
 Connection pool
 ---------------
 
-.. warning:: This module should be considered experimental.
+The ``pool`` module contains a number of :py:class:`Database` classes that provide connection pooling for PostgreSQL and MySQL databases. The pool works by overriding the methods on the :py:class:`Database` class that open and close connections to the backend. The pool can specify a timeout after which connections are recycled, as well as an upper bound on the number of open connections.
 
-The ``pool`` module contains a helper class to pool database connections, as well as implementations
-for PostgreSQL and MySQL. The pool works by overriding the methods on the :py:class:`Database` class
-that open and close connections to the backend. The pool can specify a timeout after which connections
-are recycled, as well as an upper bound on the number of open connections.
+In a multi-threaded application, up to `max_connections` will be opened. Each thread (or, if using gevent, greenlet) will have it's own connection.
 
-If your application is single-threaded, only one connection will be opened.
+In a single-threaded application, only one connection will be created. It will be continually recycled until either it exceeds the stale timeout or is closed explicitly (using `.manual_close()`).
 
-If your application is multi-threaded (this includes green threads) and you specify `threadlocals=True`
-when instantiating your database, then up to `max_connections` will be opened. As of version 2.3.3, this is the default behavior.
+By default, all your application needs to do is ensure that connections are closed when you are finished with them, and they will be returned to the pool. For web applications, this typically means that at the beginning of a request, you will open a connection, and when you return a response, you will close the connection.
+
+Simple Postgres pool example code:
+
+.. code-block:: python
+
+    # Use the special postgresql extensions.
+    from playhouse.pool import PooledPostgresqlExtDatabase
+
+    db = PooledPostgresqlExtDatabase(
+        'my_app',
+        max_connections=32,
+        stale_timeout=300,  # 5 minutes.
+        user='postgres')
+
+    class BaseModel(Model):
+        class Meta:
+            database = db
+
+That's it! If you would like finer-grained control over the pool of connections, check out the :ref:`advanced_connection_management` section.
+
+Pool APIs
+^^^^^^^^^
 
 .. py:class:: PooledDatabase(database[, max_connections=20[, stale_timeout=None[, **kwargs]]])
 
@@ -2835,25 +2853,21 @@ when instantiating your database, then up to `max_connections` will be opened. A
     :param int stale_timeout: Number of seconds to allow connections to be used.
     :param kwargs: Arbitrary keyword arguments passed to database class.
 
-    .. note:: Connections will not be closed exactly when they exceed their `stale_timeout`.
-        Instead, stale connections are only closed when a new connection is requested.
+    .. note:: Connections will not be closed exactly when they exceed their `stale_timeout`. Instead, stale connections are only closed when a new connection is requested.
 
-    .. note:: If the number of open connections exceeds `max_connections`, a `ValueError` will
-        be raised.
+    .. note:: If the number of open connections exceeds `max_connections`, a `ValueError` will be raised.
+
+    .. py:method:: _connect(*args, **kwargs)
+
+        Request a connection from the pool. If there are no available connections a new one will be opened.
+
+    .. py:method:: _close(conn[, close_conn=False])
+
+        By default `conn` will not be closed and instead will be returned to the pool of available connections. If `close_conn=True`, then `conn` will be closed and *not* be returned to the pool.
 
     .. py:method:: manual_close()
 
         Close the currently-open connection without returning it to the pool.
-
-    .. py:method:: _connect(*args, **kwargs)
-
-        Request a connection from the pool. If there are no available connections a new one will
-        be opened.
-
-    .. py:method:: _close(conn[, close_conn=False])
-
-        By default `conn` will not be closed and instead will be returned to the pool of available
-        connections. If `close_conn=True`, then `conn` will be closed and *not* be returned to the pool.
 
 .. py:class:: PooledPostgresqlDatabase
 

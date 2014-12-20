@@ -2684,6 +2684,17 @@ class ExceptionWrapper(object):
             new_type = self.exceptions[exc_type.__name__]
             reraise(new_type, new_type(*exc_value.args), traceback)
 
+class _BaseConnectionLocal(object):
+    def __init__(self, **kwargs):
+        super(_BaseConnectionLocal, self).__init__(**kwargs)
+        self.autocommit = None
+        self.closed = True
+        self.conn = None
+        self.context_stack = []
+        self.transactions = []
+
+class _ConnectionLocal(_BaseConnectionLocal, threading.local):
+    pass
 
 class Database(object):
     commit_select = False
@@ -2722,9 +2733,9 @@ class Database(object):
         self.init(database, **connect_kwargs)
 
         if threadlocals:
-            self.__local = threading.local()
+            self.__local = _ConnectionLocal()
         else:
-            self.__local = type('DummyLocal', (object,), {})
+            self.__local = _BaseConnectionLocal()
 
         self._conn_lock = threading.Lock()
         self.autocommit = autocommit
@@ -2762,12 +2773,14 @@ class Database(object):
                 self.__local.closed = True
 
     def get_conn(self):
-        if not hasattr(self.__local, 'closed') or self.__local.closed:
+        if self.__local.context_stack:
+            return self.__local.context_stack[-1].connection
+        if self.__local.closed:
             self.connect()
         return self.__local.conn
 
     def is_closed(self):
-        return getattr(self.__local, 'closed', True)
+        return self.__local.closed
 
     def get_cursor(self):
         return self.get_conn().cursor()
@@ -2830,20 +2843,30 @@ class Database(object):
         self.__local.autocommit = autocommit
 
     def get_autocommit(self):
-        if not hasattr(self.__local, 'autocommit'):
+        if self.__local.autocommit is None:
             self.set_autocommit(self.autocommit)
         return self.__local.autocommit
 
+    def push_execution_context(self, transaction):
+        self.__local.context_stack.append(transaction)
+
+    def pop_execution_context(self):
+        self.__local.context_stack.pop()
+
+    def execution_context_depth(self):
+        return len(self.__local.context_stack)
+
+    def execution_context(self, with_transaction=True):
+        return ExecutionContext(self, with_transaction=with_transaction)
+
     def push_transaction(self, transaction):
-        if not hasattr(self.__local, 'transactions'):
-            self.__local.transactions = []
         self.__local.transactions.append(transaction)
 
     def pop_transaction(self):
         self.__local.transactions.pop()
 
     def transaction_depth(self):
-        return len(getattr(self.__local, 'transactions', ()))
+        return len(self.__local.transactions)
 
     def transaction(self):
         return transaction(self)
@@ -2862,9 +2885,6 @@ class Database(object):
 
     def atomic(self):
         return _atomic(self)
-
-    def session(self, with_transaction=True):
-        return Session(self, with_transaction)
 
     def get_tables(self, schema=None):
         raise NotImplementedError
@@ -3242,30 +3262,32 @@ class _callable_context_manager(object):
                 return fn(*args, **kwargs)
         return inner
 
-class Session(_callable_context_manager):
+class ExecutionContext(_callable_context_manager):
     def __init__(self, database, with_transaction=True):
         self.database = database
         self.with_transaction = with_transaction
 
     def __enter__(self):
-        self.database.get_conn()
-        if self.with_transaction:
-            self.txn = self.database.transaction()
-            self.txn.__enter__()
+        with self.database._conn_lock:
+            self.database.push_execution_context(self)
+            self.connection = self.database._connect(
+                self.database.database,
+                **self.database.connect_kwargs)
+            if self.with_transaction:
+                self.txn = self.database.transaction()
+                self.txn.__enter__()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.with_transaction:
-            self.txn.__exit__(exc_type, exc_val, exc_tb)
-        self.database.close()
-
-    def rollback(self):
-        self.database.rollback()
-        self.database.begin()
-
-    def commit(self):
-        self.database.commit()
-        self.database.begin()
+        with self.database._conn_lock:
+            try:
+                if self.with_transaction:
+                    if not exc_type:
+                        self.txn.commit(False)
+                    self.txn.__exit__(exc_type, exc_val, exc_tb)
+            finally:
+                self.database.pop_execution_context()
+                self.database._close(self.connection)
 
 class _atomic(_callable_context_manager):
     def __init__(self, db):

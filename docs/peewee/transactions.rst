@@ -115,10 +115,29 @@ Transactions can be explicitly committed or rolled-back within the wrapped block
 
 .. note:: If you attempt to nest transactions with peewee using the :py:meth:`~Database.transaction` context manager, only the outer-most transaction will be used. However if an exception occurs in a nested block, this can lead to unpredictable behavior, so it is strongly recommended that you use :py:meth:`~Database.atomic`.
 
+Explicit Savepoints
+^^^^^^^^^^^^^^^^^^^
+
+Just as you can explicitly create transactions, you can also explicitly create savepoints using the :py:meth:`~Database.savepoint` method. Savepoints must occur within a transaction, but can be nested arbitrarily deep.
+
+.. code-block:: python
+
+    with db.transaction() as txn:
+        with db.savepoint() as sp:
+            User.create(username='mickey')
+
+        with db.savepoint() as sp2:
+            User.create(username='zaizee')
+            sp2.rollback()  # "zaizee" will not be saved, but "mickey" will be.
+
+.. note:: If you manually commit or roll back a savepoint, a new savepoint **will not** automatically be created. This differs from the behavior of :py:class:`transaction`, which will automatically open a new transaction after manual commit/rollback.
+
 Autocommit Mode
 ---------------
 
-By default, databases are initialized with ``autocommit=True``, you can turn this on and off at runtime if you like. The behavior below is roughly the same as the context manager and decorator:
+By default, databases are initialized with ``autocommit=True``, you can turn this on and off at runtime if you like. If you choose to disable autocommit, then you must explicitly call :py:meth:`Database.begin` to begin a transaction, and commit or roll back.
+
+The behavior below is roughly the same as the context manager and decorator:
 
 .. code-block:: python
 

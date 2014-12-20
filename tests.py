@@ -7,6 +7,7 @@ import logging
 import operator
 import os
 import threading
+import time
 import unittest
 import sys
 try:
@@ -4725,68 +4726,78 @@ class TransactionTestCase(ModelTestCase):
         self.assertEqual(test_db.transaction_depth(), 0)
 
 
-class SessionTestCase(ModelTestCase):
-    requires = [User, UniqueModel]
+class TestExecutionContext(ModelTestCase):
+    requires = [User]
 
-    def test_session(self):
-        def assertUsers(expected):
-            with test_db.session():
-                query = User.select(User.username).order_by(User.username)
-                users = [username for username, in query.tuples()]
-                self.assertEqual(users, expected)
+    def test_context_simple(self):
+        with test_db.execution_context():
+            User.create(username='charlie')
+            self.assertEqual(test_db.execution_context_depth(), 1)
+        self.assertEqual(test_db.execution_context_depth(), 0)
 
-        with test_db.session():
-            User.create(username='huey')
-            User.create(username='mickey')
+        with test_db.execution_context():
+            self.assertTrue(
+                User.select().where(User.username == 'charlie').exists())
+            self.assertEqual(test_db.execution_context_depth(), 1)
+        self.assertEqual(test_db.execution_context_depth(), 0)
+        queries = self.queries()
 
-        assertUsers(['huey', 'mickey'])
+    def test_context_ext(self):
+        with test_db.execution_context():
+            with test_db.execution_context() as inner_ctx:
+                with test_db.execution_context():
+                    User.create(username='huey')
+                    self.assertEqual(test_db.execution_context_depth(), 3)
 
-        with test_db.session() as session:
-            User.create(username='zaizee')
-            session.rollback()
+                conn = test_db.get_conn()
+                self.assertEqual(conn, inner_ctx.connection)
 
-        assertUsers(['huey', 'mickey'])
+                self.assertTrue(
+                    User.select().where(User.username == 'huey').exists())
 
-        with test_db.session() as session:
-            User.create(username='zaizee')
-            session.commit()
-            User.create(username='nuggie')
-            session.rollback()
+        self.assertEqual(test_db.execution_context_depth(), 0)
 
-        assertUsers(['huey', 'mickey', 'zaizee'])
+    def test_context_multithreaded(self):
+        conn = test_db.get_conn()
+        evt = threading.Event()
+        evt2 = threading.Event()
 
-        with test_db.session() as session:
-            User.create(username='graygree')
-            session.rollback()
-            User.create(username='scoutie')
-            session.commit()
+        def create():
+            with test_db.execution_context() as ctx:
+                database = ctx.database
+                self.assertEqual(database.execution_context_depth(), 1)
+                evt2.set()
+                evt.wait()
+                self.assertNotEqual(conn, ctx.connection)
+                User.create(username='huey')
 
-        assertUsers(['huey', 'mickey', 'scoutie', 'zaizee'])
+        create_t = threading.Thread(target=create)
+        create_t.daemon = True
+        create_t.start()
 
-        with test_db.session(False) as session:
-            User.create(username='beanie')
-            session.commit()
-            User.create(username='nuggie')
-            # Because we are not in a transaction, this rollback will have
-            # no effect.
-            session.rollback()
+        evt2.wait()
+        self.assertEqual(test_db.execution_context_depth(), 0)
+        evt.set()
+        create_t.join()
 
-        assertUsers([
-            'beanie', 'huey', 'mickey', 'nuggie', 'scoutie', 'zaizee'])
+        self.assertEqual(test_db.execution_context_depth(), 0)
+        self.assertEqual(User.select().count(), 1)
 
-    def test_session_transactions(self):
-        def integrity_error(with_transaction):
-            with test_db.session(with_transaction):
-                UniqueModel.create(name='a')
-                UniqueModel.create(name='a')
+    def test_context_concurrency(self):
+        def create(i):
+            with test_db.execution_context():
+                with test_db.execution_context() as ctx:
+                    User.create(username='u%s' % i)
+                    self.assertEqual(ctx.database.execution_context_depth(), 2)
 
-        self.assertRaises(IntegrityError, integrity_error, True)
-        with test_db.session():
-            self.assertEqual(UniqueModel.select().count(), 0)
-
-        self.assertRaises(IntegrityError, integrity_error, False)
-        with test_db.session():
-            self.assertEqual(UniqueModel.select().count(), 1)
+        threads = [threading.Thread(target=create, args=(i,))
+                   for i in range(5)]
+        for thread in threads:
+            thread.start()
+        [thread.join() for thread in threads]
+        self.assertEqual(
+            [user.username for user in User.select().order_by(User.username)],
+            ['u0', 'u1', 'u2', 'u3', 'u4'])
 
 
 class ConcurrencyTestCase(ModelTestCase):
