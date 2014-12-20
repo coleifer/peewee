@@ -3,7 +3,10 @@
 import sys
 import threading
 import unittest
-from Queue import Queue
+try:
+    from Queue import Queue
+except ImportError:
+    from queue import Queue
 
 from playhouse.tests.base import compiler
 from playhouse.tests.base import database_class
