@@ -145,9 +145,9 @@ if django is not None:
             self.assertEqual(
                 sql,
                 'SELECT "t1"."id", "t1"."username" FROM "user_tbl" AS t1 '
-                'INNER JOIN "playhouse_post" AS t2 '
+                'INNER JOIN "tests_post" AS t2 '
                 'ON ("t1"."id" = "t2"."author_id") '
-                'INNER JOIN "playhouse_comment" AS t3 '
+                'INNER JOIN "tests_comment" AS t3 '
                 'ON ("t2"."id" = "t3"."post_id") WHERE ("t3"."comment" = %s)')
             self.assertEqual(params, ['test'])
 
@@ -166,11 +166,12 @@ if django is not None:
             self.assertEqual(
                 sql,
                 'SELECT "t1"."id", "t1"."author_id", "t1"."content" '
-                'FROM "playhouse_post" AS t1 '
-                'INNER JOIN "playhouse_tag_posts" AS t2 '
+                'FROM "tests_post" AS t1 '
+                'INNER JOIN "tests_tag_posts" AS t2 '
                 'ON ("t1"."id" = "t2"."post_id") '
-                'INNER JOIN "playhouse_tag" AS t3 '
+                'INNER JOIN "tests_tag" AS t3 '
                 'ON ("t2"."tag_id" = "t3"."id") WHERE ("t3"."tag" = %s)')
+
             self.assertEqual(params, ['test'])
 
         def test_docs_example(self):
