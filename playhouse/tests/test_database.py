@@ -1,6 +1,20 @@
 # encoding=utf-8
 
+import sys
+import threading
+import unittest
+from Queue import Queue
+
+from playhouse.tests.base import compiler
+from playhouse.tests.base import database_class
+from playhouse.tests.base import ModelTestCase
+from playhouse.tests.base import PeeweeTestCase
+from playhouse.tests.base import query_db
+from playhouse.tests.base import skip_if
+from playhouse.tests.base import test_db
 from playhouse.tests.base import ulit
+from playhouse.tests.models import *
+
 
 class ConcurrencyTestCase(ModelTestCase):
     requires = [User]
@@ -59,7 +73,7 @@ class ConcurrencyTestCase(ModelTestCase):
         self.assertEqual(data_queue.qsize(), self.threads * 20)
 
 
-class DatabaseTestCase(BasePeeweeTestCase):
+class DatabaseTestCase(PeeweeTestCase):
     def test_deferred_database(self):
         deferred_db = SqliteDatabase(None)
         self.assertTrue(deferred_db.deferred)
@@ -91,7 +105,7 @@ class DatabaseTestCase(BasePeeweeTestCase):
 
 
 
-class SQLAllTestCase(BasePeeweeTestCase):
+class SQLAllTestCase(PeeweeTestCase):
     def setUp(self):
         super(SQLAllTestCase, self).setUp()
         fake_db = SqliteDatabase(':memory:')
@@ -131,7 +145,7 @@ class SQLAllTestCase(BasePeeweeTestCase):
         ])
 
 
-class LongIndexTestCase(BasePeeweeTestCase):
+class LongIndexTestCase(PeeweeTestCase):
     def test_long_index(self):
         class LongIndexModel(TestModel):
             a123456789012345678901234567890 = CharField()
@@ -151,7 +165,7 @@ class LongIndexTestCase(BasePeeweeTestCase):
         ))
 
 
-class ConnectionStateTestCase(BasePeeweeTestCase):
+class ConnectionStateTestCase(PeeweeTestCase):
     def test_connection_state(self):
         conn = test_db.get_conn()
         self.assertFalse(test_db.is_closed())
@@ -161,151 +175,149 @@ class ConnectionStateTestCase(BasePeeweeTestCase):
         self.assertFalse(test_db.is_closed())
 
 
-if test_db.drop_cascade:
-    class DropCascadeTestCase(ModelTestCase):
-        requires = [User, Blog]
+@skip_if(lambda: not test_db.drop_cascade)
+class DropCascadeTestCase(ModelTestCase):
+    requires = [User, Blog]
 
-        def test_drop_cascade(self):
-            u1 = User.create(username='u1')
-            b1 = Blog.create(user=u1, title='b1')
+    def test_drop_cascade(self):
+        u1 = User.create(username='u1')
+        b1 = Blog.create(user=u1, title='b1')
 
-            User.drop_table(cascade=True)
-            self.assertFalse(User.table_exists())
+        User.drop_table(cascade=True)
+        self.assertFalse(User.table_exists())
 
-            # The constraint is dropped, we can create a blog for a non-
-            # existant user.
-            Blog.create(user=-1, title='b2')
-
-
-elif TEST_VERBOSITY > 0:
-    print_('Skipping "drop/cascade" tests')
+        # The constraint is dropped, we can create a blog for a non-
+        # existant user.
+        Blog.create(user=-1, title='b2')
 
 
-if test_db.sequences:
-    class SequenceTestCase(ModelTestCase):
-        requires = [SeqModelA, SeqModelB]
+@skip_if(lambda: not test_db.sequences)
+class SequenceTestCase(ModelTestCase):
+    requires = [SeqModelA, SeqModelB]
 
-        def test_sequence_shared(self):
-            a1 = SeqModelA.create(num=1)
-            a2 = SeqModelA.create(num=2)
-            b1 = SeqModelB.create(other_num=101)
-            b2 = SeqModelB.create(other_num=102)
-            a3 = SeqModelA.create(num=3)
+    def test_sequence_shared(self):
+        a1 = SeqModelA.create(num=1)
+        a2 = SeqModelA.create(num=2)
+        b1 = SeqModelB.create(other_num=101)
+        b2 = SeqModelB.create(other_num=102)
+        a3 = SeqModelA.create(num=3)
 
-            self.assertEqual(a1.id, a2.id - 1)
-            self.assertEqual(a2.id, b1.id - 1)
-            self.assertEqual(b1.id, b2.id - 1)
-            self.assertEqual(b2.id, a3.id - 1)
-
-elif TEST_VERBOSITY > 0:
-    print_('Skipping "sequence" tests')
-
-if database_class is PostgresqlDatabase:
-    class TestUnicodeConversion(ModelTestCase):
-        requires = [User]
-
-        def setUp(self):
-            super(TestUnicodeConversion, self).setUp()
-
-            # Create a user object with UTF-8 encoded username.
-            ustr = ulit('Ísland')
-            self.user = User.create(username=ustr)
-
-        def tearDown(self):
-            super(TestUnicodeConversion, self).tearDown()
-            test_db.register_unicode = True
-            test_db.close()
-
-        def reset_encoding(self, encoding):
-            test_db.close()
-            conn = test_db.get_conn()
-            conn.set_client_encoding(encoding)
-
-        def test_unicode_conversion(self):
-            # Per psycopg2's documentation, in Python2, strings are returned as
-            # 8-bit str objects encoded in the client encoding. In python3,
-            # the strings are automatically decoded in the connection encoding.
-
-            # Turn off unicode conversion on a per-connection basis.
-            test_db.register_unicode = False
-            self.reset_encoding('LATIN1')
-
-            u = User.get(User.id == self.user.id)
-            if sys.version_info[0] < 3:
-                self.assertFalse(u.username == self.user.username)
-            else:
-                self.assertTrue(u.username == self.user.username)
-
-            test_db.register_unicode = True
-            self.reset_encoding('LATIN1')
-
-            u = User.get(User.id == self.user.id)
-            self.assertEqual(u.username, self.user.username)
-
-    class TestPostgresqlSchema(ModelTestCase):
-        requires = [PGSchema]
-
-        def setUp(self):
-            test_db.execute_sql('CREATE SCHEMA huey;')
-            super(TestPostgresqlSchema,self).setUp()
-
-        def tearDown(self):
-            super(TestPostgresqlSchema,self).tearDown()
-            test_db.execute_sql('DROP SCHEMA huey;')
-
-        def test_pg_schema(self):
-            pgs = PGSchema.create(data='huey')
-            pgs_db = PGSchema.get(PGSchema.data == 'huey')
-            self.assertEqual(pgs.id, pgs_db.id)
+        self.assertEqual(a1.id, a2.id - 1)
+        self.assertEqual(a2.id, b1.id - 1)
+        self.assertEqual(b1.id, b2.id - 1)
+        self.assertEqual(b2.id, a3.id - 1)
 
 
+@skip_if(lambda: database_class is not PostgresqlDatabase)
+class TestUnicodeConversion(ModelTestCase):
+    requires = [User]
 
-if isinstance(test_db, SqliteDatabase):
-    class TestOuterLoopInnerCommit(ModelTestCase):
-        requires = [User, Blog]
+    def setUp(self):
+        super(TestUnicodeConversion, self).setUp()
 
-        def tearDown(self):
-            test_db.set_autocommit(True)
-            super(TestOuterLoopInnerCommit, self).tearDown()
+        # Create a user object with UTF-8 encoded username.
+        ustr = ulit('Ísland')
+        self.user = User.create(username=ustr)
 
-        def test_outer_loop_inner_commit(self):
-            # By default we are in autocommit mode (isolation_level=None).
-            self.assertEqual(test_db.get_conn().isolation_level, None)
+    def tearDown(self):
+        super(TestUnicodeConversion, self).tearDown()
+        test_db.register_unicode = True
+        test_db.close()
 
-            for username in ['u1', 'u2', 'u3']:
-                User.create(username=username)
+    def reset_encoding(self, encoding):
+        test_db.close()
+        conn = test_db.get_conn()
+        conn.set_client_encoding(encoding)
 
-            for user in User.select():
-                Blog.create(user=user, title='b-%s' % user.username)
+    def test_unicode_conversion(self):
+        # Per psycopg2's documentation, in Python2, strings are returned as
+        # 8-bit str objects encoded in the client encoding. In python3,
+        # the strings are automatically decoded in the connection encoding.
 
-            # These statements are auto-committed.
-            new_db = self.new_connection()
-            count = new_db.execute_sql('select count(*) from blog;').fetchone()
-            self.assertEqual(count[0], 3)
+        # Turn off unicode conversion on a per-connection basis.
+        test_db.register_unicode = False
+        self.reset_encoding('LATIN1')
 
-            self.assertEqual(Blog.select().count(), 3)
-            blog_titles = [b.title for b in Blog.select().order_by(Blog.title)]
-            self.assertEqual(blog_titles, ['b-u1', 'b-u2', 'b-u3'])
+        u = User.get(User.id == self.user.id)
+        if sys.version_info[0] < 3:
+            self.assertFalse(u.username == self.user.username)
+        else:
+            self.assertTrue(u.username == self.user.username)
 
-            self.assertEqual(Blog.delete().execute(), 3)
+        test_db.register_unicode = True
+        self.reset_encoding('LATIN1')
 
-            # If we disable autocommit, we need to explicitly call begin().
-            test_db.set_autocommit(False)
-            test_db.begin()
+        u = User.get(User.id == self.user.id)
+        self.assertEqual(u.username, self.user.username)
 
-            for user in User.select():
-                Blog.create(user=user, title='b-%s' % user.username)
 
-            # These statements have not been committed.
-            new_db = self.new_connection()
-            count = new_db.execute_sql('select count(*) from blog;').fetchone()
-            self.assertEqual(count[0], 0)
+@skip_if(lambda: database_class is not PostgresqlDatabase)
+class TestPostgresqlSchema(ModelTestCase):
+    requires = [PGSchema]
 
-            self.assertEqual(Blog.select().count(), 3)
-            blog_titles = [b.title for b in Blog.select().order_by(Blog.title)]
-            self.assertEqual(blog_titles, ['b-u1', 'b-u2', 'b-u3'])
+    def setUp(self):
+        test_db.execute_sql('CREATE SCHEMA huey;')
+        super(TestPostgresqlSchema,self).setUp()
 
-            test_db.commit()
-            count = new_db.execute_sql('select count(*) from blog;').fetchone()
-            self.assertEqual(count[0], 3)
+    def tearDown(self):
+        super(TestPostgresqlSchema,self).tearDown()
+        test_db.execute_sql('DROP SCHEMA huey;')
 
+    def test_pg_schema(self):
+        pgs = PGSchema.create(data='huey')
+        pgs_db = PGSchema.get(PGSchema.data == 'huey')
+        self.assertEqual(pgs.id, pgs_db.id)
+
+
+@skip_if(lambda: not isinstance(test_db, SqliteDatabase))
+class TestOuterLoopInnerCommit(ModelTestCase):
+    requires = [User, Blog]
+
+    def tearDown(self):
+        test_db.set_autocommit(True)
+        super(TestOuterLoopInnerCommit, self).tearDown()
+
+    def test_outer_loop_inner_commit(self):
+        # By default we are in autocommit mode (isolation_level=None).
+        self.assertEqual(test_db.get_conn().isolation_level, None)
+
+        for username in ['u1', 'u2', 'u3']:
+            User.create(username=username)
+
+        for user in User.select():
+            Blog.create(user=user, title='b-%s' % user.username)
+
+        # These statements are auto-committed.
+        new_db = self.new_connection()
+        count = new_db.execute_sql('select count(*) from blog;').fetchone()
+        self.assertEqual(count[0], 3)
+
+        self.assertEqual(Blog.select().count(), 3)
+        blog_titles = [b.title for b in Blog.select().order_by(Blog.title)]
+        self.assertEqual(blog_titles, ['b-u1', 'b-u2', 'b-u3'])
+
+        self.assertEqual(Blog.delete().execute(), 3)
+
+        # If we disable autocommit, we need to explicitly call begin().
+        test_db.set_autocommit(False)
+        test_db.begin()
+
+        for user in User.select():
+            Blog.create(user=user, title='b-%s' % user.username)
+
+        # These statements have not been committed.
+        new_db = self.new_connection()
+        count = new_db.execute_sql('select count(*) from blog;').fetchone()
+        self.assertEqual(count[0], 0)
+
+        self.assertEqual(Blog.select().count(), 3)
+        blog_titles = [b.title for b in Blog.select().order_by(Blog.title)]
+        self.assertEqual(blog_titles, ['b-u1', 'b-u2', 'b-u3'])
+
+        test_db.commit()
+        count = new_db.execute_sql('select count(*) from blog;').fetchone()
+        self.assertEqual(count[0], 3)
+
+
+if __name__ == '__main__':
+    unittest.main(argv=sys.argv)

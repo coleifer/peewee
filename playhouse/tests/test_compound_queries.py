@@ -1,3 +1,13 @@
+import itertools
+import operator
+import sys
+import unittest
+from functools import wraps
+
+from playhouse.tests.base import compiler
+from playhouse.tests.base import ModelTestCase
+from playhouse.tests.base import test_db
+from playhouse.tests.models import *
 
 
 class CompoundSelectTestCase(ModelTestCase):
@@ -173,3 +183,7 @@ class CompoundSelectTestCase(ModelTestCase):
             {'username': 'b'},
             {'username': 'd'},
             {'username': 'e'}])
+
+
+if __name__ == '__main__':
+    unittest.main(argv=sys.argv)

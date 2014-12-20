@@ -1,16 +1,15 @@
 import logging
 import os
+import sys
 from contextlib import contextmanager
 from unittest import TestCase
 
+from peewee import *
 from peewee import AliasMap
 from peewee import logger
-from peewee import Model
-from peewee import MySQLDatabase
-from peewee import PostgresqlDatabase
 from peewee import print_
 from peewee import QueryCompiler
-from peewee import SqliteDatabase
+from peewee import SelectQuery
 
 # Register psycopg2 compatibility hooks.
 try:
@@ -158,6 +157,7 @@ class QueryLogHandler(logging.Handler):
 
 database_initializer = DatabaseInitializer(TEST_BACKEND, TEST_DATABASE)
 
+database_class = database_initializer.get_database_class()
 test_db = database_initializer.get_database()
 query_db = TestDatabase(':memory:')
 
@@ -236,3 +236,14 @@ class ModelTestCase(PeeweeTestCase):
         super(ModelTestCase, self).tearDown()
         if self.requires:
             test_db.drop_tables(self.requires, True)
+
+
+def skip_if(expression):
+    def decorator(klass):
+        if expression():
+            if TEST_VERBOSITY > 0:
+                print_('Skipping %s tests.' % klass.__name__)
+            class Dummy(object): pass
+            return Dummy
+        return klass
+    return decorator
