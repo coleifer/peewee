@@ -2021,10 +2021,13 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
 
                 if foreign_key:
                     for pk, instance in identity_map[current].items():
-                        joined_inst = identity_map[join.dest][
-                            instance._data[foreign_key.name]]
-                        setattr(instance, foreign_key.name, joined_inst)
-                        instances.append(joined_inst)
+                        try:
+                            joined_inst = identity_map[join.dest][
+                                instance._data[foreign_key.name]]
+                            setattr(instance, foreign_key.name, joined_inst)
+                            instances.append(joined_inst)
+                        except KeyError:
+                            continue
                 else:
                     backref = current._meta.reverse_rel_for_model(
                         join.dest, join.on)
@@ -2035,17 +2038,20 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
                     for instance in identity_map[current].values():
                         setattr(instance, attr_name, [])
 
-                    for pk, instance in identity_map[join.dest].items():
-                        if pk is None:
-                            continue
-                        try:
-                            joined_inst = identity_map[current][
-                                instance._data[backref.name]]
-                        except KeyError:
-                            continue
+                    try:
+                        for pk, instance in identity_map[join.dest].items():
+                            if pk is None:
+                                continue
+                            try:
+                                joined_inst = identity_map[current][
+                                    instance._data[backref.name]]
+                            except KeyError:
+                                continue
 
-                        getattr(joined_inst, attr_name).append(instance)
-                        instances.append(instance)
+                            getattr(joined_inst, attr_name).append(instance)
+                            instances.append(instance)
+                    except KeyError:
+                        continue
 
                 stack.append(join.dest)
 
