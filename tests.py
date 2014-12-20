@@ -4727,14 +4727,14 @@ class TestExecutionContext(ModelTestCase):
     def test_context_simple(self):
         with test_db.execution_context():
             User.create(username='charlie')
-            self.assertEqual(len(test_db._context_stack), 1)
-        self.assertEqual(len(test_db._context_stack), 0)
+            self.assertEqual(test_db.execution_context_depth(), 1)
+        self.assertEqual(test_db.execution_context_depth(), 0)
 
         with test_db.execution_context():
             self.assertTrue(
                 User.select().where(User.username == 'charlie').exists())
-            self.assertEqual(len(test_db._context_stack), 1)
-        self.assertEqual(len(test_db._context_stack), 0)
+            self.assertEqual(test_db.execution_context_depth(), 1)
+        self.assertEqual(test_db.execution_context_depth(), 0)
         queries = self.queries()
 
     def test_context_ext(self):
@@ -4742,7 +4742,7 @@ class TestExecutionContext(ModelTestCase):
             with test_db.execution_context() as inner_ctx:
                 with test_db.execution_context():
                     User.create(username='huey')
-                    self.assertEqual(len(test_db._context_stack), 3)
+                    self.assertEqual(test_db.execution_context_depth(), 3)
 
                 conn = test_db.get_conn()
                 self.assertEqual(conn, inner_ctx.connection)
@@ -4750,30 +4750,49 @@ class TestExecutionContext(ModelTestCase):
                 self.assertTrue(
                     User.select().where(User.username == 'huey').exists())
 
-        self.assertEqual(len(test_db._context_stack), 0)
+        self.assertEqual(test_db.execution_context_depth(), 0)
 
     def test_context_multithreaded(self):
-        created = threading.Event()
-        post_create = threading.Event()
         conn = test_db.get_conn()
+        evt = threading.Event()
+        evt2 = threading.Event()
 
         def create():
             with test_db.execution_context() as ctx:
+                database = ctx.database
+                self.assertEqual(database.execution_context_depth(), 1)
+                evt2.set()
+                evt.wait()
                 self.assertNotEqual(conn, ctx.connection)
                 User.create(username='huey')
-                created.set()
-                post_create.wait()
 
         create_t = threading.Thread(target=create)
+        create_t.daemon = True
         create_t.start()
 
-        created.wait()
-        self.assertEqual(len(test_db._context_stack), 1)
-
-        post_create.set()
+        evt2.wait()
+        self.assertEqual(test_db.execution_context_depth(), 0)
+        evt.set()
         create_t.join()
-        self.assertEqual(len(test_db._context_stack), 0)
+
+        self.assertEqual(test_db.execution_context_depth(), 0)
         self.assertEqual(User.select().count(), 1)
+
+    def test_context_concurrency(self):
+        def create(i):
+            with test_db.execution_context():
+                with test_db.execution_context() as ctx:
+                    User.create(username='u%s' % i)
+                    self.assertEqual(ctx.database.execution_context_depth(), 2)
+
+        threads = [threading.Thread(target=create, args=(i,))
+                   for i in range(5)]
+        for thread in threads:
+            thread.start()
+        [thread.join() for thread in threads]
+        self.assertEqual(
+            [user.username for user in User.select().order_by(User.username)],
+            ['u0', 'u1', 'u2', 'u3', 'u4'])
 
 
 class ConcurrencyTestCase(ModelTestCase):

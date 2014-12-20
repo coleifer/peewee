@@ -2690,6 +2690,7 @@ class _BaseConnectionLocal(object):
         self.autocommit = None
         self.closed = True
         self.conn = None
+        self.context_stack = []
         self.transactions = []
 
 class _ConnectionLocal(_BaseConnectionLocal, threading.local):
@@ -2737,7 +2738,6 @@ class Database(object):
             self.__local = _BaseConnectionLocal()
 
         self._conn_lock = threading.Lock()
-        self._context_stack = []
         self.autocommit = autocommit
         self.autorollback = autorollback
 
@@ -2773,8 +2773,8 @@ class Database(object):
                 self.__local.closed = True
 
     def get_conn(self):
-        if self._context_stack:
-            return self._context_stack[-1].connection
+        if self.__local.context_stack:
+            return self.__local.context_stack[-1].connection
         if self.__local.closed:
             self.connect()
         return self.__local.conn
@@ -2846,6 +2846,15 @@ class Database(object):
         if self.__local.autocommit is None:
             self.set_autocommit(self.autocommit)
         return self.__local.autocommit
+
+    def push_execution_context(self, transaction):
+        self.__local.context_stack.append(transaction)
+
+    def pop_execution_context(self):
+        self.__local.context_stack.pop()
+
+    def execution_context_depth(self):
+        return len(self.__local.context_stack)
 
     def execution_context(self, with_transaction=True):
         return ExecutionContext(self, with_transaction=with_transaction)
@@ -3260,7 +3269,7 @@ class ExecutionContext(_callable_context_manager):
 
     def __enter__(self):
         with self.database._conn_lock:
-            self.database._context_stack.append(self)
+            self.database.push_execution_context(self)
             self.connection = self.database._connect(
                 self.database.database,
                 **self.database.connect_kwargs)
@@ -3277,7 +3286,7 @@ class ExecutionContext(_callable_context_manager):
                         self.txn.commit(False)
                     self.txn.__exit__(exc_type, exc_val, exc_tb)
             finally:
-                self.database._context_stack.pop()
+                self.database.pop_execution_context()
                 self.database._close(self.connection)
 
 class _atomic(_callable_context_manager):
