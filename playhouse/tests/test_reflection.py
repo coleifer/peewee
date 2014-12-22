@@ -1,6 +1,5 @@
 import os
 import re
-import unittest
 
 from peewee import *
 from peewee import create_model_tables
@@ -8,6 +7,7 @@ from peewee import drop_model_tables
 from peewee import mysql
 from peewee import print_
 from playhouse.reflection import *
+from playhouse.tests.base import PeeweeTestCase
 
 
 TEST_VERBOSITY = int(os.environ.get('PEEWEE_TEST_VERBOSITY') or 1)
@@ -82,8 +82,9 @@ MODELS = (
     Underscores,
     Category)
 
-class TestReflection(unittest.TestCase):
+class TestReflection(PeeweeTestCase):
     def setUp(self):
+        super(TestReflection, self).setUp()
         if os.path.exists('tmp.db'):
             os.unlink('tmp.db')
         sqlite_db.connect()

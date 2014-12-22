@@ -1,7 +1,5 @@
 import csv
 import datetime
-import sys
-import unittest
 from contextlib import contextmanager
 from datetime import date
 try:
@@ -11,6 +9,7 @@ except ImportError:
 from textwrap import dedent
 
 from playhouse.csv_utils import *
+from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
 from playhouse.tests.base import PeeweeTestCase
 
@@ -33,7 +32,7 @@ class TestLoader(Loader):
             has_header=self.has_header,
             sample_size=self.sample_size)
 
-db = SqliteDatabase(':memory:')
+db = database_initializer.get_in_memory_database()
 
 class BaseModel(Model):
     class Meta:
@@ -220,7 +219,3 @@ class TestCSVDump(ModelTestCase):
             'user-2,note-2-4,2014-03-05 00:00:00,True',
             'user-2,note-2-5,2014-03-06 00:00:00,False']
         self.assertCSV(query, expected)
-
-
-if __name__ == '__main__':
-    unittest.main(argv=sys.argv)

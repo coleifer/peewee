@@ -2,12 +2,14 @@ import heapq
 import psycopg2  # Trigger import error if not installed.
 import threading
 import time
-from unittest import TestCase
 
 from peewee import *
 from peewee import savepoint
 from peewee import transaction
 from playhouse.pool import *
+from playhouse.tests.base import database_initializer
+from playhouse.tests.base import PeeweeTestCase
+
 
 class FakeTransaction(transaction):
     def _add_history(self, message):
@@ -49,8 +51,10 @@ class TestDB(PooledDatabase, FakeDatabase):
         super(TestDB, self).__init__(*args, **kwargs)
         self.conn_key = lambda conn: conn
 
-pooled_db = PooledPostgresqlDatabase('peewee_test')
-normal_db = PostgresqlDatabase('peewee_test')
+pooled_db = database_initializer.get_database(
+    'postgres',
+    db_class=PooledPostgresqlDatabase)
+normal_db = database_initializer.get_database('postgres')
 
 class Number(Model):
     value = IntegerField()
@@ -58,8 +62,10 @@ class Number(Model):
     class Meta:
         database = pooled_db
 
-class TestPooledDatabase(TestCase):
+
+class TestPooledDatabase(PeeweeTestCase):
     def setUp(self):
+        super(TestPooledDatabase, self).setUp()
         self.db = TestDB('testing')
 
     def test_connection_pool(self):
@@ -318,8 +324,9 @@ class TestPooledDatabase(TestCase):
             ['O2', 'O3', 'C3', 'X3', 'C2', 'X2'])
 
 
-class TestConnectionPool(TestCase):
+class TestConnectionPool(PeeweeTestCase):
     def setUp(self):
+        super(TestConnectionPool, self).setUp()
         # Use an un-pooled database to drop/create the table.
         if Number._meta.db_table in normal_db.get_tables():
             normal_db.drop_table(Number)

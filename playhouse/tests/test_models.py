@@ -1,8 +1,5 @@
 # encoding=utf-8
 
-import sys
-import unittest
-
 from playhouse.tests.base import ulit
 from playhouse.tests.base import compiler
 from playhouse.tests.base import ModelTestCase
@@ -1108,7 +1105,3 @@ class TestModelInheritance(ModelTestCase):
         self.assertEqual(b_from_db.user, u)
         self.assertEqual(b2_from_db.user, u)
         self.assertEqual(b2_from_db.extra_field, 'foo')
-
-
-if __name__ == '__main__':
-    unittest.main(argv=sys.argv)

@@ -1,15 +1,16 @@
 import functools
-import unittest
 
 from peewee import *
 from playhouse.test_utils import assert_query_count
 from playhouse.test_utils import count_queries
 from playhouse.test_utils import test_database
+from playhouse.tests.base import database_initializer
+from playhouse.tests.base import ModelTestCase
 
 
-db1 = SqliteDatabase(':memory:')
+db1 = database_initializer.get_in_memory_database()
 db1._flag = 'db1'
-db2 = SqliteDatabase(':memory:')
+db2 = database_initializer.get_in_memory_database()
 db2._flag = 'db2'
 
 class BaseModel(Model):
@@ -29,16 +30,9 @@ class DataItem(BaseModel):
     class Meta:
         order_by = ('value',)
 
-class BaseTestCase(unittest.TestCase):
-    def setUp(self):
-        DataItem.drop_table(True)
-        Data.drop_table(True)
-        Data.create_table()
-        DataItem.create_table()
+class BaseTestCase(ModelTestCase):
+    requires = [DataItem, Data]
 
-    def tearDown(self):
-        DataItem.drop_table()
-        Data.drop_table()
 
 class TestTestDatabaseCtxMgr(BaseTestCase):
     def setUp(self):

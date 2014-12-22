@@ -1,6 +1,3 @@
-import sys
-import unittest
-
 from peewee import *
 from playhouse.db_url import connect
 from playhouse.sqlite_ext import SqliteExtDatabase
@@ -29,7 +26,3 @@ class TestDBURL(PeeweeTestCase):
             connect('missing:///')
 
         self.assertRaises(RuntimeError, _test_scheme)
-
-
-if __name__ == '__main__':
-    unittest.main(argv=sys.argv)

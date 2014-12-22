@@ -1,7 +1,7 @@
-import unittest
-
 from peewee import *
 from playhouse.read_slave import ReadSlaveModel
+from playhouse.tests.base import database_initializer
+from playhouse.tests.base import ModelTestCase
 
 
 queries = []
@@ -27,9 +27,9 @@ class Slave1(QueryLogDatabase):
 class Slave2(QueryLogDatabase):
     name = 'slave2'
 
-master = Master('tmp.db')
-slave1 = Slave1('tmp.db')
-slave2 = Slave2('tmp.db')
+master = database_initializer.get_database('sqlite', db_class=Master)
+slave1 = database_initializer.get_database('sqlite', db_class=Slave1)
+slave2 = database_initializer.get_database('sqlite', db_class=Slave2)
 
 class BaseModel(ReadSlaveModel):
     class Meta:
@@ -45,19 +45,14 @@ class Thing(BaseModel):
     class Meta:
         read_slaves = [slave2]
 
-class TestMasterSlave(unittest.TestCase):
+class TestMasterSlave(ModelTestCase):
+    requires = [User, Thing]
+
     def setUp(self):
-        User.drop_table(True)
-        User.create_table()
-        Thing.drop_table(True)
-        Thing.create_table()
+        super(TestMasterSlave, self).setUp()
         User.create(username='peewee')
         Thing.create(name='something')
         reset()
-
-    def tearDown(self):
-        User.drop_table(True)
-        Thing.drop_table(True)
 
     def assertQueries(self, databases):
         self.assertEqual([q[0] for q in queries], databases)

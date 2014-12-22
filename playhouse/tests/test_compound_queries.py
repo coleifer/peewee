@@ -1,7 +1,5 @@
 import itertools
 import operator
-import sys
-import unittest
 from functools import wraps
 
 from playhouse.tests.base import compiler
@@ -183,7 +181,3 @@ class TestCompoundSelectQueries(ModelTestCase):
             {'username': 'b'},
             {'username': 'd'},
             {'username': 'e'}])
-
-
-if __name__ == '__main__':
-    unittest.main(argv=sys.argv)

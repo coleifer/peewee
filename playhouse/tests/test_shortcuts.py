@@ -1,11 +1,11 @@
-import unittest
-
 from peewee import *
 from playhouse.shortcuts import *
 from playhouse.test_utils import assert_query_count
+from playhouse.tests.base import database_initializer
+from playhouse.tests.base import ModelTestCase
 
 
-db = SqliteDatabase(':memory:')
+db = database_initializer.get_in_memory_database()
 
 class BaseModel(Model):
     class Meta:
@@ -40,7 +40,8 @@ MODELS = [
     Tag,
     NoteTag]
 
-class CaseShortcutTestCase(unittest.TestCase):
+class CaseShortcutTestCase(ModelTestCase):
+    requires = [TestModel]
     values = (
         ('alpha', 1),
         ('beta', 2),
@@ -53,8 +54,7 @@ class CaseShortcutTestCase(unittest.TestCase):
     ]
 
     def setUp(self):
-        TestModel.drop_table(True)
-        TestModel.create_table()
+        super(CaseShortcutTestCase, self).setUp()
 
         for name, number in self.values:
             TestModel.create(name=name, number=number)
@@ -76,11 +76,11 @@ class CaseShortcutTestCase(unittest.TestCase):
         self.assertEqual(list(query.dicts()), self.expected)
 
 
-class TestModelToDict(unittest.TestCase):
-    def setUp(self):
-        db.drop_tables(MODELS, safe=True)
-        db.create_tables(MODELS)
+class TestModelToDict(ModelTestCase):
+    requires = MODELS
 
+    def setUp(self):
+        super(TestModelToDict, self).setUp()
         self.user = User.create(username='peewee')
 
     def test_simple(self):
@@ -297,10 +297,11 @@ class TestModelToDict(unittest.TestCase):
             {'text': note.text, 'user': {'username': self.user.username}})
 
 
-class TestDictToModel(unittest.TestCase):
+class TestDictToModel(ModelTestCase):
+    requires = MODELS
+
     def setUp(self):
-        db.drop_tables(MODELS, safe=True)
-        db.create_tables(MODELS)
+        super(TestDictToModel, self).setUp()
         self.user = User.create(username='charlie')
 
     def test_simple(self):

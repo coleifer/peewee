@@ -4,19 +4,23 @@ try:
     sqlite3.enable_callback_tracebacks(True)
 except AttributeError:
     pass
-import unittest
 
 from peewee import *
 from peewee import print_
 from playhouse.sqlite_ext import *
+from playhouse.tests.base import database_initializer
+from playhouse.tests.base import PeeweeTestCase
+from playhouse.tests.base import skip_if
 
-# use a disk-backed db since memory dbs only exist for a single connection and
+# Use a disk-backed db since memory dbs only exist for a single connection and
 # we need to share the db w/2 for the locking tests.  additionally, set the
 # sqlite_busy_timeout to 100ms so when we test locking it doesn't take forever
-ext_db = SqliteExtDatabase('tmp.db', timeout=.1)
+ext_db = database_initializer.get_database(
+    'sqlite',
+    db_class=SqliteExtDatabase,
+    timeout=0.1)
 
 CLOSURE_EXTENSION = os.environ.get('CLOSURE_EXTENSION')
-TEST_VERBOSITY = int(os.environ.get('PEEWEE_TEST_VERBOSITY') or 1)
 
 # test aggregate.
 class WeightedAverage(object):
@@ -114,7 +118,7 @@ class TestVirtualModelChild(TestVirtualModel):
     pass
 
 
-class SqliteExtTestCase(unittest.TestCase):
+class SqliteExtTestCase(PeeweeTestCase):
     messages = [
         ('A faith is a necessity to a man. Woe to him who believes in '
          'nothing.'),
@@ -134,6 +138,7 @@ class SqliteExtTestCase(unittest.TestCase):
         ('ddddd', 'ccccc', 'xxxxx', 4)]
 
     def setUp(self):
+        super(SqliteExtTestCase, self).setUp()
         FTSDoc.drop_table(True)
         ManagedDoc.drop_table(True)
         FTSPost.drop_table(True)
@@ -524,7 +529,7 @@ class SqliteExtTestCase(unittest.TestCase):
             'p2', 'p2', 'p4'])
 
 
-class TestTransitiveClosure(unittest.TestCase):
+class TestTransitiveClosure(PeeweeTestCase):
     def test_model_factory(self):
         class Category(BaseExtModel):
             name = CharField()
@@ -559,175 +564,174 @@ class TestTransitiveClosure(unittest.TestCase):
             pass
         self.assertRaises(ValueError, ClosureTable, NoForeignKey)
 
-if CLOSURE_EXTENSION:
-    class TestTransitiveClosureIntegration(unittest.TestCase):
-        tree = {
-            'books': [
-                {'fiction': [
-                    {'scifi': [
-                        {'hard scifi': []},
-                        {'dystopian': []}]},
-                    {'westerns': []},
-                    {'classics': []},
-                ]},
-                {'non-fiction': [
-                    {'biographies': []},
-                    {'essays': []},
-                ]},
-            ]
-        }
+@skip_if(lambda: not CLOSURE_EXTENSION)
+class TestTransitiveClosureIntegration(PeeweeTestCase):
+    tree = {
+        'books': [
+            {'fiction': [
+                {'scifi': [
+                    {'hard scifi': []},
+                    {'dystopian': []}]},
+                {'westerns': []},
+                {'classics': []},
+            ]},
+            {'non-fiction': [
+                {'biographies': []},
+                {'essays': []},
+            ]},
+        ]
+    }
 
-        def setUp(self):
-            ext_db.load_extension(CLOSURE_EXTENSION.rstrip('.so'))
-            ext_db.close()
+    def setUp(self):
+        super(TestTransitiveClosureIntegration, self).setUp()
+        ext_db.load_extension(CLOSURE_EXTENSION.rstrip('.so'))
+        ext_db.close()
 
-        def initialize_models(self):
-            class Category(BaseExtModel):
-                name = CharField()
-                parent = ForeignKeyField('self', null=True)
-                @classmethod
-                def g(cls, name):
-                    return cls.get(cls.name == name)
+    def tearDown(self):
+        super(TestTransitiveClosureIntegration, self).tearDown()
+        ext_db.unload_extension(CLOSURE_EXTENSION.rstrip('.so'))
 
-            Closure = ClosureTable(Category)
-            ext_db.drop_tables([Category, Closure], True)
-            ext_db.create_tables([Category, Closure])
+    def initialize_models(self):
+        class Category(BaseExtModel):
+            name = CharField()
+            parent = ForeignKeyField('self', null=True)
+            @classmethod
+            def g(cls, name):
+                return cls.get(cls.name == name)
 
-            def build_tree(nodes, parent=None):
-                for name, subnodes in nodes.items():
-                    category = Category.create(name=name, parent=parent)
-                    if subnodes:
-                        for subnode in subnodes:
-                            build_tree(subnode, category)
+        Closure = ClosureTable(Category)
+        ext_db.drop_tables([Category, Closure], True)
+        ext_db.create_tables([Category, Closure])
 
-            build_tree(self.tree)
-            return Category, Closure
+        def build_tree(nodes, parent=None):
+            for name, subnodes in nodes.items():
+                category = Category.create(name=name, parent=parent)
+                if subnodes:
+                    for subnode in subnodes:
+                        build_tree(subnode, category)
 
-        def assertNodes(self, query, *expected):
-            self.assertEqual(
-                set([category.name for category in query]),
-                set(expected))
+        build_tree(self.tree)
+        return Category, Closure
 
-        def test_build_tree(self):
-            Category, Closure = self.initialize_models()
-            self.assertEqual(Category.select().count(), 10)
+    def assertNodes(self, query, *expected):
+        self.assertEqual(
+            set([category.name for category in query]),
+            set(expected))
 
-        def test_descendants(self):
-            Category, Closure = self.initialize_models()
-            books = Category.g('books')
-            self.assertNodes(
-                Closure.descendants(books),
-                'fiction', 'scifi', 'hard scifi', 'dystopian',
-                'westerns', 'classics', 'non-fiction', 'biographies', 'essays')
+    def test_build_tree(self):
+        Category, Closure = self.initialize_models()
+        self.assertEqual(Category.select().count(), 10)
 
-            self.assertNodes(Closure.descendants(books, 0), 'books')
-            self.assertNodes(
-                Closure.descendants(books, 1), 'fiction', 'non-fiction')
-            self.assertNodes(
-                Closure.descendants(books, 2),
-                'scifi', 'westerns', 'classics', 'biographies', 'essays')
-            self.assertNodes(
-                Closure.descendants(books, 3), 'hard scifi', 'dystopian')
+    def test_descendants(self):
+        Category, Closure = self.initialize_models()
+        books = Category.g('books')
+        self.assertNodes(
+            Closure.descendants(books),
+            'fiction', 'scifi', 'hard scifi', 'dystopian',
+            'westerns', 'classics', 'non-fiction', 'biographies', 'essays')
 
-            fiction = Category.g('fiction')
-            self.assertNodes(
-                Closure.descendants(fiction),
-                'scifi', 'hard scifi', 'dystopian', 'westerns', 'classics')
-            self.assertNodes(
-                Closure.descendants(fiction, 1),
-                'scifi', 'westerns', 'classics')
-            self.assertNodes(
-                Closure.descendants(fiction, 2), 'hard scifi', 'dystopian')
+        self.assertNodes(Closure.descendants(books, 0), 'books')
+        self.assertNodes(
+            Closure.descendants(books, 1), 'fiction', 'non-fiction')
+        self.assertNodes(
+            Closure.descendants(books, 2),
+            'scifi', 'westerns', 'classics', 'biographies', 'essays')
+        self.assertNodes(
+            Closure.descendants(books, 3), 'hard scifi', 'dystopian')
 
-            self.assertNodes(
-                Closure.descendants(Category.g('scifi')),
-                'hard scifi', 'dystopian')
-            self.assertNodes(
-                Closure.descendants(Category.g('scifi'), include_node=True),
-                'scifi', 'hard scifi', 'dystopian')
-            self.assertNodes(Closure.descendants(Category.g('hard scifi'), 1))
+        fiction = Category.g('fiction')
+        self.assertNodes(
+            Closure.descendants(fiction),
+            'scifi', 'hard scifi', 'dystopian', 'westerns', 'classics')
+        self.assertNodes(
+            Closure.descendants(fiction, 1),
+            'scifi', 'westerns', 'classics')
+        self.assertNodes(
+            Closure.descendants(fiction, 2), 'hard scifi', 'dystopian')
 
-        def test_ancestors(self):
-            Category, Closure = self.initialize_models()
+        self.assertNodes(
+            Closure.descendants(Category.g('scifi')),
+            'hard scifi', 'dystopian')
+        self.assertNodes(
+            Closure.descendants(Category.g('scifi'), include_node=True),
+            'scifi', 'hard scifi', 'dystopian')
+        self.assertNodes(Closure.descendants(Category.g('hard scifi'), 1))
 
-            hard_scifi = Category.g('hard scifi')
-            self.assertNodes(
-                Closure.ancestors(hard_scifi),
-                'scifi', 'fiction', 'books')
-            self.assertNodes(
-                Closure.ancestors(hard_scifi, include_node=True),
-                'hard scifi', 'scifi', 'fiction', 'books')
-            self.assertNodes(Closure.ancestors(hard_scifi, 2), 'fiction')
-            self.assertNodes(Closure.ancestors(hard_scifi, 3), 'books')
+    def test_ancestors(self):
+        Category, Closure = self.initialize_models()
 
-            non_fiction = Category.g('non-fiction')
-            self.assertNodes(Closure.ancestors(non_fiction), 'books')
-            self.assertNodes(Closure.ancestors(non_fiction, include_node=True),
-                             'non-fiction', 'books')
-            self.assertNodes(Closure.ancestors(non_fiction, 1), 'books')
+        hard_scifi = Category.g('hard scifi')
+        self.assertNodes(
+            Closure.ancestors(hard_scifi),
+            'scifi', 'fiction', 'books')
+        self.assertNodes(
+            Closure.ancestors(hard_scifi, include_node=True),
+            'hard scifi', 'scifi', 'fiction', 'books')
+        self.assertNodes(Closure.ancestors(hard_scifi, 2), 'fiction')
+        self.assertNodes(Closure.ancestors(hard_scifi, 3), 'books')
 
-            books = Category.g('books')
-            self.assertNodes(Closure.ancestors(books, include_node=True),
-                             'books')
-            self.assertNodes(Closure.ancestors(books))
-            self.assertNodes(Closure.ancestors(books, 1))
+        non_fiction = Category.g('non-fiction')
+        self.assertNodes(Closure.ancestors(non_fiction), 'books')
+        self.assertNodes(Closure.ancestors(non_fiction, include_node=True),
+                         'non-fiction', 'books')
+        self.assertNodes(Closure.ancestors(non_fiction, 1), 'books')
 
-        def test_siblings(self):
-            Category, Closure = self.initialize_models()
+        books = Category.g('books')
+        self.assertNodes(Closure.ancestors(books, include_node=True),
+                         'books')
+        self.assertNodes(Closure.ancestors(books))
+        self.assertNodes(Closure.ancestors(books, 1))
 
-            self.assertNodes(
-                Closure.siblings(Category.g('hard scifi')), 'dystopian')
-            self.assertNodes(
-                Closure.siblings(Category.g('hard scifi'), include_node=True),
-                'hard scifi', 'dystopian')
-            self.assertNodes(
-                Closure.siblings(Category.g('classics')), 'scifi', 'westerns')
-            self.assertNodes(
-                Closure.siblings(Category.g('classics'), include_node=True),
-                'scifi', 'westerns', 'classics')
-            self.assertNodes(
-                Closure.siblings(Category.g('fiction')), 'non-fiction')
+    def test_siblings(self):
+        Category, Closure = self.initialize_models()
 
-        def test_tree_changes(self):
-            Category, Closure = self.initialize_models()
-            books = Category.g('books')
-            fiction = Category.g('fiction')
-            dystopian = Category.g('dystopian')
-            essays = Category.g('essays')
-            new_root = Category.create(name='products')
-            Category.create(name='magazines', parent=new_root)
-            books.parent = new_root
-            books.save()
-            dystopian.delete_instance()
-            essays.parent = books
-            essays.save()
-            Category.create(name='rants', parent=essays)
-            Category.create(name='poetry', parent=books)
+        self.assertNodes(
+            Closure.siblings(Category.g('hard scifi')), 'dystopian')
+        self.assertNodes(
+            Closure.siblings(Category.g('hard scifi'), include_node=True),
+            'hard scifi', 'dystopian')
+        self.assertNodes(
+            Closure.siblings(Category.g('classics')), 'scifi', 'westerns')
+        self.assertNodes(
+            Closure.siblings(Category.g('classics'), include_node=True),
+            'scifi', 'westerns', 'classics')
+        self.assertNodes(
+            Closure.siblings(Category.g('fiction')), 'non-fiction')
 
-            query = (Category
-                     .select(Category.name, Closure.depth)
-                     .join(Closure, on=(Category.id == Closure.id))
-                     .where(Closure.root == new_root)
-                     .order_by(Closure.depth, Category.name)
-                     .tuples())
-            self.assertEqual(list(query), [
-                ('products', 0),
-                ('books', 1),
-                ('magazines', 1),
-                ('essays', 2),
-                ('fiction', 2),
-                ('non-fiction', 2),
-                ('poetry', 2),
-                ('biographies', 3),
-                ('classics', 3),
-                ('rants', 3),
-                ('scifi', 3),
-                ('westerns', 3),
-                ('hard scifi', 4),
-            ])
+    def test_tree_changes(self):
+        Category, Closure = self.initialize_models()
+        books = Category.g('books')
+        fiction = Category.g('fiction')
+        dystopian = Category.g('dystopian')
+        essays = Category.g('essays')
+        new_root = Category.create(name='products')
+        Category.create(name='magazines', parent=new_root)
+        books.parent = new_root
+        books.save()
+        dystopian.delete_instance()
+        essays.parent = books
+        essays.save()
+        Category.create(name='rants', parent=essays)
+        Category.create(name='poetry', parent=books)
 
-        def tearDown(self):
-            ext_db.unload_extension(CLOSURE_EXTENSION.rstrip('.so'))
-
-elif TEST_VERBOSITY > 0:
-    print_('Skipping transitive closure integration tests.')
+        query = (Category
+                 .select(Category.name, Closure.depth)
+                 .join(Closure, on=(Category.id == Closure.id))
+                 .where(Closure.root == new_root)
+                 .order_by(Closure.depth, Category.name)
+                 .tuples())
+        self.assertEqual(list(query), [
+            ('products', 0),
+            ('books', 1),
+            ('magazines', 1),
+            ('essays', 2),
+            ('fiction', 2),
+            ('non-fiction', 2),
+            ('poetry', 2),
+            ('biographies', 3),
+            ('classics', 3),
+            ('rants', 3),
+            ('scifi', 3),
+            ('westerns', 3),
+            ('hard scifi', 4),
+        ])

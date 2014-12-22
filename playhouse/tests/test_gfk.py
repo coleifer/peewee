@@ -1,12 +1,10 @@
-import sys
-import unittest
-
 from peewee import *
 from playhouse.gfk import *
+from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
 
 
-db = SqliteDatabase(':memory:')
+db = database_initializer.get_in_memory_database()
 
 class BaseModel(Model):
     class Meta:
@@ -128,7 +126,3 @@ class GFKTestCase(ModelTestCase):
 
         e.tags = [p, t, c, s]
         self.assertEqual([t.tag for t in e.tags], ['coconut', 'peanuts', 'spicy', 'thai'])
-
-
-if __name__ == '__main__':
-    unittest.main(argv=sys.argv)

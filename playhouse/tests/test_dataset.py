@@ -7,16 +7,15 @@ try:
     from StringIO import StringIO
 except ImportError:
     from io import StringIO
-import sys
-import unittest
 
 from peewee import *
 from playhouse.dataset import DataSet
 from playhouse.dataset import Table
+from playhouse.tests.base import database_initializer
 from playhouse.tests.base import PeeweeTestCase
 
 
-db = SqliteDatabase('tmp.db')
+db = database_initializer.get_database('sqlite')
 
 class BaseModel(Model):
     class Meta:
@@ -39,12 +38,12 @@ class TestDataSet(PeeweeTestCase):
     names = ['charlie', 'huey', 'peewee', 'mickey', 'zaizee']
 
     def setUp(self):
-        if os.path.exists('tmp.db'):
-            os.unlink('tmp.db')
+        if os.path.exists(db.database):
+            os.unlink(db.database)
         db.connect()
         db.create_tables([User, Note, Category])
 
-        self.dataset = DataSet('sqlite:///tmp.db')
+        self.dataset = DataSet('sqlite:///%s' % db.database)
 
     def tearDown(self):
         self.dataset.close()
@@ -385,7 +384,3 @@ class TestDataSet(PeeweeTestCase):
 
         ref2 = self.dataset['new_table']
         self.assertEqual(list(ref2.all()), [{'id': 1, 'data': 'foo'}])
-
-
-if __name__ == '__main__':
-    unittest.main(argv=sys.argv)

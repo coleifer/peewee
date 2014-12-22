@@ -1,6 +1,4 @@
-import sys
 import threading
-import unittest
 
 from peewee import *
 from playhouse.kv import PickledKeyStore
@@ -145,7 +143,3 @@ class PostgresqlKeyStoreTestCase(PeeweeTestCase):
 
         self.kv['a'] = 'C'
         self.assertEqual(self.kv['a'], 'C')
-
-
-if __name__ == '__main__':
-    unittest.main(argv=sys.argv)

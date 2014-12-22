@@ -1,10 +1,8 @@
 from datetime import timedelta
-import sys
-import unittest
 
 from peewee import *
-from peewee import print_
 from playhouse.tests.base import PeeweeTestCase
+from playhouse.tests.base import skip_if
 try:
     import django
 except ImportError:
@@ -74,196 +72,190 @@ if django is not None:
         pass
 
 
-    class TestDjPeewee(PeeweeTestCase):
-        def assertFields(self, model, expected):
-            self.assertEqual(len(model._meta.fields), len(expected))
-            zipped = zip(model._meta.get_fields(), expected)
-            for (model_field, (name, field_type)) in zipped:
-                self.assertEqual(model_field.name, name)
-                self.assertTrue(type(model_field) is field_type)
+@skip_if(lambda: django is None)
+class TestDjPeewee(PeeweeTestCase):
+    def assertFields(self, model, expected):
+        self.assertEqual(len(model._meta.fields), len(expected))
+        zipped = zip(model._meta.get_fields(), expected)
+        for (model_field, (name, field_type)) in zipped:
+            self.assertEqual(model_field.name, name)
+            self.assertTrue(type(model_field) is field_type)
 
-        def test_simple(self):
-            P = translate(Simple)
-            self.assertEqual(list(P.keys()), ['Simple'])
-            self.assertFields(P['Simple'], [
-                ('id', PrimaryKeyField),
-                ('char_field', CharField),
-                ('int_field', IntegerField),
-            ])
+    def test_simple(self):
+        P = translate(Simple)
+        self.assertEqual(list(P.keys()), ['Simple'])
+        self.assertFields(P['Simple'], [
+            ('id', PrimaryKeyField),
+            ('char_field', CharField),
+            ('int_field', IntegerField),
+        ])
 
-        def test_graph(self):
-            P = translate(User, Tag, Comment)
-            self.assertEqual(sorted(P.keys()), [
-                'Comment',
-                'Post',
-                'Tag',
-                'Tag_posts',
-                'User'])
+    def test_graph(self):
+        P = translate(User, Tag, Comment)
+        self.assertEqual(sorted(P.keys()), [
+            'Comment',
+            'Post',
+            'Tag',
+            'Tag_posts',
+            'User'])
 
-            # Test the models that were found.
-            user = P['User']
-            self.assertFields(user, [
-                ('id', PrimaryKeyField),
-                ('username', CharField)])
-            self.assertEqual(user.posts.rel_model, P['Post'])
-            self.assertEqual(user.comments.rel_model, P['Comment'])
+        # Test the models that were found.
+        user = P['User']
+        self.assertFields(user, [
+            ('id', PrimaryKeyField),
+            ('username', CharField)])
+        self.assertEqual(user.posts.rel_model, P['Post'])
+        self.assertEqual(user.comments.rel_model, P['Comment'])
 
-            post = P['Post']
-            self.assertFields(post, [
-                ('id', PrimaryKeyField),
-                ('author', ForeignKeyField),
-                ('content', TextField)])
-            self.assertEqual(post.comments.rel_model, P['Comment'])
+        post = P['Post']
+        self.assertFields(post, [
+            ('id', PrimaryKeyField),
+            ('author', ForeignKeyField),
+            ('content', TextField)])
+        self.assertEqual(post.comments.rel_model, P['Comment'])
 
-            comment = P['Comment']
-            self.assertFields(comment, [
-                ('id', PrimaryKeyField),
-                ('post', ForeignKeyField),
-                ('commenter', ForeignKeyField),
-                ('comment', TextField)])
+        comment = P['Comment']
+        self.assertFields(comment, [
+            ('id', PrimaryKeyField),
+            ('post', ForeignKeyField),
+            ('commenter', ForeignKeyField),
+            ('comment', TextField)])
 
-            tag = P['Tag']
-            self.assertFields(tag, [
-                ('id', PrimaryKeyField),
-                ('tag', CharField)])
+        tag = P['Tag']
+        self.assertFields(tag, [
+            ('id', PrimaryKeyField),
+            ('tag', CharField)])
 
-            thru = P['Tag_posts']
-            self.assertFields(thru, [
-                ('id', PrimaryKeyField),
-                ('tag', ForeignKeyField),
-                ('post', ForeignKeyField)])
+        thru = P['Tag_posts']
+        self.assertFields(thru, [
+            ('id', PrimaryKeyField),
+            ('tag', ForeignKeyField),
+            ('post', ForeignKeyField)])
 
-        def test_fk_query(self):
-            trans = translate(User, Post, Comment, Tag)
-            U = trans['User']
-            P = trans['Post']
-            C = trans['Comment']
+    def test_fk_query(self):
+        trans = translate(User, Post, Comment, Tag)
+        U = trans['User']
+        P = trans['Post']
+        C = trans['Comment']
 
-            query = (U.select()
-                     .join(P)
-                     .join(C)
-                     .where(C.comment == 'test'))
-            sql, params = query.sql()
-            self.assertEqual(
-                sql,
-                'SELECT "t1"."id", "t1"."username" FROM "user_tbl" AS t1 '
-                'INNER JOIN "tests_post" AS t2 '
-                'ON ("t1"."id" = "t2"."author_id") '
-                'INNER JOIN "tests_comment" AS t3 '
-                'ON ("t2"."id" = "t3"."post_id") WHERE ("t3"."comment" = %s)')
-            self.assertEqual(params, ['test'])
+        query = (U.select()
+                 .join(P)
+                 .join(C)
+                 .where(C.comment == 'test'))
+        sql, params = query.sql()
+        self.assertEqual(
+            sql,
+            'SELECT "t1"."id", "t1"."username" FROM "user_tbl" AS t1 '
+            'INNER JOIN "tests_post" AS t2 '
+            'ON ("t1"."id" = "t2"."author_id") '
+            'INNER JOIN "tests_comment" AS t3 '
+            'ON ("t2"."id" = "t3"."post_id") WHERE ("t3"."comment" = %s)')
+        self.assertEqual(params, ['test'])
 
-        def test_m2m_query(self):
-            trans = translate(Post, Tag)
-            P = trans['Post']
-            U = trans['User']
-            T = trans['Tag']
-            TP = trans['Tag_posts']
+    def test_m2m_query(self):
+        trans = translate(Post, Tag)
+        P = trans['Post']
+        U = trans['User']
+        T = trans['Tag']
+        TP = trans['Tag_posts']
 
-            query = (P.select()
-                     .join(TP)
-                     .join(T)
-                     .where(T.tag == 'test'))
-            sql, params = query.sql()
-            self.assertEqual(
-                sql,
-                'SELECT "t1"."id", "t1"."author_id", "t1"."content" '
-                'FROM "tests_post" AS t1 '
-                'INNER JOIN "tests_tag_posts" AS t2 '
-                'ON ("t1"."id" = "t2"."post_id") '
-                'INNER JOIN "tests_tag" AS t3 '
-                'ON ("t2"."tag_id" = "t3"."id") WHERE ("t3"."tag" = %s)')
+        query = (P.select()
+                 .join(TP)
+                 .join(T)
+                 .where(T.tag == 'test'))
+        sql, params = query.sql()
+        self.assertEqual(
+            sql,
+            'SELECT "t1"."id", "t1"."author_id", "t1"."content" '
+            'FROM "tests_post" AS t1 '
+            'INNER JOIN "tests_tag_posts" AS t2 '
+            'ON ("t1"."id" = "t2"."post_id") '
+            'INNER JOIN "tests_tag" AS t3 '
+            'ON ("t2"."tag_id" = "t3"."id") WHERE ("t3"."tag" = %s)')
 
-            self.assertEqual(params, ['test'])
+        self.assertEqual(params, ['test'])
 
-        def test_docs_example(self):
-            # The docs don't lie.
-            PEvent = translate(Event)['Event']
-            hour = timedelta(hours=1)
-            query = (PEvent
-                     .select()
-                     .where(
-                         (PEvent.end_time - PEvent.start_time) > hour))
-            sql, params = query.sql()
-            self.assertEqual(
-                sql,
-                'SELECT "t1"."id", "t1"."start_time", "t1"."end_time", "t1"."title" '
-                'FROM "events_tbl" AS t1 '
-                'WHERE (("t1"."end_time" - "t1"."start_time") > %s)')
-            self.assertEqual(params, [hour])
+    def test_docs_example(self):
+        # The docs don't lie.
+        PEvent = translate(Event)['Event']
+        hour = timedelta(hours=1)
+        query = (PEvent
+                 .select()
+                 .where(
+                     (PEvent.end_time - PEvent.start_time) > hour))
+        sql, params = query.sql()
+        self.assertEqual(
+            sql,
+            'SELECT "t1"."id", "t1"."start_time", "t1"."end_time", "t1"."title" '
+            'FROM "events_tbl" AS t1 '
+            'WHERE (("t1"."end_time" - "t1"."start_time") > %s)')
+        self.assertEqual(params, [hour])
 
-        def test_self_referential(self):
-            trans = translate(Category)
-            self.assertFields(trans['Category'], [
-                ('id', PrimaryKeyField),
-                ('parent', IntegerField)])
+    def test_self_referential(self):
+        trans = translate(Category)
+        self.assertFields(trans['Category'], [
+            ('id', PrimaryKeyField),
+            ('parent', IntegerField)])
 
-        def test_cycle(self):
-            trans = translate(A)
-            self.assertFields(trans['A'], [
-                ('id', PrimaryKeyField),
-                ('a_field', IntegerField),
-                ('b', ForeignKeyField)])
-            self.assertFields(trans['B'], [
-                ('id', PrimaryKeyField),
-                ('a', IntegerField)])
+    def test_cycle(self):
+        trans = translate(A)
+        self.assertFields(trans['A'], [
+            ('id', PrimaryKeyField),
+            ('a_field', IntegerField),
+            ('b', ForeignKeyField)])
+        self.assertFields(trans['B'], [
+            ('id', PrimaryKeyField),
+            ('a', IntegerField)])
 
-            trans = translate(B)
-            self.assertFields(trans['A'], [
-                ('id', PrimaryKeyField),
-                ('a_field', IntegerField),
-                ('b', IntegerField)])
-            self.assertFields(trans['B'], [
-                ('id', PrimaryKeyField),
-                ('a', ForeignKeyField)])
+        trans = translate(B)
+        self.assertFields(trans['A'], [
+            ('id', PrimaryKeyField),
+            ('a_field', IntegerField),
+            ('b', IntegerField)])
+        self.assertFields(trans['B'], [
+            ('id', PrimaryKeyField),
+            ('a', ForeignKeyField)])
 
-        def test_max_depth(self):
-            trans = translate(C, max_depth=1)
-            self.assertFields(trans['C'], [
-                ('id', PrimaryKeyField),
-                ('b', ForeignKeyField)])
-            self.assertFields(trans['B'], [
-                ('id', PrimaryKeyField),
-                ('a', IntegerField)])
+    def test_max_depth(self):
+        trans = translate(C, max_depth=1)
+        self.assertFields(trans['C'], [
+            ('id', PrimaryKeyField),
+            ('b', ForeignKeyField)])
+        self.assertFields(trans['B'], [
+            ('id', PrimaryKeyField),
+            ('a', IntegerField)])
 
-        def test_exclude(self):
-            trans = translate(Comment, exclude=(User,))
-            self.assertFields(trans['Post'], [
-                ('id', PrimaryKeyField),
-                ('author', IntegerField),
-                ('content', TextField)])
-            self.assertEqual(
-                trans['Post'].comments.rel_model,
-                trans['Comment'])
+    def test_exclude(self):
+        trans = translate(Comment, exclude=(User,))
+        self.assertFields(trans['Post'], [
+            ('id', PrimaryKeyField),
+            ('author', IntegerField),
+            ('content', TextField)])
+        self.assertEqual(
+            trans['Post'].comments.rel_model,
+            trans['Comment'])
 
-            self.assertFields(trans['Comment'], [
-                ('id', PrimaryKeyField),
-                ('post', ForeignKeyField),
-                ('commenter', IntegerField),
-                ('comment', TextField)])
+        self.assertFields(trans['Comment'], [
+            ('id', PrimaryKeyField),
+            ('post', ForeignKeyField),
+            ('commenter', IntegerField),
+            ('comment', TextField)])
 
-        def test_backrefs(self):
-            trans = translate(User, backrefs=True)
-            self.assertEqual(sorted(trans.keys()), [
-                'Comment',
-                'Post',
-                'User'])
+    def test_backrefs(self):
+        trans = translate(User, backrefs=True)
+        self.assertEqual(sorted(trans.keys()), [
+            'Comment',
+            'Post',
+            'User'])
 
-        def test_inheritance(self):
-            trans = translate(Parent)
-            self.assertEqual(list(trans.keys()), ['Parent'])
-            self.assertFields(trans['Parent'], [
-                ('id', PrimaryKeyField),])
+    def test_inheritance(self):
+        trans = translate(Parent)
+        self.assertEqual(list(trans.keys()), ['Parent'])
+        self.assertFields(trans['Parent'], [
+            ('id', PrimaryKeyField),])
 
-            trans = translate(Child)
-            self.assertEqual(sorted(trans.keys()), ['Child', 'Parent'])
-            self.assertFields(trans['Child'], [
-                ('id', PrimaryKeyField),
-                ('parent_ptr', ForeignKeyField)])
-
-else:
-    print_('Skipping djpeewee tests, Django not found.')
-
-
-if __name__ == '__main__':
-    unittest.main(argv=sys.argv)
+        trans = translate(Child)
+        self.assertEqual(sorted(trans.keys()), ['Child', 'Parent'])
+        self.assertFields(trans['Child'], [
+            ('id', PrimaryKeyField),
+            ('parent_ptr', ForeignKeyField)])

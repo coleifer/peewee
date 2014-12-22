@@ -1,6 +1,3 @@
-import sys
-import unittest
-
 from peewee import DeleteQuery
 from peewee import InsertQuery
 from peewee import prefetch_add_subquery
@@ -1521,7 +1518,3 @@ class TestForUpdateNoWait(ModelTestCase):
                      .execute())
         self.assertRaises(OperationalError, try_lock)
         test_db.rollback()
-
-
-if __name__ == '__main__':
-    unittest.main(argv=sys.argv)

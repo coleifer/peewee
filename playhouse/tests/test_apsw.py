@@ -1,7 +1,5 @@
 import apsw
 import datetime
-import unittest
-import sys
 
 from playhouse.apsw_ext import *
 from playhouse.tests.base import ModelTestCase
@@ -99,7 +97,3 @@ class APSWTestCase(ModelTestCase):
         create_success()
         self.assertEqual(User.select().count(), 2)
         self.assertEqual(Message.select().count(), 2)
-
-
-if __name__ == '__main__':
-    unittest.main(argv=sys.argv)

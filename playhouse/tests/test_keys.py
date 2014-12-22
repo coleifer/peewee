@@ -1,6 +1,3 @@
-import sys
-import unittest
-
 from playhouse.tests.base import compiler
 from playhouse.tests.base import ModelTestCase
 from playhouse.tests.base import PeeweeTestCase
@@ -430,7 +427,3 @@ class TestForeignKeyConstraints(ModelTestCase):
             fa = FKC_a.create(name='fa')
             fb = FKC_b.create(fkc_a=fa)
             txn.rollback()
-
-
-if __name__ == '__main__':
-    unittest.main(argv=sys.argv)

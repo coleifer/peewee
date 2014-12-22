@@ -1,6 +1,3 @@
-import sys
-import unittest
-
 from peewee import ModelQueryResultWrapper
 from peewee import NaiveQueryResultWrapper
 from playhouse.tests.base import ModelTestCase
@@ -1000,7 +997,3 @@ class TestPrefetchNonPKFK(ModelTestCase):
             '101': ['a'],
             '104': ['a', 'c','e'],
         })
-
-
-if __name__ == '__main__':
-    unittest.main(argv=sys.argv)

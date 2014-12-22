@@ -1,14 +1,13 @@
 import datetime
 import os
-import sys
-import unittest
 
 from peewee import *
-from peewee import create_model_tables
-from peewee import drop_model_tables
 from peewee import print_
 from playhouse.migrate import *
 from playhouse.test_utils import count_queries
+from playhouse.tests.base import database_initializer
+from playhouse.tests.base import PeeweeTestCase
+from playhouse.tests.base import skip_if
 
 try:
     from psycopg2cffi import compat
@@ -28,11 +27,18 @@ except ImportError:
         import pymysql as mysql
     except ImportError:
         mysql = None
-mysql = None
+
+if mysql:
+    mysql_db = database_initializer.get_database('mysql')
+else:
+    mysql_db = None
+
+if psycopg2:
+    pg_db = database_initializer.get_database('postgres')
+else:
+    pg_db = None
 
 sqlite_db = SqliteDatabase(':memory:')
-
-TEST_VERBOSITY = int(os.environ.get('PEEWEE_TEST_VERBOSITY') or 1)
 
 class Tag(Model):
     tag = CharField()
@@ -85,11 +91,12 @@ class BaseMigrationTestCase(object):
     ]
 
     def setUp(self):
+        super(BaseMigrationTestCase, self).setUp()
         for model_class in MODELS:
             model_class._meta.database = self.database
 
-        drop_model_tables(MODELS, fail_silently=True)
-        create_model_tables(MODELS)
+        self.database.drop_tables(MODELS, True)
+        self.database.create_tables(MODELS)
         self.migrator = self.migrator_class(self.database)
 
         if 'newpages' in User._meta.reverse_rel:
@@ -97,10 +104,10 @@ class BaseMigrationTestCase(object):
             delattr(User, 'newpages')
 
     def tearDown(self):
+        super(BaseMigrationTestCase, self).tearDown()
         for model_class in MODELS:
             model_class._meta.database = self.database
-
-        drop_model_tables(MODELS, fail_silently=True)
+        self.database.drop_tables(MODELS, True)
 
     def test_add_column(self):
         # Create some fields with a variety of NULL / default values.
@@ -458,7 +465,7 @@ class BaseMigrationTestCase(object):
         self.assertEqual(foreign_key.dest_table, 'users')
 
 
-class SqliteMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
+class SqliteMigrationTestCase(BaseMigrationTestCase, PeeweeTestCase):
     database = sqlite_db
     migrator_class = SqliteMigrator
 
@@ -551,28 +558,17 @@ class SqliteMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
         ])
 
 
-if psycopg2:
-    pg_db = PostgresqlDatabase('peewee_test')
-
-    class PostgresqlMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
-        database = pg_db
-        migrator_class = PostgresqlMigrator
-elif TEST_VERBOSITY > 0:
-    print_('Skipping postgres migrations, driver not found.')
-
-if mysql:
-    mysql_db = MySQLDatabase('peewee_test')
-
-    class MySQLMigrationTestCase(BaseMigrationTestCase, unittest.TestCase):
-        database = mysql_db
-        migrator_class = MySQLMigrator
-
-        # MySQL does not raise an exception when adding a not null constraint
-        # to a column that contains NULL values.
-        _exception_add_not_null = False
-elif TEST_VERBOSITY > 0:
-    print_('Skipping mysql migrations, driver not found.')
+@skip_if(lambda: psycopg2 is None)
+class PostgresqlMigrationTestCase(BaseMigrationTestCase, PeeweeTestCase):
+    database = pg_db
+    migrator_class = PostgresqlMigrator
 
 
-if __name__ == '__main__':
-    unittest.main(argv=sys.argv)
+@skip_if(lambda: mysql is None)
+class MySQLMigrationTestCase(BaseMigrationTestCase, PeeweeTestCase):
+    database = mysql_db
+    migrator_class = MySQLMigrator
+
+    # MySQL does not raise an exception when adding a not null constraint
+    # to a column that contains NULL values.
+    _exception_add_not_null = False

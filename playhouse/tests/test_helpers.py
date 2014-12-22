@@ -1,6 +1,3 @@
-import sys
-import unittest
-
 from peewee import *
 from peewee import sort_models_topologically
 from playhouse.tests.base import PeeweeTestCase
@@ -80,7 +77,3 @@ def permutations(xs):
 def selections(xs):
     for i in range(len(xs)):
         yield (xs[i], xs[:i] + xs[i + 1:])
-
-
-if __name__ == '__main__':
-    unittest.main(argv=sys.argv)

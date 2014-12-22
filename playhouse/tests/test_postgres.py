@@ -3,23 +3,29 @@ import datetime
 import json
 import os
 import sys
-import unittest
 import uuid
 
 import psycopg2
+try:
+    from psycopg2.extras import Json
+except ImportError:
+    Json = None
 
-from peewee import create_model_tables
-from peewee import drop_model_tables
-from peewee import print_
 from peewee import UUIDField
 from playhouse.postgres_ext import *
+from playhouse.tests.base import database_initializer
+from playhouse.tests.base import ModelTestCase
+from playhouse.tests.base import PeeweeTestCase
+from playhouse.tests.base import skip_if
 
 
 PYPY = 'PyPy' in sys.version
-TEST_VERBOSITY = int(os.environ.get('PEEWEE_TEST_VERBOSITY') or 1)
-test_db = PostgresqlExtDatabase('peewee_test', user='postgres')
-test_ss_db = PostgresqlExtDatabase(
-    'peewee_test',
+test_db = database_initializer.get_database(
+    'postgres',
+    db_class=PostgresqlExtDatabase)
+test_ss_db = database_initializer.get_database(
+    'postgres',
+    db_class=PostgresqlExtDatabase,
     server_side_cursors=True,
     user='postgres')
 
@@ -82,10 +88,8 @@ MODELS = [
     FTSModel,
 ]
 
-class BasePostgresqlExtTestCase(unittest.TestCase):
-    def setUp(self):
-        drop_model_tables(MODELS, fail_silently=True)
-        create_model_tables(MODELS)
+class BasePostgresqlExtTestCase(ModelTestCase):
+    requires = MODELS
 
 
 class TestUUIDField(BasePostgresqlExtTestCase):
@@ -426,10 +430,11 @@ class TestTSVectorField(BasePostgresqlExtTestCase):
         self.assertMessages(FTSModel.fts_data.match('god & things'), [])
 
 
-class SSCursorTestCase(unittest.TestCase):
+class SSCursorTestCase(PeeweeTestCase):
     counter = 0
 
     def setUp(self):
+        super(SSCursorTestCase, self).setUp()
         self.close_conn()  # Close open connection.
         SSCursorModel.drop_table(True)
         NormalModel.drop_table(True)
@@ -543,119 +548,112 @@ def json_ok():
     conn = test_db.get_conn()
     return conn.server_version >= 90300
 
-if json_ok():
-    from psycopg2.extras import Json
+@skip_if(lambda: not json_ok())
+class TestJsonField(ModelTestCase):
+    requires = [TestingJson]
 
-    class TestJsonField(unittest.TestCase):
-        def setUp(self):
-            TestingJson.drop_table(True)
-            TestingJson.create_table()
+    def test_json_field(self):
+        data = {'k1': ['a1', 'a2'], 'k2': {'k3': 'v3'}}
+        tj = TestingJson.create(data=data)
+        tj_db = TestingJson.get(tj._pk_expr())
+        self.assertEqual(tj_db.data, data)
 
-        def test_json_field(self):
-            data = {'k1': ['a1', 'a2'], 'k2': {'k3': 'v3'}}
-            tj = TestingJson.create(data=data)
-            tj_db = TestingJson.get(tj._pk_expr())
-            self.assertEqual(tj_db.data, data)
+    def test_json_lookup_methods(self):
+        data = {
+            'gp1': {
+                'p1': {'c1': 'foo'},
+                'p2': {'c2': 'bar'},
+            },
+            'gp2': {}}
+        tj = TestingJson.create(data=data)
 
-        def test_json_lookup_methods(self):
-            data = {
-                'gp1': {
-                    'p1': {'c1': 'foo'},
-                    'p2': {'c2': 'bar'},
-                },
-                'gp2': {}}
-            tj = TestingJson.create(data=data)
+        def assertLookup(lookup, expected):
+            query = (TestingJson
+                     .select(lookup)
+                     .where(tj._pk_expr())
+                     .dicts())
+            self.assertEqual(query.get(), expected)
 
-            def assertLookup(lookup, expected):
-                query = (TestingJson
-                         .select(lookup)
-                         .where(tj._pk_expr())
-                         .dicts())
-                self.assertEqual(query.get(), expected)
+        expr = TestingJson.data['gp1']['p1'].alias('pdata')
+        assertLookup(expr, {'pdata': '{"c1": "foo"}'})
+        assertLookup(expr.as_json(), {'pdata': {'c1': 'foo'}})
 
-            expr = TestingJson.data['gp1']['p1'].alias('pdata')
-            assertLookup(expr, {'pdata': '{"c1": "foo"}'})
-            assertLookup(expr.as_json(), {'pdata': {'c1': 'foo'}})
+        expr = TestingJson.data['gp1']['p1']['c1'].alias('cdata')
+        assertLookup(expr, {'cdata': 'foo'})
+        assertLookup(expr.as_json(), {'cdata': 'foo'})
 
-            expr = TestingJson.data['gp1']['p1']['c1'].alias('cdata')
-            assertLookup(expr, {'cdata': 'foo'})
-            assertLookup(expr.as_json(), {'cdata': 'foo'})
+        tj.data = [
+            {'i1': ['foo', 'bar', 'baze']},
+            ['nugget', 'mickey']]
+        tj.save()
 
-            tj.data = [
-                {'i1': ['foo', 'bar', 'baze']},
-                ['nugget', 'mickey']]
-            tj.save()
+        expr = TestingJson.data[0]['i1'].alias('idata')
+        assertLookup(expr, {'idata': '["foo", "bar", "baze"]'})
+        assertLookup(expr.as_json(), {'idata': ['foo', 'bar', 'baze']})
 
-            expr = TestingJson.data[0]['i1'].alias('idata')
-            assertLookup(expr, {'idata': '["foo", "bar", "baze"]'})
-            assertLookup(expr.as_json(), {'idata': ['foo', 'bar', 'baze']})
+        expr = TestingJson.data[1][1].alias('ldata')
+        assertLookup(expr, {'ldata': 'mickey'})
+        assertLookup(expr.as_json(), {'ldata': 'mickey'})
 
-            expr = TestingJson.data[1][1].alias('ldata')
-            assertLookup(expr, {'ldata': 'mickey'})
-            assertLookup(expr.as_json(), {'ldata': 'mickey'})
+    def test_json_path(self):
+        data = {
+            'foo': {
+                'baz': {
+                    'bar': ['i1', 'i2', 'i3'],
+                    'baze': ['j1', 'j2'],
+                }}}
+        tj = TestingJson.create(data=data)
 
-        def test_json_path(self):
-            data = {
-                'foo': {
-                    'baz': {
-                        'bar': ['i1', 'i2', 'i3'],
-                        'baze': ['j1', 'j2'],
-                    }}}
-            tj = TestingJson.create(data=data)
+        def assertPath(path, expected):
+            query = (TestingJson
+                     .select(path)
+                     .where(tj._pk_expr())
+                     .dicts())
+            self.assertEqual(query.get(), expected)
 
-            def assertPath(path, expected):
-                query = (TestingJson
-                         .select(path)
-                         .where(tj._pk_expr())
-                         .dicts())
-                self.assertEqual(query.get(), expected)
+        expr = TestingJson.data.path('foo', 'baz', 'bar').alias('p')
+        assertPath(expr, {'p': '["i1", "i2", "i3"]'})
+        assertPath(expr.as_json(), {'p': ['i1', 'i2', 'i3']})
 
-            expr = TestingJson.data.path('foo', 'baz', 'bar').alias('p')
-            assertPath(expr, {'p': '["i1", "i2", "i3"]'})
-            assertPath(expr.as_json(), {'p': ['i1', 'i2', 'i3']})
+        expr = TestingJson.data.path('foo', 'baz', 'baze', 1).alias('p')
+        assertPath(expr, {'p': 'j2'})
+        assertPath(expr.as_json(), {'p': 'j2'})
 
-            expr = TestingJson.data.path('foo', 'baz', 'baze', 1).alias('p')
-            assertPath(expr, {'p': 'j2'})
-            assertPath(expr.as_json(), {'p': 'j2'})
+    def test_json_field_sql(self):
+        tj = TestingJson.select().where(TestingJson.data == {'foo': 'bar'})
+        sql, params = tj.sql()
+        self.assertEqual(sql, (
+            'SELECT "t1"."id", "t1"."data" '
+            'FROM "testingjson" AS t1 WHERE ("t1"."data" = %s)'))
+        self.assertEqual(params[0].adapted, {'foo': 'bar'})
 
-        def test_json_field_sql(self):
-            tj = TestingJson.select().where(TestingJson.data == {'foo': 'bar'})
-            sql, params = tj.sql()
-            self.assertEqual(sql, (
-                'SELECT "t1"."id", "t1"."data" '
-                'FROM "testingjson" AS t1 WHERE ("t1"."data" = %s)'))
-            self.assertEqual(params[0].adapted, {'foo': 'bar'})
+        tj = TestingJson.select().where(TestingJson.data['foo'] == 'bar')
+        sql, params = tj.sql()
+        self.assertEqual(sql, (
+            'SELECT "t1"."id", "t1"."data" '
+            'FROM "testingjson" AS t1 WHERE ("t1"."data"->>%s = %s)'))
+        self.assertEqual(params, ['foo', 'bar'])
 
-            tj = TestingJson.select().where(TestingJson.data['foo'] == 'bar')
-            sql, params = tj.sql()
-            self.assertEqual(sql, (
-                'SELECT "t1"."id", "t1"."data" '
-                'FROM "testingjson" AS t1 WHERE ("t1"."data"->>%s = %s)'))
-            self.assertEqual(params, ['foo', 'bar'])
+    def assertItems(self, where, *items):
+        query = TestingJson.select().where(where).order_by(TestingJson.id)
+        self.assertEqual(
+            [item.id for item in query],
+            [item.id for item in items])
 
-        def assertItems(self, where, *items):
-            query = TestingJson.select().where(where).order_by(TestingJson.id)
-            self.assertEqual(
-                [item.id for item in query],
-                [item.id for item in items])
+    def test_lookup(self):
+        t1 = TestingJson.create(data={'k1': 'v1', 'k2': {'k3': 'v3'}})
+        t2 = TestingJson.create(data={'k1': 'x1', 'k2': {'k3': 'x3'}})
+        t3 = TestingJson.create(data={'k1': 'v1', 'j2': {'j3': 'v3'}})
+        self.assertItems((TestingJson.data['k2']['k3'] == 'v3'), t1)
+        self.assertItems((TestingJson.data['k1'] == 'v1'), t1, t3)
 
-        def test_lookup(self):
-            t1 = TestingJson.create(data={'k1': 'v1', 'k2': {'k3': 'v3'}})
-            t2 = TestingJson.create(data={'k1': 'x1', 'k2': {'k3': 'x3'}})
-            t3 = TestingJson.create(data={'k1': 'v1', 'j2': {'j3': 'v3'}})
-            self.assertItems((TestingJson.data['k2']['k3'] == 'v3'), t1)
-            self.assertItems((TestingJson.data['k1'] == 'v1'), t1, t3)
+        # Valid key, no matching value.
+        self.assertItems((TestingJson.data['k2'] == 'v1'))
 
-            # Valid key, no matching value.
-            self.assertItems((TestingJson.data['k2'] == 'v1'))
+        # Non-existent key.
+        self.assertItems((TestingJson.data['not-here'] == 'v1'))
 
-            # Non-existent key.
-            self.assertItems((TestingJson.data['not-here'] == 'v1'))
+        # Non-existent nested key.
+        self.assertItems((TestingJson.data['not-here']['xxx'] == 'v1'))
 
-            # Non-existent nested key.
-            self.assertItems((TestingJson.data['not-here']['xxx'] == 'v1'))
-
-            self.assertItems((TestingJson.data['k2']['xxx'] == 'v1'))
-
-elif TEST_VERBOSITY > 0:
-    print_('Skipping postgres "Json" tests, unsupported version.')
+        self.assertItems((TestingJson.data['k2']['xxx'] == 'v1'))

@@ -1,10 +1,10 @@
-import unittest
-
 from peewee import *
 from playhouse import signals
+from playhouse.tests.base import database_initializer
+from playhouse.tests.base import ModelTestCase
 
 
-db = SqliteDatabase(':memory:')
+db = database_initializer.get_in_memory_database()
 
 class BaseSignalModel(signals.Model):
     class Meta:
@@ -19,16 +19,11 @@ class ModelB(BaseSignalModel):
 class SubclassOfModelB(ModelB):
     pass
 
-class SignalsTestCase(unittest.TestCase):
-    def setUp(self):
-        ModelA.create_table(True)
-        ModelB.create_table(True)
-        SubclassOfModelB.create_table(True)
+class SignalsTestCase(ModelTestCase):
+    requires = [ModelA, ModelB, SubclassOfModelB]
 
     def tearDown(self):
-        ModelA.drop_table()
-        ModelB.drop_table()
-        SubclassOfModelB.drop_table()
+        super(SignalsTestCase, self).tearDown()
         signals.pre_save._flush()
         signals.post_save._flush()
         signals.pre_delete._flush()

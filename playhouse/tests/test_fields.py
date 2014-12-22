@@ -1,6 +1,5 @@
 import decimal
 import sys
-import unittest
 
 from playhouse.tests.base import binary_construct
 from playhouse.tests.base import binary_types
@@ -658,7 +657,3 @@ class TestCheckConstraints(ModelTestCase):
             with test_db.transaction() as txn:
                 self.assertRaises(IntegrityError, CheckModel.create, value=0)
                 txn.rollback()
-
-
-if __name__ == '__main__':
-    unittest.main(argv=sys.argv)

@@ -2,7 +2,6 @@
 
 import sys
 import threading
-import unittest
 try:
     from Queue import Queue
 except ImportError:
@@ -320,7 +319,3 @@ class TestOuterLoopInnerCommit(ModelTestCase):
         test_db.commit()
         count = new_db.execute_sql('select count(*) from blog;').fetchone()
         self.assertEqual(count[0], 3)
-
-
-if __name__ == '__main__':
-    unittest.main(argv=sys.argv)

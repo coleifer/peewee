@@ -63,7 +63,7 @@ class DatabaseInitializer(object):
                     return key
         return backend
 
-    def get_database_class(self):
+    def get_database_class(self, backend=None):
         mapping = {
             'postgres': PostgresqlDatabase,
             'sqlite': SqliteDatabase,
@@ -90,35 +90,48 @@ class DatabaseInitializer(object):
         else:
             mapping['sqlcipher'] = SqlCipherDatabase
 
+        backend = backend or self.backend
         try:
-            return mapping[self.backend]
+            return mapping[backend]
         except KeyError:
-            print_('Unrecognized database: "%s".' % self.backend)
+            print_('Unrecognized database: "%s".' % backend)
             print_('Available choices:\n%s' % '\n'.join(
                 sorted(mapping.keys())))
             raise
 
-    def get_database(self):
-        method = 'get_%s_database' % self.backend
-        db_class = self.get_database_class()
+    def get_database(self, backend=None, db_class=None, **kwargs):
+        backend = backend or self.backend
+        method = 'get_%s_database' % backend
+
+        if db_class is None:
+            db_class = self.get_database_class(backend)
+
         if not hasattr(self, method):
-            return db_class(self.database_name)
+            return db_class(self.database_name, **kwargs)
         else:
-            return getattr(self, method)(db_class)
+            return getattr(self, method)(db_class, **kwargs)
 
-    def get_apsw_database(self, db_class):
-        return db_class('%s.db' % self.database_name, timeout=1000)
+    def get_apsw_database(self, db_class, **kwargs):
+        return db_class('%s.db' % self.database_name, timeout=1000, **kwargs)
 
-    def get_berkeleydb_database(self, db_class):
-        return db_class('%s.bdb.db' % self.database_name, timeout=1000)
+    def get_berkeleydb_database(self, db_class, **kwargs):
+        return db_class(
+            '%s.bdb.db' % self.database_name,
+            timeout=1000,
+            **kwargs)
 
-    def get_sqlcipher_database(self, db_class):
+    def get_sqlcipher_database(self, db_class, **kwargs):
+        passphrase = kwargs.pop('passphrase', 'snakeoilpassphrase')
         return db_class(
             '%s.cipher.db' % self.database_name,
-            passphrase='snakeoilpassphrase')
+            passphrase=passphrase,
+            **kwargs)
 
-    def get_sqlite_database(self, db_class):
-        return db_class('%s.db' % self.database_name)
+    def get_sqlite_database(self, db_class, **kwargs):
+        return db_class('%s.db' % self.database_name, **kwargs)
+
+    def get_in_memory_database(self):
+        return SqliteDatabase(':memory:')
 
 
 class TestAliasMap(AliasMap):

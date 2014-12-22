@@ -1,10 +1,9 @@
-import unittest
-
 from playhouse.sqlcipher_ext import *
+from playhouse.tests.base import database_initializer
+from playhouse.tests.base import ModelTestCase
 
-DB_FILE = 'test_sqlcipher.db'
-PASSPHRASE = 'test1234'
-db = SqlCipherDatabase(DB_FILE, passphrase=PASSPHRASE)
+
+db = database_initializer.get_database('sqlcipher')
 
 
 class BaseModel(Model):
@@ -14,10 +13,8 @@ class BaseModel(Model):
 class Thing(BaseModel):
     name = CharField()
 
-class SqlCipherTestCase(unittest.TestCase):
-    def setUp(self):
-        Thing.drop_table(True)
-        Thing.create_table()
+class SqlCipherTestCase(ModelTestCase):
+    requires = [Thing]
 
     def test_good_and_bad_passphrases(self):
         things = ('t1', 't2', 't3')
@@ -26,7 +23,9 @@ class SqlCipherTestCase(unittest.TestCase):
 
         # Try to open db with wrong passphrase
         secure = False
-        bad_db = SqlCipherDatabase(DB_FILE, passphrase=PASSPHRASE + 'x')
+        bad_db = database_initializer.get_database(
+            'sqlcipher',
+            passphrase='wrong passphrase')
 
         self.assertRaises(DatabaseError, bad_db.get_tables)
 
@@ -35,9 +34,9 @@ class SqlCipherTestCase(unittest.TestCase):
         self.assertEqual([t.name for t in query], ['t1', 't2', 't3'])
 
     def test_passphrase_length(self):
-        db = SqlCipherDatabase(DB_FILE, passphrase='x')
+        db = database_initializer.get_database('sqlcipher', passphrase='x')
         self.assertRaises(ImproperlyConfigured, db.connect)
 
     def test_kdf_iter(self):
-        db = SqlCipherDatabase(DB_FILE, passphrase=PASSPHRASE, kdf_iter=9999)
+        db = database_initializer.get_database('sqlcipher', kdf_iter=9999)
         self.assertRaises(ImproperlyConfigured, db.connect)

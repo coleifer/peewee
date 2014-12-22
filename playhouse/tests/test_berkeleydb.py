@@ -1,13 +1,11 @@
 import os
-import sys
-import unittest
 
 from peewee import IntegrityError
 from playhouse.berkeleydb import *
+from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
 
-DATABASE_FILE = 'tmp.bdb.db'
-database = BerkeleyDatabase(DATABASE_FILE)
+database = database_initializer.get_database('berkeleydb')
 
 class BaseModel(Model):
     class Meta:
@@ -50,7 +48,3 @@ class TestBerkeleyDatabase(ModelTestCase):
 
         self.assertRaises(IntegrityError, rollback)
         self.assertEqual(Person.select().count(), 1)
-
-
-if __name__ == '__main__':
-    unittest.main(argv=sys.argv)

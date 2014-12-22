@@ -4,13 +4,14 @@ try:
 except ImportError:
     from io import StringIO
 import sys
-import unittest
 
 from peewee import *
 from pwiz import *
+from playhouse.tests.base import database_initializer
+from playhouse.tests.base import PeeweeTestCase
 
 
-db = SqliteDatabase('tmp.db')
+db = database_initializer.get_database('sqlite')
 
 class BaseModel(Model):
     class Meta:
@@ -40,7 +41,7 @@ class capture_output(object):
 EXPECTED = """
 from peewee import *
 
-database = SqliteDatabase('tmp.db', **{})
+database = SqliteDatabase('peewee_test.db', **{})
 
 class UnknownField(object):
     pass
@@ -71,15 +72,17 @@ class Note(BaseModel):
 """.strip()
 
 
-class TestPwiz(unittest.TestCase):
+class TestPwiz(PeeweeTestCase):
     def setUp(self):
-        if os.path.exists('tmp.db'):
-            os.unlink('tmp.db')
+        super(TestPwiz, self).setUp()
+        if os.path.exists(db.database):
+            os.unlink(db.database)
         db.connect()
         db.create_tables([User, Note, Category])
         self.introspector = Introspector.from_database(db)
 
     def tearDown(self):
+        super(TestPwiz, self).tearDown()
         db.close()
 
     def test_print_models(self):

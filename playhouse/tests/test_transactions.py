@@ -1,6 +1,4 @@
-import sys
 import threading
-import unittest
 
 from peewee import transaction
 from playhouse.tests.base import database_class
@@ -440,7 +438,3 @@ class TestAtomic(ModelTestCase):
         create_both('huey')
         self.assertEqual(User.select().count(), 2)
         self.assertEqual(UniqueModel.select().count(), 2)
-
-
-if __name__ == '__main__':
-    unittest.main(argv=sys.argv)

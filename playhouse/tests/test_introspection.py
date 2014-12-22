@@ -1,6 +1,3 @@
-import sys
-import unittest
-
 from playhouse.tests.base import database_class
 from playhouse.tests.base import ModelTestCase
 from playhouse.tests.base import test_db
@@ -113,7 +110,3 @@ class TestMetadataIntrospection(ModelTestCase):
         assertFKs(User, [])
         assertFKs(Blog, [('user_id', 'users', 'id')])
         assertFKs(Comment, [('blog_id', 'blog', 'pk')])
-
-
-if __name__ == '__main__':
-    unittest.main(argv=sys.argv)
