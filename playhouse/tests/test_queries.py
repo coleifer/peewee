@@ -50,6 +50,22 @@ class TestSelectQuery(PeeweeTestCase):
              '"users"."username" '
              'FROM "users" AS users', []))
 
+        sq = SelectQuery(Blog).distinct([Blog.user, Blog.title])
+        self.assertEqual(
+            compiler.generate_select(sq),
+            ('SELECT DISTINCT ON ("blog"."user_id", "blog"."title") '
+             '"blog"."pk", "blog"."user_id", "blog"."title", "blog"."content",'
+             ' "blog"."pub_date" '
+             'FROM "blog" AS blog', []))
+
+        sq = SelectQuery(Blog, Blog.user, Blog.title).distinct(
+            [Blog.user, Blog.title])
+        self.assertEqual(
+            compiler.generate_select(sq),
+            ('SELECT DISTINCT ON ("blog"."user_id", "blog"."title") '
+             '"blog"."user_id", "blog"."title" '
+             'FROM "blog" AS blog', []))
+
     def test_reselect(self):
         sq = SelectQuery(User, User.username)
         self.assertSelect(sq, '"users"."username"', [])
