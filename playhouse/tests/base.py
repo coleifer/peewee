@@ -10,6 +10,11 @@ from peewee import logger
 from peewee import print_
 from peewee import QueryCompiler
 from peewee import SelectQuery
+try:
+    from unittest import mock
+except ImportError:
+    from playhouse.tests.libs import mock
+
 
 # Register psycopg2 compatibility hooks.
 try:

@@ -1,7 +1,9 @@
 import threading
 
+from peewee import SqliteDatabase
 from peewee import transaction
 from playhouse.tests.base import database_class
+from playhouse.tests.base import mock
 from playhouse.tests.base import ModelTestCase
 from playhouse.tests.base import skip_if
 from playhouse.tests.base import test_db
@@ -14,6 +16,30 @@ class TestTransaction(ModelTestCase):
     def tearDown(self):
         super(TestTransaction, self).tearDown()
         test_db.set_autocommit(True)
+
+    def test_transaction_connection_handling(self):
+        patch = 'peewee.Database'
+        db = SqliteDatabase(':memory:')
+        with mock.patch(patch, wraps=db) as patched_db:
+            with transaction(patched_db):
+                patched_db.begin.assert_called_once_with()
+                self.assertEqual(patched_db.commit.call_count, 0)
+                self.assertEqual(patched_db.rollback.call_count, 0)
+
+            patched_db.begin.assert_called_once_with()
+            patched_db.commit.assert_called_once_with()
+            self.assertEqual(patched_db.rollback.call_count, 0)
+
+        with mock.patch(patch, wraps=db) as patched_db:
+            def _test_patched():
+                patched_db.commit.side_effect = ValueError
+                with transaction(patched_db):
+                    pass
+
+            self.assertRaises(ValueError, _test_patched)
+            patched_db.begin.assert_called_once_with()
+            patched_db.commit.assert_called_once_with()
+            patched_db.rollback.assert_called_once_with()
 
     def test_autocommit(self):
         test_db.set_autocommit(False)
