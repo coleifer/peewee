@@ -31,7 +31,7 @@ from copy import deepcopy
 from functools import wraps
 from inspect import isclass
 
-__version__ = '2.4.4'
+__version__ = '2.4.5'
 __all__ = [
     'BareField',
     'BigIntegerField',
