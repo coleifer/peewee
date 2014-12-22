@@ -7,22 +7,21 @@ from peewee import drop_model_tables
 from peewee import mysql
 from peewee import print_
 from playhouse.reflection import *
+from playhouse.tests.base import database_initializer
 from playhouse.tests.base import PeeweeTestCase
 
 
-TEST_VERBOSITY = int(os.environ.get('PEEWEE_TEST_VERBOSITY') or 1)
+sqlite_db = database_initializer.get_database('sqlite')
+DATABASES = [sqlite_db]
 
-# test databases
-sqlite_db = SqliteDatabase('tmp.db')
 if mysql:
-    mysql_db = MySQLDatabase('peewee_test')
-else:
-    mysql_db = None
+    DATABASES.append(database_initializer.get_database('mysql'))
+
 try:
     import psycopg2
-    postgres_db = PostgresqlDatabase('peewee_test')
+    DATABASES.append(database_initializer.get_database('postgres'))
 except ImportError:
-    postgres_db = None
+    pass
 
 class BaseModel(Model):
     class Meta:
@@ -68,12 +67,6 @@ class Category(BaseModel):
     name = CharField(max_length=10)
     parent = ForeignKeyField('self', null=True)
 
-
-DATABASES = (
-    (sqlite_db, 'sqlite'),
-    (mysql_db, 'mysql'),
-    (postgres_db, 'postgres'))
-
 MODELS = (
     ColTypes,
     Nullable,
@@ -85,8 +78,8 @@ MODELS = (
 class TestReflection(PeeweeTestCase):
     def setUp(self):
         super(TestReflection, self).setUp()
-        if os.path.exists('tmp.db'):
-            os.unlink('tmp.db')
+        if os.path.exists(sqlite_db.database):
+            os.unlink(sqlite_db.database)
         sqlite_db.connect()
 
         for model in MODELS:
@@ -248,13 +241,10 @@ class TestReflection(PeeweeTestCase):
 
     def generative_test(fn):
         def inner(self):
-            for database, identifier in DATABASES:
-                if database:
-                    introspector = Introspector.from_database(database)
-                    self.create_tables(database)
-                    fn(self, introspector)
-                elif TEST_VERBOSITY > 0:
-                    print_('Skipping %s, driver not found' % identifier)
+            for database in DATABASES:
+                introspector = Introspector.from_database(database)
+                self.create_tables(database)
+                fn(self, introspector)
         return inner
 
     @generative_test
