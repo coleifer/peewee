@@ -5,6 +5,32 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.4.5
+
+I'm excited about this release, as in addition to a number of new features and bugfixes, it also is a step towards cleaner code. I refactored the tests into a number of modules, using a standard set of base test-cases and helpers. I also introduced the `mock` library into the test suite and plan to use it for cleaner tests going forward. There's a lot of work to do to continue cleaning up the tests, but I'm feeling good about the changes. Curiously, the test suite runs faster now.
+
+### Bugs fixed
+
+* #471, #482 and #484, all of which had to do with how joins were handled by the `aggregate_rows()` query result wrapper.
+* #472 removed some needless special-casing in `Model.save()`.
+* #466 fixed case-sensitive issues with the SQLite migrator.
+* #474 fixed a handful of bugs that cropped up migrating foreign keys with SQLite.
+* #475 fixed the behavior of the SQLite migrator regarding auto-generated indexes.
+* #479 fixed a bug in the code that stripped extra parentheses in the SQL generator.
+* Fixed a handful of bugs in the APSW extension.
+
+### New features
+
+* Added connection abstraction called `ExecutionContext` ([see docs](http://docs.peewee-orm.com/en/latest/peewee/database.html#advanced-connection-management)).
+* Made all context managers work as decorators (`atomic`, `transaction`, `savepoint`, `execution_context`).
+* Added explicit methods for `IS NULL` and `IS NOT NULL` queries. The latter was actually necessary since the behavior is different from `NOT IS NULL (...)`.
+* Allow disabling backref validation (#465)
+* Made quite a few improvements to the documentation, particularly sections on transactions.
+* Added caching to the [DataSet](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#dataset) extension, which should improve performance.
+* Made the SQLite migrator smarter with regards to preserving indexes when a table copy is necessary.
+
+[View commits](https://github.com/coleifer/peewee/compare/2.4.4...2.4.5)
+
 ## 2.4.4
 
 Biggest news: peewee has a new logo!
