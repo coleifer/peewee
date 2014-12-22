@@ -21,7 +21,7 @@ class BaseModel(Model):
 
 %(models)s
 def main():
-    create_model_tables([%(model_names)s], fail_silently=True)
+    db.create_tables([%(model_names)s], True)
 %(logging)s
 
 if __name__ == '__main__':
