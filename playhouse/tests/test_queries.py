@@ -910,6 +910,12 @@ class TestInsertQuery(PeeweeTestCase):
         sql, params = compiler.generate_insert(iq)
         self.assertEqual(sql, 'INSERT INTO "emptymodel"')
 
+    def test_upsert(self):
+        query = User.insert(username='charlie').upsert()
+        sql, params = compiler.generate_insert(query)
+        self.assertEqual(sql, (
+            'INSERT OR REPLACE INTO "users" ("username") VALUES (?)'))
+
 class TestDeleteQuery(PeeweeTestCase):
     def test_where(self):
         dq = DeleteQuery(User).where(User.id == 2)
