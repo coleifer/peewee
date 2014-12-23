@@ -1198,6 +1198,74 @@ To print a list of students and their courses you might do the following:
 
 Since we selected all fields from ``Student`` and ``Course`` in the *select* clause of the query, these foreign key traversals are "free" and we've done the whole iteration with just 1 query.
 
+ManyToManyField
+^^^^^^^^^^^^^^^
+
+The :py:class:`ManyToManyField` provides a *field-like* API over many-to-many fields. For all but the simplest many-to-many situations, you're better off using the standard peewee APIs. But, if your models are very simple and your querying needs are not very complex, you can get a big boost by using :py:class:`ManyToManyField`. Check out the :ref:`shortcuts` extension module for details.
+
+Modeling students and courses using :py:class:`ManyToManyField`:
+
+.. code-block:: python
+
+    from peewee import *
+    from playhouse.shortcuts import ManyToManyField
+
+    db = SqliteDatabase('school.db')
+
+    class BaseModel(Model):
+        class Meta:
+            database = db
+
+    class Student(BaseModel):
+        name = CharField()
+
+    class Course(BaseModel):
+        name = CharField()
+        students = ManyToManyField(Student, related_name='courses')
+
+    StudentCourse = Course.students.get_through_model()
+
+    db.create_tables([
+        Student,
+        Course,
+        StudentCourse])
+
+    # Get all classes that "huey" is enrolled in:
+    huey = Student.get(Student.name == 'Huey')
+    for course in huey.courses.order_by(Course.name):
+        print course.name
+
+    # Get all students in "English 101":
+    engl_101 = Course.get(Course.name == 'English 101')
+    for student in engl_101.students:
+        print student.name
+
+    # When adding objects to a many-to-many relationship, we can pass
+    # in either a single model instance, a list of models, or even a
+    # query of models:
+    huey.courses.add(Course.select().where(Course.name.contains('English')))
+
+    engl_101.students.add(Student.get(Student.name == 'Mickey'))
+    engl_101.students.add([
+        Student.get(Student.name == 'Charlie'),
+        Student.get(Student.name == 'Zaizee')])
+
+    # The same rules apply for removing items from a many-to-many:
+    huey.courses.remove(Course.select().where(Course.name.startswith('CS')))
+
+    engl_101.students.remove(huey)
+
+    # Calling .clear() will remove all associated objects:
+    cs_150.students.clear()
+
+For more examples, see:
+
+* :py:meth:`ManyToManyField.add`
+* :py:meth:`ManyToManyField.remove`
+* :py:meth:`ManyToManyField.clear`
+* :py:meth:`ManyToManyField.get_through_model`
+
+
 Self-joins
 ----------
 
