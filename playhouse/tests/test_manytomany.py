@@ -132,8 +132,7 @@ class TestManyToManyField(ModelTestCase):
         self.assertNotes(charlie.notes, [1])
         self.assertUsers(n1.users, ['charlie'])
 
-        with self.assertQueryCount(2):
-            charlie.notes = [n2, n3]
+        charlie.notes = [n2, n3]
         self.assertNotes(charlie.notes, [2, 3])
         self.assertUsers(n1.users, [])
         self.assertUsers(n2.users, ['charlie'])
@@ -148,8 +147,7 @@ class TestManyToManyField(ModelTestCase):
         huey = User.get(User.username == 'huey')
         n1, n2, n3, n4, n5 = Note.select().order_by(Note.text)
 
-        with self.assertQueryCount(1):
-            charlie.notes.add([n1, n2])
+        charlie.notes.add([n1, n2])
         self.assertNotes(charlie.notes, [1, 2])
         self.assertUsers(n1.users, ['charlie'])
         self.assertUsers(n2.users, ['charlie'])
@@ -258,15 +256,13 @@ class TestManyToManyField(ModelTestCase):
         n1, n2, n3, n4, n5 = alt_notes
 
         # Test adding relationships by setting the descriptor.
-        with self.assertQueryCount(2):
-            charlie.altnotes = [n1, n2]
+        charlie.altnotes = [n1, n2]
 
         with self.assertQueryCount(2):
             huey.altnotes = AltNote.select().where(
                 fn.substr(AltNote.text, 6, 1) << ['1', '3', '5'])
 
-        with self.assertQueryCount(1):
-            mickey.altnotes.add([n1, n4])
+        mickey.altnotes.add([n1, n4])
 
         with self.assertQueryCount(2):
             zaizee.altnotes = AltNote.select()
