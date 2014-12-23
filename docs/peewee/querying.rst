@@ -1178,11 +1178,11 @@ To efficiently iterate over a many-to-many relation, i.e., list all students and
 .. code-block:: python
 
     query = (StudentCourse
-        .select(StudentCourse, Student, Course)
-        .join(Course)
-        .switch(StudentCourse)
-        .join(Student)
-        .order_by(Student.name))
+             .select(StudentCourse, Student, Course)
+             .join(Course)
+             .switch(StudentCourse)
+             .join(Student)
+             .order_by(Student.name))
 
 To print a list of students and their courses you might do the following:
 
@@ -1196,9 +1196,7 @@ To print a list of students and their courses you might do the following:
             print 'Student: %s' % student.name
         print '    - %s' % student_course.course.name
 
-Since we selected all fields from ``Student`` and ``Course`` in the *select*
-clause of the query, these foreign key traversals are "free" and we've done the
-whole iteration with just 1 query.
+Since we selected all fields from ``Student`` and ``Course`` in the *select* clause of the query, these foreign key traversals are "free" and we've done the whole iteration with just 1 query.
 
 Self-joins
 ----------

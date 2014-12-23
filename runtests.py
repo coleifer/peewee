@@ -38,6 +38,7 @@ def get_option_parser():
     cases.add_option('--djpeewee', dest='djpeewee', default=False, action='store_true', help='djpeewee tests')
     cases.add_option('--gfk', dest='gfk', default=False, action='store_true', help='gfk tests')
     cases.add_option('--kv', dest='kv', default=False, action='store_true', help='key/value store tests')
+    cases.add_option('--manytomany', dest='manytomany', default=False, action='store_true', help='manytomany field tests')
     cases.add_option('--migrations', dest='migrations', default=False, action='store_true', help='migration helper tests (requires psycopg2)')
     cases.add_option('--pool', dest='pool', default=False, action='store_true', help='connection pool tests')
     cases.add_option('--postgres-ext', dest='postgres_ext', default=False, action='store_true', help='postgres_ext tests (requires psycopg2)')
@@ -88,6 +89,9 @@ def collect_modules(options):
     if xtra(options.kv):
         from playhouse.tests import test_kv
         modules.append(test_kv)
+    if xtra(options.manytomany):
+        from playhouse.tests import test_manytomany
+        modules.append(test_manytomany)
     if xtra(options.migrations):
         try:
             from playhouse.tests import test_migrate
@@ -119,8 +123,11 @@ def collect_modules(options):
         from playhouse.tests import test_signals
         modules.append(test_signals)
     if xtra(options.shortcuts):
+        from playhouse.tests import test_manytomany
         from playhouse.tests import test_shortcuts
         modules.append(test_shortcuts)
+        if test_manytomany not in modules:
+            modules.append(test_manytomany)
     if xtra(options.sqlcipher):
         try:
             from playhouse.tests import test_sqlcipher_ext

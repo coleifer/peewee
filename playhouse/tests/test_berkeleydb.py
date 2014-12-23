@@ -22,6 +22,10 @@ class Message(BaseModel):
 class TestBerkeleyDatabase(ModelTestCase):
     requires = [Person, Message]
 
+    def tearDown(self):
+        super(TestBerkeleyDatabase, self).tearDown()
+        database.close()
+
     def test_storage_retrieval(self):
         pc = Person.create(name='charlie')
         ph = Person.create(name='huey')

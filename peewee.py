@@ -3604,6 +3604,9 @@ class BaseModel(type):
         cls._data = None
         cls._meta.indexes = list(cls._meta.indexes)
 
+        if not cls._meta.db_table:
+            cls._meta.db_table = re.sub('[^\w]+', '_', cls.__name__.lower())
+
         # replace fields with field descriptors, calling the add_to_class hook
         fields = []
         for name, attr in cls.__dict__.items():
@@ -3632,9 +3635,6 @@ class BaseModel(type):
 
         for field, name in fields:
             field.add_to_class(cls, name)
-
-        if not cls._meta.db_table:
-            cls._meta.db_table = re.sub('[^\w]+', '_', cls.__name__.lower())
 
         # create a repr and error class before finalizing
         if hasattr(cls, '__unicode__'):
