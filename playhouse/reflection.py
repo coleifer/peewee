@@ -381,7 +381,11 @@ class Introspector(object):
 
     def introspect(self, table_names=None):
         # Retrieve all the tables in the database.
-        tables = self.metadata.database.get_tables(self.schema)
+        if not self.schema:
+            tables = self.metadata.database.get_tables()  # Use default value.
+        else:
+            tables = self.metadata.database.get_tables(self.schema)
+
         if table_names is not None:
             tables = [table for table in tables if table in table_names]
 
