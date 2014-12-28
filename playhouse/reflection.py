@@ -382,7 +382,7 @@ class Introspector(object):
     def introspect(self, table_names=None):
         # Retrieve all the tables in the database.
         if not self.schema:
-            tables = self.metadata.database.get_tables()  # Use default value.
+            tables = self.metadata.database.get_tables()  # Use default schema.
         else:
             tables = self.metadata.database.get_tables(self.schema)
 
