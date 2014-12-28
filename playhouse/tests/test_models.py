@@ -263,6 +263,14 @@ class TestQueryingModels(ModelTestCase):
         results = [x.ct for x in query]
         self.assertEqual(results, [2, 2, 2])
 
+    def test_model_iter(self):
+        self.create_users_blogs(3, 2)
+        usernames = [user.username for user in User]
+        self.assertEqual(sorted(usernames), ['u0', 'u1', 'u2'])
+
+        blogs = list(Blog)
+        self.assertEqual(len(blogs), 6)
+
 
 class TestModelAPIs(ModelTestCase):
     requires = [User, Blog, Category, UserCategory]

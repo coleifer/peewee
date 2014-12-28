@@ -3648,6 +3648,9 @@ class BaseModel(type):
 
         return cls
 
+    def __iter__(self):
+        return iter(self.select())
+
 class Model(with_metaclass(BaseModel)):
     def __init__(self, *args, **kwargs):
         self._data = self._meta.get_default_dict()
