@@ -367,10 +367,7 @@ class Introspector(object):
         return self.metadata.database.database
 
     def get_database_kwargs(self):
-        database_kwargs = dict(self.metadata.database.connect_kwargs)
-        if self.schema:
-            database_kwargs.update(schema=self.schema)
-        return database_kwargs
+        return self.metadata.database.connect_kwargs
 
     def make_model_name(self, table):
         model = re.sub('[^\w]+', '', table)
