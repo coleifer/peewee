@@ -77,6 +77,8 @@ def print_models(introspector, tables=None):
         print_('')
         print_('    class Meta:')
         print_('        db_table = \'%s\'' % table)
+        if introspector.schema:
+            print_('        schema = \'%s\'' % introspector.schema)
         primary_keys = database.primary_keys[table]
         if len(primary_keys) > 1:
             pk_field_names = sorted([
