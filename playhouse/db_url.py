@@ -56,4 +56,10 @@ def connect(url):
     if database_class is MySQLDatabase and 'password' in connect_kwargs:
         connect_kwargs['passwd'] = connect_kwargs.pop('password')
 
+    # Adjust parameters for SQLite
+    if (database_class is SqliteDatabase and 'host' in connect_kwargs and
+        not connect_kwargs["database"]):
+        connect_kwargs['database'] = connect_kwargs['host']
+        del connect_kwargs['host']
+
     return database_class(**connect_kwargs)
