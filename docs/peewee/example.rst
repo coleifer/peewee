@@ -172,7 +172,9 @@ This is a peewee idiom:
     # execute queries
     database = SqliteDatabase(DATABASE, threadlocals=True)
 
-Because SQLite likes to have a separate connection per-thread, we will tell flask that during the request/response cycle we need to create a connection to the database. Flask provides some handy decorators to make this a snap:
+When developing a web application, it's common to open a connection when a request starts, and close it when the response is returned. **You should always manage your connections explicitly**. For instance, if you are using a :ref:`connection pool <pool>`, connections will only be recycled correctly if you call :py:meth:`~Database.connect` and :py:meth:`~Database.close`.
+
+We will tell flask that during the request/response cycle we need to create a connection to the database. Flask provides some handy decorators to make this a snap:
 
 .. code-block:: python
 

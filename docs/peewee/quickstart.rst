@@ -61,7 +61,13 @@ Things get interesting when we set up relationships between models using `foreig
         class Meta:
             database = db # this model uses the people database
 
-Now that we have our models, let's create the tables in the database that will store our data. This will create the tables with the appropriate columns, indexes, sequences, and foreign key constraints:
+Now that we have our models, let's connect to the database. Although it's not necessary to open the connection explicitly, it is good practice since it will reveal any errors with your database connection immediately, as opposed to some arbitrary time later when the first query is executed. It is also good to close the connection when you are done -- for instance, a web app might open a connection when it receives a request, and close the connection when it sends the response.
+
+.. code-block:: pycon
+
+    >>> db.connect()
+
+We'll begin by creating the tables in the database that will store our data. This will create the tables with the appropriate columns, indexes, sequences, and foreign key constraints:
 
 .. code-block:: pycon
 
@@ -307,6 +313,12 @@ One last query. This will use a SQL function to find all people whose names star
     ...     print person.name
     ...
     Grandma L.
+
+We're done with our database, let's close the connection:
+
+.. code-block:: pycon
+
+    >>> db.close()
 
 This is just the basics! You can make your queries as complex as you like.
 

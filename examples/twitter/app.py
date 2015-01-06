@@ -150,9 +150,8 @@ def get_object_or_404(model, *expressions):
 def is_following(from_user, to_user):
     return from_user.is_following(to_user)
 
-# request handlers -- these two hooks are provided by flask and we will use them
-# to create and tear down a database connection on each request.  peewee will do
-# this for us, but its generally a good idea to be explicit.
+# Request handlers -- these two hooks are provided by flask and we will use them
+# to create and tear down a database connection on each request.
 @app.before_request
 def before_request():
     g.db = database
