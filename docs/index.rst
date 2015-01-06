@@ -16,15 +16,15 @@ Peewee is a simple and small ORM. It has few (but expressive) concepts, making i
 * tons of extensions available in the :ref:`playhouse` (postgres hstore/json/arrays, sqlite full-text-search, schema migrations, and much more).
 
 .. image:: postgresql.png
-    :target: peewee/cookbook.html#using-with-postgresql
+    :target: peewee/database.html#using-postgresql
     :alt: postgresql
 
 .. image:: mysql.png
-    :target: peewee/cookbook.html#using-with-mysql
+    :target: peewee/database.html#using-mysql
     :alt: mysql
 
 .. image:: sqlite.png
-    :target: peewee/cookbook.html#using-with-sqlite
+    :target: peewee/database.html#using-sqlite
     :alt: sqlite
 
 Peewee's source code hosted on `GitHub <https://github.com/coleifer/peewee>`_.
