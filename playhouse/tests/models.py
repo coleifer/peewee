@@ -294,6 +294,18 @@ class PGSchema(TestModel):
         schema = 'huey'
 
 
+class UpperCharField(CharField):
+    def coerce(self, value):
+        value = super(UpperCharField, self).coerce(value)
+        if value:
+            value = value.upper()
+        return value
+
+
+class UpperModel(TestModel):
+    data = UpperCharField()
+
+
 MODELS = [
     User,
     Blog,
@@ -338,4 +350,5 @@ MODELS = [
     Package,
     PackageItem,
     PGSchema,
+    UpperModel,
 ]

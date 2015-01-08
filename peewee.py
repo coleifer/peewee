@@ -3414,6 +3414,15 @@ class FieldProxy(Field):
     def clone_base(self):
         return FieldProxy(self._model_alias, self.field_instance)
 
+    def coerce(self, value):
+        return self.field_instance.coerce(value)
+
+    def python_value(self, value):
+        return self.field_instance.python_value(value)
+
+    def db_value(self, value):
+        return self.field_instance.db_value(value)
+
     def __getattr__(self, attr):
         if attr == 'model_class':
             return self._model_alias
