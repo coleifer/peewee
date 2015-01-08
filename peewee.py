@@ -217,6 +217,7 @@ OP_GT = '>'
 OP_GTE = '>='
 OP_NE = '!='
 OP_IN = 'in'
+OP_NOT_IN = 'not in'
 OP_IS = 'is'
 OP_IS_NOT = 'is not'
 OP_LIKE = 'like'
@@ -399,6 +400,8 @@ class Node(object):
     # Special expressions.
     def in_(self, *rhs):
         return Expression(self, OP_IN, rhs)
+    def not_in(self, *rhs):
+        return Expression(self, OP_NOT_IN, rhs)
     def is_null(self, is_null=True):
         if is_null:
             return Expression(self, OP_IS, None)
@@ -1200,6 +1203,7 @@ class QueryCompiler(object):
         OP_GTE: '>=',
         OP_NE: '!=',
         OP_IN: 'IN',
+        OP_NOT_IN: 'NOT IN',
         OP_IS: 'IS',
         OP_IS_NOT: 'IS NOT',
         OP_BIN_AND: '&',
