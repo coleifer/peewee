@@ -47,6 +47,9 @@ When starting to a project with peewee, it's typically best to begin with your d
         class Meta:
             database = db # This model uses the "people.db" database.
 
+.. note::
+    Note that we named our model ``Person`` instead of ``People``. This is a convention you should follow -- even though the table will contain multiple people, we always name the class using the singular form.
+
 There are lots of :ref:`field types <fields>` suitable for storing various types of data. Peewee handles converting between *pythonic* values those used by the database, so you can use Python types in your code without having to worry.
 
 Things get interesting when we set up relationships between models using `foreign keys (wikipedia) <http://en.wikipedia.org/wiki/Foreign_key>`_. This is easy to do with peewee:
