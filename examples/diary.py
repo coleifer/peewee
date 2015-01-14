@@ -52,8 +52,13 @@ def view_entries(search_query=None):
         print('=' * len(timestamp))
         print(entry.content)
         print('n) next entry')
+        print('d) delete entry')
         print('q) return to main menu')
-        if raw_input('Choice? (Nq) ') == 'q':
+        action = raw_input('Choice? (Ndq) ').lower().strip()
+        if action == 'q':
+            break
+        elif action == 'd':
+            entry.delete_instance()
             break
 
 def search_entries():
