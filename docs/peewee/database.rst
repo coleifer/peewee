@@ -597,7 +597,7 @@ I haven't used bottle myself, but looking at the documentation I believe the fol
 Other frameworks
 ^^^^^^^^^^^^^^^^
 
-Don't see your framework here? Please [open a GitHub ticket](https://github.com/coleifer/issues/new) and I'll see about adding a section, or better yet, submit a documentation pull-request.
+Don't see your framework here? Please `open a GitHub ticket <https://github.com/coleifer/issues/new>`_ and I'll see about adding a section, or better yet, submit a documentation pull-request.
 
 .. _advanced_connection_management:
 
