@@ -594,6 +594,26 @@ I haven't used bottle myself, but looking at the documentation I believe the fol
 
     # Rest of your bottle app goes here.
 
+Web.py
+^^^^^^
+
+See `application processors <http://webpy.org/cookbook/application_processors`_.
+
+.. code-block:: python
+
+    db = SqliteDatabase('my_webpy_app.db')
+
+    def connection_processor(handler):
+        db.connect()
+        try:
+            return handler()
+        finally:
+            if not db.is_closed():
+                db.close()
+
+    app.add_processor(connection_processor)
+
+
 Other frameworks
 ^^^^^^^^^^^^^^^^
 
