@@ -1979,11 +1979,18 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
             self.initialize(self.cursor.description)
             self._initialized = True
 
+        def _get_pk(instance):
+            if isinstance(instance._meta.primary_key, CompositeKey):
+                return tuple([
+                    instance._data[field_name]
+                    for field_name in instance._meta.primary_key.field_names])
+            return instance._get_pk_value()
+
         identity_map = {}
         _constructed = self.construct_instances(row)
         primary_instance = _constructed[self.model]
         for model_class, instance in _constructed.items():
-            identity_map[model_class] = {instance._get_pk_value(): instance}
+            identity_map[model_class] = {_get_pk(instance): instance}
 
         model_data = self.read_model_data(row)
         while True:
@@ -2007,7 +2014,7 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
             for model_class, instance in new_instances.items():
                 # Do not include any instances which are comprised solely of
                 # NULL values.
-                pk_value = instance._get_pk_value()
+                pk_value = _get_pk(instance)
                 if [val for val in instance._data.values() if val is not None]:
                     identity_map[model_class][pk_value] = instance
 
