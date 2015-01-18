@@ -1030,10 +1030,10 @@ class TestAggregateRowsRegression(ModelTestCase):
         cat1 = Category.create(name='cat1')
         cat2 = Category.create(name='cat2')
 
-        CommentCategory.create(comment=c1, category=cat1, sort_order=1)
-        CommentCategory.create(comment=c1, category=cat2, sort_order=1)
-        CommentCategory.create(comment=c2, category=cat1, sort_order=2)
-        CommentCategory.create(comment=c2, category=cat2, sort_order=2)
+        CommentCategory.create(category=cat1, comment=c1, sort_order=1)
+        CommentCategory.create(category=cat2, comment=c1, sort_order=1)
+        CommentCategory.create(category=cat1, comment=c2, sort_order=2)
+        CommentCategory.create(category=cat2, comment=c2, sort_order=2)
 
     def test_aggregate_rows_regression(self):
         comments = (Comment
@@ -1052,7 +1052,7 @@ class TestAggregateRowsRegression(ModelTestCase):
                     .order_by(CommentCategory.sort_order))
 
         with self.assertQueryCount(1):
-            c_list = list(comments)
+            c_list = list(comments.aggregate_rows())
 
 
 class TestPrefetchNonPKFK(ModelTestCase):

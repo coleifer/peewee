@@ -311,7 +311,7 @@ class CommentCategory(TestModel):
     sort_order = IntegerField(default=0)
 
     class Meta:
-        primary_key = CompositeKey('category', 'comment')
+        primary_key = CompositeKey('comment', 'category')
 
 class BlogData(TestModel):
     blog = ForeignKeyField(Blog)
