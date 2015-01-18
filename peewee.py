@@ -1127,8 +1127,8 @@ class CompositeKey(object):
 
     def __get__(self, instance, instance_type=None):
         if instance is not None:
-            return tuple(getattr(instance, field_name)
-                         for field_name in self.field_names)
+            return [getattr(instance, field_name)
+                    for field_name in self.field_names]
         return self
 
     def __set__(self, instance, value):
@@ -2020,10 +2020,11 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
 
             for join in self.join_meta[current]:
                 foreign_key = current._meta.rel_for_model(join.dest, join.on)
-                if join.dest not in identity_map:
-                    continue
 
                 if foreign_key:
+                    if join.dest not in identity_map:
+                        continue
+
                     for pk, instance in identity_map[current].items():
                         joined_inst = identity_map[join.dest][
                             instance._data[foreign_key.name]]
@@ -2038,6 +2039,9 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
                     attr_name = backref.related_name
                     for instance in identity_map[current].values():
                         setattr(instance, attr_name, [])
+
+                    if join.dest not in identity_map:
+                        continue
 
                     for pk, instance in identity_map[join.dest].items():
                         if pk is None:
