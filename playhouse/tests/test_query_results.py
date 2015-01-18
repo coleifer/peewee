@@ -580,7 +580,7 @@ class TestSelectRelatedForeignKeyToNonPrimaryKey(ModelTestCase):
             self.assertEqual([i.package.id for i in items], [p1.id, p1.id])
 
 
-class TestPrefetch(ModelTestCase):
+class BaseTestPrefetch(ModelTestCase):
     requires = [
         User,
         Blog,
@@ -638,7 +638,7 @@ class TestPrefetch(ModelTestCase):
     ]
 
     def setUp(self):
-        super(TestPrefetch, self).setUp()
+        super(BaseTestPrefetch, self).setUp()
         for parent, (children, orphans) in self.parent_data:
             p = Parent.create(data=parent)
             for child_pets in children:
@@ -659,6 +659,8 @@ class TestPrefetch(ModelTestCase):
                 for c in comments:
                     Comment.create(blog=b, comment=c)
 
+
+class TestPrefetch(BaseTestPrefetch):
     def test_prefetch_simple(self):
         sq = User.select().where(User.username != 'u3')
         sq2 = Blog.select().where(Blog.title != 'b2')
@@ -760,6 +762,8 @@ class TestPrefetch(ModelTestCase):
                 ('u4', 'b6'),
             ])
 
+
+class TestAggregateRows(BaseTestPrefetch):
     def test_aggregate_users(self):
         with self.assertQueryCount(1):
             query = (User
@@ -837,7 +841,7 @@ class TestPrefetch(ModelTestCase):
             ('u4', ['b5', 'b6']),
         ])
 
-    def test_aggregate_unselected_join(self):
+    def test_aggregate_unselected_join_backref(self):
         cat_1 = Category.create(name='category 1')
         cat_2 = Category.create(name='category 2')
         with test_db.transaction():
@@ -849,6 +853,9 @@ class TestPrefetch(ModelTestCase):
                 UserCategory.create(user=user, category=category)
 
         with self.assertQueryCount(1):
+            # The join on UserCategory is a backref join (since the FK is on
+            # UserCategory). Additionally, UserCategory/Category are not
+            # selected and are only used for filtering the result set.
             query = (User
                      .select(User, Blog)
                      .join(Blog, JOIN_LEFT_OUTER)
@@ -953,6 +960,99 @@ class TestPrefetch(ModelTestCase):
              [('o6', ['o6-p1', 'o6-p2']),
               ('o7', ['o7-p1'])],)
         ])
+
+    def test_aggregate_with_unselected_joins(self):
+        with self.assertQueryCount(1):
+            query = (Child
+                     .select(Child, ChildPet, Parent)
+                     .join(ChildPet, JOIN_LEFT_OUTER)
+                     .switch(Child)
+                     .join(Parent)
+                     .join(Orphan)
+                     .join(OrphanPet)
+                     .where(OrphanPet.data == 'o6-p2')
+                     .order_by(Child.data, ChildPet.data)
+                     .aggregate_rows())
+            results = []
+            for child in query:
+                results.append((
+                    child.data,
+                    child.parent.data,
+                    [child_pet.data for child_pet in child.childpet_set]))
+
+        self.assertEqual(results, [
+            ('c6', 'p3', []),
+            ('c7', 'p3', ['c7-p1']),
+        ])
+
+        with self.assertQueryCount(1):
+            query = (Parent
+                     .select(Parent, Child, ChildPet)
+                     .join(Child, JOIN_LEFT_OUTER)
+                     .join(ChildPet, JOIN_LEFT_OUTER)
+                     .switch(Parent)
+                     .join(Orphan)
+                     .join(OrphanPet)
+                     .where(OrphanPet.data == 'o6-p2')
+                     .order_by(Parent.data, Child.data, ChildPet.data)
+                     .aggregate_rows())
+            results = []
+            for parent in query:
+                results.append((
+                    parent.data,
+                    [(child.data, [pet.data for pet in child.childpet_set])
+                     for child in parent.child_set]))
+
+        self.assertEqual(results, [('p3', [
+            ('c6', []),
+            ('c7', ['c7-p1']),
+        ])])
+
+
+class TestAggregateRowsRegression(ModelTestCase):
+    requires = [
+        User,
+        Blog,
+        Comment,
+        Category,
+        CommentCategory,
+        BlogData]
+
+    def setUp(self):
+        super(TestAggregateRowsRegression, self).setUp()
+        u = User.create(username='u1')
+        b = Blog.create(title='b1', user=u)
+        BlogData.create(blog=b)
+
+        c1 = Comment.create(blog=b, comment='c1')
+        c2 = Comment.create(blog=b, comment='c2')
+
+        cat1 = Category.create(name='cat1')
+        cat2 = Category.create(name='cat2')
+
+        CommentCategory.create(comment=c1, category=cat1, sort_order=1)
+        CommentCategory.create(comment=c1, category=cat2, sort_order=1)
+        CommentCategory.create(comment=c2, category=cat1, sort_order=2)
+        CommentCategory.create(comment=c2, category=cat2, sort_order=2)
+
+    def test_aggregate_rows_regression(self):
+        comments = (Comment
+                    .select(
+                        Comment,
+                        CommentCategory,
+                        Category,
+                        Blog,
+                        BlogData)
+                    .join(CommentCategory, JOIN_LEFT_OUTER)
+                    .join(Category, JOIN_LEFT_OUTER)
+                    .switch(Comment)
+                    .join(Blog)
+                    .join(BlogData, JOIN_LEFT_OUTER)
+                    .where(Category.id == 1)
+                    .order_by(CommentCategory.sort_order))
+
+        with self.assertQueryCount(1):
+            c_list = list(comments)
 
 
 class TestPrefetchNonPKFK(ModelTestCase):

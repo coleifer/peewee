@@ -1127,8 +1127,8 @@ class CompositeKey(object):
 
     def __get__(self, instance, instance_type=None):
         if instance is not None:
-            return [getattr(instance, field_name)
-                    for field_name in self.field_names]
+            return tuple([getattr(instance, field_name)
+                          for field_name in self.field_names])
         return self
 
     def __set__(self, instance, value):

@@ -305,6 +305,17 @@ class UpperCharField(CharField):
 class UpperModel(TestModel):
     data = UpperCharField()
 
+class CommentCategory(TestModel):
+    category = ForeignKeyField(Category)
+    comment = ForeignKeyField(Comment)
+    sort_order = IntegerField(default=0)
+
+    class Meta:
+        primary_key = CompositeKey('category', 'comment')
+
+class BlogData(TestModel):
+    blog = ForeignKeyField(Blog)
+
 
 MODELS = [
     User,
@@ -351,4 +362,6 @@ MODELS = [
     PackageItem,
     PGSchema,
     UpperModel,
+    CommentCategory,
+    BlogData,
 ]
