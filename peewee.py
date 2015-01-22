@@ -3762,7 +3762,7 @@ class Model(with_metaclass(BaseModel)):
 
     @classmethod
     def table_exists(cls):
-        return cls._meta.db_table in cls._meta.database.get_tables(schema=cls._meta.schema)
+        return cls._meta.db_table in cls._meta.database.get_tables()
 
     @classmethod
     def create_table(cls, fail_silently=False):
