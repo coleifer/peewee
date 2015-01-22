@@ -761,7 +761,9 @@ class Field(Node):
             ddl.append(SQL('NOT NULL'))
         if self.primary_key:
             ddl.append(SQL('PRIMARY KEY'))
-        if self.sequence:
+        if self.default:
+            ddl.append(SQL("DEFAULT '%s'" % self.default))
+        elif self.sequence:
             ddl.append(SQL("DEFAULT NEXTVAL('%s')" % self.sequence))
         if self.constraints:
             ddl.extend(self.constraints)
