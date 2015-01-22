@@ -2050,9 +2050,12 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
                         setattr(instance, foreign_key.name, joined_inst)
                         instances.append(joined_inst)
                 else:
-                    backref = current._meta.reverse_rel_for_model(
-                        join.dest, join.on)
-                    if not backref:
+                    if not isinstance(join.dest, Node):
+                        backref = current._meta.reverse_rel_for_model(
+                            join.dest, join.on)
+                        if not backref:
+                            continue
+                    else:
                         continue
 
                     attr_name = backref.related_name
@@ -3121,7 +3124,7 @@ class PostgresqlDatabase(Database):
                 self.commit()
             return result
 
-    def get_tables(self, schema=None):
+    def get_tables(self, schema='public'):
         query = ('SELECT tablename FROM pg_catalog.pg_tables '
                  'WHERE schemaname = %s ORDER BY tablename')
         return [r for r, in self.execute_sql(query, (schema,)).fetchall()]

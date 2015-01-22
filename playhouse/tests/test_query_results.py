@@ -1054,6 +1054,36 @@ class TestAggregateRowsRegression(ModelTestCase):
         with self.assertQueryCount(1):
             c_list = list(comments.aggregate_rows())
 
+    def test_regression_506(self):
+        user = User.create(username='u2')
+        for i in range(2):
+            Blog.create(title='u2-%s' % i, user=user)
+
+        users = (User
+                 .select()
+                 .order_by(User.id.desc())
+                 .paginate(1, 5)
+                 .alias('users'))
+
+        with self.assertQueryCount(1):
+            query = (User
+                     .select(User, Blog)
+                     .join(Blog)
+                     .join(users, on=(User.id == users.c.id))
+                     .order_by(User.username, Blog.title)
+                     .aggregate_rows())
+
+            results = []
+            for user in query:
+                results.append((
+                    user.username,
+                    [blog.title for blog in user.blog_set]))
+
+        self.assertEqual(results, [
+            ('u1', ['b1']),
+            ('u2', ['u2-0', 'u2-1']),
+        ])
+
 
 class TestPrefetchNonPKFK(ModelTestCase):
     requires = [Package, PackageItem]
