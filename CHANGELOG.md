@@ -5,6 +5,25 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.4.6
+
+This is a relatively small release with mostly bug fixes and updates to the documentation. The one new feature I'd like to highlight is the ``ManyToManyField`` ([docs](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#ManyToManyField)).
+
+### Bugs fixed
+
+* #503, fixes behavior of `aggregate_rows()` when used with a `CompositeKey`.
+* #498, fixes value coercion for field aliases.
+* #492, fixes bug with pwiz and composite primary keys.
+* #486, correctly handle schemas with reflection module.
+
+### New features
+
+* Peewee has a new [ManyToManyField](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#ManyToManyField) available in the ``playhouse.shortcuts`` module.
+* Peewee now has proper support for *NOT IN* queries through the ``Node.not_in()`` method.
+* Models now support iteration. This is equivalent to ``Model.select()``.
+
+[View commits](https://github.com/coleifer/peewee/compare/2.4.5...2.4.6)
+
 ## 2.4.5
 
 I'm excited about this release, as in addition to a number of new features and bugfixes, it also is a step towards cleaner code. I refactored the tests into a number of modules, using a standard set of base test-cases and helpers. I also introduced the `mock` library into the test suite and plan to use it for cleaner tests going forward. There's a lot of work to do to continue cleaning up the tests, but I'm feeling good about the changes. Curiously, the test suite runs faster now.
