@@ -281,7 +281,7 @@ Models
         :param bool fail_silently: If set to ``True``, the method will check
           for the existence of the table before attempting to create.
 
-        Create the table for the given model.
+        Create the table for the given model, along with any constraints and indexes.
 
         Example:
 
@@ -1756,6 +1756,9 @@ Database and its subclasses
         :param model_class: :py:class:`Model` class.
         :param bool safe: If `True`, the table will not be created if it already exists.
 
+        .. warning::
+            Unlike :py:meth:`Model.create_table`, this method does not create indexes or constraints. This method will only create the table itself. If you wish to create the table along with any indexes and constraints, use either :py:meth:`Model.create_table` or :py:meth:`Database.create_tables`.
+
     .. py:method:: create_index(model_class, fields[, unique=False])
 
         :param model_class: :py:class:`Model` table on which to create index
@@ -1819,7 +1822,7 @@ Database and its subclasses
         :param list models: A list of models.
         :param bool safe: Check first whether the table exists before attempting to create it.
 
-        This method should be used for creating tables as it will resolve the model dependency graph and ensure the tables are created in the correct order.
+        This method should be used for creating tables as it will resolve the model dependency graph and ensure the tables are created in the correct order. This method will also create any indexes and constraints defined on the models.
 
         Usage:
 
