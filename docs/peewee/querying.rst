@@ -1427,6 +1427,9 @@ Below is an example of how we might fetch several users and any tweets they crea
 .. note::
     Do not mix calls to :py:meth:`~SelectQuery.aggregate_rows` with :py:meth:`~SelectQuery.get`. The latter applies a ``LIMIT 1`` SQL clause, and since the aggregate result set may contain more than one item, this can lead to incorrect behavior.
 
+.. warning::
+    Because there is a lot of computation involved in de-duping data, it is possible that for some queries :py:meth:`~SelectQuery.aggregate_rows` will be significantly less performant than using :py:func:`prefetch` (described in the following section) or even issuing **N** simple queries. Profile your code if you're not sure.
+
 Using prefetch
 ^^^^^^^^^^^^^^
 
