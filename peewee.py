@@ -3121,7 +3121,7 @@ class PostgresqlDatabase(Database):
                 self.commit()
             return result
 
-    def get_tables(self, schema='public'):
+    def get_tables(self, schema=None):
         query = ('SELECT tablename FROM pg_catalog.pg_tables '
                  'WHERE schemaname = %s ORDER BY tablename')
         return [r for r, in self.execute_sql(query, (schema,)).fetchall()]
@@ -3762,7 +3762,10 @@ class Model(with_metaclass(BaseModel)):
 
     @classmethod
     def table_exists(cls):
-        return cls._meta.db_table in cls._meta.database.get_tables(schema=cls._meta.schema)
+        kwargs = {}
+        if cls._meta.schema:
+            kwargs['schema'] = cls._meta.schema
+        return cls._meta.db_table in cls._meta.database.get_tables(**kwargs)
 
     @classmethod
     def create_table(cls, fail_silently=False):
