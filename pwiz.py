@@ -57,7 +57,7 @@ def print_models(introspector, tables=None):
             # In the event the destination table has already been pushed
             # for printing, then we have a reference cycle.
             if dest in accum and table not in accum:
-                print_('# Possible reference cycle: %s' % foreign_key)
+                print_('# Possible reference cycle: %s' % dest)
 
             # If this is not a self-referential foreign key, and we have
             # not already processed the destination table, do so now.
