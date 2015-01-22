@@ -253,6 +253,10 @@ def merge_dict(source, overrides):
     merged.update(overrides)
     return merged
 
+def pythonify_name(name):
+    name = re.sub('([a-z_])([A-Z][_a-z])', '\\1 \\2', name)
+    return re.sub('[^\w+]', '_', name.lower())
+
 def returns_clone(func):
     """
     Method decorator that will "clone" the object before applying the given
@@ -1040,6 +1044,15 @@ class ForeignKeyField(IntegerField):
             to_field=self.to_field,
             **kwargs)
 
+    def _get_descriptor(self):
+        return RelationDescriptor(self, self.rel_model)
+
+    def _get_backref_descriptor(self):
+        return ReverseRelationDescriptor(self)
+
+    def _get_related_name(self):
+        return self._related_name or ('%s_set' % self.model_class._meta.name)
+
     def add_to_class(self, model_class, name):
         if isinstance(self.rel_model, Proxy):
             def callback(rel_model):
@@ -1057,8 +1070,7 @@ class ForeignKeyField(IntegerField):
         model_class._meta.fields[self.name] = self
         model_class._meta.columns[self.db_column] = self
 
-        model_name = model_class._meta.name
-        self.related_name = self._related_name or '%s_set' % (model_name)
+        self.related_name = self._get_related_name()
 
         if self.rel_model == 'self':
             self.rel_model = self.model_class
@@ -1081,10 +1093,10 @@ class ForeignKeyField(IntegerField):
                 raise AttributeError(error % (
                     self.model_class._meta.name, self.name, self.related_name))
 
-        fk_descriptor = RelationDescriptor(self, self.rel_model)
-        backref_descriptor = ReverseRelationDescriptor(self)
-        setattr(model_class, name, fk_descriptor)
-        setattr(self.rel_model, self.related_name, backref_descriptor)
+        setattr(model_class, name, self._get_descriptor())
+        setattr(self.rel_model,
+                self.related_name,
+                self._get_backref_descriptor())
         self._is_bound = True
 
         model_class._meta.rel[self.name] = self
