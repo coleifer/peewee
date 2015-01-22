@@ -361,7 +361,7 @@ class MySQLColumn(namedtuple('_Column', _column_attributes)):
         if self.is_pk:
             parts.append(SQL('PRIMARY KEY'))
         if self.extra:
-            parts.append(SQL(extra))
+            parts.append(SQL(self.extra))
         return Clause(*parts)
 
 
