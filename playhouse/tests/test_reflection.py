@@ -67,13 +67,18 @@ class Category(BaseModel):
     name = CharField(max_length=10)
     parent = ForeignKeyField('self', null=True)
 
+class Nugget(BaseModel):
+    category_id = ForeignKeyField(Category, db_column='category_id')
+    category = CharField()
+
 MODELS = (
     ColTypes,
     Nullable,
     RelModel,
     FKPK,
     Underscores,
-    Category)
+    Category,
+    Nugget)
 
 class TestReflection(PeeweeTestCase):
     def setUp(self):
@@ -100,6 +105,7 @@ class TestReflection(PeeweeTestCase):
             'category',
             'coltypes',
             'fkpk',
+            'nugget',
             'nullable',
             'relmodel',
             'underscores'])
@@ -270,6 +276,9 @@ class TestReflection(PeeweeTestCase):
             ('relmodel', (
                 ('col_types_id', ForeignKeyField, False),
                 ('col_types_nullable_id', ForeignKeyField, True))),
+            ('nugget', (
+                ('category_id', ForeignKeyField, False),
+                ('category', CharField, False))),
             ('nullable', (
                 ('nullable_cf', CharField, True),
                 ('nullable_if', IntegerField, True))),
@@ -374,6 +383,18 @@ class TestReflection(PeeweeTestCase):
             'to_field': "'id'",
         })
 
+        nugget = columns['nugget']
+        category_fk = nugget['category_id']
+        self.assertEqual(category_fk.name, 'category_id')
+        self.assertEqual(category_fk.get_field_parameters(), {
+            'to_field': "'id'",
+            'rel_model': 'Category',
+            'db_column': "'category_id'",
+        })
+
+        category = nugget['category']
+        self.assertEqual(category.name, 'category')
+
     @generative_test
     def test_get_field(self, introspector):
         columns, primary_keys, foreign_keys, model_names, indexes =\
@@ -401,6 +422,12 @@ class TestReflection(PeeweeTestCase):
                 ('col_types_id', 'col_types = ForeignKeyField('
                  'db_column=\'col_types_id\', primary_key=True, '
                  'rel_model=Coltypes, to_field=\'f11\')'),
+            )),
+            ('nugget', (
+                ('category_id', 'category_id = ForeignKeyField('
+                 'db_column=\'category_id\', rel_model=Category, '
+                 'to_field=\'id\')'),
+                ('category', 'category = CharField()'),
             )),
             ('relmodel', (
                 ('col_types_id', 'col_types = ForeignKeyField('
