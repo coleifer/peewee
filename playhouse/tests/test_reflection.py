@@ -248,9 +248,12 @@ class TestReflection(PeeweeTestCase):
     def generative_test(fn):
         def inner(self):
             for database in DATABASES:
-                introspector = Introspector.from_database(database)
-                self.create_tables(database)
-                fn(self, introspector)
+                try:
+                    introspector = Introspector.from_database(database)
+                    self.create_tables(database)
+                    fn(self, introspector)
+                finally:
+                    drop_model_tables(MODELS)
         return inner
 
     @generative_test
