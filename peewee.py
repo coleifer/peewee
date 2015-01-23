@@ -462,6 +462,9 @@ class Param(Node):
     def clone_base(self):
         return Param(self.value, self.conv)
 
+class Passthrough(Param):
+    _node_type = 'passthrough'
+
 class SQL(Node):
     """An unescaped SQL string, with optional parameters."""
     _node_type = 'sql'
@@ -1258,6 +1261,7 @@ class QueryCompiler(object):
         return {
             'expression': self._parse_expression,
             'param': self._parse_param,
+            'passthrough': self._parse_param,
             'func': self._parse_func,
             'clause': self._parse_clause,
             'entity': self._parse_entity,
