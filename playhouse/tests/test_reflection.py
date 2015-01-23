@@ -352,6 +352,7 @@ class TestReflection(PeeweeTestCase):
         self.assertEqual(col_types_nullable_id.get_field_parameters(), {
             'db_column': "'col_types_nullable_id'",
             'null': True,
+            'related_name': "'coltypes_col_types_nullable_set'",
             'rel_model': 'Coltypes',
             'to_field': "'f11'",
         })
@@ -407,7 +408,9 @@ class TestReflection(PeeweeTestCase):
                  'to_field=\'f11\')'),
                 ('col_types_nullable_id', 'col_types_nullable = '
                  'ForeignKeyField(db_column=\'col_types_nullable_id\', '
-                 'null=True, rel_model=Coltypes, to_field=\'f11\')'),
+                 'null=True, rel_model=Coltypes, '
+                 'related_name=\'coltypes_col_types_nullable_set\', '
+                 'to_field=\'f11\')'),
             )),
             ('underscores', (
                 ('_id', '_id = PrimaryKeyField()'),

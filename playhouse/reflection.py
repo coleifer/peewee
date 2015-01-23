@@ -43,6 +43,11 @@ class Column(object):
         self.index = index
         self.unique = unique
 
+        # Foreign key metadata.
+        self.rel_model = None
+        self.related_name = None
+        self.to_field = None
+
     def __repr__(self):
         attrs = [
             'field_class',
@@ -71,6 +76,8 @@ class Column(object):
             params['rel_model'] = self.rel_model
             if self.to_field:
                 params['to_field'] = "'%s'" % self.to_field
+            if self.related_name:
+                params['related_name'] = "'%s'" % self.related_name
 
         # Handle indexes on column.
         if not self.is_primary_key():
@@ -91,7 +98,8 @@ class Column(object):
         return (self.field_class is ForeignKeyField and
                 self.rel_model == "'self'")
 
-    def set_foreign_key(self, foreign_key, model_names, dest=None):
+    def set_foreign_key(self, foreign_key, model_names, dest=None,
+                        related_name=None):
         self.foreign_key = foreign_key
         self.field_class = ForeignKeyField
         if foreign_key.dest_table == foreign_key.table:
@@ -99,6 +107,7 @@ class Column(object):
         else:
             self.rel_model = model_names[foreign_key.dest_table]
         self.to_field = dest and dest.name or None
+        self.related_name = related_name or None
 
     def get_field(self):
         # Generate the field definition for this column.
@@ -443,10 +452,30 @@ class Introspector(object):
             columns[table] = table_columns
             indexes[table] = table_indexes
 
+        # Gather all instances where we might have a `related_name` conflict,
+        # either due to multiple FKs on a table pointing to the same table,
+        # or a related_name that would conflict with an existing field.
+        related_names = {}
+        sort_fn = lambda foreign_key: foreign_key.column
+        for table in tables:
+            models_referenced = set()
+            for foreign_key in sorted(foreign_keys[table], key=sort_fn):
+                try:
+                    column = columns[table][foreign_key.column]
+                except KeyError:
+                    continue
+
+                dest_table = foreign_key.dest_table
+                if dest_table in models_referenced:
+                    related_names[column] = '%s_%s_set' % (
+                        dest_table,
+                        column.name)
+                else:
+                    models_referenced.add(dest_table)
+
         # On the second pass convert all foreign keys.
         for table in tables:
             for foreign_key in foreign_keys[table]:
-                # TODO: Ensure that we generate unique related_names?
                 src = columns[foreign_key.table][foreign_key.column]
                 try:
                     dest = columns[foreign_key.dest_table][
@@ -455,9 +484,10 @@ class Introspector(object):
                     dest = None
 
                 src.set_foreign_key(
-                    foreign_key,
-                    model_names,
-                    dest)
+                    foreign_key=foreign_key,
+                    model_names=model_names,
+                    dest=dest,
+                    related_name=related_names.get(src))
 
         return DatabaseMetadata(
             columns,
