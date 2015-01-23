@@ -417,8 +417,19 @@ class Introspector(object):
 
             model_names[table] = self.make_model_name(table)
 
-            for column_name, column in table_columns.items():
-                column.name = self.make_column_name(column_name)
+            lower_col_names = set(column_name.lower()
+                                  for column_name in table_columns)
+
+            for col_name, column in table_columns.items():
+                new_name = self.make_column_name(col_name)
+
+                # If we have two columns, "parent" and "parent_id", ensure
+                # that when we don't introduce naming conflicts.
+                lower_name = col_name.lower()
+                if lower_name.endswith('_id') and new_name in lower_col_names:
+                    new_name = col_name.lower()
+
+                column.name = new_name
 
             for index in table_indexes:
                 if len(index.columns) == 1:
@@ -435,6 +446,7 @@ class Introspector(object):
         # On the second pass convert all foreign keys.
         for table in tables:
             for foreign_key in foreign_keys[table]:
+                # TODO: Ensure that we generate unique related_names?
                 src = columns[foreign_key.table][foreign_key.column]
                 try:
                     dest = columns[foreign_key.dest_table][
