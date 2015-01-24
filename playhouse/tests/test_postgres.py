@@ -699,12 +699,6 @@ class TestBinaryJsonField(BaseJsonFieldTestCase, ModelTestCase):
     ModelClass = BJson
     requires = [BJson]
 
-    def test_equality(self):
-        data = {'k1': ['a1', 'a2'], 'k2': {'k3': 'v3'}}
-        j = BJson.create(data=data)
-        j_db = BJson.get(BJson.data == data)
-        self.assertEqual(j.id, j_db.id)
-
     def _create_test_data(self):
         data = [
             {'k1': 'v1', 'k2': 'v2', 'k3': {'k4': ['i1', 'i2'], 'k5': {}}},
@@ -714,98 +708,98 @@ class TestBinaryJsonField(BaseJsonFieldTestCase, ModelTestCase):
             range(5, 15),
             ['k4', 'k1']]
 
-        bjson_objs = []
+        self._bjson_objects = []
         for json_value in data:
-            bjson_objs.append(BJson.create(data=json_value))
+            self._bjson_objects.append(BJson.create(data=json_value))
 
-        return bjson_objs
-
-    def assertBJsonObjects(self, expr, objects, indexes):
+    def assertObjects(self, expr, *indexes):
         query = (BJson
                  .select()
                  .where(expr)
                  .order_by(BJson.id))
         self.assertEqual(
             [bjson.data for bjson in query],
-            [objects[index].data for index in indexes])
+            [self._bjson_objects[index].data for index in indexes])
+
+    def test_equality(self):
+        data = {'k1': ['a1', 'a2'], 'k2': {'k3': 'v3'}}
+        j = BJson.create(data=data)
+        j_db = BJson.get(BJson.data == data)
+        self.assertEqual(j.id, j_db.id)
 
     def test_subscript_contains(self):
-        bjson_objects = self._create_test_data()
-        def assertObjects(expr, *expected):
-            return self.assertBJsonObjects(expr, bjson_objects, expected)
+        self._create_test_data()
 
         # 'k3' is mapped to another dictioary {'k4': [...]}. Therefore,
         # 'k3' is said to contain 'k4', but *not* ['k4'] or ['k4', 'k5'].
-        assertObjects(BJson.data['k3'].contains('k4'), 0)
-        assertObjects(BJson.data['k3'].contains(['k4']))
-        assertObjects(BJson.data['k3'].contains(['k4', 'k5']))
+        self.assertObjects(BJson.data['k3'].contains('k4'), 0)
+        self.assertObjects(BJson.data['k3'].contains(['k4']))
+        self.assertObjects(BJson.data['k3'].contains(['k4', 'k5']))
 
         # We can check for the keys this way, though.
-        assertObjects(BJson.data['k3'].contains_all('k4', 'k5'), 0)
-        assertObjects(BJson.data['k3'].contains_any('k4', 'kx'), 0)
+        self.assertObjects(BJson.data['k3'].contains_all('k4', 'k5'), 0)
+        self.assertObjects(BJson.data['k3'].contains_any('k4', 'kx'), 0)
 
         # However, in test object index=2, 'k4' can be said to contain
         # both 'i1' and ['i1'].
-        assertObjects(BJson.data['k4'].contains('i1'), 2)
-        assertObjects(BJson.data['k4'].contains(['i1']), 2)
+        self.assertObjects(BJson.data['k4'].contains('i1'), 2)
+        self.assertObjects(BJson.data['k4'].contains(['i1']), 2)
 
         # Interestingly, we can also specify the list of contained values
         # out-of-order.
-        assertObjects(BJson.data['k4'].contains(['i2', 'i1']), 2)
+        self.assertObjects(BJson.data['k4'].contains(['i2', 'i1']), 2)
 
         # We can test whether an object contains another JSON object fragment.
-        assertObjects(BJson.data['k3'].contains({'k4': ['i1']}), 0)
-        assertObjects(BJson.data['k3'].contains({'k4': ['i1', 'i2']}), 0)
+        self.assertObjects(BJson.data['k3'].contains({'k4': ['i1']}), 0)
+        self.assertObjects(BJson.data['k3'].contains({'k4': ['i1', 'i2']}), 0)
 
         # Check multiple levels of nesting / containment.
-        assertObjects(BJson.data['k3']['k4'].contains('i2'), 0)
-        assertObjects(BJson.data['k3']['k4'].contains_all('i1', 'i2'), 0)
-        assertObjects(BJson.data['k3']['k4'].contains_all('i0', 'i2'))
-        assertObjects(BJson.data['k4'].contains_all('i1', 'i2'), 2)
+        self.assertObjects(BJson.data['k3']['k4'].contains('i2'), 0)
+        self.assertObjects(BJson.data['k3']['k4'].contains_all('i1', 'i2'), 0)
+        self.assertObjects(BJson.data['k3']['k4'].contains_all('i0', 'i2'))
+        self.assertObjects(BJson.data['k4'].contains_all('i1', 'i2'), 2)
 
         # Check array indexes.
-        assertObjects(BJson.data[2].contains('a3'), 1)
-        assertObjects(BJson.data[0].contains('a1'), 1)
-        assertObjects(BJson.data[0].contains('k1'))
+        self.assertObjects(BJson.data[2].contains('a3'), 1)
+        self.assertObjects(BJson.data[0].contains('a1'), 1)
+        self.assertObjects(BJson.data[0].contains('k1'))
 
     def test_contains(self):
-        bjson_objects = self._create_test_data()
-        def assertObjects(expr, *expected):
-            return self.assertBJsonObjects(expr, bjson_objects, expected)
+        self._create_test_data()
 
         # Test for keys. 'k4' is both an object key and an array element.
-        assertObjects(BJson.data.contains('k4'), 2, 5)
-        assertObjects(BJson.data.contains('a1'), 1, 2)
-        assertObjects(BJson.data.contains('k3'), 0)
+        self.assertObjects(BJson.data.contains('k4'), 2, 5)
+        self.assertObjects(BJson.data.contains('a1'), 1, 2)
+        self.assertObjects(BJson.data.contains('k3'), 0)
 
         # We can test for multiple top-level keys/indexes.
-        assertObjects(BJson.data.contains_all('a1', 'a2'), 1, 2)
+        self.assertObjects(BJson.data.contains_all('a1', 'a2'), 1, 2)
 
         # If we test for both with .contains(), though, it is treated as
         # an object match.
-        assertObjects(BJson.data.contains(['a1', 'a2']), 1)
+        self.assertObjects(BJson.data.contains(['a1', 'a2']), 1)
 
         # Check numbers.
-        assertObjects(BJson.data.contains([2, 5, 6, 7, 8]), 3)
-        assertObjects(BJson.data.contains([5, 6, 7, 8, 9]), 3, 4)
+        self.assertObjects(BJson.data.contains([2, 5, 6, 7, 8]), 3)
+        self.assertObjects(BJson.data.contains([5, 6, 7, 8, 9]), 3, 4)
 
         # We can check for partial objects.
-        assertObjects(BJson.data.contains({'a1': 'x1'}), 2)
-        assertObjects(BJson.data.contains({'k3': {'k4': []}}), 0)
-        assertObjects(BJson.data.contains([{'a3': 'a4'}]), 1)
+        self.assertObjects(BJson.data.contains({'a1': 'x1'}), 2)
+        self.assertObjects(BJson.data.contains({'k3': {'k4': []}}), 0)
+        self.assertObjects(BJson.data.contains([{'a3': 'a4'}]), 1)
 
         # Check for simple keys.
-        assertObjects(BJson.data.contains('a1'), 1, 2)
-        assertObjects(BJson.data.contains('k3'), 0)
+        self.assertObjects(BJson.data.contains('a1'), 1, 2)
+        self.assertObjects(BJson.data.contains('k3'), 0)
 
         # Contains any.
-        assertObjects(BJson.data.contains_any('a1', 'k1'), 0, 1, 2, 5)
-        assertObjects(BJson.data.contains_any('k4', 'xx', 'yy', '2'), 2, 5)
-        assertObjects(BJson.data.contains_any('i1', 'i2', 'a3'))
+        self.assertObjects(BJson.data.contains_any('a1', 'k1'), 0, 1, 2, 5)
+        self.assertObjects(BJson.data.contains_any('k4', 'xx', 'yy', '2'), 2, 5)
+        self.assertObjects(BJson.data.contains_any('i1', 'i2', 'a3'))
 
         # Contains all.
-        assertObjects(BJson.data.contains_all('k1', 'k2', 'k3'), 0)
-        assertObjects(BJson.data.contains_all('k1', 'k2', 'k3', 'k4'))
+        self.assertObjects(BJson.data.contains_all('k1', 'k2', 'k3'), 0)
+        self.assertObjects(BJson.data.contains_all('k1', 'k2', 'k3', 'k4'))
 
     def test_integer_index_weirdness(self):
         self._create_test_data()
@@ -816,3 +810,33 @@ class TestBinaryJsonField(BaseJsonFieldTestCase, ModelTestCase):
                     BJson.data.contains_any(2, 8, 12)))
 
         self.assertRaises(ProgrammingError, fails)
+
+    def test_selecting(self):
+        self._create_test_data()
+        query = (BJson
+                 .select(BJson.data['k3']['k4'].as_json().alias('k3k4'))
+                 .order_by(BJson.id))
+        k3k4_data = [obj.k3k4 for obj in query]
+        self.assertEqual(k3k4_data, [
+            ['i1', 'i2'],
+            None,
+            None,
+            None,
+            None,
+            None])
+
+        query = (BJson
+                 .select(
+                     BJson.data[0].as_json(),
+                     BJson.data[2].as_json())
+                 .order_by(BJson.id)
+                 .tuples())
+        results = list(query)
+        self.assertEqual(results, [
+            (None, None),
+            ('a1', {'a3': 'a4'}),
+            (None, None),
+            (0, 2),
+            (5, 7),
+            ('k4', None),
+        ])
