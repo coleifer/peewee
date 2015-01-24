@@ -125,12 +125,13 @@ The postgresql extensions module provides a number of "postgres-only" functions,
 currently:
 
 * :ref:`hstore support <hstore>`
-* :ref:`json support <pgjson>`
+* :ref:`json support <pgjson>`, including ``jsonb`` for Postgres 9.4.
 * :ref:`server-side cursors <server_side_cursors>`
 * :ref:`full-text search <pg_fts>`
 * :py:class:`ArrayField` field type, for storing arrays.
 * :py:class:`HStoreField` field type, for storing key/value pairs.
 * :py:class:`JSONField` field type, for storing JSON data.
+* :py:class:`BinaryJSONField` field type for the ``jsonb`` JSON data type.
 * :py:class:`TSVectorField` field type, for storing full-text search data.
 * :py:class:`DateTimeTZ` field type, a timezone-aware datetime field.
 
@@ -289,12 +290,14 @@ JSON Support
 ^^^^^^^^^^^^
 
 peewee has basic support for Postgres' native JSON data type, in the form of
-:py:class:`JSONField`.
+:py:class:`JSONField`. As of version 2.4.7, peewee also supports the Postgres 9.4 binary json ``jsonb`` type, via :py:class:`BinaryJSONField`.
 
 .. warning::
   Postgres supports a JSON data type natively as of 9.2 (full support in 9.3). In
   order to use this functionality you must be using the correct version of Postgres
   with `psycopg2` version 2.5 or greater.
+
+  To use :py:class:`BinaryJSONField`, which has many performance and querying advantages, you must have Postgres 9.4 or later.
 
 .. note::
   You must be sure your database is an instance of :py:class:`PostgresqlExtDatabase`
@@ -344,8 +347,9 @@ Here is an example of how you might declare a model with a JSON field:
     for result in q:
         print result.person['name'], result.person['dob']
 
-For more examples, see the :py:class:`JSONField` API documentation below.
+The :py:class:`BinaryJSONField` works the same and supports the same operations as the regular :py:class:`JSONField`, but provides several additional operations for testing *containment*. Using the binary json field, you can test whether your JSON data contains other partial JSON structures (:py:meth:`~BinaryJSONField.contains`, :py:meth:`~BinaryJSONField.contains_any`, :py:meth:`~BinaryJSONField.contains_all`), or whether it is a subset of a larger JSON document (:py:meth:`~BinaryJSONField.contained_by`).
 
+For more examples, see the :py:class:`JSONField` and :py:class:`BinaryJSONField` API documents below.
 
 .. _server_side_cursors:
 
@@ -448,6 +452,7 @@ postgres_ext API notes
     * :py:class:`ArrayField`
     * :py:class:`DateTimeTZField`
     * :py:class:`JSONField`
+    * :py:class:`BinaryJSONField`
     * :py:class:`HStoreField`
     * :py:class:`TSVectorField`
 
@@ -671,13 +676,15 @@ postgres_ext API notes
 .. py:class:: JSONField(dumps=None, *args, **kwargs)
 
     Field class suitable for storing and querying arbitrary JSON.  When using
-    this on a model, set the field's value to a Python object (either a `dict`
-    or a `list`).  When you retrieve your value from the database it will be
+    this on a model, set the field's value to a Python object (either a ``dict``
+    or a ``list``).  When you retrieve your value from the database it will be
     returned as a Python data structure.
 
     :param dumps: The default is to call json.dumps() or the dumps function. You can override this method to create a customized JSON wrapper.
 
     .. note:: You must be using Postgres 9.2 / psycopg2 2.5 or greater.
+
+    .. note:: If you are using Postgres 9.4, strongly consider using the :py:class:`BinaryJSONField` instead as it offers better performance and more powerful querying options.
 
     Example model declaration:
 
@@ -765,6 +772,103 @@ postgres_ext API notes
         # will return the same thing as the previous example.
         get_data(APIResponse.data['foo']['bar'][0].as_json())
         # 'i1'
+
+.. py:class:: BinaryJSONField(dumps=None, *args, **kwargs)
+
+    Store and query arbitrary JSON documents. Data should be stored using normal Python ``dict`` and ``list`` objects, and when data is returned from the database, it will be returned using ``dict`` and ``list`` as well.
+
+    For examples of basic query operations, see the above code samples for :py:class:`JSONField`. The example queries below will use the same ``APIResponse`` model described above.
+
+    :param dumps: The default is to call json.dumps() or the dumps function. You can override this method to create a customized JSON wrapper.
+
+    .. note:: You must be using Postgres 9.4 / psycopg2 2.5 or newer. If you are using Postgres 9.2 or 9.3, you can use the regular :py:class:`JSONField` instead.
+
+    .. py:method:: contains(other)
+
+        Test whether the given JSON data contains the given JSON fragment or key.
+
+        Example:
+
+        .. code-block:: python
+
+            search_fragment = {
+                'foo': {'bar': ['i2']}
+            }
+            query = (APIResponse
+                     .select()
+                     .where(APIResponse.data.contains(search_fragment)))
+
+            # If we're searching for a list, the list items do not need to
+            # be ordered in a particular way:
+            query = (APIResponse
+                     .select()
+                     .where(APIResponse.data.contains({
+                         'foo': {'bar': ['i2', 'i1']}})))
+
+        We can pass in simple keys as well. To find APIResponses that contain the key ``foo`` at the top-level:
+
+        .. code-block:: python
+
+            APIResponse.select().where(APIResponse.data.contains('foo'))
+
+        We can also search sub-keys using square-brackets:
+
+        .. code-block:: python
+
+            APIResponse.select().where(
+                APIResponse.data['foo']['bar'].contains(['i2', 'i1']))
+
+    .. py:method:: contains_any(*items)
+
+        Search for the presence of one or more of the given items.
+
+        .. code-block:: python
+
+            APIResponse.select().where(
+                APIResponse.data.contains_any('foo', 'baz', 'nugget'))
+
+        Like :py:meth:`~BinaryJSONField.contains`, we can also search sub-keys:
+
+        .. code-block:: python
+
+            APIResponse.select().where(
+                APIResponse.data['foo']['bar'].contains_any('i2', 'ix'))
+
+    .. py:method:: contains_all(*items)
+
+        Search for the presence of all of the given items.
+
+        .. code-block:: python
+
+            APIResponse.select().where(
+                APIResponse.data.contains_all('foo'))
+
+        Like :py:meth:`~BinaryJSONField.contains_any`, we can also search sub-keys:
+
+        .. code-block:: python
+
+            APIResponse.select().where(
+                APIResponse.data['foo']['bar'].contains_all('i1', 'i2', 'i3'))
+
+    .. py:method:: contained_by(other)
+
+        Test whether the given JSON document is contained by (is a subset of) the given JSON document. This method is the inverse of :py:meth:`~BinaryJSONField.contains`.
+
+        .. code-block:: python
+
+            big_doc = {
+                'foo': {
+                    'bar': ['i1', 'i2', 'i3'],
+                    'baz': {
+                        'huey': 'mickey',
+                        'peewee': 'nugget',
+                    }
+                },
+                'other_key': ['nugget', 'bear', 'kitten'],
+            }
+            APIResponse.select().where(
+                APIResponse.data.contained_by(big_doc))
+
 
 .. py:function:: Match(field, query)
 
