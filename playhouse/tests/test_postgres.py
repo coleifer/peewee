@@ -721,6 +721,15 @@ class TestBinaryJsonField(BaseJsonFieldTestCase, ModelTestCase):
             [bjson.data for bjson in query],
             [self._bjson_objects[index].data for index in indexes])
 
+    def test_contained_by(self):
+        self._create_test_data()
+
+        item1 = ['a1', 'a2', {'a3': 'a4'}, 'a5']
+        self.assertObjects(BJson.data.contained_by(item1), 1)
+
+        item2 = {'a1': 'x1', 'a2': 'x2', 'k4': ['i0', 'i1', 'i2'], 'x': 'y'}
+        self.assertObjects(BJson.data.contained_by(item2), 2)
+
     def test_equality(self):
         data = {'k1': ['a1', 'a2'], 'k2': {'k3': 'v3'}}
         j = BJson.create(data=data)

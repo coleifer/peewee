@@ -224,6 +224,9 @@ class BinaryJSONField(IndexedFieldMixin, JSONField):
             return Expression(self, OP_JSONB_CONTAINS, Json(other))
         return Expression(self, OP_JSONB_EXISTS, Passthrough(other))
 
+    def contained_by(self, other):
+        return Expression(self, OP_JSONB_CONTAINED_BY, Json(other))
+
     def contains_any(self, *items):
         return Expression(
             self,
@@ -259,6 +262,7 @@ OP_ACONTAINS = 'A@>'
 OP_ACONTAINS_ANY = 'A||'
 OP_TS_MATCH = 'T@@'
 OP_JSONB_CONTAINS = 'JB@>'
+OP_JSONB_CONTAINED_BY = 'JB<@'
 OP_JSONB_CONTAINS_ANY_KEY = 'JB?|'
 OP_JSONB_CONTAINS_ALL_KEYS = 'JB?&'
 OP_JSONB_EXISTS = 'JB?'
@@ -392,6 +396,7 @@ PostgresqlExtDatabase.register_ops({
     OP_ACONTAINS_ANY: '&&',
     OP_TS_MATCH: '@@',
     OP_JSONB_CONTAINS: '@>',
+    OP_JSONB_CONTAINED_BY: '<@',
     OP_JSONB_CONTAINS_ANY_KEY: '?|',
     OP_JSONB_CONTAINS_ALL_KEYS: '?&',
     OP_JSONB_EXISTS: '?',
