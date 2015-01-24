@@ -2371,6 +2371,7 @@ class SelectQuery(Query):
                     'Your database does not support %s' % operator)
             return CompoundSelect(self.model_class, self, operator, other)
         return inner
+    _compound_op_static = staticmethod(compound_op)
     __or__ = compound_op('UNION')
     __and__ = compound_op('INTERSECT')
     __sub__ = compound_op('EXCEPT')
@@ -2380,6 +2381,9 @@ class SelectQuery(Query):
         wrapped_rhs = self.model_class.select(SQL('*')).from_(
             EnclosedClause((self & rhs)).alias('_')).order_by()
         return (self | rhs) - wrapped_rhs
+
+    def union_all(self, rhs):
+        return SelectQuery._compound_op_static('UNION ALL')(self, rhs)
 
     def __select(self, *selection):
         self._explicit_selection = len(selection) > 0
@@ -2736,7 +2740,7 @@ class _ConnectionLocal(_BaseConnectionLocal, threading.local):
 class Database(object):
     commit_select = False
     compiler_class = QueryCompiler
-    compound_operations = ['UNION', 'INTERSECT', 'EXCEPT']
+    compound_operations = ['UNION', 'INTERSECT', 'EXCEPT', 'UNION ALL']
     distinct_on = False
     drop_cascade = False
     field_overrides = {}
@@ -3210,7 +3214,7 @@ class PostgresqlDatabase(Database):
 
 class MySQLDatabase(Database):
     commit_select = True
-    compound_operations = ['UNION']
+    compound_operations = ['UNION', 'UNION ALL']
     field_overrides = {
         'bool': 'BOOL',
         'decimal': 'NUMERIC',

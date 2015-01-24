@@ -66,6 +66,15 @@ class TestCompoundSelectQueries(ModelTestCase):
             (OrderedModel, UniqueModel): all_letters,
         })
 
+    @requires_op('UNION ALL')
+    def test_union(self):
+        all_letters = ['a', 'b', 'c', 'd', 'e']
+        users = User.select(User.username)
+        uniques = UniqueModel.select(UniqueModel.name)
+        query = users.union_all(uniques)
+        results = [row[0] for row in query.tuples()]
+        self.assertEqual(sorted(results), ['a', 'b', 'b', 'c', 'd', 'd', 'e'])
+
     @requires_op('UNION')
     def test_union_from(self):
         uq = User.select(User.username).where(User.username << ['a', 'b', 'd'])
