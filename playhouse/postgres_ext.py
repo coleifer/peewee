@@ -6,11 +6,11 @@ Collection of postgres-specific extensions, currently including:
 import uuid
 
 from peewee import *
-from peewee import coerce_to_unicode
 from peewee import Expression
 from peewee import logger
 from peewee import Node
 from peewee import Param
+from peewee import Passthrough
 from peewee import returns_clone
 from peewee import QueryCompiler
 from peewee import SelectQuery
@@ -54,6 +54,24 @@ class _JsonLookupBase(_LookupNode):
     def as_json(self, as_json=True):
         self._as_json = as_json
 
+    def contains(self, other):
+        clone = self.as_json(True)
+        if isinstance(other, (list, dict)):
+            return Expression(clone, OP_JSONB_CONTAINS, Json(other))
+        return Expression(clone, OP_JSONB_EXISTS, other)
+
+    def contains_any(self, *keys):
+        return Expression(
+            self.as_json(True),
+            OP_JSONB_CONTAINS_ANY_KEY,
+            Passthrough(list(keys)))
+
+    def contains_all(self, *keys):
+        return Expression(
+            self.as_json(True),
+            OP_JSONB_CONTAINS_ALL_KEYS,
+            Passthrough(list(keys)))
+
 class JsonLookup(_JsonLookupBase):
     _node_type = 'json_lookup'
 
@@ -96,16 +114,16 @@ def adapt_array(arr):
 register_adapter(_Array, adapt_array)
 
 
-class IndexedField(Field):
+class IndexedFieldMixin(object):
     default_index_type = 'GiST'
 
     def __init__(self, index_type=None, *args, **kwargs):
         kwargs.setdefault('index', True)  # By default, use an index.
-        super(IndexedField, self).__init__(*args, **kwargs)
+        super(IndexedFieldMixin, self).__init__(*args, **kwargs)
         self.index_type = index_type or self.default_index_type
 
 
-class ArrayField(IndexedField):
+class ArrayField(IndexedFieldMixin, Field):
     default_index_type = 'GIN'
 
     def __init__(self, field_class=IntegerField, dimensions=1, *args,
@@ -134,7 +152,7 @@ class DateTimeTZField(DateTimeField):
     db_field = 'datetime_tz'
 
 
-class HStoreField(IndexedField):
+class HStoreField(IndexedFieldMixin, Field):
     db_field = 'hash'
 
     def __getitem__(self, key):
@@ -172,7 +190,7 @@ class HStoreField(IndexedField):
         return Expression(self, OP_HCONTAINS_KEY, value)
 
     def contains_any(self, *keys):
-        return Expression(self, OP_HCONTAINS_ANY_KEY, Param(value))
+        return Expression(self, OP_HCONTAINS_ANY_KEY, Param(list(keys)))
 
 
 class JSONField(Field):
@@ -186,7 +204,9 @@ class JSONField(Field):
         super(JSONField, self).__init__(*args, **kwargs)
 
     def db_value(self, value):
-        return Json(value, dumps=self.dumps)
+        if not isinstance(value, Json):
+            return Json(value, dumps=self.dumps)
+        return value
 
     def __getitem__(self, value):
         return JsonLookup(self, [value])
@@ -195,12 +215,31 @@ class JSONField(Field):
         return JsonPath(self, keys)
 
 
-class TSVectorField(IndexedField):
-    db_field = 'tsvector'
+class BinaryJSONField(IndexedFieldMixin, JSONField):
+    db_field = 'jsonb'
     default_index_type = 'GIN'
 
-    def coerce(self, value):
-        return coerce_to_unicode(value or '')
+    def contains(self, other):
+        if isinstance(other, (list, dict)):
+            return Expression(self, OP_JSONB_CONTAINS, Json(other))
+        return Expression(self, OP_JSONB_EXISTS, Passthrough(other))
+
+    def contains_any(self, *items):
+        return Expression(
+            self,
+            OP_JSONB_CONTAINS_ANY_KEY,
+            Passthrough(list(items)))
+
+    def contains_all(self, *items):
+        return Expression(
+            self,
+            OP_JSONB_CONTAINS_ALL_KEYS,
+            Passthrough(list(items)))
+
+
+class TSVectorField(IndexedFieldMixin, TextField):
+    db_field = 'tsvector'
+    default_index_type = 'GIN'
 
     def match(self, query):
         return Expression(self, OP_TS_MATCH, fn.to_tsquery(query))
@@ -219,6 +258,10 @@ OP_HCONTAINS_ANY_KEY = 'H||'
 OP_ACONTAINS = 'A@>'
 OP_ACONTAINS_ANY = 'A||'
 OP_TS_MATCH = 'T@@'
+OP_JSONB_CONTAINS = 'JB@>'
+OP_JSONB_CONTAINS_ANY_KEY = 'JB?|'
+OP_JSONB_CONTAINS_ALL_KEYS = 'JB?&'
+OP_JSONB_EXISTS = 'JB?'
 
 
 class PostgresqlExtCompiler(QueryCompiler):
@@ -229,7 +272,7 @@ class PostgresqlExtCompiler(QueryCompiler):
         # may want to use GiST indexes, for example.
         index_type = None
         for field in fields:
-            if isinstance(field, IndexedField):
+            if isinstance(field, IndexedFieldMixin):
                 index_type = field.index_type
         if index_type:
             clause.nodes.insert(-1, SQL('USING %s' % index_type))
@@ -335,6 +378,7 @@ PostgresqlExtDatabase.register_fields({
     'datetime_tz': 'timestamp with time zone',
     'hash': 'hstore',
     'json': 'json',
+    'jsonb': 'jsonb',
     'tsvector': 'tsvector',
 })
 PostgresqlExtDatabase.register_ops({
@@ -347,6 +391,10 @@ PostgresqlExtDatabase.register_ops({
     OP_ACONTAINS: '@>',
     OP_ACONTAINS_ANY: '&&',
     OP_TS_MATCH: '@@',
+    OP_JSONB_CONTAINS: '@>',
+    OP_JSONB_CONTAINS_ANY_KEY: '?|',
+    OP_JSONB_CONTAINS_ALL_KEYS: '?&',
+    OP_JSONB_EXISTS: '?',
 })
 
 def ServerSide(select_query):

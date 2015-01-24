@@ -47,6 +47,12 @@ try:
 except:
     TestingJson = None
 
+try:
+    class BJson(BaseModel):
+        data = BinaryJSONField()
+except:
+    BJson = None
+
 class TestingID(BaseModel):
     uniq = UUIDField()
 
@@ -247,6 +253,16 @@ class TestHStoreField(BasePostgresqlExtTestCase):
         self.assertEqual([x.name for x in sq], ['t1', 't2'])
 
         sq = Testing.select().where(Testing.data.contains({'k2': 'v3'}))
+        self.assertEqual([x.name for x in sq], [])
+
+        # test contains any.
+        sq = Testing.select().where(Testing.data.contains_any('k3', 'kx'))
+        self.assertEqual([x.name for x in sq], ['t2'])
+
+        sq = Testing.select().where(Testing.data.contains_any('k2', 'x', 'k3'))
+        self.assertEqual([x.name for x in sq], ['t1', 't2'])
+
+        sq = Testing.select().where(Testing.data.contains_any('x', 'kx', 'y'))
         self.assertEqual([x.name for x in sq], [])
 
     def test_hstore_filter_functions(self):
@@ -542,21 +558,15 @@ class SSCursorTestCase(PeeweeTestCase):
         test_ss_db.execute_sql('truncate table %s;' % tbl)
         test_ss_db.commit()
 
-def json_ok():
-    if TestingJson is None:
-        return False
-    conn = test_db.get_conn()
-    return conn.server_version >= 90300
 
-@skip_if(lambda: not json_ok())
-class TestJsonField(ModelTestCase):
-    requires = [TestingJson]
+class BaseJsonFieldTestCase(object):
+    ModelClass = None  # Subclasses must define this.
 
     def test_json_field(self):
         data = {'k1': ['a1', 'a2'], 'k2': {'k3': 'v3'}}
-        tj = TestingJson.create(data=data)
-        tj_db = TestingJson.get(tj._pk_expr())
-        self.assertEqual(tj_db.data, data)
+        j = self.ModelClass.create(data=data)
+        j_db = self.ModelClass.get(j._pk_expr())
+        self.assertEqual(j_db.data, data)
 
     def test_json_lookup_methods(self):
         data = {
@@ -565,33 +575,33 @@ class TestJsonField(ModelTestCase):
                 'p2': {'c2': 'bar'},
             },
             'gp2': {}}
-        tj = TestingJson.create(data=data)
+        j = self.ModelClass.create(data=data)
 
         def assertLookup(lookup, expected):
-            query = (TestingJson
+            query = (self.ModelClass
                      .select(lookup)
-                     .where(tj._pk_expr())
+                     .where(j._pk_expr())
                      .dicts())
             self.assertEqual(query.get(), expected)
 
-        expr = TestingJson.data['gp1']['p1'].alias('pdata')
+        expr = self.ModelClass.data['gp1']['p1'].alias('pdata')
         assertLookup(expr, {'pdata': '{"c1": "foo"}'})
         assertLookup(expr.as_json(), {'pdata': {'c1': 'foo'}})
 
-        expr = TestingJson.data['gp1']['p1']['c1'].alias('cdata')
+        expr = self.ModelClass.data['gp1']['p1']['c1'].alias('cdata')
         assertLookup(expr, {'cdata': 'foo'})
         assertLookup(expr.as_json(), {'cdata': 'foo'})
 
-        tj.data = [
+        j.data = [
             {'i1': ['foo', 'bar', 'baze']},
             ['nugget', 'mickey']]
-        tj.save()
+        j.save()
 
-        expr = TestingJson.data[0]['i1'].alias('idata')
+        expr = self.ModelClass.data[0]['i1'].alias('idata')
         assertLookup(expr, {'idata': '["foo", "bar", "baze"]'})
         assertLookup(expr.as_json(), {'idata': ['foo', 'bar', 'baze']})
 
-        expr = TestingJson.data[1][1].alias('ldata')
+        expr = self.ModelClass.data[1][1].alias('ldata')
         assertLookup(expr, {'ldata': 'mickey'})
         assertLookup(expr.as_json(), {'ldata': 'mickey'})
 
@@ -602,58 +612,207 @@ class TestJsonField(ModelTestCase):
                     'bar': ['i1', 'i2', 'i3'],
                     'baze': ['j1', 'j2'],
                 }}}
-        tj = TestingJson.create(data=data)
+        j = self.ModelClass.create(data=data)
 
         def assertPath(path, expected):
-            query = (TestingJson
+            query = (self.ModelClass
                      .select(path)
-                     .where(tj._pk_expr())
+                     .where(j._pk_expr())
                      .dicts())
             self.assertEqual(query.get(), expected)
 
-        expr = TestingJson.data.path('foo', 'baz', 'bar').alias('p')
+        expr = self.ModelClass.data.path('foo', 'baz', 'bar').alias('p')
         assertPath(expr, {'p': '["i1", "i2", "i3"]'})
         assertPath(expr.as_json(), {'p': ['i1', 'i2', 'i3']})
 
-        expr = TestingJson.data.path('foo', 'baz', 'baze', 1).alias('p')
+        expr = self.ModelClass.data.path('foo', 'baz', 'baze', 1).alias('p')
         assertPath(expr, {'p': 'j2'})
         assertPath(expr.as_json(), {'p': 'j2'})
 
     def test_json_field_sql(self):
-        tj = TestingJson.select().where(TestingJson.data == {'foo': 'bar'})
-        sql, params = tj.sql()
+        j = (self.ModelClass
+             .select()
+             .where(self.ModelClass.data == {'foo': 'bar'}))
+        sql, params = j.sql()
         self.assertEqual(sql, (
             'SELECT "t1"."id", "t1"."data" '
-            'FROM "testingjson" AS t1 WHERE ("t1"."data" = %s)'))
+            'FROM "%s" AS t1 WHERE ("t1"."data" = %%s)')
+            % self.ModelClass._meta.db_table)
         self.assertEqual(params[0].adapted, {'foo': 'bar'})
 
-        tj = TestingJson.select().where(TestingJson.data['foo'] == 'bar')
-        sql, params = tj.sql()
+        j = (self.ModelClass
+             .select()
+             .where(self.ModelClass.data['foo'] == 'bar'))
+        sql, params = j.sql()
         self.assertEqual(sql, (
             'SELECT "t1"."id", "t1"."data" '
-            'FROM "testingjson" AS t1 WHERE ("t1"."data"->>%s = %s)'))
+            'FROM "%s" AS t1 WHERE ("t1"."data"->>%%s = %%s)')
+            % self.ModelClass._meta.db_table)
         self.assertEqual(params, ['foo', 'bar'])
 
     def assertItems(self, where, *items):
-        query = TestingJson.select().where(where).order_by(TestingJson.id)
+        query = (self.ModelClass
+                 .select()
+                 .where(where)
+                 .order_by(self.ModelClass.id))
         self.assertEqual(
             [item.id for item in query],
             [item.id for item in items])
 
     def test_lookup(self):
-        t1 = TestingJson.create(data={'k1': 'v1', 'k2': {'k3': 'v3'}})
-        t2 = TestingJson.create(data={'k1': 'x1', 'k2': {'k3': 'x3'}})
-        t3 = TestingJson.create(data={'k1': 'v1', 'j2': {'j3': 'v3'}})
-        self.assertItems((TestingJson.data['k2']['k3'] == 'v3'), t1)
-        self.assertItems((TestingJson.data['k1'] == 'v1'), t1, t3)
+        t1 = self.ModelClass.create(data={'k1': 'v1', 'k2': {'k3': 'v3'}})
+        t2 = self.ModelClass.create(data={'k1': 'x1', 'k2': {'k3': 'x3'}})
+        t3 = self.ModelClass.create(data={'k1': 'v1', 'j2': {'j3': 'v3'}})
+        self.assertItems((self.ModelClass.data['k2']['k3'] == 'v3'), t1)
+        self.assertItems((self.ModelClass.data['k1'] == 'v1'), t1, t3)
 
         # Valid key, no matching value.
-        self.assertItems((TestingJson.data['k2'] == 'v1'))
+        self.assertItems((self.ModelClass.data['k2'] == 'v1'))
 
         # Non-existent key.
-        self.assertItems((TestingJson.data['not-here'] == 'v1'))
+        self.assertItems((self.ModelClass.data['not-here'] == 'v1'))
 
         # Non-existent nested key.
-        self.assertItems((TestingJson.data['not-here']['xxx'] == 'v1'))
+        self.assertItems((self.ModelClass.data['not-here']['xxx'] == 'v1'))
 
-        self.assertItems((TestingJson.data['k2']['xxx'] == 'v1'))
+        self.assertItems((self.ModelClass.data['k2']['xxx'] == 'v1'))
+
+def json_ok():
+    if TestingJson is None:
+        return False
+    conn = test_db.get_conn()
+    return conn.server_version >= 90300
+
+@skip_if(lambda: not json_ok())
+class TestJsonField(BaseJsonFieldTestCase, ModelTestCase):
+    ModelClass = TestingJson
+    requires = [TestingJson]
+
+def jsonb_ok():
+    if BJson is None:
+        return False
+    conn = test_db.get_conn()
+    return conn.server_version >= 90400
+
+@skip_if(lambda: not json_ok())
+class TestBinaryJsonField(BaseJsonFieldTestCase, ModelTestCase):
+    ModelClass = BJson
+    requires = [BJson]
+
+    def test_equality(self):
+        data = {'k1': ['a1', 'a2'], 'k2': {'k3': 'v3'}}
+        j = BJson.create(data=data)
+        j_db = BJson.get(BJson.data == data)
+        self.assertEqual(j.id, j_db.id)
+
+    def _create_test_data(self):
+        data = [
+            {'k1': 'v1', 'k2': 'v2', 'k3': {'k4': ['i1', 'i2'], 'k5': {}}},
+            ['a1', 'a2', {'a3': 'a4'}],
+            {'a1': 'x1', 'a2': 'x2', 'k4': ['i1', 'i2']},
+            range(10),
+            range(5, 15),
+            ['k4', 'k1']]
+
+        bjson_objs = []
+        for json_value in data:
+            bjson_objs.append(BJson.create(data=json_value))
+
+        return bjson_objs
+
+    def assertBJsonObjects(self, expr, objects, indexes):
+        query = (BJson
+                 .select()
+                 .where(expr)
+                 .order_by(BJson.id))
+        self.assertEqual(
+            [bjson.data for bjson in query],
+            [objects[index].data for index in indexes])
+
+    def test_subscript_contains(self):
+        bjson_objects = self._create_test_data()
+        def assertObjects(expr, *expected):
+            return self.assertBJsonObjects(expr, bjson_objects, expected)
+
+        # 'k3' is mapped to another dictioary {'k4': [...]}. Therefore,
+        # 'k3' is said to contain 'k4', but *not* ['k4'] or ['k4', 'k5'].
+        assertObjects(BJson.data['k3'].contains('k4'), 0)
+        assertObjects(BJson.data['k3'].contains(['k4']))
+        assertObjects(BJson.data['k3'].contains(['k4', 'k5']))
+
+        # We can check for the keys this way, though.
+        assertObjects(BJson.data['k3'].contains_all('k4', 'k5'), 0)
+        assertObjects(BJson.data['k3'].contains_any('k4', 'kx'), 0)
+
+        # However, in test object index=2, 'k4' can be said to contain
+        # both 'i1' and ['i1'].
+        assertObjects(BJson.data['k4'].contains('i1'), 2)
+        assertObjects(BJson.data['k4'].contains(['i1']), 2)
+
+        # Interestingly, we can also specify the list of contained values
+        # out-of-order.
+        assertObjects(BJson.data['k4'].contains(['i2', 'i1']), 2)
+
+        # We can test whether an object contains another JSON object fragment.
+        assertObjects(BJson.data['k3'].contains({'k4': ['i1']}), 0)
+        assertObjects(BJson.data['k3'].contains({'k4': ['i1', 'i2']}), 0)
+
+        # Check multiple levels of nesting / containment.
+        assertObjects(BJson.data['k3']['k4'].contains('i2'), 0)
+        assertObjects(BJson.data['k3']['k4'].contains_all('i1', 'i2'), 0)
+        assertObjects(BJson.data['k3']['k4'].contains_all('i0', 'i2'))
+        assertObjects(BJson.data['k4'].contains_all('i1', 'i2'), 2)
+
+        # Check array indexes.
+        assertObjects(BJson.data[2].contains('a3'), 1)
+        assertObjects(BJson.data[0].contains('a1'), 1)
+        assertObjects(BJson.data[0].contains('k1'))
+
+    def test_contains(self):
+        bjson_objects = self._create_test_data()
+        def assertObjects(expr, *expected):
+            return self.assertBJsonObjects(expr, bjson_objects, expected)
+
+        # Test for keys. 'k4' is both an object key and an array element.
+        assertObjects(BJson.data.contains('k4'), 2, 5)
+        assertObjects(BJson.data.contains('a1'), 1, 2)
+        assertObjects(BJson.data.contains('k3'), 0)
+
+        # We can test for multiple top-level keys/indexes.
+        assertObjects(BJson.data.contains_all('a1', 'a2'), 1, 2)
+
+        # If we test for both with .contains(), though, it is treated as
+        # an object match.
+        assertObjects(BJson.data.contains(['a1', 'a2']), 1)
+
+        # Check numbers.
+        assertObjects(BJson.data.contains([2, 5, 6, 7, 8]), 3)
+        assertObjects(BJson.data.contains([5, 6, 7, 8, 9]), 3, 4)
+
+        # We can check for partial objects.
+        assertObjects(BJson.data.contains({'a1': 'x1'}), 2)
+        assertObjects(BJson.data.contains({'k3': {'k4': []}}), 0)
+        assertObjects(BJson.data.contains([{'a3': 'a4'}]), 1)
+
+        # Check for simple keys.
+        assertObjects(BJson.data.contains('a1'), 1, 2)
+        assertObjects(BJson.data.contains('k3'), 0)
+
+        # Contains any.
+        assertObjects(BJson.data.contains_any('a1', 'k1'), 0, 1, 2, 5)
+        assertObjects(BJson.data.contains_any('k4', 'xx', 'yy', '2'), 2, 5)
+        assertObjects(BJson.data.contains_any('i1', 'i2', 'a3'))
+
+        # Contains all.
+        assertObjects(BJson.data.contains_all('k1', 'k2', 'k3'), 0)
+        assertObjects(BJson.data.contains_all('k1', 'k2', 'k3', 'k4'))
+
+    def test_integer_index_weirdness(self):
+        self._create_test_data()
+
+        def fails():
+            with test_db.transaction():
+                results = list(BJson.select().where(
+                    BJson.data.contains_any(2, 8, 12)))
+
+        self.assertRaises(ProgrammingError, fails)
