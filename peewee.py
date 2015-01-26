@@ -1802,6 +1802,9 @@ class QueryResultWrapper(object):
                 self.next()
             except StopIteration:
                 break
+    
+    def __len__(self):
+        return self.cursor.rowcount
 
 class ExtQueryResultWrapper(QueryResultWrapper):
     def initialize(self, description):
@@ -2556,6 +2559,9 @@ class SelectQuery(Query):
             index += 1
         res.fill_cache(index)
         return res._result_cache[value]
+
+    def __len__(self):
+        return len(self.execute())
 
     if PY3:
         def __hash__(self):
