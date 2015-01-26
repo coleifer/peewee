@@ -53,6 +53,7 @@ import datetime
 import decimal
 
 from peewee import *
+from playhouse.sqlite_ext import SqliteExtDatabase
 from pysqlcipher import dbapi2 as sqlcipher
 
 sqlcipher.register_adapter(decimal.Decimal, str)
@@ -60,7 +61,7 @@ sqlcipher.register_adapter(datetime.date, str)
 sqlcipher.register_adapter(datetime.time, str)
 
 
-class SqlCipherDatabase(SqliteDatabase):
+class _SqlCipherDatabase(object):
     def _connect(self, database, **kwargs):
         passphrase = kwargs.pop('passphrase', '')
         kdf_iter = kwargs.pop('kdf_iter', 64000)
@@ -78,4 +79,24 @@ class SqlCipherDatabase(SqliteDatabase):
         self._add_conn_hooks(conn)
         conn.execute('PRAGMA key=\'{0}\''.format(passphrase.replace("'", "''")))
         conn.execute('PRAGMA kdf_iter={0:d}'.format(kdf_iter))
+        return conn
+
+
+class SqlCipherDatabase(_SqlCipherDatabase, SqliteDatabase):
+    pass
+
+
+class SqlCipherExtDatabase(_SqlCipherDatabase, SqliteExtDatabase):
+    def _connect(self, *args, **kwargs):
+        conn = super(SqlCipherExtDatabase, self)._connect(*args, **kwargs)
+
+        self._load_aggregates(conn)
+        self._load_collations(conn)
+        self._load_functions(conn)
+        if self._row_factory:
+            conn.row_factory = self._row_factory
+        if self._extensions:
+            conn.enable_load_extension(True)
+            for extension in self._extensions:
+                conn.load_extension(extension)
         return conn

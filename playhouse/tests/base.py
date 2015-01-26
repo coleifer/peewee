@@ -95,6 +95,13 @@ class DatabaseInitializer(object):
         else:
             mapping['sqlcipher'] = SqlCipherDatabase
 
+        try:
+            from playhouse.sqlcipher_ext import SqlCipherExtDatabase
+        except ImportError:
+            pass
+        else:
+            mapping['sqlcipher_ext'] = SqlCipherExtDatabase
+
         backend = backend or self.backend
         try:
             return mapping[backend]
