@@ -878,6 +878,8 @@ class TestDeleteRecursive(ModelTestCase):
         self.assertQueriesEqual(queries, sql_params)
 
     def assertQueriesEqual(self, queries, expected):
+        queries.sort()
+        expected.sort()
         for i in range(len(queries)):
             sql, params = queries[i]
             expected_sql, expected_params = expected[i]
