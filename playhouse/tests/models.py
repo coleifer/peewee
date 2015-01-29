@@ -151,6 +151,11 @@ class OrphanPet(TestModel):
     data = CharField(default='')
 
 
+class ChildNullableData(TestModel):
+    child = ForeignKeyField(Child, null=True)
+    data = CharField()
+
+
 class CSVField(TextField):
     def db_value(self, value):
         if value:

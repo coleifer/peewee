@@ -800,12 +800,13 @@ class TestMultiTableFromClause(ModelTestCase):
 
 class TestDeleteRecursive(ModelTestCase):
     requires = [
-        Parent, Child, Orphan, ChildPet, OrphanPet, Package, PackageItem]
+        Parent, Child, ChildNullableData, ChildPet, Orphan, OrphanPet, Package,
+        PackageItem]
 
     def setUp(self):
         super(TestDeleteRecursive, self).setUp()
-        p1 = Parent.create(data='p1')
-        p2 = Parent.create(data='p2')
+        self.p1 = p1 = Parent.create(data='p1')
+        self.p2 = p2 = Parent.create(data='p2')
         c11 = Child.create(parent=p1)
         c12 = Child.create(parent=p1)
         c21 = Child.create(parent=p2)
@@ -814,16 +815,77 @@ class TestDeleteRecursive(ModelTestCase):
         o12 = Orphan.create(parent=p1)
         o21 = Orphan.create(parent=p2)
         o22 = Orphan.create(parent=p2)
-        ChildPet.create(child=c11)
-        ChildPet.create(child=c12)
-        ChildPet.create(child=c21)
-        ChildPet.create(child=c22)
-        OrphanPet.create(orphan=o11)
-        OrphanPet.create(orphan=o12)
-        OrphanPet.create(orphan=o21)
-        OrphanPet.create(orphan=o22)
-        self.p1 = p1
-        self.p2 = p2
+
+        for child in [c11, c12, c21, c22]:
+            ChildPet.create(child=child)
+
+        for orphan in [o11, o12, o21, o22]:
+            OrphanPet.create(orphan=orphan)
+
+        for i, child in enumerate([c11, c12]):
+            for j in range(2):
+                ChildNullableData.create(
+                    child=child,
+                    data='%s-%s' % (i, j))
+
+    def test_recursive_delete_parent_sql(self):
+        with self.log_queries() as query_logger:
+            with self.assertQueryCount(5):
+                self.p1.delete_instance(recursive=True, delete_nullable=False)
+
+        queries = query_logger.queries
+        update_cnd = ('UPDATE `childnullabledata` '
+                      'SET `child_id` = %% '
+                      'WHERE ('
+                      '`childnullabledata`.`child_id` IN ('
+                      'SELECT `t2`.`id` FROM `child` AS t2 WHERE ('
+                      '`t2`.`parent_id` = %%)))')
+        delete_cp = ('DELETE FROM `childpet` WHERE ('
+                     '`child_id` IN ('
+                     'SELECT `t1`.`id` FROM `child` AS t1 WHERE ('
+                     '`t1`.`parent_id` = %%)))')
+        delete_c = 'DELETE FROM `child` WHERE (`parent_id` = %%)'
+        update_o = ('UPDATE `orphan` SET `parent_id` = %% WHERE ('
+                    '`orphan`.`parent_id` = %%)')
+        delete_p = 'DELETE FROM `parent` WHERE (`id` = %%)'
+        sql_params = [
+            (update_cnd, [None, self.p1.id]),
+            (delete_cp, [self.p1.id]),
+            (delete_c, [self.p1.id]),
+            (update_o, [None, self.p1.id]),
+            (delete_p, [self.p1.id]),
+        ]
+        self.assertQueriesEqual(queries, sql_params)
+
+    def test_recursive_delete_child_queries(self):
+        c2 = self.p1.child_set.order_by(Child.id.desc()).get()
+        with self.log_queries() as query_logger:
+            with self.assertQueryCount(3):
+                c2.delete_instance(recursive=True, delete_nullable=False)
+
+        queries = query_logger.queries
+
+        update_cnd = ('UPDATE `childnullabledata` SET `child_id` = %% WHERE ('
+                      '`childnullabledata`.`child_id` = %%)')
+        delete_cp = 'DELETE FROM `childpet` WHERE (`child_id` = %%)'
+        delete_c = 'DELETE FROM `child` WHERE (`id` = %%)'
+
+        sql_params = [
+            (update_cnd, [None, c2.id]),
+            (delete_cp, [c2.id]),
+            (delete_c, [c2.id]),
+        ]
+        self.assertQueriesEqual(queries, sql_params)
+
+    def assertQueriesEqual(self, queries, expected):
+        for i in range(len(queries)):
+            sql, params = queries[i]
+            expected_sql, expected_params = expected[i]
+            expected_sql = (expected_sql
+                            .replace('`', test_db.quote_char)
+                            .replace('%%', test_db.interpolation))
+            self.assertEqual(sql, expected_sql)
+            self.assertEqual(params, expected_params)
 
     def test_recursive_update(self):
         self.p1.delete_instance(recursive=True)

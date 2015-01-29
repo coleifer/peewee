@@ -11,6 +11,7 @@ try:
 except ImportError:
     Json = None
 
+from peewee import prefetch
 from peewee import UUIDField
 from playhouse.postgres_ext import *
 from playhouse.tests.base import database_initializer
@@ -134,6 +135,28 @@ class TestUUIDField(BasePostgresqlExtTestCase):
               .where(UUIDRelatedModel.data == data_a)
               .order_by(UUIDRelatedModel.value.desc()))
         self.assertEqual([r.value for r in ra], [2, 1])
+
+    def test_prefetch_regression(self):
+        a = UUIDData.create(id=uuid.uuid4(), data='a')
+        b = UUIDData.create(id=uuid.uuid4(), data='b')
+        for i in range(5):
+            for u in [a, b]:
+                UUIDRelatedModel.create(data=u, value=i)
+
+        with self.assertQueryCount(2):
+            query = prefetch(
+                UUIDData.select().order_by(UUIDData.data),
+                UUIDRelatedModel.select().where(UUIDRelatedModel.value < 3))
+
+            accum = []
+            for item in query:
+                accum.append((item.data, [
+                    rel.value for rel in item.related_models_prefetch]))
+
+            self.assertEqual(accum, [
+                ('a', [0, 1, 2]),
+                ('b', [0, 1, 2]),
+            ])
 
 
 class TestTZField(BasePostgresqlExtTestCase):

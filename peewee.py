@@ -3897,6 +3897,7 @@ class Model(with_metaclass(BaseModel)):
         return [f for f in self._meta.get_fields() if f.name in self._dirty]
 
     def dependencies(self, search_nullable=False):
+        model_class = type(self)
         query = self.select().where(self._pk_expr())
         stack = [(type(self), query)]
         seen = set()
@@ -3908,9 +3909,14 @@ class Model(with_metaclass(BaseModel)):
             seen.add(klass)
             for rel_name, fk in klass._meta.reverse_rel.items():
                 rel_model = fk.model_class
-                node = fk << query
+                if fk.rel_model is model_class:
+                    node = (fk == self._data[fk.to_field.name])
+                    subquery = rel_model.select().where(node)
+                else:
+                    node = fk << query
+                    subquery = rel_model.select().where(node)
                 if not fk.null or search_nullable:
-                    stack.append((rel_model, rel_model.select().where(node)))
+                    stack.append((rel_model, subquery))
                 yield (node, fk)
 
     def delete_instance(self, recursive=False, delete_nullable=False):
@@ -3995,7 +4001,8 @@ class PrefetchResult(__prefetched):
             setattr(instance, dest, rel_instances)
 
     def store_instance(self, instance, id_map):
-        identity = instance._data[self.foreign_key_attr]
+        identity = self.field.to_field.python_value(
+            instance._data[self.foreign_key_attr])
         if self.backref:
             id_map[identity] = instance
         else:

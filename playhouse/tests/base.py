@@ -213,6 +213,9 @@ class PeeweeTestCase(TestCase):
         yield
         self.assertEqual(len(self.queries()) - qc, num)
 
+    def log_queries(self):
+        return QueryLogger(self)
+
     def parse_node(self, query, expr_list, compiler=compiler):
         am = compiler.calculate_alias_map(query)
         return compiler.parse_node_list(expr_list, am)
@@ -272,3 +275,19 @@ def skip_if(expression):
             return Dummy
         return klass
     return decorator
+
+
+class QueryLogger(object):
+    def __init__(self, test_case):
+        self.test_case = test_case
+        self.queries = []
+
+    def __enter__(self):
+        self._initial_query_count = len(self.test_case.queries())
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        all_queries = self.test_case.queries()
+        self._final_query_count = len(all_queries)
+        self.queries = all_queries[
+            self._initial_query_count:self._final_query_count]
