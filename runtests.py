@@ -36,6 +36,7 @@ def get_option_parser():
     cases.add_option('--dataset', dest='dataset', default=False, action='store_true', help='dataset tests')
     cases.add_option('--db-url', dest='db_url', default=False, action='store_true', help='db url tests')
     cases.add_option('--djpeewee', dest='djpeewee', default=False, action='store_true', help='djpeewee tests')
+    cases.add_option('--flask', dest='flask', default=False, action='store_true', help='flask utils tests')
     cases.add_option('--gfk', dest='gfk', default=False, action='store_true', help='gfk tests')
     cases.add_option('--kv', dest='kv', default=False, action='store_true', help='key/value store tests')
     cases.add_option('--manytomany', dest='manytomany', default=False, action='store_true', help='manytomany field tests')
@@ -83,6 +84,14 @@ def collect_modules(options):
     if xtra(options.djpeewee):
         from playhouse.tests import test_djpeewee
         modules.append(test_djpeewee)
+    if xtra(options.flask):
+        try:
+            import flask
+        except ImportError:
+            print_('Unable to import Flask tests, Flask is not installed.')
+        else:
+            from playhouse.tests import test_flask_utils
+            modules.append(test_flask_utils)
     if xtra(options.gfk):
         from playhouse.tests import test_gfk
         modules.append(test_gfk)
