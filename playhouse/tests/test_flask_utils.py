@@ -15,23 +15,44 @@ class TestPaginationHelpers(ModelTestCase):
 
     def setUp(self):
         super(TestPaginationHelpers, self).setUp()
-        for i in range(40):
+        for i in range(10):
             User.create(username='u%02d' % i)
 
         self.app = Flask(__name__)
 
     def test_paginated_query(self):
         query = User.select().order_by(User.username)
-        paginated_query = PaginatedQuery(query, 5)
+        paginated_query = PaginatedQuery(query, 4)
 
         with self.app.test_request_context('/?page=2'):
             self.assertEqual(paginated_query.get_page(), 2)
-            self.assertEqual(paginated_query.get_page_count(), 8)
+            self.assertEqual(paginated_query.get_page_count(), 3)
             users = paginated_query.get_object_list()
 
         self.assertEqual(
             [user.username for user in users],
-            ['u05', 'u06', 'u07', 'u08', 'u09'])
+            ['u04', 'u05', 'u06', 'u07'])
+
+        with self.app.test_request_context('/'):
+            self.assertEqual(paginated_query.get_page(), 1)
+
+        for value in ['1', '0', '-1', 'xxx']:
+            with self.app.test_request_context('/?page=%s' % value):
+                self.assertEqual(paginated_query.get_page(), 1)
+
+    def test_bounds_checking(self):
+        paginated_query = PaginatedQuery(User, 3, 'p', False)
+        with self.app.test_request_context('/?p=5'):
+            results = paginated_query.get_object_list()
+            self.assertEqual(list(results), [])
+
+        paginated_query = PaginatedQuery(User, 3, 'p', True)
+        with self.app.test_request_context('/?p=2'):
+            self.assertEqual(len(list(paginated_query.get_object_list())), 3)
+        with self.app.test_request_context('/?p=4'):
+            self.assertEqual(len(list(paginated_query.get_object_list())), 1)
+        with self.app.test_request_context('/?p=5'):
+            self.assertRaises(Exception, paginated_query.get_object_list)
 
 
 class TestDatabase(PeeweeTestCase):
