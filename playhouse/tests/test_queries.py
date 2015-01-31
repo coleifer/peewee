@@ -444,6 +444,13 @@ class TestSelectQuery(PeeweeTestCase):
         sq = SelectQuery(Blog).where(~((Blog.title == 'foo') & (Blog.title == 'bar')) & ((Blog.title == 'baz') & (Blog.title == 'fizz')))
         self.assertWhere(sq, '(NOT (("blog"."title" = ?) AND ("blog"."title" = ?)) AND (("blog"."title" = ?) AND ("blog"."title" = ?)))', ['foo', 'bar', 'baz', 'fizz'])
 
+    def test_where_negation_single_clause(self):
+        sq = SelectQuery(Blog).where(~Blog.title)
+        self.assertWhere(sq, 'NOT "blog"."title"', [])
+
+        sq = sq.where(Blog.pk > 1)
+        self.assertWhere(sq, '(NOT "blog"."title" AND ("blog"."pk" > ?))', [1])
+
     def test_where_chaining_collapsing(self):
         sq = SelectQuery(User).where(User.id == 1).where(User.id == 2).where(User.id == 3)
         self.assertWhere(sq, '((("users"."id" = ?) AND ("users"."id" = ?)) AND ("users"."id" = ?))', [1, 2, 3])

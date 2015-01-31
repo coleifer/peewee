@@ -700,7 +700,8 @@ class Field(Node):
         if self._is_bound:
             inst.name = self.name
             inst.model_class = self.model_class
-            return inst
+        inst._is_bound = self._is_bound
+        return inst
 
     def add_to_class(self, model_class, name):
         """
