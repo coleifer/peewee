@@ -3392,7 +3392,7 @@ This will print the following code to *stdout* (which you can redirect into a fi
 Flask Utils
 -----------
 
-The ``playhouse.flask_utils`` module contains several helpers for integrating peewee with the `Flask <http://flask.pocoo.org/>` web framework.
+The ``playhouse.flask_utils`` module contains several helpers for integrating peewee with the `Flask <http://flask.pocoo.org/>`_ web framework.
 
 Database wrapper
 ^^^^^^^^^^^^^^^^
@@ -3425,6 +3425,8 @@ Basic usage:
 
 
 The above code example will create and instantiate a peewee :py:class:`PostgresqlDatabase` specified by the given database URL. Request hooks will be configured to establish a connection when a request is received, and automatically close the connection when the response is sent. Lastly, the :py:class:`FlaskDB` class exposes a :py:attr:`FlaskDB.Model` property which can be used as a base for your application's models.
+
+.. note:: The underlying peewee database can be accessed using the ``FlaskDB.database`` attribute.
 
 While the above example shows using a database URL, for more advanced usages you can specify a dictionary of configuration options:
 
