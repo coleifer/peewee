@@ -981,6 +981,9 @@ class TestDjangoFilters(PeeweeTestCase):
         self.assertWhere(sq, '(("users"."username" IN (?, ?)) AND ("comment"."comment" = ?))', ['u1', 'u2', 'hurp'])
 
     def test_filter_dq(self):
+        sq = User.filter(~DQ(username='u1'))
+        self.assertWhere(sq, 'NOT ("users"."username" = ?)', ['u1'])
+
         sq = User.filter(DQ(username='u1') | DQ(username='u2'))
         self.assertJoins(sq, [])
         self.assertWhere(sq, '(("users"."username" = ?) OR ("users"."username" = ?))', ['u1', 'u2'])

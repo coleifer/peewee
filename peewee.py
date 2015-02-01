@@ -27,6 +27,10 @@ import threading
 import uuid
 from collections import deque
 from collections import namedtuple
+try:
+    from collections import OrderedDict
+except ImportError:
+    OrderedDict = dict
 from copy import deepcopy
 from functools import wraps
 from inspect import isclass
@@ -2007,7 +2011,8 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
         _constructed = self.construct_instances(row)
         primary_instance = _constructed[self.model]
         for model_class, instance in _constructed.items():
-            identity_map[model_class] = {_get_pk(instance): instance}
+            identity_map[model_class] = OrderedDict()
+            identity_map[model_class][_get_pk(instance)] = instance
 
         model_data = self.read_model_data(row)
         while True:

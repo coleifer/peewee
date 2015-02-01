@@ -1,3 +1,5 @@
+import sys
+
 from peewee import ModelQueryResultWrapper
 from peewee import NaiveQueryResultWrapper
 from playhouse.tests.base import ModelTestCase
@@ -1007,6 +1009,29 @@ class TestAggregateRows(BaseTestPrefetch):
             ('c6', []),
             ('c7', ['c7-p1']),
         ])])
+
+    def test_aggregate_rows_ordering(self):
+        # Refs github #519.
+        with self.assertQueryCount(1):
+            query = (User
+                     .select(User, Blog)
+                     .join(Blog, JOIN_LEFT_OUTER)
+                     .order_by(User.username.desc(), Blog.title.desc())
+                     .aggregate_rows())
+
+            accum = []
+            for user in query:
+                accum.append((
+                    user.username,
+                    [blog.title for blog in user.blog_set]))
+
+        if sys.version_info[:2] > (2, 6):
+            self.assertEqual(accum, [
+                ('u4', ['b6', 'b5']),
+                ('u3', ['b4', 'b3']),
+                ('u2', []),
+                ('u1', ['b2', 'b1']),
+            ])
 
 
 class TestAggregateRowsRegression(ModelTestCase):
