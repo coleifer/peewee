@@ -25,7 +25,7 @@ Modules which expose higher-level python constructs:
 * :ref:`shortcuts`
 * :ref:`signals`
 
-As well as tools for working with databases:
+As well as tools for working with databases and other frameworks:
 
 * :ref:`pwiz`
 * :ref:`migrate`
@@ -36,6 +36,7 @@ As well as tools for working with databases:
 * :ref:`test_utils`
 * :ref:`csv_utils`
 * :ref:`pskel`
+* :ref:`flask_utils`
 
 
 .. _apsw:
@@ -3384,3 +3385,162 @@ This will print the following code to *stdout* (which you can redirect into a fi
 
     if __name__ == '__main__':
         main()
+
+
+.. _flask_utils:
+
+Flask Utils
+-----------
+
+The ``playhouse.flask_utils`` module contains several helpers for integrating peewee with the `Flask <http://flask.pocoo.org/>` web framework.
+
+Database wrapper
+^^^^^^^^^^^^^^^^
+
+The :py:class:`FlaskDB` class provides a convenient way to configure a peewee :py:class:`Database` instance using Flask app configuration. The :py:class:`FlaskDB` wrapper will also automatically set up request setup and teardown handlers to ensure your connections are managed correctly.
+
+Basic usage:
+
+.. code-block:: python
+
+    import datetime
+    from flask import Flask
+    from peewee import *
+    from playhouse.flask_utils import FlaskDB
+
+    DATABASE = 'postgresql://postgres:password@localhost:5432/my_database'
+
+    app = Flask(__name__)
+    app.config.from_object(__name__)
+
+    database = FlaskDB(app)
+
+    class User(database.Model):
+        username = CharField(unique=True)
+
+    class Tweet(database.Model):
+        user = ForeignKeyField(User, related_name='tweets')
+        content = TextField()
+        timestamp = DateTimeField(default=datetime.datetime.now)
+
+
+The above code example will create and instantiate a peewee :py:class:`PostgresqlDatabase` specified by the given database URL. Request hooks will be configured to establish a connection when a request is received, and automatically close the connection when the response is sent. Lastly, the :py:class:`FlaskDB` class exposes a :py:attr:`FlaskDB.Model` property which can be used as a base for your application's models.
+
+While the above example shows using a database URL, for more advanced usages you can specify a dictionary of configuration options:
+
+.. code-block:: python
+
+    DATABASE = {
+        'name': 'my_app_db',
+        'engine': 'playhouse.pool.PooledPostgresqlDatabase',
+        'user': 'postgres',
+        'max_connections': 32,
+        'stale_timeout': 600,
+    }
+
+    app = Flask(__name__)
+    app.config.from_object(__name__)
+
+    database = FlaskDB(app)
+
+If you prefer to use the `application factory pattern <http://flask.pocoo.org/docs/0.10/patterns/appfactories/>`_, the :py:class:`FlaskDB` class implements an ``init_app()`` method.
+
+Using as a factory:
+
+.. code-block:: python
+
+    database = FlaskDB()
+
+    # Even though the database is not yet initialized, you can still use the
+    # `Model` property to create model classes.
+    class User(database.Model):
+        username = CharField(unique=True)
+
+
+    def create_app():
+        app = Flask(__name__)
+        app.config['DATABASE'] = 'sqlite:////home/code/apps/my-database.db'
+        database.init_app(app)
+        return app
+
+Query utilities
+^^^^^^^^^^^^^^^
+
+The ``flask_utils`` module provides several helpers for managing queries in your web app. Some common patterns include:
+
+.. py:func:: get_object_or_404(query_or_model, *query)
+
+    Retrieve the object matching the given query, or return a 404 not found response. A common use-case might be a detail page for a weblog. You want to either retrieve the post matching the given URL, or return a 404.
+
+    :param query_or_model: Either a :py:class:`Model` class or a pre-filtered :py:class:`SelectQuery`.
+    :param query: An arbitrarily complex peewee expression.
+
+    Example:
+
+    .. code-block:: python
+
+        @app.route('/blog/<slug>/')
+        def post_detail(slug):
+            public_posts = Post.select().where(Post.published == True)
+            post = get_object_or_404(public_posts, (Post.slug == slug))
+            return render_template('post_detail.html', post=post)
+
+.. py:func:: object_list(template_name, query[, context_variable='object_list'[, paginate_by=20[, page_var='page'[, check_bounds=True[, **kwargs]]]]])
+
+    Retrieve a paginated list of objects specified by the given query. The paginated object list will be dropped into the context using the given ``context_variable``, as well as metadata about the current page and total number of pages, and finally any arbitrary context data passed as keyword-arguments.
+
+    The page is specified using the ``page`` ``GET`` argument, e.g. ``/my-object-list/?page=3`` would return the third page of objects.
+
+    :param template_name: The name of the template to render.
+    :param query: A :py:class:`SelectQuery` instance to paginate.
+    :param context_variable: The context variable name to use for the paginated object list.
+    :param paginate_by: Number of objects per-page.
+    :param page_var: The name of the ``GET`` argument which contains the page.
+    :param check_bounds: Whether to check that the given page is a valid page. If ``check_bounds`` is ``True`` and an invalid page is specified, then a 404 will be returned.
+    :param kwargs: Arbitrary key/value pairs to pass into the template context.
+
+    Example:
+
+    .. code-block:: python
+
+        @app.route('/blog/')
+        def post_index():
+            public_posts = (Post
+                            .select()
+                            .where(Post.published == True)
+                            .order_by(Post.timestamp.desc()))
+
+            return object_list(
+                'post_index.html',
+                query=public_posts,
+                context_variable='post_list',
+                paginate_by=10)
+
+    The template will have the following context:
+
+    * ``post_list``, which contains a list of up to 10 posts.
+    * ``page``, which contains the current page based on the value of the ``page`` ``GET`` parameter.
+    * ``pagination``, a :py:class:`PaginatedQuery` instance.
+
+.. py:class:: PaginatedQuery(query_or_model, paginate_by[, page_var='page'[, check_bounds=False]])
+
+    Helper class to perform pagination based on ``GET`` arguments.
+
+    :param query_or_model: Either a :py:class:`Model` or a :py:class:`SelectQuery` instance containing the collection of records you wish to paginate.
+    :param paginate_by: Number of objects per-page.
+    :param page_var: The name of the ``GET`` argument which contains the page.
+    :param check_bounds: Whether to check that the given page is a valid page. If ``check_bounds`` is ``True`` and an invalid page is specified, then a 404 will be returned.
+
+    .. py:method:: get_page()
+
+        Return the currently selected page, as indicated by the value of the ``page_var`` ``GET`` parameter. If no page is explicitly selected, then this method will return 1, indicating the first page.
+
+    .. py:method:: get_page_count()
+
+        Return the total number of possible pages.
+
+    .. py:method:: get_object_list()
+
+        Using the value of :py:meth:`~PaginatedQuery.get_page`, return the page of objects requested by the user. The return value is a :py:class:`SelectQuery` with the appropriate ``LIMIT`` and ``OFFSET`` clauses.
+
+        If ``check_bounds`` was set to ``True`` and the requested page contains no objects, then a 404 will be raised.

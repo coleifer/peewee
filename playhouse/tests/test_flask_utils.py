@@ -3,10 +3,11 @@ import unittest
 from flask import Flask
 
 from peewee import *
-from playhouse.flask_utils import Database
+from playhouse.flask_utils import FlaskDB
 from playhouse.flask_utils import PaginatedQuery
 from playhouse.tests.base import ModelTestCase
 from playhouse.tests.base import PeeweeTestCase
+from playhouse.tests.base import test_db
 from playhouse.tests.models import *
 
 
@@ -55,14 +56,20 @@ class TestPaginationHelpers(ModelTestCase):
             self.assertRaises(Exception, paginated_query.get_object_list)
 
 
-class TestDatabase(PeeweeTestCase):
+class TestFlaskDB(PeeweeTestCase):
+    def tearDown(self):
+        super(TestFlaskDB, self).tearDown()
+        if not test_db.is_closed():
+            test_db.close()
+            test_db.connect()
+
     def test_database(self):
         app = Flask(__name__)
         app.config.update({
             'DATABASE': {
                 'name': ':memory:',
                 'engine': 'peewee.SqliteDatabase'}})
-        database = Database(app)
+        database = FlaskDB(app)
 
         Model = database.Model
         self.assertTrue(isinstance(Model._meta.database, SqliteDatabase))
@@ -70,6 +77,14 @@ class TestDatabase(PeeweeTestCase):
 
         # Multiple calls reference the same object.
         self.assertTrue(database.Model is Model)
+
+    def test_database_url(self):
+        app = Flask(__name__)
+        app.config['DATABASE'] = 'sqlite:///nugget.db'
+        database = FlaskDB(app)
+        Model = database.Model
+        self.assertTrue(isinstance(Model._meta.database, SqliteDatabase))
+        self.assertEqual(Model._meta.database.database, 'nugget.db')
 
     def test_deferred_database(self):
         app = Flask(__name__)
@@ -79,7 +94,7 @@ class TestDatabase(PeeweeTestCase):
                 'engine': 'peewee.SqliteDatabase'}})
 
         # Defer initialization of the database.
-        database = Database()
+        database = FlaskDB()
 
         # Ensure we can access the Model attribute.
         Model = database.Model

@@ -50,8 +50,8 @@ def get_object_or_404(query_or_model, *query):
         abort(404)
 
 def object_list(template_name, query, context_variable='object_list',
-                paginate_by=20, **kwargs):
-    paginated_query = PaginatedQuery(query, paginate_by)
+                paginate_by=20, page_var='page', check_bounds=True, **kwargs):
+    paginated_query = PaginatedQuery(query, paginate_by, page_var, check_bounds)
     kwargs[context_variable] = paginated_query.get_object_list()
     return render_template(
         template_name,
@@ -71,7 +71,7 @@ def get_next_url(default='/'):
         return request.form['next']
     return default
 
-class Database(object):
+class FlaskDB(object):
     def __init__(self, app=None):
         self._app = app
         self.database = None
