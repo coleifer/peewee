@@ -175,6 +175,7 @@ if __name__ == '__main__':
 
     files_to_delete = [
         'peewee_test.db',
+        'peewee_test',
         'tmp.db',
         'peewee_test.bdb.db',
         'peewee_test.cipher.db']
