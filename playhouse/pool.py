@@ -125,10 +125,14 @@ class PooledDatabase(object):
             self._closed.add(key)
             super(PooledDatabase, self)._close(conn)
         elif key in self._in_use:
-            logger.debug('Returning %s to pool.', key)
             ts = self._in_use[key]
             del self._in_use[key]
-            heapq.heappush(self._connections, (ts, conn))
+            if self.stale_timeout and self._is_stale(ts):
+                logger.debug('Closing stale connection %s.', key)
+                self._close(conn, close_conn=True)
+            else:
+                logger.debug('Returning %s to pool.', key)
+                heapq.heappush(self._connections, (ts, conn))
 
     def manual_close(self):
         """

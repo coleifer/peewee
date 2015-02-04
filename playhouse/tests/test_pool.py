@@ -113,12 +113,16 @@ class TestPooledDatabase(PeeweeTestCase):
         # Create a test database with a very short stale timeout.
         db = TestDB('testing', stale_timeout=.01)
         self.assertEqual(db.get_conn(), 1)
-
-        # Return the connection to the pool.
-        db.close()
+        self.assertTrue(1 in db._in_use)
 
         # Sleep long enough for the connection to be considered stale.
         time.sleep(.01)
+
+        # When we close, since the conn is stale it won't be returned to
+        # the pool.
+        db.close()
+        self.assertEqual(db._in_use, {})
+        self.assertEqual(db._connections, [])
 
         # A new connection will be returned.
         self.assertEqual(db.get_conn(), 2)
