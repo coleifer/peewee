@@ -5,6 +5,29 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.4.7
+
+### Bugs fixed
+
+* #504, Docs updates.
+* #506, Fixed regression in `aggregate_rows()`
+* #510, Fixes bug in pwiz overwriting columns.
+* #514, Correctly cast foreign keys in `prefetch()`.
+* #515, Simplifies queries issued when doing recursive deletes.
+* #516, Fix cloning of Field objects.
+* #519, Aggregate rows now correctly preserves ordering of joined instances.
+* Unreported, fixed bug to not leave expired connections sitting around in the pool.
+
+### New features
+
+* Added support for Postgresql's ``jsonb`` type with [BinaryJSONField](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#BinaryJSONField).
+* Add some basic [Flask helpers](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#flask-utils).
+* Add support for `UNION ALL` queries in #512
+* Add `SqlCipherExtDatabase`, which combines the sqlcipher database with the sqlite extensions.
+* Add option to print metadata when generating code with ``pwiz``.
+
+[View commits](https://github.com/coleifer/peewee/compare/2.4.6...2.4.7)
+
 ## 2.4.6
 
 This is a relatively small release with mostly bug fixes and updates to the documentation. The one new feature I'd like to highlight is the ``ManyToManyField`` ([docs](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#ManyToManyField)).
