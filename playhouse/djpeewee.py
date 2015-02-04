@@ -21,7 +21,7 @@ class DjangoTranslator(object):
         return [
             (djf.AutoField, PrimaryKeyField),
             (djf.BigIntegerField, BigIntegerField),
-            #(djf.BinaryField, BlobField),
+            # (djf.BinaryField, BlobField),
             (djf.BooleanField, BooleanField),
             (djf.CharField, CharField),
             (djf.DateTimeField, DateTimeField),  # Extends DateField.
@@ -140,8 +140,8 @@ class DjangoTranslator(object):
 
     def translate_models(self, *models, **options):
         """
-        Generate a group of peewee models analagous to the provided Django models
-        for the purposes of creating queries.
+        Generate a group of peewee models analagous to the provided Django
+        models for the purposes of creating queries.
 
         :param model: A Django model class.
         :param options: A dictionary of options, see note below.
@@ -163,7 +163,10 @@ class DjangoTranslator(object):
             # Generate query using peewee.
             PUser = peewee['User']
             PAccount = peewee['Account']
-            query = PUser.select().join(PAccount).where(PAccount.acct_type == 'foo')
+            query = (PUser
+                     .select()
+                     .join(PAccount)
+                     .where(PAccount.acct_type == 'foo'))
 
             # Django raw query.
             users = User.objects.raw(*query.sql())

@@ -25,7 +25,6 @@ Blog.tags -> select query of all tags for Blog instances
 
 from peewee import *
 from peewee import BaseModel as _BaseModel
-from peewee import FieldDescriptor
 from peewee import Model as _Model
 from peewee import SelectQuery
 from peewee import UpdateQuery
@@ -109,7 +108,7 @@ class ReverseGFK(object):
         miv = instance._get_pk_value()
         if (isinstance(value, SelectQuery) and
                 value.model_class == self.model_class):
-            uq = UpdateQuery(self.model_class, {
+            UpdateQuery(self.model_class, {
                 self.model_type_field: mtv,
                 self.model_id_field: miv,
             }).where(value._where).execute()

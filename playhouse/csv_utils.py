@@ -180,9 +180,9 @@ class Loader(_CSVReader):
         table name will be derived from the CSV filename).
     :param reader_kwargs: Arbitrary arguments to pass to the CSV reader.
     """
-    def __init__(self, db_or_model, file_or_name, fields=None, field_names=None,
-                 has_header=True, sample_size=10, converter=None,
-                 db_table=None, **reader_kwargs):
+    def __init__(self, db_or_model, file_or_name, fields=None,
+                 field_names=None, has_header=True, sample_size=10,
+                 converter=None, db_table=None, **reader_kwargs):
         self.file_or_name = file_or_name
         self.fields = fields
         self.field_names = field_names
@@ -251,7 +251,8 @@ class Loader(_CSVReader):
             self.field_names = [
                 'field_%d' % i for i in range(len(self.fields))]
 
-        with self.get_reader(self.file_or_name, **self.reader_kwargs) as reader:
+        reader_obj = self.get_reader(self.file_or_name, **self.reader_kwargs)
+        with reader_obj as reader:
             if not self.field_names:
                 row = next(reader)
                 self.field_names = [self.clean_field_name(col) for col in row]

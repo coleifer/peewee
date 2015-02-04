@@ -164,10 +164,10 @@ class PooledMySQLDatabase(PooledDatabase, MySQLDatabase):
 
 class _PooledPostgresqlDatabase(PooledDatabase):
     def _is_closed(self, key, conn):
-        is_closed = super(_PooledPostgresqlDatabase, self)._is_closed(key, conn)
-        if not is_closed:
-            is_closed = bool(conn.closed)
-        return is_closed
+        closed = super(_PooledPostgresqlDatabase, self)._is_closed(key, conn)
+        if not closed:
+            closed = bool(conn.closed)
+        return closed
 
 class PooledPostgresqlDatabase(_PooledPostgresqlDatabase, PostgresqlDatabase):
     pass

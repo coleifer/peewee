@@ -1,6 +1,5 @@
 from base64 import b64decode
 from base64 import b64encode
-import itertools
 import operator
 import pickle
 from peewee import *

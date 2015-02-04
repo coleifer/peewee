@@ -22,11 +22,6 @@ try:
     compat.register()
 except ImportError:
     pass
-else:
-    try:
-        import psycopg2
-    except ImportError:
-        pass
 
 # Python 2/3 compatibility.
 if sys.version_info[0] < 3:
@@ -271,7 +266,8 @@ def skip_if(expression):
         if expression():
             if TEST_VERBOSITY > 0:
                 print_('Skipping %s tests.' % klass.__name__)
-            class Dummy(object): pass
+            class Dummy(object):
+                pass
             return Dummy
         return klass
     return decorator

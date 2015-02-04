@@ -2,7 +2,6 @@
 
 from collections import namedtuple
 import optparse
-import sys
 
 template = """
 #!/usr/bin/env python

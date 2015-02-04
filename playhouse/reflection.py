@@ -68,7 +68,7 @@ class Column(object):
             params['null'] = True
         if self.field_class is ForeignKeyField or self.name != self.db_column:
             params['db_column'] = "'%s'" % self.db_column
-        if self.primary_key and not self.field_class is PrimaryKeyField:
+        if self.primary_key and self.field_class is not PrimaryKeyField:
             params['primary_key'] = True
 
         # Handle ForeignKeyField-specific attributes.
@@ -548,7 +548,7 @@ class Introspector(object):
                 params = {
                     'db_column': db_column,
                     'null': column.nullable}
-                if column.primary_key and not FieldClass is PrimaryKeyField:
+                if column.primary_key and FieldClass is not PrimaryKeyField:
                     params['primary_key'] = True
                 if column.is_foreign_key():
                     if column.is_self_referential_fk():

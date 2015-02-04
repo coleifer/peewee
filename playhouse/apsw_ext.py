@@ -26,7 +26,6 @@ from peewee import DateField as _DateField
 from peewee import DateTimeField as _DateTimeField
 from peewee import DecimalField as _DecimalField
 from peewee import logger
-from peewee import PY3
 from peewee import savepoint
 from peewee import TimeField as _TimeField
 from peewee import transaction as _transaction

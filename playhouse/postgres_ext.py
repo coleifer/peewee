@@ -22,7 +22,6 @@ try:
 except ImportError:
     pass
 
-from psycopg2 import extensions
 from psycopg2.extensions import adapt
 from psycopg2.extensions import AsIs
 from psycopg2.extensions import register_adapter
@@ -110,7 +109,7 @@ def adapt_array(arr):
     return AsIs('%s::%s%s' % (
         items,
         arr.field.get_column_type(),
-        '[]'* arr.field.dimensions))
+        '[]' * arr.field.dimensions))
 register_adapter(_Array, adapt_array)
 
 
@@ -349,7 +348,7 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
             else:
                 cursor = self.get_cursor()
             try:
-                res = cursor.execute(sql, params or ())
+                cursor.execute(sql, params or ())
             except Exception as exc:
                 logger.exception('%s %s', sql, params)
                 if self.sql_error_handler(exc, sql, params, require_commit):

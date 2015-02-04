@@ -304,7 +304,6 @@ class JSONImporter(Importer):
     def load(self, file_obj, **kwargs):
         data = json.load(file_obj, **kwargs)
         count = 0
-        valid_columns = set(self.columns)
 
         for row in data:
             if self.strict:

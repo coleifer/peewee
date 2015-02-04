@@ -41,7 +41,8 @@ put after the `db = ...` line:
     except peewee.DatabaseError as e:
         # Check whether the message *means* "passphrase is wrong"
         if e.message == 'file is encrypted or is not a database':
-            raise Exception('Developer should Prompt user for passphrase again.')
+            raise Exception('Developer should Prompt user for passphrase '
+                            'again.')
         else:
             # A different DatabaseError. Raise it.
             raise e
@@ -73,11 +74,12 @@ class _SqlCipherDatabase(object):
 
         if kdf_iter and kdf_iter < 10000:
             raise ImproperlyConfigured(
-                 'SqlCipherDatabase kdf_iter should be at least 10000.')
+                'SqlCipherDatabase kdf_iter should be at least 10000.')
 
         conn = sqlcipher.connect(database, **kwargs)
         self._add_conn_hooks(conn)
-        conn.execute('PRAGMA key=\'{0}\''.format(passphrase.replace("'", "''")))
+        conn.execute(
+            'PRAGMA key=\'{0}\''.format(passphrase.replace("'", "''")))
         conn.execute('PRAGMA kdf_iter={0:d}'.format(kdf_iter))
         return conn
 

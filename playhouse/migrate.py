@@ -449,7 +449,7 @@ class SqliteMigrator(SchemaMigrator):
         indexes = self.database.get_indexes(table)
 
         # Find any foreign keys we may need to remove.
-        foreign_keys = self.database.get_foreign_keys(table)
+        self.database.get_foreign_keys(table)
 
         # Parse out the `CREATE TABLE` and column list portions of the query.
         raw_create, raw_columns = self.column_re.search(create_table).groups()
@@ -461,7 +461,6 @@ class SqliteMigrator(SchemaMigrator):
         new_column_defs = []
         new_column_names = []
         original_column_names = []
-        fk_columns = {}
 
         for column_def in column_defs:
             column_name, = self.column_name_re.match(column_def).groups()

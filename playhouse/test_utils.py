@@ -1,4 +1,3 @@
-from contextlib import contextmanager
 from functools import wraps
 import logging
 
@@ -72,7 +71,7 @@ class assert_query_count(count_queries):
     def __call__(self, f):
         @wraps(f)
         def decorated(*args, **kwds):
-            with self as counter:
+            with self:
                 ret = f(*args, **kwds)
 
             self._assert_count()

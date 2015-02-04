@@ -60,8 +60,8 @@ class SqliteQueryCompiler(QueryCompiler):
 
         if issubclass(model_class, VirtualModel):
             statement = 'CREATE VIRTUAL TABLE'
-            # If we are using a special extension, need to insert that after the
-            # table name node.
+            # If we are using a special extension, need to insert that after
+            # the table name node.
             clause.nodes.insert(2, SQL('USING %s' % model_class._extension))
         else:
             statement = 'CREATE TABLE'
@@ -403,13 +403,13 @@ def find_best_search_field(model_class):
     return model_class._meta.get_fields()[-1]
 
 def _parse_match_info(buf):
-    # see http://sqlite.org/fts3.html#matchinfo
-    bufsize = len(buf) # length in bytes
+    # See http://sqlite.org/fts3.html#matchinfo
+    bufsize = len(buf)  # Length in bytes.
     return [struct.unpack('@I', buf[i:i+4])[0] for i in range(0, bufsize, 4)]
 
 # Ranking implementation, which parse matchinfo.
 def rank(raw_match_info):
-    # handle match_info called w/default args 'pcx' - based on the example rank
+    # Handle match_info called w/default args 'pcx' - based on the example rank
     # function http://sqlite.org/fts3.html#appendix_a
     match_info = _parse_match_info(raw_match_info)
     score = 0.0
