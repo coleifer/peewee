@@ -214,6 +214,9 @@ have an event attached:
         (Event.event_date.year == now.year) &
         (Event.event_date.month == now.month))
 
+.. note::
+    SQLite does not have a native date type, so dates are stored in formatted text columns. To ensure that comparisons work correctly, the dates need to be formatted so they are sorted lexicographically. That is why they are stored, by default, as ``YYYY-MM-DD HH:MM:SS``.
+
 Creating a custom field
 ^^^^^^^^^^^^^^^^^^^^^^^
 
