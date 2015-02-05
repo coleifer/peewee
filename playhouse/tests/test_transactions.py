@@ -1,5 +1,6 @@
 import threading
 
+from peewee import _atomic
 from peewee import SqliteDatabase
 from peewee import transaction
 from playhouse.tests.base import database_class
@@ -40,6 +41,48 @@ class TestTransaction(ModelTestCase):
             patched_db.begin.assert_called_once_with()
             patched_db.commit.assert_called_once_with()
             patched_db.rollback.assert_called_once_with()
+
+    def test_atomic_nesting(self):
+        db = SqliteDatabase(':memory:')
+        db_patches = mock.patch.multiple(
+            db,
+            begin=mock.DEFAULT,
+            commit=mock.DEFAULT,
+            execute_sql=mock.DEFAULT,
+            rollback=mock.DEFAULT)
+
+        with mock.patch('peewee.Database', wraps=db) as patched_db:
+            with db_patches as db_mocks:
+                begin = db_mocks['begin']
+                commit = db_mocks['commit']
+                execute_sql = db_mocks['execute_sql']
+                rollback = db_mocks['rollback']
+
+                with _atomic(patched_db):
+                    patched_db.transaction.assert_called_once_with()
+                    begin.assert_called_once_with()
+                    self.assertEqual(patched_db.savepoint.call_count, 0)
+
+                    with _atomic(patched_db):
+                        patched_db.transaction.assert_called_once_with()
+                        begin.assert_called_once_with()
+                        patched_db.savepoint.assert_called_once_with()
+                        self.assertEqual(commit.call_count, 0)
+                        self.assertEqual(rollback.call_count, 0)
+
+                        with _atomic(patched_db):
+                            patched_db.transaction.assert_called_once_with()
+                            begin.assert_called_once_with()
+                            self.assertEqual(
+                                patched_db.savepoint.call_count,
+                                2)
+
+                    begin.assert_called_once_with()
+                    self.assertEqual(commit.call_count, 0)
+                    self.assertEqual(rollback.call_count, 0)
+
+                commit.assert_called_once_with()
+                self.assertEqual(rollback.call_count, 0)
 
     def test_autocommit(self):
         test_db.set_autocommit(False)
@@ -327,7 +370,6 @@ class TestAutoRollback(ModelTestCase):
         self.assertEqual(u.id, u_db.id)
 
 
-@skip_if(lambda: not test_db.savepoints)
 class TestSavepoints(ModelTestCase):
     requires = [User]
 
@@ -464,3 +506,31 @@ class TestAtomic(ModelTestCase):
         create_both('huey')
         self.assertEqual(User.select().count(), 2)
         self.assertEqual(UniqueModel.select().count(), 2)
+
+    def test_atomic_rollback(self):
+        with test_db.atomic():
+            UniqueModel.create(name='charlie')
+            try:
+                with test_db.atomic():
+                    UniqueModel.create(name='charlie')
+            except IntegrityError:
+                pass
+            else:
+                assert False
+
+            with test_db.atomic():
+                UniqueModel.create(name='zaizee')
+                try:
+                    with test_db.atomic():
+                        UniqueModel.create(name='zaizee')
+                except IntegrityError:
+                    pass
+                else:
+                    assert False
+
+                UniqueModel.create(name='mickey')
+            UniqueModel.create(name='huey')
+
+        names = [um.name for um in
+                 UniqueModel.select().order_by(UniqueModel.name)]
+        self.assertEqual(names, ['charlie', 'huey', 'mickey', 'zaizee'])
