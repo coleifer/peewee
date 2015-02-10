@@ -2932,8 +2932,6 @@ Migrations API
 
     Generate migrations for MySQL databases.
 
-    .. warning:: The MySQL migrations are not well tested.
-
 
 .. _reflection:
 
