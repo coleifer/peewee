@@ -2465,7 +2465,10 @@ class SelectQuery(Query):
     def annotate(self, rel_model, annotation=None):
         if annotation is None:
             annotation = fn.Count(rel_model._meta.primary_key).alias('count')
-        query = self.clone()
+        if self._query_ctx == rel_model:
+            query = self.switch(self.model_class)
+        else:
+            query = self.clone()
         query = query.ensure_join(query._query_ctx, rel_model)
         if not query._group_by:
             query._group_by = [x.alias() for x in query._select]
