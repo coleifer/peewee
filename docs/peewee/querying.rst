@@ -574,6 +574,7 @@ The resulting query will return *User* objects with all their normal attributes 
     query = (User
              .select()
              .join(Tweet, JOIN_LEFT_OUTER)
+             .switch(User)
              .annotate(Tweet))
 
 You can also specify a custom aggregator, such as *MIN* or *MAX*:

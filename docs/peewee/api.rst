@@ -1138,7 +1138,11 @@ Query Types
             If the ``ForeignKeyField`` is ``nullable``, then a ``LEFT OUTER`` join
             may need to be used::
 
-                User.select().join(Tweet, JOIN_LEFT_OUTER).annotate(Tweet)
+                query = (User
+                         .select()
+                         .join(Tweet, JOIN_LEFT_OUTER)
+                         .switch(User)  # Switch query context back to `User`.
+                         .annotate(Tweet))
 
     .. py:method:: aggregate(aggregation)
 
