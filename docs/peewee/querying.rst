@@ -981,7 +981,7 @@ Foreign Keys
 
 Foreign keys are created using a special field class :py:class:`ForeignKeyField`. Each foreign key also creates a back-reference on the related model using the specified *related_name*.
 
-Traversing foriegn keys
+Traversing foreign keys
 -----------------------
 
 Referring back to the :ref:`User and Tweet models <blog-models>`, note that there is a :py:class:`ForeignKeyField` from *Tweet* to *User*. The foreign key can be traversed, allowing you access to the associated user instance:
