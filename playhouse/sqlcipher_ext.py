@@ -61,7 +61,7 @@ except ImportError:
     try:
         from pysqlcipher3 import dbapi2 as sqlcipher
     except ImportError:
-        raise RuntimeError('Sqlcipher python bindings not found.')
+        raise ImportError('Sqlcipher python bindings not found.')
 
 sqlcipher.register_adapter(decimal.Decimal, str)
 sqlcipher.register_adapter(datetime.date, str)
