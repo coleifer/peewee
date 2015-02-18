@@ -55,7 +55,13 @@ import decimal
 
 from peewee import *
 from playhouse.sqlite_ext import SqliteExtDatabase
-from pysqlcipher import dbapi2 as sqlcipher
+try:
+    from pysqlcipher import dbapi2 as sqlcipher
+except ImportError:
+    try:
+        from pysqlcipher3 import dbapi2 as sqlcipher
+    except ImportError:
+        raise RuntimeError('Sqlcipher python bindings not found.')
 
 sqlcipher.register_adapter(decimal.Decimal, str)
 sqlcipher.register_adapter(datetime.date, str)
