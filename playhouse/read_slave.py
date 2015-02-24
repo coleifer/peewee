@@ -21,6 +21,7 @@ class User(BaseModel):
 master_select = SelectQuery(User).where(...)
 """
 from peewee import *
+from peewee import ExecutionContext
 
 
 class ReadSlaveModel(Model):
@@ -44,3 +45,21 @@ class ReadSlaveModel(Model):
         if query._sql.lower().startswith('select'):
             query.database = cls._get_read_database()
         return query
+
+
+class Using(ExecutionContext):
+    def __init__(self, database, models, with_transaction=True):
+        super(Using, self).__init__(database, with_transaction)
+        self.models = models
+
+    def __enter__(self):
+        self._orig = []
+        for model in self.models:
+            self._orig.append(model._meta.database)
+            model._meta.database = self.database
+        return super(Using, self).__enter__()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        super(Using, self).__exit__(exc_type, exc_val, exc_tb)
+        for i, model in enumerate(self.models):
+            model._meta.database = self._orig[i]
