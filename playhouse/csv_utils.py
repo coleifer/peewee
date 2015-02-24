@@ -182,7 +182,8 @@ class Loader(_CSVReader):
     """
     def __init__(self, db_or_model, file_or_name, fields=None,
                  field_names=None, has_header=True, sample_size=10,
-                 converter=None, db_table=None, **reader_kwargs):
+                 converter=None, db_table=None, pk_in_csv=False,
+                 **reader_kwargs):
         self.file_or_name = file_or_name
         self.fields = fields
         self.field_names = field_names
@@ -208,8 +209,9 @@ class Loader(_CSVReader):
             self.db_table = self.model._meta.db_table
             self.fields = self.model._meta.get_fields()
             self.field_names = self.model._meta.get_field_names()
-            # If using an auto-incrementing primary key, ignore it.
-            if self.model._meta.auto_increment:
+            # If using an auto-incrementing primary key, ignore it unless we
+            # are told the primary key is included in the CSV.
+            if self.model._meta.auto_increment and not pk_in_csv:
                 self.fields = self.fields[1:]
                 self.field_names = self.field_names[1:]
 
@@ -238,7 +240,10 @@ class Loader(_CSVReader):
         if self.model:
             return self.model
         attrs = dict(zip(field_names, fields))
-        attrs['_auto_pk'] = PrimaryKeyField()
+        if 'id' not in attrs:
+            attrs['_auto_pk'] = PrimaryKeyField()
+        elif isinstance(attrs['id'], IntegerField):
+            attrs['id'] = PrimaryKeyField()
         klass = type(self.db_table.title(), (Model,), attrs)
         klass._meta.database = self.database
         klass._meta.db_table = self.db_table

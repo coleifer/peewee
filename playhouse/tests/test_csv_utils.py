@@ -70,9 +70,9 @@ class TestCSVConversion(PeeweeTestCase):
         return TestLoader(**loader_kwargs).load()
 
     def assertData(self, ModelClass, expected):
-        name_field = ModelClass._meta.get_fields()[2]
+        name_field = ModelClass._meta.get_fields()[1]
         query = ModelClass.select().order_by(name_field).tuples()
-        self.assertEqual([row[1:] for row in query], expected)
+        self.assertEqual([row for row in query], expected)
 
     def test_defaults(self):
         ModelClass = self.load(
@@ -83,7 +83,7 @@ class TestCSVConversion(PeeweeTestCase):
         self.assertData(ModelClass, [
             (10, 'F1 L1', date(1983, 1, 1), 10000., 't'),
             (20, 'F2 L2', date(1983, 1, 2), 20000.5, 'f'),
-            (0, 'F3 L3', None, 0., ''),
+            (21, 'F3 L3', None, 0., ''),
         ])
 
     def test_no_header(self):
@@ -95,8 +95,8 @@ class TestCSVConversion(PeeweeTestCase):
         self.assertEqual(ModelClass._meta.get_field_names(), [
             '_auto_pk', 'f1', 'f2', 'f3', 'f4', 'f5'])
         self.assertData(ModelClass, [
-            (10, 'F1 L1', date(1983, 1, 1), 10000., 't'),
-            (20, 'F2 L2', date(1983, 1, 2), 20000.5, 'f')])
+            (1, 10, 'F1 L1', date(1983, 1, 1), 10000., 't'),
+            (2, 20, 'F2 L2', date(1983, 1, 2), 20000.5, 'f')])
 
     def test_no_header_no_fieldnames(self):
         ModelClass = self.load(
@@ -117,7 +117,7 @@ class TestCSVConversion(PeeweeTestCase):
 
     def test_fields(self):
         fields = [
-            IntegerField(),
+            PrimaryKeyField(),
             CharField(),
             DateField(),
             FloatField(),
@@ -129,7 +129,7 @@ class TestCSVConversion(PeeweeTestCase):
             fields=fields)
         self.assertEqual(
             list(map(type, fields)),
-            list(map(type, ModelClass._meta.get_fields()[1:])))
+            list(map(type, ModelClass._meta.get_fields())))
         self.assertData(ModelClass, [
             (10, 'F1 L1', date(1983, 1, 1), 10000., 't'),
             (20, 'F2 L2', date(1983, 1, 2), 20000.5, 'f')])
