@@ -1366,6 +1366,9 @@ The term *N+1 queries* refers to a situation where an application performs a que
 
 Peewee provides several APIs for mitigating *N+1* query behavior. Recollecting the models used throughout this document, *User* and *Tweet*, this section will try to outline some common *N+1* scenarios, and how peewee can help you avoid them.
 
+.. note::
+    In some cases, N+1 queries will not result in a significant or measurable performance hit. It all depends on the data you are querying, the database you are using, and the latency involved in executing queries and retrieving results. As always when making optimizations, profile before and after to ensure the changes do what you expect them to.
+
 List recent tweets
 ^^^^^^^^^^^^^^^^^^
 
@@ -1401,8 +1404,8 @@ This situation is similar to the previous example, but there is one important di
 
 Peewee provides two approaches to avoiding *O(n)* queries in this situation. We can either:
 
-* Fetch both users and tweets in a single query. User data will be duplicated, so peewee will de-dupe it and aggregate the tweets as it iterates through the result set.
-* Fetch users first, then fetch all the tweets associated with those users. Once peewee has the big list of tweets, it will assign them out, matching them with the appropriate user.
+* Fetch both users and tweets in a single query. User data will be duplicated, so peewee will de-dupe it and aggregate the tweets as it iterates through the result set. This method involves a lot of data being transferred over the wire and a lot of logic in Python to de-duplicate rows.
+* Fetch users first, then fetch all the tweets associated with those users. Once peewee has the big list of tweets, it will assign them out, matching them with the appropriate user. This method is usually faster but will involve a query for each table being selected.
 
 Each solution has its place and, depending on the size and shape of the data you are querying, one may be more performant than the other.
 
@@ -1449,6 +1452,9 @@ Below is an example of how we might fetch several users and any tweets they crea
 
 .. note::
     Do not mix calls to :py:meth:`~SelectQuery.aggregate_rows` with :py:meth:`~SelectQuery.get`. The latter applies a ``LIMIT 1`` SQL clause, and since the aggregate result set may contain more than one item, this can lead to incorrect behavior.
+
+.. note::
+    Using :py:meth:`~SelectQuery.aggregate_rows` with any kind of ``LIMIT`` or ``OFFSET`` may result in unexpected results. Imagine you have three users, each of whom has 10 tweets. If you run a query with a ``LIMIT 5``, then you will only receive the first user and their first 5 tweets.
 
 .. warning::
     Because there is a lot of computation involved in de-duping data, it is possible that for some queries :py:meth:`~SelectQuery.aggregate_rows` will be significantly less performant than using :py:func:`prefetch` (described in the following section) or even issuing **N** simple queries. Profile your code if you're not sure.
