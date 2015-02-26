@@ -598,12 +598,12 @@ JoinMetadata = namedtuple('JoinMetadata', (
     'source', 'target_attr', 'dest', 'to_field', 'related_name'))
 
 class Join(namedtuple('_Join', ('dest', 'join_type', 'on'))):
-    def get_foreign_key(self, source, dest):
-        fk_field = source._meta.rel_for_model(dest)
-        if fk_field is not None:
-            return fk_field, False
-        reverse_rel = source._meta.reverse_rel_for_model(dest)
-        if reverse_rel is not None:
+    def get_foreign_keys(self, source, dest):
+        fk_fields = source._meta.all_rels_for_model(dest)
+        if fk_fields:
+            return fk_fields, False
+        reverse_rel = source._meta.all_reverse_rels_for_model(dest)
+        if reverse_rel:
             return reverse_rel, True
         return None, None
 
@@ -616,18 +616,37 @@ class Join(namedtuple('_Join', ('dest', 'join_type', 'on'))):
 
         is_expr = isinstance(self.on, Expression)
         join_alias = is_expr and self.on._alias or None
+        join_lhs = (is_expr and hasattr(self.on.lhs, 'name') and
+                    self.on.lhs) or None
+        join_rhs = (is_expr and hasattr(self.on.rhs, 'name') and
+                    self.on.rhs) or None
 
         target_attr = to_field = related_name = None
-        fk_field, is_backref = self.get_foreign_key(source, dest)
-        if fk_field is not None:
+        fk_fields, is_backref = self.get_foreign_keys(source, dest)
+        if fk_fields:
+            if is_expr:
+                for fk_field in fk_fields:
+                    our_model = dest if is_backref else source
+                    if join_lhs and join_lhs.model_class == our_model:
+                        join_field = join_lhs
+                    elif join_rhs and join_rhs.model_class == our_model:
+                        join_field = join_rhs
+                    else:
+                        continue
+                    if fk_field.name == join_field.name:
+                        break
+                else:
+                    fk_field = fk_fields[0]
+            else:
+                fk_field = fk_fields[0]
             if is_backref:
                 target_attr = dest._meta.db_table
                 related_name = fk_field.related_name
             else:
                 target_attr = fk_field.name
                 to_field = fk_field.to_field.name
-        elif is_expr and hasattr(self.on.lhs, 'name'):
-            target_attr = self.on.lhs.name
+        elif is_expr and join_lhs:
+            target_attr = join_lhs.name
         else:
             target_attr = dest._meta.db_table
 
@@ -3598,17 +3617,23 @@ class ModelOptions(object):
                 return i
         return -1
 
+    def all_rels_for_model(self, model):
+        return [f for f in self.get_fields()
+                if isinstance(f, ForeignKeyField) and f.rel_model == model]
+
     def rel_for_model(self, model, field_obj=None):
         is_field = isinstance(field_obj, Field)
         is_node = not is_field and isinstance(field_obj, Node)
-        for field in self.get_fields():
-            if isinstance(field, ForeignKeyField) and field.rel_model == model:
-                is_match = any((
-                    field_obj is None,
-                    is_field and field_obj.name == field.name,
-                    is_node and field_obj._alias == field.name))
-                if is_match:
-                    return field
+        for field in self.all_rels_for_model(model):
+            is_match = any((
+                field_obj is None,
+                is_field and field_obj.name == field.name,
+                is_node and field_obj._alias == field.name))
+            if is_match:
+                return field
+
+    def all_reverse_rels_for_model(self, model):
+        return model._meta.all_rels_for_model(self.model_class)
 
     def reverse_rel_for_model(self, model, field_obj=None):
         return model._meta.rel_for_model(self.model_class, field_obj)
