@@ -2116,6 +2116,16 @@ The easiest way to create transactions and savepoints is to use :py:meth:`Databa
         # This statement is executed using the regular `conn`.
         User.create(username='mickey')
 
+.. py:class:: Using(database, models[, with_transaction=True])
+
+    For the duration of the wrapped block, all queries against the given ``models`` will use the specified ``database``. Optionally these queries can be run inside a transaction by specifying ``with_transaction=True``.
+
+    ``Using`` provides, in short, a way to run queries on a list of models using a manually specified database.
+
+    :param database: a :py:class:`Database` instance.
+    :param models: a list of :py:class:`Model` classes to use with the given database.
+    :param with_transaction: Whether the wrapped block should be run in a transaction.
+
 Metadata Types
 --------------
 
