@@ -80,6 +80,7 @@ __all__ = [
     'SQL',
     'TextField',
     'TimeField',
+    'Using',
     'UUIDField',
     'Window',
 ]
@@ -3338,6 +3339,23 @@ class ExecutionContext(_callable_context_manager):
             finally:
                 self.database.pop_execution_context()
                 self.database._close(self.connection)
+
+class Using(ExecutionContext):
+    def __init__(self, database, models, with_transaction=True):
+        super(Using, self).__init__(database, with_transaction)
+        self.models = models
+
+    def __enter__(self):
+        self._orig = []
+        for model in self.models:
+            self._orig.append(model._meta.database)
+            model._meta.database = self.database
+        return super(Using, self).__enter__()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        super(Using, self).__exit__(exc_type, exc_val, exc_tb)
+        for i, model in enumerate(self.models):
+            model._meta.database = self._orig[i]
 
 class _atomic(_callable_context_manager):
     def __init__(self, db):

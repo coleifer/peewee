@@ -1,6 +1,6 @@
 from peewee import *
+from peewee import Using
 from playhouse.read_slave import ReadSlaveModel
-from playhouse.read_slave import Using
 from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
 

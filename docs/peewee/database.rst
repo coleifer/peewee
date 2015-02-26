@@ -650,6 +650,45 @@ Execution context examples:
 
 If you are using the peewee connection pool, then the new connections used by the :py:class:`ExecutionContext` will be pulled from the pool of available connections and recycled appropriately.
 
+Using multiple databases
+------------------------
+
+With peewee you can use as many databases as you want. Each model can define it's database by specifying a :ref:`Meta.database <model-options>`. What if you want to use the same model with multiple databases, though? Depending on your use-case, peewee provides several options.
+
+If you have a Master/Slave setup and want all writes to go to the master, but reads can go to any number of replicated copies, check out the :ref:`Read Slave extension <read-slaves>`.
+
+For finer-grained control, check out the :py:class:`Using` context manager / decorator. This allows you to specify the database to use with a given list of models for the duration of the wrapped block.
+
+Here is an example of how you might use the :py:class:`Using` context manager:
+
+.. code-block:: python
+
+    master = PostgresqlDatabase('master')
+    read_replica = PostgresqlDatabase('replica')
+
+    class Data(Model):
+        value = IntegerField()
+
+        class Meta:
+            database = master
+
+    # By default all queries go to the master, since that is what
+    # is defined on our model.
+    for i in range(10):
+        Data.create(value=i)
+
+    # But what if we want to explicitly use the read replica?
+    with Using(read_replica, [Data]):
+        # Query is executed against the read replica.
+        Data.get(Data.value == 5)
+
+        # Since we did not specify this model in the list of overrides
+        # it will use whatever database it was defined with.
+        SomeOtherModel.get(SomeOtherModel.field == 3)
+
+.. note::
+    For simple master/slave configurations, check out the :ref:`read-slaves` extension. This extension ensures writes are sent to the master database and reads occur from any of the listed read replicas.
+
 Logging queries
 ---------------
 
