@@ -705,6 +705,28 @@ Example:
     for person in Person.raw('select * from person'):
         print person.name  # .raw() will return model instances.
 
+Security and SQL Injection
+--------------------------
+
+By default peewee will parameterize queries, so any parameters passed in by the user will be escaped. The only exception to this rule is if you are writing a raw SQL query or are passing in a ``SQL`` object which may contain untrusted data. To mitigate this, ensure that any user-defined data is passed in as a query parameter and not part of the actual SQL query:
+
+.. code-block:: python
+
+    # Bad!
+    query = MyModel.raw('SELECT * FROM my_table WHERE data = %s' % (user_data,))
+
+    # Good. `user_data` will be treated as a parameter to the query.
+    query = MyModel.raw('SELECT * FROM my_table WHERE data = %s', user_data)
+
+    # Bad!
+    query = MyModel.select().where(SQL('Some SQL expression %s' % user_data))
+
+    # Good. `user_data` will be treated as a parameter.
+    query = MyModel.select().where(SQL('Some SQL expression %s', user_data))
+
+.. note::
+    MySQL and Postgresql use ``'%s'`` to denote parameters. SQLite, on the other hand, uses ``'?'``. Be sure to use the character appropriate to your database. You can also find this parameter by checking :py:attr:`Database.interpolation`.
+
 Window functions
 ----------------
 
