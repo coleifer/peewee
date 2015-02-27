@@ -2684,7 +2684,9 @@ class InsertQuery(Query):
             if not self.database.insert_many:
                 last_id = None
                 for row in self._rows:
-                    last_id = InsertQuery(self.model_class, row).execute()
+                    last_id = (InsertQuery(self.model_class, row)
+                               .upsert(self._upsert)
+                               .execute())
                 return last_id
         return self.database.last_insert_id(self._execute(), self.model_class)
 
