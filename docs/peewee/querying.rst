@@ -1411,6 +1411,9 @@ Each solution has its place and, depending on the size and shape of the data you
 
 Let's look at the first approach, since it is more general and can work with arbitrarily complex queries. We will use a special flag, :py:meth:`~SelectQuery.aggregate_rows`, when creating our query. This method tells peewee to de-duplicate any rows that, due to the structure of the JOINs, may be duplicated.
 
+.. warning::
+    Because there is a lot of computation involved in de-duping data, it is possible that for some queries :py:meth:`~SelectQuery.aggregate_rows` will be **significantly less performant** than using :py:func:`prefetch` (described in the following section) or even issuing *O(n)* simple queries! Profile your code if you're not sure.
+
 .. code-block:: python
 
     query = (User
@@ -1456,9 +1459,6 @@ Below is an example of how we might fetch several users and any tweets they crea
 .. note::
     Using :py:meth:`~SelectQuery.aggregate_rows` with any kind of ``LIMIT`` or ``OFFSET`` may result in unexpected results. Imagine you have three users, each of whom has 10 tweets. If you run a query with a ``LIMIT 5``, then you will only receive the first user and their first 5 tweets.
 
-.. warning::
-    Because there is a lot of computation involved in de-duping data, it is possible that for some queries :py:meth:`~SelectQuery.aggregate_rows` will be significantly less performant than using :py:func:`prefetch` (described in the following section) or even issuing **N** simple queries. Profile your code if you're not sure.
-
 Using prefetch
 ^^^^^^^^^^^^^^
 
@@ -1492,6 +1492,9 @@ Here is an example of how we might fetch several users and any tweets they creat
 As with :py:meth:`~SelectQuery.aggregate_rows`, you can use :py:func:`prefetch`
 to query an arbitrary number of tables. Check the API documentation for more
 examples.
+
+.. note::
+    Generally I've found :py:func:`prefetch` to be more performant than :py:meth:`~SelectQuery.aggregate_rows`. This performance difference is mostly due to the amount of Python logic that has to execute to correctly de-dupe the aggregated row data.
 
 Iterating over lots of rows
 ---------------------------
