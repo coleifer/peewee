@@ -322,7 +322,7 @@ class Infix(object):
         self._fn = fn
 
     def __ror__(self, lhs):
-        return Infix(lambda r: self.fn(lhs, r))
+        return Infix(lambda r: self._fn(lhs, r))
 
     def __or__(self, rhs):
-        return self.fn(rhs)
+        return self._fn(rhs)

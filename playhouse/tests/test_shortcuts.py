@@ -3,6 +3,7 @@ from playhouse.shortcuts import *
 from playhouse.test_utils import assert_query_count
 from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
+from playhouse.tests.base import PeeweeTestCase
 
 
 db = database_initializer.get_in_memory_database()
@@ -373,3 +374,25 @@ class TestDictToModel(ModelTestCase):
 
         inst = dict_to_model(User, data, ignore_unknown=True)
         self.assertEqual(inst.xx, 'does not exist')
+
+def add(lhs, rhs):
+    return lhs + rhs
+
+def sub(lhs, rhs):
+    return lhs - rhs
+
+P = Infix(add)
+S = Infix(sub)
+
+class TestInfix(PeeweeTestCase):
+    def test_infix(self):
+        result = 1 |P| 2
+        self.assertEqual(result, 3)
+        self.assertEqual(3 |P| 6, 9)
+
+        result = 4 |S| 5
+        self.assertEqual(result, -1)
+        self.assertEqual(4 |S| 1, 3)
+
+        result = 1 |P| 3 |S| 5 |P| 2 |S| 4
+        self.assertEqual(result, -3)
