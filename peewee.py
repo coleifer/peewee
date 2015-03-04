@@ -607,6 +607,9 @@ class Join(namedtuple('_Join', ('dest', 'join_type', 'on'))):
             return reverse_rel, True
         return None, None
 
+    def get_join_type(self):
+        return self.join_type or JOIN_INNER
+
     def join_metadata(self, source):
         is_model_alias = isinstance(self.dest, ModelAlias)
         if is_model_alias:
@@ -1245,10 +1248,10 @@ class QueryCompiler(object):
     }
 
     join_map = {
-        JOIN_INNER: 'INNER',
-        JOIN_LEFT_OUTER: 'LEFT OUTER',
-        JOIN_RIGHT_OUTER: 'RIGHT OUTER',
-        JOIN_FULL: 'FULL',
+        JOIN_INNER: 'INNER JOIN',
+        JOIN_LEFT_OUTER: 'LEFT OUTER JOIN',
+        JOIN_RIGHT_OUTER: 'RIGHT OUTER JOIN',
+        JOIN_FULL: 'FULL JOIN',
     }
     alias_map_class = AliasMap
 
@@ -1498,10 +1501,13 @@ class QueryCompiler(object):
                     q.append(dest)
                     dest_n = dest._as_entity().alias(alias_map[dest])
 
-                join_type = self.join_map[join.join_type or JOIN_INNER]
-                join_stmt = SQL('%s JOIN' % (join_type))
+                join_type = join.get_join_type()
+                if join_type in self.join_map:
+                    join_sql = SQL(self.join_map[join_type])
+                else:
+                    join_sql = SQL(join_type)
                 clauses.append(
-                    Clause(join_stmt, dest_n, SQL('ON'), constraint))
+                    Clause(join_sql, dest_n, SQL('ON'), constraint))
 
         return clauses
 
