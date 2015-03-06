@@ -416,3 +416,11 @@ def ServerSide(select_query):
         # Expose generator for iterating over query.
         for obj in query_result.iterator():
             yield obj
+
+
+def LateralJoin(lhs, rhs, join_type='LEFT', condition=True):
+    return Clause(
+        lhs,
+        SQL('%s JOIN LATERAL' % join_type),
+        rhs,
+        SQL('ON %s', condition))
