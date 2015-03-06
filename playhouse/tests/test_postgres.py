@@ -86,6 +86,17 @@ class FTSModel(BaseModel):
     data = TextField()
     fts_data = TSVectorField()
 
+class User(BaseModel):
+    username = CharField(unique=True)
+
+    class Meta:
+        db_table = 'users_x'
+
+class Post(BaseModel):
+    user = ForeignKeyField(User)
+    content = TextField()
+    timestamp = DateTimeField(default=datetime.datetime.now)
+
 MODELS = [
     Testing,
     TestingID,
@@ -872,3 +883,48 @@ class TestBinaryJsonField(BaseJsonFieldTestCase, ModelTestCase):
             (5, 7),
             ('k4', None),
         ])
+
+
+class TestLateralJoin(ModelTestCase):
+    requires = [User, Post]
+
+    def setUp(self):
+        super(TestLateralJoin, self).setUp()
+        for username in ['charlie', 'zaizee', 'huey']:
+            user = User.create(username=username)
+            for i in range(10):
+                Post.create(user=user, content='%s-%s' % (username, i))
+
+    def test_lateral_join(self):
+        user_query = (User
+                      .select(User.id, User.username)
+                      .order_by(User.username)
+                      .alias('uq'))
+
+        PostAlias = Post.alias()
+        post_query = (PostAlias
+                      .select(PostAlias.content, PostAlias.timestamp)
+                      .where(PostAlias.user == user_query.c.id)
+                      .order_by(PostAlias.timestamp.desc())
+                      .limit(3)
+                      .alias('pq'))
+
+        # Now we join the outer and inner queries using the LEFT LATERAL
+        # JOIN. The join predicate is *ON TRUE*, since we're effectively
+        # joining in the post subquery's WHERE clause.
+        join_clause = LateralJoin(user_query, post_query)
+
+        # Finally, we'll wrap these up and SELECT from the result.
+        query = (Post
+                 .select(SQL('*'))
+                 .from_(join_clause))
+        self.assertEqual([post.content for post in query], [
+            'charlie-9',
+            'charlie-8',
+            'charlie-7',
+            'huey-9',
+            'huey-8',
+            'huey-7',
+            'zaizee-9',
+            'zaizee-8',
+            'zaizee-7'])
