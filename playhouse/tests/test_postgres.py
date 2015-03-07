@@ -714,6 +714,9 @@ class BaseJsonFieldTestCase(object):
 def json_ok():
     if TestingJson is None:
         return False
+    return pg93()
+
+def pg93():
     conn = test_db.get_conn()
     return conn.server_version >= 90300
 
@@ -885,6 +888,7 @@ class TestBinaryJsonField(BaseJsonFieldTestCase, ModelTestCase):
         ])
 
 
+@skip_if(lambda: not pg93())
 class TestLateralJoin(ModelTestCase):
     requires = [User, Post]
 
