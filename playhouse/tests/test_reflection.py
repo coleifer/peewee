@@ -304,6 +304,8 @@ class TestReflection(PeeweeTestCase):
                 column = introspected_columns[field_name]
                 self.assertTrue(column.field_class in field_class)
                 self.assertEqual(column.nullable, is_null)
+                if table_name == 'coltypes' and field_class == (CharField,):
+                    self.assertEqual(column.max_length, 50)
 
     @generative_test
     def test_foreign_keys(self, introspector):
