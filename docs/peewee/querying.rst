@@ -813,6 +813,9 @@ Method                  Meaning
 ``.bin_and(value)``     Binary AND.
 ``.bin_or(value)``      Binary OR.
 ``.in_(value)``         IN lookup (identical to ``<<``).
+``.not_in(value)``      NOT IN lookup.
+``.is_null(is_null)``   IS NULL or IS NOT NULL. Accepts boolean param.
+``.concat(other)``      Concatenate two strings using ``||``.
 ======================= ===============================================
 
 To combine clauses using logical operators, use:
@@ -896,6 +899,58 @@ For more examples, see the :ref:`expressions` section.
   The glob operation uses asterisks for wildcards as opposed to the usual
   percent-sign. If you are using SQLite and want case-sensitive partial
   string matching, remember to use asterisks for the wildcard.
+
+Three valued logic
+^^^^^^^^^^^^^^^^^^
+
+Because of the way SQL handles ``NULL``, there are some special operations available for expressing:
+
+* ``IS NULL``
+* ``IS NOT NULL``
+* ``IN``
+* ``NOT IN``
+
+While it would be possible to use the ``IS NULL`` and ``IN`` operators with the negation operator (``~``), sometimes to get the correct semantics you will need to explicitly use ``IS NOT NULL`` and ``NOT IN``.
+
+The simplest way to use ``IS NULL`` and ``IN`` is to use the operator overloads:
+
+.. code-block:: python
+
+    # Get all User objects whose last login is NULL.
+    User.select().where(User.last_login >> None)
+
+    # Get users whose username is in the given list.
+    usernames = ['charlie', 'huey', 'mickey']
+    User.select().where(User.username << usernames)
+
+If you don't like operator overloads, you can call the Field methods instead:
+
+.. code-block:: python
+
+    # Get all User objects whose last login is NULL.
+    User.select().where(User.last_login.is_null(True))
+
+    # Get users whose username is in the given list.
+    usernames = ['charlie', 'huey', 'mickey']
+    User.select().where(User.username.in_(usernames))
+
+To negate the above queries, you can use unary negation, but for the correct semantics you may need to use the special ``IS NOT`` and ``NOT IN`` operators:
+
+.. code-block:: python
+
+    # Get all User objects whose last login is *NOT* NULL.
+    User.select().where(User.last_login.is_null(False))
+
+    # Using unary negation instead.
+    User.select().where(~(User.last_login >> None))
+
+    # Get users whose username is *NOT* in the given list.
+    usernames = ['charlie', 'huey', 'mickey']
+    User.select().where(User.username.not_in(usernames))
+
+    # Using unary negation instead.
+    usernames = ['charlie', 'huey', 'mickey']
+    User.select().where(~(User.username << usernames))
 
 .. _custom-operators:
 
