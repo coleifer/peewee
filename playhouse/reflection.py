@@ -159,7 +159,10 @@ class Metadata(object):
         for name, column_data in metadata.items():
             field_class = column_types[name]
             if field_class == CharField:
-                max_length = self.get_max_length(column_data.data_type)
+                if column_data.character_maximum_length is not None:
+                    max_length = column_data.character_maximum_length
+                else:
+                    max_length = self.get_max_length(column_data.data_type)
             else:
                 max_length = None
             columns[name] = Column(
