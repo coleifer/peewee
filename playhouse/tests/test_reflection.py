@@ -304,6 +304,8 @@ class TestReflection(PeeweeTestCase):
                 column = introspected_columns[field_name]
                 self.assertTrue(column.field_class in field_class)
                 self.assertEqual(column.nullable, is_null)
+                if table_name == 'coltypes' and field_class == (CharField,):
+                    self.assertEqual(column.max_length, 50)
 
     @generative_test
     def test_foreign_keys(self, introspector):
@@ -407,7 +409,7 @@ class TestReflection(PeeweeTestCase):
             ('coltypes', (
                 ('f1', 'f1 = BigIntegerField(index=True)'),
                 #('f2', 'f2 = BlobField()'),
-                ('f4', 'f4 = CharField()'),
+                ('f4', 'f4 = CharField(max_length=50)'),
                 ('f5', 'f5 = DateField()'),
                 ('f6', 'f6 = DateTimeField()'),
                 ('f7', 'f7 = DecimalField()'),
@@ -447,7 +449,7 @@ class TestReflection(PeeweeTestCase):
                 ('_name', '_name = CharField()'),
             )),
             ('category', (
-                ('name', 'name = CharField()'),
+                ('name', 'name = CharField(max_length=10)'),
                 ('parent_id', 'parent = ForeignKeyField('
                  'db_column=\'parent_id\', null=True, rel_model=\'self\', '
                  'to_field=\'id\')'),

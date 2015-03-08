@@ -83,6 +83,7 @@ __all__ = [
     'Using',
     'UUIDField',
     'Window',
+    'DEFAULT_MAX_LENGTH'
 ]
 
 # Set default logging handler to avoid "No handlers could be found for logger
@@ -251,6 +252,8 @@ JOIN_INNER = 'inner'
 JOIN_LEFT_OUTER = 'left outer'
 JOIN_RIGHT_OUTER = 'right outer'
 JOIN_FULL = 'full'
+
+DEFAULT_MAX_LENGTH = 255
 
 # Helper functions that are used in various parts of the codebase.
 def merge_dict(source, overrides):
@@ -854,7 +857,7 @@ def coerce_to_unicode(s, encoding='utf-8'):
 class CharField(Field):
     db_field = 'string'
 
-    def __init__(self, max_length=255, *args, **kwargs):
+    def __init__(self, max_length=DEFAULT_MAX_LENGTH, *args, **kwargs):
         self.max_length = max_length
         super(CharField, self).__init__(*args, **kwargs)
 
@@ -2711,7 +2714,8 @@ IndexMetadata = namedtuple(
     ('name', 'sql', 'columns', 'unique', 'table'))
 ColumnMetadata = namedtuple(
     'ColumnMetadata',
-    ('name', 'data_type', 'null', 'primary_key', 'table'))
+    ('name', 'data_type', 'null', 'primary_key', 'table',
+     'character_maximum_length'))
 ForeignKeyMetadata = namedtuple(
     'ForeignKeyMetadata',
     ('column', 'dest_table', 'dest_column', 'table'))
@@ -3075,7 +3079,8 @@ class SqliteDatabase(Database):
 
     def get_columns(self, table, schema=None):
         cursor = self.execute_sql('PRAGMA table_info("%s")' % table)
-        return [ColumnMetadata(row[1], row[2], not row[3], bool(row[5]), table)
+        return [ColumnMetadata(row[1], row[2], not row[3], bool(row[5]), table,
+                               None)
                 for row in cursor.fetchall()]
 
     def get_primary_keys(self, table, schema=None):
@@ -3176,13 +3181,15 @@ class PostgresqlDatabase(Database):
 
     def get_columns(self, table, schema='public'):
         query = """
-            SELECT column_name, is_nullable, data_type
+            SELECT column_name, is_nullable, data_type,
+                   character_maximum_length as cml
             FROM information_schema.columns
             WHERE table_name = %s AND table_schema = %s"""
         cursor = self.execute_sql(query, (table, schema))
         pks = set(self.get_primary_keys(table, schema))
-        return [ColumnMetadata(name, dt, null == 'YES', name in pks, table)
-                for name, null, dt in cursor.fetchall()]
+        return [ColumnMetadata(name, dt, null == 'YES', name in pks, table,
+                               cml)
+                for name, null, dt, cml in cursor.fetchall()]
 
     def get_primary_keys(self, table, schema='public'):
         query = """
@@ -3286,7 +3293,8 @@ class MySQLDatabase(Database):
             WHERE table_name = %s AND table_schema = DATABASE()"""
         cursor = self.execute_sql(sql, (table,))
         pks = set(self.get_primary_keys(table))
-        return [ColumnMetadata(name, dt, null == 'YES', name in pks, table)
+        return [ColumnMetadata(name, dt, null == 'YES', name in pks, table,
+                               None)
                 for name, null, dt in cursor.fetchall()]
 
     def get_primary_keys(self, table, schema=None):

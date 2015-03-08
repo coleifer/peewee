@@ -33,7 +33,8 @@ class Column(object):
     primary_key_types = (IntegerField, PrimaryKeyField)
 
     def __init__(self, name, field_class, raw_column_type, nullable,
-                 primary_key=False, db_column=None, index=False, unique=False):
+                 primary_key=False, db_column=None, index=False, unique=False,
+                 max_length=None):
         self.name = name
         self.field_class = field_class
         self.raw_column_type = raw_column_type
@@ -42,6 +43,7 @@ class Column(object):
         self.db_column = db_column
         self.index = index
         self.unique = unique
+        self.max_length = max_length
 
         # Foreign key metadata.
         self.rel_model = None
@@ -86,6 +88,9 @@ class Column(object):
             elif self.index and not self.is_foreign_key():
                 params['index'] = 'True'
 
+        if self.max_length and self.max_length != DEFAULT_MAX_LENGTH:
+            params['max_length'] = self.max_length
+
         return params
 
     def is_primary_key(self):
@@ -127,6 +132,7 @@ class Column(object):
 
 class Metadata(object):
     column_map = {}
+    re_varchar = r'^\s*(?:var)?char\s*\(\s*(\d+)\s*\)\s*$'
 
     def __init__(self, database):
         self.database = database
@@ -151,13 +157,22 @@ class Metadata(object):
 
         columns = {}
         for name, column_data in metadata.items():
+            field_class = column_types[name]
+            if field_class == CharField:
+                if column_data.character_maximum_length is not None:
+                    max_length = column_data.character_maximum_length
+                else:
+                    max_length = self.get_max_length(column_data.data_type)
+            else:
+                max_length = None
             columns[name] = Column(
                 name,
-                field_class=column_types[name],
+                field_class=field_class,
                 raw_column_type=column_data.data_type,
                 nullable=column_data.null,
                 primary_key=column_data.primary_key,
-                db_column=name)
+                db_column=name,
+                max_length=max_length)
 
         return columns
 
@@ -172,6 +187,14 @@ class Metadata(object):
 
     def get_indexes(self, table, schema=None):
         return self.database.get_indexes(table, schema)
+
+    def get_max_length(self, raw_column_type):
+        raw_column_type = raw_column_type.lower()
+        matcher = re.match(self.re_varchar, raw_column_type)
+        if matcher:
+            max_length = int(matcher.group(1))
+            if max_length != DEFAULT_MAX_LENGTH:
+                return max_length
 
 
 class PostgresqlMetadata(Metadata):
@@ -318,7 +341,6 @@ class SqliteMetadata(Metadata):
         '{begin}(.+?){end}\s+(?:.+\s+)?'
         'references\s+{begin}(.+?){end}'
         '\s*\(["|\[]?(.+?)["|\]]?\)').format(begin=begin, end=end)
-    re_varchar = r'^\s*(?:var)?char\s*\(\s*(\d+)\s*\)\s*$'
 
     def _map_col(self, column_type):
         raw_column_type = column_type.lower()
@@ -566,6 +588,8 @@ class Introspector(object):
                         params['unique'] = True
                     elif not column.is_foreign_key():
                         params['index'] = True
+                if column.max_length:
+                    params['max_length'] = column.max_length
 
                 attrs[column.name] = FieldClass(**params)
 
