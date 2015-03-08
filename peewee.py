@@ -3078,9 +3078,6 @@ class SqliteDatabase(Database):
 
     def get_columns(self, table, schema=None):
         cursor = self.execute_sql('PRAGMA table_info("%s")' % table)
-        # for row in cursor:
-            # print(row)
-        cursor = self.execute_sql('PRAGMA table_info("%s")' % table)
         return [ColumnMetadata(row[1], row[2], not row[3], bool(row[5]), table)
                 for row in cursor.fetchall()]
 
