@@ -83,6 +83,7 @@ __all__ = [
     'Using',
     'UUIDField',
     'Window',
+    'DEFAULT_MAX_LENGTH'
 ]
 
 # Set default logging handler to avoid "No handlers could be found for logger
@@ -251,6 +252,8 @@ JOIN_INNER = 'inner'
 JOIN_LEFT_OUTER = 'left outer'
 JOIN_RIGHT_OUTER = 'right outer'
 JOIN_FULL = 'full'
+
+DEFAULT_MAX_LENGTH = 255
 
 # Helper functions that are used in various parts of the codebase.
 def merge_dict(source, overrides):
@@ -854,7 +857,7 @@ def coerce_to_unicode(s, encoding='utf-8'):
 class CharField(Field):
     db_field = 'string'
 
-    def __init__(self, max_length=255, *args, **kwargs):
+    def __init__(self, max_length=DEFAULT_MAX_LENGTH, *args, **kwargs):
         self.max_length = max_length
         super(CharField, self).__init__(*args, **kwargs)
 

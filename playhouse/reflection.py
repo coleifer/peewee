@@ -88,6 +88,9 @@ class Column(object):
             elif self.index and not self.is_foreign_key():
                 params['index'] = 'True'
 
+        if self.max_length and self.max_length != DEFAULT_MAX_LENGTH:
+            params['max_length'] = self.max_length
+
         return params
 
     def is_primary_key(self):
@@ -186,7 +189,9 @@ class Metadata(object):
         raw_column_type = raw_column_type.lower()
         matcher = re.match(self.re_varchar, raw_column_type)
         if matcher:
-            return int(matcher.group(1))
+            max_length = int(matcher.group(1))
+            if max_length != DEFAULT_MAX_LENGTH:
+                return max_length
 
 
 class PostgresqlMetadata(Metadata):
@@ -580,6 +585,8 @@ class Introspector(object):
                         params['unique'] = True
                     elif not column.is_foreign_key():
                         params['index'] = True
+                if column.max_length:
+                    params['max_length'] = column.max_length
 
                 attrs[column.name] = FieldClass(**params)
 
