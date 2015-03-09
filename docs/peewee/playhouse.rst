@@ -3468,7 +3468,7 @@ Query utilities
 
 The ``flask_utils`` module provides several helpers for managing queries in your web app. Some common patterns include:
 
-.. py:func:: get_object_or_404(query_or_model, *query)
+.. py:function:: get_object_or_404(query_or_model, *query)
 
     Retrieve the object matching the given query, or return a 404 not found response. A common use-case might be a detail page for a weblog. You want to either retrieve the post matching the given URL, or return a 404.
 
@@ -3485,7 +3485,7 @@ The ``flask_utils`` module provides several helpers for managing queries in your
             post = get_object_or_404(public_posts, (Post.slug == slug))
             return render_template('post_detail.html', post=post)
 
-.. py:func:: object_list(template_name, query[, context_variable='object_list'[, paginate_by=20[, page_var='page'[, check_bounds=True[, **kwargs]]]]])
+.. py:function:: object_list(template_name, query[, context_variable='object_list'[, paginate_by=20[, page_var='page'[, check_bounds=True[, **kwargs]]]]])
 
     Retrieve a paginated list of objects specified by the given query. The paginated object list will be dropped into the context using the given ``context_variable``, as well as metadata about the current page and total number of pages, and finally any arbitrary context data passed as keyword-arguments.
 
