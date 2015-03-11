@@ -3,7 +3,7 @@
 Example app
 ===========
 
-We'll be building a simple *twitter*-like site. The source code for the example can be found in the ``examples/twitter`` directory. You can also `browse the source-code <https://github.com/coleifer/peewee/tree/master/examples/twitter>`_ on github.
+We'll be building a simple *twitter*-like site. The source code for the example can be found in the ``examples/twitter`` directory. You can also `browse the source-code <https://github.com/coleifer/peewee/tree/master/examples/twitter>`_ on github. There is also an example `blog app <https://github.com/coleifer/peewee/tree/master/examples/blog>`_ if that's more to your liking.
 
 The example app uses the `flask <http://flask.pocoo.org/>`_ web framework which is very easy to get started with. If you don't have flask already, you will need to install it to run the example:
 
@@ -339,6 +339,7 @@ More examples
 
 There are more examples included in the peewee `examples directory <https://github.com/coleifer/peewee/blob/master/examples/>`_, including:
 
+* `Example blog app <https://github.com/coleifer/peewee/tree/master/examples/blog>`_ using Flask and peewee. Also see `accompanying blog post <http://charlesleifer.com/blog/how-to-make-a-flask-blog-in-one-hour-or-less/>`_.
 * `An encrypted command-line diary <https://github.com/coleifer/peewee/blob/master/examples/diary.py>`_. There is a `companion blog post <http://charlesleifer.com/blog/dear-diary-an-encrypted-command-line-diary-with-python/>`_ you might enjoy as well.
 * `Analytics web-service <https://github.com/coleifer/peewee/tree/master/examples/analytics>`_ (like a lite version of Google Analytics). Also check out the `companion blog post <http://charlesleifer.com/blog/saturday-morning-hacks-building-an-analytics-app-with-flask/>`_.
 
