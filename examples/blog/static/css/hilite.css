@@ -1,0 +1,47 @@
+.highlight {
+	background: #040400;
+	color: #FFFFFF;
+}
+
+.highlight span.selection { color: #323232; }
+.highlight span.gp { color: #9595FF; }
+.highlight span.vi { color: #9595FF; }
+.highlight span.kn { color: #00C0D1; }
+.highlight span.cp { color: #AEE674; }
+.highlight span.caret { color: #FFFFFF; }
+.highlight span.no { color: #AEE674; }
+.highlight span.s2 { color: #BBFB8D; }
+.highlight span.nb { color: #A7FDB2; }
+.highlight span.nc { color: #C2ABFF; }
+.highlight span.nd { color: #AEE674; }
+.highlight span.s { color: #BBFB8D; }
+.highlight span.nf { color: #AEE674; }
+.highlight span.nx { color: #AEE674; }
+.highlight span.kp { color: #00C0D1; }
+.highlight span.nt { color: #C2ABFF; }
+.highlight span.s1 { color: #BBFB8D; }
+.highlight span.bg { color: #040400; }
+.highlight span.kt { color: #00C0D1; }
+.highlight span.support_function { color: #81B864; }
+.highlight span.ow { color: #EBE1B4; }
+.highlight span.mf { color: #A1FF24; }
+.highlight span.bp { color: #9595FF; }
+.highlight span.fg { color: #FFFFFF; }
+.highlight span.c1 { color: #3379FF; }
+.highlight span.kc { color: #9595FF; }
+.highlight span.c { color: #3379FF; }
+.highlight span.sx { color: #BBFB8D; }
+.highlight span.kd { color: #00C0D1; }
+.highlight span.ss { color: #A1FF24; }
+.highlight span.sr { color: #BBFB8D; }
+.highlight span.mo { color: #A1FF24; }
+.highlight span.mi { color: #A1FF24; }
+.highlight span.mh { color: #A1FF24; }
+.highlight span.o { color: #EBE1B4; }
+.highlight span.si { color: #DA96A3; }
+.highlight span.sh { color: #BBFB8D; }
+.highlight span.na { color: #AEE674; }
+.highlight span.sc { color: #BBFB8D; }
+.highlight span.k { color: #00C0D1; }
+.highlight span.se { color: #DA96A3; }
+.highlight span.sd { color: #54F79C; }
