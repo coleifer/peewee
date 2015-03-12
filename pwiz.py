@@ -72,7 +72,11 @@ def print_models(introspector, tables=None):
         columns = database.columns[table]
         primary_keys = database.primary_keys[table]
         for name, column in sorted(columns.items()):
-            if name == 'id' and column.field_class in introspector.pk_classes:
+            skip = all([
+                name == 'id',
+                len(primary_keys) == 1,
+                column.field_class in introspector.pk_classes])
+            if skip:
                 continue
             if column.primary_key and len(primary_keys) > 1:
                 # If we have a CompositeKey, then we do not want to explicitly
