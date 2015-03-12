@@ -2426,3 +2426,32 @@ Misc
     .. py:method:: desc()
 
         Apply descending ordering to the given node. This translates into *<node> DESC*.
+
+    .. py:classmethod:: extend([name=None[, clone=False]])
+
+        Decorator for adding the decorated function as a new method on :py:class:`Node` and its subclasses. Useful for adding implementation-specific features to all node types.
+
+        :param str name: Method name. If not provided the name of the wrapped function will be used.
+        :param bool clone: Whether this method should return a clone. This is generally true when the method mutates the internal state of the node.
+
+        Example:
+
+        .. code-block:: python
+
+            # Add a `cast()` method to all nodes using the '::' operator.
+            PostgresqlDatabase.register_ops({'::', '::'})
+
+            @Node.extend()
+            def cast(self, as_type):
+                return Expression(self, '::', SQL(as_type))
+
+            # Let's pretend we want to find all data points whose numbers
+            # are palindromes. Note that we can use the new *cast* method
+            # on both fields and with the `fn` helper:
+            reverse_val = fn.REVERSE(DataModel.value.cast('str')).cast('int')
+
+            query = (DataPoint
+                     .select()
+                     .where(DataPoint.value == reverse_val))
+
+        .. note:: To remove an extended method, simply call ``delattr`` on the class the method was originally added to.

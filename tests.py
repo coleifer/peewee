@@ -1,6 +1,7 @@
 import sys
 import unittest
 
+from playhouse.tests.test_apis import *
 from playhouse.tests.test_compound_queries import *
 from playhouse.tests.test_database import *
 from playhouse.tests.test_fields import *

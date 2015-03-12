@@ -41,6 +41,25 @@ MODELS = [
     Tag,
     NoteTag]
 
+class TestCastShortcut(ModelTestCase):
+    requires = [User]
+
+    def test_cast_shortcut(self):
+        for username in ['100', '001', '101']:
+            User.create(username=username)
+
+        query = (User
+                 .select(
+                     User.username,
+                     cast(User.username, 'int').alias('username_i'))
+                 .order_by(SQL('username_i')))
+        results = [(user.username, user.username_i) for user in query]
+        self.assertEqual(results, [
+            ('001', 1),
+            ('100', 100),
+            ('101', 101),
+        ])
+
 class CaseShortcutTestCase(ModelTestCase):
     requires = [TestModel]
     values = (

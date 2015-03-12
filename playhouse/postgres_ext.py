@@ -31,6 +31,9 @@ try:
 except:
     Json = None
 
+@Node.extend(clone=False)
+def cast(self, as_type):
+    return Expression(self, OP_CAST, SQL(as_type))
 
 class _LookupNode(Node):
     def __init__(self, node, parts):
@@ -265,6 +268,7 @@ OP_JSONB_CONTAINED_BY = 'JB<@'
 OP_JSONB_CONTAINS_ANY_KEY = 'JB?|'
 OP_JSONB_CONTAINS_ALL_KEYS = 'JB?&'
 OP_JSONB_EXISTS = 'JB?'
+OP_CAST = '::'
 
 
 class PostgresqlExtCompiler(QueryCompiler):
@@ -401,6 +405,7 @@ PostgresqlExtDatabase.register_ops({
     OP_JSONB_CONTAINS_ANY_KEY: '?|',
     OP_JSONB_CONTAINS_ALL_KEYS: '?&',
     OP_JSONB_EXISTS: '?',
+    OP_CAST: '::',
 })
 
 def ServerSide(select_query):

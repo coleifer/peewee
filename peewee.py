@@ -333,6 +333,16 @@ class Node(object):
         self._alias = None
         self._ordering = None  # ASC or DESC.
 
+    @classmethod
+    def extend(cls, name=None, clone=False):
+        def decorator(method):
+            method_name = name or method.__name__
+            if clone:
+                method = returns_clone(method)
+            setattr(cls, method_name, method)
+            return method
+        return decorator
+
     def clone_base(self):
         return type(self)()
 

@@ -2230,6 +2230,26 @@ be somewhat verbose or cumbersome using peewee's APIs.
           (2, "two")), "?").alias("id_string"))
 
 
+.. py:function:: cast(node, as_type)
+
+    :param node: A peewee :py:class:`Node`, for instance a :py:class:`Field` or an :py:class:`Expression`.
+    :param str as_type: The type name to cast to, e.g. ``'int'``.
+    :returns: a function call to cast the node as the given type.
+
+    Example:
+
+    .. code-block:: python
+
+        # Find all data points whose numbers are palindromes. We do this by
+        # casting the number to string, reversing it, then casting the reversed
+        # string back to an integer.
+        reverse_val = cast(fn.REVERSE(cast(DataPoint.value, 'str')), 'int')
+
+        query = (DataPoint
+                 .select()
+                 .where(DataPoint.value == reverse_val))
+
+
 .. py:class:: ManyToManyField(rel_model[, related_name=None[, through_model=None]])
 
     :param rel_model: :py:class:`Model` class.

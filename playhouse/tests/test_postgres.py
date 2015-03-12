@@ -110,6 +110,35 @@ class BasePostgresqlExtTestCase(ModelTestCase):
     requires = MODELS
 
 
+class TestCast(ModelTestCase):
+    requires = [User]
+
+    def create_users(self, *usernames):
+        for username in usernames:
+            User.create(username=username)
+
+    def test_cast_int(self):
+        self.create_users('100', '001', '101')
+
+        username_i = User.username.cast('integer')
+        query = (User
+                 .select(User.username, username_i.alias('username_i'))
+                 .order_by(User.username))
+        data = [(user.username, user.username_i) for user in query]
+        self.assertEqual(data, [
+            ('001', 1),
+            ('100', 100),
+            ('101', 101),
+        ])
+
+    def test_cast_float(self):
+        self.create_users('00.01', '100', '1.2345')
+        query = (User
+                 .select(User.username.cast('float').alias('u_f'))
+                 .order_by(SQL('u_f')))
+        self.assertEqual([user.u_f for user in query], [.01, 1.2345, 100.])
+
+
 class TestUUIDField(BasePostgresqlExtTestCase):
     def test_uuid(self):
         uuid_str = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'

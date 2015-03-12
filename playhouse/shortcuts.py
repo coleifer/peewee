@@ -55,6 +55,10 @@ def case(predicate, expression_tuples, default=None):
     return Clause(*clauses)
 
 
+def cast(node, as_type):
+    return fn.CAST(Clause(node, SQL('AS %s' % as_type)))
+
+
 class ManyToManyField(Field):
     def __init__(self, rel_model, related_name=None, through_model=None,
                  _is_backref=False):
