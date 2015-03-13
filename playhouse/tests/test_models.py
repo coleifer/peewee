@@ -72,7 +72,7 @@ class TestQueryingModels(ModelTestCase):
             ('u4', 3),
         ])
 
-    def test_select_with_target(self):
+    def test_select_with_bind_to(self):
         self.create_users_blogs(1, 1)
         blog = Blog.select(
             Blog,
