@@ -966,12 +966,12 @@ Here is how you might add support for ``modulo`` in SQLite:
     from peewee import *
     from peewee import Expression # the building block for expressions
 
-    OP_MOD = 'mod'
+    OP['MOD'] = 'mod'
 
     def mod(lhs, rhs):
-        return Expression(lhs, OP_MOD, rhs)
+        return Expression(lhs, OP.MOD, rhs)
 
-    SqliteDatabase.register_ops({OP_MOD: '%'})
+    SqliteDatabase.register_ops({OP.MOD: '%'})
 
 Now you can use these custom operators to build richer queries:
 

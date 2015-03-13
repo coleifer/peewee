@@ -1627,7 +1627,7 @@ Database and its subclasses
 
     .. py:attribute:: op_overrides = {}
 
-        A mapping of operation codes to string operations, e.g. ``{OP_LIKE: 'LIKE BINARY'}``
+        A mapping of operation codes to string operations, e.g. ``{OP.LIKE: 'LIKE BINARY'}``
 
     .. py:attribute:: quote_char = '"'
 
@@ -1966,7 +1966,7 @@ Database and its subclasses
     .. py:classmethod:: register_ops(ops)
 
         Register a mapping of operations understood by the QueryCompiler to their
-        SQL equivalent, e.g. ``{OP_EQ: '='}``.  Used to extend the types of field
+        SQL equivalent, e.g. ``{OP.EQ: '='}``.  Used to extend the types of field
         comparisons.
 
         :param dict fields: A mapping of :py:attr:`~Field.db_field` to column type

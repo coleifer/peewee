@@ -38,6 +38,7 @@ import struct
 
 from peewee import *
 from peewee import Expression
+from peewee import OP
 from peewee import QueryCompiler
 from peewee import transaction
 
@@ -383,13 +384,13 @@ class granular_transaction(transaction):
         self.db.begin(self.lock_type)
 
 
-OP_MATCH = 'match'
+OP.MATCH = 'match'
 SqliteExtDatabase.register_ops({
-    OP_MATCH: 'MATCH',
+    OP.MATCH: 'MATCH',
 })
 
 def match(lhs, rhs):
-    return Expression(lhs, OP_MATCH, rhs)
+    return Expression(lhs, OP.MATCH, rhs)
 
 # Shortcut for calculating ranks.
 Rank = lambda model: fn.rank(fn.matchinfo(model._as_entity()))

@@ -9,6 +9,7 @@ from peewee import *
 from peewee import Expression
 from peewee import logger
 from peewee import Node
+from peewee import OP
 from peewee import Param
 from peewee import Passthrough
 from peewee import returns_clone
@@ -33,7 +34,7 @@ except:
 
 @Node.extend(clone=False)
 def cast(self, as_type):
-    return Expression(self, OP_CAST, SQL(as_type))
+    return Expression(self, OP.CAST, SQL(as_type))
 
 class _LookupNode(Node):
     def __init__(self, node, parts):
@@ -59,19 +60,19 @@ class _JsonLookupBase(_LookupNode):
     def contains(self, other):
         clone = self.as_json(True)
         if isinstance(other, (list, dict)):
-            return Expression(clone, OP_JSONB_CONTAINS, Json(other))
-        return Expression(clone, OP_JSONB_EXISTS, other)
+            return Expression(clone, OP.JSONB_CONTAINS, Json(other))
+        return Expression(clone, OP.JSONB_EXISTS, other)
 
     def contains_any(self, *keys):
         return Expression(
             self.as_json(True),
-            OP_JSONB_CONTAINS_ANY_KEY,
+            OP.JSONB_CONTAINS_ANY_KEY,
             Passthrough(list(keys)))
 
     def contains_all(self, *keys):
         return Expression(
             self.as_json(True),
-            OP_JSONB_CONTAINS_ALL_KEYS,
+            OP.JSONB_CONTAINS_ALL_KEYS,
             Passthrough(list(keys)))
 
 class JsonLookup(_JsonLookupBase):
@@ -144,10 +145,10 @@ class ArrayField(IndexedFieldMixin, Field):
         return ObjectSlice.create(self, value)
 
     def contains(self, *items):
-        return Expression(self, OP_ACONTAINS, _Array(self, list(items)))
+        return Expression(self, OP.ACONTAINS, _Array(self, list(items)))
 
     def contains_any(self, *items):
-        return Expression(self, OP_ACONTAINS_ANY, _Array(self, list(items)))
+        return Expression(self, OP.ACONTAINS_ANY, _Array(self, list(items)))
 
 
 class DateTimeTZField(DateTimeField):
@@ -158,7 +159,7 @@ class HStoreField(IndexedFieldMixin, Field):
     db_field = 'hash'
 
     def __getitem__(self, key):
-        return Expression(self, OP_HKEY, Param(key))
+        return Expression(self, OP.HKEY, Param(key))
 
     def keys(self):
         return fn.akeys(self)
@@ -179,20 +180,20 @@ class HStoreField(IndexedFieldMixin, Field):
         return fn.defined(self, key)
 
     def update(self, **data):
-        return Expression(self, OP_HUPDATE, data)
+        return Expression(self, OP.HUPDATE, data)
 
     def delete(self, *keys):
         return fn.delete(self, Param(list(keys)))
 
     def contains(self, value):
         if isinstance(value, dict):
-            return Expression(self, OP_HCONTAINS_DICT, Param(value))
+            return Expression(self, OP.HCONTAINS_DICT, Param(value))
         elif isinstance(value, (list, tuple)):
-            return Expression(self, OP_HCONTAINS_KEYS, Param(value))
-        return Expression(self, OP_HCONTAINS_KEY, value)
+            return Expression(self, OP.HCONTAINS_KEYS, Param(value))
+        return Expression(self, OP.HCONTAINS_KEY, value)
 
     def contains_any(self, *keys):
-        return Expression(self, OP_HCONTAINS_ANY_KEY, Param(list(keys)))
+        return Expression(self, OP.HCONTAINS_ANY_KEY, Param(list(keys)))
 
 
 class JSONField(Field):
@@ -223,22 +224,22 @@ class BinaryJSONField(IndexedFieldMixin, JSONField):
 
     def contains(self, other):
         if isinstance(other, (list, dict)):
-            return Expression(self, OP_JSONB_CONTAINS, Json(other))
-        return Expression(self, OP_JSONB_EXISTS, Passthrough(other))
+            return Expression(self, OP.JSONB_CONTAINS, Json(other))
+        return Expression(self, OP.JSONB_EXISTS, Passthrough(other))
 
     def contained_by(self, other):
-        return Expression(self, OP_JSONB_CONTAINED_BY, Json(other))
+        return Expression(self, OP.JSONB_CONTAINED_BY, Json(other))
 
     def contains_any(self, *items):
         return Expression(
             self,
-            OP_JSONB_CONTAINS_ANY_KEY,
+            OP.JSONB_CONTAINS_ANY_KEY,
             Passthrough(list(items)))
 
     def contains_all(self, *items):
         return Expression(
             self,
-            OP_JSONB_CONTAINS_ALL_KEYS,
+            OP.JSONB_CONTAINS_ALL_KEYS,
             Passthrough(list(items)))
 
 
@@ -247,28 +248,30 @@ class TSVectorField(IndexedFieldMixin, TextField):
     default_index_type = 'GIN'
 
     def match(self, query):
-        return Expression(self, OP_TS_MATCH, fn.to_tsquery(query))
+        return Expression(self, OP.TS_MATCH, fn.to_tsquery(query))
 
 
 def Match(field, query):
-    return Expression(fn.to_tsvector(field), OP_TS_MATCH, fn.to_tsquery(query))
+    return Expression(fn.to_tsvector(field), OP.TS_MATCH, fn.to_tsquery(query))
 
 
-OP_HKEY = 'key'
-OP_HUPDATE = 'H@>'
-OP_HCONTAINS_DICT = 'H?&'
-OP_HCONTAINS_KEYS = 'H?'
-OP_HCONTAINS_KEY = 'H?|'
-OP_HCONTAINS_ANY_KEY = 'H||'
-OP_ACONTAINS = 'A@>'
-OP_ACONTAINS_ANY = 'A||'
-OP_TS_MATCH = 'T@@'
-OP_JSONB_CONTAINS = 'JB@>'
-OP_JSONB_CONTAINED_BY = 'JB<@'
-OP_JSONB_CONTAINS_ANY_KEY = 'JB?|'
-OP_JSONB_CONTAINS_ALL_KEYS = 'JB?&'
-OP_JSONB_EXISTS = 'JB?'
-OP_CAST = '::'
+OP.update(
+    HKEY='key',
+    HUPDATE='H@>',
+    HCONTAINS_DICT='H?&',
+    HCONTAINS_KEYS='H?',
+    HCONTAINS_KEY='H?|',
+    HCONTAINS_ANY_KEY='H||',
+    ACONTAINS='A@>',
+    ACONTAINS_ANY='A||',
+    TS_MATCH='T@@',
+    JSONB_CONTAINS='JB@>',
+    JSONB_CONTAINED_BY='JB<@',
+    JSONB_CONTAINS_ANY_KEY='JB?|',
+    JSONB_CONTAINS_ALL_KEYS='JB?&',
+    JSONB_EXISTS='JB?',
+    CAST='::',
+)
 
 
 class PostgresqlExtCompiler(QueryCompiler):
@@ -391,21 +394,21 @@ PostgresqlExtDatabase.register_fields({
     'tsvector': 'tsvector',
 })
 PostgresqlExtDatabase.register_ops({
-    OP_HCONTAINS_DICT: '@>',
-    OP_HCONTAINS_KEYS: '?&',
-    OP_HCONTAINS_KEY: '?',
-    OP_HCONTAINS_ANY_KEY: '?|',
-    OP_HKEY: '->',
-    OP_HUPDATE: '||',
-    OP_ACONTAINS: '@>',
-    OP_ACONTAINS_ANY: '&&',
-    OP_TS_MATCH: '@@',
-    OP_JSONB_CONTAINS: '@>',
-    OP_JSONB_CONTAINED_BY: '<@',
-    OP_JSONB_CONTAINS_ANY_KEY: '?|',
-    OP_JSONB_CONTAINS_ALL_KEYS: '?&',
-    OP_JSONB_EXISTS: '?',
-    OP_CAST: '::',
+    OP.HCONTAINS_DICT: '@>',
+    OP.HCONTAINS_KEYS: '?&',
+    OP.HCONTAINS_KEY: '?',
+    OP.HCONTAINS_ANY_KEY: '?|',
+    OP.HKEY: '->',
+    OP.HUPDATE: '||',
+    OP.ACONTAINS: '@>',
+    OP.ACONTAINS_ANY: '&&',
+    OP.TS_MATCH: '@@',
+    OP.JSONB_CONTAINS: '@>',
+    OP.JSONB_CONTAINED_BY: '<@',
+    OP.JSONB_CONTAINS_ANY_KEY: '?|',
+    OP.JSONB_CONTAINS_ALL_KEYS: '?&',
+    OP.JSONB_EXISTS: '?',
+    OP.CAST: '::',
 })
 
 def ServerSide(select_query):

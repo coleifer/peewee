@@ -202,55 +202,64 @@ def _sqlite_date_trunc(lookup_type, datetime_string):
 def _sqlite_regexp(regex, value):
     return re.search(regex, value, re.I) is not None
 
+class attrdict(dict):
+    def __getattr__(self, attr):
+        return self[attr]
+
 # Operators used in binary expressions.
-OP_AND = 'and'
-OP_OR = 'or'
+OP = attrdict(
+    AND='and',
+    OR='or',
+    ADD='+',
+    SUB='-',
+    MUL='*',
+    DIV='/',
+    BIN_AND='&',
+    BIN_OR='|',
+    XOR='^',
+    MOD='%',
+    EQ='=',
+    LT='<',
+    LTE='<=',
+    GT='>',
+    GTE='>=',
+    NE='!=',
+    IN='in',
+    NOT_IN='not in',
+    IS='is',
+    IS_NOT='is not',
+    LIKE='like',
+    ILIKE='ilike',
+    BETWEEN='between',
+    REGEXP='regexp',
+    CONCAT='||',
+)
 
-OP_ADD = '+'
-OP_SUB = '-'
-OP_MUL = '*'
-OP_DIV = '/'
-OP_BIN_AND = '&'
-OP_BIN_OR = '|'
-OP_XOR = '^'
-OP_MOD = '%'
-
-OP_EQ = '='
-OP_LT = '<'
-OP_LTE = '<='
-OP_GT = '>'
-OP_GTE = '>='
-OP_NE = '!='
-OP_IN = 'in'
-OP_NOT_IN = 'not in'
-OP_IS = 'is'
-OP_IS_NOT = 'is not'
-OP_LIKE = 'like'
-OP_ILIKE = 'ilike'
-OP_BETWEEN = 'between'
-OP_REGEXP = 'regexp'
-OP_CONCAT = '||'
+JOIN = attrdict(
+    INNER='INNER',
+    LEFT_OUTER='LEFT OUTER',
+    RIGHT_OUTER='RIGHT OUTER',
+    FULL='FULL',
+)
+JOIN_INNER = JOIN.INNER
+JOIN_LEFT_OUTER = JOIN.LEFT_OUTER
+JOIN_FULL = JOIN.FULL
 
 # To support "django-style" double-underscore filters, create a mapping between
-# operation name and operation code, e.g. "__eq" == OP_EQ.
+# operation name and operation code, e.g. "__eq" == OP.EQ.
 DJANGO_MAP = {
-    'eq': OP_EQ,
-    'lt': OP_LT,
-    'lte': OP_LTE,
-    'gt': OP_GT,
-    'gte': OP_GTE,
-    'ne': OP_NE,
-    'in': OP_IN,
-    'is': OP_IS,
-    'like': OP_LIKE,
-    'ilike': OP_ILIKE,
-    'regexp': OP_REGEXP,
+    'eq': OP.EQ,
+    'lt': OP.LT,
+    'lte': OP.LTE,
+    'gt': OP.GT,
+    'gte': OP.GTE,
+    'ne': OP.NE,
+    'in': OP.IN,
+    'is': OP.IS,
+    'like': OP.LIKE,
+    'ilike': OP.ILIKE,
+    'regexp': OP.REGEXP,
 }
-
-JOIN_INNER = 'inner'
-JOIN_LEFT_OUTER = 'left outer'
-JOIN_RIGHT_OUTER = 'right outer'
-JOIN_FULL = 'full'
 
 # Helper functions that are used in various parts of the codebase.
 def merge_dict(source, overrides):
@@ -379,64 +388,64 @@ class Node(object):
                 return Expression(rhs, op, self)
             return Expression(self, op, rhs)
         return inner
-    __and__ = _e(OP_AND)
-    __or__ = _e(OP_OR)
+    __and__ = _e(OP.AND)
+    __or__ = _e(OP.OR)
 
-    __add__ = _e(OP_ADD)
-    __sub__ = _e(OP_SUB)
-    __mul__ = _e(OP_MUL)
-    __div__ = __truediv__ = _e(OP_DIV)
-    __xor__ = _e(OP_XOR)
-    __radd__ = _e(OP_ADD, inv=True)
-    __rsub__ = _e(OP_SUB, inv=True)
-    __rmul__ = _e(OP_MUL, inv=True)
-    __rdiv__ = __rtruediv__ = _e(OP_DIV, inv=True)
-    __rand__ = _e(OP_AND, inv=True)
-    __ror__ = _e(OP_OR, inv=True)
-    __rxor__ = _e(OP_XOR, inv=True)
+    __add__ = _e(OP.ADD)
+    __sub__ = _e(OP.SUB)
+    __mul__ = _e(OP.MUL)
+    __div__ = __truediv__ = _e(OP.DIV)
+    __xor__ = _e(OP.XOR)
+    __radd__ = _e(OP.ADD, inv=True)
+    __rsub__ = _e(OP.SUB, inv=True)
+    __rmul__ = _e(OP.MUL, inv=True)
+    __rdiv__ = __rtruediv__ = _e(OP.DIV, inv=True)
+    __rand__ = _e(OP.AND, inv=True)
+    __ror__ = _e(OP.OR, inv=True)
+    __rxor__ = _e(OP.XOR, inv=True)
 
     def __eq__(self, rhs):
         if rhs is None:
-            return Expression(self, OP_IS, None)
-        return Expression(self, OP_EQ, rhs)
+            return Expression(self, OP.IS, None)
+        return Expression(self, OP.EQ, rhs)
     def __ne__(self, rhs):
         if rhs is None:
-            return Expression(self, OP_IS_NOT, None)
-        return Expression(self, OP_NE, rhs)
+            return Expression(self, OP.IS_NOT, None)
+        return Expression(self, OP.NE, rhs)
 
-    __lt__ = _e(OP_LT)
-    __le__ = _e(OP_LTE)
-    __gt__ = _e(OP_GT)
-    __ge__ = _e(OP_GTE)
-    __lshift__ = _e(OP_IN)
-    __rshift__ = _e(OP_IS)
-    __mod__ = _e(OP_LIKE)
-    __pow__ = _e(OP_ILIKE)
+    __lt__ = _e(OP.LT)
+    __le__ = _e(OP.LTE)
+    __gt__ = _e(OP.GT)
+    __ge__ = _e(OP.GTE)
+    __lshift__ = _e(OP.IN)
+    __rshift__ = _e(OP.IS)
+    __mod__ = _e(OP.LIKE)
+    __pow__ = _e(OP.ILIKE)
 
-    bin_and = _e(OP_BIN_AND)
-    bin_or = _e(OP_BIN_OR)
+    bin_and = _e(OP.BIN_AND)
+    bin_or = _e(OP.BIN_OR)
 
     # Special expressions.
     def in_(self, *rhs):
-        return Expression(self, OP_IN, rhs)
+        return Expression(self, OP.IN, rhs)
     def not_in(self, *rhs):
-        return Expression(self, OP_NOT_IN, rhs)
+        return Expression(self, OP.NOT_IN, rhs)
     def is_null(self, is_null=True):
         if is_null:
-            return Expression(self, OP_IS, None)
-        return Expression(self, OP_IS_NOT, None)
+            return Expression(self, OP.IS, None)
+        return Expression(self, OP.IS_NOT, None)
     def contains(self, rhs):
-        return Expression(self, OP_ILIKE, '%%%s%%' % rhs)
+        return Expression(self, OP.ILIKE, '%%%s%%' % rhs)
     def startswith(self, rhs):
-        return Expression(self, OP_ILIKE, '%s%%' % rhs)
+        return Expression(self, OP.ILIKE, '%s%%' % rhs)
     def endswith(self, rhs):
-        return Expression(self, OP_ILIKE, '%%%s' % rhs)
+        return Expression(self, OP.ILIKE, '%%%s' % rhs)
     def between(self, low, high):
-        return Expression(self, OP_BETWEEN, Clause(low, R('AND'), high))
+        return Expression(self, OP.BETWEEN, Clause(low, R('AND'), high))
     def regexp(self, expression):
-        return Expression(self, OP_REGEXP, expression)
+        return Expression(self, OP.REGEXP, expression)
     def concat(self, rhs):
-        return Expression(self, OP_CONCAT, rhs)
+        return Expression(self, OP.CONCAT, rhs)
 
 class Expression(Node):
     """A binary expression, e.g `foo + 1` or `bar < 7`."""
@@ -618,7 +627,7 @@ class Join(namedtuple('_Join', ('dest', 'join_type', 'on'))):
         return None, None
 
     def get_join_type(self):
-        return self.join_type or JOIN_INNER
+        return self.join_type or JOIN.INNER
 
     def join_metadata(self, source):
         is_model_alias = isinstance(self.dest, ModelAlias)
@@ -1226,42 +1235,42 @@ class QueryCompiler(object):
         'time': 'TIME',
     }
 
-    # Mapping of OP_ to actual SQL operation.  For most databases this will be
+    # Mapping of OP. to actual SQL operation.  For most databases this will be
     # the same, but some column types or databases may support additional ops.
     # Like `field_map`, Database classes may extend or override these.
     op_map = {
-        OP_EQ: '=',
-        OP_LT: '<',
-        OP_LTE: '<=',
-        OP_GT: '>',
-        OP_GTE: '>=',
-        OP_NE: '!=',
-        OP_IN: 'IN',
-        OP_NOT_IN: 'NOT IN',
-        OP_IS: 'IS',
-        OP_IS_NOT: 'IS NOT',
-        OP_BIN_AND: '&',
-        OP_BIN_OR: '|',
-        OP_LIKE: 'LIKE',
-        OP_ILIKE: 'ILIKE',
-        OP_BETWEEN: 'BETWEEN',
-        OP_ADD: '+',
-        OP_SUB: '-',
-        OP_MUL: '*',
-        OP_DIV: '/',
-        OP_XOR: '#',
-        OP_AND: 'AND',
-        OP_OR: 'OR',
-        OP_MOD: '%',
-        OP_REGEXP: 'REGEXP',
-        OP_CONCAT: '||',
+        OP.EQ: '=',
+        OP.LT: '<',
+        OP.LTE: '<=',
+        OP.GT: '>',
+        OP.GTE: '>=',
+        OP.NE: '!=',
+        OP.IN: 'IN',
+        OP.NOT_IN: 'NOT IN',
+        OP.IS: 'IS',
+        OP.IS_NOT: 'IS NOT',
+        OP.BIN_AND: '&',
+        OP.BIN_OR: '|',
+        OP.LIKE: 'LIKE',
+        OP.ILIKE: 'ILIKE',
+        OP.BETWEEN: 'BETWEEN',
+        OP.ADD: '+',
+        OP.SUB: '-',
+        OP.MUL: '*',
+        OP.DIV: '/',
+        OP.XOR: '#',
+        OP.AND: 'AND',
+        OP.OR: 'OR',
+        OP.MOD: '%',
+        OP.REGEXP: 'REGEXP',
+        OP.CONCAT: '||',
     }
 
     join_map = {
-        JOIN_INNER: 'INNER JOIN',
-        JOIN_LEFT_OUTER: 'LEFT OUTER JOIN',
-        JOIN_RIGHT_OUTER: 'RIGHT OUTER JOIN',
-        JOIN_FULL: 'FULL JOIN',
+        JOIN.INNER: 'INNER JOIN',
+        JOIN.LEFT_OUTER: 'LEFT OUTER JOIN',
+        JOIN.RIGHT_OUTER: 'RIGHT OUTER JOIN',
+        JOIN.FULL: 'FULL JOIN',
     }
     alias_map_class = AliasMap
 
@@ -1596,7 +1605,7 @@ class QueryCompiler(object):
                 value = Param(value, conv=field.db_value)
             update.append(Expression(
                 field._as_entity(with_table=False),
-                OP_EQ,
+                OP.EQ,
                 value,
                 flat=True))  # No outer parens, no table alias.
         clauses.append(CommaClause(*update))
@@ -2200,7 +2209,7 @@ class Query(Node):
                 key, op = key.rsplit('__', 1)
                 op = DJANGO_MAP[op]
             else:
-                op = OP_EQ
+                op = OP.EQ
             for piece in key.split('__'):
                 model_attr = getattr(curr, piece)
                 if isinstance(model_attr, relationship):
@@ -3024,8 +3033,8 @@ class SqliteDatabase(Database):
     insert_many = sqlite3 and sqlite3.sqlite_version_info >= (3, 7, 11, 0)
     limit_max = -1
     op_overrides = {
-        OP_LIKE: 'GLOB',
-        OP_ILIKE: 'LIKE',
+        OP.LIKE: 'GLOB',
+        OP.ILIKE: 'LIKE',
     }
 
     def __init__(self, *args, **kwargs):
@@ -3123,7 +3132,7 @@ class PostgresqlDatabase(Database):
     for_update_nowait = True
     interpolation = '%s'
     op_overrides = {
-        OP_REGEXP: '~',
+        OP.REGEXP: '~',
     }
     reserved_tables = ['user']
     sequences = True
@@ -3255,9 +3264,9 @@ class MySQLDatabase(Database):
     interpolation = '%s'
     limit_max = 2 ** 64 - 1  # MySQL quirk
     op_overrides = {
-        OP_LIKE: 'LIKE BINARY',
-        OP_ILIKE: 'LIKE',
-        OP_XOR: 'XOR',
+        OP.LIKE: 'LIKE BINARY',
+        OP.ILIKE: 'LIKE',
+        OP.XOR: 'XOR',
     }
     quote_char = '`'
     subquery_delete_same_table = False

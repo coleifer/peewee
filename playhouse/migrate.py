@@ -109,7 +109,7 @@ from peewee import EnclosedClause
 from peewee import Entity
 from peewee import Expression
 from peewee import Node
-from peewee import OP_EQ
+from peewee import OP
 
 
 class Operation(object):
@@ -178,7 +178,7 @@ class SchemaMigrator(object):
             SQL('SET'),
             Expression(
                 Entity(column_name),
-                OP_EQ,
+                OP.EQ,
                 Param(field.db_value(default)),
                 flat=True))
 
