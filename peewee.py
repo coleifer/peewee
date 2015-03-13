@@ -1923,7 +1923,10 @@ class ModelQueryResultWrapper(QueryResultWrapper):
                 attr = node.name
                 conv = node.python_value
             else:
-                key = constructor = node._bind_to if node._bind_to else self.model
+                if node._bind_to is None:
+                    key = constructor = self.model
+                else:
+                    key = constructor = node._bind_to
                 if isinstance(node, Expression) and node._alias:
                     attr = node._alias
             column_map.append((key, constructor, attr, conv))
