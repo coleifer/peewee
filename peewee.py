@@ -331,7 +331,7 @@ class Node(object):
     def __init__(self):
         self._negated = False
         self._alias = None
-        self._target = None
+        self._bind_to = None
         self._ordering = None  # ASC or DESC.
 
     @classmethod
@@ -363,8 +363,13 @@ class Node(object):
         self._alias = a
 
     @returns_clone
-    def target(self, t):
-        self._target = t
+    def bind_to(self, bt):
+        """
+        Bind the results of an expression to a specific model type. Useful when adding
+        expressions to a select, where the result of the expression should be placed on
+        a joined instance.
+        """
+        self._bind_to = bt
 
     @returns_clone
     def asc(self):
@@ -1907,7 +1912,7 @@ class ModelQueryResultWrapper(QueryResultWrapper):
                 attr = node.name
                 conv = node.python_value
             else:
-                key = constructor = node._target if node._target else self.model
+                key = constructor = node._bind_to if node._bind_to else self.model
                 if isinstance(node, Expression) and node._alias:
                     attr = node._alias
             column_map.append((key, constructor, attr, conv))

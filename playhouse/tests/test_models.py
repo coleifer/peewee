@@ -77,8 +77,8 @@ class TestQueryingModels(ModelTestCase):
         blog = Blog.select(
             Blog,
             User,
-            (User.username == 'u0').alias('is_u0').target(User),
-            (User.username == 'u1').alias('is_u1').target(User)
+            (User.username == 'u0').alias('is_u0').bind_to(User),
+            (User.username == 'u1').alias('is_u1').bind_to(User)
         ).join(User).get()
 
         self.assertTrue(blog.user.is_u0)
