@@ -72,6 +72,18 @@ class TestQueryingModels(ModelTestCase):
             ('u4', 3),
         ])
 
+    def test_select_with_bind_to(self):
+        self.create_users_blogs(1, 1)
+        blog = Blog.select(
+            Blog,
+            User,
+            (User.username == 'u0').alias('is_u0').bind_to(User),
+            (User.username == 'u1').alias('is_u1').bind_to(User)
+        ).join(User).get()
+
+        self.assertTrue(blog.user.is_u0)
+        self.assertFalse(blog.user.is_u1)
+
     def test_scalar(self):
         User.create_users(5)
 
