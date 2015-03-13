@@ -362,6 +362,7 @@ class Node(object):
         inst._negated = self._negated
         inst._alias = self._alias
         inst._ordering = self._ordering
+        inst._bind_to = self._bind_to
         return inst
 
     @returns_clone
