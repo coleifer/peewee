@@ -62,6 +62,7 @@ __all__ = [
     'IntegrityError',
     'InterfaceError',
     'InternalError',
+    'JOIN',
     'JOIN_FULL',
     'JOIN_INNER',
     'JOIN_LEFT_OUTER',

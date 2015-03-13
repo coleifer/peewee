@@ -257,7 +257,7 @@ Once again we've run into a classic example of :ref:`N+1 <nplusone>` query behav
     >>> subquery = Pet.select(fn.COUNT(Pet.id)).where(Pet.owner == Person.id).
     >>> query = (Person
     ...          .select(Person, Pet, subquery.alias('pet_count'))
-    ...          .join(Pet, JOIN_LEFT_OUTER)
+    ...          .join(Pet, JOIN.LEFT_OUTER)
     ...          .order_by(Person.name))
 
     >>> for person in query.aggregate_rows():  # Note the `aggregate_rows()` call.

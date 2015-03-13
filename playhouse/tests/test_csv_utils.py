@@ -182,7 +182,7 @@ class TestCSVDump(ModelTestCase):
     def test_dump_functions(self):
         query = (User
                  .select(User.username, fn.COUNT(Note.id))
-                 .join(Note, JOIN_LEFT_OUTER)
+                 .join(Note, JOIN.LEFT_OUTER)
                  .group_by(User.username)
                  .order_by(User.id))
         expected = [

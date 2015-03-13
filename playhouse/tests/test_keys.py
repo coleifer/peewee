@@ -73,21 +73,21 @@ class TestMultipleForeignKey(ModelTestCase):
                      Computer.hard_drive == HDD.id).alias('hard_drive'))
                  .join(
                      HDDMf,
-                     JOIN_LEFT_OUTER,
+                     JOIN.LEFT_OUTER,
                      on=(HDD.manufacturer == HDDMf.id))
                  .switch(Computer)
                  .join(Memory, on=(
                      Computer.memory == Memory.id).alias('memory'))
                  .join(
                      MemoryMf,
-                     JOIN_LEFT_OUTER,
+                     JOIN.LEFT_OUTER,
                      on=(Memory.manufacturer == MemoryMf.id))
                  .switch(Computer)
                  .join(Processor, on=(
                      Computer.processor == Processor.id).alias('processor'))
                  .join(
                      ProcessorMf,
-                     JOIN_LEFT_OUTER,
+                     JOIN.LEFT_OUTER,
                      on=(Processor.manufacturer == ProcessorMf.id))
                  .order_by(Computer.id))
 

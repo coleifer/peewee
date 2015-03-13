@@ -418,7 +418,7 @@ class TestModelQueryResultWrapper(ModelTestCase):
                 model_class.create(field=pk, data=data)
 
     def test_join_expr(self):
-        def get_query(join_type=JOIN_INNER):
+        def get_query(join_type=JOIN.INNER):
             sq = (TestModelA
                   .select(TestModelA, TestModelB, TestModelC)
                   .join(
@@ -441,7 +441,7 @@ class TestModelQueryResultWrapper(ModelTestCase):
                 self.assertEqual(results[i].rel_b.data, b_data)
                 self.assertEqual(results[i].rel_b.field.data, c_data)
 
-        sq = get_query(JOIN_LEFT_OUTER)
+        sq = get_query(JOIN.LEFT_OUTER)
         self.assertEqual(sq.count(), 3)
 
         with self.assertQueryCount(1):
@@ -746,7 +746,7 @@ class TestPrefetch(BaseTestPrefetch):
         with self.assertQueryCount(1):
             query = (User
                      .select(User, Blog)
-                     .join(Blog, JOIN_LEFT_OUTER)
+                     .join(Blog, JOIN.LEFT_OUTER)
                      .order_by(User.username, Blog.title))
             results = []
             for user in query:
@@ -770,8 +770,8 @@ class TestAggregateRows(BaseTestPrefetch):
         with self.assertQueryCount(1):
             query = (User
                      .select(User, Blog, Comment)
-                     .join(Blog, JOIN_LEFT_OUTER)
-                     .join(Comment, JOIN_LEFT_OUTER)
+                     .join(Blog, JOIN.LEFT_OUTER)
+                     .join(Comment, JOIN.LEFT_OUTER)
                      .order_by(User.username, Blog.title, Comment.id)
                      .aggregate_rows())
 
@@ -802,7 +802,7 @@ class TestAggregateRows(BaseTestPrefetch):
                      .select(Blog, User, Comment)
                      .join(User)
                      .switch(Blog)
-                     .join(Comment, JOIN_LEFT_OUTER)
+                     .join(Comment, JOIN.LEFT_OUTER)
                      .order_by(Blog.title, User.username, Comment.id)
                      .aggregate_rows())
 
@@ -827,7 +827,7 @@ class TestAggregateRows(BaseTestPrefetch):
             join_expr = (User.id == Blog.user).alias('user')
             query = (User
                      .select(User, Blog)
-                     .join(Blog, JOIN_LEFT_OUTER, on=join_expr)
+                     .join(Blog, JOIN.LEFT_OUTER, on=join_expr)
                      .order_by(User.username, Blog.title)
                      .aggregate_rows())
             results = []
@@ -860,7 +860,7 @@ class TestAggregateRows(BaseTestPrefetch):
             # selected and are only used for filtering the result set.
             query = (User
                      .select(User, Blog)
-                     .join(Blog, JOIN_LEFT_OUTER)
+                     .join(Blog, JOIN.LEFT_OUTER)
                      .switch(User)
                      .join(UserCategory)
                      .join(Category)
@@ -898,8 +898,8 @@ class TestAggregateRows(BaseTestPrefetch):
         with self.assertQueryCount(1):
             query = (Post
                      .select(Post, TagPostThroughAlt, Tag)
-                     .join(TagPostThroughAlt, JOIN_LEFT_OUTER)
-                     .join(Tag, JOIN_LEFT_OUTER)
+                     .join(TagPostThroughAlt, JOIN.LEFT_OUTER)
+                     .join(Tag, JOIN.LEFT_OUTER)
                      .order_by(Post.id, TagPostThroughAlt.post, Tag.id)
                      .aggregate_rows())
             results = []
@@ -920,11 +920,11 @@ class TestAggregateRows(BaseTestPrefetch):
         with self.assertQueryCount(1):
             query = (Parent
                      .select(Parent, Child, Orphan, ChildPet, OrphanPet)
-                     .join(Child, JOIN_LEFT_OUTER)
-                     .join(ChildPet, JOIN_LEFT_OUTER)
+                     .join(Child, JOIN.LEFT_OUTER)
+                     .join(ChildPet, JOIN.LEFT_OUTER)
                      .switch(Parent)
-                     .join(Orphan, JOIN_LEFT_OUTER)
-                     .join(OrphanPet, JOIN_LEFT_OUTER)
+                     .join(Orphan, JOIN.LEFT_OUTER)
+                     .join(OrphanPet, JOIN.LEFT_OUTER)
                      .order_by(
                          Parent.data,
                          Child.data,
@@ -967,7 +967,7 @@ class TestAggregateRows(BaseTestPrefetch):
         with self.assertQueryCount(1):
             query = (Child
                      .select(Child, ChildPet, Parent)
-                     .join(ChildPet, JOIN_LEFT_OUTER)
+                     .join(ChildPet, JOIN.LEFT_OUTER)
                      .switch(Child)
                      .join(Parent)
                      .join(Orphan)
@@ -990,8 +990,8 @@ class TestAggregateRows(BaseTestPrefetch):
         with self.assertQueryCount(1):
             query = (Parent
                      .select(Parent, Child, ChildPet)
-                     .join(Child, JOIN_LEFT_OUTER)
-                     .join(ChildPet, JOIN_LEFT_OUTER)
+                     .join(Child, JOIN.LEFT_OUTER)
+                     .join(ChildPet, JOIN.LEFT_OUTER)
                      .switch(Parent)
                      .join(Orphan)
                      .join(OrphanPet)
@@ -1015,7 +1015,7 @@ class TestAggregateRows(BaseTestPrefetch):
         with self.assertQueryCount(1):
             query = (User
                      .select(User, Blog)
-                     .join(Blog, JOIN_LEFT_OUTER)
+                     .join(Blog, JOIN.LEFT_OUTER)
                      .order_by(User.username.desc(), Blog.title.desc())
                      .aggregate_rows())
 
@@ -1068,11 +1068,11 @@ class TestAggregateRowsRegression(ModelTestCase):
                         Category,
                         Blog,
                         BlogData)
-                    .join(CommentCategory, JOIN_LEFT_OUTER)
-                    .join(Category, JOIN_LEFT_OUTER)
+                    .join(CommentCategory, JOIN.LEFT_OUTER)
+                    .join(Category, JOIN.LEFT_OUTER)
                     .switch(Comment)
                     .join(Blog)
-                    .join(BlogData, JOIN_LEFT_OUTER)
+                    .join(BlogData, JOIN.LEFT_OUTER)
                     .where(Category.id == 1)
                     .order_by(CommentCategory.sort_order))
 

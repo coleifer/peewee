@@ -467,7 +467,7 @@ When sorting on a calculated value, you can either include the necessary SQL exp
     # users with fewest tweets.
     query = (User
              .select(User.username, fn.COUNT(Tweet.id).alias('num_tweets'))
-             .join(Tweet, JOIN_LEFT_OUTER)
+             .join(Tweet, JOIN.LEFT_OUTER)
              .group_by(User.username))
 
 You can order using the same COUNT expression used in the ``select`` clause. In the example below we are ordering by the ``COUNT()`` of tweet ids descending:
@@ -476,7 +476,7 @@ You can order using the same COUNT expression used in the ``select`` clause. In 
 
     query = (User
              .select(User.username, fn.COUNT(Tweet.id).alias('num_tweets'))
-             .join(Tweet, JOIN_LEFT_OUTER)
+             .join(Tweet, JOIN.LEFT_OUTER)
              .group_by(User.username)
              .order_by(fn.COUNT(Tweet.id).desc()))
 
@@ -486,7 +486,7 @@ Alternatively, you can reference the alias assigned to the calculated value in t
 
     query = (User
              .select(User.username, fn.COUNT(Tweet.id).alias('num_tweets'))
-             .join(Tweet, JOIN_LEFT_OUTER)
+             .join(Tweet, JOIN.LEFT_OUTER)
              .group_by(User.username)
              .order_by(SQL('num_tweets').desc()))
 
@@ -573,7 +573,7 @@ The resulting query will return *User* objects with all their normal attributes 
 
     query = (User
              .select()
-             .join(Tweet, JOIN_LEFT_OUTER)
+             .join(Tweet, JOIN.LEFT_OUTER)
              .switch(User)
              .annotate(Tweet))
 
@@ -1102,7 +1102,7 @@ By default peewee will use an *INNER* join, but you can use *LEFT OUTER* or *FUL
 
     users = (User
              .select(User, fn.Count(Tweet.id).alias('num_tweets'))
-             .join(Tweet, JOIN_LEFT_OUTER)
+             .join(Tweet, JOIN.LEFT_OUTER)
              .group_by(User)
              .order_by(fn.Count(Tweet.id).desc()))
     for user in users:
@@ -1473,7 +1473,7 @@ Let's look at the first approach, since it is more general and can work with arb
 
     query = (User
              .select(User, Tweet)  # As in the previous example, we select both tables.
-             .join(Tweet, JOIN_LEFT_OUTER)
+             .join(Tweet, JOIN.LEFT_OUTER)
              .order_by(User.username)  # We need to specify an ordering here.
              .aggregate_rows())  # Tell peewee to de-dupe and aggregate results.
 
@@ -1495,7 +1495,7 @@ Below is an example of how we might fetch several users and any tweets they crea
     week_ago = datetime.date.today() - datetime.timedelta(days=7)
     query = (User
              .select(User, Tweet)
-             .join(Tweet, JOIN_LEFT_OUTER)
+             .join(Tweet, JOIN.LEFT_OUTER)
              .where(
                  (Tweet.id >> None) | (
                      (Tweet.is_published == True) &

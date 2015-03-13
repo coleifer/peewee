@@ -152,8 +152,8 @@ class TestModelToDict(ModelTestCase):
 
         query = (User
                  .select(User, Note, NoteTag)
-                 .join(Note, JOIN_LEFT_OUTER)
-                 .join(NoteTag, JOIN_LEFT_OUTER)
+                 .join(Note, JOIN.LEFT_OUTER)
+                 .join(NoteTag, JOIN.LEFT_OUTER)
                  .aggregate_rows())
         user = query.get()
 

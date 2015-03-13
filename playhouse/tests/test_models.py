@@ -991,7 +991,7 @@ class TestManyToMany(ModelTestCase):
         )
         aC(cats, ['c1', 'c2'])
 
-        cats = Category.select().join(UserCategory, JOIN_LEFT_OUTER).join(User, JOIN_LEFT_OUTER).where(
+        cats = Category.select().join(UserCategory, JOIN.LEFT_OUTER).join(User, JOIN.LEFT_OUTER).where(
             Category.name << ['c1', 'c2', 'c3']
         )
         aC(cats, ['c1', 'c2', 'c3'])

@@ -145,7 +145,7 @@ class TestSelectQuery(PeeweeTestCase):
     def test_select_cloning(self):
         ct = fn.Count(Blog.pk)
         sq = SelectQuery(User, User, User.id.alias('extra_id'), ct.alias('blog_ct')).join(
-            Blog, JOIN_LEFT_OUTER).group_by(User).order_by(ct.desc())
+            Blog, JOIN.LEFT_OUTER).group_by(User).order_by(ct.desc())
         sql = compiler.generate_select(sq)
         self.assertEqual(sql, (
             'SELECT "users"."id", "users"."username", "users"."id" AS extra_id, Count("blog"."pk") AS blog_ct ' + \
@@ -159,7 +159,7 @@ class TestSelectQuery(PeeweeTestCase):
         sq = SelectQuery(User).join(Blog)
         self.assertJoins(sq, ['INNER JOIN "blog" AS blog ON ("users"."id" = "blog"."user_id")'])
 
-        sq = SelectQuery(Blog).join(User, JOIN_LEFT_OUTER)
+        sq = SelectQuery(Blog).join(User, JOIN.LEFT_OUTER)
         self.assertJoins(sq, ['LEFT OUTER JOIN "users" AS users ON ("blog"."user_id" = "users"."id")'])
 
         sq = SelectQuery(User).join(Relationship)
@@ -168,7 +168,7 @@ class TestSelectQuery(PeeweeTestCase):
         sq = SelectQuery(User).join(Relationship, on=Relationship.to_user)
         self.assertJoins(sq, ['INNER JOIN "relationship" AS relationship ON ("users"."id" = "relationship"."to_user_id")'])
 
-        sq = SelectQuery(User).join(Relationship, JOIN_LEFT_OUTER, Relationship.to_user)
+        sq = SelectQuery(User).join(Relationship, JOIN.LEFT_OUTER, Relationship.to_user)
         self.assertJoins(sq, ['LEFT OUTER JOIN "relationship" AS relationship ON ("users"."id" = "relationship"."to_user_id")'])
 
         sq = SelectQuery(Package).join(PackageItem)
@@ -1039,13 +1039,13 @@ class TestDjangoFilters(PeeweeTestCase):
         self.assertSelect(sq, '"users"."id", "users"."username", Count("blog"."pk") AS count', [])
         self.assertOrderBy(sq, 'count DESC', [])
 
-        sq = User.select().join(Blog, JOIN_LEFT_OUTER).switch(User).annotate(Blog)
+        sq = User.select().join(Blog, JOIN.LEFT_OUTER).switch(User).annotate(Blog)
         self.assertSelect(sq, '"users"."id", "users"."username", Count("blog"."pk") AS count', [])
         self.assertJoins(sq, ['LEFT OUTER JOIN "blog" AS blog ON ("users"."id" = "blog"."user_id")'])
         self.assertWhere(sq, '', [])
         self.assertGroupBy(sq, '"users"."id", "users"."username"', [])
 
-        sq = User.select().join(Blog, JOIN_LEFT_OUTER).annotate(Blog)
+        sq = User.select().join(Blog, JOIN.LEFT_OUTER).annotate(Blog)
         self.assertSelect(sq, '"users"."id", "users"."username", Count("blog"."pk") AS count', [])
         self.assertJoins(sq, ['LEFT OUTER JOIN "blog" AS blog ON ("users"."id" = "blog"."user_id")'])
         self.assertWhere(sq, '', [])

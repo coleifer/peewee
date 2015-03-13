@@ -89,7 +89,7 @@ Queries are expressive and composable::
     tweet_ct = fn.Count(Tweet.id)
     users = (User
              .select(User, tweet_ct.alias('ct'))
-             .join(Tweet, JOIN_LEFT_OUTER)
+             .join(Tweet, JOIN.LEFT_OUTER)
              .group_by(User)
              .order_by(tweet_ct.desc()))
 

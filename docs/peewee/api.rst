@@ -171,7 +171,7 @@ Models
 
             source = (User
                       .select(User.username, fn.COUNT(Tweet.id))
-                      .join(Tweet, JOIN_LEFT_OUTER)
+                      .join(Tweet, JOIN.LEFT_OUTER)
                       .group_by(User.username))
             UserTweetDenorm.insert_from(
                 [UserTweetDenorm.username, UserTweetDenorm.num_tweets],
@@ -733,7 +733,7 @@ Query Types
         :param model: the model to join on.  there must be a :py:class:`ForeignKeyField` between
             the current ``query context`` and the model passed in.
         :param join_type: allows the type of ``JOIN`` used to be specified explicitly,
-            one of ``JOIN_INNER``, ``JOIN_LEFT_OUTER``, ``JOIN_FULL``
+            one of ``JOIN.INNER``, ``JOIN.LEFT_OUTER``, ``JOIN.FULL``
         :param on: if multiple foreign keys exist between two models, this parameter
             is the ForeignKeyField to join on.
         :rtype: a :py:class:`Query` instance
@@ -1083,7 +1083,7 @@ Query Types
 
             query = (User
                      .select(User, Tweet)
-                     .join(Tweet, JOIN_LEFT_OUTER)
+                     .join(Tweet, JOIN.LEFT_OUTER)
                      .order_by(User.username, Tweet.id)
                      .aggregate_rows())  # .aggregate_rows() tells peewee to de-dupe the rows.
             for user in query:
@@ -1140,7 +1140,7 @@ Query Types
 
                 query = (User
                          .select()
-                         .join(Tweet, JOIN_LEFT_OUTER)
+                         .join(Tweet, JOIN.LEFT_OUTER)
                          .switch(User)  # Switch query context back to `User`.
                          .annotate(Tweet))
 
@@ -1382,7 +1382,7 @@ Query Types
 
         query = (User
                  .select(User.username, fn.COUNT(Tweet.id))
-                 .join(Tweet, JOIN_LEFT_OUTER)
+                 .join(Tweet, JOIN.LEFT_OUTER)
                  .group_by(User.username))
         iq = InsertQuery(
             UserTweetDenorm,
@@ -2277,7 +2277,7 @@ Misc
         # user.
         query = (User
                  .select(User, fn.Count(Tweet.id).alias('ct'))
-                 .join(Tweet, JOIN_LEFT_OUTER)
+                 .join(Tweet, JOIN.LEFT_OUTER)
                  .group_by(User))
 
         # Sort the users by number of tweets.
