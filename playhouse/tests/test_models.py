@@ -82,7 +82,7 @@ class TestQueryingModels(ModelTestCase):
         ).join(User).get()
 
         self.assertTrue(blog.user.is_u0)
-        self.assertTrue(blog.user.is_u1)
+        self.assertFalse(blog.user.is_u1)
 
     def test_scalar(self):
         User.create_users(5)
