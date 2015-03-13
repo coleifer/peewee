@@ -331,6 +331,7 @@ class Node(object):
     def __init__(self):
         self._negated = False
         self._alias = None
+        self._target = None
         self._ordering = None  # ASC or DESC.
 
     @classmethod
@@ -360,6 +361,10 @@ class Node(object):
     @returns_clone
     def alias(self, a=None):
         self._alias = a
+
+    @returns_clone
+    def target(self, t):
+        self._target = t
 
     @returns_clone
     def asc(self):
@@ -1902,7 +1907,7 @@ class ModelQueryResultWrapper(QueryResultWrapper):
                 attr = node.name
                 conv = node.python_value
             else:
-                key = constructor = self.model
+                key = constructor = node._target if node._target else self.model
                 if isinstance(node, Expression) and node._alias:
                     attr = node._alias
             column_map.append((key, constructor, attr, conv))
