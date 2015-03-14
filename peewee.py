@@ -3171,14 +3171,16 @@ class PostgresqlDatabase(Database):
             schema = '%s.' % meta.schema
 
         if meta.primary_key.sequence:
-            seq = meta.primary_key.sequence
+            # seq = meta.primary_key.sequence
+            seq = "'%s\"%s\"'" % (schema, meta.primary_key.sequence)
         elif meta.auto_increment:
-            seq = '%s_%s_seq' % (meta.db_table, meta.primary_key.db_column)
+            # seq = '%s_%s_seq' % (meta.db_table, meta.primary_key.db_column)
+            seq = "pg_get_serial_sequence('%s\"%s\"', '%s')" % (schema, meta.db_table, meta.primary_key.db_column)
         else:
             seq = None
 
         if seq:
-            cursor.execute("SELECT CURRVAL('%s\"%s\"')" % (schema, seq))
+            cursor.execute("SELECT CURRVAL(%s)" % seq)
             result = cursor.fetchone()[0]
             if self.get_autocommit():
                 self.commit()
