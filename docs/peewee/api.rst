@@ -2427,6 +2427,10 @@ Misc
 
         Apply descending ordering to the given node. This translates into *<node> DESC*.
 
+    .. py:method:: bind_to(model_class)
+
+        Bind the results of an expression to a specific model type. Useful when adding expressions to a select, where the result of the expression should be placed on a particular joined instance.
+
     .. py:classmethod:: extend([name=None[, clone=False]])
 
         Decorator for adding the decorated function as a new method on :py:class:`Node` and its subclasses. Useful for adding implementation-specific features to all node types.
