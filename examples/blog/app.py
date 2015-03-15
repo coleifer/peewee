@@ -193,7 +193,7 @@ def create():
         if request.form.get('title') and request.form.get('content'):
             entry = Entry.create(
                 title=request.form['title'],
-                content=request.form['title'],
+                content=request.form['content'],
                 published=request.form.get('published') or False)
             flash('Entry created successfully.', 'success')
             if entry.published:
