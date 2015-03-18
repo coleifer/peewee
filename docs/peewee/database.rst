@@ -619,6 +619,23 @@ Other frameworks
 
 Don't see your framework here? Please `open a GitHub ticket <https://github.com/coleifer/peewee/issues/new>`_ and I'll see about adding a section, or better yet, submit a documentation pull-request.
 
+Additional connection initialization
+------------------------------------
+
+Peewee does a few basic things depending on your database to initialize a connection. For SQLite this means registering custom user-defined functions, for Postgresql this means registering unicode support.
+
+You may find it necessary to add additional initialization when a new connection is opened, however. For example you may want to tell SQLite to enforce all foreign key constraints (off by default). To do this, you can subclass the database and override the :py:meth:`~Database.initialize_connection` method.
+
+This method contains no implementation on the base database classes, so you do not need to call ``super()`` with it.
+
+Example turning on SQLite foreign keys:
+
+.. code-block:: python
+
+    class SqliteFKDatabase(SqliteDatabase):
+        def initialize_connection(self, conn):
+            self.execute_sql('PRAGMA foreign_keys=ON;')
+
 .. _advanced_connection_management:
 
 Advanced Connection Management

@@ -7,6 +7,7 @@ try:
 except ImportError:
     from queue import Queue
 
+from peewee import SqliteDatabase
 from playhouse.tests.base import compiler
 from playhouse.tests.base import database_class
 from playhouse.tests.base import ModelTestCase
@@ -319,3 +320,29 @@ class TestOuterLoopInnerCommit(ModelTestCase):
         test_db.commit()
         count = new_db.execute_sql('select count(*) from blog;').fetchone()
         self.assertEqual(count[0], 3)
+
+
+class TestConnectionInitialization(PeeweeTestCase):
+    def test_initialize_connection(self):
+        state = {'initialized': 0}
+
+        class TestDatabase(SqliteDatabase):
+            def initialize_connection(self, conn):
+                state['initialized'] += 1
+
+                # Ensure we can execute a query at this point.
+                self.execute_sql('pragma stats;').fetchone()
+
+        db = TestDatabase(':memory:')
+        self.assertFalse(state['initialized'])
+
+        conn = db.get_conn()
+        self.assertEqual(state['initialized'], 1)
+
+        # Since a conn is already open, this will return the existing conn.
+        conn = db.get_conn()
+        self.assertEqual(state['initialized'], 1)
+
+        db.close()
+        db.connect()
+        self.assertEqual(state['initialized'], 2)

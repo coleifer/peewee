@@ -1677,6 +1677,18 @@ Database and its subclasses
             If you initialized with ``threadlocals=True``, only a connection local
             to the calling thread will be closed.
 
+    .. py:method:: initialize_connection(conn)
+
+        Perform additional intialization on a newly-opened connection. For example, if you are using SQLite you may want to enable foreign key constraint enforcement (off by default).
+
+        Here is how you might use this hook to enable foreign key enforcement on SQLite:
+
+        .. code-block:: python
+
+            class SqliteFKDatabase(SqliteDatabase):
+                def initialize_connection(self, conn):
+                    self.execute_sql('PRAGMA foreign_keys=ON;')
+
     .. py:method:: get_conn()
 
         :rtype: a connection to the database, creates one if does not exist

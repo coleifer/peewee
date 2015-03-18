@@ -2855,6 +2855,10 @@ class Database(object):
                     self.database,
                     **self.connect_kwargs)
                 self.__local.closed = False
+                self.initialize_connection(self.__local.conn)
+
+    def initialize_connection(self, conn):
+        pass
 
     def close(self):
         with self._conn_lock:
