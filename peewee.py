@@ -3069,7 +3069,8 @@ class SqliteDatabase(Database):
         conn.create_function('date_trunc', 2, _sqlite_date_trunc)
         conn.create_function('regexp', 2, _sqlite_regexp)
         if self._journal_mode:
-            self.execute_sql('PRAGMA journal_mode=%s;' % self._journal_mode)
+            cursor = conn.cursor()
+            cursor.execute('PRAGMA journal_mode=%s;' % self._journal_mode)
 
     def begin(self, lock_type='DEFERRED'):
         self.execute_sql('BEGIN %s' % lock_type, require_commit=False)
