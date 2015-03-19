@@ -444,6 +444,18 @@ To return rows in order, use the :py:meth:`~SelectQuery.order_by` method:
     2011-06-07 14:08:48
     2010-01-01 00:00:00
 
+You can also use ``+`` and ``-`` prefix operators to indicate ordering:
+
+.. code-block:: python
+
+    # The following queries are equivalent:
+    Tweet.select().order_by(Tweet.created_date.desc())
+
+    Tweet.select().order_by(-Tweet.created_date)  # Note the "-" prefix.
+
+    # Similarly you can use "+" to indicate ascending order:
+    User.select().order_by(+User.username)
+
 You can also order across joins. Assuming you want to order tweets by the username of the author, then by created_date:
 
 .. code-block:: pycon

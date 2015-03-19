@@ -918,8 +918,23 @@ Query Types
 
         .. code-block:: python
 
-            Tweet.select().join(User).order_by(
-                User.username, Tweet.created_date.desc())
+            query = (Tweet
+                     .select()
+                     .join(User)
+                     .order_by(
+                         User.username,
+                         Tweet.created_date.desc()))
+
+        You can also use ``+`` and ``-`` prefixes to indicate ascending or descending order if you prefer:
+
+        .. code-block:: python
+
+            query = (Tweet
+                     .select()
+                     .join(User)
+                     .order_by(
+                         +User.username,
+                         -Tweet.created_date))
 
         A more complex example ordering users by the number of tweets made (greatest
         to least), then ordered by username in the event of a tie:
