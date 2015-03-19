@@ -522,6 +522,21 @@ class TestSelectQuery(PeeweeTestCase):
             'FROM "users" AS users ORDER BY ("users"."id" * ?)',
             [5]))
 
+    def test_ordering_sugar(self):
+        sq = User.select().order_by(-User.username)
+        self.assertOrderBy(sq, '"users"."username" DESC', [])
+
+        sq = User.select().order_by(+User.username)
+        self.assertOrderBy(sq, '"users"."username" ASC', [])
+
+        sq = User.select().join(Blog).order_by(
+            +User.username,
+            -Blog.title)
+        self.assertOrderBy(
+            sq,
+            '"users"."username" ASC, "blog"."title" DESC',
+            [])
+
     def test_from_subquery(self):
         # e.g. annotate the number of blogs per user, then annotate the number
         # of users with that number of blogs.
