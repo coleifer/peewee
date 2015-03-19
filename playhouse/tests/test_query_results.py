@@ -29,11 +29,26 @@ class TestQueryResultWrapper(ModelTestCase):
             another_iter = [u.username for u in qr]
             self.assertEqual(another_iter, ['u%d' % i for i in range(1, 11)])
 
+    def test_iteration_protocol(self):
+        User.create_users(3)
+
+        with self.assertQueryCount(1):
+            query = User.select().order_by(User.id)
+            qr = query.execute()
+            for user in qr:
+                pass
+
+            self.assertRaises(StopIteration, next, qr)
+            self.assertEqual([u.username for u in qr], ['u1', 'u2', 'u3'])
+            self.assertEqual(query[0].username, 'u1')
+            self.assertEqual(query[2].username, 'u3')
+            self.assertRaises(StopIteration, next, qr)
+
     def test_iterator(self):
         User.create_users(10)
 
         with self.assertQueryCount(1):
-            qr = User.select().execute()
+            qr = User.select().order_by(User.id).execute()
             usernames = [u.username for u in qr.iterator()]
             self.assertEqual(usernames, ['u%d' % i for i in range(1, 11)])
 
@@ -53,7 +68,7 @@ class TestQueryResultWrapper(ModelTestCase):
         User.create_users(10)
 
         with self.assertQueryCount(1):
-            qr = User.select()
+            qr = User.select().order_by(User.id)
             usernames = [u.username for u in qr.iterator()]
             self.assertEqual(usernames, ['u%d' % i for i in range(1, 11)])
 
@@ -127,6 +142,8 @@ class TestQueryResultWrapper(ModelTestCase):
             qr.fill_cache(21)
             self.assertTrue(qr._populated)
             assertUsernames(qr, 20)
+
+            self.assertRaises(StopIteration, next, qr)
 
     def test_select_related(self):
         u1 = User.create(username='u1')

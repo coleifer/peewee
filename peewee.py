@@ -1837,6 +1837,8 @@ class QueryResultWrapper(object):
             inst = self._result_cache[self.__idx]
             self.__idx += 1
             return inst
+        elif self._populated:
+            raise StopIteration
 
         obj = self.iterate()
         self._result_cache.append(obj)
