@@ -390,6 +390,12 @@ class Node(object):
     def desc(self):
         self._ordering = 'DESC'
 
+    def __pos__(self):
+        return self.asc()
+
+    def __neg__(self):
+        return self.desc()
+
     def _e(op, inv=False):
         """
         Lightweight factory which returns a method that builds an Expression
