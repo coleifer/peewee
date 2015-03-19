@@ -161,7 +161,12 @@ class Table(object):
         return iter(self.find().iterator())
 
     def _create_model(self):
-        return type(str(self.name), (self.dataset._base_model,), {})
+        class Meta:
+            db_table = self.name
+        return type(
+            str(self.name),
+            (self.dataset._base_model,),
+            {'Meta': Meta})
 
     def create_index(self, columns, unique=False):
         self.dataset._database.create_index(

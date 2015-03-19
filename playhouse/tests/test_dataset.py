@@ -54,6 +54,21 @@ class TestDataSet(PeeweeTestCase):
         for i in range(min(n, len(self.names))):
             user.insert(username=self.names[i])
 
+    def test_case_insensitive(self):
+        db.execute_sql('CREATE TABLE "SomeTable" (data TEXT);')
+        tables = sorted(self.dataset.tables)
+        self.assertEqual(tables, ['SomeTable', 'category', 'note', 'user'])
+
+        table = self.dataset['HueyMickey']
+        self.assertEqual(table.model_class._meta.db_table, 'HueyMickey')
+        tables = sorted(self.dataset.tables)
+        self.assertEqual(
+            tables,
+            ['HueyMickey', 'SomeTable', 'category', 'note', 'user'])
+
+        # Subsequent lookup succeeds.
+        self.dataset['HueyMickey']
+
     def test_introspect(self):
         tables = sorted(self.dataset.tables)
         self.assertEqual(tables, ['category', 'note', 'user'])
