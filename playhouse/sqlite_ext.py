@@ -193,6 +193,12 @@ class VirtualCharField(_VirtualFieldMixin, CharField):
 class VirtualFloatField(_VirtualFieldMixin, FloatField):
     pass
 
+class RowIDField(_VirtualFieldMixin, PrimaryKeyField):
+    def add_to_class(self, model_class, name):
+        if name != 'rowid':
+            raise ValueError('RowIDField must be named `rowid`.')
+        return super(RowIDField, self).add_to_class(model_class, name)
+
 def ClosureTable(model_class, foreign_key=None):
     """Model factory for the transitive closure extension."""
     if foreign_key is None:

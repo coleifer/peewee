@@ -9,6 +9,7 @@ from peewee import *
 from peewee import print_
 from playhouse.sqlite_ext import *
 from playhouse.tests.base import database_initializer
+from playhouse.tests.base import ModelTestCase
 from playhouse.tests.base import PeeweeTestCase
 from playhouse.tests.base import skip_if
 
@@ -103,6 +104,10 @@ class Values(BaseExtModel):
     klass = IntegerField()
     value = FloatField()
     weight = FloatField()
+
+class RowIDModel(BaseExtModel):
+    rowid = RowIDField()
+    data = IntegerField()
 
 
 class TestVirtualModel(VirtualModel):
@@ -527,6 +532,39 @@ class SqliteExtTestCase(PeeweeTestCase):
         res = conn2.execute('select message from post order by message;')
         self.assertEqual([x[0] for x in res.fetchall()], [
             'p2', 'p2', 'p4'])
+
+
+class TestRowIDField(ModelTestCase):
+    requires = [RowIDModel]
+
+    def test_model_meta(self):
+        self.assertEqual(RowIDModel._meta.get_field_names(), ['data'])
+        self.assertEqual(RowIDModel._meta.primary_key.name, 'rowid')
+        self.assertTrue(RowIDModel._meta.auto_increment)
+
+    def test_rowid_field(self):
+        r1 = RowIDModel.create(data=10)
+        self.assertEqual(r1.rowid, 1)
+        self.assertEqual(r1.data, 10)
+
+        r2 = RowIDModel.create(data=20)
+        self.assertEqual(r2.rowid, 2)
+        self.assertEqual(r2.data, 20)
+
+        query = RowIDModel.select().where(RowIDModel.rowid == 2)
+        sql, params = query.sql()
+        self.assertEqual(sql, (
+            'SELECT "t1"."data" '
+            'FROM "rowidmodel" AS t1 '
+            'WHERE ("t1"."rowid" = ?)'))
+        self.assertEqual(params, [2])
+        r_db = query.get()
+        self.assertEqual(r_db.rowid, None)
+        self.assertEqual(r_db.data, 20)
+
+        r_db2 = query.select(RowIDModel.rowid, RowIDModel.data).get()
+        self.assertEqual(r_db2.rowid, 2)
+        self.assertEqual(r_db2.data, 20)
 
 
 class TestTransitiveClosure(PeeweeTestCase):
