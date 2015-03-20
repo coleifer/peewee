@@ -1173,6 +1173,12 @@ class ForeignKeyField(IntegerField):
             value = value._get_pk_value()
         return self.to_field.db_value(value)
 
+    def __getattr__(self, attr):
+        try:
+            return self.rel_model._meta.fields[attr]
+        except KeyError:
+            raise AttributeError(attr)
+
 
 class CompositeKey(object):
     """A primary key composed of multiple columns."""
