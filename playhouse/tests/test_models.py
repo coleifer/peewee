@@ -1,10 +1,12 @@
 # encoding=utf-8
 
-from playhouse.tests.base import ulit
+from peewee import *
 from playhouse.tests.base import compiler
+from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
 from playhouse.tests.base import normal_compiler
 from playhouse.tests.base import PeeweeTestCase
+from playhouse.tests.base import skip_unless
 from playhouse.tests.base import test_db
 from playhouse.tests.base import ulit
 from playhouse.tests.models import *
@@ -1221,3 +1223,92 @@ class TestAliasBehavior(ModelTestCase):
         sql, params = compiler.generate_select(query)
         self.assertEqual(sql, expected)
         self.assertEqual(params, ['FOO'])
+
+
+@skip_unless(lambda: isinstance(test_db, PostgresqlDatabase))
+class TestInsertReturningModelAPI(PeeweeTestCase):
+    def setUp(self):
+        super(TestInsertReturningModelAPI, self).setUp()
+
+        self.db = database_initializer.get_database(
+            'postgres',
+            PostgresqlDatabase)
+
+        class BaseModel(TestModel):
+            class Meta:
+                database = self.db
+
+        self.BaseModel = BaseModel
+        self.models = []
+
+    def tearDown(self):
+        if self.models:
+            self.db.drop_tables(self.models, True)
+        super(TestInsertReturningModelAPI, self).tearDown()
+
+    def test_insert_returning(self):
+        class User(self.BaseModel):
+            username = CharField()
+            class Meta:
+                db_table = 'users'
+
+        self.models.append(User)
+        User.create_table()
+
+        query = User.insert(username='charlie')
+        sql, params = query.sql()
+        self.assertEqual(sql, (
+            'INSERT INTO "users" ("username") VALUES (%s) RETURNING "id"'))
+        self.assertEqual(params, ['charlie'])
+
+        result = query.execute()
+        charlie = User.get(User.username == 'charlie')
+        self.assertEqual(result, charlie.id)
+
+        result2 = User.insert(username='huey').execute()
+        self.assertTrue(result2 > result)
+        huey = User.get(User.username == 'huey')
+        self.assertEqual(result2, huey.id)
+
+        mickey = User.create(username='mickey')
+        self.assertEqual(mickey.id, huey.id + 1)
+        mickey.save()
+        self.assertEqual(User.select().count(), 3)
+
+    def test_non_int_pk(self):
+        class User(self.BaseModel):
+            username = CharField(primary_key=True)
+            data = IntegerField()
+            class Meta:
+                db_table = 'users'
+
+        self.models.append(User)
+        User.create_table()
+
+        query = User.insert(username='charlie', data=1337)
+        sql, params = query.sql()
+        self.assertEqual(sql, (
+            'INSERT INTO "users" ("username", "data") '
+            'VALUES (%s, %s) RETURNING "username"'))
+        self.assertEqual(params, ['charlie', 1337])
+
+        self.assertEqual(query.execute(), 'charlie')
+        charlie = User.get(User.data == 1337)
+        self.assertEqual(charlie.username, 'charlie')
+
+        huey = User.create(username='huey', data=1024)
+        self.assertEqual(huey.username, 'huey')
+        self.assertEqual(huey.data, 1024)
+
+        huey_db = User.get(User.data == 1024)
+        self.assertEqual(huey_db.username, 'huey')
+        huey_db.save()
+        self.assertEqual(huey_db.username, 'huey')
+
+        self.assertEqual(User.select().count(), 2)
+
+    def test_composite_key(self):
+        pass
+
+    def test_insert_many(self):
+        pass
