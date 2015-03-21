@@ -1308,7 +1308,63 @@ class TestInsertReturningModelAPI(PeeweeTestCase):
         self.assertEqual(User.select().count(), 2)
 
     def test_composite_key(self):
-        pass
+        class Person(self.BaseModel):
+            first = CharField()
+            last = CharField()
+            data = IntegerField()
+
+            class Meta:
+                primary_key = CompositeKey('first', 'last')
+
+        self.models.append(Person)
+        Person.create_table()
+
+        query = Person.insert(first='huey', last='leifer', data=3)
+        sql, params = query.sql()
+        self.assertEqual(sql, (
+            'INSERT INTO "person" ("first", "last", "data") '
+            'VALUES (%s, %s, %s) RETURNING "first", "last"'))
+        self.assertEqual(params, ['huey', 'leifer', 3])
+
+        res = query.execute()
+        self.assertEqual(res, ('huey', 'leifer'))
+
+        huey = Person.get(Person.data == 3)
+        self.assertEqual(huey.first, 'huey')
+        self.assertEqual(huey.last, 'leifer')
+
+        zaizee = Person.create(first='zaizee', last='owen', data=2)
+        self.assertEqual(zaizee.first, 'zaizee')
+        self.assertEqual(zaizee.last, 'owen')
+
+        z_db = Person.get(Person.data == 2)
+        self.assertEqual(z_db.first, 'zaizee')
+        self.assertEqual(z_db.last, 'owen')
+        z_db.save()
+
+        self.assertEqual(Person.select().count(), 2)
 
     def test_insert_many(self):
-        pass
+        class User(self.BaseModel):
+            username = CharField()
+            class Meta:
+                db_table = 'users'
+
+        self.models.append(User)
+        User.create_table()
+
+        usernames = ['charlie', 'huey', 'zaizee']
+        data = [{'username': username} for username in usernames]
+
+        query = User.insert_many(data)
+        sql, params = query.sql()
+        self.assertEqual(sql, (
+            'INSERT INTO "users" ("username") '
+            'VALUES (%s), (%s), (%s)'))
+        self.assertEqual(params, usernames)
+
+        res = query.execute()
+        self.assertEqual(User.select().count(), 3)
+        _, _, z = User.select().order_by(User.username)
+        self.assertEqual(res, z.id)
+        self.assertEqual(z.username, 'zaizee')
