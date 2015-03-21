@@ -1633,12 +1633,13 @@ class QueryCompiler(object):
 
         return self.build_query(clauses, alias_map)
 
-    def _get_field_clause(self, fields):
-        return EnclosedClause(*[
+    def _get_field_clause(self, fields, clause_type=EnclosedClause):
+        return clause_type(*[
             field._as_entity(with_table=False) for field in fields])
 
     def generate_insert(self, query):
         model = query.model_class
+        meta = model._meta
         alias_map = self.alias_map_class()
         alias_map.add(model, model._meta.db_table)
         statement = query._upsert and 'INSERT OR REPLACE INTO' or 'INSERT INTO'
@@ -1674,6 +1675,13 @@ class QueryCompiler(object):
                     self._get_field_clause(fields),
                     SQL('VALUES'),
                     CommaClause(*value_clauses)])
+
+        if meta.database.insert_returning and not query._is_multi_row_insert:
+            clauses.extend([
+                SQL('RETURNING'),
+                self._get_field_clause(
+                    meta.get_primary_key_fields(),
+                    clause_type=CommaClause)])
 
         return self.build_query(clauses, alias_map)
 
@@ -1729,7 +1737,7 @@ class QueryCompiler(object):
         meta = model_class._meta
 
         columns, constraints = [], []
-        if isinstance(meta.primary_key, CompositeKey):
+        if meta.composite_key:
             pk_cols = [meta.fields[f]._as_entity()
                        for f in meta.primary_key.field_names]
             constraints.append(Clause(
@@ -2050,7 +2058,7 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
             self._initialized = True
 
         def _get_pk(instance):
-            if isinstance(instance._meta.primary_key, CompositeKey):
+            if instance._meta.composite_key:
                 return tuple([
                     instance._data[field_name]
                     for field_name in instance._meta.primary_key.field_names])
@@ -2736,7 +2744,15 @@ class InsertQuery(Query):
                                .upsert(self._upsert)
                                .execute())
                 return last_id
-        return self.database.last_insert_id(self._execute(), self.model_class)
+
+        cursor = self._execute()
+        if self.database.insert_returning and not self._is_multi_row_insert:
+            pk_row = cursor.fetchone()
+            if self.model_class._meta.composite_key:
+                return pk_row
+            return pk_row[0]
+        else:
+            return self.database.last_insert_id(cursor, self.model_class)
 
 class DeleteQuery(Query):
     join = not_allowed('joining')
@@ -2808,6 +2824,7 @@ class Database(object):
     for_update = False
     for_update_nowait = False
     insert_many = True
+    insert_returning = False
     interpolation = '?'
     limit_max = None
     op_overrides = {}
@@ -3158,6 +3175,7 @@ class PostgresqlDatabase(Database):
     }
     for_update = True
     for_update_nowait = True
+    insert_returning = True
     interpolation = '%s'
     op_overrides = {
         OP.REGEXP: '~',
@@ -3600,6 +3618,7 @@ class ModelOptions(object):
         self.validate_backrefs = validate_backrefs
 
         self.auto_increment = None
+        self.composite_key = False
         self.rel = {}
         self.reverse_rel = {}
 
@@ -3652,6 +3671,13 @@ class ModelOptions(object):
             if field_name == field.name:
                 return i
         return -1
+
+    def get_primary_key_fields(self):
+        if self.composite_key:
+            return [
+                self.fields[field_name]
+                for field_name in self.primary_key.field_names]
+        return [self.primary_key]
 
     def rel_for_model(self, model, field_obj=None):
         is_field = isinstance(field_obj, Field)
@@ -3747,6 +3773,7 @@ class BaseModel(type):
                 else:
                     fields.append((attr, name))
 
+        composite_key = False
         if model_pk is None:
             if parent_pk:
                 model_pk, pk_name = parent_pk, parent_pk.name
@@ -3754,6 +3781,7 @@ class BaseModel(type):
                 model_pk, pk_name = PrimaryKeyField(primary_key=True), 'id'
         elif isinstance(model_pk, CompositeKey):
             pk_name = '_composite_key'
+            composite_key = True
 
         if model_pk is not False:
             model_pk.add_to_class(cls, pk_name)
@@ -3761,6 +3789,7 @@ class BaseModel(type):
             cls._meta.auto_increment = (
                 isinstance(model_pk, PrimaryKeyField) or
                 bool(model_pk.sequence))
+            cls._meta.composite_key = composite_key
 
         for field, name in fields:
             field.add_to_class(cls, name)
@@ -3929,7 +3958,8 @@ class Model(with_metaclass(BaseModel)):
     get_id = _get_pk_value  # Backwards-compatibility.
 
     def _set_pk_value(self, value):
-        setattr(self, self._meta.primary_key.name, value)
+        if not self._meta.composite_key:
+            setattr(self, self._meta.primary_key.name, value)
     set_id = _set_pk_value  # Backwards-compatibility.
 
     def _pk_expr(self):
@@ -3955,7 +3985,7 @@ class Model(with_metaclass(BaseModel)):
         if only:
             field_dict = self._prune_fields(field_dict, only)
         if self._get_pk_value() is not None and not force_insert:
-            if isinstance(pk_field, CompositeKey):
+            if self._meta.composite_key:
                 for pk_part_name in pk_field.field_names:
                     field_dict.pop(pk_part_name, None)
             else:
