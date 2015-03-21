@@ -277,6 +277,10 @@ def skip_if(expression):
     return decorator
 
 
+def skip_unless(expression):
+    return skip_if(lambda: not expression())
+
+
 class QueryLogger(object):
     def __init__(self, test_case):
         self.test_case = test_case

@@ -13,7 +13,7 @@ from playhouse.tests.base import database_class
 from playhouse.tests.base import ModelTestCase
 from playhouse.tests.base import PeeweeTestCase
 from playhouse.tests.base import query_db
-from playhouse.tests.base import skip_if
+from playhouse.tests.base import skip_unless
 from playhouse.tests.base import test_db
 from playhouse.tests.base import ulit
 from playhouse.tests.models import *
@@ -178,7 +178,7 @@ class TestConnectionState(PeeweeTestCase):
         self.assertFalse(test_db.is_closed())
 
 
-@skip_if(lambda: not test_db.drop_cascade)
+@skip_unless(lambda: test_db.drop_cascade)
 class TestDropTableCascade(ModelTestCase):
     requires = [User, Blog]
 
@@ -194,7 +194,7 @@ class TestDropTableCascade(ModelTestCase):
         Blog.create(user=-1, title='b2')
 
 
-@skip_if(lambda: not test_db.sequences)
+@skip_unless(lambda: test_db.sequences)
 class TestDatabaseSequences(ModelTestCase):
     requires = [SeqModelA, SeqModelB]
 
@@ -211,7 +211,7 @@ class TestDatabaseSequences(ModelTestCase):
         self.assertEqual(b2.id, a3.id - 1)
 
 
-@skip_if(lambda: not issubclass(database_class, PostgresqlDatabase))
+@skip_unless(lambda: issubclass(database_class, PostgresqlDatabase))
 class TestUnicodeConversion(ModelTestCase):
     requires = [User]
 
@@ -254,7 +254,7 @@ class TestUnicodeConversion(ModelTestCase):
         self.assertEqual(u.username, self.user.username)
 
 
-@skip_if(lambda: not issubclass(database_class, PostgresqlDatabase))
+@skip_unless(lambda: issubclass(database_class, PostgresqlDatabase))
 class TestPostgresqlSchema(ModelTestCase):
     requires = [PGSchema]
 
@@ -272,7 +272,7 @@ class TestPostgresqlSchema(ModelTestCase):
         self.assertEqual(pgs.id, pgs_db.id)
 
 
-@skip_if(lambda: not isinstance(test_db, SqliteDatabase))
+@skip_unless(lambda: isinstance(test_db, SqliteDatabase))
 class TestOuterLoopInnerCommit(ModelTestCase):
     requires = [User, Blog]
 
