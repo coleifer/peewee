@@ -10,6 +10,7 @@ from playhouse.tests.base import normal_compiler
 from playhouse.tests.base import PeeweeTestCase
 from playhouse.tests.base import skip_if
 from playhouse.tests.base import test_db
+from playhouse.tests.base import TestDatabase
 from playhouse.tests.base import TestModel
 from playhouse.tests.models import *
 
@@ -940,6 +941,82 @@ class TestInsertQuery(PeeweeTestCase):
         sql, params = compiler.generate_insert(query)
         self.assertEqual(sql, (
             'INSERT OR REPLACE INTO "users" ("username") VALUES (?)'))
+
+
+class TestInsertReturning(PeeweeTestCase):
+    def setUp(self):
+        super(TestInsertReturning, self).setUp()
+
+        class TestReturningDatabase(TestDatabase):
+            insert_returning = True
+
+        db = TestReturningDatabase(':memory:')
+        self.rc = db.compiler()
+
+        class BaseModel(TestModel):
+            class Meta:
+                database = db
+
+        self.BaseModel = BaseModel
+
+    def assertInsertSQL(self, insert_query, sql, params=None):
+        qsql, qparams = self.rc.generate_insert(insert_query)
+        self.assertEqual(qsql, sql)
+        self.assertEqual(qparams, params or [])
+
+    def test_insert_returning(self):
+        class User(self.BaseModel):
+            username = CharField()
+
+        self.assertInsertSQL(
+            User.insert(username='charlie'),
+            'INSERT INTO "user" ("username") VALUES (?) RETURNING "id"',
+            ['charlie'])
+
+    def test_insert_non_int_pk(self):
+        class User(self.BaseModel):
+            username = CharField(primary_key=True)
+            data = TextField(default='')
+
+        self.assertInsertSQL(
+            User.insert(username='charlie'),
+            ('INSERT INTO "user" ("username", "data") '
+             'VALUES (?, ?) RETURNING "username"'),
+            ['charlie', ''])
+
+    def test_insert_composite_key(self):
+        class Person(self.BaseModel):
+            first = CharField()
+            last = CharField()
+            dob = DateField()
+            email = CharField()
+
+            class Meta:
+                primary_key = CompositeKey('first', 'last', 'dob')
+
+        self.assertInsertSQL(
+            Person.insert(
+                first='huey',
+                last='leifer',
+                dob='05/01/2011',
+                email='huey@kitties.cat'),
+            ('INSERT INTO "person" '
+             '("first", "last", "dob", "email") '
+             'VALUES (?, ?, ?, ?) '
+             'RETURNING "first", "last", "dob"'),
+            ['huey', 'leifer', '05/01/2011', 'huey@kitties.cat'])
+
+    def test_insert_many(self):
+        class User(self.BaseModel):
+            username = CharField()
+
+        data = [{'username': 'user-%s' % i} for i in range(3)]
+        # Bulk inserts do not ask for returned primary keys.
+        self.assertInsertSQL(
+            User.insert_many(data),
+            'INSERT INTO "user" ("username") VALUES (?), (?), (?)',
+            ['user-0', 'user-1', 'user-2'])
+
 
 class TestDeleteQuery(PeeweeTestCase):
     def test_where(self):
