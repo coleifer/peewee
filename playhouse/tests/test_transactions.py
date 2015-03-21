@@ -349,7 +349,8 @@ class TestAutoRollback(ModelTestCase):
                 # Subsequent call will raise an InternalError with postgres.
                 self.assertTrue(isinstance(exc, InternalError))
             else:
-                self.assertFalse(database_class is PostgresqlDatabase)
+                self.assertFalse(
+                    issubclass(database_class, PostgresqlDatabase))
 
         # New transactions are not affected.
         self.test_auto_rollback()
@@ -360,7 +361,7 @@ class TestAutoRollback(ModelTestCase):
         # Will not be rolled back.
         self.assertRaises(IntegrityError, Blog.create)
 
-        if database_class is PostgresqlDatabase:
+        if issubclass(database_class, PostgresqlDatabase):
             self.assertRaises(InternalError, User.create, username='u')
 
         test_db.rollback()

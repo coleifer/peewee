@@ -211,7 +211,7 @@ class TestDatabaseSequences(ModelTestCase):
         self.assertEqual(b2.id, a3.id - 1)
 
 
-@skip_if(lambda: database_class is not PostgresqlDatabase)
+@skip_if(lambda: not issubclass(database_class, PostgresqlDatabase))
 class TestUnicodeConversion(ModelTestCase):
     requires = [User]
 
@@ -254,7 +254,7 @@ class TestUnicodeConversion(ModelTestCase):
         self.assertEqual(u.username, self.user.username)
 
 
-@skip_if(lambda: database_class is not PostgresqlDatabase)
+@skip_if(lambda: not issubclass(database_class, PostgresqlDatabase))
 class TestPostgresqlSchema(ModelTestCase):
     requires = [PGSchema]
 

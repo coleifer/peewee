@@ -45,6 +45,10 @@ if TEST_VERBOSITY > 1:
     logger.addHandler(handler)
 
 
+class TestPostgresqlDatabase(PostgresqlDatabase):
+    insert_returning = False
+
+
 class DatabaseInitializer(object):
     def __init__(self, backend, database_name):
         self.backend = self.normalize(backend)
@@ -65,7 +69,7 @@ class DatabaseInitializer(object):
 
     def get_database_class(self, backend=None):
         mapping = {
-            'postgres': PostgresqlDatabase,
+            'postgres': TestPostgresqlDatabase,
             'sqlite': SqliteDatabase,
             'mysql': MySQLDatabase,
         }

@@ -20,13 +20,17 @@ from playhouse.tests.base import PeeweeTestCase
 from playhouse.tests.base import skip_if
 
 
+class TestPostgresqlExtDatabase(PostgresqlExtDatabase):
+    insert_returning = False
+
+
 PYPY = 'PyPy' in sys.version
 test_db = database_initializer.get_database(
     'postgres',
-    db_class=PostgresqlExtDatabase)
+    db_class=TestPostgresqlExtDatabase)
 test_ss_db = database_initializer.get_database(
     'postgres',
-    db_class=PostgresqlExtDatabase,
+    db_class=TestPostgresqlExtDatabase,
     server_side_cursors=True,
     user='postgres')
 
