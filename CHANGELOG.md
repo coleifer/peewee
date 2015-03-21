@@ -5,6 +5,38 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.5.0
+
+There are a couple new features so I thought I'd bump to 2.5.x. One change Postgres users may be happy to see is the use of `INSERT ... RETURNING` to perform inserts. This should definitely speed up inserts for Postgres, since an extra query is no longer needed to get the new auto-generated primary key.
+
+I also added a [new context manager/decorator](http://docs.peewee-orm.com/en/latest/peewee/database.html#using-multiple-databases) that allows you to use a different database for the duration of the wrapped block.
+
+### Bugs fixed
+
+* #534, CSV utils was erroneously stripping the primary key from CSV data.
+* #537, fix upserts when using `insert_many`.
+* #541, respect `autorollback` with `PostgresqlExtDatabase`. Thanks @davidmcclure.
+* #551, fix for QueryResultWrapper's implementation of the iterator protocol.
+* #554, allow SQLite journal_mode to be set at run-time.
+* Fixed case-sensitivity issue with `DataSet`.
+
+### New features
+
+* Added support for [CAST expressions](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#cast).
+* Added a hook for [extending Node](http://docs.peewee-orm.com/en/latest/peewee/api.html#Node.extend) with custom methods.
+* `JOIN_<type>` became `JOIN.<type>`, e.g. `.join(JOIN.LEFT_OUTER)`.
+* `OP_<code>` became `OP.<code>`.
+* #556, allowed using `+` and `-` prefixes to indicate ascending/descending ordering.
+* #550, added [Database.initialize_connection()](http://docs.peewee-orm.com/en/latest/peewee/database.html#additional-connection-initialization) hook.
+* #549, bind selected columns to a particular model. Thanks @jhorman, nice PR!
+* #531, support for swapping databases at run-time via [Using](http://docs.peewee-orm.com/en/latest/peewee/database.html#using-multiple-databases).
+* #530, support for SQLCipher and Python3.
+* New `RowIDField` for `sqlite_ext` playhouse module. This field can be used to interact with SQLite `rowid` fields.
+* Added `LateralJoin` helper to the `postgres_ext` playhouse module.
+* New [example blog app](https://github.com/coleifer/peewee/tree/master/examples/blog).
+
+[View commits](https://github.com/coleifer/peewee/compare/2.4.7...2.5.0)
+
 ## 2.4.7
 
 ### Bugs fixed
