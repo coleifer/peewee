@@ -2746,13 +2746,21 @@ class InsertQuery(Query):
                 return last_id
 
         cursor = self._execute()
-        if self.database.insert_returning and not self._is_multi_row_insert:
-            pk_row = cursor.fetchone()
-            if self.model_class._meta.composite_key:
-                return pk_row
-            return pk_row[0]
+        if not self._is_multi_row_insert:
+            if self.database.insert_returning:
+                pk_row = cursor.fetchone()
+                meta = self.model_class._meta
+                clean_data = [
+                    field.python_value(column)
+                    for field, column
+                    in zip(meta.get_primary_key_fields(), pk_row)]
+                if self.model_class._meta.composite_key:
+                    return clean_data
+                return clean_data[0]
+            else:
+                return self.database.last_insert_id(cursor, self.model_class)
         else:
-            return self.database.last_insert_id(cursor, self.model_class)
+            return True
 
 class DeleteQuery(Query):
     join = not_allowed('joining')

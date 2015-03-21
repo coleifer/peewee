@@ -1327,7 +1327,7 @@ class TestInsertReturningModelAPI(PeeweeTestCase):
         self.assertEqual(params, ['huey', 'leifer', 3])
 
         res = query.execute()
-        self.assertEqual(res, ('huey', 'leifer'))
+        self.assertEqual(res, ['huey', 'leifer'])
 
         huey = Person.get(Person.data == 3)
         self.assertEqual(huey.first, 'huey')
@@ -1364,7 +1364,7 @@ class TestInsertReturningModelAPI(PeeweeTestCase):
         self.assertEqual(params, usernames)
 
         res = query.execute()
+        self.assertTrue(res is True)
         self.assertEqual(User.select().count(), 3)
-        _, _, z = User.select().order_by(User.username)
-        self.assertEqual(res, z.id)
+        z = User.select().order_by(-User.username).get()
         self.assertEqual(z.username, 'zaizee')
