@@ -1636,6 +1636,10 @@ Database and its subclasses
 
         Whether the database supports multiple ``VALUES`` clauses for ``INSERT`` queries.
 
+    .. py:attribute:: insert_returning = False
+
+        Whether the database supports returning the primary key for newly inserted rows.
+
     .. py:attribute:: interpolation = '?'
 
         The string used by the driver to interpolate query parameters
@@ -2062,6 +2066,8 @@ Database and its subclasses
     .. py:attribute:: for_update = True
 
     .. py:attribute:: for_update_nowait = True
+
+    .. py:attribute:: insert_returning = True
 
     .. py:attribute:: sequences = True
 
