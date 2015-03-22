@@ -1,4 +1,4 @@
-from collections import namedtuple
+from collections import namedtuple, OrderedDict
 import re
 
 from peewee import *
@@ -135,7 +135,7 @@ class Metadata(object):
         return self.database.execute_sql(sql, params)
 
     def get_columns(self, table, schema=None):
-        metadata = dict(
+        metadata = OrderedDict(
             (metadata.name, metadata)
             for metadata in self.database.get_columns(table, schema))
 
@@ -149,7 +149,7 @@ class Metadata(object):
             if column_types[pk] is IntegerField:
                 column_types[pk] = PrimaryKeyField
 
-        columns = {}
+        columns = OrderedDict()
         for name, column_data in metadata.items():
             columns[name] = Column(
                 name,

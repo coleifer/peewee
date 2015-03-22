@@ -69,9 +69,12 @@ def print_models(introspector, tables=None):
                     _print_table(dest, seen, accum + [table])
 
         print_('class %s(BaseModel):' % database.model_names[table])
-        columns = database.columns[table]
+        columns = database.columns[table].items()
+        if not options.order_preserved:
+            columns = sorted(columns)  # order model columns alphabetically
         primary_keys = database.primary_keys[table]
-        for name, column in sorted(columns.items()):
+
+        for name, column in columns:
             skip = all([
                 name == 'id',
                 len(primary_keys) == 1,
@@ -92,7 +95,7 @@ def print_models(introspector, tables=None):
             print_('        schema = \'%s\'' % introspector.schema)
         if len(primary_keys) > 1:
             pk_field_names = sorted([
-                field.name for col, field in columns.items()
+                field.name for col, field in columns
                 if col in primary_keys])
             pk_list = ', '.join("'%s'" % pk for pk in pk_field_names)
             print_('        primary_key = CompositeKey(%s)' % pk_list)
@@ -138,6 +141,8 @@ def get_option_parser():
     ao('-i', '--info', dest='info', action='store_true',
        help=('Add database information and other metadata to top of the '
              'generated file.'))
+    ao('-o', '--order-preserved', action='store_true',
+       help=('Order columns in model definition to preserve order in source database'))
     return parser
 
 def get_connect_kwargs(options):
