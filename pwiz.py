@@ -42,7 +42,7 @@ def make_introspector(database_type, database_name, **kwargs):
     db = DatabaseClass(database_name, **kwargs)
     return Introspector.from_database(db, schema=schema)
 
-def print_models(introspector, tables=None):
+def print_models(introspector, tables=None, preserve_order=False):
     database = introspector.introspect()
 
     print_(TEMPLATE % (
@@ -70,7 +70,7 @@ def print_models(introspector, tables=None):
 
         print_('class %s(BaseModel):' % database.model_names[table])
         columns = database.columns[table].items()
-        if not options.order_preserved:
+        if not preserve_order:
             columns = sorted(columns)  # order model columns alphabetically
         primary_keys = database.primary_keys[table]
 
@@ -174,4 +174,4 @@ if __name__ == '__main__':
         cmd_line = ' '.join(raw_argv[1:])
         print_header(cmd_line, introspector)
 
-    print_models(introspector, tables)
+    print_models(introspector, tables, preserve_order=options.order_preserved)
