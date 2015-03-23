@@ -23,12 +23,12 @@ class User(BaseModel):
     username = CharField(primary_key=True)
 
 class Note(BaseModel):
-    user = ForeignKeyField(User)
+    user = ForeignKeyField(User)    # non-alphabetical order is important here
     text = TextField(index=True)
 
 class Category(BaseModel):
+    parent = ForeignKeyField('self', null=True) # non-alphabetical order is important here
     name = CharField(unique=True)
-    parent = ForeignKeyField('self', null=True)
 
 class capture_output(object):
     def __enter__(self):
@@ -40,7 +40,7 @@ class capture_output(object):
         self.data = self._buffer.getvalue()
         sys.stdout = self._stdout
 
-EXPECTED = """
+EXPECTED_HEAD = """
 from peewee import *
 
 database = SqliteDatabase('peewee_test.db', **{})
@@ -52,9 +52,15 @@ class BaseModel(Model):
     class Meta:
         database = database
 
-class Category(BaseModel):
-    name = CharField(unique=True)
-    parent = ForeignKeyField(db_column='parent_id', null=True, rel_model='self', to_field='id')
+class Category(BaseModel):"""
+
+EXPECTED_CAT_NAME = """
+    name = CharField(unique=True)"""
+
+EXPECTED_CAT_PARENT = """
+    parent = ForeignKeyField(db_column='parent_id', null=True, rel_model='self', to_field='id')"""
+
+EXPECTED_MID = """
 
     class Meta:
         db_table = 'category'
@@ -65,13 +71,35 @@ class User(BaseModel):
     class Meta:
         db_table = 'user'
 
-class Note(BaseModel):
-    text = TextField(index=True)
-    user = ForeignKeyField(db_column='user_id', rel_model=User, to_field='username')
+class Note(BaseModel):"""
+
+EXPECTED_NOTE_TEXT = """
+    text = TextField(index=True)"""
+
+EXPECTED_NOTE_USER = """
+    user = ForeignKeyField(db_column='user_id', rel_model=User, to_field='username')"""
+
+EXPECTED_NOTE_END = """
 
     class Meta:
         db_table = 'note'
-""".strip()
+"""
+
+EXPECTED = (EXPECTED_HEAD +
+            EXPECTED_CAT_NAME +
+            EXPECTED_CAT_PARENT +
+            EXPECTED_MID +
+            EXPECTED_NOTE_TEXT +
+            EXPECTED_NOTE_USER +
+            EXPECTED_NOTE_END).strip()
+
+EXPECTED_PRESERVE_ORDER =  (EXPECTED_HEAD +
+                            EXPECTED_CAT_PARENT +
+                            EXPECTED_CAT_NAME +
+                            EXPECTED_MID +
+                            EXPECTED_NOTE_USER +
+                            EXPECTED_NOTE_TEXT +
+                            EXPECTED_NOTE_END).strip()
 
 
 class TestPwiz(PeeweeTestCase):
@@ -92,6 +120,12 @@ class TestPwiz(PeeweeTestCase):
             print_models(self.introspector)
 
         self.assertEqual(output.data.strip(), EXPECTED)
+
+    def test_print_models_order_preserved(self):
+        with capture_output() as output:
+            print_models(self.introspector, preserve_order=True)
+
+        self.assertEqual(output.data.strip(), EXPECTED_PRESERVE_ORDER)
 
     def test_print_header(self):
         cmdline = '-i -e sqlite /path/to/database.db'
