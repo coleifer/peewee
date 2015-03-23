@@ -141,7 +141,7 @@ def get_option_parser():
     ao('-i', '--info', dest='info', action='store_true',
        help=('Add database information and other metadata to top of the '
              'generated file.'))
-    ao('-o', '--order-preserved', action='store_true',
+    ao('-o', '--order-preserved', action='store_true', dest='preserve_order',
        help=('Order columns in model definition to preserve order in source database'))
     return parser
 
@@ -156,7 +156,7 @@ if __name__ == '__main__':
     parser = get_option_parser()
     options, args = parser.parse_args()
 
-    if options.order_preserved:
+    if options.preserve_order:
         try:
             from collections import OrderedDict
         except ImportError:
@@ -181,4 +181,4 @@ if __name__ == '__main__':
         cmd_line = ' '.join(raw_argv[1:])
         print_header(cmd_line, introspector)
 
-    print_models(introspector, tables, preserve_order=options.order_preserved)
+    print_models(introspector, tables, preserve_order=options.preserve_order)
