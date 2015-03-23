@@ -156,6 +156,13 @@ if __name__ == '__main__':
     parser = get_option_parser()
     options, args = parser.parse_args()
 
+    if options.order_preserved:
+        try:
+            from collections import OrderedDict
+        except ImportError:
+            err('Preserve column order not supported for Python versions prior to 2.7')
+            sys.exit(1)
+
     if len(args) < 1:
         err('Missing required parameter "database"')
         parser.print_help()
