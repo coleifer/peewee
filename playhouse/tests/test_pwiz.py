@@ -126,10 +126,14 @@ class TestPwiz(PeeweeTestCase):
         self.assertEqual(output.data.strip(), EXPECTED)
 
     def test_print_models_order_preserved(self):
-        with capture_output() as output:
-            print_models(self.introspector, preserve_order=True)
+        try:
+            from collections import OrderedDict
+            with capture_output() as output:
+                print_models(self.introspector, preserve_order=True)
 
-        self.assertEqual(output.data.strip(), EXPECTED_PRESERVE_ORDER)
+            self.assertEqual(output.data.strip(), EXPECTED_PRESERVE_ORDER)
+        except ImportError:
+            pass  # Feature only supported for versions >= 2.7
 
     def test_print_header(self):
         cmdline = '-i -e sqlite /path/to/database.db'
