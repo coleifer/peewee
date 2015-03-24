@@ -101,7 +101,6 @@ EXPECTED_PRESERVE_ORDER =  (EXPECTED_HEAD +
                             EXPECTED_NOTE_TEXT +
                             EXPECTED_NOTE_END).strip()
 
-
 class TestPwiz(PeeweeTestCase):
     def setUp(self):
         super(TestPwiz, self).setUp()

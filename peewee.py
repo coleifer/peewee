@@ -3251,7 +3251,8 @@ class PostgresqlDatabase(Database):
         query = """
             SELECT column_name, is_nullable, data_type
             FROM information_schema.columns
-            WHERE table_name = %s AND table_schema = %s"""
+            WHERE table_name = %s AND table_schema = %s
+            ORDER BY ordinal_position"""
         cursor = self.execute_sql(query, (table, schema))
         pks = set(self.get_primary_keys(table, schema))
         return [ColumnMetadata(name, dt, null == 'YES', name in pks, table)
