@@ -89,7 +89,7 @@ __all__ = [
 # Set default logging handler to avoid "No handlers could be found for logger
 # "peewee"" warnings.
 try:  # Python 2.7+
-    from logging import NullHandler, StreamHandler
+    from logging import NullHandler
 except ImportError:
     class NullHandler(logging.Handler):
         def emit(self, record):
@@ -97,8 +97,7 @@ except ImportError:
 
 # All peewee-generated logs are logged to this namespace.
 logger = logging.getLogger('peewee')
-logger.addHandler(StreamHandler())
-logger.setLevel(logging.ERROR)
+logger.addHandler(NullHandler())
 
 # Python 2/3 compatibility helpers. These helpers are used internally and are
 # not exported.
@@ -1745,7 +1744,6 @@ class QueryCompiler(object):
                 SQL('PRIMARY KEY'), EnclosedClause(*pk_cols)))
         for field in meta.get_fields():
             columns.append(self.field_definition(field))
-            logger.debug("creating field {} with sort key {} in table {}".format(field, field._sort_key, model_class))
             if isinstance(field, ForeignKeyField) and not field.deferred:
                 constraints.append(self.foreign_key_constraint(field))
 

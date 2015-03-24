@@ -11,7 +11,7 @@ from pwiz import *
 from playhouse.tests.base import database_initializer
 from playhouse.tests.base import mock
 from playhouse.tests.base import PeeweeTestCase
-import logging
+
 
 db = database_initializer.get_database('sqlite')
 
@@ -112,10 +112,7 @@ class TestPwiz(PeeweeTestCase):
         if os.path.exists(db.database):
             os.unlink(db.database)
         db.connect()
-        logger = logging.getLogger("peewee")
-        logger.setLevel(logging.DEBUG)
         db.create_tables([User, Note, Category])
-        logger.setLevel(logging.ERROR)
         self.introspector = Introspector.from_database(db)
 
     def tearDown(self):
