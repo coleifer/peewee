@@ -40,7 +40,7 @@ class capture_output(object):
         self.data = self._buffer.getvalue()
         sys.stdout = self._stdout
 
-EXPECTED_HEAD = """
+EXPECTED = """
 from peewee import *
 
 database = SqliteDatabase('peewee_test.db', **{})
@@ -52,15 +52,9 @@ class BaseModel(Model):
     class Meta:
         database = database
 
-class Category(BaseModel):"""
-
-EXPECTED_CAT_NAME = """
-    name = CharField(unique=True)"""
-
-EXPECTED_CAT_PARENT = """
-    parent = ForeignKeyField(db_column='parent_id', null=True, rel_model='self', to_field='id')"""
-
-EXPECTED_MID = """
+class Category(BaseModel):
+    name = CharField(unique=True)
+    parent = ForeignKeyField(db_column='parent_id', null=True, rel_model='self', to_field='id')
 
     class Meta:
         db_table = 'category'
@@ -71,35 +65,46 @@ class User(BaseModel):
     class Meta:
         db_table = 'user'
 
-class Note(BaseModel):"""
-
-EXPECTED_NOTE_TEXT = """
-    text = TextField(index=True)"""
-
-EXPECTED_NOTE_USER = """
-    user = ForeignKeyField(db_column='user_id', rel_model=User, to_field='username')"""
-
-EXPECTED_NOTE_END = """
+class Note(BaseModel):
+    text = TextField(index=True)
+    user = ForeignKeyField(db_column='user_id', rel_model=User, to_field='username')
 
     class Meta:
         db_table = 'note'
-"""
+""".strip()
 
-EXPECTED = (EXPECTED_HEAD +
-            EXPECTED_CAT_NAME +
-            EXPECTED_CAT_PARENT +
-            EXPECTED_MID +
-            EXPECTED_NOTE_TEXT +
-            EXPECTED_NOTE_USER +
-            EXPECTED_NOTE_END).strip()
+EXPECTED_PRESERVE_ORDER = """
+from peewee import *
 
-EXPECTED_PRESERVE_ORDER =  (EXPECTED_HEAD +
-                            EXPECTED_CAT_PARENT +
-                            EXPECTED_CAT_NAME +
-                            EXPECTED_MID +
-                            EXPECTED_NOTE_USER +
-                            EXPECTED_NOTE_TEXT +
-                            EXPECTED_NOTE_END).strip()
+database = SqliteDatabase('peewee_test.db', **{})
+
+class UnknownField(object):
+    pass
+
+class BaseModel(Model):
+    class Meta:
+        database = database
+
+class Category(BaseModel):
+    parent = ForeignKeyField(db_column='parent_id', null=True, rel_model='self', to_field='id')
+    name = CharField(unique=True)
+
+    class Meta:
+        db_table = 'category'
+
+class User(BaseModel):
+    username = CharField(primary_key=True)
+
+    class Meta:
+        db_table = 'user'
+
+class Note(BaseModel):
+    user = ForeignKeyField(db_column='user_id', rel_model=User, to_field='username')
+    text = TextField(index=True)
+
+    class Meta:
+        db_table = 'note'
+""".strip()
 
 class TestPwiz(PeeweeTestCase):
     def setUp(self):
