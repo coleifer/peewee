@@ -62,7 +62,7 @@ Things get interesting when we set up relationships between models using `foreig
         animal_type = CharField()
 
         class Meta:
-            database = db # this model uses the people database
+            database = db # this model uses the "people.db" database
 
 Now that we have our models, let's connect to the database. Although it's not necessary to open the connection explicitly, it is good practice since it will reveal any errors with your database connection immediately, as opposed to some arbitrary time later when the first query is executed. It is also good to close the connection when you are done -- for instance, a web app might open a connection when it receives a request, and close the connection when it sends the response.
 
@@ -228,11 +228,11 @@ Let's list all the people now, youngest to oldest:
 .. code-block:: pycon
 
     >>> for person in Person.select().order_by(Person.birthday.desc()):
-    ...     print person.name
+    ...     print person.name, person.birthday
     ...
-    Bob
-    Herb
-    Grandma L.
+    Bob 1960-01-15
+    Herb 1950-05-05
+    Grandma L. 1935-03-01
 
 Now let's list all the people *and* some info about their pets:
 
@@ -254,7 +254,7 @@ Once again we've run into a classic example of :ref:`N+1 <nplusone>` query behav
 
 .. code-block:: pycon
 
-    >>> subquery = Pet.select(fn.COUNT(Pet.id)).where(Pet.owner == Person.id).
+    >>> subquery = Pet.select(fn.COUNT(Pet.id)).where(Pet.owner == Person.id)
     >>> query = (Person
     ...          .select(Person, Pet, subquery.alias('pet_count'))
     ...          .join(Pet, JOIN.LEFT_OUTER)
@@ -289,10 +289,10 @@ either:
     ...          .where((Person.birthday < d1940) | (Person.birthday > d1960)))
     ...
     >>> for person in query:
-    ...     print person.name
+    ...     print person.name, person.birthday
     ...
-    Bob
-    Grandma L.
+    Bob 1960-01-15
+    Grandma L. 1935-03-01
 
 Now let's do the opposite. People whose birthday is between 1940 and 1960:
 
@@ -303,9 +303,9 @@ Now let's do the opposite. People whose birthday is between 1940 and 1960:
     ...          .where((Person.birthday > d1940) & (Person.birthday < d1960)))
     ...
     >>> for person in query:
-    ...     print person.name
+    ...     print person.name, person.birthday
     ...
-    Herb
+    Herb 1950-05-05
 
 One last query. This will use a SQL function to find all people whose names start with either an upper or lower-case *G*:
 
