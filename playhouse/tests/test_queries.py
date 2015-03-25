@@ -1011,11 +1011,21 @@ class TestInsertReturning(PeeweeTestCase):
             username = CharField()
 
         data = [{'username': 'user-%s' % i} for i in range(3)]
-        # Bulk inserts do not ask for returned primary keys.
         self.assertInsertSQL(
             User.insert_many(data),
-            'INSERT INTO "user" ("username") VALUES (?), (?), (?)',
+            'INSERT INTO "user" ("username") VALUES (?), (?), (?) RETURNING "id"',
             ['user-0', 'user-1', 'user-2'])
+
+    def test_insert_many_non_int_pk(self):
+        class User(self.BaseModel):
+            username = CharField(primary_key=True)
+            data = TextField(default='')
+
+        data = [{'username': 'user-%s' % i} for i in range(3)]
+        self.assertInsertSQL(
+            User.insert_many(data),
+            'INSERT INTO "user" ("username", "data") VALUES (?, ?), (?, ?), (?, ?) RETURNING "username"',
+            ['user-0', '', 'user-1', '', 'user-2', ''])
 
 
 class TestDeleteQuery(PeeweeTestCase):

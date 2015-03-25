@@ -1676,7 +1676,7 @@ class QueryCompiler(object):
                     SQL('VALUES'),
                     CommaClause(*value_clauses)])
 
-        if meta.database.insert_returning and not query._is_multi_row_insert:
+        if meta.database.insert_returning:
             clauses.extend([
                 SQL('RETURNING'),
                 self._get_field_clause(
@@ -2760,6 +2760,8 @@ class InsertQuery(Query):
             else:
                 return self.database.last_insert_id(cursor, self.model_class)
         else:
+            if self.database.insert_returning:
+                return [row[0] for row in cursor.fetchall()]
             return True
 
 class DeleteQuery(Query):
