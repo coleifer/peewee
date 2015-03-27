@@ -1676,7 +1676,7 @@ class QueryCompiler(object):
                     SQL('VALUES'),
                     CommaClause(*value_clauses)])
 
-        if meta.database.insert_returning and not query._is_multi_row_insert:
+        if query.is_insert_returning:
             clauses.extend([
                 SQL('RETURNING'),
                 self._get_field_clause(
@@ -2680,6 +2680,7 @@ class InsertQuery(Query):
 
         self._upsert = False
         self._is_multi_row_insert = rows is not None or query is not None
+        self._return_id_list = False
         if rows is not None:
             self._rows = rows
         else:
@@ -2723,6 +2724,7 @@ class InsertQuery(Query):
         query._is_multi_row_insert = self._is_multi_row_insert
         query._fields = self._fields
         query._query = self._query
+        query._return_id_list = self._return_id_list
         return query
 
     join = not_allowed('joining')
@@ -2732,18 +2734,43 @@ class InsertQuery(Query):
     def upsert(self, upsert=True):
         self._upsert = upsert
 
+    @returns_clone
+    def return_id_list(self, return_id_list=True):
+        self._return_id_list = return_id_list
+
+    @property
+    def is_insert_returning(self):
+        if self.database.insert_returning:
+            if not self._is_multi_row_insert or self._return_id_list:
+                return True
+        return False
+
     def sql(self):
         return self.compiler().generate_insert(self)
 
+    def _insert_with_loop(self):
+        id_list = []
+        last_id = None
+        return_id_list = self._return_id_list
+        for row in self._rows:
+            last_id = (InsertQuery(self.model_class, row)
+                       .upsert(self._upsert)
+                       .execute())
+            if return_id_list:
+                id_list.append(last_id)
+
+        if return_id_list:
+            return id_list
+        else:
+            return last_id
+
     def execute(self):
-        if self._is_multi_row_insert and self._query is None:
-            if not self.database.insert_many:
-                last_id = None
-                for row in self._rows:
-                    last_id = (InsertQuery(self.model_class, row)
-                               .upsert(self._upsert)
-                               .execute())
-                return last_id
+        insert_with_loop = all((
+            self._is_multi_row_insert,
+            self._query is None,
+            not self.database.insert_many))
+        if insert_with_loop:
+            return self._insert_with_loop()
 
         cursor = self._execute()
         if not self._is_multi_row_insert:
@@ -2759,6 +2786,8 @@ class InsertQuery(Query):
                 return clean_data[0]
             else:
                 return self.database.last_insert_id(cursor, self.model_class)
+        elif self._return_id_list:
+            return map(operator.itemgetter(0), cursor.fetchall())
         else:
             return True
 

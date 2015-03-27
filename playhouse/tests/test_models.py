@@ -1368,3 +1368,19 @@ class TestInsertReturningModelAPI(PeeweeTestCase):
         self.assertEqual(User.select().count(), 3)
         z = User.select().order_by(-User.username).get()
         self.assertEqual(z.username, 'zaizee')
+
+        usernames = ['foo', 'bar', 'baz']
+        data = [{'username': username} for username in usernames]
+        query = User.insert_many(data).return_id_list()
+        sql, params = query.sql()
+        self.assertEqual(sql, (
+            'INSERT INTO "users" ("username") '
+            'VALUES (%s), (%s), (%s) RETURNING "id"'))
+        self.assertEqual(params, usernames)
+
+        res = query.execute()
+        self.assertEqual(len(res), 3)
+        foo = User.get(User.username == 'foo')
+        bar = User.get(User.username == 'bar')
+        baz = User.get(User.username == 'baz')
+        self.assertEqual(res, [foo.id, bar.id, baz.id])
