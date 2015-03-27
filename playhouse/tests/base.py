@@ -46,7 +46,7 @@ if TEST_VERBOSITY > 1:
 
 
 class TestPostgresqlDatabase(PostgresqlDatabase):
-    insert_returning = True
+    insert_returning = False
 
 
 class DatabaseInitializer(object):
