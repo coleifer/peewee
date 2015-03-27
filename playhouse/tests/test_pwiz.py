@@ -23,12 +23,12 @@ class User(BaseModel):
     username = CharField(primary_key=True)
 
 class Note(BaseModel):
-    user = ForeignKeyField(User)
+    user = ForeignKeyField(User)    # non-alphabetical order is important here
     text = TextField(index=True)
 
 class Category(BaseModel):
+    parent = ForeignKeyField('self', null=True) # non-alphabetical order is important here
     name = CharField(unique=True)
-    parent = ForeignKeyField('self', null=True)
 
 class capture_output(object):
     def __enter__(self):
@@ -73,6 +73,38 @@ class Note(BaseModel):
         db_table = 'note'
 """.strip()
 
+EXPECTED_PRESERVE_ORDER = """
+from peewee import *
+
+database = SqliteDatabase('peewee_test.db', **{})
+
+class UnknownField(object):
+    pass
+
+class BaseModel(Model):
+    class Meta:
+        database = database
+
+class Category(BaseModel):
+    parent = ForeignKeyField(db_column='parent_id', null=True, rel_model='self', to_field='id')
+    name = CharField(unique=True)
+
+    class Meta:
+        db_table = 'category'
+
+class User(BaseModel):
+    username = CharField(primary_key=True)
+
+    class Meta:
+        db_table = 'user'
+
+class Note(BaseModel):
+    user = ForeignKeyField(db_column='user_id', rel_model=User, to_field='username')
+    text = TextField(index=True)
+
+    class Meta:
+        db_table = 'note'
+""".strip()
 
 class TestPwiz(PeeweeTestCase):
     def setUp(self):
@@ -92,6 +124,16 @@ class TestPwiz(PeeweeTestCase):
             print_models(self.introspector)
 
         self.assertEqual(output.data.strip(), EXPECTED)
+
+    def test_print_models_order_preserved(self):
+        try:
+            from collections import OrderedDict
+            with capture_output() as output:
+                print_models(self.introspector, preserve_order=True)
+
+            self.assertEqual(output.data.strip(), EXPECTED_PRESERVE_ORDER)
+        except ImportError:
+            pass  # Feature only supported for versions >= 2.7
 
     def test_print_header(self):
         cmdline = '-i -e sqlite /path/to/database.db'

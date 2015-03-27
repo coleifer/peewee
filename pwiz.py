@@ -42,7 +42,7 @@ def make_introspector(database_type, database_name, **kwargs):
     db = DatabaseClass(database_name, **kwargs)
     return Introspector.from_database(db, schema=schema)
 
-def print_models(introspector, tables=None):
+def print_models(introspector, tables=None, preserve_order=False):
     database = introspector.introspect()
 
     print_(TEMPLATE % (
@@ -69,9 +69,12 @@ def print_models(introspector, tables=None):
                     _print_table(dest, seen, accum + [table])
 
         print_('class %s(BaseModel):' % database.model_names[table])
-        columns = database.columns[table]
+        columns = database.columns[table].items()
+        if not preserve_order:
+            columns = sorted(columns)  # order model columns alphabetically
         primary_keys = database.primary_keys[table]
-        for name, column in sorted(columns.items()):
+
+        for name, column in columns:
             skip = all([
                 name == 'id',
                 len(primary_keys) == 1,
@@ -92,7 +95,7 @@ def print_models(introspector, tables=None):
             print_('        schema = \'%s\'' % introspector.schema)
         if len(primary_keys) > 1:
             pk_field_names = sorted([
-                field.name for col, field in columns.items()
+                field.name for col, field in columns
                 if col in primary_keys])
             pk_list = ', '.join("'%s'" % pk for pk in pk_field_names)
             print_('        primary_key = CompositeKey(%s)' % pk_list)
@@ -138,6 +141,8 @@ def get_option_parser():
     ao('-i', '--info', dest='info', action='store_true',
        help=('Add database information and other metadata to top of the '
              'generated file.'))
+    ao('-o', '--order-preserved', action='store_true', dest='preserve_order',
+       help=('Order columns in model definition to preserve order in source database'))
     return parser
 
 def get_connect_kwargs(options):
@@ -150,6 +155,13 @@ if __name__ == '__main__':
 
     parser = get_option_parser()
     options, args = parser.parse_args()
+
+    if options.preserve_order:
+        try:
+            from collections import OrderedDict
+        except ImportError:
+            err('Preserve column order not supported for Python versions prior to 2.7')
+            sys.exit(1)
 
     if len(args) < 1:
         err('Missing required parameter "database"')
@@ -169,4 +181,4 @@ if __name__ == '__main__':
         cmd_line = ' '.join(raw_argv[1:])
         print_header(cmd_line, introspector)
 
-    print_models(introspector, tables)
+    print_models(introspector, tables, preserve_order=options.preserve_order)
