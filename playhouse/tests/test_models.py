@@ -1378,7 +1378,7 @@ class TestInsertReturningModelAPI(PeeweeTestCase):
             'VALUES (%s), (%s), (%s) RETURNING "id"'))
         self.assertEqual(params, usernames)
 
-        res = query.execute()
+        res = list(query.execute())
         self.assertEqual(len(res), 3)
         foo = User.get(User.username == 'foo')
         bar = User.get(User.username == 'bar')

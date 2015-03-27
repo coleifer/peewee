@@ -1413,8 +1413,28 @@ Query Types
 
     .. py:method:: upsert([upsert=True])
 
-        Perform an *INSERT OR REPLACE* query. Currently only Sqlite supports
-        this method.
+        Perform an *INSERT OR REPLACE* query.
+
+        .. note:: Currently only SQLite supports this method.
+
+    .. py:method:: return_id_list([return_id_list=True])
+
+        By default, when doing bulk INSERTs, peewee will not return the list of generated primary keys. However, if the database supports returning primary keys via ``INSERT ... RETURNING``, this method instructs peewee to return the generated list of IDs.
+
+        .. note::
+            Currently only PostgreSQL supports this behavior. While other databases support bulk inserts, they will simply return ``True`` instead.
+
+        Example:
+
+        .. code-block:: python
+
+            usernames = [
+                {'username': username}
+                for username in ['charlie', 'huey', 'mickey']]
+            query = User.insert_many(usernames).return_id_list()
+            user_ids = query.execute()
+            print user_ids
+            # prints something like [1, 2, 3]
 
 .. py:class:: DeleteQuery(model_class)
 
