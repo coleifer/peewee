@@ -3225,7 +3225,7 @@ class PostgresqlDatabase(Database):
     def last_insert_id(self, cursor, model):
         seq = self._get_pk_seq(model)
         if seq:
-            cursor.execute("SELECT CURRVAL(%s)" % (seq))
+            cursor.execute("SELECT CURRVAL('%s')" % (seq))
             result = cursor.fetchone()[0]
             if self.get_autocommit():
                 self.commit()
