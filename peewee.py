@@ -3080,9 +3080,10 @@ class Database(object):
     def truncate_date(self, date_part, date_field):
         return fn.DATE_TRUNC(SQL(date_part), date_field)
 
-    def update_auto_pk(self):
-        """Update generator for primary keys, if present, to ensure it is past any explicitly inserted keys"""
-        pass # sqlite and mysql handle this natively
+    def update_auto_pk(self, model):
+        """Update generator for primary keys, if present, to ensure that next generated value
+         will be larger than existing key, (including explicitly inserted keys)"""
+        pass # sqlite and mysql handle this natively. 
 
 class SqliteDatabase(Database):
     foreign_keys = False
@@ -3219,9 +3220,10 @@ class PostgresqlDatabase(Database):
             seq = '%s\"%s_%s_seq\"' % (schema, meta.db_table, meta.primary_key.db_column)
         else:
             seq = None
+        return seq
 
     def last_insert_id(self, cursor, model):
-        seq = self.__get_pk_seq(model)
+        seq = self._get_pk_seq(model)
         if seq:
             cursor.execute("SELECT CURRVAL(%s)" % (seq))
             result = cursor.fetchone()[0]
@@ -3310,13 +3312,15 @@ class PostgresqlDatabase(Database):
         self.execute_sql('SET search_path TO %s' % path_params, search_path)
 
     def update_auto_pk(self, model):
-        seq = self.__get_pk_seq(model)
+        seq = self._get_pk_seq(model)
         if seq:
-            seq_val = model.raw("SELECT last_value FROM " + seq).scalar()
-            id_col = model._meta.primary_key.db_column
-            max_id = model.raw("SELECT max(%s) FROM %s" % (id_col, model._meta.db_table)).scalar()
-            if seq_val < max_id:
-                model.raw("SELECT setval({}, {}, true)".format(seq, max_id))
+            pk_col = model._meta.primary_key.db_column
+            table = model._meta.db_table
+            final_vals = model.raw("""
+                with max_id as (select max({0}) as max from {1})
+                select max, setval('{2}', max, true)
+                from  max_id
+                where  max >  (select last_value from {2})""".format(pk_col, table, seq)).execute()
             if self.get_autocommit():
                 self.commit()
 
@@ -3981,6 +3985,9 @@ class Model(with_metaclass(BaseModel)):
 
     @classmethod
     def update_auto_pk(cls):
+        """
+        Ensure that the next auto-generated PK value for this model will be larger than any existing ID
+        """
         db = cls._meta.database
         db.update_auto_pk(cls)
 

@@ -346,3 +346,19 @@ class TestConnectionInitialization(PeeweeTestCase):
         db.close()
         db.connect()
         self.assertEqual(state['initialized'], 2)
+
+class TestDatabaseSequenceUpdate(ModelTestCase):
+    requires = [DBUser]
+
+    def test_sequence_update(self):
+        jump_val = 20
+        a = DBUser.create(username='a')
+        b =  DBUser.create(username='b')
+        c =  DBUser.create(user_id=b.user_id+jump_val,username='c')
+        DBUser.update_auto_pk()
+        d =  DBUser.create(username='d')
+
+        self.assertEqual(a.user_id, b.user_id - 1)
+        self.assertEqual(b.user_id, c.user_id - jump_val)
+        self.assertEqual(c.user_id, d.user_id - 1)
+
