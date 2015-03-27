@@ -11,6 +11,7 @@ from pwiz import *
 from playhouse.tests.base import database_initializer
 from playhouse.tests.base import mock
 from playhouse.tests.base import PeeweeTestCase
+from playhouse.tests.base import skip_if
 
 
 db = database_initializer.get_database('sqlite')
@@ -152,6 +153,7 @@ class TestPwiz(BasePwizTestCase):
             '# Peewee version: %s') % (cmdline, peewee_version))
 
 
+@skip_if(lambda: sys.version_info[:2] < (2, 7))
 class TestPwizOrdered(BasePwizTestCase):
     models = [User, Note]
 
