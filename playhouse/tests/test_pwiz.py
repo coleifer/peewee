@@ -21,10 +21,13 @@ class BaseModel(Model):
 
 class User(BaseModel):
     username = CharField(primary_key=True)
+    id = IntegerField(default=0)
 
 class Note(BaseModel):
     user = ForeignKeyField(User)
     text = TextField(index=True)
+    data = IntegerField(default=0)
+    misc = IntegerField(default=0)
 
 class Category(BaseModel):
     name = CharField(unique=True)
@@ -60,12 +63,15 @@ class Category(BaseModel):
         db_table = 'category'
 
 class User(BaseModel):
+    id = IntegerField()
     username = CharField(primary_key=True)
 
     class Meta:
         db_table = 'user'
 
 class Note(BaseModel):
+    data = IntegerField()
+    misc = IntegerField()
     text = TextField(index=True)
     user = ForeignKeyField(db_column='user_id', rel_model=User, to_field='username')
 
@@ -74,18 +80,54 @@ class Note(BaseModel):
 """.strip()
 
 
-class TestPwiz(PeeweeTestCase):
+EXPECTED_ORDERED = """
+from peewee import *
+
+database = SqliteDatabase('peewee_test.db', **{})
+
+class UnknownField(object):
+    pass
+
+class BaseModel(Model):
+    class Meta:
+        database = database
+
+class User(BaseModel):
+    username = CharField(primary_key=True)
+    id = IntegerField()
+
+    class Meta:
+        db_table = 'user'
+
+class Note(BaseModel):
+    user = ForeignKeyField(db_column='user_id', rel_model=User, to_field='username')
+    text = TextField(index=True)
+    data = IntegerField()
+    misc = IntegerField()
+
+    class Meta:
+        db_table = 'note'
+""".strip()
+
+
+class BasePwizTestCase(PeeweeTestCase):
+    models = []
+
     def setUp(self):
-        super(TestPwiz, self).setUp()
+        super(BasePwizTestCase, self).setUp()
         if os.path.exists(db.database):
             os.unlink(db.database)
         db.connect()
-        db.create_tables([User, Note, Category])
+        db.create_tables(self.models)
         self.introspector = Introspector.from_database(db)
 
     def tearDown(self):
-        super(TestPwiz, self).tearDown()
+        super(BasePwizTestCase, self).tearDown()
         db.close()
+
+
+class TestPwiz(BasePwizTestCase):
+    models = [User, Note, Category]
 
     def test_print_models(self):
         with capture_output() as output:
@@ -108,3 +150,13 @@ class TestPwiz(PeeweeTestCase):
             '# Date: February 03, 2015 15:30PM\n'
             '# Database: peewee_test.db\n'
             '# Peewee version: %s') % (cmdline, peewee_version))
+
+
+class TestPwizOrdered(BasePwizTestCase):
+    models = [User, Note]
+
+    def test_ordered_columns(self):
+        with capture_output() as output:
+            print_models(self.introspector, preserve_order=True)
+
+        self.assertEqual(output.data.strip(), EXPECTED_ORDERED)
