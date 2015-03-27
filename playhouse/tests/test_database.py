@@ -348,17 +348,19 @@ class TestConnectionInitialization(PeeweeTestCase):
         self.assertEqual(state['initialized'], 2)
 
 class TestDatabaseSequenceUpdate(ModelTestCase):
-    requires = [DBUser]
+    requires = [AutoIncrementModel]
 
     def test_sequence_update(self):
         jump_val = 20
-        a = DBUser.create(username='a')
-        b =  DBUser.create(username='b')
-        c =  DBUser.create(user_id=b.user_id+jump_val,username='c')
-        DBUser.update_auto_pk()
-        d =  DBUser.create(username='d')
+        a = AutoIncrementModel.create(expected=1)
+        b =  AutoIncrementModel.create(expected=2)
+        c =  AutoIncrementModel.create(id=b.id+jump_val,expected=22)
+        AutoIncrementModel.update_auto_pk()
+        d =  AutoIncrementModel.create(expected=23)
 
-        self.assertEqual(a.user_id, b.user_id - 1)
-        self.assertEqual(b.user_id, c.user_id - jump_val)
-        self.assertEqual(c.user_id, d.user_id - 1)
+        self.assertEqual(a.id, b.id - 1)
+        self.assertEqual(b.id, c.id - jump_val)
+        self.assertEqual(c.id, d.id - 1)
+        for m in [a,b,c,d]:
+            self.assertEqual(m.id, m.expected)
 

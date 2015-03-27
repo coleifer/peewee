@@ -109,6 +109,9 @@ class SeqModelB(TestModel):
     id = IntegerField(primary_key=True, sequence='just_testing_seq')
     other_num = IntegerField()
 
+class AutoIncrementModel(TestModel):
+    id = PrimaryKeyField()
+    expected = IntegerField()
 
 class MultiIndexModel(TestModel):
     f1 = CharField()
