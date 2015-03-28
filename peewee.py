@@ -3232,25 +3232,29 @@ class PostgresqlDatabase(Database):
             pg_extensions.register_type(pg_extensions.UNICODEARRAY, conn)
         return conn
 
-    def last_insert_id(self, cursor, model):
+    def _get_pk_sequence(self, model):
         meta = model._meta
-        schema = ''
+        if meta.primary_key.sequence:
+            return meta.primary_key.sequence
+        elif meta.auto_increment:
+            return '%s_%s_seq' % (meta.db_table, meta.primary_key.db_column)
+
+    def last_insert_id(self, cursor, model):
+        sequence = self._get_pk_sequence(model)
+        if not sequence:
+            return
+
+        meta = model._meta
         if meta.schema:
             schema = '%s.' % meta.schema
-
-        if meta.primary_key.sequence:
-            seq = meta.primary_key.sequence
-        elif meta.auto_increment:
-            seq = '%s_%s_seq' % (meta.db_table, meta.primary_key.db_column)
         else:
-            seq = None
+            schema = ''
 
-        if seq:
-            cursor.execute("SELECT CURRVAL('%s\"%s\"')" % (schema, seq))
-            result = cursor.fetchone()[0]
-            if self.get_autocommit():
-                self.commit()
-            return result
+        cursor.execute("SELECT CURRVAL('%s\"%s\"')" % (schema, sequence))
+        result = cursor.fetchone()[0]
+        if self.get_autocommit():
+            self.commit()
+        return result
 
     def get_tables(self, schema='public'):
         query = ('SELECT tablename FROM pg_catalog.pg_tables '
