@@ -352,7 +352,8 @@ class TestDatabaseSequenceUpdate(ModelTestCase):
 
     def test_sequence_update(self):
         orig_insert_returning = AutoIncrementModel._meta.database.insert_returning
-        AutoIncrementModel._meta.database.insert_returning = True
+        if issubclass(database_class, PostgresqlDatabase):
+            AutoIncrementModel._meta.database.insert_returning = True
         jump_val = 20
         a = AutoIncrementModel.create(expected=1)
         b =  AutoIncrementModel.create(expected=2)
