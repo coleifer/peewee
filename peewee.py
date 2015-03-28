@@ -3109,6 +3109,11 @@ class Database(object):
     def truncate_date(self, date_part, date_field):
         return fn.DATE_TRUNC(SQL(date_part), date_field)
 
+    def update_auto_pk(self, model):
+        """Update generator for primary keys, if present, to ensure that next generated value
+         will be larger than existing key, (including explicitly inserted keys)"""
+        pass # sqlite and mysql handle this natively. 
+
 class SqliteDatabase(Database):
     foreign_keys = False
     insert_many = sqlite3 and sqlite3.sqlite_version_info >= (3, 7, 11, 0)
@@ -3232,21 +3237,24 @@ class PostgresqlDatabase(Database):
             pg_extensions.register_type(pg_extensions.UNICODEARRAY, conn)
         return conn
 
-    def last_insert_id(self, cursor, model):
+    def _get_pk_seq(self, model):
         meta = model._meta
         schema = ''
         if meta.schema:
             schema = '%s.' % meta.schema
 
         if meta.primary_key.sequence:
-            seq = meta.primary_key.sequence
+            seq = '%s\"%s\"' % (schema, meta.primary_key.sequence)
         elif meta.auto_increment:
-            seq = '%s_%s_seq' % (meta.db_table, meta.primary_key.db_column)
+            seq = '%s\"%s_%s_seq\"' % (schema, meta.db_table, meta.primary_key.db_column)
         else:
             seq = None
+        return seq
 
+    def last_insert_id(self, cursor, model):
+        seq = self._get_pk_seq(model)
         if seq:
-            cursor.execute("SELECT CURRVAL('%s\"%s\"')" % (schema, seq))
+            cursor.execute("SELECT CURRVAL('%s')" % (seq))
             result = cursor.fetchone()[0]
             if self.get_autocommit():
                 self.commit()
@@ -3332,6 +3340,20 @@ class PostgresqlDatabase(Database):
     def set_search_path(self, *search_path):
         path_params = ','.join(['%s'] * len(search_path))
         self.execute_sql('SET search_path TO %s' % path_params, search_path)
+
+    def update_auto_pk(self, model):
+        seq = self._get_pk_seq(model)
+        if seq:
+            pk_col = model._meta.primary_key.db_column
+            table = model._meta.db_table
+            final_vals = model.raw("""
+                with max_id as (select max({0}) as max from {1})
+                select max, setval('{2}', max, true)
+                from  max_id
+                where  max >  (select last_value from {2})""".format(pk_col, table, seq)).execute()
+            if self.get_autocommit():
+                self.commit()
+
 
 class MySQLDatabase(Database):
     commit_select = True
@@ -3990,6 +4012,14 @@ class Model(with_metaclass(BaseModel)):
         if cls._meta.schema:
             return Entity(cls._meta.schema, cls._meta.db_table)
         return Entity(cls._meta.db_table)
+
+    @classmethod
+    def update_auto_pk(cls):
+        """
+        Ensure that the next auto-generated PK value for this model will be larger than any existing ID
+        """
+        db = cls._meta.database
+        db.update_auto_pk(cls)
 
     def _get_pk_value(self):
         return getattr(self, self._meta.primary_key.name)

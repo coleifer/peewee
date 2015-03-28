@@ -478,6 +478,7 @@ Sometimes you do not want the database to automatically generate a value for the
             u.save(force_insert=True) # <-- force peewee to insert row
 
     User._meta.auto_increment = True
+    User.update_auto_pk()  # <--- force DB to ensure that next generated key will be > any existing key
 
 If you *always* want to have control over the primary key, simply do not use the :py:class:`PrimaryKeyField` field type, but use a normal :py:class:`IntegerField` (or other column type):
 

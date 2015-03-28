@@ -346,3 +346,25 @@ class TestConnectionInitialization(PeeweeTestCase):
         db.close()
         db.connect()
         self.assertEqual(state['initialized'], 2)
+
+class TestDatabaseSequenceUpdate(ModelTestCase):
+    requires = [AutoIncrementModel]
+
+    def test_sequence_update(self):
+        orig_insert_returning = AutoIncrementModel._meta.database.insert_returning
+        if issubclass(database_class, PostgresqlDatabase):
+            AutoIncrementModel._meta.database.insert_returning = True
+        jump_val = 20
+        a = AutoIncrementModel.create(expected=1)
+        b =  AutoIncrementModel.create(expected=2)
+        c =  AutoIncrementModel.create(id=b.id+jump_val,expected=22)
+        AutoIncrementModel.update_auto_pk()
+        d =  AutoIncrementModel.create(expected=23)
+        AutoIncrementModel._meta.database.insert_returning = orig_insert_returning
+
+        self.assertEqual(a.id, b.id - 1)
+        self.assertEqual(b.id, c.id - jump_val)
+        self.assertEqual(c.id, d.id - 1)
+        for m in [a,b,c,d]:
+            self.assertEqual(m.id, m.expected)
+
