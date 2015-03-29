@@ -8,16 +8,23 @@ Peewee is a simple and small ORM. It has few (but expressive) concepts, making i
 * A small, expressive ORM
 * Written in python with support for versions 2.6+ and 3.2+.
 * built-in support for sqlite, mysql and postgresql
-* tons of extensions available in the `playhouse <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html>`_ (postgres hstore/json/arrays, sqlite full-text-search, schema migrations, and much more).
+* tons of extensions available in the `playhouse <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html>`_
+
+  * `Postgresql HStore, JSON, arrays and more <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#postgres-ext>`_
+  * `SQLite full-text search, user-defined functions, virtual tables and more <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#sqlite-ext>`_
+  * `Schema migrations <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#migrate>`_ and `model code generator <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#pwiz>`_
+  * `Connection pool <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#pool>`_
+  * `Encryption <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#sqlcipher-ext>`_
+  * `and much, much more... <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html>`_
 
 New to peewee? Here is a list of documents you might find most helpful when getting
 started:
 
-* `Quickstart guide <http://docs.peewee-orm.com/en/latest/peewee/quickstart.html#quickstart>`_ -- this guide covers all the bare essentials. It will take you between 5 and 10 minutes to go through it.
+* `Quickstart guide <http://docs.peewee-orm.com/en/latest/peewee/quickstart.html#quickstart>`_ -- this guide covers all the essentials. It will take you between 5 and 10 minutes to go through it.
 * `Guide to the various query operators <http://docs.peewee-orm.com/en/latest/peewee/querying.html#query-operators>`_ describes how to construct queries and combine expressions.
 * `Field types table <http://docs.peewee-orm.com/en/latest/peewee/models.html#field-types-table>`_ lists the various field types peewee supports and the parameters they accept.
 
-For flask integration, check out `flask-peewee <http://flask-peewee.readthedocs.org/>`_, which includes and admin interface, RESTful APIs, authentication, and more. You can also use peewee with the popular extension `flask-admin <http://flask-admin.readthedocs.org/en/latest/>`_.
+For flask helpers, check out the `flask_utils extension module <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#flask-utils>`_. You can also use peewee with the popular extension `flask-admin <http://flask-admin.readthedocs.org/en/latest/>`_ to provide a Django-like admin interface for managing peewee models.
 
 Examples
 --------
