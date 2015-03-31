@@ -53,6 +53,7 @@ Contents:
    peewee/transactions
    peewee/api
    peewee/playhouse
+   peewee/hacks
 
 Note
 ----
