@@ -34,6 +34,10 @@ class KeyStoreTestCase(PeeweeTestCase):
         self.assertEqual(self.kv['b'], '1')
         self.assertEqual(self.kv['c'], 'X')
 
+        key = self.kv.key
+        results = self.kv[key << ('a', 'b')]
+        self.assertEqual(results, ['X', '1'])
+
         del(self.kv[self.kv.key << ('a', 'c')])
         self.assertRaises(KeyError, self.kv.__getitem__, 'a')
         self.assertRaises(KeyError, self.kv.__getitem__, 'c')
