@@ -3,7 +3,7 @@
 Hacks
 =====
 
-Collected hacks using peewee. Have a cool hack you'd like to share? Open `an issue on GitHub <https://github.com/coleifer/peewee/issues/new>`_ or `contact me <http://charlesleifer.com/contact/`_.
+Collected hacks using peewee. Have a cool hack you'd like to share? Open `an issue on GitHub <https://github.com/coleifer/peewee/issues/new>`_ or `contact me <http://charlesleifer.com/contact/>`_.
 
 .. _top_item_per_group:
 
@@ -65,7 +65,7 @@ In these examples we will use the *User* and *Tweet* models to find each user an
 Postgres lateral joins
 ^^^^^^^^^^^^^^^^^^^^^^
 
-`Lateral joins <http://blog.heapanalytics.com/postgresqls-powerful-new-join-type-lateral/`_ are a neat Postgres feature that allow reasonably efficient correlated subqueries. They are often described as SQL ``for each`` loops.
+`Lateral joins <http://blog.heapanalytics.com/postgresqls-powerful-new-join-type-lateral/>`_ are a neat Postgres feature that allow reasonably efficient correlated subqueries. They are often described as SQL ``for each`` loops.
 
 The desired SQL is:
 
@@ -118,7 +118,7 @@ To accomplish this with peewee we'll need to express the lateral join as a :py:c
 Window functions
 ^^^^^^^^^^^^^^^^
 
-`Window functions <http://www.postgresql.org/docs/9.1/static/tutorial-window.html>`_, which are :ref:`supported by peewee <window-functions>`_, provide scalable, efficient performance.
+`Window functions <http://www.postgresql.org/docs/9.1/static/tutorial-window.html>`_, which are :ref:`supported by peewee <window-functions>`, provide scalable, efficient performance.
 
 The desired SQL is:
 
