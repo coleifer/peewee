@@ -739,6 +739,8 @@ By default peewee will parameterize queries, so any parameters passed in by the 
 .. note::
     MySQL and Postgresql use ``'%s'`` to denote parameters. SQLite, on the other hand, uses ``'?'``. Be sure to use the character appropriate to your database. You can also find this parameter by checking :py:attr:`Database.interpolation`.
 
+.. _window-functions:
+
 Window functions
 ----------------
 
