@@ -3622,6 +3622,8 @@ class ModelAlias(object):
             FieldProxy(self, f) for f in self.model_class._meta.get_fields()]
 
     def select(self, *selection):
+        if not selection:
+            selection = self.get_proxy_fields()
         query = SelectQuery(self, *selection)
         if self._meta.order_by:
             query = query.order_by(*self._meta.order_by)
