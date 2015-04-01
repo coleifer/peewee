@@ -703,6 +703,26 @@ class TestSelectQuery(PeeweeTestCase):
         query = User.select(User.id / 2)
         self.assertSelect(query, '("users"."id" / ?)', [2])
 
+    def test_select_from_alias(self):
+        UA = User.alias()
+        query = UA.select().where(UA.username == 'charlie')
+        sql, params = normal_compiler.generate_select(query)
+        self.assertEqual(sql, (
+            'SELECT "t1"."id", "t1"."username" '
+            'FROM "users" AS t1 '
+            'WHERE ("t1"."username" = ?)'))
+        self.assertEqual(params, ['charlie'])
+
+        q2 = query.join(User, on=(User.id == UA.id)).where(User.id == 2)
+        sql, params = normal_compiler.generate_select(q2)
+        self.assertEqual(sql, (
+            'SELECT "t1"."id", "t1"."username" '
+            'FROM "users" AS t1 '
+            'INNER JOIN "users" AS t2 '
+            'ON ("t2"."id" = "t1"."id") '
+            'WHERE (("t1"."username" = ?) AND ("t2"."id" = ?))'))
+        self.assertEqual(params, ['charlie', 2])
+
 class TestUpdateQuery(PeeweeTestCase):
     def test_update(self):
         uq = UpdateQuery(User, {User.username: 'updated'})
