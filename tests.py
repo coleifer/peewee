@@ -1,3 +1,7 @@
+"""
+Aggregate all the test modules and run from the command-line. For information
+about running tests, see the README located in the `playhouse/tests` directory.
+"""
 import sys
 import unittest
 
