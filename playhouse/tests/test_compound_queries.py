@@ -1,11 +1,192 @@
 import itertools
 import operator
+import sys
+if sys.version_info[0] != 3:
+    from functools import reduce
 from functools import wraps
 
 from playhouse.tests.base import compiler
+from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
+from playhouse.tests.base import PeeweeTestCase
 from playhouse.tests.base import test_db
 from playhouse.tests.models import *
+
+compound_db = database_initializer.get_in_memory_database()
+
+class CompoundBase(Model):
+    class Meta:
+        database = compound_db
+
+class Alpha(CompoundBase):
+    alpha = IntegerField()
+
+class Beta(CompoundBase):
+    beta = IntegerField()
+    other = IntegerField(default=0)
+
+class Gamma(CompoundBase):
+    gamma = IntegerField()
+    other = IntegerField(default=1)
+
+
+class TestCompoundSelectSQL(PeeweeTestCase):
+    def setUp(self):
+        super(TestCompoundSelectSQL, self).setUp()
+        compound_db.compound_select_parentheses = False  # Restore default.
+        self.a1 = Alpha.select(Alpha.alpha).where(Alpha.alpha < 2)
+        self.a2 = Alpha.select(Alpha.alpha).where(Alpha.alpha > 5)
+        self.b1 = Beta.select(Beta.beta).where(Beta.beta < 3)
+        self.b2 = Beta.select(Beta.beta).where(Beta.beta > 4)
+
+    def test_simple_sql(self):
+        lhs = Alpha.select(Alpha.alpha)
+        rhs = Beta.select(Beta.beta)
+        sql, params = (lhs | rhs).sql()
+        self.assertEqual(sql, (
+            'SELECT "t1"."alpha" FROM "alpha" AS t1 UNION '
+            'SELECT "t2"."beta" FROM "beta" AS t2'))
+
+        sql, params = (
+            Alpha.select(Alpha.alpha) |
+            Beta.select(Beta.beta) |
+            Gamma.select(Gamma.gamma)).sql()
+        self.assertEqual(sql, (
+            'SELECT "t1"."alpha" FROM "alpha" AS t1 UNION '
+            'SELECT "t2"."beta" FROM "beta" AS t2 UNION '
+            'SELECT "t3"."gamma" FROM "gamma" AS t3'))
+
+    def test_simple_same_model(self):
+        queries = [Alpha.select(Alpha.alpha) for i in range(3)]
+        lhs = queries[0] | queries[1]
+        compound = lhs | queries[2]
+        sql, params = compound.sql()
+        self.assertEqual(sql, (
+            'SELECT "t1"."alpha" FROM "alpha" AS t1 UNION '
+            'SELECT "t2"."alpha" FROM "alpha" AS t2 UNION '
+            'SELECT "t3"."alpha" FROM "alpha" AS t3'))
+
+        lhs = queries[0]
+        compound = lhs | (queries[1] | queries[2])
+        sql, params = compound.sql()
+        self.assertEqual(sql, (
+            'SELECT "t3"."alpha" FROM "alpha" AS t3 UNION '
+            'SELECT "t1"."alpha" FROM "alpha" AS t1 UNION '
+            'SELECT "t2"."alpha" FROM "alpha" AS t2'))
+
+    def test_where_clauses(self):
+        sql, params = (self.a1 | self.a2).sql()
+        self.assertEqual(sql, (
+            'SELECT "t1"."alpha" FROM "alpha" AS t1 WHERE ("t1"."alpha" < ?) '
+            'UNION '
+            'SELECT "t2"."alpha" FROM "alpha" AS t2 WHERE ("t2"."alpha" > ?)'))
+        self.assertEqual(params, [2, 5])
+
+        sql, params = (self.a1 | self.b1).sql()
+        self.assertEqual(sql, (
+            'SELECT "t1"."alpha" FROM "alpha" AS t1 WHERE ("t1"."alpha" < ?) '
+            'UNION '
+            'SELECT "t2"."beta" FROM "beta" AS t2 WHERE ("t2"."beta" < ?)'))
+        self.assertEqual(params, [2, 3])
+
+        sql, params = (self.a1 | self.b1 | self.a2 | self.b2).sql()
+        self.assertEqual(sql, (
+            'SELECT "t1"."alpha" FROM "alpha" AS t1 WHERE ("t1"."alpha" < ?) '
+            'UNION '
+            'SELECT "t2"."beta" FROM "beta" AS t2 WHERE ("t2"."beta" < ?) '
+            'UNION '
+            'SELECT "t4"."alpha" FROM "alpha" AS t4 WHERE ("t4"."alpha" > ?) '
+            'UNION '
+            'SELECT "t3"."beta" FROM "beta" AS t3 WHERE ("t3"."beta" > ?)'))
+        self.assertEqual(params, [2, 3, 5, 4])
+
+    def test_outer_limit(self):
+        sql, params = (self.a1 | self.a2).limit(3).sql()
+        self.assertEqual(sql, (
+            'SELECT "t1"."alpha" FROM "alpha" AS t1 WHERE ("t1"."alpha" < ?) '
+            'UNION '
+            'SELECT "t2"."alpha" FROM "alpha" AS t2 WHERE ("t2"."alpha" > ?) '
+            'LIMIT 3'))
+
+    def test_union_in_from(self):
+        compound = (self.a1 | self.a2).alias('cq')
+        sql, params = Alpha.select(compound.c.alpha).from_(compound).sql()
+        self.assertEqual(sql, (
+            'SELECT "cq"."alpha" FROM ('
+            'SELECT "t1"."alpha" FROM "alpha" AS t1 WHERE ("t1"."alpha" < ?) '
+            'UNION '
+            'SELECT "t2"."alpha" FROM "alpha" AS t2 WHERE ("t2"."alpha" > ?)'
+            ') AS cq'))
+
+        compound = (self.a1 | self.b1 | self.b2).alias('cq')
+        sql, params = Alpha.select(SQL('1')).from_(compound).sql()
+        self.assertEqual(sql, (
+            'SELECT 1 FROM ('
+            'SELECT "t1"."alpha" FROM "alpha" AS t1 WHERE ("t1"."alpha" < ?) '
+            'UNION '
+            'SELECT "t2"."beta" FROM "beta" AS t2 WHERE ("t2"."beta" < ?) '
+            'UNION '
+            'SELECT "t3"."beta" FROM "beta" AS t3 WHERE ("t3"."beta" > ?)'
+            ') AS cq'))
+        self.assertEqual(params, [2, 3, 4])
+
+    def test_parentheses(self):
+        compound_db.compound_select_parentheses = True
+
+        sql, params = (self.a1 | self.a2).sql()
+        self.assertEqual(sql, (
+            '(SELECT "t1"."alpha" FROM "alpha" AS t1 '
+            'WHERE ("t1"."alpha" < ?)) '
+            'UNION '
+            '(SELECT "t2"."alpha" FROM "alpha" AS t2 '
+            'WHERE ("t2"."alpha" > ?))'))
+        self.assertEqual(params, [2, 5])
+
+    def test_multiple_with_parentheses(self):
+        compound_db.compound_select_parentheses = True
+
+        queries = [Alpha.select(Alpha.alpha) for i in range(3)]
+        lhs = queries[0] | queries[1]
+        compound = lhs | queries[2]
+        sql, params = compound.sql()
+        self.assertEqual(sql, (
+            '((SELECT "t1"."alpha" FROM "alpha" AS t1) UNION '
+            '(SELECT "t2"."alpha" FROM "alpha" AS t2)) UNION '
+            '(SELECT "t3"."alpha" FROM "alpha" AS t3)'))
+
+        lhs = queries[0]
+        compound = lhs | (queries[1] | queries[2])
+        sql, params = compound.sql()
+        self.assertEqual(sql, (
+            '(SELECT "t3"."alpha" FROM "alpha" AS t3) UNION '
+            '((SELECT "t1"."alpha" FROM "alpha" AS t1) UNION '
+            '(SELECT "t2"."alpha" FROM "alpha" AS t2))'))
+
+    def test_inner_limit(self):
+        compound_db.compound_select_parentheses = True
+        a1 = Alpha.select(Alpha.alpha).where(Alpha.alpha < 2).limit(2)
+        a2 = Alpha.select(Alpha.alpha).where(Alpha.alpha > 5).limit(4)
+        sql, params = (a1 | a2).limit(3).sql()
+
+        self.assertEqual(sql, (
+            '(SELECT "t1"."alpha" FROM "alpha" AS t1 WHERE ("t1"."alpha" < ?) '
+            'LIMIT 2) '
+            'UNION '
+            '(SELECT "t2"."alpha" FROM "alpha" AS t2 WHERE ("t2"."alpha" > ?) '
+            'LIMIT 4) '
+            'LIMIT 3'))
+
+    def test_union_subquery(self):
+        union = (Alpha.select(Alpha.alpha) |
+                 Beta.select(Beta.beta))
+        query = Alpha.select().where(Alpha.alpha << union)
+        sql, params = query.sql()
+        self.assertEqual(sql, (
+            'SELECT "t1"."id", "t1"."alpha" '
+            'FROM "alpha" AS t1 WHERE ("t1"."alpha" IN ('
+            'SELECT "t1"."alpha" FROM "alpha" AS t1 '
+            'UNION '
+            'SELECT "t2"."beta" FROM "beta" AS t2))'))
 
 
 class TestCompoundSelectQueries(ModelTestCase):
@@ -13,8 +194,8 @@ class TestCompoundSelectQueries(ModelTestCase):
     # User -> username, UniqueModel -> name, OrderedModel -> title
     test_values = {
         User.username: ['a', 'b', 'c', 'd'],
-        UniqueModel.name: ['b', 'd', 'e'],
         OrderedModel.title: ['a', 'c', 'e'],
+        UniqueModel.name: ['b', 'd', 'e'],
     }
 
     def setUp(self):
@@ -77,27 +258,26 @@ class TestCompoundSelectQueries(ModelTestCase):
 
     @requires_op('UNION')
     def test_union_from(self):
-        uq = User.select(User.username).where(User.username << ['a', 'b', 'd'])
+        uq = (User
+              .select(User.username.alias('name'))
+              .where(User.username << ['a', 'b', 'd']))
+
         oq = (OrderedModel
-              .select(OrderedModel.title)
+              .select(OrderedModel.title.alias('name'))
               .where(OrderedModel.title << ['a', 'b'])
               .order_by())
-        iq = UniqueModel.select(UniqueModel.name)
-        union = uq | oq | iq
 
-        query = User.select(SQL('1')).from_(union)
-        sql, params = compiler.generate_select(query)
-        self.assertEqual(sql, (
-            'SELECT 1 FROM ('
-            'SELECT "users"."username" FROM "users" AS users '
-            'WHERE ("users"."username" IN (?, ?, ?)) '
-            'UNION '
-            'SELECT "orderedmodel"."title" FROM "orderedmodel" AS orderedmodel'
-            ' WHERE ("orderedmodel"."title" IN (?, ?)) '
-            'UNION '
-            'SELECT "uniquemodel"."name" FROM "uniquemodel" AS uniquemodel'
-            ')'))
-        self.assertEqual(params, ['a', 'b', 'd', 'a', 'b'])
+        iq = (UniqueModel
+              .select(UniqueModel.name.alias('name'))
+              .where(UniqueModel.name << ['c', 'd']))
+
+        union_q = (uq | oq | iq).alias('union_q')
+
+        query = (User
+                 .select(union_q.c.name)
+                 .from_(union_q)
+                 .order_by(union_q.c.name.desc()))
+        self.assertEqual([row[0] for row in query.tuples()], ['d', 'b', 'a'])
 
     @requires_op('UNION')
     def test_union_count(self):
@@ -154,27 +334,6 @@ class TestCompoundSelectQueries(ModelTestCase):
                          ['e', 'd', 'c'])
 
     @requires_op('UNION')
-    def test_union_sql(self):
-        union = (User.select(User.username) |
-                 UniqueModel.select(UniqueModel.name))
-        sql, params = compiler.generate_select(union)
-        self.assertEqual(sql, (
-            'SELECT "users"."username" FROM "users" AS users UNION '
-            'SELECT "uniquemodel"."name" FROM "uniquemodel" AS uniquemodel'))
-
-    @requires_op('UNION')
-    def test_union_subquery(self):
-        union = (User.select(User.username) |
-                 UniqueModel.select(UniqueModel.name))
-        query = User.select().where(User.username << union)
-        sql, params = compiler.generate_select(query)
-        self.assertEqual(sql, (
-            'SELECT "users"."id", "users"."username" '
-            'FROM "users" AS users WHERE ("users"."username" IN '
-            '(SELECT "users"."username" FROM "users" AS users UNION '
-            'SELECT "uniquemodel"."name" FROM "uniquemodel" AS uniquemodel))'))
-
-    @requires_op('UNION')
     @requires_op('INTERSECT')
     def test_complex(self):
         left = User.select(User.username).where(User.username << ['a', 'b'])
@@ -190,3 +349,16 @@ class TestCompoundSelectQueries(ModelTestCase):
             {'username': 'b'},
             {'username': 'd'},
             {'username': 'e'}])
+
+    @requires_op('UNION')
+    def test_union_subquery(self):
+        union = (User.select(User.username).where(User.username == 'a') |
+                 UniqueModel.select(UniqueModel.name))
+        query = (User
+                 .select(User.username)
+                 .where(User.username << union)
+                 .order_by(User.username.desc()))
+        self.assertEqual(list(query.dicts()), [
+            {'username': 'd'},
+            {'username': 'b'},
+            {'username': 'a'}])
