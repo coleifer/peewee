@@ -1272,8 +1272,7 @@ Query Types
         :param rhs: Either a :py:class:`SelectQuery` or a :py:class:`CompoundSelect`
         :rtype: :py:class:`CompoundSelect`
 
-        Create a ``UNION`` query with the right-hand object. The result will contain
-        all values from both the left and right queries.
+        Create a ``UNION`` query with the right-hand object. The result will contain all values from both the left and right queries.
 
         .. code-block:: python
 
@@ -1282,6 +1281,9 @@ Query Types
 
             # Get all cities in kansas where we have either a customer or a store.
             all_cities = (customers | stores).order_by(SQL('city'))
+
+        .. note::
+            SQLite does not allow ``ORDER BY`` or ``LIMIT`` clauses on the components of a compound query, however SQLite does allow these clauses on the final, compound result. This applies to ``UNION (ALL)``, ``INTERSECT``, and ``EXCEPT``.
 
     .. py:method:: __and__(rhs)
 
@@ -1627,6 +1629,10 @@ Database and its subclasses
     .. py:attribute:: compound_operations = ['UNION', 'INTERSECT', 'EXCEPT']
 
         Supported compound query operations.
+
+    .. py:attribute:: compound_select_parentheses = False
+
+        Whether ``UNION`` (or other compound ``SELECT`` queries) allow parentheses around the queries.
 
     .. py:attribute:: distinct_on = False
 
@@ -2080,6 +2086,8 @@ Database and its subclasses
     :py:class:`Database` subclass that works with the "psycopg2" driver
 
     .. py:attribute:: commit_select = True
+
+    .. py:attribute:: compound_select_parentheses = True
 
     .. py:attribute:: distinct_on = True
 
