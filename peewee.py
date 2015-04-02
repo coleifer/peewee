@@ -790,7 +790,7 @@ class Field(Node):
         """Convert the database value to a pythonic value."""
         return value if value is None else self.coerce(value)
 
-    def _as_entity(self, with_table=False):
+    def as_entity(self, with_table=False):
         if with_table:
             return Entity(self.model_class._meta.db_table, self.db_column)
         return Entity(self.db_column)
@@ -805,7 +805,7 @@ class Field(Node):
 
     def __ddl__(self, column_type):
         """Return a list of Node instances that defines the column."""
-        ddl = [self._as_entity(), self.__ddl_column__(column_type)]
+        ddl = [self.as_entity(), self.__ddl_column__(column_type)]
         if not self.null:
             ddl.append(SQL('NOT NULL'))
         if self.primary_key:
@@ -1453,7 +1453,7 @@ class QueryCompiler(object):
                 params = [node._get_pk_value()]
         elif (isclass(node) and issubclass(node, Model)) or \
                 isinstance(node, ModelAlias):
-            entity = node._as_entity().alias(alias_map[node])
+            entity = node.as_entity().alias(alias_map[node])
             sql, params = self.parse_node(entity, alias_map, conv)
         else:
             sql, params = self._parse_default(node, alias_map, conv)
@@ -1536,7 +1536,7 @@ class QueryCompiler(object):
                     dest_n = dest
                 else:
                     q.append(dest)
-                    dest_n = dest._as_entity().alias(alias_map[dest])
+                    dest_n = dest.as_entity().alias(alias_map[dest])
 
                 join_type = join.get_join_type()
                 if join_type in self.join_map:
@@ -1569,7 +1569,7 @@ class QueryCompiler(object):
 
             clauses.extend((select_clause, SQL('FROM')))
             if query._from is None:
-                clauses.append(model._as_entity().alias(alias_map[model]))
+                clauses.append(model.as_entity().alias(alias_map[model]))
             else:
                 clauses.append(CommaClause(*query._from))
 
@@ -1615,14 +1615,14 @@ class QueryCompiler(object):
         model = query.model_class
         alias_map = self.alias_map_class()
         alias_map.add(model, model._meta.db_table)
-        clauses = [SQL('UPDATE'), model._as_entity(), SQL('SET')]
+        clauses = [SQL('UPDATE'), model.as_entity(), SQL('SET')]
 
         update = []
         for field, value in self._sorted_fields(query._update):
             if not isinstance(value, (Node, Model)):
                 value = Param(value, conv=field.db_value)
             update.append(Expression(
-                field._as_entity(with_table=False),
+                field.as_entity(with_table=False),
                 OP.EQ,
                 value,
                 flat=True))  # No outer parens, no table alias.
@@ -1635,7 +1635,7 @@ class QueryCompiler(object):
 
     def _get_field_clause(self, fields, clause_type=EnclosedClause):
         return clause_type(*[
-            field._as_entity(with_table=False) for field in fields])
+            field.as_entity(with_table=False) for field in fields])
 
     def generate_insert(self, query):
         model = query.model_class
@@ -1643,7 +1643,7 @@ class QueryCompiler(object):
         alias_map = self.alias_map_class()
         alias_map.add(model, model._meta.db_table)
         statement = query._upsert and 'INSERT OR REPLACE INTO' or 'INSERT INTO'
-        clauses = [SQL(statement), model._as_entity()]
+        clauses = [SQL(statement), model.as_entity()]
 
         if query._query is not None:
             # This INSERT query is of the form INSERT INTO ... SELECT FROM.
@@ -1687,7 +1687,7 @@ class QueryCompiler(object):
 
     def generate_delete(self, query):
         model = query.model_class
-        clauses = [SQL('DELETE FROM'), model._as_entity()]
+        clauses = [SQL('DELETE FROM'), model.as_entity()]
         if query._where:
             clauses.extend([SQL('WHERE'), query._where])
         return self.build_query(clauses)
@@ -1700,10 +1700,10 @@ class QueryCompiler(object):
     def foreign_key_constraint(self, field):
         ddl = [
             SQL('FOREIGN KEY'),
-            EnclosedClause(field._as_entity()),
+            EnclosedClause(field.as_entity()),
             SQL('REFERENCES'),
-            field.rel_model._as_entity(),
-            EnclosedClause(field.to_field._as_entity())]
+            field.rel_model.as_entity(),
+            EnclosedClause(field.to_field.as_entity())]
         if field.on_delete:
             ddl.append(SQL('ON DELETE %s' % field.on_delete))
         if field.on_update:
@@ -1726,7 +1726,7 @@ class QueryCompiler(object):
         fk_clause = self.foreign_key_constraint(field)
         return Clause(
             SQL('ALTER TABLE'),
-            model_class._as_entity(),
+            model_class.as_entity(),
             SQL('ADD CONSTRAINT'),
             Entity(constraint),
             *fk_clause.nodes)
@@ -1738,7 +1738,7 @@ class QueryCompiler(object):
 
         columns, constraints = [], []
         if meta.composite_key:
-            pk_cols = [meta.fields[f]._as_entity()
+            pk_cols = [meta.fields[f].as_entity()
                        for f in meta.primary_key.field_names]
             constraints.append(Clause(
                 SQL('PRIMARY KEY'), EnclosedClause(*pk_cols)))
@@ -1749,13 +1749,13 @@ class QueryCompiler(object):
 
         return Clause(
             SQL(statement),
-            model_class._as_entity(),
+            model_class.as_entity(),
             EnclosedClause(*(columns + constraints)))
     create_table = return_parsed_node('_create_table')
 
     def _drop_table(self, model_class, fail_silently=False, cascade=False):
         statement = 'DROP TABLE IF EXISTS' if fail_silently else 'DROP TABLE'
-        ddl = [SQL(statement), model_class._as_entity()]
+        ddl = [SQL(statement), model_class.as_entity()]
         if cascade:
             ddl.append(SQL('CASCADE'))
         return Clause(*ddl)
@@ -1776,8 +1776,8 @@ class QueryCompiler(object):
             SQL(statement),
             Entity(index_name),
             SQL('ON'),
-            model_class._as_entity(),
-            EnclosedClause(*[field._as_entity() for field in fields]),
+            model_class.as_entity(),
+            EnclosedClause(*[field.as_entity() for field in fields]),
             *extra)
     create_index = return_parsed_node('_create_index')
 
@@ -3992,7 +3992,7 @@ class Model(with_metaclass(BaseModel)):
         cls._meta.database.drop_table(cls, fail_silently, cascade)
 
     @classmethod
-    def _as_entity(cls):
+    def as_entity(cls):
         if cls._meta.schema:
             return Entity(cls._meta.schema, cls._meta.db_table)
         return Entity(cls._meta.db_table)

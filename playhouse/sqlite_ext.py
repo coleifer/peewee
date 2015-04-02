@@ -78,9 +78,9 @@ class SqliteQueryCompiler(QueryCompiler):
             columns_constraints = clause.nodes[-1]
             for k, v in sorted(table_options.items()):
                 if isinstance(v, Field):
-                    value = v._as_entity(with_table=True)
+                    value = v.as_entity(with_table=True)
                 elif inspect.isclass(v) and issubclass(v, Model):
-                    value = v._as_entity()
+                    value = v.as_entity()
                 else:
                     value = SQL(v)
                 option = Clause(SQL(k), value)
@@ -139,7 +139,7 @@ class FTSModel(VirtualModel):
         """
         Generate a `MATCH` expression appropriate for searching this table.
         """
-        return match(cls._as_entity(), term)
+        return match(cls.as_entity(), term)
 
     @classmethod
     def rank(cls):
@@ -150,7 +150,7 @@ class FTSModel(VirtualModel):
         if field is None:
             field = find_best_search_field(cls)
         field_idx = cls._meta.get_field_index(field)
-        match_info = fn.matchinfo(cls._as_entity(), 'pcxnal')
+        match_info = fn.matchinfo(cls.as_entity(), 'pcxnal')
         return fn.bm25(match_info, field_idx, k, b)
 
     @classmethod
@@ -399,8 +399,8 @@ def match(lhs, rhs):
     return Expression(lhs, OP.MATCH, rhs)
 
 # Shortcut for calculating ranks.
-Rank = lambda model: fn.rank(fn.matchinfo(model._as_entity()))
-BM25 = lambda mc, idx: fn.bm25(fn.matchinfo(mc._as_entity(), 'pcxnal'), idx)
+Rank = lambda model: fn.rank(fn.matchinfo(model.as_entity()))
+BM25 = lambda mc, idx: fn.bm25(fn.matchinfo(mc.as_entity(), 'pcxnal'), idx)
 
 def find_best_search_field(model_class):
     for field_class in [TextField, CharField]:
