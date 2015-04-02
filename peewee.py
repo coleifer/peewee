@@ -1411,13 +1411,28 @@ class QueryCompiler(object):
         return sql, []
 
     def _parse_compound_select_query(self, node, alias_map, conv):
-        lhs_map = self.alias_map_class()
-        if node.lhs._node_type == 'compound_select_query':
-            lhs_map._counter = alias_map._counter
-        l, lp = self.generate_select(node.lhs, lhs_map)
-        r, rp = self.generate_select(
-            node.rhs,
-            self.calculate_alias_map(node.rhs, lhs_map))
+        csq = 'compound_select_query'
+        if node.rhs._node_type == csq and node.lhs._node_type != csq:
+            first_q, second_q = node.rhs, node.lhs
+            inv = True
+        else:
+            first_q, second_q = node.lhs, node.rhs
+            inv = False
+
+        new_map = self.alias_map_class()
+        if first_q._node_type == csq:
+            new_map._counter = alias_map._counter
+
+        first, first_p = self.generate_select(first_q, new_map)
+        second, second_p = self.generate_select(
+            second_q,
+            self.calculate_alias_map(second_q, new_map))
+
+        if inv:
+            l, lp, r, rp = second, second_p, first, first_p
+        else:
+            l, lp, r, rp = first, first_p , second, second_p
+
         # We add outer parentheses in the event the compound query is used in
         # the `from_()` clause, in which case we'll need them.
         if node.database.compound_select_parentheses:
