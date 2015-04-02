@@ -1204,9 +1204,9 @@ class CompositeKey(object):
 class AliasMap(object):
     prefix = 't'
 
-    def __init__(self):
+    def __init__(self, start=0):
         self._alias_map = {}
-        self._counter = 0
+        self._counter = start
 
     def __repr__(self):
         return '<AliasMap: %s>' % self._alias_map
@@ -1411,10 +1411,20 @@ class QueryCompiler(object):
         return sql, []
 
     def _parse_compound_select_query(self, node, alias_map, conv):
-        l, lp = self.generate_select(node.lhs, alias_map)
-        r, rp = self.generate_select(node.rhs, alias_map)
-        sql = '(%s %s %s)' % (l, node.operator, r)
-        return sql, lp + rp
+        lhs_map = self.alias_map_class()
+        if node.lhs._node_type == 'compound_select_query':
+            lhs_map._counter = alias_map._counter
+        l, lp = self.generate_select(node.lhs, lhs_map)
+        r, rp = self.generate_select(
+            node.rhs,
+            self.calculate_alias_map(node.rhs, lhs_map))
+        # We add outer parentheses in the event the compound query is used in
+        # the `from_()` clause, in which case we'll need them.
+        if node.database.compound_select_parentheses:
+            sql = '((%s) %s (%s))' % (l, node.operator, r)
+        else:
+            sql = '(%s %s %s)' % (l, node.operator, r)
+        return  sql, lp + rp
 
     def _parse_select_query(self, node, alias_map, conv):
         clone = node.clone()
@@ -2854,6 +2864,7 @@ class Database(object):
     commit_select = False
     compiler_class = QueryCompiler
     compound_operations = ['UNION', 'INTERSECT', 'EXCEPT', 'UNION ALL']
+    compound_select_parentheses = False
     distinct_on = False
     drop_cascade = False
     field_overrides = {}
@@ -3199,6 +3210,7 @@ class SqliteDatabase(Database):
 
 class PostgresqlDatabase(Database):
     commit_select = True
+    compound_select_parentheses = True
     distinct_on = True
     drop_cascade = True
     field_overrides = {
