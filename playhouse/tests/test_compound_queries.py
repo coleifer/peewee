@@ -5,10 +5,12 @@ if sys.version_info[0] != 3:
     from functools import reduce
 from functools import wraps
 
+from peewee import *
 from playhouse.tests.base import compiler
 from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
 from playhouse.tests.base import PeeweeTestCase
+from playhouse.tests.base import skip_unless
 from playhouse.tests.base import test_db
 from playhouse.tests.models import *
 
@@ -55,6 +57,15 @@ class TestCompoundSelectSQL(PeeweeTestCase):
             'SELECT "t1"."alpha" FROM "alpha" AS t1 UNION '
             'SELECT "t2"."beta" FROM "beta" AS t2 UNION '
             'SELECT "t3"."gamma" FROM "gamma" AS t3'))
+
+        sql, params = (
+            Alpha.select(Alpha.alpha) |
+            (Beta.select(Beta.beta) |
+             Gamma.select(Gamma.gamma))).sql()
+        self.assertEqual(sql, (
+            'SELECT "t3"."alpha" FROM "alpha" AS t3 UNION '
+            'SELECT "t1"."beta" FROM "beta" AS t1 UNION '
+            'SELECT "t2"."gamma" FROM "gamma" AS t2'))
 
     def test_simple_same_model(self):
         queries = [Alpha.select(Alpha.alpha) for i in range(3)]
@@ -362,3 +373,29 @@ class TestCompoundSelectQueries(ModelTestCase):
             {'username': 'd'},
             {'username': 'b'},
             {'username': 'a'}])
+
+@skip_unless(lambda: isinstance(test_db, PostgresqlDatabase))
+class TestCompoundWithOrderLimit(ModelTestCase):
+    requires = [User]
+
+    def setUp(self):
+        super(TestCompoundWithOrderLimit, self).setUp()
+        for username in ['a', 'b', 'c', 'd', 'e', 'f']:
+            User.create(username=username)
+
+    def test_union_with_order_limit(self):
+        lhs = (User
+               .select(User.username)
+               .where(User.username << ['a', 'b', 'c']))
+        rhs = (User
+               .select(User.username)
+               .where(User.username << ['d', 'e', 'f']))
+
+        cq = (lhs.order_by(User.username.desc()).limit(2) |
+              rhs.order_by(User.username.desc()).limit(2))
+        results = [user.username for user in cq]
+        self.assertEqual(sorted(results), ['b', 'c', 'e', 'f'])
+
+        cq = cq.order_by(cq.c.username.desc()).limit(3)
+        results = [user.username for user in cq]
+        self.assertEqual(results, ['f', 'e', 'c'])
