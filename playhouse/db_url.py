@@ -31,17 +31,7 @@ schemes = {
     'sqliteext': SqliteExtDatabase,
 }
 
-def connect(url):
-    parsed = urlparse(url)
-    database_class = schemes.get(parsed.scheme)
-    if database_class is None:
-        if database_class in schemes:
-            raise RuntimeError('Attempted to use "%s" but a required library '
-                               'could not be imported.' % parsed.scheme)
-        else:
-            raise RuntimeError('Unrecognized or unsupported scheme: "%s".' %
-                               parsed.scheme)
-
+def parseresult_to_dict(parsed):
     connect_kwargs = {'database': parsed.path[1:]}
     if parsed.username:
         connect_kwargs['user'] = parsed.username
@@ -53,7 +43,26 @@ def connect(url):
         connect_kwargs['port'] = parsed.port
 
     # Adjust parameters for MySQL.
-    if database_class is MySQLDatabase and 'password' in connect_kwargs:
+    if parsed.scheme == 'mysql' and 'password' in connect_kwargs:
         connect_kwargs['passwd'] = connect_kwargs.pop('password')
+
+    return connect_kwargs
+
+def parse(url):
+    parsed = urlparse(url)
+    return parseresult_to_dict(parsed)
+
+def connect(url):
+    parsed = urlparse(url)
+    connect_kwargs = parseresult_to_dict(parsed)
+    database_class = schemes.get(parsed.scheme)
+
+    if database_class is None:
+        if database_class in schemes:
+            raise RuntimeError('Attempted to use "%s" but a required library '
+                               'could not be imported.' % parsed.scheme)
+        else:
+            raise RuntimeError('Unrecognized or unsupported scheme: "%s".' %
+                               parsed.scheme)
 
     return database_class(**connect_kwargs)
