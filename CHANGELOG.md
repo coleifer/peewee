@@ -5,6 +5,29 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.5.1
+
+This is a relatively small release with a few important bugfixes.
+
+### Bugs fixed
+
+* #566, fixed a bug regarding parentheses around compound `SELECT` queries (i.e. `UNION`, `INTERSECT`, etc).
+* Fixed unreported bug where table aliases were not generated correctly for compound `SELECT` queries.
+* #559, add option to preserve original column order with `pwiz`. Thanks @elgow!
+* Fixed unreported bug where selecting all columns from a `ModelAlias` does not use the appropriate `FieldAlias` objects.
+
+### New features
+
+* #561, added an option for bulk insert queries to return the list of auto-generated primary keys. See [docs for InsertQuery.return_id_list](http://docs.peewee-orm.com/en/latest/peewee/api.html#InsertQuery.return_id_list).
+* #569, added `parse` function to the `playhouse.db_url` module. Thanks @stt!
+* Added [hacks](http://docs.peewee-orm.com/en/latest/peewee/hacks.html) section to the docs. Please contribute your hacks!
+
+### Backwards-incompatible changes
+
+* Calls to `Node.in_()` and `Node.not_in()` do not take `*args` anymore and instead take a single argument.
+
+[View commits](https://github.com/coleifer/peewee/compare/2.5.0...2.5.1)
+
 ## 2.5.0
 
 There are a couple new features so I thought I'd bump to 2.5.x. One change Postgres users may be happy to see is the use of `INSERT ... RETURNING` to perform inserts. This should definitely speed up inserts for Postgres, since an extra query is no longer needed to get the new auto-generated primary key.
