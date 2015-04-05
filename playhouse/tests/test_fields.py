@@ -284,8 +284,8 @@ class TestFieldTypes(ModelTestCase):
         self.assertNM(field.between(5, 300), [])
 
     def test_in_(self):
-        self.assertNM(NullModel.int_field.in_(1, 3), ['c1', 'c3'])
-        self.assertNM(NullModel.int_field.in_(2, 5), ['c2'])
+        self.assertNM(NullModel.int_field.in_([1, 3]), ['c1', 'c3'])
+        self.assertNM(NullModel.int_field.in_([2, 5]), ['c2'])
 
     def test_contains(self):
         self.assertNM(NullModel.char_field.contains('c2'), ['c2'])

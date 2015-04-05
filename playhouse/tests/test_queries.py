@@ -360,7 +360,7 @@ class TestSelectQuery(PeeweeTestCase):
         sq = SelectQuery(User).where(User.username << ['u1', 'u2'])
         self.assertWhere(sq, '("users"."username" IN (?, ?))', ['u1', 'u2'])
 
-        sq = SelectQuery(User).where(User.username.not_in('u1', 'u2'))
+        sq = SelectQuery(User).where(User.username.not_in(['u1', 'u2']))
         self.assertWhere(sq, '("users"."username" NOT IN (?, ?))', ['u1', 'u2'])
 
         sq = SelectQuery(User).where((User.username << ['u1', 'u2']) | (User.username << ['u3', 'u4']))

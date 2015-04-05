@@ -444,9 +444,9 @@ class Node(object):
     bin_or = _e(OP.BIN_OR)
 
     # Special expressions.
-    def in_(self, *rhs):
+    def in_(self, rhs):
         return Expression(self, OP.IN, rhs)
-    def not_in(self, *rhs):
+    def not_in(self, rhs):
         return Expression(self, OP.NOT_IN, rhs)
     def is_null(self, is_null=True):
         if is_null:
