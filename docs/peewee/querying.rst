@@ -88,12 +88,12 @@ The above approach is slow for a couple of reasons:
 3. That's a lot of data (in terms of raw bytes of SQL) you are sending to your database to parse.
 4. We are retrieving the *last insert id*, which causes an additional query to be executed in some cases.
 
-You can get a **very significant speedup** by simply wrapping this in a :py:meth:`~Database.transaction`.
+You can get a **very significant speedup** by simply wrapping this in a :py:meth:`~Database.atomic`.
 
 .. code-block:: python
 
     # This is much faster.
-    with db.transaction():
+    with db.atomic():
         for data_dict in data_source:
             Model.create(**data_dict)
 
@@ -102,7 +102,7 @@ The above code still suffers from points 2, 3 and 4. We can get another big boos
 .. code-block:: python
 
     # Fastest.
-    with db.transaction():
+    with db.atomic():
         Model.insert_many(data_source).execute()
 
 Depending on the number of rows in your data source, you may need to break it up into chunks:
@@ -110,7 +110,7 @@ Depending on the number of rows in your data source, you may need to break it up
 .. code-block:: python
 
     # Insert rows 1000 at a time.
-    with db.transaction():
+    with db.atomic():
         for idx in range(0, len(data_source), 1000):
             Model.insert_many(data_source[idx:idx+1000]).execute()
 
@@ -277,7 +277,7 @@ Let's say we wish to implement registering a new user account using the :ref:`ex
 .. code-block:: python
 
     try:
-        with db.transaction():
+        with db.atomic():
             return User.create(username=username)
     except peewee.IntegrityError:
         # `username` is a unique column, so this username already exists,
