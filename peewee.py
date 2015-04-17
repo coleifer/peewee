@@ -3250,13 +3250,15 @@ class PostgresqlDatabase(Database):
 
     register_unicode = True
 
-    def _connect(self, database, **kwargs):
+    def _connect(self, database, encoding=None, **kwargs):
         if not psycopg2:
             raise ImproperlyConfigured('psycopg2 must be installed.')
         conn = psycopg2.connect(database=database, **kwargs)
         if self.register_unicode:
             pg_extensions.register_type(pg_extensions.UNICODE, conn)
             pg_extensions.register_type(pg_extensions.UNICODEARRAY, conn)
+        if encoding:
+            conn.set_client_encoding(encoding)
         return conn
 
     def _get_pk_sequence(self, model):
