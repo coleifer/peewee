@@ -396,6 +396,28 @@ class TestArrayField(BasePostgresqlExtTestCase):
             tags=['alpha', 'beta', 'gamma', 'delta'],
             ints=[[1, 2], [3, 4], [5, 6]])
 
+    def test_joining_on_array_index(self):
+        values = [
+            ['foo', 'bar'],
+            ['foo', 'nugget'],
+            ['baze', 'nugget']]
+        for tags in values:
+            ArrayModel.create(tags=tags, ints=[])
+
+        for value in ['nugget', 'herp', 'foo']:
+            NormalModel.create(data=value)
+
+        query = (ArrayModel
+                 .select()
+                 .join(
+                     NormalModel,
+                     on=(NormalModel.data == ArrayModel.tags[1]))
+                 .order_by(ArrayModel.id))
+        results = [am.tags for am in query]
+        self.assertEqual(results, [
+            ['foo', 'nugget'],
+            ['baze', 'nugget']])
+
     def test_array_storage_retrieval(self):
         am = self._create_am()
         am_db = ArrayModel.get(ArrayModel.id == am.id)
@@ -635,6 +657,31 @@ class BaseJsonFieldTestCase(object):
         j_db = self.ModelClass.get(j._pk_expr())
         self.assertEqual(j_db.data, data)
 
+    def test_joining_on_json_key(self):
+        JsonModel = self.ModelClass
+        values = [
+            {'foo': 'bar', 'baze': {'nugget': 'alpha'}},
+            {'foo': 'bar', 'baze': {'nugget': 'beta'}},
+            {'herp': 'derp', 'baze': {'nugget': 'epsilon'}},
+            {'herp': 'derp', 'bar': {'nuggie': 'alpha'}},
+        ]
+        for data in values:
+            JsonModel.create(data=data)
+
+        for value in ['alpha', 'beta', 'gamma', 'delta']:
+            NormalModel.create(data=value)
+
+        query = (JsonModel
+                 .select()
+                 .join(NormalModel, on=(
+                     NormalModel.data == JsonModel.data['baze']['nugget']))
+                 .order_by(JsonModel.id))
+        results = [jm.data for jm in query]
+        self.assertEqual(results, [
+            {'foo': 'bar', 'baze': {'nugget': 'alpha'}},
+            {'foo': 'bar', 'baze': {'nugget': 'beta'}},
+        ])
+
     def test_json_lookup_methods(self):
         data = {
             'gp1': {
@@ -756,7 +803,7 @@ def pg93():
 @skip_if(lambda: not json_ok())
 class TestJsonField(BaseJsonFieldTestCase, ModelTestCase):
     ModelClass = TestingJson
-    requires = [TestingJson]
+    requires = [TestingJson, NormalModel]
 
 def jsonb_ok():
     if BJson is None:
@@ -767,7 +814,7 @@ def jsonb_ok():
 @skip_if(lambda: not json_ok())
 class TestBinaryJsonField(BaseJsonFieldTestCase, ModelTestCase):
     ModelClass = BJson
-    requires = [BJson]
+    requires = [BJson, NormalModel]
 
     def _create_test_data(self):
         data = [
