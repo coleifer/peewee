@@ -12,6 +12,21 @@ from playhouse.tests.base import ulit
 from playhouse.tests.models import *
 
 
+in_memory_db = database_initializer.get_in_memory_database()
+
+class GCModel(Model):
+    name = CharField(unique=True)
+    key = CharField()
+    value = CharField()
+    number = IntegerField(default=0)
+
+    class Meta:
+        database = in_memory_db
+        indexes = (
+            (('key', 'value'), True),
+        )
+
+
 class TestQueryingModels(ModelTestCase):
     requires = [User, Blog]
 
@@ -289,6 +304,11 @@ class TestQueryingModels(ModelTestCase):
 class TestModelAPIs(ModelTestCase):
     requires = [User, Blog, Category, UserCategory]
 
+    def setUp(self):
+        super(TestModelAPIs, self).setUp()
+        GCModel.drop_table(True)
+        GCModel.create_table()
+
     def test_related_name(self):
         u1 = User.create(username='u1')
         u2 = User.create(username='u2')
@@ -533,10 +553,58 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual(u2, User.get(User.username == 'u2'))
 
     def test_get_or_create(self):
-        u1 = User.get_or_create(username='u1')
-        u1_x = User.get_or_create(username='u1')
+        u1, created = User.get_or_create(username='u1')
+        self.assertTrue(created)
+
+        u1_x, created = User.get_or_create(username='u1')
+        self.assertFalse(created)
+
         self.assertEqual(u1.id, u1_x.id)
         self.assertEqual(User.select().count(), 1)
+
+    def test_get_or_create_extended(self):
+        gc1, created = GCModel.get_or_create(
+            name='huey',
+            key='k1',
+            value='v1',
+            defaults={'number': 3})
+        self.assertTrue(created)
+        self.assertEqual(gc1.name, 'huey')
+        self.assertEqual(gc1.key, 'k1')
+        self.assertEqual(gc1.value, 'v1')
+        self.assertEqual(gc1.number, 3)
+
+        gc1_db, created = GCModel.get_or_create(
+            name='huey',
+            defaults={'key': 'k2', 'value': 'v2'})
+        self.assertFalse(created)
+        self.assertEqual(gc1_db.id, gc1.id)
+        self.assertEqual(gc1_db.key, 'k1')
+
+        def integrity_error():
+            gc2, created = GCModel.get_or_create(
+                name='huey',
+                key='kx',
+                value='vx')
+
+        self.assertRaises(IntegrityError, integrity_error)
+
+        gc2, created = GCModel.get_or_create(
+            name__ilike='%nugget%',
+            defaults={
+                'name': 'foo-nugget',
+                'key': 'k2',
+                'value': 'v2'})
+        self.assertTrue(created)
+        self.assertEqual(gc2.name, 'foo-nugget')
+
+        gc2_db, created = GCModel.get_or_create(
+            name__ilike='%nugg%',
+            defaults={'name': 'xx'})
+        self.assertFalse(created)
+        self.assertEqual(gc2_db.id, gc2.id)
+
+        self.assertEqual(GCModel.select().count(), 2)
 
     def test_first(self):
         users = User.create_users(5)
