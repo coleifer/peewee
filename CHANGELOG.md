@@ -5,6 +5,19 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.6.0
+
+This is a tiny update, mainly consisting of a new-and-improved implementation of ``get_or_create()`` ([docs](http://docs.peewee-orm.com/en/latest/peewee/api.html#Model.get_or_create)).
+
+### Backwards-incompatible changes
+
+* ``get_or_create()`` now returns a 2-tuple consisting of the model instance and a boolean indicating whether the instance was created. The function now behaves just like the Django equivalent.
+
+### New features
+
+* #574, better support for setting the character encoding on Postgresql database connections. Thanks @klen!
+* Improved implementation of [get_or_create()](http://docs.peewee-orm.com/en/latest/peewee/api.html#Model.get_or_create).
+
 ## 2.5.1
 
 This is a relatively small release with a few important bugfixes.
