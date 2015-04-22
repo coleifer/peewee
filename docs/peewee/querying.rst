@@ -270,7 +270,7 @@ For more information, see the documentation on:
 Get or create
 -------------
 
-While peewee has a :py:meth:`~Model.get_or_create` method, this should really not be used outside of tests as it is vulnerable to a race condition. The proper way to perform a *get or create* with peewee is to rely on the database to enforce a constraint.
+While peewee has a :py:meth:`~Model.get_or_create` method, I do not advise you use it. The proper way to perform a *get or create* with peewee is to *create then get*, relying on database constraints to avoid duplicate records.
 
 Let's say we wish to implement registering a new user account using the :ref:`example User model <blog-models>`. The *User* model has a *unique* constraint on the username field, so we will rely on the database's integrity guarantees to ensure we don't end up with duplicate usernames:
 
@@ -283,6 +283,30 @@ Let's say we wish to implement registering a new user account using the :ref:`ex
         # `username` is a unique column, so this username already exists,
         # making it safe to call .get().
         return User.get(User.username == username)
+
+The above example first attempts at creation, then falls back to retrieval, relying on the database to enforce a unique constraint.
+
+If you prefer to attempt to retrieve the record first, you can use :py:meth:`~Model.get_or_create`. This method is implemented along the same lines as the Django function of the same name. You can use the Django-style keyword argument filters to specify your ``WHERE`` conditions. The function returns a 2-tuple containing the instance and a boolean value indicating if the object was created.
+
+Here is how you might implement user account creation using :py:meth:`~Model.get_or_create`:
+
+.. code-block:: python
+
+    user, created = User.get_or_create(username=username)
+
+Suppose we have a different model ``Person`` and would like to get or create a person object. The only conditions we care about when retrieving the ``Person`` are their first and last names, **but** if we end up needing to create a new record, we will also specify their date-of-birth and favorite color:
+
+.. code-block:: python
+
+    person, created = Person.get_or_create(
+        first_name=first_name,
+        last_name=last_name,
+        defaults={'dob': dob, 'favorite_color': 'green'})
+
+Any keyword argument passed to :py:meth:`~Model.get_or_create` will be used in the ``get()`` portion of the logic, except for the ``defaults`` dictionary, which will be used to populate values on newly-created instances.
+
+For more details check out the documentation for :py:meth:`Model.get_or_create`.
+
 
 Selecting multiple records
 --------------------------

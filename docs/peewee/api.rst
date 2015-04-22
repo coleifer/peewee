@@ -258,6 +258,38 @@ Models
             found. If more than one row is found, the first row returned by the
             database cursor will be used.
 
+    .. py:classmethod:: get_or_create([defaults=None[, **kwargs]])
+
+        :param dict defaults: A dictionary of values to set on newly-created model instances.
+        :param kwargs: Django-style filters specifying which model to get, and what values to apply to new instances.
+        :returns: A 2-tuple containing the model instance and a boolean indicating whether the instance was created.
+
+        This function attempts to retrieve a model instance based on the provided filters. If no matching model can be found, a new model is created using the parameters specified by the filters and any values in the ``defaults`` dictionary.
+
+        Example **without** ``get_or_create``:
+
+        .. code-block:: python
+
+            # Without `get_or_create`, we might write:
+            try:
+                person = Person.get(
+                    (Person.first_name == 'John') &
+                    (Person.last_name == 'Lennon'))
+            except Person.DoesNotExist:
+                person = Person.create(
+                    first_name='John',
+                    last_name='Lennon',
+                    birthday=datetime.date(1940, 10, 9))
+
+        Equivalent code using ``get_or_create``:
+
+        .. code-block:: python
+
+            person, created = Person.get_or_create(
+                first_name='John',
+                last_name='Lennon',
+                defaults={'birthday': datetime.date(1940, 10, 9)})
+
     .. py:classmethod:: alias()
 
         :rtype: :py:class:`ModelAlias` instance
