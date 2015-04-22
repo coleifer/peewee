@@ -18,6 +18,8 @@ This is a tiny update, mainly consisting of a new-and-improved implementation of
 * #574, better support for setting the character encoding on Postgresql database connections. Thanks @klen!
 * Improved implementation of [get_or_create()](http://docs.peewee-orm.com/en/latest/peewee/api.html#Model.get_or_create).
 
+[View commits](https://github.com/coleifer/peewee/compare/2.5.1...2.6.0)
+
 ## 2.5.1
 
 This is a relatively small release with a few important bugfixes.
