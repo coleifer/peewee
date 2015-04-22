@@ -3945,11 +3945,22 @@ class Model(with_metaclass(BaseModel)):
 
     @classmethod
     def get_or_create(cls, **kwargs):
+        defaults = kwargs.pop('defaults', {})
         sq = cls.select().filter(**kwargs)
         try:
-            return sq.get()
+            return sq.get(), False
         except cls.DoesNotExist:
-            return cls.create(**kwargs)
+            try:
+                params = dict((k, v) for k, v in kwargs.items()
+                              if '__' not in k)
+                params.update(defaults)
+                with cls._meta.database.atomic():
+                    return cls.create(**params), True
+            except IntegrityError as exc:
+                try:
+                    return sq.get(), False
+                except cls.DoesNotExist:
+                    raise exc
 
     @classmethod
     def filter(cls, *dq, **query):
