@@ -2155,6 +2155,8 @@ class Database(object):
         if not params:
             params = ()
         execution_time = time.time() - start_time
+        if execution_time > 2.0:
+            logger.info(("SLOW_QUERY", sql, params, len(params), table_name, (execution_time*1000)))
         logger.debug((sql, params, len(params), table_name, (execution_time*1000)))
         if return_time:
             return cursor, execution_time
