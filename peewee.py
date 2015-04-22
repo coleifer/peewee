@@ -3181,7 +3181,9 @@ class SqliteDatabase(Database):
         # Determine which indexes have a unique constraint.
         unique_indexes = set()
         cursor = self.execute_sql('PRAGMA index_list("%s")' % table)
-        for _, name, is_unique in cursor.fetchall():
+        for row in cursor.fetchall():
+            name = row[1]
+            is_unique = int(row[2]) == 1
             if is_unique:
                 unique_indexes.add(name)
 
@@ -4063,7 +4065,7 @@ class Model(with_metaclass(BaseModel)):
                 new_data[field.name] = field_dict[field.name]
         return new_data
 
-    def save(self, force_insert=False, only=None):
+    def save(self, force_insert=False, only=None, upsert=False):
         field_dict = dict(self._data)
         pk_field = self._meta.primary_key
         if only:
@@ -4077,7 +4079,10 @@ class Model(with_metaclass(BaseModel)):
             rows = self.update(**field_dict).where(self._pk_expr()).execute()
         else:
             pk = self._get_pk_value()
-            pk_from_cursor = self.insert(**field_dict).execute()
+            insert_query = self.insert(**field_dict)
+            if upsert:
+                insert_query = insert_query.upsert()
+            pk_from_cursor = insert_query.execute()
             if pk_from_cursor is not None:
                 pk = pk_from_cursor
             self._set_pk_value(pk)  # Do not overwrite current ID with None.
