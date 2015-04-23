@@ -4065,12 +4065,13 @@ class Model(with_metaclass(BaseModel)):
                 new_data[field.name] = field_dict[field.name]
         return new_data
 
-    def save(self, force_insert=False, only=None, upsert=False):
+    def save(self, force_insert=False, only=None):
         field_dict = dict(self._data)
         pk_field = self._meta.primary_key
+        pk_value = self._get_pk_value()
         if only:
             field_dict = self._prune_fields(field_dict, only)
-        if self._get_pk_value() is not None and not force_insert:
+        if pk_value is not None and not force_insert:
             if self._meta.composite_key:
                 for pk_part_name in pk_field.field_names:
                     field_dict.pop(pk_part_name, None)
@@ -4078,14 +4079,10 @@ class Model(with_metaclass(BaseModel)):
                 field_dict.pop(pk_field.name, None)
             rows = self.update(**field_dict).where(self._pk_expr()).execute()
         else:
-            pk = self._get_pk_value()
-            insert_query = self.insert(**field_dict)
-            if upsert:
-                insert_query = insert_query.upsert()
-            pk_from_cursor = insert_query.execute()
+            pk_from_cursor = self.insert(**field_dict).execute()
             if pk_from_cursor is not None:
-                pk = pk_from_cursor
-            self._set_pk_value(pk)  # Do not overwrite current ID with None.
+                pk_value = pk_from_cursor
+            self._set_pk_value(pk_value)
             rows = 1
         self._dirty.clear()
         return rows
