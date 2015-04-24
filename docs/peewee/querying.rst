@@ -939,7 +939,7 @@ For more examples, see the :ref:`expressions` section.
   string matching, remember to use asterisks for the wildcard.
 
 Three valued logic
-^^^^^^^^^^^^^^^^^^
+------------------
 
 Because of the way SQL handles ``NULL``, there are some special operations available for expressing:
 

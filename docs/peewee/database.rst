@@ -597,7 +597,7 @@ I haven't used bottle myself, but looking at the documentation I believe the fol
 Web.py
 ^^^^^^
 
-See `application processors <http://webpy.org/cookbook/application_processors`_.
+See `application processors <http://webpy.org/cookbook/application_processors>`_.
 
 .. code-block:: python
 

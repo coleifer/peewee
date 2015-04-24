@@ -21,6 +21,7 @@ Modules which expose higher-level python constructs:
 * :ref:`dataset`
 * :ref:`djpeewee`
 * :ref:`gfk`
+* :ref:`hybrid`
 * :ref:`kv`
 * :ref:`shortcuts`
 * :ref:`signals`
@@ -2090,6 +2091,181 @@ GFK API
 .. py:class:: ReverseGFK(model, [model_type_field='object_type'[, model_id_field='object_id']])
 
     Back-reference support for :py:class:`GFKField`.
+
+.. _hybrid:
+
+Hybrid Attributes
+-----------------
+
+Hybrid attributes encapsulate functionality that operates at both the Python *and* SQL levels. The idea for hybrid attributes comes from a feature of the `same name in SQLAlchemy <http://docs.sqlalchemy.org/en/improve_toc/orm/extensions/hybrid.html>`_. Consider the following example:
+
+.. code-block:: python
+
+    class Interval(Model):
+        start = IntegerField()
+        end = IntegerField()
+
+        @hybrid_property
+        def length(self):
+            return self.end - self.start
+
+        @hybrid_method
+        def contains(self, point):
+            return (self.start <= point) & (point < self.end)
+
+The *hybrid attribute* gets its name from the fact that the ``length`` attribute will behave differently depending on whether it is accessed via the ``Interval`` class or an ``Interval`` instance.
+
+If accessed via an instance, then it behaves just as you would expect.
+
+If accessed via the ``Interval.length`` class attribute, however, the length calculation will be expressed as a SQL expression. For example:
+
+.. code-block:: python
+
+    query = Interval.select().where(Interval.length > 5)
+
+This query will be equivalent to the following SQL:
+
+.. code-block:: sql
+
+    SELECT "t1"."id", "t1"."start", "t1"."end"
+    FROM "interval" AS t1
+    WHERE (("t1"."end" - "t1"."start") > 5)
+
+The ``hybrid`` module also contains a decorator for implementing hybrid methods which can accept parameters. As with hybrid properties, when accessed via a model instance, then the function executes normally as-written. When the hybrid method is called on the class, however, it will generate a SQL expression.
+
+Example:
+
+.. code-block:: python
+
+    query = Interval.select().where(Interval.contains(2))
+
+This query is equivalent to the following SQL:
+
+.. code-block:: sql
+
+    SELECT "t1"."id", "t1"."start", "t1"."end"
+    FROM "interval" AS t1
+    WHERE (("t1"."start" <= 2) AND ("t1"."end" > 2))
+
+There is an additional API for situations where the python implementation differs slightly from the SQL implementation. Let's add a ``radius`` method to the ``Interval`` model. Because this method calculates an absolute value, we will use the Python ``abs()`` function for the instance portion and the ``fn.ABS()`` SQL function for the class portion.
+
+.. code-block:: python
+
+    class Interval(Model):
+        start = IntegerField()
+        end = IntegerField()
+
+        @hybrid_property
+        def length(self):
+            return self.end - self.start
+
+        @hybrid_property
+        def radius(self):
+            return abs(self.length) / 2
+
+        @radius.expression
+        def radius(cls):
+            return fn.ABS(cls.length) / 2
+
+What is neat is that both the ``radius`` implementations refer to the ``length`` hybrid attribute! When accessed via an ``Interval`` instance, the radius calculation will be executed in Python. When invoked via an ``Interval`` class, we will get the appropriate SQL.
+
+Example:
+
+.. code-block:: python
+
+    query = Interval.select().where(Interval.radius < 3)
+
+This query is equivalent to the following SQL:
+
+.. code-block:: sql
+
+    SELECT "t1"."id", "t1"."start", "t1"."end"
+    FROM "interval" AS t1
+    WHERE ((abs("t1"."end" - "t1"."start") / 2) < 3)
+
+Pretty neat, right? Thanks for the cool idea, SQLAlchemy!
+
+Hybrid API
+^^^^^^^^^^
+
+.. py:class:: hybrid_method(func[, expr=None])
+
+    Method decorator that allows the definition of a Python object method with both instance-level and class-level behavior.
+
+    Example:
+
+    .. code-block:: python
+
+        class Interval(Model):
+            start = IntegerField()
+            end = IntegerField()
+
+            @hybrid_method
+            def contains(self, point):
+                return (self.start <= point) & (point < self.end)
+
+    When called with an ``Interval`` instance, the ``contains`` method will behave as you would expect. When called as a classmethod, though, a SQL expression will be generated:
+
+    .. code-block:: python
+
+        query = Interval.select().where(Interval.contains(2))
+
+    Would generate the following SQL:
+
+    .. code-block:: sql
+
+        SELECT "t1"."id", "t1"."start", "t1"."end"
+        FROM "interval" AS t1
+        WHERE (("t1"."start" <= 2) AND (2 < "t1"."end"))
+
+    .. py:method:: expression(expr)
+
+        Method decorator for specifying the SQL-expression producing method.
+
+.. py:class:: hybrid_property(fget[, fset=None[, fdel=None[, expr=None]]])
+
+    Method decorator that allows the definition of a Python object property with both instance-level and class-level behavior.
+
+    Examples:
+
+    .. code-block:: python
+
+        class Interval(Model):
+            start = IntegerField()
+            end = IntegerField()
+
+            @hybrid_property
+            def length(self):
+                return self.end - self.start
+
+            @hybrid_property
+            def radius(self):
+                return abs(self.length) / 2
+
+            @radius.expression
+            def radius(cls):
+                return fn.ABS(cls.length) / 2
+
+    When accessed on an ``Interval`` instance, the ``length`` and ``radius`` properties will behave as you would expect. When accessed as class attributes, though, a SQL expression will be generated instead:
+
+    .. code-block:: python
+
+        query = (Interval
+                 .select()
+                 .where(
+                     (Interval.length > 6) &
+                     (Interval.radius >= 3)))
+
+    Would generate the following SQL:
+
+    .. code-block:: sql
+
+        SELECT "t1"."id", "t1"."start", "t1"."end"
+        FROM "interval" AS t1
+        WHERE (
+            (("t1"."end" - "t1"."start") > 6) AND
+            ((abs("t1"."end" - "t1"."start") / 2) >= 3)
+        )
 
 .. _kv:
 
