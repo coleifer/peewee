@@ -2145,7 +2145,7 @@ This query is equivalent to the following SQL:
 
     SELECT "t1"."id", "t1"."start", "t1"."end"
     FROM "interval" AS t1
-    WHERE (("t1"."start" <= 2) AND ("t1"."end" > 2))
+    WHERE (("t1"."start" <= 2) AND (2 < "t1"."end"))
 
 There is an additional API for situations where the python implementation differs slightly from the SQL implementation. Let's add a ``radius`` method to the ``Interval`` model. Because this method calculates an absolute value, we will use the Python ``abs()`` function for the instance portion and the ``fn.ABS()`` SQL function for the class portion.
 
