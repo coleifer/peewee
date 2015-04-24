@@ -36,6 +36,7 @@ def get_option_parser():
     cases.add_option('--dataset', dest='dataset', default=False, action='store_true', help='dataset tests')
     cases.add_option('--db-url', dest='db_url', default=False, action='store_true', help='db url tests')
     cases.add_option('--djpeewee', dest='djpeewee', default=False, action='store_true', help='djpeewee tests')
+    cases.add_option('--fields-ext', dest='fields_ext', default=False, action='store_true', help='field extension tests')
     cases.add_option('--flask', dest='flask', default=False, action='store_true', help='flask utils tests')
     cases.add_option('--gfk', dest='gfk', default=False, action='store_true', help='gfk tests')
     cases.add_option('--hybrid', dest='hybrid', default=False, action='store_true', help='hybrid property/method tests')
@@ -85,6 +86,9 @@ def collect_modules(options):
     if xtra(options.djpeewee):
         from playhouse.tests import test_djpeewee
         modules.append(test_djpeewee)
+    if xtra(options.fields_ext):
+        from playhouse.tests import test_fields_ext
+        modules.append(test_fields_ext)
     if xtra(options.flask):
         try:
             import flask
