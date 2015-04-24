@@ -9,3 +9,9 @@ version 3?
 ==========
 
 * Follow foreign keys through fields, e.g. Tweet.user.username, or Comment.blog.user.username.
+* Simplify the node types:
+  * Node (base class)
+  * Expression
+  * Quoted
+  * Clause
+* Parsing should be context-aware, which would reduce some of the hacks, particularly around `IN` + lists.
