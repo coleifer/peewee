@@ -38,6 +38,7 @@ def get_option_parser():
     cases.add_option('--djpeewee', dest='djpeewee', default=False, action='store_true', help='djpeewee tests')
     cases.add_option('--flask', dest='flask', default=False, action='store_true', help='flask utils tests')
     cases.add_option('--gfk', dest='gfk', default=False, action='store_true', help='gfk tests')
+    cases.add_option('--hybrid', dest='hybrid', default=False, action='store_true', help='hybrid property/method tests')
     cases.add_option('--kv', dest='kv', default=False, action='store_true', help='key/value store tests')
     cases.add_option('--manytomany', dest='manytomany', default=False, action='store_true', help='manytomany field tests')
     cases.add_option('--migrations', dest='migrations', default=False, action='store_true', help='migration helper tests (requires psycopg2)')
@@ -95,6 +96,9 @@ def collect_modules(options):
     if xtra(options.gfk):
         from playhouse.tests import test_gfk
         modules.append(test_gfk)
+    if xtra(options.hybrid):
+        from playhouse.tests import test_hybrid
+        modules.append(test_hybrid)
     if xtra(options.kv):
         from playhouse.tests import test_kv
         modules.append(test_kv)
