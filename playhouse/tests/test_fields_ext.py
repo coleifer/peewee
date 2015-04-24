@@ -13,6 +13,7 @@ from playhouse.tests.base import skip_if
 
 
 db = database_initializer.get_in_memory_database()
+PY2 = sys.version_info[0] == 2
 
 class BaseModel(Model):
     class Meta:
@@ -23,9 +24,12 @@ class CompressedModel(BaseModel):
 
 
 def convert_to_str(binary_data):
-    if sys.version_info[0] == 3:
-        return bytes(binary_data)
-    return str(binary_data)
+    if PY2:
+        return str(binary_data)
+    else:
+        if isinstance(binary_data, str):
+            return bytes(binary_data, 'utf-8')
+        return binary_data
 
 
 class TestCompressedField(ModelTestCase):
@@ -81,20 +85,27 @@ class TestAESEncryptedField(ModelTestCase):
                 encrypted = field.encrypt(data)
                 decrypted = field.decrypt(encrypted)
                 self.assertEqual(len(decrypted), i)
-                self.assertEqual(decrypted, data)
+                if PY2:
+                    self.assertEqual(decrypted, data)
+                else:
+                    self.assertEqual(decrypted, convert_to_str(data))
 
     def test_encrypted_field(self):
         EM = self.EncryptedModel
         test_str = 'abcdefghij'
         em = EM.create(data=test_str)
         em_db = EM.get(EM.id == em.id)
-        self.assertEqual(em_db.data, test_str)
+        self.assertEqual(em_db.data, convert_to_str(test_str))
 
         curs = db.execute_sql('SELECT data FROM %s WHERE id = %s' %
                               (EM._meta.db_table, em.id))
         raw_data = curs.fetchone()[0]
         self.assertNotEqual(raw_data, test_str)
-        self.assertEqual(EM.data.decrypt(raw_data), test_str)
+        decrypted = EM.data.decrypt(raw_data)
+        if PY2:
+            self.assertEqual(decrypted, test_str)
+        else:
+            self.assertEqual(decrypted, convert_to_str(test_str))
 
         EM.data.key = 'testingX'
         em_db_2 = EM.get(EM.id == em.id)
@@ -104,4 +115,4 @@ class TestAESEncryptedField(ModelTestCase):
         # trailing space looks like the same key we used to encrypt with.
         EM.data.key = 'testing  '
         em_db_3 = EM.get(EM.id == em.id)
-        self.assertEqual(em_db_3.data, test_str)
+        self.assertEqual(em_db_3.data, convert_to_str(test_str))

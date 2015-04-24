@@ -18,22 +18,23 @@ except ImportError:
 from peewee import *
 from peewee import binary_construct
 
+PY2 = sys.version_info[0] == 2
+
 
 class CompressedField(BlobField):
-    if sys.version_info[0] == 2:
+    if PY2:
         def db_value(self, value):
             if value is not None:
                 return binary_construct(zlib.compress(value))
+
+        def python_value(self, value):
+            if value is not None:
+                return zlib.decompress(value)
     else:
         def db_value(self, value):
             if value is not None:
                 return zlib.compress(binary_construct(value))
 
-    if sys.version_info[0] == 2:
-        def python_value(self, value):
-            if value is not None:
-                return zlib.decompress(value)
-    else:
         def python_value(self, value):
             if value is not None:
                 return zlib.decompress(value).decode('utf-8')
@@ -54,17 +55,26 @@ if AES and Random:
         def encrypt(self, value, chunk_size=1024):
             iv = Random.get_random_bytes(AES.block_size)
             cipher = self.get_cipher(self.key, iv)
-            return ''.join((iv, cipher.encrypt(value)))
+            return iv + cipher.encrypt(value)
 
         def decrypt(self, value, chunk_size=1024):
             iv = value[:AES.block_size]
             cipher = self.get_cipher(self.key, iv)
             return cipher.decrypt(value[AES.block_size:])
 
-        def db_value(self, value):
-            if value is not None:
-                return binary_construct(self.encrypt(value))
+        if PY2:
+            def db_value(self, value):
+                if value is not None:
+                    return binary_construct(self.encrypt(value))
 
-        def python_value(self, value):
-            if value is not None:
-                return self.decrypt(value)
+            def python_value(self, value):
+                if value is not None:
+                    return self.decrypt(value)
+        else:
+            def db_value(self, value):
+                if value is not None:
+                    return self.encrypt(value)
+
+            def python_value(self, value):
+                if value is not None:
+                    return self.decrypt(value)
