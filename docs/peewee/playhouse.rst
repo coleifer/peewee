@@ -3181,9 +3181,9 @@ This module contains a helper function to generate a database connection from a 
     Examples:
 
     * *sqlite:///my_database.db* will create a :py:class:`SqliteDatabase` instance for the file ``my_database.db`` in the current directory.
-    * *sqlite:///:memory:* will create an in-memory database.
+    * *sqlite:///:memory:* will create an in-memory :py:class:`SqliteDatabase` instance.
     * *postgresql://postgres:my_password@localhost:5432/my_database* will create a :py:class:`PostgresqlDatabase` instance. A username and password are provided, as well as the host and port to connect to.
-    * *mysql:///my_db* will create a :py:class:`MySQLDatabase` instance for the local MySQL database *my_db*.
+    * *mysql://user:passwd@ip:port/my_db* will create a :py:class:`MySQLDatabase` instance for the local MySQL database *my_db*.
 
     Usage:
 
@@ -3196,6 +3196,11 @@ This module contains a helper function to generate a database connection from a 
         # back to a local Sqlite database if no database URL is specified.
         db = connect(os.environ.get('DATABASE') or 'sqlite:///default.db')
 
+.. py:function:: parse(url)
+
+    Parse the information in the given URL into a dictionary containing ``database``, ``host``, ``port``, ``user`` and/or ``password``.
+
+    If you are using a custom database class, you can use the ``parse()`` function to extract information from a URL which can then be passed in to your database object.
 
 .. _csv_utils:
 

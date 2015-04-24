@@ -280,6 +280,7 @@ Example code:
 Example database URLs:
 
 * *sqlite:///my_database.db* will create a :py:class:`SqliteDatabase` instance for the file ``my_database.db`` in the current directory.
+* *sqlite:///:memory:* will create an in-memory :py:class:`SqliteDatabase` instance.
 * *postgresql://postgres:my_password@localhost:5432/my_database* will create a :py:class:`PostgresqlDatabase` instance. A username and password are provided, as well as the host and port to connect to.
 * *mysql://user:passwd@ip:port/my_db* will create a :py:class:`MySQLDatabase` instance for the local MySQL database *my_db*.
 
