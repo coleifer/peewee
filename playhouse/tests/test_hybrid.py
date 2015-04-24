@@ -25,7 +25,7 @@ class Interval(BaseModel):
 
     @hybrid_property
     def radius(self):
-        return abs(self.length) / 2
+        return int(abs(self.length) / 2)
 
     @radius.expression
     def radius(cls):
