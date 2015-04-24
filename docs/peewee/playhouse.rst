@@ -2352,8 +2352,7 @@ KeyStore API
 Shortcuts
 ---------
 
-This module contains helper functions for expressing things that would otherwise
-be somewhat verbose or cumbersome using peewee's APIs.
+This module contains helper functions for expressing things that would otherwise be somewhat verbose or cumbersome using peewee's APIs. This module also contains several field classes that implement additional logic like encryption and compression.
 
 .. py:function:: case(predicate, expression_tuples, default=None)
 
@@ -2611,6 +2610,20 @@ be somewhat verbose or cumbersome using peewee's APIs.
                 Course,
                 StudentCourseThrough])
 
+.. py:class:: CompressedField([compression_level=6[, algorithm='zlib'[, **kwargs]]])
+
+    ``CompressedField`` stores compressed data using the specified algorithm. This field extends :py:class:`BlobField`, transparently storing a compressed representation of the data in the database.
+
+    :param int compression_level: A value from 0 to 9.
+    :param str algorithm: Either ``'zlib'`` or ``'bz2'``.
+
+.. py:class:: AESEncryptedField(key[, **kwargs])
+
+    ``AESEncryptedField`` encrypts its contents before storing them in the database.
+
+    :param str key: Encryption key.
+
+    .. note:: This field requires `pycrypto <https://www.dlitz.net/software/pycrypto/>`_, which can be installed by running ``pip install pycrypto``.
 
 .. py:function:: model_to_dict(model[, recurse=True[, backrefs=False[, only=None[, exclude=None]]]])
 
