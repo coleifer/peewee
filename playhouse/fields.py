@@ -20,13 +20,23 @@ from peewee import binary_construct
 
 
 class CompressedField(BlobField):
-    def db_value(self, value):
-        if value is not None:
-            return binary_construct(zlib.compress(value))
+    if sys.version_info[0] == 2:
+        def db_value(self, value):
+            if value is not None:
+                return binary_construct(zlib.compress(value))
+    else:
+        def db_value(self, value):
+            if value is not None:
+                return zlib.compress(binary_construct(value))
 
-    def python_value(self, value):
-        if value is not None:
-            return zlib.decompress(value)
+    if sys.version_info[0] == 2:
+        def python_value(self, value):
+            if value is not None:
+                return zlib.decompress(value)
+    else:
+        def python_value(self, value):
+            if value is not None:
+                return zlib.decompress(value).decode('utf-8')
 
 
 if AES and Random:

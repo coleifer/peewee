@@ -1,6 +1,5 @@
 import random
 import sys
-import zlib
 
 from peewee import *
 from playhouse.fields import CompressedField
@@ -51,7 +50,6 @@ class TestCompressedField(ModelTestCase):
         db_data = self.get_raw(cm)
         compressed = len(db_data) / float(len(data))
         self.assertTrue(compressed < .01)
-        self.assertEqual(zlib.decompress(db_data), data)
 
     def test_compress_random_data(self):
         data = ''.join(
@@ -60,9 +58,6 @@ class TestCompressedField(ModelTestCase):
         cm = CompressedModel.create(data=data)
         cm_db = CompressedModel.get(CompressedModel.id == cm.id)
         self.assertEqual(cm_db.data, data)
-
-        db_data = self.get_raw(cm)
-        self.assertEqual(zlib.decompress(db_data), data)
 
 
 @skip_if(lambda: AESEncryptedField is None)
