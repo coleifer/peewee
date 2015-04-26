@@ -768,6 +768,13 @@ class TestUpdateQuery(PeeweeTestCase):
             '"user_id" = ?, "title" = ?, "content" = ?, "pub_date" = ?',
             [15, 'foo', 'bar', pub_date]))
 
+    def test_on_conflict(self):
+        uq = UpdateQuery(User, {
+            User.username: 'charlie'}).on_conflict('IGNORE')
+        self.assertEqual(compiler.generate_update(uq), (
+            'UPDATE OR IGNORE "users" SET "username" = ?',
+            ['charlie']))
+
     def test_update_special(self):
         uq = UpdateQuery(CSVRow, {CSVRow.data: ['foo', 'bar', 'baz']})
         self.assertEqual(compiler.generate_update(uq), (
@@ -961,6 +968,14 @@ class TestInsertQuery(PeeweeTestCase):
         sql, params = compiler.generate_insert(query)
         self.assertEqual(sql, (
             'INSERT OR REPLACE INTO "users" ("username") VALUES (?)'))
+        self.assertEqual(params, ['charlie'])
+
+    def test_on_conflict(self):
+        query = User.insert(username='huey').on_conflict('IGNORE')
+        sql, params = compiler.generate_insert(query)
+        self.assertEqual(sql, (
+            'INSERT OR IGNORE INTO "users" ("username") VALUES (?)'))
+        self.assertEqual(params, ['huey'])
 
 
 class TestInsertReturning(PeeweeTestCase):

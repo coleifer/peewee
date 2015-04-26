@@ -735,6 +735,74 @@ class TestModelAPIs(ModelTestCase):
         user = User.create(username=ustr)
         self.assertEqual(user.username, ustr)
 
+    def test_on_conflict(self):
+        gc = GCModel.create(name='g1', key='k1', value='v1')
+        query = GCModel.insert(
+            name='g1',
+            key='k2',
+            value='v2')
+        self.assertRaises(IntegrityError, query.execute)
+
+        # Ensure that we can ignore errors.
+        res = query.on_conflict('IGNORE').execute()
+        self.assertEqual(res, gc.id)
+        self.assertEqual(GCModel.select().count(), 1)
+
+        # Error ignored, no changes.
+        gc_db = GCModel.get()
+        self.assertEqual(gc_db.name, 'g1')
+        self.assertEqual(gc_db.key, 'k1')
+        self.assertEqual(gc_db.value, 'v1')
+
+        # Replace the old, conflicting row, with the new data.
+        res = query.on_conflict('REPLACE').execute()
+        self.assertNotEqual(res, gc.id)
+        self.assertEqual(GCModel.select().count(), 1)
+
+        gc_db = GCModel.get()
+        self.assertEqual(gc_db.name, 'g1')
+        self.assertEqual(gc_db.key, 'k2')
+        self.assertEqual(gc_db.value, 'v2')
+
+        # Replaces also can occur when violating multi-column indexes.
+        query = GCModel.insert(
+            name='g2',
+            key='k2',
+            value='v2').on_conflict('REPLACE')
+
+        res = query.execute()
+        self.assertNotEqual(res, gc_db.id)
+        self.assertEqual(GCModel.select().count(), 1)
+
+        gc_db = GCModel.get()
+        self.assertEqual(gc_db.name, 'g2')
+        self.assertEqual(gc_db.key, 'k2')
+        self.assertEqual(gc_db.value, 'v2')
+
+    def test_on_conflict_many(self):
+        for i in range(5):
+            key = 'gc%s' % i
+            GCModel.create(name=key, key=key, value=key)
+
+        insert = [
+            {'name': key, 'key': 'x-%s' % key, 'value': key}
+            for key in ['gc%s' % i for i in range(10)]]
+        res = GCModel.insert_many(insert).on_conflict('IGNORE').execute()
+        self.assertEqual(GCModel.select().count(), 10)
+
+        gcs = list(GCModel.select().order_by(GCModel.id))
+        first_five, last_five = gcs[:5], gcs[5:]
+
+        # The first five should all be "gcI", the last five will have
+        # "x-gcI" for their keys.
+        self.assertEqual(
+            [gc.key for gc in first_five],
+            ['gc0', 'gc1', 'gc2', 'gc3', 'gc4'])
+
+        self.assertEqual(
+            [gc.key for gc in last_five],
+            ['x-gc5', 'x-gc6', 'x-gc7', 'x-gc8', 'x-gc9'])
+
 
 class TestAggregatesWithModels(ModelTestCase):
     requires = [OrderedModel, User, Blog]

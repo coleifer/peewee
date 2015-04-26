@@ -1,8 +1,5 @@
 # Hybrid methods/attributes, based on similar functionality in SQLAlchemy:
 # http://docs.sqlalchemy.org/en/improve_toc/orm/extensions/hybrid.html
-import functools
-
-
 class hybrid_method(object):
     def __init__(self, func, expr=None):
         self.func = func

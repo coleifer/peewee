@@ -1640,7 +1640,11 @@ class QueryCompiler(object):
         model = query.model_class
         alias_map = self.alias_map_class()
         alias_map.add(model, model._meta.db_table)
-        clauses = [SQL('UPDATE'), model.as_entity(), SQL('SET')]
+        if query._on_conflict:
+            statement = 'UPDATE OR %s' % query._on_conflict
+        else:
+            statement = 'UPDATE'
+        clauses = [SQL(statement), model.as_entity(), SQL('SET')]
 
         update = []
         for field, value in self._sorted_fields(query._update):
@@ -1667,7 +1671,12 @@ class QueryCompiler(object):
         meta = model._meta
         alias_map = self.alias_map_class()
         alias_map.add(model, model._meta.db_table)
-        statement = query._upsert and 'INSERT OR REPLACE INTO' or 'INSERT INTO'
+        if query._upsert:
+            statement = 'INSERT OR REPLACE INTO'
+        elif query._on_conflict:
+            statement = 'INSERT OR %s INTO' % query._on_conflict
+        else:
+            statement = 'INSERT INTO'
         clauses = [SQL(statement), model.as_entity()]
 
         if query._query is not None:
@@ -2683,12 +2692,18 @@ class CompoundSelect(SelectQuery):
 class UpdateQuery(Query):
     def __init__(self, model_class, update=None):
         self._update = update
+        self._on_conflict = None
         super(UpdateQuery, self).__init__(model_class)
 
     def _clone_attributes(self, query):
         query = super(UpdateQuery, self)._clone_attributes(query)
         query._update = dict(self._update)
+        query._on_conflict = self._on_conflict
         return query
+
+    @returns_clone
+    def on_conflict(self, action=None):
+        self._on_conflict = action
 
     join = not_allowed('joining')
 
@@ -2713,6 +2728,7 @@ class InsertQuery(Query):
 
         self._fields = fields
         self._query = query
+        self._on_conflict = None
 
     def _iter_rows(self):
         model_meta = self.model_class._meta
@@ -2750,6 +2766,7 @@ class InsertQuery(Query):
         query._fields = self._fields
         query._query = self._query
         query._return_id_list = self._return_id_list
+        query._on_conflict = self._on_conflict
         return query
 
     join = not_allowed('joining')
@@ -2758,6 +2775,10 @@ class InsertQuery(Query):
     @returns_clone
     def upsert(self, upsert=True):
         self._upsert = upsert
+
+    @returns_clone
+    def on_conflict(self, action=None):
+        self._on_conflict = action
 
     @returns_clone
     def return_id_list(self, return_id_list=True):
