@@ -780,6 +780,9 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual(gc_db.value, 'v2')
 
     def test_on_conflict_many(self):
+        if not SqliteDatabase.insert_many:
+            return
+
         for i in range(5):
             key = 'gc%s' % i
             GCModel.create(name=key, key=key, value=key)
