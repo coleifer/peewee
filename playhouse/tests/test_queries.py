@@ -308,6 +308,18 @@ class TestSelectQuery(PeeweeTestCase):
             'INNER JOIN "c" AS c ON ("b"."uniq_b" = "c"."uniq_bc")',
         ])
 
+    def test_join_other_node_types(self):
+        cond = fn.Magic(User.id, Blog.user).alias('magic')
+        sq = User.select().join(Blog, on=cond)
+        self.assertJoins(sq, [
+            'INNER JOIN "blog" AS blog ON '
+            'Magic("users"."id", "blog"."user_id")'])
+
+        sq = User.select().join(Blog, on=Blog.user.as_entity(True))
+        self.assertJoins(sq, [
+            'INNER JOIN "blog" AS blog ON '
+            '"blog"."user_id"'])
+
     def test_where(self):
         sq = SelectQuery(User).where(User.id < 5)
         self.assertWhere(sq, '("users"."id" < ?)', [5])
