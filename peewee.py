@@ -1542,7 +1542,7 @@ class QueryCompiler(object):
             for join in joins[curr]:
                 src = curr
                 dest = join.dest
-                if isinstance(join.on, Expression):
+                if isinstance(join.on, (Expression, Func, Clause, Entity)):
                     # Clear any alias on the join expression.
                     constraint = join.on.clone().alias()
                 else:
