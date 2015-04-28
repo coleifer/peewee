@@ -500,6 +500,22 @@ class SqliteMigrationTestCase(BaseMigrationTestCase, PeeweeTestCase):
         self.assertEqual(len(indexes), 1)
         self.assertEqual(indexes[0].name, 'indexmodel_data')
 
+    def test_add_column_indexed_table(self):
+        # Ensure that columns can be added to tables that have indexes.
+        field = CharField(default='')
+        migrate(self.migrator.add_column('indexmodel', 'foo', field))
+
+        db = self.migrator.database
+        columns = db.get_columns('indexmodel')
+        self.assertEqual(sorted(column.name for column in columns),
+                         ['data', 'first_name', 'foo', 'id', 'last_name'])
+
+        indexes = db.get_indexes('indexmodel')
+        self.assertEqual(
+            sorted((index.name, index.columns) for index in indexes),
+            [('indexmodel_data', ['data']),
+             ('indexmodel_first_name_last_name', ['first_name', 'last_name'])])
+
     def test_index_preservation(self):
         with count_queries() as qc:
             migrate(self.migrator.rename_column(
