@@ -141,8 +141,7 @@ In the future I would like to add support for more of postgresql's features.
 If there is a particular feature you would like to see added, please
 `open a Github issue <https://github.com/coleifer/peewee/issues>`_.
 
-.. warning:: In order to start using the features described below, you will need to use the
-    extension :py:class:`PostgresqlExtDatabase` class instead of :py:class:`PostgresqlDatabase`.
+.. warning:: In order to start using the features described below, you will need to use the extension :py:class:`PostgresqlExtDatabase` class instead of :py:class:`PostgresqlDatabase`.
 
 The code below will assume you are using the following database and base model:
 
@@ -467,6 +466,9 @@ postgres_ext API notes
     :py:func:`ServerSide`.
 
     If you do not wish to use the HStore extension, you can specify ``register_hstore=False``.
+
+    .. warning::
+        The :py:class:`PostgresqlExtDatabase` by default will attempt to register the ``HSTORE`` extension. Most distributions and recent versions include this, but in some cases the extension may not be available. If you **do not** plan to use the :ref:`HStore features of peewee <hstore>`, you can pass ``register_hstore=False`` when initializing your :py:class:`PostgresqlExtDatabase`.
 
 .. py:function:: ServerSide(select_query)
 
