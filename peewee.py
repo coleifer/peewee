@@ -376,9 +376,9 @@ class Node(object):
     @returns_clone
     def bind_to(self, bt):
         """
-        Bind the results of an expression to a specific model type. Useful when adding
-        expressions to a select, where the result of the expression should be placed on
-        a joined instance.
+        Bind the results of an expression to a specific model type. Useful
+        when adding expressions to a select, where the result of the expression
+        should be placed on a joined instance.
         """
         self._bind_to = bt
 
