@@ -340,7 +340,9 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
         super(PostgresqlExtDatabase, self).__init__(*args, **kwargs)
 
     def get_cursor(self, name=None):
-        return self.get_conn().cursor(name=name)
+        if name:
+            return self.get_conn().cursor(name=name)
+        return self.get_conn().cursor()
 
     def execute_sql(self, sql, params=None, require_commit=True,
                     named_cursor=False):
