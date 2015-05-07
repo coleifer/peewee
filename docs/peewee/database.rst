@@ -673,7 +673,7 @@ Using multiple databases
 
 With peewee you can use as many databases as you want. Each model can define it's database by specifying a :ref:`Meta.database <model-options>`. What if you want to use the same model with multiple databases, though? Depending on your use-case, peewee provides several options.
 
-If you have a Master/Slave setup and want all writes to go to the master, but reads can go to any number of replicated copies, check out the :ref:`Read Slave extension <read-slaves>`.
+If you have a Master/Slave setup and want all writes to go to the master, but reads can go to any number of replicated copies, check out the :ref:`Read Slave extension <read_slaves>`.
 
 For finer-grained control, check out the :py:class:`Using` context manager / decorator. This allows you to specify the database to use with a given list of models for the duration of the wrapped block.
 
@@ -705,7 +705,7 @@ Here is an example of how you might use the :py:class:`Using` context manager:
         SomeOtherModel.get(SomeOtherModel.field == 3)
 
 .. note::
-    For simple master/slave configurations, check out the :ref:`read-slaves` extension. This extension ensures writes are sent to the master database and reads occur from any of the listed read replicas.
+    For simple master/slave configurations, check out the :ref:`read_slaves` extension. This extension ensures writes are sent to the master database and reads occur from any of the listed read replicas.
 
 Logging queries
 ---------------

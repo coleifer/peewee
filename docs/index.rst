@@ -47,6 +47,7 @@ Contents:
    peewee/quickstart
    peewee/example
    peewee/more-resources
+   peewee/contributing
    peewee/database
    peewee/models
    peewee/querying
