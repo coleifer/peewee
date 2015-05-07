@@ -272,7 +272,7 @@ Once again we've run into a classic example of :ref:`N+1 <nplusone>` query behav
     Herb 1 pets
          Mittens Jr cat
 
-Even thought we created the subquery separately, **only one** query is actually executed.
+Even though we created the subquery separately, **only one** query is actually executed.
 
 Finally, let's do a complicated one. Let's get all the people whose birthday was
 either:
