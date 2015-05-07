@@ -411,6 +411,16 @@ Multi-column indexes are defined as *Meta* attributes using a nested tuple. Each
                 (('from_acct', 'to_acct'), False),
             )
 
+.. note::
+    Remember to add a **trailing comma** if your tuple of indexes contains only one item:
+
+    .. code-block:: python
+
+        class Meta:
+            indexes = (
+                (('first_name', 'last_name'), True),  # Note the trailing comma!
+            )
+
 .. _non_integer_primary_keys:
 
 Non-integer Primary Keys, Composite Keys and other Tricks
