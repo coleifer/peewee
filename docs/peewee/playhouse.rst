@@ -1468,8 +1468,6 @@ You can also find `step by step instructions <http://charlesleifer.com/blog/buil
 Sqlcipher backend
 -----------------
 
-.. warning:: This module is experimental.
-
 * Although this extention's code is short, it has not been propery
   peer-reviewed yet and may have introduced vulnerabilities.
 * The code contains minimum values for `passphrase` length and
