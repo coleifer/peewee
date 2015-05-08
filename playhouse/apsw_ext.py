@@ -46,34 +46,6 @@ class transaction(_transaction):
         self.db.begin(self.lock_type)
 
 
-class _execute_wrapper(object):
-    def __init__(self, database, cursor, sql, params, wrap=False):
-        self.database = database
-        self.cursor = cursor
-        self.sql = sql
-        self.params = params
-        self.wrap = wrap
-
-    def __enter__(self):
-        if self.wrap:
-            self.cursor.execute('begin;')
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if exc_type and self.wrap:
-            if self.database.get_autocommit() and self.database.autorollback:
-                self.cursor.execute('rollback;')
-            error_result = self.database.sql_error_handler(
-                exc_val,
-                self.sql,
-                self.params,
-                self.wrap)
-            if not error_result:
-                return False
-        elif self.wrap:
-            self.cursor.execute('commit;')
-
-
 class APSWDatabase(SqliteExtDatabase):
     def __init__(self, database, timeout=None, **kwargs):
         self.timeout = timeout
@@ -127,11 +99,11 @@ class APSWDatabase(SqliteExtDatabase):
         logger.debug((sql, params))
         with self.exception_wrapper():
             cursor = self.get_cursor()
-            require_commit = sql.lower().startswith(
-                ('insert', 'delete', 'update'))
-            wrap_transaction = require_commit and self.get_autocommit()
-            with _execute_wrapper(self, cursor, sql, params, wrap_transaction):
+            try:
                 self._execute_sql(cursor, sql, params)
+            except Exception as exc:
+                if self.sql_error_handler(exc, sql, params, require_commit):
+                    raise
         return cursor
 
     def last_insert_id(self, cursor, model):
