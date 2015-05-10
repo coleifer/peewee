@@ -1293,6 +1293,32 @@ class TestModelOptionInheritance(PeeweeTestCase):
         self.assertTrue(bar_order_by.model_class is Bar)
         self.assertEqual(bar_order_by.name, 'val')
 
+    def test_table_name_function(self):
+        class Base(TestModel):
+            class Meta:
+                def db_table_func(model):
+                    return model.__name__.lower() + 's'
+
+        class User(Base):
+            pass
+
+        class SuperUser(User):
+            class Meta:
+                db_table = 'nugget'
+
+        class MegaUser(SuperUser):
+            class Meta:
+                def db_table_func(model):
+                    return 'mega'
+
+        class Bear(Base):
+            pass
+
+        self.assertEqual(User._meta.db_table, 'users')
+        self.assertEqual(Bear._meta.db_table, 'bears')
+        self.assertEqual(SuperUser._meta.db_table, 'nugget')
+        self.assertEqual(MegaUser._meta.db_table, 'mega')
+
 
 class TestModelInheritance(ModelTestCase):
     requires = [Blog, BlogTwo, User]

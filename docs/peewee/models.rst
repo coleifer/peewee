@@ -351,6 +351,7 @@ Option                  Meaning                                                I
 =====================   ====================================================== ============
 ``database``            database for model                                     yes
 ``db_table``            name of the table to store data                        no
+``db_table_func``       function that accepts model and returns a table name   yes
 ``indexes``             a list of fields to index                              yes
 ``order_by``            a list of fields to use for default ordering           yes
 ``primary_key``         a :py:class:`CompositeKey` instance                    yes

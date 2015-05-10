@@ -3690,10 +3690,10 @@ else:
     default_database = None
 
 class ModelOptions(object):
-    def __init__(self, cls, database=None, db_table=None, indexes=None,
-                 order_by=None, primary_key=None, table_alias=None,
-                 constraints=None, schema=None, validate_backrefs=True,
-                 **kwargs):
+    def __init__(self, cls, database=None, db_table=None, db_table_func=None,
+                 indexes=None, order_by=None, primary_key=None,
+                 table_alias=None, constraints=None, schema=None,
+                 validate_backrefs=True, **kwargs):
         self.model_class = cls
         self.name = cls.__name__.lower()
         self.fields = {}
@@ -3705,6 +3705,7 @@ class ModelOptions(object):
 
         self.database = database or default_database
         self.db_table = db_table
+        self.db_table_func = db_table_func
         self.indexes = list(indexes or [])
         self.order_by = order_by
         self.primary_key = primary_key
@@ -3721,6 +3722,9 @@ class ModelOptions(object):
         for key, value in kwargs.items():
             setattr(self, key, value)
         self._additional_keys = set(kwargs.keys())
+
+        if self.db_table_func and not self.db_table:
+            self.db_table = self.db_table_func(cls)
 
     def prepared(self):
         for field in self.fields.values():
@@ -3810,8 +3814,9 @@ class ModelOptions(object):
 
 
 class BaseModel(type):
-    inheritable = set(['constraints', 'database', 'indexes', 'order_by',
-                       'primary_key', 'schema', 'validate_backrefs'])
+    inheritable = set([
+        'constraints', 'database', 'db_table_func', 'indexes', 'order_by',
+        'primary_key', 'schema', 'validate_backrefs'])
 
     def __new__(cls, name, bases, attrs):
         if not bases:
