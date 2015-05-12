@@ -298,6 +298,10 @@ def skip_test_if(expression):
 def skip_test_unless(expression):
     return skip_test_if(lambda: not expression())
 
+def log_console(s):
+    if TEST_VERBOSITY > 1:
+        print_(s)
+
 
 class QueryLogger(object):
     def __init__(self, test_case):

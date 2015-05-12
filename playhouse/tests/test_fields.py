@@ -336,12 +336,8 @@ class TestFieldTypes(ModelTestCase):
         assertValues('efg$', 'abcdefg', 'defg')
         assertValues('a.+d', 'abcdefg', 'abcd')
 
+    @skip_test_if(lambda: database_class is MySQLDatabase)
     def test_concat(self):
-        if database_class is MySQLDatabase:
-            if TEST_VERBOSITY > 0:
-                print_('Skipping `concat` for mysql.')
-            return
-
         NullModel.create(char_field='foo')
         NullModel.create(char_field='bar')
 

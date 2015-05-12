@@ -8,6 +8,7 @@ from functools import wraps
 from peewee import *
 from playhouse.tests.base import compiler
 from playhouse.tests.base import database_initializer
+from playhouse.tests.base import log_console
 from playhouse.tests.base import ModelTestCase
 from playhouse.tests.base import PeeweeTestCase
 from playhouse.tests.base import skip_unless
@@ -221,9 +222,9 @@ class TestCompoundSelectQueries(ModelTestCase):
             def inner(self):
                 if op in test_db.compound_operations:
                     return fn(self)
-                elif TEST_VERBOSITY > 0:
-                    print_('"%s" not supported, skipping %s' %
-                           (op, fn.__name__))
+                else:
+                    log_console('"%s" not supported, skipping %s' %
+                                (op, fn.__name__))
             return inner
         return decorator
 
