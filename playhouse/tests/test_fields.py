@@ -2,6 +2,7 @@ import decimal
 import sys
 
 from peewee import MySQLDatabase
+from peewee import Param
 from playhouse.tests.base import binary_construct
 from playhouse.tests.base import binary_types
 from playhouse.tests.base import database_class
@@ -284,7 +285,7 @@ class TestFieldTypes(ModelTestCase):
     @skip_test_unless(lambda: isinstance(test_db, MySQLDatabase))
     def test_blob_field_mysql(self):
         data = bytes(bytearray(range(256)))
-        blob = BlobModel.create(data=data)
+        blob = BlobModel.create(data=Param(data))
         res = BlobModel.get(BlobModel.id == blob.id)
         self.assertEqual(blob.data, data)
 
