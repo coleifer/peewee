@@ -1,11 +1,14 @@
 import decimal
 import sys
 
+from peewee import MySQLDatabase
 from playhouse.tests.base import binary_construct
 from playhouse.tests.base import binary_types
 from playhouse.tests.base import database_class
 from playhouse.tests.base import ModelTestCase
 from playhouse.tests.base import PeeweeTestCase
+from playhouse.tests.base import skip_test_if
+from playhouse.tests.base import skip_test_unless
 from playhouse.tests.base import test_db
 from playhouse.tests.models import *
 
@@ -248,6 +251,7 @@ class TestFieldTypes(ModelTestCase):
             23, 11
         ))
 
+    @skip_test_if(lambda: isinstance(test_db, MySQLDatabase))
     def test_blob_field(self):
         byte_count = 256
         data = ''.join(chr(i) for i in range(256))
@@ -276,6 +280,13 @@ class TestFieldTypes(ModelTestCase):
         # use the binary representation
         res = BlobModel.get(BlobModel.data == binary_data)
         self.assertEqual(res.id, blob.id)
+
+    @skip_test_unless(lambda: isinstance(test_db, MySQLDatabase))
+    def test_blob_field_mysql(self):
+        data = bytes(bytearray(range(256)))
+        blob = BlobModel.create(data=data)
+        res = BlobModel.get(BlobModel.id == blob.id)
+        self.assertEqual(blob.data, data)
 
     def test_between(self):
         field = NullModel.int_field

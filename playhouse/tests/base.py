@@ -2,6 +2,7 @@ import logging
 import os
 import sys
 from contextlib import contextmanager
+from functools import wraps
 from unittest import TestCase
 
 from peewee import *
@@ -264,6 +265,7 @@ class ModelTestCase(PeeweeTestCase):
         if self.requires:
             test_db.drop_tables(self.requires, True)
 
+# TestCase class decorators that allow skipping entire test-cases.
 
 def skip_if(expression):
     def decorator(klass):
@@ -276,9 +278,25 @@ def skip_if(expression):
         return klass
     return decorator
 
-
 def skip_unless(expression):
     return skip_if(lambda: not expression())
+
+# TestCase method decorators that allow skipping single test methods.
+
+def skip_test_if(expression):
+    def decorator(fn):
+        @wraps(fn)
+        def inner(*args, **kwargs):
+            if expression():
+                if TEST_VERBOSITY > 0:
+                    print_('Skipping %s test.' % fn.__name__)
+            else:
+                return fn(*args, **kwargs)
+        return inner
+    return decorator
+
+def skip_test_unless(expression):
+    return skip_test_if(lambda: not expression())
 
 
 class QueryLogger(object):

@@ -696,7 +696,7 @@ class TestSelectQuery(PeeweeTestCase):
                          Blog
                          .select(Blog.pk)
                          .where(Blog.user == User.id)).alias('blog_ct')))
-        sql, params = query.sql()
+        sql, params = normal_compiler.generate_select(query)
         self.assertEqual(sql, (
             'SELECT "t1"."username", '
             'Count('
@@ -706,7 +706,8 @@ class TestSelectQuery(PeeweeTestCase):
         query = (User
                  .select(User.username)
                  .where(fn.Exists(fn.Exists(User.select(User.id)))))
-        self.assertEqual(query.sql()[0], (
+        sql, params = normal_compiler.generate_select(query)
+        self.assertEqual(sql, (
             'SELECT "t1"."username" FROM "users" AS t1 '
             'WHERE Exists(Exists('
             'SELECT "t2"."id" FROM "users" AS t2))'))
