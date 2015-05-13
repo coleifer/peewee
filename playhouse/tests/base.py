@@ -288,7 +288,7 @@ def skip_test_if(expression):
         @wraps(fn)
         def inner(*args, **kwargs):
             if expression():
-                if TEST_VERBOSITY > 0:
+                if TEST_VERBOSITY > 1:
                     print_('Skipping %s test.' % fn.__name__)
             else:
                 return fn(*args, **kwargs)
