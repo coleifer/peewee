@@ -3782,6 +3782,8 @@ class ModelOptions(object):
     def rel_for_model(self, model, field_obj=None):
         is_field = isinstance(field_obj, Field)
         is_node = not is_field and isinstance(field_obj, Node)
+        if isinstance(model, ModelAlias):
+            model = model.model_class
         for field in self.get_fields():
             if isinstance(field, ForeignKeyField) and field.rel_model == model:
                 is_match = any((
