@@ -3198,6 +3198,18 @@ This module contains a helper function to generate a database connection from a 
     * *postgresql://postgres:my_password@localhost:5432/my_database* will create a :py:class:`PostgresqlDatabase` instance. A username and password are provided, as well as the host and port to connect to.
     * *mysql://user:passwd@ip:port/my_db* will create a :py:class:`MySQLDatabase` instance for the local MySQL database *my_db*.
 
+    Supported schemes:
+
+    * ``apsw``: :py:class:`APSWDatabase`
+    * ``mysql``: :py:class:`MySQLDatabase`
+    * ``mysql+pool``: :py:class:`PooledMySQLDatabase`
+    * ``postgres``: :py:class:`PostgresqlDatabase`
+    * ``postgres+pool``: :py:class:`PooledPostgresqlDatabase`
+    * ``postgresext``: :py:class:`PostgresqlExtDatabase`
+    * ``postgresext+pool``: :py:class:`PooledPostgresqlExtDatabase`
+    * ``sqlite``: :py:class:`SqliteDatabase`
+    * ``sqliteext``: :py:class:`SqliteExtDatabase`
+
     Usage:
 
     .. code-block:: python
