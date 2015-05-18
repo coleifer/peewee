@@ -3681,6 +3681,9 @@ class ModelAlias(object):
             query = query.order_by(*self._meta.order_by)
         return query
 
+    def __call__(self, **kwargs):
+        return self.model_class(**kwargs)
+
 
 class DoesNotExist(Exception): pass
 
@@ -4174,8 +4177,13 @@ def prefetch_add_subquery(sq, subqueries):
         for j in reversed(range(i + 1)):
             last_query = fixed_queries[j][0]
             last_model = last_query.model_class
-            fkf = subquery_model._meta.rel_for_model(last_model)
-            backref = last_model._meta.rel_for_model(subquery_model)
+            foreign_key = subquery_model._meta.rel_for_model(last_model)
+            if foreign_key:
+                fkf = getattr(subquery_model, foreign_key.name)
+                to_field = getattr(last_model, foreign_key.to_field.name)
+            else:
+                backref = last_model._meta.rel_for_model(subquery_model)
+
             if fkf or backref:
                 break
 
@@ -4184,7 +4192,7 @@ def prefetch_add_subquery(sq, subqueries):
                                  'query: %s' % subquery)
 
         if fkf:
-            inner_query = last_query.select(fkf.to_field)
+            inner_query = last_query.select(to_field)
             fixed_queries.append(
                 PrefetchResult(subquery.where(fkf << inner_query), fkf, False))
         elif backref:

@@ -678,6 +678,16 @@ class BaseTestPrefetch(ModelTestCase):
                 for c in comments:
                     Comment.create(blog=b, comment=c)
 
+    def _build_category_tree(self):
+        def cc(name, parent=None):
+            return Category.create(name=name, parent=parent)
+        root = cc('root')
+        p1 = cc('p1', root)
+        p2 = cc('p2', root)
+        for p in (p1, p2):
+            for i in range(2):
+                cc('%s-%s' % (p.name, i + 1), p)
+
 
 class TestPrefetch(BaseTestPrefetch):
     def test_prefetch_simple(self):
@@ -780,6 +790,25 @@ class TestPrefetch(BaseTestPrefetch):
                 ('u4', 'b5'),
                 ('u4', 'b6'),
             ])
+
+    def test_prefetch_self_join(self):
+        self._build_category_tree()
+        Child = Category.alias()
+        with self.assertQueryCount(2):
+            query = prefetch(Category.select().order_by(Category.id), Child)
+            names_and_children = [
+                [parent.name, [child.name for child in parent.children_prefetch]]
+                for parent in query]
+
+        self.assertEqual(names_and_children, [
+            ['root', ['p1', 'p2']],
+            ['p1', ['p1-1', 'p1-2']],
+            ['p2', ['p2-1', 'p2-2']],
+            ['p1-1', []],
+            ['p1-2', []],
+            ['p2-1', []],
+            ['p2-2', []],
+        ])
 
 
 class TestAggregateRows(BaseTestPrefetch):
