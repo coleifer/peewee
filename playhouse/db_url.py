@@ -4,6 +4,12 @@ except ImportError:
     from urllib.parse import urlparse
 
 from peewee import *
+from playhouse.pool import PooledMySQLDatabase
+from playhouse.pool import PooledPostgresqlDatabase
+try:
+    from playhouse.pool import PooledPostgresqlExtDatabase
+except ImportError:
+    PooledPostgresqlExtDatabase = None
 from playhouse.sqlite_ext import SqliteExtDatabase
 try:
     from playhouse.apsw_ext import APSWDatabase
@@ -23,10 +29,15 @@ schemes = {
     'apsw': APSWDatabase,
     'berkeleydb': BerkeleyDatabase,
     'mysql': MySQLDatabase,
+    'mysql+pool': PooledMySQLDatabase,
     'postgres': PostgresqlDatabase,
     'postgresql': PostgresqlDatabase,
     'postgresext': PostgresqlExtDatabase,
     'postgresqlext': PostgresqlExtDatabase,
+    'postgres+pool': PooledPostgresqlDatabase,
+    'postgresql+pool': PooledPostgresqlDatabase,
+    'postgresext+pool': PooledPostgresqlExtDatabase,
+    'postgresqlext+pool': PooledPostgresqlExtDatabase,
     'sqlite': SqliteDatabase,
     'sqliteext': SqliteExtDatabase,
 }
