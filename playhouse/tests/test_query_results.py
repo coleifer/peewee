@@ -656,6 +656,16 @@ class BaseTestPrefetch(ModelTestCase):
         )),
     ]
 
+    category_tree = [
+        ['root', ['p1', 'p2']],
+        ['p1', ['p1-1', 'p1-2']],
+        ['p2', ['p2-1', 'p2-2']],
+        ['p1-1', []],
+        ['p1-2', []],
+        ['p2-1', []],
+        ['p2-2', []],
+    ]
+
     def setUp(self):
         super(BaseTestPrefetch, self).setUp()
         for parent, (children, orphans) in self.parent_data:
@@ -800,15 +810,7 @@ class TestPrefetch(BaseTestPrefetch):
                 [parent.name, [child.name for child in parent.children_prefetch]]
                 for parent in query]
 
-        self.assertEqual(names_and_children, [
-            ['root', ['p1', 'p2']],
-            ['p1', ['p1-1', 'p1-2']],
-            ['p2', ['p2-1', 'p2-2']],
-            ['p1-1', []],
-            ['p1-2', []],
-            ['p2-1', []],
-            ['p2-2', []],
-        ])
+        self.assertEqual(names_and_children, self.category_tree)
 
 
 class TestAggregateRows(BaseTestPrefetch):
@@ -1078,6 +1080,26 @@ class TestAggregateRows(BaseTestPrefetch):
                 ('u2', []),
                 ('u1', ['b2', 'b1']),
             ])
+
+    def test_aggregate_rows_self_join(self):
+        self._build_category_tree()
+        Child = Category.alias()
+
+        # Same query, but this time use an `alias` on the join expr.
+        with self.assertQueryCount(1):
+            query = (Category
+                     .select(Category, Child)
+                     .join(
+                         Child,
+                         JOIN.LEFT_OUTER,
+                         on=(Category.id == Child.parent).alias('childrenx'))
+                     .order_by(Category.id, Child.id)
+                     .aggregate_rows())
+            names_and_children = [
+                [parent.name, [child.name for child in parent.childrenx]]
+                for parent in query]
+
+        self.assertEqual(names_and_children, self.category_tree)
 
 
 class TestAggregateRowsRegression(ModelTestCase):

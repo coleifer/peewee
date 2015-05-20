@@ -2041,6 +2041,9 @@ class ModelQueryResultWrapper(QueryResultWrapper):
         return prepared
 
 
+JoinCache = namedtuple('JoinCache', ('src_fk', 'dest_fk', 'att_name'))
+
+
 class AggregateQueryResultWrapper(ModelQueryResultWrapper):
     def __init__(self, *args, **kwargs):
         self._row = []
@@ -2054,19 +2057,46 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
         for key, _, _, _ in self.column_map:
             self.all_models.add(key)
 
-        # Prepare data structure for analyzing unique rows.
+        # Prepare data structures for analyzing unique rows. Also cache
+        # foreign key and attribute names for joined models.
         self.models_with_aggregate = set()
         self.back_references = {}
-        for (src_model, _, dest_model, _, related_name) in self.join_list:
-            if related_name:
-                self.models_with_aggregate.add(src_model)
-                self.back_references[dest_model] = (src_model, related_name)
+        self.source_to_dest = {}
 
+        for (src, attr, dest, join_on, related_name) in self.join_list:
+            # The `related_name` will have a value if the join is 1->N. If
+            # this is a self-join, we will treat it as 1->N.
+            if self.is_self_join(src, dest):
+                related_name = attr
+
+            # We need to determine if the join is on a particular column so
+            # we can find the appropriate foreign key.
+            if not isinstance(join_on, Field):
+                join_on = None
+
+            if related_name:
+                self.models_with_aggregate.add(src)
+
+            self.source_to_dest.setdefault(src, {})
+            self.source_to_dest[src][dest] = JoinCache(
+                src_fk=src._meta.rel_for_model(dest, join_on),
+                dest_fk=src._meta.reverse_rel_for_model(dest, join_on),
+                att_name=related_name)
+
+        # Determine which columns could contain "duplicate" data, e.g. if
+        # getting Users and their Tweets, this would be the User columns.
         self.columns_to_compare = {}
-        for idx, (_, model_class, col_name, _) in enumerate(self.column_map):
-            if model_class in self.models_with_aggregate:
-                self.columns_to_compare.setdefault(model_class, [])
-                self.columns_to_compare[model_class].append((idx, col_name))
+        for idx, (key, model_class, col_name, _) in enumerate(self.column_map):
+            if key in self.models_with_aggregate:
+                self.columns_to_compare.setdefault(key, [])
+                self.columns_to_compare[key].append((idx, col_name))
+
+    def is_self_join(self, src_model, dest_model):
+        if isinstance(src_model, ModelAlias):
+            src_model = src_model.model_class
+        if isinstance(dest_model, ModelAlias):
+            dest_model = dest_model.model_class
+        return src_model is dest_model
 
     def read_model_data(self, row):
         models = {}
@@ -2139,44 +2169,38 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
                 continue
 
             for join in self.join_meta[current]:
-                foreign_key = current._meta.rel_for_model(join.dest, join.on)
+                try:
+                    metadata = self.source_to_dest[current][join.dest]
+                except KeyError:
+                    continue
 
-                if foreign_key:
+                if metadata.src_fk:
                     if join.dest not in identity_map:
                         continue
 
                     for pk, instance in identity_map[current].items():
                         joined_inst = identity_map[join.dest][
-                            instance._data[foreign_key.name]]
-                        setattr(instance, foreign_key.name, joined_inst)
+                            instance._data[metadata.src_fk.name]]
+                        setattr(instance, metadata.src_fk.name, joined_inst)
                         instances.append(joined_inst)
-                else:
-                    if not isinstance(join.dest, Node):
-                        backref = current._meta.reverse_rel_for_model(
-                            join.dest, join.on)
-                        if not backref:
-                            continue
-                    else:
-                        continue
-
-                    attr_name = backref.related_name
+                elif metadata.dest_fk:
                     for instance in identity_map[current].values():
-                        setattr(instance, attr_name, [])
+                        setattr(instance, metadata.att_name, [])
 
                     if join.dest not in identity_map:
                         continue
 
-                    for pk, instance in identity_map[join.dest].items():
+                    for pk, inst in identity_map[join.dest].items():
                         if pk is None:
                             continue
                         try:
                             joined_inst = identity_map[current][
-                                instance._data[backref.name]]
+                                inst._data[metadata.dest_fk.name]]
                         except KeyError:
                             continue
 
-                        getattr(joined_inst, attr_name).append(instance)
-                        instances.append(instance)
+                        getattr(joined_inst, metadata.att_name).append(inst)
+                        instances.append(inst)
 
                 stack.append(join.dest)
 
