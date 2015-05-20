@@ -43,7 +43,7 @@ def make_introspector(database_type, database_name, **kwargs):
     return Introspector.from_database(db, schema=schema)
 
 def print_models(introspector, tables=None, preserve_order=False):
-    database = introspector.introspect()
+    database = introspector.introspect(table_names=tables)
 
     print_(TEMPLATE % (
         introspector.get_database_class().__name__,
