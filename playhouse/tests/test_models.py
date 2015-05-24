@@ -384,6 +384,30 @@ class TestModelAPIs(ModelTestCase):
 
             parent = c2_db.parent
 
+    def test_related_id(self):
+        u1 = User.create(username='u1')
+        u2 = User.create(username='u2')
+        for u in [u1, u2]:
+            for j in range(2):
+                Blog.create(user=u, title='%s-%s' % (u.username, j))
+
+        with self.assertQueryCount(1):
+            query = Blog.select().order_by(Blog.pk)
+            user_ids = [blog.user_id for blog in query]
+
+        self.assertEqual(user_ids, [u1.id, u1.id, u2.id, u2.id])
+
+        p1 = Category.create(name='p1')
+        p2 = Category.create(name='p2')
+        c1 = Category.create(name='c1', parent=p1)
+        c2 = Category.create(name='c2', parent=p2)
+
+        with self.assertQueryCount(1):
+            query = Category.select().order_by(Category.id)
+            self.assertEqual(
+                [cat.parent_id for cat in query],
+                [None, None, p1.id, p2.id])
+
     def test_category_select_related_alias(self):
         g1 = Category.create(name='g1')
         g2 = Category.create(name='g2')
