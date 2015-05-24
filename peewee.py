@@ -1067,6 +1067,15 @@ class ReverseRelationDescriptor(object):
                 self.field == getattr(instance, self.field.to_field.name))
         return self
 
+class ObjectIdDescriptor(object):
+    """Gives direct access to the underlying id"""
+    def __init__(self, field):
+        self.attr_name = field.name
+
+    def __get__(self, instance, instance_type=None):
+        if instance is not None:
+            return instance._data[self.attr_name]
+
 class ForeignKeyField(IntegerField):
     def __init__(self, rel_model, related_name=None, on_delete=None,
                  on_update=None, extra=None, to_field=None, *args, **kwargs):
@@ -1095,6 +1104,9 @@ class ForeignKeyField(IntegerField):
 
     def _get_descriptor(self):
         return RelationDescriptor(self, self.rel_model)
+
+    def _get_id_descriptor(self):
+        return ObjectIdDescriptor(self)
 
     def _get_backref_descriptor(self):
         return ReverseRelationDescriptor(self)
@@ -1143,6 +1155,7 @@ class ForeignKeyField(IntegerField):
                     self.model_class._meta.name, self.name, self.related_name))
 
         setattr(model_class, name, self._get_descriptor())
+        setattr(model_class, name + '_id', self._get_id_descriptor())
         setattr(self.rel_model,
                 self.related_name,
                 self._get_backref_descriptor())
