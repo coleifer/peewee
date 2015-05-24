@@ -180,6 +180,43 @@ Some fields take special parameters...
 
     To add database (server-side) constraints, use the ``constraints`` parameter.
 
+ForeignKeyField
+^^^^^^^^^^^^^^^
+
+:py:class:`ForeignKeyField` is a special field type that allows one model to reference another. Typically a foreign key will contain the primary key of the model it relates to (but you can specify a particular column by specifying a ``to_field``).
+
+Foreign keys allow data to be `normalized <http://en.wikipedia.org/wiki/Database_normalization>`_. In our example models, there is a foreign key from ``Tweet`` to ``User``. This means that all the users are stored in their own table, as are the tweets, and the foreign key from tweet to user allows each tweet to *point* to a particular user object.
+
+In peewee, accessing the value of a :py:class:`ForeignKeyField` will return the entire related object, e.g.:
+
+.. code-block:: python
+
+    tweets = Tweet.select(Tweet, User).join(User).order_by(Tweet.create_date.desc())
+    for tweet in tweets:
+        print(tweet.user.username, tweet.message)
+
+In the example above the ``User`` data was selected as part of the query. For more examples of this technique, see the :ref:`Avoiding N+1 <nplusone>` document.
+
+If we did not select the ``User``, though, then an additional query would be issued to fetch the associated ``User`` data:
+
+.. code-block:: python
+
+    tweets = Tweet.select().order_by(Tweet.create_date.desc())
+    for tweet in tweets:
+        # WARNING: an additional query will be issued for EACH tweet
+        # to fetch the associated User data.
+        print(tweet.user.username, tweet.message)
+
+Sometimes you only need the associated primary key value from the foreign key column. In this case, Peewee follows the convention established by Django, of allowing you to access the raw foreign key value by appending ``"_id"`` to the foreign key field's name:
+
+.. code-block:: python
+
+    tweets = Tweet.select()
+    for tweet in tweets:
+        # Instead of "tweet.user", we will just get the raw ID value stored
+        # in the column.
+        print(tweet.user_id, tweet.message)
+
 DateTimeField, DateField and TimeField
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
