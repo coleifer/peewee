@@ -5,6 +5,31 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.6.1
+
+This release contains a number of small fixes and enhancements.
+
+### Bugs fixed
+
+* #606, support self-referential joins with `prefetch` and `aggregate_rows()` methods.
+* #588, accomodate changes in SQLite's `PRAGMA index_list()` return value.
+* #607, fixed bug where `pwiz` was not passing table names to introspector.
+* #591, fixed bug with handling of named cursors in older psycopg2 version.
+* Removed some cruft from the `APSWDatabase` implementation.
+
+### New features
+
+* Added [CompressedField](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#CompressedField) and [AESEncryptedField](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#AESEncryptedField)
+* #609, #610, added Django-style foreign key ID lookup. [Docs](http://docs.peewee-orm.com/en/latest/peewee/models.html#foreignkeyfield).
+* Added support for [Hybrid Attributes](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#hybrid-attributes) (cool idea courtesy of SQLAlchemy).
+* Added ``upsert`` keyword argument to the `Model.save()` function (SQLite only).
+* #587, added support for ``ON CONFLICT`` SQLite clause for `INSERT` and `UPDATE` queries. [Docs](http://docs.peewee-orm.com/en/latest/peewee/api.html#UpdateQuery.on_conflict)
+* #601, added hook for programmatically defining table names. [Model options docs](http://docs.peewee-orm.com/en/latest/peewee/models.html#model-options-and-table-metadata)
+* #581, #611, support connection pools with `playhouse.db_url.connect()`. [Docs](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#connect).
+* Added [Contributing section](http://docs.peewee-orm.com/en/latest/peewee/contributing.html) section to docs.
+
+[View commits](https://github.com/coleifer/peewee/compare/2.6.0...2.6.1)
+
 ## 2.6.0
 
 This is a tiny update, mainly consisting of a new-and-improved implementation of ``get_or_create()`` ([docs](http://docs.peewee-orm.com/en/latest/peewee/api.html#Model.get_or_create)).
