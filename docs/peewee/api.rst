@@ -1396,6 +1396,20 @@ Query Types
 
         Performs the query
 
+    .. py:method:: on_conflict([action=None])
+
+        Add a SQL ``ON CONFLICT`` clause with the specified action to the given ``UPDATE`` query. `Valid actions <https://www.sqlite.org/lang_conflict.html>`_ are:
+
+        * ROLLBACK
+        * ABORT
+        * FAIL
+        * IGNORE
+        * REPLACE
+
+        Specifying ``None`` for the action will execute a normal ``UPDATE`` query.
+
+        .. note:: This feature is only available on SQLite databases.
+
 
 .. py:class:: InsertQuery(model_class[, field_dict=None[, rows=None[, fields=None[, query=None]]]])
 
@@ -1451,7 +1465,21 @@ Query Types
 
         Perform an *INSERT OR REPLACE* query.
 
-        .. note:: Currently only SQLite supports this method.
+        .. note:: This feature is only available on SQLite databases.
+
+    .. py:method:: on_conflict([action=None])
+
+        Add a SQL ``ON CONFLICT`` clause with the specified action to the given ``INSERT`` query. Specifying ``REPLACE`` is equivalent to using the :py:meth:`~InsertQuery.upsert` method. `Valid actions <https://www.sqlite.org/lang_conflict.html>`_ are:
+
+        * ROLLBACK
+        * ABORT
+        * FAIL
+        * IGNORE
+        * REPLACE
+
+        Specifying ``None`` for the action will execute a normal ``INSERT`` query.
+
+        .. note:: This feature is only available on SQLite databases.
 
     .. py:method:: return_id_list([return_id_list=True])
 
