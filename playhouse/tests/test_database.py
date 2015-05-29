@@ -7,15 +7,18 @@ try:
 except ImportError:
     from queue import Queue
 
+from peewee import OperationalError
 from peewee import SqliteDatabase
 from playhouse.tests.base import compiler
 from playhouse.tests.base import database_class
+from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
 from playhouse.tests.base import PeeweeTestCase
 from playhouse.tests.base import query_db
 from playhouse.tests.base import skip_unless
 from playhouse.tests.base import test_db
 from playhouse.tests.base import ulit
+from playhouse.tests.libs import mock
 from playhouse.tests.models import *
 
 
@@ -101,12 +104,6 @@ class TestDeferredDatabase(PeeweeTestCase):
         deferred_db.init(None)
         self.assertTrue(deferred_db.deferred)
 
-    def test_sql_error(self):
-        bad_sql = 'select asdf from -1;'
-        self.assertRaises(Exception, query_db.execute_sql, bad_sql)
-        self.assertEqual(query_db.last_error, (bad_sql, None))
-
-
 
 class TestSQLAll(PeeweeTestCase):
     def setUp(self):
@@ -176,6 +173,43 @@ class TestConnectionState(PeeweeTestCase):
         self.assertTrue(test_db.is_closed())
         conn = test_db.get_conn()
         self.assertFalse(test_db.is_closed())
+
+    def test_sql_error(self):
+        bad_sql = 'select asdf from -1;'
+        self.assertRaises(Exception, query_db.execute_sql, bad_sql)
+        self.assertEqual(query_db.last_error, (bad_sql, None))
+
+    def test_sql_error_reconnect(self):
+        class RetryDatabase(SqliteDatabase):
+            def sql_error_handler(self, exc, sql, params, require_commit):
+                if isinstance(exc, OperationalError):
+                    self.close()
+                    self.connect()
+                return True
+
+        db = RetryDatabase(':memory:', autocommit=False)
+
+        conn1 = mock.Mock(name='conn1')
+        conn2 = mock.Mock(name='conn2')
+
+        curs = mock.Mock(name='curs')
+        curs.execute.side_effect = OperationalError()
+
+        with mock.patch.object(db, '_connect') as pc:
+            pc.side_effect = [conn1, conn2]
+
+            with mock.patch.object(db, 'get_cursor') as pgc:
+                pgc.return_value = curs
+
+                db.connect()
+                self.assertRaises(
+                    OperationalError,
+                    db.execute_sql,
+                    'fake query')
+
+        conn1.close.assert_called_once_with()
+        pgc.assert_called_once_with()
+        self.assertTrue(db.get_conn() is conn2)
 
 
 @skip_unless(lambda: test_db.drop_cascade)
