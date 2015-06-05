@@ -632,14 +632,14 @@ class _StripParens(Node):
         self.node = node
 
 JoinMetadata = namedtuple('JoinMetadata', (
-    'source', 'target_attr', 'dest', 'to_field', 'related_name'))
+    'source', 'target_attr', 'dest', 'to_field', 'related_name', 'on'))
 
 class Join(namedtuple('_Join', ('dest', 'join_type', 'on'))):
-    def get_foreign_key(self, source, dest):
-        fk_field = source._meta.rel_for_model(dest)
+    def get_foreign_key(self, source, dest, field=None):
+        fk_field = source._meta.rel_for_model(dest, field)
         if fk_field is not None:
             return fk_field, False
-        reverse_rel = source._meta.reverse_rel_for_model(dest)
+        reverse_rel = source._meta.reverse_rel_for_model(dest, field)
         if reverse_rel is not None:
             return reverse_rel, True
         return None, None
@@ -658,7 +658,9 @@ class Join(namedtuple('_Join', ('dest', 'join_type', 'on'))):
         join_alias = is_expr and self.on._alias or None
 
         target_attr = to_field = related_name = None
-        fk_field, is_backref = self.get_foreign_key(source, dest)
+        on_field = isinstance(self.on, (Field, FieldProxy)) and self.on or None
+
+        fk_field, is_backref = self.get_foreign_key(source, dest, on_field)
         if fk_field is not None:
             if is_backref:
                 target_attr = dest._meta.db_table
@@ -676,7 +678,8 @@ class Join(namedtuple('_Join', ('dest', 'join_type', 'on'))):
             join_alias or target_attr,
             self.dest,
             to_field,
-            related_name)
+            related_name,
+            self.on)
 
 class FieldDescriptor(object):
     # Fields are exposed as descriptors in order to control access to the
@@ -2039,7 +2042,7 @@ class ModelQueryResultWrapper(QueryResultWrapper):
 
     def follow_joins(self, collected):
         prepared = [collected[self.model]]
-        for (lhs, attr, rhs, to_field, related_name) in self.join_list:
+        for (lhs, attr, rhs, to_field, related_name, _) in self.join_list:
             inst = collected[lhs]
             joined_inst = collected[rhs]
 
@@ -2076,7 +2079,7 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
         self.back_references = {}
         self.source_to_dest = {}
 
-        for (src, attr, dest, join_on, related_name) in self.join_list:
+        for (src, attr, dest, to_field, related_name, on) in self.join_list:
             # The `related_name` will have a value if the join is 1->N. If
             # this is a self-join, we will treat it as 1->N.
             if self.is_self_join(src, dest):
@@ -2084,16 +2087,16 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
 
             # We need to determine if the join is on a particular column so
             # we can find the appropriate foreign key.
-            if not isinstance(join_on, Field):
-                join_on = None
+            if not isinstance(on, Field):
+                on = None
 
             if related_name:
                 self.models_with_aggregate.add(src)
 
             self.source_to_dest.setdefault(src, {})
             self.source_to_dest[src][dest] = JoinCache(
-                src_fk=src._meta.rel_for_model(dest, join_on),
-                dest_fk=src._meta.reverse_rel_for_model(dest, join_on),
+                src_fk=src._meta.rel_for_model(dest, on),
+                dest_fk=src._meta.reverse_rel_for_model(dest, on),
                 att_name=related_name)
 
         # Determine which columns could contain "duplicate" data, e.g. if
