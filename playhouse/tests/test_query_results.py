@@ -873,7 +873,7 @@ class TestAggregateRows(BaseTestPrefetch):
 
     def test_aggregate_on_expression_join(self):
         with self.assertQueryCount(1):
-            join_expr = (User.id == Blog.user).alias('user')
+            join_expr = (User.id == Blog.user)
             query = (User
                      .select(User, Blog)
                      .join(Blog, JOIN.LEFT_OUTER, on=join_expr)
@@ -891,6 +891,43 @@ class TestAggregateRows(BaseTestPrefetch):
             ('u3', ['b3', 'b4']),
             ('u4', ['b5', 'b6']),
         ])
+
+    def test_aggregate_with_join_model_aliases(self):
+        expected = [
+            ('u1', ['b1', 'b2']),
+            ('u2', []),
+            ('u3', ['b3', 'b4']),
+            ('u4', ['b5', 'b6']),
+        ]
+
+        with self.assertQueryCount(1):
+            query = (User
+                     .select(User, Blog)
+                     .join(
+                         Blog,
+                         JOIN.LEFT_OUTER,
+                         on=(User.id == Blog.user).alias('blogz'))
+                     .order_by(User.id, Blog.title)
+                     .aggregate_rows())
+            results = [
+                (user.username, [blog.title for blog in user.blogz])
+                for user in query]
+            self.assertEqual(results, expected)
+
+        BlogAlias = Blog.alias()
+        with self.assertQueryCount(1):
+            query = (User
+                     .select(User, BlogAlias)
+                     .join(
+                         BlogAlias,
+                         JOIN.LEFT_OUTER,
+                         on=(User.id == BlogAlias.user).alias('blogz'))
+                     .order_by(User.id, BlogAlias.title)
+                     .aggregate_rows())
+            results = [
+                (user.username, [blog.title for blog in user.blogz])
+                for user in query]
+            self.assertEqual(results, expected)
 
     def test_aggregate_unselected_join_backref(self):
         cat_1 = Category.create(name='category 1')

@@ -633,7 +633,7 @@ class _StripParens(Node):
 
 JoinMetadata = namedtuple('JoinMetadata', (
     'src_model', 'dest_model', 'src', 'dest', 'attr', 'primary_key',
-    'foreign_key', 'is_backref'))
+    'foreign_key', 'is_backref', 'alias'))
 
 class Join(namedtuple('_Join', ('dest', 'join_type', 'on'))):
     def get_foreign_key(self, source, dest, field=None):
@@ -690,7 +690,8 @@ class Join(namedtuple('_Join', ('dest', 'join_type', 'on'))):
             attr=join_alias or target_attr,
             primary_key=to_field,
             foreign_key=fk_field,
-            is_backref=is_backref)
+            is_backref=is_backref,
+            alias=join_alias)
 
 class FieldDescriptor(object):
     # Fields are exposed as descriptors in order to control access to the
@@ -2112,7 +2113,7 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
             self.source_to_dest[metadata.src_model][metadata.dest] = JoinCache(
                 foreign_key=metadata.foreign_key,
                 is_backref=is_backref,
-                att_name=att_name)
+                att_name=metadata.alias or att_name)
 
         # Determine which columns could contain "duplicate" data, e.g. if
         # getting Users and their Tweets, this would be the User columns.
