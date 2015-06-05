@@ -616,6 +616,7 @@ class BaseTestPrefetch(ModelTestCase):
         TagPostThroughAlt,
         Category,
         UserCategory,
+        Relationship,
     ]
 
     user_data = [
@@ -1100,6 +1101,67 @@ class TestAggregateRows(BaseTestPrefetch):
                 for parent in query]
 
         self.assertEqual(names_and_children, self.category_tree)
+
+    def test_multiple_fks(self):
+        names = ['charlie', 'huey', 'zaizee']
+        charlie, huey, zaizee = [
+            User.create(username=username) for username in names]
+        Relationship.create(from_user=charlie, to_user=huey)
+        Relationship.create(from_user=charlie, to_user=zaizee)
+        Relationship.create(from_user=huey, to_user=charlie)
+        Relationship.create(from_user=zaizee, to_user=charlie)
+        UserAlias = User.alias()
+
+        with self.assertQueryCount(1):
+            query = (User
+                     .select(User, Relationship, UserAlias)
+                     .join(
+                         Relationship,
+                         JOIN.LEFT_OUTER,
+                         on=Relationship.from_user)
+                     .join(
+                         UserAlias,
+                         on=(
+                             Relationship.to_user == UserAlias.id
+                         ).alias('to_user'))
+                     .order_by(User.username, Relationship.id)
+                     .where(User.username == 'charlie')
+                     .aggregate_rows())
+
+            results = [row for row in query]
+            self.assertEqual(len(results), 1)
+
+            user = results[0]
+            self.assertEqual(user.username, 'charlie')
+            self.assertEqual(len(user.relationships), 2)
+
+            rh, rz = user.relationships
+            self.assertEqual(rh.to_user.username, 'huey')
+            self.assertEqual(rz.to_user.username, 'zaizee')
+
+        FromUser = User.alias()
+        ToUser = User.alias()
+        from_join = (Relationship.from_user == FromUser.id)
+        to_join = (Relationship.to_user == ToUser.id)
+
+        with self.assertQueryCount(1):
+            query = (Relationship
+                     .select(Relationship, FromUser, ToUser)
+                     .join(FromUser, on=from_join.alias('from_user'))
+                     .switch(Relationship)
+                     .join(ToUser, on=to_join.alias('to_user'))
+                     .order_by(Relationship.id)
+                     .aggregate_rows())
+            results = [
+                (relationship.from_user.username,
+                 relationship.to_user.username)
+                for relationship in query]
+            self.assertEqual(results, [
+                ('charlie', 'huey'),
+                ('charlie', 'zaizee'),
+                ('huey', 'charlie'),
+                ('zaizee', 'charlie'),
+            ])
 
 
 class TestAggregateRowsRegression(ModelTestCase):

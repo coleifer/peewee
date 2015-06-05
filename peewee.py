@@ -632,10 +632,13 @@ class _StripParens(Node):
         self.node = node
 
 JoinMetadata = namedtuple('JoinMetadata', (
-    'source', 'target_attr', 'dest', 'to_field', 'related_name', 'on'))
+    'src_model', 'dest_model', 'src', 'dest', 'attr', 'primary_key',
+    'foreign_key', 'is_backref'))
 
 class Join(namedtuple('_Join', ('dest', 'join_type', 'on'))):
     def get_foreign_key(self, source, dest, field=None):
+        if isinstance(source, SelectQuery) or isinstance(dest, SelectQuery):
+            return None, None
         fk_field = source._meta.rel_for_model(dest, field)
         if fk_field is not None:
             return fk_field, False
@@ -647,39 +650,47 @@ class Join(namedtuple('_Join', ('dest', 'join_type', 'on'))):
     def get_join_type(self):
         return self.join_type or JOIN.INNER
 
+    def model_from_alias(self, model_or_alias):
+        if isinstance(model_or_alias, ModelAlias):
+            return model_or_alias.model_class
+        return model_or_alias
+
     def join_metadata(self, source):
-        is_model_alias = isinstance(self.dest, ModelAlias)
-        if is_model_alias:
-            dest = self.dest.model_class
-        else:
-            dest = self.dest
+        src = self.model_from_alias(source)
+        dest = self.model_from_alias(self.dest)
 
-        is_expr = isinstance(self.on, Expression)
-        join_alias = is_expr and self.on._alias or None
+        join_alias = isinstance(self.on, Node) and self.on._alias or None
 
-        target_attr = to_field = related_name = None
+        target_attr = to_field = None
         on_field = isinstance(self.on, (Field, FieldProxy)) and self.on or None
+        if on_field:
+            fk_field = on_field
+            is_backref = on_field.name not in src._meta.fields
+        else:
+            fk_field, is_backref = self.get_foreign_key(source, dest, self.on)
+            if fk_field is None and self.on is not None:
+                fk_field, is_backref = self.get_foreign_key(source, dest)
 
-        fk_field, is_backref = self.get_foreign_key(source, dest, on_field)
         if fk_field is not None:
+            to_field = fk_field.to_field.name
             if is_backref:
                 target_attr = dest._meta.db_table
-                related_name = fk_field.related_name
             else:
                 target_attr = fk_field.name
-                to_field = fk_field.to_field.name
-        elif is_expr and hasattr(self.on.lhs, 'name'):
+        elif isinstance(self.on, Expression) and hasattr(self.on.lhs, 'name'):
             target_attr = self.on.lhs.name
         else:
             target_attr = dest._meta.db_table
 
         return JoinMetadata(
-            source,
-            join_alias or target_attr,
-            self.dest,
-            to_field,
-            related_name,
-            self.on)
+            src_model=src,
+            dest_model=dest,
+            src=source,
+            dest=self.dest,
+            attr=join_alias or target_attr,
+            primary_key=to_field,
+            foreign_key=fk_field,
+            is_backref=is_backref)
 
 class FieldDescriptor(object):
     # Fields are exposed as descriptors in order to control access to the
@@ -1562,15 +1573,15 @@ class QueryCompiler(object):
                     # Clear any alias on the join expression.
                     constraint = join.on.clone().alias()
                 else:
-                    field = src._meta.rel_for_model(dest, join.on)
-                    if field:
-                        left_field = field
-                        right_field = field.to_field
+                    metadata = join.join_metadata(curr)
+                    if metadata.foreign_key:
+                        lhs = metadata.foreign_key
+                        rhs = metadata.foreign_key.to_field
+                        if metadata.is_backref:
+                            lhs, rhs = rhs, lhs
+                        constraint = (lhs == rhs)
                     else:
-                        field = dest._meta.rel_for_model(src, join.on)
-                        left_field = field.to_field
-                        right_field = field
-                    constraint = (left_field == right_field)
+                        raise ValueError('Missing required join predicate.')
 
                 if isinstance(dest, Node):
                     # TODO: ensure alias?
@@ -2042,22 +2053,28 @@ class ModelQueryResultWrapper(QueryResultWrapper):
 
     def follow_joins(self, collected):
         prepared = [collected[self.model]]
-        for (lhs, attr, rhs, to_field, related_name, _) in self.join_list:
-            inst = collected[lhs]
-            joined_inst = collected[rhs]
+        for metadata in self.join_list:
+            inst = collected[metadata.src]
+            joined_inst = collected[metadata.dest]
 
             # Can we populate a value on the joined instance using the current?
-            if to_field is not None and attr in inst._data:
-                if getattr(joined_inst, to_field) is None:
-                    setattr(joined_inst, to_field, inst._data[attr])
+            can_populate = (
+                (metadata.primary_key is not None) and
+                (metadata.attr in inst._data) and
+                (getattr(joined_inst, metadata.primary_key) is None))
+            if can_populate:
+                setattr(
+                    joined_inst,
+                    metadata.primary_key,
+                    inst._data[metadata.attr])
 
-            setattr(inst, attr, joined_inst)
+            setattr(inst, metadata.attr, joined_inst)
             prepared.append(joined_inst)
 
         return prepared
 
 
-JoinCache = namedtuple('JoinCache', ('src_fk', 'dest_fk', 'att_name'))
+JoinCache = namedtuple('JoinCache', ('foreign_key', 'is_backref', 'att_name'))
 
 
 class AggregateQueryResultWrapper(ModelQueryResultWrapper):
@@ -2079,25 +2096,23 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
         self.back_references = {}
         self.source_to_dest = {}
 
-        for (src, attr, dest, to_field, related_name, on) in self.join_list:
-            # The `related_name` will have a value if the join is 1->N. If
-            # this is a self-join, we will treat it as 1->N.
-            if self.is_self_join(src, dest):
-                related_name = attr
+        #for (src, attr, dest, to_field, related_name) in self.join_list:
+        for metadata in self.join_list:
+            if metadata.is_backref:
+                att_name = metadata.foreign_key.related_name
+            else:
+                att_name = metadata.attr
 
-            # We need to determine if the join is on a particular column so
-            # we can find the appropriate foreign key.
-            if not isinstance(on, Field):
-                on = None
+            is_backref = metadata.is_backref or (
+                metadata.src_model is metadata.dest_model)
+            if is_backref:
+                self.models_with_aggregate.add(metadata.src)
 
-            if related_name:
-                self.models_with_aggregate.add(src)
-
-            self.source_to_dest.setdefault(src, {})
-            self.source_to_dest[src][dest] = JoinCache(
-                src_fk=src._meta.rel_for_model(dest, on),
-                dest_fk=src._meta.reverse_rel_for_model(dest, on),
-                att_name=related_name)
+            self.source_to_dest.setdefault(metadata.src, {})
+            self.source_to_dest[metadata.src_model][metadata.dest] = JoinCache(
+                foreign_key=metadata.foreign_key,
+                is_backref=is_backref,
+                att_name=att_name)
 
         # Determine which columns could contain "duplicate" data, e.g. if
         # getting Users and their Tweets, this would be the User columns.
@@ -2106,13 +2121,6 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
             if key in self.models_with_aggregate:
                 self.columns_to_compare.setdefault(key, [])
                 self.columns_to_compare[key].append((idx, col_name))
-
-    def is_self_join(self, src_model, dest_model):
-        if isinstance(src_model, ModelAlias):
-            src_model = src_model.model_class
-        if isinstance(dest_model, ModelAlias):
-            dest_model = dest_model.model_class
-        return src_model is dest_model
 
     def read_model_data(self, row):
         models = {}
@@ -2190,16 +2198,19 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
                 except KeyError:
                     continue
 
-                if metadata.src_fk:
+                if not metadata.is_backref:
                     if join.dest not in identity_map:
                         continue
 
                     for pk, instance in identity_map[current].items():
                         joined_inst = identity_map[join.dest][
-                            instance._data[metadata.src_fk.name]]
-                        setattr(instance, metadata.src_fk.name, joined_inst)
+                            instance._data[metadata.foreign_key.name]]
+                        setattr(
+                            instance,
+                            metadata.foreign_key.name,
+                            joined_inst)
                         instances.append(joined_inst)
-                elif metadata.dest_fk:
+                elif metadata.att_name:
                     for instance in identity_map[current].values():
                         setattr(instance, metadata.att_name, [])
 
@@ -2211,7 +2222,7 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
                             continue
                         try:
                             joined_inst = identity_map[current][
-                                inst._data[metadata.dest_fk.name]]
+                                inst._data[metadata.foreign_key.name]]
                         except KeyError:
                             continue
 
@@ -3827,10 +3838,10 @@ class ModelOptions(object):
         is_node = not is_field and isinstance(field_obj, Node)
         for field in self.get_fields():
             if isinstance(field, ForeignKeyField) and field.rel_model == model:
-                is_match = any((
-                    field_obj is None,
-                    is_field and field_obj.name == field.name,
-                    is_node and field_obj._alias == field.name))
+                is_match = (
+                    (field_obj is None) or
+                    (is_field and field_obj.name == field.name) or
+                    (is_node and field_obj._alias == field.name))
                 if is_match:
                     return field
 
