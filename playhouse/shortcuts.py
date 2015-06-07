@@ -429,14 +429,3 @@ def dict_to_model(model_class, data, ignore_unknown=False):
             setattr(instance, field.name, value)
 
     return instance
-
-
-class Infix(object):
-    def __init__(self, fn):
-        self._fn = fn
-
-    def __ror__(self, lhs):
-        return Infix(lambda r: self._fn(lhs, r))
-
-    def __or__(self, rhs):
-        return self._fn(rhs)
