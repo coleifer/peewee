@@ -48,7 +48,7 @@ apsw, an advanced sqlite driver
 The ``apsw_ext`` module contains a database class suitable for use with
 the apsw sqlite driver.
 
-APSW Project page: https://code.google.com/p/apsw/
+APSW Project page: https://github.com/rogerbinns/apsw
 
 APSW is a really neat library that provides a thin wrapper on top of SQLite's
 C interface, making it possible to use all of SQLite's advanced features.
@@ -64,7 +64,7 @@ Here are just a few reasons to use APSW, taken from the documentation:
 * APSW is faster.
 
 For more information on the differences between apsw and pysqlite,
-check `the apsw docs <http://apidoc.apsw.googlecode.com/hg/pysqlite.html>`_.
+check `the apsw docs <http://rogerbinns.github.io/apsw/>`_.
 
 How to use the APSWDatabase
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -102,10 +102,10 @@ apsw_ext API notes
     .. py:method:: register_module(mod_name, mod_inst)
 
         Provides a way of globally registering a module.  For more information,
-        see the `documentation on virtual tables <http://apidoc.apsw.googlecode.com/hg/vtable.html>`_.
+        see the `documentation on virtual tables <http://rogerbinns.github.io/apsw/vtable.html>`_.
 
         :param string mod_name: name to use for module
-        :param object mod_inst: an object implementing the `Virtual Table <http://apidoc.apsw.googlecode.com/hg/vtable.html?highlight=virtual%20table#apsw.VTTable>`_ interface
+        :param object mod_inst: an object implementing the `Virtual Table <http://rogerbinns.github.io/apsw/vtable.html#vttable-class>`_ interface
 
     .. py:method:: unregister_module(mod_name)
 
