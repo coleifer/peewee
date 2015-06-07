@@ -268,10 +268,6 @@ def merge_dict(source, overrides):
     merged.update(overrides)
     return merged
 
-def pythonify_name(name):
-    name = re.sub('([a-z_])([A-Z][_a-z])', '\\1 \\2', name)
-    return re.sub('[^\w+]', '_', name.lower())
-
 def returns_clone(func):
     """
     Method decorator that will "clone" the object before applying the given
