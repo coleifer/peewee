@@ -346,7 +346,7 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
         if field in exclude or (only and (field not in only)):
             continue
 
-        field_data = model._data.get(field.name)
+        field_data = dict.get(model, field.name)
         if isinstance(field, ForeignKeyField) and recurse:
             if field_data:
                 seen.add(field)

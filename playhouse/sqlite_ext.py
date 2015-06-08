@@ -246,7 +246,7 @@ def ClosureTable(model_class, foreign_key=None):
 
         @classmethod
         def siblings(cls, node, include_node=False):
-            fk_value = node._data.get(foreign_key.name)
+            fk_value = dict.get(node, foreign_key.name)
             query = model_class.select().where(foreign_key == fk_value)
             if not include_node:
                 query = query.where(primary_key != node)
