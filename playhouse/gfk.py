@@ -60,7 +60,7 @@ class GFKField(object):
         self.att_name = '.'.join((self.model_type_field, self.model_id_field))
 
     def get_obj(self, instance):
-        data = instance._data
+        data = dict(instance)
         if data.get(self.model_type_field) and data.get(self.model_id_field):
             tbl_name = data[self.model_type_field]
             model_class = get_model(tbl_name)
@@ -82,8 +82,8 @@ class GFKField(object):
 
     def __set__(self, instance, value):
         instance._obj_cache[self.att_name] = value
-        instance._data[self.model_type_field] = value._meta.db_table
-        instance._data[self.model_id_field] = value._get_pk_value()
+        instance[self.model_type_field] = value._meta.db_table
+        instance[self.model_id_field] = value._get_pk_value()
 
 class ReverseGFK(object):
     def __init__(self, model, model_type_field='object_type',

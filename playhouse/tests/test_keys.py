@@ -21,7 +21,7 @@ class TestForeignKeyToNonPrimaryKey(ModelTestCase):
 
     def test_fk_resolution(self):
         pi = PackageItem.get(PackageItem.title == '101-0')
-        self.assertEqual(pi._data['package'], '101')
+        self.assertEqual(pi['package'], '101')
         self.assertEqual(pi.package, Package.get(Package.barcode == '101'))
 
     def test_select_generation(self):

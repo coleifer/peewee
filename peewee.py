@@ -101,7 +101,7 @@ logger.addHandler(NullHandler())
 
 # Python 2/3 compatibility helpers. These helpers are used internally and are
 # not exported.
-def with_metaclass(meta, base=object):
+def with_metaclass(meta, base=dict):
     return meta("NewBase", (base,), {})
 
 PY2 = sys.version_info[0] == 2
@@ -698,11 +698,11 @@ class FieldDescriptor(object):
 
     def __get__(self, instance, instance_type=None):
         if instance is not None:
-            return instance._data.get(self.att_name)
+            return dict.get(instance, self.att_name)
         return self.field
 
     def __set__(self, instance, value):
-        instance._data[self.att_name] = value
+        instance[self.att_name] = value
         instance._dirty.add(self.att_name)
 
 class Field(Node):
@@ -1039,7 +1039,7 @@ class RelationDescriptor(FieldDescriptor):
         super(RelationDescriptor, self).__init__(field)
 
     def get_object_or_id(self, instance):
-        rel_id = instance._data.get(self.att_name)
+        rel_id = dict.get(instance, self.att_name)
         if rel_id is not None or self.att_name in instance._obj_cache:
             if self.att_name not in instance._obj_cache:
                 obj = self.rel_model.get(self.field.to_field == rel_id)
@@ -1056,12 +1056,12 @@ class RelationDescriptor(FieldDescriptor):
 
     def __set__(self, instance, value):
         if isinstance(value, self.rel_model):
-            instance._data[self.att_name] = getattr(
+            instance[self.att_name] = getattr(
                 value, self.field.to_field.name)
             instance._obj_cache[self.att_name] = value
         else:
-            orig_value = instance._data.get(self.att_name)
-            instance._data[self.att_name] = value
+            orig_value = dict.get(instance, self.att_name)
+            instance[self.att_name] = value
             if orig_value != value and self.att_name in instance._obj_cache:
                 del instance._obj_cache[self.att_name]
         instance._dirty.add(self.att_name)
@@ -1085,7 +1085,7 @@ class ObjectIdDescriptor(object):
 
     def __get__(self, instance, instance_type=None):
         if instance is not None:
-            return instance._data[self.attr_name]
+            return instance[self.attr_name]
 
 class ForeignKeyField(IntegerField):
     def __init__(self, rel_model, related_name=None, on_delete=None,
@@ -2057,13 +2057,13 @@ class ModelQueryResultWrapper(QueryResultWrapper):
             # Can we populate a value on the joined instance using the current?
             can_populate = (
                 (metadata.primary_key is not None) and
-                (metadata.attr in inst._data) and
+                (metadata.attr in inst) and
                 (getattr(joined_inst, metadata.primary_key) is None))
             if can_populate:
                 setattr(
                     joined_inst,
                     metadata.primary_key,
-                    inst._data[metadata.attr])
+                    inst[metadata.attr])
 
             setattr(inst, metadata.attr, joined_inst)
             prepared.append(joined_inst)
@@ -2145,7 +2145,7 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
         def _get_pk(instance):
             if instance._meta.composite_key:
                 return tuple([
-                    instance._data[field_name]
+                    instance[field_name]
                     for field_name in instance._meta.primary_key.field_names])
             return instance._get_pk_value()
 
@@ -2179,7 +2179,7 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
                 # Do not include any instances which are comprised solely of
                 # NULL values.
                 pk_value = _get_pk(instance)
-                if [val for val in instance._data.values() if val is not None]:
+                if [val for val in dict.values(instance) if val is not None]:
                     identity_map[model_class][pk_value] = instance
 
         stack = [self.model]
@@ -2201,7 +2201,7 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
 
                     for pk, instance in identity_map[current].items():
                         joined_inst = identity_map[join.dest][
-                            instance._data[metadata.foreign_key.name]]
+                            instance[metadata.foreign_key.name]]
                         setattr(
                             instance,
                             metadata.foreign_key.name,
@@ -2219,7 +2219,7 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
                             continue
                         try:
                             joined_inst = identity_map[current][
-                                inst._data[metadata.foreign_key.name]]
+                                inst[metadata.foreign_key.name]]
                         except KeyError:
                             continue
 
@@ -3908,7 +3908,7 @@ class BaseModel(type):
         # initialize the new class and set the magic attributes
         cls = super(BaseModel, cls).__new__(cls, name, bases, attrs)
         cls._meta = ModelOptions(cls, **meta_options)
-        cls._data = None
+        #dict.clear(cls)
         cls._meta.indexes = list(cls._meta.indexes)
 
         if not cls._meta.db_table:
@@ -3963,7 +3963,7 @@ class BaseModel(type):
 
 class Model(with_metaclass(BaseModel)):
     def __init__(self, *args, **kwargs):
-        self._data = self._meta.get_default_dict()
+        dict.update(self, self._meta.get_default_dict())
         self._dirty = set()
         self._obj_cache = {}
 
@@ -4143,7 +4143,7 @@ class Model(with_metaclass(BaseModel)):
         return new_data
 
     def save(self, force_insert=False, only=None):
-        field_dict = dict(self._data)
+        field_dict = dict(self)
         pk_field = self._meta.primary_key
         pk_value = self._get_pk_value()
         if only:
@@ -4185,7 +4185,7 @@ class Model(with_metaclass(BaseModel)):
             for rel_name, fk in klass._meta.reverse_rel.items():
                 rel_model = fk.model_class
                 if fk.rel_model is model_class:
-                    node = (fk == self._data[fk.to_field.name])
+                    node = (fk == self[fk.to_field.name])
                     subquery = rel_model.select().where(node)
                 else:
                     node = fk << query
@@ -4268,11 +4268,11 @@ class PrefetchResult(__prefetched):
 
     def populate_instance(self, instance, id_map):
         if self.backref:
-            identifier = instance._data[self.field.name]
+            identifier = instance[self.field.name]
             if identifier in id_map:
                 setattr(instance, self.field.name, id_map[identifier])
         else:
-            identifier = instance._data[self.field.to_field.name]
+            identifier = instance[self.field.to_field.name]
             rel_instances = id_map.get(identifier, [])
             attname = self.foreign_key_attr
             dest = '%s_prefetch' % self.field.related_name
@@ -4282,7 +4282,7 @@ class PrefetchResult(__prefetched):
 
     def store_instance(self, instance, id_map):
         identity = self.field.to_field.python_value(
-            instance._data[self.foreign_key_attr])
+            instance[self.foreign_key_attr])
         if self.backref:
             id_map[identity] = instance
         else:
