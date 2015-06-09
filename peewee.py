@@ -2076,7 +2076,7 @@ class ModelQueryResultWrapper(QueryResultWrapper):
             can_populate_joined_pk = (
                 mpk and
                 (metadata.attr in inst._data) and
-                (getattr(joined_inst, metadata.primary_key) is not None))
+                (getattr(joined_inst, metadata.primary_key) is None))
             if can_populate_joined_pk:
                 setattr(
                     joined_inst,
