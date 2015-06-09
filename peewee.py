@@ -461,48 +461,6 @@ class Node(object):
     def concat(self, rhs):
         return Expression(self, OP.CONCAT, rhs)
 
-class Expression(Node):
-    """A binary expression, e.g `foo + 1` or `bar < 7`."""
-    _node_type = 'expression'
-
-    def __init__(self, lhs, op, rhs, flat=False):
-        super(Expression, self).__init__()
-        self.lhs = lhs
-        self.op = op
-        self.rhs = rhs
-        self.flat = flat
-
-    def clone_base(self):
-        return Expression(self.lhs, self.op, self.rhs, self.flat)
-
-class DQ(Node):
-    """A "django-style" filter expression, e.g. {'foo__eq': 'x'}."""
-    def __init__(self, **query):
-        super(DQ, self).__init__()
-        self.query = query
-
-    def clone_base(self):
-        return DQ(**self.query)
-
-class Param(Node):
-    """
-    Arbitrary parameter passed into a query. Instructs the query compiler to
-    specifically treat this value as a parameter, useful for `list` which is
-    special-cased for `IN` lookups.
-    """
-    _node_type = 'param'
-
-    def __init__(self, value, conv=None):
-        self.value = value
-        self.conv = conv
-        super(Param, self).__init__()
-
-    def clone_base(self):
-        return Param(self.value, self.conv)
-
-class Passthrough(Param):
-    _node_type = 'passthrough'
-
 class SQL(Node):
     """An unescaped SQL string, with optional parameters."""
     _node_type = 'sql'
@@ -515,6 +473,20 @@ class SQL(Node):
     def clone_base(self):
         return SQL(self.value, *self.params)
 R = SQL  # backwards-compat.
+
+class Entity(Node):
+    """A quoted-name or entity, e.g. "table"."column"."""
+    _node_type = 'entity'
+
+    def __init__(self, *path):
+        super(Entity, self).__init__()
+        self.path = path
+
+    def clone_base(self):
+        return Entity(*self.path)
+
+    def __getattr__(self, attr):
+        return Entity(*filter(None, self.path + (attr,)))
 
 class Func(Node):
     """An arbitrary SQL function call."""
@@ -554,6 +526,68 @@ class Func(Node):
 # API.  So instead of `Func("LOWER", param)`, `fn.LOWER(param)`.
 fn = Func(None)
 
+class Expression(Node):
+    """A binary expression, e.g `foo + 1` or `bar < 7`."""
+    _node_type = 'expression'
+
+    def __init__(self, lhs, op, rhs, flat=False):
+        super(Expression, self).__init__()
+        self.lhs = lhs
+        self.op = op
+        self.rhs = rhs
+        self.flat = flat
+
+    def clone_base(self):
+        return Expression(self.lhs, self.op, self.rhs, self.flat)
+
+class Param(Node):
+    """
+    Arbitrary parameter passed into a query. Instructs the query compiler to
+    specifically treat this value as a parameter, useful for `list` which is
+    special-cased for `IN` lookups.
+    """
+    _node_type = 'param'
+
+    def __init__(self, value, conv=None):
+        self.value = value
+        self.conv = conv
+        super(Param, self).__init__()
+
+    def clone_base(self):
+        return Param(self.value, self.conv)
+
+class Passthrough(Param):
+    _node_type = 'passthrough'
+
+class Clause(Node):
+    """A SQL clause, one or more Node objects joined by spaces."""
+    _node_type = 'clause'
+
+    glue = ' '
+    parens = False
+
+    def __init__(self, *nodes, **kwargs):
+        if 'glue' in kwargs:
+            self.glue = kwargs['glue']
+        if 'parens' in kwargs:
+            self.parens = kwargs['parens']
+        super(Clause, self).__init__()
+        self.nodes = list(nodes)
+
+    def clone_base(self):
+        clone = Clause(*self.nodes)
+        clone.glue = self.glue
+        clone.parens = self.parens
+        return clone
+
+class CommaClause(Clause):
+    """One or more Node objects joined by commas, no parens."""
+    glue = ', '
+
+class EnclosedClause(CommaClause):
+    """One or more Node objects joined by commas and enclosed in parens."""
+    parens = True
+
 class Window(Node):
     def __init__(self, partition_by=None, order_by=None):
         super(Window, self).__init__()
@@ -576,49 +610,19 @@ class Window(Node):
     def clone_base(self):
         return Window(self.partition_by, self.order_by)
 
-class Clause(Node):
-    """A SQL clause, one or more Node objects joined by spaces."""
-    _node_type = 'clause'
-
-    glue = ' '
-    parens = False
-
-    def __init__(self, *nodes):
-        super(Clause, self).__init__()
-        self.nodes = list(nodes)
-
-    def clone_base(self):
-        clone = Clause(*self.nodes)
-        clone.glue = self.glue
-        clone.parens = self.parens
-        return clone
-
-class CommaClause(Clause):
-    """One or more Node objects joined by commas, no parens."""
-    glue = ', '
-
-class EnclosedClause(CommaClause):
-    """One or more Node objects joined by commas and enclosed in parens."""
-    parens = True
-
-class Entity(Node):
-    """A quoted-name or entity, e.g. "table"."column"."""
-    _node_type = 'entity'
-
-    def __init__(self, *path):
-        super(Entity, self).__init__()
-        self.path = path
-
-    def clone_base(self):
-        return Entity(*self.path)
-
-    def __getattr__(self, attr):
-        return Entity(*filter(None, self.path + (attr,)))
-
 class Check(SQL):
     """Check constraint, usage: `Check('price > 10')`."""
     def __init__(self, value):
         super(Check, self).__init__('CHECK (%s)' % value)
+
+class DQ(Node):
+    """A "django-style" filter expression, e.g. {'foo__eq': 'x'}."""
+    def __init__(self, **query):
+        super(DQ, self).__init__()
+        self.query = query
+
+    def clone_base(self):
+        return DQ(**self.query)
 
 class _StripParens(Node):
     _node_type = 'strip_parens'
