@@ -3187,7 +3187,7 @@ Database URL
 
 This module contains a helper function to generate a database connection from a URL connection string.
 
-.. py:function:: connect(url)
+.. py:function:: connect(url, **connect_params)
 
     Create a :py:class:`Database` instance from the given connection URL.
 

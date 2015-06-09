@@ -63,9 +63,10 @@ def parse(url):
     parsed = urlparse(url)
     return parseresult_to_dict(parsed)
 
-def connect(url):
+def connect(url, **connect_params):
     parsed = urlparse(url)
     connect_kwargs = parseresult_to_dict(parsed)
+    connect_kwargs.update(connect_params)
     database_class = schemes.get(parsed.scheme)
 
     if database_class is None:
