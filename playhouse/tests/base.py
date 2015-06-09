@@ -204,6 +204,21 @@ class PeeweeTestCase(TestCase):
     def tearDown(self):
         logger.removeHandler(self.qh)
 
+    def assertIsNone(self, value):
+        self.assertTrue(value is None, '%r is not None' % value)
+
+    def assertIsNotNone(self, value):
+        self.assertFalse(value is None)
+
+    @contextmanager
+    def assertRaisesCtx(self, exc_class):
+        try:
+            yield
+        except exc_class:
+            return
+        else:
+            raise AssertionError('Exception %s not raised.' % exc_class)
+
     def queries(self):
         return [x.msg for x in self.qh.queries]
 

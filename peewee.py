@@ -632,8 +632,18 @@ class _StripParens(Node):
         self.node = node
 
 JoinMetadata = namedtuple('JoinMetadata', (
-    'src_model', 'dest_model', 'src', 'dest', 'attr', 'primary_key',
-    'foreign_key', 'is_backref', 'alias'))
+    'src_model',  # Source Model class.
+    'dest_model',   # Dest Model class.
+    'src',   # Source, may be Model, ModelAlias
+    'dest',  # Dest, may be Model, ModelAlias, or SelectQuery.
+    'attr',  # Attribute name joined instance(s) should be assigned to.
+    'primary_key',  # Primary key being joined on.
+    'foreign_key',  # Foreign key being joined from.
+    'is_backref',  # Is this a backref, i.e. 1 -> N.
+    'alias',  # Explicit alias given to join expression.
+    'is_self_join',  # Is this a self-join?
+    'is_expression',  # Is the join ON clause an Expression?
+))
 
 class Join(namedtuple('_Join', ('dest', 'join_type', 'on'))):
     def get_foreign_key(self, source, dest, field=None):
@@ -660,6 +670,7 @@ class Join(namedtuple('_Join', ('dest', 'join_type', 'on'))):
         dest = self.model_from_alias(self.dest)
 
         join_alias = isinstance(self.on, Node) and self.on._alias or None
+        is_expression = isinstance(self.on, (Expression, Func, SQL))
 
         target_attr = to_field = None
         on_field = isinstance(self.on, (Field, FieldProxy)) and self.on or None
@@ -691,7 +702,9 @@ class Join(namedtuple('_Join', ('dest', 'join_type', 'on'))):
             primary_key=to_field,
             foreign_key=fk_field,
             is_backref=is_backref,
-            alias=join_alias)
+            alias=join_alias,
+            is_self_join=src is dest,
+            is_expression=is_expression)
 
 class FieldDescriptor(object):
     # Fields are exposed as descriptors in order to control access to the
@@ -1089,7 +1102,7 @@ class ObjectIdDescriptor(object):
 
     def __get__(self, instance, instance_type=None):
         if instance is not None:
-            return instance._data[self.attr_name]
+            return instance._data.get(self.attr_name)
 
 class ForeignKeyField(IntegerField):
     def __init__(self, rel_model, related_name=None, on_delete=None,
@@ -2059,15 +2072,28 @@ class ModelQueryResultWrapper(QueryResultWrapper):
             joined_inst = collected[metadata.dest]
 
             # Can we populate a value on the joined instance using the current?
-            can_populate = (
-                (metadata.primary_key is not None) and
+            mpk = metadata.primary_key is not None
+            can_populate_joined_pk = (
+                mpk and
                 (metadata.attr in inst._data) and
-                (getattr(joined_inst, metadata.primary_key) is None))
-            if can_populate:
+                (getattr(joined_inst, metadata.primary_key) is not None))
+            if can_populate_joined_pk:
                 setattr(
                     joined_inst,
                     metadata.primary_key,
                     inst._data[metadata.attr])
+
+            if metadata.is_backref:
+                can_populate_joined_fk = (
+                    mpk and
+                    (metadata.foreign_key is not None) and
+                    (getattr(inst, metadata.primary_key) is not None) and
+                    (joined_inst._data.get(metadata.foreign_key.name) is None))
+                if can_populate_joined_fk:
+                    setattr(
+                        joined_inst,
+                        metadata.foreign_key.name,
+                        inst)
 
             setattr(inst, metadata.attr, joined_inst)
             prepared.append(joined_inst)

@@ -343,6 +343,72 @@ class TestQueryResultWrapper(ModelTestCase):
             self.assertEqual(b.user.foo, b.user.username)
 
 
+class TestPopulatePKFK(ModelTestCase):
+    requires = [Blog, User]
+
+    def setUp(self):
+        super(TestPopulatePKFK, self).setUp()
+        u1 = User.create(username='u1')
+        u2 = User.create(username='u2')
+        Blog.create(user=u1, title='b1')
+        Blog.create(user=u2, title='b2')
+
+    def test_fk_missing_pk(self):
+        # Not enough information.
+        with self.assertQueryCount(1):
+            q = (Blog
+                 .select(Blog.title, User.username)
+                 .join(User)
+                 .order_by(Blog.title, User.username))
+            results = []
+            for blog in q:
+                results.append((blog.title, blog.user.username))
+                self.assertIsNone(blog.user.id)
+                self.assertIsNone(blog.user_id)
+            self.assertEqual(results, [('b1', 'u1'), ('b2', 'u2')])
+
+    def test_fk_with_pk(self):
+        with self.assertQueryCount(1):
+            q = (Blog
+                 .select(Blog.title, User.username, User.id)
+                 .join(User)
+                 .order_by(Blog.title, User.username))
+            results = []
+            for blog in q:
+                results.append((blog.title, blog.user.username))
+                self.assertIsNotNone(blog.user.id)
+                self.assertIsNotNone(blog.user_id)
+            self.assertEqual(results, [('b1', 'u1'), ('b2', 'u2')])
+
+    def test_backref_missing_pk(self):
+        with self.assertQueryCount(1):
+            q = (User
+                 .select(User.username, Blog.title)
+                 .join(Blog)
+                 .order_by(User.username, Blog.title))
+            results = []
+            for user in q:
+                results.append((user.username, user.blog.title))
+                self.assertIsNone(user.id)
+                self.assertIsNone(user.blog.pk)
+                self.assertIsNone(user.blog.user_id)
+            self.assertEqual(results, [('u1', 'b1'), ('u2', 'b2')])
+
+    def test_backref_with_pk(self):
+        with self.assertQueryCount(1):
+            q = (User
+                 .select(User.id, User.username, Blog.title)
+                 .join(Blog)
+                 .order_by(User.username, Blog.title))
+            results = []
+            for user in q:
+                results.append((user.username, user.blog.title))
+                self.assertIsNotNone(User.id)
+                self.assertIsNotNone(user.blog.user_id)
+                self.assertEqual(user.username, user.blog.user.username)
+            self.assertEqual(results, [('u1', 'b1'), ('u2', 'b2')])
+
+
 class TestQueryResultTypeConversion(ModelTestCase):
     requires = [User]
 
