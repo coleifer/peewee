@@ -394,18 +394,59 @@ class TestPopulatePKFK(ModelTestCase):
                 self.assertIsNone(user.blog.user_id)
             self.assertEqual(results, [('u1', 'b1'), ('u2', 'b2')])
 
-    def test_backref_with_pk(self):
+    def test_fk_join_expr(self):
         with self.assertQueryCount(1):
             q = (User
-                 .select(User.id, User.username, Blog.title)
-                 .join(Blog)
-                 .order_by(User.username, Blog.title))
+                 .select(User.username, Blog.title)
+                 .join(Blog, on=(User.id == Blog.user).alias('bx'))
+                 .order_by(User.username))
+            results = []
+            for user in q:
+                results.append((user.username, user.bx.title))
+            self.assertEqual(results, [('u1', 'b1'), ('u2', 'b2')])
+
+        with self.assertQueryCount(1):
+            q = (Blog
+                 .select(Blog.title, User.username)
+                 .join(User, on=(Blog.user == User.id).alias('ux'))
+                 .order_by(Blog.title))
+            results = []
+            for blog in q:
+                results.append((blog.title, blog.ux.username))
+            self.assertEqual(results, [('b1', 'u1'), ('b2', 'u2')])
+
+    def test_aliases(self):
+        B = Blog.alias()
+        U = User.alias()
+        with self.assertQueryCount(1):
+            q = (U.select(U.username, B.title)
+                 .join(B, on=(U.id == B.user))
+                 .order_by(U.username))
             results = []
             for user in q:
                 results.append((user.username, user.blog.title))
-                self.assertIsNotNone(User.id)
-                self.assertIsNotNone(user.blog.user_id)
-                self.assertEqual(user.username, user.blog.user.username)
+            self.assertEqual(results, [('u1', 'b1'), ('u2', 'b2')])
+
+        with self.assertQueryCount(1):
+            q = (B.select(B.title, U.username)
+                 .join(U, on=(B.user == U.id))
+                 .order_by(B.title))
+            results = []
+            for blog in q:
+                results.append((blog.title, blog.user.username))
+            self.assertEqual(results, [('b1', 'u1'), ('b2', 'u2')])
+
+    def test_subqueries(self):
+        uq = User.select()
+        bq = Blog.select(Blog.title, Blog.user).alias('bq')
+        with self.assertQueryCount(1):
+            q = (User
+                 .select(User, bq.c.title.bind_to(Blog))
+                 .join(bq, on=(User.id == bq.c.user_id).alias('blog'))
+                 .order_by(User.username))
+            results = []
+            for user in q:
+                results.append((user.username, user.blog.title))
             self.assertEqual(results, [('u1', 'b1'), ('u2', 'b2')])
 
 

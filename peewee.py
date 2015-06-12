@@ -663,6 +663,8 @@ class Join(namedtuple('_Join', ('dest', 'join_type', 'on'))):
     def model_from_alias(self, model_or_alias):
         if isinstance(model_or_alias, ModelAlias):
             return model_or_alias.model_class
+        elif isinstance(model_or_alias, SelectQuery):
+            return model_or_alias.model_class
         return model_or_alias
 
     def join_metadata(self, source):
@@ -2037,8 +2039,9 @@ class ModelQueryResultWrapper(QueryResultWrapper):
                 continue
 
             for join in joins[current]:
-                if join.dest in models:
-                    join_list.append(join.join_metadata(current))
+                metadata = join.join_metadata(current)
+                if metadata.dest in models or metadata.dest_model in models:
+                    join_list.append(metadata)
                     stack.append(join.dest)
 
         return join_list
@@ -2071,7 +2074,10 @@ class ModelQueryResultWrapper(QueryResultWrapper):
         prepared = [collected[self.model]]
         for metadata in self.join_list:
             inst = collected[metadata.src]
-            joined_inst = collected[metadata.dest]
+            try:
+                joined_inst = collected[metadata.dest]
+            except KeyError:
+                joined_inst = collected[metadata.dest_model]
 
             # Can we populate a value on the joined instance using the current?
             mpk = metadata.primary_key is not None
