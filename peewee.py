@@ -645,7 +645,7 @@ JoinMetadata = namedtuple('JoinMetadata', (
     'is_expression',  # Is the join ON clause an Expression?
 ))
 
-class Join(namedtuple('_Join', ('dest', 'join_type', 'on'))):
+class Join(namedtuple('_Join', ('src', 'dest', 'join_type', 'on'))):
     def get_foreign_key(self, source, dest, field=None):
         if isinstance(source, SelectQuery) or isinstance(dest, SelectQuery):
             return None, None
@@ -667,8 +667,8 @@ class Join(namedtuple('_Join', ('dest', 'join_type', 'on'))):
             return model_or_alias.model_class
         return model_or_alias
 
-    def join_metadata(self, source):
-        src = self.model_from_alias(source)
+    def join_metadata(self):
+        src = self.model_from_alias(self.src)
         dest = self.model_from_alias(self.dest)
 
         join_alias = isinstance(self.on, Node) and self.on._alias or None
@@ -680,9 +680,9 @@ class Join(namedtuple('_Join', ('dest', 'join_type', 'on'))):
             fk_field = on_field
             is_backref = on_field.name not in src._meta.fields
         else:
-            fk_field, is_backref = self.get_foreign_key(source, dest, self.on)
+            fk_field, is_backref = self.get_foreign_key(src, dest, self.on)
             if fk_field is None and self.on is not None:
-                fk_field, is_backref = self.get_foreign_key(source, dest)
+                fk_field, is_backref = self.get_foreign_key(src, dest)
 
         if fk_field is not None:
             to_field = fk_field.to_field.name
@@ -698,7 +698,7 @@ class Join(namedtuple('_Join', ('dest', 'join_type', 'on'))):
         return JoinMetadata(
             src_model=src,
             dest_model=dest,
-            src=source,
+            src=self.src,
             dest=self.dest,
             attr=join_alias or target_attr,
             primary_key=to_field,
@@ -1589,7 +1589,7 @@ class QueryCompiler(object):
                     # Clear any alias on the join expression.
                     constraint = join.on.clone().alias()
                 else:
-                    metadata = join.join_metadata(curr)
+                    metadata = join.join_metadata()
                     if metadata.foreign_key:
                         lhs = metadata.foreign_key
                         rhs = metadata.foreign_key.to_field
@@ -2039,7 +2039,7 @@ class ModelQueryResultWrapper(QueryResultWrapper):
                 continue
 
             for join in joins[current]:
-                metadata = join.join_metadata(current)
+                metadata = join.join_metadata()
                 if metadata.dest in models or metadata.dest_model in models:
                     join_list.append(metadata)
                     stack.append(join.dest)
@@ -2325,16 +2325,17 @@ class Query(Node):
 
     @returns_clone
     def join(self, dest, join_type=None, on=None):
+        src = self._query_ctx
         if not on:
-            require_join_condition = [
-                isinstance(dest, SelectQuery),
-                (isclass(dest) and not self._query_ctx._meta.rel_exists(dest))]
-            if any(require_join_condition):
+            require_join_condition = (
+                isinstance(dest, SelectQuery) or
+                (isclass(dest) and not src._meta.rel_exists(dest)))
+            if require_join_condition:
                 raise ValueError('A join condition must be specified.')
         elif isinstance(on, basestring):
-            on = self._query_ctx._meta.fields[on]
-        self._joins.setdefault(self._query_ctx, [])
-        self._joins[self._query_ctx].append(Join(dest, join_type, on))
+            on = src._meta.fields[on]
+        self._joins.setdefault(src, [])
+        self._joins[src].append(Join(src, dest, join_type, on))
         if not isinstance(dest, SelectQuery):
             self._query_ctx = dest
 
