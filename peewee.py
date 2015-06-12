@@ -2018,8 +2018,10 @@ class ModelQueryResultWrapper(QueryResultWrapper):
                     key = constructor = self.model
                 else:
                     key = constructor = node._bind_to
-                if isinstance(node, Expression) and node._alias:
+                if isinstance(node, Node) and node._alias:
                     attr = node._alias
+                elif isinstance(node, Entity):
+                    attr = node.path[-1]
             column_map.append((key, constructor, attr, conv))
             models.add(key)
 
@@ -2701,6 +2703,9 @@ class SelectQuery(Query):
         for node in self._select:
             if isinstance(node, Field) and node.model_class != model_class:
                 return False
+            elif isinstance(node, Node) and node._bind_to is not None:
+                if node._bind_to != model_class:
+                    return False
         return True
 
     def get_query_meta(self):
