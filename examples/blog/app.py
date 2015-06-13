@@ -184,7 +184,11 @@ def index():
     # paginating the results if there are more than 20. For more info see
     # the docs:
     # http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#object_list
-    return object_list('index.html', query, search=search_query)
+    return object_list(
+        'index.html',
+        query,
+        search=search_query,
+        check_bounds=False)
 
 @app.route('/create/', methods=['GET', 'POST'])
 @login_required
@@ -208,7 +212,7 @@ def create():
 @login_required
 def drafts():
     query = Entry.drafts().order_by(Entry.timestamp.desc())
-    return object_list('index.html', query)
+    return object_list('index.html', query, check_bounds=False)
 
 @app.route('/<slug>/')
 def detail(slug):
