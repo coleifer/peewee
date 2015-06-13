@@ -342,12 +342,56 @@ class TestQueryResultWrapper(ModelTestCase):
             self.assertEqual(b.foo, b.title)
             self.assertEqual(b.user.foo, b.user.username)
 
+    def test_aliasing_values(self):
+        User.create_users(2)
+        q = User.select(User.username.alias('xx')).order_by(User.username)
+        results = [row for row in q.dicts()]
+        self.assertEqual(results, [
+            {'xx': 'u1'},
+            {'xx': 'u2'}])
 
-class TestPopulatePKFK(ModelTestCase):
+        results = [user.xx for user in q]
+        self.assertEqual(results, ['u1', 'u2'])
+
+        # Force ModelQueryResultWrapper.
+        q = (User
+             .select(User.username.alias('xx'), Blog.pk)
+             .join(Blog, JOIN.LEFT_OUTER)
+             .order_by(User.username))
+        results = [user.xx for user in q]
+        self.assertEqual(results, ['u1', 'u2'])
+
+        # Use Model and Field aliases.
+        UA = User.alias()
+        q = (User
+             .select(
+                 User.username.alias('x'),
+                 UA.username.alias('y'))
+             .join(UA, on=(User.id == UA.id).alias('z'))
+             .order_by(User.username))
+        results = [(user.x, user.z.y) for user in q]
+        self.assertEqual(results, [('u1', 'u1'), ('u2', 'u2')])
+
+        q = q.naive()
+        results = [(user.x, user.y) for user in q]
+        self.assertEqual(results, [('u1', 'u1'), ('u2', 'u2')])
+
+        uq = User.select(User.id, User.username).alias('u2')
+        q = (User
+             .select(
+                 User.username.alias('x'),
+                 uq.c.username.alias('y'))
+             .join(uq, on=(User.id == uq.c.id))
+             .order_by(User.username))
+        results = [(user.x, user.y) for user in q]
+        self.assertEqual(results, [('u1', 'u1'), ('u2', 'u2')])
+
+
+class TestJoinedInstanceConstruction(ModelTestCase):
     requires = [Blog, User]
 
     def setUp(self):
-        super(TestPopulatePKFK, self).setUp()
+        super(TestJoinedInstanceConstruction, self).setUp()
         u1 = User.create(username='u1')
         u2 = User.create(username='u2')
         Blog.create(user=u1, title='b1')

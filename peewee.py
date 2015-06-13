@@ -667,14 +667,14 @@ class Join(namedtuple('_Join', ('src', 'dest', 'join_type', 'on'))):
             return model_or_alias.model_class
         return model_or_alias
 
-    def join_metadata(self):
+    def _join_metadata(self):
+        # Get the actual tables being joined.
         src = self.model_from_alias(self.src)
         dest = self.model_from_alias(self.dest)
 
         join_alias = isinstance(self.on, Node) and self.on._alias or None
         is_expression = isinstance(self.on, (Expression, Func, SQL))
 
-        target_attr = to_field = None
         on_field = isinstance(self.on, (Field, FieldProxy)) and self.on or None
         if on_field:
             fk_field = on_field
@@ -685,15 +685,23 @@ class Join(namedtuple('_Join', ('src', 'dest', 'join_type', 'on'))):
                 fk_field, is_backref = self.get_foreign_key(src, dest)
 
         if fk_field is not None:
-            to_field = fk_field.to_field.name
-            if is_backref:
-                target_attr = dest._meta.db_table
-            else:
-                target_attr = fk_field.name
-        elif isinstance(self.on, Expression) and hasattr(self.on.lhs, 'name'):
-            target_attr = self.on.lhs.name
+            primary_key = fk_field.to_field
         else:
-            target_attr = dest._meta.db_table
+            primary_key = None
+
+        if not join_alias:
+            if fk_field is not None:
+                if is_backref:
+                    target_attr = dest._meta.db_table
+                else:
+                    target_attr = fk_field.name
+            else:
+                try:
+                    target_attr = self.on.lhs.name
+                except AttributeError:
+                    target_attr = dest._meta.db_table
+        else:
+            target_attr = None
 
         return JoinMetadata(
             src_model=src,
@@ -701,12 +709,18 @@ class Join(namedtuple('_Join', ('src', 'dest', 'join_type', 'on'))):
             src=self.src,
             dest=self.dest,
             attr=join_alias or target_attr,
-            primary_key=to_field,
+            primary_key=primary_key,
             foreign_key=fk_field,
             is_backref=is_backref,
             alias=join_alias,
             is_self_join=src is dest,
             is_expression=is_expression)
+
+    @property
+    def metadata(self):
+        if not hasattr(self, '_cached_metadata'):
+            self._cached_metadata = self._join_metadata()
+        return self._cached_metadata
 
 class FieldDescriptor(object):
     # Fields are exposed as descriptors in order to control access to the
@@ -1589,7 +1603,7 @@ class QueryCompiler(object):
                     # Clear any alias on the join expression.
                     constraint = join.on.clone().alias()
                 else:
-                    metadata = join.join_metadata()
+                    metadata = join.metadata
                     if metadata.foreign_key:
                         lhs = metadata.foreign_key
                         rhs = metadata.foreign_key.to_field
@@ -2011,10 +2025,11 @@ class ModelQueryResultWrapper(QueryResultWrapper):
                 if isinstance(node, FieldProxy):
                     key = node._model_alias
                     constructor = node.model
+                    conv = node.field_instance.python_value
                 else:
                     key = constructor = node.model_class
-                attr = node.name
-                conv = node.python_value
+                    conv = node.python_value
+                attr = node._alias or node.name
             else:
                 if node._bind_to is None:
                     key = constructor = self.model
@@ -2039,7 +2054,7 @@ class ModelQueryResultWrapper(QueryResultWrapper):
                 continue
 
             for join in joins[current]:
-                metadata = join.join_metadata()
+                metadata = join.metadata
                 if metadata.dest in models or metadata.dest_model in models:
                     join_list.append(metadata)
                     stack.append(join.dest)
@@ -2084,18 +2099,18 @@ class ModelQueryResultWrapper(QueryResultWrapper):
             can_populate_joined_pk = (
                 mpk and
                 (metadata.attr in inst._data) and
-                (getattr(joined_inst, metadata.primary_key) is None))
+                (getattr(joined_inst, metadata.primary_key.name) is None))
             if can_populate_joined_pk:
                 setattr(
                     joined_inst,
-                    metadata.primary_key,
+                    metadata.primary_key.name,
                     inst._data[metadata.attr])
 
             if metadata.is_backref:
                 can_populate_joined_fk = (
                     mpk and
                     (metadata.foreign_key is not None) and
-                    (getattr(inst, metadata.primary_key) is not None) and
+                    (getattr(inst, metadata.primary_key.name) is not None) and
                     (joined_inst._data.get(metadata.foreign_key.name) is None))
                 if can_populate_joined_fk:
                     setattr(
