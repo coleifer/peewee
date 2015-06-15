@@ -541,6 +541,29 @@ If you *always* want to have control over the primary key, simply do not use the
     >>> User.get(User.username == 'somebody').id
     999
 
+Models without a Primary Key
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you wish to create a model with no primary key, you can specify ``primary_key = False`` in the inner ``Meta`` class:
+
+.. code-block:: python
+
+    class MyData(BaseModel):
+        timestamp = DateTimeField()
+        value = IntegerField()
+
+        class Meta:
+            primary_key = False
+
+This will yield the following DDL:
+
+.. code-block:: sql
+
+    CREATE TABLE "mydata" (
+      "timestamp" DATETIME NOT NULL,
+      "value" INTEGER NOT NULL
+    )
+
 Self-referential foreign keys
 -----------------------------
 
