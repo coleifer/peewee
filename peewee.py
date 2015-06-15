@@ -2124,7 +2124,7 @@ class ModelQueryResultWrapper(QueryResultWrapper):
         return prepared
 
 
-JoinCache = namedtuple('JoinCache', ('foreign_key', 'is_backref', 'att_name'))
+JoinCache = namedtuple('JoinCache', ('metadata', 'attr'))
 
 
 class AggregateQueryResultWrapper(ModelQueryResultWrapper):
@@ -2135,7 +2135,7 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
     def initialize(self, description):
         super(AggregateQueryResultWrapper, self).initialize(description)
 
-        # Collect the set of all models queried.
+        # Collect the set of all models (and ModelAlias objects) queried.
         self.all_models = set()
         for key, _, _, _ in self.column_map:
             self.all_models.add(key)
@@ -2146,23 +2146,20 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
         self.back_references = {}
         self.source_to_dest = {}
 
-        #for (src, attr, dest, to_field, related_name) in self.join_list:
         for metadata in self.join_list:
             if metadata.is_backref:
                 att_name = metadata.foreign_key.related_name
             else:
                 att_name = metadata.attr
 
-            is_backref = metadata.is_backref or (
-                metadata.src_model is metadata.dest_model)
+            is_backref = metadata.is_backref or metadata.is_self_join
             if is_backref:
                 self.models_with_aggregate.add(metadata.src)
 
             self.source_to_dest.setdefault(metadata.src, {})
-            self.source_to_dest[metadata.src_model][metadata.dest] = JoinCache(
-                foreign_key=metadata.foreign_key,
-                is_backref=is_backref,
-                att_name=metadata.alias or att_name)
+            self.source_to_dest[metadata.src][metadata.dest] = JoinCache(
+                metadata=metadata,
+                attr=metadata.alias or att_name)
 
         # Determine which columns could contain "duplicate" data, e.g. if
         # getting Users and their Tweets, this would be the User columns.
@@ -2205,9 +2202,9 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
         identity_map = {}
         _constructed = self.construct_instances(row)
         primary_instance = _constructed[self.model]
-        for model_class, instance in _constructed.items():
-            identity_map[model_class] = OrderedDict()
-            identity_map[model_class][_get_pk(instance)] = instance
+        for model_or_alias, instance in _constructed.items():
+            identity_map[model_or_alias] = OrderedDict()
+            identity_map[model_or_alias][_get_pk(instance)] = instance
 
         model_data = self.read_model_data(row)
         while True:
@@ -2228,12 +2225,15 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
             different_models = self.all_models - duplicate_models
 
             new_instances = self.construct_instances(cur_row, different_models)
-            for model_class, instance in new_instances.items():
+            for model_or_alias, instance in new_instances.items():
                 # Do not include any instances which are comprised solely of
                 # NULL values.
-                pk_value = _get_pk(instance)
-                if [val for val in instance._data.values() if val is not None]:
-                    identity_map[model_class][pk_value] = instance
+                all_none = True
+                for value in instance._data.values():
+                    if value is not None:
+                        all_none = False
+                if not all_none:
+                    identity_map[model_or_alias][_get_pk(instance)] = instance
 
         stack = [self.model]
         instances = [primary_instance]
@@ -2244,11 +2244,30 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
 
             for join in self.join_meta[current]:
                 try:
-                    metadata = self.source_to_dest[current][join.dest]
+                    metadata, attr = self.source_to_dest[current][join.dest]
                 except KeyError:
                     continue
 
-                if not metadata.is_backref:
+                if metadata.is_backref or metadata.is_self_join:
+                    for instance in identity_map[current].values():
+                        setattr(instance, attr, [])
+
+                    if join.dest not in identity_map:
+                        continue
+
+                    for pk, inst in identity_map[join.dest].items():
+                        if pk is None:
+                            continue
+                        try:
+                            # TODO: is the value always the FK name?
+                            joined_inst = identity_map[current][
+                                inst._data[metadata.foreign_key.name]]
+                        except KeyError:
+                            continue
+
+                        getattr(joined_inst, attr).append(inst)
+                        instances.append(inst)
+                elif attr:
                     if join.dest not in identity_map:
                         continue
 
@@ -2260,24 +2279,6 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
                             metadata.foreign_key.name,
                             joined_inst)
                         instances.append(joined_inst)
-                elif metadata.att_name:
-                    for instance in identity_map[current].values():
-                        setattr(instance, metadata.att_name, [])
-
-                    if join.dest not in identity_map:
-                        continue
-
-                    for pk, inst in identity_map[join.dest].items():
-                        if pk is None:
-                            continue
-                        try:
-                            joined_inst = identity_map[current][
-                                inst._data[metadata.foreign_key.name]]
-                        except KeyError:
-                            continue
-
-                        getattr(joined_inst, metadata.att_name).append(inst)
-                        instances.append(inst)
 
                 stack.append(join.dest)
 
