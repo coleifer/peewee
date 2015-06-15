@@ -164,6 +164,20 @@ class BaseMigrationTestCase(object):
             (t2.id, 't2', None, datetime.datetime(2012, 1, 1), '', True, 0.0),
         ])
 
+    def test_change_column(self):
+        t1 = Tag.create(tag='11')
+        field = IntegerField()
+        field.add_to_class(Tag, 'tag')
+        migrate(self.migrator.change_column('tag', 'tag', field))
+        [tag] = list(Tag.select())
+        self.assertEqual(tag.tag, 11)
+
+        field = CharField()
+        field.add_to_class(Tag, 'tag')
+        migrate(self.migrator.change_column('tag', 'tag', field))
+        [tag] = list(Tag.select())
+        self.assertEqual(tag.tag, '11')
+
     def _create_people(self):
         for first, last, dob in self._person_data:
             Person.create(first_name=first, last_name=last, dob=dob)
