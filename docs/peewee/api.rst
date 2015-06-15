@@ -1159,7 +1159,7 @@ Query Types
             it may be more efficient to use :py:func:`prefetch`. In short, try both and
             see what works best for your data-set.
 
-        .. note:: For more information, see the :ref:`nplusone` document.
+        .. note:: For more information, see the :ref:`nplusone` document and the :ref:`aggregate-rows` sub-section.
 
     .. py:method:: annotate(related_model, aggregation=None)
 
@@ -1638,7 +1638,7 @@ Query Types
 
     .. note:: Subqueries must be related by foreign key and can be arbitrarily deep
 
-    .. note:: For more information, see the :ref:`nplusone` document.
+    .. note:: For more information, see the :ref:`nplusone` document and the :ref:`prefetch` sub-section.
 
     .. warning::
         :py:func:`prefetch` can use up lots of RAM when the result set is large,

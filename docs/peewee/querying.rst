@@ -1497,65 +1497,17 @@ This situation is similar to the previous example, but there is one important di
 
 Peewee provides two approaches to avoiding *O(n)* queries in this situation. We can either:
 
-* Fetch both users and tweets in a single query. User data will be duplicated, so peewee will de-dupe it and aggregate the tweets as it iterates through the result set. This method involves a lot of data being transferred over the wire and a lot of logic in Python to de-duplicate rows.
 * Fetch users first, then fetch all the tweets associated with those users. Once peewee has the big list of tweets, it will assign them out, matching them with the appropriate user. This method is usually faster but will involve a query for each table being selected.
+* Fetch both users and tweets in a single query. User data will be duplicated, so peewee will de-dupe it and aggregate the tweets as it iterates through the result set. This method involves a lot of data being transferred over the wire and a lot of logic in Python to de-duplicate rows.
 
 Each solution has its place and, depending on the size and shape of the data you are querying, one may be more performant than the other.
 
-Let's look at the first approach, since it is more general and can work with arbitrarily complex queries. We will use a special flag, :py:meth:`~SelectQuery.aggregate_rows`, when creating our query. This method tells peewee to de-duplicate any rows that, due to the structure of the JOINs, may be duplicated.
-
-.. warning::
-    Because there is a lot of computation involved in de-duping data, it is possible that for some queries :py:meth:`~SelectQuery.aggregate_rows` will be **significantly less performant** than using :py:func:`prefetch` (described in the following section) or even issuing *O(n)* simple queries! Profile your code if you're not sure.
-
-.. code-block:: python
-
-    query = (User
-             .select(User, Tweet)  # As in the previous example, we select both tables.
-             .join(Tweet, JOIN.LEFT_OUTER)
-             .order_by(User.username)  # We need to specify an ordering here.
-             .aggregate_rows())  # Tell peewee to de-dupe and aggregate results.
-
-    for user in query:
-        print user.username
-        for tweet in user.tweets:
-            print '  ', tweet.message
-
-Ordinarily, ``user.tweets`` would be a :py:class:`SelectQuery` and iterating over it would trigger an additional query. By using :py:meth:`~SelectQuery.aggregate_rows`, though, ``user.tweets`` is a Python ``list`` and no additional query occurs.
-
-.. note::
-    We used a *LEFT OUTER* join to ensure that users with zero tweets would
-    also be included in the result set.
-
-Below is an example of how we might fetch several users and any tweets they created within the past week. Because we are filtering the tweets and the user may not have any tweets, we need our *WHERE* clause to allow *NULL* tweet IDs.
-
-.. code-block:: python
-
-    week_ago = datetime.date.today() - datetime.timedelta(days=7)
-    query = (User
-             .select(User, Tweet)
-             .join(Tweet, JOIN.LEFT_OUTER)
-             .where(
-                 (Tweet.id >> None) | (
-                     (Tweet.is_published == True) &
-                     (Tweet.created_date >= week_ago)))
-             .order_by(User.username, Tweet.created_date.desc())
-             .aggregate_rows())
-
-    for user in query:
-        print user.username
-        for tweet in user.tweets:
-            print '  ', tweet.message
-
-.. note::
-    Do not mix calls to :py:meth:`~SelectQuery.aggregate_rows` with :py:meth:`~SelectQuery.get`. The latter applies a ``LIMIT 1`` SQL clause, and since the aggregate result set may contain more than one item, this can lead to incorrect behavior.
-
-.. note::
-    Using :py:meth:`~SelectQuery.aggregate_rows` with any kind of ``LIMIT`` or ``OFFSET`` may result in unexpected results. Imagine you have three users, each of whom has 10 tweets. If you run a query with a ``LIMIT 5``, then you will only receive the first user and their first 5 tweets.
+.. _prefetch:
 
 Using prefetch
 ^^^^^^^^^^^^^^
 
-Besides :py:meth:`~SelectQuery.aggregate_rows`, peewee supports a second approach using sub-queries. This method requires the use of a special API, :py:func:`prefetch`. Pre-fetch, as its name indicates, will eagerly load the appropriate tweets for the given users using subqueries. This means instead of *O(n)* queries for *n* rows, we will do *O(k)* queries for *k* tables.
+peewee supports pre-fetching related data using sub-queries. This method requires the use of a special API, :py:func:`prefetch`. Pre-fetch, as its name indicates, will eagerly load the appropriate tweets for the given users using subqueries. This means instead of *O(n)* queries for *n* rows, we will do *O(k)* queries for *k* tables.
 
 Here is an example of how we might fetch several users and any tweets they created within the past week.
 
@@ -1582,12 +1534,69 @@ Here is an example of how we might fetch several users and any tweets they creat
     JOIN clause. When using :py:func:`prefetch` you do not need to specify the
     join.
 
-As with :py:meth:`~SelectQuery.aggregate_rows`, you can use :py:func:`prefetch`
-to query an arbitrary number of tables. Check the API documentation for more
-examples.
+:py:func:`prefetch` can be used to query an arbitrary number of tables. Check the API documentation for more examples.
+
+Some things to consider when using :py:func:`prefetch`:
+
+* In general it is more performant than :py:meth:`~SelectQuery.aggregate_rows`.
+* Typically a lot less data is transferred over the wire since data is not duplicated.
+* There is less Python overhead since we don't have to de-dupe things.
+* `LIMIT` works as you'd expect on the outer-most query, but may be difficult to implement correctly if trying to limit the size of the sub-selects.
+
+.. _aggregate-rows:
+
+Using aggregate_rows
+^^^^^^^^^^^^^^^^^^^^
+
+The :py:meth:`~SelectQuery.aggregate_rows` approach selects all data in one go and de-dupes things in-memory. Like :py:func:`prefetch`, it can work with arbitrarily complex queries. To use this feature We will use a special flag, :py:meth:`~SelectQuery.aggregate_rows`, when creating our query. This method tells peewee to de-duplicate any rows that, due to the structure of the JOINs, may be duplicated.
+
+.. warning::
+    Because there is a lot of computation involved in de-duping data, it is possible that for some queries :py:meth:`~SelectQuery.aggregate_rows` will be **significantly less performant** than using :py:func:`prefetch` (described in the previous section) or even issuing *O(n)* simple queries! Profile your code if you're not sure.
+
+.. code-block:: python
+
+    query = (User
+             .select(User, Tweet)  # As in the previous example, we select both tables.
+             .join(Tweet, JOIN.LEFT_OUTER)
+             .order_by(User.username)  # We need to specify an ordering here.
+             .aggregate_rows())  # Tell peewee to de-dupe and aggregate results.
+
+    for user in query:
+        print user.username
+        for tweet in user.tweets:
+            print '  ', tweet.message
+
+Ordinarily, ``user.tweets`` would be a :py:class:`SelectQuery` and iterating over it would trigger an additional query. By using :py:meth:`~SelectQuery.aggregate_rows`, though, ``user.tweets`` is a Python ``list`` and no additional query occurs.
 
 .. note::
-    Generally I've found :py:func:`prefetch` to be more performant than :py:meth:`~SelectQuery.aggregate_rows`. This performance difference is mostly due to the amount of Python logic that has to execute to correctly de-dupe the aggregated row data.
+    We used a *LEFT OUTER* join to ensure that users with zero tweets would also be included in the result set.
+
+Below is an example of how we might fetch several users and any tweets they created within the past week. Because we are filtering the tweets and the user may not have any tweets, we need our *WHERE* clause to allow *NULL* tweet IDs.
+
+.. code-block:: python
+
+    week_ago = datetime.date.today() - datetime.timedelta(days=7)
+    query = (User
+             .select(User, Tweet)
+             .join(Tweet, JOIN.LEFT_OUTER)
+             .where(
+                 (Tweet.id >> None) | (
+                     (Tweet.is_published == True) &
+                     (Tweet.created_date >= week_ago)))
+             .order_by(User.username, Tweet.created_date.desc())
+             .aggregate_rows())
+
+    for user in query:
+        print user.username
+        for tweet in user.tweets:
+            print '  ', tweet.message
+
+Some things to consider when using :py:meth:`~SelectQuery.aggregate_rows`:
+
+* You must specify an ordering for each table that is joined on so the rows can be aggregated correctly, sort of similar to `itertools.groupby <https://docs.python.org/2/library/itertools.html#itertools.groupby>`_.
+* Do not mix calls to :py:meth:`~SelectQuery.aggregate_rows` with ``LIMIT`` or ``OFFSET`` clauses, or with :py:meth:`~SelectQuery.get` (which applies a ``LIMIT 1`` SQL clause). Since the aggregate result set may contain more than one item due to rows being duplicated, limits can lead to incorrect behavior. Imagine you have three users, each of whom has 10 tweets. If you run a query with a ``LIMIT 5``, then you will only receive the first user and their first 5 tweets.
+* In general the Python overhead of de-duplicating data can make this method less performant than :py:func:`prefetch`, and sometimes even less performan than simply issuing *O(n)* simple queries! When in doubt profile.
+* Because every column from every table is included in each row tuple returned by the cursor, this approach can use a lot more bandwidth than :py:func:`prefetch`.
 
 Iterating over lots of rows
 ---------------------------
