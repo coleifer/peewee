@@ -1538,6 +1538,7 @@ Here is an example of how we might fetch several users and any tweets they creat
 
 Some things to consider when using :py:func:`prefetch`:
 
+* Foreign keys must exist between the models being prefetched.
 * In general it is more performant than :py:meth:`~SelectQuery.aggregate_rows`.
 * Typically a lot less data is transferred over the wire since data is not duplicated.
 * There is less Python overhead since we don't have to de-dupe things.
