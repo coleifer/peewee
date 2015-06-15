@@ -2259,7 +2259,7 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
                         if pk is None:
                             continue
                         try:
-                            # TODO: is the value always the FK name?
+                            # XXX: if no FK exists, unable to join.
                             joined_inst = identity_map[current][
                                 inst._data[metadata.foreign_key.name]]
                         except KeyError:
@@ -2272,6 +2272,7 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
                         continue
 
                     for pk, instance in identity_map[current].items():
+                        # XXX: if no FK exists, unable to join.
                         joined_inst = identity_map[join.dest][
                             instance._data[metadata.foreign_key.name]]
                         setattr(

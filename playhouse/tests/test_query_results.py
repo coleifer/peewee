@@ -902,6 +902,28 @@ class TestPrefetch(BaseTestPrefetch):
             'b5', 'u4',
             'b6', 'u4'])
 
+    def test_prefetch_up_and_down(self):
+        blogs = Blog.select(Blog, User).join(User).order_by(Blog.title)
+        comments = Comment.select().order_by(Comment.comment.desc())
+
+        with self.assertQueryCount(2):
+            query = prefetch(blogs, comments)
+            results = []
+            for blog in query:
+                results.append((
+                    blog.user.username,
+                    blog.title,
+                    [comment.comment for comment in blog.comments_prefetch]))
+
+            self.assertEqual(results, [
+                ('u1', 'b1', ['b1-c2', 'b1-c1']),
+                ('u1', 'b2', ['b2-c1']),
+                ('u3', 'b3', ['b3-c2', 'b3-c1']),
+                ('u3', 'b4', []),
+                ('u4', 'b5', ['b5-c2', 'b5-c1']),
+                ('u4', 'b6', ['b6-c1']),
+            ])
+
     def test_prefetch_multi_depth(self):
         sq = Parent.select()
         sq2 = Child.select()
