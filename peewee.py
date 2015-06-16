@@ -2145,6 +2145,7 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
         self.models_with_aggregate = set()
         self.back_references = {}
         self.source_to_dest = {}
+        self.dest_to_source = {}
 
         for metadata in self.join_list:
             if metadata.is_backref:
@@ -2155,6 +2156,9 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
             is_backref = metadata.is_backref or metadata.is_self_join
             if is_backref:
                 self.models_with_aggregate.add(metadata.src)
+            else:
+                self.dest_to_source.setdefault(metadata.dest, set())
+                self.dest_to_source[metadata.dest].add(metadata.src)
 
             self.source_to_dest.setdefault(metadata.src, {})
             self.source_to_dest[metadata.src][metadata.dest] = JoinCache(
@@ -2164,10 +2168,23 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
         # Determine which columns could contain "duplicate" data, e.g. if
         # getting Users and their Tweets, this would be the User columns.
         self.columns_to_compare = {}
+        key_to_columns = {}
         for idx, (key, model_class, col_name, _) in enumerate(self.column_map):
             if key in self.models_with_aggregate:
                 self.columns_to_compare.setdefault(key, [])
                 self.columns_to_compare[key].append((idx, col_name))
+
+            key_to_columns.setdefault(key, [])
+            key_to_columns[key].append((idx, col_name))
+
+        # Also compare columns for joins -> many-related model.
+        for model_or_alias in self.models_with_aggregate:
+            if model_or_alias not in self.columns_to_compare:
+                continue
+            sources = self.dest_to_source.get(model_or_alias, ())
+            for joined_model in sources:
+                self.columns_to_compare[model_or_alias].extend(
+                    key_to_columns[joined_model])
 
     def read_model_data(self, row):
         models = {}

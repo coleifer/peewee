@@ -1373,6 +1373,72 @@ class TestAggregateRows(BaseTestPrefetch):
                 ('zaizee', 'charlie'),
             ])
 
+    def test_multiple_fks_multi_depth(self):
+        names = ['charlie', 'huey', 'zaizee']
+        charlie, huey, zaizee = [
+            User.create(username=username) for username in names]
+        Relationship.create(from_user=charlie, to_user=huey)
+        Relationship.create(from_user=charlie, to_user=zaizee)
+        Relationship.create(from_user=huey, to_user=charlie)
+        Relationship.create(from_user=zaizee, to_user=charlie)
+        human = Category.create(name='human')
+        kitty = Category.create(name='kitty')
+        UserCategory.create(user=charlie, category=human)
+        UserCategory.create(user=huey, category=kitty)
+        UserCategory.create(user=zaizee, category=kitty)
+
+        FromUser = User.alias()
+        ToUser = User.alias()
+        from_join = (Relationship.from_user == FromUser.id)
+        to_join = (Relationship.to_user == ToUser.id)
+
+        FromUserCategory = UserCategory.alias()
+        ToUserCategory = UserCategory.alias()
+        from_uc_join = (FromUser.id == FromUserCategory.user)
+        to_uc_join = (ToUser.id == ToUserCategory.user)
+
+        FromCategory = Category.alias()
+        ToCategory = Category.alias()
+        from_c_join = (FromUserCategory.category == FromCategory.id)
+        to_c_join = (ToUserCategory.category == ToCategory.id)
+
+        with self.assertQueryCount(1):
+            query = (Relationship
+                     .select(
+                         Relationship,
+                         FromUser,
+                         ToUser,
+                         FromUserCategory,
+                         ToUserCategory,
+                         FromCategory,
+                         ToCategory)
+                     .join(FromUser, on=from_join.alias('from_user'))
+                     .join(FromUserCategory, on=from_uc_join.alias('fuc'))
+                     .join(FromCategory, on=from_c_join.alias('category'))
+                     .switch(Relationship)
+                     .join(ToUser, on=to_join.alias('to_user'))
+                     .join(ToUserCategory, on=to_uc_join.alias('tuc'))
+                     .join(ToCategory, on=to_c_join.alias('category'))
+                     .order_by(Relationship.id)
+                     .aggregate_rows())
+
+            results = []
+            for obj in query:
+                from_user = obj.from_user
+                to_user = obj.to_user
+                results.append((
+                    from_user.username,
+                    from_user.fuc[0].category.name,
+                    to_user.username,
+                    to_user.tuc[0].category.name))
+
+            self.assertEqual(results, [
+                ('charlie', 'human', 'huey', 'kitty'),
+                ('charlie', 'human', 'zaizee', 'kitty'),
+                ('huey', 'kitty', 'charlie', 'human'),
+                ('zaizee', 'kitty', 'charlie', 'human'),
+            ])
+
 
 class TestAggregateRowsRegression(ModelTestCase):
     requires = [
