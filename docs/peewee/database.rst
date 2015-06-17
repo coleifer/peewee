@@ -614,6 +614,30 @@ See `application processors <http://webpy.org/cookbook/application_processors>`_
 
     app.add_processor(connection_processor)
 
+Tornado
+^^^^^^^
+
+It looks like Tornado's ``RequestHandler`` class implements two hooks which can be used to open and close connections when a request is handled.
+
+.. code-block:: python
+
+    from tornado.web import RequestHandler
+
+    db = SqliteDatabase('my_db.db')
+
+    class PeeweeRequestHandler(RequestHandler):
+        def prepare(self):
+            db.connect()
+            return super(PeeweeRequestHandler, self).prepare()
+
+        def on_finish(self):
+            if not db.is_closed():
+                db.close()
+            return super(PeeweeRequestHandler, self).on_finish()
+
+In your app, instead of extending the default ``RequestHandler``, now you can extend ``PeeweeRequestHandler``.
+
+Note that this does not address how to use peewee asynchronously with Tornado or another event loop.
 
 Other frameworks
 ^^^^^^^^^^^^^^^^
