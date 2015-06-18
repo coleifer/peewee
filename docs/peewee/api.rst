@@ -1662,6 +1662,8 @@ Database and its subclasses
     :param bool autorollback: automatically rollback when an exception occurs while executing a query.
     :param connect_kwargs: any arbitrary parameters to pass to the database driver when connecting
 
+    The ``connect_kwargs`` dictionary is used for vendor-specific parameters that will be passed back directly to your database driver, allowing you to specify the ``user``, ``host`` and ``password``, for instance. For more information and examples, see the :ref:`vendor-specific parameters document <vendor-specific-parameters>`.
+
     .. note::
         If your database name is not known when the class is declared, you can pass
         ``None`` in as the database name which will mark the database as "deferred"

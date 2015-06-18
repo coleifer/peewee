@@ -71,6 +71,37 @@ To use this database with your models, set the ``database`` attribute on an inne
     Remember to specify a database on your model classes, otherwise peewee will
     fall back to a default sqlite database named "peewee.db".
 
+.. _vendor-specific-parameters:
+
+Vendor-specific Parameters
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Some database drivers accept special parameters when being initialized. Rather than try to accomodate all these parameters, Peewee will pass back unrecognized parameters directly to the database driver.
+
+For instance, with Postgresql it is common to need to specify the ``host``, ``user`` and ``password`` when creating your connection. These are not standard Peewee :py:class:`Database` parameters, so they will be passed directly back to ``psycopg2`` when creating connections:
+
+.. code-block:: python
+
+    db = PostgresqlDatabase(
+        'database_name',  # Required by Peewee.
+        user='postgres',  # Will be passed directly to psycopg2.
+        password='secret',  # Ditto.
+        host='db.mysite.com',  # Ditto.
+    )
+
+As another example, the ``pymysql`` driver accepts a ``charset`` parameter which is not a standard Peewee :py:class:`Database` parameter. To set this value, simply pass in ``charset`` alongside your other values:
+
+.. code-block:: python
+
+    db = MySQLDatabase('database_name', user='www-data', charset='utf8mb4')
+
+Consult your database driver's documentation for the available parameters:
+
+* Postgres: `psycopg2 <http://initd.org/psycopg/docs/module.html#psycopg2.connect>`_
+* MySQL: `MySQLdb <http://mysql-python.sourceforge.net/MySQLdb.html#some-mysql-examples>`_
+* MySQL: `pymysql <https://github.com/PyMySQL/PyMySQL/blob/f08f01fe8a59e8acfb5f5add4a8fe874bec2a196/pymysql/connections.py#L494-L513>`_
+* SQLite: `sqlite3 <https://docs.python.org/2/library/sqlite3.html#sqlite3.connect>`_
+
 .. _using_postgresql:
 
 Using Postgresql
