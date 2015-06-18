@@ -2290,6 +2290,8 @@ for the values.
   To store arbitrary python objects, use the :py:class:`PickledKeyStore`, which
   stores values in a pickled :py:class:`BlobField`.
 
+  If your objects are JSON-serializable, you can also use the :py:class:`JSONKeyStore`, which stores the values as JSON-encoded strings.
+
 Using the :py:class:`KeyStore` it is possible to use "expressions" to retrieve
 values from the dictionary.  For instance, imagine you want to get all keys
 which contain a certain substring:
@@ -2329,6 +2331,21 @@ KeyStore API
         True
         >>> 'b' in kv
         False
+
+.. py:class:: JSONKeyStore([ordered=False[, database=None]])
+
+    Identical to the :py:class:`KeyStore` except the values are stored as JSON-encoded strings, so you can store complex data-types like dictionaries and lists.
+
+    Example:
+
+    .. code-block:: pycon
+
+        >>> from playhouse.kv import JSONKeyStore
+        >>> jkv = JSONKeyStore()
+        >>> jkv['a'] = 'A'
+        >>> jkv['b'] = [1, 2, 3]
+        >>> list(jkv.items())
+        [(u'a', 'A'), (u'b', [1, 2, 3])]
 
 .. py:class:: PickledKeyStore([ordered=False[, database=None]])
 

@@ -1,19 +1,38 @@
 import threading
 
 from peewee import *
-from playhouse.kv import PickledKeyStore
+from playhouse.kv import JSONKeyStore
 from playhouse.kv import KeyStore
+from playhouse.kv import PickledKeyStore
 from playhouse.tests.base import PeeweeTestCase
 from playhouse.tests.base import skip_if
 
 
-class KeyStoreTestCase(PeeweeTestCase):
+class TestKeyStore(PeeweeTestCase):
     def setUp(self):
-        super(KeyStoreTestCase, self).setUp()
+        super(TestKeyStore, self).setUp()
         self.kv = KeyStore(CharField())
         self.ordered_kv = KeyStore(CharField(), ordered=True)
         self.pickled_kv = PickledKeyStore(ordered=True)
+        self.json_kv = JSONKeyStore(ordered=True)
         self.kv.clear()
+        self.json_kv.clear()
+
+    def test_json(self):
+        self.json_kv['foo'] = 'bar'
+        self.json_kv['baze'] = {'baze': [1, 2, 3]}
+        self.json_kv['nugget'] = None
+
+        self.assertEqual(self.json_kv['foo'], 'bar')
+        self.assertEqual(self.json_kv['baze'], {'baze': [1, 2, 3]})
+        self.assertIsNone(self.json_kv['nugget'])
+        self.assertRaises(KeyError, lambda: self.json_kv['missing'])
+
+        results = self.json_kv[self.json_kv.key << ['baze', 'bar', 'nugget']]
+        self.assertEqual(results, [
+            {'baze': [1, 2, 3]},
+            None,
+        ])
 
     def test_storage(self):
         self.kv['a'] = 'A'
@@ -131,7 +150,7 @@ except ImportError:
     psycopg2 = None
 
 @skip_if(lambda: psycopg2 is None)
-class PostgresqlKeyStoreTestCase(PeeweeTestCase):
+class TestPostgresqlKeyStore(PeeweeTestCase):
     def setUp(self):
         self.db = PostgresqlDatabase('peewee_test')
         self.kv = KeyStore(CharField(), ordered=True, database=self.db)

@@ -2,6 +2,11 @@ from base64 import b64decode
 from base64 import b64encode
 import operator
 import pickle
+try:
+    import simplejson as json
+except ImportError:
+    import json
+
 from peewee import *
 from peewee import Node
 
@@ -23,6 +28,14 @@ class PickleField(BlobField):
 
     def python_value(self, value):
         return pickle.loads(b64decode(value))
+
+class JSONField(TextField):
+    def db_value(self, value):
+        return json.dumps(value)
+
+    def python_value(self, value):
+        if value is not None:
+            return json.loads(value)
 
 class KeyStore(object):
     """
@@ -147,3 +160,9 @@ class KeyStore(object):
 class PickledKeyStore(KeyStore):
     def __init__(self, ordered=False, database=None):
         super(PickledKeyStore, self).__init__(PickleField(), ordered, database)
+
+
+class JSONKeyStore(KeyStore):
+    def __init__(self, ordered=False, database=None):
+        field = JSONField(null=True)
+        super(JSONKeyStore, self).__init__(field, ordered, database)
