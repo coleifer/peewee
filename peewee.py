@@ -203,43 +203,6 @@ def _sqlite_date_trunc(lookup_type, datetime_string):
 def _sqlite_regexp(regex, value):
     return re.search(regex, value, re.I) is not None
 
-try:
-    from playhouse.fast_strip_parens import strip_parens
-except ImportError:
-    def strip_parens(s):
-        # Quick sanity check.
-        if not s or s[0] != '(':
-            return s
-
-        ct = i = 0
-        l = len(s)
-        while i < l:
-            if s[i] == '(' and s[l - 1] == ')':
-                ct += 1
-                i += 1
-                l -= 1
-            else:
-                break
-        if ct:
-            # If we ever end up with negatively-balanced parentheses, then we
-            # know that one of the outer parentheses was required.
-            unbalanced_ct = 0
-            required = 0
-            for i in range(ct, l - ct):
-                if s[i] == '(':
-                    unbalanced_ct += 1
-                elif s[i] == ')':
-                    unbalanced_ct -= 1
-                if unbalanced_ct < 0:
-                    required += 1
-                    unbalanced_ct = 0
-                if required == ct:
-                    break
-            ct -= required
-        if ct > 0:
-            return s[ct:-ct]
-        return s
-
 class attrdict(dict):
     def __getattr__(self, attr):
         return self[attr]
@@ -1425,7 +1388,38 @@ class QueryCompiler(object):
         return sorted(field_dict.items(), key=lambda i: i[0]._sort_key)
 
     def _clean_extra_parens(self, s):
-        return strip_parens(s)
+        # Quick sanity check.
+        if not s or s[0] != '(':
+            return s
+
+        ct = i = 0
+        l = len(s)
+        while i < l:
+            if s[i] == '(' and s[l - 1] == ')':
+                ct += 1
+                i += 1
+                l -= 1
+            else:
+                break
+        if ct:
+            # If we ever end up with negatively-balanced parentheses, then we
+            # know that one of the outer parentheses was required.
+            unbalanced_ct = 0
+            required = 0
+            for i in range(ct, l - ct):
+                if s[i] == '(':
+                    unbalanced_ct += 1
+                elif s[i] == ')':
+                    unbalanced_ct -= 1
+                if unbalanced_ct < 0:
+                    required += 1
+                    unbalanced_ct = 0
+                if required == ct:
+                    break
+            ct -= required
+        if ct > 0:
+            return s[ct:-ct]
+        return s
 
     def _parse_default(self, node, alias_map, conv):
         return self.interpolation, [node]

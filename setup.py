@@ -6,14 +6,6 @@ f = open(os.path.join(os.path.dirname(__file__), 'README.rst'))
 readme = f.read()
 f.close()
 
-try:
-    from Cython.Build import cythonize
-except ImportError:
-    ext_modules = None
-else:
-    ext_modules = cythonize('playhouse/fast_strip_parens.pyx')
-
-
 setup(
     name='peewee',
     version=__import__('peewee').__version__,
@@ -26,7 +18,6 @@ setup(
         'playhouse': ['berkeley_build.sh']},
     packages=['playhouse'],
     py_modules=['peewee', 'pwiz'],
-    ext_modules=ext_modules,
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',
