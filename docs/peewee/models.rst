@@ -217,6 +217,24 @@ Sometimes you only need the associated primary key value from the foreign key co
         # in the column.
         print(tweet.user_id, tweet.message)
 
+:py:class:`ForeignKeyField` allows for a backreferencing property to be bound to the target model. Implicitly, this property will be named `classname_set`, where `classname` is the lowercase name of the class, but can be overridden via the parameter ``related_name``:
+
+.. code-block:: python
+
+    class Message(Model):
+        from_user = ForeignKeyField(User)
+        to_user = ForeignKeyField(User, related_name='received_messages')
+        text = TextField()
+
+    for message in some_user.message_set:
+        # We are iterating over all Messages whose from_user is some_user.
+        print message
+
+    for message in some_user.received_messages:
+        # We are iterating over all Messages whose to_user is some_user
+        print message
+
+
 DateTimeField, DateField and TimeField
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
