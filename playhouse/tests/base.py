@@ -219,14 +219,18 @@ class PeeweeTestCase(TestCase):
         else:
             raise AssertionError('Exception %s not raised.' % exc_class)
 
-    def queries(self):
-        return [x.msg for x in self.qh.queries]
+    def queries(self, ignore_txn=False):
+        queries = [x.msg for x in self.qh.queries]
+        if ignore_txn:
+            skips = ('BEGIN', 'COMMIT', 'ROLLBACK', 'SAVEPOINT', 'RELEASE')
+            queries = [q for q in queries if not q[0].startswith(skips)]
+        return queries
 
     @contextmanager
-    def assertQueryCount(self, num):
-        qc = len(self.queries())
+    def assertQueryCount(self, num, ignore_txn=False):
+        qc = len(self.queries(ignore_txn=ignore_txn))
         yield
-        self.assertEqual(len(self.queries()) - qc, num)
+        self.assertEqual(len(self.queries(ignore_txn=ignore_txn)) - qc, num)
 
     def log_queries(self):
         return QueryLogger(self)

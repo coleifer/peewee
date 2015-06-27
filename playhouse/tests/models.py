@@ -62,6 +62,12 @@ class UniqueModel(TestModel):
     name = CharField(unique=True)
 
 
+class UniqueMultiField(TestModel):
+    name = CharField(unique=True)
+    field_a = CharField(default='')
+    field_b = IntegerField(default=0)
+
+
 class OrderedModel(TestModel):
     title = CharField()
     created = DateTimeField(default=datetime.datetime.now)

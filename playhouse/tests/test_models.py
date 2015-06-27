@@ -1,5 +1,7 @@
 # encoding=utf-8
 
+from functools import partial
+
 from peewee import *
 from playhouse.tests.base import compiler
 from playhouse.tests.base import database_initializer
@@ -302,7 +304,8 @@ class TestQueryingModels(ModelTestCase):
 
 
 class TestModelAPIs(ModelTestCase):
-    requires = [User, Blog, Category, UserCategory]
+    requires = [User, Blog, Category, UserCategory, UniqueMultiField,
+                NonIntModel]
 
     def setUp(self):
         super(TestModelAPIs, self).setUp()
@@ -629,6 +632,68 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual(gc2_db.id, gc2.id)
 
         self.assertEqual(GCModel.select().count(), 2)
+
+    def test_create_or_get(self):
+        assertQC = partial(self.assertQueryCount, ignore_txn=True)
+
+        with assertQC(1):
+            user, new = User.create_or_get(username='charlie')
+
+        self.assertTrue(user.id is not None)
+        self.assertTrue(new)
+
+        with assertQC(2):
+            user_get, new = User.create_or_get(username='peewee', id=user.id)
+
+        self.assertFalse(new)
+        self.assertEqual(user_get.id, user.id)
+        self.assertEqual(user_get.username, 'charlie')
+        self.assertEqual(User.select().count(), 1)
+
+        # Test with a unique model.
+        with assertQC(1):
+            um, new = UniqueMultiField.create_or_get(
+                name='baby huey',
+                field_a='fielda',
+                field_b=1)
+
+        self.assertTrue(new)
+        self.assertEqual(um.name, 'baby huey')
+        self.assertEqual(um.field_a, 'fielda')
+        self.assertEqual(um.field_b, 1)
+
+        with assertQC(2):
+            um_get, new = UniqueMultiField.create_or_get(
+                name='baby huey',
+                field_a='fielda-modified',
+                field_b=2)
+
+        self.assertFalse(new)
+        self.assertEqual(um_get.id, um.id)
+        self.assertEqual(um_get.name, um.name)
+        self.assertEqual(um_get.field_a, um.field_a)
+        self.assertEqual(um_get.field_b, um.field_b)
+        self.assertEqual(UniqueMultiField.select().count(), 1)
+
+        # Test with a non-integer primary key model.
+        with assertQC(1):
+            nm, new = NonIntModel.create_or_get(
+                pk='1337',
+                data='sweet mickey')
+
+        self.assertTrue(new)
+        self.assertEqual(nm.pk, '1337')
+        self.assertEqual(nm.data, 'sweet mickey')
+
+        with assertQC(2):
+            nm_get, new = NonIntModel.create_or_get(
+                pk='1337',
+                data='michael-nuggie')
+
+        self.assertFalse(new)
+        self.assertEqual(nm_get.pk, nm.pk)
+        self.assertEqual(nm_get.data, nm.data)
+        self.assertEqual(NonIntModel.select().count(), 1)
 
     def test_first(self):
         users = User.create_users(5)
