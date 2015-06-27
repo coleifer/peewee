@@ -267,10 +267,13 @@ For more information, see the documentation on:
 * :py:meth:`Model.select`
 * :py:meth:`SelectQuery.get`
 
-Get or create
+Create or get
 -------------
 
-While peewee has a :py:meth:`~Model.get_or_create` method, I do not advise you use it. The proper way to perform a *get or create* with peewee is to *create then get*, relying on database constraints to avoid duplicate records.
+Peewee has two methods for performing "get/create" type operations:
+
+* :py:meth:`Model.create_or_get`, which will attempt to create a new row. If an ``IntegrityError`` occurs indicating the violation of a constraint, then Peewee will attempt to get the object instead.
+* :py:meth:`Model.get_or_create`, which first attempts to retrieve the matching row. Failing that, a new row will be created.
 
 Let's say we wish to implement registering a new user account using the :ref:`example User model <blog-models>`. The *User* model has a *unique* constraint on the username field, so we will rely on the database's integrity guarantees to ensure we don't end up with duplicate usernames:
 
@@ -283,6 +286,12 @@ Let's say we wish to implement registering a new user account using the :ref:`ex
         # `username` is a unique column, so this username already exists,
         # making it safe to call .get().
         return User.get(User.username == username)
+
+Rather than writing all this code, you can instead call either :py:meth:`~Model.create_or_get`:
+
+.. code-block:: python
+
+    user, created = User.create_or_get(username=username)
 
 The above example first attempts at creation, then falls back to retrieval, relying on the database to enforce a unique constraint.
 
@@ -305,8 +314,7 @@ Suppose we have a different model ``Person`` and would like to get or create a p
 
 Any keyword argument passed to :py:meth:`~Model.get_or_create` will be used in the ``get()`` portion of the logic, except for the ``defaults`` dictionary, which will be used to populate values on newly-created instances.
 
-For more details check out the documentation for :py:meth:`Model.get_or_create`.
-
+For more details check out the documentation for :py:meth:`Model.create_or_get` and :py:meth:`Model.get_or_create`.
 
 Selecting multiple records
 --------------------------
