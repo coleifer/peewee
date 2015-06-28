@@ -180,6 +180,36 @@ Some fields take special parameters...
 
     To add database (server-side) constraints, use the ``constraints`` parameter.
 
+Default field values
+^^^^^^^^^^^^^^^^^^^^
+
+Peewee can provide default values for fields when objects are created. For example to have an ``IntegerField`` default to zero rather than ``NULL``, you could declare the field with a default value:
+
+.. code-block:: python
+
+    class Message(Model):
+        context = TextField()
+        read_count = IntegerField(default=0)
+
+In some instances it may make sense for the default value to be dynamic. A common scenario is using the current date and time. Peewee allows you to specify a function in these cases, whose return value will be used when the object is created. Note we only provide the function, we do not actually *call* it:
+
+.. code-block:: python
+
+    class Message(Model):
+        context = TextField()
+        timestamp = DateTimeField(default=datetime.datetime.now)
+
+When using the ``default`` parameter, the values are set by Peewee rather than being a part of the actual table and column definition.
+
+The database can also provide the default value for a field. While peewee does not explicitly provide an API for setting a server-side default value, you can use the ``constraints`` parameter to specify the server default:
+
+.. code-block:: python
+
+    class Message(Model):
+        context = TextField()
+        timestamp = DateTimeField(constraints=[SQL('DEFAULT CURRENT_TIMESTAMP')])
+
+
 ForeignKeyField
 ^^^^^^^^^^^^^^^
 
