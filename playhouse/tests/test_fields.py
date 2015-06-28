@@ -1,3 +1,4 @@
+import datetime
 import decimal
 import sys
 
@@ -665,3 +666,21 @@ class TestCheckConstraints(ModelTestCase):
             with test_db.transaction() as txn:
                 self.assertRaises(IntegrityError, CheckModel.create, value=0)
                 txn.rollback()
+
+
+class TestServerDefaults(ModelTestCase):
+    requires = [ServerDefaultModel]
+
+    def test_server_default(self):
+        sd = ServerDefaultModel.create(name='baz')
+        sd_db = ServerDefaultModel.get(ServerDefaultModel.id == sd.id)
+
+        self.assertEqual(sd_db.name, 'baz')
+        self.assertIsNotNone(sd_db.timestamp)
+
+        sd2 = ServerDefaultModel.create(
+            timestamp=datetime.datetime(2015, 1, 2, 3, 4))
+        sd2_db = ServerDefaultModel.get(ServerDefaultModel.id == sd2.id)
+
+        self.assertEqual(sd2_db.name, 'foo')
+        self.assertEqual(sd2_db.timestamp, datetime.datetime(2015, 1, 2, 3, 4))

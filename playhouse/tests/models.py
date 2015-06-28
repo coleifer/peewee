@@ -327,6 +327,11 @@ class CommentCategory(TestModel):
 class BlogData(TestModel):
     blog = ForeignKeyField(Blog)
 
+class ServerDefaultModel(TestModel):
+    name = CharField(constraints=[SQL("DEFAULT 'foo'")])
+    timestamp = DateTimeField(constraints=[
+        SQL('DEFAULT CURRENT_TIMESTAMP')])
+
 
 MODELS = [
     User,
@@ -375,4 +380,5 @@ MODELS = [
     UpperModel,
     CommentCategory,
     BlogData,
+    ServerDefaultModel,
 ]
