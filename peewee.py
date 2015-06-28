@@ -2752,20 +2752,23 @@ class SelectQuery(Query):
     def get_query_meta(self):
         return (self._select, self._joins)
 
+    def _get_result_wrapper(self):
+        if self._tuples:
+            return TuplesQueryResultWrapper
+        elif self._dicts:
+            return DictQueryResultWrapper
+        elif self._naive or not self._joins or self.verify_naive():
+            return NaiveQueryResultWrapper
+        elif self._aggregate_rows:
+            return AggregateQueryResultWrapper
+        else:
+            return ModelQueryResultWrapper
+
     def execute(self):
         if self._dirty or not self._qr:
             model_class = self.model_class
             query_meta = self.get_query_meta()
-            if self._tuples:
-                ResultWrapper = TuplesQueryResultWrapper
-            elif self._dicts:
-                ResultWrapper = DictQueryResultWrapper
-            elif self._naive or not self._joins or self.verify_naive():
-                ResultWrapper = NaiveQueryResultWrapper
-            elif self._aggregate_rows:
-                ResultWrapper = AggregateQueryResultWrapper
-            else:
-                ResultWrapper = ModelQueryResultWrapper
+            ResultWrapper = self._get_result_wrapper()
             self._qr = ResultWrapper(model_class, self._execute(), query_meta)
             self._dirty = False
             return self._qr
@@ -2812,6 +2815,23 @@ class CompoundSelect(SelectQuery):
     def get_query_meta(self):
         return self.lhs.get_query_meta()
 
+    def verify_naive(self):
+        return self.lhs.verify_naive() and self.rhs.verify_naive()
+
+    def _get_result_wrapper(self):
+        if self._tuples:
+            return TuplesQueryResultWrapper
+        elif self._dicts:
+            return DictQueryResultWrapper
+        elif self._aggregate_rows:
+            return AggregateQueryResultWrapper
+
+        has_joins = self.lhs._joins or self.rhs._joins
+        is_naive = self.lhs._naive or self.rhs._naive or self._naive
+        if is_naive or not has_joins or self.verify_naive():
+            return NaiveQueryResultWrapper
+        else:
+            return ModelQueryResultWrapper
 
 class UpdateQuery(Query):
     def __init__(self, model_class, update=None):
