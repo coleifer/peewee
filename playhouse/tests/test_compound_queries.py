@@ -202,7 +202,7 @@ class TestCompoundSelectSQL(PeeweeTestCase):
 
 
 class TestCompoundSelectQueries(ModelTestCase):
-    requires = [User, UniqueModel, OrderedModel]
+    requires = [User, UniqueModel, OrderedModel, Blog]
     # User -> username, UniqueModel -> name, OrderedModel -> title
     test_values = {
         User.username: ['a', 'b', 'c', 'd'],
@@ -374,6 +374,37 @@ class TestCompoundSelectQueries(ModelTestCase):
             {'username': 'd'},
             {'username': 'b'},
             {'username': 'a'}])
+
+    @requires_op('UNION')
+    def test_result_wrapper(self):
+        users = User.select().order_by(User.username)
+        for user in users:
+            for msg in ['foo', 'bar', 'baz']:
+                Blog.create(title='%s-%s' % (user.username, msg), user=user)
+
+        with self.assertQueryCount(1):
+            q1 = (Blog
+                  .select(Blog, User)
+                  .join(User)
+                  .where(Blog.title.contains('foo')))
+            q2 = (Blog
+                  .select(Blog, User)
+                  .join(User)
+                  .where(Blog.title.contains('baz')))
+            cq = (q1 | q2).order_by(SQL('username, title'))
+            results = [(b.user.username, b.title) for b in cq]
+
+        self.assertEqual(results, [
+            ('a', 'a-baz'),
+            ('a', 'a-foo'),
+            ('b', 'b-baz'),
+            ('b', 'b-foo'),
+            ('c', 'c-baz'),
+            ('c', 'c-foo'),
+            ('d', 'd-baz'),
+            ('d', 'd-foo'),
+        ])
+
 
 @skip_unless(lambda: isinstance(test_db, PostgresqlDatabase))
 class TestCompoundWithOrderLimit(ModelTestCase):
