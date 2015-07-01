@@ -2,6 +2,7 @@ from peewee import DeleteQuery
 from peewee import InsertQuery
 from peewee import prefetch_add_subquery
 from peewee import RawQuery
+from peewee import strip_parens
 from peewee import SelectQuery
 from peewee import UpdateQuery
 from playhouse.tests.base import compiler
@@ -1313,7 +1314,7 @@ class TestQueryCompiler(PeeweeTestCase):
             ('((((F(x) x) x), (F(x) F(x))))', '((F(x) x) x), (F(x) F(x))'),
         )
         for s, expected in tests:
-            self.assertEqual(compiler._clean_extra_parens(s), expected)
+            self.assertEqual(strip_parens(s), expected)
 
     def test_parens_in_queries(self):
         query = User.select(

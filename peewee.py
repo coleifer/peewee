@@ -158,6 +158,43 @@ except ImportError:
     except ImportError:
         mysql = None
 
+try:
+    from playhouse.speedups import strip_parens
+except ImportError:
+    def strip_parens(s):
+        # Quick sanity check.
+        if not s or s[0] != '(':
+            return s
+
+        ct = i = 0
+        l = len(s)
+        while i < l:
+            if s[i] == '(' and s[l - 1] == ')':
+                ct += 1
+                i += 1
+                l -= 1
+            else:
+                break
+        if ct:
+            # If we ever end up with negatively-balanced parentheses, then we
+            # know that one of the outer parentheses was required.
+            unbalanced_ct = 0
+            required = 0
+            for i in range(ct, l - ct):
+                if s[i] == '(':
+                    unbalanced_ct += 1
+                elif s[i] == ')':
+                    unbalanced_ct -= 1
+                if unbalanced_ct < 0:
+                    required += 1
+                    unbalanced_ct = 0
+                if required == ct:
+                    break
+            ct -= required
+        if ct > 0:
+            return s[ct:-ct]
+        return s
+
 if sqlite3:
     sqlite3.register_adapter(decimal.Decimal, str)
     sqlite3.register_adapter(datetime.date, str)
@@ -1388,40 +1425,6 @@ class QueryCompiler(object):
     def _sorted_fields(self, field_dict):
         return sorted(field_dict.items(), key=lambda i: i[0]._sort_key)
 
-    def _clean_extra_parens(self, s):
-        # Quick sanity check.
-        if not s or s[0] != '(':
-            return s
-
-        ct = i = 0
-        l = len(s)
-        while i < l:
-            if s[i] == '(' and s[l - 1] == ')':
-                ct += 1
-                i += 1
-                l -= 1
-            else:
-                break
-        if ct:
-            # If we ever end up with negatively-balanced parentheses, then we
-            # know that one of the outer parentheses was required.
-            unbalanced_ct = 0
-            required = 0
-            for i in range(ct, l - ct):
-                if s[i] == '(':
-                    unbalanced_ct += 1
-                elif s[i] == ')':
-                    unbalanced_ct -= 1
-                if unbalanced_ct < 0:
-                    required += 1
-                    unbalanced_ct = 0
-                if required == ct:
-                    break
-            ct -= required
-        if ct > 0:
-            return s[ct:-ct]
-        return s
-
     def _parse_default(self, node, alias_map, conv):
         return self.interpolation, [node]
 
@@ -1444,13 +1447,13 @@ class QueryCompiler(object):
     def _parse_func(self, node, alias_map, conv):
         conv = node._coerce and conv or None
         sql, params = self.parse_node_list(node.arguments, alias_map, conv)
-        return '%s(%s)' % (node.name, self._clean_extra_parens(sql)), params
+        return '%s(%s)' % (node.name, strip_parens(sql)), params
 
     def _parse_clause(self, node, alias_map, conv):
         sql, params = self.parse_node_list(
             node.nodes, alias_map, conv, node.glue)
         if node.parens:
-            sql = '(%s)' % self._clean_extra_parens(sql)
+            sql = '(%s)' % strip_parens(sql)
         return sql, params
 
     def _parse_entity(self, node, alias_map, conv):
@@ -1508,11 +1511,11 @@ class QueryCompiler(object):
                 select_field = clone.model_class._meta.primary_key
             clone._select = (select_field,)
         sub, params = self.generate_select(clone, alias_map)
-        return '(%s)' % self._clean_extra_parens(sub), params
+        return '(%s)' % strip_parens(sub), params
 
     def _parse_strip_parens(self, node, alias_map, conv):
         sql, params = self.parse_node(node.node, alias_map, conv)
-        return self._clean_extra_parens(sql), params
+        return strip_parens(sql), params
 
     def _parse(self, node, alias_map, conv):
         # By default treat the incoming node as a raw value that should be
