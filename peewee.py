@@ -106,6 +106,7 @@ def with_metaclass(meta, base=object):
 
 PY2 = sys.version_info[0] == 2
 PY3 = sys.version_info[0] == 3
+PY26 = sys.version_info[:2] == (2, 6)
 if PY3:
     import builtins
     from collections import Callable
@@ -3026,7 +3027,11 @@ class ExceptionWrapper(object):
             return
         if exc_type.__name__ in self.exceptions:
             new_type = self.exceptions[exc_type.__name__]
-            reraise(new_type, new_type(*exc_value.args), traceback)
+            if PY26:
+                exc_args = exc_value
+            else:
+                exc_args = exc_value.args
+            reraise(new_type, new_type(*exc_args), traceback)
 
 class _BaseConnectionLocal(object):
     def __init__(self, **kwargs):
