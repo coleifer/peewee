@@ -28,6 +28,8 @@ Just a regular old release.
 * Added docs for [models without a primary key](http://docs.peewee-orm.com/en/latest/peewee/models.html#models-without-a-primary-key).
 * Cleaned up docs on `prefetch()` and `aggregate_rows()`.
 
+[View commits](https://github.com/coleifer/peewee/compare/2.6.1...2.6.2)
+
 ## 2.6.1
 
 This release contains a number of small fixes and enhancements.
