@@ -5,6 +5,29 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.6.2
+
+Just a regular old release.
+
+### Bugs fixed
+
+* #641, fixed bug with exception wrapping and Python 2.6
+* #634, fixed bug where correct query result wrapper was not being used for certain composite queries.
+* #625, cleaned up some example code.
+* #614, fixed bug with `aggregate_rows()` when there are multiple joins to the same table.
+
+### New features
+
+* Added [create_or_get()](http://docs.peewee-orm.com/en/latest/peewee/querying.html#create-or-get) as a companion to `get_or_create()`.
+* Added support for `ON CONFLICT` clauses for `UPDATE` and `INSERT` queries. [Docs](http://docs.peewee-orm.com/en/latest/peewee/api.html#UpdateQuery.on_conflict).
+* Added a [JSONKeyStore](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#JSONKeyStore) to `playhouse.kv`.
+* Added Cythonized version of `strip_parens()`, with plans to perhaps move more performance-critical code to Cython in the future.
+* Added docs on specifying [vendor-specific database parameters](http://docs.peewee-orm.com/en/latest/peewee/database.html#vendor-specific-parameters).
+* Added docs on specifying [field default values](http://docs.peewee-orm.com/en/latest/peewee/models.html#default-field-values) (both client and server-side).
+* Added docs on [foreign key field back-references](http://docs.peewee-orm.com/en/latest/peewee/models.html#foreignkeyfield).
+* Added docs for [models without a primary key](http://docs.peewee-orm.com/en/latest/peewee/models.html#models-without-a-primary-key).
+* Cleaned up docs on `prefetch()` and `aggregate_rows()`.
+
 ## 2.6.1
 
 This release contains a number of small fixes and enhancements.
