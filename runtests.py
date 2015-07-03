@@ -36,6 +36,7 @@ def get_option_parser():
     cases.add_option('--dataset', dest='dataset', default=False, action='store_true', help='dataset tests')
     cases.add_option('--db-url', dest='db_url', default=False, action='store_true', help='db url tests')
     cases.add_option('--djpeewee', dest='djpeewee', default=False, action='store_true', help='djpeewee tests')
+    cases.add_option('--fields', dest='fields', default=False, action='store_true', help='extra field tests')
     cases.add_option('--flask', dest='flask', default=False, action='store_true', help='flask utils tests')
     cases.add_option('--gfk', dest='gfk', default=False, action='store_true', help='gfk tests')
     cases.add_option('--hybrid', dest='hybrid', default=False, action='store_true', help='hybrid property/method tests')
@@ -85,6 +86,12 @@ def collect_modules(options):
     if xtra(options.djpeewee):
         from playhouse.tests import test_djpeewee
         modules.append(test_djpeewee)
+    if xtra(options.fields):
+        from playhouse.tests import test_extra_fields
+        from playhouse.tests import test_manytomany
+        modules.append(test_extra_fields)
+        if test_manytomany not in modules:
+            modules.append(test_manytomany)
     if xtra(options.flask):
         try:
             import flask
@@ -136,11 +143,8 @@ def collect_modules(options):
         from playhouse.tests import test_signals
         modules.append(test_signals)
     if xtra(options.shortcuts):
-        from playhouse.tests import test_manytomany
         from playhouse.tests import test_shortcuts
         modules.append(test_shortcuts)
-        if test_manytomany not in modules:
-            modules.append(test_manytomany)
     if xtra(options.sqlcipher):
         try:
             from playhouse.tests import test_sqlcipher_ext

@@ -1,5 +1,5 @@
 from peewee import *
-from playhouse.shortcuts import ManyToManyField
+from playhouse.fields import ManyToManyField
 from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
 
