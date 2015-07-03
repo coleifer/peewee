@@ -20,6 +20,7 @@ Modules which expose higher-level python constructs:
 
 * :ref:`dataset`
 * :ref:`djpeewee`
+* :ref:`extra-fields`
 * :ref:`gfk`
 * :ref:`hybrid`
 * :ref:`kv`
@@ -1987,6 +1988,214 @@ djpeewee API
     * ``exclude``: A list of models to exclude.
 
 
+.. _extra-fields:
+
+Fields
+------
+
+This module also contains several field classes that implement additional logic like encryption and compression. There is also a :py:class:`ManyToManyField` that makes it easy to work with simple many-to-many relationships.
+
+
+.. py:class:: ManyToManyField(rel_model[, related_name=None[, through_model=None]])
+
+    :param rel_model: :py:class:`Model` class.
+    :param str related_name: Name for the automatically-created backref. If not
+        provided, the pluralized version of the model will be used.
+    :param through_model: :py:class:`Model` to use for the intermediary table. If
+        not provided, a simple through table will be automatically created.
+
+    The :py:class:`ManyToManyField` provides a simple interface for working with many-to-many relationships, inspired by Django. A many-to-many relationship is typically implemented by creating a junction table with foreign keys to the two models being related. For instance, if you were building a syllabus manager for college students, the relationship between students and courses would be many-to-many. Here is the schema using standard APIs:
+
+    .. code-block:: python
+
+        class Student(Model):
+            name = CharField()
+
+        class Course(Model):
+            name = CharField()
+
+        class StudentCourse(Model):
+            student = ForeignKeyField(Student)
+            course = ForeignKeyField(Course)
+
+    To query the courses for a particular student, you would join through the junction table:
+
+    .. code-block:: python
+
+        # List the courses that "Huey" is enrolled in:
+        courses = (Course
+                   .select()
+                   .join(StudentCourse)
+                   .join(Student)
+                   .where(Student.name == 'Huey'))
+        for course in courses:
+            print course.name
+
+    The :py:class:`ManyToManyField` is designed to simplify this use-case by providing a *field-like* API for querying and modifying data in the junction table. Here is how our code looks using :py:class:`ManyToManyField`:
+
+    .. code-block:: python
+
+        class Student(Model):
+            name = CharField()
+
+        class Course(Model):
+            name = CharField()
+            students = ManyToManyField(Student, related_name='courses')
+
+    .. note:: It does not matter from Peewee's perspective which model the :py:class:`ManyToManyField` goes on, since the back-reference is just the mirror image. In order to write valid Python, though, you will need to add the ``ManyToManyField`` on the second model so that the name of the first model is in the scope.
+
+    We still need a junction table to store the relationships between students and courses. This model can be accessed by calling the :py:meth:`~ManyToManyField.get_through_model` method. This is useful when creating tables.
+
+    .. code-block:: python
+
+        # Create tables for the students, courses, and relationships between
+        # the two.
+        db.create_tables([
+            Student,
+            Course,
+            Course.students.get_through_model()])
+
+    When accessed from a model instance, the :py:class:`ManyToManyField` exposes a :py:class:`SelectQuery` representing the set of related objects. Let's use the interactive shell to see how all this works:
+
+    .. code-block:: pycon
+
+        >>> huey = Student.get(Student.name == 'huey')
+        >>> [course.name for course in huey.courses]
+        ['English 101', 'CS 101']
+
+        >>> engl_101 = Course.get(Course.name == 'English 101')
+        >>> [student.name for student in engl_101.students]
+        ['Huey', 'Mickey', 'Zaizee']
+
+    To add new relationships between objects, you can either assign the objects directly to the ``ManyToManyField`` attribute, or call the :py:meth:`~ManyToManyField.add` method. The difference between the two is that simply assigning will clear out any existing relationships, whereas ``add()`` can preserve existing relationships.
+
+    .. code-block:: pycon
+
+        >>> huey.courses = Course.select().where(Course.name.contains('english'))
+        >>> for course in huey.courses.order_by(Course.name):
+        ...     print course.name
+        English 101
+        English 151
+        English 201
+        English 221
+
+        >>> cs_101 = Course.get(Course.name == 'CS 101')
+        >>> cs_151 = Course.get(Course.name == 'CS 151')
+        >>> huey.courses.add([cs_101, cs_151])
+        >>> [course.name for course in huey.courses.order_by(Course.name)]
+        ['CS 101', 'CS151', 'English 101', 'English 151', 'English 201',
+         'English 221']
+
+    This is quite a few courses, so let's remove the 200-level english courses. To remove objects, use the :py:meth:`~ManyToManyField.remove` method.
+
+    .. code-block:: pycon
+
+        >>> huey.courses.remove(Course.select().where(Course.name.contains('2'))
+        2
+        >>> [course.name for course in huey.courses.order_by(Course.name)]
+        ['CS 101', 'CS151', 'English 101', 'English 151']
+
+    To remove all relationships from a collection, you can use the :py:meth:`~SelectQuery.clear` method. Let's say that English 101 is canceled, so we need to remove all the students from it:
+
+    .. code-block:: pycon
+
+        >>> engl_101 = Course.get(Course.name == 'English 101')
+        >>> engl_101.students.clear()
+
+    .. note:: For an overview of implementing many-to-many relationships using standard Peewee APIs, check out the :ref:`manytomany` section. For all but the most simple cases, you will be better off implementing many-to-many using the standard APIs.
+
+    .. py:method:: add(value[, clear_existing=True])
+
+        :param value: Either a :py:class:`Model` instance, a list of model instances, or a :py:class:`SelectQuery`.
+        :param bool clear_existing: Whether to remove existing relationships first.
+
+        Associate ``value`` with the current instance. You can pass in a single model instance, a list of model instances, or even a :py:class:`SelectQuery`.
+
+        Example code:
+
+        .. code-block:: python
+
+            # Huey needs to enroll in a bunch of courses, including all
+            # the English classes, and a couple Comp-Sci classes.
+            huey = Student.get(Student.name == 'Huey')
+
+            # We can add all the objects represented by a query.
+            english_courses = Course.select().where(
+                Course.name.contains('english'))
+            huey.courses.add(english_courses)
+
+            # We can also add lists of individual objects.
+            cs101 = Course.get(Course.name == 'CS 101')
+            cs151 = Course.get(Course.name == 'CS 151')
+            huey.courses.add([cs101, cs151])
+
+    .. py:method:: remove(value)
+
+        :param value: Either a :py:class:`Model` instance, a list of model instances, or a :py:class:`SelectQuery`.
+
+        Disassociate ``value`` from the current instance. Like :py:meth:`~ManyToManyField.add`, you can pass in a model instance, a list of model instances, or even a :py:class:`SelectQuery`.
+
+        Example code:
+
+        .. code-block:: python
+
+            # Huey is currently enrolled in a lot of english classes
+            # as well as some Comp-Sci. He is changing majors, so we
+            # will remove all his courses.
+            english_courses = Course.select().where(
+                Course.name.contains('english'))
+            huey.courses.remove(english_courses)
+
+            # Remove the two Comp-Sci classes Huey is enrolled in.
+            cs101 = Course.get(Course.name == 'CS 101')
+            cs151 = Course.get(Course.name == 'CS 151')
+            huey.courses.remove([cs101, cs151])
+
+    .. py:method:: clear()
+
+        Remove all associated objects.
+
+        Example code:
+
+        .. code-block:: python
+
+            # English 101 is canceled this semester, so remove all
+            # the enrollments.
+            english_101 = Course.get(Course.name == 'English 101')
+            english_101.students.clear()
+
+    .. py:method:: get_through_model()
+
+        Return the :py:class:`Model` representing the many-to-many junction table. This can be specified manually when the field is being instantiated using the ``through_model`` parameter. If a ``through_model`` is not specified, one will automatically be created.
+
+        When creating tables for an application that uses :py:class:`ManyToManyField`, **you must create the through table expicitly**.
+
+        .. code-block:: python
+
+            # Get a reference to the automatically-created through table.
+            StudentCourseThrough = Course.students.get_through_model()
+
+            # Create tables for our two models as well as the through model.
+            db.create_tables([
+                Student,
+                Course,
+                StudentCourseThrough])
+
+.. py:class:: CompressedField([compression_level=6[, algorithm='zlib'[, **kwargs]]])
+
+    ``CompressedField`` stores compressed data using the specified algorithm. This field extends :py:class:`BlobField`, transparently storing a compressed representation of the data in the database.
+
+    :param int compression_level: A value from 0 to 9.
+    :param str algorithm: Either ``'zlib'`` or ``'bz2'``.
+
+.. py:class:: AESEncryptedField(key[, **kwargs])
+
+    ``AESEncryptedField`` encrypts its contents before storing them in the database.
+
+    :param str key: Encryption key.
+
+    .. note:: This field requires `pycrypto <https://www.dlitz.net/software/pycrypto/>`_, which can be installed by running ``pip install pycrypto``.
+
 .. _gfk:
 
 Generic foreign keys
@@ -2369,7 +2578,7 @@ KeyStore API
 Shortcuts
 ---------
 
-This module contains helper functions for expressing things that would otherwise be somewhat verbose or cumbersome using peewee's APIs. This module also contains several field classes that implement additional logic like encryption and compression.
+This module contains helper functions for expressing things that would otherwise be somewhat verbose or cumbersome using peewee's APIs. There are also helpers for serializing models to dictionaries and vice-versa.
 
 .. py:function:: case(predicate, expression_tuples, default=None)
 
@@ -2441,206 +2650,6 @@ This module contains helper functions for expressing things that would otherwise
                  .select()
                  .where(DataPoint.value == reverse_val))
 
-
-.. py:class:: ManyToManyField(rel_model[, related_name=None[, through_model=None]])
-
-    :param rel_model: :py:class:`Model` class.
-    :param str related_name: Name for the automatically-created backref. If not
-        provided, the pluralized version of the model will be used.
-    :param through_model: :py:class:`Model` to use for the intermediary table. If
-        not provided, a simple through table will be automatically created.
-
-    The :py:class:`ManyToManyField` provides a simple interface for working with many-to-many relationships, inspired by Django. A many-to-many relationship is typically implemented by creating a junction table with foreign keys to the two models being related. For instance, if you were building a syllabus manager for college students, the relationship between students and courses would be many-to-many. Here is the schema using standard APIs:
-
-    .. code-block:: python
-
-        class Student(Model):
-            name = CharField()
-
-        class Course(Model):
-            name = CharField()
-
-        class StudentCourse(Model):
-            student = ForeignKeyField(Student)
-            course = ForeignKeyField(Course)
-
-    To query the courses for a particular student, you would join through the junction table:
-
-    .. code-block:: python
-
-        # List the courses that "Huey" is enrolled in:
-        courses = (Course
-                   .select()
-                   .join(StudentCourse)
-                   .join(Student)
-                   .where(Student.name == 'Huey'))
-        for course in courses:
-            print course.name
-
-    The :py:class:`ManyToManyField` is designed to simplify this use-case by providing a *field-like* API for querying and modifying data in the junction table. Here is how our code looks using :py:class:`ManyToManyField`:
-
-    .. code-block:: python
-
-        class Student(Model):
-            name = CharField()
-
-        class Course(Model):
-            name = CharField()
-            students = ManyToManyField(Student, related_name='courses')
-
-    .. note:: It does not matter from Peewee's perspective which model the :py:class:`ManyToManyField` goes on, since the back-reference is just the mirror image. In order to write valid Python, though, you will need to add the ``ManyToManyField`` on the second model so that the name of the first model is in the scope.
-
-    We still need a junction table to store the relationships between students and courses. This model can be accessed by calling the :py:meth:`~ManyToManyField.get_through_model` method. This is useful when creating tables.
-
-    .. code-block:: python
-
-        # Create tables for the students, courses, and relationships between
-        # the two.
-        db.create_tables([
-            Student,
-            Course,
-            Course.students.get_through_model()])
-
-    When accessed from a model instance, the :py:class:`ManyToManyField` exposes a :py:class:`SelectQuery` representing the set of related objects. Let's use the interactive shell to see how all this works:
-
-    .. code-block:: pycon
-
-        >>> huey = Student.get(Student.name == 'huey')
-        >>> [course.name for course in huey.courses]
-        ['English 101', 'CS 101']
-
-        >>> engl_101 = Course.get(Course.name == 'English 101')
-        >>> [student.name for student in engl_101.students]
-        ['Huey', 'Mickey', 'Zaizee']
-
-    To add new relationships between objects, you can either assign the objects directly to the ``ManyToManyField`` attribute, or call the :py:meth:`~ManyToManyField.add` method. The difference between the two is that simply assigning will clear out any existing relationships, whereas ``add()`` can preserve existing relationships.
-
-    .. code-block:: pycon
-
-        >>> huey.courses = Course.select().where(Course.name.contains('english'))
-        >>> for course in huey.courses.order_by(Course.name):
-        ...     print course.name
-        English 101
-        English 151
-        English 201
-        English 221
-
-        >>> cs_101 = Course.get(Course.name == 'CS 101')
-        >>> cs_151 = Course.get(Course.name == 'CS 151')
-        >>> huey.courses.add([cs_101, cs_151])
-        >>> [course.name for course in huey.courses.order_by(Course.name)]
-        ['CS 101', 'CS151', 'English 101', 'English 151', 'English 201',
-         'English 221']
-
-    This is quite a few courses, so let's remove the 200-level english courses. To remove objects, use the :py:meth:`~ManyToManyField.remove` method.
-
-    .. code-block:: pycon
-
-        >>> huey.courses.remove(Course.select().where(Course.name.contains('2'))
-        2
-        >>> [course.name for course in huey.courses.order_by(Course.name)]
-        ['CS 101', 'CS151', 'English 101', 'English 151']
-
-    To remove all relationships from a collection, you can use the :py:meth:`~SelectQuery.clear` method. Let's say that English 101 is canceled, so we need to remove all the students from it:
-
-    .. code-block:: pycon
-
-        >>> engl_101 = Course.get(Course.name == 'English 101')
-        >>> engl_101.students.clear()
-
-    .. note:: For an overview of implementing many-to-many relationships using standard Peewee APIs, check out the :ref:`manytomany` section. For all but the most simple cases, you will be better off implementing many-to-many using the standard APIs.
-
-    .. py:method:: add(value[, clear_existing=True])
-
-        :param value: Either a :py:class:`Model` instance, a list of model instances, or a :py:class:`SelectQuery`.
-        :param bool clear_existing: Whether to remove existing relationships first.
-
-        Associate ``value`` with the current instance. You can pass in a single model instance, a list of model instances, or even a :py:class:`SelectQuery`.
-
-        Example code:
-
-        .. code-block:: python
-
-            # Huey needs to enroll in a bunch of courses, including all
-            # the English classes, and a couple Comp-Sci classes.
-            huey = Student.get(Student.name == 'Huey')
-
-            # We can add all the objects represented by a query.
-            english_courses = Course.select().where(
-                Course.name.contains('english'))
-            huey.courses.add(english_courses)
-
-            # We can also add lists of individual objects.
-            cs101 = Course.get(Course.name == 'CS 101')
-            cs151 = Course.get(Course.name == 'CS 151')
-            huey.courses.add([cs101, cs151])
-
-    .. py:method:: remove(value)
-
-        :param value: Either a :py:class:`Model` instance, a list of model instances, or a :py:class:`SelectQuery`.
-
-        Disassociate ``value`` from the current instance. Like :py:meth:`~ManyToManyField.add`, you can pass in a model instance, a list of model instances, or even a :py:class:`SelectQuery`.
-
-        Example code:
-
-        .. code-block:: python
-
-            # Huey is currently enrolled in a lot of english classes
-            # as well as some Comp-Sci. He is changing majors, so we
-            # will remove all his courses.
-            english_courses = Course.select().where(
-                Course.name.contains('english'))
-            huey.courses.remove(english_courses)
-
-            # Remove the two Comp-Sci classes Huey is enrolled in.
-            cs101 = Course.get(Course.name == 'CS 101')
-            cs151 = Course.get(Course.name == 'CS 151')
-            huey.courses.remove([cs101, cs151])
-
-    .. py:method:: clear()
-
-        Remove all associated objects.
-
-        Example code:
-
-        .. code-block:: python
-
-            # English 101 is canceled this semester, so remove all
-            # the enrollments.
-            english_101 = Course.get(Course.name == 'English 101')
-            english_101.students.clear()
-
-    .. py:method:: get_through_model()
-
-        Return the :py:class:`Model` representing the many-to-many junction table. This can be specified manually when the field is being instantiated using the ``through_model`` parameter. If a ``through_model`` is not specified, one will automatically be created.
-
-        When creating tables for an application that uses :py:class:`ManyToManyField`, **you must create the through table expicitly**.
-
-        .. code-block:: python
-
-            # Get a reference to the automatically-created through table.
-            StudentCourseThrough = Course.students.get_through_model()
-
-            # Create tables for our two models as well as the through model.
-            db.create_tables([
-                Student,
-                Course,
-                StudentCourseThrough])
-
-.. py:class:: CompressedField([compression_level=6[, algorithm='zlib'[, **kwargs]]])
-
-    ``CompressedField`` stores compressed data using the specified algorithm. This field extends :py:class:`BlobField`, transparently storing a compressed representation of the data in the database.
-
-    :param int compression_level: A value from 0 to 9.
-    :param str algorithm: Either ``'zlib'`` or ``'bz2'``.
-
-.. py:class:: AESEncryptedField(key[, **kwargs])
-
-    ``AESEncryptedField`` encrypts its contents before storing them in the database.
-
-    :param str key: Encryption key.
-
-    .. note:: This field requires `pycrypto <https://www.dlitz.net/software/pycrypto/>`_, which can be installed by running ``pip install pycrypto``.
 
 .. py:function:: model_to_dict(model[, recurse=True[, backrefs=False[, only=None[, exclude=None]]]])
 
