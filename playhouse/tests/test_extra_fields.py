@@ -22,42 +22,6 @@ class BaseModel(Model):
         database = db
 
 
-class TestModel(BaseModel):
-    name = CharField()
-    number = IntegerField()
-
-
-class Category(BaseModel):
-    name = CharField()
-    parent = ForeignKeyField('self', null=True, related_name='children')
-
-
-class User(BaseModel):
-    username = CharField()
-
-
-class Note(BaseModel):
-    user = ForeignKeyField(User, related_name='notes')
-    text = TextField()
-
-
-class Tag(BaseModel):
-    tag = CharField()
-
-
-class NoteTag(BaseModel):
-    note = ForeignKeyField(Note)
-    tag = ForeignKeyField(Tag)
-
-
-MODELS = [
-    Category,
-    User,
-    Note,
-    Tag,
-    NoteTag]
-
-
 class CompressedModel(BaseModel):
     data = CompressedField()
 
