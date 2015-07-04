@@ -111,7 +111,8 @@ def collect_modules(options):
         modules.append(test_kv)
     if xtra(options.manytomany):
         from playhouse.tests import test_manytomany
-        modules.append(test_manytomany)
+        if test_manytomany not in modules:
+            modules.append(test_manytomany)
     if xtra(options.migrations):
         try:
             from playhouse.tests import test_migrate
