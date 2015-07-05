@@ -54,6 +54,7 @@ __all__ = [
     'DoubleField',
     'DQ',
     'Field',
+    'FixedCharField',
     'FloatField',
     'fn',
     'ForeignKeyField',
@@ -988,6 +989,15 @@ class CharField(Field):
     def coerce(self, value):
         return coerce_to_unicode(value or '')
 
+class FixedCharField(CharField):
+    db_field = 'fixed_char'
+
+    def python_value(self, value):
+        value = super(FixedCharField, self).python_value(value)
+        if value:
+            value = value.strip()
+        return value
+
 class TextField(Field):
     db_field = 'text'
 
@@ -1340,6 +1350,7 @@ class QueryCompiler(object):
         'datetime': 'DATETIME',
         'decimal': 'DECIMAL',
         'double': 'REAL',
+        'fixed_char': 'CHAR',
         'float': 'REAL',
         'int': 'INTEGER',
         'primary_key': 'INTEGER',

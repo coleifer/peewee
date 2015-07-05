@@ -56,6 +56,7 @@ class NullModel(TestModel):
     date_field = DateField(null=True)
     time_field = TimeField(null=True)
     boolean_field = BooleanField(null=True)
+    fixed_char_field = FixedCharField(null=True)
 
 
 class UniqueModel(TestModel):

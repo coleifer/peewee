@@ -120,6 +120,7 @@ Field types table
 Field Type            Sqlite              Postgresql          MySQL
 ===================   =================   =================   =================
 ``CharField``         varchar             varchar             varchar
+``FixedCharField``    char                char                char
 ``TextField``         text                text                longtext
 ``DateTimeField``     datetime            timestamp           datetime
 ``IntegerField``      integer             integer             integer
@@ -161,6 +162,8 @@ Some fields take special parameters...
 | Field type                     | Special Parameters                             |
 +================================+================================================+
 | :py:class:`CharField`          | ``max_length``                                 |
++--------------------------------+------------------------------------------------+
+| :py:class:`FixedCharField`     | ``max_length``                                 |
 +--------------------------------+------------------------------------------------+
 | :py:class:`DateTimeField`      | ``formats``                                    |
 +--------------------------------+------------------------------------------------+

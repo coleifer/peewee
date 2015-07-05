@@ -23,10 +23,10 @@ class TestFieldTypes(ModelTestCase):
     _t = datetime.time
 
     _data = (
-        ('char_field', 'text_field', 'int_field', 'float_field', 'decimal_field1', 'datetime_field', 'date_field', 'time_field'),
-        ('c1',         't1',         1,           1.0,           "1.0",            _dt(2010, 1, 1),  _d(2010, 1, 1), _t(1, 0)),
-        ('c2',         't2',         2,           2.0,           "2.0",            _dt(2010, 1, 2),  _d(2010, 1, 2), _t(2, 0)),
-        ('c3',         't3',         3,           3.0,           "3.0",            _dt(2010, 1, 3),  _d(2010, 1, 3), _t(3, 0)),
+        ('char_field', 'text_field', 'int_field', 'float_field', 'decimal_field1', 'datetime_field', 'date_field', 'time_field', 'fixed_char_field'),
+        ('c1',         't1',         1,           1.0,           "1.0",            _dt(2010, 1, 1),  _d(2010, 1, 1), _t(1, 0), 'fc1'),
+        ('c2',         't2',         2,           2.0,           "2.0",            _dt(2010, 1, 2),  _d(2010, 1, 2), _t(2, 0), 'fc2'),
+        ('c3',         't3',         3,           3.0,           "3.0",            _dt(2010, 1, 3),  _d(2010, 1, 3), _t(3, 0), 'fc3'),
     )
 
     def setUp(self):
@@ -91,6 +91,15 @@ class TestFieldTypes(ModelTestCase):
 
         case_insens = NM.select(NM.char_field).where(NM.char_field ** ilike_str)
         self.assertEqual([x[0] for x in case_insens.tuples()], ['Alpha', 'Bravo'])
+
+    def test_fixed_charfield(self):
+        NM = NullModel
+        nm = NM.create(fixed_char_field=4)
+        nm_db = NM.get(NM.id == nm.id)
+        self.assertEqual(nm_db.fixed_char_field, '4')
+
+        fc_vals = [obj.fixed_char_field for obj in NM.select().order_by(NM.id)]
+        self.assertEqual(fc_vals, ['fc1', 'fc2', 'fc3', '4'])
 
     def test_intfield(self):
         nm = NullModel.create(int_field='4')
