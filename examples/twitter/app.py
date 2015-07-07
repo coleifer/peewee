@@ -196,7 +196,7 @@ def join():
                 # unique constraint, the database will raise an IntegrityError.
                 user = User.create(
                     username=request.form['username'],
-                    password=md5(request.form['password']).hexdigest(),
+                    password=md5((request.form['password']).encode('utf-8')).hexdigest(),
                     email=request.form['email'],
                     join_date=datetime.datetime.now())
 
@@ -215,7 +215,7 @@ def login():
         try:
             user = User.get(
                 username=request.form['username'],
-                password=md5(request.form['password']).hexdigest())
+                password=md5((request.form['password']).encode('utf-8')).hexdigest())
         except User.DoesNotExist:
             flash('The password entered is incorrect')
         else:
