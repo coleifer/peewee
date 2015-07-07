@@ -101,6 +101,15 @@ class Post(BaseModel):
     content = TextField()
     timestamp = DateTimeField(default=datetime.datetime.now)
 
+class ReturningModel(PostgresqlExtModel):
+    id = PrimaryKeyField()
+    field_1 = CharField()
+    field_2 = CharField()
+
+    class Meta:
+        database = test_db
+
+
 MODELS = [
     Testing,
     TestingID,
@@ -1012,3 +1021,29 @@ class TestLateralJoin(ModelTestCase):
             'zaizee-9',
             'zaizee-8',
             'zaizee-7'])
+
+
+class TestReturning(ModelTestCase):
+    requires = [ReturningModel]
+
+    def setUp(self):
+        super(TestReturning, self).setUp()
+        for i in range(5):
+            ReturningModel.create(
+                field_1='field_1_%s' % (i,), field_2='field_2_%s' %(i,)
+            )
+
+    def test_returning(self):
+        returned = (ReturningModel
+                    .update(field_1='field_1_updated')
+                    .where(ReturningModel.id == 1)
+                    .returning()
+                    .dicts()
+                    .execute())
+        expected_return = {
+            'field_2': u'field_2_0', 'id': 1, 'field_1': u'field_1_updated'
+        }
+
+        self.assertEqual(returned, expected_return)
+
+

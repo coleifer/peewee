@@ -5,6 +5,7 @@ Collection of postgres-specific extensions, currently including:
 """
 import uuid
 
+import peewee
 from peewee import *
 from peewee import Expression
 from peewee import logger
@@ -275,6 +276,7 @@ OP.update(
 
 
 class PostgresqlExtCompiler(QueryCompiler):
+
     def _create_index(self, model_class, fields, unique=False):
         clause = super(PostgresqlExtCompiler, self)._create_index(
             model_class, fields, unique)
@@ -330,6 +332,19 @@ class PostgresqlExtCompiler(QueryCompiler):
             json_path=self._parse_json_path)
         return parse_map
 
+    def generate_update(self, query):
+        sql, params = super(PostgresqlExtCompiler, self).generate_update(query)
+        if query._returning:
+            clauses = [peewee.SQL(' RETURNING')]
+            returning_clause = peewee.Clause(*query._returning)
+            returning_clause.glue = ', '
+            clauses.append(returning_clause)
+            returning_sql, _ = self.build_query(clauses)
+            sql += returning_sql
+
+        return sql, params
+
+
 
 class PostgresqlExtDatabase(PostgresqlDatabase):
     compiler_class = PostgresqlExtCompiler
@@ -374,6 +389,85 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
         if self.register_hstore:
             register_hstore(conn, globally=True)
         return conn
+
+
+class PostgresqlExtUpdateQuery(peewee.UpdateQuery):
+    """Overrides peewee.UpdateQuery to add a returning feature"""
+
+    def __init__(self, model_class, update=None):
+        super(PostgresqlExtUpdateQuery, self).__init__(model_class, update)
+        self._tuples = False
+        self._dicts = False
+        self._naive = False
+        self._returning = False
+
+    @peewee.returns_clone
+    def returning(self, *selection):
+        """Add a returning wrapper
+
+        Support for the PostgreSQL RETURNING keyword
+        """
+        self._returning = selection or self.model_class._meta.get_fields()
+
+        def naive(self, naive=True):
+            """Add a naive wrapper"""
+            self._naive = naive
+
+        def tuples(self, tuples=True):
+            """Add a tuples wrapper"""
+            self._tuples = tuples
+
+        def dicts(self, dicts=True):
+            """Add a dicts wrapper"""
+            self._dicts = dicts
+
+        setattr(PostgresqlExtUpdateQuery, 'naive', peewee.returns_clone(naive))
+        setattr(PostgresqlExtUpdateQuery, 'tuples', peewee.returns_clone(tuples))
+        setattr(PostgresqlExtUpdateQuery, 'dicts', peewee.returns_clone(dicts))
+
+    def _clone_attributes(self, query):
+        """Clone the specific attributes for chaining"""
+        query = super(PostgresqlExtUpdateQuery, self)._clone_attributes(query)
+        query._returning = self._returning
+        return query
+
+    def get_query_meta(self):
+        """Retrieve meta information of the current query"""
+        return (self._returning, self._joins)
+
+    def execute(self):
+        """Execute the current query
+
+        Depending on the use of returning or not a wrapped result is returned
+        """
+        if not self._returning:
+            return self.database.rows_affected(self._execute())
+
+        if self._tuples:
+            ResultWrapper = peewee.TuplesQueryResultWrapper
+        elif self._dicts:
+            ResultWrapper = peewee.DictQueryResultWrapper
+        elif self._naive:
+            ResultWrapper = peewee.NaiveQueryResultWrapper
+        else:
+            ResultWrapper = peewee.ModelQueryResultWrapper
+
+        meta = self.get_query_meta()
+        try:
+            return next(ResultWrapper(self.model_class, self._execute(), meta))
+        except StopIteration:
+            raise self.model_class.DoesNotExist(
+                'Instance matching query does not exist:\nSQL: %s\nPARAMS: %s'
+                % self.sql()
+            )
+
+class PostgresqlExtModel(peewee.Model):
+
+    @classmethod
+    def update(cls, **update):
+
+        fdict = dict((cls._meta.fields[f], v) for f, v in update.items())
+        return PostgresqlExtUpdateQuery(cls, update=fdict)
 
 
 class ServerSideSelectQuery(SelectQuery):
