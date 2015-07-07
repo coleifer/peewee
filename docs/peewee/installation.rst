@@ -9,6 +9,7 @@ Most users will want to simply install the latest version, hosted on PyPI:
 
     pip install peewee
 
+Peewee also comes with an optional ``playhouse.speedups`` module. If you have Cython installed, Peewee will compile the Cython extension.
 
 Installing with git
 -------------------
