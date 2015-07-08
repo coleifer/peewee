@@ -334,7 +334,7 @@ class PostgresqlExtCompiler(QueryCompiler):
 
     def generate_update(self, query):
         sql, params = super(PostgresqlExtCompiler, self).generate_update(query)
-        if query._returning:
+        if getattr(query, '_returning', None):
             clauses = [peewee.SQL(' RETURNING')]
             returning_clause = peewee.Clause(*query._returning)
             returning_clause.glue = ', '
@@ -454,12 +454,15 @@ class PostgresqlExtUpdateQuery(peewee.UpdateQuery):
 
         meta = self.get_query_meta()
         try:
-            return next(ResultWrapper(self.model_class, self._execute(), meta))
+            return ResultWrapper(self.model_class, self._execute(), meta)
         except StopIteration:
             raise self.model_class.DoesNotExist(
                 'Instance matching query does not exist:\nSQL: %s\nPARAMS: %s'
                 % self.sql()
             )
+
+    def __iter__(self):
+        return iter(self.execute())
 
 class PostgresqlExtModel(peewee.Model):
 

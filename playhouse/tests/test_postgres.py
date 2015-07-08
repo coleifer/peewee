@@ -1034,15 +1034,12 @@ class TestReturning(ModelTestCase):
             )
 
     def test_returning(self):
-        returned = (ReturningModel
-                    .update(field_1='field_1_updated')
-                    .where(ReturningModel.id == 1)
-                    .returning()
-                    .dicts()
-                    .execute())
-        expected_return = {
-            'field_2': u'field_2_0', 'id': 1, 'field_1': u'field_1_updated'
-        }
+        returned = list(ReturningModel
+                        .update(field_1='field_1_updated')
+                        .returning(ReturningModel.field_2)
+                        .dicts())
+
+        expected_return = [{'field_2': 'field_2_%s' % i} for i in range(5)]
 
         self.assertEqual(returned, expected_return)
 
