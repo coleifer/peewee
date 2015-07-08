@@ -400,6 +400,7 @@ class PostgresqlExtUpdateQuery(peewee.UpdateQuery):
         self._dicts = False
         self._naive = False
         self._returning = False
+        self._qr = None
 
     @peewee.returns_clone
     def returning(self, *selection):
@@ -440,26 +441,25 @@ class PostgresqlExtUpdateQuery(peewee.UpdateQuery):
 
         Depending on the use of returning or not a wrapped result is returned
         """
+
         if not self._returning:
             return self.database.rows_affected(self._execute())
 
-        if self._tuples:
-            ResultWrapper = peewee.TuplesQueryResultWrapper
-        elif self._dicts:
-            ResultWrapper = peewee.DictQueryResultWrapper
-        elif self._naive:
-            ResultWrapper = peewee.NaiveQueryResultWrapper
-        else:
-            ResultWrapper = peewee.ModelQueryResultWrapper
+        if self._dirty or not self._qr:
+            if self._tuples:
+                ResultWrapper = peewee.TuplesQueryResultWrapper
+            elif self._dicts:
+                ResultWrapper = peewee.DictQueryResultWrapper
+            elif self._naive:
+                ResultWrapper = peewee.NaiveQueryResultWrapper
+            else:
+                ResultWrapper = peewee.ModelQueryResultWrapper
 
-        meta = self.get_query_meta()
-        try:
-            return ResultWrapper(self.model_class, self._execute(), meta)
-        except StopIteration:
-            raise self.model_class.DoesNotExist(
-                'Instance matching query does not exist:\nSQL: %s\nPARAMS: %s'
-                % self.sql()
-            )
+            meta = self.get_query_meta()
+            self._qr =  ResultWrapper(self.model_class, self._execute(), meta)
+            self._dirty = False
+
+        return self._qr
 
     def __iter__(self):
         return iter(self.execute())
