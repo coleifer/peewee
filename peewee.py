@@ -4071,6 +4071,13 @@ class BaseModel(type):
         cls.DoesNotExist = exception_class
         cls._meta.prepared()
 
+        import playhouse.postgres_ext as postgres_ext
+        db = cls._meta.database
+        if isinstance(db, postgres_ext.PostgresqlExtDatabase):
+            cls._update_cls = postgres_ext.PostgresqlExtUpdateQuery
+        else:
+            cls._update_cls = UpdateQuery
+
         return cls
 
     def __iter__(self):
@@ -4099,7 +4106,7 @@ class Model(with_metaclass(BaseModel)):
     @classmethod
     def update(cls, **update):
         fdict = dict((cls._meta.fields[f], v) for f, v in update.items())
-        return UpdateQuery(cls, fdict)
+        return cls._update_cls(cls, fdict)
 
     @classmethod
     def insert(cls, **insert):

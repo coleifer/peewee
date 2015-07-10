@@ -5,8 +5,14 @@ Collection of postgres-specific extensions, currently including:
 """
 import uuid
 
-import peewee
-from peewee import *
+from peewee import Field
+from peewee import IntegerField
+from peewee import DateTimeField
+from peewee import TextField
+from peewee import PostgresqlDatabase
+from peewee import fn
+from peewee import SQL
+from peewee import Clause
 from peewee import Expression
 from peewee import logger
 from peewee import Node
@@ -16,7 +22,12 @@ from peewee import Passthrough
 from peewee import returns_clone
 from peewee import QueryCompiler
 from peewee import SelectQuery
+from peewee import UpdateQuery
 from peewee import UUIDField  # For backwards-compatibility.
+from peewee import DictQueryResultWrapper
+from peewee import ModelQueryResultWrapper
+from peewee import NaiveQueryResultWrapper
+from peewee import TuplesQueryResultWrapper
 
 try:
     from psycopg2cffi import compat
@@ -335,15 +346,14 @@ class PostgresqlExtCompiler(QueryCompiler):
     def generate_update(self, query):
         sql, params = super(PostgresqlExtCompiler, self).generate_update(query)
         if getattr(query, '_returning', None):
-            clauses = [peewee.SQL(' RETURNING')]
-            returning_clause = peewee.Clause(*query._returning)
+            clauses = [SQL(' RETURNING')]
+            returning_clause = Clause(*query._returning)
             returning_clause.glue = ', '
             clauses.append(returning_clause)
             returning_sql, _ = self.build_query(clauses)
             sql += returning_sql
 
         return sql, params
-
 
 
 class PostgresqlExtDatabase(PostgresqlDatabase):
@@ -391,7 +401,7 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
         return conn
 
 
-class PostgresqlExtUpdateQuery(peewee.UpdateQuery):
+class PostgresqlExtUpdateQuery(UpdateQuery):
     """Overrides peewee.UpdateQuery to add a returning feature"""
 
     def __init__(self, model_class, update=None):
@@ -402,7 +412,7 @@ class PostgresqlExtUpdateQuery(peewee.UpdateQuery):
         self._returning = False
         self._qr = None
 
-    @peewee.returns_clone
+    @returns_clone
     def returning(self, *selection):
         """Add a returning wrapper
 
@@ -422,9 +432,9 @@ class PostgresqlExtUpdateQuery(peewee.UpdateQuery):
             """Add a dicts wrapper"""
             self._dicts = dicts
 
-        setattr(PostgresqlExtUpdateQuery, 'naive', peewee.returns_clone(naive))
-        setattr(PostgresqlExtUpdateQuery, 'tuples', peewee.returns_clone(tuples))
-        setattr(PostgresqlExtUpdateQuery, 'dicts', peewee.returns_clone(dicts))
+        setattr(PostgresqlExtUpdateQuery, 'naive', returns_clone(naive))
+        setattr(PostgresqlExtUpdateQuery, 'tuples', returns_clone(tuples))
+        setattr(PostgresqlExtUpdateQuery, 'dicts', returns_clone(dicts))
 
     def _clone_attributes(self, query):
         """Clone the specific attributes for chaining"""
@@ -447,13 +457,13 @@ class PostgresqlExtUpdateQuery(peewee.UpdateQuery):
 
         if self._dirty or not self._qr:
             if self._tuples:
-                ResultWrapper = peewee.TuplesQueryResultWrapper
+                ResultWrapper = TuplesQueryResultWrapper
             elif self._dicts:
-                ResultWrapper = peewee.DictQueryResultWrapper
+                ResultWrapper = DictQueryResultWrapper
             elif self._naive:
-                ResultWrapper = peewee.NaiveQueryResultWrapper
+                ResultWrapper = NaiveQueryResultWrapper
             else:
-                ResultWrapper = peewee.ModelQueryResultWrapper
+                ResultWrapper = ModelQueryResultWrapper
 
             meta = self.get_query_meta()
             self._qr =  ResultWrapper(self.model_class, self._execute(), meta)
@@ -463,14 +473,6 @@ class PostgresqlExtUpdateQuery(peewee.UpdateQuery):
 
     def __iter__(self):
         return iter(self.execute())
-
-class PostgresqlExtModel(peewee.Model):
-
-    @classmethod
-    def update(cls, **update):
-
-        fdict = dict((cls._meta.fields[f], v) for f, v in update.items())
-        return PostgresqlExtUpdateQuery(cls, update=fdict)
 
 
 class ServerSideSelectQuery(SelectQuery):

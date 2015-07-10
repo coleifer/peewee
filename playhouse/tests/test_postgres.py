@@ -11,6 +11,7 @@ try:
 except ImportError:
     Json = None
 
+from peewee import *
 from peewee import prefetch
 from peewee import UUIDField
 from playhouse.postgres_ext import *
@@ -101,14 +102,10 @@ class Post(BaseModel):
     content = TextField()
     timestamp = DateTimeField(default=datetime.datetime.now)
 
-class ReturningModel(PostgresqlExtModel):
+class ReturningModel(BaseModel):
     id = PrimaryKeyField()
     field_1 = CharField()
     field_2 = CharField()
-
-    class Meta:
-        database = test_db
-
 
 MODELS = [
     Testing,
