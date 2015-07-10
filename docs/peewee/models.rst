@@ -615,6 +615,9 @@ This will yield the following DDL:
       "value" INTEGER NOT NULL
     )
 
+.. warning::
+    Some model APIs may not work correctly for models without a primary key, for instance :py:meth:`~Model.save` (you can instead use `~Model.insert` and `~Model.update`).
+
 Self-referential foreign keys
 -----------------------------
 
