@@ -819,6 +819,7 @@ class TestUpdateQuery(PeeweeTestCase):
 
     def test_update_returning(self):
         uq = UpdateQuery(User, {User.username: 'baze'}).where(User.id > 2)
+        test_db.update_returning = False
         self.assertRaises(ValueError, lambda: uq.returning(User.username))
 
         test_db.update_returning = True
