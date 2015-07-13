@@ -1793,6 +1793,11 @@ class QueryCompiler(object):
                 self._get_field_clause(
                     meta.get_primary_key_fields(),
                     clause_type=CommaClause)])
+        elif query._returning is not None:
+            returning_clause = Clause(*query._returning)
+            returning_clause.glue = ', '
+            clauses.extend([SQL('RETURNING'), returning_clause])
+
 
         return self.build_query(clauses, alias_map)
 
@@ -1801,6 +1806,10 @@ class QueryCompiler(object):
         clauses = [SQL('DELETE FROM'), model.as_entity()]
         if query._where:
             clauses.extend([SQL('WHERE'), query._where])
+        if query._returning is not None:
+            returning_clause = Clause(*query._returning)
+            returning_clause.glue = ', '
+            clauses.extend([SQL('RETURNING'), returning_clause])
         return self.build_query(clauses)
 
     def field_definition(self, field):
@@ -2853,35 +2862,27 @@ class CompoundSelect(SelectQuery):
         else:
             return ModelQueryResultWrapper
 
-class UpdateQuery(Query):
-    def __init__(self, model_class, update=None):
-        self._update = update
-        self._on_conflict = None
+class _WriteQuery(Query):
+    def __init__(self, model_class):
         self._returning = None
-        self._qr = None
         self._tuples = False
         self._dicts = False
-        super(UpdateQuery, self).__init__(model_class)
+        self._qr = None
+        super(_WriteQuery, self).__init__(model_class)
 
     def _clone_attributes(self, query):
-        query = super(UpdateQuery, self)._clone_attributes(query)
-        query._update = dict(self._update)
-        query._on_conflict = self._on_conflict
+        query = super(_WriteQuery, self)._clone_attributes(query)
         if self._returning:
             query._returning = list(self._returning)
             query._tuples = self._tuples
             query._dicts = self._dicts
         return query
 
-    @returns_clone
-    def on_conflict(self, action=None):
-        self._on_conflict = action
-
     def requires_returning(method):
         def inner(self, *args, **kwargs):
             db = self.model_class._meta.database
             if not db.returning_clause:
-                raise ValueError('UPDATE...RETURNING is not supported by your '
+                raise ValueError('RETURNING is not supported by your '
                                  'database: %s' % type(db))
             return method(self, *args, **kwargs)
         return inner
@@ -2906,6 +2907,37 @@ class UpdateQuery(Query):
     def dicts(self, dicts=True):
         self._dicts = dicts
 
+    def get_result_wrapper(self):
+        if self._returning is not None:
+            if self._tuples:
+                return TuplesQueryResultWrapper
+            elif self._dicts:
+                return DictQueryResultWrapper
+        return NaiveQueryResultWrapper
+
+    def _execute_with_result_wrapper(self):
+        ResultWrapper = self.get_result_wrapper()
+        meta = (self._returning, {self.model_class: []})
+        self._qr = ResultWrapper(self.model_class, self._execute(), meta)
+        return self._qr
+
+
+class UpdateQuery(_WriteQuery):
+    def __init__(self, model_class, update=None):
+        self._update = update
+        self._on_conflict = None
+        super(UpdateQuery, self).__init__(model_class)
+
+    def _clone_attributes(self, query):
+        query = super(UpdateQuery, self)._clone_attributes(query)
+        query._update = dict(self._update)
+        query._on_conflict = self._on_conflict
+        return query
+
+    @returns_clone
+    def on_conflict(self, action=None):
+        self._on_conflict = action
+
     join = not_allowed('joining')
 
     def sql(self):
@@ -2913,15 +2945,7 @@ class UpdateQuery(Query):
 
     def execute(self):
         if self._returning is not None and not self._qr:
-            if self._tuples:
-                ResultWrapper = TuplesQueryResultWrapper
-            elif self._dicts:
-                ResultWrapper = DictQueryResultWrapper
-            else:
-                ResultWrapper = NaiveQueryResultWrapper
-            meta = (self._returning, {self.model_class: []})
-            self._qr = ResultWrapper(self.model_class, self._execute(), meta)
-            return self._qr
+            return self._execute_with_result_wrapper()
         elif self._qr:
             return self._qr
         else:
@@ -2937,7 +2961,7 @@ class UpdateQuery(Query):
     def iterator(self):
         return iter(self.execute().iterator())
 
-class InsertQuery(Query):
+class InsertQuery(_WriteQuery):
     def __init__(self, model_class, field_dict=None, rows=None,
                  fields=None, query=None):
         super(InsertQuery, self).__init__(model_class)
@@ -3060,15 +3084,26 @@ class InsertQuery(Query):
             return map(operator.itemgetter(0), cursor.fetchall())
         else:
             return True
+        """
+        if self._returning is not None and not self._qr:
+            return self._execute_with_result_wrapper()
+        elif self._qr:
+            return self._qr
+        """
 
-class DeleteQuery(Query):
+class DeleteQuery(_WriteQuery):
     join = not_allowed('joining')
 
     def sql(self):
         return self.compiler().generate_delete(self)
 
     def execute(self):
-        return self.database.rows_affected(self._execute())
+        if self._returning is not None and not self._qr:
+            return self._execute_with_result_wrapper()
+        elif self._qr:
+            return self._qr
+        else:
+            return self.database.rows_affected(self._execute())
 
 
 IndexMetadata = namedtuple(

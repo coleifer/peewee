@@ -740,11 +740,11 @@ class TestSelectQuery(PeeweeTestCase):
 class TestUpdateQuery(PeeweeTestCase):
     def setUp(self):
         super(TestUpdateQuery, self).setUp()
-        self._orig_update_returning = test_db.update_returning
+        self._orig_returning_clause = test_db.returning_clause
 
     def tearDown(self):
         super(TestUpdateQuery, self).tearDown()
-        test_db.update_returning = self._orig_update_returning
+        test_db.returning_clause = self._orig_returning_clause
 
     def test_update(self):
         uq = UpdateQuery(User, {User.username: 'updated'})
@@ -817,12 +817,12 @@ class TestUpdateQuery(PeeweeTestCase):
               .where(User.username == 'old'))
         self.assertWhere(uq, '(("users"."id" = ?) AND ("users"."username" = ?))', [2, 'old'])
 
-    def test_update_returning(self):
+    def test_returning_clause(self):
         uq = UpdateQuery(User, {User.username: 'baze'}).where(User.id > 2)
-        test_db.update_returning = False
+        test_db.returning_clause = False
         self.assertRaises(ValueError, lambda: uq.returning(User.username))
 
-        test_db.update_returning = True
+        test_db.returning_clause = True
         uq_returning = uq.returning(User.username)
 
         self.assertFalse(id(uq_returning) == id(uq))
@@ -849,6 +849,14 @@ class TestUpdateQuery(PeeweeTestCase):
 
 
 class TestInsertQuery(PeeweeTestCase):
+    def setUp(self):
+        super(TestInsertQuery, self).setUp()
+        self._orig_returning_clause = test_db.returning_clause
+
+    def tearDown(self):
+        super(TestInsertQuery, self).tearDown()
+        test_db.returning_clause = self._orig_returning_clause
+
     def test_insert(self):
         iq = InsertQuery(User, {User.username: 'inserted'})
         self.assertEqual(compiler.generate_insert(iq), (
@@ -1030,6 +1038,34 @@ class TestInsertQuery(PeeweeTestCase):
             'INSERT OR IGNORE INTO "users" ("username") VALUES (?)'))
         self.assertEqual(params, ['huey'])
 
+    def test_returning(self):
+        iq = User.insert(username='huey')
+        test_db.returning_clause = False
+        self.assertRaises(ValueError, lambda: iq.returning(User.id))
+
+        test_db.returning_clause = True
+        iq_returning = iq.returning(User.id)
+
+        self.assertFalse(id(iq_returning) == id(iq))
+        self.assertIsNone(iq._returning)
+
+        sql, params = normal_compiler.generate_insert(iq_returning)
+        self.assertEqual(sql, (
+            'INSERT INTO "users" ("username") VALUES (?) '
+            'RETURNING "users"."id"'))
+        self.assertEqual(params, ['huey'])
+
+        iq2 = iq_returning.returning(User, SQL('1'))
+        sql, params = normal_compiler.generate_insert(iq2)
+        self.assertEqual(sql, (
+            'INSERT INTO "users" ("username") VALUES (?) '
+            'RETURNING "users"."id", "users"."username", 1'))
+        self.assertEqual(params, ['huey'])
+
+        iq_no_return = iq2.returning(None)
+        sql, _ = normal_compiler.generate_insert(iq_no_return)
+        self.assertFalse('RETURNING' in sql)
+
 
 class TestInsertReturning(PeeweeTestCase):
     def setUp(self):
@@ -1107,6 +1143,43 @@ class TestInsertReturning(PeeweeTestCase):
 
 
 class TestDeleteQuery(PeeweeTestCase):
+    def setUp(self):
+        super(TestDeleteQuery, self).setUp()
+        self._orig_returning_clause = test_db.returning_clause
+
+    def tearDown(self):
+        super(TestDeleteQuery, self).tearDown()
+        test_db.returning_clause = self._orig_returning_clause
+
+    def test_returning(self):
+        dq = DeleteQuery(User).where(User.id > 2)
+        test_db.returning_clause = False
+        self.assertRaises(ValueError, lambda: dq.returning(User.username))
+
+        test_db.returning_clause = True
+        dq_returning = dq.returning(User.username)
+
+        self.assertFalse(id(dq_returning) == id(dq))
+        self.assertIsNone(dq._returning)
+
+        sql, params = normal_compiler.generate_delete(dq_returning)
+        self.assertEqual(sql, (
+            'DELETE FROM "users" '
+            'WHERE ("id" > ?) '
+            'RETURNING "username"'))
+        self.assertEqual(params, [2])
+
+        dq2 = dq_returning.returning(User, SQL('1'))
+        sql, params = normal_compiler.generate_delete(dq2)
+        self.assertEqual(sql, (
+            'DELETE FROM "users" WHERE ("id" > ?) '
+            'RETURNING "id", "username", 1'))
+        self.assertEqual(params, [2])
+
+        dq_no_return = dq2.returning(None)
+        sql, _ = normal_compiler.generate_delete(dq_no_return)
+        self.assertFalse('RETURNING' in sql)
+
     def test_where(self):
         dq = DeleteQuery(User).where(User.id == 2)
         self.assertWhere(dq, '("users"."id" = ?)', [2])

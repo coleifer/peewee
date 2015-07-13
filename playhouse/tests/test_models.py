@@ -1641,7 +1641,7 @@ class TestInsertReturningModelAPI(PeeweeTestCase):
 
 
 @skip_unless(lambda: isinstance(test_db, PostgresqlDatabase))
-class TestUpdateReturning(ModelTestCase):
+class TestReturningClause(ModelTestCase):
     requires = [User]
 
     def test_update_returning(self):
@@ -1673,3 +1673,33 @@ class TestUpdateReturning(ModelTestCase):
         self.assertEqual(
             user_data,
             [{'username': 'huey'}, {'username': 'huey'}])
+
+    def test_delete_returning(self):
+        User.create_users(10)
+
+        dq = User.delete().where(User.username << ['u9', 'u10'])
+        res = dq.execute()
+        self.assertEqual(res, 2)  # Number of rows modified.
+
+        dq = (User
+              .delete()
+              .where(User.username << ['u7', 'u8'])
+              .returning(User.username))
+        users = [user for user in dq.execute()]
+        self.assertEqual(len(users), 2)
+
+        usernames = sorted([user.username for user in users])
+        self.assertEqual(usernames, ['u7', 'u8'])
+
+        ids = [user.id for user in users]
+        self.assertEqual(ids, [None, None])  # Was not selected.
+
+        dq = (User
+              .delete()
+              .where(User.username == 'u1')
+              .returning(User))
+        users = [user for user in dq.execute()]
+        self.assertEqual(len(users), 1)
+        user, = users
+        self.assertEqual(user.username, 'u1')
+        self.assertIsNotNone(user.id)
