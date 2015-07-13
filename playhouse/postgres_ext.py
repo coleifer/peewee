@@ -5,7 +5,14 @@ Collection of postgres-specific extensions, currently including:
 """
 import uuid
 
-from peewee import *
+from peewee import Field
+from peewee import IntegerField
+from peewee import DateTimeField
+from peewee import TextField
+from peewee import PostgresqlDatabase
+from peewee import fn
+from peewee import SQL
+from peewee import Clause
 from peewee import Expression
 from peewee import logger
 from peewee import Node
@@ -15,7 +22,12 @@ from peewee import Passthrough
 from peewee import returns_clone
 from peewee import QueryCompiler
 from peewee import SelectQuery
+from peewee import UpdateQuery
 from peewee import UUIDField  # For backwards-compatibility.
+from peewee import DictQueryResultWrapper
+from peewee import ModelQueryResultWrapper
+from peewee import NaiveQueryResultWrapper
+from peewee import TuplesQueryResultWrapper
 
 try:
     from psycopg2cffi import compat
@@ -275,6 +287,7 @@ OP.update(
 
 
 class PostgresqlExtCompiler(QueryCompiler):
+
     def _create_index(self, model_class, fields, unique=False):
         clause = super(PostgresqlExtCompiler, self)._create_index(
             model_class, fields, unique)
@@ -330,6 +343,18 @@ class PostgresqlExtCompiler(QueryCompiler):
             json_path=self._parse_json_path)
         return parse_map
 
+    def generate_update(self, query):
+        sql, params = super(PostgresqlExtCompiler, self).generate_update(query)
+        if getattr(query, '_returning', None):
+            clauses = [SQL(' RETURNING')]
+            returning_clause = Clause(*query._returning)
+            returning_clause.glue = ', '
+            clauses.append(returning_clause)
+            returning_sql, _ = self.build_query(clauses)
+            sql += returning_sql
+
+        return sql, params
+
 
 class PostgresqlExtDatabase(PostgresqlDatabase):
     compiler_class = PostgresqlExtCompiler
@@ -374,6 +399,80 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
         if self.register_hstore:
             register_hstore(conn, globally=True)
         return conn
+
+
+class PostgresqlExtUpdateQuery(UpdateQuery):
+    """Overrides peewee.UpdateQuery to add a returning feature"""
+
+    def __init__(self, model_class, update=None):
+        super(PostgresqlExtUpdateQuery, self).__init__(model_class, update)
+        self._tuples = False
+        self._dicts = False
+        self._naive = False
+        self._returning = False
+        self._qr = None
+
+    @returns_clone
+    def returning(self, *selection):
+        """Add a returning wrapper
+
+        Support for the PostgreSQL RETURNING keyword
+        """
+        self._returning = selection or self.model_class._meta.get_fields()
+
+        def naive(self, naive=True):
+            """Add a naive wrapper"""
+            self._naive = naive
+
+        def tuples(self, tuples=True):
+            """Add a tuples wrapper"""
+            self._tuples = tuples
+
+        def dicts(self, dicts=True):
+            """Add a dicts wrapper"""
+            self._dicts = dicts
+
+        setattr(PostgresqlExtUpdateQuery, 'naive', returns_clone(naive))
+        setattr(PostgresqlExtUpdateQuery, 'tuples', returns_clone(tuples))
+        setattr(PostgresqlExtUpdateQuery, 'dicts', returns_clone(dicts))
+
+    def _clone_attributes(self, query):
+        """Clone the specific attributes for chaining"""
+        query = super(PostgresqlExtUpdateQuery, self)._clone_attributes(query)
+        query._returning = self._returning
+        return query
+
+    def get_query_meta(self):
+        """Retrieve meta information of the current query"""
+        return (self._returning, self._joins)
+
+    def execute(self):
+        """Execute the current query
+
+        Depending on the use of returning or not a wrapped result is returned
+        """
+
+        if not self._returning:
+            return self.database.rows_affected(self._execute())
+
+        if self._dirty or not self._qr:
+            if self._tuples:
+                ResultWrapper = TuplesQueryResultWrapper
+            elif self._dicts:
+                ResultWrapper = DictQueryResultWrapper
+            elif self._naive:
+                ResultWrapper = NaiveQueryResultWrapper
+            else:
+                ResultWrapper = ModelQueryResultWrapper
+
+            meta = self.get_query_meta()
+            self._qr =  ResultWrapper(self.model_class, self._execute(), meta)
+            self._dirty = False
+
+        return self._qr
+
+    def __iter__(self):
+        return iter(self.execute())
 
 
 class ServerSideSelectQuery(SelectQuery):

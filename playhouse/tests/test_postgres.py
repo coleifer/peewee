@@ -11,6 +11,7 @@ try:
 except ImportError:
     Json = None
 
+from peewee import *
 from peewee import prefetch
 from peewee import UUIDField
 from playhouse.postgres_ext import *
@@ -100,6 +101,11 @@ class Post(BaseModel):
     user = ForeignKeyField(User)
     content = TextField()
     timestamp = DateTimeField(default=datetime.datetime.now)
+
+class ReturningModel(BaseModel):
+    id = PrimaryKeyField()
+    field_1 = CharField()
+    field_2 = CharField()
 
 MODELS = [
     Testing,
@@ -1012,3 +1018,26 @@ class TestLateralJoin(ModelTestCase):
             'zaizee-9',
             'zaizee-8',
             'zaizee-7'])
+
+
+class TestReturning(ModelTestCase):
+    requires = [ReturningModel]
+
+    def setUp(self):
+        super(TestReturning, self).setUp()
+        for i in range(5):
+            ReturningModel.create(
+                field_1='field_1_%s' % (i,), field_2='field_2_%s' %(i,)
+            )
+
+    def test_returning(self):
+        returned = list(ReturningModel
+                        .update(field_1='field_1_updated')
+                        .returning(ReturningModel.field_2)
+                        .dicts())
+
+        expected_return = [{'field_2': 'field_2_%s' % i} for i in range(5)]
+
+        self.assertEqual(returned, expected_return)
+
+
