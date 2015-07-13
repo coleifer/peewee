@@ -738,6 +738,14 @@ class TestSelectQuery(PeeweeTestCase):
         self.assertEqual(params, ['charlie', 2])
 
 class TestUpdateQuery(PeeweeTestCase):
+    def setUp(self):
+        super(TestUpdateQuery, self).setUp()
+        self._orig_update_returning = test_db.update_returning
+
+    def tearDown(self):
+        super(TestUpdateQuery, self).tearDown()
+        test_db.update_returning = self._orig_update_returning
+
     def test_update(self):
         uq = UpdateQuery(User, {User.username: 'updated'})
         self.assertEqual(compiler.generate_update(uq), (
@@ -808,6 +816,36 @@ class TestUpdateQuery(PeeweeTestCase):
               .where(User.id == 2)
               .where(User.username == 'old'))
         self.assertWhere(uq, '(("users"."id" = ?) AND ("users"."username" = ?))', [2, 'old'])
+
+    def test_update_returning(self):
+        uq = UpdateQuery(User, {User.username: 'baze'}).where(User.id > 2)
+        self.assertRaises(ValueError, lambda: uq.returning(User.username))
+
+        test_db.update_returning = True
+        uq_returning = uq.returning(User.username)
+
+        self.assertFalse(id(uq_returning) == id(uq))
+        self.assertIsNone(uq._returning)
+
+        sql, params = normal_compiler.generate_update(uq_returning)
+        self.assertEqual(sql, (
+            'UPDATE "users" SET "username" = ? '
+            'WHERE ("users"."id" > ?) '
+            'RETURNING "users"."username"'))
+        self.assertEqual(params, ['baze', 2])
+
+        uq2 = uq_returning.returning(User, SQL('1'))
+        sql, params = normal_compiler.generate_update(uq2)
+        self.assertEqual(sql, (
+            'UPDATE "users" SET "username" = ? '
+            'WHERE ("users"."id" > ?) '
+            'RETURNING "users"."id", "users"."username", 1'))
+        self.assertEqual(params, ['baze', 2])
+
+        uq_no_return = uq2.returning(None)
+        sql, _ = normal_compiler.generate_update(uq_no_return)
+        self.assertFalse('RETURNING' in sql)
+
 
 class TestInsertQuery(PeeweeTestCase):
     def test_insert(self):

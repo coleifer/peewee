@@ -1638,3 +1638,38 @@ class TestInsertReturningModelAPI(PeeweeTestCase):
         bar = User.get(User.username == 'bar')
         baz = User.get(User.username == 'baz')
         self.assertEqual(res, [foo.id, bar.id, baz.id])
+
+
+@skip_unless(lambda: isinstance(test_db, PostgresqlDatabase))
+class TestUpdateReturning(ModelTestCase):
+    requires = [User]
+
+    def test_update_returning(self):
+        User.create_users(3)
+        u1, u2, u3 = [user for user in User.select().order_by(User.id)]
+
+        uq = User.update(username='uII').where(User.id == u2.id)
+        res = uq.execute()
+        self.assertEqual(res, 1)  # Number of rows modified.
+
+        uq = uq.returning(User.username)
+        users = [user for user in uq.execute()]
+        self.assertEqual(len(users), 1)
+        user, = users
+        self.assertEqual(user.username, 'uII')
+        self.assertIsNone(user.id)  # Was not explicitly selected.
+
+        uq = (User
+              .update(username='huey')
+              .where(User.username != 'uII')
+              .returning(User))
+        users = [user for user in uq.execute()]
+        self.assertEqual(len(users), 2)
+        self.assertTrue(all([user.username == 'huey' for user in users]))
+        self.assertTrue(all([user.id is not None for user in users]))
+
+        uq = uq.dicts().returning(User.username)
+        user_data = [data for data in uq.execute()]
+        self.assertEqual(
+            user_data,
+            [{'username': 'huey'}, {'username': 'huey'}])

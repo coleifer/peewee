@@ -1732,6 +1732,11 @@ class QueryCompiler(object):
         if query._where:
             clauses.extend([SQL('WHERE'), query._where])
 
+        if query._returning is not None:
+            returning_clause = Clause(*query._returning)
+            returning_clause.glue = ', '
+            clauses.extend([SQL('RETURNING'), returning_clause])
+
         return self.build_query(clauses, alias_map)
 
     def _get_field_clause(self, fields, clause_type=EnclosedClause):
@@ -2363,6 +2368,19 @@ class Query(Node):
         conjunction = conjunction or operator.and_
         return conjunction(initial, reduced)
 
+    def _model_shorthand(self, args):
+        accum = []
+        for arg in args:
+            if isinstance(arg, Node):
+                accum.append(arg)
+            elif isinstance(arg, Query):
+                accum.append(arg)
+            elif isinstance(arg, ModelAlias):
+                accum.extend(arg.get_proxy_fields())
+            elif isclass(arg) and issubclass(arg, Model):
+                accum.extend(arg._meta.get_fields())
+        return accum
+
     @returns_clone
     def where(self, *expressions):
         self._where = self._add_query_clauses(self._where, expressions)
@@ -2582,19 +2600,6 @@ class SelectQuery(Query):
         query._aggregate_rows = self._aggregate_rows
         query._alias = self._alias
         return query
-
-    def _model_shorthand(self, args):
-        accum = []
-        for arg in args:
-            if isinstance(arg, Node):
-                accum.append(arg)
-            elif isinstance(arg, Query):
-                accum.append(arg)
-            elif isinstance(arg, ModelAlias):
-                accum.extend(arg.get_proxy_fields())
-            elif isclass(arg) and issubclass(arg, Model):
-                accum.extend(arg._meta.get_fields())
-        return accum
 
     def compound_op(operator):
         def inner(self, other):
@@ -2852,17 +2857,54 @@ class UpdateQuery(Query):
     def __init__(self, model_class, update=None):
         self._update = update
         self._on_conflict = None
+        self._returning = None
+        self._qr = None
+        self._tuples = False
+        self._dicts = False
         super(UpdateQuery, self).__init__(model_class)
 
     def _clone_attributes(self, query):
         query = super(UpdateQuery, self)._clone_attributes(query)
         query._update = dict(self._update)
         query._on_conflict = self._on_conflict
+        if self._returning:
+            query._returning = list(self._returning)
+            query._tuples = self._tuples
+            query._dicts = self._dicts
         return query
 
     @returns_clone
     def on_conflict(self, action=None):
         self._on_conflict = action
+
+    def requires_returning(method):
+        def inner(self, *args, **kwargs):
+            db = self.model_class._meta.database
+            if not db.update_returning:
+                raise ValueError('UPDATE...RETURNING is not supported by your '
+                                 'database: %s' % type(db))
+            return method(self, *args, **kwargs)
+        return inner
+
+    @requires_returning
+    @returns_clone
+    def returning(self, *selection):
+        if len(selection) == 1 and selection[0] is None:
+            self._returning = None
+        else:
+            if not selection:
+                selection = self.model_class._meta.get_fields()
+            self._returning = self._model_shorthand(selection)
+
+    @requires_returning
+    @returns_clone
+    def tuples(self, tuples=True):
+        self._tuples = tuples
+
+    @requires_returning
+    @returns_clone
+    def dicts(self, dicts=True):
+        self._dicts = dicts
 
     join = not_allowed('joining')
 
@@ -2870,7 +2912,30 @@ class UpdateQuery(Query):
         return self.compiler().generate_update(self)
 
     def execute(self):
-        return self.database.rows_affected(self._execute())
+        if self._returning is not None and not self._qr:
+            if self._tuples:
+                ResultWrapper = TuplesQueryResultWrapper
+            elif self._dicts:
+                ResultWrapper = DictQueryResultWrapper
+            else:
+                ResultWrapper = NaiveQueryResultWrapper
+            meta = (self._returning, {self.model_class: []})
+            self._qr = ResultWrapper(self.model_class, self._execute(), meta)
+            return self._qr
+        elif self._qr:
+            return self._qr
+        else:
+            return self.database.rows_affected(self._execute())
+
+    def __iter__(self):
+        if not self.model_class._meta.database.update_returning:
+            raise ValueError('UPDATE queries cannot be iterated over unless '
+                             'they specify a RETURNING clause, which is not '
+                             'supported by your database.')
+        return iter(self.execute())
+
+    def iterator(self):
+        return iter(self.execute().iterator())
 
 class InsertQuery(Query):
     def __init__(self, model_class, field_dict=None, rows=None,
@@ -3080,6 +3145,7 @@ class Database(object):
     savepoints = True
     sequences = False
     subquery_delete_same_table = True
+    update_returning = False
     window_functions = False
 
     exceptions = {
@@ -3432,6 +3498,7 @@ class PostgresqlDatabase(Database):
     }
     reserved_tables = ['user']
     sequences = True
+    update_returning = True
     window_functions = True
 
     register_unicode = True
