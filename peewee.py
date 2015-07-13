@@ -2880,7 +2880,7 @@ class UpdateQuery(Query):
     def requires_returning(method):
         def inner(self, *args, **kwargs):
             db = self.model_class._meta.database
-            if not db.update_returning:
+            if not db.returning_clause:
                 raise ValueError('UPDATE...RETURNING is not supported by your '
                                  'database: %s' % type(db))
             return method(self, *args, **kwargs)
@@ -2928,7 +2928,7 @@ class UpdateQuery(Query):
             return self.database.rows_affected(self._execute())
 
     def __iter__(self):
-        if not self.model_class._meta.database.update_returning:
+        if not self.model_class._meta.database.returning_clause:
             raise ValueError('UPDATE queries cannot be iterated over unless '
                              'they specify a RETURNING clause, which is not '
                              'supported by your database.')
@@ -3142,10 +3142,10 @@ class Database(object):
     op_overrides = {}
     quote_char = '"'
     reserved_tables = []
+    returning_clause = False
     savepoints = True
     sequences = False
     subquery_delete_same_table = True
-    update_returning = False
     window_functions = False
 
     exceptions = {
@@ -3497,8 +3497,8 @@ class PostgresqlDatabase(Database):
         OP.REGEXP: '~',
     }
     reserved_tables = ['user']
+    returning_clause = True
     sequences = True
-    update_returning = True
     window_functions = True
 
     register_unicode = True
