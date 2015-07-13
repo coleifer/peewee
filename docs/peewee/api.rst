@@ -1418,6 +1418,52 @@ Query Types
 
         Performs the query
 
+    .. py:method:: returning(*returning)
+
+        :param returning: A list of model classes, field instances, functions
+          or expressions. If no argument is provided, all columns for the given model
+          will be selected. To clear any existing values, pass in ``None``.
+        :rtype: a :py:class:`UpdateQuery` for the given :py:class:`Model`.
+
+        Add a ``RETURNING`` clause to the query, which will cause the ``UPDATE`` to compute return values based on each row that was actually updated.
+
+        When the query is executed, rather than returning the number of rows updated, an iterator will be returned that yields the updated objects.
+
+        .. note:: Currently only :py:class:`PostgresqlDatabase` supports this feature.
+
+        Example:
+
+        .. code-block:: python
+
+            # Disable all users whose registration expired, and return the user
+            # objects that were updated.
+            query = (User
+                     .update(active=False)
+                     .where(User.registration_expired == True)
+                     .returning(User))
+
+            # We can iterate over the users that were updated.
+            for updated_user in query.execute():
+                send_activation_email(updated_user.email)
+
+        For more information, check out :ref:`the RETURNING clause docs <returning-clause>`_.
+
+    .. py:method:: tuples()
+
+        :rtype: :py:class:`UpdateQuery`
+
+        .. note:: This method should only be used in conjunction with a call to :py:meth:`~UpdateQuery.returning`.
+
+        When the updated results are returned, they will be returned as row tuples.
+
+    .. py:method:: dicts()
+
+        :rtype: :py:class:`UpdateQuery`
+
+        .. note:: This method should only be used in conjunction with a call to :py:meth:`~UpdateQuery.returning`.
+
+        When the updated results are returned, they will be returned as dictionaries mapping column to value.
+
     .. py:method:: on_conflict([action=None])
 
         Add a SQL ``ON CONFLICT`` clause with the specified action to the given ``UPDATE`` query. `Valid actions <https://www.sqlite.org/lang_conflict.html>`_ are:
@@ -1522,6 +1568,51 @@ Query Types
             print user_ids
             # prints something like [1, 2, 3]
 
+    .. py:method:: returning(*returning)
+
+        :param returning: A list of model classes, field instances, functions
+          or expressions. If no argument is provided, all columns for the given model
+          will be selected. To clear any existing values, pass in ``None``.
+        :rtype: a :py:class:`InsertQuery` for the given :py:class:`Model`.
+
+        Add a ``RETURNING`` clause to the query, which will cause the ``INSERT`` to compute return values based on each row that was inserted.
+
+        When the query is executed, rather than returning the primary key of the new row(s), an iterator will be returned that yields the inserted objects.
+
+        .. note:: Currently only :py:class:`PostgresqlDatabase` supports this feature.
+
+        Example:
+
+        .. code-block:: python
+
+            # Create some users, retrieving the list of IDs assigned to them.
+            query = (User
+                     .insert_many(list_of_user_data)
+                     .returning(User))
+
+            # We can iterate over the users that were created.
+            for new_user in query.execute():
+                # Do something with the new user's ID...
+                do_something(new_user.id)
+
+        For more information, check out :ref:`the RETURNING clause docs <returning-clause>`_.
+
+    .. py:method:: tuples()
+
+        :rtype: :py:class:`InsertQuery`
+
+        .. note:: This method should only be used in conjunction with a call to :py:meth:`~InsertQuery.returning`.
+
+        When the inserted results are returned, they will be returned as row tuples.
+
+    .. py:method:: dicts()
+
+        :rtype: :py:class:`InsertQuery`
+
+        .. note:: This method should only be used in conjunction with a call to :py:meth:`~InsertQuery.returning`.
+
+        When the inserted results are returned, they will be returned as dictionaries mapping column to value.
+
 .. py:class:: DeleteQuery(model_class)
 
     Creates a *DELETE* query for the given model.
@@ -1541,6 +1632,52 @@ Query Types
         :rtype: Number of rows deleted
 
         Performs the query
+
+    .. py:method:: returning(*returning)
+
+        :param returning: A list of model classes, field instances, functions
+          or expressions. If no argument is provided, all columns for the given model
+          will be selected. To clear any existing values, pass in ``None``.
+        :rtype: a :py:class:`DeleteQuery` for the given :py:class:`Model`.
+
+        Add a ``RETURNING`` clause to the query, which will cause the ``DELETE`` to compute return values based on each row that was removed from the database.
+
+        When the query is executed, rather than returning the number of rows deleted, an iterator will be returned that yields the deleted objects.
+
+        .. note:: Currently only :py:class:`PostgresqlDatabase` supports this feature.
+
+        Example:
+
+        .. code-block:: python
+
+            # Create some users, retrieving the list of IDs assigned to them.
+            query = (User
+                     .delete()
+                     .where(User.account_expired == True)
+                     .returning(User))
+
+            # We can iterate over the user objects that were deleted.
+            for deleted_user in query.execute():
+                # Do something with the deleted user.
+                notify_account_deleted(deleted_user.email)
+
+        For more information, check out :ref:`the RETURNING clause docs <returning-clause>`_.
+
+    .. py:method:: tuples()
+
+        :rtype: :py:class:`DeleteQuery`
+
+        .. note:: This method should only be used in conjunction with a call to :py:meth:`~DeleteQuery.returning`.
+
+        When the deleted results are returned, they will be returned as row tuples.
+
+    .. py:method:: dicts()
+
+        :rtype: :py:class:`DeleteQuery`
+
+        .. note:: This method should only be used in conjunction with a call to :py:meth:`~DeleteQuery.returning`.
+
+        When the deleted results are returned, they will be returned as dictionaries mapping column to value.
 
 
 .. py:class:: RawQuery(model_class, sql, *params)
@@ -1768,6 +1905,18 @@ Database and its subclasses
 
         Table names that are reserved by the backend -- if encountered in the
         application a warning will be issued.
+
+    .. py:attribute:: returning_clause = False
+
+        Whether the database supports ``RETURNING`` clauses for ``UPDATE``, ``INSERT`` and ``DELETE`` queries.
+
+        .. note:: Currently only :py:class:`PostgresqlDatabase` supports this.
+
+        See the following for more information:
+
+        * :py:meth:`UpdateQuery.returning`
+        * :py:meth:`InsertQuery.returning`
+        * :py:meth:`DeleteQuery.returning`
 
     .. py:attribute:: savepoints = True
 
@@ -2182,6 +2331,8 @@ Database and its subclasses
     .. py:attribute:: for_update_nowait = True
 
     .. py:attribute:: insert_returning = True
+
+    .. py:attribute:: returning_clause = True
 
     .. py:attribute:: sequences = True
 

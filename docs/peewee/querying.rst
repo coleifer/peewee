@@ -823,6 +823,37 @@ Similarly, you can return the rows from the cursor as dictionaries using :py:met
     for stat in stats:
         print stat['url'], stat['ct']
 
+.. _returning-clause:
+
+Returning Clause
+----------------
+
+:py:class:`PostgresqlDatabase` supports a ``RETURNING`` clause on ``UPDATE``, ``INSERT`` and ``DELETE`` queries. Specifying a ``RETURNING`` clause allows you to iterate over the rows accessed by the query.
+
+For example, let's say you have an :py:class:`UpdateQuery` that deactivates all user accounts whose registration has expired. After deactivating them, you want to send each user an email letting them know their account was deactivated. Rather than writing two queries, a ``SELECT`` and an ``UPDATE``, you can do this in a single ``UPDATE`` query with a ``RETURNING`` clause:
+
+.. code-block:: python
+
+    query = (User
+             .update(is_active=False)
+             .where(User.registration_expired == True)
+             .returning(User))
+
+    # Send an email to every user that was deactivated.
+    for deactivate_user in query.execute():
+        send_deactivation_email(deactivated_user)
+
+The ``RETURNING`` clause is also available on :py:class:`InsertQuery` and :py:class:`DeleteQuery`. When used with ``INSERT``, the newly-created rows will be returned. When used with ``DELETE``, the deleted rows will be returned.
+
+The only limitation of the ``RETURNING`` clause is that it can only consist of columns from tables listed in the query's ``FROM`` clause. To select all columns from a particular table, you can simply pass in the :py:class:`Model` class.
+
+For more information, see:
+
+* :py:meth:`UpdateQuery.returning`
+* :py:meth:`InsertQuery.returning`
+* :py:meth:`DeleteQuery.returning`
+
+
 .. _query-operators:
 
 Query operators
