@@ -1703,3 +1703,34 @@ class TestReturningClause(ModelTestCase):
         user, = users
         self.assertEqual(user.username, 'u1')
         self.assertIsNotNone(user.id)
+
+    def test_insert_returning(self):
+        iq = User.insert(username='zaizee').returning(User)
+        users = [user for user in iq.execute()]
+        self.assertEqual(len(users), 1)
+        user, = users
+        self.assertEqual(user.username, 'zaizee')
+        self.assertIsNotNone(user.id)
+
+        iq = (User
+              .insert_many([
+                  {'username': 'charlie'},
+                  {'username': 'huey'},
+                  {'username': 'connor'},
+                  {'username': 'leslie'},
+                  {'username': 'mickey'}])
+              .returning(User))
+        users = sorted([user for user in iq.tuples().execute()])
+
+        usernames = [username for _, username in users]
+        self.assertEqual(usernames, [
+            'charlie',
+            'huey',
+            'connor',
+            'leslie',
+            'mickey',
+        ])
+
+        id_charlie = users[0][0]
+        id_mickey = users[-1][0]
+        self.assertEqual(id_mickey - id_charlie, 4)

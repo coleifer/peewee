@@ -3059,37 +3059,36 @@ class InsertQuery(_WriteQuery):
             return last_id
 
     def execute(self):
-        insert_with_loop = all((
-            self._is_multi_row_insert,
-            self._query is None,
-            not self.database.insert_many))
+        insert_with_loop = (
+            self._is_multi_row_insert and
+            self._query is None and
+            self._returning is None and
+            not self.database.insert_many)
         if insert_with_loop:
             return self._insert_with_loop()
 
-        cursor = self._execute()
-        if not self._is_multi_row_insert:
-            if self.database.insert_returning:
-                pk_row = cursor.fetchone()
-                meta = self.model_class._meta
-                clean_data = [
-                    field.python_value(column)
-                    for field, column
-                    in zip(meta.get_primary_key_fields(), pk_row)]
-                if self.model_class._meta.composite_key:
-                    return clean_data
-                return clean_data[0]
-            else:
-                return self.database.last_insert_id(cursor, self.model_class)
-        elif self._return_id_list:
-            return map(operator.itemgetter(0), cursor.fetchall())
-        else:
-            return True
-        """
         if self._returning is not None and not self._qr:
             return self._execute_with_result_wrapper()
         elif self._qr:
             return self._qr
-        """
+        else:
+            cursor = self._execute()
+            if not self._is_multi_row_insert:
+                if self.database.insert_returning:
+                    pk_row = cursor.fetchone()
+                    meta = self.model_class._meta
+                    clean_data = [
+                        field.python_value(column)
+                        for field, column
+                        in zip(meta.get_primary_key_fields(), pk_row)]
+                    if self.model_class._meta.composite_key:
+                        return clean_data
+                    return clean_data[0]
+                return self.database.last_insert_id(cursor, self.model_class)
+            elif self._return_id_list:
+                return map(operator.itemgetter(0), cursor.fetchall())
+            else:
+                return True
 
 class DeleteQuery(_WriteQuery):
     join = not_allowed('joining')
