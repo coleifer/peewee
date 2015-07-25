@@ -581,6 +581,7 @@ If you have a django project named *my_blog* and your peewee database is defined
         def process_response(self, request, response):
             if not database.is_closed():
                 database.close()
+            return response
 
 To ensure this middleware gets executed, add it to your ``settings`` module:
 
