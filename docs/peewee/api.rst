@@ -2273,6 +2273,22 @@ Database and its subclasses
         :param Field date_field: field instance storing a datetime, date or time.
         :rtype: an expression object.
 
+    .. py:method:: truncate_date(date_part, date_field)
+
+        Return an expression suitable for truncating a date / datetime to the given resolution. This can be used, for example, to group a collection of timestamps by day.
+
+        :param str date_part: The date part to truncate to. Valid options are: "year", "month", "day", "hour", "minute" and "second".
+        :param Field date_field: field instance storing a datetime, date or time.
+        :rtype: an expression object.
+
+        Example:
+
+        .. code-block:: python
+
+            # Get tweets from today.
+            tweets = Tweet.select().where(
+                db.truncate_date('day', Tweet.timestamp) == datetime.date.today())
+
     .. py:method:: sql_error_handler(exception, sql, params, require_commit)
 
         This hook is called when an error is raised executing a query, allowing
