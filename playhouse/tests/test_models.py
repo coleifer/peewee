@@ -303,6 +303,24 @@ class TestQueryingModels(ModelTestCase):
         self.assertEqual(len(blogs), 6)
 
 
+class TestInsertEmptyModel(ModelTestCase):
+    requires = [EmptyModel]
+
+    def test_insert_empty(self):
+        query = EmptyModel.insert()
+        sql, params = compiler.generate_insert(query)
+        self.assertEqual(sql, 'INSERT INTO "emptymodel" DEFAULT VALUES')
+        self.assertEqual(params, [])
+
+        # Verify the query works.
+        pk = query.execute()
+        em = EmptyModel.get(EmptyModel.id == pk)
+
+        # Verify we can also use `create()`.
+        em2 = EmptyModel.create()
+        self.assertEqual(EmptyModel.select().count(), 2)
+
+
 class TestModelAPIs(ModelTestCase):
     requires = [User, Blog, Category, UserCategory, UniqueMultiField,
                 NonIntModel]

@@ -954,7 +954,7 @@ class TestInsertQuery(PeeweeTestCase):
 
         iq = InsertQuery(User, rows=[])
         self.assertEqual(compiler.generate_insert(iq), (
-            'INSERT INTO "users"', []))
+            'INSERT INTO "users" DEFAULT VALUES', []))
 
     def test_insert_many_defaults(self):
         class DefaultGenerator(object):
@@ -1022,7 +1022,7 @@ class TestInsertQuery(PeeweeTestCase):
             pass
         iq = InsertQuery(EmptyModel, {})
         sql, params = compiler.generate_insert(iq)
-        self.assertEqual(sql, 'INSERT INTO "emptymodel"')
+        self.assertEqual(sql, 'INSERT INTO "emptymodel" DEFAULT VALUES')
 
     def test_upsert(self):
         query = User.insert(username='charlie').upsert()

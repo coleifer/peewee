@@ -333,6 +333,9 @@ class ServerDefaultModel(TestModel):
     timestamp = DateTimeField(constraints=[
         SQL('DEFAULT CURRENT_TIMESTAMP')])
 
+class EmptyModel(TestModel):
+    pass
+
 
 MODELS = [
     User,
@@ -382,4 +385,5 @@ MODELS = [
     CommentCategory,
     BlogData,
     ServerDefaultModel,
+    EmptyModel,
 ]

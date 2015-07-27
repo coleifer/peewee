@@ -1786,6 +1786,10 @@ class QueryCompiler(object):
                     self._get_field_clause(fields),
                     SQL('VALUES'),
                     CommaClause(*value_clauses)])
+            elif query.model_class._meta.auto_increment:
+                # Bare insert, use default value for primary key.
+                clauses.append(query.database.default_insert_clause(
+                    query.model_class))
 
         if query.is_insert_returning:
             clauses.extend([
@@ -3419,6 +3423,9 @@ class Database(object):
     def truncate_date(self, date_part, date_field):
         return fn.DATE_TRUNC(SQL(date_part), date_field)
 
+    def default_insert_clause(self, model_class):
+        return SQL('DEFAULT VALUES')
+
 class SqliteDatabase(Database):
     foreign_keys = False
     insert_many = sqlite3 and sqlite3.sqlite_version_info >= (3, 7, 11, 0)
@@ -3734,6 +3741,11 @@ class MySQLDatabase(Database):
 
     def truncate_date(self, date_part, date_field):
         return fn.DATE_FORMAT(date_field, MYSQL_DATE_TRUNC_MAPPING[date_part])
+
+    def default_insert_clause(self, model_class):
+        return Clause(
+            EnclosedClause(model_class._meta.primary_key),
+            SQL('VALUES (DEFAULT)'))
 
 
 class _callable_context_manager(object):
