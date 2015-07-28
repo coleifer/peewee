@@ -693,3 +693,16 @@ class TestServerDefaults(ModelTestCase):
 
         self.assertEqual(sd2_db.name, 'foo')
         self.assertEqual(sd2_db.timestamp, datetime.datetime(2015, 1, 2, 3, 4))
+
+
+class TestPasswordFields(ModelTestCase):
+    requires = [PasswordTestModel]
+
+    def test_fails(self):
+        test_pwd = 'Hello!:)'
+
+        tm = PasswordTestModel.create(username='User', password=test_pwd)
+        tm_db = PasswordTestModel.get(PasswordTestModel.id == tm.id)
+
+        print(tm.password, tm_db.password,tm_db.password.check_password(test_pwd))
+        self.assertTrue(tm_db.password.check_password(test_pwd),'Passwords did not match')
