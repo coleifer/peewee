@@ -2188,6 +2188,14 @@ This module also contains several field classes that implement additional logic 
     :param int compression_level: A value from 0 to 9.
     :param str algorithm: Either ``'zlib'`` or ``'bz2'``.
 
+.. py:class:: PasswordField([iterations=12[, **kwargs]])
+
+    ``PasswordField`` stores a password hash and lets you verify it. The password is hashed when it is saved to the database and after reading it from the database you can call ``check_password (password) -> bool`` on it.
+
+    :param int iterations: Indicates the work factor, it does 2^n iterations.
+
+    .. note:: This field requires `bcrypt <https://github.com/pyca/bcrypt/>`_, which can be installed by running ``pip install bcrypt``.
+
 .. py:class:: AESEncryptedField(key[, **kwargs])
 
     ``AESEncryptedField`` encrypts its contents before storing them in the database.
