@@ -1446,7 +1446,7 @@ Query Types
             for updated_user in query.execute():
                 send_activation_email(updated_user.email)
 
-        For more information, check out :ref:`the RETURNING clause docs <returning-clause>`_.
+        For more information, check out :ref:`the RETURNING clause docs <returning-clause>`.
 
     .. py:method:: tuples()
 
@@ -1595,7 +1595,7 @@ Query Types
                 # Do something with the new user's ID...
                 do_something(new_user.id)
 
-        For more information, check out :ref:`the RETURNING clause docs <returning-clause>`_.
+        For more information, check out :ref:`the RETURNING clause docs <returning-clause>`.
 
     .. py:method:: tuples()
 
@@ -1661,7 +1661,7 @@ Query Types
                 # Do something with the deleted user.
                 notify_account_deleted(deleted_user.email)
 
-        For more information, check out :ref:`the RETURNING clause docs <returning-clause>`_.
+        For more information, check out :ref:`the RETURNING clause docs <returning-clause>`.
 
     .. py:method:: tuples()
 
