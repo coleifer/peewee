@@ -1543,7 +1543,8 @@ class QueryCompiler(object):
             sql = '(%s)' % sql
         elif isinstance(node, Model):
             sql = self.interpolation
-            if conv and isinstance(conv, ForeignKeyField):
+            if conv and isinstance(conv, ForeignKeyField) and \
+                    not isinstance(conv.to_field, ForeignKeyField):
                 params = [
                     conv.to_field.db_value(getattr(node, conv.to_field.name))]
             else:

@@ -190,6 +190,10 @@ class JobExecutionRecord(TestModel):
     status = CharField()
 
 
+class JERRelated(TestModel):
+    jer = ForeignKeyField(JobExecutionRecord)
+
+
 class TestModelA(TestModel):
     field = CharField(primary_key=True)
     data = CharField()
@@ -363,6 +367,7 @@ MODELS = [
     BlobModel,
     Job,
     JobExecutionRecord,
+    JERRelated,
     TestModelA,
     TestModelB,
     TestModelC,

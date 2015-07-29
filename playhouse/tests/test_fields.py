@@ -522,7 +522,7 @@ class TestNonIntegerPrimaryKey(ModelTestCase):
 
 
 class TestPrimaryKeyIsForeignKey(ModelTestCase):
-    requires = [Job, JobExecutionRecord]
+    requires = [Job, JobExecutionRecord, JERRelated]
 
     def test_primary_foreign_key(self):
         # we have one job, unexecuted, and therefore no executed jobs
@@ -538,6 +538,23 @@ class TestPrimaryKeyIsForeignKey(ModelTestCase):
         # we must not be able to create another execution record for the job
         self.assertRaises(Exception, JobExecutionRecord.create, job=job, status='success')
         test_db.rollback()
+
+    def test_pk_fk_relations(self):
+        j1 = Job.create(name='j1')
+        j2 = Job.create(name='j2')
+        jer1 = JobExecutionRecord.create(job=j1, status='1')
+        jer2 = JobExecutionRecord.create(job=j2, status='2')
+        jerr1 = JERRelated.create(jer=jer1)
+        jerr2 = JERRelated.create(jer=jer2)
+
+        jerr_j1 = [x for x in jer1.jerrelated_set]
+        self.assertEqual(jerr_j1, [jerr1])
+
+        jerr_j2 = [x for x in jer2.jerrelated_set]
+        self.assertEqual(jerr_j2, [jerr2])
+
+        jerr1_db = JERRelated.get(JERRelated.jer == j1)
+        self.assertEqual(jerr1_db, jerr1)
 
 
 class TestFieldDatabaseColumn(ModelTestCase):
