@@ -141,6 +141,11 @@ class ArrayField(IndexedFieldMixin, Field):
         sql.value += '[]' * self.dimensions
         return sql
 
+    def db_value(self, value):
+        if value is not None and not isinstance(value, (list, _Array)):
+            return list(value)
+        return value
+
     def __getitem__(self, value):
         return ObjectSlice.create(self, value)
 

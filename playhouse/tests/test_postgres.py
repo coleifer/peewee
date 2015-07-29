@@ -424,6 +424,11 @@ class TestArrayField(BasePostgresqlExtTestCase):
         self.assertEqual(am_db.tags, ['alpha', 'beta', 'gamma', 'delta'])
         self.assertEqual(am_db.ints, [[1, 2], [3, 4], [5, 6]])
 
+    def test_array_iterables(self):
+        am = ArrayModel.create(tags=('foo', 'bar'), ints=[])
+        am_db = ArrayModel.get(ArrayModel.id == am.id)
+        self.assertEqual(am_db.tags, ['foo', 'bar'])
+
     def test_array_search(self):
         def assertAM(where, *instances):
             query = (ArrayModel
