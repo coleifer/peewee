@@ -4098,7 +4098,7 @@ class BaseModel(type):
         'constraints', 'database', 'db_table_func', 'indexes', 'order_by',
         'primary_key', 'schema', 'validate_backrefs'])
 
-    def __new__(cls, name, bases, attrs):
+    def __new__(cls=None, name=None, bases=None, attrs=None):
         if not bases:
             return super(BaseModel, cls).__new__(cls, name, bases, attrs)
 
