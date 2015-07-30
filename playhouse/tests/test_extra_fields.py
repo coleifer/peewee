@@ -7,6 +7,10 @@ try:
     from playhouse.fields import AESEncryptedField
 except ImportError:
     AESEncryptedField = None
+try:
+    from playhouse.fields import PasswordField
+except ImportError:
+    PasswordField = None
 from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
 from playhouse.tests.base import skip_if
@@ -119,3 +123,39 @@ class TestAESEncryptedField(ModelTestCase):
         EM.data.key = 'testing  '
         em_db_3 = EM.get(EM.id == em.id)
         self.assertEqual(em_db_3.data, convert_to_str(test_str))
+
+
+@skip_if(lambda: PasswordField is None)
+class TestPasswordFields(ModelTestCase):
+    def setUp(self):
+        class PasswordModel(BaseModel):
+            username = TextField()
+            password = PasswordField(iterations=4)
+
+        self.PasswordModel = PasswordModel
+        self.requires = [PasswordModel]
+        super(TestPasswordFields, self).setUp()
+
+    def test_valid_password(self):
+        test_pwd = 'Hello!:)'
+
+        tm = self.PasswordModel.create(username='User', password=test_pwd)
+        tm_db = self.PasswordModel.get(self.PasswordModel.id == tm.id)
+
+        self.assertTrue(tm_db.password.check_password(test_pwd),'Correct password did not match')
+
+    def test_invalid_password(self):
+        test_pwd = 'Hello!:)'
+
+        tm = self.PasswordModel.create(username='User', password=test_pwd)
+        tm_db = self.PasswordModel.get(self.PasswordModel.id == tm.id)
+
+        self.assertFalse(tm_db.password.check_password('a'+test_pwd),'Incorrect password did match')
+
+    def test_unicode(self):
+        test_pwd = u'H\u00c3l\u00c5o!:)'
+
+        tm = self.PasswordModel.create(username='User', password=test_pwd)
+        tm_db = self.PasswordModel.get(self.PasswordModel.id == tm.id)
+
+        self.assertTrue(tm_db.password.check_password(test_pwd),'Correct unicode password did not match')

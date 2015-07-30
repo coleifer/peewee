@@ -11,10 +11,12 @@ except ImportError:
         from StringIO import StringIO
     else:
         from io import StringIO
+
 try:
     import bz2
 except ImportError:
     bz2 = None
+
 try:
     import zlib
 except ImportError:
@@ -26,11 +28,42 @@ try:
 except ImportError:
     AES = Random = None
 
+try:
+    from bcrypt import hashpw, gensalt
+except ImportError:
+    hashpw = gensalt = None
+
 from peewee import *
 from peewee import binary_construct
 from peewee import Field
 from peewee import FieldDescriptor
 from peewee import SelectQuery
+
+if hashpw and gensalt:
+    class PasswordHash(bytes):
+        def check_password(self, password):
+            password = password.encode('utf-8')
+            return hashpw(password, self) == self
+
+
+    class PasswordField(TextField):
+        def __init__(self, iterations=12, *args, **kwargs):
+            if None in (hashpw, gensalt):
+                raise ValueError('Missing library required for PasswordField: bcrypt')
+            self.bcrypt_iterations = iterations
+            self.raw_password = None
+            super(PasswordField, self).__init__(*args, **kwargs)
+
+        def db_value(self, value):
+            """Convert the python value for storage in the database."""
+            value = value.encode('utf-8')
+            salt = gensalt(self.bcrypt_iterations)
+            return value if value is None else hashpw(value, salt)
+
+        def python_value(self, value):
+            """Convert the database value to a pythonic value."""
+            # FixMe: how do i get this to run before saving to the DB?
+            return PasswordHash(value)
 
 class ManyToManyField(Field):
     def __init__(self, rel_model, related_name=None, through_model=None,
