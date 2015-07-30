@@ -2,7 +2,6 @@ import datetime
 
 from peewee import *
 from playhouse.tests.base import TestModel
-from ..fields import PasswordField
 
 
 class User(TestModel):
@@ -337,9 +336,6 @@ class ServerDefaultModel(TestModel):
 class EmptyModel(TestModel):
     pass
 
-class PasswordTestModel(TestModel):
-    username = TextField()
-    password = PasswordField(iterations=4)
 
 MODELS = [
     User,
@@ -390,5 +386,4 @@ MODELS = [
     BlogData,
     ServerDefaultModel,
     EmptyModel,
-    PasswordTestModel,
 ]

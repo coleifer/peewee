@@ -11,12 +11,10 @@ except ImportError:
         from StringIO import StringIO
     else:
         from io import StringIO
-
 try:
     import bz2
 except ImportError:
     bz2 = None
-
 try:
     import zlib
 except ImportError:
@@ -28,42 +26,11 @@ try:
 except ImportError:
     AES = Random = None
 
-try:
-    from bcrypt import hashpw, gensalt
-except ImportError:
-    hashpw, gensalt = None, None
-
 from peewee import *
 from peewee import binary_construct
 from peewee import Field
 from peewee import FieldDescriptor
 from peewee import SelectQuery
-
-
-class PasswordHash(bytes):
-            def check_password(self, password):
-                password = password.encode('utf-8')
-                return hashpw(password, self) == self
-
-
-class PasswordField(TextField):
-    def __init__(self, iterations=12, *args, **kwargs):
-        if None in (hashpw, gensalt):
-            raise ValueError('Missing library required for PasswordField: bcrypt')
-        self.bcrypt_iterations = iterations
-        self.raw_password = None
-        super(PasswordField, self).__init__(*args, **kwargs)
-
-    def db_value(self, value):
-        """Convert the python value for storage in the database."""
-        value = value.encode('utf-8')
-        salt = gensalt(self.bcrypt_iterations)
-        return value if value is None else hashpw(value, salt)
-
-    def python_value(self, value):
-        """Convert the database value to a pythonic value."""
-        # FixMe: how do i get this to run before saving to the DB?
-        return PasswordHash(value)
 
 class ManyToManyField(Field):
     def __init__(self, rel_model, related_name=None, through_model=None,
@@ -80,7 +47,6 @@ class ManyToManyField(Field):
             def callback(through_model):
                 self._through_model = through_model
                 self.add_to_class(model_class, name)
-
             self._through_model.attach_callback(callback)
             return
 
@@ -182,9 +148,9 @@ class ManyToManyQuery(SelectQuery):
             if not isinstance(value, (list, tuple)):
                 value = [value]
             inserts = [{
-                           fd.src_fk.name: self._instance.get_id(),
-                           fd.dest_fk.name: rel_instance.get_id()}
-                       for rel_instance in value]
+                fd.src_fk.name: self._instance.get_id(),
+                fd.dest_fk.name: rel_instance.get_id()}
+                for rel_instance in value]
             fd.through_model.insert_many(inserts).execute()
 
     def remove(self, value):
@@ -194,8 +160,8 @@ class ManyToManyQuery(SelectQuery):
             return (fd.through_model
                     .delete()
                     .where(
-                (fd.dest_fk << subquery) &
-                (fd.src_fk == self._instance.get_id()))
+                        (fd.dest_fk << subquery) &
+                        (fd.src_fk == self._instance.get_id()))
                     .execute())
         else:
             if not isinstance(value, (list, tuple)):
@@ -204,8 +170,8 @@ class ManyToManyQuery(SelectQuery):
             return (fd.through_model
                     .delete()
                     .where(
-                (fd.dest_fk << primary_keys) &
-                (fd.src_fk == self._instance.get_id()))
+                        (fd.dest_fk << primary_keys) &
+                        (fd.src_fk == self._instance.get_id()))
                     .execute())
 
     def clear(self):
