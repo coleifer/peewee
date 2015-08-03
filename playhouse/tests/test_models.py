@@ -323,7 +323,7 @@ class TestInsertEmptyModel(ModelTestCase):
 
 class TestModelAPIs(ModelTestCase):
     requires = [User, Blog, Category, UserCategory, UniqueMultiField,
-                NonIntModel]
+                NonIntModel, MultiIndexModel]
 
     def setUp(self):
         super(TestModelAPIs, self).setUp()
@@ -712,6 +712,31 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual(nm_get.pk, nm.pk)
         self.assertEqual(nm_get.data, nm.data)
         self.assertEqual(NonIntModel.select().count(), 1)
+
+        # Create one here to ensure multi-column unique indexes really works
+        MultiIndexModel.create(f1='f11', f2='f12', f3='f13')
+
+        with assertQC(1):
+            mim, new = MultiIndexModel.create_or_get(
+                f1='f1',
+                f2='f2',
+                f3='f3'
+            )
+        self.assertTrue(new)
+        self.assertEqual(mim.f1, 'f1')
+        self.assertEqual(mim.f2, 'f2')
+        self.assertEqual(mim.f3, 'f3')
+
+        with assertQC(2):
+            mim_get, new = MultiIndexModel.create_or_get(
+                f1='f1',
+                f2='f2',
+                f3='f3'
+            )
+        self.assertFalse(new)
+        self.assertEqual(mim_get.f1, mim.f1)
+        self.assertEqual(mim_get.f2, mim.f2)
+        self.assertEqual(mim_get.f3, mim.f3)
 
     def test_first(self):
         users = User.create_users(5)
