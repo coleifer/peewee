@@ -137,6 +137,12 @@ Field Type            Sqlite              Postgresql          MySQL
 ``UUIDField``         not supported       uuid                not supported
 ===================   =================   =================   =================
 
+.. note::
+    Don't see the field you're looking for in the above table? It's easy to create custom field types and use them with your models.
+
+    * :ref:`custom-fields`
+    * :py:class:`Database`, particularly the ``fields`` parameter.
+
 Field initialization arguments
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -304,6 +310,8 @@ have an event attached:
 
 .. note::
     SQLite does not have a native date type, so dates are stored in formatted text columns. To ensure that comparisons work correctly, the dates need to be formatted so they are sorted lexicographically. That is why they are stored, by default, as ``YYYY-MM-DD HH:MM:SS``.
+
+.. _custom-fields:
 
 Creating a custom field
 ^^^^^^^^^^^^^^^^^^^^^^^
