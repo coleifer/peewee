@@ -1750,9 +1750,19 @@ class QueryCompiler(object):
         alias_map = self.alias_map_class()
         alias_map.add(model, model._meta.db_table)
         if query._upsert:
-            statement = 'INSERT OR REPLACE INTO'
+            if isinstance(meta.database, MySQLDatabase):
+                # MySQL upsert
+                statement = 'REPLACE INTO'
+            else:
+                # SQLite upsert
+                statement = 'INSERT OR REPLACE INTO'
         elif query._on_conflict:
-            statement = 'INSERT OR %s INTO' % query._on_conflict
+            if isinstance(meta.database, MySQLDatabase):
+                # MySQL supports INSERT IGNORE
+                statement = 'INSERT %s INTO' % query._on_conflict
+            else:
+                # SQLite
+                statement = 'INSERT OR %s INTO' % query._on_conflict
         else:
             statement = 'INSERT INTO'
         clauses = [SQL(statement), model.as_entity()]

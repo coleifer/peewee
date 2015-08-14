@@ -1531,13 +1531,18 @@ Query Types
 
     .. py:method:: upsert([upsert=True])
 
-        Perform an *INSERT OR REPLACE* query.
+        Perform an *INSERT OR REPLACE* query on SQLite or *REPLACE INTO* query on MySQL.
 
-        .. note:: This feature is only available on SQLite databases.
+        .. note:: This feature is only available on SQLite and MySQL databases.
 
     .. py:method:: on_conflict([action=None])
 
-        Add a SQL ``ON CONFLICT`` clause with the specified action to the given ``INSERT`` query. Specifying ``REPLACE`` is equivalent to using the :py:meth:`~InsertQuery.upsert` method. `Valid actions <https://www.sqlite.org/lang_conflict.html>`_ are:
+        For SQLite databases, add a SQL ``ON CONFLICT`` clause with the specified action to the given ``INSERT`` query.
+        For MySQL databases, the only supported action is ``IGNORE``, it will generate a SQL ``INSERT INGORE`` query.
+
+        Specifying ``REPLACE`` is equivalent to using the :py:meth:`~InsertQuery.upsert` method.
+        
+        For SQLite databases `Valid actions <https://www.sqlite.org/lang_conflict.html>`_ are:
 
         * ROLLBACK
         * ABORT
@@ -1547,7 +1552,7 @@ Query Types
 
         Specifying ``None`` for the action will execute a normal ``INSERT`` query.
 
-        .. note:: This feature is only available on SQLite databases.
+        .. note:: This feature is only available on SQLite and MySQL databases.
 
     .. py:method:: return_id_list([return_id_list=True])
 
