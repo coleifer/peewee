@@ -3,6 +3,7 @@ import sys
 from peewee import ModelQueryResultWrapper
 from peewee import NaiveQueryResultWrapper
 from playhouse.tests.base import ModelTestCase
+from playhouse.tests.base import skip_test_if
 from playhouse.tests.base import test_db
 from playhouse.tests.models import *
 
@@ -28,6 +29,41 @@ class TestQueryResultWrapper(ModelTestCase):
 
             another_iter = [u.username for u in qr]
             self.assertEqual(another_iter, ['u%d' % i for i in range(1, 11)])
+
+    def test_count(self):
+        User.create_users(5)
+
+        with self.assertQueryCount(1):
+            query = User.select()
+            qr = query.execute()
+            self.assertEqual(qr.count, 5)
+
+            # Calling again does not incur another query.
+            self.assertEqual(qr.count, 5)
+
+        with self.assertQueryCount(1):
+            query = query.where(User.username != 'u1')
+            qr = query.execute()
+            self.assertEqual(qr.count, 4)
+
+            # Calling again does not incur another query.
+            self.assertEqual(qr.count, 4)
+
+    # TODO: Fix this.
+    @skip_test_if(lambda: True)
+    def test_nested_iteration(self):
+        User.create_users(4)
+        with self.assertQueryCount(1):
+            sq = User.select()
+            outer = []
+            inner = []
+            for i_user in sq:
+                outer.append(i_user.username)
+                for o_user in sq:
+                    inner.append(o_user.username)
+
+            self.assertEqual(outer, ['u1', 'u2', 'u3', 'u4'])
+            self.assertEqual(inner, ['u1', 'u2', 'u3', 'u4'])
 
     def test_iteration_protocol(self):
         User.create_users(3)

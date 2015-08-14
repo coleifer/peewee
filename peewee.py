@@ -1946,6 +1946,11 @@ class QueryResultWrapper(object):
         else:
             return iter(self._result_cache)
 
+    @property
+    def count(self):
+        self.fill_cache()
+        return self.__ct
+
     def process_row(self, row):
         return row
 
@@ -2799,7 +2804,7 @@ class SelectQuery(Query):
             return ModelQueryResultWrapper
 
     def execute(self):
-        if self._dirty or not self._qr:
+        if self._dirty or self._qr is None:
             model_class = self.model_class
             query_meta = self.get_query_meta()
             ResultWrapper = self._get_result_wrapper()
@@ -2949,9 +2954,9 @@ class UpdateQuery(_WriteQuery):
         return self.compiler().generate_update(self)
 
     def execute(self):
-        if self._returning is not None and not self._qr:
+        if self._returning is not None and self._qr is None:
             return self._execute_with_result_wrapper()
-        elif self._qr:
+        elif self._qr is not None:
             return self._qr
         else:
             return self.database.rows_affected(self._execute())
@@ -3072,9 +3077,9 @@ class InsertQuery(_WriteQuery):
         if insert_with_loop:
             return self._insert_with_loop()
 
-        if self._returning is not None and not self._qr:
+        if self._returning is not None and self._qr is None:
             return self._execute_with_result_wrapper()
-        elif self._qr:
+        elif self._qr is not None:
             return self._qr
         else:
             cursor = self._execute()
@@ -3102,9 +3107,9 @@ class DeleteQuery(_WriteQuery):
         return self.compiler().generate_delete(self)
 
     def execute(self):
-        if self._returning is not None and not self._qr:
+        if self._returning is not None and self._qr is None:
             return self._execute_with_result_wrapper()
-        elif self._qr:
+        elif self._qr is not None:
             return self._qr
         else:
             return self.database.rows_affected(self._execute())
