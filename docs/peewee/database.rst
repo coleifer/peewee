@@ -671,6 +671,29 @@ In your app, instead of extending the default ``RequestHandler``, now you can ex
 
 Note that this does not address how to use peewee asynchronously with Tornado or another event loop.
 
+Wheezy.web
+^^^^^^^^^^
+
+The connection handling code can be placed in a `middleware <https://pythonhosted.org/wheezy.http/userguide.html#middleware>`_.
+
+.. code-block:: python
+
+    def peewee_middleware(request, following):
+        db.connect()
+        try:
+            response = following(request)
+        finally:
+            if not db.is_closed():
+                db.close()
+        return response
+
+    app = WSGIApplication(middleware=[
+        lambda x: peewee_middleware,
+        # ... other middlewares ...
+    ])
+
+Thanks to GitHub user *@tuukkamustonen* for submitting this code.
+
 Other frameworks
 ^^^^^^^^^^^^^^^^
 
