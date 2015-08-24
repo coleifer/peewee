@@ -1,4 +1,8 @@
 from peewee import *
+from peewee import Expression
+from peewee import OP
+from playhouse.hybrid import hybrid_method
+from playhouse.hybrid import hybrid_property
 from playhouse.shortcuts import *
 from playhouse.test_utils import assert_query_count
 from playhouse.tests.base import database_initializer
@@ -25,6 +29,21 @@ class Category(BaseModel):
 
 class User(BaseModel):
     username = CharField()
+
+    @hybrid_method
+    def name_hash(self):
+        return sum(map(ord, self.username)) % 10
+
+    @hybrid_property
+    def title(self):
+        return self.username.title()
+
+    @title.expression
+    def title(self):
+        return Expression(
+            fn.UPPER(fn.SUBSTR(self.username, 1, 1)),
+            OP_CONCAT,
+            fn.SUBSTR(self.username, 2))
 
 
 class Note(BaseModel):
@@ -324,6 +343,22 @@ class TestModelToDict(ModelTestCase):
                 backrefs=True,
                 exclude=[User.id, Note.notetag_set, Note.id]),
             {'text': note.text, 'user': {'username': self.user.username}})
+
+    def test_extra_attrs(self):
+        with assert_query_count(0):
+            extra = ['name_hash', 'title']
+            self.assertEqual(model_to_dict(self.user, extra_attrs=extra), {
+                'id': self.user.id,
+                'username': self.user.username,
+                'name_hash': 5,
+                'title': 'Peewee',
+            })
+
+        with assert_query_count(0):
+            # Unknown attr causes AttributeError.
+            def fails():
+                model_to_dict(self.user, extra_attrs=['xx'])
+            self.assertRaises(AttributeError, fails)
 
 
 class TestDictToModel(ModelTestCase):

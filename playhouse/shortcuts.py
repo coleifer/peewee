@@ -1,4 +1,10 @@
+import sys
+
 from peewee import *
+
+if sys.version_info[0] == 3:
+    from collections import Callable
+    callable = lambda c: isinstance(c, Callable)
 
 
 def case(predicate, expression_tuples, default=None):
@@ -60,7 +66,7 @@ def _clone_set(s):
     return set()
 
 def model_to_dict(model, recurse=True, backrefs=False, only=None,
-                  exclude=None, seen=None):
+                  exclude=None, seen=None, extra_attrs=None):
     """
     Convert a model instance (and any related objects) to a dictionary.
 
@@ -70,6 +76,8 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
         should be included.
     :param exclude: A list (or set) of field instances that should be
         excluded from the dictionary.
+    :param list extra_attrs: Names of model instance attributes or methods
+        that should be included.
     """
     data = {}
     only = _clone_set(only)
@@ -98,6 +106,14 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
                 field_data = {}
 
         data[field.name] = field_data
+
+    if extra_attrs:
+        for attr_name in extra_attrs:
+            attr = getattr(model, attr_name)
+            if callable(attr):
+                data[attr_name] = attr()
+            else:
+                data[attr_name] = attr
 
     if backrefs:
         for related_name, foreign_key in model._meta.reverse_rel.items():
