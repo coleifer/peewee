@@ -2651,7 +2651,7 @@ This module contains helper functions for expressing things that would otherwise
                  .where(DataPoint.value == reverse_val))
 
 
-.. py:function:: model_to_dict(model[, recurse=True[, backrefs=False[, only=None[, exclude=None]]]])
+.. py:function:: model_to_dict(model[, recurse=True[, backrefs=False[, only=None[, exclude=None[, extra_attrs=None]]]]])
 
     Convert a model instance (and optionally any related instances) to
     a dictionary.
@@ -2660,6 +2660,7 @@ This module contains helper functions for expressing things that would otherwise
     :param bool backrefs: Whether lists of related objects should be recursed.
     :param only: A list (or set) of field instances which should be included in the result dictionary.
     :param exclude: A list (or set) of field instances which should be excluded from the result dictionary.
+    :param extra_attrs: A list of attribute or method names on the instance which should be included in the dictionary.
 
     Examples:
 
