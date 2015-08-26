@@ -1,3 +1,4 @@
+import itertools
 import sys
 
 from peewee import ModelQueryResultWrapper
@@ -424,7 +425,7 @@ class TestQueryResultWrapper(ModelTestCase):
 
 
 class TestJoinedInstanceConstruction(ModelTestCase):
-    requires = [Blog, User]
+    requires = [Blog, User, Relationship]
 
     def setUp(self):
         super(TestJoinedInstanceConstruction, self).setUp()
@@ -516,6 +517,25 @@ class TestJoinedInstanceConstruction(ModelTestCase):
                 results.append((blog.title, blog.user.username))
             self.assertEqual(results, [('b1', 'u1'), ('b2', 'u2')])
 
+        # No explicit join condition.
+        with self.assertQueryCount(1):
+            q = (B.select(B.title, U.username)
+                 .join(U, on=B.user)
+                 .order_by(B.title))
+            results = [(blog.title, blog.user.username) for blog in q]
+            self.assertEqual(results, [('b1', 'u1'), ('b2', 'u2')])
+
+        # No explicit condition, backref.
+        Blog.create(user=User.get(User.username == 'u2'), title='b2-2')
+        with self.assertQueryCount(1):
+            q = (U.select(U.username, B.title)
+                 .join(B, on=B.user)
+                 .order_by(U.username, B.title))
+            results = [(user.username, user.blog.title) for user in q]
+            self.assertEqual(
+                results,
+                [('u1', 'b1'), ('u2', 'b2'), ('u2', 'b2-2')])
+
     def test_subqueries(self):
         uq = User.select()
         bq = Blog.select(Blog.title, Blog.user).alias('bq')
@@ -528,6 +548,32 @@ class TestJoinedInstanceConstruction(ModelTestCase):
             for user in q:
                 results.append((user.username, user.blog.title))
             self.assertEqual(results, [('u1', 'b1'), ('u2', 'b2')])
+
+    def test_multiple_joins(self):
+        User.delete().execute()
+        users = [User.create(username='u%s' % i) for i in range(4)]
+        for from_user, to_user in itertools.combinations(users, 2):
+            Relationship.create(from_user=from_user, to_user=to_user)
+
+        with self.assertQueryCount(1):
+            ToUser = User.alias()
+            q = (Relationship
+                 .select(Relationship, User, ToUser)
+                 .join(User, on=Relationship.from_user)
+                 .switch(Relationship)
+                 .join(ToUser, on=Relationship.to_user)
+                 .order_by(User.username, ToUser.username))
+
+            results = [(r.from_user.username, r.to_user.username) for r in q]
+
+        self.assertEqual(results, [
+            ('u0', 'u1'),
+            ('u0', 'u2'),
+            ('u0', 'u3'),
+            ('u1', 'u2'),
+            ('u1', 'u3'),
+            ('u2', 'u3'),
+        ])
 
 
 class TestQueryResultTypeConversion(ModelTestCase):

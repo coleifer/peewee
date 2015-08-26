@@ -1620,9 +1620,17 @@ class QueryCompiler(object):
                     constraint = join.on.clone().alias()
                 else:
                     metadata = join.metadata
-                    if metadata.foreign_key:
-                        lhs = metadata.foreign_key
-                        rhs = metadata.foreign_key.to_field
+                    if metadata.is_backref:
+                        fk_model = join.dest
+                        pk_model = join.src
+                    else:
+                        fk_model = join.src
+                        pk_model = join.dest
+
+                    fk = metadata.foreign_key
+                    if fk:
+                        lhs = getattr(fk_model, fk.name)
+                        rhs = getattr(pk_model, fk.to_field.name)
                         if metadata.is_backref:
                             lhs, rhs = rhs, lhs
                         constraint = (lhs == rhs)
