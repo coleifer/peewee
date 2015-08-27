@@ -550,6 +550,7 @@ class TestJoinedInstanceConstruction(ModelTestCase):
             self.assertEqual(results, [('u1', 'b1'), ('u2', 'b2')])
 
     def test_multiple_joins(self):
+        Blog.delete().execute()
         User.delete().execute()
         users = [User.create(username='u%s' % i) for i in range(4)]
         for from_user, to_user in itertools.combinations(users, 2):
