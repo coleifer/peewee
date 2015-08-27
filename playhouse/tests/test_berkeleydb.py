@@ -1,4 +1,5 @@
 import os
+import shutil
 
 from peewee import IntegrityError
 from playhouse.berkeleydb import *
@@ -22,9 +23,21 @@ class Message(BaseModel):
 class TestBerkeleyDatabase(ModelTestCase):
     requires = [Person, Message]
 
+    def setUp(self):
+        self.remove_db_files()
+        super(TestBerkeleyDatabase, self).setUp()
+
     def tearDown(self):
         super(TestBerkeleyDatabase, self).tearDown()
-        database.close()
+        if not database.is_closed():
+            database.close()
+
+    def remove_db_files(self):
+        filename = database.database
+        if os.path.exists(filename):
+            os.unlink(filename)
+        if os.path.exists(filename + '-journal'):
+            shutil.rmtree(filename + '-journal')
 
     def test_storage_retrieval(self):
         pc = Person.create(name='charlie')
@@ -52,3 +65,47 @@ class TestBerkeleyDatabase(ModelTestCase):
 
         self.assertRaises(IntegrityError, rollback)
         self.assertEqual(Person.select().count(), 1)
+
+    def _test_pragmas(self, db):
+        class PragmaTest(Model):
+            data = TextField()
+            class Meta:
+                database = db
+
+        with db.execution_context() as ctx:
+            PragmaTest.create_table()
+
+        # Use another connection to check the pragma values.
+        with db.execution_context() as ctx:
+            conn = db.get_conn()
+            cache = db.execute_sql('PRAGMA cache_size;').fetchone()[0]
+            page = db.execute_sql('PRAGMA page_size;').fetchone()[0]
+            mvcc = db.execute_sql('PRAGMA multiversion;').fetchone()[0]
+            self.assertEqual(cache, 1000)
+            self.assertEqual(page, 2048)
+            self.assertEqual(mvcc, 1)
+
+    def test_pragmas(self):
+        database.close()
+        self.remove_db_files()
+
+        db = BerkeleyDatabase(
+            database.database,
+            cache_size=1000,
+            page_size=2048,
+            multiversion=True)
+
+        try:
+            self._test_pragmas(db)
+        finally:
+            if not db.is_closed():
+                db.close()
+
+    def test_udf(self):
+        @database.func()
+        def title(s):
+            return s.title()
+
+        with database.execution_context():
+            res = database.execute_sql('select title(?)', ('whats up',))
+            self.assertEqual(res.fetchone(), ('Whats Up',))

@@ -284,8 +284,8 @@ class SqliteExtDatabase(SqliteDatabase):
         self.register_function(rank, 'rank', 1)
         self.register_function(bm25, 'bm25', -1)
 
-    def _connect(self, database, **kwargs):
-        conn = super(SqliteExtDatabase, self)._connect(database, **kwargs)
+    def _add_conn_hooks(self, conn):
+        super(SqliteExtDatabase, self)._add_conn_hooks(conn)
         self._load_aggregates(conn)
         self._load_collations(conn)
         self._load_functions(conn)
@@ -295,7 +295,6 @@ class SqliteExtDatabase(SqliteDatabase):
             conn.enable_load_extension(True)
             for extension in self._extensions:
                 conn.load_extension(extension)
-        return conn
 
     def _load_aggregates(self, conn):
         for name, (klass, num_params) in self._aggregates.items():
