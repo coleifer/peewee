@@ -21,7 +21,7 @@ class TestDBURL(PeeweeTestCase):
         self.assertEqual(db.database, ':memory:')
 
         db = connect('sqlite:///:memory:', journal_mode='MEMORY')
-        self.assertEqual(db._journal_mode, 'MEMORY')
+        self.assertTrue(('journal_mode', 'MEMORY') in db._pragmas)
 
         db = connect('sqliteext:///foo/bar.db')
         self.assertTrue(isinstance(db, SqliteExtDatabase))

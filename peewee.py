@@ -3449,9 +3449,13 @@ class SqliteDatabase(Database):
         OP.ILIKE: 'LIKE',
     }
 
-    def __init__(self, *args, **kwargs):
-        self._journal_mode = kwargs.pop('journal_mode', None)
-        super(SqliteDatabase, self).__init__(*args, **kwargs)
+    def __init__(self, database, pragmas=None, *args, **kwargs):
+        self._pragmas = pragmas or []
+        journal_mode = kwargs.pop('journal_mode', None)  # Backwards-compat.
+        if journal_mode:
+            self._pragmas.append(('journal_mode', journal_mode))
+
+        super(SqliteDatabase, self).__init__(database, *args, **kwargs)
         if not self.database:
             self.database = ':memory:'
 
@@ -3465,9 +3469,11 @@ class SqliteDatabase(Database):
         conn.create_function('date_part', 2, _sqlite_date_part)
         conn.create_function('date_trunc', 2, _sqlite_date_trunc)
         conn.create_function('regexp', 2, _sqlite_regexp)
-        if self._journal_mode:
+        if self._pragmas:
             cursor = conn.cursor()
-            cursor.execute('PRAGMA journal_mode=%s;' % self._journal_mode)
+            for pragma, value in self._pragmas:
+                cursor.execute('PRAGMA %s = %s;' % (pragma, value))
+            cursor.close()
 
     def begin(self, lock_type='DEFERRED'):
         self.execute_sql('BEGIN %s' % lock_type, require_commit=False)

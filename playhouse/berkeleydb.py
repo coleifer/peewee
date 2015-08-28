@@ -13,18 +13,19 @@ berkeleydb.register_adapter(datetime.time, str)
 
 
 class BerkeleyDatabase(SqliteExtDatabase):
-    def _connect(self, database, cache_size=None, multiversion=None,
-                 page_size=None, **kwargs):
+    def __init__(self, database, pragmas=None, cache_size=None, page_size=None,
+                 multiversion=None, *args, **kwargs):
+        super(BerkeleyDatabase, self).__init__(
+            database, pragmas=pragmas, *args, **kwargs)
+        if multiversion:
+            self._pragmas.append(('multiversion', 'on'))
+        if page_size:
+            self._pragmas.append(('page_size', page_size))
+        if cache_size:
+            self._pragmas.append(('cache_size', cache_size))
+
+    def _connect(self, database, **kwargs):
         conn = berkeleydb.connect(database, **kwargs)
         conn.isolation_level = None
-        if cache_size or multiversion or page_size:
-            cursor = conn.cursor()
-            if multiversion:
-                cursor.execute('PRAGMA multiversion = on;')
-            if page_size:
-                cursor.execute('PRAGMA page_size = %d;' % page_size)
-            if cache_size:
-                cursor.execute('PRAGMA cache_size = %d;' % cache_size)
-            cursor.close()
         self._add_conn_hooks(conn)
         return conn
