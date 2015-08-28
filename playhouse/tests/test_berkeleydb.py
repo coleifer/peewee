@@ -72,18 +72,32 @@ class TestBerkeleyDatabase(ModelTestCase):
             class Meta:
                 database = db
 
+        sql = lambda q: db.execute_sql(q).fetchone()[0]
+
         with db.execution_context() as ctx:
             PragmaTest.create_table()
 
         # Use another connection to check the pragma values.
         with db.execution_context() as ctx:
             conn = db.get_conn()
-            cache = db.execute_sql('PRAGMA cache_size;').fetchone()[0]
-            page = db.execute_sql('PRAGMA page_size;').fetchone()[0]
-            mvcc = db.execute_sql('PRAGMA multiversion;').fetchone()[0]
+            cache = sql('PRAGMA cache_size;')
+            page = sql('PRAGMA page_size;')
+            mvcc = sql('PRAGMA multiversion;')
             self.assertEqual(cache, 1000)
             self.assertEqual(page, 2048)
             self.assertEqual(mvcc, 1)
+
+        # Now, use two connections. This tests the weird behavior of the
+        # BTree cache.
+        conn = db.get_conn()
+        self.assertEqual(sql('PRAGMA multiversion;'), 1)
+
+        with db.execution_context():
+            conn2 = db.get_conn()
+            self.assertTrue(id(conn) != id(conn2))
+            self.assertEqual(sql('PRAGMA cache_size;'), 1000)
+            self.assertEqual(sql('PRAGMA multiversion;'), 1)
+            self.assertEqual(sql('PRAGMA page_size;'), 2048)
 
     def test_pragmas(self):
         database.close()

@@ -29,3 +29,21 @@ class BerkeleyDatabase(SqliteExtDatabase):
         conn.isolation_level = None
         self._add_conn_hooks(conn)
         return conn
+
+    def _set_pragmas(self, conn):
+        # `multiversion` is weird. It checks first whether another connection
+        # from the BTree cache is available, and then switches to that, which
+        # may have the handle of the DB_Env. If that happens, then we get
+        # an error stating that you cannot set `multiversion` despite the
+        # fact we have not done any operations and it's a brand new conn.
+        if self._pragmas:
+            cursor = conn.cursor()
+            for pragma, value in self._pragmas:
+                if pragma == 'multiversion':
+                    try:
+                        cursor.execute('PRAGMA %s = %s;' % (pragma, value))
+                    except berkeleydb.OperationalError:
+                        pass
+                else:
+                    cursor.execute('PRAGMA %s = %s;' % (pragma, value))
+            cursor.close()

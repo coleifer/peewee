@@ -3466,9 +3466,12 @@ class SqliteDatabase(Database):
         return conn
 
     def _add_conn_hooks(self, conn):
+        self._set_pragmas(conn)
         conn.create_function('date_part', 2, _sqlite_date_part)
         conn.create_function('date_trunc', 2, _sqlite_date_trunc)
         conn.create_function('regexp', 2, _sqlite_regexp)
+
+    def _set_pragmas(self, conn):
         if self._pragmas:
             cursor = conn.cursor()
             for pragma, value in self._pragmas:
