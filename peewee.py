@@ -3261,7 +3261,9 @@ class Database(object):
 
     def get_conn(self):
         if self.__local.context_stack:
-            return self.__local.context_stack[-1].connection
+            conn = self.__local.context_stack[-1].connection
+            if conn is not None:
+                return conn
         if self.__local.closed:
             self.connect()
         return self.__local.conn
