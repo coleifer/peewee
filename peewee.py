@@ -3783,6 +3783,7 @@ class ExecutionContext(_callable_context_manager):
     def __init__(self, database, with_transaction=True):
         self.database = database
         self.with_transaction = with_transaction
+        self.connection = None
 
     def __enter__(self):
         with self.database._conn_lock:
@@ -3797,14 +3798,17 @@ class ExecutionContext(_callable_context_manager):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         with self.database._conn_lock:
-            try:
-                if self.with_transaction:
-                    if not exc_type:
-                        self.txn.commit(False)
-                    self.txn.__exit__(exc_type, exc_val, exc_tb)
-            finally:
+            if self.connection is None:
                 self.database.pop_execution_context()
-                self.database._close(self.connection)
+            else:
+                try:
+                    if self.with_transaction:
+                        if not exc_type:
+                            self.txn.commit(False)
+                        self.txn.__exit__(exc_type, exc_val, exc_tb)
+                finally:
+                    self.database.pop_execution_context()
+                    self.database._close(self.connection)
 
 class Using(ExecutionContext):
     def __init__(self, database, models, with_transaction=True):

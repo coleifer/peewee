@@ -576,6 +576,28 @@ class TestJoinedInstanceConstruction(ModelTestCase):
             ('u2', 'u3'),
         ])
 
+        with self.assertQueryCount(1):
+            ToUser = User.alias()
+            q = (Relationship
+                 .select(Relationship, User, ToUser)
+                 .join(User,
+                       on=(Relationship.from_user == User.id))
+                 .switch(Relationship)
+                 .join(ToUser,
+                       on=(Relationship.to_user == ToUser.id).alias('to_user'))
+                 .order_by(User.username, ToUser.username))
+
+            results = [(r.from_user.username, r.to_user.username) for r in q]
+
+        self.assertEqual(results, [
+            ('u0', 'u1'),
+            ('u0', 'u2'),
+            ('u0', 'u3'),
+            ('u1', 'u2'),
+            ('u1', 'u3'),
+            ('u2', 'u3'),
+        ])
+
 
 class TestQueryResultTypeConversion(ModelTestCase):
     requires = [User]

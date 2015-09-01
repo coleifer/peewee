@@ -303,6 +303,25 @@ class TestExecutionContext(ModelTestCase):
             [user.username for user in User.select().order_by(User.username)],
             ['u0', 'u1', 'u2', 'u3', 'u4'])
 
+    def test_context_conn_error(self):
+        class MagicException(Exception):
+            pass
+
+        class FailDB(SqliteDatabase):
+            def _connect(self, *args, **kwargs):
+                raise MagicException('boo')
+
+        db = FailDB(':memory:')
+
+        def generate_exc():
+            try:
+                with db.execution_context():
+                    db.execute_sql('SELECT 1;')
+            except MagicException:
+                db.get_conn()
+
+        self.assertRaises(MagicException, generate_exc)
+
 
 class TestAutoRollback(ModelTestCase):
     requires = [User, Blog]
