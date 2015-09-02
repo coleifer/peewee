@@ -88,7 +88,7 @@ class DjangoTranslator(object):
                         logger.warn('Cycle detected: %s: %s',
                                     model_field.name, model_name)
                         attrs[model_field.name] = IntegerField(
-                            db_column=model_field.get_attname())
+                            db_column=model_field.column)
                     else:
                         related_name = (model_field.rel.related_name or
                                         model_field.related_query_name())
@@ -100,11 +100,13 @@ class DjangoTranslator(object):
 
                         attrs[model_field.name] = ForeignKeyField(
                             mapping[model_name],
-                            related_name=related_name)
+                            related_name=related_name,
+                            db_column=model_field.column,
+                        )
 
                 else:
                     attrs[model_field.name] = IntegerField(
-                        db_column=model_field.get_attname())
+                        db_column=model_field.column)
 
             elif converted:
                 attrs[model_field.name] = converted()
