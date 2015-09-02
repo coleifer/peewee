@@ -51,7 +51,7 @@ class TestQueryResultWrapper(ModelTestCase):
             self.assertEqual(qr.count, 4)
 
     # TODO: Fix this.
-    @skip_test_if(lambda: True)
+    #@skip_test_if(lambda: True)
     def test_nested_iteration(self):
         User.create_users(4)
         with self.assertQueryCount(1):
@@ -64,7 +64,7 @@ class TestQueryResultWrapper(ModelTestCase):
                     inner.append(o_user.username)
 
             self.assertEqual(outer, ['u1', 'u2', 'u3', 'u4'])
-            self.assertEqual(inner, ['u1', 'u2', 'u3', 'u4'])
+            self.assertEqual(inner, ['u1', 'u2', 'u3', 'u4'] * 4)
 
     def test_iteration_protocol(self):
         User.create_users(3)
