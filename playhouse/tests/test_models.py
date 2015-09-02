@@ -471,6 +471,21 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual(u.delete_instance(), 1)
         self.assertEqual(u.save(), 0)
 
+    def test_save_fk(self):
+        blog = Blog(title='b1', content='')
+        blog.user = User(username='u1')
+        blog.user.save()
+        with self.assertQueryCount(1):
+            blog.save()
+
+        with self.assertQueryCount(1):
+            blog_db = (Blog
+                       .select(Blog, User)
+                       .join(User)
+                       .where(Blog.pk == blog.pk)
+                       .get())
+            self.assertEqual(blog_db.user.username, 'u1')
+
     def test_modify_model_cause_it_dirty(self):
         u = User(username='u1')
         u.save()

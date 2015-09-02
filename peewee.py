@@ -4412,12 +4412,24 @@ class Model(with_metaclass(BaseModel)):
                 new_data[field.name] = field_dict[field.name]
         return new_data
 
+    def _populate_unsaved_relations(self, field_dict):
+        for key in self._meta.rel:
+            conditions = (
+                key in self._dirty and
+                key in field_dict and
+                field_dict[key] is None and
+                self._obj_cache.get(key) is not None)
+            if conditions:
+                setattr(self, key, getattr(self, key))
+                field_dict[key] = self._data[key]
+
     def save(self, force_insert=False, only=None):
         field_dict = dict(self._data)
         pk_field = self._meta.primary_key
         pk_value = self._get_pk_value()
         if only:
             field_dict = self._prune_fields(field_dict, only)
+        self._populate_unsaved_relations(field_dict)
         if pk_value is not None and not force_insert:
             if self._meta.composite_key:
                 for pk_part_name in pk_field.field_names:
