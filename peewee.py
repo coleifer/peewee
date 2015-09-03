@@ -1428,7 +1428,7 @@ class QueryCompiler(object):
         return '%s%s%s' % (self.quote_char, s, self.quote_char)
 
     def get_column_type(self, f):
-        return self._field_map[f]
+        return self._field_map[f] if f in self._field_map else f.upper()
 
     def get_op(self, q):
         return self._op_map[q]
