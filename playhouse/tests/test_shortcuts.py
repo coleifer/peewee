@@ -360,6 +360,67 @@ class TestModelToDict(ModelTestCase):
                 model_to_dict(self.user, extra_attrs=['xx'])
             self.assertRaises(AttributeError, fails)
 
+    def test_fields_from_query(self):
+        User.delete().execute()
+        for i in range(3):
+            user = User.create(username='u%s' % i)
+            for x in range(i + 1):
+                Note.create(user=user, text='%s-%s' % (user.username, x))
+
+        query = (User
+                 .select(User.username, fn.COUNT(Note.id).alias('ct'))
+                 .join(Note, JOIN.LEFT_OUTER)
+                 .group_by(User.username)
+                 .order_by(User.id))
+        with assert_query_count(1):
+            u0, u1, u2 = list(query)
+            self.assertEqual(model_to_dict(u0, fields_from_query=query), {
+                'username': 'u0',
+                'ct': 1})
+            self.assertEqual(model_to_dict(u2, fields_from_query=query), {
+                'username': 'u2',
+                'ct': 3})
+
+        notes = (Note
+                 .select(Note, User, SQL('1337').alias('magic'))
+                 .join(User)
+                 .order_by(Note.id)
+                 .limit(1))
+        with assert_query_count(1):
+            n1, = notes
+            res = model_to_dict(n1, fields_from_query=notes)
+            self.assertEqual(res, {
+                'id': n1.id,
+                'magic': 1337,
+                'text': 'u0-0',
+                'user': {
+                    'id': n1.user_id,
+                    'username': 'u0',
+                },
+            })
+
+            res = model_to_dict(
+                n1,
+                fields_from_query=notes,
+                exclude=[User.id, Note.id])
+            self.assertEqual(res, {
+                'magic': 1337,
+                'text': 'u0-0',
+                'user': {'username': 'u0'},
+            })
+
+            # `only` has no effect when using `fields_from_query`.
+            res = model_to_dict(
+                n1,
+                fields_from_query=notes,
+                only=[User.username])
+            self.assertEqual(res, {
+                'id': n1.id,
+                'magic': 1337,
+                'text': 'u0-0',
+                'user': {'id': n1.user_id, 'username': 'u0'},
+            })
+
 
 class TestDictToModel(ModelTestCase):
     requires = MODELS

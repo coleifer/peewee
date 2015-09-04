@@ -1,6 +1,7 @@
 import sys
 
 from peewee import *
+from peewee import Node
 
 if sys.version_info[0] == 3:
     from collections import Callable
@@ -66,7 +67,8 @@ def _clone_set(s):
     return set()
 
 def model_to_dict(model, recurse=True, backrefs=False, only=None,
-                  exclude=None, seen=None, extra_attrs=None):
+                  exclude=None, seen=None, extra_attrs=None,
+                  fields_from_query=None):
     """
     Convert a model instance (and any related objects) to a dictionary.
 
@@ -78,9 +80,20 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
         excluded from the dictionary.
     :param list extra_attrs: Names of model instance attributes or methods
         that should be included.
+    :param SelectQuery fields_from_query: Query that was source of model. Take
+        fields explicitly selected by the query and serialize them.
     """
-    data = {}
     only = _clone_set(only)
+    extra_attrs = _clone_set(extra_attrs)
+
+    if fields_from_query is not None:
+        for item in fields_from_query._select:
+            if isinstance(item, Field):
+                only.add(item)
+            elif isinstance(item, Node) and item._alias:
+                extra_attrs.add(item._alias)
+
+    data = {}
     exclude = _clone_set(exclude)
     seen = _clone_set(seen)
     exclude |= seen
