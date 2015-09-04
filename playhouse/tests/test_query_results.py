@@ -25,10 +25,14 @@ class TestQueryResultWrapper(ModelTestCase):
                     break
             self.assertEqual(first_five, ['u1', 'u2', 'u3', 'u4', 'u5'])
 
-            another_iter = [u.username for u in qr]
+            names = lambda it: [obj.username for obj in it]
+            self.assertEqual(names(sq[5:]), ['u6', 'u7', 'u8', 'u9', 'u10'])
+            self.assertEqual(names(sq[2:5]), ['u3', 'u4', 'u5'])
+
+            another_iter = names(qr)
             self.assertEqual(another_iter, ['u%d' % i for i in range(1, 11)])
 
-            another_iter = [u.username for u in qr]
+            another_iter = names(qr)
             self.assertEqual(another_iter, ['u%d' % i for i in range(1, 11)])
 
     def test_count(self):
@@ -72,14 +76,18 @@ class TestQueryResultWrapper(ModelTestCase):
         with self.assertQueryCount(1):
             query = User.select().order_by(User.id)
             qr = query.execute()
-            for user in qr:
-                pass
+            for _ in range(2):
+                for user in qr:
+                    pass
 
-            self.assertRaises(StopIteration, next, qr)
+            i = iter(qr)
+            for obj in i:
+                pass
+            self.assertRaises(StopIteration, next, i)
             self.assertEqual([u.username for u in qr], ['u1', 'u2', 'u3'])
             self.assertEqual(query[0].username, 'u1')
             self.assertEqual(query[2].username, 'u3')
-            self.assertRaises(StopIteration, next, qr)
+            self.assertRaises(StopIteration, next, i)
 
     def test_iterator(self):
         User.create_users(10)

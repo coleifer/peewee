@@ -1927,10 +1927,16 @@ class ResultIterator(object):
     def __init__(self, qrw):
         self.qrw = qrw
         self._idx = 0
-        self._ct = qrw._ct
 
     def next(self):
-        obj = self.qrw.fetch_next(self._idx)
+        if self._idx < self.qrw._ct:
+            obj = self.qrw._result_cache[self._idx]
+        elif not self.qrw._populated:
+            obj = self.qrw.iterate()
+            self.qrw._result_cache.append(obj)
+            self.qrw._ct += 1
+        else:
+            raise StopIteration
         self._idx += 1
         return obj
     __next__ = next
@@ -1988,16 +1994,6 @@ class QueryResultWrapper(object):
     def iterator(self):
         while True:
             yield self.iterate()
-
-    def fetch_next(self, idx):
-        while not self._populated and idx >= self._ct:
-            obj = self.iterate()
-            self._result_cache.append(obj)
-            self._ct += 1
-        try:
-            return self._result_cache[idx]
-        except IndexError:
-            raise StopIteration
 
     def next(self):
         if self._idx < self._ct:
