@@ -1923,6 +1923,25 @@ class QueryCompiler(object):
     drop_sequence = return_parsed_node('_drop_sequence')
 
 
+class ResultIterator(object):
+    def __init__(self, qrw):
+        self.qrw = qrw
+        self._idx = 0
+
+    def next(self):
+        if self._idx < self.qrw._ct:
+            obj = self.qrw._result_cache[self._idx]
+        elif not self.qrw._populated:
+            obj = self.qrw.iterate()
+            self.qrw._result_cache.append(obj)
+            self.qrw._ct += 1
+        else:
+            raise StopIteration
+        self._idx += 1
+        return obj
+    __next__ = next
+
+
 class QueryResultWrapper(object):
     """
     Provides an iterator over the results of a raw Query, additionally doing
@@ -1934,8 +1953,8 @@ class QueryResultWrapper(object):
         self.model = model
         self.cursor = cursor
 
-        self.__ct = 0
-        self.__idx = 0
+        self._ct = 0
+        self._idx = 0
 
         self._result_cache = []
         self._populated = False
@@ -1947,17 +1966,15 @@ class QueryResultWrapper(object):
             self.column_meta = self.join_meta = None
 
     def __iter__(self):
-        self.__idx = 0
-
-        if not self._populated:
-            return self
-        else:
+        if self._populated:
             return iter(self._result_cache)
+        else:
+            return ResultIterator(self)
 
     @property
     def count(self):
         self.fill_cache()
-        return self.__ct
+        return self._ct
 
     def process_row(self, row):
         return row
@@ -1979,17 +1996,17 @@ class QueryResultWrapper(object):
             yield self.iterate()
 
     def next(self):
-        if self.__idx < self.__ct:
-            inst = self._result_cache[self.__idx]
-            self.__idx += 1
+        if self._idx < self._ct:
+            inst = self._result_cache[self._idx]
+            self._idx += 1
             return inst
         elif self._populated:
             raise StopIteration
 
         obj = self.iterate()
         self._result_cache.append(obj)
-        self.__ct += 1
-        self.__idx += 1
+        self._ct += 1
+        self._idx += 1
         return obj
     __next__ = next
 
@@ -1997,8 +2014,8 @@ class QueryResultWrapper(object):
         n = n or float('Inf')
         if n < 0:
             raise ValueError('Negative values are not supported.')
-        self.__idx = self.__ct
-        while not self._populated and (n > self.__ct):
+        self._idx = self._ct
+        while not self._populated and (n > self._ct):
             try:
                 self.next()
             except StopIteration:
