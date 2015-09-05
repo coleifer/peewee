@@ -564,3 +564,10 @@ class TestAtomic(ModelTestCase):
 
         usernames = [u.username for u in User.select()]
         self.assertEqual(sorted(usernames), ['u0', 'u2'])
+
+        with test_db.atomic():
+            with test_db.atomic():
+                User.get(User.username == 'u2').delete_instance()
+
+        usernames = [u.username for u in User.select()]
+        self.assertEqual(usernames, ['u0'])
