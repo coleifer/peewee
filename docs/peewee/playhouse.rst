@@ -1456,9 +1456,7 @@ Then get a copy of the standard library SQLite driver and build it against Berke
     python setup.py build
     sudo python setup.py install
 
-To simplify this process, peewee comes with a script that will automatically build the appropriate libraries for you. The ``berkeley_build.sh`` script can be found in the ``playhouse`` directory (or you can `view the source online <https://github.com/coleifer/peewee/blob/master/playhouse/berkeley_build.sh>`_).
-
-You can also find `step by step instructions <http://charlesleifer.com/blog/building-the-python-sqlite-driver-for-use-with-berkeleydb/>`_ on my blog.
+You can also find up-to-date `step by step instructions <http://charlesleifer.com/blog/building-the-python-sqlite-driver-for-use-with-berkeleydb/>`_ on my blog.
 
 .. py:class:: BerkeleyDatabase(database, **kwargs)
 

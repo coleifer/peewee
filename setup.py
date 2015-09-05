@@ -11,7 +11,9 @@ try:
 except ImportError:
     ext_modules = None
 else:
-    ext_modules = cythonize('playhouse/speedups.pyx')
+    speedups = cythonize('playhouse/speedups.pyx')
+    udf = cythonize('playhouse/sqlite_extensions/udf.pyx')
+    ext_modules = speedups + udf
 
 setup(
     name='peewee',
@@ -21,8 +23,6 @@ setup(
     author='Charles Leifer',
     author_email='coleifer@gmail.com',
     url='http://github.com/coleifer/peewee/',
-    package_data = {
-        'playhouse': ['berkeley_build.sh']},
     packages=['playhouse'],
     py_modules=['peewee', 'pwiz'],
     ext_modules=ext_modules,
