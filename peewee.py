@@ -1098,11 +1098,14 @@ class TimeField(_BaseFormattedField):
     ]
 
     def python_value(self, value):
-        if value and isinstance(value, basestring):
-            pp = lambda x: x.time()
-            return format_date_time(value, self.formats, pp)
-        elif value and isinstance(value, datetime.datetime):
-            return value.time()
+        if value:
+            if isinstance(value, basestring):
+                pp = lambda x: x.time()
+                return format_date_time(value, self.formats, pp)
+            elif isinstance(value, datetime.datetime):
+                return value.time()
+        elif value is not None and isinstance(value, datetime.timedelta):
+            return (datetime.datetime.min + value).time()
         return value
 
     hour = property(_date_part('hour'))
