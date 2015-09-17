@@ -420,7 +420,7 @@ class SqliteMigrator(SchemaMigrator):
     """
     column_re = re.compile('(.+?)\((.+)\)')
     column_split_re = re.compile(r'(?:[^,(]|\([^)]*\))+')
-    column_name_re = re.compile('"?([\w]+)')
+    column_name_re = re.compile('["`]?([\w]+)')
     fk_re = re.compile('FOREIGN KEY\s+\("?([\w]+)"?\)\s+', re.I)
 
     def _get_column_names(self, table):
@@ -450,6 +450,10 @@ class SqliteMigrator(SchemaMigrator):
 
         # Find any foreign keys we may need to remove.
         self.database.get_foreign_keys(table)
+
+        # Make sure the create_table does not contain any newlines or tabs,
+        # allowing the regex to work correctly.
+        create_table = re.sub(r'\s+', ' ', create_table)
 
         # Parse out the `CREATE TABLE` and column list portions of the query.
         raw_create, raw_columns = self.column_re.search(create_table).groups()
