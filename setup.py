@@ -12,8 +12,7 @@ except ImportError:
     ext_modules = None
 else:
     speedups = cythonize('playhouse/speedups.pyx')
-    udf = cythonize('playhouse/sqlite_extensions/udf.pyx')
-    ext_modules = speedups + udf
+    ext_modules = speedups
 
 setup(
     name='peewee',
