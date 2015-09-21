@@ -54,8 +54,6 @@ class TestQueryResultWrapper(ModelTestCase):
             # Calling again does not incur another query.
             self.assertEqual(qr.count, 4)
 
-    # TODO: Fix this.
-    #@skip_test_if(lambda: True)
     def test_nested_iteration(self):
         User.create_users(4)
         with self.assertQueryCount(1):
