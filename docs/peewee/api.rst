@@ -1961,13 +1961,13 @@ Database and its subclasses
 
         Perform additional intialization on a newly-opened connection. For example, if you are using SQLite you may want to enable foreign key constraint enforcement (off by default).
 
-        Here is how you might use this hook to enable foreign key enforcement on SQLite:
+        Here is how you might use this hook to load a SQLite extension:
 
         .. code-block:: python
 
-            class SqliteFKDatabase(SqliteDatabase):
+            class CustomSqliteDatabase(SqliteDatabase):
                 def initialize_connection(self, conn):
-                    self.execute_sql('PRAGMA foreign_keys=ON;')
+                    conn.load_extension('fts5')
 
     .. py:method:: get_conn()
 
@@ -2311,11 +2311,20 @@ Database and its subclasses
 
     :py:class:`Database` subclass that works with the "sqlite3" driver. In addition to the default database parameters, :py:class:`SqliteDatabase` also accepts a *journal_mode* parameter which will configure the journaling mode.
 
-    To use write-ahead log:
+    Custom parameters:
+
+    :param str journal_mode: Journaling mode.
+    :param list pragmas: List of 2-tuples containing ``PRAGMA`` statements to run against new connections.
+
+    SQLite allows run-time configuration of a number of parameters through ``PRAGMA`` statements (`documentation <https://www.sqlite.org/pragma.html>`_). These statements are typically run against a new database connection. To run one or more ``PRAGMA`` statements against new connections, you can specify them as a list of 2-tuples containing the pragma name and value:
 
     .. code-block:: python
 
-        db = SqliteDatabase('my_app.db', journal_mode='WAL')
+        db = SqliteDatabase('my_app.db', pragmas=(
+            ('journal_mode', 'WAL'),
+            ('cache_size', 10000),
+            ('mmap_size', 1024 * 1024 * 32),
+        ))
 
     .. py:attribute:: insert_many = True *if* using SQLite 3.7.11.0 or newer.
 

@@ -172,6 +172,23 @@ If you would like to use these awesome features, use the :py:class:`SqliteExtDat
 
     sqlite_db = SqliteExtDatabase('my_app.db', journal_mode='WAL')
 
+.. _sqlite-pragma:
+
+PRAGMA statements
+^^^^^^^^^^^^^^^^^
+
+.. versionadded:: 2.6.4
+
+SQLite allows run-time configuration of a number of parameters through ``PRAGMA`` statements (`documentation <https://www.sqlite.org/pragma.html>`_). These statements are typically run against a new database connection. To run one or more ``PRAGMA`` statements against new connections, you can specify them as a list of 2-tuples containing the pragma name and value:
+
+.. code-block:: python
+
+    db = SqliteDatabase('my_app.db', pragmas=(
+        ('journal_mode', 'WAL'),
+        ('cache_size', 10000),
+        ('mmap_size', 1024 * 1024 * 32),
+    ))
+
 SQLite and Autocommit
 ^^^^^^^^^^^^^^^^^^^^^
 
