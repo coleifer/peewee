@@ -5,6 +5,38 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.6.4
+
+Updating so some of the new APIs are available on pypi.
+
+### Bugs fixed
+
+* #646, fixed a bug with the Cython speedups not being included in package.
+* #654, documented how to create models with no primary key.
+* #659, allow bare `INSERT` statements.
+* #674, regarding foreign key / one-to-one relationships.
+* #676, allow `ArrayField` to accept tuples in addition to lists.
+* #679, fix regarding unsaved relations.
+* #682, refactored QueryResultWrapper to allow multiple independent iterations over the same underlying result cache.
+* #692, fix bug with multiple joins to same table + eager loading.
+* #695, fix bug when connection fails while using an execution context.
+* #698, use correct column names with non-standard django foreign keys.
+* #706, return `datetime.time` instead of `timedelta` for MySQL time fields.
+* #712, fixed SQLite migrator regular expressions. Thanks @sroebert.
+
+### New features
+
+* #647, #649, #650, added support for `RETURNING` clauses. Update, Insert and Delete queries can now be called with `RETURNING` to retrieve the rows that were affected. [See docs](http://docs.peewee-orm.com/en/latest/peewee/querying.html#returning-clause).
+* #685, added web request hook docs.
+* #691, allowed arbitrary model attributes and methods to be serialized by `model_to_dict()`. [Docs](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#model_to_dict).
+* #696, allow `model_to_dict()` to introspect query for which fields to serialize.
+* Added backend-agnostic [truncate_date()](http://docs.peewee-orm.com/en/latest/peewee/api.html#Database.truncate_date) implementation.
+* Added a `FixedCharField` which uses column type `CHAR`.
+* Added support for arbitrary `PRAGMA` statements to be run on new SQLite connections. [Docs](http://docs.peewee-orm.com/en/latest/peewee/databases.html#sqlite-pragma).
+* Removed `berkeley_build.sh` script. See instructions [on my blog instead](http://charlesleifer.com/blog/building-the-python-sqlite-driver-for-use-with-berkeleydb/).
+
+[View commits](https://github.com/coleifer/peewee/compare/2.6.2...2.6.4)
+
 ## 2.6.2
 
 Just a regular old release.
