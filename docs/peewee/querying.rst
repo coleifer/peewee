@@ -1273,7 +1273,7 @@ When calling :py:meth:`~Query.join`, peewee will use the *last joined table* as 
 
 .. code-block:: python
 
-    User.join(Tweet).join(Comment)
+    User.select().join(Tweet).join(Comment)
 
 This query will result in a join from *User* to *Tweet*, and another join from *Tweet* to *Comment*.
 
@@ -1282,7 +1282,7 @@ If you would like to join the same table twice, use the :py:meth:`~Query.switch`
 .. code-block:: python
 
     # Join the Artist table on both `Ablum` and `Genre`.
-    Artist.join(Album).switch(Artist).join(Genre)
+    Artist.select().join(Album).switch(Artist).join(Genre)
 
 .. _manytomany:
 
