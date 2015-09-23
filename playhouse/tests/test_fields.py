@@ -178,6 +178,24 @@ class TestFieldTypes(ModelTestCase):
         else:
             self.assertEqual(nmf2.time_field, t2)
 
+    def test_time_field_python_value(self):
+        tf = NullModel.time_field
+        def T(*a):
+            return datetime.time(*a)
+        tests = (
+            ('01:23:45', T(1, 23, 45)),
+            ('01:23', T(1, 23, 0)),
+            (T(13, 14, 0), T(13, 14, 0)),
+            (datetime.datetime(2015, 1, 1, 0, 59, 0), T(0, 59)),
+            ('', ''),
+            (None, None),
+            (T(0, 0), T(0, 0)),
+            (datetime.timedelta(seconds=(4 * 60 * 60) + (20 * 60)), T(4, 20)),
+            (datetime.timedelta(seconds=0), T(0, 0)),
+        )
+        for val, expected in tests:
+            self.assertEqual(tf.python_value(val), expected)
+
     def test_date_as_string(self):
         nm1 = NullModel.create(date_field='2014-01-02')
         nm1_db = NullModel.get(NullModel.id == nm1.id)

@@ -1104,7 +1104,7 @@ class TimeField(_BaseFormattedField):
                 return format_date_time(value, self.formats, pp)
             elif isinstance(value, datetime.datetime):
                 return value.time()
-        elif value is not None and isinstance(value, datetime.timedelta):
+        if value is not None and isinstance(value, datetime.timedelta):
             return (datetime.datetime.min + value).time()
         return value
 
