@@ -3674,12 +3674,18 @@ Basic usage:
         content = TextField()
         timestamp = DateTimeField(default=datetime.datetime.now)
 
-
 The above code example will create and instantiate a peewee :py:class:`PostgresqlDatabase` specified by the given database URL. Request hooks will be configured to establish a connection when a request is received, and automatically close the connection when the response is sent. Lastly, the :py:class:`FlaskDB` class exposes a :py:attr:`FlaskDB.Model` property which can be used as a base for your application's models.
 
 .. note:: The underlying peewee database can be accessed using the ``FlaskDB.database`` attribute.
 
-While the above example shows using a database URL, for more advanced usages you can specify a dictionary of configuration options:
+If you prefer, you can also pass the database value directly into the ``FlaskDB`` object:
+
+.. code-block:: python
+
+    app = Flask(__name__)
+    database = FlaskDB(app, 'sqlite:///my_app.db')
+
+While the above examples show using a database URL, for more advanced usages you can specify a dictionary of configuration options or simply pass in a peewee :py:class:`Database` instance:
 
 .. code-block:: python
 
@@ -3695,6 +3701,17 @@ While the above example shows using a database URL, for more advanced usages you
     app.config.from_object(__name__)
 
     database = FlaskDB(app)
+
+Using a peewee :py:class:`Database` object:
+
+.. code-block:: python
+
+    peewee_db = PostgresqlExtDatabase('my_app')
+    app = Flask(__name__)
+    flask_db = FlaskDB(app, peewee_db)
+
+Database with Application Factory
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 If you prefer to use the `application factory pattern <http://flask.pocoo.org/docs/0.10/patterns/appfactories/>`_, the :py:class:`FlaskDB` class implements an ``init_app()`` method.
 
