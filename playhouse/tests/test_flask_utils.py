@@ -86,6 +86,25 @@ class TestFlaskDB(PeeweeTestCase):
         self.assertTrue(isinstance(Model._meta.database, SqliteDatabase))
         self.assertEqual(Model._meta.database.database, 'nugget.db')
 
+        # If a value is specified, it trumps config value.
+        database = FlaskDB(app, 'sqlite:///nuglets.db')
+        Model = database.Model
+        self.assertEqual(Model._meta.database.database, 'nuglets.db')
+
+    def test_database_instance(self):
+        app = Flask(__name__)
+        db = SqliteDatabase(':memory:')
+        flask_db = FlaskDB(app, db)
+        Model = flask_db.Model
+        self.assertEqual(Model._meta.database, db)
+
+    def test_database_instance_config(self):
+        app = Flask(__name__)
+        app.config['DATABASE'] = db = SqliteDatabase(':memory:')
+        flask_db = FlaskDB(app)
+        Model = flask_db.Model
+        self.assertEqual(Model._meta.database, db)
+
     def test_deferred_database(self):
         app = Flask(__name__)
         app.config.update({

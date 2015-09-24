@@ -4,7 +4,7 @@ import sys
 from flask import abort
 from flask import render_template
 from flask import request
-from peewee import Database as _Database
+from peewee import Database
 from peewee import DoesNotExist
 from peewee import Model
 from peewee import Proxy
@@ -76,20 +76,28 @@ def get_next_url(default='/'):
     return default
 
 class FlaskDB(object):
-    def __init__(self, app=None):
+    def __init__(self, app=None, database=None):
+        self.database = None  # Reference to actual Peewee database instance.
         self._app = app
-        self.database = None
+        self._db = database  # dict, url, Database, or None (default).
         if app is not None:
             self.init_app(app)
 
     def init_app(self, app):
         self._app = app
-        self._load_database(app)
+
+        if self._db is None:
+            initial_db = app.config['DATABASE']
+        else:
+            initial_db = self._db
+
+        self._load_database(app, initial_db)
         self._register_handlers(app)
 
-    def _load_database(self, app):
-        config_value = app.config['DATABASE']
-        if isinstance(config_value, dict):
+    def _load_database(self, app, config_value):
+        if isinstance(config_value, Database):
+            database = config_value
+        elif isinstance(config_value, dict):
             database = self._load_from_config_dict(dict(config_value))
         else:
             # Assume a database connection URL.
@@ -117,7 +125,7 @@ class FlaskDB(object):
             __import__(path)
             module = sys.modules[path]
             database_class = getattr(module, class_name)
-            assert issubclass(database_class, _Database)
+            assert issubclass(database_class, Database)
         except ImportError:
             raise RuntimeError('Unable to import %s' % engine)
         except AttributeError:
