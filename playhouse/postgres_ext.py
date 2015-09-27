@@ -212,6 +212,8 @@ class JSONField(Field):
         super(JSONField, self).__init__(*args, **kwargs)
 
     def db_value(self, value):
+        if value is None:
+            return value
         if not isinstance(value, Json):
             return Json(value, dumps=self.dumps)
         return value

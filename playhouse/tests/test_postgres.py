@@ -49,6 +49,9 @@ class Testing(BaseModel):
 try:
     class TestingJson(BaseModel):
         data = JSONField()
+
+    class TestingJsonNull(BaseModel):
+        data = JSONField(null=True)
 except:
     TestingJson = None
 
@@ -808,7 +811,21 @@ def pg93():
 @skip_if(lambda: not json_ok())
 class TestJsonField(BaseJsonFieldTestCase, ModelTestCase):
     ModelClass = TestingJson
-    requires = [TestingJson, NormalModel]
+    requires = [TestingJson, NormalModel, TestingJsonNull]
+
+    def test_json_null(self):
+        tjn = TestingJsonNull.create(data=None)
+        tj = TestingJsonNull.create(data={'k1': 'v1'})
+
+        results = TestingJsonNull.select().order_by(TestingJsonNull.id)
+        self.assertEqual(
+            [tj_db.data for tj_db in results],
+            [None, {'k1': 'v1'}])
+
+        query = TestingJsonNull.select().where(
+            TestingJsonNull.data.is_null(True))
+        self.assertEqual(query.get(), tjn)
+
 
 def jsonb_ok():
     if BJson is None:
