@@ -1,5 +1,6 @@
 # encoding=utf-8
 
+import sys
 from functools import partial
 
 from peewee import *
@@ -613,10 +614,11 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual(u2, User.get(User.username == 'u2'))
 
     def test_get_exception(self):
+        exc = None
         try:
             User.get(User.id == 0)
-        except Exception as exc:
-            pass
+        except Exception as raised_exc:
+            exc = raised_exc
         else:
             assert False
 
@@ -624,8 +626,9 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual(
             str(type(exc)),
             "<class 'playhouse.tests.models.UserDoesNotExist'>")
-        self.assertTrue(exc.message.startswith('Instance matching query'))
-        self.assertTrue(exc.message.endswith('PARAMS: [0]'))
+        if sys.version_info[0] < 3:
+            self.assertTrue(exc.message.startswith('Instance matching query'))
+            self.assertTrue(exc.message.endswith('PARAMS: [0]'))
 
     def test_get_or_create(self):
         u1, created = User.get_or_create(username='u1')
