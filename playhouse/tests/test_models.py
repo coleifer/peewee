@@ -612,6 +612,21 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual(u1, User.get(User.username == 'u1'))
         self.assertEqual(u2, User.get(User.username == 'u2'))
 
+    def test_get_exception(self):
+        try:
+            User.get(User.id == 0)
+        except Exception as exc:
+            pass
+        else:
+            assert False
+
+        self.assertEqual(exc.__module__, 'playhouse.tests.models')
+        self.assertEqual(
+            str(type(exc)),
+            "<class 'playhouse.tests.models.UserDoesNotExist'>")
+        self.assertTrue(exc.message.startswith('Instance matching query'))
+        self.assertTrue(exc.message.endswith('PARAMS: [0]'))
+
     def test_get_or_create(self):
         u1, created = User.get_or_create(username='u1')
         self.assertTrue(created)

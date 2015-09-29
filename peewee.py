@@ -4229,7 +4229,8 @@ class BaseModel(type):
                 cls.__name__, self.__unicode__()))
 
         exc_name = '%sDoesNotExist' % cls.__name__
-        exception_class = type(exc_name, (DoesNotExist,), {})
+        exc_attrs = {'__module__': cls.__module__}
+        exception_class = type(exc_name, (DoesNotExist,), exc_attrs)
         cls.DoesNotExist = exception_class
         cls._meta.prepared()
 
