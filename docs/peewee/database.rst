@@ -302,6 +302,8 @@ To fix this, make sure you are explicitly connecting to the database when you ne
 
 See the :ref:`adding_request_hooks` for more information.
 
+If you would like to automatically reconnect and retry queries that fail due to an ``OperationalError``, peewee provides a :py:class:`Database` mixin :py:class:`RetryOperationalError` that will handle reconnecting and retrying the query automatically. For more information see :ref:`automatic-reconnect`.
+
 
 Connecting using a Database URL
 -------------------------------
@@ -802,6 +804,9 @@ Here is an example of how you might use the :py:class:`Using` context manager:
 
 .. note::
     For simple master/slave configurations, check out the :ref:`read_slaves` extension. This extension ensures writes are sent to the master database and reads occur from any of the listed read replicas.
+
+
+.. _automatic-reconnect:
 
 Automatic Reconnect
 -------------------
