@@ -803,6 +803,25 @@ Here is an example of how you might use the :py:class:`Using` context manager:
 .. note::
     For simple master/slave configurations, check out the :ref:`read_slaves` extension. This extension ensures writes are sent to the master database and reads occur from any of the listed read replicas.
 
+Automatic Reconnect
+-------------------
+
+Peewee provides very basic support for automatic reconnecting in the :ref:`shortcuts` module, through the use of the :py:class:`RetryOperationalError` mixin. This mixin will automatically reconnect to the database and retry any queries that fail with an ``OperationalError``. The query that failed will be retried only once, and if it fails twice an exception will be raised.
+
+Usage:
+
+.. code-block:: python
+
+    from peewee import *
+    from playhouse.shortcuts import RetryOperationalError
+
+
+    class MyRetryDB(RetryOperationalError, MySQLDatabase):
+        pass
+
+
+    db = MyRetryDB('my_app')
+
 Logging queries
 ---------------
 

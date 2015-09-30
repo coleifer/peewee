@@ -7,6 +7,8 @@ from playhouse.shortcuts import *
 from playhouse.test_utils import assert_query_count
 from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
+from playhouse.tests.base import PeeweeTestCase
+from playhouse.tests.libs import mock
 
 
 db = database_initializer.get_in_memory_database()
@@ -66,6 +68,74 @@ MODELS = [
     Note,
     Tag,
     NoteTag]
+
+
+class TestRetryDatabaseMixin(PeeweeTestCase):
+    def test_retry_success(self):
+        class RetryDB(RetryOperationalError, SqliteDatabase):
+            pass
+        db = RetryDB(':memory:')
+
+        conn1 = mock.Mock(name='conn1')
+        conn2 = mock.Mock(name='conn2')
+
+        curs_exc = mock.Mock(name='curs_exc')
+        curs_exc.execute.side_effect = OperationalError()
+
+        curs_ok = mock.Mock(name='curs_ok')
+
+        conn1.cursor.side_effect = [curs_exc]
+        conn2.cursor.side_effect = [curs_ok]
+
+        with mock.patch.object(db, '_connect') as mc:
+            mc.side_effect = [conn1, conn2]
+            ret = db.execute_sql('fail query', (1, 2))
+
+        self.assertTrue(ret is curs_ok)
+        self.assertFalse(ret is curs_exc)
+
+        curs_exc.execute.assert_called_once_with('fail query', (1, 2))
+        self.assertEqual(conn1.commit.call_count, 0)
+        self.assertEqual(conn1.rollback.call_count, 0)
+        self.assertEqual(conn1.close.call_count, 1)
+
+        curs_ok.execute.assert_called_once_with('fail query', (1, 2))
+        self.assertEqual(conn2.commit.call_count, 1)
+        self.assertEqual(conn2.rollback.call_count, 0)
+        self.assertEqual(conn2.close.call_count, 0)
+
+        self.assertTrue(db.get_conn() is conn2)
+
+    def test_retry_fail(self):
+        class RetryDB(RetryOperationalError, SqliteDatabase):
+            pass
+        db = RetryDB(':memory:')
+
+        conn1 = mock.Mock(name='conn1')
+        conn2 = mock.Mock(name='conn2')
+
+        curs_exc = mock.Mock(name='curs_exc')
+        curs_exc.execute.side_effect = OperationalError()
+
+        curs_exc2 = mock.Mock(name='curs_exc2')
+        curs_exc2.execute.side_effect = OperationalError()
+
+        conn1.cursor.side_effect = [curs_exc]
+        conn2.cursor.side_effect = [curs_exc2]
+
+        with mock.patch.object(db, '_connect') as mc:
+            mc.side_effect = [conn1, conn2]
+            self.assertRaises(OperationalError, db.execute_sql, 'fail2')
+
+        curs_exc.execute.assert_called_once_with('fail2', ())
+        self.assertEqual(conn1.commit.call_count, 0)
+        self.assertEqual(conn1.rollback.call_count, 0)
+        self.assertEqual(conn1.close.call_count, 1)
+
+        curs_exc2.execute.assert_called_once_with('fail2', ())
+        self.assertEqual(conn2.commit.call_count, 0)
+        self.assertEqual(conn2.rollback.call_count, 0)
+        self.assertEqual(conn2.close.call_count, 0)
 
 
 class TestCastShortcut(ModelTestCase):

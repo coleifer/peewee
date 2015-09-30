@@ -18,7 +18,6 @@ from playhouse.tests.base import query_db
 from playhouse.tests.base import skip_unless
 from playhouse.tests.base import test_db
 from playhouse.tests.base import ulit
-from playhouse.tests.libs import mock
 from playhouse.tests.models import *
 
 

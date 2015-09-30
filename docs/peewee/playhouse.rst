@@ -2735,6 +2735,23 @@ This module contains helper functions for expressing things that would otherwise
         >>> user.notes[0].user.username
         'charlie'
 
+.. py:class:: RetryOperationalError()
+
+    When mixed-in with a vendor-specific :py:class:`Database` subclass, this class overrides the :py:meth:`~Database.execute_sql` method to automatically reconnect and retry queries that fail due to an ``OperationalError``. The query that failed will be retried only once, and if it fails twice an exception will be raised.
+
+    Usage:
+
+    .. code-block:: python
+
+        from peewee import *
+        from playhouse.shortcuts import RetryOperationalError
+
+
+        class MyRetryDB(RetryOperationalError, MySQLDatabase):
+            pass
+
+
+        db = MyRetryDB('my_app')
 
 .. _signals:
 
