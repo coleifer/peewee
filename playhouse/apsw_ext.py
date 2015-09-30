@@ -99,11 +99,7 @@ class APSWDatabase(SqliteExtDatabase):
         logger.debug((sql, params))
         with self.exception_wrapper():
             cursor = self.get_cursor()
-            try:
-                self._execute_sql(cursor, sql, params)
-            except Exception as exc:
-                if self.sql_error_handler(exc, sql, params, require_commit):
-                    raise
+            self._execute_sql(cursor, sql, params)
         return cursor
 
     def last_insert_id(self, cursor, model):

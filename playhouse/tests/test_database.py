@@ -179,38 +179,6 @@ class TestConnectionState(PeeweeTestCase):
         self.assertRaises(Exception, query_db.execute_sql, bad_sql)
         self.assertEqual(query_db.last_error, (bad_sql, None))
 
-    def test_sql_error_reconnect(self):
-        class RetryDatabase(SqliteDatabase):
-            def sql_error_handler(self, exc, sql, params, require_commit):
-                if isinstance(exc, OperationalError):
-                    self.close()
-                    self.connect()
-                return True
-
-        db = RetryDatabase(':memory:', autocommit=False)
-
-        conn1 = mock.Mock(name='conn1')
-        conn2 = mock.Mock(name='conn2')
-
-        curs = mock.Mock(name='curs')
-        curs.execute.side_effect = OperationalError()
-
-        with mock.patch.object(db, '_connect') as pc:
-            pc.side_effect = [conn1, conn2]
-
-            with mock.patch.object(db, 'get_cursor') as pgc:
-                pgc.return_value = curs
-
-                db.connect()
-                self.assertRaises(
-                    OperationalError,
-                    db.execute_sql,
-                    'fake query')
-
-        conn1.close.assert_called_once_with()
-        pgc.assert_called_once_with()
-        self.assertTrue(db.get_conn() is conn2)
-
 
 @skip_unless(lambda: test_db.drop_cascade)
 class TestDropTableCascade(ModelTestCase):

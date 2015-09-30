@@ -366,11 +366,9 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
             try:
                 cursor.execute(sql, params or ())
             except Exception as exc:
-                logger.exception('%s %s', sql, params)
                 if self.get_autocommit() and self.autorollback:
                     self.rollback()
-                if self.sql_error_handler(exc, sql, params, require_commit):
-                    raise
+                raise
             else:
                 if require_commit and self.get_autocommit():
                     self.commit()

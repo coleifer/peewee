@@ -165,10 +165,13 @@ class TestDatabase(SqliteDatabase):
     op_overrides = {}
     quote_char = '"'
 
-    def sql_error_handler(self, exception, sql, params, require_commit):
-        self.last_error = (sql, params)
-        return super(TestDatabase, self).sql_error_handler(
-            exception, sql, params, require_commit)
+    def execute_sql(self, sql, params=None, require_commit=True):
+        try:
+            return super(TestDatabase, self).execute_sql(
+                sql, params, require_commit)
+        except Exception as exc:
+            self.last_error = (sql, params)
+            raise
 
 
 class QueryLogHandler(logging.Handler):

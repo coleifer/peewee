@@ -3315,9 +3315,6 @@ class Database(object):
     def rows_affected(self, cursor):
         return cursor.rowcount
 
-    def sql_error_handler(self, exception, sql, params, require_commit):
-        return True
-
     def compiler(self):
         return self.compiler_class(
             self.quote_char, self.interpolation, self.field_overrides,
@@ -3329,11 +3326,10 @@ class Database(object):
             cursor = self.get_cursor()
             try:
                 cursor.execute(sql, params or ())
-            except Exception as exc:
+            except Exception:
                 if self.get_autocommit() and self.autorollback:
                     self.rollback()
-                if self.sql_error_handler(exc, sql, params, require_commit):
-                    raise
+                raise
             else:
                 if require_commit and self.get_autocommit():
                     self.commit()
