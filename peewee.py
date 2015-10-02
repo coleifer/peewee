@@ -4517,13 +4517,18 @@ class Model(with_metaclass(BaseModel)):
 def prefetch_add_subquery(sq, subqueries):
     fixed_queries = [PrefetchResult(sq)]
     for i, subquery in enumerate(subqueries):
+        if isinstance(subquery, tuple):
+            subquery, target_model = subquery
+        else:
+            target_model = None
         if not isinstance(subquery, Query) and issubclass(subquery, Model):
             subquery = subquery.select()
         subquery_model = subquery.model_class
         fkf = backref = None
         for j in reversed(range(i + 1)):
-            last_query = fixed_queries[j][0]
-            last_model = last_query.model_class
+            prefetch_result = fixed_queries[j]
+            last_query = prefetch_result.query
+            last_model = prefetch_result.model
             foreign_key = subquery_model._meta.rel_for_model(last_model)
             if foreign_key:
                 fkf = getattr(subquery_model, foreign_key.name)
@@ -4531,12 +4536,14 @@ def prefetch_add_subquery(sq, subqueries):
             else:
                 backref = last_model._meta.rel_for_model(subquery_model)
 
-            if fkf or backref:
+            if (fkf or backref) and ((target_model is last_model) or
+                                     (target_model is None)):
                 break
 
         if not (fkf or backref):
+            tgt_err = ' using %s' % target_model if target_model else ''
             raise AttributeError('Error: unable to find foreign key for '
-                                 'query: %s' % subquery)
+                                 'query: %s%s' % (subquery, tgt_err))
 
         if fkf:
             inner_query = last_query.select(to_field)

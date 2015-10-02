@@ -879,6 +879,7 @@ class BaseTestPrefetch(ModelTestCase):
         Category,
         UserCategory,
         Relationship,
+        SpecialComment,
     ]
 
     user_data = [
@@ -1096,6 +1097,50 @@ class TestPrefetch(BaseTestPrefetch):
                 for parent in query]
 
         self.assertEqual(names_and_children, self.category_tree)
+
+    def test_prefetch_specific_model(self):
+        # User -> Blog
+        #      -> SpecialComment (fk to user and blog)
+        Comment.delete().execute()
+        Blog.delete().execute()
+        User.delete().execute()
+        u1 = User.create(username='u1')
+        u2 = User.create(username='u2')
+        for i in range(1, 3):
+            for user in (u1, u2):
+                b = Blog.create(user=user, title='%s-b%s' % (user.username, i))
+                SpecialComment.create(
+                    user=user,
+                    blog=b,
+                    name='%s-c%s' % (user.username, i))
+
+        u3 = User.create(username='u3')
+        SpecialComment.create(user=u3, name='u3-c1')
+
+        u4 = User.create(username='u4')
+        Blog.create(user=u4, title='u4-b1')
+
+        u5 = User.create(username='u5')
+
+        with self.assertQueryCount(3):
+            user_pf = prefetch(
+                User.select(),
+                Blog,
+                (SpecialComment, User))
+            results = []
+            for user in user_pf:
+                results.append((
+                    user.username,
+                    [b.title for b in user.blog_set_prefetch],
+                    [c.name for c in user.special_comments_prefetch]))
+
+        self.assertEqual(results, [
+            ('u1', ['u1-b1', 'u1-b2'], ['u1-c1', 'u1-c2']),
+            ('u2', ['u2-b1', 'u2-b2'], ['u2-c1', 'u2-c2']),
+            ('u3', [], ['u3-c1']),
+            ('u4', ['u4-b1'], []),
+            ('u5', [], []),
+        ])
 
 
 class TestAggregateRows(BaseTestPrefetch):

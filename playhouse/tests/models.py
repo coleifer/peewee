@@ -337,6 +337,12 @@ class ServerDefaultModel(TestModel):
     timestamp = DateTimeField(constraints=[
         SQL('DEFAULT CURRENT_TIMESTAMP')])
 
+class SpecialComment(TestModel):
+    user = ForeignKeyField(User, related_name='special_comments')
+    blog = ForeignKeyField(Blog, null=True, related_name='special_comments')
+    name = CharField()
+
+
 class EmptyModel(TestModel):
     pass
 
@@ -390,5 +396,6 @@ MODELS = [
     CommentCategory,
     BlogData,
     ServerDefaultModel,
+    SpecialComment,
     EmptyModel,
 ]
