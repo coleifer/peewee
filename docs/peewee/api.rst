@@ -1741,7 +1741,8 @@ Query Types
 
     :param sq: :py:class:`SelectQuery` instance
     :param subqueries: one or more :py:class:`SelectQuery` instances to prefetch for ``sq``. You
-        can also pass models, but they will be converted into SelectQueries.
+        can also pass models, but they will be converted into SelectQueries. If you wish to specify
+        a particular model to join against, you can pass a 2-tuple of ``(query_or_model, join_model)``.
 
     :rtype: :py:class:`SelectQuery` with related instances pre-populated
 
