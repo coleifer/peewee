@@ -953,8 +953,12 @@ class TestInsertQuery(PeeweeTestCase):
             ['u1']))
 
         iq = InsertQuery(User, rows=[])
-        self.assertEqual(compiler.generate_insert(iq), (
-            'INSERT INTO "users" DEFAULT VALUES', []))
+        if isinstance(test_db, MySQLDatabase):
+            self.assertEqual(compiler.generate_insert(iq), (
+                'INSERT INTO "users" ("users"."id") VALUES (DEFAULT)', []))
+        else:
+            self.assertEqual(compiler.generate_insert(iq), (
+                'INSERT INTO "users" DEFAULT VALUES', []))
 
     def test_insert_many_defaults(self):
         class DefaultGenerator(object):
@@ -1022,7 +1026,12 @@ class TestInsertQuery(PeeweeTestCase):
             pass
         iq = InsertQuery(EmptyModel, {})
         sql, params = compiler.generate_insert(iq)
-        self.assertEqual(sql, 'INSERT INTO "emptymodel" DEFAULT VALUES')
+        if isinstance(test_db, MySQLDatabase):
+            self.assertEqual(sql, (
+                'INSERT INTO "emptymodel" ("emptymodel"."id") '
+                'VALUES (DEFAULT)'))
+        else:
+            self.assertEqual(sql, 'INSERT INTO "emptymodel" DEFAULT VALUES')
 
     def test_upsert(self):
         query = User.insert(username='charlie').upsert()

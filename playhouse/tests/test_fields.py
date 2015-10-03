@@ -163,20 +163,12 @@ class TestFieldTypes(ModelTestCase):
 
         nmf1 = NullModel.get(NullModel.id==nm1.id)
         self.assertEqual(nmf1.date_field, d1)
-        if isinstance(test_db, MySQLDatabase):
-            # mysql doesn't store microseconds
-            self.assertEqual(nmf1.datetime_field, dt2)
-            self.assertEqual(nmf1.time_field, td2)
-        else:
-            self.assertEqual(nmf1.datetime_field, dt1)
-            self.assertEqual(nmf1.time_field, t1)
+        self.assertEqual(nmf1.datetime_field, dt1)
+        self.assertEqual(nmf1.time_field, t1)
 
         nmf2 = NullModel.get(NullModel.id==nm2.id)
         self.assertEqual(nmf2.datetime_field, dt2)
-        if isinstance(test_db, MySQLDatabase):
-            self.assertEqual(nmf2.time_field, td2)
-        else:
-            self.assertEqual(nmf2.time_field, t2)
+        self.assertEqual(nmf2.time_field, t2)
 
     def test_time_field_python_value(self):
         tf = NullModel.time_field

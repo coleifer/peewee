@@ -310,7 +310,12 @@ class TestInsertEmptyModel(ModelTestCase):
     def test_insert_empty(self):
         query = EmptyModel.insert()
         sql, params = compiler.generate_insert(query)
-        self.assertEqual(sql, 'INSERT INTO "emptymodel" DEFAULT VALUES')
+        if isinstance(test_db, MySQLDatabase):
+            self.assertEqual(sql, (
+                'INSERT INTO "emptymodel" ("emptymodel"."id") '
+                'VALUES (DEFAULT)'))
+        else:
+            self.assertEqual(sql, 'INSERT INTO "emptymodel" DEFAULT VALUES')
         self.assertEqual(params, [])
 
         # Verify the query works.
