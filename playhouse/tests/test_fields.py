@@ -155,8 +155,10 @@ class TestFieldTypes(ModelTestCase):
         d1 = datetime.date(2011, 1, 3)
         t1 = datetime.time(11, 12, 13, 54321)
         t2 = datetime.time(11, 12, 13)
-        td1 = self._time_to_delta(t1)
-        td2 = self._time_to_delta(t2)
+        if isinstance(test_db, MySQLDatabase):
+            dt1 = dt1.replace(microsecond=0)
+            dt2 = dt2.replace(microsecond=0)
+            t1 = t1.replace(microsecond=0)
 
         nm1 = NullModel.create(datetime_field=dt1, date_field=d1, time_field=t1)
         nm2 = NullModel.create(datetime_field=dt2, time_field=t2)
