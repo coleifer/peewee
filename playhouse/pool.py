@@ -93,6 +93,7 @@ class PooledDatabase(object):
                 if self.stale_timeout and self._is_stale(ts):
                     logger.debug('Connection %s was stale, closing.', key)
                     self._close(conn, True)
+                    self._closed.discard(key)
                     ts = conn = None
                 elif self._is_closed(key, conn):
                     logger.debug('Connection %s was closed.', key)

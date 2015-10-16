@@ -101,6 +101,9 @@ class TestPooledDatabase(PeeweeTestCase):
         [t.join() for t in threads]
 
         self.assertEqual(db.counter, 5)
+        self.assertEqual(
+            sorted([conn for _, conn in db._connections]),
+            [1, 2, 3, 4, 5])  # All 5 are ready to be re-used.
         self.assertEqual(db._in_use, {})
 
     def test_max_conns(self):
@@ -126,6 +129,28 @@ class TestPooledDatabase(PeeweeTestCase):
 
         # A new connection will be returned.
         self.assertEqual(db.get_conn(), 2)
+
+    def test_stale_on_checkout(self):
+        # Create a test database with a very short stale timeout.
+        db = TestDB('testing', stale_timeout=.01)
+        self.assertEqual(db.get_conn(), 1)
+        self.assertTrue(1 in db._in_use)
+
+        # When we close, the conn should not be stale so it won't return to
+        # the pool.
+        db.close()
+
+        # Sleep long enough for the connection to be considered stale.
+        time.sleep(.01)
+
+        self.assertEqual(db._in_use, {})
+        self.assertEqual(len(db._connections), 1)
+
+        # A new connection will be returned, as the original one is stale.
+        # The stale connection (1) will be removed and not placed in the
+        # "closed" set.
+        self.assertEqual(db.get_conn(), 2)
+        self.assertEqual(db._closed, set())
 
     def test_manual_close(self):
         conn = self.db.get_conn()
