@@ -83,6 +83,7 @@ class PooledDatabase(object):
     def _connect(self, *args, **kwargs):
         while True:
             try:
+                # Remove the oldest connection from the heap.
                 ts, conn = heapq.heappop(self._connections)
                 key = self.conn_key(conn)
             except IndexError:
@@ -90,15 +91,24 @@ class PooledDatabase(object):
                 logger.debug('No connection available in pool.')
                 break
             else:
-                if self.stale_timeout and self._is_stale(ts):
+                if self._is_closed(key, conn):
+                    # This connecton was closed, but since it was not stale
+                    # it got added back to the queue of available conns. We
+                    # then closed it and marked it as explicitly closed, so
+                    # it's safe to throw it away now.
+                    # (Because Database.close() calls Database._close()).
+                    logger.debug('Connection %s was closed.', key)
+                    ts = conn = None
+                    self._closed.discard(key)
+                elif self.stale_timeout and self._is_stale(ts):
+                    # If we are attempting to check out a stale connection,
+                    # then close it. We don't need to mark it in the "closed"
+                    # set, because it is not in the list of available conns
+                    # anymore.
                     logger.debug('Connection %s was stale, closing.', key)
                     self._close(conn, True)
                     self._closed.discard(key)
                     ts = conn = None
-                elif self._is_closed(key, conn):
-                    logger.debug('Connection %s was closed.', key)
-                    ts = conn = None
-                    self._closed.discard(key)
                 else:
                     break
 
@@ -130,7 +140,7 @@ class PooledDatabase(object):
             del self._in_use[key]
             if self.stale_timeout and self._is_stale(ts):
                 logger.debug('Closing stale connection %s.', key)
-                self._close(conn, close_conn=True)
+                super(PooledDatabase, self)._close(conn)
             else:
                 logger.debug('Returning %s to pool.', key)
                 heapq.heappush(self._connections, (ts, conn))
@@ -141,7 +151,8 @@ class PooledDatabase(object):
         """
         conn = self.get_conn()
         self.close()
-        self._close(conn, close_conn=True)
+        if not self._is_closed(self.conn_key(conn), conn):
+            self._close(conn, close_conn=True)
 
     def close_all(self):
         """

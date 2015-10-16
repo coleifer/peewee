@@ -126,6 +126,7 @@ class TestPooledDatabase(PeeweeTestCase):
         db.close()
         self.assertEqual(db._in_use, {})
         self.assertEqual(db._connections, [])
+        self.assertEqual(db._closed, set())
 
         # A new connection will be returned.
         self.assertEqual(db.get_conn(), 2)
@@ -157,8 +158,20 @@ class TestPooledDatabase(PeeweeTestCase):
         self.assertEqual(conn, 1)
 
         self.db.manual_close()
+
+        # When we manually close a connection that's not yet stale, we add it
+        # back to the queue (because close() calls _close()), then close it
+        # for real, and mark it with a tombstone. The next time it's checked
+        # out, it will simply be removed and skipped over.
+        self.assertEqual(self.db._closed, set([1]))
+        self.assertEqual(len(self.db._connections), 1)
+        self.assertEqual(self.db._in_use, {})
+
         conn = self.db.get_conn()
         self.assertEqual(conn, 2)
+        self.assertEqual(self.db._closed, set())
+        self.assertEqual(len(self.db._connections), 0)
+        self.assertEqual(self.db._in_use.keys(), [2])
 
         self.db.close()
         conn = self.db.get_conn()
