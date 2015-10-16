@@ -171,7 +171,7 @@ class TestPooledDatabase(PeeweeTestCase):
         self.assertEqual(conn, 2)
         self.assertEqual(self.db._closed, set())
         self.assertEqual(len(self.db._connections), 0)
-        self.assertEqual(self.db._in_use.keys(), [2])
+        self.assertEqual(list(self.db._in_use.keys()), [2])
 
         self.db.close()
         conn = self.db.get_conn()
