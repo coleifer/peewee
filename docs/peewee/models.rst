@@ -454,6 +454,7 @@ Option                  Meaning                                                I
 ``table_alias``         an alias to use for the table in queries               no
 ``schema``              the database schema for the model                      yes
 ``validate_backrefs``   ensure backrefs do not conflict with other attributes. yes
+``only_save_dirty``     when calling model.save(), only save dirty fields      yes
 =====================   ====================================================== ============
 
 Here is an example showing inheritable versus non-inheritable attributes:

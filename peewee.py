@@ -4016,7 +4016,7 @@ class ModelOptions(object):
     def __init__(self, cls, database=None, db_table=None, db_table_func=None,
                  indexes=None, order_by=None, primary_key=None,
                  table_alias=None, constraints=None, schema=None,
-                 validate_backrefs=True, **kwargs):
+                 validate_backrefs=True, only_save_dirty=False, **kwargs):
         self.model_class = cls
         self.name = cls.__name__.lower()
         self.fields = {}
@@ -4036,6 +4036,7 @@ class ModelOptions(object):
         self.constraints = constraints
         self.schema = schema
         self.validate_backrefs = validate_backrefs
+        self.only_save_dirty = only_save_dirty
 
         self.auto_increment = None
         self.composite_key = False
@@ -4139,7 +4140,7 @@ class ModelOptions(object):
 class BaseModel(type):
     inheritable = set([
         'constraints', 'database', 'db_table_func', 'indexes', 'order_by',
-        'primary_key', 'schema', 'validate_backrefs'])
+        'primary_key', 'schema', 'validate_backrefs', 'only_save_dirty'])
 
     def __new__(cls, name, bases, attrs):
         if not bases:
@@ -4445,6 +4446,14 @@ class Model(with_metaclass(BaseModel)):
         pk_value = self._get_pk_value()
         if only:
             field_dict = self._prune_fields(field_dict, only)
+        elif self._meta.only_save_dirty and not force_insert:
+            field_dict = self._prune_fields(
+                field_dict,
+                self.dirty_fields)
+            if not field_dict:
+                self._dirty.clear()
+                return False
+
         self._populate_unsaved_relations(field_dict)
         if pk_value is not None and not force_insert:
             if self._meta.composite_key:

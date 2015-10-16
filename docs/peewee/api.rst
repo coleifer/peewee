@@ -419,6 +419,21 @@ Models
             If you just want to persist modified fields, you can call
             ``model.save(only=model.dirty_fields)``.
 
+            If you **always** want to only save a model's dirty fields, you can use the Meta
+            option ``only_save_dirty = True``. Then, any time you call :py:meth:`Model.save()`,
+            by default only the dirty fields will be saved, e.g.
+
+            .. code-block:: python
+
+                class Person(Model):
+                    first_name = CharField()
+                    last_name = CharField()
+                    dob = DateField()
+
+                    class Meta:
+                        database = db
+                        only_save_dirty = True
+
     .. py:method:: is_dirty()
 
         Return whether any fields were manually set.

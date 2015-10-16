@@ -579,6 +579,44 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual(saved.title, 'baby huey')
         self.assertEqual(saved.content, 'mickey-nugget')
 
+    def test_save_dirty_auto(self):
+        User._meta.only_save_dirty = True
+        Blog._meta.only_save_dirty = True
+        try:
+            with self.log_queries() as query_logger:
+                u = User.create(username='u1')
+                b = Blog.create(title='b1', user=u)
+
+            # The default value for the blog title will be saved as well.
+            self.assertEqual(
+                [params for _, params in query_logger.queries],
+                [['u1'], [u.id, 'b1', '']])
+
+            with self.assertQueryCount(0):
+                self.assertTrue(u.save() is False)
+                self.assertTrue(b.save() is False)
+
+            u.username = 'u1-edited'
+            b.title = 'b1-edited'
+            with self.assertQueryCount(1):
+                with self.log_queries() as query_logger:
+                    self.assertEqual(u.save(), 1)
+
+            sql, params = query_logger.queries[0]
+            self.assertTrue(sql.startswith('UPDATE'))
+            self.assertEqual(params, ['u1-edited', u.id])
+
+            with self.assertQueryCount(1):
+                with self.log_queries() as query_logger:
+                    self.assertEqual(b.save(), 1)
+
+            sql, params = query_logger.queries[0]
+            self.assertTrue(sql.startswith('UPDATE'))
+            self.assertEqual(params, ['b1-edited', b.pk])
+        finally:
+            User._meta.only_save_dirty = False
+            Blog._meta.only_save_dirty = False
+
     def test_zero_id(self):
         if isinstance(test_db, MySQLDatabase):
             # Need to explicitly tell MySQL it's OK to use zero.
