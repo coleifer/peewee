@@ -475,6 +475,50 @@ Here is an example showing inheritable versus non-inheritable attributes:
     >>> ModelOne._meta.db_table == ModelTwo._meta.db_table
     False
 
+Meta.order_by
+^^^^^^^^^^^^^
+
+Specifying a default ordering is, in my opinion, a bad idea. It's better to be explicit in your code when you want to sort your results.
+
+That said, to specify a default ordering, the syntax is similar to that of Django. ``Meta.order_by`` is a tuple of field names, and to indicate descending ordering, the field name is prefixed by a ``'-'``.
+
+.. code-block:: python
+
+    class Person(Model):
+        first_name = CharField()
+        last_name = CharField()
+        dob = DateField()
+
+        class Meta:
+            # Order people by last name, first name. If two people have the
+            # same first and last, order them youngest to oldest.
+            order_by = ('last_name', 'first_name', '-dob')
+
+Meta.primary_key
+^^^^^^^^^^^^^^^^
+
+The ``Meta.primary_key`` attribute is used to specify either a :py:class:`CompositeKey` or to indicate that the model has *no* primary key. Composite primary keys are discussed in more detail here: :ref:`composite-key`.
+
+To indicate that a model should not have a primary key, then set ``primary_key = False``.
+
+Examples:
+
+.. code-block:: python
+
+    class BlogToTag(Model):
+        """A simple "through" table for many-to-many relationship."""
+        blog = ForeignKeyField(Blog)
+        tag = ForeignKeyField(Tag)
+
+        class Meta:
+            primary_key = CompositeKey('blog', 'tag')
+
+    class NoPrimaryKey(Model):
+        data = IntegerField()
+
+        class Meta:
+            primary_key = False
+
 .. _model_indexes:
 
 Indexes and Unique Constraints
@@ -554,6 +598,8 @@ Auto-incrementing IDs are, as their name says, automatically generated for you w
 
 .. note::
     Any foreign keys to a model with a non-integer primary key will have a ``ForeignKeyField`` use the same underlying storage type as the primary key they are related to.
+
+.. _composite-key:
 
 Composite primary keys
 ^^^^^^^^^^^^^^^^^^^^^^
