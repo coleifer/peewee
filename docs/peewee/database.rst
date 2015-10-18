@@ -21,7 +21,7 @@ This document describes how to perform typical database-related tasks with peewe
 Creating a database connection and tables
 -----------------------------------------
 
-While it is not necessary to explicitly connect to the database before using it, **managing connections explicitly is a good practice**. This way if the connection fails, the exception can be caught during the *connect* step, rather than some arbitrary time later when a query is executed. Furthermore, if you're using a :ref:`connection pool <pool>`, it is actually necessary to call :py:meth:`~Database.connect` and :py:meth:`~Database.close` to ensure connections are recycled correctly.
+While it is not necessary to explicitly connect to the database before using it, **managing connections explicitly is a good practice**. This way if the connection fails, the exception can be caught during the *connect* step, rather than some arbitrary time later when a query is executed. Furthermore, **if you're using a :ref:`connection pool <pool>`, it is actually necessary to call :py:meth:`~Database.connect` and :py:meth:`~Database.close` to ensure connections are recycled correctly**.
 
 For web-apps you will typically open a connection when a request is started and close it when the response is delivered:
 

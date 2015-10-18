@@ -3379,7 +3379,7 @@ In a multi-threaded application, up to `max_connections` will be opened. Each th
 
 In a single-threaded application, only one connection will be created. It will be continually recycled until either it exceeds the stale timeout or is closed explicitly (using `.manual_close()`).
 
-By default, all your application needs to do is ensure that connections are closed when you are finished with them, and they will be returned to the pool. For web applications, this typically means that at the beginning of a request, you will open a connection, and when you return a response, you will close the connection.
+**By default, all your application needs to do is ensure that connections are closed when you are finished with them, and they will be returned to the pool**. For web applications, this typically means that at the beginning of a request, you will open a connection, and when you return a response, you will close the connection.
 
 Simple Postgres pool example code:
 
