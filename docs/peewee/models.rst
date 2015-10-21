@@ -422,7 +422,7 @@ Once the class is defined, you should not access ``ModelClass.Meta``, but instea
     >>> Person.Meta
     Traceback (most recent call last):
       File "<stdin>", line 1, in <module>
-    AttributeError: type object 'Preson' has no attribute 'Meta'
+    AttributeError: type object 'Person' has no attribute 'Meta'
 
     >>> Person._meta
     <peewee.ModelOptions object at 0x7f51a2f03790>
