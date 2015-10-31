@@ -222,29 +222,43 @@ class FTS5Model(VirtualModel):
         return SQL('rank')
 
     @classmethod
-    def search(cls, term):
+    def search(cls, term, with_score=False, score_alias='score'):
         """Full-text search using selected `term`."""
+        selection = ()
+        if with_score:
+            selection = (cls, SQL('rank').alias(score_alias))
+            ordering = SQL(score_alias)
+        else:
+            ordering = SQL('rank')
         return (cls
-                .select(cls)
+                .select(*selection)
                 .where(cls.match(term))
-                .order_by(SQL('rank')))
+                .order_by(ordering))
 
     @classmethod
-    def search_bm25(cls, term, weights=None):
+    def search_bm25(cls, term, weights=None, with_score=False,
+                    score_alias='score'):
         """Full-text search using selected `term`."""
         if weights:
             weight_args = []
-            for field in cls._meta.sorted_fields:
+            for field in cls._meta.get_fields():
                 weight_args.append(
                     weights.get(field, weights.get(field.name, 1.0)))
             rank = fn.bm25(cls.as_entity(), *weight_args)
         else:
             rank = fn.bm25(cls.as_entity())
 
+        selection = ()
+        if with_score:
+            selection = (cls, rank.alias(score_alias))
+            ordering = SQL(score_alias)
+        else:
+            ordering = rank
+
         return (cls
-                .select(cls)
+                .select(*selection)
                 .where(cls.match(term))
-                .order_by(rank))
+                .order_by(ordering))
 
 
 def ClosureTable(model_class, foreign_key=None):

@@ -3598,7 +3598,7 @@ class PostgresqlDatabase(Database):
 
     def _get_pk_sequence(self, model):
         meta = model._meta
-        if meta.primary_key.sequence:
+        if meta.primary_key is not False and meta.primary_key.sequence:
             return meta.primary_key.sequence
         elif meta.auto_increment:
             return '%s_%s_seq' % (meta.db_table, meta.primary_key.db_column)
@@ -4346,7 +4346,7 @@ class Model(with_metaclass(BaseModel)):
 
         db = cls._meta.database
         pk = cls._meta.primary_key
-        if db.sequences and pk.sequence:
+        if db.sequences and pk is not False and pk.sequence:
             if not db.sequence_exists(pk.sequence):
                 db.create_sequence(pk.sequence)
 

@@ -12,6 +12,7 @@ from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
 from playhouse.tests.base import PeeweeTestCase
 from playhouse.tests.base import skip_if
+from playhouse.tests.base import skip_unless
 
 # Use a disk-backed db since memory dbs only exist for a single connection and
 # we need to share the db w/2 for the locking tests.  additionally, set the
@@ -21,7 +22,29 @@ ext_db = database_initializer.get_database(
     db_class=SqliteExtDatabase,
     timeout=0.1)
 
+# Test in-memory DB to determine if the FTS5 extension is installed.
+def check_fts5():
+    tmp_db = database_initializer.get_in_memory_database()
+    class FTS5Test(FTS5Model):
+        data = BareField(null=True)
+        class Meta:
+            database = tmp_db
+
+    try:
+        FTS5Test.create_table()
+    except OperationalError:
+        try:
+            sqlite3.enable_load_extension(True)
+            sqlite3.load_extension('fts5')
+        except OperationalError:
+            return False
+    finally:
+        tmp_db.close()
+
+    return True
+
 CLOSURE_EXTENSION = os.environ.get('CLOSURE_EXTENSION')
+FTS5_EXTENSION = check_fts5()
 
 # test aggregate.
 class WeightedAverage(object):
@@ -96,6 +119,14 @@ class MultiColumn(FTSModel):
     c2 = CharField(default='')
     c3 = CharField(default='')
     c4 = IntegerField()
+
+    class Meta:
+        database = ext_db
+
+class FTS5Test(FTS5Model):
+    title = BareField(null=True)
+    data = BareField(null=True)
+    misc = BareField(null=True, constraints=[SQL('UNINDEXED')])
 
     class Meta:
         database = ext_db
@@ -601,6 +632,97 @@ class TestTransitiveClosure(PeeweeTestCase):
         class NoForeignKey(BaseExtModel):
             pass
         self.assertRaises(ValueError, ClosureTable, NoForeignKey)
+
+
+@skip_unless(lambda: FTS5_EXTENSION)
+class TestFTS5Extension(ModelTestCase):
+    requires = [FTS5Test]
+    corpus = (
+        ('foo aa bb', 'aa bb cc ' * 10, 1),
+        ('bar bb cc', 'bb cc dd ' * 9, 2),
+        ('baze cc dd', 'cc dd ee ' * 8, 3),
+        ('nug aa dd', 'bb cc ' * 7, 4),
+    )
+
+    def setUp(self):
+        super(TestFTS5Extension, self).setUp()
+        for title, data, misc in self.corpus:
+            FTS5Test.create(title=title, data=data, misc=misc)
+
+    def assertResults(self, query, expected, scores=False, alias='score'):
+        if scores:
+            results = [
+                (obj.title, round(getattr(obj, alias), 7))
+                for obj in query]
+        else:
+            results = [obj.title for obj in query]
+        self.assertEqual(results, expected)
+
+    def test_search(self):
+        query = FTS5Test.search('bb')
+        self.assertEqual(query.sql(), (
+            ('SELECT "t1"."title", "t1"."data", "t1"."misc" '
+             'FROM "fts5test" AS t1 '
+             'WHERE ("fts5test" MATCH ?) ORDER BY rank'),
+            ['bb']))
+        self.assertResults(query, ['nug aa dd', 'foo aa bb', 'bar bb cc'])
+
+        query = FTS5Test.search('bb', with_score=True)
+        self.assertEqual(query.sql(), (
+            ('SELECT "t1"."title", "t1"."data", "t1"."misc", rank AS score '
+             'FROM "fts5test" AS t1 '
+             'WHERE ("fts5test" MATCH ?) ORDER BY score'),
+            ['bb']))
+        self.assertResults(query, [
+            ('nug aa dd', -2e-06),
+            ('foo aa bb', -1.9e-06),
+            ('bar bb cc', -1.9e-06)], True)
+
+        query = FTS5Test.search('aa', with_score=True, score_alias='s')
+        self.assertResults(query, [
+            ('foo aa bb', -1.9e-06),
+            ('nug aa dd', -1.2e-06),
+        ], True, 's')
+
+    def test_search_bm25(self):
+        query = FTS5Test.search_bm25('bb')
+        self.assertEqual(query.sql(), (
+            ('SELECT "t1"."title", "t1"."data", "t1"."misc" '
+             'FROM "fts5test" AS t1 '
+             'WHERE ("fts5test" MATCH ?) ORDER BY bm25("fts5test")'),
+            ['bb']))
+        self.assertResults(query, ['nug aa dd', 'foo aa bb', 'bar bb cc'])
+
+        query = FTS5Test.search_bm25('bb', with_score=True)
+        self.assertEqual(query.sql(), (
+            ('SELECT "t1"."title", "t1"."data", "t1"."misc", '
+             'bm25("fts5test") AS score '
+             'FROM "fts5test" AS t1 '
+             'WHERE ("fts5test" MATCH ?) ORDER BY score'),
+            ['bb']))
+        self.assertResults(query, [
+            ('nug aa dd', -2e-06),
+            ('foo aa bb', -1.9e-06),
+            ('bar bb cc', -1.9e-06)], True)
+
+        query = FTS5Test.search_bm25('aa', with_score=True, score_alias='s')
+        self.assertResults(query, [
+            ('foo aa bb', -1.9e-06),
+            ('nug aa dd', -1.2e-06)], True, 's')
+
+    def test_search_bm25_scores(self):
+        query = FTS5Test.search_bm25('bb', {'title': 5.0}, True)
+        self.assertEqual(query.sql(), (
+            ('SELECT "t1"."title", "t1"."data", "t1"."misc", '
+             'bm25("fts5test", ?, ?, ?) AS score '
+             'FROM "fts5test" AS t1 '
+             'WHERE ("fts5test" MATCH ?) ORDER BY score'),
+            [5.0, 1.0, 1.0, 'bb']))
+        self.assertResults(query, [
+            ('bar bb cc', -2e-06),
+            ('foo aa bb', -2e-06),
+            ('nug aa dd', -2e-06)], True)
+
 
 @skip_if(lambda: not CLOSURE_EXTENSION)
 class TestTransitiveClosureIntegration(PeeweeTestCase):
