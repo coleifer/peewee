@@ -37,7 +37,10 @@ import sqlite3
 import struct
 
 from peewee import *
+from peewee import EnclosedClause
+from peewee import Entity
 from peewee import Expression
+from peewee import Node
 from peewee import OP
 from peewee import QueryCompiler
 from peewee import transaction
@@ -92,7 +95,12 @@ class SqliteQueryCompiler(QueryCompiler):
             statement = 'CREATE VIRTUAL TABLE'
             # If we are using a special extension, need to insert that after
             # the table name node.
-            clause.nodes.insert(2, SQL('USING %s' % model_class._extension))
+            extension = model_class._extension
+            if isinstance(extension, Node):
+                parts = clause.nodes[:2] + [SQL('USING'), extension]
+                clause = Clause(*parts)
+            else:
+                clause.nodes.insert(2, SQL('USING %s' % model_class._extension))
         else:
             statement = 'CREATE TABLE'
         if safe:
@@ -204,6 +212,59 @@ class FTSModel(VirtualModel):
 
 
 class FTS5Model(VirtualModel):
+    """
+    Requires SQLite >= 3.9.0.
+
+    Table options:
+
+    content: table name of external content, or empty string for "contentless"
+    content_rowid: column name of external content primary key
+    prefix: integer(s). Ex: '2' or '2 3 4'
+    tokenize: porter, unicode61, ascii. Ex: 'porter unicode61'
+
+    The unicode tokenizer supports the following parameters:
+
+    * remove_diacritics (1 or 0, default is 1)
+    * tokenchars (string of characters, e.g. '-_'
+    * separators (string of characters)
+
+    Parameters are passed as alternating parameter name and value, so:
+
+    {'tokenize': "unicode61 remove_diacritics 0 tokenchars '-_'"}
+
+    Content-less tables:
+
+    If you don't need the full-text content in it's original form, you can
+    specify a content-less table. Searches and auxiliary functions will work
+    as usual, but the only values returned when SELECT-ing can be rowid. Also
+    content-less tables do not support UPDATE or DELETE.
+
+    External content tables:
+
+    You can set up triggers to sync these, e.g.
+
+    -- Create a table. And an external content fts5 table to index it.
+    CREATE TABLE tbl(a INTEGER PRIMARY KEY, b);
+    CREATE VIRTUAL TABLE ft USING fts5(b, content='tbl', content_rowid='a');
+
+    -- Triggers to keep the FTS index up to date.
+    CREATE TRIGGER tbl_ai AFTER INSERT ON tbl BEGIN
+      INSERT INTO ft(rowid, b) VALUES (new.a, new.b);
+    END;
+    CREATE TRIGGER tbl_ad AFTER DELETE ON tbl BEGIN
+      INSERT INTO ft(fts_idx, rowid, b) VALUES('delete', old.a, old.b);
+    END;
+    CREATE TRIGGER tbl_au AFTER UPDATE ON tbl BEGIN
+      INSERT INTO ft(fts_idx, rowid, b) VALUES('delete', old.a, old.b);
+      INSERT INTO ft(rowid, b) VALUES (new.a, new.b);
+    END;
+
+    Built-in auxiliary functions:
+
+    * bm25(tbl[, weight_0, ... weight_n])
+    * highlight(tbl, col_idx, prefix, suffix)
+    * snippet(tbl, col_idx, prefix, suffix, ?, max_tokens)
+    """
     _extension = 'fts5'
 
     # FTS5 does not support declared primary keys, but we will use the
@@ -227,38 +288,102 @@ class FTS5Model(VirtualModel):
         selection = ()
         if with_score:
             selection = (cls, SQL('rank').alias(score_alias))
-            ordering = SQL(score_alias)
-        else:
-            ordering = SQL('rank')
         return (cls
                 .select(*selection)
                 .where(cls.match(term))
-                .order_by(ordering))
+                .order_by(SQL('rank')))
 
     @classmethod
     def search_bm25(cls, term, weights=None, with_score=False,
                     score_alias='score'):
         """Full-text search using selected `term`."""
-        if weights:
-            weight_args = []
-            for field in cls._meta.get_fields():
-                weight_args.append(
-                    weights.get(field, weights.get(field.name, 1.0)))
-            rank = fn.bm25(cls.as_entity(), *weight_args)
-        else:
-            rank = fn.bm25(cls.as_entity())
+        if not weights:
+            return cls.search(term, with_score, score_alias)
+
+        weight_args = []
+        for field in cls._meta.get_fields():
+            weight_args.append(
+                weights.get(field, weights.get(field.name, 1.0)))
+        rank = fn.bm25(cls.as_entity(), *weight_args)
 
         selection = ()
+        order_by = rank
         if with_score:
             selection = (cls, rank.alias(score_alias))
-            ordering = SQL(score_alias)
-        else:
-            ordering = rank
+            order_by = SQL(score_alias)
 
         return (cls
                 .select(*selection)
                 .where(cls.match(term))
-                .order_by(ordering))
+                .order_by(order_by))
+
+    @classmethod
+    def _fts_cmd(cls, cmd, **extra_params):
+        tbl = cls.as_entity()
+        columns = [tbl]
+        values = [cmd]
+        for key, value in extra_params.items():
+            columns.append(Entity(key))
+            values.append(value)
+
+        inner_clause = EnclosedClause(tbl)
+        clause = Clause(
+            SQL('INSERT INTO'),
+            cls.as_entity(),
+            EnclosedClause(*columns),
+            SQL('VALUES'),
+            EnclosedClause(*values))
+        return cls._meta.database.execute(clause)
+
+    @classmethod
+    def automerge(cls, level):
+        if not (0 <= level <= 16):
+            raise ValueError('level must be between 0 and 16')
+        return cls._fts_cmd('automerge', rank=level)
+
+    @classmethod
+    def merge(cls, npages):
+        return cls._fts_cmd('merge', rank=npages)
+
+    @classmethod
+    def set_pgsz(cls, pgsz):
+        return cls._fts_cmd('pgsz', rank=pgsz)
+
+    @classmethod
+    def set_rank(cls, rank_expression):
+        return cls._fts_cmd('rank', rank=rank_expression)
+
+    @classmethod
+    def delete_all(cls):
+        return cls._fts_cmd('delete-all')
+
+    @classmethod
+    def VocabModel(cls, table_type='row', table_name=None):
+        if table_type not in ('row', 'column'):
+            raise ValueError('table_type must be either "row" or "column".')
+
+        attr = '_vocab_model_%s' % table_type
+
+        if not hasattr(cls, attr):
+            class Meta:
+                database = cls._meta.database
+                db_table = table_name or cls._meta.db_table + '_v'
+                primary_key = False
+
+            attrs = {
+                '_extension': fn.fts5vocab(cls.as_entity(), SQL(table_type)),
+                'term': BareField(),
+                'doc': IntegerField(),
+                'cnt': IntegerField(),
+                'Meta': Meta,
+            }
+            if table_type == 'col':
+                attrs['col'] = BareField()
+
+            class_name = '%sVocab' % cls.__name__
+            setattr(cls, attr, type(class_name, (VirtualModel,), attrs))
+
+        return getattr(cls, attr)
 
 
 def ClosureTable(model_class, foreign_key=None):

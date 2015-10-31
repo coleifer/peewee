@@ -671,7 +671,7 @@ class TestFTS5Extension(ModelTestCase):
         self.assertEqual(query.sql(), (
             ('SELECT "t1"."title", "t1"."data", "t1"."misc", rank AS score '
              'FROM "fts5test" AS t1 '
-             'WHERE ("fts5test" MATCH ?) ORDER BY score'),
+             'WHERE ("fts5test" MATCH ?) ORDER BY rank'),
             ['bb']))
         self.assertResults(query, [
             ('nug aa dd', -2e-06),
@@ -689,28 +689,30 @@ class TestFTS5Extension(ModelTestCase):
         self.assertEqual(query.sql(), (
             ('SELECT "t1"."title", "t1"."data", "t1"."misc" '
              'FROM "fts5test" AS t1 '
-             'WHERE ("fts5test" MATCH ?) ORDER BY bm25("fts5test")'),
+             'WHERE ("fts5test" MATCH ?) ORDER BY rank'),
             ['bb']))
         self.assertResults(query, ['nug aa dd', 'foo aa bb', 'bar bb cc'])
 
         query = FTS5Test.search_bm25('bb', with_score=True)
         self.assertEqual(query.sql(), (
-            ('SELECT "t1"."title", "t1"."data", "t1"."misc", '
-             'bm25("fts5test") AS score '
+            ('SELECT "t1"."title", "t1"."data", "t1"."misc", rank AS score '
              'FROM "fts5test" AS t1 '
-             'WHERE ("fts5test" MATCH ?) ORDER BY score'),
+             'WHERE ("fts5test" MATCH ?) ORDER BY rank'),
             ['bb']))
         self.assertResults(query, [
             ('nug aa dd', -2e-06),
             ('foo aa bb', -1.9e-06),
             ('bar bb cc', -1.9e-06)], True)
 
-        query = FTS5Test.search_bm25('aa', with_score=True, score_alias='s')
-        self.assertResults(query, [
-            ('foo aa bb', -1.9e-06),
-            ('nug aa dd', -1.2e-06)], True, 's')
-
     def test_search_bm25_scores(self):
+        query = FTS5Test.search_bm25('bb', {'title': 5.0})
+        self.assertEqual(query.sql(), (
+            ('SELECT "t1"."title", "t1"."data", "t1"."misc" '
+             'FROM "fts5test" AS t1 '
+             'WHERE ("fts5test" MATCH ?) ORDER BY bm25("fts5test", ?, ?, ?)'),
+            ['bb', 5.0, 1.0, 1.0]))
+        self.assertResults(query, ['bar bb cc', 'foo aa bb', 'nug aa dd'])
+
         query = FTS5Test.search_bm25('bb', {'title': 5.0}, True)
         self.assertEqual(query.sql(), (
             ('SELECT "t1"."title", "t1"."data", "t1"."misc", '
@@ -722,6 +724,33 @@ class TestFTS5Extension(ModelTestCase):
             ('bar bb cc', -2e-06),
             ('foo aa bb', -2e-06),
             ('nug aa dd', -2e-06)], True)
+
+    def test_set_rank(self):
+        FTS5Test.set_rank('bm25(10.0, 1.0)')
+        query = FTS5Test.search('bb', with_score=True)
+        self.assertEqual(query.sql(), (
+            ('SELECT "t1"."title", "t1"."data", "t1"."misc", rank AS score '
+             'FROM "fts5test" AS t1 '
+             'WHERE ("fts5test" MATCH ?) ORDER BY rank'),
+            ['bb']))
+        self.assertResults(query, [
+            ('bar bb cc', -2.1e-06),
+            ('foo aa bb', -2.1e-06),
+            ('nug aa dd', -2e-06)], True)
+
+    def test_vocab_model(self):
+        Vocab = FTS5Test.VocabModel()
+        Vocab.create_table()
+
+        query = Vocab.select().where(Vocab.term == 'aa')
+        self.assertEqual(
+            query.dicts()[:],
+            [{'doc': 2, 'term': 'aa', 'cnt': 12}])
+
+        query = Vocab.select().where(Vocab.cnt > 20).order_by(Vocab.cnt)
+        self.assertEqual(query.dicts()[:], [
+            {'doc': 3, 'term': u'bb', 'cnt': 28},
+            {'doc': 4, 'term': u'cc', 'cnt': 36}])
 
 
 @skip_if(lambda: not CLOSURE_EXTENSION)

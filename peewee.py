@@ -3320,6 +3320,9 @@ class Database(object):
             self.quote_char, self.interpolation, self.field_overrides,
             self.op_overrides)
 
+    def execute(self, clause):
+        return self.execute_sql(*self.compiler().parse_node(clause))
+
     def execute_sql(self, sql, params=None, require_commit=True):
         logger.debug((sql, params))
         with self.exception_wrapper():
