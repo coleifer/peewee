@@ -359,8 +359,8 @@ class FTS5Model(VirtualModel):
 
     @classmethod
     def VocabModel(cls, table_type='row', table_name=None):
-        if table_type not in ('row', 'column'):
-            raise ValueError('table_type must be either "row" or "column".')
+        if table_type not in ('row', 'col'):
+            raise ValueError('table_type must be either "row" or "col".')
 
         attr = '_vocab_model_%s' % table_type
 
