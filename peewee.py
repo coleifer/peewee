@@ -3007,7 +3007,7 @@ class UpdateQuery(_WriteQuery):
 
 class InsertQuery(_WriteQuery):
     def __init__(self, model_class, field_dict=None, rows=None,
-                 fields=None, query=None):
+                 fields=None, query=None, validate_fields=False):
         super(InsertQuery, self).__init__(model_class)
 
         self._upsert = False
@@ -3020,15 +3020,17 @@ class InsertQuery(_WriteQuery):
 
         self._fields = fields
         self._query = query
+        self._validate_fields = validate_fields
         self._on_conflict = None
 
     def _iter_rows(self):
         model_meta = self.model_class._meta
-        valid_fields = (set(model_meta.fields.keys()) |
-                        set(model_meta.fields.values()))
-        def validate_field(field):
-            if field not in valid_fields:
-                raise KeyError('"%s" is not a recognized field.' % field)
+        if self._validate_fields:
+            valid_fields = (set(model_meta.fields.keys()) |
+                            set(model_meta.fields.values()))
+            def validate_field(field):
+                if field not in valid_fields:
+                    raise KeyError('"%s" is not a recognized field.' % field)
 
         defaults = model_meta._default_dict
         callables = model_meta._default_callables
@@ -3037,7 +3039,8 @@ class InsertQuery(_WriteQuery):
             field_row = defaults.copy()
             seen = set()
             for key in row_dict:
-                validate_field(key)
+                if self._validate_fields:
+                    validate_field(key)
                 if key in model_meta.fields:
                     field = model_meta.fields[key]
                 else:
@@ -3058,6 +3061,7 @@ class InsertQuery(_WriteQuery):
         query._fields = self._fields
         query._query = self._query
         query._return_id_list = self._return_id_list
+        query._validate_fields = self._validate_fields
         query._on_conflict = self._on_conflict
         return query
 
@@ -4265,17 +4269,20 @@ class Model(with_metaclass(BaseModel)):
         return query
 
     @classmethod
-    def update(cls, **update):
-        fdict = dict((cls._meta.fields[f], v) for f, v in update.items())
+    def update(cls, __data=None, **update):
+        fdict = __data or {}
+        fdict.update([(cls._meta.fields[f], update[f]) for f in update])
         return UpdateQuery(cls, fdict)
 
     @classmethod
-    def insert(cls, **insert):
-        return InsertQuery(cls, insert)
+    def insert(cls, __data=None, **insert):
+        fdict = __data or {}
+        fdict.update([(cls._meta.fields[f], insert[f]) for f in insert])
+        return InsertQuery(cls, fdict)
 
     @classmethod
-    def insert_many(cls, rows):
-        return InsertQuery(cls, rows=rows)
+    def insert_many(cls, rows, validate_fields=True):
+        return InsertQuery(cls, rows=rows, validate_fields=True)
 
     @classmethod
     def insert_from(cls, fields, query):

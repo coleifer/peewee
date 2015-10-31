@@ -790,6 +790,27 @@ class TestUpdateQuery(PeeweeTestCase):
             '"user_id" = ?, "title" = ?, "content" = ?, "pub_date" = ?',
             [15, 'foo', 'bar', pub_date]))
 
+    def test_via_model(self):
+        uq = User.update(username='updated')
+        self.assertEqual(compiler.generate_update(uq), (
+            'UPDATE "users" SET "username" = ?',
+            ['updated']))
+
+        uq = User.update({User.username: 'updated'})
+        self.assertEqual(compiler.generate_update(uq), (
+            'UPDATE "users" SET "username" = ?',
+            ['updated']))
+
+        uq = Blog.update({Blog.user: User(id=100)})
+        self.assertEqual(compiler.generate_update(uq), (
+            'UPDATE "blog" SET "user_id" = ?',
+            [100]))
+
+        uq = User.update({User.id: User.id + 5})
+        self.assertEqual(compiler.generate_update(uq), (
+            'UPDATE "users" SET "id" = ("users"."id" + ?)',
+            [5]))
+
     def test_on_conflict(self):
         uq = UpdateQuery(User, {
             User.username: 'charlie'}).on_conflict('IGNORE')

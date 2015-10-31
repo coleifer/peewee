@@ -168,8 +168,7 @@ class TestQueryingModels(ModelTestCase):
         u = User.get(User.id==uid)
         self.assertEqual(u.username, 'u1')
 
-        iq = User.insert(doesnotexist='invalid')
-        self.assertRaises(KeyError, iq.execute)
+        self.assertRaises(KeyError, lambda: User.insert(doesnotexist='invalid'))
 
     def test_insert_from(self):
         u0, u1, u2 = [User.create(username='U%s' % i) for i in range(3)]
