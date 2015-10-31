@@ -51,6 +51,35 @@ class PrimaryKeyAutoIncrementField(PrimaryKeyField):
         ddl = super(PrimaryKeyAutoIncrementField, self).__ddl__(column_type)
         return ddl + [SQL('AUTOINCREMENT')]
 
+class _VirtualFieldMixin(object):
+    """
+    Field mixin to support virtual table attributes that may not correspond
+    to actual columns in the database.
+    """
+    def add_to_class(self, model_class, name):
+        super(_VirtualFieldMixin, self).add_to_class(model_class, name)
+        del model_class._meta.fields[self.name]
+        del model_class._meta.columns[self.db_column]
+
+class VirtualField(_VirtualFieldMixin, BareField):
+    pass
+
+class VirtualIntegerField(_VirtualFieldMixin, IntegerField):
+    pass
+
+class VirtualCharField(_VirtualFieldMixin, CharField):
+    pass
+
+class VirtualFloatField(_VirtualFieldMixin, FloatField):
+    pass
+
+class RowIDField(_VirtualFieldMixin, PrimaryKeyField):
+    def add_to_class(self, model_class, name):
+        if name != 'rowid':
+            raise ValueError('RowIDField must be named `rowid`.')
+        return super(RowIDField, self).add_to_class(model_class, name)
+
+
 class SqliteQueryCompiler(QueryCompiler):
     """
     Subclass of QueryCompiler that can be used to construct virtual tables.
@@ -92,9 +121,11 @@ class SqliteQueryCompiler(QueryCompiler):
     def create_table(self, model_class, safe=False, options=None):
         return self.parse_node(self._create_table(model_class, safe, options))
 
+
 class VirtualModel(Model):
     """Model class stored using a Sqlite virtual table."""
     _extension = ''
+
 
 class FTSModel(VirtualModel):
     _extension = FTS_VER
@@ -151,7 +182,7 @@ class FTSModel(VirtualModel):
             field = find_best_search_field(cls)
         field_idx = cls._meta.get_field_index(field)
         match_info = fn.matchinfo(cls.as_entity(), 'pcxnal')
-        return fn.bm25(match_info, field_idx, k, b)
+        return fn.fts_bm25(match_info, field_idx, k, b)
 
     @classmethod
     def search(cls, term, alias='score'):
@@ -171,33 +202,50 @@ class FTSModel(VirtualModel):
                 .where(cls.match(term))
                 .order_by(SQL(alias).desc()))
 
-class _VirtualFieldMixin(object):
-    """
-    Field mixin to support virtual table attributes that may not correspond
-    to actual columns in the database.
-    """
-    def add_to_class(self, model_class, name):
-        super(_VirtualFieldMixin, self).add_to_class(model_class, name)
-        del model_class._meta.fields[self.name]
-        del model_class._meta.columns[self.db_column]
 
-class VirtualField(_VirtualFieldMixin, BareField):
-    pass
+class FTS5Model(VirtualModel):
+    _extension = 'fts5'
 
-class VirtualIntegerField(_VirtualFieldMixin, IntegerField):
-    pass
+    # FTS5 does not support declared primary keys, but we will use the
+    # implicit rowid.
+    rowid = RowIDField()
 
-class VirtualCharField(_VirtualFieldMixin, CharField):
-    pass
+    @classmethod
+    def match(cls, term):
+        """
+        Generate a `MATCH` expression appropriate for searching this table.
+        """
+        return match(cls.as_entity(), term)
 
-class VirtualFloatField(_VirtualFieldMixin, FloatField):
-    pass
+    @classmethod
+    def rank(cls):
+        return SQL('rank')
 
-class RowIDField(_VirtualFieldMixin, PrimaryKeyField):
-    def add_to_class(self, model_class, name):
-        if name != 'rowid':
-            raise ValueError('RowIDField must be named `rowid`.')
-        return super(RowIDField, self).add_to_class(model_class, name)
+    @classmethod
+    def search(cls, term):
+        """Full-text search using selected `term`."""
+        return (cls
+                .select(cls)
+                .where(cls.match(term))
+                .order_by(SQL('rank')))
+
+    @classmethod
+    def search_bm25(cls, term, weights=None):
+        """Full-text search using selected `term`."""
+        if weights:
+            weight_args = []
+            for field in cls._meta.sorted_fields:
+                weight_args.append(
+                    weights.get(field, weights.get(field.name, 1.0)))
+            rank = fn.bm25(cls.as_entity(), *weight_args)
+        else:
+            rank = fn.bm25(cls.as_entity())
+
+        return (cls
+                .select(cls)
+                .where(cls.match(term))
+                .order_by(rank))
+
 
 def ClosureTable(model_class, foreign_key=None):
     """Model factory for the transitive closure extension."""
@@ -281,8 +329,8 @@ class SqliteExtDatabase(SqliteDatabase):
         self._functions = {}
         self._extensions = set([])
         self._row_factory = None
-        self.register_function(rank, 'rank', 1)
-        self.register_function(bm25, 'bm25', -1)
+        self.register_function(rank, 'fts_rank', 1)
+        self.register_function(bm25, 'fts_bm25', -1)
 
     def _add_conn_hooks(self, conn):
         super(SqliteExtDatabase, self)._add_conn_hooks(conn)
@@ -398,8 +446,8 @@ def match(lhs, rhs):
     return Expression(lhs, OP.MATCH, rhs)
 
 # Shortcut for calculating ranks.
-Rank = lambda model: fn.rank(fn.matchinfo(model.as_entity()))
-BM25 = lambda mc, idx: fn.bm25(fn.matchinfo(mc.as_entity(), 'pcxnal'), idx)
+Rank = lambda model: fn.fts_rank(fn.matchinfo(model.as_entity()))
+BM25 = lambda mc, idx: fn.fts_bm25(fn.matchinfo(mc.as_entity(), 'pcxnal'), idx)
 
 def find_best_search_field(model_class):
     for field_class in [TextField, CharField]:
