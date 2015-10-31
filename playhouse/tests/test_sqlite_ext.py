@@ -24,7 +24,7 @@ ext_db = database_initializer.get_database(
 
 # Test in-memory DB to determine if the FTS5 extension is installed.
 def check_fts5():
-    tmp_db = database_initializer.get_in_memory_database()
+    tmp_db = SqliteExtDatabase(':memory:')
     class FTS5Test(FTS5Model):
         data = BareField(null=True)
         class Meta:
