@@ -54,6 +54,22 @@ class TestQueryResultWrapper(ModelTestCase):
             # Calling again does not incur another query.
             self.assertEqual(qr.count, 4)
 
+    def test_len(self):
+        User.create_users(5)
+
+        with self.assertQueryCount(1):
+            query = User.select()
+            self.assertEqual(len(query), 5)
+
+            qr = query.execute()
+            self.assertEqual(len(qr), 5)
+
+        with self.assertQueryCount(1):
+            query = query.where(User.username != 'u1')
+            qr = query.execute()
+            self.assertEqual(len(qr), 4)
+            self.assertEqual(len(query), 4)
+
     def test_nested_iteration(self):
         User.create_users(4)
         with self.assertQueryCount(1):

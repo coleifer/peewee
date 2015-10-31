@@ -1979,6 +1979,9 @@ class QueryResultWrapper(object):
         self.fill_cache()
         return self._ct
 
+    def __len__(self):
+        return self.count
+
     def process_row(self, row):
         return row
 
@@ -2858,6 +2861,9 @@ class SelectQuery(Query):
             index += 1
         res.fill_cache(index)
         return res._result_cache[value]
+
+    def __len__(self):
+        return len(self.execute())
 
     if PY3:
         def __hash__(self):
