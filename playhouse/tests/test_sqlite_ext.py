@@ -749,8 +749,8 @@ class TestFTS5Extension(ModelTestCase):
 
         query = Vocab.select().where(Vocab.cnt > 20).order_by(Vocab.cnt)
         self.assertEqual(query.dicts()[:], [
-            {'doc': 3, 'term': u'bb', 'cnt': 28},
-            {'doc': 4, 'term': u'cc', 'cnt': 36}])
+            {'doc': 3, 'term': 'bb', 'cnt': 28},
+            {'doc': 4, 'term': 'cc', 'cnt': 36}])
 
 
 @skip_if(lambda: not CLOSURE_EXTENSION)
