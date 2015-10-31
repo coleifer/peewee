@@ -32,11 +32,11 @@ def check_fts5():
 
     try:
         FTS5Test.create_table()
-    except OperationalError:
+    except:
         try:
             sqlite3.enable_load_extension(True)
             sqlite3.load_extension('fts5')
-        except OperationalError:
+        except:
             return False
     finally:
         tmp_db.close()
