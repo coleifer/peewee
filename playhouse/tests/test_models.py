@@ -305,7 +305,7 @@ class TestQueryingModels(ModelTestCase):
 
 
 class TestInsertEmptyModel(ModelTestCase):
-    requires = [EmptyModel]
+    requires = [EmptyModel, NoPKModel]
 
     def test_insert_empty(self):
         query = EmptyModel.insert()
@@ -325,6 +325,23 @@ class TestInsertEmptyModel(ModelTestCase):
         # Verify we can also use `create()`.
         em2 = EmptyModel.create()
         self.assertEqual(EmptyModel.select().count(), 2)
+
+    def test_no_pk(self):
+        obj = NoPKModel.create(data='1')
+        self.assertEqual(NoPKModel.select(fn.COUNT('1')).scalar(), 1)
+
+        res = (NoPKModel
+               .update(data='1-e')
+               .where(NoPKModel.data == '1')
+               .execute())
+        self.assertEqual(res, 1)
+        self.assertEqual(NoPKModel.select(fn.COUNT('1')).scalar(), 1)
+
+        NoPKModel(data='2').save()
+        NoPKModel(data='3').save()
+        self.assertEqual(
+            [obj.data for obj in NoPKModel.select().order_by(NoPKModel.data)],
+            ['1-e', '2', '3'])
 
 
 class TestModelAPIs(ModelTestCase):

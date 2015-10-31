@@ -4442,8 +4442,11 @@ class Model(with_metaclass(BaseModel)):
 
     def save(self, force_insert=False, only=None):
         field_dict = dict(self._data)
-        pk_field = self._meta.primary_key
-        pk_value = self._get_pk_value()
+        if self._meta.primary_key is not False:
+            pk_field = self._meta.primary_key
+            pk_value = self._get_pk_value()
+        else:
+            pk_field = pk_value = None
         if only:
             field_dict = self._prune_fields(field_dict, only)
         elif self._meta.only_save_dirty and not force_insert:
@@ -4462,6 +4465,9 @@ class Model(with_metaclass(BaseModel)):
             else:
                 field_dict.pop(pk_field.name, None)
             rows = self.update(**field_dict).where(self._pk_expr()).execute()
+        elif pk_field is None:
+            self.insert(**field_dict).execute()
+            rows = 1
         else:
             pk_from_cursor = self.insert(**field_dict).execute()
             if pk_from_cursor is not None:

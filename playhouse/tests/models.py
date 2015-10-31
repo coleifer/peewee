@@ -347,6 +347,12 @@ class EmptyModel(TestModel):
     pass
 
 
+class NoPKModel(TestModel):
+    data = TextField()
+    class Meta:
+        primary_key = False
+
+
 MODELS = [
     User,
     Blog,
@@ -398,4 +404,5 @@ MODELS = [
     ServerDefaultModel,
     SpecialComment,
     EmptyModel,
+    NoPKModel,
 ]
