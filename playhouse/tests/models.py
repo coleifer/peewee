@@ -243,6 +243,10 @@ class CompositeKeyModel(TestModel):
         primary_key = CompositeKey('f1', 'f2')
 
 
+class ForeignKeyToCompositeKeyModel(TestModel):
+    ref_to_composite_key_model = ForeignKeyField(CompositeKeyModel)
+    tag = CharField()
+
 class UserThing(TestModel):
     thing = CharField()
     user = ForeignKeyField(User, related_name='things')
@@ -405,4 +409,5 @@ MODELS = [
     SpecialComment,
     EmptyModel,
     NoPKModel,
+    ForeignKeyToCompositeKeyModel
 ]
