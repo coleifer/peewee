@@ -369,7 +369,7 @@ You can filter for particular records using normal python operators. Peewee supp
 
     >>> user = User.get(User.username == 'Charlie')
     >>> for tweet in Tweet.select().where(Tweet.user == user, Tweet.is_published == True):
-    ...     print '%s: %s (%s)' % (tweet.user.username, tweet.message)
+    ...     print '%s: %s' % (tweet.user.username, tweet.message)
     ...
     Charlie: hello world
     Charlie: this is fun
