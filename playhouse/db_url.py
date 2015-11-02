@@ -56,6 +56,8 @@ def parseresult_to_dict(parsed):
     # Adjust parameters for MySQL.
     if parsed.scheme == 'mysql' and 'password' in connect_kwargs:
         connect_kwargs['passwd'] = connect_kwargs.pop('password')
+    elif 'sqlite' in parsed.scheme and not connect_kwargs['database']:
+        connect_kwargs['database'] = ':memory:'
 
     return connect_kwargs
 
