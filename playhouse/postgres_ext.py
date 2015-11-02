@@ -45,6 +45,9 @@ class _LookupNode(Node):
     def clone_base(self):
         return type(self)(self.node, list(self.parts))
 
+    def cast(self, as_type):
+        return Expression(Clause(self, parens=True), OP.CAST, SQL(as_type))
+
 class _JsonLookupBase(_LookupNode):
     def __init__(self, node, parts, as_json=False):
         super(_JsonLookupBase, self).__init__(node, parts)

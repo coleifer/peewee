@@ -727,6 +727,17 @@ class BaseJsonFieldTestCase(object):
         assertLookup(expr, {'ldata': 'mickey'})
         assertLookup(expr.as_json(), {'ldata': 'mickey'})
 
+    def test_json_cast(self):
+        self.ModelClass.create(data={'foo': {'bar': 3}})
+        self.ModelClass.create(data={'foo': {'bar': 5}})
+        query = self.ModelClass.select(
+            self.ModelClass.data['foo']['bar'].cast('float') * 1.5
+        ).order_by(self.ModelClass.id).tuples()
+        results = query[:]
+        self.assertEqual(results, [
+            (4.5,),
+            (7.5,)])
+
     def test_json_path(self):
         data = {
             'foo': {
