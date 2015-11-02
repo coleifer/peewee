@@ -3487,8 +3487,6 @@ class SqliteDatabase(Database):
             self._pragmas.append(('journal_mode', journal_mode))
 
         super(SqliteDatabase, self).__init__(database, *args, **kwargs)
-        if not self.database:
-            self.database = ':memory:'
 
     def _connect(self, database, **kwargs):
         conn = sqlite3.connect(database, **kwargs)
