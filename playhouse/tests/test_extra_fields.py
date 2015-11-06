@@ -14,6 +14,7 @@ except ImportError:
 from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
 from playhouse.tests.base import skip_if
+from playhouse.tests.base import ulit
 
 PY2 = sys.version_info[0] == 2
 
@@ -153,7 +154,7 @@ class TestPasswordFields(ModelTestCase):
         self.assertFalse(tm_db.password.check_password('a'+test_pwd),'Incorrect password did match')
 
     def test_unicode(self):
-        test_pwd = u'H\u00c3l\u00c5o!:)'
+        test_pwd = ulit('H\u00c3l\u00c5o!:)')
 
         tm = self.PasswordModel.create(username='User', password=test_pwd)
         tm_db = self.PasswordModel.get(self.PasswordModel.id == tm.id)
