@@ -3510,6 +3510,10 @@ class SqliteDatabase(Database):
     def begin(self, lock_type='DEFERRED'):
         self.execute_sql('BEGIN %s' % lock_type, require_commit=False)
 
+    def create_foreign_key(self, model_class, field, constraint=None):
+        raise OperationalError('SQLite does not support ALTER TABLE '
+                               'statements to add constraints.')
+
     def get_tables(self, schema=None):
         cursor = self.execute_sql('SELECT name FROM sqlite_master WHERE '
                                   'type = ? ORDER BY name;', ('table',))

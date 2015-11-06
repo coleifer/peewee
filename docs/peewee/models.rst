@@ -763,4 +763,8 @@ Here is how to create the tables:
     Tweet.create_table()
 
     # Now that both tables exist, we can create the foreign key from User -> Tweet:
+    # NOTE: this will not work in SQLite!
     db.create_foreign_key(User, User.favorite_tweet)
+
+.. warning::
+    SQLite does not support adding constraints to existing tables through the ``ALTER TABLE`` statement.
