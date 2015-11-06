@@ -1,4 +1,5 @@
 from playhouse.tests.base import compiler
+from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
 from playhouse.tests.base import PeeweeTestCase
 from playhouse.tests.base import skip_if
@@ -378,6 +379,31 @@ class TestDeferredForeignKey(ModelTestCase):
             Language.get(Language.id == python.id).selected_snippet, p2)
         self.assertEqual(
             Language.get(Language.id == javascript.id).selected_snippet, None)
+
+
+class TestSQLiteDeferredForeignKey(PeeweeTestCase):
+    def test_doc_example(self):
+        db = database_initializer.get_in_memory_database()
+        TweetProxy = Proxy()
+        class Base(Model):
+            class Meta:
+                database = db
+        class User(Base):
+            username = CharField()
+            favorite_tweet = ForeignKeyField(TweetProxy, null=True)
+        class Tweet(Base):
+            user = ForeignKeyField(User)
+            message = TextField()
+        TweetProxy.initialize(Tweet)
+        with db.transaction():
+            User.create_table()
+            Tweet.create_table()
+
+        # SQLite does not support alter + add constraint.
+        self.assertRaises(
+            OperationalError,
+            lambda: db.create_foreign_key(User, User.favorite_tweet))
+
 
 
 @skip_if(lambda: not test_db.foreign_keys)
