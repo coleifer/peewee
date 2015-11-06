@@ -713,6 +713,28 @@ The connection handling code can be placed in a `middleware <https://pythonhoste
 
 Thanks to GitHub user *@tuukkamustonen* for submitting this code.
 
+Falcon
+^^^^^^
+
+The connection handling code can be placed in a `middleware component <https://falcon.readthedocs.org/en/stable/api/middleware.html>`_.
+
+.. code-block:: python
+
+    import falcon
+    from peewee import *
+
+    database = SqliteDatabase('my_app.db')
+
+    class PeeweeConnectionMiddleware(object):
+        def process_request(self, req, resp):
+            database.connect()
+
+        def process_response(self, req, resp, resource):
+            if not database.is_closed():
+                database.close()
+
+    application = falcon.API(middleware=PeeweeConnectionMiddleware())
+
 Other frameworks
 ^^^^^^^^^^^^^^^^
 
