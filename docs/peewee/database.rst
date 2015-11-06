@@ -733,7 +733,10 @@ The connection handling code can be placed in a `middleware component <https://f
             if not database.is_closed():
                 database.close()
 
-    application = falcon.API(middleware=PeeweeConnectionMiddleware())
+    application = falcon.API(middleware=[
+        PeeweeConnectionMiddleware(),
+        # ... other middlewares ...
+    ])
 
 Other frameworks
 ^^^^^^^^^^^^^^^^
