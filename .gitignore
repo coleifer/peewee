@@ -2,3 +2,5 @@
 build
 prof/
 playhouse/speedups.c
+playhouse/tests/peewee_test.db
+.idea/
