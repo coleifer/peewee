@@ -290,6 +290,50 @@ class TestCompositePrimaryKey(ModelTestCase):
             ['t1', 't2', 't3'])
 
 
+class TestForeignKeyToCompositePrimaryKey(ModelTestCase):
+    requires = [ForeignKeyToCompositeKeyModel, CompositeKeyModel]
+
+    def setUp(self):
+        super(TestForeignKeyToCompositePrimaryKey, self).setUp()
+        self.ckm_1 = CompositeKeyModel.create(f1="A", f2=1, F3=1.0)
+        self.ckm_2 = CompositeKeyModel.create(f1="A", f2=2, F3=1.0)
+
+        self.fktckm_1_1 = ForeignKeyToCompositeKeyModel.create(
+            ref_to_composite_key_model=ckm_1,
+            tag="t1.1",
+        )
+
+        self.fktckm_1_2 = ForeignKeyToCompositeKeyModel.create(
+            ref_to_composite_key_model=ckm_1,
+            tag="t1.2",
+        )
+
+        self.fktckm_2_1 = ForeignKeyToCompositeKeyModel.create(
+            ref_to_composite_key_model=ckm_2,
+            tag="t2.1",
+        )
+
+    def test_storage_retrieval(self):
+        ckms = list(CompositeKeyModel.select())
+        self.assrtEqual(len(ckms), 1)
+        self.assertEqual(len(ckms[0].foreignkeytocompositekeymodel_set), 2)
+        self.assertEqual(ckms[0].foreignkeytocompositekeymodel_set,
+            [self.fktckm_1_1, self.fktckm_1_2]
+        )
+
+    def test_create_table_query(self):
+        query, params = compiler.create_table(ForeignKeyToCompositeKeyModel)
+        self.assertEqual(
+            query,
+            'CREATE TABLE "foreignkeytocompositekeymodel" '
+            '("composite_key_model_f1_id" INTEGER NOT NULL, '
+            '"composite_key_model_f2_id" VARCHAR(255) NOT NULL, '
+            'FOREIGN KEY ("composite_key_model_f1_id", '
+            '"composite_key_model_f2_id") '
+            'REFERENCES "compositekeymodel" ("f1", "f2")'
+            ')')
+
+
 class TestForeignKeyNonPrimaryKeyCreateTable(PeeweeTestCase):
     def test_create_table(self):
         class A(TestModel):
