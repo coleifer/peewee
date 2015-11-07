@@ -453,6 +453,7 @@ Option                  Meaning                                                I
 ``primary_key``         a :py:class:`CompositeKey` instance                    yes
 ``table_alias``         an alias to use for the table in queries               no
 ``schema``              the database schema for the model                      yes
+``constraints``         a list of table constraints                            yes
 ``validate_backrefs``   ensure backrefs do not conflict with other attributes. yes
 ``only_save_dirty``     when calling model.save(), only save dirty fields      yes
 =====================   ====================================================== ============
@@ -521,10 +522,13 @@ Examples:
 
 .. _model_indexes:
 
-Indexes and Unique Constraints
-------------------------------
+Indexes and Constraints
+-----------------------
 
-Peewee can create indexes on single or multiple columns, optionally including a *UNIQUE* constraint.
+Peewee can create indexes on single or multiple columns, optionally including a *UNIQUE* constraint. Peewee also supports user-defined constraints on both models and fields.
+
+Single-column indexes and constraints
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Single column indexes are defined using field initialization parameters. The following example adds a unique index on the *username* field, and a normal index on the *email* field:
 
@@ -533,6 +537,19 @@ Single column indexes are defined using field initialization parameters. The fol
     class User(Model):
         username = CharField(unique=True)
         email = CharField(index=True)
+
+To add a user-defined constraint on a column, you can pass it in using the ``constraints`` parameter. You may wish to specify a default value as part of the schema, or add a ``CHECK`` constraint, for example:
+
+.. code-block:: python
+
+    class Product(Model):
+        name = CharField(unique=True)
+        price = DecimalField(constraints=[Check('price < 10000')])
+        created = DateTimeField(
+            constraints=[SQL("DEFAULT (datetime('now'))")])
+
+Multi-column indexes
+^^^^^^^^^^^^^^^^^^^^
 
 Multi-column indexes are defined as *Meta* attributes using a nested tuple. Each database index is a 2-tuple, the first part of which is a tuple of the names of the fields, the second part a boolean indicating whether the index should be unique.
 
@@ -562,6 +579,42 @@ Multi-column indexes are defined as *Meta* attributes using a nested tuple. Each
             indexes = (
                 (('first_name', 'last_name'), True),  # Note the trailing comma!
             )
+
+Table constraints
+^^^^^^^^^^^^^^^^^
+
+Peewee allows you to add arbitrary constraints to your :py:class:`Model`, that will be part of the table definition when the schema is created.
+
+For instance, suppose you have a *people* table with a composite primary key of two columns, the person's first and last name. You wish to have another table relate to the *people* table, and to do this, you will need to define a foreign key constraint:
+
+.. code-block:: python
+
+    class Person(Model):
+        first = CharField()
+        last = CharField()
+
+        class Meta:
+            primary_key = CompositeKey('first', 'last')
+
+    class Pet(Model):
+        owner_first = CharField()
+        owner_last = CharField()
+        pet_name = CharField()
+
+        class Meta:
+            constraints = [SQL('FOREIGN KEY(owner_first, owner_last) '
+                               'REFERENCES person(first, last)')]
+
+You can also implement ``CHECK`` constraints at the table level:
+
+.. code-block:: python
+
+    class Product(Model):
+        name = CharField(unique=True)
+        price = DecimalField()
+
+        class Meta:
+            constraints = [Check('price < 10000')]
 
 .. _non_integer_primary_keys:
 

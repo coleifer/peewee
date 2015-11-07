@@ -1883,6 +1883,12 @@ class QueryCompiler(object):
             if isinstance(field, ForeignKeyField) and not field.deferred:
                 constraints.append(self.foreign_key_constraint(field))
 
+        if model_class._meta.constraints:
+            for constraint in model_class._meta.constraints:
+                if not isinstance(constraint, Node):
+                    constraint = SQL(constraint)
+                constraints.append(constraint)
+
         return Clause(
             SQL(statement),
             model_class.as_entity(),
