@@ -5,6 +5,7 @@ from peewee import IntegrityError
 from playhouse.berkeleydb import *
 from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
+from playhouse.tests.base import skip_unless
 
 database = database_initializer.get_database('berkeleydb')
 
@@ -20,6 +21,7 @@ class Message(BaseModel):
     body = TextField()
 
 
+@skip_unless(check_pysqlite)
 class TestBerkeleyDatabase(ModelTestCase):
     requires = [Person, Message]
 

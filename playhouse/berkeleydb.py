@@ -1,11 +1,52 @@
+import ctypes
 import datetime
 import decimal
+import sys
 
+from peewee import ImproperlyConfigured
 from playhouse.sqlite_ext import *
+
+
+def check_pysqlite():
+    try:
+        from pysqlite2 import dbapi2 as sqlite3
+    except ImportError:
+        import sqlite3
+    conn = sqlite3.connect(':memory:')
+    try:
+        results = conn.execute('PRAGMA compile_options;').fetchall()
+    finally:
+        conn.close()
+    for option, in results:
+        if option == 'BERKELEY_DB':
+            return True
+    return False
+
+def check_libsqlite():
+    if sys.platform.startswith('win'):
+        library = 'libsqlite3.dll'
+    elif sys.platform == 'darwin':
+        library = 'libsqlite3.dylib'
+    else:
+        library = 'libsqlite3.so'
+
+    try:
+        libsqlite = ctypes.CDLL(library)
+    except OSError:
+        return False
+
+    return libsqlite.sqlite3_compileoption_used('BERKELEY_DB') == 1
+
+PYSQLITE_BERKELEYDB = check_pysqlite()
+LIBSQLITE_BERKELEYDB = check_libsqlite()
+
 
 # Peewee assumes that the `pysqlite2` module was compiled against the
 # BerkeleyDB SQLite libraries.
-from pysqlite2 import dbapi2 as berkeleydb
+try:
+    from pysqlite2 import dbapi2 as berkeleydb
+except ImportError:
+    import sqlite3 as berkeleydb
 
 berkeleydb.register_adapter(decimal.Decimal, str)
 berkeleydb.register_adapter(datetime.date, str)
@@ -25,6 +66,20 @@ class BerkeleyDatabase(SqliteExtDatabase):
             self._pragmas.append(('cache_size', cache_size))
 
     def _connect(self, database, **kwargs):
+        if not PYSQLITE_BERKELEYDB:
+            message = ('Your Python SQLite driver (%s) does not appear to '
+                       'have been compiled against the BerkeleyDB SQLite '
+                       'library.' % berkeleydb)
+            if LIBSQLITE_BERKELEYDB:
+                message += (' However, the libsqlite on your system is the '
+                            'BerkeleyDB implementation. Try recompiling '
+                            'pysqlite.')
+            else:
+                message += (' Additionally, the libsqlite on your system '
+                            'does not appear to be the BerkeleyDB '
+                            'implementation.')
+            raise ImproperlyConfigured(message)
+
         conn = berkeleydb.connect(database, **kwargs)
         conn.isolation_level = None
         self._add_conn_hooks(conn)
