@@ -354,12 +354,8 @@ class MySQLColumn(namedtuple('_Column', _column_attributes)):
         parts = [
             Entity(column_name),
             SQL(self.definition)]
-        if self.is_unique:
-            parts.append(SQL('UNIQUE'))
         if not is_null:
             parts.append(SQL('NOT NULL'))
-        if self.is_pk:
-            parts.append(SQL('PRIMARY KEY'))
         if self.extra:
             parts.append(SQL(self.extra))
         return Clause(*parts)
