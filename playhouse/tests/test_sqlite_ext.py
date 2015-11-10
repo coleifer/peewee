@@ -22,29 +22,9 @@ ext_db = database_initializer.get_database(
     db_class=SqliteExtDatabase,
     timeout=0.1)
 
-# Test in-memory DB to determine if the FTS5 extension is installed.
-def check_fts5():
-    tmp_db = SqliteExtDatabase(':memory:')
-    class FTS5Test(FTS5Model):
-        data = BareField(null=True)
-        class Meta:
-            database = tmp_db
-
-    try:
-        FTS5Test.create_table()
-    except:
-        try:
-            sqlite3.enable_load_extension(True)
-            sqlite3.load_extension('fts5')
-        except:
-            return False
-    finally:
-        tmp_db.close()
-
-    return True
 
 CLOSURE_EXTENSION = os.environ.get('CLOSURE_EXTENSION')
-FTS5_EXTENSION = check_fts5()
+FTS5_EXTENSION = FTS5Model.fts5_installed()
 
 # test aggregate.
 class WeightedAverage(object):

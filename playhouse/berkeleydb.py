@@ -7,40 +7,6 @@ from peewee import ImproperlyConfigured
 from playhouse.sqlite_ext import *
 
 
-def check_pysqlite():
-    try:
-        from pysqlite2 import dbapi2 as sqlite3
-    except ImportError:
-        import sqlite3
-    conn = sqlite3.connect(':memory:')
-    try:
-        results = conn.execute('PRAGMA compile_options;').fetchall()
-    finally:
-        conn.close()
-    for option, in results:
-        if option == 'BERKELEY_DB':
-            return True
-    return False
-
-def check_libsqlite():
-    if sys.platform.startswith('win'):
-        library = 'libsqlite3.dll'
-    elif sys.platform == 'darwin':
-        library = 'libsqlite3.dylib'
-    else:
-        library = 'libsqlite3.so'
-
-    try:
-        libsqlite = ctypes.CDLL(library)
-    except OSError:
-        return False
-
-    return libsqlite.sqlite3_compileoption_used('BERKELEY_DB') == 1
-
-PYSQLITE_BERKELEYDB = check_pysqlite()
-LIBSQLITE_BERKELEYDB = check_libsqlite()
-
-
 # Peewee assumes that the `pysqlite2` module was compiled against the
 # BerkeleyDB SQLite libraries.
 try:
@@ -102,3 +68,39 @@ class BerkeleyDatabase(SqliteExtDatabase):
                 else:
                     cursor.execute('PRAGMA %s = %s;' % (pragma, value))
             cursor.close()
+
+    @classmethod
+    def check_pysqlite(cls):
+        try:
+            from pysqlite2 import dbapi2 as sqlite3
+        except ImportError:
+            import sqlite3
+        conn = sqlite3.connect(':memory:')
+        try:
+            results = conn.execute('PRAGMA compile_options;').fetchall()
+        finally:
+            conn.close()
+        for option, in results:
+            if option == 'BERKELEY_DB':
+                return True
+        return False
+
+    @classmethod
+    def check_libsqlite(cls):
+        if sys.platform.startswith('win'):
+            library = 'libsqlite3.dll'
+        elif sys.platform == 'darwin':
+            library = 'libsqlite3.dylib'
+        else:
+            library = 'libsqlite3.so'
+
+        try:
+            libsqlite = ctypes.CDLL(library)
+        except OSError:
+            return False
+
+        return libsqlite.sqlite3_compileoption_used('BERKELEY_DB') == 1
+
+
+PYSQLITE_BERKELEYDB = BerkeleyDatabase.check_pysqlite()
+LIBSQLITE_BERKELEYDB = BerkeleyDatabase.check_libsqlite()

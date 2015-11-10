@@ -21,7 +21,7 @@ class Message(BaseModel):
     body = TextField()
 
 
-@skip_unless(check_pysqlite)
+@skip_unless(BerkeleyDatabase.check_pysqlite)
 class TestBerkeleyDatabase(ModelTestCase):
     requires = [Person, Message]
 

@@ -33,7 +33,10 @@ best_docs = Document.match('some phrase')
 """
 import inspect
 import math
-import sqlite3
+try:
+    import sqlite3
+except ImportError:
+    from pysqlite2 import dbapi2 as sqlite3
 import struct
 
 from peewee import *
@@ -272,6 +275,25 @@ class FTS5Model(VirtualModel):
     rowid = RowIDField()
 
     @classmethod
+    def fts5_installed(cls):
+        # Test in-memory DB to determine if the FTS5 extension is installed.
+        tmp_db = sqlite3.connect(':memory:')
+        try:
+            tmp_db.execute('CREATE VIRTUAL TABLE fts5test USING fts5 (data);')
+        except:
+            try:
+                sqlite3.enable_load_extension(True)
+                sqlite3.load_extension('fts5')
+            except:
+                return False
+            else:
+                cls._meta.database.load_extension('fts5')
+        finally:
+            tmp_db.close()
+
+        return True
+
+    @classmethod
     def match(cls, term):
         """
         Generate a `MATCH` expression appropriate for searching this table.
@@ -472,7 +494,9 @@ class SqliteExtDatabase(SqliteDatabase):
         self.register_function(bm25, 'fts_bm25', -1)
 
     def _add_conn_hooks(self, conn):
+        # Registers date_part, date_trunc and regexp helpers.
         super(SqliteExtDatabase, self)._add_conn_hooks(conn)
+
         self._load_aggregates(conn)
         self._load_collations(conn)
         self._load_functions(conn)
@@ -535,6 +559,10 @@ class SqliteExtDatabase(SqliteDatabase):
 
     def load_extension(self, extension):
         self._extensions.add(extension)
+        if not self.is_closed():
+            conn = self.get_conn()
+            conn.enable_load_extension(True)
+            conn.load_extension(extension)
 
     def unregister_aggregate(self, name):
         del(self._aggregates[name])
