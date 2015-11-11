@@ -56,7 +56,7 @@ class User(Model):
         db_table = 'users'
 
 class Page(Model):
-    name = TextField(unique=True, null=True)
+    name = CharField(max_length=100, unique=True, null=True)
     user = ForeignKeyField(User, null=True, related_name='pages')
 
 class IndexModel(Model):
@@ -231,7 +231,7 @@ class BaseMigrationTestCase(object):
         self.assertEqual(column_names, set(['id', 'title', 'user_id']))
 
         class NewPage(Model):
-            title = TextField(unique=True, null=True)
+            title = CharField(max_length=100, unique=True, null=True)
             user = ForeignKeyField(User, null=True, related_name='newpages')
 
             class Meta:
