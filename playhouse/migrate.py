@@ -154,6 +154,9 @@ def operation(fn):
     return inner
 
 class SchemaMigrator(object):
+    explicit_create_foreign_key = False
+    explicit_delete_foreign_key = False
+
     def __init__(self, database):
         self.database = database
 
@@ -195,12 +198,19 @@ class SchemaMigrator(object):
             SQL('ADD COLUMN'),
             field_clause]
         if isinstance(field, ForeignKeyField):
-            parts.extend([
-                SQL('REFERENCES'),
-                Entity(field.rel_model._meta.db_table),
-                EnclosedClause(Entity(field.to_field.db_column))
-            ])
+            parts.extend(self.get_inline_fk_sql(field))
         return Clause(*parts)
+
+    def get_inline_fk_sql(self, field):
+        return [
+            SQL('REFERENCES'),
+            Entity(field.rel_model._meta.db_table),
+            EnclosedClause(Entity(field.to_field.db_column))
+        ]
+
+    @operation
+    def add_foreign_key_constraint(self, table, column_name, field):
+        raise NotImplementedError
 
     @operation
     def add_column(self, table, column_name, field):
@@ -211,8 +221,10 @@ class SchemaMigrator(object):
         if not field.null and field.default is None:
             raise ValueError('%s is not null but has no default' % column_name)
 
+        is_foreign_key = isinstance(field, ForeignKeyField)
+
         # Foreign key fields must explicitly specify a `to_field`.
-        if isinstance(field, ForeignKeyField) and not field.to_field:
+        if is_foreign_key and not field.to_field:
             raise ValueError('Foreign keys must specify a `to_field`.')
 
         operations = [self.alter_add_column(table, column_name, field)]
@@ -224,7 +236,19 @@ class SchemaMigrator(object):
                 self.apply_default(table, column_name, field),
                 self.add_not_null(table, column_name)])
 
+        if is_foreign_key and self.explicit_create_foreign_key:
+            operations.append(
+                self.add_foreign_key_constraint(
+                    table,
+                    column_name,
+                    field.rel_model._meta.db_table,
+                    field.to_field.db_column))
+
         return operations
+
+    @operation
+    def drop_foreign_key_constraint(self, table, column_name):
+        raise NotImplementedError
 
     @operation
     def drop_column(self, table, column_name, cascade=True):
@@ -235,7 +259,16 @@ class SchemaMigrator(object):
             Entity(column_name)]
         if cascade:
             nodes.append(SQL('CASCADE'))
-        return Clause(*nodes)
+        drop_column_node = Clause(*nodes)
+        fk_columns = [
+            foreign_key.column
+            for foreign_key in self.database.get_foreign_keys(table)]
+        if column_name in fk_columns and self.explicit_delete_foreign_key:
+            return [
+                self.drop_foreign_key_constraint(table, column_name),
+                drop_column_node]
+        else:
+            return drop_column_node
 
     @operation
     def rename_column(self, table, old_name, new_name):
@@ -356,7 +389,9 @@ class MySQLColumn(namedtuple('_Column', _column_attributes)):
             SQL(self.definition)]
         if self.is_unique:
             parts.append(SQL('UNIQUE'))
-        if not is_null:
+        if is_null:
+            parts.append(SQL('NULL'))
+        else:
             parts.append(SQL('NOT NULL'))
         if self.is_pk:
             parts.append(SQL('PRIMARY KEY'))
@@ -366,6 +401,17 @@ class MySQLColumn(namedtuple('_Column', _column_attributes)):
 
 
 class MySQLMigrator(SchemaMigrator):
+    explicit_create_foreign_key = True
+    explicit_delete_foreign_key = True
+
+    @operation
+    def rename_table(self, old_name, new_name):
+        return Clause(
+            SQL('RENAME TABLE'),
+            Entity(old_name),
+            SQL('TO'),
+            Entity(new_name))
+
     def _get_column_definition(self, table, column_name):
         cursor = self.database.execute_sql('DESCRIBE %s;' % table)
         rows = cursor.fetchall()
@@ -374,6 +420,47 @@ class MySQLMigrator(SchemaMigrator):
             if column.name == column_name:
                 return column
         return False
+
+    @operation
+    def add_foreign_key_constraint(self, table, column_name, rel, rel_column):
+        # TODO: refactor, this duplicates QueryCompiler._create_foreign_key
+        constraint = 'fk_%s_%s_refs_%s' % (table, column_name, rel)
+        return Clause(
+            SQL('ALTER TABLE'),
+            Entity(table),
+            SQL('ADD CONSTRAINT'),
+            Entity(constraint),
+            SQL('FOREIGN KEY'),
+            EnclosedClause(Entity(column_name)),
+            SQL('REFERENCES'),
+            Entity(rel),
+            EnclosedClause(Entity(rel_column)))
+
+    def get_foreign_key_constraint(self, table, column_name):
+        cursor = self.database.execute_sql(
+            ('SELECT constraint_name '
+             'FROM information_schema.key_column_usage WHERE '
+             'table_schema = DATABASE() AND '
+             'table_name = %s AND '
+             'column_name = %s;'),
+            (table, column_name))
+        result = cursor.fetchone()
+        if not result:
+            raise AttributeError(
+                'Unable to find foreign key constraint for '
+                '"%s" on table "%s".' % (table, column_name))
+        return result[0]
+
+    @operation
+    def drop_foreign_key_constraint(self, table, column_name):
+        return Clause(
+            SQL('ALTER TABLE'),
+            Entity(table),
+            SQL('DROP FOREIGN KEY'),
+            Entity(self.get_foreign_key_constraint(table, column_name)))
+
+    def get_inline_fk_sql(self, field):
+        return []
 
     @operation
     def add_not_null(self, table, column):
@@ -397,13 +484,31 @@ class MySQLMigrator(SchemaMigrator):
 
     @operation
     def rename_column(self, table, old_name, new_name):
+        fk_objects = dict(
+            (fk.column, fk)
+            for fk in self.database.get_foreign_keys(table))
+        is_foreign_key = old_name in fk_objects
+
         column = self._get_column_definition(table, old_name)
-        return Clause(
+        rename_clause = Clause(
             SQL('ALTER TABLE'),
             Entity(table),
             SQL('CHANGE'),
             Entity(old_name),
             column.sql(column_name=new_name))
+        if is_foreign_key:
+            fk_metadata = fk_objects[old_name]
+            return [
+                self.drop_foreign_key_constraint(table, old_name),
+                rename_clause,
+                self.add_foreign_key_constraint(
+                    table,
+                    new_name,
+                    fk_metadata.dest_table,
+                    fk_metadata.dest_column),
+            ]
+        else:
+            return rename_clause
 
     @operation
     def drop_index(self, table, index_name):
