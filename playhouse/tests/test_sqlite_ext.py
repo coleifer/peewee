@@ -104,9 +104,9 @@ class MultiColumn(FTSModel):
         database = ext_db
 
 class FTS5Test(FTS5Model):
-    title = BareField(null=True)
-    data = BareField(null=True)
-    misc = BareField(null=True, constraints=[SQL('UNINDEXED')])
+    title = SearchField()
+    data = SearchField()
+    misc = SearchField(unindexed=True)
 
     class Meta:
         database = ext_db

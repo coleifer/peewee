@@ -212,6 +212,15 @@ class FTSModel(VirtualModel):
                 .order_by(SQL(alias).desc()))
 
 
+class SearchField(BareField):
+    def __init__(self, unindexed=False, db_column=None):
+        kwargs = {'null': True, 'db_column': db_column}
+        self._unindexed = unindexed
+        if unindexed:
+            kwargs['constraints'] = [SQL('UNINDEXED')]
+        super(SearchField, self).__init__(**kwargs)
+
+
 class FTS5Model(VirtualModel):
     """
     Requires SQLite >= 3.9.0.
