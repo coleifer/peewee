@@ -135,12 +135,17 @@ else:
 
 # By default, peewee supports Sqlite, MySQL and Postgresql.
 try:
+    from pysqlite2 import dbapi2 as pysqlite
+except ImportError:
+    pysqlite = None
+try:
     import sqlite3
 except ImportError:
-    try:
-        from pysqlite2 import dbapi2 as sqlite3
-    except ImportError:
-        sqlite3 = None
+    sqlite3 = pysqlite
+else:
+    if pysqlite and pysqlite.sqlite_version_info > sqlite3.sqlite_version_info:
+        sqlite3 = pysqlite
+
 try:
     from psycopg2cffi import compat
     compat.register()

@@ -33,10 +33,6 @@ best_docs = Document.match('some phrase')
 """
 import inspect
 import math
-try:
-    import sqlite3
-except ImportError:
-    from pysqlite2 import dbapi2 as sqlite3
 import struct
 
 from peewee import *
@@ -46,10 +42,12 @@ from peewee import Expression
 from peewee import Node
 from peewee import OP
 from peewee import QueryCompiler
+from peewee import sqlite3  # Import the best SQLite version.
 from peewee import transaction
 
 
 FTS_VER = sqlite3.sqlite_version_info[:3] >= (3, 7, 4) and 'FTS4' or 'FTS3'
+FTS5_MIN_VERSION = (3, 9, 0)
 
 
 class PrimaryKeyAutoIncrementField(PrimaryKeyField):
@@ -276,6 +274,9 @@ class FTS5Model(VirtualModel):
 
     @classmethod
     def fts5_installed(cls):
+        if sqlite3.sqlite_version_info[:3] < FTS5_MIN_VERSION:
+            return False
+
         # Test in-memory DB to determine if the FTS5 extension is installed.
         tmp_db = sqlite3.connect(':memory:')
         try:
