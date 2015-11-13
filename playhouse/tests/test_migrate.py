@@ -291,6 +291,37 @@ class BaseMigrationTestCase(object):
                      (Person.last_name >> None)))
         self.assertEqual(query.count(), 1)
 
+    def test_modify_not_null_foreign_key(self):
+        user = User.create(id='charlie')
+        Page.create(name='null user')
+        Page.create(name='charlie', user=user)
+
+        def addNotNull():
+            with self.database.transaction():
+                migrate(self.migrator.add_not_null('page', 'user_id'))
+
+        if self._exception_add_not_null:
+            self.assertRaises(IntegrityError, addNotNull)
+
+        Page.update(user=user).where(Page.user.is_null()).execute()
+        addNotNull()
+
+        # And attempting to insert a null value results in an integrity error.
+        with self.database.transaction():
+            self.assertRaises(
+                self._exception_not_null_violation,
+                Page.create,
+                name='fails',
+                user=None)
+
+        # Now we will drop it.
+        with self.database.transaction():
+            migrate(self.migrator.drop_not_null('page', 'user_id'))
+
+        self.assertEqual(Page.select().where(Page.user.is_null()).count(), 0)
+        Page.create(name='succeeds', user=None)
+        self.assertEqual(Page.select().where(Page.user.is_null()).count(), 1)
+
     def test_rename_table(self):
         t1 = Tag.create(tag='t1')
         t2 = Tag.create(tag='t2')
