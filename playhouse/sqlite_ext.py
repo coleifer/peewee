@@ -44,6 +44,9 @@ from peewee import OP
 from peewee import QueryCompiler
 from peewee import sqlite3  # Import the best SQLite version.
 from peewee import transaction
+from peewee import _sqlite_date_part
+from peewee import _sqlite_date_trunc
+from peewee import _sqlite_regexp
 
 
 FTS_VER = sqlite3.sqlite_version_info[:3] >= (3, 7, 4) and 'FTS4' or 'FTS3'
@@ -500,13 +503,14 @@ class SqliteExtDatabase(SqliteDatabase):
         self._functions = {}
         self._extensions = set([])
         self._row_factory = None
+        self.register_function(_sqlite_date_part, 'date_part', 2)
+        self.register_function(_sqlite_date_trunc, 'date_trunc', 2)
+        self.register_function(_sqlite_regexp, 'regexp', 2)
         self.register_function(rank, 'fts_rank', 1)
         self.register_function(bm25, 'fts_bm25', -1)
 
     def _add_conn_hooks(self, conn):
-        # Registers date_part, date_trunc and regexp helpers.
-        super(SqliteExtDatabase, self)._add_conn_hooks(conn)
-
+        self._set_pragmas(conn)
         self._load_aggregates(conn)
         self._load_collations(conn)
         self._load_functions(conn)
