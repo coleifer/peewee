@@ -4256,6 +4256,9 @@ class BaseModel(type):
         cls.DoesNotExist = exception_class
         cls._meta.prepared()
 
+        if hasattr(cls, 'validate'):
+            cls.validate()
+
         return cls
 
     def __iter__(self):

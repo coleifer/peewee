@@ -81,7 +81,9 @@ class Post(BaseExtModel):
 
 class FTSPost(Post, FTSModel):
     """Automatically managed and populated via the Post model."""
-    pass
+    # Need to specify this, since the `Post.id` primary key will take
+    # precedence.
+    docid = DocIDField()
 
 class FTSDoc(FTSModel):
     """Manually managed and populated using queries."""
@@ -211,7 +213,10 @@ class SqliteExtTestCase(PeeweeTestCase):
     def test_fts_manual(self):
         messages = [FTSDoc.create(message=msg) for msg in self.messages]
 
-        q = FTSDoc.select().where(FTSDoc.match('believe')).order_by(FTSDoc.id)
+        q = (FTSDoc
+             .select()
+             .where(FTSDoc.match('believe'))
+             .order_by(FTSDoc.docid))
         self.assertMessages(q, [0, 3])
 
         q = FTSDoc.search('believe')
@@ -229,10 +234,10 @@ class SqliteExtTestCase(PeeweeTestCase):
         query = (FTSPost
                  .select(FTSPost, FTSPost.rank().alias('score'))
                  .where(FTSPost.match('believe'))
-                 .order_by(FTSPost.id))
+                 .order_by(FTSPost.docid))
         self.assertMessages(query, [0, 3])
 
-        fts_posts = FTSPost.select().order_by(FTSPost.id)
+        fts_posts = FTSPost.select(FTSPost.docid).order_by(FTSPost.docid)
         for fts_post in fts_posts:
             self.assertEqual(fts_post.delete_instance(), 1)
 
@@ -372,25 +377,25 @@ class SqliteExtTestCase(PeeweeTestCase):
         pq = (ModelClass
               .select()
               .where(ModelClass.match('faith'))
-              .order_by(ModelClass.id))
+              .order_by(ModelClass.docid))
         self.assertMessages(pq, range(len(self.messages)))
 
         pq = (ModelClass
               .select()
               .where(ModelClass.match('believe'))
-              .order_by(ModelClass.id))
+              .order_by(ModelClass.docid))
         self.assertMessages(pq, [0, 3])
 
         pq = (ModelClass
               .select()
               .where(ModelClass.match('thin*'))
-              .order_by(ModelClass.id))
+              .order_by(ModelClass.docid))
         self.assertMessages(pq, [2, 4])
 
         pq = (ModelClass
               .select()
               .where(ModelClass.match('"it is"'))
-              .order_by(ModelClass.id))
+              .order_by(ModelClass.docid))
         self.assertMessages(pq, [2, 3])
 
         pq = ModelClass.search('things')
@@ -628,6 +633,29 @@ class TestFTS5Extension(ModelTestCase):
         super(TestFTS5Extension, self).setUp()
         for title, data, misc in self.corpus:
             FTS5Test.create(title=title, data=data, misc=misc)
+
+    def test_fts5_options(self):
+        class Test1(FTS5Model):
+            f1 = SearchField()
+            f2 = SearchField(unindexed=True)
+            f3 = SearchField()
+
+            class Meta:
+                database = ext_db
+                options = {
+                    'prefix': [2, 3],
+                    'tokenize': 'porter unicode61',
+                    'content': Post,
+                    'content_rowid': Post.id,
+                }
+
+        create_sql = Test1.sqlall()
+        self.assertEqual(len(create_sql), 1)
+        self.assertEqual(create_sql[0], (
+            'CREATE VIRTUAL TABLE "test1" USING fts5 ('
+            '"f1" , "f2"  UNINDEXED, "f3" , '
+            'content="post", content_rowid="id", '
+            'prefix=\'2,3\', tokenize="porter unicode61")'))
 
     def assertResults(self, query, expected, scores=False, alias='score'):
         if scores:

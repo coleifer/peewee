@@ -34,6 +34,7 @@ best_docs = Document.match('some phrase')
 import inspect
 import math
 import struct
+import sys
 
 from peewee import *
 from peewee import EnclosedClause
@@ -48,6 +49,9 @@ from peewee import _sqlite_date_part
 from peewee import _sqlite_date_trunc
 from peewee import _sqlite_regexp
 
+
+if sys.version_info[0] == 3:
+    basestring = str
 
 FTS_VER = sqlite3.sqlite_version_info[:3] >= (3, 7, 4) and 'FTS4' or 'FTS3'
 FTS5_MIN_VERSION = (3, 9, 0)
@@ -86,6 +90,12 @@ class RowIDField(_VirtualFieldMixin, PrimaryKeyField):
             raise ValueError('RowIDField must be named `rowid`.')
         return super(RowIDField, self).add_to_class(model_class, name)
 
+class DocIDField(_VirtualFieldMixin, PrimaryKeyField):
+    def add_to_class(self, model_class, name):
+        if name != 'docid':
+            raise ValueError('DocIDField must be named `docid`.')
+        return super(DocIDField, self).add_to_class(model_class, name)
+
 
 class SqliteQueryCompiler(QueryCompiler):
     """
@@ -119,12 +129,12 @@ class SqliteQueryCompiler(QueryCompiler):
             columns_constraints = clause.nodes[-1]
             for k, v in sorted(table_options.items()):
                 if isinstance(v, Field):
-                    value = v.as_entity(with_table=True)
+                    v = v.as_entity(model_class._extension != 'fts5')
                 elif inspect.isclass(v) and issubclass(v, Model):
-                    value = v.as_entity()
-                else:
-                    value = SQL(v)
-                option = Clause(SQL(k), value)
+                    v = v.as_entity()
+                elif not isinstance(v, Node):
+                    v = SQL(v)
+                option = Clause(SQL(k), v)
                 option.glue = '='
                 columns_constraints.nodes.append(option)
 
@@ -141,6 +151,16 @@ class VirtualModel(Model):
 
 class FTSModel(VirtualModel):
     _extension = FTS_VER
+
+    # FTS3/4 does not support declared primary keys, but we will use the
+    # implicit docid.
+    docid = DocIDField()
+
+    @classmethod
+    def validate(cls):
+        if cls._meta.primary_key.name != 'docid':
+            raise ImproperlyConfigured(
+                'FTSModel classes must use the default `docid` primary key.')
 
     @classmethod
     def create_table(cls, fail_silently=False, **options):
@@ -278,11 +298,39 @@ class FTS5Model(VirtualModel):
     * highlight(tbl, col_idx, prefix, suffix)
     * snippet(tbl, col_idx, prefix, suffix, ?, max_tokens)
     """
+    _error_messages = {
+        'field_type': ('Besides the implicit `rowid` column, all columns must '
+                       'be instances of SearchField'),
+        'index': 'Secondary indexes are not supported for FTS5 models',
+        'pk': 'FTS5 models must use the default `rowid` primary key',
+    }
     _extension = 'fts5'
 
     # FTS5 does not support declared primary keys, but we will use the
     # implicit rowid.
     rowid = RowIDField()
+
+    @classmethod
+    def validate(cls):
+        # Perform FTS5-specific validation and options post-processing.
+        if cls._meta.primary_key.name != 'rowid':
+            raise ImproperlyConfigured(cls._error_messages['pk'])
+        for field in cls._meta.fields.values():
+            if not isinstance(field, SearchField):
+                raise ImproperlyConfigured(cls._error_messages['field_type'])
+        if cls._meta.indexes:
+            raise ImproperlyConfigured(cls._error_messages['index'])
+        if getattr(cls._meta, 'options', None):
+            options = cls._meta.options
+            prefix = options.get('prefix')
+            tokenize = options.get('tokenize')
+            if prefix and isinstance(prefix, (list, tuple)):
+                prefix_str = ','.join(map(str, prefix))
+                options['prefix'] = "'%s'" % prefix_str
+            if tokenize:
+                options['tokenize'] = '"%s"' % tokenize
+            if options.get('content') == '':
+                options['content'] = "''"
 
     @classmethod
     def fts5_installed(cls):
