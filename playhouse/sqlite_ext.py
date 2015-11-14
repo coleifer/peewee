@@ -121,10 +121,7 @@ class SqliteQueryCompiler(QueryCompiler):
             statement += ' IF NOT EXISTS'
         clause.nodes[0] = SQL(statement)  # Overwrite the statement.
 
-        table_options = getattr(model_class._meta, 'options', None) or {}
-        if options:
-            table_options.update(options)
-
+        table_options = self.clean_options(model_class, clause, options)
         if table_options:
             columns_constraints = clause.nodes[-1]
             for k, v in sorted(table_options.items()):
@@ -140,6 +137,16 @@ class SqliteQueryCompiler(QueryCompiler):
 
         return clause
 
+    def clean_options(self, model_class, clause, extra_options):
+        model_options = getattr(model_class._meta, 'options', None)
+        if model_options:
+            options = model_class.clean_options(**model_options)
+        else:
+            options = {}
+        if extra_options:
+            options.update(model_class.clean_options(**extra_options))
+        return options
+
     def create_table(self, model_class, safe=False, options=None):
         return self.parse_node(self._create_table(model_class, safe, options))
 
@@ -148,8 +155,30 @@ class VirtualModel(Model):
     """Model class stored using a Sqlite virtual table."""
     _extension = ''
 
+    @classmethod
+    def clean_options(cls, **options):
+        # Called by the QueryCompiler when generating the virtual table's
+        # options clauses.
+        return options
 
-class FTSModel(VirtualModel):
+
+class BaseFTSModel(VirtualModel):
+    @classmethod
+    def clean_options(cls, **options):
+        prefix = options.get('prefix')
+        tokenize = options.get('tokenize')
+        content = options.get('content')
+        if prefix and isinstance(prefix, (list, tuple)):
+            prefix_str = ','.join(map(str, prefix))
+            options['prefix'] = "'%s'" % prefix_str
+        if tokenize:
+            options['tokenize'] = '"%s"' % tokenize
+        if isinstance(content, basestring) and content == '':
+            options['content'] = "''"
+        return options
+
+
+class FTSModel(BaseFTSModel):
     _extension = FTS_VER
 
     # FTS3/4 does not support declared primary keys, but we will use the
@@ -248,7 +277,7 @@ class SearchField(BareField):
             unindexed=self._unindexed, **kwargs)
 
 
-class FTS5Model(VirtualModel):
+class FTS5Model(BaseFTSModel):
     """
     Requires SQLite >= 3.9.0.
 
@@ -324,17 +353,6 @@ class FTS5Model(VirtualModel):
                 raise ImproperlyConfigured(cls._error_messages['field_type'])
         if cls._meta.indexes:
             raise ImproperlyConfigured(cls._error_messages['index'])
-        if getattr(cls._meta, 'options', None):
-            options = cls._meta.options
-            prefix = options.get('prefix')
-            tokenize = options.get('tokenize')
-            if prefix and isinstance(prefix, (list, tuple)):
-                prefix_str = ','.join(map(str, prefix))
-                options['prefix'] = "'%s'" % prefix_str
-            if tokenize:
-                options['tokenize'] = '"%s"' % tokenize
-            if options.get('content') == '':
-                options['content'] = "''"
 
     @classmethod
     def fts5_installed(cls):
