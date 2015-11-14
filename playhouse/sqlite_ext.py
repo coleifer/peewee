@@ -129,6 +129,8 @@ class SqliteQueryCompiler(QueryCompiler):
                     v = v.as_entity(model_class._extension != 'fts5')
                 elif inspect.isclass(v) and issubclass(v, Model):
                     v = v.as_entity()
+                elif isinstance(v, (list, tuple)):
+                    v = SQL("'%s'" % ','.join(map(str, v)))
                 elif not isinstance(v, Node):
                     v = SQL(v)
                 option = Clause(SQL(k), v)
@@ -165,12 +167,8 @@ class VirtualModel(Model):
 class BaseFTSModel(VirtualModel):
     @classmethod
     def clean_options(cls, **options):
-        prefix = options.get('prefix')
         tokenize = options.get('tokenize')
         content = options.get('content')
-        if prefix and isinstance(prefix, (list, tuple)):
-            prefix_str = ','.join(map(str, prefix))
-            options['prefix'] = "'%s'" % prefix_str
         if tokenize:
             options['tokenize'] = '"%s"' % tokenize
         if isinstance(content, basestring) and content == '':
