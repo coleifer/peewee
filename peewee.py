@@ -910,6 +910,14 @@ class Field(Node):
 class BareField(Field):
     db_field = 'bare'
 
+    def __init__(self, coerce=None, *args, **kwargs):
+        super(BareField, self).__init__(*args, **kwargs)
+        if coerce is not None:
+            self.coerce = coerce
+
+    def clone_base(self, **kwargs):
+        return super(BareField, self).clone_base(coerce=self.coerce, **kwargs)
+
 class IntegerField(Field):
     db_field = 'int'
     coerce = int

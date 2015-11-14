@@ -236,12 +236,16 @@ class FTSModel(VirtualModel):
 
 
 class SearchField(BareField):
-    def __init__(self, unindexed=False, db_column=None):
-        kwargs = {'null': True, 'db_column': db_column}
+    def __init__(self, unindexed=False, db_column=None, coerce=None):
+        kwargs = {'null': True, 'db_column': db_column, 'coerce': coerce}
         self._unindexed = unindexed
         if unindexed:
             kwargs['constraints'] = [SQL('UNINDEXED')]
         super(SearchField, self).__init__(**kwargs)
+
+    def clone_base(self, **kwargs):
+        return super(SearchField, self).clone_base(
+            unindexed=self._unindexed, **kwargs)
 
 
 class FTS5Model(VirtualModel):
