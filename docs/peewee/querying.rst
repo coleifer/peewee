@@ -1356,14 +1356,14 @@ Since we selected all fields from ``Student`` and ``Course`` in the *select* cla
 ManyToManyField
 ^^^^^^^^^^^^^^^
 
-The :py:class:`ManyToManyField` provides a *field-like* API over many-to-many fields. For all but the simplest many-to-many situations, you're better off using the standard peewee APIs. But, if your models are very simple and your querying needs are not very complex, you can get a big boost by using :py:class:`ManyToManyField`. Check out the :ref:`shortcuts` extension module for details.
+The :py:class:`ManyToManyField` provides a *field-like* API over many-to-many fields. For all but the simplest many-to-many situations, you're better off using the standard peewee APIs. But, if your models are very simple and your querying needs are not very complex, you can get a big boost by using :py:class:`ManyToManyField`. Check out the :ref:`extra-fields` extension module for details.
 
 Modeling students and courses using :py:class:`ManyToManyField`:
 
 .. code-block:: python
 
     from peewee import *
-    from playhouse.shortcuts import ManyToManyField
+    from playhouse.fields import ManyToManyField
 
     db = SqliteDatabase('school.db')
 
