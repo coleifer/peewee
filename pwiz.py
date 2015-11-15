@@ -3,6 +3,7 @@
 import datetime
 from optparse import OptionParser
 import sys
+from getpass import getpass
 
 from peewee import *
 from peewee import print_
@@ -170,6 +171,9 @@ if __name__ == '__main__':
 
     connect = get_connect_kwargs(options)
     database = args[-1]
+
+    if 'password' not in connect:
+        connect['password'] = getpass()
 
     tables = None
     if options.tables:
