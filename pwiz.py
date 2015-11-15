@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 
 import datetime
-from optparse import OptionParser
 import sys
+from getpass import getpass
+from optparse import OptionParser
 
 from peewee import *
 from peewee import print_
@@ -129,7 +130,7 @@ def get_option_parser():
     ao('-H', '--host', dest='host')
     ao('-p', '--port', dest='port', type='int')
     ao('-u', '--user', dest='user')
-    ao('-P', '--password', dest='password')
+    ao('-P', '--password', dest='password', action='store_true')
     engines = sorted(DATABASE_MAP)
     ao('-e', '--engine', dest='engine', default='postgresql', choices=engines,
        help=('Database type, e.g. sqlite, mysql or postgresql. Default '
@@ -146,8 +147,11 @@ def get_option_parser():
     return parser
 
 def get_connect_kwargs(options):
-    ops = ('host', 'port', 'user', 'password', 'schema')
-    return dict((o, getattr(options, o)) for o in ops if getattr(options, o))
+    ops = ('host', 'port', 'user', 'schema')
+    kwargs = dict((o, getattr(options, o)) for o in ops if getattr(options, o))
+    if options.password:
+        kwargs['password'] = getpass()
+    return kwargs
 
 
 if __name__ == '__main__':
