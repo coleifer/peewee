@@ -55,6 +55,8 @@ if sys.version_info[0] == 3:
     basestring = str
 
 CUR_DIR = os.path.realpath(os.path.dirname(__file__))
+FTS_MATCHINFO_FORMAT = 'pcnalx'
+FTS_MATCHINFO_FORMAT_SIMPLE = 'pcx'
 FTS_VER = sqlite3.sqlite_version_info[:3] >= (3, 7, 4) and 'FTS4' or 'FTS3'
 FTS5_MIN_VERSION = (3, 9, 0)
 
@@ -63,6 +65,7 @@ class PrimaryKeyAutoIncrementField(PrimaryKeyField):
     def __ddl__(self, column_type):
         ddl = super(PrimaryKeyAutoIncrementField, self).__ddl__(column_type)
         return ddl + [SQL('AUTOINCREMENT')]
+
 
 class _VirtualFieldMixin(object):
     """
@@ -74,25 +77,30 @@ class _VirtualFieldMixin(object):
         del model_class._meta.fields[self.name]
         del model_class._meta.columns[self.db_column]
 
-class VirtualField(_VirtualFieldMixin, BareField):
-    pass
 
-class VirtualIntegerField(_VirtualFieldMixin, IntegerField):
-    pass
+# Virtual field types that can be used to reference specially-created fields
+# on virtual tables. These fields are exposed as attributes on the model class,
+# but are not included in any `CREATE TABLE` statements or by default when
+# performing an `INSERT` or `UPDATE` query.
+class VirtualField(_VirtualFieldMixin, BareField): pass
+class VirtualIntegerField(_VirtualFieldMixin, IntegerField): pass
+class VirtualCharField(_VirtualFieldMixin, CharField): pass
+class VirtualFloatField(_VirtualFieldMixin, FloatField): pass
 
-class VirtualCharField(_VirtualFieldMixin, CharField):
-    pass
-
-class VirtualFloatField(_VirtualFieldMixin, FloatField):
-    pass
 
 class RowIDField(_VirtualFieldMixin, PrimaryKeyField):
+    """
+    Field used to access hidden primary key on FTS5 or any other SQLite
+    table that does not have a separately-defined primary key.
+    """
     def add_to_class(self, model_class, name):
         if name != 'rowid':
             raise ValueError('RowIDField must be named `rowid`.')
         return super(RowIDField, self).add_to_class(model_class, name)
 
+
 class DocIDField(_VirtualFieldMixin, PrimaryKeyField):
+    """Field used to access hidden primary key on FTS3/4 tables."""
     def add_to_class(self, model_class, name):
         if name != 'docid':
             raise ValueError('DocIDField must be named `docid`.')
@@ -113,9 +121,13 @@ class SqliteQueryCompiler(QueryCompiler):
             # the table name node.
             extension = model_class._extension
             if isinstance(extension, Node):
+                # If the `_extension` attribute is a `Node` subclass, then we
+                # assume the VirtualModel will be responsible for defining
+                # not only the extension, but also the columns.
                 parts = clause.nodes[:2] + [SQL('USING'), extension]
                 clause = Clause(*parts)
             else:
+                # The extension name is a simple string.
                 clause.nodes.insert(2, SQL('USING %s' % model_class._extension))
         else:
             statement = 'CREATE TABLE'
@@ -128,10 +140,15 @@ class SqliteQueryCompiler(QueryCompiler):
             columns_constraints = clause.nodes[-1]
             for k, v in sorted(table_options.items()):
                 if isinstance(v, Field):
+                    # Special hack here for FTS5. We want to include the
+                    # fully-qualified column entity in most cases, but for
+                    # FTS5 we only want the string column name.
                     v = v.as_entity(model_class._extension != 'fts5')
                 elif inspect.isclass(v) and issubclass(v, Model):
+                    # The option points to a table name.
                     v = v.as_entity()
                 elif isinstance(v, (list, tuple)):
+                    # Lists will be quoted and joined by commas.
                     v = SQL("'%s'" % ','.join(map(str, v)))
                 elif not isinstance(v, Node):
                     v = SQL(v)
@@ -159,6 +176,9 @@ class VirtualModel(Model):
     """Model class stored using a Sqlite virtual table."""
     _extension = ''
 
+    class Meta:
+        options = {}
+
     @classmethod
     def clean_options(cls, **options):
         # Called by the QueryCompiler when generating the virtual table's
@@ -172,8 +192,10 @@ class BaseFTSModel(VirtualModel):
         tokenize = options.get('tokenize')
         content = options.get('content')
         if tokenize:
+            # Tokenizers need to be in quoted string.
             options['tokenize'] = '"%s"' % tokenize
         if isinstance(content, basestring) and content == '':
+            # Special-case content-less full-text search tables.
             options['content'] = "''"
         return options
 
@@ -235,11 +257,12 @@ class FTSModel(BaseFTSModel):
 
     @classmethod
     def rank(cls):
-        return Rank(cls)
+        return fn.fts_rank(fn.matchinfo(
+            cls.as_entity(), FTS_MATCHINFO_FORMAT_SIMPLE))
 
     @classmethod
     def bm25(cls, *weights):
-        match_info = fn.matchinfo(cls.as_entity(), 'pcnalx')
+        match_info = fn.matchinfo(cls.as_entity(), FTS_MATCHINFO_FORMAT)
         return fn.fts_bm25(match_info, *weights)
 
     @classmethod
@@ -704,36 +727,38 @@ SqliteExtDatabase.register_ops({
 def match(lhs, rhs):
     return Expression(lhs, OP.MATCH, rhs)
 
-# Shortcut for calculating ranks.
-Rank = lambda model: fn.fts_rank(fn.matchinfo(model.as_entity()))
-BM25 = lambda mc, idx: fn.fts_bm25(fn.matchinfo(mc.as_entity(), 'pcnalx'), idx)
-
-def find_best_search_field(model_class):
-    for field_class in [TextField, CharField]:
-        for model_field in model_class._meta.get_fields():
-            if isinstance(model_field, field_class):
-                return model_field
-    return model_class._meta.get_fields()[-1]
-
 def _parse_match_info(buf):
     # See http://sqlite.org/fts3.html#matchinfo
     bufsize = len(buf)  # Length in bytes.
     return [struct.unpack('@I', buf[i:i+4])[0] for i in range(0, bufsize, 4)]
 
 # Ranking implementation, which parse matchinfo.
-def rank(raw_match_info):
+def rank(raw_match_info, *weights):
     # Handle match_info called w/default args 'pcx' - based on the example rank
     # function http://sqlite.org/fts3.html#appendix_a
     match_info = _parse_match_info(raw_match_info)
     score = 0.0
+
     p, c = match_info[:2]
+    if not weights:
+        weights = [1] * c
+    else:
+        weights = [0] * c
+        for i, weight in enumerate(weights):
+            weights[i] = args[i]
+
     for phrase_num in range(p):
         phrase_info_idx = 2 + (phrase_num * c * 3)
         for col_num in range(c):
+            weight = weights[col_num]
+            if not weight:
+                continue
+
             col_idx = phrase_info_idx + (col_num * 3)
             x1, x2 = match_info[col_idx:col_idx + 2]
             if x1 > 0:
-                score += float(x1) / x2
+                score += weight * (float(x1) / x2)
+
     return -score
 
 # Okapi BM25 ranking implementation (FTS4 only).

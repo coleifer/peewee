@@ -184,30 +184,38 @@ cdef void peewee_rank(sqlite3_context *ctx, int argc,
         unsigned int *match_info
         unsigned int *phrase_info
         int ncol, nphrase, icol, iphrase, hits, global_hits
+        int P_O = 0, C_O = 1, X_O = 2
         double score = 0.0, weight
+        double *weights
 
     if argc < 1:
         sqlite3_result_error(ctx, 'Missing matchinfo().', -1)
         return
 
     match_info = <unsigned int *>sqlite3_value_blob(argv[0])
-    nphrase = match_info[0]
-    ncol = match_info[1]
+    nphrase = match_info[P_O]
+    ncol = match_info[C_O]
+
+    weights = <double *>malloc(sizeof(double) * ncol)
+    for icol in range(ncol):
+        if icol < (argc - 1):
+            weights[icol] = sqlite3_value_double(argv[icol + 1])
+        else:
+            weights[icol] = 1.0
 
     for iphrase in range(nphrase):
-        phrase_info = &match_info[2 + iphrase * ncol * 3]
+        phrase_info = &match_info[X_O + iphrase * ncol * 3]
         for icol in range(ncol):
+            weight = weights[icol]
+            if weight == 0:
+                continue
             hits = phrase_info[3 * icol]
             global_hits = phrase_info[3 * icol + 1]
-            if icol < (argc - 1):
-                weight = sqlite3_value_double(argv[icol + 1])
-            else:
-                weight = 1.0
             if hits > 0:
                 score += weight * (<double>hits / <double>global_hits)
 
     sqlite3_result_double(ctx, -1 * score)
-    return
+    free(weights)
 
 
 cdef void peewee_bm25(sqlite3_context *ctx, int argc,
@@ -225,7 +233,7 @@ cdef void peewee_bm25(sqlite3_context *ctx, int argc,
         double idf, weight, rhs
         double *weights
         int P_O = 0, C_O = 1, N_O = 2, A_O = 3, L_O, X_O
-        int i, j
+        int i, j, x
 
         double score = 0.0
 

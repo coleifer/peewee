@@ -9,10 +9,7 @@ from playhouse.tests.base import ModelTestCase
 from playhouse.tests.libs import mock
 
 
-db = database_initializer.get_database(
-    ':memory:',
-    db_class=SqliteExtDatabase,
-    c_extensions=True)
+db = SqliteExtDatabase(':memory:', c_extensions=True)
 
 try:
     db.connect()

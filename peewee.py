@@ -165,7 +165,7 @@ except ImportError:
         mysql = None
 
 try:
-    from playhouse.speedups import strip_parens
+    from playhouse._speedups import strip_parens
 except ImportError:
     def strip_parens(s):
         # Quick sanity check.

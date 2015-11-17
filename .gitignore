@@ -5,5 +5,6 @@ playhouse/_sqlite_ext.c
 playhouse/_sqlite_ext.h
 playhouse/_sqlite_ext.so
 playhouse/speedups.c
+playhouse/speedups.so
 playhouse/tests/peewee_test.db
 .idea/

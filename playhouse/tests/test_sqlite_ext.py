@@ -410,7 +410,7 @@ class SqliteExtTestCase(PeeweeTestCase):
         ])
 
         pq = (ModelClass
-              .select(Rank(ModelClass))
+              .select(ModelClass.rank())
               .where(ModelClass.match('faithful'))
               .tuples())
         self.assertEqual([x[0] for x in pq], [-.2] * 5)
