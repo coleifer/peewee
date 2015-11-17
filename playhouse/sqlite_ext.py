@@ -236,12 +236,9 @@ class FTSModel(BaseFTSModel):
         return Rank(cls)
 
     @classmethod
-    def bm25(cls, field=None, k=1.2, b=0.75):
-        if field is None:
-            field = find_best_search_field(cls)
-        field_idx = cls._meta.get_field_index(field)
-        match_info = fn.matchinfo(cls.as_entity(), 'pcxnal')
-        return fn.fts_bm25(match_info, field_idx, k, b)
+    def bm25(cls, *weights):
+        match_info = fn.matchinfo(cls.as_entity(), 'pcnalx')
+        return fn.fts_bm25(match_info, *weights)
 
     @classmethod
     def search(cls, term, alias='score'):
@@ -249,17 +246,16 @@ class FTSModel(BaseFTSModel):
         return (cls
                 .select(cls, cls.rank().alias(alias))
                 .where(cls.match(term))
-                .order_by(SQL(alias).desc()))
+                .order_by(SQL(alias)))
 
     @classmethod
-    def search_bm25(cls, term, field=None, k=1.2, b=0.75, alias='score'):
+    def search_bm25(cls, term, *weights, **kwargs):
         """Full-text search for selected `term` using BM25 algorithm."""
-        if field is None:
-            field = find_best_search_field(cls)
+        alias = kwargs.pop('alias', None) or 'score'
         return (cls
-                .select(cls, cls.bm25(field, k, b).alias(alias))
+                .select(cls, cls.bm25(*weights).alias(alias))
                 .where(cls.match(term))
-                .order_by(SQL(alias).desc()))
+                .order_by(SQL(alias)))
 
 
 class SearchField(BareField):
@@ -703,7 +699,7 @@ def match(lhs, rhs):
 
 # Shortcut for calculating ranks.
 Rank = lambda model: fn.fts_rank(fn.matchinfo(model.as_entity()))
-BM25 = lambda mc, idx: fn.fts_bm25(fn.matchinfo(mc.as_entity(), 'pcxnal'), idx)
+BM25 = lambda mc, idx: fn.fts_bm25(fn.matchinfo(mc.as_entity(), 'pcnalx'), idx)
 
 def find_best_search_field(model_class):
     for field_class in [TextField, CharField]:
@@ -731,69 +727,55 @@ def rank(raw_match_info):
             x1, x2 = match_info[col_idx:col_idx + 2]
             if x1 > 0:
                 score += float(x1) / x2
-    return score
+    return -score
 
 # Okapi BM25 ranking implementation (FTS4 only).
-def bm25(raw_match_info, column_index, k1=1.2, b=0.75):
+def bm25(raw_match_info, *args):
     """
     Usage:
 
-        # Format string *must* be pcxnal
+        # Format string *must* be pcnalx
         # Second parameter to bm25 specifies the index of the column, on
         # the table being queries.
-        bm25(matchinfo(document_tbl, 'pcxnal'), 1) AS rank
+        bm25(matchinfo(document_tbl, 'pcnalx'), 1) AS rank
     """
     match_info = _parse_match_info(raw_match_info)
+    K = 1.2
+    B = 0.75
     score = 0.0
-    # p, 1 --> num terms
-    # c, 1 --> num cols
-    # x, (3 * p * c) --> for each phrase/column,
-    #     term_freq for this column
-    #     term_freq for all columns
-    #     total documents containing this term
-    # n, 1 --> total rows in table
-    # a, c --> for each column, avg number of tokens in this column
-    # l, c --> for each column, length of value for this column (in this row)
-    # s, c --> ignore
-    p, c = match_info[:2]
-    n_idx = 2 + (3 * p * c)
-    a_idx = n_idx + 1
-    l_idx = a_idx + c
-    n = match_info[n_idx]
-    a = match_info[a_idx: a_idx + c]
-    l = match_info[l_idx: l_idx + c]
 
-    total_docs = n
-    avg_length = float(a[column_index])
-    doc_length = float(l[column_index])
-    if avg_length == 0:
-        D = 0
+    P_O, C_O, N_O, A_O = range(4)
+    term_count = match_info[P_O]
+    col_count = match_info[C_O]
+    total_docs = match_info[N_O]
+    L_O = A_O + col_count
+    X_O = L_O + col_count
+
+    if not args:
+        weights = [1] * col_count
     else:
-        D = 1 - b + (b * (doc_length / avg_length))
+        weights = [0] * col_count
+        for i, weight in enumerate(args):
+            weights[i] = args[i]
 
-    for phrase in range(p):
-        # p, c, p0c01, p0c02, p0c03, p0c11, p0c12, p0c13, p1c01, p1c02, p1c03..
-        # So if we're interested in column <i>, the counts will be at indexes
-        x_idx = 2 + (3 * column_index * (phrase + 1))
-        term_freq = float(match_info[x_idx])
-        term_matches = float(match_info[x_idx + 2])
-
-        # The `max` check here is based on a suggestion in the Wikipedia
-        # article. For terms that are common to a majority of documents, the
-        # idf function can return negative values. Applying the max() here
-        # weeds out those values.
-        idf = max(
-            math.log(
-                (total_docs - term_matches + 0.5) /
-                (term_matches + 0.5)),
-            0)
-
-        denom = term_freq + (k1 * D)
-        if denom == 0:
-            rhs = 0
-        else:
-            rhs = (term_freq * (k1 + 1)) / denom
-
-        score += (idf * rhs)
-
-    return score
+    for i in range(term_count):
+        for j in range(col_count):
+            weight = weights[j]
+            if weight == 0:
+                continue
+            avg_length = float(match_info[A_O + j])
+            doc_length = float(match_info[L_O + j])
+            x = X_O + (3 * j * (i + 1))
+            term_frequency = float(match_info[x])
+            docs_with_term = float(match_info[x + 2])
+            idf = math.log(
+                (total_docs - docs_with_term + 0.5) /
+                (docs_with_term + 0.5))
+            rhs = (
+                (term_frequency * (K + 1)) /
+                (term_frequency +
+                 (K * (1 - B + (B * (doc_length / avg_length))))
+                )
+            )
+            score += (idf * rhs) * weight
+    return -score

@@ -224,8 +224,8 @@ class SqliteExtTestCase(PeeweeTestCase):
 
         q = FTSDoc.search('things')
         self.assertEqual([(x.message, x.score) for x in q], [
-            (self.messages[4], 2.0 / 3),
-            (self.messages[2], 1.0 / 3),
+            (self.messages[4], -2.0 / 3),
+            (self.messages[2], -1.0 / 3),
         ])
 
     def test_fts_delete_row(self):
@@ -277,31 +277,31 @@ class SqliteExtTestCase(PeeweeTestCase):
 
         # `bbbbb` appears two times in `c1`, one time in `c2`.
         assertResults('bbbbb', [
-            (2, 1.5),  # 1/2 + 1/1
-            (1, 0.5),  # 1/2
+            (2, -1.5),  # 1/2 + 1/1
+            (1, -0.5),  # 1/2
         ])
 
         # `ccccc` appears four times in `c1`, three times in `c2`.
         assertResults('ccccc', [
-            (3, .83),  # 2/4 + 1/3
-            (1, .58), # 1/4 + 1/3
-            (4, .33), # 1/3
-            (2, .25), # 1/4
+            (3, -.83),  # 2/4 + 1/3
+            (1, -.58), # 1/4 + 1/3
+            (4, -.33), # 1/3
+            (2, -.25), # 1/4
         ])
 
         # `zzzzz` appears three times in c3.
         assertResults('zzzzz', [
-            (1, .67),
-            (2, .33),
+            (1, -.67),
+            (2, -.33),
         ])
 
         self.assertEqual(
             [x.score for x in MultiColumn.search('ddddd')],
-            [.25, .25, .25, .25])
+            [-.25, -.25, -.25, -.25])
 
     def test_bm25(self):
         def assertResults(term, col_idx, expected):
-            query = MultiColumn.search_bm25(term, MultiColumn.c1)
+            query = MultiColumn.search_bm25(term, 1.0, 0, 0, 0)
             self.assertEqual(
                 [(mc.c4, round(mc.score, 2)) for mc in query],
                 expected)
@@ -310,34 +310,34 @@ class SqliteExtTestCase(PeeweeTestCase):
         MultiColumn.create(c1='aaaaa fffff', c4=5)
 
         assertResults('aaaaa', 1, [
-            (5, 0.39),
-            (1, 0.3),
+            (5, -0.39),
+            (1, -0.3),
         ])
         assertResults('fffff', 1, [
-            (5, 0.39),
-            (3, 0.3),
+            (5, -0.39),
+            (3, -0.3),
         ])
         assertResults('eeeee', 1, [
-            (2, 0.97),
+            (2, -0.97),
         ])
 
         # No column specified, use the first text field.
-        query = MultiColumn.search_bm25('fffff')
+        query = MultiColumn.search_bm25('fffff', 1.0, 0, 0, 0)
         self.assertEqual([(mc.c4, round(mc.score, 2)) for mc in query], [
-            (5, 0.39),
-            (3, 0.3),
+            (5, -0.39),
+            (3, -0.3),
         ])
 
         # Use helpers.
         query = (MultiColumn
                  .select(
                      MultiColumn.c4,
-                     MultiColumn.bm25(MultiColumn.c1).alias('score'))
+                     MultiColumn.bm25(1.0).alias('score'))
                  .where(MultiColumn.match('aaaaa'))
-                 .order_by(SQL('score').desc()))
+                 .order_by(SQL('score')))
         self.assertEqual([(mc.c4, round(mc.score, 2)) for mc in query], [
-            (5, 0.39),
-            (1, 0.3),
+            (5, -0.39),
+            (1, -0.3),
         ])
 
     def test_bm25_alt_corpus(self):
@@ -352,14 +352,19 @@ class SqliteExtTestCase(PeeweeTestCase):
             self.assertEqual(cleaned, expected)
 
         assertResults('things', [
-            (0.45, 'Faith has'),
-            (0.36, 'Be faithful'),
+            (-0.45, 'Faith has'),
+            (-0.36, 'Be faithful'),
         ])
 
         # Indeterminate order since all are 0.0. All phrases contain the word
         # faith, so there is no meaningful score.
-        results = [x.score for x in FTSDoc.search_bm25('faith')]
-        self.assertEqual(results, [0., 0., 0., 0., 0.])
+        results = [round(x.score, 2) for x in FTSDoc.search_bm25('faith')]
+        self.assertEqual(results, [
+            2.01,
+            2.29,
+            2.52,
+            2.58,
+            2.58])
 
     def _test_fts_auto(self, ModelClass):
         posts = []
@@ -400,20 +405,20 @@ class SqliteExtTestCase(PeeweeTestCase):
 
         pq = ModelClass.search('things')
         self.assertEqual([(x.message, x.score) for x in pq], [
-            (self.messages[4], 2.0 / 3),
-            (self.messages[2], 1.0 / 3),
+            (self.messages[4], -2.0 / 3),
+            (self.messages[2], -1.0 / 3),
         ])
 
         pq = (ModelClass
               .select(Rank(ModelClass))
               .where(ModelClass.match('faithful'))
               .tuples())
-        self.assertEqual([x[0] for x in pq], [.2] * 5)
+        self.assertEqual([x[0] for x in pq], [-.2] * 5)
 
         pq = (ModelClass
               .search('faithful')
               .dicts())
-        self.assertEqual([x['score'] for x in pq], [.2] * 5)
+        self.assertEqual([x['score'] for x in pq], [-.2] * 5)
 
     def test_fts_auto_model(self):
         self._test_fts_auto(FTSPost)
