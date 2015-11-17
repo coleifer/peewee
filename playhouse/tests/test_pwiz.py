@@ -29,6 +29,10 @@ class Note(BaseModel):
     text = TextField(index=True)
     data = IntegerField(default=0)
     misc = IntegerField(default=0)
+    class Meta:
+        indexes = (
+            (('data', 'misc', 'text'), True),
+        )
 
 class Category(BaseModel):
     name = CharField(unique=True)
@@ -78,6 +82,9 @@ class Note(BaseModel):
 
     class Meta:
         db_table = 'note'
+        indexes = (
+            (('data', 'misc', 'text'), True),
+        )
 """.strip()
 
 
@@ -108,6 +115,9 @@ class Note(BaseModel):
 
     class Meta:
         db_table = 'note'
+        indexes = (
+            (('data', 'misc', 'text'), True),
+        )
 """.strip()
 
 
