@@ -14,7 +14,6 @@ db = database_initializer.get_database(
     db_class=SqliteExtDatabase,
     c_extensions=True)
 
-import ipdb; ipdb.set_trace()
 try:
     db.connect()
 except OperationalError:
