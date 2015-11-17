@@ -1,18 +1,22 @@
 import os
-from setuptools import find_packages
-from setuptools import setup
+from distutils.core import setup
+from distutils.extension import Extension
 
 f = open(os.path.join(os.path.dirname(__file__), 'README.rst'))
 readme = f.read()
 f.close()
 
 try:
-    from Cython.Build import cythonize
+    from Cython.Distutils import build_ext
 except ImportError:
+    cmdclass = None
     ext_modules = None
 else:
-    speedups = cythonize('playhouse/speedups.pyx')
-    ext_modules = speedups
+    cmdclass = {'build_ext': build_ext}
+    ext_modules = [
+        Extension('playhouse._speedups', ['playhouse/speedups.pyx']),
+        Extension('playhouse._sqlite_ext', ['playhouse/_sqlite_ext.pyx']),
+    ]
 
 setup(
     name='peewee',
@@ -25,6 +29,7 @@ setup(
     packages=['playhouse'],
     py_modules=['peewee', 'pwiz'],
     ext_modules=ext_modules,
+    cmdclass=cmdclass,
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',

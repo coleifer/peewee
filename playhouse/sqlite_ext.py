@@ -33,6 +33,7 @@ best_docs = Document.match('some phrase')
 """
 import inspect
 import math
+import os
 import struct
 import sys
 
@@ -53,6 +54,7 @@ from peewee import _sqlite_regexp
 if sys.version_info[0] == 3:
     basestring = str
 
+CUR_DIR = os.path.realpath(os.path.dirname(__file__))
 FTS_VER = sqlite3.sqlite_version_info[:3] >= (3, 7, 4) and 'FTS4' or 'FTS3'
 FTS5_MIN_VERSION = (3, 9, 0)
 
@@ -568,17 +570,22 @@ class SqliteExtDatabase(SqliteDatabase):
     compiler_class = SqliteQueryCompiler
 
     def __init__(self, *args, **kwargs):
+        c_extensions = bool(kwargs.pop('c_extensions', None))
         super(SqliteExtDatabase, self).__init__(*args, **kwargs)
         self._aggregates = {}
         self._collations = {}
         self._functions = {}
         self._extensions = set([])
         self._row_factory = None
-        self.register_function(_sqlite_date_part, 'date_part', 2)
-        self.register_function(_sqlite_date_trunc, 'date_trunc', 2)
-        self.register_function(_sqlite_regexp, 'regexp', 2)
-        self.register_function(rank, 'fts_rank', 1)
-        self.register_function(bm25, 'fts_bm25', -1)
+        self._c_extensions = c_extensions
+        if c_extensions:
+            self.load_extension(os.path.join(CUR_DIR, '_sqlite_ext'))
+        else:
+            self.register_function(_sqlite_date_part, 'date_part', 2)
+            self.register_function(_sqlite_date_trunc, 'date_trunc', 2)
+            self.register_function(_sqlite_regexp, 'regexp', 2)
+            self.register_function(rank, 'fts_rank', 1)
+            self.register_function(bm25, 'fts_bm25', -1)
 
     def _add_conn_hooks(self, conn):
         self._set_pragmas(conn)
