@@ -554,6 +554,13 @@ def ClosureTable(model_class, foreign_key=None):
     return type(name, (BaseClosureTable,), {'Meta': Meta})
 
 
+@Node.extend(clone=False)
+def disqualify(self):
+    # In the where clause, prevent the given node/expression from constraining
+    # an index.
+    return Clause('+', self, glue='')
+
+
 class SqliteExtDatabase(SqliteDatabase):
     """
     Database class which provides additional Sqlite-specific functionality:
