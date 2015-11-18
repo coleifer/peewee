@@ -2308,7 +2308,11 @@ Database and its subclasses
 
 .. py:class:: SqliteDatabase(Database)
 
-    :py:class:`Database` subclass that works with the "sqlite3" driver. In addition to the default database parameters, :py:class:`SqliteDatabase` also accepts a *journal_mode* parameter which will configure the journaling mode.
+    :py:class:`Database` subclass that works with the ``sqlite3`` driver (or ``pysqlite2``). In addition to the default database parameters, :py:class:`SqliteDatabase` also accepts a *journal_mode* parameter which will configure the journaling mode.
+
+    .. note:: If you have both ``sqlite3`` and ``pysqlite2`` installed on your system, peewee will use whichever points at a newer version of SQLite.
+
+    .. note:: SQLite is unique among the databases supported by Peewee in that it allows a high degree of customization by the host application. This means you can do things like write custom functions or aggregates *in Python* and then call them from your SQL queries. This feature, and many more, are available through the :py:class:`SqliteExtDatabase`, part of ``playhouse.sqlite_ext``. I *strongly* recommend you use :py:class:`SqliteExtDatabase` as it exposes many of the features that make SQLite so powerful.
 
     Custom parameters:
 

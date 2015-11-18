@@ -10,11 +10,11 @@ to mess around with.
 The playhouse includes modules for different database drivers or database
 specific functionality:
 
-* :ref:`apsw`
-* :ref:`postgres_ext`
 * :ref:`sqlite_ext`
+* :ref:`apsw`
 * :ref:`berkeleydb`
 * :ref:`sqlcipher_ext`
+* :ref:`postgres_ext`
 
 Modules which expose higher-level python constructs:
 
@@ -39,6 +39,605 @@ As well as tools for working with databases and other frameworks:
 * :ref:`csv_utils`
 * :ref:`pskel`
 * :ref:`flask_utils`
+
+.. _sqlite_ext:
+
+Sqlite Extensions
+-----------------
+
+The SQLite extensions module provides support for some interesting sqlite-only
+features:
+
+* Define custom aggregates, collations and functions.
+* Support for FTS3/4 (sqlite full-text search) with :ref:`BM25 ranking <sqlite_bm25>`.
+* C extension providing fast implementations of ranking and other utility functions.
+* Support for the new FTS5 search extension.
+* Specify isolation level in transactions.
+* Support for virtual tables and SQLite C extensions.
+* Support for the `closure table <http://charlesleifer.com/blog/querying-tree-structures-in-sqlite-using-python-and-the-transitive-closure-extension/>`_ extension, which allows efficient querying of heirarchical tables.
+
+sqlite_ext API notes
+^^^^^^^^^^^^^^^^^^^^
+
+.. py:class:: SqliteExtDatabase(database, pragmas=(), c_extensions=False, **kwargs)
+
+    :param pragmas: A list of 2-tuples containing ``PRAGMA`` settings to configure on a per-connection basis.
+    :param bool c_extensions: Boolean flag indicating whether to load the SQLite C extension (``_sqlite_ext.so`` on linux systems). **Requires Cython**.
+
+    Subclass of the :py:class:`SqliteDatabase` that provides some advanced
+    features only offered by Sqlite.
+
+    * Register custom aggregates, collations and functions
+    * Support for SQLite virtual tables and C extensions
+    * Specify a row factory
+    * Advanced transactions (specify isolation level)
+
+    .. py:method:: aggregate([name=None[, num_params=-1]])
+
+        Class-decorator for registering custom aggregation functions.
+
+        :param name: string name for the aggregate, defaults to the name of the class.
+        :param num_params: integer representing number of parameters the aggregate function accepts. The default value, ``-1``, indicates the aggregate can accept any number of parameters.
+
+        .. code-block:: python
+
+            @db.aggregate('product', 1)
+            class Product(object):
+                """Like sum, except calculate the product of a series of numbers."""
+                def __init__(self):
+                    self.product = 1
+
+                def step(self, value):
+                    self.product *= value
+
+                def finalize(self):
+                    return self.product
+
+            # To use this aggregate:
+            product = (Score
+                       .select(fn.product(Score.value))
+                       .scalar())
+
+    .. py:method:: unregister_aggregate(name):
+
+        Unregister the given aggregate function.
+
+    .. py:method:: collation([name])
+
+        Function decorator for registering a custom collation.
+
+        :param name: string name to use for this collation.
+
+        .. code-block:: python
+
+            @db.collation()
+            def collate_reverse(s1, s2):
+                return -cmp(s1, s2)
+
+            # To use this collation:
+            Book.select().order_by(collate_reverse.collation(Book.title))
+
+        As you might have noticed, the original ``collate_reverse`` function
+        has a special attribute called ``collation`` attached to it.  This extra
+        attribute provides a shorthand way to generate the SQL necessary to use
+        our custom collation.
+
+    .. py:method:: unregister_collation(name):
+
+        Unregister the given collation function.
+
+    .. py:method:: func([name[, num_params]])
+
+        Function decorator for registering user-defined functions.
+
+        :param name: name to use for this function.
+        :param num_params: number of parameters this function accepts.  If not
+            provided, peewee will introspect the function for you.
+
+        .. code-block:: python
+
+            @db.func()
+            def title_case(s):
+                return s.title()
+
+            # Use in the select clause...
+            titled_books = Book.select(fn.title_case(Book.title))
+
+            @db.func()
+            def sha1(s):
+                return hashlib.sha1(s).hexdigest()
+
+            # Use in the where clause...
+            user = User.select().where(
+                (User.username == username) &
+                (fn.sha1(User.password) == password_hash)).get()
+
+    .. py:method:: unregister_function(name):
+
+        Unregister the given user-defiend function.
+
+    .. py:method:: load_extension(extension)
+
+        Load the given C extension. If a connection is currently open in the calling thread, then the extension will be loaded for that connection as well as all subsequent connections.
+
+        For example, if you've compiled the closure table extension and wish to use it in your application, you might write:
+
+        .. code-block:: python
+
+            db = SqliteExtDatabase('my_app.db')
+            db.load_extension('closure')
+
+    .. py:method:: unload_extension(name):
+
+        Unload the given SQLite extension.
+
+    .. py:method:: granular_transaction([lock_type='deferred'])
+
+        With the ``granular_transaction`` helper, you can specify the isolation level
+        for an individual transaction.  The valid options are:
+
+        * ``exclusive``
+        * ``immediate``
+        * ``deferred``
+
+        Example usage:
+
+        .. code-block:: python
+
+            with db.granular_transaction('exclusive'):
+                # no other readers or writers!
+                (Account
+                 .update(Account.balance=Account.balance - 100)
+                 .where(Account.id == from_acct)
+                 .execute())
+
+                (Account
+                 .update(Account.balance=Account.balance + 100)
+                 .where(Account.id == to_acct)
+                 .execute())
+
+
+.. py:class:: VirtualModel
+
+    Subclass of :py:class:`Model` that signifies the model operates using a
+    virtual table provided by a sqlite extension.
+
+    .. py:attribute:: _extension = 'name of sqlite extension'
+
+    SQLite virtual tables often support configuration via arbitrary key/value options which are included in the ``CREATE TABLE`` statement. To configure a virtual table, you can specify options like this:
+
+    .. code-block:: python
+
+        class SearchIndex(FTSModel):
+            content = SearchField()
+            metadata = SearchField()
+
+            class Meta:
+                database = my_db
+                options = {
+                    'prefix': [2, 3],
+                    'tokenize': 'porter',
+                }
+
+.. _sqlite_fts:
+
+.. py:class:: FTSModel
+
+    Model class that provides support for Sqlite's full-text search extension.
+    Models should be defined normally, however there are a couple caveats:
+
+    * Unique constraints, not null constraints, check constraints and foreign keys are not supported.
+    * Indexes on fields and multi-column indexes are ignored completely
+    * Sqlite will treat all column types as ``TEXT`` (although you
+      can store other data types, Sqlite will treat them as text).
+    * FTS models contain a ``docid`` field which is automatically created and managed by SQLite (unless you choose to explicitly set it during model creation). Lookups on this column **are performant**.
+
+    ``sqlite_ext`` provides a :py:class:`SearchField` field class which should be used on ``FTSModel`` implementations instead of the regular peewee field types. This will help prevent you accidentally creating invalid column constraints.
+
+    Because of the lack of secondary indexes, it usually makes sense to use the ``docid`` primary key as a pointer to a row in a regular table. For example:
+
+    .. code-block:: python
+
+        class Tweet(Model):
+            user = ForeignKeyField(User, related_name='tweets')
+            content = TextField()
+            timestamp = DateTimeField()
+
+        class TweetIndex(FTSModel):
+            content = TextField()
+
+            @classmethod
+            def store_tweet(cls, tweet):
+                TweetIndex.insert({
+                    TweetIndex.docid: tweet.id,
+                    TweetIndex.content: tweet.content}).execute()
+
+            @classmethod
+            def search(cls, phrase):
+                # Query the search index and join the corresponding Tweet object
+                # on each search result.
+                return (TweetIndex
+                        .select(TweetIndex.docid, Tweet)
+                        .join(Tweet,
+                              on=(TweetIndex.docid == Tweet.id).alias('tweet'))
+                        .where(TweetIndex.match(phrase))
+                        .order_by(TweetIndex.bm25()))
+
+    Just remember: all SQL queries except full-text searches and ``docid`` lookups will be slow.
+
+    Example:
+
+    .. code-block:: python
+
+        class Document(FTSModel):
+            title = SearchField()  # type affinities are ignored by FTS, so use TextField
+            content = SearchField()
+
+            class Meta:
+                # Use the porter stemming algorithm to tokenize content.
+                options = {'tokenize': 'porter'}
+
+        Document.create_table()
+
+        # populate documents using normal operations.
+        for doc in list_of_docs_to_index:
+            Document.create(title=doc['title'], content=doc['content'])
+
+        # use the "match" operation for FTS queries.
+        matching_docs = (Document
+                         .select()
+                         .where(Document.match('some query')))
+
+        # to sort by best match, use the custom "rank" function.
+        best = (Document
+                .select()
+                .where(Document.match('some query'))
+                .order_by(Document.rank()))
+
+        # or use the shortcut method:
+        best = Document.search('some phrase')
+
+        # Peewee allows you to specify weights for columns.
+        best = Document.search(
+            'some phrase',
+            2.0,  # Matches in the title will be 2x more valuable
+            1.0,  # than matches in the content field.
+        )
+
+        # you can also use the BM25 algorithm to rank documents:
+        best = (Document
+                .select()
+                .where(Document.match('some query'))
+                .order_by(Document.bm25()))
+
+        # There is a shortcut method for bm25 as well:
+        best_bm25 = Document.search_bm25('some phrase')
+
+        # BM25 allows you to specify weights for columns.
+        best_bm25 = Document.search_bm25(
+            'some phrase',
+            2.0,  # Matches in the title will be 2x more valuable
+            1.0,  # than matches in the content field.
+        )
+
+    If you have an existing table and would like to add search for a column
+    on that table, you can specify it using the ``content`` option:
+
+    .. code-block:: python
+
+        class Blog(Model):
+            title = CharField()
+            pub_date = DateTimeField()
+            content = TextField()  # we want to search this.
+
+        class FTSBlog(FTSModel):
+            content = TextField()
+
+        Blog.create_table()
+        FTSBlog.create_table(content=Blog.content)
+
+        # Now, we can manage content in the FTSBlog.  To populate it with
+        # content:
+        FTSBlog.rebuild()
+
+        # Optimize the index.
+        FTSBlog.optimize()
+
+    The ``content`` option accepts either a single :py:class:`Field` or a :py:class:`Model`
+    and can reduce the amount of storage used.  However, content will need to be
+    manually moved to/from the associated ``FTSModel``.
+
+    .. py:classmethod:: create_table([fail_silently=False[, **options]])
+
+        :param boolean fail_silently: do not re-create if table already exists.
+        :param options: options passed along when creating the table, e.g. ``content``.
+
+    .. py:classmethod:: rebuild()
+
+        Rebuild the search index -- this only works when the ``content`` option
+        was specified during table creation.
+
+    .. py:classmethod:: optimize()
+
+        Optimize the search index.
+
+    .. py:classmethod:: match(term)
+
+        Shorthand for generating a `MATCH` expression for the given term.
+
+        .. code-block:: python
+
+            query = Document.select().where(Document.match('search phrase'))
+            for doc in query:
+                print 'match: ', doc.title
+
+    .. py:classmethod:: rank()
+
+        Calculate the rank based on the quality of the match.
+
+        .. code-block:: python
+
+            query = (Document
+                     .select(Document, Document.rank().alias('score'))
+                     .where(Document.match('search phrase'))
+                     .order_by(SQL('score').desc()))
+
+            for search_result in query:
+                print search_result.title, search_result.score
+
+    .. py:classmethod:: bm25([field=None[, k=1.2[, b=0.75]]])
+
+        Calculate the rank based on the quality of the match using the
+        BM25 algorithm.
+
+        .. note::
+            If no field is specified, then the first `TextField` on the model
+            will be used. If no `TextField` is present, the first `CharField`
+            will be used. Failing either of those conditions, the last overall
+            field on the model will be used.
+
+        .. code-block:: python
+
+            query = (Document
+                     .select(
+                         Document,
+                         Document.bm25(Document.content).alias('score'))
+                     .where(Document.match('search phrase'))
+                     .order_by(SQL('score').desc()))
+
+            for search_result in query:
+                print search_result.title, search_result.score
+
+    .. py:classmethod:: search(term[, alias='score'])
+
+        Shorthand way of searching for a term and sorting results by the
+        quality of the match. This is equivalent to the :py:meth:`~FTSModel.rank`
+        example code presented above.
+
+        :param str term: Search term to use.
+        :param str alias: Alias to use for the calculated rank score.
+
+        .. code-block:: python
+
+            docs = Document.search('search term')
+            for result in docs:
+                print result.title, result.score
+
+    .. _sqlite_bm25:
+
+    .. py:classmethod:: search_bm25(term[, field=None[, k=1.2[, b=0.75[, alias='score']]]])
+
+        Shorthand way of searching for a term and sorting results by the
+        quality of the match, as determined by the BM25 algorithm. This is
+        equivalent to the :py:meth:`~FTSModel.bm25` example code presented above.
+
+        :param str term: Search term to use.
+        :param Field field: A field on the model.
+        :param float k: Parameter for BM25
+        :param float b: Parameter for BM25
+        :param str alias: Alias to use for the calculated rank score.
+
+        .. note::
+            If no field is specified, then the first `TextField` on the model
+            will be used. If no `TextField` is present, the first `CharField`
+            will be used. Failing either of those conditions, the last overall
+            field on the model will be used.
+
+        .. note:: BM25 only works with FTS4 tables.
+
+        .. code-block:: python
+
+            docs = Document.search_bm25('search term')
+            for result in docs:
+                print result.title, result.score
+
+
+.. py:function:: match(lhs, rhs)
+
+    Generate a SQLite `MATCH` expression for use in full-text searches.
+
+    .. code-block:: python
+
+        Document.select().where(match(Document.content, 'search term'))
+
+.. py:function:: Rank(model_class)
+
+    Calculate the rank of the search results, for use with `FTSModel` queries
+    using the `MATCH` operator.
+
+    .. code-block:: python
+
+        # Search for documents and return results ordered by quality
+        # of match.
+        docs = (Document
+                .select(Document, Rank(Document).alias('score'))
+                .where(Document.match('some search term'))
+                .order_by(SQL('score').desc()))
+
+.. py:function:: BM25(model_class, field_index)
+
+    Calculate the rank of the search results, for use with `FTSModel` queries
+    using the `MATCH` operator.
+
+    :param Model model_class: The `FTSModel` on which the query is being performed.
+    :param int field_index: The 0-based index of the field being queried.
+
+    .. code-block:: python
+
+        # Assuming the `content` field has index=2 (0=pk, 1=title, 2=content),
+        # calculate the BM25 score for each result.
+        docs = (Document
+                .select(Document, BM25(Document, 2).alias('score'))
+                .where(Document.match('search term'))
+                .order_by(SQL('score').desc()))
+
+    .. note:: BM25 only works with FTS4 tables.
+
+.. _sqlite_closure:
+
+.. py:function:: ClosureTable(model_class[, foreign_key=None])
+
+    Factory function for creating a model class suitable for working with a `transitive closure <http://www.sqlite.org/cgi/src/artifact/636024302cde41b2bf0c542f81c40c624cfb7012>`_ table. Closure tables are :py:class:`VirtualModel` subclasses that work with the transitive closure SQLite extension. These special tables are designed to make it easy to efficiently query heirarchical data. The SQLite extension manages an AVL tree behind-the-scenes, transparently updating the tree when your table changes and making it easy to perform common queries on heirarchical data.
+
+    To use the closure table extension in your project, you need:
+
+    1. A copy of the SQLite extension. The source code can be found in the `SQLite code repository <http://www.sqlite.org/cgi/src/artifact/636024302cde41b2bf0c542f81c40c624cfb7012>`_ or by cloning `this gist <https://gist.github.com/coleifer/7f3593c5c2a645913b92>`_:
+
+       .. code-block:: console
+
+           $ git clone https://gist.github.com/coleifer/7f3593c5c2a645913b92 closure
+           $ cd closure/
+
+    2. Compile the extension as a shared library, e.g.
+
+       .. code-block:: console
+
+           $ gcc -g -fPIC -shared closure.c -o closure.so
+
+    3. Create a model for your heirarchical data. The only requirement here is that the model have an integer primary key and a self-referential foreign key. Any additional fields are fine.
+
+       .. code-block:: python
+
+           class Category(Model):
+               name = CharField()
+               metadata = TextField()
+               parent = ForeignKeyField('self', index=True, null=True)  # Required.
+
+           # Generate a model for the closure virtual table.
+           CategoryClosure = ClosureTable(Category)
+
+    4. In your application code, make sure you load the extension when you instantiate your :py:class:`Database` object. This is done by passing the path to the shared library to the :py:meth:`~SqliteExtDatabase.load_extension` method.
+
+       .. code-block:: python
+
+           db = SqliteExtDatabase('my_database.db')
+           db.load_extension('/path/to/closure')
+
+    :param model_class: The model class containing the nodes in the tree.
+    :param foreign_key: The self-referential parent-node field on the model class. If not provided, peewee will introspect the model to find a suitable key.
+    :return: Returns a :py:class:`VirtualModel` for working with a closure table.
+
+    .. warning:: There are two caveats you should be aware of when using the ``transitive_closure`` extension. First, it requires that your *source model* have an integer primary key. Second, it is strongly recommended that you create an index on the self-referential foreign key.
+
+    Example code:
+
+    .. code-block:: python
+
+        db = SqliteExtDatabase('my_database.db')
+        db.load_extension('/path/to/closure')
+
+        class Category(Model):
+            name = CharField()
+            parent = ForiegnKeyField('self', index=True, null=True)  # Required.
+
+            class Meta:
+                database = db
+
+        CategoryClosure = ClosureTable(Category)
+
+        # Create the tables if they do not exist.
+        db.create_tables([Category, CategoryClosure], True)
+
+    It is now possible to perform interesting queries using the data from the closure table:
+
+    .. code-block:: python
+
+        # Get all ancestors for a particular node.
+        laptops = Category.get(Category.name == 'Laptops')
+        for parent in Closure.ancestors(laptops):
+            print parent.name
+
+        # Computer Hardware
+        # Computers
+        # Electronics
+        # All products
+
+        # Get all descendants for a particular node.
+        hardware = Category.get(Category.name == 'Computer Hardware')
+        for node in Closure.descendants(hardware):
+            print node.name
+
+        # Laptops
+        # Desktops
+        # Hard-drives
+        # Monitors
+        # LCD Monitors
+        # LED Monitors
+
+
+    The :py:class:`VirtualTable` returned by this function contains a handful of interesting methods. The model will be a subclass of :py:class:`BaseClosureTable`.
+
+    .. py:class:: BaseClosureTable()
+
+        .. py:attribute:: id
+
+            A field for the primary key of the given node.
+
+        .. py:attribute:: depth
+
+            A field representing the relative depth of the given node.
+
+        .. py:attribute:: root
+
+            A field representing the relative root node.
+
+        .. py:method:: descendants(node[, depth=None[, include_node=False]])
+
+            Retrieve all descendants of the given node. If a depth is specified, only nodes at that depth (relative to the given node) will be returned.
+
+            .. code-block:: python
+
+                node = Category.get(Category.name == 'Electronics')
+
+                # Direct child categories.
+                children = CategoryClosure.descendants(node, depth=1)
+
+                # Grand-child categories.
+                children = CategoryClosure.descendants(node, depth=2)
+
+                # Descendants at all depths.
+                all_descendants = CategoryClosure.descendants(node)
+
+
+        .. py:method:: ancestors(node[, depth=None[, include_node=False]])
+
+            Retrieve all ancestors of the given node. If a depth is specified, only nodes at that depth (relative to the given node) will be returned.
+
+            .. code-block:: python
+
+                node = Category.get(Category.name == 'Laptops')
+
+                # All ancestors.
+                all_ancestors = CategoryClosure.ancestors(node)
+
+                # Grand-parent category.
+                grandparent = CategoryClosure.ancestores(node, depth=2)
+
+        .. py:method:: siblings(node[, include_node=False])
+
+            Retrieve all nodes that are children of the specified node's parent.
+
+    .. note:: For an in-depth discussion of the SQLite transitive closure extension, check out this blog post, `Querying Tree Structures in SQLite using Python and the Transitive Closure Extension <http://charlesleifer.com/blog/querying-tree-structures-in-sqlite-using-python-and-the-transitive-closure-extension/>`_.
 
 
 .. _apsw:
@@ -88,6 +687,8 @@ How to use the APSWDatabase
 apsw_ext API notes
 ^^^^^^^^^^^^^^^^^^
 
+:py:class:`APSWDatabase` extends the :py:class:`SqliteExtDatabase` and inherits its advanced features.
+
 .. py:class:: APSWDatabase(database, **connect_kwargs)
 
     :param string database: filename of sqlite database
@@ -117,6 +718,162 @@ apsw_ext API notes
 .. note::
     Be sure to use the ``Field`` subclasses defined in the ``apsw_ext``
     module, as they will properly handle adapting the data types for storage.
+
+.. _berkeleydb:
+
+BerkeleyDB backend
+------------------
+
+BerkeleyDB provides a `SQLite-compatible API <http://www.oracle.com/technetwork/database/database-technologies/berkeleydb/overview/sql-160887.html>`_. BerkeleyDB's SQL API has many advantages over SQLite:
+
+* Higher transactions-per-second in multi-threaded environments.
+* Built-in replication and hot backup.
+* Fewer system calls, less resource utilization.
+* Multi-version concurrency control.
+
+For more details, Oracle has published a short `technical overview <http://www.oracle.com/technetwork/database/berkeleydb/learnmore/bdbvssqlite-wp-186779.pdf>`_.
+
+In order to use peewee with BerkeleyDB, you need to compile BerkeleyDB with the SQL API enabled. Then compile the Python SQLite driver against BerkeleyDB's sqlite replacement.
+
+Begin by downloading and compiling BerkeleyDB:
+
+.. code-block:: console
+
+    wget http://download.oracle.com/berkeley-db/db-6.0.30.tar.gz
+    tar xzf db-6.0.30.tar.gz
+    cd db-6.0.30/build_unix
+    export CFLAGS='-DSQLITE_ENABLE_FTS3=1 -DSQLITE_ENABLE_FTS3_PARENTHESIS=1 -DSQLITE_ENABLE_UPDATE_DELETE_LIMIT -DSQLITE_SECURE_DELETE -DSQLITE_SOUNDEX -DSQLITE_ENABLE_RTREE=1 -fPIC'
+    ../dist/configure --enable-static --enable-shared --enable-sql --enable-sql-compat
+    make
+    sudo make prefix=/usr/local/ install
+
+Then get a copy of the standard library SQLite driver and build it against BerkeleyDB:
+
+.. code-block:: console
+
+    git clone https://github.com/ghaering/pysqlite
+    cd pysqlite
+    sed -i "s|#||g" setup.cfg
+    python setup.py build
+    sudo python setup.py install
+
+You can also find up-to-date `step by step instructions <http://charlesleifer.com/blog/building-the-python-sqlite-driver-for-use-with-berkeleydb/>`_ on my blog.
+
+.. py:class:: BerkeleyDatabase(database, **kwargs)
+
+    :param bool multiversion: Enable multiversion concurrency control. Default is ``False``.
+    :param int page_size: Set the page size ``PRAGMA``. This option only works on new databases.
+    :param int cache_size: Set the cache size ``PRAGMA``.
+
+    Subclass of the :py:class:`SqliteExtDatabase` that supports connecting to BerkeleyDB-backed version of SQLite.
+
+    .. py:classmethod:: check_pysqlite()
+
+        Check whether ``pysqlite2`` was compiled against the BerkeleyDB SQLite. Returns ``True`` or ``False``.
+
+    .. py:classmethod:: check_libsqlite()
+
+        Check whether ``libsqlite3`` is the BerkeleyDB SQLite implementation. Returns ``True`` or ``False``.
+
+
+.. _sqlcipher_ext:
+
+Sqlcipher backend
+-----------------
+
+* Although this extention's code is short, it has not been properly
+  peer-reviewed yet and may have introduced vulnerabilities.
+* The code contains minimum values for `passphrase` length and
+  `kdf_iter`, as well as a default value for the later.
+  **Do not** regard these numbers as advice. Consult the docs at
+  http://sqlcipher.net/sqlcipher-api/ and security experts.
+
+Also note that this code relies on pysqlcipher_ and sqlcipher_, and
+the code there might have vulnerabilities as well, but since these
+are widely used crypto modules, we can expect "short zero days" there.
+
+..  _pysqlcipher: https://pypi.python.org/pypi/pysqlcipher
+..  _sqlcipher: http://sqlcipher.net
+
+sqlcipher_ext API notes
+^^^^^^^^^^^^^^^^^^^^^^^
+
+.. py:class:: SqlCipherDatabase(database, passphrase, kdf_iter=64000, **kwargs)
+
+    Subclass of :py:class:`SqliteDatabase` that stores the database
+    encrypted. Instead of the standard ``sqlite3`` backend, it uses pysqlcipher_:
+    a python wrapper for sqlcipher_, which -- in turn -- is an encrypted wrapper
+    around ``sqlite3``, so the API is *identical* to :py:class:`SqliteDatabase`'s,
+    except for object construction parameters:
+
+    :param database: Path to encrypted database filename to open [or create].
+    :param passphrase: Database encryption passphrase: should be at least 8 character
+        long (or an error is raised), but it is *strongly advised* to enforce better
+        `passphrase strength`_ criteria in your implementation.
+    :param kdf_iter: [Optional] number of PBKDF2_ iterations.
+
+    * If the ``database`` file doesn't exist, it will be *created* with
+      encryption by a key derived from ``passhprase`` with ``kdf_iter``
+      PBKDF2_ iterations.
+    * When trying to open an existing database, ``passhprase`` and ``kdf_iter``
+      should be *identical* to the ones used when it was created.
+
+.. _PBKDF2: https://en.wikipedia.org/wiki/PBKDF2
+.. _passphrase strength: https://en.wikipedia.org/wiki/Password_strength
+
+Notes:
+
+    * [Hopefully] there's no way to tell whether the passphrase is wrong
+      or the file is corrupt.
+      In both cases -- *the first time we try to acces the database* -- a
+      :py:class:`DatabaseError` error is raised,
+      with the *exact* message: ``"file is encrypted or is not a database"``.
+
+      As mentioned above, this only happens when you *access* the databse,
+      so if you need to know *right away* whether the passphrase was correct,
+      you can trigger this check by calling [e.g.]
+      :py:meth:`~Database.get_tables()` (see example below).
+
+    * Most applications can expect failed attempts to open the database
+      (common case: prompting the user for ``passphrase``), so
+      the database can't be hardwired into the :py:class:`Meta` of
+      model classes, and a :py:class:`Proxy` should be used instead.
+
+Example:
+
+.. code-block:: python
+
+    db_proxy = peewee.Proxy()
+
+    class BaseModel(Model):
+        """Parent for all app's models"""
+        class Meta:
+            # We won't have a valid db until user enters passhrase,
+            # so we use a Proxy() instead.
+            database = db_proxy
+
+    # Derive our model subclasses
+    class Person(BaseModel):
+        name = CharField(primary_key=True)
+
+    right_passphrase = False
+    while not right_passphrase:
+        passphrase = None
+        db = SqlCipherDatabase('testsqlcipher.db',
+                               get_passphrase_from_user())
+        try:  # Error only gets triggered when we access the db
+            db.get_tables()
+            right_passphrase = True
+        except DatabaseError as exc:
+            # We only allow a specific [somewhat cryptic] error message.
+            if exc.message != 'file is encrypted or is not a database':
+                raise exc
+        tell_user_the_passphrase_was_wrong()
+
+    # If we're here, db is ok, we can connect it to Model subclasses
+    db_proxy.initialize(db)
+
+See also: a slightly more elaborate `example <https://gist.github.com/thedod/11048875#file-testpeeweesqlcipher-py>`_.
 
 
 .. _postgres_ext:
@@ -908,662 +1665,6 @@ postgres_ext API notes
               content=content,
               search_content=fn.to_tsvector(content))  # Note `to_tsvector()`.
 
-
-.. _sqlite_ext:
-
-Sqlite Extensions
------------------
-
-The SQLite extensions module provides support for some interesting sqlite-only
-features:
-
-* Define custom aggregates, collations and functions.
-* Support for FTS3/4 (sqlite full-text search) with :ref:`BM25 ranking <sqlite_bm25>`.
-* Support for the new FTS5 search extension.
-* Specify isolation level in transactions.
-* Basic support for virtual tables.
-* Collection of user-defined functions written with Cython as a SQLite extension module.
-* Support for the `closure table <http://charlesleifer.com/blog/querying-tree-structures-in-sqlite-using-python-and-the-transitive-closure-extension/>`_ extension.
-
-
-sqlite_ext API notes
-^^^^^^^^^^^^^^^^^^^^
-
-.. py:class:: SqliteExtDatabase(database, **kwargs)
-
-    Subclass of the :py:class:`SqliteDatabase` that provides some advanced
-    features only offered by Sqlite.
-
-    * Register custom aggregates, collations and functions
-    * Specify a row factory
-    * Advanced transactions (specify isolation level)
-
-    .. py:method:: aggregate([name=None[, num_params=-1]])
-
-        Class-decorator for registering custom aggregation functions.
-
-        :param name: string name for the aggregate, defaults to the name of the class.
-        :param num_params: integer representing number of parameters the aggregate function accepts. The default value, ``-1``, indicates the aggregate can accept any number of parameters.
-
-        .. code-block:: python
-
-            @db.aggregate('product', 1)
-            class Product(object):
-                """Like sum, except calculate the product of a series of numbers."""
-                def __init__(self):
-                    self.product = 1
-
-                def step(self, value):
-                    self.product *= value
-
-                def finalize(self):
-                    return self.product
-
-            # To use this aggregate:
-            product = (Score
-                       .select(fn.product(Score.value))
-                       .scalar())
-
-    .. py:method:: collation([name])
-
-        Function decorator for registering a custom collation.
-
-        :param name: string name to use for this collation.
-
-        .. code-block:: python
-
-            @db.collation()
-            def collate_reverse(s1, s2):
-                return -cmp(s1, s2)
-
-            # To use this collation:
-            Book.select().order_by(collate_reverse.collation(Book.title))
-
-        As you might have noticed, the original ``collate_reverse`` function
-        has a special attribute called ``collation`` attached to it.  This extra
-        attribute provides a shorthand way to generate the SQL necessary to use
-        our custom collation.
-
-    .. py:method:: func([name[, num_params]])
-
-        Function decorator for registering user-defined functions.
-
-        :param name: name to use for this function.
-        :param num_params: number of parameters this function accepts.  If not
-            provided, peewee will introspect the function for you.
-
-        .. code-block:: python
-
-            @db.func()
-            def title_case(s):
-                return s.title()
-
-            # Use in the select clause...
-            titled_books = Book.select(fn.title_case(Book.title))
-
-            @db.func()
-            def sha1(s):
-                return hashlib.sha1(s).hexdigest()
-
-            # Use in the where clause...
-            user = User.select().where(
-                (User.username == username) &
-                (fn.sha1(User.password) == password_hash)).get()
-
-    .. py:method:: granular_transaction([lock_type='deferred'])
-
-        With the ``granular_transaction`` helper, you can specify the isolation level
-        for an individual transaction.  The valid options are:
-
-        * ``exclusive``
-        * ``immediate``
-        * ``deferred``
-
-        Example usage:
-
-        .. code-block:: python
-
-            with db.granular_transaction('exclusive'):
-                # no other readers or writers!
-                (Account
-                 .update(Account.balance=Account.balance - 100)
-                 .where(Account.id == from_acct)
-                 .execute())
-
-                (Account
-                 .update(Account.balance=Account.balance + 100)
-                 .where(Account.id == to_acct)
-                 .execute())
-
-
-.. py:class:: VirtualModel
-
-    Subclass of :py:class:`Model` that signifies the model operates using a
-    virtual table provided by a sqlite extension.
-
-    .. py:attribute:: _extension = 'name of sqlite extension'
-
-.. _sqlite_fts:
-
-.. py:class:: FTSModel
-
-    Model class that provides support for Sqlite's full-text search extension.
-    Models should be defined normally, however there are a couple caveats:
-
-    * Indexes are ignored completely
-    * Sqlite will treat all column types as :py:class:`TextField` (although you
-      can store other data types, Sqlite will treat them as text).
-
-    Therefore it usually makes sense to index the content you intend to search
-    and a single link back to the original document, since all SQL queries
-    *except* full-text searches and ``rowid`` lookups will be slow.
-
-    Example:
-
-    .. code-block:: python
-
-        class Document(FTSModel):
-            title = TextField()  # type affinities are ignored by FTS, so use TextField
-            content = TextField()
-
-        Document.create_table(tokenize='porter')  # use the porter stemmer.
-
-        # populate documents using normal operations.
-        for doc in list_of_docs_to_index:
-            Document.create(title=doc['title'], content=doc['content'])
-
-        # use the "match" operation for FTS queries.
-        matching_docs = (Document
-                         .select()
-                         .where(Document.match('some query')))
-
-        # to sort by best match, use the custom "rank" function.
-        best = (Document
-                .select(Document, Rank(Document).alias('score'))
-                .where(Document.match('some query'))
-                .order_by(SQL('score').desc()))
-
-        # or use the shortcut method:
-        best = Document.search('some phrase')
-
-        # you can also use the BM25 algorithm to rank documents:
-        best = (Document
-                .select(
-                    Document,
-                    Document.bm25(Document.content).alias('score'))
-                .where(Document.match('some query'))
-                .order_by(SQL('score').desc()))
-
-        # There is a shortcut method for bm25 as well:
-        best_bm25 = Document.search_bm25('some phrase')
-
-        # BM25 allows you to specify a column if your FTS model contains
-        # multiple fields.
-        best_bm25 = Document.search_bm25('some phrase', Document.content)
-
-    If you have an existing table and would like to add search for a column
-    on that table, you can specify it using the ``content`` option:
-
-    .. code-block:: python
-
-        class Blog(Model):
-            title = CharField()
-            pub_date = DateTimeField()
-            content = TextField()  # we want to search this.
-
-        class FTSBlog(FTSModel):
-            content = TextField()
-
-        Blog.create_table()
-        FTSBlog.create_table(content=Blog.content)
-
-        # Now, we can manage content in the FTSBlog.  To populate it with
-        # content:
-        FTSBlog.rebuild()
-
-        # Optimize the index.
-        FTSBlog.optimize()
-
-    The ``content`` option accepts either a single :py:class:`Field` or a :py:class:`Model`
-    and can reduce the amount of storage used.  However, content will need to be
-    manually moved to/from the associated ``FTSModel``.
-
-    .. py:classmethod:: create_table([fail_silently=False[, **options]])
-
-        :param boolean fail_silently: do not re-create if table already exists.
-        :param options: options passed along when creating the table, e.g. ``content``.
-
-    .. py:classmethod:: rebuild()
-
-        Rebuild the search index -- this only works when the ``content`` option
-        was specified during table creation.
-
-    .. py:classmethod:: optimize()
-
-        Optimize the search index.
-
-    .. py:classmethod:: match(term)
-
-        Shorthand for generating a `MATCH` expression for the given term.
-
-        .. code-block:: python
-
-            query = Document.select().where(Document.match('search phrase'))
-            for doc in query:
-                print 'match: ', doc.title
-
-    .. py:classmethod:: rank()
-
-        Calculate the rank based on the quality of the match.
-
-        .. code-block:: python
-
-            query = (Document
-                     .select(Document, Document.rank().alias('score'))
-                     .where(Document.match('search phrase'))
-                     .order_by(SQL('score').desc()))
-
-            for search_result in query:
-                print search_result.title, search_result.score
-
-    .. py:classmethod:: bm25([field=None[, k=1.2[, b=0.75]]])
-
-        Calculate the rank based on the quality of the match using the
-        BM25 algorithm.
-
-        .. note::
-            If no field is specified, then the first `TextField` on the model
-            will be used. If no `TextField` is present, the first `CharField`
-            will be used. Failing either of those conditions, the last overall
-            field on the model will be used.
-
-        .. code-block:: python
-
-            query = (Document
-                     .select(
-                         Document,
-                         Document.bm25(Document.content).alias('score'))
-                     .where(Document.match('search phrase'))
-                     .order_by(SQL('score').desc()))
-
-            for search_result in query:
-                print search_result.title, search_result.score
-
-    .. py:classmethod:: search(term[, alias='score'])
-
-        Shorthand way of searching for a term and sorting results by the
-        quality of the match. This is equivalent to the :py:meth:`~FTSModel.rank`
-        example code presented above.
-
-        :param str term: Search term to use.
-        :param str alias: Alias to use for the calculated rank score.
-
-        .. code-block:: python
-
-            docs = Document.search('search term')
-            for result in docs:
-                print result.title, result.score
-
-    .. _sqlite_bm25:
-
-    .. py:classmethod:: search_bm25(term[, field=None[, k=1.2[, b=0.75[, alias='score']]]])
-
-        Shorthand way of searching for a term and sorting results by the
-        quality of the match, as determined by the BM25 algorithm. This is
-        equivalent to the :py:meth:`~FTSModel.bm25` example code presented above.
-
-        :param str term: Search term to use.
-        :param Field field: A field on the model.
-        :param float k: Parameter for BM25
-        :param float b: Parameter for BM25
-        :param str alias: Alias to use for the calculated rank score.
-
-        .. note::
-            If no field is specified, then the first `TextField` on the model
-            will be used. If no `TextField` is present, the first `CharField`
-            will be used. Failing either of those conditions, the last overall
-            field on the model will be used.
-
-        .. note:: BM25 only works with FTS4 tables.
-
-        .. code-block:: python
-
-            docs = Document.search_bm25('search term')
-            for result in docs:
-                print result.title, result.score
-
-
-.. py:function:: match(lhs, rhs)
-
-    Generate a SQLite `MATCH` expression for use in full-text searches.
-
-    .. code-block:: python
-
-        Document.select().where(match(Document.content, 'search term'))
-
-.. py:function:: Rank(model_class)
-
-    Calculate the rank of the search results, for use with `FTSModel` queries
-    using the `MATCH` operator.
-
-    .. code-block:: python
-
-        # Search for documents and return results ordered by quality
-        # of match.
-        docs = (Document
-                .select(Document, Rank(Document).alias('score'))
-                .where(Document.match('some search term'))
-                .order_by(SQL('score').desc()))
-
-.. py:function:: BM25(model_class, field_index)
-
-    Calculate the rank of the search results, for use with `FTSModel` queries
-    using the `MATCH` operator.
-
-    :param Model model_class: The `FTSModel` on which the query is being performed.
-    :param int field_index: The 0-based index of the field being queried.
-
-    .. code-block:: python
-
-        # Assuming the `content` field has index=2 (0=pk, 1=title, 2=content),
-        # calculate the BM25 score for each result.
-        docs = (Document
-                .select(Document, BM25(Document, 2).alias('score'))
-                .where(Document.match('search term'))
-                .order_by(SQL('score').desc()))
-
-    .. note:: BM25 only works with FTS4 tables.
-
-.. _sqlite_closure:
-
-.. py:function:: ClosureTable(model_class[, foreign_key=None])
-
-    Factory function for creating a model class suitable for working with a `transitive closure <http://www.sqlite.org/cgi/src/artifact/636024302cde41b2bf0c542f81c40c624cfb7012>`_ table. Closure tables are :py:class:`VirtualModel` subclasses that work with the transitive closure SQLite extension. These special tables are designed to make it easy to efficiently query heirarchical data. The SQLite extension manages an AVL tree behind-the-scenes, transparently updating the tree when your table changes and making it easy to perform common queries on heirarchical data.
-
-    To use the closure table extension in your project, you need:
-
-    1. A copy of the SQLite extension. The source code can be found in the `SQLite code repository <http://www.sqlite.org/cgi/src/artifact/636024302cde41b2bf0c542f81c40c624cfb7012>`_ or by cloning `this gist <https://gist.github.com/coleifer/7f3593c5c2a645913b92>`_:
-
-       .. code-block:: console
-
-           $ git clone https://gist.github.com/coleifer/7f3593c5c2a645913b92 closure
-           $ cd closure/
-
-    2. Compile the extension as a shared library, e.g.
-
-       .. code-block:: console
-
-           $ gcc -g -fPIC -shared closure.c -o closure.so
-
-    3. Create a model for your heirarchical data. The only requirement here is that the model have an integer primary key and a self-referential foreign key. Any additional fields are fine.
-
-       .. code-block:: python
-
-           class Category(Model):
-               name = CharField()
-               metadata = TextField()
-               parent = ForeignKeyField('self', index=True, null=True)  # Required.
-
-           # Generate a model for the closure virtual table.
-           CategoryClosure = ClosureTable(Category)
-
-    4. In your application code, make sure you load the extension when you instantiate your :py:class:`Database` object. This is done by passing the path to the shared library to the :py:meth:`~SqliteExtDatabase.load_extension` method.
-
-       .. code-block:: python
-
-           db = SqliteExtDatabase('my_database.db')
-           db.load_extension('/path/to/closure')
-
-    :param model_class: The model class containing the nodes in the tree.
-    :param foreign_key: The self-referential parent-node field on the model class. If not provided, peewee will introspect the model to find a suitable key.
-    :return: Returns a :py:class:`VirtualModel` for working with a closure table.
-
-    .. warning:: There are two caveats you should be aware of when using the ``transitive_closure`` extension. First, it requires that your *source model* have an integer primary key. Second, it is strongly recommended that you create an index on the self-referential foreign key.
-
-    Example code:
-
-    .. code-block:: python
-
-        db = SqliteExtDatabase('my_database.db')
-        db.load_extension('/path/to/closure')
-
-        class Category(Model):
-            name = CharField()
-            parent = ForiegnKeyField('self', index=True, null=True)  # Required.
-
-            class Meta:
-                database = db
-
-        CategoryClosure = ClosureTable(Category)
-
-        # Create the tables if they do not exist.
-        db.create_tables([Category, CategoryClosure], True)
-
-    It is now possible to perform interesting queries using the data from the closure table:
-
-    .. code-block:: python
-
-        # Get all ancestors for a particular node.
-        laptops = Category.get(Category.name == 'Laptops')
-        for parent in Closure.ancestors(laptops):
-            print parent.name
-
-        # Computer Hardware
-        # Computers
-        # Electronics
-        # All products
-
-        # Get all descendants for a particular node.
-        hardware = Category.get(Category.name == 'Computer Hardware')
-        for node in Closure.descendants(hardware):
-            print node.name
-
-        # Laptops
-        # Desktops
-        # Hard-drives
-        # Monitors
-        # LCD Monitors
-        # LED Monitors
-
-
-    The :py:class:`VirtualTable` returned by this function contains a handful of interesting methods. The model will be a subclass of :py:class:`BaseClosureTable`.
-
-    .. py:class:: BaseClosureTable()
-
-        .. py:attribute:: id
-
-            A field for the primary key of the given node.
-
-        .. py:attribute:: depth
-
-            A field representing the relative depth of the given node.
-
-        .. py:attribute:: root
-
-            A field representing the relative root node.
-
-        .. py:method:: descendants(node[, depth=None[, include_node=False]])
-
-            Retrieve all descendants of the given node. If a depth is specified, only nodes at that depth (relative to the given node) will be returned.
-
-            .. code-block:: python
-
-                node = Category.get(Category.name == 'Electronics')
-
-                # Direct child categories.
-                children = CategoryClosure.descendants(node, depth=1)
-
-                # Grand-child categories.
-                children = CategoryClosure.descendants(node, depth=2)
-
-                # Descendants at all depths.
-                all_descendants = CategoryClosure.descendants(node)
-
-
-        .. py:method:: ancestors(node[, depth=None[, include_node=False]])
-
-            Retrieve all ancestors of the given node. If a depth is specified, only nodes at that depth (relative to the given node) will be returned.
-
-            .. code-block:: python
-
-                node = Category.get(Category.name == 'Laptops')
-
-                # All ancestors.
-                all_ancestors = CategoryClosure.ancestors(node)
-
-                # Grand-parent category.
-                grandparent = CategoryClosure.ancestores(node, depth=2)
-
-        .. py:method:: siblings(node[, include_node=False])
-
-            Retrieve all nodes that are children of the specified node's parent.
-
-    .. note:: For an in-depth discussion of the SQLite transitive closure extension, check out this blog post, `Querying Tree Structures in SQLite using Python and the Transitive Closure Extension <http://charlesleifer.com/blog/querying-tree-structures-in-sqlite-using-python-and-the-transitive-closure-extension/>`_.
-
-.. py:class:: FTSModel
-
-.. _berkeleydb:
-
-BerkeleyDB backend
-------------------
-
-BerkeleyDB provides a `SQLite-compatible API <http://www.oracle.com/technetwork/database/database-technologies/berkeleydb/overview/sql-160887.html>`_. BerkeleyDB's SQL API has many advantages over SQLite:
-
-* Higher transactions-per-second in multi-threaded environments.
-* Built-in replication and hot backup.
-* Fewer system calls, less resource utilization.
-* Multi-version concurrency control.
-
-For more details, Oracle has published a short `technical overview <http://www.oracle.com/technetwork/database/berkeleydb/learnmore/bdbvssqlite-wp-186779.pdf>`_.
-
-In order to use peewee with BerkeleyDB, you need to compile BerkeleyDB with the SQL API enabled. Then compile the Python SQLite driver against BerkeleyDB's sqlite replacement.
-
-Begin by downloading and compiling BerkeleyDB:
-
-.. code-block:: console
-
-    wget http://download.oracle.com/berkeley-db/db-6.0.30.tar.gz
-    tar xzf db-6.0.30.tar.gz
-    cd db-6.0.30/build_unix
-    export CFLAGS='-DSQLITE_ENABLE_FTS3=1 -DSQLITE_ENABLE_RTREE=1 -fPIC'
-    ../dist/configure --enable-static --disable-shared --enable-sql --enable-sql-compat
-    make
-    sudo make prefix=/usr/local/ install
-
-Then get a copy of the standard library SQLite driver and build it against BerkeleyDB:
-
-.. code-block:: console
-
-    git clone https://github.com/ghaering/pysqlite
-    cd pysqlite
-    sed -i "s|#||g" setup.cfg
-    python setup.py build
-    sudo python setup.py install
-
-You can also find up-to-date `step by step instructions <http://charlesleifer.com/blog/building-the-python-sqlite-driver-for-use-with-berkeleydb/>`_ on my blog.
-
-.. py:class:: BerkeleyDatabase(database, **kwargs)
-
-    Subclass of the :py:class:`SqliteExtDatabase` that supports connecting to BerkeleyDB-backed version of SQLite.
-
-.. _sqlcipher_ext:
-
-Sqlcipher backend
------------------
-
-* Although this extention's code is short, it has not been properly
-  peer-reviewed yet and may have introduced vulnerabilities.
-* The code contains minimum values for `passphrase` length and
-  `kdf_iter`, as well as a default value for the later.
-  **Do not** regard these numbers as advice. Consult the docs at
-  http://sqlcipher.net/sqlcipher-api/ and security experts.
-
-Also note that this code relies on pysqlcipher_ and sqlcipher_, and
-the code there might have vulnerabilities as well, but since these
-are widely used crypto modules, we can expect "short zero days" there.
-
-..  _pysqlcipher: https://pypi.python.org/pypi/pysqlcipher
-..  _sqlcipher: http://sqlcipher.net
-
-sqlcipher_ext API notes
-^^^^^^^^^^^^^^^^^^^^^^^
-
-.. py:class:: SqlCipherDatabase(database, passphrase, kdf_iter=64000, **kwargs)
-
-    Subclass of :py:class:`SqliteDatabase` that stores the database
-    encrypted. Instead of the standard ``sqlite3`` backend, it uses pysqlcipher_:
-    a python wrapper for sqlcipher_, which -- in turn -- is an encrypted wrapper
-    around ``sqlite3``, so the API is *identical* to :py:class:`SqliteDatabase`'s,
-    except for object construction parameters:
-
-    :param database: Path to encrypted database filename to open [or create].
-    :param passphrase: Database encryption passphrase: should be at least 8 character
-        long (or an error is raised), but it is *strongly advised* to enforce better
-        `passphrase strength`_ criteria in your implementation.
-    :param kdf_iter: [Optional] number of PBKDF2_ iterations.
-
-    * If the ``database`` file doesn't exist, it will be *created* with
-      encryption by a key derived from ``passhprase`` with ``kdf_iter``
-      PBKDF2_ iterations.
-    * When trying to open an existing database, ``passhprase`` and ``kdf_iter``
-      should be *identical* to the ones used when it was created.
-
-.. _PBKDF2: https://en.wikipedia.org/wiki/PBKDF2
-.. _passphrase strength: https://en.wikipedia.org/wiki/Password_strength
-
-Notes:
-
-    * [Hopefully] there's no way to tell whether the passphrase is wrong
-      or the file is corrupt.
-      In both cases -- *the first time we try to acces the database* -- a
-      :py:class:`DatabaseError` error is raised,
-      with the *exact* message: ``"file is encrypted or is not a database"``.
-
-      As mentioned above, this only happens when you *access* the databse,
-      so if you need to know *right away* whether the passphrase was correct,
-      you can trigger this check by calling [e.g.]
-      :py:meth:`~Database.get_tables()` (see example below).
-
-    * Most applications can expect failed attempts to open the database
-      (common case: prompting the user for ``passphrase``), so
-      the database can't be hardwired into the :py:class:`Meta` of
-      model classes, and a :py:class:`Proxy` should be used instead.
-
-Example:
-
-.. code-block:: python
-
-    db_proxy = peewee.Proxy()
-
-    class BaseModel(Model):
-        """Parent for all app's models"""
-        class Meta:
-            # We won't have a valid db until user enters passhrase,
-            # so we use a Proxy() instead.
-            database = db_proxy
-
-    # Derive our model subclasses
-    class Person(BaseModel):
-        name = CharField(primary_key=True)
-
-    right_passphrase = False
-    while not right_passphrase:
-        passphrase = None
-        db = SqlCipherDatabase('testsqlcipher.db',
-                               get_passphrase_from_user())
-        try:  # Error only gets triggered when we access the db
-            db.get_tables()
-            right_passphrase = True
-        except DatabaseError as exc:
-            # We only allow a specific [somewhat cryptic] error message.
-            if exc.message != 'file is encrypted or is not a database':
-                raise exc
-        tell_user_the_passphrase_was_wrong()
-
-    # If we're here, db is ok, we can connect it to Model subclasses
-    db_proxy.initialize(db)
-
-See also: a slightly more elaborate `example <https://gist.github.com/thedod/11048875#file-testpeeweesqlcipher-py>`_.
 
 .. _dataset:
 
