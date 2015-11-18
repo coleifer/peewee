@@ -35,9 +35,10 @@ Examples
 Defining models is similar to Django or SQLAlchemy::
 
     from peewee import *
+    from playhouse.sqlite_ext import SqliteExtDatabase
     import datetime
 
-    db = SqliteDatabase('my_database.db', threadlocals=True)
+    db = SqliteExtDatabase('my_database.db')
 
     class BaseModel(Model):
         class Meta:
