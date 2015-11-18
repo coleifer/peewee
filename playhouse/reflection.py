@@ -345,12 +345,30 @@ class SqliteMetadata(Metadata):
         return column_types
 
 
-DatabaseMetadata = namedtuple('DatabaseMetadata', (
+_DatabaseMetadata = namedtuple('_DatabaseMetadata', (
     'columns',
     'primary_keys',
     'foreign_keys',
     'model_names',
     'indexes'))
+
+
+class DatabaseMetadata(_DatabaseMetadata):
+    def multi_column_indexes(self, table):
+        accum = []
+        for index in self.indexes[table]:
+            if len(index.columns) > 1:
+                field_names = [self.columns[table][column].name
+                               for column in index.columns]
+                accum.append((field_names, index.unique))
+        return accum
+
+    def column_indexes(self, table):
+        accum = {}
+        for index in self.indexes[table]:
+            if len(index.columns) == 1:
+                accum[index.columns[0]] = index.unique
+        return accum
 
 
 class Introspector(object):
@@ -521,16 +539,8 @@ class Introspector(object):
                 if column.primary_key:
                     primary_keys.append(column.name)
 
-            multi_column_indexes = []
-            column_indexes = {}
-            indexes = database.indexes[table]
-            for index in indexes:
-                if len(index.columns) > 1:
-                    field_names = [columns[column].name
-                                   for column in index.columns]
-                    multi_column_indexes.append((field_names, index.unique))
-                elif len(index.columns) == 1:
-                    column_indexes[index.columns[0]] = index.unique
+            multi_column_indexes = database.multi_column_indexes(table)
+            column_indexes = database.column_indexes(table)
 
             class Meta:
                 indexes = multi_column_indexes

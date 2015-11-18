@@ -30,6 +30,12 @@ class Note(BaseModel):
     data = IntegerField(default=0)
     misc = IntegerField(default=0)
 
+    class Meta:
+        indexes = (
+            (('user', 'text'), True),
+            (('user', 'data', 'misc'), False),
+        )
+
 class Category(BaseModel):
     name = CharField(unique=True)
     parent = ForeignKeyField('self', null=True)
@@ -78,6 +84,10 @@ class Note(BaseModel):
 
     class Meta:
         db_table = 'note'
+        indexes = (
+            (('user', 'data', 'misc'), False),
+            (('user', 'text'), True),
+        )
 """.strip()
 
 
@@ -108,6 +118,10 @@ class Note(BaseModel):
 
     class Meta:
         db_table = 'note'
+        indexes = (
+            (('user', 'data', 'misc'), False),
+            (('user', 'text'), True),
+        )
 """.strip()
 
 

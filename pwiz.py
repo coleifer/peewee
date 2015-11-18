@@ -92,6 +92,16 @@ def print_models(introspector, tables=None, preserve_order=False):
         print_('')
         print_('    class Meta:')
         print_('        db_table = \'%s\'' % table)
+        multi_column_indexes = database.multi_column_indexes(table)
+        if multi_column_indexes:
+            print_('        indexes = (')
+            for fields, unique in sorted(multi_column_indexes):
+                print_('            ((%s), %s),' % (
+                    ', '.join("'%s'" % field for field in fields),
+                    unique,
+                ))
+            print_('        )')
+
         if introspector.schema:
             print_('        schema = \'%s\'' % introspector.schema)
         if len(primary_keys) > 1:
