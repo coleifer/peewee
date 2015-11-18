@@ -1,14 +1,13 @@
 .. _playhouse:
 
-Playhouse, a collection of addons
-=================================
+Playhouse, extensions to Peewee
+===============================
 
-Peewee comes with numerous extras which I didn't really feel like including in
-the main source module, but which might be interesting to implementers or fun
-to mess around with.
+Peewee comes with numerous extrension modules which are collected under the ``playhouse`` namespace. Despite the silly name, there are some very useful extensions, particularly those that expose vendor-specific database features like the :ref:`sqlite_ext` and :ref:`postgres_ext` extensions.
 
-The playhouse includes modules for different database drivers or database
-specific functionality:
+Below you will find a loosely organized listing of the various modules that make up the ``playhouse``.
+
+**Database drivers / vendor-specific database functionality**
 
 * :ref:`sqlite_ext`
 * :ref:`apsw`
@@ -16,29 +15,29 @@ specific functionality:
 * :ref:`sqlcipher_ext`
 * :ref:`postgres_ext`
 
-Modules which expose higher-level python constructs:
+**High-level features**
 
-* :ref:`dataset`
-* :ref:`djpeewee`
 * :ref:`extra-fields`
-* :ref:`gfk`
-* :ref:`hybrid`
-* :ref:`kv`
 * :ref:`shortcuts`
+* :ref:`hybrid`
 * :ref:`signals`
+* :ref:`dataset`
+* :ref:`kv`
+* :ref:`gfk`
+* :ref:`csv_utils`
 
-As well as tools for working with databases and other frameworks:
+**Database management and framework integration**
 
 * :ref:`pwiz`
 * :ref:`migrate`
+* :ref:`pool`
 * :ref:`reflection`
 * :ref:`db_url`
-* :ref:`pool`
 * :ref:`read_slaves`
 * :ref:`test_utils`
-* :ref:`csv_utils`
 * :ref:`pskel`
 * :ref:`flask_utils`
+* :ref:`djpeewee`
 
 .. _sqlite_ext:
 

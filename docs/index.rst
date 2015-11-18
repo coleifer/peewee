@@ -13,7 +13,7 @@ Peewee is a simple and small ORM. It has few (but expressive) concepts, making i
 * A small, expressive ORM
 * Written in python with support for versions 2.6+ and 3.2+.
 * built-in support for sqlite, mysql and postgresql
-* tons of extensions available in the :ref:`playhouse` (postgres hstore/json/arrays, sqlite full-text-search, schema migrations, and much more).
+* :ref:`numerous extensions available <playhouse>` (:ref:`postgres hstore/json/arrays <postgres_ext>`, :ref:`sqlite full-text-search <sqlite_ext>`, :ref:`schema migrations <migrate>`, and much more).
 
 .. image:: postgresql.png
     :target: peewee/database.html#using-postgresql
@@ -34,7 +34,7 @@ started:
 
 * :ref:`Quickstart guide <quickstart>` -- this guide covers all the bare essentials. It will take you between 5 and 10 minutes to go through it.
 * :ref:`Guide to the various query operators <query-operators>` describes how to construct queries and combine expressions.
-* :ref:`Field types table <field_types_table>` lists the various field types peewee supports and the parameters they accept.
+* :ref:`Field types table <field_types_table>` lists the various field types peewee supports and the parameters they accept. There is also an :ref:`extension module <playhouse>` that contains :ref:`special/custom field types <extra-fields>`.
 
 Contents:
 ---------
