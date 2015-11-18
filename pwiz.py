@@ -74,6 +74,9 @@ def print_models(introspector, tables=None, preserve_order=False):
         if not preserve_order:
             columns = sorted(columns)
         primary_keys = database.primary_keys[table]
+        composite_indices = [index_data for index_data in database.indexes[table] if len(index_data.columns) > 1]
+        composite_unq_cols = [col for idx in composite_indices for col in idx.columns if idx.unique]
+        composite_nonunq_cols = [col for idx in composite_indices for col in idx.columns if not idx.unique]
         for name, column in columns:
             skip = all([
                 name in primary_keys,
@@ -86,6 +89,12 @@ def print_models(introspector, tables=None, preserve_order=False):
                 # If we have a CompositeKey, then we do not want to explicitly
                 # mark the columns as being primary keys.
                 column.primary_key = False
+            if column.index and (column in composite_unq_cols if column.unique else 
+                                 column in composite_nonunq_cols):
+                # If we have a composite index, we do not want to explicitly
+                # mark the columns as being index, unless the composite is of 
+                # a different uniqueness than the composite
+                column.index = False
 
             print_('    %s' % column.get_field())
 
@@ -100,6 +109,13 @@ def print_models(introspector, tables=None, preserve_order=False):
                 if col in primary_keys])
             pk_list = ', '.join("'%s'" % pk for pk in pk_field_names)
             print_('        primary_key = CompositeKey(%s)' % pk_list)
+                        # Add Composite Indices to Meta if they exist
+        if len(composite_indices) > 0:
+            print_('        indexes = (')
+            for composite_index in composite_indices:
+                idx_list = ", ".join("'%s'" % idx for idx in composite_index.columns)
+                print_('            ((%s), %s),' % (idx_list, composite_index.unique))
+            print_('        )')
         print_('')
 
         seen.add(table)
