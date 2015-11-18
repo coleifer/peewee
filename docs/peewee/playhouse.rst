@@ -238,90 +238,104 @@ sqlite_ext API notes
 
     .. code-block:: python
 
-        class Tweet(Model):
-            user = ForeignKeyField(User, related_name='tweets')
-            content = TextField()
+        class Document(Model):
+            author = ForeignKeyField(User, related_name='documents')
+            title = TextField(null=False, unique=True)
+            content = TextField(null=False)
             timestamp = DateTimeField()
 
-        class TweetIndex(FTSModel):
-            content = TextField()
+            class Meta:
+                database = db
 
-            @classmethod
-            def store_tweet(cls, tweet):
-                TweetIndex.insert({
-                    TweetIndex.docid: tweet.id,
-                    TweetIndex.content: tweet.content}).execute()
 
-            @classmethod
-            def search(cls, phrase):
-                # Query the search index and join the corresponding Tweet object
-                # on each search result.
-                return (TweetIndex
-                        .select(TweetIndex.docid, Tweet)
-                        .join(Tweet,
-                              on=(TweetIndex.docid == Tweet.id).alias('tweet'))
-                        .where(TweetIndex.match(phrase))
-                        .order_by(TweetIndex.bm25()))
-
-    Just remember: all SQL queries except full-text searches and ``docid`` lookups will be slow.
-
-    Example:
-
-    .. code-block:: python
-
-        class Document(FTSModel):
-            title = SearchField()  # type affinities are ignored by FTS, so use TextField
+        class DocumentIndex(FTSModel):
+            title = SearchField()
             content = SearchField()
 
             class Meta:
+                database = db
                 # Use the porter stemming algorithm to tokenize content.
                 options = {'tokenize': 'porter'}
 
-        Document.create_table()
+    To store a document in the document index, we will ``INSERT`` a row into the ``DocumentIndex`` table, manually setting the ``docid``:
 
-        # populate documents using normal operations.
-        for doc in list_of_docs_to_index:
-            Document.create(title=doc['title'], content=doc['content'])
+    .. code-block:: python
 
-        # use the "match" operation for FTS queries.
-        matching_docs = (Document
+        def store_document(document):
+            DocumentIndex.insert({
+                DocumentIndex.docid: document.id,
+                DocumentIndex.title: document.title,
+                DocumentIndex.content: document.content}).execute()
+
+    To perform a search and return ranked results, we can query the ``Document`` table and join on the ``DocumentIndex``:
+
+    .. code-block:: python
+
+        def search(phrase):
+            # Query the search index and join the corresponding Document
+            # object on each search result.
+            return (Document
+                    .select()
+                    .join(
+                        DocumentIndex,
+                        on=(Document.id == DocumentIndex.docid))
+                    .where(DocumentIndex.match(phrase))
+                    .order_by(DocumentIndex.bm25()))
+
+    .. warning:: All SQL queries on ``FTSModel`` classes will be slow **except** full-text searches and ``docid`` lookups.
+
+    Continued examples:
+
+    .. code-block:: python
+
+        # Use the "match" operation for FTS queries.
+        matching_docs = (DocumentIndex
                          .select()
-                         .where(Document.match('some query')))
+                         .where(DocumentIndex.match('some query')))
 
-        # to sort by best match, use the custom "rank" function.
-        best = (Document
+        # To sort by best match, use the custom "rank" function.
+        best = (DocumentIndex
                 .select()
-                .where(Document.match('some query'))
-                .order_by(Document.rank()))
+                .where(DocumentIndex.match('some query'))
+                .order_by(DocumentIndex.rank()))
 
-        # or use the shortcut method:
-        best = Document.search('some phrase')
+        # Or use the shortcut method:
+        best = DocumentIndex.search('some phrase')
 
         # Peewee allows you to specify weights for columns.
-        best = Document.search(
+        # Matches in the title will be 2x more valuable than matches
+        # in the content field:
+        best = DocumentIndex.search(
             'some phrase',
-            2.0,  # Matches in the title will be 2x more valuable
-            1.0,  # than matches in the content field.
+            weights=[2.0, 1.0],
         )
+
+    Examples using the BM25 ranking algorithm:
+
+    .. code-block:: python
 
         # you can also use the BM25 algorithm to rank documents:
-        best = (Document
+        best = (DocumentIndex
                 .select()
-                .where(Document.match('some query'))
-                .order_by(Document.bm25()))
+                .where(DocumentIndex.match('some query'))
+                .order_by(DocumentIndex.bm25()))
 
         # There is a shortcut method for bm25 as well:
-        best_bm25 = Document.search_bm25('some phrase')
+        best_bm25 = DocumentIndex.search_bm25('some phrase')
 
         # BM25 allows you to specify weights for columns.
-        best_bm25 = Document.search_bm25(
+        # Matches in the title will be 2x more valuable than matches
+        # in the content field:
+        best_bm25 = DocumentIndex.search_bm25(
             'some phrase',
-            2.0,  # Matches in the title will be 2x more valuable
-            1.0,  # than matches in the content field.
+            weights=[2.0, 1.0],
         )
 
-    If you have an existing table and would like to add search for a column
-    on that table, you can specify it using the ``content`` option:
+    If the primary source of the content you are indexing exists in a separate table, you can save some disk space by instructing SQLite to not store an additional copy of the search index content. SQLite will still create the metadata and data-structures needed to perform searches on the content, but the content itself will not be stored in the search index.
+
+    To accomplish this, you can specify a table or column using the ``content`` option. The `FTS4 documentation <http://sqlite.org/fts3.html#section_6_2>`_ has more information.
+
+    Here is a short code snippet illustrating how to implement this with peewee:
 
     .. code-block:: python
 
@@ -330,27 +344,139 @@ sqlite_ext API notes
             pub_date = DateTimeField()
             content = TextField()  # we want to search this.
 
-        class FTSBlog(FTSModel):
-            content = TextField()
+            class Meta:
+                database = db
 
-        Blog.create_table()
-        FTSBlog.create_table(content=Blog.content)
+        class BlogIndex(FTSModel):
+            content = SearchField()
+
+            class Meta:
+                database = db
+                options = {'content': Blog.content}
+
+        db.create_tables([Blog, BlogIndex])
 
         # Now, we can manage content in the FTSBlog.  To populate it with
         # content:
-        FTSBlog.rebuild()
+        BlogIndex.rebuild()
 
         # Optimize the index.
-        FTSBlog.optimize()
+        BlogIndex.optimize()
 
     The ``content`` option accepts either a single :py:class:`Field` or a :py:class:`Model`
     and can reduce the amount of storage used.  However, content will need to be
     manually moved to/from the associated ``FTSModel``.
 
+    **FTSModel API methods:**
+
     .. py:classmethod:: create_table([fail_silently=False[, **options]])
 
         :param boolean fail_silently: do not re-create if table already exists.
         :param options: options passed along when creating the table, e.g. ``content``.
+
+    .. py:classmethod:: match(term)
+
+        Shorthand for generating a ``MATCH`` expression for the given term(s).
+
+        .. code-block:: python
+
+            query = (DocumentIndex
+                     .select()
+                     .where(DocumentIndex.match('search phrase')))
+            for doc in query:
+                print 'match: ', doc.title
+
+    .. py:classmethod:: search(term[, weights=None[, with_score=False[, score_alias='score']]])
+
+        Shorthand way of searching for a term and sorting results by the
+        quality of the match. This is equivalent to the :py:meth:`~FTSModel.rank`
+        example code presented below.
+
+        :param str term: Search term to use.
+        :param weights: A list of weights for the columns, ordered with respect to the column's position in the table. **Or**, a dictionary keyed by the field or field name and mapped to a value.
+        :param with_score: Whether the score should be returned as part of the ``SELECT`` statement.
+        :param str score_alias: Alias to use for the calculated rank score. This is the attribute you will use to access the score if ``with_score=True``.
+
+        .. code-block:: python
+
+            # Simple search.
+            docs = DocumentIndex.search('search term')
+            for result in docs:
+                print result.title
+
+            # More complete example.
+            docs = DocumentIndex.search(
+                'search term',
+                weights={'title': 2.0, 'content': 1.0},
+                with_score=True,
+                score_alias='search_score')
+            for result in docs:
+                print result.title, result.search_score
+
+    .. py:classmethod:: rank([col1_weight, col2_weight...coln_weight])
+
+        Generate an expression that will calculate and return the quality of the search match. This ``rank`` can be used to sort the search results. The lower the ``rank``, the better the match.
+
+        The ``rank`` function accepts optional parameters that allow you to specify weights for the various columns. If no weights are specified, all columns are considered of equal importance.
+
+        .. code-block:: python
+
+            query = (DocumentIndex
+                     .select(
+                         DocumentIndex,
+                         DocumentIndex.rank().alias('score'))
+                     .where(DocumentIndex.match('search phrase'))
+                     .order_by(DocumentIndex.rank()))
+
+            for search_result in query:
+                print search_result.title, search_result.score
+
+    .. _sqlite_bm25:
+
+    .. py:classmethod:: search_bm25(term[, weights=None[, with_score=False[, score_alias='score']]])
+
+        Shorthand way of searching for a term and sorting results by the
+        quality of the match, as determined by the BM25 algorithm. This is
+        equivalent to the :py:meth:`~FTSModel.bm25` example code presented below.
+
+        :param str term: Search term to use.
+        :param weights: A list of weights for the columns, ordered with respect to the column's position in the table. **Or**, a dictionary keyed by the field or field name and mapped to a value.
+        :param with_score: Whether the score should be returned as part of the ``SELECT`` statement.
+        :param str score_alias: Alias to use for the calculated rank score. This is the attribute you will use to access the score if ``with_score=True``.
+
+        .. code-block:: python
+
+            # Simple search.
+            docs = DocumentIndex.search('search term')
+            for result in docs:
+                print result.title
+
+            # More complete example.
+            docs = DocumentIndex.search(
+                'search term',
+                weights={'title': 2.0, 'content': 1.0},
+                with_score=True,
+                score_alias='search_score')
+            for result in docs:
+                print result.title, result.search_score
+
+    .. py:classmethod:: bm25([col1_weight, col2_weight...coln_weight])
+
+        Generate an expression that will calculate and return the quality of the search match using the `BM25 algorithm <https://en.wikipedia.org/wiki/Okapi_BM25>`_. This value can be used to sort the search results, and the lower the value the better the match.
+
+        The ``bm25`` function accepts optional parameters that allow you to specify weights for the various columns. If no weights are specified, all columns are considered of equal importance.
+
+        .. code-block:: python
+
+            query = (DocumentIndex
+                     .select(
+                         DocumentIndex,
+                         DocumentIndex.bm25().alias('score'))
+                     .where(DocumentIndex.match('search phrase'))
+                     .order_by(DocumentIndex.bm25()))
+
+            for search_result in query:
+                print search_result.title, search_result.score
 
     .. py:classmethod:: rebuild()
 
@@ -361,95 +487,31 @@ sqlite_ext API notes
 
         Optimize the search index.
 
-    .. py:classmethod:: match(term)
 
-        Shorthand for generating a `MATCH` expression for the given term.
+.. py:class:: SearchField([unindexed=False[, db_column=None[, coerce=None]]])
 
-        .. code-block:: python
+    :param unindexed: Whether the contents of this field should be excluded from the full-text search index.
+    :param db_column: Name of the underlying database column.
+    :param coerce: Function used to convert the value from the database into the appropriate Python format.
 
-            query = Document.select().where(Document.match('search phrase'))
-            for doc in query:
-                print 'match: ', doc.title
 
-    .. py:classmethod:: rank()
+.. py:class:: PrimaryKeyAutoIncrementField()
 
-        Calculate the rank based on the quality of the match.
+    Subclass of :py:class:`PrimaryKeyField` that uses a monotonically-increasing value for the primary key. This differs from the default SQLite primary key, which simply uses the "max + 1" approach to determining the next ID.
 
-        .. code-block:: python
 
-            query = (Document
-                     .select(Document, Document.rank().alias('score'))
-                     .where(Document.match('search phrase'))
-                     .order_by(SQL('score').desc()))
+.. py:class:: RowIDField()
 
-            for search_result in query:
-                print search_result.title, search_result.score
+    Subclass of :py:class:`PrimaryKeyField` that provides access to the underlying ``rowid`` field used internally by SQLite.
 
-    .. py:classmethod:: bm25([field=None[, k=1.2[, b=0.75]]])
+    .. note:: When added to a Model, this field will act as the primary key. However, this field will not be included by default when selecting rows from the table.
 
-        Calculate the rank based on the quality of the match using the
-        BM25 algorithm.
 
-        .. note::
-            If no field is specified, then the first `TextField` on the model
-            will be used. If no `TextField` is present, the first `CharField`
-            will be used. Failing either of those conditions, the last overall
-            field on the model will be used.
+.. py:class:: DocIDField()
 
-        .. code-block:: python
+    Subclass of :py:class:`PrimaryKeyField` that provides access to the underlying ``docid`` field used internally by SQLite's FTS3/4 virtual tables.
 
-            query = (Document
-                     .select(
-                         Document,
-                         Document.bm25(Document.content).alias('score'))
-                     .where(Document.match('search phrase'))
-                     .order_by(SQL('score').desc()))
-
-            for search_result in query:
-                print search_result.title, search_result.score
-
-    .. py:classmethod:: search(term[, alias='score'])
-
-        Shorthand way of searching for a term and sorting results by the
-        quality of the match. This is equivalent to the :py:meth:`~FTSModel.rank`
-        example code presented above.
-
-        :param str term: Search term to use.
-        :param str alias: Alias to use for the calculated rank score.
-
-        .. code-block:: python
-
-            docs = Document.search('search term')
-            for result in docs:
-                print result.title, result.score
-
-    .. _sqlite_bm25:
-
-    .. py:classmethod:: search_bm25(term[, field=None[, k=1.2[, b=0.75[, alias='score']]]])
-
-        Shorthand way of searching for a term and sorting results by the
-        quality of the match, as determined by the BM25 algorithm. This is
-        equivalent to the :py:meth:`~FTSModel.bm25` example code presented above.
-
-        :param str term: Search term to use.
-        :param Field field: A field on the model.
-        :param float k: Parameter for BM25
-        :param float b: Parameter for BM25
-        :param str alias: Alias to use for the calculated rank score.
-
-        .. note::
-            If no field is specified, then the first `TextField` on the model
-            will be used. If no `TextField` is present, the first `CharField`
-            will be used. Failing either of those conditions, the last overall
-            field on the model will be used.
-
-        .. note:: BM25 only works with FTS4 tables.
-
-        .. code-block:: python
-
-            docs = Document.search_bm25('search term')
-            for result in docs:
-                print result.title, result.score
+    .. note:: This field should not be created manually, as it is only needed on ``FTSModel`` classes, which include it already.
 
 
 .. py:function:: match(lhs, rhs)
@@ -460,38 +522,54 @@ sqlite_ext API notes
 
         Document.select().where(match(Document.content, 'search term'))
 
-.. py:function:: Rank(model_class)
 
-    Calculate the rank of the search results, for use with `FTSModel` queries
-    using the `MATCH` operator.
+.. py:class:: FTS5Model()
 
-    .. code-block:: python
+    Model class that should be used to implement virtual tables using the FTS5 extension. Documentation on the FTS5 extension `can be found here <http://sqlite.org/fts5.html>`_. This extension behaves very similarly to the FTS3 and FTS4 extensions, and the ``FTS5Model`` supports many of the same APIs as :py:class:`FTSModel`.
 
-        # Search for documents and return results ordered by quality
-        # of match.
-        docs = (Document
-                .select(Document, Rank(Document).alias('score'))
-                .where(Document.match('some search term'))
-                .order_by(SQL('score').desc()))
+    The ``FTS5`` extension is more strict in enforcing that no column define any type or constraints. For this reason, only :py:class:`SearchField` objects can be used with ``FTS5Model`` implementations.
 
-.. py:function:: BM25(model_class, field_index)
+    Additionally, ``FTS5`` comes with a built-in implementation of the BM25 ranking function. Therefore, the ``search`` and ``search_bm25`` methods have been overridden to use the builtin ranking functions rather than user-defined functions.
 
-    Calculate the rank of the search results, for use with `FTSModel` queries
-    using the `MATCH` operator.
+    .. py:classmethod:: fts5_installed()
 
-    :param Model model_class: The `FTSModel` on which the query is being performed.
-    :param int field_index: The 0-based index of the field being queried.
+        Return a boolean indicating whether the FTS5 extension is installed. If it is not installed, an attempt will be made to load the extension.
 
-    .. code-block:: python
+    .. py:classmethod:: search(term[, weights=None[, with_score=False[, score_alias='score']]])
 
-        # Assuming the `content` field has index=2 (0=pk, 1=title, 2=content),
-        # calculate the BM25 score for each result.
-        docs = (Document
-                .select(Document, BM25(Document, 2).alias('score'))
-                .where(Document.match('search term'))
-                .order_by(SQL('score').desc()))
+        Shorthand way of searching for a term and sorting results by the
+        quality of the match. This is equivalent to the built-in ``rank`` value provided by the ``FTS5`` extension.
 
-    .. note:: BM25 only works with FTS4 tables.
+        :param str term: Search term to use.
+        :param weights: A list of weights for the columns, ordered with respect to the column's position in the table. **Or**, a dictionary keyed by the field or field name and mapped to a value.
+        :param with_score: Whether the score should be returned as part of the ``SELECT`` statement.
+        :param str score_alias: Alias to use for the calculated rank score. This is the attribute you will use to access the score if ``with_score=True``.
+
+        .. code-block:: python
+
+            # Simple search.
+            docs = DocumentIndex.search('search term')
+            for result in docs:
+                print result.title
+
+            # More complete example.
+            docs = DocumentIndex.search(
+                'search term',
+                weights={'title': 2.0, 'content': 1.0},
+                with_score=True,
+                score_alias='search_score')
+            for result in docs:
+                print result.title, result.search_score
+
+    .. py:classmethod:: search_bm25(term[, weights=None[, with_score=False[, score_alias='score']]])
+
+        With FTS5, the ``search_bm25`` method is the same as the :py:meth:`FTS5Model.search` method.
+
+    .. py:classmethod:: VocabModel([table_type='row'|'col'[, table_name=None]])
+
+        :param table_type: Either ``'row'`` or ``'col'``.
+        :param table_name: Name for the vocab table. If not specified, will be "fts5tablename_v".
+
 
 .. _sqlite_closure:
 

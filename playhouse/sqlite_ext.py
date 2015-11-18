@@ -256,9 +256,9 @@ class FTSModel(BaseFTSModel):
         return match(cls.as_entity(), term)
 
     @classmethod
-    def rank(cls):
+    def rank(cls, *weights):
         return fn.fts_rank(fn.matchinfo(
-            cls.as_entity(), FTS_MATCHINFO_FORMAT_SIMPLE))
+            cls.as_entity(), FTS_MATCHINFO_FORMAT_SIMPLE), *weights)
 
     @classmethod
     def bm25(cls, *weights):
@@ -266,21 +266,39 @@ class FTSModel(BaseFTSModel):
         return fn.fts_bm25(match_info, *weights)
 
     @classmethod
-    def search(cls, term, alias='score'):
-        """Full-text search using selected `term`."""
+    def _search(cls, term, weights, with_score, score_alias, score_fn):
+        if not weights:
+            rank = score_fn()
+        elif isinstance(weights, dict):
+            weight_args = []
+            for field in cls._meta.get_fields():
+                weight_args.append(
+                    weights.get(field, weights.get(field.name, 1.0)))
+            rank = score_fn(*weight_args)
+        else:
+            rank = score_fn(*weights)
+
+        selection = ()
+        order_by = rank
+        if with_score:
+            selection = (cls, rank.alias(score_alias))
+            order_by = SQL(score_alias)
+
         return (cls
-                .select(cls, cls.rank().alias(alias))
+                .select(*selection)
                 .where(cls.match(term))
-                .order_by(SQL(alias)))
+                .order_by(order_by))
 
     @classmethod
-    def search_bm25(cls, term, *weights, **kwargs):
+    def search(cls, term, weights=None, with_score=False, score_alias='score'):
+        """Full-text search using selected `term`."""
+        return cls._search(term, weights, with_score, score_alias, cls.rank)
+
+    @classmethod
+    def search_bm25(cls, term, weights=None, with_score=False,
+                    score_alias='score'):
         """Full-text search for selected `term` using BM25 algorithm."""
-        alias = kwargs.pop('alias', None) or 'score'
-        return (cls
-                .select(cls, cls.bm25(*weights).alias(alias))
-                .where(cls.match(term))
-                .order_by(SQL(alias)))
+        return cls._search(term, weights, with_score, score_alias, cls.bm25)
 
 
 class SearchField(BareField):
@@ -407,28 +425,24 @@ class FTS5Model(BaseFTSModel):
         return SQL('rank')
 
     @classmethod
-    def search(cls, term, with_score=False, score_alias='score'):
+    def search(cls, term, weights=None, with_score=False, score_alias='score'):
         """Full-text search using selected `term`."""
-        selection = ()
-        if with_score:
-            selection = (cls, SQL('rank').alias(score_alias))
-        return (cls
-                .select(*selection)
-                .where(cls.match(term))
-                .order_by(SQL('rank')))
+        return cls.search_bm25(term, weights, with_score, score_alias)
 
     @classmethod
     def search_bm25(cls, term, weights=None, with_score=False,
                     score_alias='score'):
         """Full-text search using selected `term`."""
         if not weights:
-            return cls.search(term, with_score, score_alias)
-
-        weight_args = []
-        for field in cls._meta.get_fields():
-            weight_args.append(
-                weights.get(field, weights.get(field.name, 1.0)))
-        rank = fn.bm25(cls.as_entity(), *weight_args)
+            rank = SQL('rank')
+        elif isinstance(weights, dict):
+            weight_args = []
+            for field in cls._meta.get_fields():
+                weight_args.append(
+                    weights.get(field, weights.get(field.name, 1.0)))
+            rank = fn.bm25(cls.as_entity(), *weight_args)
+        else:
+            rank = fn.bm25(cls.as_entity(), *weights)
 
         selection = ()
         order_by = rank

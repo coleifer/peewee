@@ -94,19 +94,19 @@ class TestRank(BaseTestCase):
                 NoteIndex.index_note(note)
 
     def test_scoring(self):
-        query = NoteIndex.search('things').tuples()
+        query = NoteIndex.search('things', with_score=True).tuples()
         self.assertEqual(query[:], [
             (self.test_content[4], -2.0 / 3),
             (self.test_content[2], -1.0 / 3),
         ])
 
-        query = NoteIndex.search('faithful').tuples()
+        query = NoteIndex.search('faithful', with_score=True).tuples()
         self.assertEqual([row[1] for row in query[:]], [
             -.2, -.2, -.2, -.2, -.2
         ])
 
     def test_scoring_bm25(self):
-        query = NoteIndex.search_bm25('things', 1.0)
+        query = NoteIndex.search_bm25('things', [1.0], with_score=True)
         results = [(item[0], round(item[1], 2)) for item in query.tuples()]
         self.assertEqual(results, [
             (self.test_content[4], -.45),

@@ -222,7 +222,7 @@ class SqliteExtTestCase(PeeweeTestCase):
         q = FTSDoc.search('believe')
         self.assertMessages(q, [3, 0])
 
-        q = FTSDoc.search('things')
+        q = FTSDoc.search('things', with_score=True)
         self.assertEqual([(x.message, x.score) for x in q], [
             (self.messages[4], -2.0 / 3),
             (self.messages[2], -1.0 / 3),
@@ -270,7 +270,7 @@ class SqliteExtTestCase(PeeweeTestCase):
         def assertResults(term, expected):
             results = [
                 (x.c4, round(x.score, 2))
-                for x in MultiColumn.search(term)]
+                for x in MultiColumn.search(term, with_score=True)]
             self.assertEqual(results, expected)
 
         self._create_multi_column()
@@ -296,12 +296,12 @@ class SqliteExtTestCase(PeeweeTestCase):
         ])
 
         self.assertEqual(
-            [x.score for x in MultiColumn.search('ddddd')],
+            [x.score for x in MultiColumn.search('ddddd', with_score=True)],
             [-.25, -.25, -.25, -.25])
 
     def test_bm25(self):
         def assertResults(term, col_idx, expected):
-            query = MultiColumn.search_bm25(term, 1.0, 0, 0, 0)
+            query = MultiColumn.search_bm25(term, [1.0, 0, 0, 0], True)
             self.assertEqual(
                 [(mc.c4, round(mc.score, 2)) for mc in query],
                 expected)
@@ -322,7 +322,7 @@ class SqliteExtTestCase(PeeweeTestCase):
         ])
 
         # No column specified, use the first text field.
-        query = MultiColumn.search_bm25('fffff', 1.0, 0, 0, 0)
+        query = MultiColumn.search_bm25('fffff', [1.0, 0, 0, 0], True)
         self.assertEqual([(mc.c4, round(mc.score, 2)) for mc in query], [
             (5, -0.39),
             (3, -0.3),
@@ -345,7 +345,7 @@ class SqliteExtTestCase(PeeweeTestCase):
             FTSDoc.create(message=message)
 
         def assertResults(term, expected):
-            query = FTSDoc.search_bm25(term)
+            query = FTSDoc.search_bm25(term, with_score=True)
             cleaned = [
                 (round(doc.score, 2), ' '.join(doc.message.split()[:2]))
                 for doc in query]
@@ -358,7 +358,8 @@ class SqliteExtTestCase(PeeweeTestCase):
 
         # Indeterminate order since all are 0.0. All phrases contain the word
         # faith, so there is no meaningful score.
-        results = [round(x.score, 2) for x in FTSDoc.search_bm25('faith')]
+        results = [round(x.score, 2)
+                   for x in FTSDoc.search_bm25('faith', with_score=True)]
         self.assertEqual(results, [
             2.01,
             2.29,
@@ -403,7 +404,7 @@ class SqliteExtTestCase(PeeweeTestCase):
               .order_by(ModelClass.docid))
         self.assertMessages(pq, [2, 3])
 
-        pq = ModelClass.search('things')
+        pq = ModelClass.search('things', with_score=True)
         self.assertEqual([(x.message, x.score) for x in pq], [
             (self.messages[4], -2.0 / 3),
             (self.messages[2], -1.0 / 3),
@@ -416,7 +417,7 @@ class SqliteExtTestCase(PeeweeTestCase):
         self.assertEqual([x[0] for x in pq], [-.2] * 5)
 
         pq = (ModelClass
-              .search('faithful')
+              .search('faithful', with_score=True)
               .dicts())
         self.assertEqual([x['score'] for x in pq], [-.2] * 5)
 
@@ -684,7 +685,7 @@ class TestFTS5Extension(ModelTestCase):
         self.assertEqual(query.sql(), (
             ('SELECT "t1"."title", "t1"."data", "t1"."misc", rank AS score '
              'FROM "fts5test" AS t1 '
-             'WHERE ("fts5test" MATCH ?) ORDER BY rank'),
+             'WHERE ("fts5test" MATCH ?) ORDER BY score'),
             ['bb']))
         self.assertResults(query, [
             ('nug aa dd', -2e-06),
@@ -710,7 +711,7 @@ class TestFTS5Extension(ModelTestCase):
         self.assertEqual(query.sql(), (
             ('SELECT "t1"."title", "t1"."data", "t1"."misc", rank AS score '
              'FROM "fts5test" AS t1 '
-             'WHERE ("fts5test" MATCH ?) ORDER BY rank'),
+             'WHERE ("fts5test" MATCH ?) ORDER BY score'),
             ['bb']))
         self.assertResults(query, [
             ('nug aa dd', -2e-06),
@@ -744,7 +745,7 @@ class TestFTS5Extension(ModelTestCase):
         self.assertEqual(query.sql(), (
             ('SELECT "t1"."title", "t1"."data", "t1"."misc", rank AS score '
              'FROM "fts5test" AS t1 '
-             'WHERE ("fts5test" MATCH ?) ORDER BY rank'),
+             'WHERE ("fts5test" MATCH ?) ORDER BY score'),
             ['bb']))
         self.assertResults(query, [
             ('bar bb cc', -2.1e-06),
