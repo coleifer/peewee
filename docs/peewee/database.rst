@@ -159,7 +159,7 @@ To connect to a SQLite database, we will use :py:class:`SqliteDatabase`. The fir
 
 The :ref:`playhouse` contains a :ref:`SQLite extension module <sqlite_ext>` which provides many SQLite-specific features such as:
 
-* :ref:`Full-text search <sqlite_fts>`
+* :ref:`Full-text search <sqlite_fts>` with `BM25 ranking <sqlite_bm25>`.
 * Support for custom functions, aggregates and collations
 * Advanced transaction support
 * And more!
@@ -235,9 +235,9 @@ Peewee also comes with an alternate SQLite database that uses :ref:`apsw`, an ad
 * Virtual tables, virtual file-systems, Blob I/O, backups and file control.
 * Connections can be shared across threads without any additional locking.
 * Transactions are managed explicitly by your code.
-* Transactions can be nested.
 * Unicode is handled *correctly*.
 * APSW is faster that the standard library sqlite3 module.
+* Exposes pretty much the entire SQLite C API to your Python app.
 
 If you would like to use APSW, use the :py:class:`APSWDatabase` from the `apsw_ext` module:
 
@@ -254,7 +254,7 @@ Using BerkeleyDB
 
 The :ref:`playhouse <playhouse>` contains a special extension module for using a :ref:`BerkeleyDB database <berkeleydb>`. BerkeleyDB can be compiled with a SQLite-compatible API, then the python SQLite driver can be compiled to use the Berkeley version of SQLite.
 
-You can find up-to-date `step by step instructions <http://charlesleifer.com/blog/building-the-python-sqlite-driver-for-use-with-berkeleydb/>`_ on my blog.
+You can find up-to-date `step by step instructions <http://charlesleifer.com/blog/building-the-python-sqlite-driver-for-use-with-berkeleydb/>`_ on my blog for compling the BerkeleyDB + SQLite library, then building a statically-linked `pysqlite <https://github.com/ghaering/pysqlite>`_ that uses the custom sqlite library.
 
 To connect to a BerkeleyDB database, we will use :py:class:`BerkeleyDatabase`. Like :py:class:`SqliteDatabase`, the first parameter is the filename containing the database or the string *:memory:* to create an in-memory database.
 
@@ -333,6 +333,7 @@ Example database URLs:
 * *sqlite:///:memory:* will create an in-memory :py:class:`SqliteDatabase` instance.
 * *postgresql://postgres:my_password@localhost:5432/my_database* will create a :py:class:`PostgresqlDatabase` instance. A username and password are provided, as well as the host and port to connect to.
 * *mysql://user:passwd@ip:port/my_db* will create a :py:class:`MySQLDatabase` instance for the local MySQL database *my_db*.
+* :ref:`More examples in the db_url documentation <db_url>`.
 
 Multi-threaded applications
 ---------------------------
@@ -830,6 +831,23 @@ Here is an example of how you might use the :py:class:`Using` context manager:
 .. note::
     For simple master/slave configurations, check out the :ref:`read_slaves` extension. This extension ensures writes are sent to the master database and reads occur from any of the listed read replicas.
 
+.. _database-errors:
+
+Database Errors
+---------------
+
+The Python DB-API 2.0 spec describes `several types of exceptions <https://www.python.org/dev/peps/pep-0249/#exceptions>`_. Because most database drivers have their own implementations of these exceptions, Peewee simplifies things by providing its own wrappers around any implementation-specific exception classes. That way, you don't need to worry about importing any special exception classes, you can just use the ones from peewee:
+
+* ``DatabaseError``
+* ``DataError``
+* ``IntegrityError``
+* ``InterfaceError``
+* ``InternalError``
+* ``NotSupportedError``
+* ``OperationalError``
+* ``ProgrammingError``
+
+.. note:: All of these error classes extend ``PeeweeException``.
 
 .. _automatic-reconnect:
 

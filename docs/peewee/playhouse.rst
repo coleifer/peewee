@@ -918,9 +918,11 @@ The SQLite extensions module provides support for some interesting sqlite-only
 features:
 
 * Define custom aggregates, collations and functions.
-* Support for FTS3/4 (sqlite full-text search).
+* Support for FTS3/4 (sqlite full-text search) with :ref:`BM25 ranking <sqlite_bm25>`.
+* Support for the new FTS5 search extension.
 * Specify isolation level in transactions.
 * Basic support for virtual tables.
+* Collection of user-defined functions written with Cython as a SQLite extension module.
 * Support for the `closure table <http://charlesleifer.com/blog/querying-tree-structures-in-sqlite-using-python-and-the-transitive-closure-extension/>`_ extension.
 
 
@@ -1201,6 +1203,8 @@ sqlite_ext API notes
             docs = Document.search('search term')
             for result in docs:
                 print result.title, result.score
+
+    .. _sqlite_bm25:
 
     .. py:classmethod:: search_bm25(term[, field=None[, k=1.2[, b=0.75[, alias='score']]]])
 
