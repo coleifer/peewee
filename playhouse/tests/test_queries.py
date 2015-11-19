@@ -1055,17 +1055,21 @@ class TestInsertQuery(PeeweeTestCase):
             self.assertEqual(sql, 'INSERT INTO "emptymodel" DEFAULT VALUES')
 
     def test_upsert(self):
-        query = User.insert(username='charlie').upsert()
-        sql, params = compiler.generate_insert(query)
+        class TestUser(User):
+            class Meta:
+                database = SqliteDatabase(':memory:')
+        sql, params = TestUser.insert(username='charlie').upsert().sql()
         self.assertEqual(sql, (
-            'INSERT OR REPLACE INTO "users" ("username") VALUES (?)'))
+            'INSERT OR REPLACE INTO "testuser" ("username") VALUES (?)'))
         self.assertEqual(params, ['charlie'])
 
     def test_on_conflict(self):
-        query = User.insert(username='huey').on_conflict('IGNORE')
-        sql, params = compiler.generate_insert(query)
+        class TestUser(User):
+            class Meta:
+                database = SqliteDatabase(':memory:')
+        sql, params = TestUser.insert(username='huey').on_conflict('IGNORE').sql()
         self.assertEqual(sql, (
-            'INSERT OR IGNORE INTO "users" ("username") VALUES (?)'))
+            'INSERT OR IGNORE INTO "testuser" ("username") VALUES (?)'))
         self.assertEqual(params, ['huey'])
 
     def test_upsert_mysql(self):
