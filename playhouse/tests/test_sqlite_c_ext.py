@@ -15,7 +15,7 @@ try:
     db.connect()
 except OperationalError:
     raise ImportError('Unable to load `_sqlite_ext` C extension.')
-finally:
+else:
     db.close()
 
 

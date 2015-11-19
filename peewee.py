@@ -3508,7 +3508,11 @@ class SqliteDatabase(Database):
     def _connect(self, database, **kwargs):
         conn = sqlite3.connect(database, **kwargs)
         conn.isolation_level = None
-        self._add_conn_hooks(conn)
+        try:
+            self._add_conn_hooks(conn)
+        except:
+            conn.close()
+            raise
         return conn
 
     def _add_conn_hooks(self, conn):
