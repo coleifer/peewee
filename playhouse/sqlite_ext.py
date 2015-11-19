@@ -506,13 +506,13 @@ class FTS5Model(BaseFTSModel):
             class Meta:
                 database = cls._meta.database
                 db_table = table_name or cls._meta.db_table + '_v'
-                primary_key = False
 
             attrs = {
                 '_extension': fn.fts5vocab(cls.as_entity(), SQL(table_type)),
                 'term': BareField(),
                 'doc': IntegerField(),
                 'cnt': IntegerField(),
+                'rowid': RowIDField(),
                 'Meta': Meta,
             }
             if table_type == 'col':
