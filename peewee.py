@@ -3497,7 +3497,7 @@ class SqliteDatabase(Database):
         OP.LIKE: 'GLOB',
         OP.ILIKE: 'LIKE',
     }
-    upsert_sql = 'INSERT OR REPLACE'
+    upsert_sql = 'INSERT OR REPLACE INTO'
 
     def __init__(self, database, pragmas=None, *args, **kwargs):
         self._pragmas = pragmas or []

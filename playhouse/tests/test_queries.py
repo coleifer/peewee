@@ -1068,6 +1068,17 @@ class TestInsertQuery(PeeweeTestCase):
             'INSERT OR IGNORE INTO "users" ("username") VALUES (?)'))
         self.assertEqual(params, ['huey'])
 
+    def test_upsert_mysql(self):
+        class TestUser(User):
+            class Meta:
+                database = MySQLDatabase('peewee_test')
+
+        query = TestUser.insert(username='zaizee', id=3).upsert()
+        sql, params = query.sql()
+        self.assertEqual(sql, (
+            'REPLACE INTO `testuser` (`id`, `username`) VALUES (%s, %s)'))
+        self.assertEqual(params, [3, 'zaizee'])
+
     def test_returning(self):
         iq = User.insert(username='huey')
         test_db.returning_clause = False
