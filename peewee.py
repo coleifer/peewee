@@ -4059,6 +4059,11 @@ class _SortedFieldList(object):
         self._keys.insert(i, k)
         self._items.insert(i, item)
 
+    def remove(self, item):
+        idx = self._items.index(item)
+        del self._items[idx]
+        del self._keys[idx]
+
 class DoesNotExist(Exception): pass
 
 if sqlite3:
@@ -4121,6 +4126,7 @@ class ModelOptions(object):
             self.order_by = norm_order_by
 
     def add_field(self, field):
+        self.remove_field(field.name)
         self.fields[field.name] = field
         self.columns[field.db_column] = field
 
@@ -4134,6 +4140,19 @@ class ModelOptions(object):
             else:
                 self._default_dict[field] = field.default
                 self._default_by_name[field.name] = field.default
+
+    def remove_field(self, field_name):
+        if field_name not in self.fields:
+            return
+        original = self.fields.pop(field_name)
+        del self.columns[original.db_column]
+        self._sorted_field_list.remove(original)
+
+        if original.default is not None:
+            del self.defaults[original]
+            self._default_callables.pop(original, None)
+            self._default_dict.pop(original, None)
+            self._default_by_name.pop(original.name, None)
 
     def get_default_dict(self):
         dd = self._default_by_name.copy()

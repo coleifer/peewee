@@ -74,8 +74,7 @@ class _VirtualFieldMixin(object):
     """
     def add_to_class(self, model_class, name):
         super(_VirtualFieldMixin, self).add_to_class(model_class, name)
-        del model_class._meta.fields[self.name]
-        del model_class._meta.columns[self.db_column]
+        model_class._meta.remove_field(name)
 
 
 # Virtual field types that can be used to reference specially-created fields
