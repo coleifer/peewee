@@ -1772,7 +1772,7 @@ class QueryCompiler(object):
         alias_map = self.alias_map_class()
         alias_map.add(model, model._meta.db_table)
         if query._upsert:
-            statement = 'INSERT OR REPLACE INTO'
+            statement = meta.database.upsert_sql
         elif query._on_conflict:
             statement = 'INSERT OR %s INTO' % query._on_conflict
         else:
@@ -3245,6 +3245,7 @@ class Database(object):
     savepoints = True
     sequences = False
     subquery_delete_same_table = True
+    upsert_sql = None
     window_functions = False
 
     exceptions = {
@@ -3496,6 +3497,7 @@ class SqliteDatabase(Database):
         OP.LIKE: 'GLOB',
         OP.ILIKE: 'LIKE',
     }
+    upsert_sql = 'INSERT OR REPLACE'
 
     def __init__(self, database, pragmas=None, *args, **kwargs):
         self._pragmas = pragmas or []
@@ -3757,6 +3759,7 @@ class MySQLDatabase(Database):
     }
     quote_char = '`'
     subquery_delete_same_table = False
+    upsert_sql = 'REPLACE INTO'
 
     def _connect(self, database, **kwargs):
         if not mysql:
