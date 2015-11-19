@@ -157,7 +157,7 @@ class TestReflection(PeeweeTestCase):
         col_types = models['coltypes']
         indexed = set(['f1'])
         unique = set(['f10'])
-        for field in col_types._meta.get_fields():
+        for field in col_types._meta.sorted_fields:
             self.assertEqual(field.index, field.name in indexed)
             self.assertEqual(field.unique, field.name in unique)
         indexes = col_types._meta.indexes

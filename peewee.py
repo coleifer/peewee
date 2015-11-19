@@ -25,6 +25,8 @@ import re
 import sys
 import threading
 import uuid
+from bisect import bisect_left
+from bisect import bisect_right
 from collections import deque
 from collections import namedtuple
 try:
@@ -848,9 +850,7 @@ class Field(Node):
         if not self.verbose_name:
             self.verbose_name = re.sub('_+', ' ', name).title()
 
-        model_class._meta.fields[self.name] = self
-        model_class._meta.columns[self.db_column] = self
-
+        model_class._meta.add_field(self)
         setattr(model_class, name, FieldDescriptor(self))
         self._is_bound = True
 
@@ -1236,11 +1236,9 @@ class ForeignKeyField(IntegerField):
         if not self.verbose_name:
             self.verbose_name = re.sub('_+', ' ', name).title()
 
-        model_class._meta.fields[self.name] = self
-        model_class._meta.columns[self.db_column] = self
+        model_class._meta.add_field(self)
 
         self.related_name = self._get_related_name()
-
         if self.rel_model == 'self':
             self.rel_model = self.model_class
 
@@ -1891,7 +1889,7 @@ class QueryCompiler(object):
                        for f in meta.primary_key.field_names]
             constraints.append(Clause(
                 SQL('PRIMARY KEY'), EnclosedClause(*pk_cols)))
-        for field in meta.get_fields():
+        for field in meta.sorted_fields:
             columns.append(self.field_definition(field))
             if isinstance(field, ForeignKeyField) and not field.deferred:
                 constraints.append(self.foreign_key_constraint(field))
@@ -2447,7 +2445,7 @@ class Query(Node):
             elif isinstance(arg, ModelAlias):
                 accum.extend(arg.get_proxy_fields())
             elif isclass(arg) and issubclass(arg, Model):
-                accum.extend(arg._meta.get_fields())
+                accum.extend(arg._meta.sorted_fields)
         return accum
 
     @returns_clone
@@ -2694,7 +2692,7 @@ class SelectQuery(Query):
 
     def __select(self, *selection):
         self._explicit_selection = len(selection) > 0
-        selection = selection or self.model_class._meta.get_fields()
+        selection = selection or self.model_class._meta.sorted_fields
         self._select = self._model_shorthand(selection)
     select = returns_clone(__select)
 
@@ -2957,7 +2955,7 @@ class _WriteQuery(Query):
             self._returning = None
         else:
             if not selection:
-                selection = self.model_class._meta.get_fields()
+                selection = self.model_class._meta.sorted_fields
             self._returning = self._model_shorthand(selection)
 
     @requires_returning
@@ -4025,7 +4023,7 @@ class ModelAlias(object):
 
     def get_proxy_fields(self):
         return [
-            FieldProxy(self, f) for f in self.model_class._meta.get_fields()]
+            FieldProxy(self, f) for f in self.model_class._meta.sorted_fields]
 
     def select(self, *selection):
         if not selection:
@@ -4038,6 +4036,28 @@ class ModelAlias(object):
     def __call__(self, **kwargs):
         return self.model_class(**kwargs)
 
+class _SortedFieldList(object):
+    def __init__(self):
+        self._keys = []
+        self._items = []
+
+    def __getitem__(self, i):
+        return self._items[i]
+
+    def __iter__(self):
+        return iter(self._items)
+
+    def __contains__(self, item):
+        k = item._sort_key
+        i = bisect_left(self._keys, k)
+        j = bisect_right(self._keys, k)
+        return item in self._items[i:j]
+
+    def insert(self, item):
+        k = item._sort_key
+        i = bisect_left(self._keys, k)
+        self._keys.insert(i, k)
+        self._items.insert(i, item)
 
 class DoesNotExist(Exception): pass
 
@@ -4059,6 +4079,8 @@ class ModelOptions(object):
         self._default_by_name = {}
         self._default_dict = {}
         self._default_callables = {}
+        self._sorted_field_list = _SortedFieldList()
+        self.sorted_fields = []
 
         self.database = database or default_database
         self.db_table = db_table
@@ -4085,15 +4107,6 @@ class ModelOptions(object):
             self.db_table = self.db_table_func(cls)
 
     def prepared(self):
-        for field in self.fields.values():
-            if field.default is not None:
-                self.defaults[field] = field.default
-                if callable(field.default):
-                    self._default_callables[field] = field.default
-                else:
-                    self._default_dict[field] = field.default
-                    self._default_by_name[field.name] = field.default
-
         if self.order_by:
             norm_order_by = []
             for item in self.order_by:
@@ -4107,6 +4120,21 @@ class ModelOptions(object):
                     norm_order_by.append(field.asc())
             self.order_by = norm_order_by
 
+    def add_field(self, field):
+        self.fields[field.name] = field
+        self.columns[field.db_column] = field
+
+        self._sorted_field_list.insert(field)
+        self.sorted_fields = list(self._sorted_field_list)
+
+        if field.default is not None:
+            self.defaults[field] = field.default
+            if callable(field.default):
+                self._default_callables[field] = field.default
+            else:
+                self._default_dict[field] = field.default
+                self._default_by_name[field.name] = field.default
+
     def get_default_dict(self):
         dd = self._default_by_name.copy()
         if self._default_callables:
@@ -4114,21 +4142,17 @@ class ModelOptions(object):
                 dd[field.name] = default()
         return dd
 
-    def get_sorted_fields(self):
-        key = lambda i: i[1]._sort_key
-        return sorted(self.fields.items(), key=key)
-
     def get_field_names(self):
-        return [f[0] for f in self.get_sorted_fields()]
+        return [field.name for field in self.sorted_fields]
 
     def get_fields(self):
-        return [f[1] for f in self.get_sorted_fields()]
+        return self.sorted_fields
 
     def get_field_index(self, field):
-        for i, (field_name, field_obj) in enumerate(self.get_sorted_fields()):
-            if field_name == field.name:
-                return i
-        return -1
+        try:
+            return self._sorted_field_list.index(field)
+        except ValueError:
+            return -1
 
     def get_primary_key_fields(self):
         if self.composite_key:
@@ -4140,7 +4164,7 @@ class ModelOptions(object):
     def rel_for_model(self, model, field_obj=None):
         is_field = isinstance(field_obj, Field)
         is_node = not is_field and isinstance(field_obj, Node)
-        for field in self.get_fields():
+        for field in self.sorted_fields:
             if isinstance(field, ForeignKeyField) and field.rel_model == model:
                 is_match = (
                     (field_obj is None) or
@@ -4522,7 +4546,7 @@ class Model(with_metaclass(BaseModel)):
 
     @property
     def dirty_fields(self):
-        return [f for f in self._meta.get_fields() if f.name in self._dirty]
+        return [f for f in self._meta.sorted_fields if f.name in self._dirty]
 
     def dependencies(self, search_nullable=False):
         model_class = type(self)

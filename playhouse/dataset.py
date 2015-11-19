@@ -191,7 +191,7 @@ class Table(object):
 
     @property
     def columns(self):
-        return self.model_class._meta.get_field_names()
+        return [f.name for f in self.model_class._meta.sorted_fields]
 
     def _migrate_new_columns(self, data):
         new_keys = set(data) - set(self.model_class._meta.fields)
@@ -345,7 +345,7 @@ class CSVImporter(Importer):
             else:
                 header_fields = list(enumerate(header_keys))
         else:
-            header_fields = list(enumerate(self.model._meta.get_fields()))
+            header_fields = list(enumerate(self.model._meta.sorted_fields))
 
         if not header_fields:
             return count

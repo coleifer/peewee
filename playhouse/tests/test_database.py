@@ -151,7 +151,7 @@ class TestLongIndexName(PeeweeTestCase):
             b123456789012345678901234567890 = CharField()
             c123456789012345678901234567890 = CharField()
 
-        fields = LongIndexModel._meta.get_fields()[1:]
+        fields = LongIndexModel._meta.sorted_fields[1:]
         self.assertEqual(len(fields), 3)
 
         sql, params = compiler.create_index(LongIndexModel, fields, False)

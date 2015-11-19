@@ -76,7 +76,7 @@ if django is not None:
 class TestDjPeewee(PeeweeTestCase):
     def assertFields(self, model, expected):
         self.assertEqual(len(model._meta.fields), len(expected))
-        zipped = zip(model._meta.get_fields(), expected)
+        zipped = zip(model._meta.sorted_fields, expected)
         for (model_field, (name, field_type)) in zipped:
             self.assertEqual(model_field.name, name)
             self.assertTrue(type(model_field) is field_type)
