@@ -4088,6 +4088,7 @@ class ModelOptions(object):
         self._default_by_name = {}
         self._default_dict = {}
         self._default_callables = {}
+        self._default_callable_list = []
         self._sorted_field_list = _SortedFieldList()
         self.sorted_fields = []
 
@@ -4141,6 +4142,7 @@ class ModelOptions(object):
             self.defaults[field] = field.default
             if callable(field.default):
                 self._default_callables[field] = field.default
+                self._default_callable_list.append((field.name, field.default))
             else:
                 self._default_dict[field] = field.default
                 self._default_by_name[field.name] = field.default
@@ -4154,15 +4156,19 @@ class ModelOptions(object):
 
         if original.default is not None:
             del self.defaults[original]
-            self._default_callables.pop(original, None)
-            self._default_dict.pop(original, None)
-            self._default_by_name.pop(original.name, None)
+            if self._default_callables.pop(original, None):
+                for i, (name, _) in enumerate(self._default_callable_list):
+                    if name == field_name:
+                        self._default_callable_list.pop(i)
+                        break
+            else:
+                self._default_dict.pop(original, None)
+                self._default_by_name.pop(original.name, None)
 
     def get_default_dict(self):
         dd = self._default_by_name.copy()
-        if self._default_callables:
-            for field, default in self._default_callables.items():
-                dd[field.name] = default()
+        for field_name, default in self._default_callable_list:
+            dd[field_name] = default()
         return dd
 
     def get_field_names(self):
