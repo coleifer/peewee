@@ -1546,9 +1546,9 @@ Query Types
 
     .. py:method:: upsert([upsert=True])
 
-        Perform an *INSERT OR REPLACE* query.
+        Perform an *INSERT OR REPLACE* query with SQLite. MySQL databases will issue a *REPLACE* query. Currently this feature is not supported for Postgres databases, but the 9.5 syntax will be added soon.
 
-        .. note:: This feature is only available on SQLite databases.
+        .. note:: This feature is only available on SQLite and MySQL databases.
 
     .. py:method:: on_conflict([action=None])
 
