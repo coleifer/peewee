@@ -6,17 +6,19 @@ f = open(os.path.join(os.path.dirname(__file__), 'README.rst'))
 readme = f.read()
 f.close()
 
+setup_kwargs = {}
 try:
     from Cython.Distutils import build_ext
 except ImportError:
-    cmdclass = None
-    ext_modules = None
+    pass
 else:
-    cmdclass = {'build_ext': build_ext}
-    ext_modules = [
-        Extension('playhouse._speedups', ['playhouse/speedups.pyx']),
-        Extension('playhouse._sqlite_ext', ['playhouse/_sqlite_ext.pyx']),
-    ]
+    setup_kwargs.update(
+        cmdclass={'build_ext': build_ext},
+        ext_modules=[
+            Extension('playhouse._speedups', ['playhouse/speedups.pyx']),
+            Extension('playhouse._sqlite_ext', ['playhouse/_sqlite_ext.pyx']),
+        ],
+    )
 
 setup(
     name='peewee',
@@ -28,8 +30,6 @@ setup(
     url='http://github.com/coleifer/peewee/',
     packages=['playhouse'],
     py_modules=['peewee', 'pwiz'],
-    ext_modules=ext_modules,
-    cmdclass=cmdclass,
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',
@@ -40,4 +40,5 @@ setup(
     ],
     test_suite='tests',
     scripts = ['pwiz.py'],
+    **setup_kwargs
 )
