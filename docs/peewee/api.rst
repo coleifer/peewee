@@ -701,6 +701,14 @@ Fields
 
     .. note:: Currently this field is only supported by :py:class:`PostgresqlDatabase`.
 
+.. py:class:: BareField
+
+    Intended to be used only with SQLite. Since data-types are not enforced, you can declare fields without *any* data-type. It is also common for SQLite virtual tables to use meta-columns or untyped columns, so for those cases as well you may wish to use an untyped field.
+
+    Accepts a special ``coerce`` parameter, a function that takes a value coming from the database and converts it into the appropriate Python type.
+
+    .. note:: Currently this field is only supported by :py:class:`SqliteDatabase`.
+
 .. py:class:: ForeignKeyField(rel_model[, related_name=None[, on_delete=None[, on_update=None[, to_field=None[, ...]]]]])
 
     Stores: relationship to another model
@@ -1325,6 +1333,12 @@ Query Types
             for user in User.select().where(User.active == True):
                 print user.username
 
+    .. py:method:: __len__()
+
+        Return the number of items in the result set of this query. If all you need is the count of items and do not intend to do anything with the results, call :py:meth:`~SelectQuery.count`.
+
+        .. warning:: The ``SELECT`` query will be executed and the result set will be loaded.
+
     .. py:method:: __getitem__(value)
 
         :param value: Either an index or a ``slice`` object.
@@ -1494,7 +1508,7 @@ Query Types
         .. note:: This feature is only available on SQLite databases.
 
 
-.. py:class:: InsertQuery(model_class[, field_dict=None[, rows=None[, fields=None[, query=None]]]])
+.. py:class:: InsertQuery(model_class[, field_dict=None[, rows=None[, fields=None[, query=None[, validate_fields=False]]]]])
 
     Creates an ``InsertQuery`` instance for the given model.
 
@@ -1503,6 +1517,7 @@ Query Types
         field or field-name to value.
     :param list fields: A list of field objects to insert data into (only used in combination with the ``query`` parameter).
     :param query: A :py:class:`SelectQuery` to use as the source of data.
+    :param bool validate_fields: Check that every column referenced in the insert query has a corresponding field on the model. If validation is enabled and then fails, a ``KeyError`` is raised.
 
     Basic example:
 
@@ -2007,6 +2022,12 @@ Database and its subclasses
 
         :rtype: an instance of :py:class:`QueryCompiler` using the field and
             op overrides specified.
+
+    .. py:method:: execute(clause)
+
+        :param Node clause: a :py:class:`Node` instance or subclass (e.g. a :py:class:`SelectQuery`).
+
+        The clause will be compiled into SQL then sent to the :py:meth:`~Database.execute_sql` method.
 
     .. py:method:: execute_sql(sql[, params=None[, require_commit=True]])
 

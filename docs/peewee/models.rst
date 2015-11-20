@@ -135,6 +135,7 @@ Field Type            Sqlite              Postgresql          MySQL
 ``TimeField``         time                time                time
 ``BlobField``         blob                bytea               blob
 ``UUIDField``         not supported       uuid                not supported
+``BareField``         untyped             not supported       not supported
 ===================   =================   =================   =================
 
 .. note::
@@ -182,6 +183,8 @@ Some fields take special parameters...
 +--------------------------------+------------------------------------------------+
 | :py:class:`ForeignKeyField`    | ``rel_model``, ``related_name``, ``to_field``, |
 |                                | ``on_delete``, ``on_update``, ``extra``        |
++--------------------------------+------------------------------------------------+
+| :py:class:`BareField`          | ``coerce``                                     |
 +--------------------------------+------------------------------------------------+
 
 .. note::
@@ -310,6 +313,13 @@ have an event attached:
 
 .. note::
     SQLite does not have a native date type, so dates are stored in formatted text columns. To ensure that comparisons work correctly, the dates need to be formatted so they are sorted lexicographically. That is why they are stored, by default, as ``YYYY-MM-DD HH:MM:SS``.
+
+BareField
+^^^^^^^^^
+
+The :py:class:`BareField` class is intended to be used only with SQLite. Since SQLite uses dynamic typing and data-types are not enforced, it can be perfectly fine to declare fields without *any* data-type. In those cases you can use :py:class:`BareField`. It is also common for SQLite virtual tables to use meta-columns or untyped columns, so for those cases as well you may wish to use an untyped field.
+
+:py:class:`BareField` accepts a special parameter ``coerce``. This parameter is a function that takes a value coming from the database and converts it into the appropriate Python type. For instance, if you have a virtual table with an un-typed column but you know that it will return ``int`` objects, you can specify ``coerce=int``.
 
 .. _custom-fields:
 
