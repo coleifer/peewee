@@ -5,6 +5,56 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.7.0
+
+New APIs, features, and performance improvements.
+
+### Notable changes and new features
+
+* [`PasswordField`](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#PasswordField) that uses the `bcrypt` module.
+* Added new Model [`Meta.only_save_dirty`](http://docs.peewee-orm.com/en/latest/peewee/models.html#model-options-and-table-metadata) flag to, by default, only save fields that have been modified.
+* Added support for [`upsert()`](http://docs.peewee-orm.com/en/latest/peewee/api.html#InsertQuery.upsert) on MySQL (in addition to SQLite).
+* Implemented SQLite ranking functions (``rank`` and ``bm25``) in Cython, and changed both the Cython and Python APIs to accept weight values for every column in the search index. This more closely aligns with the APIs provided by FTS5. In fact, made the APIs for FTS4 and FTS5 result ranking compatible.
+* Major changes to the :ref:`sqlite_ext` module. Function callbacks implemented in Python were implemented in Cython (e.g. date manipulation and regex processing) and will be used if Cython is available when Peewee is installed.
+* Support for the experimental new [FTS5](http://sqlite.org/fts5.html) SQLite search extension.
+* Added :py:class:`SearchField` for use with the SQLite FTS extensions.
+* Added :py:class:`RowIDField` for working with the special ``rowid`` column in SQLite.
+* Added a model class validation hook to allow model subclasses to perform any validation after class construction. This is currently used to ensure that ``FTS5Model`` subclasses do not violate any rules required by the FTS5 virtual table.
+
+### Bugs fixed
+
+* **#751**, fixed some very broken behavior in the MySQL migrator code. Added more tests.
+* **#718**, added a `RetryOperationalError` mixin that will try automatically reconnecting after a failed query. There was a bug in the previous error handler implementation that made this impossible, which is also fixed.
+
+#### Small bugs
+
+* #713, fix column name regular expression in SQLite migrator.
+* #724, fixed `NULL` handling with the Postgresql `JSONField`.
+* #725, added `__module__` attribute to `DoesNotExist` classes.
+* #727, removed the `commit_select` logic for MySQL databases.
+* #730, added documentation for `Meta.order_by` API.
+* #745, added `cast()` method for casting JSON field values.
+* #748, added docs and method override to indicate that SQLite does not support adding foreign key constraints after table creation.
+* Check whether pysqlite or libsqlite were compiled with BerkeleyDB support when using the :py:class:`BerkeleyDatabase`.
+* Clean up the options passed to SQLite virtual tables on creation.
+
+### Small features
+
+* #700, use sensible default if field's declared data-type is not present in the field type map.
+* #707, allow model to be specified explicitly in `prefetch()`.
+* #734, automatic testing against python 3.5.
+* #753, added support for `upsert()` ith MySQL via the `REPLACE INTO ...` statement.
+* #757, `pwiz`, the schema intropsection tool, will now generate multi-column index declarations.
+* #756, `pwiz` will capture passwords using the `getpass()` function rather than via the command-line.
+* Removed `Database.sql_error_handler()`, replaced with the `RetryOperationalError` mixin class.
+* Documentation for `Meta.order_by` and `Meta.primary_key`.
+* Better documentation around column and table constraints.
+* Improved performance for some methods that are called frequently.
+* Added `coerce` parameter to `BareField` and added documentation.
+
+[View commits](https://github.com/coleifer/peewee/compare/2.6.4...2.6.5)
+
+
 ## 2.6.4
 
 Updating so some of the new APIs are available on pypi.
