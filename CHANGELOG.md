@@ -52,7 +52,7 @@ New APIs, features, and performance improvements.
 * Improved performance for some methods that are called frequently.
 * Added `coerce` parameter to `BareField` and added documentation.
 
-[View commits](https://github.com/coleifer/peewee/compare/2.6.4...2.6.5)
+[View commits](https://github.com/coleifer/peewee/compare/2.6.4...2.7.0)
 
 
 ## 2.6.4
