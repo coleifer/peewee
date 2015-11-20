@@ -26,7 +26,7 @@ matching_docs = Document.select().where(match(Document.title, 'some query'))
 best_docs = (Document
              .select(Document, Document.rank('score'))
              .where(match(Document.title, 'some query'))
-             .order_by(SQL('score').desc()))
+             .order_by(SQL('score')))
 
 # or use the shortcut method.
 best_docs = Document.match('some phrase')
@@ -420,8 +420,15 @@ class FTS5Model(BaseFTSModel):
         return match(cls.as_entity(), term)
 
     @classmethod
-    def rank(cls):
-        return SQL('rank')
+    def rank(cls, *args):
+        if args:
+            return cls.bm25(*args)
+        else:
+            return SQL('rank')
+
+    @classmethod
+    def bm25(cls, *weights):
+        return fn.bm25(cls.as_entity(), *weights)
 
     @classmethod
     def search(cls, term, weights=None, with_score=False, score_alias='score'):
@@ -620,7 +627,7 @@ class SqliteExtDatabase(SqliteDatabase):
             self.register_function(_sqlite_date_part, 'date_part', 2)
             self.register_function(_sqlite_date_trunc, 'date_trunc', 2)
             self.register_function(_sqlite_regexp, 'regexp', 2)
-            self.register_function(rank, 'fts_rank', 1)
+            self.register_function(rank, 'fts_rank', -1)
             self.register_function(bm25, 'fts_bm25', -1)
 
     def _add_conn_hooks(self, conn):
@@ -758,7 +765,7 @@ def rank(raw_match_info, *weights):
     else:
         weights = [0] * c
         for i, weight in enumerate(weights):
-            weights[i] = args[i]
+            weights[i] = weight
 
     for phrase_num in range(p):
         phrase_info_idx = 2 + (phrase_num * c * 3)
