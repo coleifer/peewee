@@ -171,7 +171,7 @@ class TestJSONField(ModelTestCase):
          'title': 'My List of Python and SQLite Resources',
          'url': 'http://charlesleifer.com/blog/my-list-of-python-and-sqlite-resources/'},
         {'metadata': {'tags': ['nosql', 'python', 'sqlite', 'cython']},
-         'title': u"Using SQLite4's LSM Storage Engine as a Stand-alone NoSQL Database with Python",
+         'title': "Using SQLite4's LSM Storage Engine as a Stand-alone NoSQL Database with Python",
          'url': 'http://charlesleifer.com/blog/using-sqlite4-s-lsm-storage-engine-as-a-stand-alone-nosql-database-with-python/'},
         {'metadata': {'tags': ['sqlite', 'search', 'python', 'peewee']},
          'title': 'Building the SQLite FTS5 Search Extension',
