@@ -556,11 +556,11 @@ class TestFTSModel(ModelTestCase):
         results = [round(x.score, 2)
                    for x in FTSDoc.search_bm25('faith', with_score=True)]
         self.assertEqual(results, [
-            2.01,
-            2.29,
-            2.52,
-            2.58,
-            2.58])
+            -0.,
+            -0.,
+            -0.,
+            -0.,
+            -0.])
 
     def _test_fts_auto(self, ModelClass):
         posts = []

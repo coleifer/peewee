@@ -227,10 +227,10 @@ cdef void peewee_bm25(sqlite3_context *ctx, int argc,
         unsigned int *match_info
         unsigned int *phrase_info
         int term_count, col_count
-        double B = 0.75, K = 1.2
+        double B = 0.75, K = 1.2, D
         double total_docs, term_frequency,
         double doc_length, docs_with_term, avg_length
-        double idf, weight, rhs
+        double idf, weight, rhs, denom
         double *weights
         int P_O = 0, C_O = 1, N_O = 2, A_O = 3, L_O, X_O
         int i, j, x
@@ -259,19 +259,25 @@ cdef void peewee_bm25(sqlite3_context *ctx, int argc,
                 continue
             avg_length = match_info[A_O + j]
             doc_length = match_info[L_O + j]
+            if avg_length == 0:
+                D = 0
+            else:
+                D = 1 - B + (B * (doc_length / avg_length))
+
             x = X_O + (3 * j * (i + 1))
             term_frequency = match_info[x]
             docs_with_term = match_info[x + 2]
-            idf = log(
-                (total_docs - docs_with_term + 0.5) /
-                (docs_with_term + 0.5)
-            )
-            rhs = (
-                (term_frequency * (K + 1)) /
-                (term_frequency +
-                 (K * (1 - B + (B * (doc_length / avg_length))))
-                )
-            )
+            idf = max(
+                log(
+                    (total_docs - docs_with_term + 0.5) /
+                    (docs_with_term + 0.5)),
+                0)
+            denom = term_frequency + (K * D)
+            if denom == 0:
+                rhs = 0
+            else:
+                rhs = (term_frequency * (K + 1)) / denom
+
             score += (idf * rhs) * weight
 
     sqlite3_result_double(ctx, -1 * score)
