@@ -5,6 +5,10 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.7.3
+
+Small release which includes some changes to the BM25 sorting algorithm and the addition of a [`JSONField`](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#JSONField) for use with the new [JSON1 extension](http://sqlite.org/json1.html).
+
 ## 2.7.2
 
 People were having trouble building the sqlite extension. I figure enough people are having trouble that I made it a separate command: `python setup.py build_sqlite_ext`.
