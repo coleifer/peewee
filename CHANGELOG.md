@@ -5,6 +5,14 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.7.2
+
+People were having trouble building the sqlite extension. I figure enough people are having trouble that I made it a separate command: `python setup.py build_sqlite_ext`.
+
+## 2.7.1
+
+Jacked up the setup.py
+
 ## 2.7.0
 
 New APIs, features, and performance improvements.
