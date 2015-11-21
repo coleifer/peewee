@@ -83,36 +83,50 @@ class JSONField(TextField):
         if value is not None:
             return json.dumps(value)
 
+    def clean_path(self, path):
+        if path.startswith('[') or not path:
+            return '$%s' % path
+        return '$.%s' % path
+
     def length(self, path=None):
         if path:
-            return fn.json_array_length(self, '$.%s' % path)
+            return fn.json_array_length(self, self.clean_path(path))
         return fn.json_array_length(self)
 
     def extract(self, path):
-        return fn.json_extract(self, '$.%s' % path)
+        return fn.json_extract(self, self.clean_path(path))
 
     def _value_for_insertion(self, value):
         if isinstance(value, (list, tuple, dict)):
             return fn.json(json.dumps(value))
         return value
 
-    def insert(self, path, value):
-        path = '$.%s' % path
-        return fn.json_insert(self, path, self._value_for_insertion(value))
+    def _insert_like(self, fn, pairs):
+        npairs = len(pairs)
+        if npairs % 2 != 0:
+            raise ValueError('Mismatched path and value parameters.')
+        accum = []
+        for i in range(0, npairs, 2):
+            accum.append(self.clean_path(pairs[i]))
+            accum.append(self._value_for_insertion(pairs[i + 1]))
+        return fn(self, *accum)
 
-    def replace(self, path, value):
-        path = '$.%s' % path
-        return fn.json_replace(self, path, self._value_for_insertion(value))
+    def insert(self, *pairs):
+        return self._insert_like(fn.json_insert, pairs)
 
-    def set(self, path, value):
-        path = '$.%s' % path
-        return fn.json_set(self, path, self._value_for_insertion(value))
+    def replace(self, *pairs):
+        return self._insert_like(fn.json_replace, pairs)
+
+    def set(self, *pairs):
+        return self._insert_like(fn.json_set, pairs)
 
     def remove(self, *paths):
-        return fn.json_remove(self, *['$.%s' % path for path in paths])
+        return fn.json_remove(self, *[self.clean_path(path) for path in paths])
 
-    def json_type(self, path):
-        return fn.json_type(self, '$.%s' % path)
+    def json_type(self, path=None):
+        if path:
+            return fn.json_type(self, self.clean_path(path))
+        return fn.json_type(self)
 
     def children(self, path=None):
         """
@@ -130,12 +144,12 @@ class JSONField(TextField):
         root TEXT hidden (2nd input parameter, path at which to start)
         """
         if path:
-            return fn.json_each(self, '$.%s' % path)
+            return fn.json_each(self, self.clean_path(path))
         return fn.json_each(self)
 
     def tree(self, path=None):
         if path:
-            return fn.json_tree(self, '$.%s' % path)
+            return fn.json_tree(self, self.clean_path(path))
         return fn.json_tree(self)
 
 

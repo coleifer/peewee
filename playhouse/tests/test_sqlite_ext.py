@@ -290,6 +290,33 @@ class TestJSONField(ModelTestCase):
             else:
                 self.assertNotEqual(row, 'hello')
 
+    def test_multi_set(self):
+        Clone = APIData.alias()
+        set_query = (Clone
+                     .select(Clone.data.set(
+                         'foo', 'foo value',
+                         'tagz', ['list', 'of', 'tags'],
+                         'x.y.z', 3,
+                         'metadata.foo', None,
+                         'bar.baze', True))
+                     .where(Clone.id == APIData.id))
+        query = (APIData
+                 .update(data=set_query)
+                 .where(APIData.value.contains('LSM Storage'))
+                 .execute())
+        self.assertEqual(query, 1)
+
+        result = APIData.select().where(APIData.value.contains('LSM storage')).get()
+        self.assertEqual(result.data, {
+            'bar': {'baze': 1},
+            'foo': 'foo value',
+            'metadata': {'tags': ['nosql', 'python', 'sqlite', 'cython'], 'foo': None},
+            'tagz': ['list', 'of', 'tags'],
+            'title': 'Using SQLite4\'s LSM Storage Engine as a Stand-alone NoSQL Database with Python',
+            'url': 'http://charlesleifer.com/blog/using-sqlite4-s-lsm-storage-engine-as-a-stand-alone-nosql-database-with-python/',
+            'x': {'y': {'z': 3}},
+        })
+
     def test_children(self):
         children = APIData.data.children().alias('children')
         query = (APIData

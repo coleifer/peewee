@@ -494,6 +494,161 @@ sqlite_ext API notes
     :param coerce: Function used to convert the value from the database into the appropriate Python format.
 
 
+.. py:class:: JSONField()
+
+    Field class suitable for working with JSON stored and manipulated using the `JSON1 extension <https://www.sqlite.org/json1.html>`_.
+
+    Most functions that operate on JSON fields take a ``path`` argument. The JSON documents specify that the path should begin with ``'$'`` followed by zero or more instances of ``'.objectlabel'`` or ``'[arrayindex]'``. Peewee simplifies this by allowing you to omit the ``'$'`` character and just specify the path you need or ``None`` for an empty path:
+
+    * ``path=''`` --> ``'$'``
+    * ``path='tags'`` --> ``'$.tags'``
+    * ``path='[0][1].bar'`` --> ``'$[0][1].bar'``
+    * ``path='metadata[0]'`` --> ``'$.metadata[0]'``
+    * ``path='user.data.email'`` --> ``'$.user.data.email'``
+
+    .. py:method:: length([path=None])
+
+        Return the number of items in a JSON array at the given path. If the path is omitted, then return the number of items in the top-level array.
+
+        `SQLite documentation <https://www.sqlite.org/json1.html#jarraylen>`_.
+
+    .. py:method:: extract(path)
+
+        Return the value at the given path. If the value is a JSON object or array, it will be decoded into a ``dict`` or ``list``. If the value is a scalar type, string or ``null`` then it will be returned as the appropriate Python type.
+
+        `SQLite documentation <https://www.sqlite.org/json1.html#jex>`_.
+
+        Example:
+
+        .. code-block:: python
+
+            # data looks like {'post': {'title': 'post 1', 'body': '...'}, ...}
+            query = (Post
+                     .select(Post.data.json_extract('post.title'))
+                     .tuples())
+
+            # Only the `title` value is extracted from the JSON data.
+            for title, in query:
+                print title
+
+    .. py:method:: set(path, value[, path2, value2...])
+
+        Set values stored in the input JSON string using the given path/value pairs. The ``set`` function returns a **new** JSON string formed by updating the input JSON with the given path/value pairs.
+
+        If the path does not exist, it **will** be created.
+
+        Similarly, if the path does exist, it **will** be overwritten.
+
+        `SQLite documentation <https://www.sqlite.org/json1.html#jset>`_.
+
+        .. _updating-json:
+
+        Example:
+
+        .. code-block:: python
+
+            PostAlias = Post.alias()
+            set_query = (PostAlias
+                         .select(PostAlias.data.set(
+                             'title', 'New title',
+                             'tags', ['list', 'of', 'new', 'tags'],
+                             'totally.new.field', 3,
+                             'status.published', True))
+                         .where(PostAlias.id == Post.id))
+
+            # Update multiple fields at one time on the Post
+            # with the title "Old title".
+            query = (Post
+                     .update(data=set_query)
+                     .where(Post.data.extract('title') == 'Old title'))
+            query.execute()
+
+            post = (Post
+                    .select()
+                    .where(Post.data.extract('title') == 'New title')
+                    .get())
+
+            # Our new data has been added, even nested objects that did not
+            # exist before. Any pre-existing data has also been preserved,
+            # provided it was not over-written.
+            assert post.data == {
+                'title': 'New title',
+                'tags': ['list', 'of', 'new', 'tags'],
+                'totally': {'new': {'field: 3}},
+                'status': {'published': True, 'draft': False},
+                'other-field': ['this', 'was', 'here', 'before'],
+                'another-old-field': 'etc, etc'}
+
+    .. py:method:: insert(path, value[, path2, value2...])
+
+        Insert the given path/value pairs into the JSON string stored in the field. The ``insert`` function returns a **new** JSON string formed by updating the input JSON with the given path/value pairs.
+
+        If the path already exists, it will **not** be overwritten.
+
+        `SQLite documentation <https://www.sqlite.org/json1.html#jins>`_.
+
+    .. py:method:: replace(path, value[, path2, value2...])
+
+        Replace values stored in the input JSON string using the given path/value pairs. The ``replace`` function returns a **new** JSON string formed by updating the input JSON with the given path/value pairs.
+
+        If the path does not exist, it will **not** be created.
+
+        `SQLite documentation <https://www.sqlite.org/json1.html#jrepl>`_.
+
+    .. py:method:: remove(*paths)
+
+        Remove values referenced by the given path(s). The ``remove`` function returns a **new** JSON string formed by removing the specified paths from the input JSON string.
+
+        The process for removing fields from a JSON column is similar to the way you :py:meth:`~JSONField.set` them. For a code example, see :ref:`updating JSON data <updating-json>`.
+
+        `SQLite documentation <https://www.sqlite.org/json1.html#jrm>`_.
+
+    .. py:method:: json_type([path=None])
+
+        Return a string indicating the type of object stored in the field. You can optionally supply a path to specify a sub-item. The types of objects are:
+
+        * object
+        * array
+        * integer
+        * real
+        * true
+        * false
+        * text
+        * null  <-- the string "null" means an actual NULL value
+        * NULL  <-- an actual NULL value means the path was not found
+
+        `SQLite documentation <https://www.sqlite.org/json1.html#jtype>`_.
+
+    .. py:method:: children([path=None])
+
+        The ``children`` function corresponds to ``json_each``, a table-valued function that walks the JSON value provided and returns the immediate children of the top-level array or object. If a path is specified, then that path is treated as the top-most element.
+
+        The rows returned by calls to ``children()`` have the following attributes:
+
+        * ``key``: the key of the current element relative to its parent.
+        * ``value``: the value of the current element.
+        * ``type``: one of the data-types (see :py:meth:`~JSONField.json_type`).
+        * ``atom``: the scalar value for primitive types, ``NULL`` for arrays and objects.
+        * ``id``: a unique ID referencing the current node in the tree.
+        * ``parent``: the ID of the containing node.
+        * ``fullkey``: the full path describing the current element.
+        * ``path``: the path to the container of the current row.
+
+        For examples, see `my blog post on JSON1 <http://charlesleifer.com/blog/using-the-sqlite-json1-and-fts5-extensions-with-python/>`_.
+
+        `SQLite documentation <https://www.sqlite.org/json1.html#jeach>`_.
+
+    .. py:method:: tree([path=None])
+
+        The ``tree`` function corresponds to ``json_tree``, a table-valued function that walks the JSON value provided and recursively returns all descendants of the given root node. If a path is specified, then that path is treated as the root node element.
+
+        The rows returned by calls to ``tree()`` have the same attributes as rows returned by calls to :py:meth:`~JSONField.children`.
+
+        For examples, see `my blog post on JSON1 <http://charlesleifer.com/blog/using-the-sqlite-json1-and-fts5-extensions-with-python/>`_.
+
+        `SQLite documentation <https://www.sqlite.org/json1.html#jtree>`_.
+
+
 .. py:class:: PrimaryKeyAutoIncrementField()
 
     Subclass of :py:class:`PrimaryKeyField` that uses a monotonically-increasing value for the primary key. This differs from the default SQLite primary key, which simply uses the "max + 1" approach to determining the next ID.
