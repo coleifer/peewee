@@ -9,7 +9,19 @@ Most users will want to simply install the latest version, hosted on PyPI:
 
     pip install peewee
 
-Peewee also comes with an optional ``playhouse.speedups`` module. If you have Cython installed, Peewee will compile the Cython extension.
+Peewee comes with two C extensions that can optionally be compiled:
+
+* Speedups, which includes miscellaneous functions re-implemented with Cython. This module will be built automatically if Cython is installed.
+* Sqlite extensions, which includes Cython implementations of the SQLite date manipulation functions, the REGEXP operator, and full-text search result ranking algorithms. This module should be built using the ``build_sqlite_ext`` command.
+
+.. note::
+    If you have Cython installed, then the ``speedups`` module will automatically be built. If you wish to also build the SQLite Cython extension, you must manually run:
+
+    .. code-block:: console
+
+        python setup.py build_sqlite_ext
+        python setup.py install
+
 
 Installing with git
 -------------------
@@ -23,9 +35,15 @@ using git:
     cd peewee
     python setup.py install
 
+If you would like to build the SQLite extension in a git checkout, you can run:
+
+.. code-block:: console
+
+    # Build the sqlite extension and place the shared library alongside the other modules.
+    python setup.py build_sqlite_ext -i
+
 .. note::
-    On some systems you may need to use ``sudo python setup.py install`` to
-    install peewee system-wide.
+    On some systems you may need to use ``sudo python setup.py install`` to install peewee system-wide.
 
 Running tests
 -------------
