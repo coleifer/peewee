@@ -12,13 +12,28 @@ try:
 except ImportError:
     pass
 else:
+    speedups_ext_module = Extension(
+        'playhouse._speedups',
+        ['playhouse/speedups.pyx'])
+    sqlite_ext_module = Extension(
+        'playhouse._sqlite_ext',
+        ['playhouse/_sqlite_ext.pyx'])
+
+    class BuildSqliteExt(build_ext):
+        def run(self):
+            self._original_modules = self.distribution.ext_modules
+            try:
+                self.extensions = [sqlite_ext_module]
+                return build_ext.run(self)
+            finally:
+                self.distribution.ext_modules = self._original_modules
+
     setup_kwargs.update(
-        cmdclass={'build_ext': build_ext},
-        ext_modules=[
-            Extension('playhouse._speedups', ['playhouse/speedups.pyx']),
-            Extension('playhouse._sqlite_ext', ['playhouse/_sqlite_ext.pyx']),
-        ],
-    )
+        cmdclass={
+            'build_ext': build_ext,
+            'build_sqlite_ext': BuildSqliteExt},
+        ext_modules=[speedups_ext_module])
+
 
 setup(
     name='peewee',
