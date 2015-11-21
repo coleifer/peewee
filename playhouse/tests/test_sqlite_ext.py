@@ -26,7 +26,8 @@ ext_db = database_initializer.get_database(
 CLOSURE_EXTENSION = os.environ.get('CLOSURE_EXTENSION')
 FTS5_EXTENSION = FTS5Model.fts5_installed()
 
-# test aggregate.
+
+# Test aggregate.
 class WeightedAverage(object):
     def __init__(self):
         self.total_weight = 0.0
@@ -42,7 +43,7 @@ class WeightedAverage(object):
             return self.total_ct / self.total_weight
         return 0.0
 
-# test collations
+# Test collations.
 def _cmp(l, r):
     if l < r:
         return -1
@@ -57,7 +58,7 @@ def collate_reverse(s1, s2):
 def collate_case_insensitive(s1, s2):
     return _cmp(s1.lower(), s2.lower())
 
-# test function
+# Test functions.
 def title_case(s):
     return s.title()
 
@@ -65,7 +66,7 @@ def title_case(s):
 def rstrip(s, n):
     return s.rstrip(n)
 
-# register test aggregates / collations / functions
+# Register test aggregates / collations / functions.
 ext_db.register_aggregate(WeightedAverage, 'weighted_avg', 1)
 ext_db.register_aggregate(WeightedAverage, 'weighted_avg2', 2)
 ext_db.register_collation(collate_reverse)
@@ -76,8 +77,10 @@ class BaseExtModel(Model):
     class Meta:
         database = ext_db
 
+
 class Post(BaseExtModel):
     message = TextField()
+
 
 class FTSPost(Post, FTSModel):
     """Automatically managed and populated via the Post model."""
@@ -85,16 +88,28 @@ class FTSPost(Post, FTSModel):
     # precedence.
     docid = DocIDField()
 
+    class Meta:
+        options = {
+            'content': Post,
+            'tokenize': 'porter'}
+
+
 class FTSDoc(FTSModel):
     """Manually managed and populated using queries."""
     message = TextField()
+
     class Meta:
         database = ext_db
+        options = {'tokenize': 'porter'}
+
 
 class ManagedDoc(FTSModel):
     message = TextField()
+
     class Meta:
         database = ext_db
+        options = {'tokenize': 'porter', 'content': Post.message}
+
 
 class MultiColumn(FTSModel):
     c1 = CharField(default='')
@@ -104,6 +119,8 @@ class MultiColumn(FTSModel):
 
     class Meta:
         database = ext_db
+        options = {'tokenize': 'porter'}
+
 
 class FTS5Test(FTS5Model):
     title = SearchField()
@@ -113,10 +130,12 @@ class FTS5Test(FTS5Model):
     class Meta:
         database = ext_db
 
+
 class Values(BaseExtModel):
     klass = IntegerField()
     value = FloatField()
     weight = FloatField()
+
 
 class RowIDModel(BaseExtModel):
     rowid = RowIDField()
@@ -132,11 +151,175 @@ class TestVirtualModel(VirtualModel):
             'baze': 'nugget'}
         primary_key = False
 
+
+class APIData(BaseExtModel):
+    data = JSONField()
+    value = TextField()
+
+
 class TestVirtualModelChild(TestVirtualModel):
     pass
 
 
-class SqliteExtTestCase(PeeweeTestCase):
+@skip_unless(lambda: sqlite3.sqlite_version_info >= (3, 9, 0))
+class TestJSONField(ModelTestCase):
+    requires = [
+        APIData,
+    ]
+    test_data = [
+        {'metadata': {'tags': ['python', 'sqlite']},
+         'title': 'My List of Python and SQLite Resources',
+         'url': 'http://charlesleifer.com/blog/my-list-of-python-and-sqlite-resources/'},
+        {'metadata': {'tags': ['nosql', 'python', 'sqlite', 'cython']},
+         'title': u"Using SQLite4's LSM Storage Engine as a Stand-alone NoSQL Database with Python",
+         'url': 'http://charlesleifer.com/blog/using-sqlite4-s-lsm-storage-engine-as-a-stand-alone-nosql-database-with-python/'},
+        {'metadata': {'tags': ['sqlite', 'search', 'python', 'peewee']},
+         'title': 'Building the SQLite FTS5 Search Extension',
+         'url': 'http://charlesleifer.com/blog/building-the-sqlite-fts5-search-extension/'},
+        {'metadata': {'tags': ['nosql', 'python', 'unqlite', 'cython']},
+         'title': 'Introduction to the fast new UnQLite Python Bindings',
+         'url': 'http://charlesleifer.com/blog/introduction-to-the-fast-new-unqlite-python-bindings/'},
+        {'metadata': {'tags': ['python', 'walrus', 'redis', 'nosql']},
+         'title': 'Alternative Redis-Like Databases with Python',
+         'url': 'http://charlesleifer.com/blog/alternative-redis-like-databases-with-python/'},
+    ]
+
+    def setUp(self):
+        super(TestJSONField, self).setUp()
+        with ext_db.execution_context():
+            for entry in self.test_data:
+                APIData.create(data=entry, value=entry['title'])
+
+        self.Q = APIData.select().order_by(APIData.id)
+
+    def test_extract(self):
+        titles = self.Q.select(APIData.data.extract('title')).tuples()
+        self.assertEqual([row for row, in titles], [
+            'My List of Python and SQLite Resources',
+            'Using SQLite4\'s LSM Storage Engine as a Stand-alone NoSQL Database with Python',
+            'Building the SQLite FTS5 Search Extension',
+            'Introduction to the fast new UnQLite Python Bindings',
+            'Alternative Redis-Like Databases with Python',
+        ])
+
+        tags = (self.Q
+                .select(APIData.data.extract('metadata.tags').alias('tags'))
+                .dicts())
+        self.assertEqual(list(tags), [
+            {'tags': ['python', 'sqlite']},
+            {'tags': ['nosql', 'python', 'sqlite', 'cython']},
+            {'tags': ['sqlite', 'search', 'python', 'peewee']},
+            {'tags': ['nosql', 'python', 'unqlite', 'cython']},
+            {'tags': ['python', 'walrus', 'redis', 'nosql']},
+        ])
+
+        missing = self.Q.select(APIData.data.extract('foo.bar')).tuples()
+        self.assertEqual([row for row, in missing], [None] * 5)
+
+    def test_length(self):
+        tag_len = (self.Q
+                   .select(APIData.data.length('metadata.tags').alias('len'))
+                   .dicts())
+        self.assertEqual(list(tag_len), [
+            {'len': 2},
+            {'len': 4},
+            {'len': 4},
+            {'len': 4},
+            {'len': 4},
+        ])
+
+    def test_remove(self):
+        query = (self.Q
+                 .select(
+                     fn.json_extract(
+                         APIData.data.remove('metadata.tags'),
+                         '$.metadata'))
+                 .tuples())
+        self.assertEqual([row for row, in query], ['{}'] * 5)
+
+        Clone = APIData.alias()
+        query = (APIData
+                 .update(
+                     data=(Clone
+                           .select(Clone.data.remove('metadata.tags[2]'))
+                           .where(Clone.id == APIData.id)))
+                 .where(
+                     APIData.value.contains('LSM Storage') |
+                     APIData.value.contains('UnQLite Python'))
+                 .execute())
+        self.assertEqual(query, 2)
+
+        tag_len = (self.Q
+                   .select(APIData.data.length('metadata.tags').alias('len'))
+                   .dicts())
+        self.assertEqual(list(tag_len), [
+            {'len': 2},
+            {'len': 3},
+            {'len': 4},
+            {'len': 3},
+            {'len': 4},
+        ])
+
+    def test_set(self):
+        query = (self.Q
+                 .select(
+                     fn.json_extract(
+                         APIData.data.set(
+                             'metadata',
+                             {'k1': {'k2': 'bar'}}),
+                         '$.metadata.k1'))
+                 .tuples())
+        self.assertEqual(
+            [json.loads(row) for row, in query],
+            [{'k2': 'bar'}] * 5)
+
+        Clone = APIData.alias()
+        query = (APIData
+                 .update(
+                     data=(Clone
+                           .select(Clone.data.set('title', 'hello'))
+                           .where(Clone.id == APIData.id)))
+                 .where(APIData.value.contains('LSM Storage'))
+                 .execute())
+        self.assertEqual(query, 1)
+
+        titles = self.Q.select(APIData.data.extract('title')).tuples()
+        for idx, (row,) in enumerate(titles):
+            if idx == 1:
+                self.assertEqual(row, 'hello')
+            else:
+                self.assertNotEqual(row, 'hello')
+
+    def test_children(self):
+        children = APIData.data.children().alias('children')
+        query = (APIData
+                 .select(children.c.value.alias('value'))
+                 .from_(APIData, children)
+                 .where(children.c.key.in_(['title', 'url']))
+                 .order_by(SQL('1'))
+                 .tuples())
+        self.assertEqual([row for row, in query], [
+            'Alternative Redis-Like Databases with Python',
+            'Building the SQLite FTS5 Search Extension',
+            'Introduction to the fast new UnQLite Python Bindings',
+            'My List of Python and SQLite Resources',
+            'Using SQLite4\'s LSM Storage Engine as a Stand-alone NoSQL Database with Python',
+            'http://charlesleifer.com/blog/alternative-redis-like-databases-with-python/',
+            'http://charlesleifer.com/blog/building-the-sqlite-fts5-search-extension/',
+            'http://charlesleifer.com/blog/introduction-to-the-fast-new-unqlite-python-bindings/',
+            'http://charlesleifer.com/blog/my-list-of-python-and-sqlite-resources/',
+            'http://charlesleifer.com/blog/using-sqlite4-s-lsm-storage-engine-as-a-stand-alone-nosql-database-with-python/',
+        ])
+
+
+class TestFTSModel(ModelTestCase):
+    requires = [
+        FTSDoc,
+        ManagedDoc,
+        FTSPost,
+        Post,
+        MultiColumn,
+    ]
     messages = [
         ('A faith is a necessity to a man. Woe to him who believes in '
          'nothing.'),
@@ -154,21 +337,6 @@ class SqliteExtTestCase(PeeweeTestCase):
         ('bbbbb ccccc ddddd eeeee', 'bbbbb', 'zzzzz', 2),
         ('ccccc ccccc ddddd fffff', 'ccccc', 'yyyyy', 3),
         ('ddddd', 'ccccc', 'xxxxx', 4)]
-
-    def setUp(self):
-        super(SqliteExtTestCase, self).setUp()
-        FTSDoc.drop_table(True)
-        ManagedDoc.drop_table(True)
-        FTSPost.drop_table(True)
-        Post.drop_table(True)
-        MultiColumn.drop_table(True)
-        Values.drop_table(True)
-        Values.create_table()
-        MultiColumn.create_table(tokenize='porter')
-        Post.create_table()
-        FTSPost.create_table(tokenize='porter', content=Post)
-        ManagedDoc.create_table(tokenize='porter', content=Post.message)
-        FTSDoc.create_table(tokenize='porter')
 
     def test_virtual_model_options(self):
         compiler = ext_db.compiler()
@@ -426,6 +594,13 @@ class SqliteExtTestCase(PeeweeTestCase):
 
     def test_fts_auto_field(self):
         self._test_fts_auto(ManagedDoc)
+
+
+class TestUserDefinedCallbacks(ModelTestCase):
+    requires = [
+        Post,
+        Values,
+    ]
 
     def test_custom_agg(self):
         data = (

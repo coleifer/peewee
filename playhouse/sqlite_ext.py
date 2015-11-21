@@ -36,6 +36,10 @@ import math
 import os
 import struct
 import sys
+try:
+    import simplejson as json
+except ImportError:
+    import json
 
 from peewee import *
 from peewee import EnclosedClause
@@ -65,6 +69,74 @@ class PrimaryKeyAutoIncrementField(PrimaryKeyField):
     def __ddl__(self, column_type):
         ddl = super(PrimaryKeyAutoIncrementField, self).__ddl__(column_type)
         return ddl + [SQL('AUTOINCREMENT')]
+
+
+class JSONField(TextField):
+    def python_value(self, value):
+        if value is not None:
+            try:
+                return json.loads(value)
+            except (TypeError, ValueError):
+                return value
+
+    def db_value(self, value):
+        if value is not None:
+            return json.dumps(value)
+
+    def length(self, path=None):
+        if path:
+            return fn.json_array_length(self, '$.%s' % path)
+        return fn.json_array_length(self)
+
+    def extract(self, path):
+        return fn.json_extract(self, '$.%s' % path)
+
+    def _value_for_insertion(self, value):
+        if isinstance(value, (list, tuple, dict)):
+            return fn.json(json.dumps(value))
+        return value
+
+    def insert(self, path, value):
+        path = '$.%s' % path
+        return fn.json_insert(self, path, self._value_for_insertion(value))
+
+    def replace(self, path, value):
+        path = '$.%s' % path
+        return fn.json_replace(self, path, self._value_for_insertion(value))
+
+    def set(self, path, value):
+        path = '$.%s' % path
+        return fn.json_set(self, path, self._value_for_insertion(value))
+
+    def remove(self, *paths):
+        return fn.json_remove(self, *['$.%s' % path for path in paths])
+
+    def json_type(self, path):
+        return fn.json_type(self, '$.%s' % path)
+
+    def children(self, path=None):
+        """
+        Schema of `json_each` and `json_tree`:
+
+        key,
+        value,
+        type TEXT (object, array, string, etc),
+        atom (value for primitive/scalar types, NULL for array and object)
+        id INTEGER (unique identifier for element)
+        parent INTEGER (unique identifier of parent element or NULL)
+        fullkey TEXT (full path describing element)
+        path TEXT (path to the container of the current element)
+        json JSON hidden (1st input parameter to function)
+        root TEXT hidden (2nd input parameter, path at which to start)
+        """
+        if path:
+            return fn.json_each(self, '$.%s' % path)
+        return fn.json_each(self)
+
+    def tree(self, path=None):
+        if path:
+            return fn.json_tree(self, '$.%s' % path)
+        return fn.json_tree(self)
 
 
 class _VirtualFieldMixin(object):
