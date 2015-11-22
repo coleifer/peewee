@@ -1523,8 +1523,8 @@ class TestModelInheritance(ModelTestCase):
     requires = [Blog, BlogTwo, User]
 
     def test_model_inheritance_attrs(self):
-        self.assertEqual(Blog._meta.get_field_names(), ['pk', 'user', 'title', 'content', 'pub_date'])
-        self.assertEqual(BlogTwo._meta.get_field_names(), ['pk', 'user', 'content', 'pub_date', 'title', 'extra_field'])
+        self.assertEqual(Blog._meta.sorted_field_names, ['pk', 'user', 'title', 'content', 'pub_date'])
+        self.assertEqual(BlogTwo._meta.sorted_field_names, ['pk', 'user', 'content', 'pub_date', 'title', 'extra_field'])
 
         self.assertEqual(Blog._meta.primary_key.name, 'pk')
         self.assertEqual(BlogTwo._meta.primary_key.name, 'pk')

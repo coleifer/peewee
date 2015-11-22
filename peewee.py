@@ -4094,6 +4094,7 @@ class ModelOptions(object):
         self._default_callable_list = []
         self._sorted_field_list = _SortedFieldList()
         self.sorted_fields = []
+        self.sorted_field_names = []
 
         self.database = database or default_database
         self.db_table = db_table
@@ -4140,6 +4141,7 @@ class ModelOptions(object):
 
         self._sorted_field_list.insert(field)
         self.sorted_fields = list(self._sorted_field_list)
+        self.sorted_field_names = [f.name for f in self.sorted_fields]
 
         if field.default is not None:
             self.defaults[field] = field.default
@@ -4173,12 +4175,6 @@ class ModelOptions(object):
         for field_name, default in self._default_callable_list:
             dd[field_name] = default()
         return dd
-
-    def get_field_names(self):
-        return [field.name for field in self.sorted_fields]
-
-    def get_fields(self):
-        return self.sorted_fields
 
     def get_field_index(self, field):
         try:

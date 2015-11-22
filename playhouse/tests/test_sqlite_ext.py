@@ -776,7 +776,7 @@ class TestRowIDField(ModelTestCase):
     requires = [RowIDModel]
 
     def test_model_meta(self):
-        self.assertEqual(RowIDModel._meta.get_field_names(), ['data'])
+        self.assertEqual(RowIDModel._meta.sorted_field_names, ['data'])
         self.assertEqual(RowIDModel._meta.primary_key.name, 'rowid')
         self.assertTrue(RowIDModel._meta.auto_increment)
 

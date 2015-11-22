@@ -207,8 +207,8 @@ class Loader(_CSVReader):
             self.model = db_or_model
             self.database = self.model._meta.database
             self.db_table = self.model._meta.db_table
-            self.fields = self.model._meta.get_fields()
-            self.field_names = self.model._meta.get_field_names()
+            self.fields = self.model._meta.sorted_fields
+            self.field_names = self.model._meta.sorted_field_names
             # If using an auto-incrementing primary key, ignore it unless we
             # are told the primary key is included in the CSV.
             if self.model._meta.auto_increment and not pk_in_csv:

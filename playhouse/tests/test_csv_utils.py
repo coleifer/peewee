@@ -70,7 +70,7 @@ class TestCSVConversion(PeeweeTestCase):
         return TestLoader(**loader_kwargs).load()
 
     def assertData(self, ModelClass, expected):
-        name_field = ModelClass._meta.get_fields()[1]
+        name_field = ModelClass._meta.sorted_fields[1]
         query = ModelClass.select().order_by(name_field).tuples()
         self.assertEqual([row for row in query], expected)
 
@@ -92,7 +92,7 @@ class TestCSVConversion(PeeweeTestCase):
             self.float_sal,
             field_names=['f1', 'f2', 'f3', 'f4', 'f5'],
             has_header=False)
-        self.assertEqual(ModelClass._meta.get_field_names(), [
+        self.assertEqual(ModelClass._meta.sorted_field_names, [
             '_auto_pk', 'f1', 'f2', 'f3', 'f4', 'f5'])
         self.assertData(ModelClass, [
             (1, 10, 'F1 L1', date(1983, 1, 1), 10000., 't'),
@@ -103,7 +103,7 @@ class TestCSVConversion(PeeweeTestCase):
             self.simple,
             self.float_sal,
             has_header=False)
-        self.assertEqual(ModelClass._meta.get_field_names(), [
+        self.assertEqual(ModelClass._meta.sorted_field_names, [
             '_auto_pk', 'field_0', 'field_1', 'field_2', 'field_3', 'field_4'])
 
     def test_mismatch_types(self):
@@ -129,7 +129,7 @@ class TestCSVConversion(PeeweeTestCase):
             fields=fields)
         self.assertEqual(
             list(map(type, fields)),
-            list(map(type, ModelClass._meta.get_fields())))
+            list(map(type, ModelClass._meta.sorted_fields)))
         self.assertData(ModelClass, [
             (10, 'F1 L1', date(1983, 1, 1), 10000., 't'),
             (20, 'F2 L2', date(1983, 1, 2), 20000.5, 'f')])
