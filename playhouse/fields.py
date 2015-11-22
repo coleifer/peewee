@@ -38,6 +38,7 @@ from peewee import binary_construct
 from peewee import Field
 from peewee import FieldDescriptor
 from peewee import SelectQuery
+from peewee import unicode_type
 
 if hashpw and gensalt:
     class PasswordHash(bytes):
@@ -63,6 +64,9 @@ if hashpw and gensalt:
         def python_value(self, value):
             """Convert the database value to a pythonic value."""
             # FixMe: how do i get this to run before saving to the DB?
+            if isinstance(value, unicode_type):
+                value = value.encode('utf-8')
+
             return PasswordHash(value)
 
 class ManyToManyField(Field):
