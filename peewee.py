@@ -4060,6 +4060,9 @@ class _SortedFieldList(object):
         j = bisect_right(self._keys, k)
         return item in self._items[i:j]
 
+    def index(self, field):
+        return self._keys.index(field._sort_key)
+
     def insert(self, item):
         k = item._sort_key
         i = bisect_left(self._keys, k)
@@ -4067,7 +4070,7 @@ class _SortedFieldList(object):
         self._items.insert(i, item)
 
     def remove(self, item):
-        idx = self._items.index(item)
+        idx = self.index(item)
         del self._items[idx]
         del self._keys[idx]
 
@@ -4158,6 +4161,8 @@ class ModelOptions(object):
         original = self.fields.pop(field_name)
         del self.columns[original.db_column]
         self._sorted_field_list.remove(original)
+        self.sorted_fields = list(self._sorted_field_list)
+        self.sorted_field_names = [f.name for f in self.sorted_fields]
 
         if original.default is not None:
             del self.defaults[original]

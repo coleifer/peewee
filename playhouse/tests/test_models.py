@@ -1005,6 +1005,20 @@ class TestModelAPIs(ModelTestCase):
             [gc.key for gc in last_five],
             ['x-gc5', 'x-gc6', 'x-gc7', 'x-gc8', 'x-gc9'])
 
+    def test_meta_get_field_index(self):
+        index = Blog._meta.get_field_index(Blog.content)
+        self.assertEqual(index, 3)
+
+    def test_meta_remove_field(self):
+
+        class _Model(Model):
+            title = CharField(max_length=25)
+            content = TextField(default='')
+
+        _Model._meta.remove_field('content')
+        self.assertTrue('content' not in _Model._meta.fields)
+        self.assertTrue('content' not in _Model._meta.sorted_field_names)
+
 
 class TestAggregatesWithModels(ModelTestCase):
     requires = [OrderedModel, User, Blog]
