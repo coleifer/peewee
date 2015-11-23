@@ -34,6 +34,7 @@ best_docs = Document.match('some phrase')
 import inspect
 import math
 import os
+import re
 import struct
 import sys
 try:
@@ -414,6 +415,26 @@ class SearchField(BareField):
             unindexed=self._unindexed, **kwargs)
 
 
+_alphabet = 'abcdefghijklmnopqrstuvwxyz'
+_alphanum = set([
+    '\t',
+    chr(26),  # Substitution control character.
+    '"',
+    '(',
+    ')',
+    '*',
+    ':',
+    '_',
+    ' ',
+    '+',
+    ',',
+    '{',
+    '}',
+]) | set('0123456789') | set(_alphabet) | set(_alphabet.upper())
+_invalid_ascii = set([chr(p) for p in range(128) if chr(p) not in _alphanum])
+_quote_re = re.compile('(?:[^\s"]|"(?:\\.|[^"])*")+')
+
+
 class FTS5Model(BaseFTSModel):
     """
     Requires SQLite >= 3.9.0.
@@ -513,6 +534,40 @@ class FTS5Model(BaseFTSModel):
 
         return True
 
+    @staticmethod
+    def validate_query(query):
+        tokens = _quote_re.findall(query)
+        for token in tokens:
+            if token.startswith('"') and token.endswith('"'):
+                continue
+            if set(token) & _invalid_ascii:
+                return False
+        return True
+
+    @staticmethod
+    def clean_query(query, replace=chr(26)):
+        """
+        Clean a query of invalid tokens.
+        """
+        accum = []
+        any_invalid = False
+        tokens = _quote_re.findall(query)
+        for token in tokens:
+            if token.startswith('"') and token.endswith('"'):
+                accum.append(token)
+                continue
+            token_set = set(token)
+            invalid_for_token = token_set & _invalid_ascii
+            if invalid_for_token:
+                any_invalid = True
+                for c in invalid_for_token:
+                    token = token.replace(c, replace)
+            accum.append(token)
+
+        if any_invalid:
+            return ' '.join(accum)
+        return query
+
     @classmethod
     def match(cls, term):
         """
@@ -536,7 +591,7 @@ class FTS5Model(BaseFTSModel):
                explicit_ordering=False):
         """Full-text search using selected `term`."""
         return cls.search_bm25(
-            term,
+            FTS5Model.clean_query(term),
             weights,
             with_score,
             score_alias,
@@ -566,7 +621,7 @@ class FTS5Model(BaseFTSModel):
 
         return (cls
                 .select(*selection)
-                .where(cls.match(term))
+                .where(cls.match(FTS5Model.clean_query(term)))
                 .order_by(order_by))
 
     @classmethod

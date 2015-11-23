@@ -982,6 +982,30 @@ class TestFTS5Extension(ModelTestCase):
             {'doc': 3, 'term': 'bb', 'cnt': 28},
             {'doc': 4, 'term': 'cc', 'cnt': 36}])
 
+    def test_validate_query(self):
+        data = (
+            ('testing one two three', True),
+            ('"testing one" "two" three', True),
+            ('\'testing one\' "two" three', False),
+            ('"\'testing one\'" "two" three', True),
+            ('k-means', False),
+            ('"k-means"', True),
+            ('0123 AND (4 OR 5)', True),
+            ('it\'s', False),
+        )
+        for phrase, valid in data:
+            self.assertEqual(FTS5Model.validate_query(phrase), valid)
+
+    def test_clean_query(self):
+        data = (
+            ('testing  one', 'testing  one'),
+            ('testing  "one"', 'testing  "one"'),
+            ('testing  \'one\'', 'testing _one_'),
+            ('foo; bar [1 2 3] it\'s', 'foo_ bar _1 2 3_ it_s'),
+        )
+        for inval, outval in data:
+            self.assertEqual(FTS5Model.clean_query(inval, '_'), outval)
+
 
 @skip_if(lambda: not CLOSURE_EXTENSION)
 class TestTransitiveClosureIntegration(PeeweeTestCase):
