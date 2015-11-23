@@ -4620,7 +4620,7 @@ class Model(with_metaclass(BaseModel)):
         return not self == other
 
 def clean_prefetch_subquery(query):
-    query._group_by = query._having = query._order_by = None
+    query._group_by = query._having = None
     return query
 
 def prefetch_add_subquery(sq, subqueries):
