@@ -951,6 +951,9 @@ apsw_ext API notes
     Be sure to use the ``Field`` subclasses defined in the ``apsw_ext``
     module, as they will properly handle adapting the data types for storage.
 
+    For example, instead of using ``peewee.DateTimeField``, be sure you are importing
+    and using ``playhouse.apsw_ext.DateTimeField``.
+
 .. _berkeleydb:
 
 BerkeleyDB backend
