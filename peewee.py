@@ -4316,8 +4316,8 @@ class BaseModel(type):
         cls.DoesNotExist = exception_class
         cls._meta.prepared()
 
-        if hasattr(cls, 'validate'):
-            cls.validate()
+        if hasattr(cls, 'validate_model'):
+            cls.validate_model()
 
         return cls
 

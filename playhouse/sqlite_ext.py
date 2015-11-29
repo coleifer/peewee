@@ -294,7 +294,7 @@ class FTSModel(BaseFTSModel):
     docid = DocIDField()
 
     @classmethod
-    def validate(cls):
+    def validate_model(cls):
         if cls._meta.primary_key.name != 'docid':
             raise ImproperlyConfigured(
                 'FTSModel classes must use the default `docid` primary key.')
@@ -502,7 +502,7 @@ class FTS5Model(BaseFTSModel):
     rowid = RowIDField()
 
     @classmethod
-    def validate(cls):
+    def validate_model(cls):
         # Perform FTS5-specific validation and options post-processing.
         if cls._meta.primary_key.name != 'rowid':
             raise ImproperlyConfigured(cls._error_messages['pk'])
