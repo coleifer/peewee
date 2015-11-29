@@ -739,6 +739,11 @@ The connection handling code can be placed in a `middleware component <https://f
         # ... other middlewares ...
     ])
 
+Pyramid
+^^^^^^^
+
+There is a project named `pyramid_peewee <https://bitbucket.org/jjgalvez/pyramid_peewee>`_ that provides some helpers for integrating peewee with the Pyramid framework.
+
 Other frameworks
 ^^^^^^^^^^^^^^^^
 
