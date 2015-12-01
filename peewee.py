@@ -4669,9 +4669,9 @@ def prefetch_add_subquery(sq, subqueries):
                                  'query: %s%s' % (subquery, tgt_err))
 
         if fkfs:
-            inner_query = last_query.select(to_field)
             exprBuilder = None
             for fkf, to_field in zip(fkfs, to_fields):
+				inner_query = last_query.select(to_field)
                 part = operator.lshift(fkf, inner_query)
                 exprBuilder = exprBuilder and operator.or_(exprBuilder, part) or part
 
