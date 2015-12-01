@@ -1018,6 +1018,8 @@ class TestModelAPIs(ModelTestCase):
         _Model._meta.remove_field('content')
         self.assertTrue('content' not in _Model._meta.fields)
         self.assertTrue('content' not in _Model._meta.sorted_field_names)
+        self.assertEqual([f.name for f in _Model._meta.sorted_fields],
+                         ['id', 'title'])
 
 
 class TestAggregatesWithModels(ModelTestCase):
