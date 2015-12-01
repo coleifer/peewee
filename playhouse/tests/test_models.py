@@ -1021,6 +1021,47 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual([f.name for f in _Model._meta.sorted_fields],
                          ['id', 'title'])
 
+    def test_meta_rel_for_model(self):
+        class User(Model):
+            pass
+        class Category(Model):
+            parent = ForeignKeyField('self')
+        class Tweet(Model):
+            user = ForeignKeyField(User)
+        class Relationship(Model):
+            from_user = ForeignKeyField(User, related_name='r1')
+            to_user = ForeignKeyField(User, related_name='r2')
+
+        UM = User._meta
+        CM = Category._meta
+        TM = Tweet._meta
+        RM = Relationship._meta
+
+        # Simple refs work.
+        self.assertIsNone(UM.rel_for_model(Tweet))
+        self.assertEqual(UM.rel_for_model(Tweet, multi=True), [])
+        self.assertEqual(UM.reverse_rel_for_model(Tweet), Tweet.user)
+        self.assertEqual(UM.reverse_rel_for_model(Tweet, multi=True),
+                         [Tweet.user])
+
+        # Multi fks.
+        self.assertEqual(RM.rel_for_model(User), Relationship.from_user)
+        self.assertEqual(RM.rel_for_model(User, multi=True),
+                         [Relationship.from_user, Relationship.to_user])
+
+        self.assertEqual(UM.reverse_rel_for_model(Relationship),
+                         Relationship.from_user)
+        self.assertEqual(UM.reverse_rel_for_model(Relationship, multi=True),
+                         [Relationship.from_user, Relationship.to_user])
+
+        # Self-refs work.
+        self.assertEqual(CM.rel_for_model(Category), Category.parent)
+        self.assertEqual(CM.reverse_rel_for_model(Category), Category.parent)
+
+        # Field aliases work.
+        UA = User.alias()
+        self.assertEqual(TM.rel_for_model(UA), Tweet.user)
+
 
 class TestAggregatesWithModels(ModelTestCase):
     requires = [OrderedModel, User, Blog]

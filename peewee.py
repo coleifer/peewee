@@ -4194,9 +4194,11 @@ class ModelOptions(object):
                 for field_name in self.primary_key.field_names]
         return [self.primary_key]
 
-    def rel_for_model(self, model, field_obj=None):
+    def rel_for_model(self, model, field_obj=None, multi=False):
         is_field = isinstance(field_obj, Field)
         is_node = not is_field and isinstance(field_obj, Node)
+        if multi:
+            accum = []
         for field in self.sorted_fields:
             if isinstance(field, ForeignKeyField) and field.rel_model == model:
                 is_match = (
@@ -4204,10 +4206,14 @@ class ModelOptions(object):
                     (is_field and field_obj.name == field.name) or
                     (is_node and field_obj._alias == field.name))
                 if is_match:
-                    return field
+                    if not multi:
+                        return field
+                    accum.append(field)
+        if multi:
+            return accum
 
-    def reverse_rel_for_model(self, model, field_obj=None):
-        return model._meta.rel_for_model(self.model_class, field_obj)
+    def reverse_rel_for_model(self, model, field_obj=None, multi=False):
+        return model._meta.rel_for_model(self.model_class, field_obj, multi)
 
     def rel_exists(self, model):
         return self.rel_for_model(model) or self.reverse_rel_for_model(model)
