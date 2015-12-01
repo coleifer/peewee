@@ -4652,7 +4652,7 @@ def prefetch_add_subquery(sq, subqueries):
             prefetch_result = fixed_queries[j]
             last_query = prefetch_result.query
             last_model = prefetch_result.model
-            foreign_keys = subquery_model._meta.rel_for_model(last_model)
+            foreign_keys = subquery_model._meta.rels_for_model(last_model)
             if foreign_keys:
                 fkfs = [getattr(subquery_model, foreign_key.name) for foreign_key in foreign_keys]
                 to_fields = [getattr(last_model, foreign_key.to_field.name) for foreign_key in foreign_keys]
