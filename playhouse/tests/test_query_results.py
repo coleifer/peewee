@@ -1158,6 +1158,30 @@ class TestPrefetch(BaseTestPrefetch):
             ('u5', [], []),
         ])
 
+    def test_prefetch_multiple_fks(self):
+        User.delete().execute()
+        Relationship.delete().execute()
+
+        names = ['charlie', 'huey', 'zaizee']
+        charlie, huey, zaizee = [
+            User.create(username=username) for username in names]
+        Relationship.create(from_user=charlie, to_user=huey)
+        Relationship.create(from_user=charlie, to_user=zaizee)
+        Relationship.create(from_user=huey, to_user=charlie)
+        Relationship.create(from_user=zaizee, to_user=charlie)
+
+        with self.assertQueryCount(2):
+            users = User.select().order_by(User.id)
+            relationships = Relationship.select()
+
+            import ipdb; ipdb.set_trace()
+            query = prefetch(users, relationships)
+            results = [row for row in query]
+            self.assertEqual(len(results), 3)
+
+            charlie, huey, zaizee = results
+            import ipdb; ipdb.set_trace()
+
 
 class TestAggregateRows(BaseTestPrefetch):
     def test_aggregate_users(self):
