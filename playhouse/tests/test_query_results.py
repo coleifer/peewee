@@ -1158,20 +1158,28 @@ class TestPrefetch(BaseTestPrefetch):
             ('u5', [], []),
         ])
 
-    def test_prefetch_multiple_fks(self):
-        with test_db.atomic():
-            Comment.delete().execute()
-            Blog.delete().execute()
-            Relationship.delete().execute()
-            User.delete().execute()
 
+class TestPrefetchMultipleFKs(ModelTestCase):
+    requires = [
+        User,
+        Blog,
+        Relationship,
+    ]
+
+    def create_users(self):
         names = ['charlie', 'huey', 'zaizee']
-        charlie, huey, zaizee = [
-            User.create(username=username) for username in names]
+        return [User.create(username=username) for username in names]
+
+    def create_relationships(self, charlie, huey, zaizee):
         r1 = Relationship.create(from_user=charlie, to_user=huey)
         r2 = Relationship.create(from_user=charlie, to_user=zaizee)
         r3 = Relationship.create(from_user=huey, to_user=charlie)
         r4 = Relationship.create(from_user=zaizee, to_user=charlie)
+        return r1, r2, r3, r4
+
+    def test_multiple_fks(self):
+        charlie, huey, zaizee = self.create_users()
+        r1, r2, r3, r4 = self.create_relationships(charlie, huey, zaizee)
 
         def assertRelationships(attr, values):
             for relationship, value in zip(attr, values):
@@ -1203,6 +1211,27 @@ class TestPrefetch(BaseTestPrefetch):
                 {'id': r4.id, 'from_user': zaizee.id, 'to_user': charlie.id}])
             assertRelationships(zp.related_to_prefetch, [
                 {'id': r2.id, 'from_user': charlie.id, 'to_user': zaizee.id}])
+
+    def test_prefetch_multiple_fk_reverse(self):
+        charlie, huey, zaizee = self.create_users()
+        r1, r2, r3, r4 = self.create_relationships(charlie, huey, zaizee)
+
+        with self.assertQueryCount(2):
+            relationships = Relationship.select().order_by(Relationship.id)
+            users = User.select()
+
+            query = prefetch(relationships, users)
+            results = [row for row in query]
+            self.assertEqual(len(results), 4)
+
+            expected = (
+                ('charlie', 'huey'),
+                ('charlie', 'zaizee'),
+                ('huey', 'charlie'),
+                ('zaizee', 'charlie'))
+            for (from_user, to_user), relationship in zip(expected, results):
+                self.assertEqual(relationship.from_user.username, from_user)
+                self.assertEqual(relationship.to_user.username, to_user)
 
 
 class TestAggregateRows(BaseTestPrefetch):
