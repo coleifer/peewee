@@ -1159,8 +1159,11 @@ class TestPrefetch(BaseTestPrefetch):
         ])
 
     def test_prefetch_multiple_fks(self):
-        User.delete().execute()
-        Relationship.delete().execute()
+        with test_db.atomic():
+            Comment.delete().execute()
+            Blog.delete().execute()
+            Relationship.delete().execute()
+            User.delete().execute()
 
         names = ['charlie', 'huey', 'zaizee']
         charlie, huey, zaizee = [
