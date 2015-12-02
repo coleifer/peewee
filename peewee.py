@@ -4697,7 +4697,7 @@ class PrefetchResult(__prefetched):
             else:
                 rel_models = [field.rel_model for field in fields]
                 foreign_key_attrs = [field.name for field in fields]
-            field_to_name = zip(fields, foreign_key_attrs)
+            field_to_name = list(zip(fields, foreign_key_attrs))
         model = query.model_class
         return super(PrefetchResult, cls).__new__(
             cls, query, fields, backref, rel_models, field_to_name, model)
