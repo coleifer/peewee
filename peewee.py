@@ -4670,15 +4670,17 @@ def prefetch_add_subquery(sq, subqueries):
         if fks:
             cleaned = clean_prefetch_subquery(last_query)
             expr = reduce(operator.or_, [
-                subquery.where(fk << cleaned.select(pk))
+                (fk << cleaned.select(pk))
                 for (fk, pk) in zip(fks, pks)])
-            fixed_queries.append(PrefetchResult(expr, fks, False))
+            subquery = subquery.where(expr)
+            fixed_queries.append(PrefetchResult(subquery, fks, False))
         elif backrefs:
             cleaned = clean_prefetch_subquery(last_query)
             expr = reduce(operator.or_, [
-                subquery.where(backref.to_field << cleaned.select(backref))
+                (backref.to_field << cleaned.select(backref))
                 for backref in backrefs])
-            fixed_queries.append(PrefetchResult(expr, backrefs, True))
+            subquery = subquery.where(expr)
+            fixed_queries.append(PrefetchResult(subquery, backrefs, True))
 
     return fixed_queries
 
