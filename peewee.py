@@ -4706,12 +4706,14 @@ class PrefetchResult(__prefetched):
         if self.backref:
             for field in self.fields:
                 identifier = instance._data[field.name]
-                if identifier in id_map:
-                    setattr(instance, field.name, id_map[identifier])
+                key = (field, identifier)
+                if key in id_map:
+                    setattr(instance, field.name, id_map[key])
         else:
             for field, attname in self.field_to_name:
                 identifier = instance._data[field.to_field.name]
-                rel_instances = id_map.get(identifier, [])
+                key = (field, identifier)
+                rel_instances = id_map.get(key, [])
                 dest = '%s_prefetch' % field.related_name
                 for inst in rel_instances:
                     setattr(inst, attname, instance)
@@ -4720,11 +4722,12 @@ class PrefetchResult(__prefetched):
     def store_instance(self, instance, id_map):
         for field, attname in self.field_to_name:
             identity = field.to_field.python_value(instance._data[attname])
+            key = (field, identity)
             if self.backref:
-                id_map[identity] = instance
+                id_map[key] = instance
             else:
-                id_map.setdefault(identity, [])
-                id_map[identity].append(instance)
+                id_map.setdefault(key, [])
+                id_map[key].append(instance)
 
 
 def prefetch(sq, *subqueries):

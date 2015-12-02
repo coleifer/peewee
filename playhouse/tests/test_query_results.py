@@ -1165,22 +1165,41 @@ class TestPrefetch(BaseTestPrefetch):
         names = ['charlie', 'huey', 'zaizee']
         charlie, huey, zaizee = [
             User.create(username=username) for username in names]
-        Relationship.create(from_user=charlie, to_user=huey)
-        Relationship.create(from_user=charlie, to_user=zaizee)
-        Relationship.create(from_user=huey, to_user=charlie)
-        Relationship.create(from_user=zaizee, to_user=charlie)
+        r1 = Relationship.create(from_user=charlie, to_user=huey)
+        r2 = Relationship.create(from_user=charlie, to_user=zaizee)
+        r3 = Relationship.create(from_user=huey, to_user=charlie)
+        r4 = Relationship.create(from_user=zaizee, to_user=charlie)
+
+        def assertRelationships(attr, values):
+            for relationship, value in zip(attr, values):
+                self.assertEqual(relationship._data, value)
 
         with self.assertQueryCount(2):
             users = User.select().order_by(User.id)
             relationships = Relationship.select()
 
-            import ipdb; ipdb.set_trace()
             query = prefetch(users, relationships)
             results = [row for row in query]
             self.assertEqual(len(results), 3)
 
-            charlie, huey, zaizee = results
-            import ipdb; ipdb.set_trace()
+            cp, hp, zp = results
+
+            assertRelationships(cp.relationships_prefetch, [
+                {'id': r1.id, 'from_user': charlie.id, 'to_user': huey.id},
+                {'id': r2.id, 'from_user': charlie.id, 'to_user': zaizee.id}])
+            assertRelationships(cp.related_to_prefetch, [
+                {'id': r3.id, 'from_user': huey.id, 'to_user': charlie.id},
+                {'id': r4.id, 'from_user': zaizee.id, 'to_user': charlie.id}])
+
+            assertRelationships(hp.relationships_prefetch, [
+                {'id': r3.id, 'from_user': huey.id, 'to_user': charlie.id}])
+            assertRelationships(hp.related_to_prefetch, [
+                {'id': r1.id, 'from_user': charlie.id, 'to_user': huey.id}])
+
+            assertRelationships(zp.relationships_prefetch, [
+                {'id': r4.id, 'from_user': zaizee.id, 'to_user': charlie.id}])
+            assertRelationships(zp.related_to_prefetch, [
+                {'id': r2.id, 'from_user': charlie.id, 'to_user': zaizee.id}])
 
 
 class TestAggregateRows(BaseTestPrefetch):
