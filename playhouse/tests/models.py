@@ -352,6 +352,17 @@ class NoPKModel(TestModel):
     class Meta:
         primary_key = False
 
+class TestingID(TestModel):
+    uniq = UUIDField()
+
+class UUIDData(TestModel):
+    id = UUIDField(primary_key=True)
+    data = CharField()
+
+class UUIDRelatedModel(TestModel):
+    data = ForeignKeyField(UUIDData, null=True, related_name='related_models')
+    value = IntegerField(default=0)
+
 
 MODELS = [
     User,
@@ -405,4 +416,7 @@ MODELS = [
     SpecialComment,
     EmptyModel,
     NoPKModel,
+    TestingID,
+    UUIDData,
+    UUIDRelatedModel,
 ]

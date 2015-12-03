@@ -12,12 +12,12 @@ except ImportError:
     Json = None
 
 from peewee import prefetch
-from peewee import UUIDField
 from playhouse.postgres_ext import *
 from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
 from playhouse.tests.base import PeeweeTestCase
 from playhouse.tests.base import skip_if
+from playhouse.tests.models import TestingID
 
 
 class TestPostgresqlExtDatabase(PostgresqlExtDatabase):
@@ -61,17 +61,6 @@ try:
 except:
     BJson = None
 
-class TestingID(BaseModel):
-    uniq = UUIDField()
-
-class UUIDData(BaseModel):
-    id = UUIDField(primary_key=True)
-    data = CharField()
-
-class UUIDRelatedModel(BaseModel):
-    data = ForeignKeyField(UUIDData, null=True, related_name='related_models')
-    value = IntegerField(default=0)
-
 class TZModel(BaseModel):
     dt = DateTimeTZField()
 
@@ -107,8 +96,6 @@ class Post(BaseModel):
 MODELS = [
     Testing,
     TestingID,
-    UUIDData,
-    UUIDRelatedModel,
     ArrayModel,
     FTSModel,
 ]
@@ -144,66 +131,6 @@ class TestCast(ModelTestCase):
                  .select(User.username.cast('float').alias('u_f'))
                  .order_by(SQL('u_f')))
         self.assertEqual([user.u_f for user in query], [.01, 1.2345, 100.])
-
-
-class TestUUIDField(BasePostgresqlExtTestCase):
-    def test_uuid(self):
-        uuid_str = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
-        uuid_obj = uuid.UUID(uuid_str)
-
-        t1 = TestingID.create(uniq=uuid_obj)
-        t1_db = TestingID.get(TestingID.uniq == uuid_str)
-        self.assertEqual(t1, t1_db)
-
-        t2 = TestingID.get(TestingID.uniq == uuid_obj)
-        self.assertEqual(t1, t2)
-
-    def test_uuid_foreign_keys(self):
-        data_a = UUIDData.create(id=uuid.uuid4(), data='a')
-        data_b = UUIDData.create(id=uuid.uuid4(), data='b')
-
-        rel_a1 = UUIDRelatedModel.create(data=data_a, value=1)
-        rel_a2 = UUIDRelatedModel.create(data=data_a, value=2)
-        rel_none = UUIDRelatedModel.create(data=None, value=3)
-
-        db_a = UUIDData.get(UUIDData.id == data_a.id)
-        self.assertEqual(db_a.id, data_a.id)
-        self.assertEqual(db_a.data, 'a')
-
-        values = [rm.value
-                  for rm in db_a.related_models.order_by(UUIDRelatedModel.id)]
-        self.assertEqual(values, [1, 2])
-
-        rnone = UUIDRelatedModel.get(UUIDRelatedModel.data >> None)
-        self.assertEqual(rnone.value, 3)
-
-        ra = (UUIDRelatedModel
-              .select()
-              .where(UUIDRelatedModel.data == data_a)
-              .order_by(UUIDRelatedModel.value.desc()))
-        self.assertEqual([r.value for r in ra], [2, 1])
-
-    def test_prefetch_regression(self):
-        a = UUIDData.create(id=uuid.uuid4(), data='a')
-        b = UUIDData.create(id=uuid.uuid4(), data='b')
-        for i in range(5):
-            for u in [a, b]:
-                UUIDRelatedModel.create(data=u, value=i)
-
-        with self.assertQueryCount(2):
-            query = prefetch(
-                UUIDData.select().order_by(UUIDData.data),
-                UUIDRelatedModel.select().where(UUIDRelatedModel.value < 3))
-
-            accum = []
-            for item in query:
-                accum.append((item.data, [
-                    rel.value for rel in item.related_models_prefetch]))
-
-            self.assertEqual(accum, [
-                ('a', [0, 1, 2]),
-                ('b', [0, 1, 2]),
-            ])
 
 
 class TestTZField(BasePostgresqlExtTestCase):

@@ -3490,6 +3490,9 @@ class Database(object):
         return SQL('DEFAULT VALUES')
 
 class SqliteDatabase(Database):
+    field_overrides = {
+        'uuid': 'TEXT',
+    }
     foreign_keys = False
     insert_many = sqlite3 and sqlite3.sqlite_version_info >= (3, 7, 11, 0)
     limit_max = -1

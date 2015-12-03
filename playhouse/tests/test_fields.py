@@ -1,6 +1,7 @@
 import datetime
 import decimal
 import sys
+import uuid
 
 from peewee import MySQLDatabase
 from peewee import Param
@@ -9,6 +10,7 @@ from playhouse.tests.base import binary_types
 from playhouse.tests.base import database_class
 from playhouse.tests.base import ModelTestCase
 from playhouse.tests.base import PeeweeTestCase
+from playhouse.tests.base import skip_if
 from playhouse.tests.base import skip_test_if
 from playhouse.tests.base import skip_test_unless
 from playhouse.tests.base import test_db
@@ -722,3 +724,70 @@ class TestServerDefaults(ModelTestCase):
 
         self.assertEqual(sd2_db.name, 'foo')
         self.assertEqual(sd2_db.timestamp, datetime.datetime(2015, 1, 2, 3, 4))
+
+
+@skip_if(lambda: isinstance(test_db, MySQLDatabase))
+class TestUUIDField(ModelTestCase):
+    requires = [
+        TestingID,
+        UUIDData,
+        UUIDRelatedModel,
+    ]
+
+    def test_uuid(self):
+        uuid_str = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
+        uuid_obj = uuid.UUID(uuid_str)
+
+        t1 = TestingID.create(uniq=uuid_obj)
+        t1_db = TestingID.get(TestingID.uniq == uuid_str)
+        self.assertEqual(t1, t1_db)
+
+        t2 = TestingID.get(TestingID.uniq == uuid_obj)
+        self.assertEqual(t1, t2)
+
+    def test_uuid_foreign_keys(self):
+        data_a = UUIDData.create(id=uuid.uuid4(), data='a')
+        data_b = UUIDData.create(id=uuid.uuid4(), data='b')
+
+        rel_a1 = UUIDRelatedModel.create(data=data_a, value=1)
+        rel_a2 = UUIDRelatedModel.create(data=data_a, value=2)
+        rel_none = UUIDRelatedModel.create(data=None, value=3)
+
+        db_a = UUIDData.get(UUIDData.id == data_a.id)
+        self.assertEqual(db_a.id, data_a.id)
+        self.assertEqual(db_a.data, 'a')
+
+        values = [rm.value
+                  for rm in db_a.related_models.order_by(UUIDRelatedModel.id)]
+        self.assertEqual(values, [1, 2])
+
+        rnone = UUIDRelatedModel.get(UUIDRelatedModel.data >> None)
+        self.assertEqual(rnone.value, 3)
+
+        ra = (UUIDRelatedModel
+              .select()
+              .where(UUIDRelatedModel.data == data_a)
+              .order_by(UUIDRelatedModel.value.desc()))
+        self.assertEqual([r.value for r in ra], [2, 1])
+
+    def test_prefetch_regression(self):
+        a = UUIDData.create(id=uuid.uuid4(), data='a')
+        b = UUIDData.create(id=uuid.uuid4(), data='b')
+        for i in range(5):
+            for u in [a, b]:
+                UUIDRelatedModel.create(data=u, value=i)
+
+        with self.assertQueryCount(2):
+            query = prefetch(
+                UUIDData.select().order_by(UUIDData.data),
+                UUIDRelatedModel.select().where(UUIDRelatedModel.value < 3))
+
+            accum = []
+            for item in query:
+                accum.append((item.data, [
+                    rel.value for rel in item.related_models_prefetch]))
+
+            self.assertEqual(accum, [
+                ('a', [0, 1, 2]),
+                ('b', [0, 1, 2]),
+            ])
