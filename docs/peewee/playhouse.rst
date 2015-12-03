@@ -3618,6 +3618,20 @@ This module contains a helper function to generate a database connection from a 
 
     If you are using a custom database class, you can use the ``parse()`` function to extract information from a URL which can then be passed in to your database object.
 
+.. py:function:: register_database(db_class, *names)
+
+    :param db_class: A subclass of :py:class:`Database`.
+    :param names: A list of names to use as the scheme in the URL, e.g. 'sqlite' or 'firebird'
+
+    Register additional database class under the specified names. This function can be used to extend the ``connect()`` function to support additional schemes. Suppose you have a custom database class for ``Firebird`` named ``FirebirdDatabase``.
+
+    .. code-block:: python
+
+        from playhouse.db_url import connect, register_database
+
+        register_database(FirebirdDatabase, 'firebird')
+        db = connect('firebird://my-firebird-db')
+
 .. _csv_utils:
 
 CSV Utils
