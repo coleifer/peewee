@@ -6,41 +6,24 @@ except ImportError:
 from peewee import *
 from playhouse.pool import PooledMySQLDatabase
 from playhouse.pool import PooledPostgresqlDatabase
-try:
-    from playhouse.pool import PooledPostgresqlExtDatabase
-except ImportError:
-    PooledPostgresqlExtDatabase = None
 from playhouse.sqlite_ext import SqliteExtDatabase
-try:
-    from playhouse.apsw_ext import APSWDatabase
-except ImportError:
-    APSWDatabase = None
-try:
-    from playhouse.berkeleydb import BerkeleyDatabase
-except ImportError:
-    BerkeleyDatabase = None
-try:
-    from playhouse.postgres_ext import PostgresqlExtDatabase
-except ImportError:
-    PostgresqlExtDatabase = None
 
 
 schemes = {
-    'apsw': APSWDatabase,
-    'berkeleydb': BerkeleyDatabase,
     'mysql': MySQLDatabase,
     'mysql+pool': PooledMySQLDatabase,
     'postgres': PostgresqlDatabase,
     'postgresql': PostgresqlDatabase,
-    'postgresext': PostgresqlExtDatabase,
-    'postgresqlext': PostgresqlExtDatabase,
     'postgres+pool': PooledPostgresqlDatabase,
     'postgresql+pool': PooledPostgresqlDatabase,
-    'postgresext+pool': PooledPostgresqlExtDatabase,
-    'postgresqlext+pool': PooledPostgresqlExtDatabase,
     'sqlite': SqliteDatabase,
     'sqliteext': SqliteExtDatabase,
 }
+
+def register_database(db_class, *names):
+    global schemes
+    for name in names:
+        schemes[name] = db_class
 
 def parseresult_to_dict(parsed):
     connect_kwargs = {'database': parsed.path[1:]}
@@ -80,3 +63,35 @@ def connect(url, **connect_params):
                                parsed.scheme)
 
     return database_class(**connect_kwargs)
+
+# Conditionally register additional databases.
+try:
+    from playhouse.pool import PooledPostgresqlExtDatabase
+except ImportError:
+    pass
+else:
+    register_database(
+        PooledPostgresqlExtDatabase,
+        'postgresext+pool',
+        'postgresqlext+pool')
+
+try:
+    from playhouse.apsw_ext import APSWDatabase
+except ImportError:
+    pass
+else:
+    register_database(APSWDatabase, 'apsw')
+
+try:
+    from playhouse.berkeleydb import BerkeleyDatabase
+except ImportError:
+    pass
+else:
+    register_database(BerkeleyDatabase, 'berkeleydb')
+
+try:
+    from playhouse.postgres_ext import PostgresqlExtDatabase
+except ImportError:
+    pass
+else:
+    register_database(PostgresqlExtDatabase, 'postgresext', 'postgresqlext')
