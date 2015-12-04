@@ -5,6 +5,17 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.7.4
+
+This is another small release which adds code to automatically build the SQLite C extension if `libsqlite` is available. The release also includes:
+
+* Support for `UUIDField` with SQLite.
+* Support for registering additional database classes with the `db_url` module via `register_database`.
+* `prefetch()` supports fetching multiple foreign-keys to the same model class.
+* Added method to validate FTS5 search queries.
+
+[View commits](https://github.com/coleifer/peewee/compare/2.7.3...2.7.4)
+
 ## 2.7.3
 
 Small release which includes some changes to the BM25 sorting algorithm and the addition of a [`JSONField`](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#JSONField) for use with the new [JSON1 extension](http://sqlite.org/json1.html).
