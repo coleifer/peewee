@@ -142,7 +142,7 @@ following:
     was not found and may not be installed correctly. Check the :ref:`installation`
     document for instructions on installing peewee.
 
-Every model has a :py:meth:`~Model.create_table` classmethod which runs a SQL *CREATE TABLE* statement in the database. This method will create the table, including all columns, foreign-key constaints, indexes, and sequences. Usually this is something you'll only do once, whenever a new model is added.
+Every model has a :py:meth:`~Model.create_table` classmethod which runs a SQL *CREATE TABLE* statement in the database. This method will create the table, including all columns, foreign-key constraints, indexes, and sequences. Usually this is something you'll only do once, whenever a new model is added.
 
 Peewee provides a helper method :py:meth:`Database.create_tables` which will resolve inter-model dependencies and call :py:meth:`~Model.create_table` on each model.
 
