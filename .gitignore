@@ -8,3 +8,4 @@ playhouse/speedups.c
 playhouse/_speedups.so
 playhouse/tests/peewee_test.db
 .idea/
+MANIFEST
