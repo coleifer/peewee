@@ -19,6 +19,7 @@ from playhouse.tests.base import skip_unless
 # sqlite_busy_timeout to 100ms so when we test locking it doesn't take forever
 ext_db = database_initializer.get_database(
     'sqlite',
+    c_extensions=False,
     db_class=SqliteExtDatabase,
     timeout=0.1)
 
@@ -89,7 +90,7 @@ class FTSPost(Post, FTSModel):
     docid = DocIDField()
 
     class Meta:
-        options = {
+        extension_options = {
             'content': Post,
             'tokenize': 'porter'}
 
@@ -100,7 +101,7 @@ class FTSDoc(FTSModel):
 
     class Meta:
         database = ext_db
-        options = {'tokenize': 'porter'}
+        extension_options = {'tokenize': 'porter'}
 
 
 class ManagedDoc(FTSModel):
@@ -108,7 +109,7 @@ class ManagedDoc(FTSModel):
 
     class Meta:
         database = ext_db
-        options = {'tokenize': 'porter', 'content': Post.message}
+        extension_options = {'tokenize': 'porter', 'content': Post.message}
 
 
 class MultiColumn(FTSModel):
@@ -119,7 +120,7 @@ class MultiColumn(FTSModel):
 
     class Meta:
         database = ext_db
-        options = {'tokenize': 'porter'}
+        extension_options = {'tokenize': 'porter'}
 
 
 class FTS5Test(FTS5Model):
@@ -143,10 +144,10 @@ class RowIDModel(BaseExtModel):
 
 
 class TestVirtualModel(VirtualModel):
-    _extension = 'test_ext'
     class Meta:
         database = ext_db
-        options = {
+        extension_module = 'test_ext'
+        extension_options = {
             'foo': 'bar',
             'baze': 'nugget'}
         primary_key = False
@@ -812,11 +813,11 @@ class TestTransitiveClosure(PeeweeTestCase):
             parent = ForeignKeyField('self', null=True)
 
         Closure = ClosureTable(Category)
-        self.assertEqual(Closure._extension, 'transitive_closure')
+        self.assertEqual(Closure._meta.extension_module, 'transitive_closure')
         self.assertEqual(Closure._meta.columns, {})
         self.assertEqual(Closure._meta.fields, {})
         self.assertFalse(Closure._meta.primary_key)
-        self.assertEqual(Closure._meta.options, {
+        self.assertEqual(Closure._meta.extension_options, {
             'idcolumn': 'id',
             'parentcolumn': 'parent_id',
             'tablename': 'category',
@@ -830,7 +831,7 @@ class TestTransitiveClosure(PeeweeTestCase):
         self.assertEqual(Closure._meta.columns, {})
         self.assertEqual(Closure._meta.fields, {})
         self.assertFalse(Closure._meta.primary_key)
-        self.assertEqual(Closure._meta.options, {
+        self.assertEqual(Closure._meta.extension_options, {
             'idcolumn': 'pk',
             'parentcolumn': 'ref_id',
             'tablename': 'alt',
@@ -864,7 +865,7 @@ class TestFTS5Extension(ModelTestCase):
 
             class Meta:
                 database = ext_db
-                options = {
+                extension_options = {
                     'prefix': [2, 3],
                     'tokenize': 'porter unicode61',
                     'content': Post,

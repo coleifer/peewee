@@ -641,9 +641,11 @@ class FTS5Model(BaseFTSModel):
             class Meta:
                 database = cls._meta.database
                 db_table = table_name or cls._meta.db_table + '_v'
+                extension_module = fn.fts5vocab(
+                    cls.as_entity(),
+                    SQL(table_type))
 
             attrs = {
-                '_extension': fn.fts5vocab(cls.as_entity(), SQL(table_type)),
                 'term': BareField(),
                 'doc': IntegerField(),
                 'cnt': IntegerField(),
@@ -749,7 +751,7 @@ class SqliteQueryCompiler(QueryCompiler):
                 clause = Clause(*parts)
             else:
                 # The extension name is a simple string.
-                clause.nodes.insert(2, SQL('USING %s' % model_class._extension))
+                clause.nodes.insert(2, SQL('USING %s' % extension))
         else:
             statement = 'CREATE TABLE'
 
@@ -766,7 +768,7 @@ class SqliteQueryCompiler(QueryCompiler):
                     # Special hack here for FTS5. We want to include the
                     # fully-qualified column entity in most cases, but for
                     # FTS5 we only want the string column name.
-                    v = v.as_entity(model_class._extension != 'fts5')
+                    v = v.as_entity(extension != 'fts5')
                 elif inspect.isclass(v) and issubclass(v, Model):
                     # The option points to a table name.
                     v = v.as_entity()
