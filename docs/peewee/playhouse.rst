@@ -58,13 +58,12 @@ features:
 sqlite_ext API notes
 ^^^^^^^^^^^^^^^^^^^^
 
-.. py:class:: SqliteExtDatabase(database, pragmas=(), c_extensions=False, **kwargs)
+.. py:class:: SqliteExtDatabase(database, pragmas=(), c_extensions=C_EXTENSION, **kwargs)
 
     :param pragmas: A list of 2-tuples containing ``PRAGMA`` settings to configure on a per-connection basis.
-    :param bool c_extensions: Boolean flag indicating whether to load the SQLite C extension (``_sqlite_ext.so`` on linux systems). **Requires Cython**.
+    :param bool c_extensions: Boolean flag indicating whether to load the SQLite C extension (``_sqlite_ext.so`` on linux systems). **Requires Cython**. The default value is determined at module-load time based on whether a file named ``"_sqlite_ext*.{so,dylib}"`` is found in the directory alongside the ``sqlite_ext.py`` module. The presence of this shared library indicates that the C extension is present, and will be used by default.
 
-    Subclass of the :py:class:`SqliteDatabase` that provides some advanced
-    features only offered by Sqlite.
+    Subclass of the :py:class:`SqliteDatabase` that provides some advanced features only offered by Sqlite.
 
     * Register custom aggregates, collations and functions
     * Support for SQLite virtual tables and C extensions
@@ -201,22 +200,35 @@ sqlite_ext API notes
     Subclass of :py:class:`Model` that signifies the model operates using a
     virtual table provided by a sqlite extension.
 
-    .. py:attribute:: _extension = 'name of sqlite extension'
-
-    SQLite virtual tables often support configuration via arbitrary key/value options which are included in the ``CREATE TABLE`` statement. To configure a virtual table, you can specify options like this:
+    Creating a virtual model is easy, simply subclass ``VirtualModel`` and specify the extension module and any options:
 
     .. code-block:: python
 
-        class SearchIndex(FTSModel):
-            content = SearchField()
-            metadata = SearchField()
-
+        class MyVirtualModel(VirtualModel):
             class Meta:
-                database = my_db
-                options = {
-                    'prefix': [2, 3],
-                    'tokenize': 'porter',
-                }
+                database = db
+                extension_module = 'nextchar'
+                extension_options = {}
+
+    .. py:attribute:: Meta.extension_module = 'name of sqlite extension'
+
+    .. py:attribute:: Meta.extension_options = {'tokenize': 'porter', etc}
+
+        SQLite virtual tables often support configuration via arbitrary key/value options which are included in the ``CREATE TABLE`` statement. To configure a virtual table, you can specify options like this:
+
+        .. code-block:: python
+
+            class SearchIndex(FTSModel):
+                content = SearchField()
+                metadata = SearchField()
+
+                class Meta:
+                    database = my_db
+                    extension_options = {
+                        'prefix': [2, 3],
+                        'tokenize': 'porter',
+                    }
+
 
 .. _sqlite_fts:
 
@@ -254,7 +266,7 @@ sqlite_ext API notes
             class Meta:
                 database = db
                 # Use the porter stemming algorithm to tokenize content.
-                options = {'tokenize': 'porter'}
+                extension_options = {'tokenize': 'porter'}
 
     To store a document in the document index, we will ``INSERT`` a row into the ``DocumentIndex`` table, manually setting the ``docid``:
 
@@ -351,7 +363,7 @@ sqlite_ext API notes
 
             class Meta:
                 database = db
-                options = {'content': Blog.content}
+                extension_options = {'content': Blog.content}
 
         db.create_tables([Blog, BlogIndex])
 
