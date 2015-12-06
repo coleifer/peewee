@@ -31,6 +31,7 @@ best_docs = (Document
 # or use the shortcut method.
 best_docs = Document.match('some phrase')
 """
+import glob
 import inspect
 import math
 import os
@@ -60,13 +61,48 @@ if sys.version_info[0] == 3:
     basestring = str
 
 CUR_DIR = os.path.realpath(os.path.dirname(__file__))
+C_EXTENSION = bool(glob.glob(os.path.join(CUR_DIR, '_sqlite_ext*.so')) or
+                   glob.glob(os.path.join(CUR_DIR, '_sqlite_ext*.dylib')))
 FTS_MATCHINFO_FORMAT = 'pcnalx'
 FTS_MATCHINFO_FORMAT_SIMPLE = 'pcx'
 FTS_VER = sqlite3.sqlite_version_info[:3] >= (3, 7, 4) and 'FTS4' or 'FTS3'
 FTS5_MIN_VERSION = (3, 9, 0)
 
 
+class RowIDField(PrimaryKeyField):
+    """
+    Field used to access hidden primary key on FTS5 or any other SQLite
+    table that does not have a separately-defined primary key.
+    """
+    def add_to_class(self, model_class, name):
+        if name != 'rowid':
+            raise ValueError('RowIDField must be named `rowid`.')
+        super(RowIDField, self).add_to_class(model_class, name)
+
+        # The `rowid` field should not ever be declared as part of a DDL
+        # or INSERT statement.
+        model_class._meta.remove_field(name)
+
+
+class DocIDField(PrimaryKeyField):
+    """Field used to access hidden primary key on FTS3/4 tables."""
+    def add_to_class(self, model_class, name):
+        if name != 'docid':
+            raise ValueError('DocIDField must be named `docid`.')
+        super(DocIDField, self).add_to_class(model_class, name)
+
+        # The `docid` field should not ever be declared as part of a DDL
+        # or INSERT statement.
+        model_class._meta.remove_field(name)
+
+
 class PrimaryKeyAutoIncrementField(PrimaryKeyField):
+    """
+    SQLite by default uses MAX(primary key) + 1 to set the ID on a new row.
+    Using the `AUTOINCREMENT` field, the IDs will increase monotonically
+    even if rows are deleted. Use this if you need to guarantee IDs are not
+    re-used in the event of deletion.
+    """
     def __ddl__(self, column_type):
         ddl = super(PrimaryKeyAutoIncrementField, self).__ddl__(column_type)
         return ddl + [SQL('AUTOINCREMENT')]
@@ -154,6 +190,25 @@ class JSONField(TextField):
         return fn.json_tree(self)
 
 
+class SearchField(BareField):
+    """
+    Field class to be used with full-text search extension. Since the FTS
+    extensions do not support any field types besides `TEXT`, and furthermore
+    do not support secondary indexes, using this field will prevent you
+    from mistakenly creating the wrong kind of field on your FTS table.
+    """
+    def __init__(self, unindexed=False, db_column=None, coerce=None):
+        kwargs = {'null': True, 'db_column': db_column, 'coerce': coerce}
+        self._unindexed = unindexed
+        if unindexed:
+            kwargs['constraints'] = [SQL('UNINDEXED')]
+        super(SearchField, self).__init__(**kwargs)
+
+    def clone_base(self, **kwargs):
+        return super(SearchField, self).clone_base(
+            unindexed=self._unindexed, **kwargs)
+
+
 class _VirtualFieldMixin(object):
     """
     Field mixin to support virtual table attributes that may not correspond
@@ -174,102 +229,27 @@ class VirtualCharField(_VirtualFieldMixin, CharField): pass
 class VirtualFloatField(_VirtualFieldMixin, FloatField): pass
 
 
-class RowIDField(_VirtualFieldMixin, PrimaryKeyField):
-    """
-    Field used to access hidden primary key on FTS5 or any other SQLite
-    table that does not have a separately-defined primary key.
-    """
-    def add_to_class(self, model_class, name):
-        if name != 'rowid':
-            raise ValueError('RowIDField must be named `rowid`.')
-        return super(RowIDField, self).add_to_class(model_class, name)
-
-
-class DocIDField(_VirtualFieldMixin, PrimaryKeyField):
-    """Field used to access hidden primary key on FTS3/4 tables."""
-    def add_to_class(self, model_class, name):
-        if name != 'docid':
-            raise ValueError('DocIDField must be named `docid`.')
-        return super(DocIDField, self).add_to_class(model_class, name)
-
-
-class SqliteQueryCompiler(QueryCompiler):
-    """
-    Subclass of QueryCompiler that can be used to construct virtual tables.
-    """
-    def _create_table(self, model_class, safe=False, options=None):
-        clause = super(SqliteQueryCompiler, self)._create_table(
-            model_class, safe=safe)
-
-        if issubclass(model_class, VirtualModel):
-            statement = 'CREATE VIRTUAL TABLE'
-            # If we are using a special extension, need to insert that after
-            # the table name node.
-            extension = model_class._extension
-            if isinstance(extension, Node):
-                # If the `_extension` attribute is a `Node` subclass, then we
-                # assume the VirtualModel will be responsible for defining
-                # not only the extension, but also the columns.
-                parts = clause.nodes[:2] + [SQL('USING'), extension]
-                clause = Clause(*parts)
-            else:
-                # The extension name is a simple string.
-                clause.nodes.insert(2, SQL('USING %s' % model_class._extension))
-        else:
-            statement = 'CREATE TABLE'
-        if safe:
-            statement += ' IF NOT EXISTS'
-        clause.nodes[0] = SQL(statement)  # Overwrite the statement.
-
-        table_options = self.clean_options(model_class, clause, options)
-        if table_options:
-            columns_constraints = clause.nodes[-1]
-            for k, v in sorted(table_options.items()):
-                if isinstance(v, Field):
-                    # Special hack here for FTS5. We want to include the
-                    # fully-qualified column entity in most cases, but for
-                    # FTS5 we only want the string column name.
-                    v = v.as_entity(model_class._extension != 'fts5')
-                elif inspect.isclass(v) and issubclass(v, Model):
-                    # The option points to a table name.
-                    v = v.as_entity()
-                elif isinstance(v, (list, tuple)):
-                    # Lists will be quoted and joined by commas.
-                    v = SQL("'%s'" % ','.join(map(str, v)))
-                elif not isinstance(v, Node):
-                    v = SQL(v)
-                option = Clause(SQL(k), v)
-                option.glue = '='
-                columns_constraints.nodes.append(option)
-
-        return clause
-
-    def clean_options(self, model_class, clause, extra_options):
-        model_options = getattr(model_class._meta, 'options', None)
-        if model_options:
-            options = model_class.clean_options(**model_options)
-        else:
-            options = {}
-        if extra_options:
-            options.update(model_class.clean_options(**extra_options))
-        return options
-
-    def create_table(self, model_class, safe=False, options=None):
-        return self.parse_node(self._create_table(model_class, safe, options))
-
-
 class VirtualModel(Model):
-    """Model class stored using a Sqlite virtual table."""
-    _extension = ''
-
     class Meta:
-        options = {}
+        virtual_table = True
+        extension_module = None
+        extension_options = {}
 
     @classmethod
     def clean_options(cls, **options):
         # Called by the QueryCompiler when generating the virtual table's
         # options clauses.
         return options
+
+    @classmethod
+    def create_table(cls, fail_silently=False, **options):
+        # Modified to support **options, which are passed back to the
+        # query compiler.
+        if fail_silently and cls.table_exists():
+            return
+
+        cls._meta.database.create_table(cls, options=options)
+        cls._create_indexes()
 
 
 class BaseFTSModel(VirtualModel):
@@ -287,25 +267,26 @@ class BaseFTSModel(VirtualModel):
 
 
 class FTSModel(BaseFTSModel):
-    _extension = FTS_VER
+    """
+    VirtualModel class for creating tables that use either the FTS3 or FTS4
+    search extensions. Peewee automatically determines which version of the
+    FTS extension is supported and will use FTS4 if possible.
 
-    # FTS3/4 does not support declared primary keys, but we will use the
+    Note: because FTS5 is significantly different from FTS3 and FTS4, there is
+    a separate model class for FTS5 virtual tables.
+    """
+    # FTS3/4 does not support declared primary keys, but we can use the
     # implicit docid.
     docid = DocIDField()
+
+    class Meta:
+        extension_module = FTS_VER
 
     @classmethod
     def validate_model(cls):
         if cls._meta.primary_key.name != 'docid':
             raise ImproperlyConfigured(
                 'FTSModel classes must use the default `docid` primary key.')
-
-    @classmethod
-    def create_table(cls, fail_silently=False, **options):
-        if fail_silently and cls.table_exists():
-            return
-
-        cls._meta.database.create_table(cls, options=options)
-        cls._create_indexes()
 
     @classmethod
     def _fts_cmd(cls, cmd):
@@ -402,34 +383,12 @@ class FTSModel(BaseFTSModel):
             explicit_ordering)
 
 
-class SearchField(BareField):
-    def __init__(self, unindexed=False, db_column=None, coerce=None):
-        kwargs = {'null': True, 'db_column': db_column, 'coerce': coerce}
-        self._unindexed = unindexed
-        if unindexed:
-            kwargs['constraints'] = [SQL('UNINDEXED')]
-        super(SearchField, self).__init__(**kwargs)
-
-    def clone_base(self, **kwargs):
-        return super(SearchField, self).clone_base(
-            unindexed=self._unindexed, **kwargs)
-
-
 _alphabet = 'abcdefghijklmnopqrstuvwxyz'
 _alphanum = set([
-    '\t',
+    '\t', ' ', ',', '"',
     chr(26),  # Substitution control character.
-    '"',
-    '(',
-    ')',
-    '*',
-    ':',
-    '_',
-    ' ',
-    '+',
-    ',',
-    '{',
-    '}',
+    '(', ')', '{', '}',
+    '*', ':', '_', '+',
 ]) | set('0123456789') | set(_alphabet) | set(_alphabet.upper())
 _invalid_ascii = set([chr(p) for p in range(128) if chr(p) not in _alphanum])
 _quote_re = re.compile('(?:[^\s"]|"(?:\\.|[^"])*")+')
@@ -489,17 +448,19 @@ class FTS5Model(BaseFTSModel):
     * highlight(tbl, col_idx, prefix, suffix)
     * snippet(tbl, col_idx, prefix, suffix, ?, max_tokens)
     """
+    # FTS5 does not support declared primary keys, but we can use the
+    # implicit rowid.
+    rowid = RowIDField()
+
+    class Meta:
+        extension_module = 'fts5'
+
     _error_messages = {
         'field_type': ('Besides the implicit `rowid` column, all columns must '
                        'be instances of SearchField'),
         'index': 'Secondary indexes are not supported for FTS5 models',
         'pk': 'FTS5 models must use the default `rowid` primary key',
     }
-    _extension = 'fts5'
-
-    # FTS5 does not support declared primary keys, but we will use the
-    # implicit rowid.
-    rowid = RowIDField()
 
     @classmethod
     def validate_model(cls):
@@ -536,6 +497,11 @@ class FTS5Model(BaseFTSModel):
 
     @staticmethod
     def validate_query(query):
+        """
+        Simple helper function to indicate whether a search query is a
+        valid FTS5 query. Note: this simply looks at the characters being
+        used, and is not guaranteed to catch all problematic queries.
+        """
         tokens = _quote_re.findall(query)
         for token in tokens:
             if token.startswith('"') and token.endswith('"'):
@@ -702,17 +668,19 @@ def ClosureTable(model_class, foreign_key=None):
                 break
         else:
             raise ValueError('Unable to find self-referential foreign key.')
+
     primary_key = model_class._meta.primary_key
 
     class BaseClosureTable(VirtualModel):
-        _extension = 'transitive_closure'
-
         depth = VirtualIntegerField()
         id = VirtualIntegerField()
         idcolumn = VirtualIntegerField()
         parentcolumn = VirtualIntegerField()
         root = VirtualIntegerField()
         tablename = VirtualCharField()
+
+        class Meta:
+            extension_module = 'transitive_closure'
 
         @classmethod
         def descendants(cls, node, depth=None, include_node=False):
@@ -748,7 +716,7 @@ def ClosureTable(model_class, foreign_key=None):
 
     class Meta:
         database = model_class._meta.database
-        options = {
+        extension_options = {
             'tablename': model_class._meta.db_table,
             'idcolumn': model_class._meta.primary_key.db_column,
             'parentcolumn': foreign_key.db_column}
@@ -756,6 +724,75 @@ def ClosureTable(model_class, foreign_key=None):
 
     name = '%sClosure' % model_class.__name__
     return type(name, (BaseClosureTable,), {'Meta': Meta})
+
+
+class SqliteQueryCompiler(QueryCompiler):
+    """
+    Subclass of QueryCompiler that can be used to construct virtual tables.
+    """
+    def _create_table(self, model_class, safe=False, options=None):
+        clause = super(SqliteQueryCompiler, self)._create_table(
+            model_class, safe=safe)
+
+        if issubclass(model_class, VirtualModel):
+            statement = 'CREATE VIRTUAL TABLE'
+
+            # If we are using a special extension, need to insert that after
+            # the table name node.
+            extension = model_class._meta.extension_module
+
+            if isinstance(extension, Node):
+                # If the `extension_module` attribute is a `Node` subclass,
+                # then we assume the VirtualModel will be responsible for
+                # defining not only the extension, but also the columns.
+                parts = clause.nodes[:2] + [SQL('USING'), extension]
+                clause = Clause(*parts)
+            else:
+                # The extension name is a simple string.
+                clause.nodes.insert(2, SQL('USING %s' % model_class._extension))
+        else:
+            statement = 'CREATE TABLE'
+
+        if safe:
+            statement += ' IF NOT EXISTS'
+
+        clause.nodes[0] = SQL(statement)  # Overwrite the statement.
+
+        table_options = self.clean_options(model_class, clause, options)
+        if table_options:
+            columns_constraints = clause.nodes[-1]
+            for k, v in sorted(table_options.items()):
+                if isinstance(v, Field):
+                    # Special hack here for FTS5. We want to include the
+                    # fully-qualified column entity in most cases, but for
+                    # FTS5 we only want the string column name.
+                    v = v.as_entity(model_class._extension != 'fts5')
+                elif inspect.isclass(v) and issubclass(v, Model):
+                    # The option points to a table name.
+                    v = v.as_entity()
+                elif isinstance(v, (list, tuple)):
+                    # Lists will be quoted and joined by commas.
+                    v = SQL("'%s'" % ','.join(map(str, v)))
+                elif not isinstance(v, Node):
+                    v = SQL(v)
+                option = Clause(SQL(k), v)
+                option.glue = '='
+                columns_constraints.nodes.append(option)
+
+        return clause
+
+    def clean_options(self, model_class, clause, extra_options):
+        model_options = getattr(model_class._meta, 'extension_options', None)
+        if model_options:
+            options = model_class.clean_options(**model_options)
+        else:
+            options = {}
+        if extra_options:
+            options.update(model_class.clean_options(**extra_options))
+        return options
+
+    def create_table(self, model_class, safe=False, options=None):
+        return self.parse_node(self._create_table(model_class, safe, options))
 
 
 @Node.extend(clone=False)
@@ -775,9 +812,8 @@ class SqliteExtDatabase(SqliteDatabase):
     """
     compiler_class = SqliteQueryCompiler
 
-    def __init__(self, *args, **kwargs):
-        c_extensions = bool(kwargs.pop('c_extensions', None))
-        super(SqliteExtDatabase, self).__init__(*args, **kwargs)
+    def __init__(self, database, c_extensions=C_EXTENSION, *args, **kwargs):
+        super(SqliteExtDatabase, self).__init__(database, *args, **kwargs)
         self._aggregates = {}
         self._collations = {}
         self._functions = {}
