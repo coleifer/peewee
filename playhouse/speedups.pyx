@@ -1,3 +1,6 @@
+from cpython cimport datetime
+
+
 cdef basestring _strip_parens(basestring s):
     if not s or s[0] != '(':
         return s
@@ -32,3 +35,30 @@ cdef basestring _strip_parens(basestring s):
 
 def strip_parens(basestring s):
     return _strip_parens(s)
+
+
+cdef tuple SQLITE_DATETIME_FORMATS = (
+    '%Y-%m-%d %H:%M:%S',
+    '%Y-%m-%d %H:%M:%S.%f',
+    '%Y-%m-%d',
+    '%H:%M:%S',
+    '%H:%M:%S.%f',
+    '%H:%M')
+
+cpdef datetime.datetime format_date_time(date_value, formats, post_fn=None):
+    cdef:
+        datetime.datetime date_obj
+        tuple formats_t = tuple(formats)
+
+    for date_format in formats_t:
+        try:
+            date_obj = datetime.datetime.strptime(date_value, date_format)
+        except ValueError:
+            pass
+        else:
+            if post_fn:
+                return post_fn(date_obj)
+            return date_obj
+
+cpdef datetime.datetime format_date_time_sqlite(date_value):
+    return format_date_time(date_value, SQLITE_DATETIME_FORMATS)

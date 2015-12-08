@@ -167,8 +167,17 @@ except ImportError:
         mysql = None
 
 try:
-    from playhouse._speedups import strip_parens
+    from playhouse._speedups import format_date_time, strip_parens
 except ImportError:
+    def format_date_time(value, formats, post_process=None):
+        post_process = post_process or (lambda x: x)
+        for fmt in formats:
+            try:
+                return post_process(datetime.datetime.strptime(value, fmt))
+            except ValueError:
+                pass
+        return value
+
     def strip_parens(s):
         # Quick sanity check.
         if not s or s[0] != '(':
@@ -1033,15 +1042,6 @@ class UUIDField(Field):
 
     def python_value(self, value):
         return None if value is None else uuid.UUID(value)
-
-def format_date_time(value, formats, post_process=None):
-    post_process = post_process or (lambda x: x)
-    for fmt in formats:
-        try:
-            return post_process(datetime.datetime.strptime(value, fmt))
-        except ValueError:
-            pass
-    return value
 
 def _date_part(date_part):
     def dec(self):
