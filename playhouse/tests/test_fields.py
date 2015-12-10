@@ -726,7 +726,6 @@ class TestServerDefaults(ModelTestCase):
         self.assertEqual(sd2_db.timestamp, datetime.datetime(2015, 1, 2, 3, 4))
 
 
-@skip_if(lambda: isinstance(test_db, MySQLDatabase))
 class TestUUIDField(ModelTestCase):
     requires = [
         TestingID,
@@ -744,6 +743,29 @@ class TestUUIDField(ModelTestCase):
 
         t2 = TestingID.get(TestingID.uniq == uuid_obj)
         self.assertEqual(t1, t2)
+
+    def test_uuid_casting(self):
+        uuid_obj = uuid.UUID('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11')
+        uuid_str = uuid_obj.hex
+        uuid_str_short = uuid_str.replace("-", "")
+
+        t1 = TestingID.create(uniq=uuid_obj)
+        t1_db = TestingID.get(TestingID.uniq == uuid_str)
+        self.assertEqual(t1_db.uniq, uuid_obj)
+        t1_db = TestingID.get(TestingID.uniq == uuid_str_short)
+        self.assertEqual(t1_db.uniq, uuid_obj)
+
+        t1 = TestingID.create(uniq=uuid_str)
+        t1_db = TestingID.get(TestingID.uniq == uuid_str)
+        self.assertEqual(t1_db.uniq, uuid_obj)
+        t1_db = TestingID.get(TestingID.uniq == uuid_str_short)
+        self.assertEqual(t1_db.uniq, uuid_obj)
+
+        t1 = TestingID.create(uniq=uuid_str_short)
+        t1_db = TestingID.get(TestingID.uniq == uuid_str)
+        self.assertEqual(t1_db.uniq, uuid_obj)
+        t1_db = TestingID.get(TestingID.uniq == uuid_str_short)
+        self.assertEqual(t1_db.uniq, uuid_obj)
 
     def test_uuid_foreign_keys(self):
         data_a = UUIDData.create(id=uuid.uuid4(), data='a')
