@@ -1038,7 +1038,12 @@ class UUIDField(Field):
     db_field = 'uuid'
 
     def db_value(self, value):
-        return None if value is None else str(value)
+        if isinstance(value, uuid.UUID):
+            return value.hex
+        try:
+            return uuid.UUID(value).hex
+        except:
+            return value
 
     def python_value(self, value):
         return None if value is None else uuid.UUID(value)
@@ -3751,6 +3756,7 @@ class MySQLDatabase(Database):
         'float': 'FLOAT',
         'primary_key': 'INTEGER AUTO_INCREMENT',
         'text': 'LONGTEXT',
+        'uuid': 'LONGTEXT'
     }
     for_update = True
     interpolation = '%s'
