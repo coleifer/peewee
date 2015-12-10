@@ -45,7 +45,7 @@ cdef tuple SQLITE_DATETIME_FORMATS = (
     '%H:%M:%S.%f',
     '%H:%M')
 
-cpdef datetime.datetime format_date_time(date_value, formats, post_fn=None):
+cpdef format_date_time(date_value, formats, post_fn=None):
     cdef:
         datetime.datetime date_obj
         tuple formats_t = tuple(formats)
@@ -59,6 +59,7 @@ cpdef datetime.datetime format_date_time(date_value, formats, post_fn=None):
             if post_fn:
                 return post_fn(date_obj)
             return date_obj
+    return date_value
 
 cpdef datetime.datetime format_date_time_sqlite(date_value):
     return format_date_time(date_value, SQLITE_DATETIME_FORMATS)

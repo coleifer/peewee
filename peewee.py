@@ -3261,6 +3261,7 @@ class Database(object):
 
     def __init__(self, database, threadlocals=True, autocommit=True,
                  fields=None, ops=None, autorollback=False, **connect_kwargs):
+        self.connect_kwargs = {}
         self.init(database, **connect_kwargs)
 
         if threadlocals:
@@ -3278,7 +3279,7 @@ class Database(object):
     def init(self, database, **connect_kwargs):
         self.deferred = database is None
         self.database = database
-        self.connect_kwargs = connect_kwargs
+        self.connect_kwargs.update(connect_kwargs)
 
     def exception_wrapper(self):
         return ExceptionWrapper(self.exceptions)

@@ -53,7 +53,8 @@ def check_libsqlite():
         compiler.link_executable(
             compiler.compile([filename]),
             binary,
-            libraries=libraries)
+            libraries=libraries,
+            output_dir=tmp_dir)
     except CompileError:
         print('libsqlite3 compile error')
         return False

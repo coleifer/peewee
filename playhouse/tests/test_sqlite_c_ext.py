@@ -35,7 +35,7 @@ class NoteIndex(FTSModel):
 
     class Meta:
         database = db
-        options = {'tokenize': 'porter'}
+        extension_options = {'tokenize': 'porter'}
 
     @classmethod
     def index_note(cls, note):

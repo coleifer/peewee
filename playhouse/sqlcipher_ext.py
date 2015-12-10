@@ -95,6 +95,10 @@ class SqlCipherDatabase(_SqlCipherDatabase, SqliteDatabase):
 
 
 class SqlCipherExtDatabase(_SqlCipherDatabase, SqliteExtDatabase):
+    def __init__(self, *args, **kwargs):
+        kwargs['c_extensions'] = False
+        super(SqlCipherExtDatabase, self).__init__(*args, **kwargs)
+
     def _connect(self, *args, **kwargs):
         conn = super(SqlCipherExtDatabase, self)._connect(*args, **kwargs)
 
