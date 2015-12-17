@@ -186,7 +186,8 @@ class ManyToManyQuery(SelectQuery):
                 value = [value]
             inserts = [{
                 fd.src_fk.name: self._instance.get_id(),
-                fd.dest_fk.name: rel_instance.get_id()}
+                fd.dest_fk.name: rel_instance.get_id()
+                if hasattr(rel_instance, 'get_id') else rel_instance}
                 for rel_instance in value]
             fd.through_model.insert_many(inserts).execute()
 
@@ -203,7 +204,10 @@ class ManyToManyQuery(SelectQuery):
         else:
             if not isinstance(value, (list, tuple)):
                 value = [value]
-            primary_keys = [rel_instance.get_id() for rel_instance in value]
+            primary_keys = [rel_instance.get_id()
+                            if hasattr(rel_instance, 'get_id')
+                            else rel_instance
+                            for rel_instance in value]
             return (fd.through_model
                     .delete()
                     .where(
