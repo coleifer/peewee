@@ -169,6 +169,11 @@ class ManyToManyQuery(SelectQuery):
         query.database = self.database
         return self._clone_attributes(query)
 
+    def _id_list(self, model_or_id_list):
+        if isinstance(model_or_id_list[0], Model):
+            return [obj.get_id() for obj in model_or_id_list]
+        return model_or_id_list
+
     def add(self, value, clear_existing=False):
         if clear_existing:
             self.clear()
@@ -184,10 +189,12 @@ class ManyToManyQuery(SelectQuery):
         else:
             if not isinstance(value, (list, tuple)):
                 value = [value]
+            if not value:
+                return
             inserts = [{
                 fd.src_fk.name: self._instance.get_id(),
-                fd.dest_fk.name: rel_instance.get_id()}
-                for rel_instance in value]
+                fd.dest_fk.name: rel_id}
+                for rel_id in self._id_list(value)]
             fd.through_model.insert_many(inserts).execute()
 
     def remove(self, value):
@@ -203,11 +210,12 @@ class ManyToManyQuery(SelectQuery):
         else:
             if not isinstance(value, (list, tuple)):
                 value = [value]
-            primary_keys = [rel_instance.get_id() for rel_instance in value]
+            if not value:
+                return
             return (fd.through_model
                     .delete()
                     .where(
-                        (fd.dest_fk << primary_keys) &
+                        (fd.dest_fk << self._id_list(value)) &
                         (fd.src_fk == self._instance.get_id()))
                     .execute())
 

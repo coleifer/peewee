@@ -175,6 +175,15 @@ class TestManyToManyField(ModelTestCase):
                 clear_existing=True)
         self.assertUsers(n3.users, ['huey', 'mickey', 'zaizee'])
 
+    def test_add_by_ids(self):
+        charlie = User.get(User.username == 'charlie')
+        n1, n2, n3 = Note.select().order_by(Note.text).limit(3)
+        charlie.notes.add([n1.id, n2.id])
+        self.assertNotes(charlie.notes, [1, 2])
+        self.assertUsers(n1.users, ['charlie'])
+        self.assertUsers(n2.users, ['charlie'])
+        self.assertUsers(n3.users, [])
+
     def test_unique(self):
         n1 = Note.get(Note.text == 'note-1')
         charlie = User.get(User.username == 'charlie')
@@ -215,6 +224,18 @@ class TestManyToManyField(ModelTestCase):
         with self.assertQueryCount(1):
             n5.users.remove(User.select())
         self.assertUsers(n5.users, [])
+
+    def test_remove_by_id(self):
+        self._create_relationship()
+        charlie, huey, mickey, zaizee = User.select().order_by(User.username)
+        n1, n2, n3, n4, n5 = Note.select().order_by(Note.text)
+        charlie.notes.add([n3, n4])
+
+        with self.assertQueryCount(1):
+            charlie.notes.remove([n1.id, n3.id])
+
+        self.assertNotes(charlie.notes, [2, 4])
+        self.assertNotes(huey.notes, [2, 3])
 
     def test_clear(self):
         charlie = User.get(User.username == 'charlie')
