@@ -243,3 +243,19 @@ class TestDateFunctions(BaseTestCase):
 
         self.assertRaises(OperationalError, Q, 'foo')
         self.assertRaises(OperationalError, Q, '')
+
+
+class TestMurmurHash(BaseTestCase):
+    def assertHash(self, s, e):
+        curs = db.execute_sql('select murmurhash(?)', (s,))
+        result = curs.fetchone()[0]
+        self.assertEqual(result, e)
+
+    def test_murmur_hash(self):
+        self.assertHash('testkey', 3599487917)
+        self.assertHash('murmur', 4160318927)
+        self.assertHash('', 0)
+        self.assertHash('this is a test of a longer string', 3556042345)
+        self.assertHash(None, None)
+
+

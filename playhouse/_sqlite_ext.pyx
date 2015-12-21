@@ -2,6 +2,7 @@ import re
 from cpython cimport datetime
 from libc.math cimport log
 from libc.stdlib cimport free, malloc
+from libc.string cimport strlen
 
 
 cdef extern from "Python.h":
@@ -144,32 +145,19 @@ cdef void peewee_date_trunc(sqlite3_context *ctx, int argc,
             len(truncated),
             <sqlite3_destructor_type>-1)
 
-
-cdef dict regex_cache = {}
-cdef int regex_cache_size = 16
-
 cdef void peewee_regexp(sqlite3_context *ctx, int argc,
                         sqlite3_value **argv) with gil:
     cdef int result = 0
-    global regex_cache
-    global regex_cache_size
     regex_str = sqlite3_value_text(argv[0])
     if not regex_str:
         sqlite3_result_int(ctx, 0)
         return
 
-    if regex_str in regex_cache:
-        regex = regex_cache[regex_str]
-    else:
-        try:
-            regex = re.compile(regex_str, re.I)
-        except TypeError as exc:
-            sqlite3_result_error(ctx, <const char *>exc.message, -1)
-            return
-        else:
-            if len(regex_cache) == regex_cache_size:
-                regex_cache.popitem()
-            regex_cache[regex_str] = regex
+    try:
+        regex = re.compile(regex_str, re.I)
+    except TypeError as exc:
+        sqlite3_result_error(ctx, <const char *>exc.message, -1)
+        return
 
     value = sqlite3_value_text(argv[1])
     if value and regex.search(value) is not None:
@@ -284,6 +272,74 @@ cdef void peewee_bm25(sqlite3_context *ctx, int argc,
     free(weights)
 
 
+cdef unsigned int murmurhash2(const char *key, int nlen, unsigned int seed):
+    cdef:
+        unsigned int m = 0x5bd1e995
+        int r = 24
+        unsigned int l = nlen
+        unsigned char *data = <unsigned char *>key
+        unsigned int h = seed
+        unsigned int k
+        unsigned int t = 0
+
+    while nlen >= 4:
+        k = <unsigned int>(<unsigned int *>data)[0]
+
+        # mmix(h, k).
+        k *= m
+        k = k ^ (k >> r)
+        k *= m
+        h *= m
+        h = h ^ k
+
+        data += 4
+        nlen -= 4
+
+    if nlen == 3:
+        t = t ^ (data[2] << 16)
+    if nlen >= 2:
+        t = t ^ (data[1] << 8)
+    if nlen >= 1:
+        t = t ^ (data[0])
+
+    # mmix(h, t).
+    t *= m
+    t = t ^ (t >> r)
+    t *= m
+    h *= m
+    h = h ^ t
+
+    # mmix(h, l).
+    l *= m
+    l = l ^ (l >> r)
+    l *= m
+    h *= m
+    h = h ^ l
+
+    h = h ^ (h >> 13)
+    h *= m
+    h = h ^ (h >> 15)
+
+    return h
+
+
+cdef void peewee_murmurhash(sqlite3_context *ctx, int argc,
+                            sqlite3_value **argv) with gil:
+    cdef:
+        char *key
+        int data_type = sqlite3_value_type(argv[0])
+
+    if data_type != SQLITE_NULL:
+        key = <char *>sqlite3_value_text(argv[0])
+        if key:
+            sqlite3_result_int64(
+                ctx,
+                murmurhash2(key, strlen(key), 0))
+            return
+
+    sqlite3_result_null(ctx)
+
+
 cdef extern void init_sqlite_ext() except *
 
 cdef public int sqlite3_sqliteext_init(sqlite3 *conn, char **errMessage, const sqlite3_api_routines *pApi):
@@ -337,6 +393,15 @@ cdef public int sqlite3_sqliteext_init(sqlite3 *conn, char **errMessage, const s
         SQLITE_UTF8,
         NULL,
         peewee_bm25,
+        NULL,
+        NULL)
+    rc = sqlite3_create_function(
+        conn,
+        'murmurhash',
+        1,
+        SQLITE_UTF8,
+        NULL,
+        peewee_murmurhash,
         NULL,
         NULL)
 
