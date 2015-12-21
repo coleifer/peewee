@@ -665,10 +665,8 @@ class Window(Node):
     def clone_base(self):
         return Window(self.partition_by, self.order_by)
 
-class Check(SQL):
-    """Check constraint, usage: `Check('price > 10')`."""
-    def __init__(self, value):
-        super(Check, self).__init__('CHECK (%s)' % value)
+def Check(value):
+    return SQL('CHECK (%s)' % value)
 
 class DQ(Node):
     """A "django-style" filter expression, e.g. {'foo__eq': 'x'}."""
