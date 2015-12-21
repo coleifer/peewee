@@ -67,17 +67,12 @@ cpdef peewee_regexp(regex_str, value):
     return False
 
 
-cdef unsigned int *parse_match_info(buf):
-    cdef:
-        bytes bbuf = bytes(buf)
-        char *raw_data = bbuf
-    return <unsigned int *>raw_data
-
-
 def peewee_rank(py_match_info, *raw_weights):
     cdef:
         unsigned int *match_info
         unsigned int *phrase_info
+        bytes _match_info_buf = bytes(py_match_info)
+        char *match_info_buf = _match_info_buf
         int argc = len(raw_weights) + 1
         int ncol, nphrase, icol, iphrase, hits, global_hits
         int P_O = 0, C_O = 1, X_O = 2
@@ -87,7 +82,7 @@ def peewee_rank(py_match_info, *raw_weights):
     if argc < 1:
         raise ValueError('Missing matchinfo().')
 
-    match_info = parse_match_info(py_match_info)
+    match_info = <unsigned int *>match_info_buf
     nphrase = match_info[P_O]
     ncol = match_info[C_O]
 
@@ -120,6 +115,8 @@ def peewee_bm25(py_match_info, *raw_weights):
     cdef:
         unsigned int *match_info
         unsigned int *phrase_info
+        bytes _match_info_buf = bytes(py_match_info)
+        char *match_info_buf = _match_info_buf
         int argc = len(raw_weights) + 1
         int term_count, col_count
         double B = 0.75, K = 1.2, D
@@ -132,7 +129,7 @@ def peewee_bm25(py_match_info, *raw_weights):
 
         double score = 0.0
 
-    match_info = parse_match_info(py_match_info)
+    match_info = <unsigned int *>match_info_buf
     term_count = match_info[P_O]
     col_count = match_info[C_O]
     total_docs = match_info[N_O]
