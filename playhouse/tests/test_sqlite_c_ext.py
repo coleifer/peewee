@@ -185,9 +185,8 @@ class TestDateFunctions(BaseTestCase):
         self.assertEqual(Q('second'), [5, 6, 59, 0])
 
         self.assertEqual(Q(None), [None, None, None, None])
-
-        self.assertRaises(OperationalError, Q, 'foo')
-        self.assertRaises(OperationalError, Q, '')
+        self.assertEqual(Q('foo'), [None, None, None, None])
+        self.assertEqual(Q(''), [None, None, None, None])
 
         sql = 'SELECT date_part(?, ?)'
 
@@ -234,9 +233,8 @@ class TestDateFunctions(BaseTestCase):
             '2010-03-01 00:00:00'])
 
         self.assertEqual(Q(None), [None, None, None, None])
-
-        self.assertRaises(OperationalError, Q, 'foo')
-        self.assertRaises(OperationalError, Q, '')
+        self.assertEqual(Q('foo'), [None, None, None, None])
+        self.assertEqual(Q(''), [None, None, None, None])
 
 
 class TestMurmurHash(BaseTestCase):

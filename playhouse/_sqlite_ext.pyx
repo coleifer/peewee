@@ -22,12 +22,12 @@ cdef dict SQLITE_DATE_TRUNC_MAPPING = {
 
 
 cdef tuple validate_and_format_datetime(lookup, date_str):
-    if not date_str or lookup is None:
+    if not date_str or not lookup:
         return
 
     lookup = lookup.lower()
     if lookup not in SQLITE_DATE_TRUNC_MAPPING:
-        raise ValueError('Unrecognized date part: %s' % lookup)
+        return
 
     cdef datetime.datetime date_obj
     cdef bint success = False
@@ -38,12 +38,7 @@ cdef tuple validate_and_format_datetime(lookup, date_str):
         except ValueError:
             pass
         else:
-            success = True
-
-    if not success:
-        return None
-
-    return (date_obj, lookup)
+            return (date_obj, lookup)
 
 
 cpdef peewee_date_part(lookup, date_str):
