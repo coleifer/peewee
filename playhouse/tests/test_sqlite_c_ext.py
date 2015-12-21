@@ -8,18 +8,12 @@ from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
 from playhouse.tests.libs import mock
 
-
-db = SqliteExtDatabase(':memory:', c_extensions=True)
-
 try:
-    db.connect()
-except OperationalError:
+    from playhouse import _sqlite_ext
+except ImportError:
     raise ImportError('Unable to load `_sqlite_ext` C extension.')
-except AttributeError:
-    raise ImportError('pysqlite not compiled with load extension support.')
-else:
-    db.close()
 
+db = SqliteExtDatabase(':memory:')
 
 class BaseModel(Model):
     class Meta:
@@ -158,7 +152,7 @@ class TestRegexp(BaseTestCase):
         assertMatches('[0-4]{6}', [0, 0, 0])
 
         assertMatches('', [1, 1, 1])
-        assertMatches(None, [0, 0, 0])
+        assertMatches(None, [None, None, None])
 
 
 class TestDateFunctions(BaseTestCase):

@@ -60,14 +60,15 @@ from peewee import transaction
 from peewee import _sqlite_date_part
 from peewee import _sqlite_date_trunc
 from peewee import _sqlite_regexp
+try:
+    from playhouse import _sqlite_ext as _c_ext
+except ImportError:
+    _c_ext = None
 
 
 if sys.version_info[0] == 3:
     basestring = str
 
-CUR_DIR = os.path.realpath(os.path.dirname(__file__))
-C_EXTENSION = bool(glob.glob(os.path.join(CUR_DIR, '_sqlite_ext*.so')) or
-                   glob.glob(os.path.join(CUR_DIR, '_sqlite_ext*.dylib')))
 FTS_MATCHINFO_FORMAT = 'pcnalx'
 FTS_MATCHINFO_FORMAT_SIMPLE = 'pcx'
 FTS_VER = sqlite3.sqlite_version_info[:3] >= (3, 7, 4) and 'FTS4' or 'FTS3'
@@ -819,16 +820,20 @@ class SqliteExtDatabase(SqliteDatabase):
     """
     compiler_class = SqliteQueryCompiler
 
-    def __init__(self, database, c_extensions=C_EXTENSION, *args, **kwargs):
+    def __init__(self, database, c_extensions=True, *args, **kwargs):
         super(SqliteExtDatabase, self).__init__(database, *args, **kwargs)
         self._aggregates = {}
         self._collations = {}
         self._functions = {}
         self._extensions = set([])
         self._row_factory = None
-        self._c_extensions = c_extensions
-        if c_extensions:
-            self.load_extension(os.path.join(CUR_DIR, '_sqlite_ext'))
+        if _c_ext and c_extensions:
+            self.register_function(_c_ext.peewee_date_part, 'date_part', 2)
+            self.register_function(_c_ext.peewee_date_trunc, 'date_trunc', 2)
+            self.register_function(_c_ext.peewee_regexp, 'regexp', 2)
+            self.register_function(_c_ext.peewee_rank, 'fts_rank', -1)
+            self.register_function(_c_ext.peewee_bm25, 'fts_bm25', -1)
+            self.register_function(_c_ext.peewee_murmurhash, 'murmurhash', 1)
         else:
             self.register_function(_sqlite_date_part, 'date_part', 2)
             self.register_function(_sqlite_date_trunc, 'date_trunc', 2)
