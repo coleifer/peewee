@@ -22,55 +22,10 @@ sqlite_ext_module = Extension(
     'playhouse._sqlite_ext',
     ['playhouse/_sqlite_ext.pyx'])
 
-def check_libsqlite():
-    import shutil
-    import tempfile
-    from textwrap import dedent
-
-    import distutils.ccompiler
-    import distutils.sysconfig
-    from distutils.errors import CompileError, LinkError
-
-    libraries = ['sqlite3']
-    c_code = dedent("""
-        #include <sqlite3.h>
-
-        int main(int argc, char **argv) {
-            return (sqlite3_libversion_number() > 3080000) ? 0 : 1;
-        }""")
-
-    tmp_dir = tempfile.mkdtemp(prefix='tmp_peewee_')
-    binary = os.path.join(tmp_dir, 'test_peewee')
-    filename = binary + '.c'
-    with open(filename, 'w') as fh:
-        fh.write(c_code)
-
-    compiler = distutils.ccompiler.new_compiler()
-    assert isinstance(compiler, distutils.ccompiler.CCompiler)
-    distutils.sysconfig.customize_compiler(compiler)
-
-    try:
-        compiler.link_executable(
-            compiler.compile([filename]),
-            binary,
-            libraries=libraries,
-            output_dir=tmp_dir)
-    except CompileError:
-        print('libsqlite3 compile error')
-        return False
-    except LinkError:
-        print('libsqlite3 link error')
-        return False
-    finally:
-        shutil.rmtree(tmp_dir)
-    return True
 
 ext_modules = []
 if cython_installed:
-    ext_modules.append(speedups_ext_module)
-    if check_libsqlite() and sys.version_info[0] == 2:
-        # Sorry, no python 3.
-        ext_modules.append(sqlite_ext_module)
+    ext_modules.extend([speedups_ext_module, sqlite_ext_module])
 
 if ext_modules:
     setup_kwargs.update(
