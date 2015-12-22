@@ -58,10 +58,10 @@ features:
 sqlite_ext API notes
 ^^^^^^^^^^^^^^^^^^^^
 
-.. py:class:: SqliteExtDatabase(database, pragmas=(), c_extensions=C_EXTENSION, **kwargs)
+.. py:class:: SqliteExtDatabase(database, pragmas=(), c_extensions=True, **kwargs)
 
     :param pragmas: A list of 2-tuples containing ``PRAGMA`` settings to configure on a per-connection basis.
-    :param bool c_extensions: Boolean flag indicating whether to load the SQLite C extension (``_sqlite_ext.so`` on linux systems). **Requires Cython**. The default value is determined at module-load time based on whether a file named ``"_sqlite_ext*.{so,dylib}"`` is found in the directory alongside the ``sqlite_ext.py`` module. The presence of this shared library indicates that the C extension is present, and will be used by default.
+    :param bool c_extensions: Boolean flag indicating whether to use the fast implementations of various SQLite user-defined functions. If Cython was installed when you built ``peewee``, then these functions should be available. If not, Peewee will fall back to using the slower pure-Python functions.
 
     Subclass of the :py:class:`SqliteDatabase` that provides some advanced features only offered by Sqlite.
 
