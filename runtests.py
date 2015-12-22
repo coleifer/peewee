@@ -50,6 +50,7 @@ def get_option_parser():
     cases.add_option('--reflection', dest='reflection', default=False, action='store_true', help='reflection schema introspector')
     cases.add_option('--signals', dest='signals', default=False, action='store_true', help='signals tests')
     cases.add_option('--shortcuts', dest='shortcuts', default=False, action='store_true', help='shortcuts tests')
+    cases.add_option('--speedups', dest='speedups', default=False, action='store_true', help='speedups c extension tests')
     cases.add_option('--sqlcipher-ext', dest='sqlcipher', default=False, action='store_true', help='sqlcipher_ext tests (requires pysqlcipher)')
     cases.add_option('--sqlite-c-ext', dest='sqlite_c', default=False, action='store_true', help='sqlite c extension tests')
     cases.add_option('--sqlite-ext', dest='sqlite_ext', default=False, action='store_true', help='sqlite_ext tests')
@@ -147,6 +148,12 @@ def collect_modules(options):
     if xtra(options.shortcuts):
         from playhouse.tests import test_shortcuts
         modules.append(test_shortcuts)
+    if xtra(options.speedups):
+        try:
+            from playhouse.tests import test_speedups
+            modules.append(test_speedups)
+        except ImportError:
+            print_('Unable to import speedups tests, skipping')
     if xtra(options.sqlcipher):
         try:
             from playhouse.tests import test_sqlcipher_ext
