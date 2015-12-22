@@ -1842,7 +1842,7 @@ Query Types
 Database and its subclasses
 ---------------------------
 
-.. py:class:: Database(database[, threadlocals=True[, autocommit=True[, fields=None[, ops=None[, autorollback=False[, **connect_kwargs]]]]]])
+.. py:class:: Database(database[, threadlocals=True[, autocommit=True[, fields=None[, ops=None[, autorollback=False[, use_speedups=True[, **connect_kwargs]]]]]]])
 
     :param database: the name of the database (or filename if using sqlite)
     :param bool threadlocals: whether to store connections in a threadlocal
@@ -1850,6 +1850,7 @@ Database and its subclasses
     :param dict fields: a mapping of :py:attr:`~Field.db_field` to database column type, e.g. 'string' => 'varchar'
     :param dict ops: a mapping of operations understood by the querycompiler to expressions
     :param bool autorollback: automatically rollback when an exception occurs while executing a query.
+    :param bool use_speedups: use the Cython speedups module to improve performance of some queries.
     :param connect_kwargs: any arbitrary parameters to pass to the database driver when connecting
 
     The ``connect_kwargs`` dictionary is used for vendor-specific parameters that will be passed back directly to your database driver, allowing you to specify the ``user``, ``host`` and ``password``, for instance. For more information and examples, see the :ref:`vendor-specific parameters document <vendor-specific-parameters>`.
