@@ -21,7 +21,8 @@ ext_db = database_initializer.get_database(
     'sqlite',
     c_extensions=False,
     db_class=SqliteExtDatabase,
-    timeout=0.1)
+    timeout=0.1,
+    use_speedups=False)
 
 
 CLOSURE_EXTENSION = os.environ.get('CLOSURE_EXTENSION')
