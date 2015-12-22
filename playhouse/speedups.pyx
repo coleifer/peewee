@@ -1,5 +1,6 @@
+from bisect import bisect_left
+from bisect import bisect_right
 from cpython cimport datetime
-from cpython.tuple cimport PyTuple_New, PyTuple_SetItem
 
 
 cdef basestring _strip_parens(basestring s):
@@ -81,7 +82,7 @@ cdef class _QueryResultWrapper(object)  # Forward decl.
 cdef class _ResultIterator(object):
     cdef:
         int _idx
-        public _QueryResultWrapper qrw
+        _QueryResultWrapper qrw
 
     def __init__(self, _QueryResultWrapper qrw):
         self.qrw = qrw
@@ -102,12 +103,15 @@ cdef class _ResultIterator(object):
 
 cdef class _QueryResultWrapper(object):
     cdef:
-        bint _populated, _initialized
+        bint _initialized
         dict join_meta
-        int _ct, _idx
-        list column_meta
+        int _idx
+        int row_size
+        list column_names, converters
+        readonly bint _populated
+        readonly int _ct
         readonly list _result_cache
-        object cursor, model
+        object column_meta, cursor, model
 
     def __init__(self, model, cursor, meta=None):
         self.model = model
@@ -135,7 +139,36 @@ cdef class _QueryResultWrapper(object):
         return self.count
 
     cdef initialize(self, cursor_description):
-        pass
+        cdef:
+            int i
+            int n = len(cursor_description)
+
+        self.row_size = n
+        self.column_names = []
+        self.converters = []
+
+        for i in range(n):
+            attr_name = cursor_description[i][0]
+            found = None
+            if self.column_meta is not None:
+                try:
+                    column = self.column_meta[i]
+                except IndexError:
+                    pass
+                else:
+                    nt = getattr(column, '_node_type', None)
+                    if isinstance(nt, basestring) and nt == 'field':
+                        attr_name = column._alias or column.name
+                        found = column.python_value
+
+            if found is None:
+                if attr_name in self.model._meta.columns:
+                    field = self.model._meta.columns[attr_name]
+                    found = field.python_value
+                    attr_name = field.name
+
+            self.column_names.append(attr_name)
+            self.converters.append(found)
 
     cdef process_row(self, tuple row):
         return row
@@ -173,73 +206,40 @@ cdef class _QueryResultWrapper(object):
         self._idx += 1
         return inst
 
-    cpdef fill_cache(self, int n=-1):
-        if n > 0:
-            n = n - self.ct
+    cpdef fill_cache(self, n=None):
+        cdef:
+            int counter = -1 if n is None else <int>n
+        if counter > 0:
+            counter = counter - self._ct
 
         self._idx = self._ct
-        while not self._populated and n:
+        while not self._populated and counter:
             try:
                 next(self)
             except StopIteration:
                 break
             else:
-                n -= 1
+                counter -= 1
 
 
-cdef class _ModelResultWrapper(_QueryResultWrapper):
-    cdef:
-        int row_size
-        list column_names, converters
-
-    cdef initialize(self, cursor_description):
-        cdef:
-            int i
-            int n = len(cursor_description)
-
-        self.row_size = n
-        self.column_names = []
-        self.converters = []
-
-        for i in range(n):
-            attr_name = cursor_description[i][0]
-            self.column_names.append(attr_name)
-            found = None
-            if self.column_meta is not None:
-                try:
-                    column = self.column_meta[i]
-                except IndexError:
-                    pass
-                else:
-                    try:
-                        found = column.python_value
-                    except AttributeError:
-                        pass
-
-            if found is None:
-                if attr_name in self.model._meta.columns:
-                    found = self.model._meta.columns[attr_name].python_value
-
-            self.converters.append(found)
-
-
-cdef class _TuplesQueryResultWrapper(_ModelResultWrapper):
+cdef class _TuplesQueryResultWrapper(_QueryResultWrapper):
     cdef process_row(self, tuple row):
         cdef:
             int i = 0
             list ret = []
 
         for i in range(self.row_size):
-            if self.converters[i] is None:
+            func = self.converters[i]
+            if func is None:
                 ret.append(row[i])
             else:
-                ret.append(self.converters[i](row[i]))
+                ret.append(func(row[i]))
 
         return tuple(ret)
 
 
-cdef class _DictQueryResultWrapper(_ModelResultWrapper):
-    cdef process_row(self, tuple row):
+cdef class _DictQueryResultWrapper(_QueryResultWrapper):
+    cdef dict _make_dict(self, tuple row):
         cdef:
             dict result = {}
             int i = 0
@@ -252,3 +252,48 @@ cdef class _DictQueryResultWrapper(_ModelResultWrapper):
                 result[self.column_names[i]] = row[i]
 
         return result
+
+    cdef process_row(self, tuple row):
+        return self._make_dict(row)
+
+
+cdef class _ModelQueryResultWrapper(_DictQueryResultWrapper):
+    cdef process_row(self, tuple row):
+        inst = self.model(**self._make_dict(row))
+        inst.prepared()
+        return inst
+
+
+cdef class _SortedFieldList(object):
+    cdef:
+        list _items, _keys
+
+    def __init__(self):
+        self._items = []
+        self._keys = []
+
+    def __getitem__(self, i):
+        return self._items[i]
+
+    def __iter__(self):
+        return iter(self._items)
+
+    def __contains__(self, item):
+        k = item._sort_key
+        i = bisect_left(self.keys, k)
+        j = bisect_right(self.keys, k)
+        return item in self._items[i:j]
+
+    def index(self, field):
+        return self._keys.index(field._sort_key)
+
+    def insert(self, item):
+        k = item._sort_key
+        i = bisect_left(self._keys, k)
+        self._keys.insert(i, k)
+        self._items.insert(i, item)
+
+    def remove(self, item):
+        idx = self.index(item)
+        del self._items[idx]
+        del self._keys[idx]

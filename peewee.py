@@ -167,7 +167,8 @@ except ImportError:
         mysql = None
 
 try:
-    from playhouse._speedups import format_date_time, strip_parens
+    from playhouse._speedups import format_date_time
+    from playhouse._speedups import strip_parens
 except ImportError:
     def format_date_time(value, formats, post_process=None):
         post_process = post_process or (lambda x: x)
@@ -211,6 +212,15 @@ except ImportError:
         if ct > 0:
             return s[ct:-ct]
         return s
+
+try:
+    from playhouse._speedups import _DictQueryResultWrapper
+    from playhouse._speedups import _ModelQueryResultWrapper
+    from playhouse._speedups import _SortedFieldList
+    from playhouse._speedups import _TuplesQueryResultWrapper
+except ImportError:
+    _DictQueryResultWrapper = _ModelQueryResultWrapper = _SortedFieldList =\
+            _TuplesQueryResultWrapper = None
 
 if sqlite3:
     sqlite3.register_adapter(decimal.Decimal, str)
@@ -300,6 +310,12 @@ JOIN = attrdict(
 JOIN_INNER = JOIN.INNER
 JOIN_LEFT_OUTER = JOIN.LEFT_OUTER
 JOIN_FULL = JOIN.FULL
+
+RESULTS_NAIVE = 1
+RESULTS_MODELS = 2
+RESULTS_TUPLES = 3
+RESULTS_DICTS = 4
+RESULTS_AGGREGATE_MODELS = 5
 
 # To support "django-style" double-underscore filters, create a mapping between
 # operation name and operation code, e.g. "__eq" == OP.EQ.
@@ -2086,6 +2102,9 @@ class TuplesQueryResultWrapper(ExtQueryResultWrapper):
     def process_row(self, row):
         return tuple([self.conv[i][2](col) for i, col in enumerate(row)])
 
+if _TuplesQueryResultWrapper is None:
+    _TuplesQueryResultWrapper = TuplesQueryResultWrapper
+
 class NaiveQueryResultWrapper(ExtQueryResultWrapper):
     def process_row(self, row):
         instance = self.model()
@@ -2094,12 +2113,18 @@ class NaiveQueryResultWrapper(ExtQueryResultWrapper):
         instance._prepare_instance()
         return instance
 
+if _ModelQueryResultWrapper is None:
+    _ModelQueryResultWrapper = NaiveQueryResultWrapper
+
 class DictQueryResultWrapper(ExtQueryResultWrapper):
     def process_row(self, row):
         res = {}
         for i, column, func in self.conv:
             res[column] = func(row[i])
         return res
+
+if _DictQueryResultWrapper is None:
+    _DictQueryResultWrapper = DictQueryResultWrapper
 
 class ModelQueryResultWrapper(QueryResultWrapper):
     def initialize(self, description):
@@ -2607,12 +2632,12 @@ class RawQuery(Query):
     def execute(self):
         if self._qr is None:
             if self._tuples:
-                ResultWrapper = TuplesQueryResultWrapper
+                QRW = self.database.get_result_wrapper(RESULTS_TUPLES)
             elif self._dicts:
-                ResultWrapper = DictQueryResultWrapper
+                QRW = self.database.get_result_wrapper(RESULTS_DICTS)
             else:
-                ResultWrapper = NaiveQueryResultWrapper
-            self._qr = ResultWrapper(self.model_class, self._execute(), None)
+                QRW = self.database.get_result_wrapper(RESULTS_NAIVE)
+            self._qr = QRW(self.model_class, self._execute(), None)
         return self._qr
 
     def __iter__(self):
@@ -2844,15 +2869,15 @@ class SelectQuery(Query):
 
     def _get_result_wrapper(self):
         if self._tuples:
-            return TuplesQueryResultWrapper
+            return self.database.get_result_wrapper(RESULTS_TUPLES)
         elif self._dicts:
-            return DictQueryResultWrapper
+            return self.database.get_result_wrapper(RESULTS_DICTS)
         elif self._naive or not self._joins or self.verify_naive():
-            return NaiveQueryResultWrapper
+            return self.database.get_result_wrapper(RESULTS_NAIVE)
         elif self._aggregate_rows:
-            return AggregateQueryResultWrapper
+            return self.database.get_result_wrapper(RESULTS_AGGREGATE_MODELS)
         else:
-            return ModelQueryResultWrapper
+            return self.database.get_result_wrapper(RESULTS_MODELS)
 
     def execute(self):
         if self._dirty or self._qr is None:
@@ -2913,18 +2938,18 @@ class CompoundSelect(SelectQuery):
 
     def _get_result_wrapper(self):
         if self._tuples:
-            return TuplesQueryResultWrapper
+            return self.database.get_result_wrapper(RESULTS_TUPLES)
         elif self._dicts:
-            return DictQueryResultWrapper
+            return self.database.get_result_wrapper(RESULTS_DICTS)
         elif self._aggregate_rows:
-            return AggregateQueryResultWrapper
+            return self.database.get_result_wrapper(RESULTS_AGGREGATE_MODELS)
 
         has_joins = self.lhs._joins or self.rhs._joins
         is_naive = self.lhs._naive or self.rhs._naive or self._naive
         if is_naive or not has_joins or self.verify_naive():
-            return NaiveQueryResultWrapper
+            return self.database.get_result_wrapper(RESULTS_NAIVE)
         else:
-            return ModelQueryResultWrapper
+            return self.database.get_result_wrapper(RESULTS_MODELS)
 
 class _WriteQuery(Query):
     def __init__(self, model_class):
@@ -2974,10 +2999,10 @@ class _WriteQuery(Query):
     def get_result_wrapper(self):
         if self._returning is not None:
             if self._tuples:
-                return TuplesQueryResultWrapper
+                return self.database.get_result_wrapper(RESULTS_TUPLES)
             elif self._dicts:
-                return DictQueryResultWrapper
-        return NaiveQueryResultWrapper
+                return self.database.get_result_wrapper(RESULTS_DICTS)
+        return self.database.get_result_wrapper(RESULTS_NAIVE)
 
     def _execute_with_result_wrapper(self):
         ResultWrapper = self.get_result_wrapper()
@@ -3263,7 +3288,8 @@ class Database(object):
         'ProgrammingError': ProgrammingError}
 
     def __init__(self, database, threadlocals=True, autocommit=True,
-                 fields=None, ops=None, autorollback=False, **connect_kwargs):
+                 fields=None, ops=None, autorollback=False, use_speedups=True,
+                 **connect_kwargs):
         self.connect_kwargs = {}
         self.init(database, **connect_kwargs)
 
@@ -3275,6 +3301,7 @@ class Database(object):
         self._conn_lock = threading.Lock()
         self.autocommit = autocommit
         self.autorollback = autorollback
+        self.use_speedups = use_speedups
 
         self.field_overrides = merge_dict(self.field_overrides, fields or {})
         self.op_overrides = merge_dict(self.op_overrides, ops or {})
@@ -3339,6 +3366,24 @@ class Database(object):
     @classmethod
     def register_ops(cls, ops):
         cls.op_overrides = merge_dict(cls.op_overrides, ops)
+
+    def get_result_wrapper(self, wrapper_type):
+        if wrapper_type == RESULTS_NAIVE:
+            return (_ModelQueryResultWrapper if self.use_speedups
+                    else NaiveQueryResultWrapper)
+        elif wrapper_type == RESULTS_MODELS:
+            return ModelQueryResultWrapper
+        elif wrapper_type == RESULTS_TUPLES:
+            return (_TuplesQueryResultWrapper if self.use_speedups
+                    else TuplesQueryResultWrapper)
+        elif wrapper_type == RESULTS_DICTS:
+            return (_DictQueryResultWrapper if self.use_speedups
+                    else DictQueryResultWrapper)
+        elif wrapper_type == RESULTS_AGGREGATE_MODELS:
+            return AggregateQueryResultWrapper
+        else:
+            return (_ModelQueryResultWrapper if self.use_speedups
+                    else NaiveQueryResultWrapper)
 
     def last_insert_id(self, cursor, model):
         if model._meta.auto_increment:
@@ -4051,36 +4096,39 @@ class ModelAlias(object):
     def __call__(self, **kwargs):
         return self.model_class(**kwargs)
 
-class _SortedFieldList(object):
-    def __init__(self):
-        self._keys = []
-        self._items = []
+if _SortedFieldList is None:
+    class _SortedFieldList(object):
+        __slots__ = ('_keys', '_items')
 
-    def __getitem__(self, i):
-        return self._items[i]
+        def __init__(self):
+            self._keys = []
+            self._items = []
 
-    def __iter__(self):
-        return iter(self._items)
+        def __getitem__(self, i):
+            return self._items[i]
 
-    def __contains__(self, item):
-        k = item._sort_key
-        i = bisect_left(self._keys, k)
-        j = bisect_right(self._keys, k)
-        return item in self._items[i:j]
+        def __iter__(self):
+            return iter(self._items)
 
-    def index(self, field):
-        return self._keys.index(field._sort_key)
+        def __contains__(self, item):
+            k = item._sort_key
+            i = bisect_left(self._keys, k)
+            j = bisect_right(self._keys, k)
+            return item in self._items[i:j]
 
-    def insert(self, item):
-        k = item._sort_key
-        i = bisect_left(self._keys, k)
-        self._keys.insert(i, k)
-        self._items.insert(i, item)
+        def index(self, field):
+            return self._keys.index(field._sort_key)
 
-    def remove(self, item):
-        idx = self.index(item)
-        del self._items[idx]
-        del self._keys[idx]
+        def insert(self, item):
+            k = item._sort_key
+            i = bisect_left(self._keys, k)
+            self._keys.insert(i, k)
+            self._items.insert(i, item)
+
+        def remove(self, item):
+            idx = self.index(item)
+            del self._items[idx]
+            del self._keys[idx]
 
 class DoesNotExist(Exception): pass
 
