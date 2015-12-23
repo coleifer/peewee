@@ -47,7 +47,7 @@ if hashpw and gensalt:
             return hashpw(password, self) == self
 
 
-    class PasswordField(TextField):
+    class PasswordField(BlobField):
         def __init__(self, iterations=12, *args, **kwargs):
             if None in (hashpw, gensalt):
                 raise ValueError('Missing library required for PasswordField: bcrypt')

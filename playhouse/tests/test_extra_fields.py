@@ -15,6 +15,7 @@ from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
 from playhouse.tests.base import skip_if
 from playhouse.tests.base import ulit
+from playhouse.tests.base import TestModel
 
 PY2 = sys.version_info[0] == 2
 
@@ -129,7 +130,7 @@ class TestAESEncryptedField(ModelTestCase):
 @skip_if(lambda: PasswordField is None)
 class TestPasswordFields(ModelTestCase):
     def setUp(self):
-        class PasswordModel(BaseModel):
+        class PasswordModel(TestModel):
             username = TextField()
             password = PasswordField(iterations=4)
 
