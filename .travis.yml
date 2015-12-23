@@ -11,7 +11,7 @@ env:
   - PEEWEE_TEST_BACKEND=postgresql
 services:
   - postgres
-install: "pip install psycopg2"
+install: "pip install psycopg2 Cython"
 before_script:
   - sh -c "psql -c 'create database peewee_test;' -U postgres"
   - sh -c "psql peewee_test -c 'create extension hstore;' -U postgres"
