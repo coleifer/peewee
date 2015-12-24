@@ -8,6 +8,7 @@ except ImportError:
     from io import StringIO
 from textwrap import dedent
 
+from peewee import *
 from playhouse.csv_utils import *
 from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
@@ -19,6 +20,18 @@ class TestRowConverter(RowConverter):
     def get_reader(self, csv_data, **reader_kwargs):
         reader = csv.reader(StringIO(csv_data), **reader_kwargs)
         yield reader
+
+
+class TestBooleanRowConverter(RowConverter):
+    @convert_field(BooleanField, default=False)
+    def is_boolean(self, value):
+        return value in ('TRUE', 'FALSE')
+
+    def get_checks(self):
+        checks = super(TestBooleanRowConverter, self).get_checks()
+        checks.insert(-1, self.is_boolean)
+        return checks
+
 
 class TestLoader(Loader):
     @contextmanager
@@ -32,7 +45,9 @@ class TestLoader(Loader):
             has_header=self.has_header,
             sample_size=self.sample_size)
 
+
 db = database_initializer.get_in_memory_database()
+
 
 class BaseModel(Model):
     class Meta:
@@ -46,6 +61,35 @@ class Note(BaseModel):
     content = TextField()
     timestamp = DateTimeField(default=datetime.datetime.now)
     is_published = BooleanField(default=True)
+
+
+class TestCustomConverter(PeeweeTestCase):
+    def setUp(self):
+        super(TestCustomConverter, self).setUp()
+        self.db = database_initializer.get_in_memory_database()
+
+    def tearDown(self):
+        if not self.db.is_closed():
+            self.db.close()
+        super(TestCustomConverter, self).tearDown()
+
+    def test_custom_converter(self):
+        csv_data = StringIO('\r\n'.join((
+            'username,enabled,last_login',
+            'charlie,TRUE,2015-01-02 00:00:00',
+            'huey,FALSE,2015-02-03 00:00:00',
+            'zaizee,,2015-03-04 00:00:00',
+        )))
+        converter = TestBooleanRowConverter(self.db)
+        ModelClass = load_csv(self.db, csv_data, converter=converter)
+        self.assertEqual(sorted(ModelClass._meta.fields.keys()), [
+            '_auto_pk',
+            'enabled',
+            'last_login',
+            'username'])
+        self.assertTrue(isinstance(ModelClass.enabled, BooleanField))
+        self.assertTrue(isinstance(ModelClass.last_login, DateTimeField))
+        self.assertTrue(isinstance(ModelClass.username, BareField))
 
 
 class TestCSVConversion(PeeweeTestCase):
