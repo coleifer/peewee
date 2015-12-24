@@ -2059,7 +2059,7 @@ class QueryResultWrapper(object):
         self._idx = self._ct
         while not self._populated and (n > self._ct):
             try:
-                self.next()
+                next(self)
             except StopIteration:
                 break
 
@@ -2837,7 +2837,7 @@ class SelectQuery(Query):
     def get(self):
         clone = self.paginate(1, 1)
         try:
-            return clone.execute().next()
+            return next(clone.execute())
         except StopIteration:
             raise self.model_class.DoesNotExist(
                 'Instance matching query does not exist:\nSQL: %s\nPARAMS: %s'
