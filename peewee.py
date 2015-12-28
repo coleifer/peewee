@@ -1377,6 +1377,7 @@ class QueryCompiler(object):
     field_map = {
         'bare': '',
         'bigint': 'BIGINT',
+        'binary': 'BLOB',
         'blob': 'BLOB',
         'bool': 'SMALLINT',
         'date': 'DATE',
@@ -3795,6 +3796,7 @@ class MySQLDatabase(Database):
     compound_operations = ['UNION', 'UNION ALL']
     field_overrides = {
         'bool': 'BOOL',
+        'binary': 'binary',
         'decimal': 'NUMERIC',
         'double': 'DOUBLE PRECISION',
         'float': 'FLOAT',
