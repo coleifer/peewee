@@ -267,18 +267,18 @@ class CheckModel(TestModel):
 
 
 # Deferred foreign keys.
-SnippetProxy = Proxy()
+SnippetDeferred = DeferredRelation()
 
 class Language(TestModel):
     name = CharField()
-    selected_snippet = ForeignKeyField(SnippetProxy, null=True)
+    selected_snippet = ForeignKeyField(SnippetDeferred, null=True)
 
 
 class Snippet(TestModel):
     code = TextField()
     language = ForeignKeyField(Language, related_name='snippets')
 
-SnippetProxy.initialize(Snippet)
+SnippetDeferred.set_model(Snippet)
 
 
 class _UpperField(CharField):

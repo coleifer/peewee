@@ -69,9 +69,24 @@ if hashpw and gensalt:
 
             return PasswordHash(value)
 
+class DeferredThroughModel(object):
+    def set_field(self, model_class, field, name):
+        self.model_class = model_class
+        self.field = field
+        self.name = name
+
+    def set_model(self, through_model):
+        self.field._through_model = through_model
+        self.field.add_to_class(self.model_class, self.name)
+
 class ManyToManyField(Field):
     def __init__(self, rel_model, related_name=None, through_model=None,
                  _is_backref=False):
+        if through_model is not None and not (
+                isinstance(through_model, (Proxy, DeferredThroughModel)) or
+                issubclass(through_model, Model)):
+            raise TypeError('Unexpected value for `through_model`.  Expected '
+                            '`Model`, `Proxy` or `DeferredThroughModel`.')
         self.rel_model = rel_model
         self._related_name = related_name
         self._through_model = through_model
@@ -85,6 +100,9 @@ class ManyToManyField(Field):
                 self._through_model = through_model
                 self.add_to_class(model_class, name)
             self._through_model.attach_callback(callback)
+            return
+        elif isinstance(self._through_model, DeferredThroughModel):
+            self._through_model.set_field(model_class, self, name)
             return
 
         self.name = name

@@ -1,4 +1,5 @@
 from peewee import *
+from playhouse.fields import DeferredThroughModel
 from playhouse.fields import ManyToManyField
 from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
@@ -19,11 +20,11 @@ class Note(BaseModel):
 
 NoteUserThrough = Note.users.get_through_model()
 
-AltThroughProxy = Proxy()
+AltThroughDeferred = DeferredThroughModel()
 
 class AltNote(BaseModel):
     text = TextField()
-    users = ManyToManyField(User, through_model=AltThroughProxy)
+    users = ManyToManyField(User, through_model=AltThroughDeferred)
 
 class AltThroughModel(BaseModel):
     user = ForeignKeyField(User, related_name='_xx_rel')
@@ -32,7 +33,7 @@ class AltThroughModel(BaseModel):
     class Meta:
         primary_key = CompositeKey('user', 'note')
 
-AltThroughProxy.initialize(AltThroughModel)
+AltThroughDeferred.set_model(AltThroughModel)
 
 class TestManyToManyField(ModelTestCase):
     requires = [User, Note, NoteUserThrough, AltThroughModel, AltNote]

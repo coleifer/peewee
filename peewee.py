@@ -52,6 +52,7 @@ __all__ = [
     'DateField',
     'DateTimeField',
     'DecimalField',
+    'DeferredRelation',
     'DoesNotExist',
     'DoubleField',
     'DQ',
@@ -391,6 +392,16 @@ class Proxy(object):
         if attr not in self.__slots__:
             raise AttributeError('Cannot set attribute on proxy.')
         return super(Proxy, self).__setattr__(attr, value)
+
+class DeferredRelation(object):
+    def set_field(self, model_class, field, name):
+        self.model_class = model_class
+        self.field = field
+        self.name = name
+
+    def set_model(self, rel_model):
+        self.field.rel_model = rel_model
+        self.field.add_to_class(self.model_class, self.name)
 
 class _CDescriptor(object):
     def __get__(self, instance, instance_type=None):
@@ -1206,13 +1217,14 @@ class ObjectIdDescriptor(object):
 class ForeignKeyField(IntegerField):
     def __init__(self, rel_model, related_name=None, on_delete=None,
                  on_update=None, extra=None, to_field=None, *args, **kwargs):
-        if rel_model != 'self' and not isinstance(rel_model, Proxy) and not \
+        if rel_model != 'self' and not \
+                isinstance(rel_model, (Proxy, DeferredRelation)) and not \
                 issubclass(rel_model, Model):
             raise TypeError('Unexpected value for `rel_model`.  Expected '
-                            '`Model`, `Proxy` or "self"')
+                            '`Model`, `Proxy`, `DeferredRelation`, or "self"')
         self.rel_model = rel_model
         self._related_name = related_name
-        self.deferred = isinstance(rel_model, Proxy)
+        self.deferred = isinstance(rel_model, (Proxy, DeferredRelation))
         self.on_delete = on_delete
         self.on_update = on_update
         self.extra = extra
@@ -1247,6 +1259,9 @@ class ForeignKeyField(IntegerField):
                 self.rel_model = rel_model
                 self.add_to_class(model_class, name)
             self.rel_model.attach_callback(callback)
+            return
+        elif isinstance(self.rel_model, DeferredRelation):
+            self.rel_model.set_field(model_class, self, name)
             return
 
         self.name = name

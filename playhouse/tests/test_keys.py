@@ -384,17 +384,18 @@ class TestDeferredForeignKey(ModelTestCase):
 class TestSQLiteDeferredForeignKey(PeeweeTestCase):
     def test_doc_example(self):
         db = database_initializer.get_in_memory_database()
-        TweetProxy = Proxy()
+        TweetDeferred = DeferredRelation()
+
         class Base(Model):
             class Meta:
                 database = db
         class User(Base):
             username = CharField()
-            favorite_tweet = ForeignKeyField(TweetProxy, null=True)
+            favorite_tweet = ForeignKeyField(TweetDeferred, null=True)
         class Tweet(Base):
             user = ForeignKeyField(User)
             message = TextField()
-        TweetProxy.initialize(Tweet)
+        TweetDeferred.set_model(Tweet)
         with db.transaction():
             User.create_table()
             Tweet.create_table()
@@ -424,12 +425,12 @@ class TestForeignKeyConstraints(ModelTestCase):
         class FKC_a(TestModel):
             name = CharField()
 
-        fkc_proxy = Proxy()
+        fkc_deferred = DeferredRelation()
 
         class FKC_b(TestModel):
-            fkc_a = ForeignKeyField(fkc_proxy)
+            fkc_a = ForeignKeyField(fkc_deferred)
 
-        fkc_proxy.initialize(FKC_a)
+        fkc_deferred.set_model(FKC_a)
 
         with test_db.transaction() as txn:
             FKC_b.drop_table(True)
