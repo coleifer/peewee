@@ -3796,7 +3796,7 @@ class MySQLDatabase(Database):
     compound_operations = ['UNION', 'UNION ALL']
     field_overrides = {
         'bool': 'BOOL',
-        'binary': 'binary',
+        'binary': 'BINARY',
         'decimal': 'NUMERIC',
         'double': 'DOUBLE PRECISION',
         'float': 'FLOAT',
