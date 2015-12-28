@@ -313,6 +313,9 @@ class TestFieldTypes(ModelTestCase):
         res = BlobModel.get(BlobModel.id == blob.id)
         self.assertEqual(blob.data, data)
 
+    test_binary_field = test_blob_field
+    test_binary_field_mysql = test_blob_field_mysql
+
     def test_between(self):
         field = NullModel.int_field
         self.assertNM(field.between(1, 2), ['c1', 'c2'])

@@ -42,6 +42,7 @@ __all__ = [
     'BareField',
     'BigIntegerField',
     'BlobField',
+    'BinaryField',
     'BooleanField',
     'CharField',
     'Check',
@@ -1047,6 +1048,9 @@ class BlobField(Field):
         if isinstance(value, basestring):
             return binary_construct(value)
         return value
+
+class BinaryField(BlobField):
+    db_field = 'binary'
 
 class UUIDField(Field):
     db_field = 'uuid'
