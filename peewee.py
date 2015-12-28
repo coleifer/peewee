@@ -3661,6 +3661,7 @@ class PostgresqlDatabase(Database):
         'double': 'DOUBLE PRECISION',
         'primary_key': 'SERIAL',
         'uuid': 'UUID',
+        'binary': 'BYTEA'
     }
     for_update = True
     for_update_nowait = True
