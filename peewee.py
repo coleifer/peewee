@@ -42,6 +42,7 @@ __all__ = [
     'BareField',
     'BigIntegerField',
     'BlobField',
+    'BinaryField',
     'BooleanField',
     'CharField',
     'Check',
@@ -1059,6 +1060,9 @@ class BlobField(Field):
             return binary_construct(value)
         return value
 
+class BinaryField(BlobField):
+    db_field = 'binary'
+
 class UUIDField(Field):
     db_field = 'uuid'
 
@@ -1392,6 +1396,7 @@ class QueryCompiler(object):
     field_map = {
         'bare': '',
         'bigint': 'BIGINT',
+        'binary': 'BLOB',
         'blob': 'BLOB',
         'bool': 'SMALLINT',
         'date': 'DATE',
@@ -3676,6 +3681,7 @@ class PostgresqlDatabase(Database):
         'double': 'DOUBLE PRECISION',
         'primary_key': 'SERIAL',
         'uuid': 'UUID',
+        'binary': 'BYTEA'
     }
     for_update = True
     for_update_nowait = True
@@ -3811,6 +3817,7 @@ class MySQLDatabase(Database):
     compound_operations = ['UNION', 'UNION ALL']
     field_overrides = {
         'bool': 'BOOL',
+        'binary': 'BINARY',
         'decimal': 'NUMERIC',
         'double': 'DOUBLE PRECISION',
         'float': 'FLOAT',
