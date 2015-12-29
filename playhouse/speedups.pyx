@@ -1,5 +1,6 @@
 from bisect import bisect_left
 from bisect import bisect_right
+from collections import deque
 from cpython cimport datetime
 
 
@@ -297,3 +298,24 @@ cdef class _SortedFieldList(object):
         idx = self.index(item)
         del self._items[idx]
         del self._keys[idx]
+
+cdef tuple _sort_key(model):
+    return (model._meta.name, model._meta.db_table)
+
+cdef _sort_models(model, set model_set, set seen, list accum):
+    if model in model_set and model not in seen:
+        seen.add(model)
+        for foreign_key in model._meta.reverse_rel.values():
+            _sort_models(foreign_key.model_class, model_set, seen, accum)
+        accum.append(model)
+
+def sort_models_topologically(models):
+    cdef:
+        set model_set = set(models)
+        set seen = set()
+        list accum = []
+
+    for model in sorted(model_set, key=_sort_key, reverse=True):
+        _sort_models(model, model_set, seen, accum)
+
+    return list(reversed(accum))

@@ -170,6 +170,7 @@ except ImportError:
 
 try:
     from playhouse._speedups import format_date_time
+    from playhouse._speedups import sort_models_topologically
     from playhouse._speedups import strip_parens
 except ImportError:
     def format_date_time(value, formats, post_process=None):
@@ -180,6 +181,23 @@ except ImportError:
             except ValueError:
                 pass
         return value
+
+    def sort_models_topologically(models):
+        """Sort models topologically so that parents will precede children."""
+        models = set(models)
+        seen = set()
+        ordering = []
+        def dfs(model):
+            if model in models and model not in seen:
+                seen.add(model)
+                for foreign_key in model._meta.reverse_rel.values():
+                    dfs(foreign_key.model_class)
+                ordering.append(model)  # parent will follow descendants
+        # Order models by name and table initially to guarantee total ordering.
+        names = lambda m: (m._meta.name, m._meta.db_table)
+        for m in sorted(models, key=names, reverse=True):
+            dfs(m)
+        return list(reversed(ordering))
 
     def strip_parens(s):
         # Quick sanity check.
@@ -4846,20 +4864,3 @@ def drop_model_tables(models, **drop_table_kwargs):
     """Drop tables for all given models (in the right order)."""
     for m in reversed(sort_models_topologically(models)):
         m.drop_table(**drop_table_kwargs)
-
-def sort_models_topologically(models):
-    """Sort models topologically so that parents will precede children."""
-    models = set(models)
-    seen = set()
-    ordering = []
-    def dfs(model):
-        if model in models and model not in seen:
-            seen.add(model)
-            for foreign_key in model._meta.reverse_rel.values():
-                dfs(foreign_key.model_class)
-            ordering.append(model)  # parent will follow descendants
-    # order models by name and table initially to guarantee a total ordering
-    names = lambda m: (m._meta.name, m._meta.db_table)
-    for m in sorted(models, key=names, reverse=True):
-        dfs(m)
-    return list(reversed(ordering))  # want parents first in output ordering
