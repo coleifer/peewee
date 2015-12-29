@@ -1084,20 +1084,20 @@ Notes:
     * Most applications can expect failed attempts to open the database
       (common case: prompting the user for ``passphrase``), so
       the database can't be hardwired into the :py:class:`Meta` of
-      model classes, and a :py:class:`Proxy` should be used instead.
+      model classes. To defer initialization, pass `None` in to the
+      database.
 
 Example:
 
 .. code-block:: python
 
-    db_proxy = peewee.Proxy()
+    db = SqlCipherDatabase(None)
 
     class BaseModel(Model):
         """Parent for all app's models"""
         class Meta:
-            # We won't have a valid db until user enters passhrase,
-            # so we use a Proxy() instead.
-            database = db_proxy
+            # We won't have a valid db until user enters passhrase.
+            database = db
 
     # Derive our model subclasses
     class Person(BaseModel):
@@ -1105,20 +1105,22 @@ Example:
 
     right_passphrase = False
     while not right_passphrase:
-        passphrase = None
-        db = SqlCipherDatabase('testsqlcipher.db',
-                               get_passphrase_from_user())
-        try:  # Error only gets triggered when we access the db
+        db.init(
+            'testsqlcipher.db',
+            passphrase=get_passphrase_from_user())
+
+        try:  # Actually execute a query against the db to test passphrase.
             db.get_tables()
-            right_passphrase = True
         except DatabaseError as exc:
             # We only allow a specific [somewhat cryptic] error message.
             if exc.message != 'file is encrypted or is not a database':
                 raise exc
-        tell_user_the_passphrase_was_wrong()
-
-    # If we're here, db is ok, we can connect it to Model subclasses
-    db_proxy.initialize(db)
+            else:
+                tell_user_the_passphrase_was_wrong()
+                db.init(None)  # Reset the db.
+        else:
+            # The password was correct.
+            right_passphrase = True
 
 See also: a slightly more elaborate `example <https://gist.github.com/thedod/11048875#file-testpeeweesqlcipher-py>`_.
 

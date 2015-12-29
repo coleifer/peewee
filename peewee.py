@@ -25,6 +25,7 @@ import re
 import sys
 import threading
 import uuid
+import warnings
 from bisect import bisect_left
 from bisect import bisect_right
 from collections import deque
@@ -371,6 +372,7 @@ class Proxy(object):
     __slots__ = ['obj', '_callbacks']
 
     def __init__(self):
+        warnings.warn('deprecated', DeprecationWarning)
         self._callbacks = []
         self.initialize(None)
 
@@ -3306,12 +3308,11 @@ class Database(object):
                  fields=None, ops=None, autorollback=False, use_speedups=True,
                  **connect_kwargs):
         self.connect_kwargs = {}
-        self.init(database, **connect_kwargs)
-
         if threadlocals:
             self.__local = _ConnectionLocal()
         else:
             self.__local = _BaseConnectionLocal()
+        self.init(database, **connect_kwargs)
 
         self._conn_lock = threading.Lock()
         self.autocommit = autocommit
@@ -3322,6 +3323,8 @@ class Database(object):
         self.op_overrides = merge_dict(self.op_overrides, ops or {})
 
     def init(self, database, **connect_kwargs):
+        if not self.is_closed():
+            self.close()
         self.deferred = database is None
         self.database = database
         self.connect_kwargs.update(connect_kwargs)
