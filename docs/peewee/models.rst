@@ -796,12 +796,12 @@ By using :py:class:`DeferredRelation` we can get around the problem and still us
 
 .. code-block:: python
 
-    # Create a proxy object to stand in for our as-yet-undefined Tweet model.
+    # Create a reference object to stand in for our as-yet-undefined Tweet model.
     DeferredTweet = DeferredRelation()
 
     class User(Model):
         username = CharField()
-        # Tweet has not been defined yet so use the proxy.
+        # Tweet has not been defined yet so use the deferred reference.
         favorite_tweet = ForeignKeyField(DeferredTweet, null=True)
 
     class Tweet(Model):
