@@ -25,7 +25,6 @@ import re
 import sys
 import threading
 import uuid
-import warnings
 from bisect import bisect_left
 from bisect import bisect_right
 from collections import deque
@@ -372,7 +371,6 @@ class Proxy(object):
     __slots__ = ['obj', '_callbacks']
 
     def __init__(self):
-        warnings.warn('deprecated', DeprecationWarning)
         self._callbacks = []
         self.initialize(None)
 

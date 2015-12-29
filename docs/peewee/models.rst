@@ -792,26 +792,26 @@ One option is to simply use an :py:class:`IntegerField` to store the raw ID:
         username = CharField()
         favorite_tweet_id = IntegerField(null=True)
 
-By using :py:class:`Proxy` we can get around the problem and still use a foreign key field:
+By using :py:class:`DeferredRelation` we can get around the problem and still use a foreign key field:
 
 .. code-block:: python
 
     # Create a proxy object to stand in for our as-yet-undefined Tweet model.
-    TweetProxy = Proxy()
+    DeferredTweet = DeferredRelation()
 
     class User(Model):
         username = CharField()
         # Tweet has not been defined yet so use the proxy.
-        favorite_tweet = ForeignKeyField(TweetProxy, null=True)
+        favorite_tweet = ForeignKeyField(DeferredTweet, null=True)
 
     class Tweet(Model):
         message = TextField()
         user = ForeignKeyField(User, related_name='tweets')
 
-    # Now that Tweet is defined, we can initialize the proxy object.
-    TweetProxy.initialize(Tweet)
+    # Now that Tweet is defined, we can initialize the reference.
+    DeferredTweet.set_model(Tweet)
 
-After initializing the proxy the foreign key fields are now correctly set up. There is one more quirk to watch out for, though. When you call :py:class:`~Model.create_table` we will again encounter the same issue. For this reason peewee will not automatically create a foreign key constraint for any *deferred* foreign keys.
+After initializing the deferred relation, the foreign key fields are now correctly set up. There is one more quirk to watch out for, though. When you call :py:class:`~Model.create_table` we will again encounter the same issue. For this reason peewee will not automatically create a foreign key constraint for any *deferred* foreign keys.
 
 Here is how to create the tables:
 

@@ -2111,17 +2111,17 @@ Database and its subclasses
 
         .. code-block:: python
 
-            PostProxy = Proxy()
+            DeferredPost = DeferredRelation()
 
             class User(Model):
                 username = CharField()
-                favorite_post = ForeignKeyField(PostProxy, null=True)
+                favorite_post = ForeignKeyField(DeferredPost, null=True)
 
             class Post(Model):
                 title = CharField()
                 author = ForeignKeyField(User, related_name='posts')
 
-            PostProxy.initialize(Post)
+            DeferredPost.set_model(Post)
 
             # Create tables.  The foreign key from Post -> User will be created
             # automatically, but the foreign key from User -> Post must be added
@@ -2652,6 +2652,31 @@ Misc
                      fn.Avg(Employee.salary).over(window))
                  .window(window)
                  .order_by(Employee.name))
+
+.. py:class:: DeferredRelation()
+
+    Used to reference a not-yet-created model class. Stands in as a placeholder for the related model of a foreign key. Useful for circular references.
+
+    .. code-block:: python
+
+        DeferredPost = DeferredRelation()
+
+        class User(Model):
+            username = CharField()
+
+            # `Post` is not available yet, it is declared below.
+            favorite_post = ForeignKeyField(DeferredPost, null=True)
+
+        class Post(Model):
+            # `Post` comes after `User` since it refers to `User`.
+            user = ForeignKeyField(User)
+            title = CharField()
+
+        DeferredPost.set_model(Post)  # Post is now available.
+
+    .. py:method:: set_model(model)
+
+        Replace the placeholder with the correct model class.
 
 .. py:class:: Proxy()
 
