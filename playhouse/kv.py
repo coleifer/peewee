@@ -1,5 +1,3 @@
-from base64 import b64decode
-from base64 import b64encode
 import operator
 import pickle
 try:
@@ -9,6 +7,7 @@ except ImportError:
 
 from peewee import *
 from peewee import Node
+from playhouse.fields import PickledField
 
 try:
     from playhouse.apsw_ext import APSWDatabase
@@ -21,13 +20,6 @@ except ImportError:
 Sentinel = type('Sentinel', (object,), {})
 
 key_value_db = KeyValueDatabase(':memory:', threadlocals=False)
-
-class PickleField(BlobField):
-    def db_value(self, value):
-        return b64encode(pickle.dumps(value))
-
-    def python_value(self, value):
-        return pickle.loads(b64decode(value))
 
 class JSONField(TextField):
     def db_value(self, value):
@@ -159,7 +151,8 @@ class KeyStore(object):
 
 class PickledKeyStore(KeyStore):
     def __init__(self, ordered=False, database=None):
-        super(PickledKeyStore, self).__init__(PickleField(), ordered, database)
+        super(PickledKeyStore, self).__init__(
+            PickledField(), ordered, database)
 
 
 class JSONKeyStore(KeyStore):
