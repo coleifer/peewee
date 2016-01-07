@@ -1,7 +1,12 @@
 import datetime
+import sys
 
 from peewee import *
 from playhouse.tests.base import TestModel
+
+
+if sys.version_info[0] == 3:
+    long = int
 
 
 class User(TestModel):
