@@ -32,6 +32,10 @@ class CompressedModel(BaseModel):
     data = CompressedField()
 
 
+class PickledModel(BaseModel):
+    data = PickledField()
+
+
 def convert_to_str(binary_data):
     if PY2:
         return str(binary_data)
@@ -161,3 +165,23 @@ class TestPasswordFields(ModelTestCase):
         tm_db = self.PasswordModel.get(self.PasswordModel.id == tm.id)
 
         self.assertTrue(tm_db.password.check_password(test_pwd),'Correct unicode password did not match')
+
+
+class TestPickledField(ModelTestCase):
+    requires = [PickledModel]
+
+    def test_pickled_field(self):
+        test_1 = {'foo': [0, 1, '2']}
+        test_2 = ['bar', ('nuggie', 'baze')]
+
+        p1 = PickledModel.create(data=test_1)
+        p2 = PickledModel.create(data=test_2)
+
+        p1_db = PickledModel.get(PickledModel.id == p1.id)
+        self.assertEqual(p1_db.data, test_1)
+
+        p2_db = PickledModel.get(PickledModel.id == p2.id)
+        self.assertEqual(p2_db.data, test_2)
+
+        p1_db_g = PickledModel.get(PickledModel.data == test_1)
+        self.assertEqual(p1_db_g.id, p1_db.id)

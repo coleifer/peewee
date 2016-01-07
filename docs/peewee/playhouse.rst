@@ -2556,6 +2556,13 @@ This module also contains several field classes that implement additional logic 
 
     .. note:: This field requires `pycrypto <https://www.dlitz.net/software/pycrypto/>`_, which can be installed by running ``pip install pycrypto``.
 
+
+.. py:class:: PickledField([**kwargs])
+
+    A field capable of storing arbitrary Python objects.
+
+    .. note:: If the ``cPickle`` module is available, it will be used.
+
 .. _gfk:
 
 Generic foreign keys

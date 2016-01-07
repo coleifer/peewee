@@ -1,3 +1,7 @@
+try:
+    import cPickle as pickle
+except ImportError:
+    import pickle
 import re
 import sys
 
@@ -284,6 +288,18 @@ class CompressedField(BlobField):
         def python_value(self, value):
             if value is not None:
                 return self.decompress(value).decode('utf-8')
+
+
+class PickledField(BlobField):
+    def db_value(self, value):
+        if value is not None:
+            return pickle.dumps(value)
+
+    def python_value(self, value):
+        if value is not None:
+            if isinstance(value, unicode_type):
+                value = value.encode('raw_unicode_escape')
+            return pickle.loads(value)
 
 
 if AES and Random:
