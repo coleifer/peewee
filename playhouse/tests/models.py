@@ -366,6 +366,22 @@ class UUIDRelatedModel(TestModel):
     value = IntegerField(default=0)
 
 
+class UInt32Field(Field):
+    db_field = 'int'
+
+    def db_value(self, value):
+        return long(value - (1 << 31))
+
+    def python_value(self, value):
+        return long(value + (1 << 31))
+
+class UIntModel(TestModel):
+    data = UInt32Field()
+
+class UIntRelModel(TestModel):
+    uint_model = ForeignKeyField(UIntModel, to_field='data')
+
+
 MODELS = [
     User,
     Blog,
@@ -421,5 +437,7 @@ MODELS = [
     NoPKModel,
     TestingID,
     UUIDData,
-    UUIDRelatedModel
+    UUIDRelatedModel,
+    UIntModel,
+    UIntRelModel,
 ]

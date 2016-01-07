@@ -1093,6 +1093,8 @@ class UUIDField(Field):
             return value
 
     def python_value(self, value):
+        if isinstance(value, uuid.UUID):
+            return value
         return None if value is None else uuid.UUID(value)
 
 def _date_part(date_part):
@@ -1347,6 +1349,11 @@ class ForeignKeyField(IntegerField):
         if isinstance(value, self.rel_model):
             value = value._get_pk_value()
         return self.to_field.db_value(value)
+
+    def python_value(self, value):
+        if isinstance(value, self.rel_model):
+            return value
+        return self.to_field.python_value(value)
 
 
 class CompositeKey(object):

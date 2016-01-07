@@ -10,9 +10,9 @@ from playhouse.tests.base import binary_types
 from playhouse.tests.base import database_class
 from playhouse.tests.base import ModelTestCase
 from playhouse.tests.base import PeeweeTestCase
-from playhouse.tests.base import skip_if
 from playhouse.tests.base import skip_test_if
 from playhouse.tests.base import skip_test_unless
+from playhouse.tests.base import skip_unless
 from playhouse.tests.base import test_db
 from playhouse.tests.models import *
 
@@ -821,3 +821,29 @@ class TestUUIDField(ModelTestCase):
                 ('a', [0, 1, 2]),
                 ('b', [0, 1, 2]),
             ])
+
+
+@skip_unless(lambda: isinstance(test_db, SqliteDatabase))
+class TestForeignKeyConversion(ModelTestCase):
+    requires = [UIntModel, UIntRelModel]
+
+    def test_fk_conversion(self):
+        u1 = UIntModel.create(data=1337)
+        u2 = UIntModel.create(data=(1 << 31) + 1000)
+
+        u1_db = UIntModel.get(UIntModel.data == 1337)
+        self.assertEqual(u1_db.id, u1.id)
+        u2_db = UIntModel.get(UIntModel.data == (1 << 31) + 1000)
+        self.assertEqual(u2_db.id, u2.id)
+
+        ur1 = UIntRelModel.create(uint_model=u1)
+        ur2 = UIntRelModel.create(uint_model=u2)
+
+        self.assertEqual(ur1.uint_model_id, 1337)
+        self.assertEqual(ur2.uint_model_id, (1 << 31) + 1000)
+
+        ur1_db = UIntRelModel.get(UIntRelModel.id == ur1.id)
+        ur2_db = UIntRelModel.get(UIntRelModel.id == ur2.id)
+
+        self.assertEqual(ur1_db.uint_model.id, u1.id)
+        self.assertEqual(ur2_db.uint_model.id, u2.id)
