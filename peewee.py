@@ -3848,7 +3848,7 @@ class MySQLDatabase(Database):
         'float': 'FLOAT',
         'primary_key': 'INTEGER AUTO_INCREMENT',
         'text': 'LONGTEXT',
-        'uuid': 'LONGTEXT'
+        'uuid': 'VARCHAR(255)',
     }
     for_update = True
     interpolation = '%s'
