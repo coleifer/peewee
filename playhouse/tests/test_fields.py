@@ -12,6 +12,7 @@ from playhouse.tests.base import ModelTestCase
 from playhouse.tests.base import PeeweeTestCase
 from playhouse.tests.base import skip_test_if
 from playhouse.tests.base import skip_test_unless
+from playhouse.tests.base import skip_if
 from playhouse.tests.base import skip_unless
 from playhouse.tests.base import test_db
 from playhouse.tests.models import *
@@ -716,6 +717,7 @@ class TestCheckConstraints(ModelTestCase):
                 txn.rollback()
 
 
+@skip_if(lambda: isinstance(test_db, MySQLDatabase)
 class TestServerDefaults(ModelTestCase):
     requires = [ServerDefaultModel]
 
