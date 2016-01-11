@@ -717,7 +717,7 @@ class TestCheckConstraints(ModelTestCase):
                 txn.rollback()
 
 
-@skip_if(lambda: isinstance(test_db, MySQLDatabase)
+@skip_if(lambda: isinstance(test_db, MySQLDatabase))
 class TestServerDefaults(ModelTestCase):
     requires = [ServerDefaultModel]
 
