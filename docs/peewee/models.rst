@@ -134,7 +134,7 @@ Field Type            Sqlite              Postgresql          MySQL
 ``DateField``         date                date                date
 ``TimeField``         time                time                time
 ``BlobField``         blob                bytea               blob
-``UUIDField``         not supported       uuid                not supported
+``UUIDField``         text                uuid                not supported
 ``BareField``         untyped             not supported       not supported
 ===================   =================   =================   =================
 
