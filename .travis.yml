@@ -9,10 +9,14 @@ python:
 env:
   - PEEWEE_TEST_BACKEND=sqlite
   - PEEWEE_TEST_BACKEND=postgresql
+  - PEEWEE_TEST_BACKEND=mysql
 services:
   - postgres
-install: "pip install psycopg2 Cython"
+  - mysql
+install: "pip install psycopg2 Cython pymysql"
 before_script:
-  - sh -c "psql -c 'create database peewee_test;' -U postgres"
-  - sh -c "psql peewee_test -c 'create extension hstore;' -U postgres"
+  - sh -c "if [ '$PEEWEE_TEST_BACKEND' = 'postgresql' ]; then psql -c 'drop database if exists peewee_test;' -U postgres; fi"
+  - sh -c "if [ '$PEEWEE_TEST_BACKEND' = 'postgresql' ]; then psql -c 'create database peewee_test;' -U postgres; fi"
+  - sh -c "if [ '$PEEWEE_TEST_BACKEND' = 'postgresql' ]; then psql peewee_test -c 'create extension hstore;' -U postgres; fi"
+  - sh -c "if [ '$PEEWEE_TEST_BACKEND' = 'mysql' ]; then mysql -e 'create database if not exists peewee_test;'; fi"
 script: "python runtests.py -a"
