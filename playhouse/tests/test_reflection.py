@@ -45,7 +45,7 @@ class ColTypes(BaseModel):
     class Meta:
         indexes = (
             (('f10', 'f11'), True),
-            (('f11', 'f12', 'f13'), False),
+            (('f11', 'f8', 'f13'), False),
         )
 
 class Nullable(BaseModel):
@@ -163,7 +163,7 @@ class TestReflection(PeeweeTestCase):
         indexes = col_types._meta.indexes
         self.assertEqual(sorted(indexes), [
             (['f10', 'f11'], True),
-            (['f11', 'f12', 'f13'], False),
+            (['f11', 'f8', 'f13'], False),
         ])
 
     def test_table_subset(self):
