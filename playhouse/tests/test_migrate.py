@@ -83,7 +83,6 @@ class BaseMigrationTestCase(object):
 
     # Each database behaves slightly differently.
     _exception_add_not_null = True
-    _exception_not_null_violation = IntegrityError
 
     _person_data = [
         ('Charlie', 'Leifer', None),
@@ -270,12 +269,11 @@ class BaseMigrationTestCase(object):
 
         # And attempting to insert a null value results in an integrity error.
         with self.database.transaction():
-            self.assertRaises(
-                self._exception_not_null_violation,
-                Person.create,
-                first_name='Kirby',
-                last_name='Snazebrauer',
-                dob=None)
+            with self.assertRaisesCtx((IntegrityError, OperationalError)):
+                Person.create(
+                    first_name='Kirby',
+                    last_name='Snazebrauer',
+                    dob=None)
 
     def test_drop_not_null(self):
         self._create_people()
@@ -308,11 +306,10 @@ class BaseMigrationTestCase(object):
 
         # And attempting to insert a null value results in an integrity error.
         with self.database.transaction():
-            self.assertRaises(
-                self._exception_not_null_violation,
-                Page.create,
-                name='fails',
-                user=None)
+            with self.assertRaisesCtx((OperationalError, IntegrityError)):
+                Page.create(
+                    name='fails',
+                    user=None)
 
         # Now we will drop it.
         with self.database.transaction():
@@ -620,4 +617,3 @@ class MySQLMigrationTestCase(BaseMigrationTestCase, PeeweeTestCase):
     # MySQL does not raise an exception when adding a not null constraint
     # to a column that contains NULL values.
     _exception_add_not_null = False
-    _exception_not_null_violation = OperationalError
