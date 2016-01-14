@@ -5,6 +5,47 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.8.0
+
+This release includes a couple new field types and greatly improved C extension support for both speedups and SQLite enhancements. Also includes some work, suggested by @foxx, to remove some places where `Proxy` was used in favor of more obvious APIs.
+
+### New features
+
+* [travis-ci builds](http://travis-ci.org/coleifer/peewee/builds/) now include MySQL and Python 3.5. Dropped support for Python 3.2 and 3.3. Builds also will run the C-extension code.
+* C extension speedups now enabled by default, includes faster implementations for `dict` and `tuple` `QueryResultWrapper` classes, faster date formatting, and a faster field and model sorting.
+* C implementations of SQLite functions is now enabled by default. SQLite extension is now compatible with APSW and can be used in standalone form directly from Python. See [SqliteExtDatabase](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#SqliteExtDatabase) for more details.
+* SQLite C extension now supports `murmurhash2`.
+* `UUIDField` is now supported for SQLite and MySQL, using `text` and `varchar` respectively, thanks @foxx!
+* Added `BinaryField`, thanks again, @foxx!
+* Added `PickledField` to `playhouse.fields`.
+* `ManyToManyField` now accepts a list of primary keys when adding or removing values from the through relationship.
+* Added support for SQLite [table-valued functions](http://sqlite.org/vtab.html#tabfunc2) using the [sqlite-vtfunc library](https://github.com/coleifer/sqlite-vtfunc).
+* Significantly simplified the build process for compiling the C extensions.
+
+### Backwards-incompatible changes
+
+* Instead of using a `Proxy` for defining circular foreign key relationships, you now need to use [DeferredRelation](http://docs.peewee-orm.com/en/latest/peewee/api.html#DeferredRelation).
+* Instead of using a `Proxy` for defining many-to-many through tables, you now need to use [DeferredThroughModel](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#DeferredThroughModel).
+* SQLite Virtual Models must now use `Meta.extension_module` and `Meta.extension_options` to declare extension and any options. For more details, see [VirtualModel](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#VirtualModel).
+* MySQL database will now issue `COMMIT` statements for `SELECT` queries. This was not necessary, but added due to an influx of confused users creating GitHub tickets. Hint: learn to user your damn database, it's not magic!
+
+### Bugs fixed
+
+Some of these may have been included in a previous release, but since I did not list them I'm listing them here.
+
+* #766, fixed bug with PasswordField and Python3. Fuck Python 3.
+* #768, fixed SortedFieldList and `remove_field()`. Thanks @klen!
+* #771, clarified docs for APSW.
+* #773, added docs for request hooks in Pyramid (who uses Pyramid, by the way?).
+* #774, prefetch() only loads first ForeignKeyField for a given relation.
+* #782, fixed typo in docs.
+* #791, foreign keys were not correctly handling coercing to the appropriate python value.
+* #792, cleaned up some CSV utils code.
+* #798, cleaned up iteration protocol in QueryResultWrappers.
+* #806, not really a bug, but MySQL users were clowning around and needed help.
+
+[View commits](https://github.com/coleifer/peewee/compare/2.7.4...2.8.0)
+
 ## 2.7.4
 
 This is another small release which adds code to automatically build the SQLite C extension if `libsqlite` is available. The release also includes:

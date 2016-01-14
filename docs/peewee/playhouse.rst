@@ -2533,6 +2533,36 @@ This module also contains several field classes that implement additional logic 
                 Course,
                 StudentCourseThrough])
 
+.. py:class:: DeferredThroughModel()
+
+    In some instances, you may need to obtain a reference to a through model before that model is actually defined. In order to avoid weird circular logic, you can use the ``DeferredThroughModel`` as a placeholder, then "fill it in" when you're ready.
+
+    Example:
+
+    .. code-block:: python
+
+        class User(Model):
+            username = CharField()
+
+        NoteThroughDeferred = DeferredThroughModel()  # Create placeholder.
+
+        class Note(Model):
+            text = TextField()
+            users = ManyToManyField(User, through_model=NoteThroughDeferred)
+
+        class NoteThrough(Model):
+            user = ForeignKeyField(User)
+            note = ForeignKeyField(Note)
+            sort_order = IntegerField(default=0)
+
+        # Now that all the models are defined, we can replace the placeholder
+        # with the actual through model implementation.
+        NoteThroughDeferred.set_model(NoteThrough)
+
+    .. py:method:: set_model(model_class)
+
+        Initialize the deferred placeholder with the appropriate model class.
+
 .. py:class:: CompressedField([compression_level=6[, algorithm='zlib'[, **kwargs]]])
 
     ``CompressedField`` stores compressed data using the specified algorithm. This field extends :py:class:`BlobField`, transparently storing a compressed representation of the data in the database.
