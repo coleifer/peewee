@@ -19,7 +19,7 @@ from playhouse.tests.models import *
 
 
 class TestFieldTypes(ModelTestCase):
-    requires = [NullModel, BlobModel, BinaryModel]
+    requires = [NullModel, BlobModel, BinaryModel, FixedBinaryModel]
 
     _dt = datetime.datetime
     _d = datetime.date
@@ -277,11 +277,11 @@ class TestFieldTypes(ModelTestCase):
             23, 11
         ))
 
-    @skip_test_if(lambda: isinstance(test_db, MySQLDatabase))
-    def test_blob_and_binary_field(self):
+    #@skip_test_if(lambda: isinstance(test_db, MySQLDatabase))
+    def test_blob_field(self):
         def inner(cls):
-            byte_count = 256
-            data = ''.join(chr(i) for i in range(256))
+            byte_count = 255 if cls in (BinaryModel, FixedBinaryModel) else 256 
+            data = ''.join(chr(i) for i in range(byte_count))
             blob = cls.create(data=data)
 
             # pull from db and check binary data
@@ -310,17 +310,7 @@ class TestFieldTypes(ModelTestCase):
 
         inner(BlobModel)
         inner(BinaryModel)
-
-    @skip_test_unless(lambda: isinstance(test_db, MySQLDatabase))
-    def test_blob_and_binary_field_mysql(self):
-        def inner(cls):
-            data = bytes(bytearray(range(256)))
-            blob = cls.create(data=Param(data))
-            res = cls.get(cls.id == blob.id)
-            self.assertEqual(blob.data, data)
-
-        inner(BlobModel)
-        inner(BinaryModel)
+        inner(FixedBinaryModel)
 
     def test_between(self):
         field = NullModel.int_field
