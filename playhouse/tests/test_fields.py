@@ -17,9 +17,49 @@ from playhouse.tests.base import skip_unless
 from playhouse.tests.base import test_db
 from playhouse.tests.models import *
 
+class BlobFieldCheckMixin(object):
+    def inner_blob_field(self, cls):
+        byte_count = 255 if cls in (BinaryModel, FixedBinaryModel) else 256 
+        data = ''.join(chr(i) for i in range(byte_count))
+        blob = cls.create(data=data)
 
-class TestFieldTypes(ModelTestCase):
-    requires = [NullModel, BlobModel, BinaryModel, FixedBinaryModel]
+        # pull from db and check binary data
+        res = cls.get(cls.id == blob.id)
+        self.assertTrue(isinstance(res.data, binary_types))
+
+        self.assertEqual(len(res.data), byte_count)
+        db_data = res.data
+        binary_data = binary_construct(data)
+
+        if db_data != binary_data and sys.version_info[:3] >= (3, 3, 3):
+            db_data = db_data.tobytes()
+
+        self.assertEqual(db_data, binary_data)
+
+        # try querying the blob field
+        binary_data = res.data
+
+        # use the string representation
+        res = cls.get(cls.data == data)
+        self.assertEqual(res.id, blob.id)
+
+        # use the binary representation
+        res = cls.get(cls.data == binary_data)
+        self.assertEqual(res.id, blob.id)
+
+
+@skip_unless(lambda: isinstance(test_db, MySQLDatabase))
+class TestFieldTypesMySQL(BlobFieldCheckMixin, ModelTestCase):
+    requires = [BinaryModel, FixedBinaryModel]
+
+    def test_blob_field_mysql(self):
+        self.inner_blob_field(BlobModel)
+        self.inner_blob_field(BinaryModel)
+        self.inner_blob_field(FixedBinaryModel)
+
+
+class TestFieldTypes(BlobFieldCheckMixin, ModelTestCase):
+    requires = [NullModel, BlobModel]
 
     _dt = datetime.datetime
     _d = datetime.date
@@ -45,6 +85,9 @@ class TestFieldTypes(ModelTestCase):
                 self.field_data[attr].append(col)
                 setattr(nm, attr, col)
             nm.save()
+
+    def test_blob_field(self):
+        self.inner_blob_field(BlobModel)
 
     def assertNM(self, q, exp):
         query = NullModel.select().where(q).order_by(NullModel.id)
@@ -276,45 +319,6 @@ class TestFieldTypes(ModelTestCase):
         self.assertEqual(tf.python_value('11:11 PM'), t(
             23, 11
         ))
-
-    def inner_blob_field(self, cls):
-        byte_count = 255 if cls in (BinaryModel, FixedBinaryModel) else 256 
-        data = ''.join(chr(i) for i in range(byte_count))
-        blob = cls.create(data=data)
-
-        # pull from db and check binary data
-        res = cls.get(cls.id == blob.id)
-        self.assertTrue(isinstance(res.data, binary_types))
-
-        self.assertEqual(len(res.data), byte_count)
-        db_data = res.data
-        binary_data = binary_construct(data)
-
-        if db_data != binary_data and sys.version_info[:3] >= (3, 3, 3):
-            db_data = db_data.tobytes()
-
-        self.assertEqual(db_data, binary_data)
-
-        # try querying the blob field
-        binary_data = res.data
-
-        # use the string representation
-        res = cls.get(cls.data == data)
-        self.assertEqual(res.id, blob.id)
-
-        # use the binary representation
-        res = cls.get(cls.data == binary_data)
-        self.assertEqual(res.id, blob.id)
-
-    @skip_test_if(lambda: not isinstance(test_db, MySQLDatabase))
-    def test_blob_field_mysql(self):
-        self.inner_blob_field(BlobModel)
-
-    @skip_test_if(lambda: isinstance(test_db, MySQLDatabase))
-    def test_blob_field_mysql(self):
-        self.inner_blob_field(BlobModel)
-        self.inner_blob_field(BinaryModel)
-        self.inner_blob_field(FixedBinaryModel)
 
     def test_between(self):
         field = NullModel.int_field
