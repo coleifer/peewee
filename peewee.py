@@ -43,6 +43,7 @@ __all__ = [
     'BigIntegerField',
     'BlobField',
     'BinaryField',
+    'FixedBinaryField',
     'BooleanField',
     'CharField',
     'Check',
@@ -1078,8 +1079,33 @@ class BlobField(Field):
             return binary_construct(value)
         return value
 
+    def python_value(self, value):
+        if isinstance(value, basestring):
+            return binary_construct(value)
+
+
 class BinaryField(BlobField):
+    db_field = 'varbinary'
+
+    def __init__(self, max_length=255, *args, **kwargs):
+        self.max_length = max_length
+        super(BinaryField, self).__init__(*args, **kwargs)
+
+    def clone_base(self, **kwargs):
+        return super(BinaryField, self).clone_base(
+            max_length=self.max_length,
+            **kwargs)
+
+    def get_modifiers(self):
+        return self.max_length and [self.max_length] or None
+
+    def coerce(self, value):
+        return binary_construct(value or '')
+
+
+class FixedBinaryField(BinaryField):
     db_field = 'binary'
+
 
 class UUIDField(Field):
     db_field = 'uuid'
@@ -1422,6 +1448,7 @@ class QueryCompiler(object):
         'bare': '',
         'bigint': 'BIGINT',
         'binary': 'BLOB',
+        'varbinary': 'BLOB',
         'blob': 'BLOB',
         'bool': 'SMALLINT',
         'date': 'DATE',
@@ -3693,6 +3720,7 @@ class SqliteDatabase(Database):
     def truncate_date(self, date_part, date_field):
         return fn.strftime(SQLITE_DATE_TRUNC_MAPPING[date_part], date_field)
 
+
 class PostgresqlDatabase(Database):
     commit_select = True
     compound_select_parentheses = True
@@ -3706,7 +3734,8 @@ class PostgresqlDatabase(Database):
         'double': 'DOUBLE PRECISION',
         'primary_key': 'SERIAL',
         'uuid': 'UUID',
-        'binary': 'BYTEA'
+        'binary': 'BYTEA',
+        'varbinary': 'BYTEA'
     }
     for_update = True
     for_update_nowait = True
@@ -3844,6 +3873,7 @@ class MySQLDatabase(Database):
     field_overrides = {
         'bool': 'BOOL',
         'binary': 'BINARY',
+        'varbinary': 'VARBINARY',
         'decimal': 'NUMERIC',
         'double': 'DOUBLE PRECISION',
         'float': 'FLOAT',

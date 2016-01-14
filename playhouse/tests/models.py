@@ -188,6 +188,10 @@ class BlobModel(TestModel):
 class BinaryModel(TestModel):
     data = BinaryField()
 
+class FixedBinaryModel(TestModel):
+    data = FixedBinaryField()
+
+
 class Job(TestModel):
     name = CharField()
 
@@ -412,6 +416,7 @@ MODELS = [
     OrphanPet,
     BlobModel,
     BinaryModel,
+    FixedBinaryModel,
     Job,
     JobExecutionRecord,
     JERRelated,
