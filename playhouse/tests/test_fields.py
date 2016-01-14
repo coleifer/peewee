@@ -277,40 +277,44 @@ class TestFieldTypes(ModelTestCase):
             23, 11
         ))
 
-    #@skip_test_if(lambda: isinstance(test_db, MySQLDatabase))
-    def test_blob_field(self):
-        def inner(cls):
-            byte_count = 255 if cls in (BinaryModel, FixedBinaryModel) else 256 
-            data = ''.join(chr(i) for i in range(byte_count))
-            blob = cls.create(data=data)
+    def inner_blob_field(self, cls):
+        byte_count = 255 if cls in (BinaryModel, FixedBinaryModel) else 256 
+        data = ''.join(chr(i) for i in range(byte_count))
+        blob = cls.create(data=data)
 
-            # pull from db and check binary data
-            res = cls.get(cls.id == blob.id)
-            self.assertTrue(isinstance(res.data, binary_types))
+        # pull from db and check binary data
+        res = cls.get(cls.id == blob.id)
+        self.assertTrue(isinstance(res.data, binary_types))
 
-            self.assertEqual(len(res.data), byte_count)
-            db_data = res.data
-            binary_data = binary_construct(data)
+        self.assertEqual(len(res.data), byte_count)
+        db_data = res.data
+        binary_data = binary_construct(data)
 
-            if db_data != binary_data and sys.version_info[:3] >= (3, 3, 3):
-                db_data = db_data.tobytes()
+        if db_data != binary_data and sys.version_info[:3] >= (3, 3, 3):
+            db_data = db_data.tobytes()
 
-            self.assertEqual(db_data, binary_data)
+        self.assertEqual(db_data, binary_data)
 
-            # try querying the blob field
-            binary_data = res.data
+        # try querying the blob field
+        binary_data = res.data
 
-            # use the string representation
-            res = cls.get(cls.data == data)
-            self.assertEqual(res.id, blob.id)
+        # use the string representation
+        res = cls.get(cls.data == data)
+        self.assertEqual(res.id, blob.id)
 
-            # use the binary representation
-            res = cls.get(cls.data == binary_data)
-            self.assertEqual(res.id, blob.id)
+        # use the binary representation
+        res = cls.get(cls.data == binary_data)
+        self.assertEqual(res.id, blob.id)
 
-        inner(BlobModel)
-        inner(BinaryModel)
-        inner(FixedBinaryModel)
+    @skip_test_if(lambda: not isinstance(test_db, MySQLDatabase))
+    def test_blob_field_mysql(self):
+        self.inner_blob_field(BlobModel)
+
+    @skip_test_if(lambda: isinstance(test_db, MySQLDatabase))
+    def test_blob_field_mysql(self):
+        self.inner_blob_field(BlobModel)
+        self.inner_blob_field(BinaryModel)
+        self.inner_blob_field(FixedBinaryModel)
 
     def test_between(self):
         field = NullModel.int_field
