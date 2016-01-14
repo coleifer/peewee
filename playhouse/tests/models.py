@@ -3,6 +3,7 @@ import sys
 
 from peewee import *
 from playhouse.tests.base import TestModel
+from playhouse.tests.base import test_db
 
 
 if sys.version_info[0] == 3:
@@ -184,9 +185,6 @@ class CSVRow(TestModel):
 
 class BlobModel(TestModel):
     data = BlobField()
-
-class BinaryModel(TestModel):
-    data = BinaryField()
 
 class Job(TestModel):
     name = CharField()
@@ -411,7 +409,6 @@ MODELS = [
     ChildPet,
     OrphanPet,
     BlobModel,
-    BinaryModel,
     Job,
     JobExecutionRecord,
     JERRelated,
