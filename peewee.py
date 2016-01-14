@@ -3720,6 +3720,7 @@ class SqliteDatabase(Database):
     def truncate_date(self, date_part, date_field):
         return fn.strftime(SQLITE_DATE_TRUNC_MAPPING[date_part], date_field)
 
+
 class PostgresqlDatabase(Database):
     commit_select = True
     compound_select_parentheses = True
