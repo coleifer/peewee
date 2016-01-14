@@ -1943,8 +1943,8 @@ class QueryCompiler(object):
             *fk_clause.nodes)
     create_foreign_key = return_parsed_node('_create_foreign_key')
 
-    def _create_table(self, model_class, safe=False):
-        statement = 'CREATE TABLE IF NOT EXISTS' if safe else 'CREATE TABLE'
+    def _create_table(self, model_class, fail_silently=False):
+        statement = 'CREATE TABLE IF NOT EXISTS' if fail_silently else 'CREATE TABLE'
         meta = model_class._meta
 
         columns, constraints = [], []
@@ -3535,12 +3535,12 @@ class Database(object):
     def sequence_exists(self, seq):
         raise NotImplementedError
 
-    def create_table(self, model_class, safe=False):
+    def create_table(self, model_class, fail_silently=False):
         qc = self.compiler()
-        return self.execute_sql(*qc.create_table(model_class, safe))
+        return self.execute_sql(*qc.create_table(model_class, fail_silently))
 
-    def create_tables(self, models, safe=False):
-        create_model_tables(models, fail_silently=safe)
+    def create_tables(self, models, fail_silently=False):
+        create_model_tables(models, fail_silently=fail_silently)
 
     def create_index(self, model_class, fields, unique=False):
         qc = self.compiler()
@@ -3567,8 +3567,8 @@ class Database(object):
         return self.execute_sql(*qc.drop_table(
             model_class, fail_silently, cascade))
 
-    def drop_tables(self, models, safe=False, cascade=False):
-        drop_model_tables(models, fail_silently=safe, cascade=cascade)
+    def drop_tables(self, models, fail_silently=False, cascade=False):
+        drop_model_tables(models, fail_silently=fail_silently, cascade=cascade)
 
     def drop_sequence(self, seq):
         if self.sequences:
