@@ -5,13 +5,20 @@ python:
   - "3.4"
   - "3.5"
 env:
-  - PEEWEE_TEST_BACKEND=sqlite
-  - PEEWEE_TEST_BACKEND=postgresql
-  - PEEWEE_TEST_BACKEND=mysql
+  - CYTHON_VERSION=0.23.4
+  - CYTHON_VERSION=0.23
+  - CYTHON_VERSION=0.22
+  - CYTHON_VERSION=0.21.1
+  - CYTHON_VERSION=0.21
+  - PEEWEE_TEST_BACKEND=sqlite CYTHON_VERSION=0.23.4
+  - PEEWEE_TEST_BACKEND=postgresql CYTHON_VERSION=0.23.4
+  - PEEWEE_TEST_BACKEND=mysql CYTHON_VERSION=0.23.4
 services:
   - postgres
   - mysql
-install: "pip install psycopg2 Cython pymysql"
+install:
+  - "pip install Cython==$CYTHON_VERSION"
+  - "pip install psycopg2 pymysql"
 before_script:
   - sh -c "python setup.py build_ext -i"
   - sh -c "psql -c 'drop database if exists peewee_test;' -U postgres"
