@@ -2,6 +2,7 @@ import os
 import sys
 from distutils.core import setup
 from distutils.extension import Extension
+from distutils.version import StrictVersion
 
 f = open(os.path.join(os.path.dirname(__file__), 'README.rst'))
 readme = f.read()
@@ -10,6 +11,9 @@ f.close()
 setup_kwargs = {}
 try:
     from Cython.Distutils import build_ext
+    from Cython import __version__ as cython_version
+    if StrictVersion(cython_version) < StrictVersion("0.22.1"):
+        raise ImportError("requires Cython>=0.22.1 not %s" % cython_version)
 except ImportError:
     cython_installed = False
 else:
