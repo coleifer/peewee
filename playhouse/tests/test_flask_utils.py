@@ -55,6 +55,18 @@ class TestPaginationHelpers(ModelTestCase):
         with self.app.test_request_context('/?p=5'):
             self.assertRaises(Exception, paginated_query.get_object_list)
 
+    def test_empty_query_no_404(self):
+        """Paginated query of no objects should return empty list"""
+        empty_query = User.select().where(
+            (User.username == 'fake-name') &
+            (User.username != 'fake-name')
+        )
+        page_size = 5
+        check_bounds = True
+        paginated_query = PaginatedQuery(empty_query, page_size, check_bounds=check_bounds)
+        with self.app.test_request_context('/'):
+            self.assertEqual(paginated_query.get_object_list(), [])
+
 
 class TestFlaskDB(PeeweeTestCase):
     def tearDown(self):
