@@ -12,7 +12,7 @@ f.close()
 setup_kwargs = {}
 try:
     from Cython.Distutils import build_ext
-    from Cythin import __version__ as cython_version
+    from Cython import __version__ as cython_version
     if StrictVersion(cython_version) < StrictVersion('0.22.1'):
         warnings.warn('Your Cython appears to be an older version. You may '
                       'need to upgrade Cython in order to build the peewee '
