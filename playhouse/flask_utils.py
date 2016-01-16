@@ -36,7 +36,10 @@ class PaginatedQuery(object):
         return int(math.ceil(float(self.query.count()) / self.paginate_by))
 
     def get_object_list(self):
-        if self.check_bounds and self.get_page() > self.get_page_count():
+        page_count = self.get_page_count()
+        if page_count == 0:
+            return []
+        elif self.check_bounds and self.get_page() > page_count:
             abort(404)
         return self.query.paginate(self.get_page(), self.paginate_by)
 
