@@ -4375,7 +4375,8 @@ class BaseModel(type):
 
         # initialize the new class and set the magic attributes
         cls = super(BaseModel, cls).__new__(cls, name, bases, attrs)
-        cls._meta = ModelOptions(cls, **meta_options)
+        ModelOptionsBase = meta_options.get('model_options_base', ModelOptions)
+        cls._meta = ModelOptionsBase(cls, **meta_options)
         cls._data = None
         cls._meta.indexes = list(cls._meta.indexes)
 

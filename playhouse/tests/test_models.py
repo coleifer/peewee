@@ -4,6 +4,7 @@ import sys
 from functools import partial
 
 from peewee import *
+from peewee import ModelOptions
 from playhouse.tests.base import compiler
 from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
@@ -1430,6 +1431,39 @@ class TestManyToMany(ModelTestCase):
         self.assertEqual(
             sorted(result_list),
             ['c1', 'c12', 'c2', 'c23', 'c3', 'u1', 'u1', 'u2', 'u2', 'u2'])
+
+
+class TestCustomModelOptionsBase(PeeweeTestCase):
+    def test_custom_model_options_base(self):
+        db = SqliteDatabase(None)
+
+        class DatabaseDescriptor(object):
+            def __init__(self, db):
+                self._db = db
+
+            def __get__(self, instance_type, instance):
+                if instance is not None:
+                    return self._db
+                return self
+
+            def __set__(self, instance, value):
+                pass
+
+        class TestModelOptions(ModelOptions):
+            database = DatabaseDescriptor(db)
+
+        class BaseModel(Model):
+            class Meta:
+                model_options_base = TestModelOptions
+
+        class TestModel(BaseModel):
+            pass
+
+        class TestChildModel(TestModel):
+            pass
+
+        self.assertEqual(id(TestModel._meta.database), id(db))
+        self.assertEqual(id(TestChildModel._meta.database), id(db))
 
 
 class TestModelOptionInheritance(PeeweeTestCase):
