@@ -79,6 +79,13 @@ class GFKTestCase(ModelTestCase):
         self.assertEqual(t_db.object_type, 'tag')
         self.assertEqual(t_db.object, t_db)
 
+    def test_querying(self):
+        self.create()
+
+        tacos = Entree.get(Entree.name == 'tacos')
+        tags = Tag.select().where(Tag.object == tacos).order_by(Tag.tag)
+        self.assertEqual([tag.tag for tag in tags], ['fried', 'spicy'])
+
     def test_gfk_api(self):
         self.create()
 

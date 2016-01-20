@@ -52,6 +52,30 @@ def get_model(tbl_name):
                 break
     return table_cache.get(tbl_name)
 
+class BoundGFKField(object):
+    __slots__ = ('model_class', 'gfk_field')
+
+    def __init__(self, model_class, gfk_field):
+        self.model_class = model_class
+        self.gfk_field = gfk_field
+
+    def __eq__(self, other):
+        meta = self.model_class._meta
+        type_field = meta.fields[self.gfk_field.model_type_field]
+        id_field = meta.fields[self.gfk_field.model_id_field]
+        return (
+            (type_field == other._meta.db_table) &
+            (id_field == other._get_pk_value()))
+
+    def __ne__(self, other):
+        other_cls = type(other)
+        type_field = other._meta.fields[self.gfk_field.model_type_field]
+        id_field = other._meta.fields[self.gfk_field.model_id_field]
+        return (
+            (type_field == other._meta.db_table) &
+            (id_field != other._get_pk_value()))
+
+
 class GFKField(object):
     def __init__(self, model_type_field='object_type',
                  model_id_field='object_id'):
@@ -78,12 +102,13 @@ class GFKField(object):
                 if rel_obj:
                     instance._obj_cache[self.att_name] = rel_obj
             return instance._obj_cache.get(self.att_name)
-        return self
+        return BoundGFKField(instance_type, self)
 
     def __set__(self, instance, value):
         instance._obj_cache[self.att_name] = value
         instance._data[self.model_type_field] = value._meta.db_table
         instance._data[self.model_id_field] = value._get_pk_value()
+
 
 class ReverseGFK(object):
     def __init__(self, model, model_type_field='object_type',
