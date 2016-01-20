@@ -86,6 +86,33 @@ class GFKTestCase(ModelTestCase):
         tags = Tag.select().where(Tag.object == tacos).order_by(Tag.tag)
         self.assertEqual([tag.tag for tag in tags], ['fried', 'spicy'])
 
+    def test_get_or_create(self):
+        a = Appetizer.create(name='walrus mix')
+        tag, created = Tag.get_or_create(tag='walrus-food', object=a)
+        self.assertTrue(created)
+        self.assertEqual(tag.object, a)
+
+        tag_db = Tag.get(Tag.id == tag.id)
+        self.assertEqual(tag_db.object, a)
+
+        tag, created = Tag.get_or_create(tag='walrus-food', object=a)
+        self.assertFalse(created)
+        self.assertEqual(Tag.select().count(), 1)
+        self.assertEqual(tag, tag_db)
+
+        tag2, created = Tag.get_or_create(tag='walrus-treats', object=a)
+        self.assertTrue(created)
+        tag2_db = Tag.get(Tag.id == tag2.id)
+        self.assertEqual(tag2_db.tag, 'walrus-treats')
+        self.assertEqual(tag2_db.object, a)
+
+        b = Appetizer.create(name='walrus-meal')
+        tag3, created = Tag.get_or_create(tag='walrus-treats', object=b)
+        self.assertTrue(created)
+        tag3_db = Tag.get(Tag.id == tag3.id)
+        self.assertEqual(tag3_db.tag, 'walrus-treats')
+        self.assertEqual(tag3_db.object, b)
+
     def test_gfk_api(self):
         self.create()
 

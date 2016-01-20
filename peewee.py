@@ -4501,9 +4501,15 @@ class Model(with_metaclass(BaseModel)):
     @classmethod
     def get_or_create(cls, **kwargs):
         defaults = kwargs.pop('defaults', {})
-        sq = cls.select().filter(**kwargs)
+        query = cls.select()
+        for field, value in kwargs.items():
+            if '__' in field:
+                query = query.filter(**{field: value})
+            else:
+                query = query.where(getattr(cls, field) == value)
+
         try:
-            return sq.get(), False
+            return query.get(), False
         except cls.DoesNotExist:
             try:
                 params = dict((k, v) for k, v in kwargs.items()
@@ -4513,7 +4519,7 @@ class Model(with_metaclass(BaseModel)):
                     return cls.create(**params), True
             except IntegrityError as exc:
                 try:
-                    return sq.get(), False
+                    return query.get(), False
                 except cls.DoesNotExist:
                     raise exc
 
