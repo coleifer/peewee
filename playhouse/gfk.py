@@ -59,6 +59,26 @@ class BoundGFKField(object):
         self.model_class = model_class
         self.gfk_field = gfk_field
 
+    @property
+    def unique(self):
+        indexes = self.model_class._meta.indexes
+        fields = set((self.gfk_field.model_type_field,
+                      self.gfk_field.model_id_field))
+        for (indexed_columns, is_unique) in indexes:
+            if not fields - set(indexed_columns):
+                return True
+        return False
+
+    @property
+    def primary_key(self):
+        pk = self.model_class._meta.primary_key
+        if isinstance(pk, CompositeKey):
+            fields = set((self.gfk_field.model_type_field,
+                          self.gfk_field.model_id_field))
+            if not fields - set(pk.field_names):
+                return True
+        return False
+
     def __eq__(self, other):
         meta = self.model_class._meta
         type_field = meta.fields[self.gfk_field.model_type_field]
