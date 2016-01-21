@@ -978,7 +978,7 @@ class BigIntegerField(IntegerField):
     db_field = 'bigint'
 
 class SmallIntegerField(IntegerField):
-    db_field = 'small_int'
+    db_field = 'smallint'
 
 class PrimaryKeyField(IntegerField):
     db_field = 'primary_key'
