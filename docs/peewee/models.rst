@@ -116,27 +116,28 @@ For full documentation on fields, see the :ref:`Fields API notes <fields-api>`
 Field types table
 ^^^^^^^^^^^^^^^^^
 
-===================   =================   =================   =================
-Field Type            Sqlite              Postgresql          MySQL
-===================   =================   =================   =================
-``CharField``         varchar             varchar             varchar
-``FixedCharField``    char                char                char
-``TextField``         text                text                longtext
-``DateTimeField``     datetime            timestamp           datetime
-``IntegerField``      integer             integer             integer
-``BooleanField``      smallint            boolean             bool
-``FloatField``        real                real                real
-``DoubleField``       real                double precision    double precision
-``BigIntegerField``   integer             bigint              bigint
-``DecimalField``      decimal             numeric             numeric
-``PrimaryKeyField``   integer             serial              integer
-``ForeignKeyField``   integer             integer             integer
-``DateField``         date                date                date
-``TimeField``         time                time                time
-``BlobField``         blob                bytea               blob
-``UUIDField``         text                uuid                varchar(40)
-``BareField``         untyped             not supported       not supported
-===================   =================   =================   =================
+=====================   =================   =================   =================
+Field Type              Sqlite              Postgresql          MySQL
+=====================   =================   =================   =================
+``CharField``           varchar             varchar             varchar
+``FixedCharField``      char                char                char
+``TextField``           text                text                longtext
+``DateTimeField``       datetime            timestamp           datetime
+``IntegerField``        integer             integer             integer
+``BooleanField``        integer             boolean             bool
+``FloatField``          real                real                real
+``DoubleField``         real                double precision    double precision
+``BigIntegerField``     integer             bigint              bigint
+``SmallIntegerField``   integer             smallint            smallint
+``DecimalField``        decimal             numeric             numeric
+``PrimaryKeyField``     integer             serial              integer
+``ForeignKeyField``     integer             integer             integer
+``DateField``           date                date                date
+``TimeField``           time                time                time
+``BlobField``           blob                bytea               blob
+``UUIDField``           text                uuid                varchar(40)
+``BareField``           untyped             not supported       not supported
+=====================   =================   =================   =================
 
 .. note::
     Don't see the field you're looking for in the above table? It's easy to create custom field types and use them with your models.

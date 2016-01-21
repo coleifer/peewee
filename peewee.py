@@ -977,6 +977,9 @@ class IntegerField(Field):
 class BigIntegerField(IntegerField):
     db_field = 'bigint'
 
+class SmallIntegerField(IntegerField):
+    db_field = 'small_int'
+
 class PrimaryKeyField(IntegerField):
     db_field = 'primary_key'
 
@@ -1427,6 +1430,7 @@ class QueryCompiler(object):
         'float': 'REAL',
         'int': 'INTEGER',
         'primary_key': 'INTEGER',
+        'smallint': 'SMALLINT',
         'string': 'VARCHAR',
         'text': 'TEXT',
         'time': 'TIME',
@@ -3581,6 +3585,8 @@ class Database(object):
 
 class SqliteDatabase(Database):
     field_overrides = {
+        'bool': 'INTEGER',
+        'smallint': 'INTEGER',
         'uuid': 'TEXT',
     }
     foreign_keys = False
