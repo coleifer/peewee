@@ -1,11 +1,9 @@
 *.pyc
 build
 prof/
-playhouse/_sqlite_ext.c
-playhouse/_sqlite_ext.h
-playhouse/_sqlite_ext*.so
-playhouse/speedups.c
-playhouse/_speedups*.so
+playhouse/*.c
+playhouse/*.h
+playhouse/*.so
 playhouse/tests/peewee_test.db
 .idea/
 MANIFEST
