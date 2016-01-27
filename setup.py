@@ -24,7 +24,7 @@ else:
 
 speedups_ext_module = Extension(
     'playhouse._speedups',
-    ['playhouse/speedups.pyx'])
+    ['playhouse/_speedups.pyx'])
 sqlite_ext_module = Extension(
     'playhouse._sqlite_ext',
     ['playhouse/_sqlite_ext.pyx'])

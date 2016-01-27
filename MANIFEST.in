@@ -5,7 +5,7 @@ include TODO.rst
 include runtests.py
 include tests.py
 include playhouse/_sqlite_ext.pyx
-include playhouse/speedups.pyx
+include playhouse/_speedups.pyx
 include playhouse/tests/README
 recursive-include examples *
 recursive-include docs *
