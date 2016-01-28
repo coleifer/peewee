@@ -3,7 +3,7 @@ import datetime
 
 from playhouse.apsw_ext import *
 from playhouse.tests.base import ModelTestCase
-
+from uuid import uuid1
 
 db = APSWDatabase(':memory:')
 
@@ -20,9 +20,13 @@ class Message(BaseModel):
     pub_date = DateTimeField()
     published = BooleanField()
 
+class UniversallyUniqueKeyValue(BaseModel):
+    key = UUIDField(primary_key=True)
+    value = TextField()
+
 
 class APSWTestCase(ModelTestCase):
-    requires = [Message, User]
+    requires = [Message, User, UniversallyUniqueKeyValue]
 
     def test_select_insert(self):
         users = ('u1', 'u2', 'u3')
@@ -97,3 +101,9 @@ class APSWTestCase(ModelTestCase):
         create_success()
         self.assertEqual(User.select().count(), 2)
         self.assertEqual(Message.select().count(), 2)
+
+    def test_non_int_pk(self):
+        universal_key = uuid1()
+        ukv = UniversallyUniqueKeyValue.create(key=universal_key, value = 'test')
+        self.assertEqual(ukv.key, universal_key)
+
