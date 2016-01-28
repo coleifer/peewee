@@ -103,7 +103,8 @@ class APSWDatabase(SqliteExtDatabase):
         return cursor
 
     def last_insert_id(self, cursor, model):
-        return cursor.getconnection().last_insert_rowid()
+        last_rowid = cursor.getconnection().last_insert_rowid()
+        return model.select().where(SQL('_ROWID_=?',last_rowid)).get()._get_pk_value()
 
     def rows_affected(self, cursor):
         return cursor.getconnection().changes()
