@@ -98,6 +98,9 @@ class ManyToManyField(Field):
         self.primary_key = False
         self.verbose_name = None
 
+    def _get_descriptor(self):
+        return ManyToManyFieldDescriptor(self)
+
     def add_to_class(self, model_class, name):
         if isinstance(self._through_model, Proxy):
             def callback(through_model):
@@ -113,7 +116,7 @@ class ManyToManyField(Field):
         self.model_class = model_class
         if not self.verbose_name:
             self.verbose_name = re.sub('_+', ' ', name).title()
-        setattr(model_class, name, ManyToManyFieldDescriptor(self))
+        setattr(model_class, name, self._get_descriptor())
 
         if not self._is_backref:
             backref = ManyToManyField(
