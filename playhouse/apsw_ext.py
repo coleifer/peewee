@@ -103,7 +103,8 @@ class APSWDatabase(SqliteExtDatabase):
         return cursor
 
     def last_insert_id(self, cursor, model):
-        return cursor.getconnection().last_insert_rowid()
+        if model._meta.auto_increment:
+            return cursor.getconnection().last_insert_rowid()
 
     def rows_affected(self, cursor):
         return cursor.getconnection().changes()
