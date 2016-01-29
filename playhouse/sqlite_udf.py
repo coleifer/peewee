@@ -3,6 +3,7 @@ import heapq
 import math
 import os
 import random
+import re
 import sys
 import threading
 import zlib
@@ -14,6 +15,11 @@ try:
     from urlparse import urlparse
 except ImportError:
     from urllib.parse import urlparse
+
+try:
+    from vtfunc import TableFunction
+except ImportError:
+    TableFunction = None
 
 from peewee import binary_construct
 from peewee import unicode_type
@@ -41,6 +47,7 @@ MATH = 'math'
 STRING = 'string'
 
 AGGREGATE_COLLECTION = {}
+TABLE_FUNCTION_COLLECTION = {}
 UDF_COLLECTION = {}
 
 
@@ -74,6 +81,14 @@ def aggregate(*groups):
         return klass
     return decorator
 
+def table_function(*groups):
+    def decorator(klass):
+        for group in groups:
+            TABLE_FUNCTION_COLLECTION.setdefault(group, [])
+            TABLE_FUNCTION_COLLECTION[group].append(klass)
+        return klass
+    return decorator
+
 def udf(*groups):
     def decorator(fn):
         for group in groups:
@@ -93,6 +108,15 @@ def register_aggregate_groups(conn, *groups):
                 seen.add(name)
                 conn.create_aggregate(name, -1, klass)
 
+def register_table_function_groups(conn, *groups):
+    seen = set()
+    for group in groups:
+        klasses = TABLE_FUNCTION_COLLECTION[group]
+        for klass in klasses:
+            if klass.name not in seen:
+                seen.add(klass.name)
+                klass.register(conn)
+
 def register_udf_groups(conn, *groups):
     seen = set()
     for group in groups:
@@ -105,6 +129,7 @@ def register_udf_groups(conn, *groups):
 
 def register_all(conn):
     register_aggregate_groups(conn, *AGGREGATE_COLLECTION)
+    register_table_function_groups(conn, *TABLE_FUNCTION_COLLECTION)
     register_udf_groups(conn, *UDF_COLLECTION)
 
 
@@ -303,6 +328,14 @@ class _datetime_heap_agg(_heap_agg):
     def process(self, value):
         return format_date_time_sqlite(value)
 
+if sys.version_info[:2] == (2, 6):
+    def total_seconds(td):
+        return (td.seconds +
+                (td.days * 86400) +
+                (td.microseconds / (10.**6)))
+else:
+    total_seconds = lambda td: td.total_seconds()
+
 @aggregate(DATE)
 class mintdiff(_datetime_heap_agg):
     def finalize(self):
@@ -318,7 +351,7 @@ class mintdiff(_datetime_heap_agg):
                 min_diff = diff
             dtp = dt
         if min_diff is not None:
-            return min_diff.total_seconds()
+            return total_seconds(min_diff)
 
 @aggregate(DATE)
 class avgtdiff(_datetime_heap_agg):
@@ -328,10 +361,10 @@ class avgtdiff(_datetime_heap_agg):
         elif self.ct == 1:
             return 0
 
-        total_seconds = ct = 0
+        total = ct = 0
         dtp = None
         while self.heap:
-            if total_seconds == 0:
+            if total == 0:
                 if dtp is None:
                     dtp = heapq.heappop(self.heap)
                     continue
@@ -339,10 +372,10 @@ class avgtdiff(_datetime_heap_agg):
             dt = heapq.heappop(self.heap)
             diff = dt - dtp
             ct += 1
-            total_seconds += diff.total_seconds()
+            total += total_seconds(diff)
             dtp = dt
 
-        return float(total_seconds) / ct
+        return float(total) / ct
 
 @aggregate(DATE)
 class duration(object):
@@ -358,7 +391,8 @@ class duration(object):
 
     def finalize(self):
         if self._min and self._max:
-            return (self._max - self._min).total_seconds()
+            td = (self._max - self._min)
+            return total_seconds(td)
         return None
 
 @aggregate(MATH)
@@ -382,7 +416,7 @@ class mode(object):
 
         def finalize(self):
             if self.items:
-                return max(set(self.items), key=items.count)
+                return max(set(self.items), key=self.items.count)
 
 @aggregate(MATH)
 class minrange(_heap_agg):
@@ -454,3 +488,17 @@ if cython_udf is not None:
     levenshtein_dist = udf(STRING)(cython_udf.levenshtein_dist)
     str_dist = udf(STRING)(cython_udf.str_dist)
     median = aggregate(MATH)(cython_udf.median)
+
+
+if TableFunction is not None:
+    @table_function(STRING)
+    class RegexSearch(TableFunction):
+        params = ['regex', 'search_string']
+        columns = ['match']
+        name = 'regex_search'
+
+        def initialize(self, regex=None, search_string=None):
+            self._iter = re.finditer(regex, search_string)
+
+        def iterate(self, idx):
+            return (next(self._iter).group(0),)
