@@ -2,12 +2,18 @@ import datetime
 import json
 import random
 
+try:
+    import vtfunc
+except ImportError:
+    vtfunc = None
+
 from peewee import *
 from playhouse.sqlite_ext import SqliteExtDatabase
 from playhouse.sqlite_udf import register_all
 from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
 from playhouse.tests.base import skip_test_unless
+from playhouse.tests.base import skip_unless
 from playhouse.tests.models import User as _User
 try:
     from playhouse import _sqlite_udf as cython_udf
@@ -18,11 +24,15 @@ except ImportError:
 def requires_cython(method):
     return skip_test_unless(lambda: cython_udf is not None)(method)
 
+def requires_vtfunc(testcase):
+    return skip_unless(lambda: vtfunc is not None)(testcase)
+
 
 class UDFDatabase(SqliteExtDatabase):
     def _add_conn_hooks(self, conn):
         super(UDFDatabase, self)._add_conn_hooks(conn)
         register_all(conn)
+
 
 ext_db = database_initializer.get_database(
     'sqlite',
@@ -33,20 +43,25 @@ class BaseModel(Model):
     class Meta:
         database = ext_db
 
+
 class User(_User):
     class Meta:
         database = ext_db
+
 
 class APIResponse(BaseModel):
     url = TextField(default='')
     data = TextField(default='')
     timestamp = DateTimeField(default=datetime.datetime.now)
 
+
 class Generic(BaseModel):
     value = IntegerField(default=0)
     x = BareField(null=True)
 
+
 MODELS = [User, APIResponse, Generic]
+
 
 class FixedOffset(datetime.tzinfo):
     def __init__(self, offset, name, dstoffset=42):
@@ -415,3 +430,74 @@ class TestScalarFunctions(BaseTestUDF):
         self.assertEqual(
             self.sql1('select strip_chars(?, ?)', '  hey foo ', ' '),
             'hey foo')
+
+
+@requires_vtfunc
+class TestVirtualTableFunctions(ModelTestCase):
+    requires = MODELS
+
+    def sqln(self, sql, *p):
+        cursor = ext_db.execute_sql(sql, p)
+        return cursor.fetchall()
+
+    def test_regex_search(self):
+        usernames = [
+            'charlie',
+            'hu3y17',
+            'zaizee2012',
+            '1234.56789',
+            'hurr durr']
+        for username in usernames:
+            User.create(username=username)
+
+        rgx = '[0-9]+'
+        results = self.sqln(
+            ('SELECT user.username, regex_search.match '
+             'FROM user, regex_search(?, user.username) '
+             'ORDER BY regex_search.match'),
+            rgx)
+        self.assertEqual([row for row in results], [
+            ('1234.56789', '1234'),
+            ('hu3y17', '17'),
+            ('zaizee2012', '2012'),
+            ('hu3y17', '3'),
+            ('1234.56789', '56789'),
+        ])
+
+    def test_date_series(self):
+        ONE_DAY = 86400
+        def assertValues(start, stop, step_seconds, expected):
+            results = self.sqln('select * from date_series(?, ?, ?)',
+                                start, stop, step_seconds)
+            self.assertEqual(results, expected)
+
+        assertValues('2015-01-01', '2015-01-05', 86400, [
+            ('2015-01-01',),
+            ('2015-01-02',),
+            ('2015-01-03',),
+            ('2015-01-04',),
+            ('2015-01-05',),
+        ])
+
+        assertValues('2015-01-01', '2015-01-05', 86400 / 2, [
+            ('2015-01-01 00:00:00',),
+            ('2015-01-01 12:00:00',),
+            ('2015-01-02 00:00:00',),
+            ('2015-01-02 12:00:00',),
+            ('2015-01-03 00:00:00',),
+            ('2015-01-03 12:00:00',),
+            ('2015-01-04 00:00:00',),
+            ('2015-01-04 12:00:00',),
+            ('2015-01-05 00:00:00',),
+        ])
+
+        assertValues('14:20:15', '14:24', 30, [
+            ('14:20:15',),
+            ('14:20:45',),
+            ('14:21:15',),
+            ('14:21:45',),
+            ('14:22:15',),
+            ('14:22:45',),
+            ('14:23:15',),
+            ('14:23:45',),
+        ])
