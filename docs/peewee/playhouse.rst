@@ -10,6 +10,7 @@ Below you will find a loosely organized listing of the various modules that make
 **Database drivers / vendor-specific database functionality**
 
 * :ref:`sqlite_ext`
+* :ref:`sqlite_udf`
 * :ref:`apsw`
 * :ref:`berkeleydb`
 * :ref:`sqlcipher_ext`
@@ -883,6 +884,69 @@ sqlite_ext API notes
 
     .. note:: For an in-depth discussion of the SQLite transitive closure extension, check out this blog post, `Querying Tree Structures in SQLite using Python and the Transitive Closure Extension <http://charlesleifer.com/blog/querying-tree-structures-in-sqlite-using-python-and-the-transitive-closure-extension/>`_.
 
+.. _sqlite_udf:
+
+Sqlite User-Defined Functions
+-----------------------------
+
+The ``sqlite_udf`` playhouse module contains a number of user-defined functions, aggregates, and table-valued functions, which you may find useful. The functions are grouped in collections and you can register these user-defined extensions individually, by collection, or register everything.
+
+Scalar functions are functions which take a number of parameters and return a single value. For example, converting a string to upper-case, or calculating the MD5 hex digest.
+
+Aggregate functions are like scalar functions that operate on multiple rows of data, producing a single result. For example, calculating the sum of a list of integers, or finding the smallest value in a particular column.
+
+Table-valued functions are simply functions that can return multiple rows of data. For example, a regular-expression search function that returns all the matches in a given string, or a function that accepts two dates and generates all the intervening days.
+
+.. note:: To use table-valued functions, you will need to install the ``vtfunc`` module. The ``vtfunc`` module is available `on GitHub <https://github.com/coleifer/sqlite-vtfunc>`_ or can be installed using ``pip``.
+
+Functions, listed by collection name
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Scalar functions are indicated by ``(f)``, aggregate functions by ``(a)``, and table-valued functions by ``(t)``.
+
+* ``CONTROL_FLOW``
+  * :py:func:`if_then_else` (f)
+* ``DATE``
+  * :py:func:`strip_tz` (f)
+  * :py:func:`human_delta` (f)
+  * :py:func:`mintdiff` (a)
+  * :py:func:`avgtdiff` (a)
+  * :py:func:`duration` (a)
+  * :py:func:`date_series` (t)
+* ``FILE``
+  * :py:func:`file_ext` (f)
+  * :py:func:`file_read` (f)
+* ``HELPER``
+  * :py:func:`gzip` (f)
+  * :py:func:`gunzip` (f)
+  * :py:func:`hostname` (f)
+  * :py:func:`toggle` (f)
+  * :py:func:`setting` (f)
+  * :py:func:`clear_toggles` (f)
+  * :py:func:`clear_settings` (f)
+* ``MATH``
+  * :py:func:`randomrange` (f)
+  * :py:func:`gauss_distribution` (f)
+  * :py:func:`sqrt` (f)
+  * :py:func:`tonumber` (f)
+  * :py:func:`mode` (a)
+  * :py:func:`minrange` (a)
+  * :py:func:`avgrange` (a)
+  * :py:func:`range` (a)
+  * :py:func:`median` (a) (requires cython)
+* ``STRING``
+  * :py:func:`substr_count` (f)
+  * :py:func:`strip_chars` (f)
+  * :py:func:`md5` (f)
+  * :py:func:`sha1` (f)
+  * :py:func:`sha256` (f)
+  * :py:func:`sha512` (f)
+  * :py:func:`adler32` (f)
+  * :py:func:`crc32` (f)
+  * :py:func:`damerau_levenshtein_dist` (f) (requires cython)
+  * :py:func:`levenshtein_dist` (f) (requires cython)
+  * :py:func:`str_dist` (f) (requires cython)
+  * :py:func:`regex_search` (t)
 
 .. _apsw:
 
