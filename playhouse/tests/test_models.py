@@ -377,6 +377,15 @@ class TestModelAPIs(ModelTestCase):
 
         self.assertRaises(AttributeError, make_klass)
 
+    def test_dynamic_related_name(self):
+        class Foo(TestModel):
+            f1 = CharField()
+
+        class FooRel(TestModel):
+            foo = ForeignKeyField(Foo, related_name='{classname}_bar')
+
+        self.assertTrue(hasattr(Foo, 'foorel_bar'))
+
     def test_fk_exceptions(self):
         c1 = Category.create(name='c1')
         c2 = Category.create(parent=c1, name='c2')
