@@ -187,7 +187,7 @@ class ManyToManyQuery(SelectQuery):
         super(ManyToManyQuery, self).__init__(*args, **kwargs)
 
     def clone(self):
-        query = ManyToManyQuery(
+        query = type(self)(
             self._instance,
             self._field_descriptor,
             self.model_class)
