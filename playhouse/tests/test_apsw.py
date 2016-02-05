@@ -3,6 +3,7 @@ import datetime
 
 from playhouse.apsw_ext import *
 from playhouse.tests.base import ModelTestCase
+from playhouse.tests.base import PragmaTestCase
 
 
 db = APSWDatabase(':memory:')
@@ -97,3 +98,10 @@ class APSWTestCase(ModelTestCase):
         create_success()
         self.assertEqual(User.select().count(), 2)
         self.assertEqual(Message.select().count(), 2)
+
+
+class APSWPragmaTestCase(PragmaTestCase):
+    db_class = APSWDatabase
+
+    def test_pragmas(self):
+        self._test_pragmas()

@@ -11,6 +11,7 @@ from playhouse.sqlite_ext import *
 from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
 from playhouse.tests.base import PeeweeTestCase
+from playhouse.tests.base import PragmaTestCase
 from playhouse.tests.base import skip_if
 from playhouse.tests.base import skip_unless
 
@@ -1180,3 +1181,10 @@ class TestTransitiveClosureIntegration(PeeweeTestCase):
             ('westerns', 3),
             ('hard scifi', 4),
         ])
+
+
+class SqliteExtPragmaTestCase(PragmaTestCase):
+    db_class = SqliteExtDatabase
+
+    def test_pragmas(self):
+        self._test_pragmas()
