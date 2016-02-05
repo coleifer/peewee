@@ -1274,7 +1274,8 @@ class ForeignKeyField(IntegerField):
         return ReverseRelationDescriptor(self)
 
     def _get_related_name(self):
-        return self._related_name or ('%s_set' % self.model_class._meta.name)
+        return (self._related_name or '{classname}_set').format(
+                                        classname=self.model_class._meta.name)
 
     def add_to_class(self, model_class, name):
         if isinstance(self.rel_model, Proxy):
