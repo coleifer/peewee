@@ -14,6 +14,7 @@ from playhouse.tests.base import database_class
 from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
 from playhouse.tests.base import PeeweeTestCase
+from playhouse.tests.base import PragmaTestCase
 from playhouse.tests.base import query_db
 from playhouse.tests.base import skip_unless
 from playhouse.tests.base import test_db
@@ -347,3 +348,10 @@ class TestConnectionInitialization(PeeweeTestCase):
         db.close()
         db.connect()
         self.assertEqual(state['initialized'], 2)
+
+
+class TestPragmaInitialization(PragmaTestCase):
+    db_class = SqliteDatabase
+
+    def test_pragmas(self):
+        self._test_pragmas()

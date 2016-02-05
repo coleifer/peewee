@@ -341,3 +341,33 @@ class QueryLogger(object):
         self._final_query_count = len(all_queries)
         self.queries = all_queries[
             self._initial_query_count:self._final_query_count]
+
+class PragmaTestCase(PeeweeTestCase):
+    """ Test correct handling of pragmas given on initialization"""
+
+    # Inheriting class should set to type of db being tested.
+    db_class = None
+
+    # Default set of pragmas to set.
+    pragmas = (
+        ('busy_timeout', 1000),
+        ('cache_size', 1000),
+        ('page_size', 2048),
+    )
+
+    def setUp(self):
+        super(PragmaTestCase, self).setUp()
+        self.db = self.db_class(':memory:',
+                                pragmas=self.pragmas)
+
+    def tearDown(self):
+        super(PragmaTestCase, self).tearDown()
+        if not self.db.is_closed():
+            self.db.close()
+
+    def _test_pragmas(self):
+        sql = lambda q: self.db.execute_sql(q).fetchone()[0]
+
+        conn = self.db.get_conn()
+        for name, value in self.pragmas:
+            self.assertEqual(sql('PRAGMA %s;'%(name,)), value)

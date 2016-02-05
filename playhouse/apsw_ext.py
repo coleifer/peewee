@@ -60,6 +60,11 @@ class APSWDatabase(SqliteExtDatabase):
 
     def _connect(self, database, **kwargs):
         conn = apsw.Connection(database, **kwargs)
+        try:
+            self._add_conn_hooks(conn)
+        except:
+            conn.close()
+            raise
         if self.timeout is not None:
             conn.setbusytimeout(self.timeout)
         try:
