@@ -24,6 +24,24 @@ class Message(BaseModel):
 class APSWTestCase(ModelTestCase):
     requires = [Message, User]
 
+    def test_db_register_functions(self):
+        result = db.execute_sql('SELECT date_part(?, ?)', (
+            'day', '2015-01-02 03:04:05')).fetchone()[0]
+        self.assertEqual(result, 2)
+
+        result = db.execute_sql('SELECT date_trunc(?, ?)', (
+            'day', '2015-01-02 03:04:05')).fetchone()[0]
+        self.assertEqual(result, '2015-01-02')
+
+    def test_db_pragmas(self):
+        test_db = APSWDatabase(':memory:', pragmas=(
+            ('cache_size', '1337'),
+        ))
+        test_db.connect()
+
+        cs = test_db.execute_sql('PRAGMA cache_size;').fetchone()[0]
+        self.assertEqual(cs, 1337)
+
     def test_select_insert(self):
         users = ('u1', 'u2', 'u3')
         for user in users:

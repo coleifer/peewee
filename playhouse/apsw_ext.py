@@ -62,14 +62,16 @@ class APSWDatabase(SqliteExtDatabase):
         conn = apsw.Connection(database, **kwargs)
         if self.timeout is not None:
             conn.setbusytimeout(self.timeout)
-        conn.createscalarfunction('date_part', _sqlite_date_part, 2)
-        conn.createscalarfunction('date_trunc', _sqlite_date_trunc, 2)
-        conn.createscalarfunction('regexp', _sqlite_regexp, 2)
-        self._load_aggregates(conn)
-        self._load_collations(conn)
-        self._load_functions(conn)
-        self._load_modules(conn)
+        try:
+            self._add_conn_hooks(conn)
+        except:
+            conn.close()
+            raise
         return conn
+
+    def _add_conn_hooks(self, conn):
+        super(APSWDatabase, self)._add_conn_hooks(conn)
+        self._load_modules(conn)  # APSW-only.
 
     def _load_modules(self, conn):
         for mod_name, mod_inst in self._modules.items():
@@ -90,6 +92,18 @@ class APSWDatabase(SqliteExtDatabase):
     def _load_functions(self, conn):
         for name, (fn, num_params) in self._functions.items():
             conn.createscalarfunction(name, fn, num_params)
+
+    def _load_extensions(self, conn):
+        conn.enableloadextension(True)
+        for extension in self._extensions:
+            conn.loadextension(extension)
+
+    def load_extension(self, extension):
+        self._extensions.add(extension)
+        if not self.is_closed():
+            conn = self.get_conn()
+            conn.enableloadextension(True)
+            conn.loadextension(extension)
 
     def _execute_sql(self, cursor, sql, params):
         cursor.execute(sql, params or ())

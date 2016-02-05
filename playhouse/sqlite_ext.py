@@ -849,9 +849,7 @@ class SqliteExtDatabase(SqliteDatabase):
         if self._row_factory:
             conn.row_factory = self._row_factory
         if self._extensions:
-            conn.enable_load_extension(True)
-            for extension in self._extensions:
-                conn.load_extension(extension)
+            self._load_extensions(conn)
 
     def _load_aggregates(self, conn):
         for name, (klass, num_params) in self._aggregates.items():
@@ -864,6 +862,11 @@ class SqliteExtDatabase(SqliteDatabase):
     def _load_functions(self, conn):
         for name, (fn, num_params) in self._functions.items():
             conn.create_function(name, num_params, fn)
+
+    def _load_extensions(self, conn):
+        conn.enable_load_extension(True)
+        for extension in self._extensions:
+            conn.load_extension(extension)
 
     def register_aggregate(self, klass, name=None, num_params=-1):
         self._aggregates[name or klass.__name__.lower()] = (klass, num_params)
