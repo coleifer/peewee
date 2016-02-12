@@ -4,8 +4,10 @@ import decimal
 import sys
 
 from peewee import ImproperlyConfigured
+from peewee import sqlite3
 from playhouse.sqlite_ext import *
 
+sqlite3_lib_version = sqlite3.sqlite_version_info
 
 # Peewee assumes that the `pysqlite2` module was compiled against the
 # BerkeleyDB SQLite libraries.
@@ -87,6 +89,7 @@ class BerkeleyDatabase(SqliteExtDatabase):
 
     @classmethod
     def check_libsqlite(cls):
+        # Checking compile options is not supported.
         if sys.platform.startswith('win'):
             library = 'libsqlite3.dll'
         elif sys.platform == 'darwin':
@@ -102,5 +105,10 @@ class BerkeleyDatabase(SqliteExtDatabase):
         return libsqlite.sqlite3_compileoption_used('BERKELEY_DB') == 1
 
 
-PYSQLITE_BERKELEYDB = BerkeleyDatabase.check_pysqlite()
-LIBSQLITE_BERKELEYDB = BerkeleyDatabase.check_libsqlite()
+if sqlite3_lib_version < (2, 6, 23):
+    # Checking compile flags is not supported in older SQLite versions.
+    PYSQLITE_BERKELEYDB = False
+    LIBSQLITE_BERKELEYDB = False
+else:
+    PYSQLITE_BERKELEYDB = BerkeleyDatabase.check_pysqlite()
+    LIBSQLITE_BERKELEYDB = BerkeleyDatabase.check_libsqlite()
