@@ -742,7 +742,31 @@ The connection handling code can be placed in a `middleware component <https://f
 Pyramid
 ^^^^^^^
 
-There is a project named `pyramid_peewee <https://bitbucket.org/jjgalvez/pyramid_peewee>`_ that provides some helpers for integrating peewee with the Pyramid framework.
+Set up a Request factory that handles database connection lifetime as follows:
+
+.. code-block:: python
+
+    from pyramid.request import Request
+
+    db = SqliteDatabase('pyramidapp.db')
+
+    class MyRequest(Request):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            db.connect()
+            self.add_finished_callback(self.finish)
+
+        def finish(self, request):
+            if not db.is_closed():
+                db.close()
+
+In your application `main()` make sure `MyRequest` is used as `request_factory`:
+
+.. code-block:: python
+
+    def main(global_settings, **settings):
+        config = Configurator(settings=settings, ...)
+        config.set_request_factory(MyRequest)
 
 Other frameworks
 ^^^^^^^^^^^^^^^^
