@@ -1,7 +1,7 @@
 try:
-    from urlparse import urlparse
+    from urlparse import urlparse, parse_qsl
 except ImportError:
-    from urllib.parse import urlparse
+    from urllib.parse import urlparse, parse_qsl
 
 from peewee import *
 from playhouse.pool import PooledMySQLDatabase
@@ -26,7 +26,16 @@ def register_database(db_class, *names):
         schemes[name] = db_class
 
 def parseresult_to_dict(parsed):
-    connect_kwargs = {'database': parsed.path[1:]}
+
+    # urlparse in python 2.6 is broken so query will be empty and instead
+    # appended to path complete with '?'
+    path_parts = parsed.path[1:].split('?')
+    try:
+        query = path_parts[1]
+    except IndexError:
+        query = parsed.query
+
+    connect_kwargs = {'database': path_parts[0]}
     if parsed.username:
         connect_kwargs['user'] = parsed.username
     if parsed.password:
@@ -41,6 +50,9 @@ def parseresult_to_dict(parsed):
         connect_kwargs['passwd'] = connect_kwargs.pop('password')
     elif 'sqlite' in parsed.scheme and not connect_kwargs['database']:
         connect_kwargs['database'] = ':memory:'
+
+    # Get additional connection args from the query string
+    connect_kwargs.update(parse_qsl(query))
 
     return connect_kwargs
 

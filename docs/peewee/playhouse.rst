@@ -3703,6 +3703,7 @@ This module contains a helper function to generate a database connection from a 
     * *sqlite:///:memory:* will create an in-memory :py:class:`SqliteDatabase` instance.
     * *postgresql://postgres:my_password@localhost:5432/my_database* will create a :py:class:`PostgresqlDatabase` instance. A username and password are provided, as well as the host and port to connect to.
     * *mysql://user:passwd@ip:port/my_db* will create a :py:class:`MySQLDatabase` instance for the local MySQL database *my_db*.
+    * *mysql+pool://user:passwd@ip:port/my_db?max_connections=20&stale_timeout=300* will create a :py:class:`PooledMySQLDatabase` instance for the local MySQL database *my_db* with max_connections set to 20 and a stale_timeout setting of 300 seconds.
 
     Supported schemes:
 
@@ -3729,7 +3730,7 @@ This module contains a helper function to generate a database connection from a 
 
 .. py:function:: parse(url)
 
-    Parse the information in the given URL into a dictionary containing ``database``, ``host``, ``port``, ``user`` and/or ``password``.
+    Parse the information in the given URL into a dictionary containing ``database``, ``host``, ``port``, ``user`` and/or ``password``. Additional connection arguments can be passed in the URL query string.
 
     If you are using a custom database class, you can use the ``parse()`` function to extract information from a URL which can then be passed in to your database object.
 
