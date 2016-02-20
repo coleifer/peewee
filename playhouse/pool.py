@@ -80,6 +80,14 @@ class PooledDatabase(object):
 
         super(PooledDatabase, self).__init__(database, **kwargs)
 
+    def init(self, database, max_connections=None, stale_timeout=None,
+             **connect_kwargs):
+        super(PooledDatabase, self).init(database, **connect_kwargs)
+        if max_connections:
+            self.max_connections = max_connections
+        if stale_timeout:
+            self.stale_timeout = stale_timeout
+
     def _connect(self, *args, **kwargs):
         while True:
             try:
