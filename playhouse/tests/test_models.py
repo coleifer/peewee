@@ -1353,6 +1353,21 @@ class TestDeleteRecursive(ModelTestCase):
         ])
 
 
+@skip_unless(lambda: isinstance(test_db, PostgresqlDatabase))
+class TestTruncate(ModelTestCase):
+    requires = [User]
+
+    def test_truncate(self):
+        for i in range(3):
+            User.create(username='u%s' % i)
+
+        User.truncate_table(restart_identity=True)
+        self.assertEqual(User.select().count(), 0)
+
+        u = User.create(username='ux')
+        self.assertEqual(u.id, 1)
+
+
 class TestManyToMany(ModelTestCase):
     requires = [User, Category, UserCategory]
 
