@@ -2016,6 +2016,12 @@ class QueryCompiler(object):
     drop_sequence = return_parsed_node('_drop_sequence')
 
 
+class SqliteQueryCompiler(QueryCompiler):
+    def truncate_table(self, model_class, restart_identity=False,
+                       cascade=False):
+        return model_class.delete().sql()
+
+
 class ResultIterator(object):
     def __init__(self, qrw):
         self.qrw = qrw
@@ -3604,6 +3610,7 @@ class Database(object):
         return SQL('DEFAULT VALUES')
 
 class SqliteDatabase(Database):
+    compiler_class = SqliteQueryCompiler
     field_overrides = {
         'bool': 'INTEGER',
         'smallint': 'INTEGER',

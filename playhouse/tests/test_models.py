@@ -10,6 +10,7 @@ from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
 from playhouse.tests.base import normal_compiler
 from playhouse.tests.base import PeeweeTestCase
+from playhouse.tests.base import skip_if
 from playhouse.tests.base import skip_unless
 from playhouse.tests.base import test_db
 from playhouse.tests.base import ulit
@@ -1353,7 +1354,7 @@ class TestDeleteRecursive(ModelTestCase):
         ])
 
 
-@skip_unless(lambda: isinstance(test_db, PostgresqlDatabase))
+@skip_if(lambda: isinstance(test_db, MySQLDatabase))
 class TestTruncate(ModelTestCase):
     requires = [User]
 
