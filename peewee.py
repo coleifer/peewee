@@ -1977,6 +1977,15 @@ class QueryCompiler(object):
         return Clause(*ddl)
     drop_table = return_parsed_node('_drop_table')
 
+    def _truncate_table(self, model_class, restart_identity=False, cascade=False):
+        cl = [SQL('TRUNCATE TABLE'), model_class.as_entity()]
+        if restart_identity:
+            cl.append(SQL('RESTART IDENTITY'))
+        if cascade:
+            cl.append(SQL('CASCADE'))
+        return Clause(*cl)
+    truncate_table = return_parsed_node('_truncate_table')
+
     def index_name(self, table, columns):
         index = '%s_%s' % (table, '_'.join(columns))
         if len(index) > 64:
@@ -3569,6 +3578,14 @@ class Database(object):
     def drop_tables(self, models, safe=False, cascade=False):
         drop_model_tables(models, fail_silently=safe, cascade=cascade)
 
+    def truncate_table(self, model_class, restart_identity=False, cascade=False):
+        qc = self.compiler()
+        return self.execute_sql(*qc.truncate_table(
+            model_class, restart_identity, cascade))
+
+    def truncate_tables(self, models, restart_identity=False, cascade=False):
+        truncate_model_tables(models, restart_identity=restart_identity, cascade=cascade)
+
     def drop_sequence(self, seq):
         if self.sequences:
             qc = self.compiler()
@@ -4612,6 +4629,10 @@ class Model(with_metaclass(BaseModel)):
         cls._meta.database.drop_table(cls, fail_silently, cascade)
 
     @classmethod
+    def truncate_table(cls, restart_identity=False, cascade=False):
+        cls._meta.database.truncate_table(cls, restart_identity, cascade)
+
+    @classmethod
     def as_entity(cls):
         if cls._meta.schema:
             return Entity(cls._meta.schema, cls._meta.db_table)
@@ -4878,3 +4899,8 @@ def drop_model_tables(models, **drop_table_kwargs):
     """Drop tables for all given models (in the right order)."""
     for m in reversed(sort_models_topologically(models)):
         m.drop_table(**drop_table_kwargs)
+
+def truncate_model_tables(models, **truncate_table_kwargs):
+    """Truncate tables for all given models (in the right order)."""
+    for m in reversed(sort_models_topologically(models)):
+        m.truncate_table(**truncate_table_kwargs)
