@@ -81,6 +81,7 @@ __all__ = [
     'ProgrammingError',
     'Proxy',
     'R',
+    'SmallIntegerField',
     'SqliteDatabase',
     'SQL',
     'TextField',
