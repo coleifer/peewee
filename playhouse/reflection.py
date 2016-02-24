@@ -546,12 +546,14 @@ class Introspector(object):
                 indexes = multi_column_indexes
 
             # Fix models with multi-column primary keys.
+            composite_key = False
             if len(primary_keys) == 0:
                 primary_keys = columns.keys()
             if len(primary_keys) > 1:
-                Meta.primary_key = CompositeKey([
+                Meta.primary_key = CompositeKey(*[
                     field.name for col, field in columns.items()
                     if col in primary_keys])
+                composite_key = True
 
             attrs = {'Meta': Meta}
             for db_column, column in columns.items():
@@ -562,7 +564,11 @@ class Introspector(object):
                 params = {
                     'db_column': db_column,
                     'null': column.nullable}
-                if column.primary_key and FieldClass is not PrimaryKeyField:
+                if column.primary_key and composite_key:
+                    if FieldClass is PrimaryKeyField:
+                        FieldClass = IntegerField
+                    params['primary_key'] = False
+                elif column.primary_key and FieldClass is not PrimaryKeyField:
                     params['primary_key'] = True
                 if column.is_foreign_key():
                     if column.is_self_referential_fk():
