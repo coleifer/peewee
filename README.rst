@@ -32,7 +32,9 @@ For flask helpers, check out the `flask_utils extension module <http://docs.peew
 Examples
 --------
 
-Defining models is similar to Django or SQLAlchemy::
+Defining models is similar to Django or SQLAlchemy:
+
+.. code-block:: python
 
     from peewee import *
     from playhouse.sqlite_ext import SqliteExtDatabase
@@ -53,12 +55,16 @@ Defining models is similar to Django or SQLAlchemy::
         created_date = DateTimeField(default=datetime.datetime.now)
         is_published = BooleanField(default=True)
 
-Connect to the database and create tables::
+Connect to the database and create tables:
+
+.. code-block:: python
 
     db.connect()
     db.create_tables([User, Tweet])
 
-Create a few rows::
+Create a few rows:
+
+.. code-block:: python
 
     charlie = User.create(username='charlie')
     huey = User(username='huey')
@@ -68,7 +74,9 @@ Create a few rows::
     # will just use the default values we specified.
     Tweet.create(user=charlie, message='My first tweet')
 
-Queries are expressive and composable::
+Queries are expressive and composable:
+
+.. code-block:: python
 
     # A simple query selecting a user.
     User.get(User.username == 'charles')
