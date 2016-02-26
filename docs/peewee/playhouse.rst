@@ -2411,6 +2411,7 @@ Fields
 
 This module also contains several field classes that implement additional logic like encryption and compression. There is also a :py:class:`ManyToManyField` that makes it easy to work with simple many-to-many relationships.
 
+These fields can be found in the ``playhouse.fields`` module.
 
 .. py:class:: ManyToManyField(rel_model[, related_name=None[, through_model=None]])
 
