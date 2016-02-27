@@ -2083,7 +2083,10 @@ class QueryResultWrapper(object):
         return row
 
     def iterate(self):
-        row = self.cursor.fetchone()
+        try:
+            row = next(self.cursor)
+        except StopIteration:
+            row = None
         if not row:
             self._populated = True
             if not getattr(self.cursor, 'name', None):
@@ -2374,7 +2377,10 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
         if self._row:
             row = self._row.pop()
         else:
-            row = self.cursor.fetchone()
+            try:
+                row = next(self.cursor)
+            except StopIteration:
+                row = None
 
         if not row:
             self._populated = True
@@ -2401,8 +2407,9 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
 
         model_data = self.read_model_data(row)
         while True:
-            cur_row = self.cursor.fetchone()
-            if cur_row is None:
+            try:
+                cur_row = next(self.cursor)
+            except StopIteration:
                 break
 
             duplicate_models = set()
@@ -2650,11 +2657,11 @@ class Query(Node):
         if convert:
             row = self.tuples().first()
         else:
-            row = self._execute().fetchone()
-        if row and not as_tuple:
-            return row[0]
-        else:
-            return row
+            try:
+                row = next(self._execute())
+            except StopIteration:
+                return
+        return row if as_tuple else row[0]
 
 class RawQuery(Query):
     """
@@ -3229,7 +3236,10 @@ class InsertQuery(_WriteQuery):
             cursor = self._execute()
             if not self._is_multi_row_insert:
                 if self.database.insert_returning:
-                    pk_row = cursor.fetchone()
+                    try:
+                        pk_row = next(cursor)
+                    except StopIteration:
+                        pk_row = None
                     meta = self.model_class._meta
                     clean_data = [
                         field.python_value(column)
