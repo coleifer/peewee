@@ -1083,7 +1083,7 @@ class BlobField(Field):
 
     def db_value(self, value):
         if isinstance(value, unicode_type):
-            value = value.encode('utf-8')
+            value = value.encode('raw_unicode_escape')
         if isinstance(value, basestring):
             return self._constructor(value)
         return value
