@@ -1082,6 +1082,8 @@ class BlobField(Field):
         return super(BlobField, self).add_to_class(model_class, name)
 
     def db_value(self, value):
+        if isinstance(value, unicode_type):
+            value = value.encode('utf-8')
         if isinstance(value, basestring):
             return self._constructor(value)
         return value
