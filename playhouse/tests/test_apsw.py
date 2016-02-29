@@ -115,8 +115,3 @@ class APSWTestCase(ModelTestCase):
         create_success()
         self.assertEqual(User.select().count(), 2)
         self.assertEqual(Message.select().count(), 2)
-
-    def test_exists_regression(self):
-        User.create(username='u1')
-        self.assertTrue(User.select().where(User.username == 'u1').exists())
-        self.assertFalse(User.select().where(User.username == 'ux').exists())
