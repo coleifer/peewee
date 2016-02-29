@@ -1075,10 +1075,15 @@ class TextField(Field):
 
 class BlobField(Field):
     db_field = 'blob'
+    _constructor = binary_construct
+
+    def add_to_class(self, model_class, name):
+        self._constructor = model_class._meta.database.get_binary_type()
+        return super(BlobField, self).add_to_class(model_class, name)
 
     def db_value(self, value):
         if isinstance(value, basestring):
-            return binary_construct(value)
+            return self._constructor(value)
         return value
 
 class UUIDField(Field):
@@ -3610,6 +3615,9 @@ class Database(object):
     def default_insert_clause(self, model_class):
         return SQL('DEFAULT VALUES')
 
+    def get_binary_type(self):
+        return binary_constructor
+
 class SqliteDatabase(Database):
     compiler_class = SqliteQueryCompiler
     field_overrides = {
@@ -3721,6 +3729,9 @@ class SqliteDatabase(Database):
 
     def truncate_date(self, date_part, date_field):
         return fn.strftime(SQLITE_DATE_TRUNC_MAPPING[date_part], date_field)
+
+    def get_binary_type(self):
+        return sqlite3.Binary
 
 class PostgresqlDatabase(Database):
     commit_select = True
@@ -3866,6 +3877,9 @@ class PostgresqlDatabase(Database):
         path_params = ','.join(['%s'] * len(search_path))
         self.execute_sql('SET search_path TO %s' % path_params, search_path)
 
+    def get_binary_type(self):
+        return psycopg2.Binary
+
 class MySQLDatabase(Database):
     commit_select = True
     compound_operations = ['UNION', 'UNION ALL']
@@ -3954,6 +3968,9 @@ class MySQLDatabase(Database):
         return Clause(
             EnclosedClause(model_class._meta.primary_key),
             SQL('VALUES (DEFAULT)'))
+
+    def get_binary_type(self):
+        return mysql.Binary
 
 
 class _callable_context_manager(object):
