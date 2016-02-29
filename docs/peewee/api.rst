@@ -268,6 +268,8 @@ Models
 
         This function attempts to retrieve a model instance based on the provided filters. If no matching model can be found, a new model is created using the parameters specified by the filters and any values in the ``defaults`` dictionary.
 
+        .. note:: Use care when calling ``get_or_create`` with ``autocommit=False``, as the ``get_or_create()`` method will call :py:meth:`Database.atomic` to create either a transaction or savepoint.
+
         Example **without** ``get_or_create``:
 
         .. code-block:: python
@@ -300,6 +302,8 @@ Models
         This function attempts to create a model instance based on the provided kwargs. If an ``IntegrityError`` occurs indicating the violation of a constraint, then Peewee will return the model matching the filters.
 
         .. note:: Peewee will not attempt to match *all* the kwargs when an ``IntegrityError`` occurs. Rather, only primary key fields or fields that have a unique constraint will be used to retrieve the matching instance.
+
+        .. note:: Use care when calling ``create_or_get`` with ``autocommit=False``, as the ``create_or_get()`` method will call :py:meth:`Database.atomic` to create either a transaction or savepoint.
 
         Example:
 
