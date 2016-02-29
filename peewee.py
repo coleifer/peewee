@@ -129,7 +129,7 @@ if PY3:
 elif PY2:
     unicode_type = unicode
     string_type = basestring
-    binary_construct = buffer
+    binary_construct = bytearray
     def print_(s):
         sys.stdout.write(s)
         sys.stdout.write('\n')
