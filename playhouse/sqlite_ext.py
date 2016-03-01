@@ -203,7 +203,7 @@ class SearchField(BareField):
     do not support secondary indexes, using this field will prevent you
     from mistakenly creating the wrong kind of field on your FTS table.
     """
-    def __init__(self, unindexed=False, db_column=None, coerce=None):
+    def __init__(self, unindexed=False, db_column=None, coerce=None, **_):
         kwargs = {'null': True, 'db_column': db_column, 'coerce': coerce}
         self._unindexed = unindexed
         if unindexed:
