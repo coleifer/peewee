@@ -211,8 +211,9 @@ class SearchField(BareField):
         super(SearchField, self).__init__(**kwargs)
 
     def clone_base(self, **kwargs):
-        return super(SearchField, self).clone_base(
-            unindexed=self._unindexed, **kwargs)
+        clone = super(SearchField, self).clone_base(**kwargs)
+        clone._unindexed = self._unindexed
+        return clone
 
 
 class _VirtualFieldMixin(object):
