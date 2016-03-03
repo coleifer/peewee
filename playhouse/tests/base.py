@@ -124,24 +124,24 @@ class DatabaseInitializer(object):
         else:
             return getattr(self, method)(db_class, **kwargs)
 
+    def get_filename(self, extension):
+        return os.path.join('/tmp', '%s%s' % (self.database_name, extension))
+
     def get_apsw_database(self, db_class, **kwargs):
-        return db_class('%s.db' % self.database_name, timeout=1000, **kwargs)
+        return db_class(self.get_filename('.db'), timeout=1000, **kwargs)
 
     def get_berkeleydb_database(self, db_class, **kwargs):
-        return db_class(
-            '%s.bdb.db' % self.database_name,
-            timeout=1000,
-            **kwargs)
+        return db_class(self.get_filename('.bdb.db'), timeout=1000, **kwargs)
 
     def get_sqlcipher_database(self, db_class, **kwargs):
         passphrase = kwargs.pop('passphrase', 'snakeoilpassphrase')
         return db_class(
-            '%s.cipher.db' % self.database_name,
+            self.get_filename('.cipher.db'),
             passphrase=passphrase,
             **kwargs)
 
     def get_sqlite_database(self, db_class, **kwargs):
-        return db_class('%s.db' % self.database_name, **kwargs)
+        return db_class(self.get_filename('.db'), **kwargs)
 
     def get_in_memory_database(self, **kwargs):
         kwargs.setdefault('use_speedups', False)
