@@ -605,6 +605,27 @@ class TestSelectQuery(PeeweeTestCase):
         self.assertEqual(sq._limit, 30)
         self.assertEqual(sq._offset, 60)
 
+    def test_limit(self):
+        orig = User._meta.database.limit_max
+        User._meta.database.limit_max = -1
+        try:
+            sq = SelectQuery(User, User.id).limit(10).offset(5)
+            sql, params = compiler.generate_select(sq)
+            self.assertEqual(sql, (
+                'SELECT "users"."id" FROM "users" AS users LIMIT 10 OFFSET 5'))
+
+            sq = SelectQuery(User, User.id).offset(5)
+            sql, params = compiler.generate_select(sq)
+            self.assertEqual(sql, (
+                'SELECT "users"."id" FROM "users" AS users LIMIT -1 OFFSET 5'))
+
+            sq = SelectQuery(User, User.id).limit(0).offset(0)
+            sql, params = compiler.generate_select(sq)
+            self.assertEqual(sql, (
+                'SELECT "users"."id" FROM "users" AS users LIMIT 0 OFFSET 0'))
+        finally:
+            User._meta.database.limit_max = orig
+
     def test_prefetch_subquery(self):
         sq = SelectQuery(User).where(User.username == 'foo')
         sq2 = SelectQuery(Blog).where(Blog.title == 'bar')

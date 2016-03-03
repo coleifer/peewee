@@ -139,16 +139,16 @@ else:
 
 # By default, peewee supports Sqlite, MySQL and Postgresql.
 try:
-    from pysqlite2 import dbapi2 as pysqlite
+    from pysqlite2 import dbapi2 as pysq3
 except ImportError:
-    pysqlite = None
+    pysq3 = None
 try:
     import sqlite3
 except ImportError:
-    sqlite3 = pysqlite
+    sqlite3 = pysq3
 else:
-    if pysqlite and pysqlite.sqlite_version_info > sqlite3.sqlite_version_info:
-        sqlite3 = pysqlite
+    if pysq3 and pysq3.sqlite_version_info >= sqlite3.sqlite_version_info:
+        sqlite3 = pysq3
 
 try:
     from psycopg2cffi import compat
@@ -1789,10 +1789,10 @@ class QueryCompiler(object):
         if query._order_by:
             clauses.extend([SQL('ORDER BY'), CommaClause(*query._order_by)])
 
-        if query._limit or (query._offset and db.limit_max):
-            limit = query._limit or db.limit_max
+        if query._limit is not None or (query._offset and db.limit_max):
+            limit = query._limit if query._limit is not None else db.limit_max
             clauses.append(SQL('LIMIT %s' % limit))
-        if query._offset:
+        if query._offset is not None:
             clauses.append(SQL('OFFSET %s' % query._offset))
 
         for_update, no_wait = query._for_update
