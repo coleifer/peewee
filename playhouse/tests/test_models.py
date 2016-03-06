@@ -1981,3 +1981,12 @@ class TestModelHash(PeeweeTestCase):
         self.assertEqual(d[u2], 'u2')
         self.assertEqual(d[m1], 'm1')
         self.assertEqual(d[m2], 'm2')
+
+        un = User()
+        mn = MyUser()
+        d[un] = 'un'
+        d[mn] = 'mn'
+        self.assertTrue(un in d)  # Hash implementation.
+        self.assertTrue(mn in d)
+        self.assertEqual(d[un], 'un')
+        self.assertEqual(d[mn], 'mn')
