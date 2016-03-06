@@ -1951,3 +1951,33 @@ class TestReturningClause(ModelTestCase):
         id_charlie = users[0][0]
         id_mickey = users[-1][0]
         self.assertEqual(id_mickey - id_charlie, 4)
+
+
+class TestModelHash(PeeweeTestCase):
+    def test_hash(self):
+        class MyUser(User):
+            pass
+
+        d = {}
+        u1 = User(id=1)
+        u2 = User(id=2)
+        u3 = User(id=3)
+        m1 = MyUser(id=1)
+        m2 = MyUser(id=2)
+        m3 = MyUser(id=3)
+
+        d[u1] = 'u1'
+        d[u2] = 'u2'
+        d[m1] = 'm1'
+        d[m2] = 'm2'
+        self.assertTrue(u1 in d)
+        self.assertTrue(u2 in d)
+        self.assertFalse(u3 in d)
+        self.assertTrue(m1 in d)
+        self.assertTrue(m2 in d)
+        self.assertFalse(m3 in d)
+
+        self.assertEqual(d[u1], 'u1')
+        self.assertEqual(d[u2], 'u2')
+        self.assertEqual(d[m1], 'm1')
+        self.assertEqual(d[m2], 'm2')

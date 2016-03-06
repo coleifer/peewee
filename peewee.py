@@ -4783,6 +4783,9 @@ class Model(with_metaclass(BaseModel)):
                     model.delete().where(query).execute()
         return self.delete().where(self._pk_expr()).execute()
 
+    def __hash__(self):
+        return hash((self.__class__, self._get_pk_value()))
+
     def __eq__(self, other):
         return (
             other.__class__ == self.__class__ and
