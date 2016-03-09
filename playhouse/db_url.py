@@ -6,6 +6,8 @@ except ImportError:
 from peewee import *
 from playhouse.pool import PooledMySQLDatabase
 from playhouse.pool import PooledPostgresqlDatabase
+from playhouse.pool import PooledSqliteDatabase
+from playhouse.pool import PooledSqliteExtDatabase
 from playhouse.sqlite_ext import SqliteExtDatabase
 
 
@@ -18,6 +20,8 @@ schemes = {
     'postgresql+pool': PooledPostgresqlDatabase,
     'sqlite': SqliteDatabase,
     'sqliteext': SqliteExtDatabase,
+    'sqlite+pool': PooledSqliteDatabase,
+    'sqliteext+pool': PooledSqliteExtDatabase,
 }
 
 def register_database(db_class, *names):

@@ -21,7 +21,7 @@ This document describes how to perform typical database-related tasks with peewe
 Creating a database connection and tables
 -----------------------------------------
 
-While it is not necessary to explicitly connect to the database before using it, **managing connections explicitly is a good practice**. This way if the connection fails, the exception can be caught during the *connect* step, rather than some arbitrary time later when a query is executed. Furthermore, **if you're using a :ref:`connection pool <pool>`, it is actually necessary to call :py:meth:`~Database.connect` and :py:meth:`~Database.close` to ensure connections are recycled correctly**.
+While it is not necessary to explicitly connect to the database before using it, **managing connections explicitly is a good practice**. This way if the connection fails, the exception can be caught during the *connect* step, rather than some arbitrary time later when a query is executed. Furthermore, if you're using a :ref:`connection pool <pool>`, it is actually necessary to call :py:meth:`~Database.connect` and :py:meth:`~Database.close` to ensure connections are recycled correctly.
 
 For web-apps you will typically open a connection when a request is started and close it when the response is delivered:
 
@@ -159,7 +159,7 @@ To connect to a SQLite database, we will use :py:class:`SqliteDatabase`. The fir
 
 The :ref:`playhouse` contains a :ref:`SQLite extension module <sqlite_ext>` which provides many SQLite-specific features such as:
 
-* :ref:`Full-text search <sqlite_fts>` with `BM25 ranking <sqlite_bm25>`.
+* :ref:`Full-text search <sqlite_fts>` with :ref:`BM25 ranking <sqlite_bm25>`.
 * Support for custom functions, aggregates and collations
 * Advanced transaction support
 * And more!
@@ -338,21 +338,7 @@ Example database URLs:
 Multi-threaded applications
 ---------------------------
 
-Some database engines may not allow a connection to be shared across threads, notably SQLite. As of version 2.3.3, peewee's default behavior is to maintain a connection-per-thread. For earlier versions, instantiate your database with ``threadlocals=True``:
-
-.. code-block:: python
-
-    # If using 2.3.2 or lower, you must specify `threadlocals=True`.
-    database = SqliteDatabase('my_app.db', threadlocals=True)
-
-The above code will cause peewee to store the connection state in a thread local; each thread gets its own separate connection.
-
-.. note::
-    For web applications or any multi-threaded (including green threads!) app,
-    it is best to set ``threadlocals=True`` when instantiating your database.
-
-    As of version 2.3.3, this is the default behavior when instantiating your
-    database, but for earlier versions you will need to specify this manually.
+peewee stores the connection state in a thread local, so each thread gets its own separate connection. If you prefer to manage the connections yourself, you can disable this behavior by initializing your database with ``threadlocals=False``.
 
 .. _deferring_initialization:
 
@@ -450,11 +436,10 @@ The following pooled database classes are available:
 * :py:class:`PooledPostgresqlDatabase`
 * :py:class:`PooledPostgresqlExtDatabase`
 * :py:class:`PooledMySQLDatabase`
+* :py:class:`PooledSqliteDatabase`
+* :py:class:`PooledSqliteExtDatabase`
 
 For an in-depth discussion of peewee's connection pool, see the :ref:`pool` section of the :ref:`playhouse` documentation.
-
-.. warning::
-    If you are using version 2.3.2 or lower, be sure to specify ``threadlocals=True`` when instantiating your pooled database.
 
 .. _using_read_slaves:
 

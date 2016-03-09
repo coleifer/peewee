@@ -52,8 +52,8 @@ Contents:
    peewee/models
    peewee/querying
    peewee/transactions
-   peewee/api
    peewee/playhouse
+   peewee/api
    peewee/hacks
 
 Note

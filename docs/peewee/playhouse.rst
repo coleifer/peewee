@@ -3717,6 +3717,8 @@ This module contains a helper function to generate a database connection from a 
     * ``postgresext+pool``: :py:class:`PooledPostgresqlExtDatabase`
     * ``sqlite``: :py:class:`SqliteDatabase`
     * ``sqliteext``: :py:class:`SqliteExtDatabase`
+    * ``sqlite+pool``: :py:class:`PooledSqliteDatabase`
+    * ``sqliteext+pool``: :py:class:`PooledSqliteExtDatabase`
 
     Usage:
 
@@ -3920,6 +3922,14 @@ Pool APIs
 .. py:class:: PooledMySQLDatabase
 
     Subclass of :py:class:`MySQLDatabase` that mixes in the :py:class:`PooledDatabase` helper.
+
+.. py:class:: PooledSqliteDatabase
+
+    Persistent connections for SQLite apps.
+
+.. py:class:: PooledSqliteExtDatabase
+
+    Persistent connections for SQLite apps, using the :ref:`sqlite_ext` advanced database driver :py:class:`SqliteExtDatabase`.
 
 
 .. _read_slaves:

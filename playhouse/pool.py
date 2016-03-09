@@ -64,6 +64,7 @@ import time
 
 from peewee import MySQLDatabase
 from peewee import PostgresqlDatabase
+from peewee import SqliteDatabase
 
 logger = logging.getLogger('peewee.pool')
 
@@ -169,6 +170,7 @@ class PooledDatabase(object):
         for _, conn in self._connections:
             self._close(conn, close_conn=True)
 
+
 class PooledMySQLDatabase(PooledDatabase, MySQLDatabase):
     def _is_closed(self, key, conn):
         is_closed = super(PooledMySQLDatabase, self)._is_closed(key, conn)
@@ -178,6 +180,7 @@ class PooledMySQLDatabase(PooledDatabase, MySQLDatabase):
             except:
                 is_closed = True
         return is_closed
+
 
 class _PooledPostgresqlDatabase(PooledDatabase):
     def _is_closed(self, key, conn):
@@ -193,6 +196,28 @@ try:
     from playhouse.postgres_ext import PostgresqlExtDatabase
 
     class PooledPostgresqlExtDatabase(_PooledPostgresqlDatabase, PostgresqlExtDatabase):
+        pass
+except ImportError:
+    pass
+
+
+class _PooledSqliteDatabase(PooledDatabase):
+    def _is_closed(self, key, conn):
+        closed = super(_PooledSqliteDatabase, self)._is_closed(key, conn)
+        if not closed:
+            try:
+                conn.total_changes
+            except:
+                return True
+        return closed
+
+class PooledSqliteDatabase(_PooledSqliteDatabase, SqliteDatabase):
+    pass
+
+try:
+    from playhouse.sqlite_ext import SqliteExtDatabase
+
+    class PooledSqliteExtDatabase(_PooledSqliteDatabase, SqliteExtDatabase):
         pass
 except ImportError:
     pass
