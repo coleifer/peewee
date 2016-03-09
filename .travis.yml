@@ -8,8 +8,10 @@ env:
   - PEEWEE_TEST_BACKEND=sqlite
   - PEEWEE_TEST_BACKEND=postgresql
   - PEEWEE_TEST_BACKEND=mysql
+addons:
+  postgresql: "9.4"
 services:
-  - postgres
+  - postgresql
   - mysql
 install: "pip install psycopg2 Cython pymysql"
 before_script:
