@@ -2998,6 +2998,9 @@ class CompoundSelect(SelectQuery):
         query.rhs = self.rhs
         return query
 
+    def count(self, clear_limit=False):
+        return self.wrapped_count(clear_limit=clear_limit)
+
     def get_query_meta(self):
         return self.lhs.get_query_meta()
 

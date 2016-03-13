@@ -405,6 +405,13 @@ class TestCompoundSelectQueries(ModelTestCase):
             ('d', 'd-foo'),
         ])
 
+    @requires_op('UNION')
+    def test_union_with_count(self):
+        lhs = User.select().where(User.username << ['a', 'b'])
+        rhs = User.select().where(User.username << ['d', 'x'])
+        cq = (lhs | rhs)
+        self.assertEqual(cq.count(), 3)
+
 
 @skip_unless(lambda: isinstance(test_db, PostgresqlDatabase))
 class TestCompoundWithOrderLimit(ModelTestCase):
