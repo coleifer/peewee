@@ -68,6 +68,17 @@ class ArrayModel(BaseModel):
     tags = ArrayField(CharField)
     ints = ArrayField(IntegerField, dimensions=2)
 
+class FakeIndexedField(IndexedFieldMixin, CharField):
+    index_type = 'FAKE'
+
+class TestIndexModel(BaseModel):
+    array_index = ArrayField(CharField)
+    array_noindex= ArrayField(IntegerField, index=False)
+    fake_index = FakeIndexedField()
+    fake_index_with_type = FakeIndexedField(index_type='MAGIC')
+    fake_noindex = FakeIndexedField(index=False)
+
+
 class SSCursorModel(Model):
     data = CharField()
 
@@ -781,8 +792,8 @@ class TestBinaryJsonField(BaseJsonFieldTestCase, ModelTestCase):
             {'k1': 'v1', 'k2': 'v2', 'k3': {'k4': ['i1', 'i2'], 'k5': {}}},
             ['a1', 'a2', {'a3': 'a4'}],
             {'a1': 'x1', 'a2': 'x2', 'k4': ['i1', 'i2']},
-            list(range(10)),
-            list(range(5, 15)),
+            range(10),
+            range(5, 15),
             ['k4', 'k1']]
 
         self._bjson_objects = []
@@ -972,3 +983,35 @@ class TestLateralJoin(ModelTestCase):
             'zaizee-9',
             'zaizee-8',
             'zaizee-7'])
+
+
+class TestIndexedField(PeeweeTestCase):
+    def test_indexed_field_ddl(self):
+        compiler = test_db.compiler()
+
+        create_sql, _ = compiler.create_table(TestIndexModel)
+        self.assertEqual(create_sql, (
+            'CREATE TABLE "testindexmodel" ('
+            '"id" SERIAL NOT NULL PRIMARY KEY, '
+            '"array_index" VARCHAR(255)[] NOT NULL, '
+            '"array_noindex" INTEGER[] NOT NULL, '
+            '"fake_index" VARCHAR(255) NOT NULL, '
+            '"fake_index_with_type" VARCHAR(255) NOT NULL, '
+            '"fake_noindex" VARCHAR(255) NOT NULL)'))
+
+        all_sql = TestIndexModel.sqlall()
+        tbl, array_idx, fake_idx, fake_idx_type = all_sql
+        self.assertEqual(tbl, create_sql)
+
+        self.assertEqual(array_idx, (
+            'CREATE INDEX "testindexmodel_array_index" ON "testindexmodel" '
+            'USING GIN ("array_index")'))
+
+        self.assertEqual(fake_idx, (
+            'CREATE INDEX "testindexmodel_fake_index" ON "testindexmodel" '
+            'USING GiST ("fake_index")'))
+
+        self.assertEqual(fake_idx_type, (
+            'CREATE INDEX "testindexmodel_fake_index_with_type" '
+            'ON "testindexmodel" '
+            'USING MAGIC ("fake_index_with_type")'))

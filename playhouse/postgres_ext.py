@@ -126,7 +126,10 @@ class IndexedFieldMixin(object):
     def __init__(self, index_type=None, *args, **kwargs):
         kwargs.setdefault('index', True)  # By default, use an index.
         super(IndexedFieldMixin, self).__init__(*args, **kwargs)
-        self.index_type = index_type or self.default_index_type
+        if self.index:
+            self.index_type = index_type or self.default_index_type
+        else:
+            self.index_type = None
 
 
 class ArrayField(IndexedFieldMixin, Field):

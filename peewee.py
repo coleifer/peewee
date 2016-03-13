@@ -4620,7 +4620,7 @@ class Model(with_metaclass(BaseModel)):
     @classmethod
     def _fields_to_index(cls):
         fields = []
-        for field in cls._meta.fields.values():
+        for field in cls._meta.sorted_fields:
             if field.primary_key:
                 continue
             requires_index = any((
