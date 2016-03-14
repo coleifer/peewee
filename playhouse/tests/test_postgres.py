@@ -792,8 +792,8 @@ class TestBinaryJsonField(BaseJsonFieldTestCase, ModelTestCase):
             {'k1': 'v1', 'k2': 'v2', 'k3': {'k4': ['i1', 'i2'], 'k5': {}}},
             ['a1', 'a2', {'a3': 'a4'}],
             {'a1': 'x1', 'a2': 'x2', 'k4': ['i1', 'i2']},
-            range(10),
-            range(5, 15),
+            list(range(10)),
+            list(range(5, 15)),
             ['k4', 'k1']]
 
         self._bjson_objects = []
