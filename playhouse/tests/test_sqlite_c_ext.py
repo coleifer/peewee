@@ -89,6 +89,19 @@ class TestRank(BaseTestCase):
                 note = Note.create(content=content)
                 NoteIndex.index_note(note)
 
+    def test_scoring_lucene(self):
+        query = NoteIndex.search_lucene('things', [1.0], with_score=True)
+        results = [(item[0], round(item[1], 2)) for item in query.tuples()]
+        self.assertEqual(results, [
+            (self.test_content[4], -0.17),
+            (self.test_content[2], -0.14)])
+
+        query = NoteIndex.search_lucene('faithful thing', [1.0], with_score=True)
+        results = [(item[0], round(item[1], 2)) for item in query.tuples()]
+        self.assertEqual(results, [
+            (self.test_content[4], 0.08),
+            (self.test_content[2], 0.1)])
+
     def test_scoring(self):
         query = NoteIndex.search('things', with_score=True).tuples()
         self.assertEqual(query[:], [

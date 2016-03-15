@@ -340,6 +340,11 @@ class FTSModel(BaseFTSModel):
         return fn.fts_bm25(match_info, *weights)
 
     @classmethod
+    def lucene(cls, *weights):
+        match_info = fn.matchinfo(cls.as_entity(), FTS_MATCHINFO_FORMAT)
+        return fn.fts_lucene(match_info, *weights)
+
+    @classmethod
     def _search(cls, term, weights, with_score, score_alias, score_fn,
                 explicit_ordering):
         if not weights:
@@ -387,6 +392,18 @@ class FTSModel(BaseFTSModel):
             with_score,
             score_alias,
             cls.bm25,
+            explicit_ordering)
+
+    @classmethod
+    def search_lucene(cls, term, weights=None, with_score=False,
+                      score_alias='score', explicit_ordering=False):
+        """Full-text search for selected `term` using BM25 algorithm."""
+        return cls._search(
+            term,
+            weights,
+            with_score,
+            score_alias,
+            cls.lucene,
             explicit_ordering)
 
 
@@ -833,6 +850,7 @@ class SqliteExtDatabase(SqliteDatabase):
             self.register_function(_c_ext.peewee_date_trunc, 'date_trunc', 2)
             self.register_function(_c_ext.peewee_regexp, 'regexp', 2)
             self.register_function(_c_ext.peewee_rank, 'fts_rank', -1)
+            self.register_function(_c_ext.peewee_lucene, 'fts_lucene', -1)
             self.register_function(_c_ext.peewee_bm25, 'fts_bm25', -1)
             self.register_function(_c_ext.peewee_murmurhash, 'murmurhash', 1)
         else:

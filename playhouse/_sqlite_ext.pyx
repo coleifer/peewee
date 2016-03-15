@@ -1,6 +1,6 @@
 import re
 from cpython cimport datetime
-from libc.math cimport log
+from libc.math cimport log, sqrt
 from libc.stdlib cimport free, malloc
 
 
@@ -103,6 +103,57 @@ def peewee_rank(py_match_info, *raw_weights):
             global_hits = phrase_info[3 * icol + 1]
             if hits > 0:
                 score += weight * (<double>hits / <double>global_hits)
+
+    free(weights)
+    return -1 * score
+
+
+def peewee_lucene(py_match_info, *raw_weights):
+    # Usage: peewee_lucene(matchinfo(table, 'pcxnal'), 1)
+    cdef:
+        unsigned int *match_info
+        unsigned int *phrase_info
+        bytes _match_info_buf = bytes(py_match_info)
+        char *match_info_buf = _match_info_buf
+        int argc = len(raw_weights) + 1
+        int term_count, col_count
+        double total_docs, term_frequency,
+        double doc_length, docs_with_term, avg_length
+        double idf, weight, rhs, denom
+        double *weights
+        int P_O = 0, C_O = 1, N_O = 2, L_O, X_O
+        int i, j, x
+
+        double score = 0.0
+
+    match_info = <unsigned int *>match_info_buf
+    term_count = match_info[P_O]
+    col_count = match_info[C_O]
+    total_docs = match_info[N_O]
+
+    L_O = 3 + col_count
+    X_O = L_O + col_count
+
+    weights = <double *>malloc(sizeof(double) * col_count)
+    for i in range(col_count):
+        if i < (argc - 1):
+            weights[i] = <double>raw_weights[i]
+        else:
+            weights[i] = 0
+
+    for i in range(term_count):
+        for j in range(col_count):
+            weight = weights[j]
+            if weight == 0:
+                continue
+            doc_length = match_info[L_O + j]
+            x = X_O + (3 * j * (i + 1))
+            term_frequency = match_info[x]
+            docs_with_term = match_info[x + 2]
+            idf = log(total_docs / (docs_with_term + 1.))
+            tf = sqrt(term_frequency)
+            fieldNorms = 1.0 / sqrt(doc_length)
+            score += (idf * tf * fieldNorms)
 
     free(weights)
     return -1 * score
