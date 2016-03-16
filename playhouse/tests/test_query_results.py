@@ -1234,6 +1234,84 @@ class TestPrefetchMultipleFKs(ModelTestCase):
                 self.assertEqual(relationship.to_user.username, to_user)
 
 
+class TestPrefetchThroughM2M(ModelTestCase):
+    requires = [User, Note, Flag, NoteFlag]
+    test_data = [
+        ('charlie', [
+            ('rewrite peewee', ['todo']),
+            ('rice desktop', ['done']),
+            ('test peewee', ['todo', 'urgent']),
+            ('write window-manager', [])]),
+        ('huey', [
+            ('bite mickey', []),
+            ('scratch furniture', ['todo', 'urgent']),
+            ('vomit on carpet', ['done'])]),
+        ('zaizee', []),
+    ]
+
+    def setUp(self):
+        super(TestPrefetchThroughM2M, self).setUp()
+        with test_db.atomic():
+            for username, note_data in self.test_data:
+                user = User.create(username=username)
+                for note, flags in note_data:
+                    self.create_note(user, note, *flags)
+
+    def create_note(self, user, text, *flags):
+        note = Note.create(user=user, text=text)
+        for flag in flags:
+            try:
+                flag = Flag.get(Flag.label == flag)
+            except Flag.DoesNotExist:
+                flag = Flag.create(label=flag)
+            NoteFlag.create(note=note, flag=flag)
+        return note
+
+    def test_prefetch_through_m2m(self):
+        # One query for each table being prefetched.
+        with self.assertQueryCount(4):
+            users = User.select()
+            notes = Note.select().order_by(Note.text)
+            flags = Flag.select().order_by(Flag.label)
+            query = prefetch(users, notes, NoteFlag, flags)
+            accum = []
+            for user in query:
+                notes = []
+                for note in user.notes_prefetch:
+                    flags = []
+                    for nf in note.flags_prefetch:
+                        self.assertEqual(nf.note_id, note.id)
+                        self.assertEqual(nf.note.id, note.id)
+                        flags.append(nf.flag.label)
+                    notes.append((note.text, flags))
+                accum.append((user.username, notes))
+
+        self.assertEqual(self.test_data, accum)
+
+    def test_aggregate_through_m2m(self):
+        with self.assertQueryCount(1):
+            query = (User
+                     .select(User, Note, NoteFlag, Flag)
+                     .join(Note, JOIN.LEFT_OUTER)
+                     .join(NoteFlag, JOIN.LEFT_OUTER)
+                     .join(Flag, JOIN.LEFT_OUTER)
+                     .order_by(User.id, Note.text, Flag.label)
+                     .aggregate_rows())
+
+            accum = []
+            for user in query:
+                notes = []
+                for note in user.notes:
+                    flags = []
+                    for nf in note.flags:
+                        self.assertEqual(nf.note_id, note.id)
+                        flags.append(nf.flag.label)
+                    notes.append((note.text, flags))
+                accum.append((user.username, notes))
+
+        self.assertEqual(self.test_data, accum)
+
+
 class TestAggregateRows(BaseTestPrefetch):
     def test_aggregate_users(self):
         with self.assertQueryCount(1):

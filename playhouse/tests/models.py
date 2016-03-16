@@ -384,6 +384,17 @@ class UIntModel(TestModel):
 class UIntRelModel(TestModel):
     uint_model = ForeignKeyField(UIntModel, to_field='data')
 
+class Note(TestModel):
+    user = ForeignKeyField(User, related_name='notes')
+    text = TextField()
+
+class Flag(TestModel):
+    label = TextField()
+
+class NoteFlag(TestModel):
+    note = ForeignKeyField(Note, related_name='flags')
+    flag = ForeignKeyField(Flag, related_name='notes')
+
 
 MODELS = [
     User,
@@ -442,4 +453,7 @@ MODELS = [
     UUIDRelatedModel,
     UIntModel,
     UIntRelModel,
+    Note,
+    Flag,
+    NoteFlag,
 ]
