@@ -1245,6 +1245,9 @@ class ObjectIdDescriptor(object):
         if instance is not None:
             return instance._data.get(self.attr_name)
 
+    def __set__(self, instance, value):
+        setattr(instance, self.attr_name, value)
+
 class ForeignKeyField(IntegerField):
     def __init__(self, rel_model, related_name=None, on_delete=None,
                  on_update=None, extra=None, to_field=None, *args, **kwargs):
