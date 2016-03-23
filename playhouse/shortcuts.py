@@ -133,7 +133,7 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
             descriptor = getattr(model_class, related_name)
             if descriptor in exclude or foreign_key in exclude:
                 continue
-            if only and (descriptor not in only or foreign_key not in only):
+            if only and (descriptor not in only) and (foreign_key not in only):
                 continue
 
             accum = []

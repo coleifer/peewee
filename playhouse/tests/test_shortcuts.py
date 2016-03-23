@@ -491,6 +491,26 @@ class TestModelToDict(ModelTestCase):
                 'user': {'id': n1.user_id, 'username': 'u0'},
             })
 
+    def test_only_backref(self):
+        u = User.create(username='u1')
+        Note.create(user=u, text='n1')
+        Note.create(user=u, text='n2')
+        Note.create(user=u, text='n3')
+        d = model_to_dict(u, only=[
+            User.username,
+            User.notes,
+            Note.text],
+            backrefs=True)
+        if 'notes' in d:
+            d['notes'].sort(key=lambda n: n['text'])
+        self.assertEqual(d, {
+            'username': 'u1',
+            'notes': [
+                {'text': 'n1'},
+                {'text': 'n2'},
+                {'text': 'n3'},
+            ]})
+
 
 class TestDictToModel(ModelTestCase):
     requires = MODELS
