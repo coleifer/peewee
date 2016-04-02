@@ -1103,6 +1103,19 @@ class TestPrefetch(BaseTestPrefetch):
                 ('u4', 'b6'),
             ])
 
+    def test_prefetch_group_by(self):
+        users = (User
+                 .select(User, fn.Max(fn.Length(Blog.content)).alias('max_content_len'))
+                 .join(Blog, JOIN_LEFT_OUTER)
+                 .group_by(User)
+                 .order_by(User.id))
+        blogs = Blog.select()
+        comments = Comment.select()
+        with self.assertQueryCount(3):
+            result = prefetch(users, blogs, comments)
+            self.assertEqual(len(result), 4)
+            
+
     def test_prefetch_self_join(self):
         self._build_category_tree()
         Child = Category.alias()
