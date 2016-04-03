@@ -4802,6 +4802,7 @@ class Model(with_metaclass(BaseModel)):
         return not self == other
 
 def clean_prefetch_subquery(query):
+    query = query.clone()
     query._group_by = query._having = None
     return query
 
