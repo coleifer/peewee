@@ -1999,3 +1999,21 @@ class TestModelHash(PeeweeTestCase):
         self.assertTrue(mn in d)
         self.assertEqual(d[un], 'un')
         self.assertEqual(d[mn], 'mn')
+
+
+class TestDeleteNullableForeignKeys(ModelTestCase):
+    requires = [User, Note, Flag, NoteFlagNullable]
+
+    def test_delete(self):
+        u = User.create(username='u')
+        n = Note.create(user=u, text='n')
+        f = Flag.create(label='f')
+        nf1 = NoteFlagNullable.create(note=n, flag=f)
+        nf2 = NoteFlagNullable.create(note=n, flag=None)
+        nf3 = NoteFlagNullable.create(note=None, flag=f)
+        nf4 = NoteFlagNullable.create(note=None, flag=None)
+
+        self.assertEqual(nf1.delete_instance(), 1)
+        self.assertEqual(nf2.delete_instance(), 1)
+        self.assertEqual(nf3.delete_instance(), 1)
+        self.assertEqual(nf4.delete_instance(), 1)

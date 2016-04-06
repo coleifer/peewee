@@ -395,6 +395,10 @@ class NoteFlag(TestModel):
     note = ForeignKeyField(Note, related_name='flags')
     flag = ForeignKeyField(Flag, related_name='notes')
 
+class NoteFlagNullable(TestModel):
+    note = ForeignKeyField(Note, null=True, related_name='nullable_flags')
+    flag = ForeignKeyField(Flag, null=True, related_name='nullable_notes')
+
 
 MODELS = [
     User,
