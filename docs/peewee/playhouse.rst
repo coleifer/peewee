@@ -3958,7 +3958,7 @@ might be useful if you have your databases in a master / slave configuration.
         class BaseModel(ReadSlaveModel):
             class Meta:
                 database = master
-                read_slaves = (replica_1, replica_2)
+                read_slaves = [replica_1, replica_2]
 
         # Declare your models.
         class User(BaseModel):
