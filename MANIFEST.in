@@ -6,6 +6,7 @@ include runtests.py
 include tests.py
 include playhouse/_sqlite_ext.pyx
 include playhouse/_speedups.pyx
+include playhouse/pskel
 include playhouse/tests/README
 recursive-include examples *
 recursive-include docs *
