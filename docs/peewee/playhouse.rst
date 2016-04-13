@@ -3222,10 +3222,7 @@ This module contains helper functions for expressing things that would otherwise
 Signal support
 --------------
 
-Models with hooks for signals (a-la django) are provided in ``playhouse.signals``.
-To use the signals, you will need all of your project's models to be a subclass
-of ``playhouse.signals.Model``, which overrides the necessary methods to provide
-support for the various signals.
+Models with hooks for signals (a-la django) are provided in ``playhouse.signals``. To use the signals, you will need all of your project's models to be a subclass of ``playhouse.signals.Model``, which overrides the necessary methods to provide support for the various signals.
 
 .. highlight:: python
 .. code-block:: python
@@ -3240,6 +3237,10 @@ support for the various signals.
     def on_save_handler(model_class, instance, created):
         put_data_in_cache(instance.data)
 
+.. warning::
+    For what I hope are obvious reasons, Peewee signals do not work when you use the :py:meth:`Model.insert`, :py:meth:`Model.update`, or :py:meth:`Model.delete` methods. These methods generate queries that execute beyond the scope of the ORM, and the ORM does not know about which model instances might or might not be affected when the query executes.
+
+    Signals work by hooking into the higher-level peewee APIs like :py:meth:`Model.save` and :py:meth:`Model.delete_instance`, where the affected model instance is known ahead of time.
 
 The following signals are provided:
 
