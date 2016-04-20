@@ -76,7 +76,7 @@ To use this database with your models, set the ``database`` attribute on an inne
 Vendor-specific Parameters
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Some database drivers accept special parameters when being initialized. Rather than try to accomodate all these parameters, Peewee will pass back unrecognized parameters directly to the database driver.
+Some database drivers accept special parameters when being initialized. Rather than try to accommodate all these parameters, Peewee will pass back unrecognized parameters directly to the database driver.
 
 For instance, with Postgresql it is common to need to specify the ``host``, ``user`` and ``password`` when creating your connection. These are not standard Peewee :py:class:`Database` parameters, so they will be passed directly back to ``psycopg2`` when creating connections:
 
