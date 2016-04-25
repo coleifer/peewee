@@ -105,7 +105,7 @@ class BerkeleyDatabase(SqliteExtDatabase):
         return libsqlite.sqlite3_compileoption_used('BERKELEY_DB') == 1
 
 
-if sqlite3_lib_version < (2, 6, 23):
+if sqlite3_lib_version < (3, 6, 23):
     # Checking compile flags is not supported in older SQLite versions.
     PYSQLITE_BERKELEYDB = False
     LIBSQLITE_BERKELEYDB = False
