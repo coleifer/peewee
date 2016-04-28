@@ -3651,6 +3651,8 @@ class SqliteDatabase(Database):
         super(SqliteDatabase, self).__init__(database, *args, **kwargs)
 
     def _connect(self, database, **kwargs):
+        if not sqlite3:
+            raise ImproperlyConfigured('pysqlite or sqlite3 must be installed.')
         conn = sqlite3.connect(database, **kwargs)
         conn.isolation_level = None
         try:
