@@ -1285,6 +1285,8 @@ class ForeignKeyField(IntegerField):
         return ReverseRelationDescriptor(self)
 
     def _get_related_name(self):
+        if self._related_name and callable(self._related_name):
+            return self._related_name(self)
         return self._related_name or ('%s_set' % self.model_class._meta.name)
 
     def add_to_class(self, model_class, name):

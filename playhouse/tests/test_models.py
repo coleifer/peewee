@@ -378,6 +378,27 @@ class TestModelAPIs(ModelTestCase):
 
         self.assertRaises(AttributeError, make_klass)
 
+    def test_callable_related_name(self):
+        class Foo(TestModel):
+            pass
+
+        def rel_name(field):
+            return '%s_%s_ref' % (field.model_class._meta.name, field.name)
+
+        class Bar(TestModel):
+            fk1 = ForeignKeyField(Foo, related_name=rel_name)
+            fk2 = ForeignKeyField(Foo, related_name=rel_name)
+
+        class Baz(Bar):
+            pass
+
+        self.assertTrue(Foo.bar_fk1_ref.rel_model is Bar)
+        self.assertTrue(Foo.bar_fk2_ref.rel_model is Bar)
+        self.assertTrue(Foo.baz_fk1_ref.rel_model is Baz)
+        self.assertTrue(Foo.baz_fk2_ref.rel_model is Baz)
+        self.assertFalse(hasattr(Foo, 'bar_set'))
+        self.assertFalse(hasattr(Foo, 'baz_set'))
+
     def test_fk_exceptions(self):
         c1 = Category.create(name='c1')
         c2 = Category.create(parent=c1, name='c2')
