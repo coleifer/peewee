@@ -5,6 +5,59 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.8.1
+
+This release is long overdue so apologies if you've been waiting on it and
+running off master. There are numerous bugfixes contained in this release, so
+I'll list those first this time.
+
+### Bugs fixed
+
+* #821 - issue warning if Cython is old
+* #822 - better handling of MySQL connections
+point for advanced use-cases.
+* #313 - support equality/inequality with generic foreign key queries, and
+ensure `get_or_create` works with GFKs.
+* #834 - fixed Python3 incompatibilities in the `PasswordField`, thanks
+@mosquito.
+* #836 - fix handling of `last_insert_id()` when using `APSWDatabase`.
+* #845 - add connection hooks to `APSWDatabase`.
+* #852 - check SQLite library version to avoid calls to missing APIs.
+* #857 - allow database definition to be deferred when using the connection
+pool.
+* #878 - formerly `.limit(0)` had no effect. Now adds `LIMIT 0`.
+* #879 - implement a `__hash__` method for `Model`
+* #886 - fix `count()` for compound select queries.
+* #895 - allow writing to the `foreign_key_id` descriptor to set the foreign
+key value.
+* #893 - fix boolean logic bug in `model_to_dict()`.
+* #904 - fix side-effect in `clean_prefetch_query`, thanks to @p.kamayev
+* #907 - package includes `pskel` now.
+* #852 - fix sqlite version check in BerkeleyDB backend.
+* #919 - add runtime check for `sqlite3` library to match MySQL and Postgres.
+Thanks @M157q
+
+### New features
+
+* Added a number of [SQLite user-defined functions and
+aggregates](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#sqlite-udf).
+* Use the DB-API2 `Binary` type for `BlobField`.
+* Implemented the lucene scoring algorithm in the `sqlite_ext` Cython library.
+* #825 - allow a custom base class for `ModelOptions`, providing an extension
+* #830 - added `SmallIntegerField` type.
+* #838 - allow using a custom descriptor class with `ManyToManyField`.
+* #855 - merged change from @lez which included docs on using peewee with
+Pyramid.
+* #858 - allow arguments to be passed on query-string when using the `db_url`
+module. Thanks @RealSalmon
+* #862 - add support for `truncate table`, thanks @dev-zero for the sample
+code.
+* Allow the `related_name` model `Meta` option to be a callable that accepts
+the foreign key field instance.
+
+
+[View commits](https://github.com/coleifer/peewee/compare/2.8.0...2.8.1)
+
 ## 2.8.0
 
 This release includes a couple new field types and greatly improved C extension support for both speedups and SQLite enhancements. Also includes some work, suggested by @foxx, to remove some places where `Proxy` was used in favor of more obvious APIs.
