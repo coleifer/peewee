@@ -483,6 +483,35 @@ class TestModelAPIs(ModelTestCase):
                 [cat.parent_id for cat in query],
                 [None, None, p1.id, p2.id])
 
+    def test_fk_object_id(self):
+        u = User.create(username='u')
+        b = Blog.create(user_id=u.id, title='b1')
+        self.assertEqual(b._data['user'], u.id)
+        self.assertFalse('user' in b._obj_cache)
+
+        with self.assertQueryCount(1):
+            u_db = b.user
+            self.assertEqual(u_db.id, u.id)
+
+        b_db = Blog.get(Blog.pk == b.pk)
+        with self.assertQueryCount(0):
+            self.assertEqual(b_db.user_id, u.id)
+
+        u2 = User.create(username='u2')
+        Blog.create(user=u, title='b1x')
+        Blog.create(user=u2, title='b2')
+
+        q = Blog.select().where(Blog.user_id == u2.id)
+        self.assertEqual(q.count(), 1)
+        self.assertEqual(q.get().title, 'b2')
+
+        q = Blog.select(Blog.pk, Blog.user_id).where(Blog.user_id == u.id)
+        self.assertEqual(q.count(), 2)
+        result = q.order_by(Blog.pk).first()
+        self.assertEqual(result.user_id, u.id)
+        with self.assertQueryCount(1):
+            self.assertEqual(result.user.id, u.id)
+
     def test_category_select_related_alias(self):
         g1 = Category.create(name='g1')
         g2 = Category.create(name='g2')

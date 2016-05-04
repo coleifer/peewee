@@ -25,6 +25,7 @@ import re
 import sys
 import threading
 import uuid
+import weakref
 from bisect import bisect_left
 from bisect import bisect_right
 from collections import deque
@@ -1240,10 +1241,12 @@ class ObjectIdDescriptor(object):
     """Gives direct access to the underlying id"""
     def __init__(self, field):
         self.attr_name = field.name
+        self.field = weakref.ref(field)
 
     def __get__(self, instance, instance_type=None):
         if instance is not None:
             return instance._data.get(self.attr_name)
+        return self.field()
 
     def __set__(self, instance, value):
         setattr(instance, self.attr_name, value)
