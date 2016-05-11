@@ -158,9 +158,21 @@ cdef class _QueryResultWrapper(object):
                     pass
                 else:
                     nt = getattr(column, '_node_type', None)
-                    if isinstance(nt, basestring) and nt == 'field':
-                        attr_name = column._alias or column.name
-                        found = column.python_value
+                    if isinstance(nt, basestring):
+                        if nt == 'field':
+                            attr_name = column._alias or column.name
+                            found = column.python_value
+                        elif nt == 'func' and len(column.arguments):
+                            first_arg = column.arguments[0]
+                            nt = getattr(first_arg, '_node_type', None)
+                            try:
+                                if nt and nt == 'field':
+                                    attr_name = (column._alias or
+                                                 first_arg._alias or
+                                                 first_arg.name)
+                                    found = first_arg.python_value
+                            except:
+                                pass
 
             if found is None:
                 if attr_name in self.model._meta.columns:
