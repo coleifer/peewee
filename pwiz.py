@@ -15,7 +15,7 @@ TEMPLATE = """from peewee import *
 database = %s('%s', **%s)
 
 class UnknownField(object):
-    pass
+    def __init__(*_, **__): pass
 
 class BaseModel(Model):
     class Meta:
