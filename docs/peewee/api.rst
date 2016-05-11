@@ -872,9 +872,12 @@ Query Types
 
         .. warning: This method should be implemented by subclasses
 
-    .. py:method:: scalar([as_tuple=False])
+    .. py:method:: scalar([as_tuple=False[, convert=False]])
 
         :param bool as_tuple: return the row as a tuple or a single value
+        :param bool convert: attempt to coerce the selected value to the
+          appropriate data-type based on it's associated Field type (assuming
+          one exists).
         :rtype: the resulting row, either as a single value or tuple
 
         Provide a way to retrieve single values from select queries, for instance
@@ -884,6 +887,19 @@ Query Types
 
             >>> PageView.select(fn.Count(fn.Distinct(PageView.url))).scalar()
             100 # <-- there are 100 distinct URLs in the pageview table
+
+        This example illustrates the use of the `convert` argument. When using
+        a SQLite database, datetimes are stored as strings. To select the max
+        datetime, and have it *returned* as a datetime, we will specify
+        ``convert=True``.
+
+        .. code-block:: pycon
+
+            >>> PageView.select(fn.MAX(PageView.timestamp)).scalar()
+            '2016-04-20 13:37:00.1234'
+
+            >>> PageView.select(fn.MAX(PageView.timestamp)).scalar(convert=True)
+            datetime.datetime(2016, 4, 20, 13, 37, 0, 1234)
 
 
 .. py:class:: SelectQuery(model_class, *selection)
