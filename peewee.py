@@ -2007,7 +2007,7 @@ class QueryCompiler(object):
         index = '%s_%s' % (table, '_'.join(columns))
         if len(index) > 64:
             index_hash = hashlib.md5(index.encode('utf-8')).hexdigest()
-            index = '%s_%s' % (table, index_hash)
+            index = '%s_%s' % (table[:55], index_hash[:8])  # 55 + 1 + 8 = 64
         return index
 
     def _create_index(self, model_class, fields, unique, *extra):
