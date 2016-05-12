@@ -56,7 +56,7 @@ from peewee import *
 database = SqliteDatabase('/tmp/peewee_test.db', **{})
 
 class UnknownField(object):
-    pass
+    def __init__(self, *_, **__): pass
 
 class BaseModel(Model):
     class Meta:
@@ -97,7 +97,7 @@ from peewee import *
 database = SqliteDatabase('/tmp/peewee_test.db', **{})
 
 class UnknownField(object):
-    pass
+    def __init__(self, *_, **__): pass
 
 class BaseModel(Model):
     class Meta:

@@ -156,7 +156,7 @@ class TestLongIndexName(PeeweeTestCase):
 
         sql, params = compiler.create_index(LongIndexModel, fields, False)
         self.assertEqual(sql, (
-            'CREATE INDEX "longindexmodel_85c2f7db5319d3c0c124a1594087a1cb" '
+            'CREATE INDEX "longindexmodel_85c2f7db" '
             'ON "longindexmodel" ('
             '"a123456789012345678901234567890", '
             '"b123456789012345678901234567890", '
