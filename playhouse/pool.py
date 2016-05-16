@@ -69,11 +69,17 @@ from peewee import SqliteDatabase
 logger = logging.getLogger('peewee.pool')
 
 
+def make_int(val):
+    if val is not None and not isinstance(val, (int, float)):
+        return int(val)
+    return val
+
+
 class PooledDatabase(object):
     def __init__(self, database, max_connections=20, stale_timeout=None,
                  **kwargs):
-        self.max_connections = max_connections
-        self.stale_timeout = stale_timeout
+        self.max_connections = make_int(max_connections)
+        self.stale_timeout = make_int(stale_timeout)
         self._connections = []
         self._in_use = {}
         self._closed = set()
@@ -84,10 +90,10 @@ class PooledDatabase(object):
     def init(self, database, max_connections=None, stale_timeout=None,
              **connect_kwargs):
         super(PooledDatabase, self).init(database, **connect_kwargs)
-        if max_connections:
-            self.max_connections = max_connections
-        if stale_timeout:
-            self.stale_timeout = stale_timeout
+        if max_connections is not None:
+            self.max_connections = make_int(max_connections)
+        if stale_timeout is not None:
+            self.stale_timeout = make_int(stale_timeout)
 
     def _connect(self, *args, **kwargs):
         while True:
