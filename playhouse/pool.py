@@ -72,8 +72,8 @@ logger = logging.getLogger('peewee.pool')
 class PooledDatabase(object):
     def __init__(self, database, max_connections=20, stale_timeout=None,
                  **kwargs):
-        self.max_connections = max_connections
-        self.stale_timeout = stale_timeout
+        self.max_connections = int(max_connections)
+        self.stale_timeout = float(stale_timeout)
         self._connections = []
         self._in_use = {}
         self._closed = set()
