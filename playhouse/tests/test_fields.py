@@ -54,7 +54,7 @@ class TestFieldTypes(ModelTestCase):
             _dt(2010, 1, 2, 13, 37, 1, 123456),
             _dt(2010, 1, 3, 13, 37, 1, 123456)),
     }
-    value_table = zip(*[(k,) + v for k, v in field_data.items()])
+    value_table = list(zip(*[(k,) + v for k, v in field_data.items()]))
 
     def setUp(self):
         super(TestFieldTypes, self).setUp()

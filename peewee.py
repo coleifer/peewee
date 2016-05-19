@@ -4064,6 +4064,9 @@ class MySQLDatabase(Database):
             EnclosedClause(model_class._meta.primary_key),
             SQL('VALUES (DEFAULT)'))
 
+    def get_noop_sql(self):
+        return 'SELECT 0 WHERE false'
+
     def get_binary_type(self):
         return mysql.Binary
 
