@@ -3015,6 +3015,14 @@ class SelectQuery(Query):
         def __hash__(self):
             return id(self)
 
+class NoopSelectQuery(SelectQuery):
+    def sql(self):
+        return ('SELECT 0 WHERE 0', ())
+
+    def execute(self):
+        Wrapper = self.database.get_result_wrapper(RESULTS_TUPLES)
+        return Wrapper(self.model_class, self._execute(), None)
+
 class CompoundSelect(SelectQuery):
     _node_type = 'compound_select_query'
 
@@ -4705,6 +4713,10 @@ class Model(with_metaclass(BaseModel)):
         if cls._meta.schema:
             return Entity(cls._meta.schema, cls._meta.db_table)
         return Entity(cls._meta.db_table)
+
+    @classmethod
+    def noop(cls, *args, **kwargs):
+        return NoopSelectQuery(cls, *args, **kwargs)
 
     def _get_pk_value(self):
         return getattr(self, self._meta.primary_key.name)

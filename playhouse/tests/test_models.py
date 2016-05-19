@@ -131,6 +131,15 @@ class TestQueryingModels(ModelTestCase):
         users = User.select(fn.Count(fn.Distinct(User.username))).scalar()
         self.assertEqual(users, 6)
 
+    def test_noop_query(self):
+        query = User.noop()
+        with self.assertQueryCount(1) as qc:
+            result = list(query)
+            import ipdb
+            ipdb.set_trace()
+
+        self.assertEqual(result, [])
+
     def test_update(self):
         User.create_users(5)
         uq = User.update(username='u-edited').where(User.username << ['u1', 'u2', 'u3'])
