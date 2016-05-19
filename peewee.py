@@ -87,6 +87,7 @@ __all__ = [
     'SQL',
     'TextField',
     'TimeField',
+    'TimestampField',
     'Using',
     'UUIDField',
     'Window',
@@ -1186,6 +1187,30 @@ class TimeField(_BaseFormattedField):
     hour = property(_date_part('hour'))
     minute = property(_date_part('minute'))
     second = property(_date_part('second'))
+
+class TimestampField(IntegerField):
+    epoch = datetime.datetime(1970, 1, 1)
+    epoch_date = datetime.date(1970, 1, 1)
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault('default', datetime.datetime.now)
+        super(TimestampField, self).__init__(*args, **kwargs)
+
+    def db_value(self, value):
+        if value is not None:
+            if isinstance(value, datetime.datetime):
+                epoch = self.epoch
+            elif isinstance(value, datetime.date):
+                epoch = self.epoch_date
+            else:
+                return value
+
+            return int((value - epoch).total_seconds())
+
+    def python_value(self, value):
+        if value is not None and isinstance(value, int):
+            return datetime.datetime.utcfromtimestamp(value)
+        return value
 
 class BooleanField(Field):
     db_field = 'bool'

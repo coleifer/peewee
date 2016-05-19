@@ -26,10 +26,10 @@ class TestFieldTypes(ModelTestCase):
     _t = datetime.time
 
     _data = (
-        ('char_field', 'text_field', 'int_field', 'float_field', 'decimal_field1', 'datetime_field', 'date_field', 'time_field', 'fixed_char_field'),
-        ('c1',         't1',         1,           1.0,           "1.0",            _dt(2010, 1, 1),  _d(2010, 1, 1), _t(1, 0), 'fc1'),
-        ('c2',         't2',         2,           2.0,           "2.0",            _dt(2010, 1, 2),  _d(2010, 1, 2), _t(2, 0), 'fc2'),
-        ('c3',         't3',         3,           3.0,           "3.0",            _dt(2010, 1, 3),  _d(2010, 1, 3), _t(3, 0), 'fc3'),
+        ('char_field', 'text_field', 'int_field', 'float_field', 'decimal_field1', 'datetime_field', 'date_field', 'time_field', 'fixed_char_field', 'ts_field'),
+        ('c1',         't1',         1,           1.0,           "1.0",            _dt(2010, 1, 1),  _d(2010, 1, 1), _t(1, 0),   'fc1',         _dt(2010, 1, 1)),
+        ('c2',         't2',         2,           2.0,           "2.0",            _dt(2010, 1, 2),  _d(2010, 1, 2), _t(2, 0),   'fc2',         _dt(2010, 1, 2)),
+        ('c3',         't3',         3,           3.0,           "3.0",            _dt(2010, 1, 3),  _d(2010, 1, 3), _t(3, 0),   'fc3',         _dt(2010, 1, 3)),
     )
 
     def setUp(self):
@@ -146,6 +146,30 @@ class TestFieldTypes(ModelTestCase):
         self.assertNM(NullModel.boolean_field == True, ['t'])
         self.assertNM(NullModel.boolean_field == False, ['f'])
         self.assertNM(NullModel.boolean_field >> None, ['n'])
+
+    def test_timestamp_field(self):
+        dt = datetime.datetime(2016, 1, 2, 11, 12, 13, 54321)
+        d = datetime.date(2016, 1, 3)
+
+        nm1 = NullModel.create(ts_field=dt)
+        nm2 = NullModel.create(ts_field=d)
+
+        nm1_db = NullModel.get(NullModel.ts_field == dt)
+        self.assertNotEqual(nm1_db.ts_field, dt)  # Microseconds!
+        dt = dt.replace(microsecond=0)
+        self.assertEqual(nm1_db.id, nm1.id)
+
+        nm2_db = NullModel.get(NullModel.ts_field == d)
+        d_dt = datetime.datetime(year=d.year, month=d.month, day=d.day)
+        self.assertEqual(nm2_db.ts_field, d_dt)
+        self.assertEqual(nm2_db.id, nm2.id)
+
+        dt += datetime.timedelta(days=1, seconds=3600)
+        ts = (dt - NullModel.ts_field.epoch).total_seconds()
+        nm3 = NullModel.create(ts_field=int(ts))
+        nm3_db = NullModel.get(NullModel.id == nm3.id)
+        self.assertEqual(nm3_db.ts_field,
+                         datetime.datetime(2016, 1, 3, 12, 12, 13))
 
     def _time_to_delta(self, t):
         micro = t.microsecond / 1000000.
