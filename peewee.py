@@ -4065,7 +4065,7 @@ class MySQLDatabase(Database):
             SQL('VALUES (DEFAULT)'))
 
     def get_noop_sql(self):
-        return 'SELECT 0 WHERE false'
+        return 'DO 0'
 
     def get_binary_type(self):
         return mysql.Binary
