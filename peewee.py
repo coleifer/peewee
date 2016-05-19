@@ -16,6 +16,7 @@
 #     //
 #    '
 
+import calendar
 import datetime
 import decimal
 import hashlib
@@ -24,6 +25,7 @@ import operator
 import re
 import sys
 import threading
+import time
 import uuid
 import weakref
 from bisect import bisect_left
@@ -124,6 +126,7 @@ if PY3:
     basestring = str
     print_ = getattr(builtins, 'print')
     binary_construct = lambda s: bytes(s.encode('raw_unicode_escape'))
+    long = int
     def reraise(tp, value, tb=None):
         if value.__traceback__ is not tb:
             raise value.with_traceback(tb)
@@ -138,6 +141,12 @@ elif PY2:
     exec('def reraise(tp, value, tb=None): raise tp, value, tb')
 else:
     raise RuntimeError('Unsupported python version.')
+
+if PY26:
+    _M = 10**6
+    total_seconds = lambda t: (t.microseconds + 0.0 + (t.seconds + t.days * 24 * 3600) * _M) / _M
+else:
+    total_seconds = lambda t: t.total_seconds()
 
 # By default, peewee supports Sqlite, MySQL and Postgresql.
 try:
@@ -1189,27 +1198,57 @@ class TimeField(_BaseFormattedField):
     second = property(_date_part('second'))
 
 class TimestampField(IntegerField):
-    epoch = datetime.datetime(1970, 1, 1)
-    epoch_date = datetime.date(1970, 1, 1)
+    # Support second -> microsecond resolution.
+    valid_resolutions = [10**i for i in range(7)]
 
     def __init__(self, *args, **kwargs):
-        kwargs.setdefault('default', datetime.datetime.now)
+        self.resolution = kwargs.pop('resolution', 1) or 1
+        if self.resolution not in self.valid_resolutions:
+            raise ValueError('TimestampField resolution must be one of: %s' %
+                             ', '.join(str(i) for i in self.valid_resolutions))
+
+        self.utc = kwargs.pop('utc', False) or False
+        if self.utc:
+            _conv = datetime.datetime.utcfromtimestamp
+            self.conv = lambda v: _conv(float(v) / self.resolution)
+            default = datetime.datetime.utcnow
+        else:
+            self.conv = datetime.datetime.fromtimestamp
+            default = datetime.datetime.now
+
+        kwargs.setdefault('default', default)
         super(TimestampField, self).__init__(*args, **kwargs)
 
-    def db_value(self, value):
-        if value is not None:
-            if isinstance(value, datetime.datetime):
-                epoch = self.epoch
-            elif isinstance(value, datetime.date):
-                epoch = self.epoch_date
-            else:
-                return value
+    def get_db_field(self):
+        # For second resolution we can get away (for a while) with using
+        # 4 bytes to store the timestamp (as long as they're not > ~2038).
+        # Otherwise we'll need to use a BigInteger type.
+        return (self.db_field if self.resolution == 1
+                else BigIntegerField.db_field)
 
-            return int((value - epoch).total_seconds())
+    def db_value(self, value):
+        if value is None:
+            return
+
+        if isinstance(value, datetime.datetime):
+            pass
+        elif isinstance(value, datetime.date):
+            value = datetime.datetime(value.year, value.month, value.day)
+        else:
+            return value
+
+        if self.utc:
+            timestamp = calendar.timegm(value.utctimetuple())
+        else:
+            timestamp = time.mktime(value.timetuple())
+        timestamp += value.microsecond
+        if self.resolution > 1:
+            timestamp *= self.resolution
+        return int(round(timestamp))
 
     def python_value(self, value):
-        if value is not None and isinstance(value, int):
-            return datetime.datetime.utcfromtimestamp(value)
+        if value is not None and isinstance(value, (int, float, long)):
+            return self.conv(value)
         return value
 
 class BooleanField(Field):

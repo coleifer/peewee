@@ -1,6 +1,7 @@
 import datetime
 import decimal
 import sys
+import time
 import uuid
 
 from peewee import MySQLDatabase
@@ -25,25 +26,43 @@ class TestFieldTypes(ModelTestCase):
     _d = datetime.date
     _t = datetime.time
 
-    _data = (
-        ('char_field', 'text_field', 'int_field', 'float_field', 'decimal_field1', 'datetime_field', 'date_field', 'time_field', 'fixed_char_field', 'ts_field'),
-        ('c1',         't1',         1,           1.0,           "1.0",            _dt(2010, 1, 1),  _d(2010, 1, 1), _t(1, 0),   'fc1',         _dt(2010, 1, 1)),
-        ('c2',         't2',         2,           2.0,           "2.0",            _dt(2010, 1, 2),  _d(2010, 1, 2), _t(2, 0),   'fc2',         _dt(2010, 1, 2)),
-        ('c3',         't3',         3,           3.0,           "3.0",            _dt(2010, 1, 3),  _d(2010, 1, 3), _t(3, 0),   'fc3',         _dt(2010, 1, 3)),
-    )
+    field_data = {
+        'char_field': ('c1', 'c2', 'c3'),
+        'date_field': (
+            _d(2010, 1, 1),
+            _d(2010, 1, 2),
+            _d(2010, 1, 3)),
+        'datetime_field': (
+            _dt(2010, 1, 1, 0, 0),
+            _dt(2010, 1, 2, 0, 0),
+            _dt(2010, 1, 3, 0, 0)),
+        'decimal_field1': ('1.0', '2.0', '3.0'),
+        'fixed_char_field': ('fc1', 'fc2', 'fc3'),
+        'float_field': (1.0, 2.0, 3.0),
+        'int_field': (1, 2, 3),
+        'text_field': ('t1', 't2', 't3'),
+        'time_field': (
+            _t(1, 0),
+            _t(2, 0),
+            _t(3, 0)),
+        'ts_field': (
+            _dt(2010, 1, 1, 0, 0),
+            _dt(2010, 1, 2, 0, 0),
+            _dt(2010, 1, 3, 0, 0)),
+        'ts_field2': (
+            _dt(2010, 1, 1, 13, 37, 1, 123456),
+            _dt(2010, 1, 2, 13, 37, 1, 123456),
+            _dt(2010, 1, 3, 13, 37, 1, 123456)),
+    }
+    value_table = zip(*[(k,) + v for k, v in field_data.items()])
 
     def setUp(self):
         super(TestFieldTypes, self).setUp()
-        self.field_data = {}
-
-        headers = self._data[0]
-        for row in self._data[1:]:
+        header, values = self.value_table[0], self.value_table[1:]
+        for row in values:
             nm = NullModel()
             for i, col in enumerate(row):
-                attr = headers[i]
-                self.field_data.setdefault(attr, [])
-                self.field_data[attr].append(col)
-                setattr(nm, attr, col)
+                setattr(nm, header[i], col)
             nm.save()
 
     def assertNM(self, q, exp):
@@ -151,8 +170,8 @@ class TestFieldTypes(ModelTestCase):
         dt = datetime.datetime(2016, 1, 2, 11, 12, 13, 54321)
         d = datetime.date(2016, 1, 3)
 
-        nm1 = NullModel.create(ts_field=dt)
-        nm2 = NullModel.create(ts_field=d)
+        nm1 = NullModel.create(ts_field=dt, ts_field2=dt)
+        nm2 = NullModel.create(ts_field=d, ts_field2=d)
 
         nm1_db = NullModel.get(NullModel.ts_field == dt)
         self.assertNotEqual(nm1_db.ts_field, dt)  # Microseconds!
@@ -165,8 +184,8 @@ class TestFieldTypes(ModelTestCase):
         self.assertEqual(nm2_db.id, nm2.id)
 
         dt += datetime.timedelta(days=1, seconds=3600)
-        ts = (dt - NullModel.ts_field.epoch).total_seconds()
-        nm3 = NullModel.create(ts_field=int(ts))
+        ts = time.mktime(dt.timetuple())
+        nm3 = NullModel.create(ts_field=ts)
         nm3_db = NullModel.get(NullModel.id == nm3.id)
         self.assertEqual(nm3_db.ts_field,
                          datetime.datetime(2016, 1, 3, 12, 12, 13))
