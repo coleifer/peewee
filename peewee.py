@@ -660,13 +660,13 @@ class Param(Node):
     """
     _node_type = 'param'
 
-    def __init__(self, value, conv=None):
+    def __init__(self, value, adapt=None):
         self.value = value
-        self.conv = conv
+        self.adapt = adapt
         super(Param, self).__init__()
 
     def clone_base(self):
-        return Param(self.value, self.conv)
+        return Param(self.value, self.adapt)
 
 class Passthrough(Param):
     _node_type = 'passthrough'
@@ -1210,10 +1210,10 @@ class TimestampField(IntegerField):
         self.utc = kwargs.pop('utc', False) or False
         if self.utc:
             _conv = datetime.datetime.utcfromtimestamp
-            self.conv = lambda v: _conv(float(v) / self.resolution)
+            self.adapt = lambda v: _conv(float(v) / self.resolution)
             default = datetime.datetime.utcnow
         else:
-            self.conv = datetime.datetime.fromtimestamp
+            self.adapt = datetime.datetime.fromtimestamp
             default = datetime.datetime.now
 
         kwargs.setdefault('default', default)
@@ -1248,7 +1248,7 @@ class TimestampField(IntegerField):
 
     def python_value(self, value):
         if value is not None and isinstance(value, (int, float, long)):
-            return self.conv(value)
+            return self.adapt(value)
         return value
 
 class BooleanField(Field):
@@ -1606,11 +1606,14 @@ class QueryCompiler(object):
         return sql, lparams + rparams
 
     def _parse_param(self, node, alias_map, conv):
-        if node.conv:
-            params = [node.conv(node.value)]
+        if node.adapt:
+            if conv and conv.db_value is node.adapt:
+                conv = None
+            return self.parse_node(node.adapt(node.value), alias_map, conv)
+        elif conv is not None:
+            return self.parse_node(conv.db_value(node.value), alias_map)
         else:
-            params = [node.value]
-        return self.interpolation, params
+            return self.interpolation, [node.value]
 
     def _parse_func(self, node, alias_map, conv):
         conv = node._coerce and conv or None
@@ -1692,7 +1695,9 @@ class QueryCompiler(object):
         unknown = False
         if node_type in self._parse_map:
             sql, params = self._parse_map[node_type](node, alias_map, conv)
-            unknown = node_type in self._unknown_types
+            unknown = (node_type in self._unknown_types and
+                       node.adapt is None and
+                       conv is None)
         elif isinstance(node, (list, tuple)):
             # If you're wondering how to pass a list into your query, simply
             # wrap it in Param().
@@ -1710,15 +1715,18 @@ class QueryCompiler(object):
                 isinstance(node, ModelAlias):
             entity = node.as_entity().alias(alias_map[node])
             sql, params = self.parse_node(entity, alias_map, conv)
+        elif conv is not None:
+            value = conv.db_value(node)
+            sql, params, _ = self._parse(value, alias_map, None)
         else:
-            sql, params = self._parse_default(node, alias_map, conv)
+            sql, params = self._parse_default(node, alias_map, None)
             unknown = True
 
         return sql, params, unknown
 
     def parse_node(self, node, alias_map=None, conv=None):
         sql, params, unknown = self._parse(node, alias_map, conv)
-        if unknown and conv and params:
+        if unknown and (conv is not None) and params:
             params = [conv.db_value(i) for i in params]
 
         if isinstance(node, Node):
@@ -1728,6 +1736,14 @@ class QueryCompiler(object):
                 sql = ' '.join((sql, 'AS', node._alias))
             if node._ordering:
                 sql = ' '.join((sql, node._ordering))
+
+        if params and any(isinstance(p, Node) for p in params):
+            clean_params = []
+            clean_sql = []
+            for idx, param in enumerate(params):
+                if isinstance(param, Node):
+                    csql, cparams = self.parse_node(param)
+
         return sql, params
 
     def parse_node_list(self, nodes, alias_map, conv=None, glue=', '):
@@ -1887,7 +1903,7 @@ class QueryCompiler(object):
         update = []
         for field, value in self._sorted_fields(query._update):
             if not isinstance(value, (Node, Model)):
-                value = Param(value, conv=field.db_value)
+                value = Param(value, adapt=field.db_value)
             update.append(Expression(
                 field.as_entity(with_table=False),
                 OP.EQ,
@@ -1942,7 +1958,7 @@ class QueryCompiler(object):
                 for field in fields:
                     value = row_dict[field]
                     if not isinstance(value, (Node, Model)):
-                        value = Param(value, conv=field.db_value)
+                        value = Param(value, adapt=field.db_value)
                     values.append(value)
 
                 value_clauses.append(EnclosedClause(*values))
