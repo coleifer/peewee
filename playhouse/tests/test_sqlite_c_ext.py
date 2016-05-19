@@ -262,5 +262,3 @@ class TestMurmurHash(BaseTestCase):
         self.assertHash('', 0)
         self.assertHash('this is a test of a longer string', 3556042345)
         self.assertHash(None, None)
-
-

@@ -3017,11 +3017,13 @@ class SelectQuery(Query):
 
 class NoopSelectQuery(SelectQuery):
     def sql(self):
-        return ('SELECT 0 WHERE 0', ())
+        return (self.database.get_noop_sql(), ())
 
-    def execute(self):
-        Wrapper = self.database.get_result_wrapper(RESULTS_TUPLES)
-        return Wrapper(self.model_class, self._execute(), None)
+    def get_query_meta(self):
+        return None, None
+
+    def _get_result_wrapper(self):
+        return self.database.get_result_wrapper(RESULTS_TUPLES)
 
 class CompoundSelect(SelectQuery):
     _node_type = 'compound_select_query'
@@ -3661,6 +3663,9 @@ class Database(object):
     def default_insert_clause(self, model_class):
         return SQL('DEFAULT VALUES')
 
+    def get_noop_sql(self):
+        return 'SELECT 0 WHERE 0'
+
     def get_binary_type(self):
         return binary_constructor
 
@@ -3924,6 +3929,9 @@ class PostgresqlDatabase(Database):
     def set_search_path(self, *search_path):
         path_params = ','.join(['%s'] * len(search_path))
         self.execute_sql('SET search_path TO %s' % path_params, search_path)
+
+    def get_noop_sql(self):
+        return 'SELECT 0 WHERE false'
 
     def get_binary_type(self):
         return psycopg2.Binary

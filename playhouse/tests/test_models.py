@@ -134,9 +134,7 @@ class TestQueryingModels(ModelTestCase):
     def test_noop_query(self):
         query = User.noop()
         with self.assertQueryCount(1) as qc:
-            result = list(query)
-            import ipdb
-            ipdb.set_trace()
+            result = [row for row in query]
 
         self.assertEqual(result, [])
 
