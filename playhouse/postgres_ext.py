@@ -103,11 +103,10 @@ class ObjectSlice(_LookupNode):
     def __getitem__(self, value):
         return ObjectSlice.create(self, value)
 
-class _Array(Node):
+class _Array(object):
     def __init__(self, field, items):
         self.field = field
         self.items = items
-        super(_Array, self).__init__()
 
 def adapt_array(arr):
     conn = arr.field.model_class._meta.database.get_conn()
@@ -148,18 +147,20 @@ class ArrayField(IndexedFieldMixin, Field):
         return sql
 
     def db_value(self, value):
-        if value is not None and not isinstance(value, (list, _Array)):
-            return list(value)
-        return value
+        if value is None:
+            return
+        if not isinstance(value, (list, _Array)):
+            value = list(value)
+        return _Array(self, value)
 
     def __getitem__(self, value):
         return ObjectSlice.create(self, value)
 
     def contains(self, *items):
-        return Expression(self, OP.ACONTAINS, _Array(self, list(items)))
+        return Expression(self, OP.ACONTAINS, Param(items))
 
     def contains_any(self, *items):
-        return Expression(self, OP.ACONTAINS_ANY, _Array(self, list(items)))
+        return Expression(self, OP.ACONTAINS_ANY, Param(items))
 
 
 class DateTimeTZField(DateTimeField):
@@ -182,7 +183,7 @@ class HStoreField(IndexedFieldMixin, Field):
         return fn.hstore_to_matrix(self)
 
     def slice(self, *args):
-        return fn.slice(self, Param(list(args)))
+        return fn.slice(self, Passthrough(list(args)))
 
     def exists(self, key):
         return fn.exist(self, key)
@@ -194,17 +195,17 @@ class HStoreField(IndexedFieldMixin, Field):
         return Expression(self, OP.HUPDATE, data)
 
     def delete(self, *keys):
-        return fn.delete(self, Param(list(keys)))
+        return fn.delete(self, Passthrough(list(keys)))
 
     def contains(self, value):
         if isinstance(value, dict):
-            return Expression(self, OP.HCONTAINS_DICT, Param(value))
+            return Expression(self, OP.HCONTAINS_DICT, Passthrough(value))
         elif isinstance(value, (list, tuple)):
-            return Expression(self, OP.HCONTAINS_KEYS, Param(value))
+            return Expression(self, OP.HCONTAINS_KEYS, Passthrough(value))
         return Expression(self, OP.HCONTAINS_KEY, value)
 
     def contains_any(self, *keys):
-        return Expression(self, OP.HCONTAINS_ANY_KEY, Param(list(keys)))
+        return Expression(self, OP.HCONTAINS_ANY_KEY, Passthrough(list(keys)))
 
 
 class JSONField(Field):
@@ -247,7 +248,7 @@ class BinaryJSONField(IndexedFieldMixin, JSONField):
         return Expression(
             self,
             OP.JSONB_CONTAINS_ANY_KEY,
-            Passthrough(list(items)))
+            Passthrough(list(items)),)
 
     def contains_all(self, *items):
         return Expression(

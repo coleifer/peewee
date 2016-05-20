@@ -1570,7 +1570,7 @@ class QueryCompiler(object):
         return {
             'expression': self._parse_expression,
             'param': self._parse_param,
-            'passthrough': self._parse_param,
+            'passthrough': self._parse_passthrough,
             'func': self._parse_func,
             'clause': self._parse_clause,
             'entity': self._parse_entity,
@@ -1604,6 +1604,11 @@ class QueryCompiler(object):
         template = '%s %s %s' if node.flat else '(%s %s %s)'
         sql = template % (lhs, self.get_op(node.op), rhs)
         return sql, lparams + rparams
+
+    def _parse_passthrough(self, node, alias_map, conv):
+        if node.adapt:
+            return self.parse_node(node.adapt(node.value), alias_map, None)
+        return self.interpolation, [node.value]
 
     def _parse_param(self, node, alias_map, conv):
         if node.adapt:
