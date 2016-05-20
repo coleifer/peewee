@@ -6,6 +6,10 @@ import uuid
 
 from peewee import MySQLDatabase
 from peewee import Param
+from peewee import Proxy
+from peewee import SqliteDatabase
+from peewee import binary_construct
+from peewee import sqlite3
 from playhouse.tests.base import binary_construct
 from playhouse.tests.base import binary_types
 from playhouse.tests.base import database_class
@@ -414,6 +418,20 @@ class TestFieldTypes(ModelTestCase):
             {'nugs': 'c3-nuggets'},
             {'nugs': 'foo-nuggets'},
             {'nugs': 'bar-nuggets'}])
+
+class TestBinaryTypeFromDatabase(PeeweeTestCase):
+    def test_binary_type_info(self):
+        db_proxy = Proxy()
+        class A(Model):
+            blob_field = BlobField()
+            class Meta:
+                database = db_proxy
+
+        self.assertTrue(A.blob_field._constructor is binary_construct)
+
+        db = SqliteDatabase(':memory:')
+        db_proxy.initialize(db)
+        self.assertTrue(A.blob_field._constructor is sqlite3.Binary)
 
 class TestDateTimeExtract(ModelTestCase):
     requires = [NullModel]

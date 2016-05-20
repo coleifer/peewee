@@ -1089,8 +1089,12 @@ class BlobField(Field):
     _constructor = binary_construct
 
     def add_to_class(self, model_class, name):
-        self._constructor = model_class._meta.database.get_binary_type()
+        if isinstance(model_class._meta.database, Proxy):
+            model_class._meta.database.attach_callback(self._set_constructor)
         return super(BlobField, self).add_to_class(model_class, name)
+
+    def _set_constructor(self, database):
+        self._constructor = database.get_binary_type()
 
     def db_value(self, value):
         if isinstance(value, unicode_type):
@@ -3727,7 +3731,7 @@ class Database(object):
         return 'SELECT 0 WHERE 0'
 
     def get_binary_type(self):
-        return binary_constructor
+        return binary_construct
 
 class SqliteDatabase(Database):
     compiler_class = SqliteQueryCompiler
