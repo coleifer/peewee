@@ -805,6 +805,9 @@ class SqliteQueryCompiler(QueryCompiler):
                 option.glue = '='
                 columns_constraints.nodes.append(option)
 
+        if getattr(model_class._meta, 'without_rowid'):
+            clause.nodes.append(SQL('WITHOUT ROWID'))
+
         return clause
 
     def clean_options(self, model_class, clause, extra_options):
