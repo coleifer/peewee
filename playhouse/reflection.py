@@ -359,7 +359,8 @@ class DatabaseMetadata(_DatabaseMetadata):
         for index in self.indexes[table]:
             if len(index.columns) > 1:
                 field_names = [self.columns[table][column].name
-                               for column in index.columns]
+                               for column in index.columns
+                               if column in self.columns[table]]
                 accum.append((field_names, index.unique))
         return accum
 
