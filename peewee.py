@@ -1245,7 +1245,7 @@ class TimestampField(IntegerField):
             timestamp = calendar.timegm(value.utctimetuple())
         else:
             timestamp = time.mktime(value.timetuple())
-        timestamp += value.microsecond
+        timestamp += (value.microsecond * .000001)
         if self.resolution > 1:
             timestamp *= self.resolution
         return int(round(timestamp))
