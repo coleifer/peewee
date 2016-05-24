@@ -15,14 +15,18 @@ class TestDBURL(PeeweeTestCase):
         cfg = parse('postgresql://usr:pwd@hst/db')
         self.assertEqual(cfg['password'], 'pwd')
         cfg = parse('mysql+pool://usr:pwd@hst:123/db'
-                    '?max_connections=42&stale_timeout=8001')
+                    '?max_connections=42&stale_timeout=8001.2&zai=&baz=3.4.5'
+                    '&boolz=false')
         self.assertEqual(cfg['user'], 'usr')
         self.assertEqual(cfg['password'], 'pwd')
         self.assertEqual(cfg['host'], 'hst')
         self.assertEqual(cfg['database'], 'db')
         self.assertEqual(cfg['port'], 123)
-        self.assertEqual(cfg['max_connections'], '42')
-        self.assertEqual(cfg['stale_timeout'], '8001')
+        self.assertEqual(cfg['max_connections'], 42)
+        self.assertEqual(cfg['stale_timeout'], 8001.2)
+        self.assertEqual(cfg['zai'], '')
+        self.assertEqual(cfg['baz'], '3.4.5')
+        self.assertEqual(cfg['boolz'], False)
 
     def test_db_url(self):
         db = connect('sqlite:///:memory:')

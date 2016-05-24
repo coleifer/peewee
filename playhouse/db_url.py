@@ -56,7 +56,23 @@ def parseresult_to_dict(parsed):
         connect_kwargs['database'] = ':memory:'
 
     # Get additional connection args from the query string
-    connect_kwargs.update(parse_qsl(query))
+    qs_args = parse_qsl(query, keep_blank_values=True)
+    for key, value in qs_args:
+        if value.lower() == 'false':
+            value = False
+        elif value.lower() == 'true':
+            value = True
+        elif value.isdigit():
+            value = int(value)
+        elif '.' in value and all(p.isdigit() for p in value.split('.', 1)):
+            try:
+                value = float(value)
+            except ValueError:
+                pass
+        elif value.lower() in ('null', 'none'):
+            value = None
+
+        connect_kwargs[key] = value
 
     return connect_kwargs
 
