@@ -419,7 +419,9 @@ class TestFieldTypes(ModelTestCase):
             {'nugs': 'foo-nuggets'},
             {'nugs': 'bar-nuggets'}])
 
+
 class TestBinaryTypeFromDatabase(PeeweeTestCase):
+    @skip_test_if(lambda: sys.version_info[0] == 3)
     def test_binary_type_info(self):
         db_proxy = Proxy()
         class A(Model):
