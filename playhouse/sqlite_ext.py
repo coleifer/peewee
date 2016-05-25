@@ -805,7 +805,7 @@ class SqliteQueryCompiler(QueryCompiler):
                 option.glue = '='
                 columns_constraints.nodes.append(option)
 
-        if getattr(model_class._meta, 'without_rowid'):
+        if getattr(model_class._meta, 'without_rowid', None):
             clause.nodes.append(SQL('WITHOUT ROWID'))
 
         return clause
