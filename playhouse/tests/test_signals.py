@@ -38,12 +38,14 @@ class SignalsTestCase(ModelTestCase):
         def pre_save(sender, instance, created):
             state.append((sender, instance, instance._get_pk_value(), created))
         m = ModelA()
-        m.save()
+        res = m.save()
         self.assertEqual(state, [(ModelA, m, None, True)])
+        self.assertEqual(res, 1)
 
-        m.save()
+        res = m.save()
         self.assertTrue(m.id is not None)
         self.assertEqual(state[-1], (ModelA, m, m.id, False))
+        self.assertEqual(res, 1)
 
     def test_post_save(self):
         state = []
@@ -69,8 +71,9 @@ class SignalsTestCase(ModelTestCase):
         @signals.pre_delete()
         def pre_delete(sender, instance):
             state.append((sender, instance, ModelA.select().count()))
-        m.delete_instance()
+        res = m.delete_instance()
         self.assertEqual(state, [(ModelA, m, 1)])
+        self.assertEqual(res, 1)
 
     def test_post_delete(self):
         state = []
