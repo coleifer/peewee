@@ -131,9 +131,11 @@ class Column(object):
 
 class Metadata(object):
     column_map = {}
+    extension_import = ''
 
     def __init__(self, database):
         self.database = database
+        self.requires_extension = False
 
     def execute(self, sql, *params):
         return self.database.execute_sql(sql, params)
@@ -198,6 +200,7 @@ class PostgresqlMetadata(Metadata):
         1700: DecimalField,
         2950: TextField, # UUID
     }
+    extension_import = 'from playhouse.postgres_ext import *'
 
     def __init__(self, database):
         super(PostgresqlMetadata, self).__init__(database)
@@ -217,6 +220,10 @@ class PostgresqlMetadata(Metadata):
 
     def get_column_types(self, table, schema):
         column_types = {}
+        extension_types = set((
+            postgres_ext.JSONField,
+            postgres_ext.TSVectorField,
+            postgres_ext.HStoreField)) if postgres_ext is not None else set()
 
         # Look up the actual column type for each column.
         identifier = '"%s"."%s"' % (schema, table)
@@ -227,6 +234,8 @@ class PostgresqlMetadata(Metadata):
             column_types[column_description.name] = self.column_map.get(
                 column_description.type_code,
                 UnknownField)
+            if column_types[column_description.name] in extension_types:
+                self.requires_extension = True
 
         return column_types
 
@@ -400,6 +409,11 @@ class Introspector(object):
 
     def get_database_kwargs(self):
         return self.metadata.database.connect_kwargs
+
+    def get_additional_imports(self):
+        if self.metadata.requires_extension:
+            return '\n' + self.metadata.extension_import
+        return ''
 
     def make_model_name(self, table):
         model = re.sub('[^\w]+', '', table)
