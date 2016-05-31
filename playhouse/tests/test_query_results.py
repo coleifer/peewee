@@ -827,12 +827,12 @@ class TestModelQueryResultForeignKeys(ModelTestCase):
         rhs_alias = query.join(ParentAlias, on=rjoin)
 
         self.assertJoins(lhs_alias, [
-            'INNER JOIN "parent" AS parent '
-            'ON ("parent"."id" = "child"."parent_id")'])
+            'INNER JOIN parent AS parent '
+            'ON (parent.id = child.parent_id)'])
 
         self.assertJoins(rhs_alias, [
-            'INNER JOIN "parent" AS parent '
-            'ON ("child"."parent_id" = "parent"."id")'])
+            'INNER JOIN parent AS parent '
+            'ON (child.parent_id = parent.id)'])
 
         with self.assertQueryCount(1):
             lchild = lhs_alias.get()

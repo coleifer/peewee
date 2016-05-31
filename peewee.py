@@ -1586,6 +1586,7 @@ class QueryCompiler(object):
         }
 
     def quote(self, s):
+        if re.match(r'[a-zA-Z]\w*$', s): return s
         return '%s%s%s' % (self.quote_char, s, self.quote_char)
 
     def get_column_type(self, f):

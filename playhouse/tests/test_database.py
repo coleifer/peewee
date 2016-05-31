@@ -121,26 +121,26 @@ class TestSQLAll(PeeweeTestCase):
     def test_sqlall(self):
         sql = UniqueModel.sqlall()
         self.assertEqual(sql, [
-            ('CREATE TABLE "uniquemodel" ("id" INTEGER NOT NULL PRIMARY KEY, '
-             '"name" VARCHAR(255) NOT NULL)'),
-            'CREATE UNIQUE INDEX "uniquemodel_name" ON "uniquemodel" ("name")',
+            ('CREATE TABLE uniquemodel (id INTEGER NOT NULL PRIMARY KEY, '
+             'name VARCHAR(255) NOT NULL)'),
+            'CREATE UNIQUE INDEX uniquemodel_name ON uniquemodel (name)',
         ])
 
         sql = MultiIndexModel.sqlall()
         self.assertEqual(sql, [
-            ('CREATE TABLE "multiindexmodel" ("id" INTEGER NOT NULL PRIMARY '
-             'KEY, "f1" VARCHAR(255) NOT NULL, "f2" VARCHAR(255) NOT NULL, '
-             '"f3" VARCHAR(255) NOT NULL)'),
-            ('CREATE UNIQUE INDEX "multiindexmodel_f1_f2" ON "multiindexmodel"'
-             ' ("f1", "f2")'),
-            ('CREATE INDEX "multiindexmodel_f2_f3" ON "multiindexmodel" '
-             '("f2", "f3")'),
+            ('CREATE TABLE multiindexmodel (id INTEGER NOT NULL PRIMARY '
+             'KEY, f1 VARCHAR(255) NOT NULL, f2 VARCHAR(255) NOT NULL, '
+             'f3 VARCHAR(255) NOT NULL)'),
+            ('CREATE UNIQUE INDEX multiindexmodel_f1_f2 ON multiindexmodel'
+             ' (f1, f2)'),
+            ('CREATE INDEX multiindexmodel_f2_f3 ON multiindexmodel '
+             '(f2, f3)'),
         ])
 
         sql = SeqModelA.sqlall()
         self.assertEqual(sql, [
-            ('CREATE TABLE "seqmodela" ("id" INTEGER NOT NULL PRIMARY KEY '
-             'DEFAULT NEXTVAL(\'just_testing_seq\'), "num" INTEGER NOT NULL)'),
+            ('CREATE TABLE seqmodela (id INTEGER NOT NULL PRIMARY KEY '
+             'DEFAULT NEXTVAL(\'just_testing_seq\'), num INTEGER NOT NULL)'),
         ])
 
 
@@ -156,11 +156,11 @@ class TestLongIndexName(PeeweeTestCase):
 
         sql, params = compiler.create_index(LongIndexModel, fields, False)
         self.assertEqual(sql, (
-            'CREATE INDEX "longindexmodel_85c2f7db" '
-            'ON "longindexmodel" ('
-            '"a123456789012345678901234567890", '
-            '"b123456789012345678901234567890", '
-            '"c123456789012345678901234567890")'
+            'CREATE INDEX longindexmodel_85c2f7db '
+            'ON longindexmodel ('
+            'a123456789012345678901234567890, '
+            'b123456789012345678901234567890, '
+            'c123456789012345678901234567890)'
         ))
 
 
