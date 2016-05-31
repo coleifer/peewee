@@ -574,32 +574,32 @@ class SqliteMigrationTestCase(BaseMigrationTestCase, PeeweeTestCase):
             ('PRAGMA foreign_key_list("indexmodel")', None),
 
             # Drop any temporary table, if it exists.
-            ('DROP TABLE IF EXISTS "indexmodel__tmp__"', []),
+            ('DROP TABLE IF EXISTS indexmodel__tmp__', []),
 
             # Create a temporary table with the renamed column.
-            ('CREATE TABLE "indexmodel__tmp__" ('
-             '"id" INTEGER NOT NULL PRIMARY KEY, '
-             '"first" VARCHAR(255) NOT NULL, '
-             '"last_name" VARCHAR(255) NOT NULL, '
-             '"data" INTEGER NOT NULL)', []),
+            ('CREATE TABLE indexmodel__tmp__ ('
+             'id INTEGER NOT NULL PRIMARY KEY, '
+             'first VARCHAR(255) NOT NULL, '
+             'last_name VARCHAR(255) NOT NULL, '
+             'data INTEGER NOT NULL)', []),
 
             # Copy data from original table into temporary table.
-            ('INSERT INTO "indexmodel__tmp__" '
-             '("id", "first", "last_name", "data") '
-             'SELECT "id", "first_name", "last_name", "data" '
-             'FROM "indexmodel"', []),
+            ('INSERT INTO indexmodel__tmp__ '
+             '(id, first, last_name, data) '
+             'SELECT id, first_name, last_name, data '
+             'FROM indexmodel', []),
 
             # Drop the original table.
-            ('DROP TABLE "indexmodel"', []),
+            ('DROP TABLE indexmodel', []),
 
             # Rename the temporary table, replacing the original.
-            ('ALTER TABLE "indexmodel__tmp__" RENAME TO "indexmodel"', []),
+            ('ALTER TABLE indexmodel__tmp__ RENAME TO indexmodel', []),
 
             # Re-create the indexes.
-            ('CREATE UNIQUE INDEX "indexmodel_data" '
-             'ON "indexmodel" ("data")', []),
-            ('CREATE UNIQUE INDEX "indexmodel_first_last_name" '
-             'ON "indexmodel" ("first", "last_name")', [])
+            ('CREATE UNIQUE INDEX indexmodel_data '
+             'ON indexmodel (data)', []),
+            ('CREATE UNIQUE INDEX indexmodel_first_last_name '
+             'ON indexmodel (first, last_name)', [])
         ])
 
 

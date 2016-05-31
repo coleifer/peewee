@@ -385,14 +385,14 @@ class TestFTSModel(ModelTestCase):
         compiler = ext_db.compiler()
         sql, params = compiler.create_table(TestVirtualModel)
         self.assertEqual(sql, (
-            'CREATE VIRTUAL TABLE "testvirtualmodel" USING test_ext '
+            'CREATE VIRTUAL TABLE testvirtualmodel USING test_ext '
             '(baze=nugget, foo=bar)'))
         self.assertEqual(params, [])
 
         sql, params = compiler.create_table(TestVirtualModelChild)
         self.assertEqual(sql, (
-            'CREATE VIRTUAL TABLE "testvirtualmodelchild" USING test_ext '
-            '("id" INTEGER NOT NULL PRIMARY KEY, baze=nugget, foo=bar)'))
+            'CREATE VIRTUAL TABLE testvirtualmodelchild USING test_ext '
+            '(id INTEGER NOT NULL PRIMARY KEY, baze=nugget, foo=bar)'))
         self.assertEqual(params, [])
 
         test_options = {'baze': 'nugz', 'huey': 'mickey'}
@@ -400,7 +400,7 @@ class TestFTSModel(ModelTestCase):
             TestVirtualModel,
             options=test_options)
         self.assertEqual(sql, (
-            'CREATE VIRTUAL TABLE "testvirtualmodel" USING test_ext '
+            'CREATE VIRTUAL TABLE testvirtualmodel USING test_ext '
             '(baze=nugz, foo=bar, huey=mickey)'))
         self.assertEqual(params, [])
 
@@ -413,9 +413,9 @@ class TestFTSModel(ModelTestCase):
         sql, params = compiler.create_table(AutoInc)
         self.assertEqual(
             sql,
-            'CREATE TABLE "autoinc" '
-            '("id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, '
-            '"foo" VARCHAR(255) NOT NULL)')
+            'CREATE TABLE autoinc '
+            '(id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, '
+            'foo VARCHAR(255) NOT NULL)')
 
     def assertMessages(self, query, indices):
         self.assertEqual([x.message for x in query], [
@@ -794,9 +794,9 @@ class TestRowIDField(ModelTestCase):
         query = RowIDModel.select().where(RowIDModel.rowid == 2)
         sql, params = query.sql()
         self.assertEqual(sql, (
-            'SELECT "t1"."data" '
-            'FROM "rowidmodel" AS t1 '
-            'WHERE ("t1"."rowid" = ?)'))
+            'SELECT t1.data '
+            'FROM rowidmodel AS t1 '
+            'WHERE (t1.rowid = ?)'))
         self.assertEqual(params, [2])
         r_db = query.get()
         self.assertEqual(r_db.rowid, None)
@@ -876,9 +876,9 @@ class TestFTS5Extension(ModelTestCase):
         create_sql = Test1.sqlall()
         self.assertEqual(len(create_sql), 1)
         self.assertEqual(create_sql[0], (
-            'CREATE VIRTUAL TABLE "test1" USING fts5 ('
-            '"f1" , "f2"  UNINDEXED, "f3" , '
-            'content="post", content_rowid="id", '
+            'CREATE VIRTUAL TABLE test1 USING fts5 ('
+            'f1 , f2  UNINDEXED, f3 , '
+            'content=post, content_rowid=id, '
             'prefix=\'2,3\', tokenize="porter unicode61")'))
 
     def assertResults(self, query, expected, scores=False, alias='score'):
@@ -893,17 +893,17 @@ class TestFTS5Extension(ModelTestCase):
     def test_search(self):
         query = FTS5Test.search('bb')
         self.assertEqual(query.sql(), (
-            ('SELECT "t1"."title", "t1"."data", "t1"."misc" '
-             'FROM "fts5test" AS t1 '
-             'WHERE ("fts5test" MATCH ?) ORDER BY rank'),
+            ('SELECT t1.title, t1.data, t1.misc '
+             'FROM fts5test AS t1 '
+             'WHERE (fts5test MATCH ?) ORDER BY rank'),
             ['bb']))
         self.assertResults(query, ['nug aa dd', 'foo aa bb', 'bar bb cc'])
 
         query = FTS5Test.search('bb', with_score=True)
         self.assertEqual(query.sql(), (
-            ('SELECT "t1"."title", "t1"."data", "t1"."misc", rank AS score '
-             'FROM "fts5test" AS t1 '
-             'WHERE ("fts5test" MATCH ?) ORDER BY score'),
+            ('SELECT t1.title, t1.data, t1.misc, rank AS score '
+             'FROM fts5test AS t1 '
+             'WHERE (fts5test MATCH ?) ORDER BY score'),
             ['bb']))
         self.assertResults(query, [
             ('nug aa dd', -2e-06),
@@ -919,17 +919,17 @@ class TestFTS5Extension(ModelTestCase):
     def test_search_bm25(self):
         query = FTS5Test.search_bm25('bb')
         self.assertEqual(query.sql(), (
-            ('SELECT "t1"."title", "t1"."data", "t1"."misc" '
-             'FROM "fts5test" AS t1 '
-             'WHERE ("fts5test" MATCH ?) ORDER BY rank'),
+            ('SELECT t1.title, t1.data, t1.misc '
+             'FROM fts5test AS t1 '
+             'WHERE (fts5test MATCH ?) ORDER BY rank'),
             ['bb']))
         self.assertResults(query, ['nug aa dd', 'foo aa bb', 'bar bb cc'])
 
         query = FTS5Test.search_bm25('bb', with_score=True)
         self.assertEqual(query.sql(), (
-            ('SELECT "t1"."title", "t1"."data", "t1"."misc", rank AS score '
-             'FROM "fts5test" AS t1 '
-             'WHERE ("fts5test" MATCH ?) ORDER BY score'),
+            ('SELECT t1.title, t1.data, t1.misc, rank AS score '
+             'FROM fts5test AS t1 '
+             'WHERE (fts5test MATCH ?) ORDER BY score'),
             ['bb']))
         self.assertResults(query, [
             ('nug aa dd', -2e-06),
@@ -939,18 +939,18 @@ class TestFTS5Extension(ModelTestCase):
     def test_search_bm25_scores(self):
         query = FTS5Test.search_bm25('bb', {'title': 5.0})
         self.assertEqual(query.sql(), (
-            ('SELECT "t1"."title", "t1"."data", "t1"."misc" '
-             'FROM "fts5test" AS t1 '
-             'WHERE ("fts5test" MATCH ?) ORDER BY bm25("fts5test", ?, ?, ?)'),
+            ('SELECT t1.title, t1.data, t1.misc '
+             'FROM fts5test AS t1 '
+             'WHERE (fts5test MATCH ?) ORDER BY bm25(fts5test, ?, ?, ?)'),
             ['bb', 5.0, 1.0, 1.0]))
         self.assertResults(query, ['bar bb cc', 'foo aa bb', 'nug aa dd'])
 
         query = FTS5Test.search_bm25('bb', {'title': 5.0}, True)
         self.assertEqual(query.sql(), (
-            ('SELECT "t1"."title", "t1"."data", "t1"."misc", '
-             'bm25("fts5test", ?, ?, ?) AS score '
-             'FROM "fts5test" AS t1 '
-             'WHERE ("fts5test" MATCH ?) ORDER BY score'),
+            ('SELECT t1.title, t1.data, t1.misc, '
+             'bm25(fts5test, ?, ?, ?) AS score '
+             'FROM fts5test AS t1 '
+             'WHERE (fts5test MATCH ?) ORDER BY score'),
             [5.0, 1.0, 1.0, 'bb']))
         self.assertResults(query, [
             ('bar bb cc', -2e-06),
@@ -961,9 +961,9 @@ class TestFTS5Extension(ModelTestCase):
         FTS5Test.set_rank('bm25(10.0, 1.0)')
         query = FTS5Test.search('bb', with_score=True)
         self.assertEqual(query.sql(), (
-            ('SELECT "t1"."title", "t1"."data", "t1"."misc", rank AS score '
-             'FROM "fts5test" AS t1 '
-             'WHERE ("fts5test" MATCH ?) ORDER BY score'),
+            ('SELECT t1.title, t1.data, t1.misc, rank AS score '
+             'FROM fts5test AS t1 '
+             'WHERE (fts5test MATCH ?) ORDER BY score'),
             ['bb']))
         self.assertResults(query, [
             ('bar bb cc', -2.1e-06),

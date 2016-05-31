@@ -1160,7 +1160,7 @@ class TestInsertReturning(PeeweeTestCase):
 
         self.assertInsertSQL(
             User.insert(username='charlie'),
-            'INSERT INTO user (username) VALUES (?) RETURNING id',
+            'INSERT INTO "user" (username) VALUES (?) RETURNING id',
             ['charlie'])
 
     def test_insert_non_int_pk(self):
@@ -1170,7 +1170,7 @@ class TestInsertReturning(PeeweeTestCase):
 
         self.assertInsertSQL(
             User.insert(username='charlie'),
-            ('INSERT INTO user (username, data) '
+            ('INSERT INTO "user" (username, data) '
              'VALUES (?, ?) RETURNING username'),
             ['charlie', ''])
 
@@ -1204,7 +1204,7 @@ class TestInsertReturning(PeeweeTestCase):
         # Bulk inserts do not ask for returned primary keys.
         self.assertInsertSQL(
             User.insert_many(data),
-            'INSERT INTO user (username) VALUES (?), (?), (?)',
+            'INSERT INTO "user" (username) VALUES (?), (?), (?)',
             ['user-0', 'user-1', 'user-2'])
 
 
