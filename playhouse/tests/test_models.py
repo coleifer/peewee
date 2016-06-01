@@ -1190,7 +1190,7 @@ class TestMultiTableFromClause(ModelTestCase):
         sql, params = compiler.generate_select(outer)
         self.assertEqual(sql, (
             'SELECT "users"."username" FROM '
-            '(SELECT "users"."username" FROM "users" AS users) AS t1'))
+            '(SELECT "users"."username" FROM "users" AS users) AS u1'))
 
         self.assertEqual(
             [u.username for u in outer.order_by(User.username)], ['u0', 'u1'])
@@ -1203,7 +1203,7 @@ class TestMultiTableFromClause(ModelTestCase):
         sql, params = compiler.generate_select(outer)
         self.assertEqual(sql, (
             'SELECT "t1"."name" FROM '
-            '(SELECT "users"."username" AS name FROM "users" AS users) AS t1'))
+            '(SELECT "users"."username" AS name FROM "users" AS users) AS u1'))
 
         query = outer.order_by(inner.c.name.desc())
         self.assertEqual([u[0] for u in query.tuples()], ['u1', 'u0'])

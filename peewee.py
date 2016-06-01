@@ -27,6 +27,7 @@ import threading
 import uuid
 from bisect import bisect_left
 from bisect import bisect_right
+from collections import defaultdict
 from collections import deque
 from collections import namedtuple
 try:
@@ -1400,7 +1401,7 @@ class AliasMap(object):
 
     def __init__(self, start=0):
         self._alias_map = {}
-        self._counter = start
+        self._counters = defaultdict(lambda: start)
 
     def __repr__(self):
         return '<AliasMap: %s>' % self._alias_map
@@ -1408,8 +1409,22 @@ class AliasMap(object):
     def add(self, obj, alias=None):
         if obj in self._alias_map:
             return
-        self._counter += 1
-        self._alias_map[obj] = alias or '%s%s' % (self.prefix, self._counter)
+        if alias is None:
+            alias = self.propose_alias(obj)
+        self._alias_map[obj] = alias
+    
+    def propose_alias(self, obj):
+        if isinstance(obj, BaseModel):
+            name = obj._meta.db_table
+        elif isinstance(obj, ModelAlias):
+            name = obj.model_class._meta.db_table
+        else:
+            name = self.prefix
+        name = ''.join([s[0] for s in name.split('_') if len(s)>0]) # create an acronym
+        if not name: name = self.prefix
+        self._counters[name] += 1
+        name = '%s%s' % (name, self._counters[name])
+        return name
 
     def __getitem__(self, obj):
         if obj not in self._alias_map:
@@ -1583,7 +1598,7 @@ class QueryCompiler(object):
 
         new_map = self.alias_map_class()
         if first_q._node_type == csq:
-            new_map._counter = alias_map._counter
+            new_map._counters = alias_map._counters.copy()
 
         first, first_p = self.generate_select(first_q, new_map)
         second, second_p = self.generate_select(
@@ -1675,7 +1690,7 @@ class QueryCompiler(object):
     def calculate_alias_map(self, query, alias_map=None):
         new_map = self.alias_map_class()
         if alias_map is not None:
-            new_map._counter = alias_map._counter
+            new_map._counters = alias_map._counters.copy()
 
         new_map.add(query.model_class, query.model_class._meta.table_alias)
         for src_model, joined_models in query._joins.items():
