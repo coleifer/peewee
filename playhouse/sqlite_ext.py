@@ -792,7 +792,7 @@ class SqliteQueryCompiler(QueryCompiler):
                     # Special hack here for FTS5. We want to include the
                     # fully-qualified column entity in most cases, but for
                     # FTS5 we only want the string column name.
-                    v = v.as_entity(extension != 'fts5')
+                    v = v.as_entity(extension != 'fts5', force_quote=True)
                 elif inspect.isclass(v) and issubclass(v, Model):
                     # The option points to a table name.
                     v = v.as_entity()

@@ -451,6 +451,7 @@ class Node(object):
         self._alias = None
         self._bind_to = None
         self._ordering = None  # ASC or DESC.
+        self._force_quote = False
 
     @classmethod
     def extend(cls, name=None, clone=False):
@@ -471,6 +472,7 @@ class Node(object):
         inst._alias = self._alias
         inst._ordering = self._ordering
         inst._bind_to = self._bind_to
+        inst._force_quote = self._force_quote
         return inst
 
     @returns_clone
@@ -942,10 +944,13 @@ class Field(Node):
         """Convert the database value to a pythonic value."""
         return value if value is None else self.coerce(value)
 
-    def as_entity(self, with_table=False):
+    def as_entity(self, with_table=False, force_quote=False):
         if with_table:
-            return Entity(self.model_class._meta.db_table, self.db_column)
-        return Entity(self.db_column)
+            entity = Entity(self.model_class._meta.db_table, self.db_column)
+        else:
+            entity = Entity(self.db_column)
+        entity._force_quote = force_quote
+        return entity
 
     def __ddl_column__(self, column_type):
         """Return the column type, e.g. VARCHAR(255) or REAL."""
@@ -1600,8 +1605,8 @@ class QueryCompiler(object):
             'strip_parens': self._parse_strip_parens,
         }
 
-    def quote(self, s):
-        if re.match(r'[a-zA-Z]\w*$', s) and s.upper() not in self.sql_reserved_words:
+    def quote(self, s, force_quote=False):
+        if not force_quote and re.match(r'[a-zA-Z]\w*$', s) and s.upper() not in self.sql_reserved_words:
           return s
         return '%s%s%s' % (self.quote_char, s, self.quote_char)
 
@@ -1654,7 +1659,7 @@ class QueryCompiler(object):
         return sql, params
 
     def _parse_entity(self, node, alias_map, conv):
-        return '.'.join(map(self.quote, node.path)), []
+        return '.'.join(map(self.quote, node.path, [node._force_quote for x in node.path])), []
 
     def _parse_sql(self, node, alias_map, conv):
         return node.value, list(node.params)
