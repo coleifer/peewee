@@ -109,10 +109,17 @@ Depending on the number of rows in your data source, you may need to break it up
 
 .. code-block:: python
 
-    # Insert rows 1000 at a time.
+    # Insert rows 100 at a time.
     with db.atomic():
-        for idx in range(0, len(data_source), 1000):
-            Model.insert_many(data_source[idx:idx+1000]).execute()
+        for idx in range(0, len(data_source), 100):
+            Model.insert_many(data_source[idx:idx+100]).execute()
+
+.. note::
+    SQLite users should be aware of some caveats when using bulk inserts.
+    Specifically, your SQLite3 version must be 3.7.11.0 or newer to take
+    advantage of the bulk insert API. Additionally, by default SQLite limits
+    the number of bound variables in a SQL query to ``999``. This value can be
+    modified by setting the ``SQLITE_MAX_VARIABLE_NUMBER`` flag.
 
 If the data you would like to bulk load is stored in another table, you can also create *INSERT* queries whose source is a *SELECT* query. Use the :py:meth:`Model.insert_from` method:
 

@@ -158,6 +158,22 @@ Models
                     yield {'username': username}
             User.insert_many(get_usernames()).execute()
 
+        .. warning::
+            If you are using SQLite, your SQLite library must be version 3.7.11
+            or newer to take advantage of bulk inserts.
+
+        .. note::
+            SQLite has a default limit of 999 bound variables per statement.
+            This limit can be modified at compile-time or at run-time, **but**
+            if modifying at run-time, you can only specify a *lower* value than
+            the default limit.
+
+            For more information, check out the following SQLite documents:
+
+            * `Max variable number limit <https://www.sqlite.org/limits.html#max_variable_number>`_
+            * `Changing run-time limits <https://www.sqlite.org/c3ref/limit.html>`_
+            * `SQLite compile-time flags <https://www.sqlite.org/compile.html>`_
+
     .. py:classmethod:: insert_from(fields, query)
 
         Insert rows into the table using a query as the data source. This API should
