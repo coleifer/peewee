@@ -4703,11 +4703,27 @@ class Model(with_metaclass(BaseModel)):
             with cls._meta.database.atomic():
                 return cls.create(**kwargs), True
         except IntegrityError:
-            query = []  # TODO: multi-column unique constraints.
+            query = []
             for field_name, value in kwargs.items():
                 field = getattr(cls, field_name)
                 if field.unique or field.primary_key:
                     query.append(field == value)
+            # Use multi-column unique indexes when
+            # we got no unique/primary_key fields
+            if not query and cls._meta.indexes:
+                for field_names, unique in cls._meta.indexes:
+                    if not unique:
+                        continue
+                    index_query = []
+                    for field_name in field_names:
+                        if field_name not in kwargs:
+                            index_query = []
+                            break
+                        field = cls._meta.fields[field_name]
+                        value = kwargs[field_name]
+                        index_query.append(field == value)
+                    if index_query:
+                        query.extend(index_query)
             return cls.get(*query), False
 
     @classmethod
