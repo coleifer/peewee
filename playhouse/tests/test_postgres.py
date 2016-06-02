@@ -461,9 +461,9 @@ class TestTSVectorField(BasePostgresqlExtTestCase):
     def test_sql(self):
         query = FTSModel.select().where(Match(FTSModel.data, 'foo bar'))
         self.assertEqual(query.sql(), (
-            'SELECT "t1"."id", "t1"."title", "t1"."data", "t1"."fts_data" '
-            'FROM "ftsmodel" AS t1 '
-            'WHERE (to_tsvector("t1"."data") @@ to_tsquery(%s))',
+            'SELECT t1.id, t1.title, t1.data, t1.fts_data '
+            'FROM ftsmodel AS t1 '
+            'WHERE (to_tsvector(t1.data) @@ to_tsquery(%s))',
             ['foo bar']
         ))
 
@@ -711,8 +711,8 @@ class BaseJsonFieldTestCase(object):
              .where(self.ModelClass.data == {'foo': 'bar'}))
         sql, params = j.sql()
         self.assertEqual(sql, (
-            'SELECT "t1"."id", "t1"."data" '
-            'FROM "%s" AS t1 WHERE ("t1"."data" = %%s)')
+            'SELECT t1.id, t1.data '
+            'FROM %s AS t1 WHERE (t1.data = %%s)')
             % self.ModelClass._meta.db_table)
         self.assertEqual(params[0].adapted, {'foo': 'bar'})
 
@@ -721,8 +721,8 @@ class BaseJsonFieldTestCase(object):
              .where(self.ModelClass.data['foo'] == 'bar'))
         sql, params = j.sql()
         self.assertEqual(sql, (
-            'SELECT "t1"."id", "t1"."data" '
-            'FROM "%s" AS t1 WHERE ("t1"."data"->>%%s = %%s)')
+            'SELECT t1.id, t1.data '
+            'FROM %s AS t1 WHERE (t1.data->>%%s = %%s)')
             % self.ModelClass._meta.db_table)
         self.assertEqual(params, ['foo', 'bar'])
 
@@ -996,30 +996,30 @@ class TestIndexedField(PeeweeTestCase):
 
         create_sql, _ = compiler.create_table(TestIndexModel)
         self.assertEqual(create_sql, (
-            'CREATE TABLE "testindexmodel" ('
-            '"id" SERIAL NOT NULL PRIMARY KEY, '
-            '"array_index" VARCHAR(255)[] NOT NULL, '
-            '"array_noindex" INTEGER[] NOT NULL, '
-            '"fake_index" VARCHAR(255) NOT NULL, '
-            '"fake_index_with_type" VARCHAR(255) NOT NULL, '
-            '"fake_noindex" VARCHAR(255) NOT NULL)'))
+            'CREATE TABLE testindexmodel ('
+            'id SERIAL NOT NULL PRIMARY KEY, '
+            'array_index VARCHAR(255)[] NOT NULL, '
+            'array_noindex INTEGER[] NOT NULL, '
+            'fake_index VARCHAR(255) NOT NULL, '
+            'fake_index_with_type VARCHAR(255) NOT NULL, '
+            'fake_noindex VARCHAR(255) NOT NULL)'))
 
         all_sql = TestIndexModel.sqlall()
         tbl, array_idx, fake_idx, fake_idx_type = all_sql
         self.assertEqual(tbl, create_sql)
 
         self.assertEqual(array_idx, (
-            'CREATE INDEX "testindexmodel_array_index" ON "testindexmodel" '
-            'USING GIN ("array_index")'))
+            'CREATE INDEX testindexmodel_array_index ON testindexmodel '
+            'USING GIN (array_index)'))
 
         self.assertEqual(fake_idx, (
-            'CREATE INDEX "testindexmodel_fake_index" ON "testindexmodel" '
-            'USING GiST ("fake_index")'))
+            'CREATE INDEX testindexmodel_fake_index ON testindexmodel '
+            'USING GiST (fake_index)'))
 
         self.assertEqual(fake_idx_type, (
-            'CREATE INDEX "testindexmodel_fake_index_with_type" '
-            'ON "testindexmodel" '
-            'USING MAGIC ("fake_index_with_type")'))
+            'CREATE INDEX testindexmodel_fake_index_with_type '
+            'ON testindexmodel '
+            'USING MAGIC (fake_index_with_type)'))
 
 
 if __name__ == '__main__':

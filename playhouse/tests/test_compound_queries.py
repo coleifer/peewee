@@ -47,26 +47,26 @@ class TestCompoundSelectSQL(PeeweeTestCase):
         rhs = Beta.select(Beta.beta)
         sql, params = (lhs | rhs).sql()
         self.assertEqual(sql, (
-            'SELECT "t1"."alpha" FROM "alpha" AS t1 UNION '
-            'SELECT "t2"."beta" FROM "beta" AS t2'))
+            'SELECT t1.alpha FROM alpha AS t1 UNION '
+            'SELECT t2.beta FROM beta AS t2'))
 
         sql, params = (
             Alpha.select(Alpha.alpha) |
             Beta.select(Beta.beta) |
             Gamma.select(Gamma.gamma)).sql()
         self.assertEqual(sql, (
-            'SELECT "t1"."alpha" FROM "alpha" AS t1 UNION '
-            'SELECT "t2"."beta" FROM "beta" AS t2 UNION '
-            'SELECT "t3"."gamma" FROM "gamma" AS t3'))
+            'SELECT t1.alpha FROM alpha AS t1 UNION '
+            'SELECT t2.beta FROM beta AS t2 UNION '
+            'SELECT t3.gamma FROM gamma AS t3'))
 
         sql, params = (
             Alpha.select(Alpha.alpha) |
             (Beta.select(Beta.beta) |
              Gamma.select(Gamma.gamma))).sql()
         self.assertEqual(sql, (
-            'SELECT "t3"."alpha" FROM "alpha" AS t3 UNION '
-            'SELECT "t1"."beta" FROM "beta" AS t1 UNION '
-            'SELECT "t2"."gamma" FROM "gamma" AS t2'))
+            'SELECT t3.alpha FROM alpha AS t3 UNION '
+            'SELECT t1.beta FROM beta AS t1 UNION '
+            'SELECT t2.gamma FROM gamma AS t2'))
 
     def test_simple_same_model(self):
         queries = [Alpha.select(Alpha.alpha) for i in range(3)]
@@ -74,71 +74,71 @@ class TestCompoundSelectSQL(PeeweeTestCase):
         compound = lhs | queries[2]
         sql, params = compound.sql()
         self.assertEqual(sql, (
-            'SELECT "t1"."alpha" FROM "alpha" AS t1 UNION '
-            'SELECT "t2"."alpha" FROM "alpha" AS t2 UNION '
-            'SELECT "t3"."alpha" FROM "alpha" AS t3'))
+            'SELECT t1.alpha FROM alpha AS t1 UNION '
+            'SELECT t2.alpha FROM alpha AS t2 UNION '
+            'SELECT t3.alpha FROM alpha AS t3'))
 
         lhs = queries[0]
         compound = lhs | (queries[1] | queries[2])
         sql, params = compound.sql()
         self.assertEqual(sql, (
-            'SELECT "t3"."alpha" FROM "alpha" AS t3 UNION '
-            'SELECT "t1"."alpha" FROM "alpha" AS t1 UNION '
-            'SELECT "t2"."alpha" FROM "alpha" AS t2'))
+            'SELECT t3.alpha FROM alpha AS t3 UNION '
+            'SELECT t1.alpha FROM alpha AS t1 UNION '
+            'SELECT t2.alpha FROM alpha AS t2'))
 
     def test_where_clauses(self):
         sql, params = (self.a1 | self.a2).sql()
         self.assertEqual(sql, (
-            'SELECT "t1"."alpha" FROM "alpha" AS t1 WHERE ("t1"."alpha" < ?) '
+            'SELECT t1.alpha FROM alpha AS t1 WHERE (t1.alpha < ?) '
             'UNION '
-            'SELECT "t2"."alpha" FROM "alpha" AS t2 WHERE ("t2"."alpha" > ?)'))
+            'SELECT t2.alpha FROM alpha AS t2 WHERE (t2.alpha > ?)'))
         self.assertEqual(params, [2, 5])
 
         sql, params = (self.a1 | self.b1).sql()
         self.assertEqual(sql, (
-            'SELECT "t1"."alpha" FROM "alpha" AS t1 WHERE ("t1"."alpha" < ?) '
+            'SELECT t1.alpha FROM alpha AS t1 WHERE (t1.alpha < ?) '
             'UNION '
-            'SELECT "t2"."beta" FROM "beta" AS t2 WHERE ("t2"."beta" < ?)'))
+            'SELECT t2.beta FROM beta AS t2 WHERE (t2.beta < ?)'))
         self.assertEqual(params, [2, 3])
 
         sql, params = (self.a1 | self.b1 | self.a2 | self.b2).sql()
         self.assertEqual(sql, (
-            'SELECT "t1"."alpha" FROM "alpha" AS t1 WHERE ("t1"."alpha" < ?) '
+            'SELECT t1.alpha FROM alpha AS t1 WHERE (t1.alpha < ?) '
             'UNION '
-            'SELECT "t2"."beta" FROM "beta" AS t2 WHERE ("t2"."beta" < ?) '
+            'SELECT t2.beta FROM beta AS t2 WHERE (t2.beta < ?) '
             'UNION '
-            'SELECT "t4"."alpha" FROM "alpha" AS t4 WHERE ("t4"."alpha" > ?) '
+            'SELECT t4.alpha FROM alpha AS t4 WHERE (t4.alpha > ?) '
             'UNION '
-            'SELECT "t3"."beta" FROM "beta" AS t3 WHERE ("t3"."beta" > ?)'))
+            'SELECT t3.beta FROM beta AS t3 WHERE (t3.beta > ?)'))
         self.assertEqual(params, [2, 3, 5, 4])
 
     def test_outer_limit(self):
         sql, params = (self.a1 | self.a2).limit(3).sql()
         self.assertEqual(sql, (
-            'SELECT "t1"."alpha" FROM "alpha" AS t1 WHERE ("t1"."alpha" < ?) '
+            'SELECT t1.alpha FROM alpha AS t1 WHERE (t1.alpha < ?) '
             'UNION '
-            'SELECT "t2"."alpha" FROM "alpha" AS t2 WHERE ("t2"."alpha" > ?) '
+            'SELECT t2.alpha FROM alpha AS t2 WHERE (t2.alpha > ?) '
             'LIMIT 3'))
 
     def test_union_in_from(self):
         compound = (self.a1 | self.a2).alias('cq')
         sql, params = Alpha.select(compound.c.alpha).from_(compound).sql()
         self.assertEqual(sql, (
-            'SELECT "cq"."alpha" FROM ('
-            'SELECT "t1"."alpha" FROM "alpha" AS t1 WHERE ("t1"."alpha" < ?) '
+            'SELECT cq.alpha FROM ('
+            'SELECT t1.alpha FROM alpha AS t1 WHERE (t1.alpha < ?) '
             'UNION '
-            'SELECT "t2"."alpha" FROM "alpha" AS t2 WHERE ("t2"."alpha" > ?)'
+            'SELECT t2.alpha FROM alpha AS t2 WHERE (t2.alpha > ?)'
             ') AS cq'))
 
         compound = (self.a1 | self.b1 | self.b2).alias('cq')
         sql, params = Alpha.select(SQL('1')).from_(compound).sql()
         self.assertEqual(sql, (
             'SELECT 1 FROM ('
-            'SELECT "t1"."alpha" FROM "alpha" AS t1 WHERE ("t1"."alpha" < ?) '
+            'SELECT t1.alpha FROM alpha AS t1 WHERE (t1.alpha < ?) '
             'UNION '
-            'SELECT "t2"."beta" FROM "beta" AS t2 WHERE ("t2"."beta" < ?) '
+            'SELECT t2.beta FROM beta AS t2 WHERE (t2.beta < ?) '
             'UNION '
-            'SELECT "t3"."beta" FROM "beta" AS t3 WHERE ("t3"."beta" > ?)'
+            'SELECT t3.beta FROM beta AS t3 WHERE (t3.beta > ?)'
             ') AS cq'))
         self.assertEqual(params, [2, 3, 4])
 
@@ -147,11 +147,11 @@ class TestCompoundSelectSQL(PeeweeTestCase):
 
         sql, params = (self.a1 | self.a2).sql()
         self.assertEqual(sql, (
-            '(SELECT "t1"."alpha" FROM "alpha" AS t1 '
-            'WHERE ("t1"."alpha" < ?)) '
+            '(SELECT t1.alpha FROM alpha AS t1 '
+            'WHERE (t1.alpha < ?)) '
             'UNION '
-            '(SELECT "t2"."alpha" FROM "alpha" AS t2 '
-            'WHERE ("t2"."alpha" > ?))'))
+            '(SELECT t2.alpha FROM alpha AS t2 '
+            'WHERE (t2.alpha > ?))'))
         self.assertEqual(params, [2, 5])
 
     def test_multiple_with_parentheses(self):
@@ -162,17 +162,17 @@ class TestCompoundSelectSQL(PeeweeTestCase):
         compound = lhs | queries[2]
         sql, params = compound.sql()
         self.assertEqual(sql, (
-            '((SELECT "t1"."alpha" FROM "alpha" AS t1) UNION '
-            '(SELECT "t2"."alpha" FROM "alpha" AS t2)) UNION '
-            '(SELECT "t3"."alpha" FROM "alpha" AS t3)'))
+            '((SELECT t1.alpha FROM alpha AS t1) UNION '
+            '(SELECT t2.alpha FROM alpha AS t2)) UNION '
+            '(SELECT t3.alpha FROM alpha AS t3)'))
 
         lhs = queries[0]
         compound = lhs | (queries[1] | queries[2])
         sql, params = compound.sql()
         self.assertEqual(sql, (
-            '(SELECT "t3"."alpha" FROM "alpha" AS t3) UNION '
-            '((SELECT "t1"."alpha" FROM "alpha" AS t1) UNION '
-            '(SELECT "t2"."alpha" FROM "alpha" AS t2))'))
+            '(SELECT t3.alpha FROM alpha AS t3) UNION '
+            '((SELECT t1.alpha FROM alpha AS t1) UNION '
+            '(SELECT t2.alpha FROM alpha AS t2))'))
 
     def test_inner_limit(self):
         compound_db.compound_select_parentheses = True
@@ -181,10 +181,10 @@ class TestCompoundSelectSQL(PeeweeTestCase):
         sql, params = (a1 | a2).limit(3).sql()
 
         self.assertEqual(sql, (
-            '(SELECT "t1"."alpha" FROM "alpha" AS t1 WHERE ("t1"."alpha" < ?) '
+            '(SELECT t1.alpha FROM alpha AS t1 WHERE (t1.alpha < ?) '
             'LIMIT 2) '
             'UNION '
-            '(SELECT "t2"."alpha" FROM "alpha" AS t2 WHERE ("t2"."alpha" > ?) '
+            '(SELECT t2.alpha FROM alpha AS t2 WHERE (t2.alpha > ?) '
             'LIMIT 4) '
             'LIMIT 3'))
 
@@ -194,11 +194,11 @@ class TestCompoundSelectSQL(PeeweeTestCase):
         query = Alpha.select().where(Alpha.alpha << union)
         sql, params = query.sql()
         self.assertEqual(sql, (
-            'SELECT "t1"."id", "t1"."alpha" '
-            'FROM "alpha" AS t1 WHERE ("t1"."alpha" IN ('
-            'SELECT "t1"."alpha" FROM "alpha" AS t1 '
+            'SELECT t1.id, t1.alpha '
+            'FROM alpha AS t1 WHERE (t1.alpha IN ('
+            'SELECT t1.alpha FROM alpha AS t1 '
             'UNION '
-            'SELECT "t2"."beta" FROM "beta" AS t2))'))
+            'SELECT t2.beta FROM beta AS t2))'))
 
 
 class TestCompoundSelectQueries(ModelTestCase):

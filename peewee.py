@@ -451,6 +451,7 @@ class Node(object):
         self._alias = None
         self._bind_to = None
         self._ordering = None  # ASC or DESC.
+        self._force_quote = False
 
     @classmethod
     def extend(cls, name=None, clone=False):
@@ -471,6 +472,7 @@ class Node(object):
         inst._alias = self._alias
         inst._ordering = self._ordering
         inst._bind_to = self._bind_to
+        inst._force_quote = self._force_quote
         return inst
 
     @returns_clone
@@ -942,10 +944,13 @@ class Field(Node):
         """Convert the database value to a pythonic value."""
         return value if value is None else self.coerce(value)
 
-    def as_entity(self, with_table=False):
+    def as_entity(self, with_table=False, force_quote=False):
         if with_table:
-            return Entity(self.model_class._meta.db_table, self.db_column)
-        return Entity(self.db_column)
+            entity = Entity(self.model_class._meta.db_table, self.db_column)
+        else:
+            entity = Entity(self.db_column)
+        entity._force_quote = force_quote
+        return entity
 
     def __ddl_column__(self, column_type):
         """Return the column type, e.g. VARCHAR(255) or REAL."""
@@ -1551,6 +1556,21 @@ class QueryCompiler(object):
         OP.CONCAT: '||',
     }
 
+    sql_reserved_words = set('''
+      ADD EXTERNAL PROCEDURE ALL FETCH PUBLIC ALTER FILE RAISERROR AND FILLFACTOR READ ANY FOR READTEXT AS FOREIGN RECONFIGURE 
+      ASC FREETEXT REFERENCES AUTHORIZATION FREETEXTTABLE REPLICATION BACKUP FROM RESTORE BEGIN FULL RESTRICT BETWEEN FUNCTION 
+      RETURN BREAK GOTO REVERT BROWSE GRANT REVOKE BULK GROUP RIGHT BY HAVING ROLLBACK CASCADE HOLDLOCK ROWCOUNT CASE IDENTITY
+      ROWGUIDCOL CHECK IDENTITY_INSERT RULE CHECKPOINT IDENTITYCOL SAVE CLOSE IF SCHEMA CLUSTERED IN SECURITYAUDIT COALESCE INDEX
+      SELECT COLLATE INNER SEMANTICKEYPHRASETABLE COLUMN INSERT SEMANTICSIMILARITYDETAILSTABLE COMMIT INTERSECT 
+      SEMANTICSIMILARITYTABLE COMPUTE INTO SESSION_USER CONSTRAINT IS SET CONTAINS JOIN SETUSER CONTAINSTABLE KEY SHUTDOWN CONTINUE
+      KILL SOME CONVERT LEFT STATISTICS CREATE LIKE SYSTEM_USER CROSS LINENO TABLE CURRENT LOAD TABLESAMPLE CURRENT_DATE MERGE 
+      TEXTSIZE CURRENT_TIME NATIONAL THEN CURRENT_TIMESTAMP NOCHECK TO CURRENT_USER NONCLUSTERED TOP CURSOR NOT TRAN DATABASE NULL
+      TRANSACTION DBCC NULLIF TRIGGER DEALLOCATE OF TRUNCATE DECLARE OFF TRY_CONVERT DEFAULT OFFSETS TSEQUAL DELETE ON UNION DENY 
+      OPEN UNIQUE DESC OPENDATASOURCE UNPIVOT DISK OPENQUERY UPDATE DISTINCT OPENROWSET UPDATETEXT DISTRIBUTED OPENXML USE DOUBLE
+      OPTION USER DROP OR VALUES DUMP ORDER VARYING ELSE OUTER VIEW END OVER WAITFOR ERRLVL PERCENT WHEN ESCAPE PIVOT WHERE EXCEPT
+      PLAN WHILE EXEC PRECISION WITH EXECUTE PRIMARY WITHIN GROUP EXISTS PRINT WRITETEXT EXIT PROC
+    '''.split())
+
     join_map = {
         JOIN.INNER: 'INNER JOIN',
         JOIN.LEFT_OUTER: 'LEFT OUTER JOIN',
@@ -1585,7 +1605,9 @@ class QueryCompiler(object):
             'strip_parens': self._parse_strip_parens,
         }
 
-    def quote(self, s):
+    def quote(self, s, force_quote=False):
+        if not force_quote and re.match(r'[a-zA-Z]\w*$', s) and s.upper() not in self.sql_reserved_words:
+          return s
         return '%s%s%s' % (self.quote_char, s, self.quote_char)
 
     def get_column_type(self, f):
@@ -1637,7 +1659,7 @@ class QueryCompiler(object):
         return sql, params
 
     def _parse_entity(self, node, alias_map, conv):
-        return '.'.join(map(self.quote, node.path)), []
+        return '.'.join(map(self.quote, node.path, [node._force_quote for x in node.path])), []
 
     def _parse_sql(self, node, alias_map, conv):
         return node.value, list(node.params)

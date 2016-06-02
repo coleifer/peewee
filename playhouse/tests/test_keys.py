@@ -181,12 +181,12 @@ class TestCompositePrimaryKey(ModelTestCase):
         query, params = compiler.create_table(TagPostThrough)
         self.assertEqual(
             query,
-            'CREATE TABLE "tagpostthrough" '
-            '("tag_id" INTEGER NOT NULL, '
-            '"post_id" INTEGER NOT NULL, '
-            'PRIMARY KEY ("tag_id", "post_id"), '
-            'FOREIGN KEY ("tag_id") REFERENCES "tag" ("id"), '
-            'FOREIGN KEY ("post_id") REFERENCES "post" ("id")'
+            'CREATE TABLE tagpostthrough '
+            '(tag_id INTEGER NOT NULL, '
+            'post_id INTEGER NOT NULL, '
+            'PRIMARY KEY (tag_id, post_id), '
+            'FOREIGN KEY (tag_id) REFERENCES tag (id), '
+            'FOREIGN KEY (post_id) REFERENCES post (id)'
             ')')
 
     def test_get_set_id(self):
@@ -309,18 +309,18 @@ class TestForeignKeyNonPrimaryKeyCreateTable(PeeweeTestCase):
         cf_create, _ = compiler.create_table(CF)
         self.assertEqual(
             cf_create,
-            'CREATE TABLE "cf" ('
-            '"id" INTEGER NOT NULL PRIMARY KEY, '
-            '"a_id" VARCHAR(100) NOT NULL, '
-            'FOREIGN KEY ("a_id") REFERENCES "a" ("cf"))')
+            'CREATE TABLE cf ('
+            'id INTEGER NOT NULL PRIMARY KEY, '
+            'a_id VARCHAR(100) NOT NULL, '
+            'FOREIGN KEY (a_id) REFERENCES a (cf))')
 
         df_create, _ = compiler.create_table(DF)
         self.assertEqual(
             df_create,
-            'CREATE TABLE "df" ('
-            '"id" INTEGER NOT NULL PRIMARY KEY, '
-            '"a_id" DECIMAL(4, 2) NOT NULL, '
-            'FOREIGN KEY ("a_id") REFERENCES "a" ("df"))')
+            'CREATE TABLE df ('
+            'id INTEGER NOT NULL PRIMARY KEY, '
+            'a_id DECIMAL(4, 2) NOT NULL, '
+            'FOREIGN KEY (a_id) REFERENCES a (df))')
 
 
 class TestDeferredForeignKey(ModelTestCase):
@@ -347,20 +347,20 @@ class TestDeferredForeignKey(ModelTestCase):
         query, params = compiler.create_table(Snippet)
         self.assertEqual(
             query,
-            'CREATE TABLE "snippet" '
-            '("id" INTEGER NOT NULL PRIMARY KEY, '
-            '"code" TEXT NOT NULL, '
-            '"language_id" INTEGER NOT NULL, '
-            'FOREIGN KEY ("language_id") REFERENCES "language" ("id")'
+            'CREATE TABLE snippet '
+            '(id INTEGER NOT NULL PRIMARY KEY, '
+            'code TEXT NOT NULL, '
+            'language_id INTEGER NOT NULL, '
+            'FOREIGN KEY (language_id) REFERENCES language (id)'
             ')')
 
         query, params = compiler.create_table(Language)
         self.assertEqual(
             query,
-            'CREATE TABLE "language" '
-            '("id" INTEGER NOT NULL PRIMARY KEY, '
-            '"name" VARCHAR(255) NOT NULL, '
-            '"selected_snippet_id" INTEGER)')
+            'CREATE TABLE language '
+            '(id INTEGER NOT NULL PRIMARY KEY, '
+            'name VARCHAR(255) NOT NULL, '
+            'selected_snippet_id INTEGER)')
 
     def test_storage_retrieval(self):
         python = Language.create(name='python')

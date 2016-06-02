@@ -633,13 +633,13 @@ class TestFieldDatabaseColumn(ModelTestCase):
 
     def test_select(self):
         sq = DBUser.select().where(DBUser.username == 'u1')
-        self.assertSelect(sq, '"dbuser"."db_user_id", "dbuser"."db_username"', [])
-        self.assertWhere(sq, '("dbuser"."db_username" = ?)', ['u1'])
+        self.assertSelect(sq, 'dbuser.db_user_id, dbuser.db_username', [])
+        self.assertWhere(sq, '(dbuser.db_username = ?)', ['u1'])
 
         sq = DBUser.select(DBUser.user_id).join(DBBlog).where(DBBlog.title == 'b1')
-        self.assertSelect(sq, '"dbuser"."db_user_id"', [])
-        self.assertJoins(sq, ['INNER JOIN "dbblog" AS dbblog ON ("dbuser"."db_user_id" = "dbblog"."db_user")'])
-        self.assertWhere(sq, '("dbblog"."db_title" = ?)', ['b1'])
+        self.assertSelect(sq, 'dbuser.db_user_id', [])
+        self.assertJoins(sq, ['INNER JOIN dbblog AS dbblog ON (dbuser.db_user_id = dbblog.db_user)'])
+        self.assertWhere(sq, '(dbblog.db_title = ?)', ['b1'])
 
     def test_db_column(self):
         u1 = DBUser.create(username='u1')
