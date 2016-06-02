@@ -1,6 +1,5 @@
 from bisect import bisect_left
 from bisect import bisect_right
-from collections import defaultdict
 from collections import deque
 from cpython cimport datetime
 
@@ -106,7 +105,7 @@ cdef class _ResultIterator(object):
 cdef class _QueryResultWrapper(object):
     cdef:
         bint _initialized
-        defaultdict join_meta
+        dict join_meta
         int _idx
         int row_size
         list column_names, converters
@@ -123,7 +122,7 @@ cdef class _QueryResultWrapper(object):
         self._populated = self._initialized = False
         self._result_cache = []
         if meta is not None:
-            self.column_meta, self.join_meta = meta
+            self.column_meta, self.join_meta = meta[0], dict(meta[1])
         else:
             self.column_meta = self.join_meta = None
 
