@@ -1,5 +1,6 @@
 from bisect import bisect_left
 from bisect import bisect_right
+from collections import defaultdict
 from collections import deque
 from cpython cimport datetime
 
@@ -105,7 +106,7 @@ cdef class _ResultIterator(object):
 cdef class _QueryResultWrapper(object):
     cdef:
         bint _initialized
-        dict join_meta
+        defaultdict join_meta
         int _idx
         int row_size
         list column_names, converters
