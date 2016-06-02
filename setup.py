@@ -10,17 +10,25 @@ readme = f.read()
 f.close()
 
 setup_kwargs = {}
+cython_min_version = '0.22.1'
 try:
     from Cython.Distutils import build_ext
     from Cython import __version__ as cython_version
-    if StrictVersion(cython_version) < StrictVersion('0.22.1'):
-        warnings.warn('Your Cython appears to be an older version. You may '
-                      'need to upgrade Cython in order to build the peewee '
-                      'C extensions.')
 except ImportError:
     cython_installed = False
+    warnings.warn('Cython C extensions for peewee will NOT be built, because '
+                  'Cython does not seem to be installed. To enable Cython C '
+                  'extensions, install Cython >=' + cython_min_version + '.')
 else:
-    cython_installed = True
+    if StrictVersion(cython_version) < StrictVersion(cython_min_version):
+        cython_installed = False
+        warnings.warn('Cython C extensions for peewee will NOT be built, '
+                      'because the installed Cython version '
+                      '(' + cython_version + ') is too old. To enable Cython '
+                      'C extensions, install Cython >=' + cython_min_version +
+                      '.')
+    else:
+        cython_installed = True
 
 speedups_ext_module = Extension(
     'playhouse._speedups',
