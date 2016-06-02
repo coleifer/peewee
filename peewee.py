@@ -27,6 +27,7 @@ import threading
 import uuid
 from bisect import bisect_left
 from bisect import bisect_right
+from collections import defaultdict
 from collections import deque
 from collections import namedtuple
 try:
@@ -2506,7 +2507,7 @@ class Query(Node):
 
         self._dirty = True
         self._query_ctx = model_class
-        self._joins = {self.model_class: []}  # Join graph as adjacency list.
+        self._joins = defaultdict(list)  # Join graph as adjacency list like: {self.model_class: []}
         self._where = None
 
     def __repr__(self):
@@ -2526,8 +2527,10 @@ class Query(Node):
         return query
 
     def _clone_joins(self):
-        return dict(
-            (mc, list(j)) for mc, j in self._joins.items())
+        new_dict = defaultdict(list)
+        for mc, j in self._joins.items():
+          new_dict[mc] = list(j)
+        return new_dict
 
     def _add_query_clauses(self, initial, expressions, conjunction=None):
         reduced = reduce(operator.and_, expressions)
@@ -2569,7 +2572,6 @@ class Query(Node):
                 raise ValueError('A join condition must be specified.')
         elif isinstance(on, basestring):
             on = src._meta.fields[on]
-        self._joins.setdefault(src, [])
         self._joins[src].append(Join(src, dest, join_type, on))
         if not isinstance(dest, SelectQuery):
             self._query_ctx = dest
@@ -2581,7 +2583,7 @@ class Query(Node):
 
     def ensure_join(self, lm, rm, on=None):
         ctx = self._query_ctx
-        for join in self._joins.get(lm, []):
+        for join in self._joins[lm]:
             if join.dest == rm:
                 return self
         return self.switch(lm).join(rm, on=on).switch(ctx)
