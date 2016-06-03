@@ -2917,6 +2917,12 @@ class SelectQuery(Query):
                 % self.sql())
 
     def first(self):
+        try:
+            return list(self.limit(1))[0]
+        except IndexError:
+            return None
+
+    def peek(self):
         res = self.execute()
         res.fill_cache(1)
         try:

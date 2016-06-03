@@ -842,10 +842,22 @@ class TestModelAPIs(ModelTestCase):
 
         with self.assertQueryCount(1):
             sq = User.select().order_by(User.username)
+            first = sq.first()
+            self.assertEqual(first.username, 'u1')
+
+        # call it with an empty result
+        sq = User.select().where(User.username == 'not-here')
+        self.assertEqual(sq.first(), None)
+
+    def test_peek(self):
+        users = User.create_users(5)
+
+        with self.assertQueryCount(1):
+            sq = User.select().order_by(User.username)
             qr = sq.execute()
 
             # call it once
-            first = sq.first()
+            first = sq.peek()
             self.assertEqual(first.username, 'u1')
 
             # check the result cache
@@ -853,7 +865,7 @@ class TestModelAPIs(ModelTestCase):
 
             # call it again and we get the same result, but not an
             # extra query
-            self.assertEqual(sq.first().username, 'u1')
+            self.assertEqual(sq.peek().username, 'u1')
 
         with self.assertQueryCount(0):
             usernames = [u.username for u in sq]
@@ -861,14 +873,14 @@ class TestModelAPIs(ModelTestCase):
 
         with self.assertQueryCount(0):
             # call after iterating
-            self.assertEqual(sq.first().username, 'u1')
+            self.assertEqual(sq.peek().username, 'u1')
 
             usernames = [u.username for u in sq]
             self.assertEqual(usernames, ['u1', 'u2', 'u3', 'u4', 'u5'])
 
         # call it with an empty result
         sq = User.select().where(User.username == 'not-here')
-        self.assertEqual(sq.first(), None)
+        self.assertEqual(sq.peek(), None)
 
     def test_deleting(self):
         u1 = User.create(username='u1')
