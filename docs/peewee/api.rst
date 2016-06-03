@@ -1344,12 +1344,34 @@ Query Types
 
             user = User.get(User.active == True, User.username == username)
 
-    .. py:method:: first()
+    .. py:method:: first([n=1])
 
-        :rtype: :py:class:`Model` instance or ``None`` if no results
+        :param int n: Return the first *n* query results after applying a limit
+            of ``n`` records.
+        :rtype: :py:class:`Model` instance, list or ``None`` if no results
 
-        Fetch the first row from a query. The result will be cached in case the entire
-        query result-set should be iterated later.
+        Fetch the first *n* rows from a query. Behind-the-scenes, a ``LIMIT n``
+        is applied. The results of the query are then cached on the query
+        result wrapper so subsequent calls to :py:meth:`~SelectQuery.first`
+        will not cause multiple queries.
+
+        If only one row is requested (default behavior), then the return-type
+        will be either a model instance or ``None``.
+
+        If multiple rows are requested, the return type will either be a list
+        of one to n model instances, or ``None`` if no results are found.
+
+    .. py:method:: peek([n=1])
+
+        :param int n: Return the first *n* query results.
+        :rtype: :py:class:`Model` instance, list or ``None`` if no results
+
+        Fetch the first *n* rows from a query. No ``LIMIT`` is applied to the
+        query, so the :py:meth:`~SelectQuery.peek` has slightly different
+        semantics from :py:meth:`~SelectQuery.first`, which ensures no more
+        than *n* rows are requested. The ``peek`` method, on the other hand,
+        retains the ability to fetch the entire result set withouth issuing
+        additional queries.
 
     .. py:method:: execute()
 

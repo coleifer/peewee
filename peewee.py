@@ -3008,13 +3008,18 @@ class SelectQuery(Query):
                 'Instance matching query does not exist:\nSQL: %s\nPARAMS: %s'
                 % self.sql())
 
-    def first(self):
+    def peek(self, n=1):
         res = self.execute()
-        res.fill_cache(1)
-        try:
-            return res._result_cache[0]
-        except IndexError:
-            pass
+        res.fill_cache(n)
+        models = res._result_cache[:n]
+        if models:
+            return models[0] if n == 1 else models
+
+    def first(self, n=1):
+        if self._limit != n:
+            self._limit = n
+            self._dirty = True
+        return self.peek(n=n)
 
     def sql(self):
         return self.compiler().generate_select(self)

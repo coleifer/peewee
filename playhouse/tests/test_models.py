@@ -873,34 +873,59 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual(nm_get.data, nm.data)
         self.assertEqual(NonIntModel.select().count(), 1)
 
-    def test_first(self):
-        users = User.create_users(5)
+    def test_peek(self):
+        users = User.create_users(3)
 
         with self.assertQueryCount(1):
             sq = User.select().order_by(User.username)
-            qr = sq.execute()
+
+            # call it once
+            u1 = sq.peek()
+            self.assertEqual(u1.username, 'u1')
+
+            # check the result cache
+            self.assertEqual(len(sq._qr._result_cache), 1)
+
+            # call it again and we get the same result, but not an
+            # extra query
+            self.assertEqual(sq.peek().username, 'u1')
+
+        with self.assertQueryCount(0):
+            # no limit is applied.
+            usernames = [u.username for u in sq]
+            self.assertEqual(usernames, ['u1', 'u2', 'u3'])
+
+    def test_first(self):
+        users = User.create_users(3)
+
+        with self.assertQueryCount(1):
+            sq = User.select().order_by(User.username)
 
             # call it once
             first = sq.first()
             self.assertEqual(first.username, 'u1')
 
             # check the result cache
-            self.assertEqual(len(qr._result_cache), 1)
+            self.assertEqual(len(sq._qr._result_cache), 1)
 
             # call it again and we get the same result, but not an
             # extra query
             self.assertEqual(sq.first().username, 'u1')
 
         with self.assertQueryCount(0):
+            # also note that a limit has been applied.
+            all_results = [obj for obj in sq]
+            self.assertEqual(all_results, [first])
+
             usernames = [u.username for u in sq]
-            self.assertEqual(usernames, ['u1', 'u2', 'u3', 'u4', 'u5'])
+            self.assertEqual(usernames, ['u1'])
 
         with self.assertQueryCount(0):
-            # call after iterating
+            # call first() after iterating
             self.assertEqual(sq.first().username, 'u1')
 
             usernames = [u.username for u in sq]
-            self.assertEqual(usernames, ['u1', 'u2', 'u3', 'u4', 'u5'])
+            self.assertEqual(usernames, ['u1'])
 
         # call it with an empty result
         sq = User.select().where(User.username == 'not-here')
