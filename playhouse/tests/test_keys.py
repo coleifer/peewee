@@ -195,7 +195,7 @@ class TestCompositePrimaryKey(ModelTestCase):
                .join(Tag)
                .switch(TagPostThrough)
                .join(Post)
-               .order_by(Tag.tag, Post.title)).get()
+               .order_by(Tag.tag, Post.title)).first()
         # Sanity check.
         self.assertEqual(tpt.tag.tag, 't1')
         self.assertEqual(tpt.post.title, 'p1')

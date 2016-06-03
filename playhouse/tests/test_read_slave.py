@@ -87,7 +87,7 @@ class TestUsing(ModelTestCase):
         with Using(slave2, models, False):
             A.create(data='a2')
             B.create(data='b2')
-            a_obj = A.select().order_by(A.id).get()
+            a_obj = A.select().order_by(A.id).first()
             self.assertEqual(a_obj.data, 'a1')
 
         self.assertDatabaseVerb([

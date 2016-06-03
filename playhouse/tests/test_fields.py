@@ -749,18 +749,21 @@ class TestUUIDField(ModelTestCase):
         self.assertEqual(t1_db.uniq, uuid_obj)
         t1_db = TestingID.get(TestingID.uniq == uuid_str_short)
         self.assertEqual(t1_db.uniq, uuid_obj)
+        t1_db.delete_instance()
 
         t1 = TestingID.create(uniq=uuid_str)
         t1_db = TestingID.get(TestingID.uniq == uuid_str)
         self.assertEqual(t1_db.uniq, uuid_obj)
         t1_db = TestingID.get(TestingID.uniq == uuid_str_short)
         self.assertEqual(t1_db.uniq, uuid_obj)
+        t1_db.delete_instance()
 
         t1 = TestingID.create(uniq=uuid_str_short)
         t1_db = TestingID.get(TestingID.uniq == uuid_str)
         self.assertEqual(t1_db.uniq, uuid_obj)
         t1_db = TestingID.get(TestingID.uniq == uuid_str_short)
         self.assertEqual(t1_db.uniq, uuid_obj)
+        t1_db.delete_instance()
 
     def test_uuid_foreign_keys(self):
         data_a = UUIDData.create(id=uuid.uuid4(), data='a')
