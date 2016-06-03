@@ -1867,7 +1867,7 @@ class TestInsertReturningModelAPI(PeeweeTestCase):
         res = query.execute()
         self.assertTrue(res is True)
         self.assertEqual(User.select().count(), 3)
-        z = User.select().order_by(-User.username).get()
+        z = User.select().order_by(-User.username).first()
         self.assertEqual(z.username, 'zaizee')
 
         usernames = ['foo', 'bar', 'baz']
