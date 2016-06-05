@@ -3475,9 +3475,9 @@ class Database(object):
                  **connect_kwargs):
         self.connect_kwargs = {}
         if threadlocals:
-            self.__local = _ConnectionLocal()
+            self._local = _ConnectionLocal()
         else:
-            self.__local = _BaseConnectionLocal()
+            self._local = _BaseConnectionLocal()
         self.init(database, **connect_kwargs)
 
         self._conn_lock = threading.Lock()
@@ -3504,11 +3504,11 @@ class Database(object):
                 raise Exception('Error, database not properly initialized '
                                 'before opening connection')
             with self.exception_wrapper():
-                self.__local.conn = self._connect(
+                self._local.conn = self._connect(
                     self.database,
                     **self.connect_kwargs)
-                self.__local.closed = False
-                self.initialize_connection(self.__local.conn)
+                self._local.closed = False
+                self.initialize_connection(self._local.conn)
 
     def initialize_connection(self, conn):
         pass
@@ -3519,20 +3519,20 @@ class Database(object):
                 raise Exception('Error, database not properly initialized '
                                 'before closing connection')
             with self.exception_wrapper():
-                self._close(self.__local.conn)
-                self.__local.closed = True
+                self._close(self._local.conn)
+                self._local.closed = True
 
     def get_conn(self):
-        if self.__local.context_stack:
-            conn = self.__local.context_stack[-1].connection
+        if self._local.context_stack:
+            conn = self._local.context_stack[-1].connection
             if conn is not None:
                 return conn
-        if self.__local.closed:
+        if self._local.closed:
             self.connect()
-        return self.__local.conn
+        return self._local.conn
 
     def is_closed(self):
-        return self.__local.closed
+        return self._local.closed
 
     def get_cursor(self):
         return self.get_conn().cursor()
@@ -3609,33 +3609,33 @@ class Database(object):
         self.get_conn().rollback()
 
     def set_autocommit(self, autocommit):
-        self.__local.autocommit = autocommit
+        self._local.autocommit = autocommit
 
     def get_autocommit(self):
-        if self.__local.autocommit is None:
+        if self._local.autocommit is None:
             self.set_autocommit(self.autocommit)
-        return self.__local.autocommit
+        return self._local.autocommit
 
     def push_execution_context(self, transaction):
-        self.__local.context_stack.append(transaction)
+        self._local.context_stack.append(transaction)
 
     def pop_execution_context(self):
-        self.__local.context_stack.pop()
+        self._local.context_stack.pop()
 
     def execution_context_depth(self):
-        return len(self.__local.context_stack)
+        return len(self._local.context_stack)
 
     def execution_context(self, with_transaction=True):
         return ExecutionContext(self, with_transaction=with_transaction)
 
     def push_transaction(self, transaction):
-        self.__local.transactions.append(transaction)
+        self._local.transactions.append(transaction)
 
     def pop_transaction(self):
-        self.__local.transactions.pop()
+        self._local.transactions.pop()
 
     def transaction_depth(self):
-        return len(self.__local.transactions)
+        return len(self._local.transactions)
 
     def transaction(self):
         return transaction(self)

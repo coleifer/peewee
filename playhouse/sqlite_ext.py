@@ -54,7 +54,7 @@ from peewee import Entity
 from peewee import Expression
 from peewee import Node
 from peewee import OP
-from peewee import QueryCompiler
+from peewee import SqliteQueryCompiler
 from peewee import sqlite3  # Import the best SQLite version.
 from peewee import transaction
 from peewee import _sqlite_date_part
@@ -752,12 +752,12 @@ def ClosureTable(model_class, foreign_key=None):
     return type(name, (BaseClosureTable,), {'Meta': Meta})
 
 
-class SqliteQueryCompiler(QueryCompiler):
+class SqliteExtQueryCompiler(SqliteQueryCompiler):
     """
     Subclass of QueryCompiler that can be used to construct virtual tables.
     """
     def _create_table(self, model_class, safe=False, options=None):
-        clause = super(SqliteQueryCompiler, self)._create_table(
+        clause = super(SqliteExtQueryCompiler, self)._create_table(
             model_class, safe=safe)
 
         if issubclass(model_class, VirtualModel):
@@ -839,7 +839,7 @@ class SqliteExtDatabase(SqliteDatabase):
     * Specify a row factory
     * Advanced transactions (specify isolation level)
     """
-    compiler_class = SqliteQueryCompiler
+    compiler_class = SqliteExtQueryCompiler
 
     def __init__(self, database, c_extensions=True, *args, **kwargs):
         super(SqliteExtDatabase, self).__init__(database, *args, **kwargs)
