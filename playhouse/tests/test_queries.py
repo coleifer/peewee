@@ -321,6 +321,13 @@ class TestSelectQuery(PeeweeTestCase):
             'INNER JOIN "blog" AS blog ON '
             '"blog"."user_id"'])
 
+    def test_aliasing_in_select(self):
+        sq = User.select(User.id, Blog.select(fn.GROUP_CONCAT(' ', Blog.title)).where(Blog.user == User.id))
+        sql = compiler.generate_select(sq)
+        self.assertEqual(sql, (
+            'SELECT "users"."id", (SELECT GROUP_CONCAT(?, "blog"."title") FROM "blog" AS blog WHERE ("blog"."user_id" = "users"."id")) FROM "users" AS users',
+            [' ']))
+
     def test_where(self):
         sq = SelectQuery(User).where(User.id < 5)
         self.assertWhere(sq, '("users"."id" < ?)', [5])

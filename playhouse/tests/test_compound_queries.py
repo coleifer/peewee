@@ -138,7 +138,7 @@ class TestCompoundSelectSQL(PeeweeTestCase):
             'UNION '
             'SELECT "t2"."beta" FROM "beta" AS t2 WHERE ("t2"."beta" < ?) '
             'UNION '
-            'SELECT "t3"."beta" FROM "beta" AS t3 WHERE ("t3"."beta" > ?)'
+            'SELECT "t4"."beta" FROM "beta" AS t4 WHERE ("t4"."beta" > ?)'
             ') AS cq'))
         self.assertEqual(params, [2, 3, 4])
 
