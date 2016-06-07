@@ -1409,6 +1409,8 @@ class AliasMap(object):
         if obj in self._alias_map:
             return
         self._counter += 1
+        if alias is None and isinstance(obj, ModelAlias) and obj.__dict__['alias_name']:
+            alias = obj.__dict__['alias_name']
         self._alias_map[obj] = alias or '%s%s' % (self.prefix, self._counter)
 
     def __getitem__(self, obj):
@@ -4174,8 +4176,9 @@ class FieldProxy(Field):
         return getattr(self.field_instance, attr)
 
 class ModelAlias(object):
-    def __init__(self, model_class):
+    def __init__(self, model_class, alias_name=None):
         self.__dict__['model_class'] = model_class
+        self.__dict__['alias_name'] = alias_name
 
     def __getattr__(self, attr):
         model_attr = getattr(self.model_class, attr)
@@ -4200,6 +4203,18 @@ class ModelAlias(object):
 
     def __call__(self, **kwargs):
         return self.model_class(**kwargs)
+
+    def __hash__(self):
+        if self.__dict__['alias_name']:
+          return hash((self.__dict__['model_class'], self.__dict__['alias_name']))
+        else:
+          return object.__hash__(self)
+
+    def __eq__(self, other):
+        if self.__dict__['alias_name'] and other.__dict__['alias_name']:
+          return (self.__dict__['model_class'], self.__dict__['alias_name']) == (other.__dict__['model_class'], other.__dict__['alias_name'])
+        else:
+          return object.__eq__(self)
 
 if _SortedFieldList is None:
     class _SortedFieldList(object):
@@ -4507,8 +4522,14 @@ class Model(with_metaclass(BaseModel)):
             setattr(self, k, v)
 
     @classmethod
-    def alias(cls):
-        return ModelAlias(cls)
+    def alias(*args):
+        cls = args[0]
+        alias_name = args[1] if len(args)>=2 else None
+        return ModelAlias(cls, alias_name=alias_name)
+
+    @classmethod
+    def as_(cls, alias_name):
+        return ModelAlias(cls, alias_name=alias_name)
 
     @classmethod
     def select(cls, *selection):
