@@ -765,6 +765,19 @@ class TestSelectQuery(PeeweeTestCase):
             'WHERE (("t1"."username" = ?) AND ("t2"."id" = ?))'))
         self.assertEqual(params, ['charlie', 2])
 
+    def test_select_from_implied_alias(self):
+        query = User.alias().select().where(User.username=='charlie')
+        sql, params = normal_compiler.generate_select(query)
+        self.assertEqual(sql, (
+            'SELECT "t1"."id", "t1"."username" '
+            'FROM "users" AS t1 '
+            'WHERE ("t1"."username" = ?)'))
+        self.assertEqual(params, ['charlie'])
+
+    def test_select_from_ambiguous_implied_alias(self):
+        query = User.alias().select().join(User.alias(), on=User.username=='charlie')
+        self.assertRaises(ProgrammingError, lambda: normal_compiler.generate_select(query))
+
 class TestUpdateQuery(PeeweeTestCase):
     def setUp(self):
         super(TestUpdateQuery, self).setUp()

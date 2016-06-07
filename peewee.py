@@ -1416,9 +1416,15 @@ class AliasMap(object):
             self.add(obj)
         return self._alias_map[obj]
 
-    def lookup(self, obj):
+    def lookup(self, obj, loose=True):
         if obj in self._alias_map:
             return self._alias_map[obj]
+        if loose and issubclass(obj, Model):
+          possible_aliases = [x for x in self._alias_map.keys() if isinstance(x,ModelAlias) and x.model_class==obj]
+          if len(possible_aliases) == 1:
+            return self._alias_map[possible_aliases[0]]
+          if len(possible_aliases) > 1:
+            raise ProgrammingError('more than one %s is part of this query - please use an alias to avoid ambiguity' % obj)
         raise ProgrammingError('%s is not a part of this query' % obj)
 
     def __contains__(self, obj):
