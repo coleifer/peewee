@@ -4647,7 +4647,7 @@ class Model(with_metaclass(BaseModel)):
 
     @classmethod
     def insert_many(cls, rows, validate_fields=True):
-        return InsertQuery(cls, rows=rows, validate_fields=True)
+        return InsertQuery(cls, rows=rows, validate_fields=validate_fields)
 
     @classmethod
     def insert_from(cls, fields, query):

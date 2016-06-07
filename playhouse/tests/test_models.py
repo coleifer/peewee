@@ -243,6 +243,12 @@ class TestQueryingModels(ModelTestCase):
 
         self.assertEqual(User.select().count(), 4)
 
+    def test_insert_many_validates_fields_by_default(self):
+        self.assertTrue(User.insert_many([])._validate_fields)
+
+    def test_insert_many_without_field_validation(self):
+        self.assertFalse(User.insert_many([], validate_fields=False)._validate_fields)
+
     def test_delete(self):
         User.create_users(5)
         dq = User.delete().where(User.username << ['u1', 'u2', 'u3'])
