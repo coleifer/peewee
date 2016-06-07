@@ -4214,7 +4214,7 @@ class ModelAlias(object):
         if self.__dict__['alias_name'] and other.__dict__['alias_name']:
           return (self.__dict__['model_class'], self.__dict__['alias_name']) == (other.__dict__['model_class'], other.__dict__['alias_name'])
         else:
-          return object.__eq__(self, other)
+          return id(self) == id(other)
 
 if _SortedFieldList is None:
     class _SortedFieldList(object):
