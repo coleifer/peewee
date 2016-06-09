@@ -1,8 +1,10 @@
+from peewee import SqliteDatabase
 from playhouse.tests.base import compiler
 from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
 from playhouse.tests.base import PeeweeTestCase
 from playhouse.tests.base import skip_if
+from playhouse.tests.base import skip_test_if
 from playhouse.tests.base import test_db
 from playhouse.tests.models import *
 
@@ -406,10 +408,23 @@ class TestSQLiteDeferredForeignKey(PeeweeTestCase):
             lambda: db.create_foreign_key(User, User.favorite_tweet))
 
 
-
-@skip_if(lambda: not test_db.foreign_keys)
 class TestForeignKeyConstraints(ModelTestCase):
     requires = [User, Blog]
+
+    def setUp(self):
+        self.set_foreign_key_pragma(True)
+        super(TestForeignKeyConstraints, self).setUp()
+
+    def tearDown(self):
+        self.set_foreign_key_pragma(False)
+        super(TestForeignKeyConstraints, self).tearDown()
+
+    def set_foreign_key_pragma(self, is_enabled):
+        if not isinstance(test_db, SqliteDatabase):
+            return
+
+        state = 'on' if is_enabled else 'off'
+        test_db.execute_sql('PRAGMA foreign_keys = %s' % state)
 
     def test_constraint_exists(self):
         # IntegrityError is raised when we specify a non-existent user_id.
@@ -421,6 +436,7 @@ class TestForeignKeyConstraints(ModelTestCase):
 
         self.assertRaises(IntegrityError, will_fail)
 
+    @skip_test_if(lambda: isinstance(test_db, SqliteDatabase))
     def test_constraint_creation(self):
         class FKC_a(TestModel):
             name = CharField()

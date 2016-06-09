@@ -983,8 +983,9 @@ class TestFTS5Extension(ModelTestCase):
 
     def test_vocab_model(self):
         Vocab = FTS5Test.VocabModel()
+        if Vocab.table_exists():
+            Vocab.drop_table()
         Vocab.create_table()
-
         query = Vocab.select().where(Vocab.term == 'aa')
         self.assertEqual(
             query.dicts()[:],
