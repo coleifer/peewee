@@ -806,6 +806,17 @@ class TestRowIDField(ModelTestCase):
         self.assertEqual(r_db2.rowid, 2)
         self.assertEqual(r_db2.data, 20)
 
+    def test_insert_with_rowid(self):
+        RowIDModel.insert({RowIDModel.rowid: 5, 'data': 1}).execute()
+        self.assertEqual(5, RowIDModel.select(RowIDModel.rowid).first().rowid)
+
+    def test_insert_many_with_rowid_without_field_validation(self):
+        RowIDModel.insert_many([{RowIDModel.rowid: 5, 'data': 1}], validate_fields=False).execute()
+        self.assertEqual(5, RowIDModel.select(RowIDModel.rowid).first().rowid)
+
+    def test_insert_many_with_rowid_with_field_validation(self):
+        RowIDModel.insert_many([{RowIDModel.rowid: 5, 'data': 1}], validate_fields=True).execute()
+        self.assertEqual(5, RowIDModel.select(RowIDModel.rowid).first().rowid)
 
 class TestTransitiveClosure(PeeweeTestCase):
     def test_model_factory(self):
