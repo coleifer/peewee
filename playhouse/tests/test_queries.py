@@ -536,6 +536,24 @@ class TestSelectQuery(PeeweeTestCase):
             'FROM "users" AS users ORDER BY ("users"."id" * ?)',
             [5]))
 
+    def test_ordering_extend(self):
+        sq = User.select().order_by(User.username, extend=True)
+        self.assertEqual([f.name for f in sq._order_by], ['username'])
+
+        sq = sq.order_by(User.id.desc(), extend=True)
+        self.assertEqual([f.name for f in sq._order_by], ['username', 'id'])
+
+        sq = sq.order_by(extend=True)
+        self.assertEqual([f.name for f in sq._order_by], ['username', 'id'])
+
+        sq = sq.order_by()
+        self.assertTrue(sq._order_by is None)
+
+        sq = sq.order_by(extend=True)
+        self.assertTrue(sq._order_by is None)
+
+        self.assertRaises(ValueError, lambda: sq.order_by(foo=True))
+
     def test_ordering_sugar(self):
         sq = User.select().order_by(-User.username)
         self.assertOrderBy(sq, '"users"."username" DESC', [])

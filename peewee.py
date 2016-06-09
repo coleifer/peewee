@@ -2808,6 +2808,15 @@ class RawQuery(Query):
     def __iter__(self):
         return iter(self.execute())
 
+def allow_extend(orig, new_val, **kwargs):
+    extend = kwargs.pop('extend', False)
+    if kwargs:
+        raise ValueError('"extend" is the only valid keyword argument.')
+    if extend:
+        return ((orig or []) + new_val) or None
+    elif new_val:
+        return new_val
+
 class SelectQuery(Query):
     _node_type = 'select_query'
 
@@ -2891,25 +2900,23 @@ class SelectQuery(Query):
 
     @returns_clone
     def from_(self, *args):
-        self._from = None
-        if args:
-            self._from = list(args)
+        self._from = list(args) if args else None
 
     @returns_clone
-    def group_by(self, *args):
-        self._group_by = self._model_shorthand(args)
+    def group_by(self, *args, **kwargs):
+        self._group_by = self._model_shorthand(args) if args else None
 
     @returns_clone
     def having(self, *expressions):
         self._having = self._add_query_clauses(self._having, expressions)
 
     @returns_clone
-    def order_by(self, *args):
-        self._order_by = list(args)
+    def order_by(self, *args, **kwargs):
+        self._order_by = allow_extend(self._order_by, list(args), **kwargs)
 
     @returns_clone
-    def window(self, *windows):
-        self._windows = list(windows)
+    def window(self, *windows, **kwargs):
+        self._windows = allow_extend(self._windows, list(windows), **kwargs)
 
     @returns_clone
     def limit(self, lim):
