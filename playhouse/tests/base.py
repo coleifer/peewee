@@ -143,9 +143,10 @@ class DatabaseInitializer(object):
     def get_sqlite_database(self, db_class, **kwargs):
         return db_class(self.get_filename('.db'), **kwargs)
 
-    def get_in_memory_database(self, **kwargs):
+    def get_in_memory_database(self, db_class=None, **kwargs):
         kwargs.setdefault('use_speedups', False)
-        return SqliteDatabase(':memory:', **kwargs)
+        db_class = db_class or SqliteDatabase
+        return db_class(':memory:', **kwargs)
 
 
 class TestAliasMap(AliasMap):

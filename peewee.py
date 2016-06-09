@@ -3261,8 +3261,7 @@ class InsertQuery(_WriteQuery):
     def _iter_rows(self):
         model_meta = self.model_class._meta
         if self._validate_fields:
-            valid_fields = (set(model_meta.fields.keys()) |
-                            set(model_meta.fields.values()))
+            valid_fields = model_meta.valid_fields
             def validate_field(field):
                 if field not in valid_fields:
                     raise KeyError('"%s" is not a recognized field.' % field)
@@ -4382,6 +4381,7 @@ class ModelOptions(object):
         self._sorted_field_list = _SortedFieldList()
         self.sorted_fields = []
         self.sorted_field_names = []
+        self.valid_fields = set()
 
         self.database = database or default_database
         self.db_table = db_table
@@ -4421,14 +4421,20 @@ class ModelOptions(object):
                     norm_order_by.append(field.asc())
             self.order_by = norm_order_by
 
+    def _update_field_lists(self):
+        self.sorted_fields = list(self._sorted_field_list)
+        self.sorted_field_names = [f.name for f in self.sorted_fields]
+        self.valid_fields = (set(self.fields.keys()) |
+                             set(self.fields.values()) |
+                             set((self.primary_key,)))
+
     def add_field(self, field):
         self.remove_field(field.name)
         self.fields[field.name] = field
         self.columns[field.db_column] = field
 
         self._sorted_field_list.insert(field)
-        self.sorted_fields = list(self._sorted_field_list)
-        self.sorted_field_names = [f.name for f in self.sorted_fields]
+        self._update_field_lists()
 
         if field.default is not None:
             self.defaults[field] = field.default
@@ -4445,8 +4451,7 @@ class ModelOptions(object):
         original = self.fields.pop(field_name)
         del self.columns[original.db_column]
         self._sorted_field_list.remove(original)
-        self.sorted_fields = list(self._sorted_field_list)
-        self.sorted_field_names = [f.name for f in self.sorted_fields]
+        self._update_field_lists()
 
         if original.default is not None:
             del self.defaults[original]
