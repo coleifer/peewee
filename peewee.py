@@ -1339,7 +1339,7 @@ class ForeignKeyField(IntegerField):
     def clone_base(self, **kwargs):
         return super(ForeignKeyField, self).clone_base(
             rel_model=self.rel_model,
-            related_name=self.related_name,
+            related_name=self._get_related_name(),
             on_delete=self.on_delete,
             on_update=self.on_update,
             extra=self.extra,

@@ -419,6 +419,27 @@ class TestFieldTypes(ModelTestCase):
             {'nugs': 'foo-nuggets'},
             {'nugs': 'bar-nuggets'}])
 
+    def test_field_aliasing(self):
+        username = User.username
+        user_fk = Blog.user
+        blog_pk = Blog.pk
+
+        for i in range(2):
+            username = username.clone()
+            user_fk = user_fk.clone()
+            blog_pk = blog_pk.clone()
+
+            self.assertEqual(username.name, 'username')
+            self.assertEqual(username.model_class, User)
+
+            self.assertEqual(user_fk.name, 'user')
+            self.assertEqual(user_fk.model_class, Blog)
+            self.assertEqual(user_fk.rel_model, User)
+
+            self.assertEqual(blog_pk.name, 'pk')
+            self.assertEqual(blog_pk.model_class, Blog)
+            self.assertTrue(blog_pk.primary_key)
+
 
 class TestBinaryTypeFromDatabase(PeeweeTestCase):
     @skip_test_if(lambda: sys.version_info[0] == 3)
