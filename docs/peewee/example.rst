@@ -180,19 +180,15 @@ We will tell flask that during the request/response cycle we need to create a co
 
     @app.before_request
     def before_request():
-        g.db = database
-        g.db.connect()
-
+        database.connect()
+       
     @app.after_request
     def after_request(response):
-        g.db.close()
+        database.close()
         return response
 
 .. note::
-    We're storing the db on the magical variable ``g`` - that's a
-    flask-ism and can be ignored as an implementation detail. The important
-    takeaway is that we connect to our db every request and close that connection
-    when we return a response.
+    Peewee uses thread local storage to manage connection state, so this pattern can be used with multi-threaded WSGI servers.
 
 
 Making queries
