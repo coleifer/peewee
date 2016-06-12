@@ -1212,15 +1212,10 @@ class TimestampField(IntegerField):
                              ', '.join(str(i) for i in self.valid_resolutions))
 
         self.utc = kwargs.pop('utc', False) or False
-        if self.utc:
-            _conv = datetime.datetime.utcfromtimestamp
-            self.adapt = lambda v: _conv(float(v) / self.resolution)
-            default = datetime.datetime.utcnow
-        else:
-            self.adapt = datetime.datetime.fromtimestamp
-            default = datetime.datetime.now
-
-        kwargs.setdefault('default', default)
+        _dt = datetime.datetime
+        self._conv = _dt.utcfromtimestamp if self.utc else _dt.fromtimestamp
+        _default = _dt.utcnow if self.utc else _dt.now
+        kwargs.setdefault('default', _default)
         super(TimestampField, self).__init__(*args, **kwargs)
 
     def get_db_field(self):
@@ -1239,7 +1234,7 @@ class TimestampField(IntegerField):
         elif isinstance(value, datetime.date):
             value = datetime.datetime(value.year, value.month, value.day)
         else:
-            return value
+            return int(round(value * self.resolution))
 
         if self.utc:
             timestamp = calendar.timegm(value.utctimetuple())
@@ -1252,7 +1247,11 @@ class TimestampField(IntegerField):
 
     def python_value(self, value):
         if value is not None and isinstance(value, (int, float, long)):
-            return self.adapt(value)
+            if self.resolution > 1:
+                value, microseconds = divmod(value, self.resolution)
+                return self._conv(value).replace(microsecond=microseconds)
+            else:
+                return self._conv(value)
         return value
 
 class BooleanField(Field):

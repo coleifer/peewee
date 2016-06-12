@@ -1,3 +1,4 @@
+import calendar
 import datetime
 import decimal
 import sys
@@ -169,30 +170,6 @@ class TestFieldTypes(ModelTestCase):
         self.assertNM(NullModel.boolean_field == True, ['t'])
         self.assertNM(NullModel.boolean_field == False, ['f'])
         self.assertNM(NullModel.boolean_field >> None, ['n'])
-
-    def test_timestamp_field(self):
-        dt = datetime.datetime(2016, 1, 2, 11, 12, 13, 54321)
-        d = datetime.date(2016, 1, 3)
-
-        nm1 = NullModel.create(ts_field=dt, ts_field2=dt)
-        nm2 = NullModel.create(ts_field=d, ts_field2=d)
-
-        nm1_db = NullModel.get(NullModel.ts_field == dt)
-        self.assertNotEqual(nm1_db.ts_field, dt)  # Microseconds!
-        dt = dt.replace(microsecond=0)
-        self.assertEqual(nm1_db.id, nm1.id)
-
-        nm2_db = NullModel.get(NullModel.ts_field == d)
-        d_dt = datetime.datetime(year=d.year, month=d.month, day=d.day)
-        self.assertEqual(nm2_db.ts_field, d_dt)
-        self.assertEqual(nm2_db.id, nm2.id)
-
-        dt += datetime.timedelta(days=1, seconds=3600)
-        ts = time.mktime(dt.timetuple())
-        nm3 = NullModel.create(ts_field=ts)
-        nm3_db = NullModel.get(NullModel.id == nm3.id)
-        self.assertEqual(nm3_db.ts_field,
-                         datetime.datetime(2016, 1, 3, 12, 12, 13))
 
     def _time_to_delta(self, t):
         micro = t.microsecond / 1000000.
@@ -439,6 +416,45 @@ class TestFieldTypes(ModelTestCase):
             self.assertEqual(blog_pk.name, 'pk')
             self.assertEqual(blog_pk.model_class, Blog)
             self.assertTrue(blog_pk.primary_key)
+
+
+class TestTimestampField(ModelTestCase):
+    requires = [TimestampModel]
+
+    def test_timestamp_field(self):
+        dt = datetime.datetime(2016, 1, 2, 11, 12, 13, 654321)
+        d_dt = datetime.datetime(2016, 1, 3)
+        d = d_dt.date()
+
+        t1 = TimestampModel.create(local_us=dt, utc_ms=dt, local=dt)
+        t2 = TimestampModel.create(local_us=d, utc_ms=d, local=d)
+
+        t1_db = TimestampModel.get(TimestampModel.local_us == dt)
+        self.assertEqual(t1_db.id, t1.id)
+        self.assertEqual(t1_db.local_us, dt)
+        self.assertEqual(t1_db.utc_ms, dt.replace(microsecond=654))
+        self.assertEqual(t1_db.local,
+                         dt.replace(microsecond=0).replace(second=14))
+
+        t2_db = TimestampModel.get(TimestampModel.utc_ms == d)
+        self.assertEqual(t2_db.id, t2.id)
+        self.assertEqual(t2_db.local_us, d_dt)
+        self.assertEqual(t2_db.utc_ms, d_dt)
+        self.assertEqual(t2_db.local, d_dt)
+
+        dt += datetime.timedelta(days=1, seconds=3600)
+        dt_us = dt.microsecond / 1000000.
+        ts = time.mktime(dt.timetuple()) + dt_us
+        utc_ts = calendar.timegm(dt.utctimetuple()) + dt_us
+        t3 = TimestampModel.create(local_us=ts, utc_ms=utc_ts, local=ts)
+
+        t3_db = TimestampModel.get(TimestampModel.local == ts)
+        self.assertEqual(t3_db.id, t3.id)
+
+        expected = datetime.datetime(2016, 1, 3, 12, 12, 13)
+        self.assertEqual(t3_db.local_us, expected.replace(microsecond=654321))
+        self.assertEqual(t3_db.utc_ms, expected.replace(microsecond=654))
+        self.assertEqual(t3_db.local, expected.replace(second=14))
 
 
 class TestBinaryTypeFromDatabase(PeeweeTestCase):
