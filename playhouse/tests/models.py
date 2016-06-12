@@ -63,6 +63,9 @@ class NullModel(TestModel):
     time_field = TimeField(null=True)
     boolean_field = BooleanField(null=True)
     fixed_char_field = FixedCharField(null=True)
+    ts_field = TimestampField(null=True, default=None, resolution=1000000)
+    ts_field2 = TimestampField(null=True, default=None, resolution=1000,
+                               utc=True)
 
 
 class TimestampModel(TestModel):
