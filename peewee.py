@@ -1464,6 +1464,9 @@ class CompositeKey(object):
                        for field, value in zip(self.field_names, other)]
         return reduce(operator.and_, expressions)
 
+    def __hash__(self):
+        return hash((self.model_class.__name__, self.field_names))
+
 
 class AliasMap(object):
     prefix = 't'
