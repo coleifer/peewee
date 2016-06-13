@@ -1400,6 +1400,15 @@ class ForeignKeyField(IntegerField):
                 raise AttributeError(error % (
                     self.model_class._meta.name, self.name, self.related_name))
 
+        if hasattr(model_class, name + '_id'):
+            name_id_attr = getattr(model_class, name + '_id')
+            if not (isinstance(name_id_attr, ForeignKeyField) and
+                    (name_id_attr.db_column == self.db_column)):
+                error = ('Foreign key: %s.%s id descriptor "%s" collision with'
+                         ' model attribute of the same name.')
+                raise AttributeError(error % (
+                    self.model_class._meta.name, self.name, name + '_id'))
+
         setattr(model_class, name, self._get_descriptor())
         setattr(model_class, name + '_id', self._get_id_descriptor())
         setattr(self.rel_model,
