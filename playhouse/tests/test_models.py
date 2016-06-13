@@ -391,6 +391,19 @@ class TestModelAPIs(ModelTestCase):
 
         self.assertRaises(AttributeError, make_klass)
 
+    def test_id_descriptor_collision(self):
+        class Bar(TestModel):
+            name = CharField()
+
+        class Foo(TestModel):
+            foobarbaz = ForeignKeyField(Bar)
+
+        def make_class():
+            class ExtFoo(Foo):
+                foobarbaz_id = CharField()
+
+        self.assertRaises(AttributeError, make_class)
+
     def test_callable_related_name(self):
         class Foo(TestModel):
             pass
