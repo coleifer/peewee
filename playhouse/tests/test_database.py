@@ -164,6 +164,40 @@ class TestLongIndexName(PeeweeTestCase):
         ))
 
 
+class TestDroppingIndex(ModelTestCase):
+    def test_drop_index(self):
+        db = database_initializer.get_in_memory_database()
+
+        class IndexedModel(Model):
+            idx = CharField(index=True)
+            uniq = CharField(unique=True)
+            f1 = IntegerField()
+            f2 = IntegerField()
+
+            class Meta:
+                database = db
+                indexes = (
+                    (('f1', 'f2'), True),
+                    (('idx', 'uniq'), False),
+                )
+
+        IndexedModel.create_table()
+        indexes = db.get_indexes(IndexedModel._meta.db_table)
+
+        self.assertEqual(sorted(idx.name for idx in indexes), [
+            'indexedmodel_f1_f2',
+            'indexedmodel_idx',
+            'indexedmodel_idx_uniq',
+            'indexedmodel_uniq'])
+
+        with self.log_queries() as query_log:
+            IndexedModel._drop_indexes()
+
+        self.assertEqual(sorted(query_log.queries), sorted([
+            ('DROP INDEX "%s"' % idx.name, []) for idx in indexes]))
+        self.assertEqual(db.get_indexes(IndexedModel._meta.db_table), [])
+
+
 class TestConnectionState(PeeweeTestCase):
     def test_connection_state(self):
         conn = test_db.get_conn()

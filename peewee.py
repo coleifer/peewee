@@ -20,6 +20,7 @@ import calendar
 import datetime
 import decimal
 import hashlib
+import itertools
 import logging
 import operator
 import re
@@ -111,7 +112,7 @@ logger.addHandler(NullHandler())
 # Python 2/3 compatibility helpers. These helpers are used internally and are
 # not exported.
 def with_metaclass(meta, base=object):
-    return meta("NewBase", (base,), {})
+    return meta('_metaclass_helper_', (base,), {})
 
 PY2 = sys.version_info[0] == 2
 PY3 = sys.version_info[0] == 3
@@ -2114,6 +2115,13 @@ class QueryCompiler(object):
             *extra)
     create_index = return_parsed_node('_create_index')
 
+    def _drop_index(self, model_class, fields, fail_silently=False):
+        tbl_name = model_class._meta.db_table
+        statement = 'DROP INDEX IF EXISTS' if fail_silently else 'DROP INDEX'
+        index_name = self.index_name(tbl_name, [f.db_column for f in fields])
+        return Clause(SQL(statement), Entity(index_name))
+    drop_index = return_parsed_node('_drop_index')
+
     def _create_sequence(self, sequence_name):
         return Clause(SQL('CREATE SEQUENCE'), Entity(sequence_name))
     create_sequence = return_parsed_node('_create_sequence')
@@ -3698,6 +3706,16 @@ class Database(object):
             for f in fields]
         return self.execute_sql(*qc.create_index(model_class, fobjs, unique))
 
+    def drop_index(self, model_class, fields, safe=False):
+        qc = self.compiler()
+        if not isinstance(fields, (list, tuple)):
+            raise ValueError('Fields passed to "drop_index" must be a list '
+                             'or tuple: "%s"' % fields)
+        fobjs = [
+            model_class._meta.fields[f] if isinstance(f, basestring) else f
+            for f in fields]
+        return self.execute_sql(*qc.drop_index(model_class, fobjs, safe))
+
     def create_foreign_key(self, model_class, field, constraint=None):
         qc = self.compiler()
         return self.execute_sql(*qc.create_foreign_key(
@@ -4409,6 +4427,9 @@ class ModelOptions(object):
         if self.db_table_func and not self.db_table:
             self.db_table = self.db_table_func(cls)
 
+    def __repr__(self):
+        return '<%s: %s>' % (self.__class__.__name__, self.name)
+
     def prepared(self):
         if self.order_by:
             norm_order_by = []
@@ -4769,14 +4790,20 @@ class Model(with_metaclass(BaseModel)):
         return fields
 
     @classmethod
-    def _create_indexes(cls):
-        db = cls._meta.database
-        for field in cls._fields_to_index():
-            db.create_index(cls, [field], field.unique)
+    def _index_data(cls):
+        return itertools.chain(
+            [((field,), field.unique) for field in cls._fields_to_index()],
+            cls._meta.indexes or ())
 
-        if cls._meta.indexes:
-            for fields, unique in cls._meta.indexes:
-                db.create_index(cls, fields, unique)
+    @classmethod
+    def _create_indexes(cls):
+        for field_list, is_unique in cls._index_data():
+            cls._meta.database.create_index(cls, field_list, is_unique)
+
+    @classmethod
+    def _drop_indexes(cls, safe=False):
+        for field_list, is_unique in cls._index_data():
+            cls._meta.database.drop_index(cls, field_list, safe)
 
     @classmethod
     def sqlall(cls):
