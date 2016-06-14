@@ -1709,7 +1709,7 @@ class QueryCompiler(object):
             unknown = (node_type in self._unknown_types and
                        node.adapt is None and
                        conv is None)
-        elif isinstance(node, (list, tuple)):
+        elif isinstance(node, (list, tuple, set)):
             # If you're wondering how to pass a list into your query, simply
             # wrap it in Param().
             sql, params = self.parse_node_list(node, alias_map, conv)

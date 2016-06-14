@@ -373,11 +373,30 @@ class TestSelectQuery(PeeweeTestCase):
         sq = SelectQuery(User).where(User.username << ['u1', 'u2'])
         self.assertWhere(sq, '("users"."username" IN (?, ?))', ['u1', 'u2'])
 
+        sq = SelectQuery(User).where(User.username.in_(('u1', 'u2')))
+        self.assertWhere(sq, '("users"."username" IN (?, ?))', ['u1', 'u2'])
+
         sq = SelectQuery(User).where(User.username.not_in(['u1', 'u2']))
         self.assertWhere(sq, '("users"."username" NOT IN (?, ?))', ['u1', 'u2'])
 
         sq = SelectQuery(User).where((User.username << ['u1', 'u2']) | (User.username << ['u3', 'u4']))
         self.assertWhere(sq, '(("users"."username" IN (?, ?)) OR ("users"."username" IN (?, ?)))', ['u1', 'u2', 'u3', 'u4'])
+
+    def test_where_sets(self):
+        def where_sql(expr, query=None):
+            if query is None:
+                query = User.select()
+            query = query.where(expr)
+            return self.parse_query(query, query._where)
+
+        sql, params = where_sql(User.username << set(['u1', 'u2']))
+        self.assertEqual(sql, '("users"."username" IN (?, ?))')
+        self.assertTrue(isinstance(params, list))
+        self.assertEqual(sorted(params), ['u1', 'u2'])
+
+        sql, params = where_sql(User.username.in_(set(['u1', 'u2'])))
+        self.assertEqual(sql, '("users"."username" IN (?, ?))')
+        self.assertEqual(sorted(params), ['u1', 'u2'])
 
     def test_where_joins(self):
         sq = SelectQuery(User).where(
