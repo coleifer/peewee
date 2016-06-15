@@ -1063,6 +1063,12 @@ Query Types
                 .group_by(User)
                 .order_by(tweet_ct.desc(), User.username))
 
+        Call it without argument to remove any previously added order by clause;
+
+        .. code-block:: python
+
+            User.select().order_by().first()
+
     .. py:method:: window(*windows)
 
         :param Window windows: One or more :py:class:`Window` instances.
