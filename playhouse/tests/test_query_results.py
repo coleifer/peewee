@@ -334,6 +334,11 @@ class TestQueryResultWrapper(ModelTestCase):
 
         with self.assertQueryCount(0):
             for i in range(2):
+                res = uq[-1]
+                self.assertEqual(res.username, 'u10')
+
+        with self.assertQueryCount(0):
+            for i in range(2):
                 res = uq[:3]
                 assertUsernames(res, [1, 2, 3])
 
@@ -347,12 +352,42 @@ class TestQueryResultWrapper(ModelTestCase):
                 res = uq[5:]
                 assertUsernames(res, [6, 7, 8, 9, 10])
 
+        with self.assertQueryCount(0):
+            for i in range(2):
+                res = uq[-3:]
+                assertUsernames(res, [8, 9, 10])
+
+        with self.assertQueryCount(0):
+            for i in range(2):
+                res = uq[-5:-3]
+                assertUsernames(res, [6, 7])
+
+        with self.assertQueryCount(0):
+            for i in range(2):
+                res = uq[:-3]
+                assertUsernames(res, list(range(1, 8)))
+
+        with self.assertQueryCount(0):
+            for i in range(2):
+                res = uq[4:-4]
+                assertUsernames(res, [5, 6])
+
+        with self.assertQueryCount(0):
+            for i in range(2):
+                res = uq[-6:6]
+                assertUsernames(res, [5, 6])
+
         self.assertRaises(IndexError, uq.__getitem__, 10)
-        self.assertRaises(ValueError, uq.__getitem__, -1)
 
         with self.assertQueryCount(0):
             res = uq[10:]
             self.assertEqual(res, [])
+
+        uq = uq.clone()
+        with self.assertQueryCount(1):
+            for _ in range(2):
+                res = uq[-1]
+                self.assertEqual(res.username, 'u10')
 
     def test_indexing_fill_cache(self):
         def assertUser(query_or_qr, idx):
@@ -1114,7 +1149,7 @@ class TestPrefetch(BaseTestPrefetch):
         with self.assertQueryCount(3):
             result = prefetch(users, blogs, comments)
             self.assertEqual(len(result), 4)
-            
+
 
     def test_prefetch_self_join(self):
         self._build_category_tree()
