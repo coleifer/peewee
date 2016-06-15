@@ -1017,9 +1017,13 @@ Query Types
                 .group_by(User)
                 .having(fn.Count(Tweet.id) > 100))
 
-    .. py:method:: order_by(*clauses)
+    .. py:method:: order_by(*clauses[, extend=False])
 
-        :param clauses: a list of fields, calls to ``field.[asc|desc]()`` or one or more expressions
+        :param clauses: a list of fields, calls to ``field.[asc|desc]()`` or
+          one or more expressions. If called without any arguments, any
+          pre-existing ``ORDER BY`` clause will be removed.
+        :param extend: When called with ``extend=True``, Peewee will append any
+          to the pre-existing ``ORDER BY`` rather than overwriting it.
         :rtype: :py:class:`SelectQuery`
 
         Example of ordering users by username:
@@ -1062,6 +1066,17 @@ Query Types
                 .join(Tweet)
                 .group_by(User)
                 .order_by(tweet_ct.desc(), User.username))
+
+        Example of removing a pre-existing ``ORDER BY`` clause:
+
+        .. code-block:: python
+
+            # Query will be ordered by username.
+            users = User.select().order_by(User.username)
+
+            # Query will be returned in whatever order database chooses.
+            unordered_users = users.order_by()
+
 
     .. py:method:: window(*windows)
 
