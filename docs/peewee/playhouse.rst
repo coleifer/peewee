@@ -1984,7 +1984,7 @@ postgres_ext API notes
 DataSet
 -------
 
-The *dataset* module contains a high-level API for working with databases modeled after the popular `project of the same name <https://dataset.readthedocs.org/en/latest/index.html>`_. The aims of the *dataset* module are to provide:
+The *dataset* module contains a high-level API for working with databases modeled after the popular `project of the same name <https://dataset.readthedocs.io/en/latest/index.html>`_. The aims of the *dataset* module are to provide:
 
 * A simplified API for working with relational data, along the lines of working with JSON.
 * An easy way to export relational data as JSON or CSV.
