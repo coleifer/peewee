@@ -27,7 +27,7 @@ started:
 * `Guide to the various query operators <http://docs.peewee-orm.com/en/latest/peewee/querying.html#query-operators>`_ describes how to construct queries and combine expressions.
 * `Field types table <http://docs.peewee-orm.com/en/latest/peewee/models.html#field-types-table>`_ lists the various field types peewee supports and the parameters they accept.
 
-For flask helpers, check out the `flask_utils extension module <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#flask-utils>`_. You can also use peewee with the popular extension `flask-admin <http://flask-admin.readthedocs.org/en/latest/>`_ to provide a Django-like admin interface for managing peewee models.
+For flask helpers, check out the `flask_utils extension module <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#flask-utils>`_. You can also use peewee with the popular extension `flask-admin <https://flask-admin.readthedocs.io/en/latest/>`_ to provide a Django-like admin interface for managing peewee models.
 
 Examples
 --------

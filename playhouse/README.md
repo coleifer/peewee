@@ -35,7 +35,7 @@ The `playhouse` namespace contains numerous extensions to Peewee. These include 
     * Retry query with backoff
 * [Hybrid attributes](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#hybrid)
 * [Signals](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#signals): pre/post-save, pre/post-delete, pre/post-init.
-* [Dataset](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#dataset): high-level API for working with databases popuarlized by the [project of the same name](http://dataset.readthedocs.org/).
+* [Dataset](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#dataset): high-level API for working with databases popuarlized by the [project of the same name](https://dataset.readthedocs.io/).
 * [Key/Value Store](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#kv): key/value store using SQLite. Supports *smart indexing*, for *Pandas*-style queries.
 * [Generic foreign key](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#gfk): made popular by Django.
 * [CSV utilities](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#csv-utils): load CSV directly into database, generate models from CSV, and more.

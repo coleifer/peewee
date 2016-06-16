@@ -702,7 +702,7 @@ Thanks to GitHub user *@tuukkamustonen* for submitting this code.
 Falcon
 ^^^^^^
 
-The connection handling code can be placed in a `middleware component <https://falcon.readthedocs.org/en/stable/api/middleware.html>`_.
+The connection handling code can be placed in a `middleware component <https://falcon.readthedocs.io/en/stable/api/middleware.html>`_.
 
 .. code-block:: python
 
