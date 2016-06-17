@@ -2907,7 +2907,14 @@ class SelectQuery(Query):
         clone._select = [SQL('1')]
         return bool(clone.scalar())
 
-    def get(self):
+    def get(self, *query, **kwargs):
+        if query or kwargs:
+            sq = self
+            if query:
+                sq = sq.where(*query)
+            if kwargs:
+                sq = sq.filter(**kwargs)
+            return sq.get()
         clone = self.paginate(1, 1)
         try:
             return next(clone.execute())

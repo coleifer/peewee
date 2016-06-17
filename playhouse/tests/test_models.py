@@ -304,6 +304,14 @@ class TestQueryingModels(ModelTestCase):
         blogs = list(Blog)
         self.assertEqual(len(blogs), 6)
 
+    def test_select_get(self):
+        User.create_users(1)
+        u1 = User.get(User.id==1)
+        u2 = User.select().where(User.id==1).get()
+        u3 = User.select().get(User.id==1)
+        self.assertEqual(u1, u2)
+        self.assertEqual(u1, u3)
+
 
 class TestInsertEmptyModel(ModelTestCase):
     requires = [EmptyModel, NoPKModel]
