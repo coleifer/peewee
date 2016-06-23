@@ -1410,7 +1410,10 @@ Query Types
 
         Return the number of items in the result set of this query. If all you need is the count of items and do not intend to do anything with the results, call :py:meth:`~SelectQuery.count`.
 
-        .. warning:: The ``SELECT`` query will be executed and the result set will be loaded.
+        .. warning::
+            The ``SELECT`` query will be executed and the result set will be loaded.
+            If you want to obtain the number of results without also loading
+            the query, use :py:meth:`~SelectQuery.count`.
 
     .. py:method:: __getitem__(value)
 
