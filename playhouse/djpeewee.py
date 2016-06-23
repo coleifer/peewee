@@ -109,7 +109,8 @@ class DjangoTranslator(object):
                         db_column=model_field.column)
 
             elif converted:
-                attrs[model_field.name] = converted()
+                attrs[model_field.name] = converted(
+                    db_column=model_field.db_column)
 
         klass = type(options.object_name, (Model,), attrs)
         klass._meta.db_table = options.db_table
