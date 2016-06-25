@@ -3753,7 +3753,7 @@ class Database(object):
         return fn.EXTRACT(Clause(date_part, R('FROM'), date_field))
 
     def truncate_date(self, date_part, date_field):
-        return fn.DATE_TRUNC(SQL(date_part), date_field)
+        return fn.DATE_TRUNC(date_part, date_field)
 
     def default_insert_clause(self, model_class):
         return SQL('DEFAULT VALUES')
