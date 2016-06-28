@@ -4846,6 +4846,11 @@ class Model(with_metaclass(BaseModel)):
     def _set_pk_value(self, value):
         if not self._meta.composite_key:
             setattr(self, self._meta.primary_key.name, value)
+        else:
+            i = 0
+            for field in self._meta.primary_key.field_names:
+                setattr(self, field, value[i])
+                i += 1
     set_id = _set_pk_value  # Backwards-compatibility.
 
     def _pk_expr(self):
