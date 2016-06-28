@@ -4844,6 +4844,9 @@ class Model(with_metaclass(BaseModel)):
     get_id = _get_pk_value  # Backwards-compatibility.
 
     def _set_pk_value(self, value):
+        if value is None:
+            return
+        
         if not self._meta.composite_key:
             setattr(self, self._meta.primary_key.name, value)
         else:
