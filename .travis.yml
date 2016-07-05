@@ -38,7 +38,7 @@ before_install:
         fi
 install:
   - "pip install tox"
-  - if [ "$TOXENV" = "pypy*" ]; then pip install Cython; fi
+  - if [ "$TOXENV" != "pypy*" ]; then pip install Cython; fi
 before_script:
   - sh -c "psql -c 'drop database if exists peewee_test;' -U postgres"
   - sh -c "psql -c 'create database peewee_test;' -U postgres"
