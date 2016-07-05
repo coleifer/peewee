@@ -45,4 +45,4 @@ before_script:
   - sh -c "psql peewee_test -c 'create extension hstore;' -U postgres"
   - sh -c "mysql -e 'drop database if exists peewee_test;'"
   - sh -c "mysql -e 'create database peewee_test;'"
-script: "tox"
+script: "tox --sitepackages"
