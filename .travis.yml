@@ -36,7 +36,9 @@ before_install:
           virtualenv --python="$PYENV_ROOT/versions/pypy-$PYPY_VERSION/bin/python" "$HOME/virtualenvs/pypy-$PYPY_VERSION"
           source "$HOME/virtualenvs/pypy-$PYPY_VERSION/bin/activate"
         fi
-install: "pip install tox"
+install:
+  - "pip install tox"
+  - if [ "$TOXENV" = "pypy*" ]; then pip install Cython; fi
 before_script:
   - sh -c "psql -c 'drop database if exists peewee_test;' -U postgres"
   - sh -c "psql -c 'create database peewee_test;' -U postgres"
