@@ -5,7 +5,14 @@ import os
 import sys
 import uuid
 
+try:
+    from psycopg2cffi import compat
+    compat.register()
+except ImportError:
+    pass
+
 import psycopg2
+
 try:
     from psycopg2.extras import Json
 except ImportError:

@@ -1,14 +1,22 @@
 language: python
 python:
-  - "2.6"
   - "2.7"
-  - "3.4"
-  - "3.5"
-  - "pypy"
 env:
-  - PEEWEE_TEST_BACKEND=sqlite
-  - PEEWEE_TEST_BACKEND=postgresql
-  - PEEWEE_TEST_BACKEND=mysql
+  - TOXENV=py26-sqlite
+  - TOXENV=py26-postgres
+  - TOXENV=py26-mysql
+  - TOXENV=py27-sqlite
+  - TOXENV=py27-postgres
+  - TOXENV=py27-mysql
+  - TOXENV=py34-sqlite
+  - TOXENV=py34-postgres
+  - TOXENV=py34-mysql
+  - TOXENV=py35-sqlite
+  - TOXENV=py35-postgres
+  - TOXENV=py35-mysql
+  - TOXENV=pypy-sqlite
+  - TOXENV=pypy-postgres
+  - TOXENV=pypy-mysql
 addons:
   postgresql: "9.4"
 services:
@@ -16,7 +24,7 @@ services:
   - mysql
 before_install:
     - |
-        if [ "$TRAVIS_PYTHON_VERSION" = "pypy" ]; then
+        if [ "$TOXENV" = "pypy*" ]; then
           export PYENV_ROOT="$HOME/.pyenv"
           if [ -f "$PYENV_ROOT/bin/pyenv" ]; then
             pushd "$PYENV_ROOT" && git pull && popd
@@ -28,12 +36,11 @@ before_install:
           virtualenv --python="$PYENV_ROOT/versions/pypy-$PYPY_VERSION/bin/python" "$HOME/virtualenvs/pypy-$PYPY_VERSION"
           source "$HOME/virtualenvs/pypy-$PYPY_VERSION/bin/activate"
         fi
-install: "pip install psycopg2 Cython pymysql"
+install: "pip install tox"
 before_script:
-  - sh -c "python setup.py build_ext -i"
   - sh -c "psql -c 'drop database if exists peewee_test;' -U postgres"
   - sh -c "psql -c 'create database peewee_test;' -U postgres"
   - sh -c "psql peewee_test -c 'create extension hstore;' -U postgres"
   - sh -c "mysql -e 'drop database if exists peewee_test;'"
   - sh -c "mysql -e 'create database peewee_test;'"
-script: "python runtests.py -a"
+script: "tox"
