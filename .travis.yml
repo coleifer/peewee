@@ -2,21 +2,21 @@ language: python
 python:
   - "2.7"
 env:
-  - TOXENV=py26-sqlite
-  - TOXENV=py26-postgres
-  - TOXENV=py26-mysql
-  - TOXENV=py27-sqlite
-  - TOXENV=py27-postgres
-  - TOXENV=py27-mysql
-  - TOXENV=py34-sqlite
-  - TOXENV=py34-postgres
-  - TOXENV=py34-mysql
-  - TOXENV=py35-sqlite
-  - TOXENV=py35-postgres
-  - TOXENV=py35-mysql
-  - TOXENV=pypy-sqlite
-  - TOXENV=pypy-postgres
-  - TOXENV=pypy-mysql
+  - TOXENV=py26-sqlite   PEEWEE_TEST_BACKEND=sqlite
+  - TOXENV=py26-postgres PEEWEE_TEST_BACKEND=postgresql
+  - TOXENV=py26-mysql    PEEWEE_TEST_BACKEND=mysql
+  - TOXENV=py27-sqlite   PEEWEE_TEST_BACKEND=sqlite
+  - TOXENV=py27-postgres PEEWEE_TEST_BACKEND=postgresql
+  - TOXENV=py27-mysql    PEEWEE_TEST_BACKEND=mysql
+  - TOXENV=py34-sqlite   PEEWEE_TEST_BACKEND=sqlite
+  - TOXENV=py34-postgres PEEWEE_TEST_BACKEND=postgresql
+  - TOXENV=py34-mysql    PEEWEE_TEST_BACKEND=mysql
+  - TOXENV=py35-sqlite   PEEWEE_TEST_BACKEND=sqlite
+  - TOXENV=py35-postgres PEEWEE_TEST_BACKEND=postgresql
+  - TOXENV=py35-mysql    PEEWEE_TEST_BACKEND=mysql
+  - TOXENV=pypy-sqlite   PEEWEE_TEST_BACKEND=sqlite
+  - TOXENV=pypy-postgres PEEWEE_TEST_BACKEND=postgresql
+  - TOXENV=pypy-mysql    PEEWEE_TEST_BACKEND=mysql
 addons:
   postgresql: "9.4"
 services:
