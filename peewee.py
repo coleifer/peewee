@@ -1000,6 +1000,14 @@ class PrimaryKeyField(IntegerField):
         kwargs['primary_key'] = True
         super(PrimaryKeyField, self).__init__(*args, **kwargs)
 
+class _AutoPrimaryKeyField(PrimaryKeyField):
+    _column_name = None
+
+    def add_to_class(self, model_class, name):
+        if name != self._column_name:
+            raise ValueError('%s must be named `%s`.' % (type(self), name))
+        super(_AutoPrimaryKeyField, self).add_to_class(model_class, name)
+
 class FloatField(Field):
     db_field = 'float'
     coerce = float
@@ -2061,7 +2069,8 @@ class QueryCompiler(object):
             constraints.append(Clause(
                 SQL('PRIMARY KEY'), EnclosedClause(*pk_cols)))
         for field in meta.sorted_fields:
-            columns.append(self.field_definition(field))
+            if not isinstance(field, _AutoPrimaryKeyField):
+                columns.append(self.field_definition(field))
             if isinstance(field, ForeignKeyField) and not field.deferred:
                 constraints.append(self.foreign_key_constraint(field))
 
