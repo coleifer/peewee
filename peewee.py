@@ -2068,9 +2068,8 @@ class QueryCompiler(object):
                        for f in meta.primary_key.field_names]
             constraints.append(Clause(
                 SQL('PRIMARY KEY'), EnclosedClause(*pk_cols)))
-        for field in meta.sorted_fields:
-            if not isinstance(field, _AutoPrimaryKeyField):
-                columns.append(self.field_definition(field))
+        for field in meta.declared_fields:
+            columns.append(self.field_definition(field))
             if isinstance(field, ForeignKeyField) and not field.deferred:
                 constraints.append(self.foreign_key_constraint(field))
 
@@ -2657,7 +2656,7 @@ class Query(Node):
             elif isinstance(arg, ModelAlias):
                 accum.extend(arg.get_proxy_fields())
             elif isclass(arg) and issubclass(arg, Model):
-                accum.extend(arg._meta.sorted_fields)
+                accum.extend(arg._meta.declared_fields)
         return accum
 
     @returns_clone
@@ -2913,7 +2912,7 @@ class SelectQuery(Query):
 
     def __select(self, *selection):
         self._explicit_selection = len(selection) > 0
-        selection = selection or self.model_class._meta.sorted_fields
+        selection = selection or self.model_class._meta.declared_fields
         self._select = self._model_shorthand(selection)
     select = returns_clone(__select)
 
@@ -3192,7 +3191,7 @@ class _WriteQuery(Query):
             self._returning = None
         else:
             if not selection:
-                selection = self.model_class._meta.sorted_fields
+                selection = self.model_class._meta.declared_fields
             self._returning = self._model_shorthand(selection)
 
     @requires_returning
@@ -4337,9 +4336,10 @@ class ModelAlias(object):
     def __setattr__(self, attr, value):
         raise AttributeError('Cannot set attributes on ModelAlias instances')
 
-    def get_proxy_fields(self):
-        return [
-            FieldProxy(self, f) for f in self.model_class._meta.sorted_fields]
+    def get_proxy_fields(self, declared_fields=False):
+        mm = self.model_class._meta
+        fields = mm.declared_fields if declared_fields else mm.sorted_fields
+        return [FieldProxy(self, f) for f in fields]
 
     def select(self, *selection):
         if not selection:
@@ -4411,6 +4411,7 @@ class ModelOptions(object):
         self.sorted_fields = []
         self.sorted_field_names = []
         self.valid_fields = set()
+        self.declared_fields = []
 
         self.database = database or default_database
         self.db_table = db_table
@@ -4459,6 +4460,8 @@ class ModelOptions(object):
         self.valid_fields = (set(self.fields.keys()) |
                              set(self.fields.values()) |
                              set((self.primary_key,)))
+        self.declared_fields = [field for field in self.sorted_fields
+                                if not isinstance(field, _AutoPrimaryKeyField)]
 
     def add_field(self, field):
         self.remove_field(field.name)

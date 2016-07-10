@@ -778,7 +778,10 @@ class TestRowIDField(ModelTestCase):
     requires = [RowIDModel]
 
     def test_model_meta(self):
-        self.assertEqual(RowIDModel._meta.sorted_field_names, ['data'])
+        self.assertEqual(RowIDModel._meta.sorted_field_names,
+                         ['rowid', 'data'])
+        self.assertEqual([f.name for f in RowIDModel._meta.declared_fields],
+                         ['data'])
         self.assertEqual(RowIDModel._meta.primary_key.name, 'rowid')
         self.assertTrue(RowIDModel._meta.auto_increment)
 
@@ -1047,6 +1050,7 @@ class TestTransitiveClosureIntegration(PeeweeTestCase):
     def tearDown(self):
         super(TestTransitiveClosureIntegration, self).tearDown()
         ext_db.unload_extension(CLOSURE_EXTENSION.rstrip('.so'))
+        ext_db.close()
 
     def initialize_models(self):
         class Category(BaseExtModel):

@@ -99,7 +99,7 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
     exclude |= seen
     model_class = type(model)
 
-    for field in model._meta.sorted_fields:
+    for field in model._meta.declared_fields:
         if field in exclude or (only and (field not in only)):
             continue
 

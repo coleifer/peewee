@@ -338,7 +338,7 @@ class FTSModel(BaseFTSModel):
             rank = score_fn()
         elif isinstance(weights, dict):
             weight_args = []
-            for field in cls._meta.sorted_fields:
+            for field in cls._meta.declared_fields:
                 weight_args.append(
                     weights.get(field, weights.get(field.name, 1.0)))
             rank = score_fn(*weight_args)
@@ -582,7 +582,7 @@ class FTS5Model(BaseFTSModel):
             rank = SQL('rank')
         elif isinstance(weights, dict):
             weight_args = []
-            for field in cls._meta.sorted_fields:
+            for field in cls._meta.declared_fields:
                 weight_args.append(
                     weights.get(field, weights.get(field.name, 1.0)))
             rank = fn.bm25(cls.as_entity(), *weight_args)
