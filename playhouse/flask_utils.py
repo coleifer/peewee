@@ -87,7 +87,8 @@ class FlaskDB(object):
         self._app = app
 
         if self._db is None:
-            initial_db = app.config['DATABASE']
+            initial_db = (app.config.get('DATABASE_URL') or
+                          app.config['DATABASE'])
         else:
             initial_db = self._db
 
