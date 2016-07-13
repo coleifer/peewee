@@ -61,6 +61,9 @@ if hashpw and gensalt:
 
         def db_value(self, value):
             """Convert the python value for storage in the database."""
+            if isinstance(value, PasswordHash):
+                return bytes(value)
+
             if isinstance(value, unicode_type):
                 value = value.encode('utf-8')
             salt = gensalt(self.bcrypt_iterations)
