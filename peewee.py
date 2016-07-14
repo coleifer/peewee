@@ -4600,7 +4600,7 @@ class BaseModel(type):
         'primary_key', 'schema', 'validate_backrefs', 'only_save_dirty'])
 
     def __new__(cls, name, bases, attrs):
-        if not bases:
+        if name in ('_metaclass_helper_', 'Model'):
             return super(BaseModel, cls).__new__(cls, name, bases, attrs)
 
         meta_options = {}

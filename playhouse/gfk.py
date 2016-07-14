@@ -38,7 +38,8 @@ table_cache = {}
 class BaseModel(_BaseModel):
     def __new__(cls, name, bases, attrs):
         cls = super(BaseModel, cls).__new__(cls, name, bases, attrs)
-        all_models.add(cls)
+        if name not in ('_metaclass_helper_', 'Model'):
+            all_models.add(cls)
         return cls
 
 class Model(with_metaclass(BaseModel, _Model)):
