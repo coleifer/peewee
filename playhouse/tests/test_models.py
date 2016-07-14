@@ -1760,6 +1760,36 @@ class TestModelInheritance(ModelTestCase):
         self.assertEqual(b2_from_db.user, u)
         self.assertEqual(b2_from_db.extra_field, 'foo')
 
+    def test_inheritance_primary_keys(self):
+        self.assertFalse(hasattr(Model, 'id'))
+
+        class M1(Model): pass
+        self.assertTrue(hasattr(M1, 'id'))
+
+        class M2(Model):
+            key = CharField(primary_key=True)
+        self.assertFalse(hasattr(M2, 'id'))
+
+        class M3(Model):
+            id = TextField()
+            key = IntegerField(primary_key=True)
+        self.assertTrue(hasattr(M3, 'id'))
+        self.assertFalse(M3.id.primary_key)
+
+        class C1(M1): pass
+        self.assertTrue(hasattr(C1, 'id'))
+        self.assertTrue(C1.id.model_class is C1)
+
+        class C2(M2): pass
+        self.assertFalse(hasattr(C2, 'id'))
+        self.assertTrue(C2.key.primary_key)
+        self.assertTrue(C2.key.model_class is C2)
+
+        class C3(M3): pass
+        self.assertTrue(hasattr(C3, 'id'))
+        self.assertFalse(C3.id.primary_key)
+        self.assertTrue(C3.id.model_class is C3)
+
 
 class TestAliasBehavior(ModelTestCase):
     requires = [UpperModel]
