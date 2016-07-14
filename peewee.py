@@ -2354,7 +2354,19 @@ class ModelQueryResultWrapper(QueryResultWrapper):
             for join in joins[current]:
                 metadata = join.metadata
                 if metadata.dest in models or metadata.dest_model in models:
-                    join_list.append(metadata)
+                    if metadata.foreign_key is not None:
+                        fk_present = metadata.foreign_key in self.column_meta
+                        pk_present = metadata.primary_key in self.column_meta
+                        check = metadata.foreign_key.null and (fk_present or
+                                                               pk_present)
+                    else:
+                        check = fk_present = pk_present = False
+
+                    join_list.append((
+                        metadata,
+                        check,
+                        fk_present,
+                        pk_present))
                     stack.append(join.dest)
 
         return join_list
@@ -2385,12 +2397,22 @@ class ModelQueryResultWrapper(QueryResultWrapper):
 
     def follow_joins(self, collected):
         prepared = [collected[self.model]]
-        for metadata in self.join_list:
+        for (metadata, check_null, fk_present, pk_present) in self.join_list:
             inst = collected[metadata.src]
             try:
                 joined_inst = collected[metadata.dest]
             except KeyError:
                 joined_inst = collected[metadata.dest_model]
+
+            has_fk = True
+            if check_null:
+                if fk_present:
+                    has_fk = inst._data.get(metadata.foreign_key.name)
+                elif pk_present:
+                    has_fk = joined_inst._data.get(metadata.primary_key.name)
+
+            if not has_fk:
+                continue
 
             # Can we populate a value on the joined instance using the current?
             mpk = metadata.primary_key is not None
@@ -2445,7 +2467,7 @@ class AggregateQueryResultWrapper(ModelQueryResultWrapper):
         self.source_to_dest = {}
         self.dest_to_source = {}
 
-        for metadata in self.join_list:
+        for (metadata, _, _, _) in self.join_list:
             if metadata.is_backref:
                 att_name = metadata.foreign_key.related_name
             else:
