@@ -1387,6 +1387,7 @@ class ForeignKeyField(IntegerField):
 
         model_class._meta.add_field(self)
 
+        obj_id_name = name + '_id'
         self.related_name = self._get_related_name()
         if self.rel_model == 'self':
             self.rel_model = self.model_class
@@ -1397,20 +1398,31 @@ class ForeignKeyField(IntegerField):
         else:
             self.to_field = self.rel_model._meta.primary_key
 
+        # TODO: factor into separate method.
         if model_class._meta.validate_backrefs:
+            def invalid(msg, **context):
+                context.update(
+                    field='%s.%s' % (model_class._meta.name, name),
+                    backref=self.related_name,
+                    obj_id_name=obj_id_name)
+                raise AttributeError(msg % context)
+
             if self.related_name in self.rel_model._meta.fields:
-                error = ('Foreign key: %s.%s related name "%s" collision with '
-                         'model field of the same name.')
-                raise AttributeError(error % (
-                    self.model_class._meta.name, self.name, self.related_name))
-            if self.related_name in self.rel_model._meta.reverse_rel:
-                error = ('Foreign key: %s.%s related name "%s" collision with '
-                         'foreign key using same related_name.')
-                raise AttributeError(error % (
-                    self.model_class._meta.name, self.name, self.related_name))
+                invalid('The related_name of %(field)s ("%(backref)s") '
+                        'conflicts with a field of the same name.')
+            elif self.related_name in self.rel_model._meta.reverse_rel:
+                invalid('The related_name of %(field)s ("%(backref)s") '
+                        'is already in use by another foreign key.')
+
+            if obj_id_name in model_class._meta.fields:
+                invalid('The object id descriptor of %(field)s conflicts '
+                        'with a field named %(obj_id_name)s')
+            elif obj_id_name in model_class.__dict__:
+                invalid('Model attribute "%(obj_id_name)s" would be shadowed '
+                        'by the object id descriptor of %(field)s.')
 
         setattr(model_class, name, self._get_descriptor())
-        setattr(model_class, name + '_id', self._get_id_descriptor())
+        setattr(model_class, obj_id_name,  self._get_id_descriptor())
         setattr(self.rel_model,
                 self.related_name,
                 self._get_backref_descriptor())
