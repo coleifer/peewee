@@ -2324,7 +2324,8 @@ if _DictQueryResultWrapper is None:
 class ModelQueryResultWrapper(QueryResultWrapper):
     def initialize(self, description):
         self.column_map, model_set = self.generate_column_map()
-        self._col_set = set(self.column_meta)
+        self._col_set = set(col for col in self.column_meta
+                            if isinstance(col, Field))
         self.join_list = self.generate_join_list(model_set)
 
     def generate_column_map(self):
