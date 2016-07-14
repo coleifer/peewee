@@ -2312,6 +2312,7 @@ if _DictQueryResultWrapper is None:
 class ModelQueryResultWrapper(QueryResultWrapper):
     def initialize(self, description):
         self.column_map, model_set = self.generate_column_map()
+        self._col_set = set(self.column_meta)
         self.join_list = self.generate_join_list(model_set)
 
     def generate_column_map(self):
@@ -2355,8 +2356,8 @@ class ModelQueryResultWrapper(QueryResultWrapper):
                 metadata = join.metadata
                 if metadata.dest in models or metadata.dest_model in models:
                     if metadata.foreign_key is not None:
-                        fk_present = metadata.foreign_key in self.column_meta
-                        pk_present = metadata.primary_key in self.column_meta
+                        fk_present = metadata.foreign_key in self._col_set
+                        pk_present = metadata.primary_key in self._col_set
                         check = metadata.foreign_key.null and (fk_present or
                                                                pk_present)
                     else:

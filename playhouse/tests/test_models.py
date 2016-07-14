@@ -2105,3 +2105,76 @@ class TestDeleteNullableForeignKeys(ModelTestCase):
         self.assertEqual(nf2.delete_instance(), 1)
         self.assertEqual(nf3.delete_instance(), 1)
         self.assertEqual(nf4.delete_instance(), 1)
+
+
+class TestJoinNullableForeignKey(ModelTestCase):
+    requires = [Parent, Orphan, Child]
+
+    def setUp(self):
+        super(TestJoinNullableForeignKey, self).setUp()
+
+        p1 = Parent.create(data='p1')
+        p2 = Parent.create(data='p2')
+        for i in range(1, 3):
+            Child.create(parent=p1, data='child%s-p1' % i)
+            Child.create(parent=p2, data='child%s-p2' % i)
+            Orphan.create(parent=p1, data='orphan%s-p1' % i)
+
+        Orphan.create(data='orphan1-noparent')
+        Orphan.create(data='orphan2-noparent')
+
+    def test_no_empty_instances(self):
+        with self.assertQueryCount(1):
+            query = (Orphan
+                     .select(Orphan, Parent)
+                     .join(Parent, JOIN.LEFT_OUTER)
+                     .order_by(Orphan.id))
+            res = [(orphan.data, orphan.parent is None) for orphan in query]
+
+        self.assertEqual(res, [
+            ('orphan1-p1', False),
+            ('orphan2-p1', False),
+            ('orphan1-noparent', True),
+            ('orphan2-noparent', True),
+        ])
+
+    def test_unselected_fk_pk(self):
+        with self.assertQueryCount(1):
+            query = (Orphan
+                     .select(Orphan.data, Parent.data)
+                     .join(Parent, JOIN.LEFT_OUTER)
+                     .order_by(Orphan.id))
+            res = [(orphan.data, orphan.parent is None) for orphan in query]
+
+        self.assertEqual(res, [
+            ('orphan1-p1', False),
+            ('orphan2-p1', False),
+            ('orphan1-noparent', False),
+            ('orphan2-noparent', False),
+        ])
+
+    def test_non_null_fk_unselected_fk(self):
+        with self.assertQueryCount(1):
+            query = (Child
+                     .select(Child.data, Parent.data)
+                     .join(Parent, JOIN.LEFT_OUTER)
+                     .order_by(Child.id))
+            res = [(child.data, child.parent is None) for child in query]
+
+        self.assertEqual(res, [
+            ('child1-p1', False),
+            ('child1-p2', False),
+            ('child2-p1', False),
+            ('child2-p2', False),
+        ])
+
+        res = [child.parent.data for child in query]
+        self.assertEqual(res, ['p1', 'p2', 'p1', 'p2'])
+
+        res = [(child._data['parent'], child.parent.id) for child in query]
+        self.assertEqual(res, [
+            (None, None),
+            (None, None),
+            (None, None),
+            (None, None),
+        ])
