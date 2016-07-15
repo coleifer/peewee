@@ -1,7 +1,7 @@
 import os
 import sys
 import warnings
-from distutils.command import build_ext
+from distutils.command.build_ext import build_ext
 from distutils.core import setup
 from distutils.extension import Extension
 from distutils.version import StrictVersion
