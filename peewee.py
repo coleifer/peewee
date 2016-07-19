@@ -1265,16 +1265,17 @@ class TimestampField(IntegerField):
 
 class BooleanField(Field):
     db_field = 'bool'
+    
     def coerce(self, value):
-    if value == 'true':
-        return True
-    elif value == 'false':
-        return False
-    else:
-        try:
-            return bool(int(value))
-        except:
-            return bool(value)
+        if value == 'true':
+            return True
+        elif value == 'false':
+            return False
+        else:
+            try:
+                return bool(int(value))
+            except:
+                return bool(value)
 
 class RelationDescriptor(FieldDescriptor):
     """Foreign-key abstraction to replace a related PK with a related model."""
