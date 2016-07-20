@@ -334,16 +334,27 @@ class TestDeferredForeignKey(ModelTestCase):
         Language.drop_table(True)
         Language.create_table()
         Snippet.create_table()
+        Snippet2.drop_table(True)
+        Language2.drop_table(True)
+        Language2.create_table()
+        Snippet2.create_table()
 
     def tearDown(self):
         super(TestDeferredForeignKey, self).tearDown()
         Snippet.drop_table(True)
         Language.drop_table(True)
+        Snippet2.drop_table(True)
+        Language2.drop_table(True)
 
     def test_field_definitions(self):
         self.assertEqual(Snippet._meta.fields['language'].rel_model, Language)
         self.assertEqual(Language._meta.fields['selected_snippet'].rel_model,
                          Snippet)
+
+    def test_field_definitions2(self):
+        self.assertEqual(Snippet2._meta.fields['language'].rel_model, Language2)
+        self.assertEqual(Language2._meta.fields['selected_snippet'].rel_model,
+                         Snippet2)
 
     def test_create_table_query(self):
         query, params = compiler.create_table(Snippet)
