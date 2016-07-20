@@ -620,11 +620,12 @@ class Entity(Node):
 class Func(Node):
     """An arbitrary SQL function call."""
     _node_type = 'func'
+    _no_coerce = set(('count', 'sum'))
 
     def __init__(self, name, *arguments):
         self.name = name
         self.arguments = arguments
-        self._coerce = True
+        self._coerce = (name.lower() not in self._no_coerce) if name else False
         super(Func, self).__init__()
 
     @returns_clone
