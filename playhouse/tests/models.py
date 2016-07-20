@@ -295,16 +295,6 @@ class Snippet(TestModel):
 SnippetDeferred.set_model(Snippet)
 
 
-class Language2(TestModel):
-    name = CharField()
-    selected_snippet = ForeignKeyField(DeferredRelation('Snippet2'), null=True)
-    
-
-class Snippet2(TestModel):
-    code = TextField()
-    language = ForeignKeyField(Language2, related_name='snippets')
-
-
 class _UpperField(CharField):
     def python_value(self, value):
         return value.upper() if value else value
@@ -455,9 +445,7 @@ MODELS = [
     TagPostThrough,
     TagPostThroughAlt,
     Language,
-    Language2,
     Snippet,
-    Snippet2,
     Manufacturer,
     CompositeKeyModel,
     UserThing,

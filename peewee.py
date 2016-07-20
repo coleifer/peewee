@@ -425,13 +425,13 @@ class Proxy(object):
         return super(Proxy, self).__setattr__(attr, value)
 
 class DeferredRelation(object):
-    _unresolved_deferred_relations = set()
-    
+    _unresolved = set()
+
     def __init__(self, rel_model_name=None):
         if rel_model_name is not None:
-            self._rel_model_name = rel_model_name
-            self._unresolved_deferred_relations.add(self)
-    
+            self._rel_model_name = rel_model_name.lower()
+            self._unresolved.add(self)
+
     def set_field(self, model_class, field, name):
         self.model_class = model_class
         self.field = field
@@ -440,13 +440,14 @@ class DeferredRelation(object):
     def set_model(self, rel_model):
         self.field.rel_model = rel_model
         self.field.add_to_class(self.model_class, self.name)
-        
+
     @staticmethod
-    def _resolve_unresolved_deferred_relations(cls):
-        for deferred_relation in list(DeferredRelation._unresolved_deferred_relations):
-            if deferred_relation._rel_model_name == cls.__name__:
-                deferred_relation.set_model(cls)
-                DeferredRelation._unresolved_deferred_relations.discard(deferred_relation)
+    def resolve(model_cls):
+        unresolved = list(DeferredRelation._unresolved)
+        for dr in unresolved:
+            if dr._rel_model_name == model_cls.__name__.lower():
+                dr.set_model(model_cls)
+                DeferredRelation._unresolved.discard(dr)
 
 
 class _CDescriptor(object):
@@ -4706,7 +4707,7 @@ class BaseModel(type):
         if hasattr(cls, 'validate_model'):
             cls.validate_model()
 
-        DeferredRelation._resolve_unresolved_deferred_relations(cls)
+        DeferredRelation.resolve(cls)
 
         return cls
 
