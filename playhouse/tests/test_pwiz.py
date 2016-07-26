@@ -4,6 +4,7 @@ try:
     from StringIO import StringIO
 except ImportError:
     from io import StringIO
+import textwrap
 import sys
 
 from peewee import *
@@ -39,6 +40,10 @@ class Note(BaseModel):
 class Category(BaseModel):
     name = CharField(unique=True)
     parent = ForeignKeyField('self', null=True)
+
+class OddColumnNames(BaseModel):
+    spaces = CharField(db_column='s p aces')
+    symbols = CharField(db_column='w/-nug!')
 
 class capture_output(object):
     def __enter__(self):
@@ -176,3 +181,23 @@ class TestPwizOrdered(BasePwizTestCase):
             print_models(self.introspector, preserve_order=True)
 
         self.assertEqual(output.data.strip(), EXPECTED_ORDERED)
+
+
+class TestPwizInvalidColumns(BasePwizTestCase):
+    models = [OddColumnNames]
+
+    def test_invalid_columns(self):
+        with capture_output() as output:
+            print_models(self.introspector)
+
+        result = output.data.strip()
+        expected = textwrap.dedent("""
+            class Oddcolumnnames(BaseModel):
+                s_p_aces = CharField(db_column='s p aces')
+                w_nug_ = CharField(db_column='w/-nug!')
+
+                class Meta:
+                    db_table = 'oddcolumnnames'""").strip()
+
+        actual = result[-len(expected):]
+        self.assertEqual(actual, expected)
