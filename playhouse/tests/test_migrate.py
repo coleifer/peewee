@@ -606,14 +606,14 @@ class SqliteMigrationTestCase(BaseMigrationTestCase, PeeweeTestCase):
         db = self.migrator.database
         # rename column to table name
         migrate(self.migrator.rename_column('indexmodel', 'first_name', 'indexmodel'))
-        self.assertIn('indexmodel', [column.name for column in db.get_columns('indexmodel')])
-        self.assertIn('indexmodel_indexmodel_last_name',
-                      [index.name for index in db.get_indexes('indexmodel')])
+        self.assertTrue('indexmodel' in [column.name for column in db.get_columns('indexmodel')])
+        self.assertTrue('indexmodel_indexmodel_last_name' in
+                        [index.name for index in db.get_indexes('indexmodel')])
         # rename column back to original name
         migrate(self.migrator.rename_column('indexmodel', 'indexmodel', 'first_name'))
-        self.assertIn('first_name', [column.name for column in db.get_columns('indexmodel')])
-        self.assertIn('indexmodel_first_name_last_name',
-                      [index.name for index in db.get_indexes('indexmodel')])
+        self.assertTrue('first_name' in [column.name for column in db.get_columns('indexmodel')])
+        self.assertTrue('indexmodel_first_name_last_name' in
+                        [index.name for index in db.get_indexes('indexmodel')])
 
 
 @skip_if(lambda: psycopg2 is None)
