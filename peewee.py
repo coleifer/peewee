@@ -4466,7 +4466,7 @@ class ModelOptions(object):
         self.valid_fields = set()
         self.declared_fields = []
 
-        self.database = database or default_database
+        self.database = database if database is not None else default_database
         self.db_table = db_table
         self.db_table_func = db_table_func
         self.indexes = list(indexes or [])
