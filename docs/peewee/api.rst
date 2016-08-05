@@ -832,7 +832,7 @@ Query Types
         :param model: the model to join on.  there must be a :py:class:`ForeignKeyField` between
             the current ``query context`` and the model passed in.
         :param join_type: allows the type of ``JOIN`` used to be specified explicitly,
-            one of ``JOIN.INNER``, ``JOIN.LEFT_OUTER``, ``JOIN.FULL``
+            one of ``JOIN.INNER``, ``JOIN.LEFT_OUTER``, ``JOIN.FULL``, ``JOIN.CROSS``
         :param on: if multiple foreign keys exist between two models, this parameter
             is the ForeignKeyField to join on.
         :rtype: a :py:class:`Query` instance

@@ -781,6 +781,25 @@ class TestModelQueryResultWrapper(ModelTestCase):
                 self.assertEqual(results[i].rel_b.data, b_data)
                 self.assertEqual(results[i].rel_b.field.data, c_data)
 
+    def test_cross_join(self):
+        u1 = User.create(username='u1')
+        u2 = User.create(username='u2')
+        b1 = Blog.create(title='b1', user=u1)
+        b2 = Blog.create(title='b2', user=u2)
+        b3 = Blog.create(title='b3', user=u2)
+
+        res = (User
+               .select(User.username, Blog.title)
+               .join(Blog, join_type=JOIN.CROSS)
+               .order_by(User.username.asc(), Blog.title.asc()))
+        self.assertEqual([(u.username, u.blog.title) for u in res], [
+            ('u1', 'b1'),
+            ('u1', 'b2'),
+            ('u1', 'b3'),
+            ('u2', 'b1'),
+            ('u2', 'b2'),
+            ('u2', 'b3')])
+
     def test_backward_join(self):
         u1 = User.create(username='u1')
         u2 = User.create(username='u2')
