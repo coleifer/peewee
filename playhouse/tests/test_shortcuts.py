@@ -61,6 +61,9 @@ class NoteTag(BaseModel):
     note = ForeignKeyField(Note)
     tag = ForeignKeyField(Tag)
 
+    class Meta:
+        primary_key = CompositeKey('note', 'tag')
+
 
 MODELS = [
     Category,
@@ -225,6 +228,62 @@ class TestModelToDict(ModelTestCase):
                 'user': self.user.id,
             })
 
+    def test_recurse_max_depth(self):
+        n0, n1, n2 = [Note.create(user=self.user, text='n%s' % i)
+                      for i in range(3)]
+        t0, tx = [Tag.create(tag=t) for t in ('t0', 'tx')]
+        NoteTag.create(note=n0, tag=t0)
+        NoteTag.create(note=n0, tag=tx)
+        NoteTag.create(note=n1, tag=tx)
+
+        data = model_to_dict(self.user, recurse=True, backrefs=True)
+        self.assertEqual(data, {
+            'id': self.user.id,
+            'username': 'peewee',
+            'notes': [
+                {'id': n0.id, 'text': 'n0', 'notetag_set': [
+                    {'tag': {'tag': 't0', 'id': t0.id}},
+                    {'tag': {'tag': 'tx', 'id': tx.id}},
+                ]},
+                {'id': n1.id, 'text': 'n1', 'notetag_set': [
+                    {'tag': {'tag': 'tx', 'id': tx.id}},
+                ]},
+                {'id': n2.id, 'text': 'n2', 'notetag_set': []},
+            ]})
+
+        data = model_to_dict(self.user, recurse=True, backrefs=True,
+                             max_depth=2)
+        self.assertEqual(data, {
+            'id': self.user.id,
+            'username': 'peewee',
+            'notes': [
+                {'id': n0.id, 'text': 'n0', 'notetag_set': [
+                    {'tag': t0.id},
+                    {'tag': tx.id},
+                ]},
+                {'id': n1.id, 'text': 'n1', 'notetag_set': [
+                    {'tag': tx.id},
+                ]},
+                {'id': n2.id, 'text': 'n2', 'notetag_set': []},
+            ]})
+
+        data = model_to_dict(self.user, recurse=True, backrefs=True,
+                             max_depth=1)
+        self.assertEqual(data, {
+            'id': self.user.id,
+            'username': 'peewee',
+            'notes': [
+                {'id': n0.id, 'text': 'n0'},
+                {'id': n1.id, 'text': 'n1'},
+                {'id': n2.id, 'text': 'n2'},
+            ]})
+
+        data = model_to_dict(self.user, recurse=True, backrefs=True,
+                             max_depth=0)
+        self.assertEqual(data, {
+            'id': self.user.id,
+            'username': 'peewee'})
+
     def test_simple_backref(self):
         with assert_query_count(1):
             self.assertEqual(model_to_dict(self.user, backrefs=True), {
@@ -334,8 +393,8 @@ class TestModelToDict(ModelTestCase):
             'notes': [{
                 'id': note.id,
                 'notetag_set': [
-                    {'id': nt1.id, 'tag': {'id': t1.id, 'tag': t1.tag}},
-                    {'id': nt2.id, 'tag': {'id': t2.id, 'tag': t2.tag}},
+                    {'tag': {'id': t1.id, 'tag': t1.tag}},
+                    {'tag': {'id': t2.id, 'tag': t2.tag}},
                 ],
                 'text': note.text,
             }],

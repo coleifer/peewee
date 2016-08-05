@@ -68,7 +68,7 @@ def _clone_set(s):
 
 def model_to_dict(model, recurse=True, backrefs=False, only=None,
                   exclude=None, seen=None, extra_attrs=None,
-                  fields_from_query=None):
+                  fields_from_query=None, max_depth=None):
     """
     Convert a model instance (and any related objects) to a dictionary.
 
@@ -82,7 +82,12 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
         that should be included.
     :param SelectQuery fields_from_query: Query that was source of model. Take
         fields explicitly selected by the query and serialize them.
+    :param int max_depth: Maximum depth to recurse, value <= 0 means no max.
     """
+    max_depth = -1 if max_depth is None else max_depth
+    if max_depth == 0:
+        recurse = False
+
     only = _clone_set(only)
     extra_attrs = _clone_set(extra_attrs)
 
@@ -114,7 +119,8 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
                     backrefs=backrefs,
                     only=only,
                     exclude=exclude,
-                    seen=seen)
+                    seen=seen,
+                    max_depth=max_depth - 1)
             else:
                 field_data = {}
 
@@ -128,7 +134,7 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
             else:
                 data[attr_name] = attr
 
-    if backrefs:
+    if backrefs and recurse:
         for related_name, foreign_key in model._meta.reverse_rel.items():
             descriptor = getattr(model_class, related_name)
             if descriptor in exclude or foreign_key in exclude:
@@ -149,7 +155,8 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
                     recurse=recurse,
                     backrefs=backrefs,
                     only=only,
-                    exclude=exclude))
+                    exclude=exclude,
+                    max_depth=max_depth - 1))
 
             data[related_name] = accum
 
