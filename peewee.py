@@ -2742,12 +2742,12 @@ class Query(Node):
         """Change or reset the query context."""
         self._query_ctx = model_class or self.model_class
 
-    def ensure_join(self, lm, rm, on=None):
+    def ensure_join(self, lm, rm, on=None, **join_kwargs):
         ctx = self._query_ctx
         for join in self._joins.get(lm, []):
             if join.dest == rm:
                 return self
-        return self.switch(lm).join(rm, on=on).switch(ctx)
+        return self.switch(lm).join(rm, on=on, **join_kwargs).switch(ctx)
 
     def convert_dict_to_node(self, qdict):
         accum = []
