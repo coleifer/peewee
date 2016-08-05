@@ -602,6 +602,19 @@ class SqliteMigrationTestCase(BaseMigrationTestCase, PeeweeTestCase):
              'ON "indexmodel" ("first", "last_name")', [])
         ])
 
+    def test_rename_indexed_column_with_same_name_as_containing_table(self):
+        db = self.migrator.database
+        # rename column to table name
+        migrate(self.migrator.rename_column('indexmodel', 'first_name', 'indexmodel'))
+        self.assertTrue('indexmodel' in [column.name for column in db.get_columns('indexmodel')])
+        self.assertTrue('indexmodel_indexmodel_last_name' in
+                        [index.name for index in db.get_indexes('indexmodel')])
+        # rename column back to original name
+        migrate(self.migrator.rename_column('indexmodel', 'indexmodel', 'first_name'))
+        self.assertTrue('first_name' in [column.name for column in db.get_columns('indexmodel')])
+        self.assertTrue('indexmodel_first_name_last_name' in
+                        [index.name for index in db.get_indexes('indexmodel')])
+
 
 @skip_if(lambda: psycopg2 is None)
 class PostgresqlMigrationTestCase(BaseMigrationTestCase, PeeweeTestCase):

@@ -650,7 +650,11 @@ class SqliteMigrator(SchemaMigrator):
             if column_to_update in index.columns:
                 if new_column:
                     queries.append(
-                        SQL(index.sql.replace(column_to_update, new_column)))
+                        SQL(index.sql
+                            .replace('("' + column_to_update + '"', '("' + new_column + '"')
+                            .replace('"' + column_to_update + '")', '"' + new_column + '")')
+                            .replace('_' + column_to_update + '"', '_' + new_column + '"')
+                            .replace('_' + column_to_update + '_', '_' + new_column + '_')))
             else:
                 queries.append(SQL(index.sql))
 
