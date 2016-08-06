@@ -545,6 +545,30 @@ class SqliteMigrationTestCase(BaseMigrationTestCase, PeeweeTestCase):
             [('indexmodel_data', ['data']),
              ('indexmodel_first_name_last_name', ['first_name', 'last_name'])])
 
+    def test_rename_column_to_table_name(self):
+        db = self.migrator.database
+        columns = lambda: sorted(col.name for col in db.get_columns('page'))
+        indexes = lambda: sorted((idx.name, idx.columns)
+                                 for idx in db.get_indexes('page'))
+
+        orig_columns = columns()
+        orig_indexes = indexes()
+
+        # Rename "page"."name" to "page"."page".
+        migrate(self.migrator.rename_column('page', 'name', 'page'))
+
+        # Ensure that the index on "name" is preserved, and that the index on
+        # the user_id foreign key is also preserved.
+        self.assertEqual(columns(),  ['id', 'page', 'user_id'])
+        self.assertEqual(indexes(), [
+            ('page_name', ['page']),
+            ('page_user_id', ['user_id'])])
+
+        # Revert the operation and verify
+        migrate(self.migrator.rename_column('page', 'page', 'name'))
+        self.assertEqual(columns(),  orig_columns)
+        self.assertEqual(indexes(), orig_indexes)
+
     def test_index_preservation(self):
         with count_queries() as qc:
             migrate(self.migrator.rename_column(
@@ -598,7 +622,7 @@ class SqliteMigrationTestCase(BaseMigrationTestCase, PeeweeTestCase):
             # Re-create the indexes.
             ('CREATE UNIQUE INDEX "indexmodel_data" '
              'ON "indexmodel" ("data")', []),
-            ('CREATE UNIQUE INDEX "indexmodel_first_last_name" '
+            ('CREATE UNIQUE INDEX "indexmodel_first_name_last_name" '
              'ON "indexmodel" ("first", "last_name")', [])
         ])
 

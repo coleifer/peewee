@@ -525,7 +525,7 @@ class SqliteMigrator(SchemaMigrator):
     """
     column_re = re.compile('(.+?)\((.+)\)')
     column_split_re = re.compile(r'(?:[^,(]|\([^)]*\))+')
-    column_name_re = re.compile('["`]?([\w]+)')
+    column_name_re = re.compile('["`\']?([\w]+)')
     fk_re = re.compile('FOREIGN KEY\s+\("?([\w]+)"?\)\s+', re.I)
 
     def _get_column_names(self, table):
@@ -564,8 +564,8 @@ class SqliteMigrator(SchemaMigrator):
         raw_create, raw_columns = self.column_re.search(create_table).groups()
 
         # Clean up the individual column definitions.
-        column_defs = [
-            col.strip() for col in self.column_split_re.findall(raw_columns)]
+        split_columns = self.column_split_re.findall(raw_columns)
+        column_defs = [col.strip() for col in split_columns]
 
         new_column_defs = []
         new_column_names = []
@@ -644,15 +644,44 @@ class SqliteMigrator(SchemaMigrator):
         for index in indexes:
             # Auto-generated indexes in SQLite will not have associated SQL,
             # so pass over them.
-            if not index.sql:
+            sql = index.sql
+            if not sql:
                 continue
 
-            if column_to_update in index.columns:
-                if new_column:
-                    queries.append(
-                        SQL(index.sql.replace(column_to_update, new_column)))
-            else:
-                queries.append(SQL(index.sql))
+            if column_to_update not in index.columns:
+                queries.append(SQL(sql))
+                continue
+            elif not new_column:
+                continue
+
+            parts = sql.split(column_to_update)
+            if len(parts) == 2:
+                queries.append(SQL(sql.replace(column_to_update, new_column)))
+                continue
+
+            # Find the list of columns in the index expression.
+            lhs, rhs = index.sql.rsplit('(', 1)
+
+            # Does the column name appear only once in the column list?
+            if len(rhs.split(column_to_update)) == 2:
+                rhs = rhs.replace(column_to_update, new_column)
+                queries.append(SQL('%s(%s' % (lhs, rhs)))
+                continue
+
+            parts = rhs.rsplit(')', 1)[0].split(',')
+            columns = [part.strip('"`[]\' ') for part in parts]
+
+            # columns looks something like: ['status', 'timestamp" DESC']
+            # https://www.sqlite.org/lang_keywords.html
+            # Strip out any junk after the column name.
+            clean = []
+            for column in columns:
+                if re.match('%s(?:[\'"`\]]?\s|$)' % column_to_update, column):
+                    column = new_columne + column[len(column_to_update):]
+                clean.append(column)
+
+            sql = '%s(%s)' % (lhs, ', '.join('"%s"' % c for c in clean))
+            queries.append(SQL(sql))
 
         return queries
 
