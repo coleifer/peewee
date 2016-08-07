@@ -143,6 +143,7 @@ class BasePwizTestCase(PeeweeTestCase):
 
     def tearDown(self):
         super(BasePwizTestCase, self).tearDown()
+        db.drop_tables(self.models)
         db.close()
 
 
