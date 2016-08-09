@@ -5,6 +5,84 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.8.2
+
+This release contains mostly bug-fixes, clean-ups, and API enhancements.
+
+### Bugs fixed and general cleanups
+
+* #820 - fixed some bugs related to the Cython extension build process.
+* #858 - allow blanks and perform type conversion when using the `db_url`
+  extension
+* #895 - added the ability to query using the `<foreign_key>_id` attribute.
+* #922 - ensure that `peewee.OperationalError` is raised consistently when
+  using the `RetryOperationalError` mixin.
+* #929 - ensure that `pwiz` will import the appropriate extensions when
+  vendor-specific fields are used.
+* #930 - ensure that `pwiz`-generated models containing `UnknownField`
+  placeholders do not blow up when you instantiate them.
+* #932 - correctly limit the length of automatically-generated index names.
+* #933 - fixed bug where `BlobField` could not be used if it's parent model
+  pointed to an uninitialized database `Proxy`.
+* #935 - greater consistency with the conversion to Python data-types when
+  performing aggregations, annotations, or calling `scalar()`.
+* #939 - ensure the correct data-types are used when initializing a connection
+  pool.
+* #947 - fix bug where `Signal` subclasses were not returning rows affected on
+  save.
+* #948 - added documentation about SQLite limits and how they affect
+  `insert_many`.
+* #951 - better warnings regarding C extension compilation, thanks @dhaase-de.
+* #968 - fix bug where table names starting with numbers generated invalid
+  table names when using `pwiz`.
+* #971 - fix bug where parameter was not being used. Thanks @jberkel.
+* #974 - fixed the way `SqliteExtDatabase` handles the automatic `rowid` (and
+    `docid`) columns. Thanks for alerting me to the issue and providing a
+    failing test case @jberkel.
+* #976 - fix obscure bug relating to cloning foreign key fields twice.
+* #981 - allow `set` instances to be used on the right-hand side of `IN` exprs.
+* #983 - fix behavior where the default `id` primary key was inherited
+  regardless. When users would inadvertently include it in their queries, it
+  would use the table alias of it's parent class.
+* #992 - add support for `db_column` in `djpeewee`
+* #995 - fix the behavior of `truncate_date` with Postgresql. Thanks @Zverik.
+* #1009 - allow `DATABASE_URL` as a recognized parameter to the Flask config.
+* #1011 - correctly handle `bytes` wrapper used by `PasswordField` to `bytes`.
+* #1012 - when selecting and joining on multiple models, do not create model
+  instances when the foreign key is NULL.
+* #1017 - do not coerce the return value of function calls to `COUNT` or `SUM`,
+  since the python driver will already give us the right Python value.
+* #1018 - use global state to resolve `DeferredRelations`, allowing for a nicer
+  API. Thanks @brenguyen711.
+* #1022 - attempt to avoid creating invalid Python when using `pwiz` with MySQL
+  database columns containing spaces. Yes, fucking spaces.
+* #1024 - fix bug in SQLite migrator which had a naive approach to fixing
+  indexes.
+* #1025 - explicitly check for `None` when determining if the database has been
+  set on `ModelOptions`. Thanks @joeyespo.
+
+### New stuff
+
+* Added `TimestampField` for storing datetimes using integers. Greater than
+  second delay is possible through exponentiation.
+* Added `Database.drop_index()` method.
+* Added a `max_depth` parameter to the `model_to_dict` function in
+  the `playhouse.shortcuts` extension module.
+* `SelectQuery.first()` function accepts a parameter `n` which
+  applies a limit to the query and returns the first row. Previously the limit
+  was not applied out of consideration for subsequent iterations, but I believe
+  usage has shown that a limit is more desirable than reserving the option to
+  iterate without a second query. The old behavior is preserved in the new
+  `SelectQuery.peek()` method.
+* `group_by()`, `order_by()`, `window()` now accept a keyward argument
+  `extend`, which, when set to `True`, will append to the existing values
+  rather than overwriting them.
+* Query results support negative indexing.
+* C sources are included now as part of the package. I *think* they should be
+  able to compile for python 2 or 3, on linux or windows...but not positive.
+
+[View commits](https://github.com/coleifer/peewee/compare/2.8.1...2.8.2)
+
 ## 2.8.1
 
 This release is long overdue so apologies if you've been waiting on it and
