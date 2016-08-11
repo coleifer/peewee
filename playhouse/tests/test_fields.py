@@ -301,7 +301,6 @@ class TestFieldTypes(ModelTestCase):
             23, 11
         ))
 
-    @skip_test_if(lambda: isinstance(test_db, MySQLDatabase))
     def test_blob_and_binary_field(self):
         byte_count = 256
         data = ''.join(chr(i) for i in range(256))
@@ -309,11 +308,15 @@ class TestFieldTypes(ModelTestCase):
 
         # pull from db and check binary data
         res = BlobModel.get(BlobModel.id == blob.id)
-        self.assertTrue(isinstance(res.data, binary_types))
+        if isinstance(test_db, MySQLDatabase):
+            self.assertTrue(isinstance(res.data, bytes))
+            binary_data = data
+        else:
+            self.assertTrue(isinstance(res.data, binary_types))
+            binary_data = binary_construct(data)
 
         self.assertEqual(len(res.data), byte_count)
         db_data = res.data
-        binary_data = binary_construct(data)
 
         if db_data != binary_data and sys.version_info[:3] >= (3, 3, 3):
             db_data = db_data.tobytes()
