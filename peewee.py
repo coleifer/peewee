@@ -111,8 +111,9 @@ logger.addHandler(NullHandler())
 
 # Python 2/3 compatibility helpers. These helpers are used internally and are
 # not exported.
+_METACLASS_ = '_metaclass_helper_'
 def with_metaclass(meta, base=object):
-    return meta('_metaclass_helper_', (base,), {})
+    return meta(_METACLASS_, (base,), {})
 
 PY2 = sys.version_info[0] == 2
 PY3 = sys.version_info[0] == 3
@@ -4617,7 +4618,7 @@ class BaseModel(type):
         'primary_key', 'schema', 'validate_backrefs', 'only_save_dirty'])
 
     def __new__(cls, name, bases, attrs):
-        if name in ('_metaclass_helper_', 'Model'):
+        if name == _METACLASS_ or bases[0].__name__ == _METACLASS_:
             return super(BaseModel, cls).__new__(cls, name, bases, attrs)
 
         meta_options = {}
