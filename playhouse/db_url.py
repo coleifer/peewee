@@ -1,7 +1,7 @@
 try:
-    from urlparse import urlparse, parse_qsl
+    from urlparse import urlparse, urlunparse, parse_qsl
 except ImportError:
-    from urllib.parse import urlparse, parse_qsl
+    from urllib.parse import urlparse, urlunparse, parse_qsl
 
 from peewee import *
 from playhouse.pool import PooledMySQLDatabase
@@ -82,6 +82,17 @@ def parse(url):
 
 def connect(url, **connect_params):
     parsed = urlparse(url)
+    pool = connect_params.pop('pool', None)
+    if parsed.scheme and pool is not None:
+        if pool and not parsed.scheme.endswith('+pool'):
+            scheme = parsed.scheme + '+pool'
+        elif not pool and parsed.scheme.endswith('+pool'):
+            scheme = parsed.scheme[:len('+pool')]
+        else:
+            scheme = parsed.scheme
+        url = urlunparse((scheme,) + parsed[1:])
+        parsed = urlparse(url)
+
     connect_kwargs = parseresult_to_dict(parsed)
     connect_kwargs.update(connect_params)
     database_class = schemes.get(parsed.scheme)
