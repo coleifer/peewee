@@ -179,7 +179,11 @@ PRAGMA statements
 
 .. versionadded:: 2.6.4
 
-SQLite allows run-time configuration of a number of parameters through ``PRAGMA`` statements (`documentation <https://www.sqlite.org/pragma.html>`_). These statements are typically run against a new database connection. To run one or more ``PRAGMA`` statements against new connections, you can specify them as a list of 2-tuples containing the pragma name and value:
+SQLite allows run-time configuration of a number of parameters through
+``PRAGMA`` statements (`documentation <https://www.sqlite.org/pragma.html>`_).
+These statements are typically run against a new database connection. To run
+one or more ``PRAGMA`` statements against new connections, you can specify them
+as a list or tuple of 2-tuples containing the pragma name and value:
 
 .. code-block:: python
 

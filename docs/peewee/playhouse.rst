@@ -61,7 +61,7 @@ sqlite_ext API notes
 
 .. py:class:: SqliteExtDatabase(database, pragmas=(), c_extensions=True, **kwargs)
 
-    :param pragmas: A list of 2-tuples containing ``PRAGMA`` settings to configure on a per-connection basis.
+    :param pragmas: A list or tuple of 2-tuples containing ``PRAGMA`` settings to configure on a per-connection basis.
     :param bool c_extensions: Boolean flag indicating whether to use the fast implementations of various SQLite user-defined functions. If Cython was installed when you built ``peewee``, then these functions should be available. If not, Peewee will fall back to using the slower pure-Python functions.
 
     Subclass of the :py:class:`SqliteDatabase` that provides some advanced features only offered by Sqlite.
