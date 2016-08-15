@@ -274,7 +274,7 @@ class TestReflection(PeeweeTestCase):
                 ('f9', FloatField, False),
                 ('f10', IntegerField, False),
                 ('f11', PrimaryKeyField, False),
-                ('f12', TextField, False),
+                ('f12', (TextField, BlobField), False),
                 ('f13', TimeField, False))),
             ('relmodel', (
                 ('col_types_id', ForeignKeyField, False),
@@ -302,6 +302,8 @@ class TestReflection(PeeweeTestCase):
                 if not isinstance(field_class, (list, tuple)):
                     field_class = (field_class,)
                 column = introspected_columns[field_name]
+                if column.field_class not in field_class:
+                    import ipdb; ipdb.set_trace()
                 self.assertTrue(column.field_class in field_class)
                 self.assertEqual(column.nullable, is_null)
 
