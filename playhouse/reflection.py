@@ -261,7 +261,7 @@ class MySQLMetadata(Metadata):
         column_map = {}
     else:
         column_map = {
-            FIELD_TYPE.BLOB: BlobField,
+            FIELD_TYPE.BLOB: TextField,
             FIELD_TYPE.CHAR: CharField,
             FIELD_TYPE.DATE: DateField,
             FIELD_TYPE.DATETIME: DateTimeField,
@@ -269,16 +269,16 @@ class MySQLMetadata(Metadata):
             FIELD_TYPE.DOUBLE: FloatField,
             FIELD_TYPE.FLOAT: FloatField,
             FIELD_TYPE.INT24: IntegerField,
-            FIELD_TYPE.LONG_BLOB: BlobField,
+            FIELD_TYPE.LONG_BLOB: TextField,
             FIELD_TYPE.LONG: IntegerField,
             FIELD_TYPE.LONGLONG: BigIntegerField,
-            FIELD_TYPE.MEDIUM_BLOB: BlobField,
+            FIELD_TYPE.MEDIUM_BLOB: TextField,
             FIELD_TYPE.NEWDECIMAL: DecimalField,
             FIELD_TYPE.SHORT: IntegerField,
             FIELD_TYPE.STRING: CharField,
             FIELD_TYPE.TIMESTAMP: DateTimeField,
             FIELD_TYPE.TIME: TimeField,
-            FIELD_TYPE.TINY_BLOB: BlobField,
+            FIELD_TYPE.TINY_BLOB: TextField,
             FIELD_TYPE.TINY: IntegerField,
             FIELD_TYPE.VAR_STRING: CharField,
         }
