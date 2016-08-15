@@ -4,12 +4,9 @@ include README.rst
 include TODO.rst
 include runtests.py
 include tests.py
-include playhouse/_sqlite_udf.pyx
 include playhouse/_sqlite_ext.pyx
+include playhouse/_sqlite_udf.pyx
 include playhouse/_speedups.pyx
-include playhouse/_sqlite_udf.c
-include playhouse/_sqlite_ext.c
-include playhouse/_speedups.c
 include playhouse/pskel
 include playhouse/README.md
 include playhouse/tests/README

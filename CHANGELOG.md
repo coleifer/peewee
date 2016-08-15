@@ -14,7 +14,6 @@ This release contains mostly bug-fixes, clean-ups, and API enhancements.
 * #820 - fixed some bugs related to the Cython extension build process.
 * #858 - allow blanks and perform type conversion when using the `db_url`
   extension
-* #895 - added the ability to query using the `<foreign_key>_id` attribute.
 * #922 - ensure that `peewee.OperationalError` is raised consistently when
   using the `RetryOperationalError` mixin.
 * #929 - ensure that `pwiz` will import the appropriate extensions when
@@ -30,8 +29,6 @@ This release contains mostly bug-fixes, clean-ups, and API enhancements.
   pool.
 * #947 - fix bug where `Signal` subclasses were not returning rows affected on
   save.
-* #948 - added documentation about SQLite limits and how they affect
-  `insert_many`.
 * #951 - better warnings regarding C extension compilation, thanks @dhaase-de.
 * #968 - fix bug where table names starting with numbers generated invalid
   table names when using `pwiz`.
@@ -46,7 +43,6 @@ This release contains mostly bug-fixes, clean-ups, and API enhancements.
   would use the table alias of it's parent class.
 * #992 - add support for `db_column` in `djpeewee`
 * #995 - fix the behavior of `truncate_date` with Postgresql. Thanks @Zverik.
-* #1009 - allow `DATABASE_URL` as a recognized parameter to the Flask config.
 * #1011 - correctly handle `bytes` wrapper used by `PasswordField` to `bytes`.
 * #1012 - when selecting and joining on multiple models, do not create model
   instances when the foreign key is NULL.
@@ -80,6 +76,10 @@ This release contains mostly bug-fixes, clean-ups, and API enhancements.
 * Query results support negative indexing.
 * C sources are included now as part of the package. I *think* they should be
   able to compile for python 2 or 3, on linux or windows...but not positive.
+* #895 - added the ability to query using the `<foreign_key>_id` attribute.
+* #948 - added documentation about SQLite limits and how they affect
+* #1009 - allow `DATABASE_URL` as a recognized parameter to the Flask config.
+  `insert_many`.
 
 [View commits](https://github.com/coleifer/peewee/compare/2.8.1...2.8.2)
 
