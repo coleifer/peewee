@@ -264,7 +264,7 @@ class TestReflection(PeeweeTestCase):
         expected = (
             ('coltypes', (
                 ('f1', BigIntegerField, False),
-                ('f2', (BlobField, TextField), False),
+                ('f2', BlobField, False),
                 ('f3', (BooleanField, IntegerField), False),
                 ('f4', CharField, False),
                 ('f5', DateField, False),
@@ -406,14 +406,14 @@ class TestReflection(PeeweeTestCase):
         expected = (
             ('coltypes', (
                 ('f1', 'f1 = BigIntegerField(index=True)'),
-                #('f2', 'f2 = BlobField()'),
+                ('f2', 'f2 = BlobField()'),
                 ('f4', 'f4 = CharField()'),
                 ('f5', 'f5 = DateField()'),
                 ('f6', 'f6 = DateTimeField()'),
                 ('f7', 'f7 = DecimalField()'),
                 ('f10', 'f10 = IntegerField(unique=True)'),
                 ('f11', 'f11 = PrimaryKeyField()'),
-                ('f12', 'f12 = TextField()'),
+                ('f12', ('f12 = TextField()', 'f12 = BlobField()')),
                 ('f13', 'f13 = TimeField()'),
             )),
             ('nullable', (
@@ -455,7 +455,7 @@ class TestReflection(PeeweeTestCase):
         )
 
         for table, field_data in expected:
-            for field_name, field_str in field_data:
-                self.assertEqual(
-                    columns[table][field_name].get_field(),
-                    field_str)
+            for field_name, fields in field_data:
+                if not isinstance(fields, tuple):
+                    fields = (fields,)
+                self.assertTrue(columns[table][field_name].get_field(), fields)
