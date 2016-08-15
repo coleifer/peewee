@@ -264,7 +264,9 @@ class TestReflection(PeeweeTestCase):
         expected = (
             ('coltypes', (
                 ('f1', BigIntegerField, False),
-                ('f2', BlobField, False),
+                # There do not appear to be separate constants for the blob and
+                # text field types in MySQL's drivers. See GH#1034.
+                ('f2', (BlobField, TextField), False),
                 ('f3', (BooleanField, IntegerField), False),
                 ('f4', CharField, False),
                 ('f5', DateField, False),
@@ -274,7 +276,7 @@ class TestReflection(PeeweeTestCase):
                 ('f9', FloatField, False),
                 ('f10', IntegerField, False),
                 ('f11', PrimaryKeyField, False),
-                ('f12', (TextField, BlobField), False),
+                ('f12', TextField, False),
                 ('f13', TimeField, False))),
             ('relmodel', (
                 ('col_types_id', ForeignKeyField, False),
@@ -302,8 +304,6 @@ class TestReflection(PeeweeTestCase):
                 if not isinstance(field_class, (list, tuple)):
                     field_class = (field_class,)
                 column = introspected_columns[field_name]
-                if column.field_class not in field_class:
-                    import ipdb; ipdb.set_trace()
                 self.assertTrue(column.field_class in field_class)
                 self.assertEqual(column.nullable, is_null)
 
