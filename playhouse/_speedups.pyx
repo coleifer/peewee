@@ -273,7 +273,7 @@ cdef class _DictQueryResultWrapper(_QueryResultWrapper):
 cdef class _ModelQueryResultWrapper(_DictQueryResultWrapper):
     cdef process_row(self, tuple row):
         inst = self.model(**self._make_dict(row))
-        inst.prepared()
+        inst._prepare_instance()
         return inst
 
 

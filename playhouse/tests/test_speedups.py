@@ -26,6 +26,19 @@ class TestResultWrappers(ModelTestCase):
         for i in range(10):
             Note.create(content='note-%s' % i)
 
+    def test_dirty_fields(self):
+        note = Note.create(content='huey')
+        self.assertFalse(note.is_dirty())
+        self.assertEqual(note.dirty_fields, [])
+
+        ndb = Note.get(Note.content == 'huey')
+        self.assertFalse(ndb.is_dirty())
+        self.assertEqual(ndb.dirty_fields, [])
+
+        ndb.content = 'x'
+        self.assertTrue(ndb.is_dirty())
+        self.assertEqual(ndb.dirty_fields, ['content'])
+
     def test_tuple_results(self):
         query = Note.select().order_by(Note.id).tuples()
         qr = query.execute()
