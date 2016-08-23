@@ -1,7 +1,7 @@
 """
 Peewee integration with APSW, "another python sqlite wrapper".
 
-Project page: https://code.google.com/p/apsw/
+Project page: https://rogerbinns.github.io/apsw/
 
 APSW is a really neat library that provides a thin wrapper on top of SQLite's
 C interface.
