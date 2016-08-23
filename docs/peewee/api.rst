@@ -705,6 +705,20 @@ Fields
 
         Same as :py:attr:`~TimeField.hour`, except extract second..
 
+.. py:class:: TimestampField
+
+    Stores: python ``datetime.datetime`` instances (stored as integers)
+
+    Accepts a special parameter ``resolution``, which is a power-of-10 up to
+    ``10^6``. This allows sub-second precision while still using an
+    :py:class:`IntegerField` for storage. Default is ``1`` (second precision).
+
+    Also accepts a boolean parameter ``utc``, used to indicate whether the
+    timestamps should be UTC. Default is ``False``.
+
+    Finally, the field ``default`` is the current timestamp. If you do not want
+    this behavior, then explicitly pass in ``default=None``.
+
 .. py:class:: BooleanField
 
     Stores: ``True`` / ``False``

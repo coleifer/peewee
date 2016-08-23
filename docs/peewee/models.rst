@@ -134,6 +134,7 @@ Field Type              Sqlite              Postgresql          MySQL
 ``ForeignKeyField``     integer             integer             integer
 ``DateField``           date                date                date
 ``TimeField``           time                time                time
+``TimestampField``      integer             integer             integer
 ``BlobField``           blob                bytea               blob
 ``UUIDField``           text                uuid                varchar(40)
 ``BareField``           untyped             not supported       not supported
@@ -178,6 +179,8 @@ Some fields take special parameters...
 | :py:class:`DateField`          | ``formats``                                    |
 +--------------------------------+------------------------------------------------+
 | :py:class:`TimeField`          | ``formats``                                    |
++--------------------------------+------------------------------------------------+
+| :py:class:`TimestampField`     | ``resolution``, ``utc``                        |
 +--------------------------------+------------------------------------------------+
 | :py:class:`DecimalField`       | ``max_digits``, ``decimal_places``,            |
 |                                | ``auto_round``, ``rounding``                   |
