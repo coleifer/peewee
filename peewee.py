@@ -4719,7 +4719,7 @@ class BaseModel(type):
 class Model(with_metaclass(BaseModel)):
     def __init__(self, *args, **kwargs):
         self._data = self._meta.get_default_dict()
-        self._dirty = set()
+        self._dirty = set(self._data)
         self._obj_cache = {}
 
         for k, v in kwargs.items():

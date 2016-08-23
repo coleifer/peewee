@@ -31,6 +31,20 @@ class GCModel(Model):
             (('key', 'value'), True),
         )
 
+def incrementer():
+    d = {'value': 0}
+    def increment():
+        d['value'] += 1
+        return d['value']
+    return increment
+
+class DefaultsModel(Model):
+    field = IntegerField(default=incrementer())
+    control = IntegerField(default=1)
+
+    class Meta:
+        database = in_memory_db
+
 
 class TestQueryingModels(ModelTestCase):
     requires = [User, Blog]
@@ -677,7 +691,7 @@ class TestModelAPIs(ModelTestCase):
                 u = User.create(username='u1')
                 b = Blog.create(title='b1', user=u)
 
-            # The default value for the blog title will be saved as well.
+            # The default value for the blog content will be saved as well.
             self.assertEqual(
                 [params for _, params in query_logger.queries],
                 [['u1'], [u.id, 'b1', '']])
@@ -2208,3 +2222,41 @@ class TestJoinNullableForeignKey(ModelTestCase):
             (None, None),
             (None, None),
         ])
+
+
+class TestDefaultDirtyBehavior(PeeweeTestCase):
+    def setUp(self):
+        super(TestDefaultDirtyBehavior, self).setUp()
+        DefaultsModel.drop_table(True)
+        DefaultsModel.create_table()
+
+    def test_default_dirty(self):
+        DM = DefaultsModel
+        DM._meta.only_save_dirty = True
+
+        dm = DM()
+        dm.save()
+
+        self.assertEqual(dm.field, 1)
+        self.assertEqual(dm.control, 1)
+
+        dm_db = DM.get((DM.field == 1) & (DM.control == 1))
+        self.assertEqual(dm_db.field, 1)
+        self.assertEqual(dm_db.control, 1)
+
+        # No changes.
+        self.assertFalse(dm_db.save())
+
+        dm2 = DM.create()
+        self.assertEqual(dm2.field, 3)  # One extra when fetched from DB.
+        self.assertEqual(dm2.control, 1)
+
+        dm._meta.only_save_dirty = False
+
+        dm3 = DM()
+        self.assertEqual(dm3.field, 4)
+        self.assertEqual(dm3.control, 1)
+        dm3.save()
+
+        dm3_db = DM.get(DM.id == dm3.id)
+        self.assertEqual(dm3_db.field, 4)
