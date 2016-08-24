@@ -1755,12 +1755,15 @@ class QueryCompiler(object):
             sql = '(%s)' % sql
         elif isinstance(node, Model):
             sql = self.interpolation
-            if conv and isinstance(conv, ForeignKeyField) and \
-                    not isinstance(conv.to_field, ForeignKeyField):
-                params = [
-                    conv.to_field.db_value(getattr(node, conv.to_field.name))]
+            if conv and isinstance(conv, ForeignKeyField):
+                to_field = conv.to_field
+                if isinstance(to_field, ForeignKeyField):
+                    value = conv.db_value(node)
+                else:
+                    value = to_field.db_value(getattr(node, to_field.name))
             else:
-                params = [node._get_pk_value()]
+                value = node._get_pk_value()
+            params = [value]
         elif (isclass(node) and issubclass(node, Model)) or \
                 isinstance(node, ModelAlias):
             entity = node.as_entity().alias(alias_map[node])

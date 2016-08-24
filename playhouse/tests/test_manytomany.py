@@ -340,3 +340,62 @@ class TestManyToManyField(ModelTestCase):
             self.assertUsers(n1.users, [])
         with self.assertQueryCount(1):
             self.assertUsers(n5.users, ['zaizee'])
+
+
+class Person(BaseModel):
+    name = CharField()
+
+class Soul(BaseModel):
+    person = ForeignKeyField(Person, primary_key=True)
+
+class SoulList(BaseModel):
+    name = CharField()
+    souls = ManyToManyField(Soul, related_name='lists')
+
+SoulListThrough = SoulList.souls.get_through_model()
+
+class TestForeignKeyPrimaryKeyManyToMany(ModelTestCase):
+    requires = [Person, Soul, SoulList, SoulListThrough]
+    test_data = (
+        ('huey', ('cats', 'evil')),
+        ('zaizee', ('cats', 'good')),
+        ('mickey', ('dogs', 'good')),
+        ('zombie', ()),
+    )
+
+    def setUp(self):
+        super(TestForeignKeyPrimaryKeyManyToMany, self).setUp()
+
+        name2list = {}
+        for name, lists in self.test_data:
+            p = Person.create(name=name)
+            s = Soul.create(person=p)
+            for l in lists:
+                if l not in name2list:
+                    name2list[l] = SoulList.create(name=l)
+                name2list[l].souls.add(s)
+
+    def soul_for(self, name):
+        return Soul.select().join(Person).where(Person.name == name).get()
+
+    def assertLists(self, l1, l2):
+        self.assertEqual(sorted(list(l1)), sorted(list(l2)))
+
+    def test_pk_is_fk(self):
+        list2names = {}
+        for name, lists in self.test_data:
+            soul = self.soul_for(name)
+            self.assertLists([l.name for l in soul.lists],
+                             lists)
+            for l in lists:
+                list2names.setdefault(l, [])
+                list2names[l].append(name)
+
+        for list_name, names in list2names.items():
+            soul_list = SoulList.get(SoulList.name == list_name)
+            self.assertLists([s.person.name for s in soul_list.souls],
+                             names)
+
+    def test_empty(self):
+        sl = SoulList.create(name='empty')
+        self.assertEqual(list(sl.souls), [])
