@@ -11,12 +11,22 @@ except ImportError:
 
 if django is not None:
     from django.conf import settings
-    settings.configure(
-        DATABASES={
-            'default': {
-                'engine': 'django.db.backends.sqlite3',
-                'name': ':memory:'}},
-    )
+    if not settings.configured:
+        settings.configure(
+            DATABASES={
+                'default': {
+                    'engine': 'django.db.backends.sqlite3',
+                    'name': ':memory:'}},
+            INSTALLED_APPS=['playhouse.tests.test_djpeewee'],
+            SITE_ID=1,
+        )
+    try:
+        from django import setup
+    except ImportError:
+        pass
+    else:
+        setup()
+
     from django.db import models
     from playhouse.djpeewee import translate
 
@@ -146,9 +156,9 @@ class TestDjPeewee(PeeweeTestCase):
         self.assertEqual(
             sql,
             'SELECT "t1"."id", "t1"."username" FROM "user_tbl" AS t1 '
-            'INNER JOIN "tests_post" AS t2 '
+            'INNER JOIN "test_djpeewee_post" AS t2 '
             'ON ("t1"."id" = "t2"."author_id") '
-            'INNER JOIN "tests_comment" AS t3 '
+            'INNER JOIN "test_djpeewee_comment" AS t3 '
             'ON ("t2"."id" = "t3"."post_id") WHERE ("t3"."comment" = %s)')
         self.assertEqual(params, ['test'])
 
@@ -167,10 +177,10 @@ class TestDjPeewee(PeeweeTestCase):
         self.assertEqual(
             sql,
             'SELECT "t1"."id", "t1"."author_id", "t1"."content" '
-            'FROM "tests_post" AS t1 '
-            'INNER JOIN "tests_tag_posts" AS t2 '
+            'FROM "test_djpeewee_post" AS t1 '
+            'INNER JOIN "test_djpeewee_tag_posts" AS t2 '
             'ON ("t1"."id" = "t2"."post_id") '
-            'INNER JOIN "tests_tag" AS t3 '
+            'INNER JOIN "test_djpeewee_tag" AS t3 '
             'ON ("t2"."tag_id" = "t3"."id") WHERE ("t3"."tag" = %s)')
 
         self.assertEqual(params, ['test'])

@@ -119,11 +119,19 @@ class DjangoTranslator(object):
 
         if backrefs:
             # Follow back-references for foreign keys.
-            for rel_obj in options.get_all_related_objects():
-                if rel_obj.model._meta.object_name in mapping:
+            try:
+                all_related = [(f, f.model) for f in
+                               options.get_all_related_objects()]
+            except AttributeError:
+                all_related = [(f, f.field.model) for f in options.get_fields()
+                               if (f.one_to_many or f.one_to_one)
+                               and f.auto_created and not f.concrete]
+
+            for rel_obj, model in all_related:
+                if model._meta.object_name in mapping:
                     continue
                 self._translate_model(
-                    rel_obj.model,
+                    model,
                     mapping,
                     max_depth=max_depth - 1,
                     backrefs=backrefs,
