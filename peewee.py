@@ -1401,13 +1401,14 @@ class ForeignKeyField(IntegerField):
 
         self.name = name
         self.model_class = model_class
-        self.db_column = self.db_column or '%s_id' % self.name
+        self.db_column = obj_id_name = self.db_column or '%s_id' % self.name
+        if obj_id_name == self.name:
+            obj_id_name += '_id'
         if not self.verbose_name:
             self.verbose_name = re.sub('_+', ' ', name).title()
 
         model_class._meta.add_field(self)
 
-        obj_id_name = name + '_id'
         self.related_name = self._get_related_name()
         if self.rel_model == 'self':
             self.rel_model = self.model_class

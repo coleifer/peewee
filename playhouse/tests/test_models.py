@@ -539,6 +539,26 @@ class TestModelAPIs(ModelTestCase):
         with self.assertQueryCount(1):
             self.assertEqual(result.user.id, u.id)
 
+    def test_object_id_descriptor_naming(self):
+        class Person(Model):
+            pass
+
+        class Foo(Model):
+            me = ForeignKeyField(Person, db_column='me', related_name='foo1')
+            another = ForeignKeyField(Person, db_column='_whatever_',
+                                      related_name='foo2')
+            another2 = ForeignKeyField(Person, db_column='person_id',
+                                       related_name='foo3')
+            plain = ForeignKeyField(Person, related_name='foo4')
+
+        self.assertTrue(Foo.me is Foo.me_id)
+        self.assertTrue(Foo.another is Foo._whatever_)
+        self.assertTrue(Foo.another2 is Foo.person_id)
+        self.assertTrue(Foo.plain is Foo.plain_id)
+
+        self.assertRaises(AttributeError, lambda: Foo.another_id)
+        self.assertRaises(AttributeError, lambda: Foo.another2_id)
+
     def test_category_select_related_alias(self):
         g1 = Category.create(name='g1')
         g2 = Category.create(name='g2')
