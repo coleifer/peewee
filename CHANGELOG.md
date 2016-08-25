@@ -5,6 +5,45 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.8.3
+
+This release contains bugfixes and a small backwards-incompatible change to the
+way foreign key `ObjectIdDescriptor` is named (issue #1050).
+
+### Bugs fixed and general changes
+
+* #1028 - allow the `ensure_join` method to accept `on` and `join_type`
+  parameters. Thanks @paulbooth.
+* #1032 - fix bug related to coercing model instances to database parameters
+  when the model's primary key is a foreign key.
+* #1035 - fix bug introduced in 2.8.2, where I had added some logic to try and
+  restrict the base `Model` class from being treated as a "real" Model.
+* #1039 - update documentation to clarify that lists *or tuples* are acceptable
+  values when specifying SQLite `PRAGMA` statements.
+* #1041 - PyPy user was unable to install Peewee. (Who in their right mind
+  would *ever* use PyPy?!) Bug was fixed by removing the pre-generated C files
+  from the distribution.
+* #1043 - fix bug where the `speedups` C extension was not calling the correct
+  model initialization method, resulting in model instances returned as results
+  of a query having their `dirty` flag incorrectly set.
+* #1048 - similar to #1043, add logic to ensure that fields with default values
+  are considered dirty when instantiating the model.
+* #1049 - update URL to [APSW](https://rogerbinns.github.io/apsw).
+* Fixed unreported bug regarding `TimestampField` with zero values reporting
+  the incorrect datetime.
+
+### New stuff
+
+* [djpeewee](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#djpeewee) extension
+  module now works with Django 1.9.
+* [TimestampField](http://docs.peewee-orm.com/en/latest/peewee/api.html#TimestampField)
+  is now an officially documented field.
+* #1050 - use the `db_column` of a `ForeignKeyField` for the name of the
+  `ObjectIdDescriptor`, except when the `db_column` and field `name` are the
+  same, in which case the ID descriptor will be named `<field_name>_id`.
+
+[View commits](https://github.com/coleifer/peewee/compare/2.8.2...2.8.3)
+
 ## 2.8.2
 
 This release contains mostly bug-fixes, clean-ups, and API enhancements.
