@@ -1274,7 +1274,9 @@ class TimestampField(IntegerField):
 
     def python_value(self, value):
         if value is not None and isinstance(value, (int, float, long)):
-            if self.resolution > 1:
+            if value == 0:
+                return
+            elif self.resolution > 1:
                 value, microseconds = divmod(value, self.resolution)
                 return self._conv(value).replace(microsecond=microseconds)
             else:
