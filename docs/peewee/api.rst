@@ -2853,6 +2853,13 @@ Misc
 
         Concatenate the current node with the provided ``rhs``.
 
+        .. warning::
+            In order for this method to work with MySQL, the MySQL session must
+            be set to use ``PIPES_AS_CONCAT``.
+
+            To reliably concatenate strings with MySQL, use
+            ``fn.CONCAT(s1, s2...)`` instead.
+
     .. py:method:: is_null([is_null=True])
 
         Create an expression testing whether the ``Node`` is (or is not) ``NULL``.
