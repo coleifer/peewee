@@ -199,7 +199,9 @@ Some fields take special parameters...
 Default field values
 ^^^^^^^^^^^^^^^^^^^^
 
-Peewee can provide default values for fields when objects are created. For example to have an ``IntegerField`` default to zero rather than ``NULL``, you could declare the field with a default value:
+Peewee can provide default values for fields when objects are created. For
+example to have an ``IntegerField`` default to zero rather than ``NULL``, you
+could declare the field with a default value:
 
 .. code-block:: python
 
@@ -207,7 +209,11 @@ Peewee can provide default values for fields when objects are created. For examp
         context = TextField()
         read_count = IntegerField(default=0)
 
-In some instances it may make sense for the default value to be dynamic. A common scenario is using the current date and time. Peewee allows you to specify a function in these cases, whose return value will be used when the object is created. Note we only provide the function, we do not actually *call* it:
+In some instances it may make sense for the default value to be dynamic. A
+common scenario is using the current date and time. Peewee allows you to
+specify a function in these cases, whose return value will be used when the
+object is created. Note we only provide the function, we do not actually *call*
+it:
 
 .. code-block:: python
 
@@ -215,9 +221,25 @@ In some instances it may make sense for the default value to be dynamic. A commo
         context = TextField()
         timestamp = DateTimeField(default=datetime.datetime.now)
 
-When using the ``default`` parameter, the values are set by Peewee rather than being a part of the actual table and column definition.
+.. note::
+    If you are using a field that accepts a mutable type (`list`, `dict`, etc),
+    and would like to provide a default, it is a good idea to wrap your default
+    value in a simple function so that multiple model instances are not sharing
+    a reference to the same underlying object:
 
-The database can also provide the default value for a field. While peewee does not explicitly provide an API for setting a server-side default value, you can use the ``constraints`` parameter to specify the server default:
+    .. code-block:: python
+
+        def house_defaults():
+            return {'beds': 0, 'baths': 0}
+
+        class House(Model):
+            number = TextField()
+            street = TextField()
+            attributes = JSONField(default=house_defaults)
+
+The database can also provide the default value for a field. While peewee does
+not explicitly provide an API for setting a server-side default value, you can
+use the ``constraints`` parameter to specify the server default:
 
 .. code-block:: python
 
@@ -225,6 +247,9 @@ The database can also provide the default value for a field. While peewee does n
         context = TextField()
         timestamp = DateTimeField(constraints=[SQL('DEFAULT CURRENT_TIMESTAMP')])
 
+.. note::
+    **Remember:** when using the ``default`` parameter, the values are set by
+    Peewee rather than being a part of the actual table and column definition.
 
 ForeignKeyField
 ^^^^^^^^^^^^^^^
