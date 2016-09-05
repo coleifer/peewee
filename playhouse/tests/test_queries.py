@@ -382,6 +382,21 @@ class TestSelectQuery(PeeweeTestCase):
         sq = SelectQuery(User).where((User.username << ['u1', 'u2']) | (User.username << ['u3', 'u4']))
         self.assertWhere(sq, '(("users"."username" IN (?, ?)) OR ("users"."username" IN (?, ?)))', ['u1', 'u2', 'u3', 'u4'])
 
+    def test_where_in_empty(self):
+        sq = SelectQuery(User).where(User.username << [])
+        self.assertWhere(sq, '(0 = 1)', [])
+
+        sq = SelectQuery(User).where(User.username << ())
+        self.assertWhere(sq, '(0 = 1)', [])
+
+        # NOT IN is not affected.
+        sq = SelectQuery(User).where(User.username.not_in([]))
+        self.assertWhere(sq, '("users"."username" NOT IN ())', [])
+
+        # But ~ (x IN y) is.
+        sq = SelectQuery(User).where(~(User.username << ()))
+        self.assertWhere(sq, 'NOT (0 = 1)', [])
+
     def test_where_sets(self):
         def where_sql(expr, query=None):
             if query is None:
