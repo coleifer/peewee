@@ -9,9 +9,10 @@ except ImportError:
 
 try:
     from gevent import Greenlet as GThread
+    from gevent.event import Event as GEvent
     from gevent.queue import Queue as GQueue
 except ImportError:
-    GThread = GQueue = None
+    GThread = GQueue = GEvent = None
 
 from playhouse.sqlite_ext import SqliteExtDatabase
 
@@ -81,6 +82,9 @@ class Environment(object):
     def create_queue(self, queue_max_size=None):
         raise NotImplementedError
 
+    def create_event(self):
+        raise NotImplementedError
+
     def get_queue_size(self):
         return self.queue.qsize()
 
@@ -97,6 +101,9 @@ class ThreadEnvironment(Environment):
     def is_worker_stopped(self):
         return not self.worker.isAlive()
 
+    def create_event(self):
+        return Event()
+
     def create_queue(self, queue_max_size=None):
         return Queue(maxsize=queue_max_size)
 
@@ -112,13 +119,17 @@ class GreenletEnvironment(Environment):
     def is_worker_stopped(self):
         return self.worker.dead
 
+    def create_event(self):
+        return GEvent()
+
     def create_queue(self, queue_max_size=None):
         return GQueue(maxsize=queue_max_size)
 
 
 class Execution(object):
-    def __init__(self, database, sql, params, require_commit=False):
+    def __init__(self, database, event, sql, params, require_commit=False):
         self.db = database
+        self.event = event
         self.sql = sql
         self.params = params
         self.require_commit = require_commit
@@ -127,11 +138,9 @@ class Execution(object):
         self.__cursor = None
         self.__idx = 0
         self.__exc = None
-        self.__populated = False
         self.__results = None
         self.__lastrowid = None
         self.__rowcount = None
-        self.__event = Event()
 
     def __del__(self):
         if self.__cursor is not None:
@@ -140,28 +149,23 @@ class Execution(object):
     def execute(self):
         self.__exc = None
         self.__cursor = self.db._process_execution(self)
-        self.__populated = False
-        self.__event.set()
-
-    def __populate(self):
-        self.__event.wait()
         if self.__exc:
             raise self.__exc
+        self.__populate()
+        self.event.set()
+
+    def __populate(self):
         self.__idx = 0
         self.__results = [row for row in self.__cursor]
-        self.__populated = True
 
     def set_exception(self, exc):
         self.__exc = exc
 
     def __iter__(self):
-        if not self.__populated:
-            self.__populate()
         return self
 
     def next(self):
-        if not self.__populated:
-            self.__populate()
+        self.event.wait()
         try:
             obj = self.__results[self.__idx]
         except IndexError:
@@ -173,12 +177,12 @@ class Execution(object):
 
     @property
     def lastrowid(self):
-        self.__event.wait()
+        self.event.wait()
         return self.__cursor.lastrowid
 
     @property
     def rowcount(self):
-        self.__event.wait()
+        self.event.wait()
         return self.__cursor.rowcount
 
     @property
@@ -221,7 +225,8 @@ class SqliteThreadDatabase(SqliteExtDatabase):
                                   execution.require_commit)
 
     def execute_sql(self, sql, params=None, require_commit=True):
-        execution = Execution(self, sql, params, require_commit)
+        event = self.environment.create_event()
+        execution = Execution(self, event, sql, params, require_commit)
         self.environment.enqueue(execution)
         return execution
 
