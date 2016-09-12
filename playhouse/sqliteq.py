@@ -66,7 +66,7 @@ class Environment(object):
                              (timeout or 'indefinitely'))
                 self.worker.join(timeout=timeout)
 
-        worker_finished = not self.worker.isAlive()
+        worker_finished = self.is_worker_stopped()
         logger.debug('returning from stop(), worker is %sfinished' %
                      ('' if worker_finished else 'not '))
 
@@ -75,8 +75,14 @@ class Environment(object):
     def create_worker(self):
         raise NotImplementedError
 
+    def is_worker_stopped(self):
+        raise NotImplementedError
+
     def create_queue(self, queue_max_size=None):
         raise NotImplementedError
+
+    def get_queue_size(self):
+        return self.queue.qsize()
 
     def enqueue(self, execution):
         self.queue.put(execution)
@@ -87,6 +93,9 @@ class ThreadEnvironment(Environment):
         worker = Thread(target=self.worker_loop, name='sqliteq-worker')
         worker.daemon = True
         return worker
+
+    def is_worker_stopped(self):
+        return not self.worker.isAlive()
 
     def create_queue(self, queue_max_size=None):
         return Queue(maxsize=queue_max_size)
@@ -99,6 +108,9 @@ class GreenletEnvironment(Environment):
 
     def create_worker(self):
         return GThread(run=self.worker_loop)
+
+    def is_worker_stopped(self):
+        return self.worker.dead
 
     def create_queue(self, queue_max_size=None):
         return GQueue(maxsize=queue_max_size)
@@ -214,7 +226,10 @@ class SqliteThreadDatabase(SqliteExtDatabase):
         return execution
 
     def start_worker(self):
-        self.environment.start()
+        return self.environment.start()
 
-    def shutdown(self):
-        self.environment.stop()
+    def shutdown(self, block=True, timeout=None):
+        return self.environment.stop(block=block, timeout=timeout)
+
+    def queue_size(self):
+        return self.environment.get_queue_size()
