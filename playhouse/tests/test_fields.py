@@ -432,7 +432,7 @@ class TestTimestampField(ModelTestCase):
         t1_db = TimestampModel.get(TimestampModel.local_us == dt)
         self.assertEqual(t1_db.id, t1.id)
         self.assertEqual(t1_db.local_us, dt)
-        self.assertEqual(t1_db.utc_ms, dt.replace(microsecond=654))
+        self.assertEqual(t1_db.utc_ms, dt.replace(microsecond=654000))
         self.assertEqual(t1_db.local,
                          dt.replace(microsecond=0).replace(second=14))
 
@@ -453,7 +453,7 @@ class TestTimestampField(ModelTestCase):
 
         expected = datetime.datetime(2016, 1, 3, 12, 12, 13)
         self.assertEqual(t3_db.local_us, expected.replace(microsecond=654321))
-        self.assertEqual(t3_db.utc_ms, expected.replace(microsecond=654))
+        self.assertEqual(t3_db.utc_ms, expected.replace(microsecond=654000))
         self.assertEqual(t3_db.local, expected.replace(second=14))
 
 

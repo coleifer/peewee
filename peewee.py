@@ -1277,7 +1277,9 @@ class TimestampField(IntegerField):
             if value == 0:
                 return
             elif self.resolution > 1:
-                value, microseconds = divmod(value, self.resolution)
+                ticks_to_microsecond = 1000000 // self.resolution
+                value, ticks = divmod(value, self.resolution)
+                microseconds = ticks * ticks_to_microsecond
                 return self._conv(value).replace(microsecond=microseconds)
             else:
                 return self._conv(value)
