@@ -1,4 +1,5 @@
 import logging
+import weakref
 from threading import Event
 from threading import Lock
 from threading import Thread
@@ -128,7 +129,7 @@ class GreenletEnvironment(Environment):
 
 class Execution(object):
     def __init__(self, database, event, sql, params, require_commit=False):
-        self.db = database
+        self.db = weakref.proxy(database)
         self.event = event
         self.sql = sql
         self.params = params
