@@ -3592,9 +3592,10 @@ class Database(object):
                 raise Exception('Error, database not properly initialized '
                                 'before opening connection')
             with self.exception_wrapper():
-                self._local.conn = self._connect(
-                    self.database,
-                    **self.connect_kwargs)
+                if self._local.conn is None:
+                    self._local.conn = self._connect(
+                        self.database,
+                        **self.connect_kwargs)
                 self._local.closed = False
                 self.initialize_connection(self._local.conn)
 
