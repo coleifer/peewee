@@ -10,6 +10,8 @@ logger = logging.getLogger('peewee')
 class test_database(object):
     def __init__(self, db, models, create_tables=True, drop_tables=True,
                  fail_silently=False):
+        if not isinstance(models, (list, tuple, set)):
+            raise ValueError('%r must be a list or tuple.' % models)
         self.db = db
         self.models = models
         self.create_tables = create_tables

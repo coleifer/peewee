@@ -9,9 +9,7 @@ except ImportError:
     gevent = None
 
 from peewee import *
-from playhouse.sqliteq import GreenletEnvironment
-from playhouse.sqliteq import SqliteThreadDatabase
-from playhouse.sqliteq import ThreadEnvironment
+from playhouse.sqliteq import SqliteQueueDatabase
 from playhouse.tests.base import database_initializer
 from playhouse.tests.base import PeeweeTestCase
 from playhouse.tests.base import skip_if
@@ -20,7 +18,7 @@ from playhouse.tests.base import skip_if
 get_db = partial(
     database_initializer.get_database,
     'sqlite',
-    db_class=SqliteThreadDatabase)
+    db_class=SqliteQueueDatabase)
 
 db = database_initializer.get_database('sqlite')
 
@@ -31,42 +29,42 @@ class User(Model):
         db_table = 'threaded_db_test_user'
 
 
-class BaseTestThreadedDatabase(object):
-    environment_type = None
+class BaseTestQueueDatabase(object):
+    database_config = {}
 
     def setUp(self):
-        super(BaseTestThreadedDatabase, self).setUp()
+        super(BaseTestQueueDatabase, self).setUp()
         with db.execution_context():
             User.create_table(True)
         User._meta.database = \
-                self.db = get_db(environment_type=self.environment_type)
+                self.db = get_db(**self.database_config)
 
         # Sanity check at startup.
-        self.assertEqual(self.db.queue_size(), 0)
+        self.assertEqual(self.db.queue_size(), (0, 0))
 
     def tearDown(self):
-        super(BaseTestThreadedDatabase, self).tearDown()
+        super(BaseTestQueueDatabase, self).tearDown()
         User._meta.database = db
         with db.execution_context():
             User.drop_table()
 
     def test_query_execution(self):
         qr = User.select().execute()
-        self.assertEqual(self.db.queue_size(), 1)
+        self.assertEqual(self.db.queue_size(), (0, 1))
 
-        self.db.start_worker()
+        self.db.start()
         self.assertEqual(list(qr), [])
-        self.assertEqual(self.db.queue_size(), 0)
-        self.db.shutdown()
+        self.assertEqual(self.db.queue_size(), (0, 0))
+        self.db.stop()
 
 
-class TestThreadedDatabaseThreads(BaseTestThreadedDatabase, PeeweeTestCase):
-    environment_type = ThreadEnvironment
+class TestThreadedDatabaseThreads(BaseTestQueueDatabase, PeeweeTestCase):
+    database_config = {'use_gevent': False}
 
 
 @skip_if(lambda: gevent is None)
-class TestThreadedDatabaseGreenlets(BaseTestThreadedDatabase, PeeweeTestCase):
-    environment_type = GreenletEnvironment
+class TestThreadedDatabaseGreenlets(BaseTestQueueDatabase, PeeweeTestCase):
+    database_config = {'use_gevent': True}
 
 
 if __name__ == '__main__':
