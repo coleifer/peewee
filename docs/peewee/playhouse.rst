@@ -4005,7 +4005,7 @@ Contains utilities helpful when testing peewee projects.
     using a "test-only" database.
 
     :param Database db: Database to use with the given models
-    :param models: a ``list`` of :py:class:`Model` classes to use with the ``db``
+    :param models: a ``list`` or ``tuple`` of :py:class:`Model` classes to use with the ``db``
     :param boolean create_tables: Whether tables should be automatically created
         and dropped.
     :param boolean fail_silently: Whether the table create / drop should fail
@@ -4036,6 +4036,10 @@ Contains utilities helpful when testing peewee projects.
 
                     # Perform assertions on test data inside ctx manager.
                     self.assertEqual(Tweet.timeline('user-0') [...])
+
+                with test_database(test_db, (User,)):
+                    # Test something that just affects user.
+                    self.test_some_user_thing()
 
                 # once we exit the context manager, we're back to using the normal database
 
