@@ -52,6 +52,7 @@ def get_option_parser():
     cases.add_option('--shortcuts', dest='shortcuts', default=False, action='store_true', help='shortcuts tests')
     cases.add_option('--speedups', dest='speedups', default=False, action='store_true', help='speedups c extension tests')
     cases.add_option('--sqlcipher-ext', dest='sqlcipher', default=False, action='store_true', help='sqlcipher_ext tests (requires pysqlcipher)')
+    cases.add_option('--sqliteq', dest='sqliteq', default=False, action='store_true', help='sqliteq tests')
     cases.add_option('--sqlite-c-ext', dest='sqlite_c', default=False, action='store_true', help='sqlite c extension tests')
     cases.add_option('--sqlite-ext', dest='sqlite_ext', default=False, action='store_true', help='sqlite_ext tests')
     cases.add_option('--sqlite-udf', dest='sqlite_udf', default=False, action='store_true', help='sqlite_udf tests')
@@ -161,6 +162,9 @@ def collect_modules(options):
             modules.append(test_sqlcipher_ext)
         except ImportError:
             print_('Unable to import pysqlcipher tests, skipping')
+    if xtra(options.sqliteq):
+        from playhouse.tests import test_sqliteq
+        modules.append(test_sqliteq)
     if xtra(options.sqlite_c):
         try:
             from playhouse.tests import test_sqlite_c_ext

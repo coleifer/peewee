@@ -49,6 +49,8 @@ class AsyncCursor(object):
         timeout = timeout if timeout is not None else self.timeout
         if not self._event.wait(timeout=timeout) and timeout:
             raise ResultTimeout('results not ready, timed out.')
+        if self._exc is not None:
+            raise self._exc
 
     def __iter__(self):
         self._wait()
@@ -79,6 +81,9 @@ class AsyncCursor(object):
     @property
     def description(self):
         return self._cursor.description
+
+    def close(self):
+        self._cursor.close()
 
     def fetchall(self):
         return list(self)  # Iterating implies waiting until populated.
