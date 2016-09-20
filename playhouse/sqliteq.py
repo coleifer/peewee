@@ -134,11 +134,13 @@ class SqliteQueueDatabase(SqliteExtDatabase):
         self._autostart = autostart
         self._results_timeout = results_timeout
         self._num_readers = readers
-        self._thread_helper = ((GreenletHelper if use_gevent else ThreadHelper)
-                               (queue_max_size))
+        self._thread_helper = self.get_thread_impl(use_gevent)(queue_max_size)
         self._create_queues_and_workers()
         if self._autostart:
             self.start()
+
+    def get_thread_impl(self, use_gevent):
+        return GreenletHelper if use_gevent else ThreadHelper
 
     def _validate_journal_mode(self, journal_mode=None, pragmas=None):
         if journal_mode and journal_mode.lower() != 'wal':
