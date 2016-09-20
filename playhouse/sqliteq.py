@@ -147,11 +147,11 @@ class SqliteQueueDatabase(SqliteExtDatabase):
             raise ValueError(WAL_MODE_ERROR_MESSAGE)
 
         if pragmas:
-            pdict = dict((k.lower(), v) for (k, v) in kwargs['pragmas'])
+            pdict = dict((k.lower(), v) for (k, v) in pragmas)
             if pdict.get('journal_mode', 'wal').lower() != 'wal':
                 raise ValueError(WAL_MODE_ERROR_MESSAGE)
 
-            return [(k, v) for (k, v) in kwargs.pop('pragmas')
+            return [(k, v) for (k, v) in pragmas
                     if k != 'journal_mode'] + [('journal_mode', 'wal')]
         else:
             return [('journal_mode', 'wal')]
