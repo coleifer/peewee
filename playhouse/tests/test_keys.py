@@ -401,6 +401,29 @@ class TestDeferredForeignKey(ModelTestCase):
         self.assertEqual(
             Language.get(Language.id == javascript.id).selected_snippet, None)
 
+    def test_multiple_refs(self):
+        person_ref = DeferredRelation()
+        class Relationship(TestModel):
+            person_from = ForeignKeyField(person_ref, related_name='f1')
+            person_to = ForeignKeyField(person_ref, related_name='f2')
+        class SomethingElse(TestModel):
+            person = ForeignKeyField(person_ref)
+
+        class Person(TestModel):
+            name = CharField()
+        person_ref.set_model(Person)
+
+        p1 = Person(id=1, name='p1')
+        p2 = Person(id=2, name='p2')
+        p3 = Person(id=3, name='p3')
+        r = Relationship(person_from=p1, person_to=p2)
+        s = SomethingElse(person=p3)
+
+        self.assertEqual(r.person_from.name, 'p1')
+        self.assertEqual(r.person_to.name, 'p2')
+        self.assertEqual(s.person.name, 'p3')
+
+
 
 class TestSQLiteDeferredForeignKey(PeeweeTestCase):
     def test_doc_example(self):

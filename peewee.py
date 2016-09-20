@@ -429,18 +429,18 @@ class DeferredRelation(object):
     _unresolved = set()
 
     def __init__(self, rel_model_name=None):
+        self.fields = []
         if rel_model_name is not None:
             self._rel_model_name = rel_model_name.lower()
             self._unresolved.add(self)
 
     def set_field(self, model_class, field, name):
-        self.model_class = model_class
-        self.field = field
-        self.name = name
+        self.fields.append((model_class, field, name))
 
     def set_model(self, rel_model):
-        self.field.rel_model = rel_model
-        self.field.add_to_class(self.model_class, self.name)
+        for model, field, name in self.fields:
+            field.rel_model = rel_model
+            field.add_to_class(model, name)
 
     @staticmethod
     def resolve(model_cls):
