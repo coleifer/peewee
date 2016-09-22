@@ -2288,42 +2288,47 @@ class QueryResultWrapper(object):
 
 class ExtQueryResultWrapper(QueryResultWrapper):
     def initialize(self, description):
-        model = self.model
-        conv = []
-        identity = lambda x: x
-        for i in range(len(description)):
-            func = identity
-            column = description[i][0]
-            found = False
-            if self.column_meta is not None:
-                try:
-                    select_column = self.column_meta[i]
-                except IndexError:
-                    pass
-                else:
-                    if isinstance(select_column, Field):
-                        func = select_column.python_value
-                        column = select_column._alias or select_column.name
-                        found = True
-                    elif (isinstance(select_column, Func) and
-                            len(select_column.arguments) and
-                            isinstance(select_column.arguments[0], Field)):
-                        if select_column._coerce:
-                            # Special-case handling aggregations.
-                            func = select_column.arguments[0].python_value
-                        found = True
+        n_cols = len(description)
+        self.conv = conv = []
+        if self.column_meta is not None:
+            n_meta = len(self.column_meta)
+            for i, node in enumerate(self.column_meta):
+                if not self._initialize_node(node, i):
+                    self._initialize_by_name(description[i][0], i)
+            if n_cols == n_meta:
+                return
+        else:
+            i = 0
 
-            if not found and column in model._meta.columns:
-                field_obj = model._meta.columns[column]
-                column = field_obj.name
-                func = field_obj.python_value
+        for i in range(i, n_cols):
+            self._initialize_by_name(description[i][0], i)
 
-            conv.append((i, column, func))
-        self.conv = conv
+    def _initialize_by_name(self, name, i):
+        model_cols = self.model._meta.columns
+        if name in model_cols:
+            field = model_cols[name]
+            self.conv.append((i, field.name, field.python_value))
+        else:
+            self.conv.append((i, name, None))
+
+    def _initialize_node(self, node, i):
+        if isinstance(node, Field):
+            self.conv.append((i, node._alias or node.name, node.python_value))
+            return True
+        elif isinstance(node, Func) and len(node.arguments):
+            arg = node.arguments[0]
+            if isinstance(arg, Field):
+                name = node._alias or arg._alias or arg.name
+                func = node._coerce and arg.python_value or None
+                self.conv.append((i, name, func))
+                return True
+        return False
+
 
 class TuplesQueryResultWrapper(ExtQueryResultWrapper):
     def process_row(self, row):
-        return tuple([self.conv[i][2](col) for i, col in enumerate(row)])
+        return tuple([col if self.conv[i][2] is None else self.conv[i][2](col)
+                      for i, col in enumerate(row)])
 
 if _TuplesQueryResultWrapper is None:
     _TuplesQueryResultWrapper = TuplesQueryResultWrapper
@@ -2331,8 +2336,8 @@ if _TuplesQueryResultWrapper is None:
 class NaiveQueryResultWrapper(ExtQueryResultWrapper):
     def process_row(self, row):
         instance = self.model()
-        for i, column, func in self.conv:
-            setattr(instance, column, func(row[i]))
+        for i, column, f in self.conv:
+            setattr(instance, column, f(row[i]) if f is not None else row[i])
         instance._prepare_instance()
         return instance
 
@@ -2342,8 +2347,8 @@ if _ModelQueryResultWrapper is None:
 class DictQueryResultWrapper(ExtQueryResultWrapper):
     def process_row(self, row):
         res = {}
-        for i, column, func in self.conv:
-            res[column] = func(row[i])
+        for i, column, f in self.conv:
+            res[column] = f(row[i]) if f is not None else row[i]
         return res
 
 if _DictQueryResultWrapper is None:
@@ -2431,9 +2436,7 @@ class ModelQueryResultWrapper(QueryResultWrapper):
             instance = collected_models[key]
             if attr is None:
                 attr = self.cursor.description[i][0]
-            if conv is not None:
-                value = conv(value)
-            setattr(instance, attr, value)
+            setattr(instance, attr, value if conv is None else conv(value))
 
         return collected_models
 
