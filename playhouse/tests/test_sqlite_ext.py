@@ -739,12 +739,16 @@ class TestUserDefinedCallbacks(ModelTestCase):
         def test_locked_dbr(isolation_level):
             with ext_db.granular_transaction(isolation_level):
                 Post.create(message='p2')
-                conn2 = ext_db._connect(ext_db.database, **ext_db.connect_kwargs)
-                res = conn2.execute('select message from post')
+                other_db = database_initializer.get_database(
+                    'sqlite',
+                    db_class=SqliteExtDatabase,
+                    timeout=0.1,
+                    use_speedups=False)
+                res = other_db.execute_sql('select message from post')
                 return res.fetchall()
 
         # no read-only stuff with exclusive locks
-        self.assertRaises(sqlite3.OperationalError, test_locked_dbr, 'exclusive')
+        self.assertRaises(OperationalError, test_locked_dbr, 'exclusive')
 
         # ok to do readonly w/immediate and deferred (p2 is saved twice)
         self.assertEqual(test_locked_dbr('immediate'), [])
