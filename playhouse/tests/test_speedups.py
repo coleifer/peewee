@@ -39,6 +39,15 @@ class TestResultWrappers(ModelTestCase):
         self.assertTrue(ndb.is_dirty())
         self.assertEqual(ndb.dirty_fields, ['content'])
 
+    def test_gh_regression_1073_func_coerce(self):
+        func = fn.GROUP_CONCAT(Note.id).alias('note_ids')
+        query = Note.select(func)
+        self.assertRaises(ValueError, query.get)
+
+        query = Note.select(func.coerce(False))
+        result = query.get().note_ids
+        self.assertEqual(result, ','.join(str(i) for i in range(1, 11)))
+
     def test_tuple_results(self):
         query = Note.select().order_by(Note.id).tuples()
         qr = query.execute()
