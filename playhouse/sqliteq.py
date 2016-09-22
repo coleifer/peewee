@@ -229,7 +229,7 @@ class ThreadHelper(object):
 
     def queue(self, max_size=None):
         max_size = max_size if max_size is not None else self.queue_max_size
-        return Queue(maxsize=max_size)
+        return Queue(maxsize=max_size or 0)
 
     def thread(self, fn, *args, **kwargs):
         thread = Thread(target=fn, args=args, kwargs=kwargs)
@@ -244,7 +244,7 @@ class GreenletHelper(ThreadHelper):
 
     def queue(self, max_size=None):
         max_size = max_size if max_size is not None else self.queue_max_size
-        return GQueue(maxsize=max_size)
+        return GQueue(maxsize=max_size or 0)
 
     def thread(self, fn, *args, **kwargs):
         def wrap(*a, **k):
