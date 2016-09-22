@@ -1,4 +1,5 @@
 from functools import partial
+import os
 import sys
 import threading
 import time
@@ -51,6 +52,13 @@ class BaseTestQueueDatabase(object):
         User._meta.database = db
         with db.execution_context():
             User.drop_table()
+        if not self.db.is_closed():
+            self.db.close()
+        if not db.is_closed():
+            db.close()
+        filename = db.database
+        if os.path.exists(filename):
+            os.unlink(filename)
 
     def test_query_execution(self):
         qr = User.select().execute()
