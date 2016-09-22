@@ -757,6 +757,23 @@ In your application `main()` make sure `MyRequest` is used as `request_factory`:
         config = Configurator(settings=settings, ...)
         config.set_request_factory(MyRequest)
 
+CherryPy
+^^^^^^^^
+
+See `Publish/Subscribe pattern <http://docs.cherrypy.org/en/latest/extend.html#publish-subscribe-pattern>`_.
+
+.. code-block:: python
+
+    def _db_connect():
+        db.connect()
+     
+    def _db_close():
+        if not db.is_closed():
+            db.close()
+      
+    cherrypy.engine.subscribe('before_request', _db_connect)
+    cherrypy.engine.subscribe('after_request', _db_close)
+
 Other frameworks
 ^^^^^^^^^^^^^^^^
 
