@@ -141,47 +141,59 @@ cdef class _QueryResultWrapper(object):
 
     cdef initialize(self, cursor_description):
         cdef:
-            int i
+            bint found
+            int i = 0
             int n = len(cursor_description)
+            int n_cm
 
         self.row_size = n
         self.column_names = []
         self.converters = []
 
-        for i in range(n):
-            attr_name = cursor_description[i][0]
-            found = None
-            if self.column_meta is not None:
-                try:
-                    column = self.column_meta[i]
-                except IndexError:
-                    pass
-                else:
-                    nt = getattr(column, '_node_type', None)
-                    if isinstance(nt, basestring):
-                        if nt == 'field':
-                            attr_name = column._alias or column.name
-                            found = column.python_value
-                        elif nt == 'func' and len(column.arguments):
-                            first_arg = column.arguments[0]
-                            nt = getattr(first_arg, '_node_type', None)
-                            try:
-                                if nt and nt == 'field':
-                                    attr_name = (column._alias or
-                                                 first_arg._alias or
-                                                 first_arg.name)
-                                    found = first_arg.python_value
-                            except:
-                                pass
+        if self.column_meta is not None:
+            n_cm = len(self.column_meta)
+            for i, node in enumerate(self.column_meta):
+                if not self._initialize_node(node, i):
+                    self._initialize_by_name(cursor_description[i][0], i)
+            if n_cm == n:
+                return
 
-            if found is None:
-                if attr_name in self.model._meta.columns:
-                    field = self.model._meta.columns[attr_name]
-                    found = field.python_value
-                    attr_name = field.name
+        for i in range(i, n):
+            self._initialize_by_name(cursor_description[i][0], i)
 
-            self.column_names.append(attr_name)
-            self.converters.append(found)
+    def _initialize_by_name(self, name, int i):
+        if name in self.model._meta.columns:
+            field = self.model._meta.columns[name]
+            self.converters.append(field.python_value)
+        else:
+            self.converters.append(None)
+        self.column_names.append(name)
+
+    cdef bint _initialize_node(self, node, int i):
+        try:
+            node_type = node._node_type
+        except AttributeError:
+            return False
+        if (node_type == 'field') is True:
+            self.column_names.append(node._alias or node.name)
+            self.converters.append(node.python_value)
+            return True
+
+        if node_type != 'func' or not len(node.arguments):
+            return False
+
+        arg = node.arguments[0]
+        try:
+            node_type = arg._node_type
+        except AttributeError:
+            return False
+
+        if (node_type == 'field') is True:
+            self.column_names.append(node._alias or arg._alias or arg.name)
+            self.converters.append(arg.python_value if node._coerce else None)
+            return True
+
+        return False
 
     cdef process_row(self, tuple row):
         return row
