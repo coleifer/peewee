@@ -3589,15 +3589,16 @@ class Database(object):
     def exception_wrapper(self):
         return ExceptionWrapper(self.exceptions)
 
-    def connect(self):
+    def connect(self, nest=False):
         with self._conn_lock:
             if self.deferred:
                 raise Exception('Error, database not properly initialized '
                                 'before opening connection')
             with self.exception_wrapper():
-                self._local.conn = self._connect(
-                    self.database,
-                    **self.connect_kwargs)
+                if self._local.conn is None or nest:
+                    self._local.conn = self._connect(
+                        self.database,
+                        **self.connect_kwargs)
                 self._local.closed = False
                 self.initialize_connection(self._local.conn)
 
