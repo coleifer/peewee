@@ -134,6 +134,8 @@ class SqliteQueueDatabase(SqliteExtDatabase):
         self._autostart = autostart
         self._results_timeout = results_timeout
         self._num_readers = readers
+
+        self._is_stopped = True
         self._thread_helper = self.get_thread_impl(use_gevent)(queue_max_size)
         self._create_queues_and_workers()
         if self._autostart:
@@ -201,15 +203,20 @@ class SqliteQueueDatabase(SqliteExtDatabase):
 
     def start(self):
         with self._conn_lock:
+            if not self._is_stopped:
+                return False
             self._writer.start()
             for reader in self._readers:
                 reader.start()
             logger.info('workers started.')
+            self._is_stopped = False
             return True
 
     def stop(self):
         logger.debug('environment stop requested.')
         with self._conn_lock:
+            if self._is_stopped:
+                return False
             self._write_queue.put(StopIteration)
             for _ in self._readers:
                 self._read_queue.put(StopIteration)
@@ -217,6 +224,10 @@ class SqliteQueueDatabase(SqliteExtDatabase):
             for reader in self._readers:
                 reader.join()
             return True
+
+    def is_stopped(self):
+        with self._conn_lock:
+            return self._is_stopped
 
 
 class ThreadHelper(object):
