@@ -40,7 +40,7 @@ put after the `db = ...` line:
     # We're looking for a DatabaseError with a specific error message.
     except peewee.DatabaseError as e:
         # Check whether the message *means* "passphrase is wrong"
-        if e.message == 'file is encrypted or is not a database':
+        if e.args[0] == 'file is encrypted or is not a database':
             raise Exception('Developer should Prompt user for passphrase '
                             'again.')
         else:

@@ -1177,7 +1177,7 @@ Example:
             db.get_tables()
         except DatabaseError as exc:
             # We only allow a specific [somewhat cryptic] error message.
-            if exc.message != 'file is encrypted or is not a database':
+            if exc.args[0] != 'file is encrypted or is not a database':
                 raise exc
             else:
                 tell_user_the_passphrase_was_wrong()

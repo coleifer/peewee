@@ -462,7 +462,7 @@ class Introspector(object):
                 foreign_keys[table] = self.metadata.get_foreign_keys(
                     table, self.schema)
             except ValueError as exc:
-                err(exc.message)
+                err(*exc.args)
                 foreign_keys[table] = []
 
             model_names[table] = self.make_model_name(table)
