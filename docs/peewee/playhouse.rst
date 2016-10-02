@@ -890,7 +890,97 @@ sqlite_ext API notes
 SqliteQ
 -------
 
-.. note:: Temporarily empty.
+The ``playhouse.sqliteq`` module provides a subclass of :py:class:`SqliteExtDatabase`,
+that will serialize concurrent access to a SQLite database. The :py:class:`SqliteQueueDatabase`
+is meant to be used as a drop-in replacement, and all the magic happens below
+the public APIs. This should hopefully make it very easy to integrate into an
+existing application.
+
+.. note::
+    This is a new module and should be considered alpha-quality software.
+
+Explanation
+^^^^^^^^^^^
+
+It is important to understand the way SQLite handles concurrency when using
+`write-ahead logging <https://www.sqlite.org/wal.html>`_, but in the simpleset
+terms only one connection can write to the database at a time **and** any
+number of other connections can read while the database is being written to.
+Or, in other words, readers don't block the writer, and the writer doesn't
+block the readers.
+
+An example that comes to my mind is a web application, which handles each
+request in a separate thread/greenlet. If the application is particularly busy
+and there are multiple connections open at a given point in time, you can end
+up in a bad situation quickly because SQLite limits you to one writer. This
+typically manifests as ``OperationalError: database is locked`` exceptions.
+
+Due to the global interpreter lock, however, Python appears single-threaded to
+other applications (only one thread can run Python code at a time, per
+interpreter process). It follows then, that even though multiple threads are
+attempting to access the SQLite database, SQLite only sees one thread accessing
+the database at any point in time.
+
+So, what we can do is create a single *worker* thread that is responsible for
+all writes to the database, and have our other request-handling threads
+hand-off their writes. In this way, we'll have our cake and eat it, too -- our
+Python application can queue-up writes from as many threads as it wants and we
+should hardly notice the performance hit that comes from pushing all database
+accesses through a single thread.
+
+Code sample
+^^^^^^^^^^^
+
+Creating a database instance does not require any special handling. The
+:py:class:`SqliteQueueDatabase` accepts some special parameters which you
+should be aware of, though. If you are using `gevent <http://gevent.org>`_, you
+must specify ``use_gevent=True`` when instantiating your database -- this way
+Peewee will know to use the appropriate objects for handling queueing, thread
+creation, and locking.
+
+.. code-block:: python
+
+    from playhouse.sqliteq import SqliteQueueDatabase
+
+    db = SqliteQueueDatabase(
+        'my_app.db',
+        use_gevent=False,  # Use standard library "threading" module.
+        autostart=False,  # Do not automatically start the workers.
+        queue_max_size=1024,  # Max. # of pending writes that can accumulate.
+        readers=4,  # Size of reader thread-pool - these handle non-writes.
+        results_timeout=5.0)  # Max. time to wait for query to be executed.
+
+
+If ``autostart=False``, as in the above example, you will need to call
+:py:meth:`~SqliteQueueDatabase.start` to bring up the worker threads that will
+do the actual query execution. Additionally, because the connections are
+managed by the database class itself, you do not need to call
+:py:meth:`~Database.connect` or :py:meth:`~Database.close` at any point in your
+application.
+
+.. code-block:: python
+
+    @app.before_first_request
+    def _start_worker_threads():
+        db.start()
+
+When your application is ready to terminate, use the
+:py:meth:`~SqliteQueueDatabase.stop` method to shut down the worker threads.
+If there was a backlog of work, then this method will block until all pending
+work is finished (though no new work is allowed).
+
+.. code-block:: python
+
+    import atexit
+
+    @atexit.register
+    def _stop_worker_threads():
+        db.stop()
+
+
+Lastly, the :py:meth:`~SqliteQueueDatabase.is_stopped` method can be used to
+determine whether the database workers are up and running.
+
 
 .. _sqlite_udf:
 
