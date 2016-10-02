@@ -10,6 +10,7 @@ Below you will find a loosely organized listing of the various modules that make
 **Database drivers / vendor-specific database functionality**
 
 * :ref:`sqlite_ext`
+* :ref:`sqliteq`
 * :ref:`sqlite_udf`
 * :ref:`apsw`
 * :ref:`berkeleydb`
@@ -883,6 +884,13 @@ sqlite_ext API notes
             Retrieve all nodes that are children of the specified node's parent.
 
     .. note:: For an in-depth discussion of the SQLite transitive closure extension, check out this blog post, `Querying Tree Structures in SQLite using Python and the Transitive Closure Extension <http://charlesleifer.com/blog/querying-tree-structures-in-sqlite-using-python-and-the-transitive-closure-extension/>`_.
+
+.. _sqliteq:
+
+SqliteQ
+-------
+
+.. note:: Temporarily empty.
 
 .. _sqlite_udf:
 

@@ -5,6 +5,32 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.8.4
+
+This release contains bugfixes as well as a new playhouse extension module for
+working with [SQLite in multi-threaded / concurrent environments](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#sqliteq).
+The new module is called `playhouse.sqliteq` and it works by serializing
+queries using a dedicated worker thread (or greenlet). The performance is quite
+good, hopefully this proves useful to someone besides myself! You can learn
+more by reading the [sqliteq documentation](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#sqliteq).
+
+As a miscellaneous note, I did some major refactoring and cleanup in
+`ExtQueryResultsWrapper` and it's corollary in the `speedups` module. The code
+is much easier to read than before.
+
+### Bugs fixed
+
+* #1061 - @akrs patched a bug in `TimestampField` which affected the accuracy
+  of sub-second timestamps (for resolution > 1).
+* #1071, small python 3 fix.
+* #1072, allow `DeferredRelation` to be used multiple times if there are
+  multiple references to a given deferred model.
+* #1073, fixed regression in the speedups module that caused SQL functions to
+  always coerce return values, regardless of the `coerce` flag.
+* #1083, another Python 3 issue - this time regarding the use of `exc.message`.
+
+[View commits](https://github.com/coleifer/peewee/compare/2.8.3...2.8.4)
+
 ## 2.8.3
 
 This release contains bugfixes and a small backwards-incompatible change to the
