@@ -5048,11 +5048,6 @@ class Model(with_metaclass(BaseModel)):
     def __ne__(self, other):
         return not self == other
 
-def clean_prefetch_subquery(query):
-    query = query.clone()
-    query._group_by = query._having = None
-    return query
-
 def prefetch_add_subquery(sq, subqueries):
     fixed_queries = [PrefetchResult(sq)]
     for i, subquery in enumerate(subqueries):
@@ -5087,16 +5082,14 @@ def prefetch_add_subquery(sq, subqueries):
                                  'query: %s%s' % (subquery, tgt_err))
 
         if fks:
-            cleaned = clean_prefetch_subquery(last_query)
             expr = reduce(operator.or_, [
-                (fk << cleaned.select(pk))
+                (fk << last_query.select(pk))
                 for (fk, pk) in zip(fks, pks)])
             subquery = subquery.where(expr)
             fixed_queries.append(PrefetchResult(subquery, fks, False))
         elif backrefs:
-            cleaned = clean_prefetch_subquery(last_query)
             expr = reduce(operator.or_, [
-                (backref.to_field << cleaned.select(backref))
+                (backref.to_field << last_query.select(backref))
                 for backref in backrefs])
             subquery = subquery.where(expr)
             fixed_queries.append(PrefetchResult(subquery, backrefs, True))
