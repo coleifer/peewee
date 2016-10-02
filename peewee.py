@@ -4108,6 +4108,7 @@ class PostgresqlDatabase(Database):
 
 class MySQLDatabase(Database):
     commit_select = True
+    compound_select_parentheses = True
     compound_operations = ['UNION', 'UNION ALL']
     field_overrides = {
         'bool': 'BOOL',
