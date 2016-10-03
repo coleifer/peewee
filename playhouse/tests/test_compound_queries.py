@@ -11,6 +11,7 @@ from playhouse.tests.base import database_initializer
 from playhouse.tests.base import log_console
 from playhouse.tests.base import ModelTestCase
 from playhouse.tests.base import PeeweeTestCase
+from playhouse.tests.base import skip_test_if
 from playhouse.tests.base import skip_unless
 from playhouse.tests.base import test_db
 from playhouse.tests.models import *
@@ -363,6 +364,7 @@ class TestCompoundSelectQueries(ModelTestCase):
             {'username': 'e'}])
 
     @requires_op('UNION')
+    @skip_test_if(lambda: isinstance(test_db, MySQLDatabase))  # MySQL needs parens, but doesn't like them here.
     def test_union_subquery(self):
         union = (User.select(User.username).where(User.username == 'a') |
                  UniqueModel.select(UniqueModel.name))
