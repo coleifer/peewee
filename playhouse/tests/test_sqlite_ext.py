@@ -724,11 +724,11 @@ class TestUserDefinedCallbacks(ModelTestCase):
         self.assertEqual([x[0] for x in pq.tuples()], [
             'testing', 'chatting', '  foo'])
 
-    def test_granular_transaction(self):
+    def test_lock_type_transaction(self):
         conn = ext_db.get_conn()
 
         def test_locked_dbw(isolation_level):
-            with ext_db.granular_transaction(isolation_level):
+            with ext_db.transaction(isolation_level):
                 Post.create(message='p1')  # Will not be saved.
                 conn2 = ext_db._connect(ext_db.database, **ext_db.connect_kwargs)
                 conn2.execute('insert into post (message) values (?);', ('x1',))
@@ -737,7 +737,7 @@ class TestUserDefinedCallbacks(ModelTestCase):
         self.assertRaises(sqlite3.OperationalError, test_locked_dbw, 'deferred')
 
         def test_locked_dbr(isolation_level):
-            with ext_db.granular_transaction(isolation_level):
+            with ext_db.transaction(isolation_level):
                 Post.create(message='p2')
                 other_db = database_initializer.get_database(
                     'sqlite',
@@ -770,7 +770,7 @@ class TestUserDefinedCallbacks(ModelTestCase):
         conn.rollback()
         ext_db.set_autocommit(True)
 
-        with ext_db.granular_transaction('deferred'):
+        with ext_db.transaction('deferred'):
             Post.create(message='p4')
 
         res = conn2.execute('select message from post order by message;')

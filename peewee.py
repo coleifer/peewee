@@ -305,6 +305,8 @@ class attrdict(dict):
     def __getattr__(self, attr):
         return self[attr]
 
+SENTINEL = object()
+
 # Operators used in binary expressions.
 OP = attrdict(
     AND='and',
@@ -3839,6 +3841,13 @@ class Database(object):
     def get_binary_type(self):
         return binary_construct
 
+def __pragma__(name):
+    def __get__(self):
+        return self.pragma(name)
+    def __set__(self, value):
+        return self.pragma(name, value)
+    return property(__get__, __set__)
+
 class SqliteDatabase(Database):
     compiler_class = SqliteQueryCompiler
     field_overrides = {
@@ -3887,6 +3896,22 @@ class SqliteDatabase(Database):
             for pragma, value in self._pragmas:
                 cursor.execute('PRAGMA %s = %s;' % (pragma, value))
             cursor.close()
+
+    def pragma(self, key, value=SENTINEL):
+        sql = 'PRAGMA %s' % key
+        if value is not SENTINEL:
+            sql += ' = %s' % value
+        return self.execute_sql(sql).fetchone()
+
+    cache_size = __pragma__('cache_size')
+    foreign_keys = __pragma__('foreign_keys')
+    journal_mode = __pragma__('journal_mode')
+    journal_size_limit = __pragma__('journal_size_limit')
+    mmap_size = __pragma__('mmap_size')
+    page_size = __pragma__('page_size')
+    read_uncommitted = __pragma__('read_uncommitted')
+    synchronous = __pragma__('synchronous')
+    wal_autocheckpoint = __pragma__('wal_autocheckpoint')
 
     def begin(self, lock_type='DEFERRED'):
         self.execute_sql('BEGIN %s' % lock_type, require_commit=False)
@@ -4274,6 +4299,7 @@ class _atomic(_callable_context_manager):
         return self._helper.__exit__(exc_type, exc_val, exc_tb)
 
 class transaction(_callable_context_manager):
+    __slots__ = ('db', 'autocommit')
     def __init__(self, db):
         self.db = db
 
@@ -4291,7 +4317,7 @@ class transaction(_callable_context_manager):
             self._begin()
 
     def __enter__(self):
-        self._orig = self.db.get_autocommit()
+        self.autocommit = self.db.get_autocommit()
         self.db.set_autocommit(False)
         if self.db.transaction_depth() == 0:
             self._begin()
@@ -4309,10 +4335,11 @@ class transaction(_callable_context_manager):
                     self.rollback(False)
                     raise
         finally:
-            self.db.set_autocommit(self._orig)
+            self.db.set_autocommit(self.autocommit)
             self.db.pop_transaction()
 
 class savepoint(_callable_context_manager):
+    __slots__ = ('db', 'sid', 'quoted_sid', 'autocommit')
     def __init__(self, db, sid=None):
         self.db = db
         _compiler = db.compiler()
@@ -4329,7 +4356,7 @@ class savepoint(_callable_context_manager):
         self._execute('ROLLBACK TO SAVEPOINT %s;' % self.quoted_sid)
 
     def __enter__(self):
-        self._orig_autocommit = self.db.get_autocommit()
+        self.autocommit = self.db.get_autocommit()
         self.db.set_autocommit(False)
         self._execute('SAVEPOINT %s;' % self.quoted_sid)
         return self
@@ -4345,19 +4372,20 @@ class savepoint(_callable_context_manager):
                     self.rollback()
                     raise
         finally:
-            self.db.set_autocommit(self._orig_autocommit)
+            self.db.set_autocommit(self.autocommit)
 
 class savepoint_sqlite(savepoint):
+    __slots__ = savepoint.__slots__ + ('isolation_level',)
     def __enter__(self):
         conn = self.db.get_conn()
         # For sqlite, the connection's isolation_level *must* be set to None.
         # The act of setting it, though, will break any existing savepoints,
         # so only write to it if necessary.
         if conn.isolation_level is not None:
-            self._orig_isolation_level = conn.isolation_level
+            self.isolation_level = conn.isolation_level
             conn.isolation_level = None
         else:
-            self._orig_isolation_level = None
+            self.isolation_level = None
         return super(savepoint_sqlite, self).__enter__()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -4365,8 +4393,8 @@ class savepoint_sqlite(savepoint):
             return super(savepoint_sqlite, self).__exit__(
                 exc_type, exc_val, exc_tb)
         finally:
-            if self._orig_isolation_level is not None:
-                self.db.get_conn().isolation_level = self._orig_isolation_level
+            if self.isolation_level is not None:
+                self.db.get_conn().isolation_level = self.isolation_level
 
 class FieldProxy(Field):
     def __init__(self, alias, field_instance):
