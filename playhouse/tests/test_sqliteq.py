@@ -117,6 +117,22 @@ class BaseTestQueueDatabase(object):
 
         self.assertEqual(sorted(D), ['charlie', 'huey', 'users', 'zaizee'])
 
+    def test_next_method(self):
+        self.db.start()
+
+        User.create(name='mickey')
+        User.create(name='huey')
+        query = iter(User.select().order_by(User.name))
+        self.assertEqual(next(query).name, 'huey')
+        self.assertEqual(next(query).name, 'mickey')
+        self.assertRaises(StopIteration, lambda: next(query))
+
+        self.assertEqual(
+            next(self.db.execute_sql('PRAGMA journal_mode'))[0],
+            'wal')
+
+        self.db.stop()
+
 
 class TestThreadedDatabaseThreads(BaseTestQueueDatabase, PeeweeTestCase):
     database_config = {'use_gevent': False}

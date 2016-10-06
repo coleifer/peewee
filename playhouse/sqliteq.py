@@ -27,7 +27,7 @@ class ResultTimeout(Exception):
 
 class AsyncCursor(object):
     __slots__ = ('sql', 'params', 'commit', 'timeout',
-                 '_event', '_cursor', '_exc', '_idx', '_rows')
+                 '_event', '_cursor', '_exc', '_idx', '_rows', '_ready')
 
     def __init__(self, event, sql, params, commit, timeout):
         self._event = event
@@ -36,6 +36,7 @@ class AsyncCursor(object):
         self.commit = commit
         self.timeout = timeout
         self._cursor = self._exc = self._idx = self._rows = None
+        self._ready = False
 
     def set_result(self, cursor, exc=None):
         self._cursor = cursor
@@ -51,14 +52,18 @@ class AsyncCursor(object):
             raise ResultTimeout('results not ready, timed out.')
         if self._exc is not None:
             raise self._exc
+        self._ready = True
 
     def __iter__(self):
-        self._wait()
+        if not self._ready:
+            self._wait()
         if self._exc is not None:
             raise self._exec
         return self
 
     def next(self):
+        if not self._ready:
+            self._wait()
         try:
             obj = self._rows[self._idx]
         except IndexError:
@@ -70,12 +75,14 @@ class AsyncCursor(object):
 
     @property
     def lastrowid(self):
-        self._wait()
+        if not self._ready:
+            self._wait()
         return self._cursor.lastrowid
 
     @property
     def rowcount(self):
-        self._wait()
+        if not self._ready:
+            self._wait()
         return self._cursor.rowcount
 
     @property
@@ -89,7 +96,8 @@ class AsyncCursor(object):
         return list(self)  # Iterating implies waiting until populated.
 
     def fetchone(self):
-        self._wait()
+        if not self._ready:
+            self._wait()
         try:
             return next(self)
         except StopIteration:
