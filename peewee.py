@@ -3696,10 +3696,12 @@ class Database(object):
         pass
 
     def commit(self):
-        self.get_conn().commit()
+        with self.exception_wrapper():
+            self.get_conn().commit()
 
     def rollback(self):
-        self.get_conn().rollback()
+        with self.exception_wrapper():
+            self.get_conn().rollback()
 
     def set_autocommit(self, autocommit):
         self._local.autocommit = autocommit
