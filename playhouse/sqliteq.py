@@ -176,14 +176,18 @@ class SqliteQueueDatabase(SqliteExtDatabase):
                          for _ in range(self._num_readers)]
 
     def _run_worker_loop(self, queue):
-        while True:
-            async_cursor = queue.get()
-            if async_cursor is StopIteration:
-                logger.info('worker shutting down.')
-                return
+        conn = self.get_conn()
+        try:
+            while True:
+                async_cursor = queue.get()
+                if async_cursor is StopIteration:
+                    logger.info('worker shutting down.')
+                    return
 
-            logger.debug('received query %s', async_cursor.sql)
-            self._process_execution(async_cursor)
+                logger.debug('received query %s', async_cursor.sql)
+                self._process_execution(async_cursor)
+        finally:
+            self._close(conn)
 
     def _process_execution(self, async_cursor):
         try:
@@ -231,6 +235,7 @@ class SqliteQueueDatabase(SqliteExtDatabase):
             self._writer.join()
             for reader in self._readers:
                 reader.join()
+            self._is_stopped = True
             return True
 
     def is_stopped(self):
