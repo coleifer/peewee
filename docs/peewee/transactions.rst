@@ -7,7 +7,53 @@ Peewee provides several interfaces for working with transactions. The most gener
 
 If an exception occurs in a wrapped block, the current transaction/savepoint will be rolled back. Otherwise the statements will be committed at the end of the wrapped block.
 
-:py:meth:`~Database.atomic` can be used as either a **context manager** or a **decorator**.
+.. note::
+    While inside a block wrapped by the :py:meth:`~Database.atomic` context
+    manager, you can explicitly rollback or commit at any point by calling
+    :py:meth:`Transaction.rollback` or :py:meth:`Transaction.commit`. When you
+    do this inside a wrapped block of code, a new transaction will be started
+    automatically.
+
+    Consider this code:
+
+    .. code-block:: python
+
+        db.begin()  # Open a new transaction.
+        try:
+            save_some_objects()
+        except ErrorSavingData:
+            db.rollback()  # Uh-oh! Let's roll-back any partial changes.
+            error_saving = True
+
+        create_report(error_saving=error_saving)
+        db.commit()  # What happens here??
+
+    If the ``ErrorSavingData`` exception gets raised, we call rollback, but
+    because we are not using the ``~Database.atomic`` context manager, **no new
+    transaction is begun**. The call to ``commit()`` will fail because no
+    transaction is active!
+
+    On the other hand, consider this:
+
+    .. code-block:: python
+
+        with db.atomic() as transaction:  # Opens new transaction.
+            try:
+                save_some_objects()
+            except ErrorSavingData:
+                # Because this block of code is wrapped with "atomic", a
+                # new transaction will begin automatically after the call
+                # to rollback().
+                db.rollback()
+                error_saving = True
+
+            create_report(error_saving=error_saving)
+            # Note: no need to call commit. Since this marks the end of the
+            # wrapped block of code, the `atomic` context manager will
+            # automatically call commit for us.
+
+.. note::
+    :py:meth:`~Database.atomic` can be used as either a **context manager** or a **decorator**.
 
 Context manager
 ---------------
