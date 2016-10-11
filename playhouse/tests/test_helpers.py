@@ -66,6 +66,35 @@ class TestTopologicalSorting(PeeweeTestCase):
         assert_precedes(A, E)
 
 
+class TestDeclaredDependencies(PeeweeTestCase):
+    def test_declared_dependencies(self):
+        class A(Model): pass
+        class B(Model):
+            a = ForeignKeyField(A)
+            b = ForeignKeyField('self')
+        class NA(Model):
+            class Meta:
+                depends_on = (A, B)
+        class C(Model):
+            b = ForeignKeyField(B)
+            c = ForeignKeyField('self')
+            class Meta:
+                depends_on = (NA,)
+        class D1(Model):
+            na = ForeignKeyField(NA)
+            class Meta:
+                depends_on = (A, C)
+        class D2(Model):
+            class Meta:
+                depends_on = (NA, D1, C, B)
+
+        models = [A, B, C, D1, D2]
+        ordered = list(models)
+        for pmodels in permutations(models):
+            ordering = sort_models_topologically(pmodels)
+            self.assertEqual(ordering, ordered)
+
+
 def permutations(xs):
     if not xs:
         yield []

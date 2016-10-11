@@ -206,6 +206,9 @@ except ImportError:
                 for foreign_key in model._meta.reverse_rel.values():
                     dfs(foreign_key.model_class)
                 ordering.append(model)  # parent will follow descendants
+                if model._meta.depends_on:
+                    for dependency in model._meta.depends_on:
+                        dfs(dependency)
         # Order models by name and table initially to guarantee total ordering.
         names = lambda m: (m._meta.name, m._meta.db_table)
         for m in sorted(models, key=names, reverse=True):
@@ -4495,7 +4498,8 @@ class ModelOptions(object):
     def __init__(self, cls, database=None, db_table=None, db_table_func=None,
                  indexes=None, order_by=None, primary_key=None,
                  table_alias=None, constraints=None, schema=None,
-                 validate_backrefs=True, only_save_dirty=False, **kwargs):
+                 validate_backrefs=True, only_save_dirty=False,
+                 depends_on=None, **kwargs):
         self.model_class = cls
         self.name = cls.__name__.lower()
         self.fields = {}
@@ -4522,6 +4526,7 @@ class ModelOptions(object):
         self.schema = schema
         self.validate_backrefs = validate_backrefs
         self.only_save_dirty = only_save_dirty
+        self.depends_on = depends_on
 
         self.auto_increment = None
         self.composite_key = False

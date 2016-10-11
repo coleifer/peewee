@@ -332,6 +332,9 @@ cdef _sort_models(model, set model_set, set seen, list accum):
         for foreign_key in model._meta.reverse_rel.values():
             _sort_models(foreign_key.model_class, model_set, seen, accum)
         accum.append(model)
+        if model._meta.depends_on is not None:
+            for dependency in model._meta.depends_on:
+                _sort_models(dependency, model_set, seen, accum)
 
 def sort_models_topologically(models):
     cdef:
