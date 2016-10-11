@@ -900,25 +900,6 @@ The module gets its name from the fact that all write queries get put into a
 thread-safe queue. Listening to that queue for messages is a worker thread
 which holds the sole write connection to the database.
 
-What is SqliteQueueDatabase?
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-SQLite only allows one connection to write or otherwise modify the database at
-any given time. Any number of connections can continue to read from the
-database, however, thanks to write-ahead logging and snapshot isolation.
-
-In order to avoid errors caused by attempting to open too many write
-transactions, you can:
-
-1. Use locks in your application to prevent multiple threads from writing at
-   the same time.
-2. Lean on SQLite's default busy handler, which will try to acquire the write
-   lock in a loop for up to **n** seconds (default 5).
-3. Use a dedicated worker thread to execute all writes through a single
-   connection.
-
-:py:class:`SqliteQueueDatabase` is an implementation of the third option.
-
 When would SqliteQueueDatabase be useful?
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
