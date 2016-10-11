@@ -116,7 +116,7 @@ WAL_MODE_ERROR_MESSAGE = ('SQLite must be configured to use the WAL journal '
 
 
 class SqliteQueueDatabase(SqliteExtDatabase):
-    def __init__(self, database, use_gevent=False, autostart=False,
+    def __init__(self, database, use_gevent=False, autostart=True,
                  queue_max_size=None, results_timeout=None, *args, **kwargs):
         if kwargs.get('threadlocals'):
             raise ValueError(THREADLOCAL_ERROR_MESSAGE)
