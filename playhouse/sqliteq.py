@@ -1,5 +1,6 @@
 import logging
 import weakref
+from threading import local as thread_local
 from threading import Event
 from threading import Thread
 try:
@@ -11,6 +12,7 @@ try:
     import gevent
     from gevent import Greenlet as GThread
     from gevent.event import Event as GEvent
+    from gevent.local import local as greenlet_local
     from gevent.queue import Queue as GQueue
 except ImportError:
     GThread = GQueue = GEvent = None
@@ -114,6 +116,11 @@ WAL_MODE_ERROR_MESSAGE = ('SQLite must be configured to use the WAL journal '
                           'one or more readers to continue reading while '
                           'another connection writes to the database.')
 
+SHUTDOWN = StopIteration
+PAUSE = object()
+UNPAUSE = object()
+
+
 
 class SqliteQueueDatabase(SqliteExtDatabase):
     def __init__(self, database, use_gevent=False, autostart=True,
@@ -141,10 +148,17 @@ class SqliteQueueDatabase(SqliteExtDatabase):
 
         self._autostart = autostart
         self._results_timeout = results_timeout
-
         self._is_stopped = True
+
+        # Get different objects depending on the threading implementation.
         self._thread_helper = self.get_thread_impl(use_gevent)(queue_max_size)
-        self._create_queues_and_workers()
+
+        # Initialize threadlocal storage for tracking query pipelines.
+        self._pipeline = self._thread_helper.local()
+        self._pipeline.active_pipeline = None
+
+        # Create the writer thread, optionally starting it.
+        self._create_write_queue()
         if self._autostart:
             self.start()
 
@@ -165,27 +179,42 @@ class SqliteQueueDatabase(SqliteExtDatabase):
         else:
             return [('journal_mode', 'wal')]
 
-    def _create_queues_and_workers(self):
+    def _create_write_queue(self):
         self._write_queue = self._thread_helper.queue()
 
-        target = self._run_worker_loop
-        self._writer = self._thread_helper.thread(target, self._write_queue)
-
-    def _run_worker_loop(self, queue):
+    def _run_writer(self, queue):
         conn = self.get_conn()
         try:
             while True:
-                async_cursor = queue.get()
-                if async_cursor is StopIteration:
-                    logger.info('worker shutting down.')
+                obj = queue.get()
+                if isinstance(obj, AsyncCursor) and conn is not None:
+                    self._process_execution(obj)
+                elif obj is SHUTDOWN:
+                    logger.info('writer received shutdown request, exiting.')
                     return
-
-                logger.debug('received query %s', async_cursor.sql)
-                self._process_execution(async_cursor)
+                else:
+                    conn = self._process_misc(obj, conn)
         finally:
+            if conn is not None:
+                self._close(conn)
+
+    def _process_misc(self, obj, conn):
+        if obj is PAUSE and conn is not None:
+            logger.info('received pause request, hanging up connection.')
             self._close(conn)
+            conn = None
+        elif obj is UNPAUSE and conn is None:
+            logger.info('received un-pause request, establishing connection.')
+            conn = self.get_conn()
+        elif obj is PAUSE or obj is UNPAUSE:
+            operation = 'pause' if obj is PAUSE else 'unpause'
+            logger.info('%s ignored, currently %sd', operation, operation)
+        else:
+            logger.error('unrecognized object received by writer: %s', obj)
+        return conn
 
     def _process_execution(self, async_cursor):
+        logger.debug('received query %s', async_cursor.sql)
         try:
             cursor = self.__execute_sql(async_cursor.sql, async_cursor.params,
                                         async_cursor.commit)
@@ -215,6 +244,9 @@ class SqliteQueueDatabase(SqliteExtDatabase):
         with self._conn_lock:
             if not self._is_stopped:
                 return False
+            self._writer = self._thread_helper.thread(
+                self._run_writer,
+                self._write_queue)
             self._writer.start()
             self._is_stopped = False
             return True
@@ -224,7 +256,7 @@ class SqliteQueueDatabase(SqliteExtDatabase):
         with self._conn_lock:
             if self._is_stopped:
                 return False
-            self._write_queue.put(StopIteration)
+            self._write_queue.put(SHUTDOWN)
             self._writer.join()
             self._is_stopped = True
             return True
@@ -232,6 +264,19 @@ class SqliteQueueDatabase(SqliteExtDatabase):
     def is_stopped(self):
         with self._conn_lock:
             return self._is_stopped
+
+    def pause(self):
+        with self._conn_lock:
+            self._write_queue.put(PAUSE)
+
+    def unpause(self):
+        with self._conn_lock:
+            self._write_queue.put(UNPAUSE)
+
+    def atomic(self):
+        if self._pipeline.active_pipeline is not None:
+            raise ValueError('Sub-pipelines are not currently supported.')
+        self._pipeline.active_pipeline = []
 
 
 class ThreadHelper(object):
@@ -241,6 +286,7 @@ class ThreadHelper(object):
         self.queue_max_size = queue_max_size
 
     def event(self): return Event()
+    def local(self): return thread_local()
 
     def queue(self, max_size=None):
         max_size = max_size if max_size is not None else self.queue_max_size
@@ -256,6 +302,7 @@ class GreenletHelper(ThreadHelper):
     __slots__ = ('queue_max_size',)
 
     def event(self): return GEvent()
+    def local(self): return greenlet_local()
 
     def queue(self, max_size=None):
         max_size = max_size if max_size is not None else self.queue_max_size

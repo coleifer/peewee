@@ -892,12 +892,13 @@ SqliteQ
 
 The ``playhouse.sqliteq`` module provides a subclass of
 :py:class:`SqliteExtDatabase`, that will serialize concurrent access to a
-SQLite database. The :py:class:`SqliteQueueDatabase` is meant to be used as a
-drop-in replacement for the regular :py:class:`SqliteDatabase` when you need
-**read and write** access from **multiple threads**.
+SQLite database. :py:class:`SqliteQueueDatabase` can be used as a drop-in
+replacement for the regular :py:class:`SqliteDatabase` whenever you need to
+**read and write** to a SQLite database from **multiple threads**.
 
-.. note::
-    This is a new module and should be considered alpha-quality software.
+The module gets its name from the fact that all write queries get put into a
+thread-safe queue. Listening to that queue for messages is a worker thread
+which holds the sole write connection to the database.
 
 What is SqliteQueueDatabase?
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -921,12 +922,34 @@ transactions, you can:
 When would SqliteQueueDatabase be useful?
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-SqliteQueueDatabase may be useful for applications that need to be able to
-read and write to a single Sqlite database from multiple threads, **and** that
-do not require complex multi-statement transactional semantics.
+SqliteQueueDatabase may be useful for applications that need to read and write
+to a single Sqlite database from multiple threads, and do not require complex
+multi-statement transactional semantics.
 
-An example that comes to my mind is a web application, which handles each
-request in a separate thread/greenlet. If the application is particularly busy
+The latter point is **extremely important**. Because all queries are serialized
+and executed by a single worker thread, it is possible for transactional SQL
+from separate threads to become executed out-of-order. In the example below,
+the transaction started by thread "B" is rolled back by thread "A" (with bad
+consequences!):
+
+* Thread A: UPDATE transplants SET organ='liver', ...;
+* Thread B: BEGIN TRANSACTION;
+* Thread B: UPDATE life_support_system SET timer += 60 ...;
+* Thread A: ROLLBACK; --
+
+Avoid multi-statement transactions when using :py:class:`SqliteQueueDatabase`.
+That said, it is still possible to safely run multi-statement transactions when
+using this database class. For cases when you wish to temporarily write to the
+database from a different thread, you can use the :py:meth:`~SqliteQueueDatabase.pause`
+and :py:meth:`~SqliteQueueDatabase.unpause` methods. These methods block the
+caller until the writer thread is finished with its current workload. The
+writer then disconnects and the caller takes over until ``unpause`` is called.
+
+For example, I've been using ``SqliteQueueDatabase`` to power the analytics
+web-service I `blogged about </blog/saturday-morning-hacks-building-an-analytics-app-with-flask/>`_
+a while ago. The way this web service works is dead simple: you send it pings
+
+If the application is particularly busy
 and there are multiple connections open at a given point in time, you can end
 up in a bad situation quickly because SQLite limits you to one writer. This
 typically manifests as ``OperationalError: database is locked`` exceptions.
