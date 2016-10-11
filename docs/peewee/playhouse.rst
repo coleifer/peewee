@@ -891,62 +891,62 @@ SqliteQ
 -------
 
 The ``playhouse.sqliteq`` module provides a subclass of
-:py:class:`SqliteExtDatabase`, that will serialize concurrent access to a
+:py:class:`SqliteExtDatabase`, that will serialize concurrent writes to a
 SQLite database. :py:class:`SqliteQueueDatabase` can be used as a drop-in
-replacement for the regular :py:class:`SqliteDatabase` whenever you need to
-**read and write** to a SQLite database from **multiple threads**.
+replacement for the regular :py:class:`SqliteDatabase` if you want simple
+**read and write** access to a SQLite database from **multiple threads**.
 
-The module gets its name from the fact that all write queries get put into a
-thread-safe queue. Listening to that queue for messages is a worker thread
-which holds the sole write connection to the database.
+SQLite only allows one connection to write to the database at any given time.
+As a result, if you have a multi-threaded application (like a web-server, for
+example) that needs to write to the database, you may see occasional errors
+when one or more of the threads attempting to write cannot acquire the lock.
 
-When would SqliteQueueDatabase be useful?
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+:py:class:`SqliteQueueDatabase` is designed to simplify things by sending all
+write queries through a single, long-lived connection. The benefit is that you
+get the appearance of multiple threads writing to the database without
+conflicts or timeouts. The downside, however, is that you cannot issue
+write transactions that encompass multiple queries -- all writes run in
+autocommit mode, essentially.
 
-SqliteQueueDatabase may be useful for applications that need to read and write
-to a single Sqlite database from multiple threads, and do not require complex
-multi-statement transactional semantics.
+.. note::
+    The module gets its name from the fact that all write queries get put into
+    a thread-safe queue. A single worker thread listens to the queue and
+    executes all queries that are sent to it.
 
-The latter point is **extremely important**. Because all queries are serialized
+Transactions
+^^^^^^^^^^^^
+
+SqliteQueueDatabase may be useful for simple applications that need to read and
+write to a single Sqlite database from multiple threads, and do not require
+complex multi-statement transactional semantics.
+
+The latter point is extremely important. Because all queries are serialized
 and executed by a single worker thread, it is possible for transactional SQL
-from separate threads to become executed out-of-order. In the example below,
+from separate threads to be executed out-of-order. In the example below,
 the transaction started by thread "B" is rolled back by thread "A" (with bad
 consequences!):
 
 * Thread A: UPDATE transplants SET organ='liver', ...;
 * Thread B: BEGIN TRANSACTION;
 * Thread B: UPDATE life_support_system SET timer += 60 ...;
-* Thread A: ROLLBACK; --
+* Thread A: ROLLBACK; -- Oh no....
 
-Avoid multi-statement transactions when using :py:class:`SqliteQueueDatabase`.
-That said, it is still possible to safely run multi-statement transactions when
-using this database class. For cases when you wish to temporarily write to the
-database from a different thread, you can use the :py:meth:`~SqliteQueueDatabase.pause`
-and :py:meth:`~SqliteQueueDatabase.unpause` methods. These methods block the
+Because of the potential for queries from separate transactions to be
+interleaved, the :py:meth:`~SqliteQueueDatabase.transaction` and
+:py:meth:`~SqliteQueueDatabase.atomic` methods behave differently on
+:py:class:`SqliteQueueDatabase`. These methods will store up all write queries
+executed within the wrapped block and deliver them to be executed as a single
+group, effectively preventing multiple transactions from interacting.
+
+For cases when you wish to temporarily write to the database from a different
+thread, you can use the :py:meth:`~SqliteQueueDatabase.pause` and
+:py:meth:`~SqliteQueueDatabase.unpause` methods. These methods block the
 caller until the writer thread is finished with its current workload. The
 writer then disconnects and the caller takes over until ``unpause`` is called.
 
-For example, I've been using ``SqliteQueueDatabase`` to power the analytics
-web-service I `blogged about </blog/saturday-morning-hacks-building-an-analytics-app-with-flask/>`_
-a while ago. The way this web service works is dead simple: you send it pings
-
-If the application is particularly busy
-and there are multiple connections open at a given point in time, you can end
-up in a bad situation quickly because SQLite limits you to one writer. This
-typically manifests as ``OperationalError: database is locked`` exceptions.
-
-Due to the global interpreter lock, however, Python appears single-threaded to
-other applications (only one thread can run Python code at a time, per
-interpreter process). It follows then, that even though multiple threads are
-attempting to access the SQLite database, SQLite only sees one thread accessing
-the database at any point in time.
-
-So, what we can do is create a single *worker* thread that is responsible for
-all writes to the database, and have our other request-handling threads
-hand-off their writes. In this way, we'll have our cake and eat it, too -- our
-Python application can queue-up writes from as many threads as it wants and we
-should hardly notice the performance hit that comes from pushing all database
-accesses through a single thread.
+The :py:meth:`~SqliteQueueDatabase.stop`, :py:meth:`~SqliteQueueDatabase.start`,
+and :py:meth:`~SqliteQueueDatabase.is_stopped` methods can be used to control
+the writer thread.
 
 .. note::
     If you plan on using SQLite in a multi-threaded application, the
@@ -971,25 +971,25 @@ creation, and locking.
 
     db = SqliteQueueDatabase(
         'my_app.db',
-        use_gevent=False,  # Use standard library "threading" module.
-        autostart=False,  # Do not automatically start the workers.
+        use_gevent=False,  # Use the standard library "threading" module.
+        autostart=False,  # The worker thread now must be started manually.
         queue_max_size=1024,  # Max. # of pending writes that can accumulate.
-        readers=4,  # Size of reader thread-pool - these handle non-writes.
         results_timeout=5.0)  # Max. time to wait for query to be executed.
 
 
 If ``autostart=False``, as in the above example, you will need to call
 :py:meth:`~SqliteQueueDatabase.start` to bring up the worker threads that will
-do the actual query execution. Additionally, because the connections are
-managed by the database class itself, you do not need to call
-:py:meth:`~Database.connect` or :py:meth:`~Database.close` at any point in your
-application.
+do the actual write query execution.
 
 .. code-block:: python
 
     @app.before_first_request
     def _start_worker_threads():
         db.start()
+
+If you plan on performing SELECT queries or generally wanting to access the
+database, you will need to call :py:meth:`~Database.connect` and
+:py:meth:`~Database.close` as you would with any other database instance.
 
 When your application is ready to terminate, use the
 :py:meth:`~SqliteQueueDatabase.stop` method to shut down the worker threads.
@@ -1007,7 +1007,6 @@ work is finished (though no new work is allowed).
 
 Lastly, the :py:meth:`~SqliteQueueDatabase.is_stopped` method can be used to
 determine whether the database workers are up and running.
-
 
 .. _sqlite_udf:
 
