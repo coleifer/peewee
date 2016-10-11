@@ -890,24 +890,40 @@ sqlite_ext API notes
 SqliteQ
 -------
 
-The ``playhouse.sqliteq`` module provides a subclass of :py:class:`SqliteExtDatabase`,
-that will serialize concurrent access to a SQLite database. The :py:class:`SqliteQueueDatabase`
-is meant to be used as a drop-in replacement, and all the magic happens below
-the public APIs. This should hopefully make it very easy to integrate into an
-existing application.
+The ``playhouse.sqliteq`` module provides a subclass of
+:py:class:`SqliteExtDatabase`, that will serialize concurrent access to a
+SQLite database. The :py:class:`SqliteQueueDatabase` is meant to be used as a
+drop-in replacement for the regular :py:class:`SqliteDatabase` when you need
+**read and write** access from **multiple threads**.
 
 .. note::
     This is a new module and should be considered alpha-quality software.
 
-Explanation
-^^^^^^^^^^^
+What is SqliteQueueDatabase?
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-It is important to understand the way SQLite handles concurrency when using
-`write-ahead logging <https://www.sqlite.org/wal.html>`_, but in the simpleset
-terms only one connection can write to the database at a time **and** any
-number of other connections can read while the database is being written to.
-Or, in other words, readers don't block the writer, and the writer doesn't
-block the readers.
+SQLite only allows one connection to write or otherwise modify the database at
+any given time. Any number of connections can continue to read from the
+database, however, thanks to write-ahead logging and snapshot isolation.
+
+In order to avoid errors caused by attempting to open too many write
+transactions, you can:
+
+1. Use locks in your application to prevent multiple threads from writing at
+   the same time.
+2. Lean on SQLite's default busy handler, which will try to acquire the write
+   lock in a loop for up to **n** seconds (default 5).
+3. Use a dedicated worker thread to execute all writes through a single
+   connection.
+
+:py:class:`SqliteQueueDatabase` is an implementation of the third option.
+
+When would SqliteQueueDatabase be useful?
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+SqliteQueueDatabase may be useful for applications that need to be able to
+read and write to a single Sqlite database from multiple threads, **and** that
+do not require complex multi-statement transactional semantics.
 
 An example that comes to my mind is a web application, which handles each
 request in a separate thread/greenlet. If the application is particularly busy
@@ -927,6 +943,13 @@ hand-off their writes. In this way, we'll have our cake and eat it, too -- our
 Python application can queue-up writes from as many threads as it wants and we
 should hardly notice the performance hit that comes from pushing all database
 accesses through a single thread.
+
+.. note::
+    If you plan on using SQLite in a multi-threaded application, the
+    `write-ahead logging <https://www.sqlite.org/wal.html>`_ docs are good to
+    be familiar with, but the `isolation <https://www.sqlite.org/isolation.html>`_
+    documentation is what really allowed me to reason about SQLite's behavior
+    in a multi-threaded environment.
 
 Code sample
 ^^^^^^^^^^^
