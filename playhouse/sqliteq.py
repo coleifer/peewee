@@ -116,7 +116,7 @@ WAL_MODE_ERROR_MESSAGE = ('SQLite must be configured to use the WAL journal '
 
 
 class SqliteQueueDatabase(SqliteExtDatabase):
-    def __init__(self, database, use_gevent=False, autostart=False, readers=1,
+    def __init__(self, database, use_gevent=False, autostart=False,
                  queue_max_size=None, results_timeout=None, *args, **kwargs):
         if kwargs.get('threadlocals'):
             raise ValueError(THREADLOCAL_ERROR_MESSAGE)
@@ -141,7 +141,6 @@ class SqliteQueueDatabase(SqliteExtDatabase):
 
         self._autostart = autostart
         self._results_timeout = results_timeout
-        self._num_readers = readers
 
         self._is_stopped = True
         self._thread_helper = self.get_thread_impl(use_gevent)(queue_max_size)
@@ -168,12 +167,9 @@ class SqliteQueueDatabase(SqliteExtDatabase):
 
     def _create_queues_and_workers(self):
         self._write_queue = self._thread_helper.queue()
-        self._read_queue = self._thread_helper.queue()
 
         target = self._run_worker_loop
         self._writer = self._thread_helper.thread(target, self._write_queue)
-        self._readers = [self._thread_helper.thread(target, self._read_queue)
-                         for _ in range(self._num_readers)]
 
     def _run_worker_loop(self, queue):
         conn = self.get_conn()
@@ -200,17 +196,19 @@ class SqliteQueueDatabase(SqliteExtDatabase):
         return async_cursor.set_result(cursor, exc)
 
     def queue_size(self):
-        return (self._write_queue.qsize(), self._read_queue.qsize())
+        return self._write_queue.qsize()
 
     def execute_sql(self, sql, params=None, require_commit=True, timeout=None):
+        if not require_commit:
+            return self.__execute_sql(sql, params=params, require_commit=False)
+
         cursor = AsyncCursor(
             event=self._thread_helper.event(),
             sql=sql,
             params=params,
             commit=require_commit,
             timeout=self._results_timeout if timeout is None else timeout)
-        queue = self._write_queue if require_commit else self._read_queue
-        queue.put(cursor)
+        self._write_queue.put(cursor)
         return cursor
 
     def start(self):
@@ -218,9 +216,6 @@ class SqliteQueueDatabase(SqliteExtDatabase):
             if not self._is_stopped:
                 return False
             self._writer.start()
-            for reader in self._readers:
-                reader.start()
-            logger.info('workers started.')
             self._is_stopped = False
             return True
 
@@ -230,11 +225,7 @@ class SqliteQueueDatabase(SqliteExtDatabase):
             if self._is_stopped:
                 return False
             self._write_queue.put(StopIteration)
-            for _ in self._readers:
-                self._read_queue.put(StopIteration)
             self._writer.join()
-            for reader in self._readers:
-                reader.join()
             self._is_stopped = True
             return True
 

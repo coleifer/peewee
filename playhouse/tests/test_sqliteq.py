@@ -45,7 +45,7 @@ class BaseTestQueueDatabase(object):
                 self.db = get_db(**self.database_config)
 
         # Sanity check at startup.
-        self.assertEqual(self.db.queue_size(), (0, 0))
+        self.assertEqual(self.db.queue_size(), 0)
 
     def tearDown(self):
         super(BaseTestQueueDatabase, self).tearDown()
@@ -62,7 +62,7 @@ class BaseTestQueueDatabase(object):
 
     def test_query_execution(self):
         qr = User.select().execute()
-        self.assertEqual(self.db.queue_size(), (0, 1))
+        self.assertEqual(self.db.queue_size(), 0)
 
         self.db.start()
 
@@ -72,7 +72,7 @@ class BaseTestQueueDatabase(object):
 
         self.assertTrue(huey.id is not None)
         self.assertTrue(mickey.id is not None)
-        self.assertEqual(self.db.queue_size(), (0, 0))
+        self.assertEqual(self.db.queue_size(), 0)
 
         self.db.stop()
 
