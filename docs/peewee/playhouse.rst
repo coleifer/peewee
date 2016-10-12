@@ -916,22 +916,17 @@ autocommit mode, essentially.
 Transactions
 ^^^^^^^^^^^^
 
-SqliteQueueDatabase may be useful for simple applications that need to read and
-write to a single Sqlite database from multiple threads, and do not require
-complex multi-statement transactional semantics.
-
-The latter point is extremely important. Because all queries are serialized
-and executed by a single worker thread, it is possible for transactional SQL
-from separate threads to be executed out-of-order. In the example below,
-the transaction started by thread "B" is rolled back by thread "A" (with bad
-consequences!):
+Because all queries are serialized and executed by a single worker thread, it
+is possible for transactional SQL from separate threads to be executed
+out-of-order. In the example below, the transaction started by thread "B" is
+rolled back by thread "A" (with bad consequences!):
 
 * Thread A: UPDATE transplants SET organ='liver', ...;
 * Thread B: BEGIN TRANSACTION;
 * Thread B: UPDATE life_support_system SET timer += 60 ...;
 * Thread A: ROLLBACK; -- Oh no....
 
-Because of the potential for queries from separate transactions to be
+Since there is a potential for queries from separate transactions to be
 interleaved, the :py:meth:`~SqliteQueueDatabase.transaction` and
 :py:meth:`~SqliteQueueDatabase.atomic` methods behave differently on
 :py:class:`SqliteQueueDatabase`. These methods will store up all write queries
@@ -949,11 +944,9 @@ and :py:meth:`~SqliteQueueDatabase.is_stopped` methods can be used to control
 the writer thread.
 
 .. note::
-    If you plan on using SQLite in a multi-threaded application, the
-    `write-ahead logging <https://www.sqlite.org/wal.html>`_ docs are good to
-    be familiar with, but the `isolation <https://www.sqlite.org/isolation.html>`_
-    documentation is what really allowed me to reason about SQLite's behavior
-    in a multi-threaded environment.
+    Take a look at SQLite's `isolation <https://www.sqlite.org/isolation.html>`_
+    documentation for more information about how SQLite handles concurrent
+    connections.
 
 Code sample
 ^^^^^^^^^^^
