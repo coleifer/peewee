@@ -4280,10 +4280,18 @@ Flask Utils
 
 The ``playhouse.flask_utils`` module contains several helpers for integrating peewee with the `Flask <http://flask.pocoo.org/>`_ web framework.
 
-Database wrapper
+Database Wrapper
 ^^^^^^^^^^^^^^^^
 
-The :py:class:`FlaskDB` class provides a convenient way to configure a peewee :py:class:`Database` instance using Flask app configuration. The :py:class:`FlaskDB` wrapper will also automatically set up request setup and teardown handlers to ensure your connections are managed correctly.
+The :py:class:`FlaskDB` class is a wrapper for configuring and referencing a
+Peewee database from within a Flask application. Don't let it's name fool you:
+it is **not the same thing as a peewee database**. ``FlaskDB`` is designed to
+remove the following boilerplate from your flask app:
+
+* Dynamically create a Peewee database instance based on app config data.
+* Create a base class from which all your application's models will descend.
+* Register hooks at the start and end of a request to handle opening and
+  closing a database connection.
 
 Basic usage:
 
@@ -4299,28 +4307,43 @@ Basic usage:
     app = Flask(__name__)
     app.config.from_object(__name__)
 
-    database = FlaskDB(app)
+    db_wrapper = FlaskDB(app)
 
-    class User(database.Model):
+    class User(db_wrapper.Model):
         username = CharField(unique=True)
 
-    class Tweet(database.Model):
+    class Tweet(db_wrapper.Model):
         user = ForeignKeyField(User, related_name='tweets')
         content = TextField()
         timestamp = DateTimeField(default=datetime.datetime.now)
 
 The above code example will create and instantiate a peewee :py:class:`PostgresqlDatabase` specified by the given database URL. Request hooks will be configured to establish a connection when a request is received, and automatically close the connection when the response is sent. Lastly, the :py:class:`FlaskDB` class exposes a :py:attr:`FlaskDB.Model` property which can be used as a base for your application's models.
 
-.. note:: The underlying peewee database can be accessed using the ``FlaskDB.database`` attribute.
+Here is how you can access the wrapped Peewee database instance that is
+configured for you by the ``FlaskDB`` wrapper:
 
-If you prefer, you can also pass the database value directly into the ``FlaskDB`` object:
+.. code-block:: python
+
+    # Obtain a reference to the Peewee database instance.
+    peewee_db = db_wrapper.database
+
+    @app.route('/transfer-funds/', methods=['POST'])
+    def transfer_funds():
+        with peewee_db.atomic():
+            # ...
+
+        return jsonify({'transfer-id': xid})
+
+.. note:: The actual peewee database can be accessed using the ``FlaskDB.database`` attribute.
+
+Here is another way to configure a Peewee database using ``FlaskDB``:
 
 .. code-block:: python
 
     app = Flask(__name__)
-    database = FlaskDB(app, 'sqlite:///my_app.db')
+    db_wrapper = FlaskDB(app, 'sqlite:///my_app.db')
 
-While the above examples show using a database URL, for more advanced usages you can specify a dictionary of configuration options or simply pass in a peewee :py:class:`Database` instance:
+While the above examples show using a database URL, for more advanced usages you can specify a dictionary of configuration options, or simply pass in a peewee :py:class:`Database` instance:
 
 .. code-block:: python
 
@@ -4335,7 +4358,8 @@ While the above examples show using a database URL, for more advanced usages you
     app = Flask(__name__)
     app.config.from_object(__name__)
 
-    database = FlaskDB(app)
+    wrapper = FlaskDB(app)
+    pooled_postgres_db = wrapper.database
 
 Using a peewee :py:class:`Database` object:
 
@@ -4343,7 +4367,8 @@ Using a peewee :py:class:`Database` object:
 
     peewee_db = PostgresqlExtDatabase('my_app')
     app = Flask(__name__)
-    flask_db = FlaskDB(app, peewee_db)
+    db_wrapper = FlaskDB(app, peewee_db)
+
 
 Database with Application Factory
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -4354,18 +4379,18 @@ Using as a factory:
 
 .. code-block:: python
 
-    database = FlaskDB()
+    db_wrapper = FlaskDB()
 
     # Even though the database is not yet initialized, you can still use the
     # `Model` property to create model classes.
-    class User(database.Model):
+    class User(db_wrapper.Model):
         username = CharField(unique=True)
 
 
     def create_app():
         app = Flask(__name__)
         app.config['DATABASE'] = 'sqlite:////home/code/apps/my-database.db'
-        database.init_app(app)
+        db_wrapper.init_app(app)
         return app
 
 Query utilities
