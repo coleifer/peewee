@@ -3735,23 +3735,17 @@ class Database(object):
     def transaction_depth(self):
         return len(self._local.transactions)
 
-    def transaction(self):
-        return transaction(self)
-
-    def commit_on_success(self, func):
-        @wraps(func)
-        def inner(*args, **kwargs):
-            with self.transaction():
-                return func(*args, **kwargs)
-        return inner
+    def transaction(self, transaction_type=None):
+        return transaction(self, transaction_type)
+    commit_on_success = property(transaction)
 
     def savepoint(self, sid=None):
         if not self.savepoints:
             raise NotImplementedError
         return savepoint(self, sid)
 
-    def atomic(self):
-        return _atomic(self)
+    def atomic(self, transaction_type=None):
+        return _atomic(self, transaction_type)
 
     def get_tables(self, schema=None):
         raise NotImplementedError
@@ -3918,8 +3912,12 @@ class SqliteDatabase(Database):
     synchronous = __pragma__('synchronous')
     wal_autocheckpoint = __pragma__('wal_autocheckpoint')
 
-    def begin(self, lock_type='DEFERRED'):
-        self.execute_sql('BEGIN %s' % lock_type, require_commit=False)
+    def begin(self, lock_type=None):
+        statement = 'BEGIN %s' % lock_type if lock_type else 'BEGIN'
+        self.execute_sql(statement, require_commit=False)
+
+    def transaction(self, transaction_type=None):
+        return transaction_sqlite(self, transaction_type)
 
     def create_foreign_key(self, model_class, field, constraint=None):
         raise OperationalError('SQLite does not support ALTER TABLE '
@@ -4290,42 +4288,42 @@ class Using(ExecutionContext):
             model._meta.database = self._orig[i]
 
 class _atomic(_callable_context_manager):
-    def __init__(self, db):
+    __slots__ = ('db', 'transaction_type', 'context_manager')
+    def __init__(self, db, transaction_type=None):
         self.db = db
+        self.transaction_type = transaction_type
 
     def __enter__(self):
         if self.db.transaction_depth() == 0:
-            self._helper = self.db.transaction()
+            self.context_manager = self.db.transaction(self.transaction_type)
         else:
-            self._helper = self.db.savepoint()
-        return self._helper.__enter__()
+            self.context_manager = self.db.savepoint()
+        return self.context_manager.__enter__()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        return self._helper.__exit__(exc_type, exc_val, exc_tb)
+        return self.context_manager.__exit__(exc_type, exc_val, exc_tb)
 
 class transaction(_callable_context_manager):
-    __slots__ = ('db', 'autocommit')
-    def __init__(self, db):
+    __slots__ = ('db', 'autocommit', 'transaction_type')
+    def __init__(self, db, transaction_type=None):
         self.db = db
+        self.transaction_type = transaction_type
 
     def _begin(self):
         self.db.begin()
 
     def commit(self, begin=True):
         self.db.commit()
-        if begin:
-            self._begin()
+        if begin: self._begin()
 
     def rollback(self, begin=True):
         self.db.rollback()
-        if begin:
-            self._begin()
+        if begin: self._begin()
 
     def __enter__(self):
         self.autocommit = self.db.get_autocommit()
         self.db.set_autocommit(False)
-        if self.db.transaction_depth() == 0:
-            self._begin()
+        if self.db.transaction_depth() == 0: self._begin()
         self.db.push_transaction(self)
         return self
 
@@ -4378,6 +4376,10 @@ class savepoint(_callable_context_manager):
                     raise
         finally:
             self.db.set_autocommit(self.autocommit)
+
+class transaction_sqlite(transaction):
+    def _begin(self):
+        self.db.begin(lock_type=self.transaction_type)
 
 class savepoint_sqlite(savepoint):
     __slots__ = savepoint.__slots__ + ('isolation_level',)

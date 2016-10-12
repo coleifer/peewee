@@ -953,19 +953,6 @@ class SqliteExtDatabase(SqliteDatabase):
         return super(SqliteExtDatabase, self).create_index(
             model_class, field_name, unique)
 
-    def transaction(self, lock_type='deferred'):
-        assert lock_type.lower() in ('deferred', 'immediate', 'exclusive')
-        return _sqlite_transaction(self, lock_type)
-
-
-class _sqlite_transaction(transaction):
-    def __init__(self, db, lock_type='deferred'):
-        super(_sqlite_transaction, self).__init__(db)
-        self.lock_type = lock_type
-
-    def _begin(self):
-        self.db.begin(self.lock_type)
-
 
 OP.MATCH = 'match'
 SqliteExtDatabase.register_ops({

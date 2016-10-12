@@ -171,31 +171,6 @@ sqlite_ext API notes
 
         Unload the given SQLite extension.
 
-    .. py:method:: granular_transaction([lock_type='deferred'])
-
-        With the ``granular_transaction`` helper, you can specify the isolation level
-        for an individual transaction.  The valid options are:
-
-        * ``exclusive``
-        * ``immediate``
-        * ``deferred``
-
-        Example usage:
-
-        .. code-block:: python
-
-            with db.granular_transaction('exclusive'):
-                # no other readers or writers!
-                (Account
-                 .update(Account.balance=Account.balance - 100)
-                 .where(Account.id == from_acct)
-                 .execute())
-
-                (Account
-                 .update(Account.balance=Account.balance + 100)
-                 .where(Account.id == to_acct)
-                 .execute())
-
 
 .. py:class:: VirtualModel
 
@@ -1118,13 +1093,6 @@ apsw_ext API notes
 
     :param string database: filename of sqlite database
     :param connect_kwargs: keyword arguments passed to apsw when opening a connection
-
-    .. py:method:: transaction([lock_type='deferred'])
-
-        Functions just like the :py:meth:`Database.transaction` context manager,
-        but accepts an additional parameter specifying the type of lock to use.
-
-        :param string lock_type: type of lock to use when opening a new transaction
 
     .. py:method:: register_module(mod_name, mod_inst)
 

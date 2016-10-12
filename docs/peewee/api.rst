@@ -2130,10 +2130,34 @@ Database and its subclasses
             the :py:meth:`~Database.set_autocommit` and :py:meth:`Database.get_autocommit`
             methods.
 
-    .. py:method:: begin()
+    .. py:method:: begin([lock_type=None])
 
         Initiate a new transaction.  By default **not** implemented as this is not
-        part of the DB-API 2.0, but provided for API compatibility.
+        part of the DB-API 2.0, but provided for API compatibility and to allow
+        SQLite users to specify the isolation level when beginning transactions.
+
+        For SQLite users, the valid isolation levels for ``lock_type`` are:
+
+        * ``exclusive``
+        * ``immediate``
+        * ``deferred``
+
+        Example usage:
+
+        .. code-block:: python
+
+            # Calling transaction() in turn calls begin('exclusive').
+            with db.transaction('exclusive'):
+                # No other readers or writers allowed while this is active.
+                (Account
+                 .update(Account.balance=Account.balance - 100)
+                 .where(Account.id == from_acct)
+                 .execute())
+
+                (Account
+                 .update(Account.balance=Account.balance + 100)
+                 .where(Account.id == to_acct)
+                 .execute())
 
     .. py:method:: commit()
 
@@ -2268,10 +2292,15 @@ Database and its subclasses
 
             db.drop_tables([User, Tweet, Something], safe=True)
 
-    .. py:method:: atomic()
+    .. py:method:: atomic([transaction_type=None])
 
         Execute statements in either a transaction or a savepoint. The outer-most call to *atomic* will use a transaction,
         and any subsequent nested calls will use savepoints.
+
+        :param str transaction_type: Specify isolation level. This parameter
+            only has effect on **SQLite databases**, and furthermore, only
+            affects the outer-most call to :py:meth:`~Database.atomic`. For
+            more information, see :py:meth:`~Database.transaction`.
 
         ``atomic`` can be used as either a context manager or a decorator.
 
@@ -2301,7 +2330,7 @@ Database and its subclasses
                 # This function will execute in a transaction/savepoint.
                 return User.create(username=username)
 
-    .. py:method:: transaction()
+    .. py:method:: transaction([transaction_type=None])
 
         Execute statements in a transaction using either a context manager or decorator. If an
         error is raised inside the wrapped block, the transaction will be rolled
@@ -2310,6 +2339,8 @@ Database and its subclasses
         Nested blocks can be wrapped with ``transaction`` - the database
         will keep a stack and only commit when it reaches the end of the outermost
         function / block.
+
+        :param str transaction_type: Specify isolation level, **SQLite only**.
 
         Context manager example code:
 
@@ -2337,6 +2368,29 @@ Database and its subclasses
                 from_acct.charge(amt)
                 to_acct.pay(amt)
                 return amt
+
+        SQLite users can specify the isolation level by specifying one of the
+        following values for ``transaction_type``:
+
+        * ``exclusive``
+        * ``immediate``
+        * ``deferred``
+
+        Example usage:
+
+        .. code-block:: python
+
+            with db.transaction('exclusive'):
+                # No other readers or writers allowed while this is active.
+                (Account
+                 .update(Account.balance=Account.balance - 100)
+                 .where(Account.id == from_acct)
+                 .execute())
+
+                (Account
+                 .update(Account.balance=Account.balance + 100)
+                 .where(Account.id == to_acct)
+                 .execute())
 
     .. py:method:: commit_on_success(func)
 

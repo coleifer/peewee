@@ -59,25 +59,26 @@ class TestTransaction(ModelTestCase):
                 rollback = db_mocks['rollback']
 
                 with _atomic(patched_db):
-                    patched_db.transaction.assert_called_once_with()
-                    begin.assert_called_once_with()
+                    patched_db.transaction.assert_called_once_with(None)
+                    begin.assert_called_once_with(lock_type=None)
                     self.assertEqual(patched_db.savepoint.call_count, 0)
 
                     with _atomic(patched_db):
-                        patched_db.transaction.assert_called_once_with()
-                        begin.assert_called_once_with()
+                        patched_db.transaction.assert_called_once_with(None)
+                        begin.assert_called_once_with(lock_type=None)
                         patched_db.savepoint.assert_called_once_with()
                         self.assertEqual(commit.call_count, 0)
                         self.assertEqual(rollback.call_count, 0)
 
                         with _atomic(patched_db):
-                            patched_db.transaction.assert_called_once_with()
-                            begin.assert_called_once_with()
+                            (patched_db.transaction
+                             .assert_called_once_with(None))
+                            begin.assert_called_once_with(lock_type=None)
                             self.assertEqual(
                                 patched_db.savepoint.call_count,
                                 2)
 
-                    begin.assert_called_once_with()
+                    begin.assert_called_once_with(lock_type=None)
                     self.assertEqual(commit.call_count, 0)
                     self.assertEqual(rollback.call_count, 0)
 
