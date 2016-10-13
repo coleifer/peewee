@@ -364,7 +364,7 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
         use_named_cursor = (named_cursor or (
                             self.server_side_cursors and
                             sql.lower().startswith('select')))
-        with self.exception_wrapper():
+        with self.exception_wrapper:
             if use_named_cursor:
                 cursor = self.get_cursor(name=str(uuid.uuid1()))
                 require_commit = False

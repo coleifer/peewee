@@ -111,7 +111,7 @@ class APSWDatabase(SqliteExtDatabase):
 
     def execute_sql(self, sql, params=None, require_commit=True):
         logger.debug((sql, params))
-        with self.exception_wrapper():
+        with self.exception_wrapper:
             cursor = self.get_cursor()
             self._execute_sql(cursor, sql, params)
         return cursor

@@ -211,7 +211,7 @@ class RetryOperationalError(object):
         except OperationalError:
             if not self.is_closed():
                 self.close()
-            with self.exception_wrapper():
+            with self.exception_wrapper:
                 cursor = self.get_cursor()
                 cursor.execute(sql, params or ())
                 if require_commit and self.get_autocommit():

@@ -3583,6 +3583,7 @@ class Database(object):
 
         self.field_overrides = merge_dict(self.field_overrides, fields or {})
         self.op_overrides = merge_dict(self.op_overrides, ops or {})
+        self.exception_wrapper = ExceptionWrapper(self.exceptions)
 
     def init(self, database, **connect_kwargs):
         if not self.is_closed():
@@ -3591,19 +3592,14 @@ class Database(object):
         self.database = database
         self.connect_kwargs.update(connect_kwargs)
 
-    def exception_wrapper(self):
-        return ExceptionWrapper(self.exceptions)
-
     def connect(self):
         with self._conn_lock:
             if self.deferred:
                 raise Exception('Error, database not properly initialized '
                                 'before opening connection')
-            with self.exception_wrapper():
-                self._local.conn = self._connect(
-                    self.database,
-                    **self.connect_kwargs)
-                self._local.closed = False
+            self._local.conn = self._create_connection()
+            self._local.closed = False
+            with self.exception_wrapper:
                 self.initialize_connection(self._local.conn)
 
     def initialize_connection(self, conn):
@@ -3614,7 +3610,7 @@ class Database(object):
             if self.deferred:
                 raise Exception('Error, database not properly initialized '
                                 'before closing connection')
-            with self.exception_wrapper():
+            with self.exception_wrapper:
                 self._close(self._local.conn)
                 self._local.closed = True
 
@@ -3626,6 +3622,10 @@ class Database(object):
         if self._local.closed:
             self.connect()
         return self._local.conn
+
+    def _create_connection(self):
+        with self.exception_wrapper:
+            return self._connect(self.database, **self.connect_kwargs)
 
     def is_closed(self):
         return self._local.closed
@@ -3682,12 +3682,12 @@ class Database(object):
 
     def execute_sql(self, sql, params=None, require_commit=True):
         logger.debug((sql, params))
-        with self.exception_wrapper():
+        with self.exception_wrapper:
             cursor = self.get_cursor()
             try:
                 cursor.execute(sql, params or ())
             except Exception:
-                if self.get_autocommit() and self.autorollback:
+                if self.autorollback and self.get_autocommit():
                     self.rollback()
                 raise
             else:
@@ -3699,11 +3699,11 @@ class Database(object):
         pass
 
     def commit(self):
-        with self.exception_wrapper():
+        with self.exception_wrapper:
             self.get_conn().commit()
 
     def rollback(self):
-        with self.exception_wrapper():
+        with self.exception_wrapper:
             self.get_conn().rollback()
 
     def set_autocommit(self, autocommit):
@@ -3723,8 +3723,8 @@ class Database(object):
     def execution_context_depth(self):
         return len(self._local.context_stack)
 
-    def execution_context(self, with_transaction=True):
-        return ExecutionContext(self, with_transaction=with_transaction)
+    def execution_context(self, with_transaction=True, transaction_type=None):
+        return ExecutionContext(self, with_transaction, transaction_type)
 
     def push_transaction(self, transaction):
         self._local.transactions.append(transaction)
@@ -4240,9 +4240,10 @@ class _callable_context_manager(object):
         return inner
 
 class ExecutionContext(_callable_context_manager):
-    def __init__(self, database, with_transaction=True):
+    def __init__(self, database, with_transaction=True, transaction_type=None):
         self.database = database
         self.with_transaction = with_transaction
+        self.transaction_type = transaction_type
         self.connection = None
 
     def __enter__(self):
