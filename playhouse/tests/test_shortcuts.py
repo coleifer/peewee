@@ -341,7 +341,7 @@ class TestModelToDict(ModelTestCase):
             self.assertEqual(model_to_dict(root), {
                 'id': root.id,
                 'name': root.name,
-                'parent': {},
+                'parent': None,
             })
 
         with assert_query_count(0):
@@ -356,7 +356,7 @@ class TestModelToDict(ModelTestCase):
                 'children': [{'id': child.id, 'name': child.name}],
                 'id': root.id,
                 'name': root.name,
-                'parent': {},
+                'parent': None,
             })
 
         with assert_query_count(1):

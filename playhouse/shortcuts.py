@@ -122,7 +122,7 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
                     seen=seen,
                     max_depth=max_depth - 1)
             else:
-                field_data = {}
+                field_data = None
 
         data[field.name] = field_data
 
