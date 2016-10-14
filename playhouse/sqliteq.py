@@ -320,7 +320,7 @@ class ThreadHelper(object):
 
 
 class GreenletHelper(ThreadHelper):
-    __slots__ = ('queue_max_size',)
+    __slots__ = ()
 
     def event(self): return GEvent()
     def local(self): return greenlet_local()
