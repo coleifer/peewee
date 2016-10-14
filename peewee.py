@@ -405,7 +405,7 @@ class Proxy(object):
     Proxy class useful for situations when you wish to defer the initialization
     of an object.
     """
-    __slots__ = ['obj', '_callbacks']
+    __slots__ = ('obj', '_callbacks')
 
     def __init__(self):
         self._callbacks = []
@@ -4232,6 +4232,7 @@ class MySQLDatabase(Database):
 
 
 class _callable_context_manager(object):
+    __slots__ = ()
     def __call__(self, fn):
         @wraps(fn)
         def inner(*args, **kwargs):
@@ -4379,11 +4380,12 @@ class savepoint(_callable_context_manager):
             self.db.set_autocommit(self.autocommit)
 
 class transaction_sqlite(transaction):
+    __slots__ = ()
     def _begin(self):
         self.db.begin(lock_type=self.transaction_type)
 
 class savepoint_sqlite(savepoint):
-    __slots__ = savepoint.__slots__ + ('isolation_level',)
+    __slots__ = ('isolation_level',)
     def __enter__(self):
         conn = self.db.get_conn()
         # For sqlite, the connection's isolation_level *must* be set to None.
