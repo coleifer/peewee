@@ -1180,7 +1180,7 @@ Use the :py:meth:`~Query.join` method to *JOIN* additional tables. When a foreig
 
     >>> my_tweets = Tweet.select().join(User).where(User.username == 'charlie')
 
-By default peewee will use an *INNER* join, but you can use *LEFT OUTER* or *FULL* joins as well:
+By default peewee will use an *INNER* join, but you can use *LEFT OUTER*, *RIGHT OUTER*, *FULL*, or *CROSS* joins as well:
 
 .. code-block:: python
 

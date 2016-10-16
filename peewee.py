@@ -71,6 +71,7 @@ __all__ = [
     'InterfaceError',
     'InternalError',
     'JOIN',
+    'JOIN_CROSS',
     'JOIN_FULL',
     'JOIN_INNER',
     'JOIN_LEFT_OUTER',
@@ -344,10 +345,12 @@ JOIN = attrdict(
     LEFT_OUTER='LEFT OUTER',
     RIGHT_OUTER='RIGHT OUTER',
     FULL='FULL',
+    CROSS='CROSS',
 )
 JOIN_INNER = JOIN.INNER
 JOIN_LEFT_OUTER = JOIN.LEFT_OUTER
 JOIN_FULL = JOIN.FULL
+JOIN_CROSS = JOIN.CROSS
 
 RESULTS_NAIVE = 1
 RESULTS_MODELS = 2
@@ -1607,6 +1610,7 @@ class QueryCompiler(object):
         JOIN.LEFT_OUTER: 'LEFT OUTER JOIN',
         JOIN.RIGHT_OUTER: 'RIGHT OUTER JOIN',
         JOIN.FULL: 'FULL JOIN',
+        JOIN.CROSS: 'CROSS JOIN',
     }
     alias_map_class = AliasMap
 
@@ -1853,7 +1857,10 @@ class QueryCompiler(object):
             for join in joins[curr]:
                 src = curr
                 dest = join.dest
-                if isinstance(join.on, (Expression, Func, Clause, Entity)):
+                join_type = join.get_join_type()
+                if join_type == JOIN.CROSS:
+                    constraint = None
+                elif isinstance(join.on, (Expression, Func, Clause, Entity)):
                     # Clear any alias on the join expression.
                     constraint = join.on.clone().alias()
                 else:
@@ -1882,13 +1889,15 @@ class QueryCompiler(object):
                     q.append(dest)
                     dest_n = dest.as_entity().alias(alias_map[dest])
 
-                join_type = join.get_join_type()
                 if join_type in self.join_map:
                     join_sql = SQL(self.join_map[join_type])
                 else:
                     join_sql = SQL(join_type)
-                clauses.append(
-                    Clause(join_sql, dest_n, SQL('ON'), constraint))
+
+                clause_args = [join_sql, dest_n]
+                if constraint:
+                    clause_args.extend([SQL('ON'), constraint])
+                clauses.append(Clause(*clause_args))
 
         return clauses
 
@@ -2745,8 +2754,9 @@ class Query(Node):
         src = self._query_ctx
         if not on:
             require_join_condition = (
-                isinstance(dest, SelectQuery) or
-                (isclass(dest) and not src._meta.rel_exists(dest)))
+                join_type != JOIN.CROSS and (
+                    isinstance(dest, SelectQuery) or
+                    (isclass(dest) and not src._meta.rel_exists(dest))))
             if require_join_condition:
                 raise ValueError('A join condition must be specified.')
         elif isinstance(on, basestring):
