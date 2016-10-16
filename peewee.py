@@ -344,6 +344,7 @@ JOIN = attrdict(
     LEFT_OUTER='LEFT OUTER',
     RIGHT_OUTER='RIGHT OUTER',
     FULL='FULL',
+    CROSS='CROSS',
 )
 JOIN_INNER = JOIN.INNER
 JOIN_LEFT_OUTER = JOIN.LEFT_OUTER
@@ -1607,6 +1608,7 @@ class QueryCompiler(object):
         JOIN.LEFT_OUTER: 'LEFT OUTER JOIN',
         JOIN.RIGHT_OUTER: 'RIGHT OUTER JOIN',
         JOIN.FULL: 'FULL JOIN',
+        JOIN.CROSS: 'CROSS JOIN',
     }
     alias_map_class = AliasMap
 
@@ -2743,12 +2745,14 @@ class Query(Node):
     @returns_clone
     def join(self, dest, join_type=None, on=None):
         src = self._query_ctx
-        if not on:
-            require_join_condition = (
+        if on is None:
+            require_join_condition = join_type != JOIN.CROSS and (
                 isinstance(dest, SelectQuery) or
                 (isclass(dest) and not src._meta.rel_exists(dest)))
             if require_join_condition:
                 raise ValueError('A join condition must be specified.')
+        elif join_type == JOIN.CROSS:
+            raise ValueError('A CROSS join cannot have a constraint.')
         elif isinstance(on, basestring):
             on = src._meta.fields[on]
         self._joins.setdefault(src, [])
