@@ -3601,6 +3601,8 @@ class Database(object):
             if self.deferred:
                 raise Exception('Error, database not properly initialized '
                                 'before opening connection')
+            if not self._local.closed:
+                raise Exception('Connection misuse detected (already connected)')
             self._local.conn = self._create_connection()
             self._local.closed = False
             with self.exception_wrapper:
