@@ -3602,8 +3602,9 @@ class Database(object):
     def connect(self):
         with self._conn_lock:
             if self.deferred:
-                raise Exception('Error, database not properly initialized '
-                                'before opening connection')
+                raise OperationalError('Database has not been initialized')
+            if not self._local.closed:
+                raise OperationalError('Connection already open')
             self._local.conn = self._create_connection()
             self._local.closed = False
             with self.exception_wrapper:

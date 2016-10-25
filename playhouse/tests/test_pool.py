@@ -108,8 +108,10 @@ class TestPooledDatabase(PeeweeTestCase):
 
     def test_max_conns(self):
         for i in range(self.db.max_connections):
+            self.db._local.closed = True
             self.db.connect()
             self.assertEqual(self.db.get_conn(), i + 1)
+        self.db._local.closed = True
         self.assertRaises(ValueError, self.db.connect)
 
     def test_stale_timeout(self):
@@ -215,6 +217,7 @@ class TestPooledDatabase(PeeweeTestCase):
         self.assertEqual(db._connections, [(now, 4)])
 
         # Since conn 4 is closed, we will open a new conn.
+        db._local.closed = True  # Pretend we're in a different thread.
         db.connect()
         self.assertEqual(db.get_conn(), 5)
         self.assertEqual(sorted(db._in_use.keys()), [3, 5])
