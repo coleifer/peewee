@@ -1081,7 +1081,10 @@ def coerce_to_unicode(s, encoding='utf-8'):
     if isinstance(s, unicode_type):
         return s
     elif isinstance(s, string_type):
-        return s.decode(encoding)
+        try:
+            return s.decode(encoding)
+        except UnicodeDecodeError:
+            return s
     return unicode_type(s)
 
 class CharField(Field):
