@@ -216,7 +216,6 @@ class SqliteQueueDatabase(SqliteExtDatabase):
 
         # Initialize threadlocal storage for tracking query pipelines.
         self._pipeline = self._thread_helper.local()
-        self._pipeline.pending = None
 
         # Create the writer thread, optionally starting it.
         self._create_write_queue()
@@ -294,10 +293,9 @@ class SqliteQueueDatabase(SqliteExtDatabase):
         with self._conn_lock:
             self._write_queue.put(UNPAUSE)
 
-    def atomic(self):
-        if self._pipeline.pending is not None:
-            raise ValueError('Sub-pipelines are not currently supported.')
-        self._pipeline.pending = []
+    def __unsupported__(self, *args, **kwargs):
+        raise ValueError('This method is not supported by %r.' % type(self))
+    atomic = transaction = savepoint = __unsupported__
 
 
 class ThreadHelper(object):

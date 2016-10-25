@@ -3730,6 +3730,8 @@ class Database(object):
     def execution_context(self, with_transaction=True, transaction_type=None):
         return ExecutionContext(self, with_transaction, transaction_type)
 
+    __call__ = execution_context
+
     def push_transaction(self, transaction):
         self._local.transactions.append(transaction)
 
