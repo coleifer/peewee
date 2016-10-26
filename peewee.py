@@ -145,8 +145,8 @@ else:
     raise RuntimeError('Unsupported python version.')
 
 if PY26:
-    _M = 10**6
-    total_seconds = lambda t: (t.microseconds + 0.0 + (t.seconds + t.days * 24 * 3600) * _M) / _M
+    _D, _M = 24 * 3600., 10**6
+    total_seconds = lambda t: (t.microseconds+(t.seconds+t.days*_D)*_M)/_M
 else:
     total_seconds = lambda t: t.total_seconds()
 
