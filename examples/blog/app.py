@@ -194,19 +194,28 @@ def index():
 @login_required
 def create():
     if request.method == 'POST':
-        if request.form.get('title') and request.form.get('content'):
-            entry = Entry.create(
-                title=request.form['title'],
-                content=request.form['content'],
-                published=request.form.get('published') or False)
-            flash('Entry created successfully.', 'success')
-            if entry.published:
-                return redirect(url_for('detail', slug=entry.slug))
+        entry = Entry(
+            title=request.form.get('title') or '',
+            content=request.form.get('content') or '',
+            published=request.form.get('published') or False)
+
+        if entry.title and entry.content:
+            try:
+                with database.atomic():
+                    entry.save()
+            except IntegrityError:
+                flash('Error: this title is already in use.', 'danger')
             else:
-                return redirect(url_for('edit', slug=entry.slug))
+                flash('Entry created successfully.', 'success')
+                if entry.published:
+                    return redirect(url_for('detail', slug=entry.slug))
+                else:
+                    return redirect(url_for('edit', slug=entry.slug))
         else:
             flash('Title and Content are required.', 'danger')
-    return render_template('create.html')
+    else:
+        entry = Entry()
+    return render_template('create.html', entry=entry)
 
 @app.route('/drafts/')
 @login_required
