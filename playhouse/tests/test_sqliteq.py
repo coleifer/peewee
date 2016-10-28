@@ -7,12 +7,14 @@ import unittest
 
 try:
     import gevent
+    from gevent.event import Event as GreenEvent
 except ImportError:
     gevent = None
 
 from peewee import *
 from playhouse.sqliteq import ResultTimeout
 from playhouse.sqliteq import SqliteQueueDatabase
+from playhouse.sqliteq import WriterPaused
 from playhouse.tests.base import database_initializer
 from playhouse.tests.base import PeeweeTestCase
 from playhouse.tests.base import skip_if
@@ -79,6 +81,9 @@ class BaseTestQueueDatabase(object):
     def create_thread(self, fn, *args):
         raise NotImplementedError
 
+    def create_event(self):
+        raise NotImplementedError
+
     def test_multiple_threads(self):
         def create_rows(idx, nrows):
             for i in range(idx, idx + nrows):
@@ -93,6 +98,60 @@ class BaseTestQueueDatabase(object):
 
         self.assertEqual(User.select().count(), total)
         self.db.stop()
+
+    def test_pause(self):
+        event_a = self.create_event()
+        event_b = self.create_event()
+
+        def create_user(name, event, expect_paused):
+            event.wait()
+            if expect_paused:
+                self.assertRaises(WriterPaused, lambda: User.create(name=name))
+            else:
+                User.create(name=name)
+
+        self.db.start()
+
+        t_a = self.create_thread(create_user, 'a', event_a, True)
+        t_a.start()
+        t_b = self.create_thread(create_user, 'b', event_b, False)
+        t_b.start()
+
+        User.create(name='c')
+        self.assertEqual(User.select().count(), 1)
+
+        # Pause operations but preserve the writer thread/connection.
+        self.db.pause()
+
+        event_a.set()
+        self.assertEqual(User.select().count(), 1)
+        t_a.join()
+
+        self.db.unpause()
+        self.assertEqual(User.select().count(), 1)
+
+        event_b.set()
+        t_b.join()
+        self.assertEqual(User.select().count(), 2)
+
+        self.db.stop()
+
+    def test_restart(self):
+        self.db.start()
+        User.create(name='a')
+        self.db.stop()
+        self.db._results_timeout = 0.0001
+
+        self.assertRaises(ResultTimeout, User.create, name='b')
+        self.assertEqual(User.select().count(), 1)
+
+        self.db.start()  # Will execute the pending "b" INSERT.
+        self.db._results_timeout = None
+
+        User.create(name='c')
+        self.assertEqual(User.select().count(), 3)
+        self.assertEqual(sorted(u.name for u in User.select()),
+                         ['a', 'b', 'c'])
 
     def test_waiting(self):
         D = {}
@@ -146,6 +205,9 @@ class TestThreadedDatabaseThreads(BaseTestQueueDatabase, PeeweeTestCase):
         t.daemon = True
         return t
 
+    def create_event(self):
+        return threading.Event()
+
     def test_timeout(self):
         @self.db.func()
         def slow(n):
@@ -171,6 +233,9 @@ class TestThreadedDatabaseGreenlets(BaseTestQueueDatabase, PeeweeTestCase):
 
     def create_thread(self, fn, *args):
         return gevent.Greenlet(fn, *args)
+
+    def create_event(self):
+        return GreenEvent()
 
 
 if __name__ == '__main__':

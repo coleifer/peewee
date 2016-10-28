@@ -26,6 +26,9 @@ logger = logging.getLogger('peewee.sqliteq')
 class ResultTimeout(Exception):
     pass
 
+class WriterPaused(Exception):
+    pass
+
 class ShutdownException(Exception):
     pass
 
@@ -136,6 +139,7 @@ class Writer(object):
         finally:
             if conn is not None:
                 self.database._close(conn)
+                self.database._local.closed = True
 
     def wait_unpause(self):
         obj = self.queue.get()
@@ -147,6 +151,7 @@ class Writer(object):
         elif obj is PAUSE:
             logger.error('writer received pause, but is already paused.')
         else:
+            obj.set_result(None, WriterPaused())
             logger.warning('writer paused, not handling %s', obj)
 
     def loop(self, conn):
@@ -156,6 +161,7 @@ class Writer(object):
         elif obj is PAUSE:
             logger.info('writer paused - closing database connection.')
             self.database._close(conn)
+            self.database._local.closed = True
             return
         elif obj is UNPAUSE:
             logger.error('writer received unpause, but is already running.')
