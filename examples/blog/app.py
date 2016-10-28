@@ -93,8 +93,11 @@ class Entry(flask_db.Model):
         # Create a row in the FTSEntry table with the post content. This will
         # allow us to use SQLite's awesome full-text search extension to
         # search our entries.
+        query = (FTSEntry
+                 .select(FTSEntry.docid, FTSEntry.entry_id)
+                 .where(FTSEntry.entry_id == self.id))
         try:
-            fts_entry = FTSEntry.get(FTSEntry.entry_id == self.id)
+            fts_entry = query.get()
         except FTSEntry.DoesNotExist:
             fts_entry = FTSEntry(entry_id=self.id)
             force_insert = True
@@ -190,32 +193,34 @@ def index():
         search=search_query,
         check_bounds=False)
 
-@app.route('/create/', methods=['GET', 'POST'])
-@login_required
-def create():
+def _create_or_edit(entry, template):
     if request.method == 'POST':
-        entry = Entry(
-            title=request.form.get('title') or '',
-            content=request.form.get('content') or '',
-            published=request.form.get('published') or False)
-
-        if entry.title and entry.content:
+        entry.title = request.form.get('title') or ''
+        entry.content = request.form.get('content') or ''
+        entry.published = request.form.get('published') or False
+        if not (entry.title and entry.content):
+            flash('Title and Content are required.', 'danger')
+        else:
+            # Wrap the call to save in a transaction so we can roll it back
+            # cleanly in the event of an integrity error.
             try:
                 with database.atomic():
                     entry.save()
             except IntegrityError:
                 flash('Error: this title is already in use.', 'danger')
             else:
-                flash('Entry created successfully.', 'success')
+                flash('Entry saved successfully.', 'success')
                 if entry.published:
                     return redirect(url_for('detail', slug=entry.slug))
                 else:
                     return redirect(url_for('edit', slug=entry.slug))
-        else:
-            flash('Title and Content are required.', 'danger')
-    else:
-        entry = Entry()
-    return render_template('create.html', entry=entry)
+
+    return render_template(template, entry=entry)
+
+@app.route('/create/', methods=['GET', 'POST'])
+@login_required
+def create():
+    return _create_or_edit(Entry(title='', content=''), 'create.html')
 
 @app.route('/drafts/')
 @login_required
@@ -236,22 +241,7 @@ def detail(slug):
 @login_required
 def edit(slug):
     entry = get_object_or_404(Entry, Entry.slug == slug)
-    if request.method == 'POST':
-        if request.form.get('title') and request.form.get('content'):
-            entry.title = request.form['title']
-            entry.content = request.form['content']
-            entry.published = request.form.get('published') or False
-            entry.save()
-
-            flash('Entry saved successfully.', 'success')
-            if entry.published:
-                return redirect(url_for('detail', slug=entry.slug))
-            else:
-                return redirect(url_for('edit', slug=entry.slug))
-        else:
-            flash('Title and Content are required.', 'danger')
-
-    return render_template('edit.html', entry=entry)
+    return _create_or_edit(entry, 'edit.html')
 
 @app.template_filter('clean_querystring')
 def clean_querystring(request_args, *keys_to_remove, **new_values):
