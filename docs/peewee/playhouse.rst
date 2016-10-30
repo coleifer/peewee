@@ -903,10 +903,7 @@ rolled back by thread "A" (with bad consequences!):
 
 Since there is a potential for queries from separate transactions to be
 interleaved, the :py:meth:`~SqliteQueueDatabase.transaction` and
-:py:meth:`~SqliteQueueDatabase.atomic` methods behave differently on
-:py:class:`SqliteQueueDatabase`. These methods will store up all write queries
-executed within the wrapped block and deliver them to be executed as a single
-group, effectively preventing multiple transactions from interacting.
+:py:meth:`~SqliteQueueDatabase.atomic` methods are disabled on :py:class:`SqliteQueueDatabase`.
 
 For cases when you wish to temporarily write to the database from a different
 thread, you can use the :py:meth:`~SqliteQueueDatabase.pause` and
@@ -915,8 +912,8 @@ caller until the writer thread is finished with its current workload. The
 writer then disconnects and the caller takes over until ``unpause`` is called.
 
 The :py:meth:`~SqliteQueueDatabase.stop`, :py:meth:`~SqliteQueueDatabase.start`,
-and :py:meth:`~SqliteQueueDatabase.is_stopped` methods can be used to control
-the writer thread.
+and :py:meth:`~SqliteQueueDatabase.is_stopped` methods can also be used to
+control the writer thread.
 
 .. note::
     Take a look at SQLite's `isolation <https://www.sqlite.org/isolation.html>`_
@@ -941,7 +938,7 @@ creation, and locking.
         'my_app.db',
         use_gevent=False,  # Use the standard library "threading" module.
         autostart=False,  # The worker thread now must be started manually.
-        queue_max_size=1024,  # Max. # of pending writes that can accumulate.
+        queue_max_size=64,  # Max. # of pending writes that can accumulate.
         results_timeout=5.0)  # Max. time to wait for query to be executed.
 
 
@@ -959,10 +956,10 @@ If you plan on performing SELECT queries or generally wanting to access the
 database, you will need to call :py:meth:`~Database.connect` and
 :py:meth:`~Database.close` as you would with any other database instance.
 
-When your application is ready to terminate, use the
-:py:meth:`~SqliteQueueDatabase.stop` method to shut down the worker threads.
-If there was a backlog of work, then this method will block until all pending
-work is finished (though no new work is allowed).
+When your application is ready to terminate, use the :py:meth:`~SqliteQueueDatabase.stop`
+method to shut down the worker thread. If there was a backlog of work, then
+this method will block until all pending work is finished (though no new work
+is allowed).
 
 .. code-block:: python
 
@@ -974,7 +971,7 @@ work is finished (though no new work is allowed).
 
 
 Lastly, the :py:meth:`~SqliteQueueDatabase.is_stopped` method can be used to
-determine whether the database workers are up and running.
+determine whether the database writer is up and running.
 
 .. _sqlite_udf:
 
