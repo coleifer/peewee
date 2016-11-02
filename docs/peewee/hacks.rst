@@ -5,6 +5,114 @@ Hacks
 
 Collected hacks using peewee. Have a cool hack you'd like to share? Open `an issue on GitHub <https://github.com/coleifer/peewee/issues/new>`_ or `contact me <http://charlesleifer.com/contact/>`_.
 
+.. _optimistic_locking:
+
+Optimistic Locking
+------------------
+
+Optimistic locking is useful in situations where you might ordinarily use a
+*SELECT FOR UPDATE* (or in SQLite, *BEGIN IMMEDIATE*). For example, you might
+fetch a user record from the database, make some modifications, then save the
+modified user record. Typically this scenario would require us to lock the user
+record for the duration of the transaction, from the moment we select it, to
+the moment we save our changes.
+
+In optimistic locking, on the other hand, we do *not* acquire any lock and
+instead rely on an internal *version* column in the row we're modifying. At
+read time, we see what version the row is currently at, and on save, we ensure
+that the update takes place only if the version is the same as the one we
+initially read. If the version is higher, then some other process must have
+snuck in and changed the row -- to save our modified version could result in
+the loss of important changes.
+
+It's quite simple to implement optimistic locking in Peewee, here is a base
+class that you can use as a starting point:
+
+.. code-block:: python
+
+    from peewee import *
+
+    class BaseVersionedModel(Model):
+        version = IntegerField(default=1, index=True)
+
+        def save_optimistic(self):
+            if not self.id:
+                # This is a new record, so the default logic is to perform an
+                # INSERT. Ideally your model would also have a unique
+                # constraint that made it impossible for two INSERTs to happen
+                # at the same time.
+                return self.save()
+
+            # Update any data that has changed and bump the version counter.
+            field_data = dict(self._data)
+            current_version = field_data.pop('version', 1)
+            field_data = self._prune_fields(field_data, self.dirty_fields)
+            if not field_data:
+                raise ValueError('No changes have been made.')
+
+            ModelClass = type(self)
+            field_data['version'] = ModelClass.version + 1  # Atomic increment.
+
+            query = ModelClass.update(**field_data).where(
+                (ModelClass.version == current_version) &
+                (ModelClass.id == self.id))
+            if query.execute() == 0:
+                # No rows were updated, indicating another process has saved
+                # a new version. How you handle this situation is up to you,
+                # but for simplicity I'm just raising an exception.
+                raise ConflictDetectedException()
+            else:
+                # Increment local version to match what is now in the db.
+                self.version += 1
+                return True
+
+Here's an example of how this works. Let's assume we have the following model
+definition. Note that there's a unique constraint on the username -- this is
+important as it provides a way to prevent double-inserts.
+
+.. code-block:: python
+
+    class User(BaseVersionedModel):
+        username = CharField(unique=True)
+        favorite_animal = CharField()
+
+Example:
+
+.. code-block:: pycon
+
+    >>> u = User(username='charlie', favorite_animal='cat')
+    >>> u.save_optimistic()
+    True
+
+    >>> u.version
+    1
+
+    >>> u.save_optimistic()
+    Traceback (most recent call last):
+      File "<stdin>", line 1, in <module>
+      File "x.py", line 18, in save_optimistic
+        raise ValueError('No changes have been made.')
+    ValueError: No changes have been made.
+
+    >>> u.favorite_animal = 'kitten'
+    >>> u.save_optimistic()
+    True
+
+    # Simulate a separate thread coming in and updating the model.
+    >>> u2 = User.get(User.username == 'charlie')
+    >>> u2.favorite_animal = 'macaw'
+    >>> u2.save_optimistic()
+    True
+
+    # Now, attempt to change and re-save the original instance:
+    >>> u.favorite_animal = 'little parrot'
+    >>> u.save_optimistic()
+    Traceback (most recent call last):
+      File "<stdin>", line 1, in <module>
+      File "x.py", line 30, in save_optimistic
+        raise ConflictDetectedException()
+    ConflictDetectedException: current version is out of sync
+
 .. _top_item_per_group:
 
 Top object per group
