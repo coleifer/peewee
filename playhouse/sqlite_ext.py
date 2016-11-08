@@ -43,11 +43,6 @@ try:
 except ImportError:
     import json
 
-try:
-    from vtfunc import TableFunction
-except ImportError:
-    pass
-
 from peewee import *
 from peewee import EnclosedClause
 from peewee import Entity

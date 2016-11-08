@@ -64,3 +64,34 @@ extension tests are not run. To view the available test runner options, use:
 .. code-block:: console
 
     python runtests.py --help
+
+Optional dependencies
+---------------------
+
+.. note::
+    To use Peewee, you typically won't need anything outside the standard
+    library, since most Python distributions are compiled with SQLite support.
+    You can test by running ``import sqlite3`` in the Python console. If you
+    wish to use another database, there are many DB-API 2.0-compatible drivers
+    out there, such as ``pymysql`` or ``psycopg2`` for MySQL and Postgres
+    respectively.
+
+* `Cython <http://cython.org/>`_: used for various speedups. Can give a big
+  boost to certain operations, particularly if you use SQLite.
+* `apsw <https://github.com/rogerbinns/apsw>`_: an optional 3rd-party SQLite
+  binding offering greater performance and much, much saner semantics than the
+  standard library ``pysqlite``. Use with :py:class:`APSWDatabase`.
+* `pycrypto <http://pythonhosted.org/pycrypto/>`_ is used for the
+  :py:class:`AESEncryptedField`.
+* ``bcrypt`` module is used for the :py:class:`PasswordField`.
+* `vtfunc <https://github.com/coleifer/sqlite-vtfunc>` is used to provide some
+  table-valued functions for Sqlite as part of the ``sqlite_udf`` extensions
+  module.
+* `gevent <http://www.gevent.org/>`_ is an optional dependency for
+  :py:class:`SqliteQueueDatabase` (though it works with ``threading`` just
+  fine).
+* `BerkeleyDB <http://www.oracle.com/technetwork/database/database-technologies/berkeleydb/downloads/index.html>`_ can
+  be compiled with a SQLite frontend, which works with Peewee. Compiling can be
+  tricky so `here are instructions <http://charlesleifer.com/blog/updated-instructions-for-compiling-berkeleydb-with-sqlite-for-use-with-python/>`_.
+* Lastly, if you use the *Flask* or *Django* frameworks, there are helper
+  extension modules available.
