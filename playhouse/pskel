@@ -88,8 +88,8 @@ if __name__ == '__main__':
     ao('-d', '--database', dest='database', default=':memory:')
 
     options, models = parser.parse_args()
-    print render_models(
+    print(render_models(
         models,
         engine=engine_mapping[options.engine],
         database=options.database,
-        logging=options.logging)
+        logging=options.logging))
