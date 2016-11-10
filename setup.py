@@ -71,6 +71,6 @@ setup(
         'Programming Language :: Python',
         'Programming Language :: Python :: 3',
     ],
-    scripts = ['pwiz.py'],
+    scripts = ['pwiz.py', 'playhouse/pskel'],
     **setup_kwargs
 )
