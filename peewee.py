@@ -883,7 +883,7 @@ class Field(Node):
     def __init__(self, null=False, index=False, unique=False,
                  verbose_name=None, help_text=None, db_column=None,
                  default=None, choices=None, primary_key=False, sequence=None,
-                 constraints=None, schema=None):
+                 constraints=None, schema=None, undeclared=False):
         self.null = null
         self.index = index
         self.unique = unique
@@ -896,6 +896,7 @@ class Field(Node):
         self.sequence = sequence  # Name of sequence, e.g. foo_id_seq.
         self.constraints = constraints  # List of column constraints.
         self.schema = schema  # Name of schema, e.g. 'public'.
+        self.undeclared = undeclared  # Whether this field is part of schema.
 
         # Used internally for recovering the order in which Fields were defined
         # on the Model class.
@@ -920,6 +921,7 @@ class Field(Node):
             sequence=self.sequence,
             constraints=self.constraints,
             schema=self.schema,
+            undeclared=self.undeclared,
             **kwargs)
         if self._is_bound:
             inst.name = self.name
@@ -1026,6 +1028,12 @@ class PrimaryKeyField(IntegerField):
 
 class _AutoPrimaryKeyField(PrimaryKeyField):
     _column_name = None
+
+    def __init__(self, *args, **kwargs):
+        if 'undeclared' in kwargs and not kwargs['undeclared']:
+            raise ValueError('%r must be created with undeclared=True.' % self)
+        kwargs['undeclared'] = True
+        super(_AutoPrimaryKeyField, self).__init__(*args, **kwargs)
 
     def add_to_class(self, model_class, name):
         if name != self._column_name:
@@ -4579,7 +4587,7 @@ class ModelOptions(object):
                              set(self.fields.values()) |
                              set((self.primary_key,)))
         self.declared_fields = [field for field in self.sorted_fields
-                                if not isinstance(field, _AutoPrimaryKeyField)]
+                                if not field.undeclared]
 
     def add_field(self, field):
         self.remove_field(field.name)
