@@ -1,4 +1,5 @@
 import os
+import platform
 import sys
 import warnings
 from distutils.core import setup
@@ -11,6 +12,7 @@ f.close()
 
 setup_kwargs = {}
 cython_min_version = '0.22.1'
+
 try:
     from Cython.Distutils import build_ext
     from Cython import __version__ as cython_version
@@ -20,7 +22,11 @@ except ImportError:
                   'Cython does not seem to be installed. To enable Cython C '
                   'extensions, install Cython >=' + cython_min_version + '.')
 else:
-    if StrictVersion(cython_version) < StrictVersion(cython_min_version):
+    if platform.python_implementation() != 'CPython':
+        cython_installed = False
+        warnings.warn('Cython C extensions disabled as you are not using '
+                      'CPython.')
+    elif StrictVersion(cython_version) < StrictVersion(cython_min_version):
         cython_installed = False
         warnings.warn('Cython C extensions for peewee will NOT be built, '
                       'because the installed Cython version '
