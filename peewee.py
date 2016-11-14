@@ -91,6 +91,7 @@ __all__ = [
     'TextField',
     'TimeField',
     'TimestampField',
+    'Tuple',
     'Using',
     'UUIDField',
     'Window',
@@ -724,6 +725,7 @@ class CommaClause(Clause):
 class EnclosedClause(CommaClause):
     """One or more Node objects joined by commas and enclosed in parens."""
     parens = True
+Tuple = EnclosedClause
 
 class Window(Node):
     def __init__(self, partition_by=None, order_by=None):

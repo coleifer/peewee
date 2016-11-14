@@ -518,6 +518,10 @@ class TestSelectQuery(PeeweeTestCase):
         sq = SelectQuery(User).where(~(User.id == 1)).where(User.id == 2).where(~(User.id == 3))
         self.assertWhere(sq, '((NOT ("users"."id" = ?) AND ("users"."id" = ?)) AND NOT ("users"."id" = ?))', [1, 2, 3])
 
+    def test_tuples(self):
+        sq = User.select().where(Tuple(User.id, User.username) == (1, 'hello'))
+        self.assertWhere(sq, '(("users"."id", "users"."username") = (?, ?))', [1, 'hello'])
+
     def test_grouping(self):
         sq = SelectQuery(User).group_by(User.id)
         self.assertGroupBy(sq, '"users"."id"', [])
