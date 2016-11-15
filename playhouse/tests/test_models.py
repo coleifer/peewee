@@ -5,6 +5,7 @@ from functools import partial
 
 from peewee import *
 from peewee import ModelOptions
+from peewee import sqlite3
 from playhouse.tests.base import compiler
 from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
@@ -18,6 +19,7 @@ from playhouse.tests.models import *
 
 
 in_memory_db = database_initializer.get_in_memory_database()
+supports_tuples = sqlite3.sqlite_version_info >= (3, 15, 0)
 
 class GCModel(Model):
     name = CharField(unique=True)
@@ -2308,3 +2310,20 @@ class TestFunctionCoerceRegression(PeeweeTestCase):
 
         m2 = qm2.get()
         self.assertEqual(m2.ids, '1,2,3')
+
+
+@skip_unless(
+    lambda: (isinstance(test_db, PostgresqlDatabase) or
+             (isinstance(test_db, SqliteDatabase) and supports_tuples)))
+class TestTupleComparison(ModelTestCase):
+    requires = [User]
+
+    def test_tuples(self):
+        ua = User.create(username='user-a')
+        ub = User.create(username='user-b')
+        uc = User.create(username='user-c')
+        query = User.select().where(
+            Tuple(User.username, User.id) == ('user-b', ub.id))
+        self.assertEqual(query.count(), 1)
+        obj = query.get()
+        self.assertEqual(obj, ub)
