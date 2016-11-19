@@ -164,7 +164,7 @@ class ArrayField(IndexedFieldMixin, Field):
 
 
 class DateTimeTZField(DateTimeField):
-    db_field = 'datetime_tz'
+    db_field = 'timestamptz'
 
 
 class HStoreField(IndexedFieldMixin, Field):
