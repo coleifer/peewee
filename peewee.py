@@ -1058,6 +1058,7 @@ class DecimalField(Field):
         self.decimal_places = decimal_places
         self.auto_round = auto_round
         self.rounding = rounding or decimal.DefaultContext.rounding
+        self._exp = decimal.Decimal(10) ** (-self.decimal_places)
         super(DecimalField, self).__init__(*args, **kwargs)
 
     def clone_base(self, **kwargs):
@@ -1075,10 +1076,10 @@ class DecimalField(Field):
         D = decimal.Decimal
         if not value:
             return value if value is None else D(0)
-        if self.auto_round:
-            exp = D(10) ** (-self.decimal_places)
-            rounding = self.rounding
-            return D(str(value)).quantize(exp, rounding=rounding)
+        elif self.auto_round or not isinstance(value, D):
+            value = D(str(value))
+            if value.is_normal() and self.auto_round:
+                value = value.quantize(self._exp, rounding=self.rounding)
         return value
 
     def python_value(self, value):
