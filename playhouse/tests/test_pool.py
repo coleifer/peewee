@@ -417,3 +417,18 @@ class TestConnectionPool(PeeweeTestCase):
                 for number in Number.select().order_by(Number.value)]
 
         self.assertEqual(numbers, [1, 3, 4, 5])
+        
+    def test_bad_connection(self):
+        db = pooled_db
+        db.connect()
+        try:
+            db.execute_sql('select * from not_a_table;')
+            # For PostgreSQL, connection is now in a CONNECTION_BAD state.
+        except Exception as e:
+            pass # ignore
+        db.close()
+        db.connect()
+        # The connection pool should return a clean connection (either new or reset to a usable state).
+        db.execute_sql('select 1')
+        db.close()
+       

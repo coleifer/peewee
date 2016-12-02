@@ -66,6 +66,11 @@ from peewee import MySQLDatabase
 from peewee import PostgresqlDatabase
 from peewee import SqliteDatabase
 
+try:
+    from psycopg2 import extensions as pg_extensions
+except ImportError:
+    pg_extensions = None
+
 logger = logging.getLogger('peewee.pool')
 
 
@@ -142,6 +147,12 @@ class PooledDatabase(object):
     def _is_stale(self, timestamp):
         return (time.time() - timestamp) > self.stale_timeout
 
+    def _is_ok(self, conn):
+        # Return True if it's safe to return this connection to the pool.
+        # Retrun False otherwise.
+        # Implementing classes are encouraged to fix the connection (if possible).
+        return True
+
     def _is_closed(self, key, conn):
         return key in self._closed
 
@@ -158,7 +169,8 @@ class PooledDatabase(object):
                 super(PooledDatabase, self)._close(conn)
             else:
                 logger.debug('Returning %s to pool.', key)
-                heapq.heappush(self._connections, (ts, conn))
+                if self._is_ok(conn):
+                    heapq.heappush(self._connections, (ts, conn))
 
     def manual_close(self):
         """
@@ -194,6 +206,12 @@ class _PooledPostgresqlDatabase(PooledDatabase):
         if not closed:
             closed = bool(conn.closed)
         return closed
+
+    def _is_ok(self, conn):
+        if conn.get_transaction_status() == pg_extensions.TRANSACTION_STATUS_INERROR:
+            conn.reset()
+        return True
+
 
 class PooledPostgresqlDatabase(_PooledPostgresqlDatabase, PostgresqlDatabase):
     pass
