@@ -442,7 +442,9 @@ class MySQLMigrator(SchemaMigrator):
              'FROM information_schema.key_column_usage WHERE '
              'table_schema = DATABASE() AND '
              'table_name = %s AND '
-             'column_name = %s;'),
+             'column_name = %s AND '
+             'referenced_table_name IS NOT NULL AND '
+             'referenced_column_name IS NOT NULL;'),
             (table, column_name))
         result = cursor.fetchone()
         if not result:

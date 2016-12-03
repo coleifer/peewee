@@ -59,6 +59,10 @@ class Page(Model):
     name = CharField(max_length=100, unique=True, null=True)
     user = ForeignKeyField(User, null=True, related_name='pages')
 
+class Session(Model):
+    user = ForeignKeyField(User, unique=True, related_name='sessions')
+    updated_at = DateField(null=True)
+
 class IndexModel(Model):
     first_name = CharField()
     last_name = CharField()
@@ -75,6 +79,7 @@ MODELS = [
     Tag,
     User,
     Page,
+    Session
 ]
 
 class BaseMigrationTestCase(object):
@@ -493,6 +498,19 @@ class BaseMigrationTestCase(object):
         self.assertEqual(foreign_key.dest_column, 'id')
         self.assertEqual(foreign_key.dest_table, 'users')
 
+    def test_rename_unique_foreign_key(self):
+        migrate(self.migrator.rename_column('session', 'user_id', 'huey_id'))
+        columns = self.database.get_columns('session')
+        self.assertEqual(
+            sorted(column.name for column in columns),
+            ['huey_id', 'id', 'updated_at'])
+
+        foreign_keys = self.database.get_foreign_keys('session')
+        self.assertEqual(len(foreign_keys), 1)
+        foreign_key = foreign_keys[0]
+        self.assertEqual(foreign_key.column, 'huey_id')
+        self.assertEqual(foreign_key.dest_column, 'id')
+        self.assertEqual(foreign_key.dest_table, 'users')
 
 class SqliteMigrationTestCase(BaseMigrationTestCase, PeeweeTestCase):
     database = sqlite_db
