@@ -1869,10 +1869,11 @@ class QueryCompiler(object):
             for join in joins[curr]:
                 src = curr
                 dest = join.dest
+                join_type = join.get_join_type()
                 if isinstance(join.on, (Expression, Func, Clause, Entity)):
                     # Clear any alias on the join expression.
                     constraint = join.on.clone().alias()
-                else:
+                elif join_type != JOIN.CROSS:
                     metadata = join.metadata
                     if metadata.is_backref:
                         fk_model = join.dest
@@ -1898,13 +1899,16 @@ class QueryCompiler(object):
                     q.append(dest)
                     dest_n = dest.as_entity().alias(alias_map[dest])
 
-                join_type = join.get_join_type()
                 if join_type in self.join_map:
                     join_sql = SQL(self.join_map[join_type])
                 else:
                     join_sql = SQL(join_type)
-                clauses.append(
-                    Clause(join_sql, dest_n, SQL('ON'), constraint))
+                if join_type == JOIN.CROSS:
+                    clauses.append(
+                        Clause(join_sql, dest_n))
+                else:
+                    clauses.append(
+                        Clause(join_sql, dest_n, SQL('ON'), constraint))
 
         return clauses
 
