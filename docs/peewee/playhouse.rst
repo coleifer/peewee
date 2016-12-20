@@ -3,7 +3,7 @@
 Playhouse, extensions to Peewee
 ===============================
 
-Peewee comes with numerous extrension modules which are collected under the ``playhouse`` namespace. Despite the silly name, there are some very useful extensions, particularly those that expose vendor-specific database features like the :ref:`sqlite_ext` and :ref:`postgres_ext` extensions.
+Peewee comes with numerous extension modules which are collected under the ``playhouse`` namespace. Despite the silly name, there are some very useful extensions, particularly those that expose vendor-specific database features like the :ref:`sqlite_ext` and :ref:`postgres_ext` extensions.
 
 Below you will find a loosely organized listing of the various modules that make up the ``playhouse``.
 
