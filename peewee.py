@@ -2017,7 +2017,7 @@ class QueryCompiler(object):
         alias_map.add(model, model._meta.db_table)
         if query._upsert:
             statement = meta.database.upsert_sql
-        elif query._on_conflict:
+        elif query._on_conflict and query._on_conflict.upper() != 'DO NOTHING':
             statement = 'INSERT OR %s INTO' % query._on_conflict
         else:
             statement = 'INSERT INTO'
@@ -2057,6 +2057,9 @@ class QueryCompiler(object):
                 # Bare insert, use default value for primary key.
                 clauses.append(query.database.default_insert_clause(
                     query.model_class))
+
+        if query._on_conflict and query._on_conflict.upper() == 'DO NOTHING':
+            clauses.append(SQL('ON CONFLICT %s' % query._on_conflict))
 
         if query.is_insert_returning:
             clauses.extend([
