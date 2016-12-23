@@ -31,7 +31,7 @@ Field instance    Column on a table
 Model instance    Row in a database table
 ================= =================================
 
-When starting to a project with peewee, it's typically best to begin with your data model, by defining one or more :py:class:`Model` classes:
+When starting a project with peewee, it's typically best to begin with your data model, by defining one or more :py:class:`Model` classes:
 
 .. code-block:: python
 
