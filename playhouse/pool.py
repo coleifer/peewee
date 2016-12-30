@@ -60,7 +60,12 @@ Execution context examples (using above `db` instance):
 """
 import heapq
 import logging
+import threading
 import time
+try:
+    from Queue import Queue
+except ImportError:
+    from queue import Queue
 
 from peewee import MySQLDatabase
 from peewee import PostgresqlDatabase
@@ -75,25 +80,50 @@ def make_int(val):
     return val
 
 
+class MaxConnectionsExceeded(ValueError): pass
+
+
 class PooledDatabase(object):
     def __init__(self, database, max_connections=20, stale_timeout=None,
-                 **kwargs):
+                 timeout=None, **kwargs):
         self.max_connections = make_int(max_connections)
         self.stale_timeout = make_int(stale_timeout)
+        self.timeout = make_int(timeout)
+        self._closed = set()
         self._connections = []
         self._in_use = {}
-        self._closed = set()
         self.conn_key = id
+
+        if self.timeout:
+            self._event = threading.Event()
+            self._ready_queue = Queue()
 
         super(PooledDatabase, self).__init__(database, **kwargs)
 
     def init(self, database, max_connections=None, stale_timeout=None,
-             **connect_kwargs):
+             timeout=None, **connect_kwargs):
         super(PooledDatabase, self).init(database, **connect_kwargs)
         if max_connections is not None:
             self.max_connections = make_int(max_connections)
         if stale_timeout is not None:
             self.stale_timeout = make_int(stale_timeout)
+        if timeout is not None:
+            self.timeout = make_int(timeout)
+
+    def connect(self):
+        if self.timeout:
+            start = time.time()
+            while start + self.timeout > time.time():
+                try:
+                    super(PooledDatabase, self).connect()
+                except MaxConnectionsExceeded:
+                    time.sleep(0.1)
+                else:
+                    return
+            raise MaxConnectionsExceeded('Max connections exceeded, timed out '
+                                         'attempting to connect.')
+        else:
+            super(PooledDatabase, self).connect()
 
     def _connect(self, *args, **kwargs):
         while True:
@@ -130,7 +160,7 @@ class PooledDatabase(object):
         if conn is None:
             if self.max_connections and (
                     len(self._in_use) >= self.max_connections):
-                raise ValueError('Exceeded maximum connections.')
+                raise MaxConnectionsExceeded('Exceeded maximum connections.')
             conn = super(PooledDatabase, self)._connect(*args, **kwargs)
             ts = time.time()
             key = self.conn_key(conn)
