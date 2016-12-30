@@ -244,6 +244,10 @@ class SchemaMigrator(object):
                     field.rel_model._meta.db_table,
                     field.to_field.db_column))
 
+        if field.index or field.unique:
+            operations.append(
+                self.add_index(table, (column_name,), field.unique))
+
         return operations
 
     @operation

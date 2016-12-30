@@ -1,5 +1,6 @@
 import datetime
 import os
+from functools import partial
 
 from peewee import *
 from peewee import print_
@@ -128,8 +129,7 @@ class BaseMigrationTestCase(object):
         t2 = Tag.create(tag='t2')
 
         # Convenience function for generating `add_column` migrations.
-        def add_column(field_name, field_obj):
-            return self.migrator.add_column('tag', field_name, field_obj)
+        add_column = partial(self.migrator.add_column, 'tag')
 
         # Run the migration.
         migrate(
@@ -364,6 +364,27 @@ class BaseMigrationTestCase(object):
                 Person.create,
                 first_name='first',
                 last_name='last')
+
+    def test_add_unique_column(self):
+        uf = CharField(default='', unique=True)
+
+        # Run the migration.
+        migrate(self.migrator.add_column('tag', 'unique_field', uf))
+
+        # Create a new tag model to represent the fields we added.
+        class NewTag(Model):
+            tag = CharField()
+            unique_field = uf
+
+            class Meta:
+                database = self.database
+                db_table = Tag._meta.db_table
+
+        NewTag.create(tag='t1', unique_field='u1')
+        NewTag.create(tag='t2', unique_field='u2')
+        with self.database.atomic():
+            self.assertRaises(IntegrityError, NewTag.create, tag='t3',
+                              unique_field='u1')
 
     def test_drop_index(self):
         # Create a unique index.
