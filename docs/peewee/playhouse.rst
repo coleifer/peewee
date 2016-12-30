@@ -3967,13 +3967,14 @@ That's it! If you would like finer-grained control over the pool of connections,
 Pool APIs
 ^^^^^^^^^
 
-.. py:class:: PooledDatabase(database[, max_connections=20[, stale_timeout=None[, **kwargs]]])
+.. py:class:: PooledDatabase(database[, max_connections=20[, stale_timeout=None[, timeout=None[, **kwargs]]]])
 
     Mixin class intended to be used with a subclass of :py:class:`Database`.
 
     :param str database: The name of the database or database file.
     :param int max_connections: Maximum number of connections. Provide ``None`` for unlimited.
     :param int stale_timeout: Number of seconds to allow connections to be used.
+    :param int timeout: Number of seconds block when pool is full. By default peewee does not block when the pool is full but simply throws an exception. To block indefinitely set this value to ``0``.
     :param kwargs: Arbitrary keyword arguments passed to database class.
 
     .. note:: Connections will not be closed exactly when they exceed their `stale_timeout`. Instead, stale connections are only closed when a new connection is requested.

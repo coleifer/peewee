@@ -89,6 +89,8 @@ class PooledDatabase(object):
         self.max_connections = make_int(max_connections)
         self.stale_timeout = make_int(stale_timeout)
         self.timeout = make_int(timeout)
+        if self.timeout == 0:
+            self.timeout = float('inf')
         self._closed = set()
         self._connections = []
         self._in_use = {}
@@ -109,6 +111,8 @@ class PooledDatabase(object):
             self.stale_timeout = make_int(stale_timeout)
         if timeout is not None:
             self.timeout = make_int(timeout)
+            if self.timeout == 0:
+                self.timeout = float('inf')
 
     def connect(self):
         if self.timeout:
