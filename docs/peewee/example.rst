@@ -219,7 +219,7 @@ These methods are similar in their implementation but with an important differen
 Creating new objects
 ^^^^^^^^^^^^^^^^^^^^
 
-When a new user wants to join the site we need to make sure the username is available, and if so, create a new *User* record. Looking at the *join()* view, we can that our application attempts to create the User using :py:meth:`Model.create`. We defined the *User.username* field with a unique constraint, so if the username is taken the database will raise an ``IntegrityError``.
+When a new user wants to join the site we need to make sure the username is available, and if so, create a new *User* record. Looking at the *join()* view, we can see that our application attempts to create the User using :py:meth:`Model.create`. We defined the *User.username* field with a unique constraint, so if the username is taken the database will raise an ``IntegrityError``.
 
 .. code-block:: python
 
