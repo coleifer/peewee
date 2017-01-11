@@ -1,3 +1,10 @@
+Setup:
+
+Make sure you create your postgres database w/ the `postgres` user, otherwise 
+you get permission errors as the tests are run as `postgres`:
+
+    $ createdb -U postgres peewee_test
+
 Run peewee tests:
 
     $ python runtests.py (-e sqlite, -e postgres, -e mysql)
