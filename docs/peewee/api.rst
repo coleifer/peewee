@@ -805,7 +805,7 @@ Query Types
 
 .. py:class:: Query()
 
-    The parent class from which all other query classes are drived. While you
+    The parent class from which all other query classes are derived. While you
     will not deal with :py:class:`Query` directly in your code, it implements some
     methods that are common across all query types.
 
