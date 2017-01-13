@@ -1746,9 +1746,19 @@ class QueryCompiler(object):
         # We add outer parentheses in the event the compound query is used in
         # the `from_()` clause, in which case we'll need them.
         if node.database.compound_select_parentheses:
-            sql = '((%s) %s (%s))' % (l, node.operator, r)
-        else:
-            sql = '(%s %s %s)' % (l, node.operator, r)
+            # only add parentheses around non-compound queries, so that SQL syntax stays correct
+            if first_q._node_type != csq:
+                if inv:
+                    r = '(%s)' % r
+                else:
+                    l = '(%s)' % l
+            if second_q._node_type != csq:
+                if inv:
+                    l = '(%s)' % l
+                else:
+                    r = '(%s)' % r
+
+        sql = '(%s %s %s)' % (l, node.operator, r)
         return  sql, lp + rp
 
     def _parse_select_query(self, node, alias_map, conv):
