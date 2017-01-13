@@ -1896,16 +1896,12 @@ class QueryCompiler(object):
                     q.append(dest)
                     dest_n = dest.as_entity().alias(alias_map[dest])
 
-                if join_type in self.join_map:
-                    join_sql = SQL(self.join_map[join_type])
-                else:
-                    join_sql = SQL(join_type)
+                join_sql = SQL(self.join_map.get(join_type) or join_type)
                 if join_type == JOIN.CROSS:
-                    clauses.append(
-                        Clause(join_sql, dest_n))
+                    clauses.append(Clause(join_sql, dest_n))
                 else:
-                    clauses.append(
-                        Clause(join_sql, dest_n, SQL('ON'), constraint))
+                    clauses.append(Clause(join_sql, dest_n, SQL('ON'),
+                                          constraint))
 
         return clauses
 
