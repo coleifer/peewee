@@ -163,8 +163,8 @@ class TestCompoundSelectSQL(PeeweeTestCase):
         compound = lhs | queries[2]
         sql, params = compound.sql()
         self.assertEqual(sql, (
-            '((SELECT "t1"."alpha" FROM "alpha" AS t1) UNION '
-            '(SELECT "t2"."alpha" FROM "alpha" AS t2)) UNION '
+            '(SELECT "t1"."alpha" FROM "alpha" AS t1) UNION '
+            '(SELECT "t2"."alpha" FROM "alpha" AS t2) UNION '
             '(SELECT "t3"."alpha" FROM "alpha" AS t3)'))
 
         lhs = queries[0]
@@ -172,8 +172,8 @@ class TestCompoundSelectSQL(PeeweeTestCase):
         sql, params = compound.sql()
         self.assertEqual(sql, (
             '(SELECT "t3"."alpha" FROM "alpha" AS t3) UNION '
-            '((SELECT "t1"."alpha" FROM "alpha" AS t1) UNION '
-            '(SELECT "t2"."alpha" FROM "alpha" AS t2))'))
+            '(SELECT "t1"."alpha" FROM "alpha" AS t1) UNION '
+            '(SELECT "t2"."alpha" FROM "alpha" AS t2)'))
 
     def test_inner_limit(self):
         compound_db.compound_select_parentheses = True
