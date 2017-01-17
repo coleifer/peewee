@@ -1780,6 +1780,116 @@ class TestWindowFunctions(ModelTestCase):
             (3, 100.0, 1),
         ])
 
+    def test_frame_clause_rows(self):
+        query = (NullModel
+                 .select(
+                     NullModel.int_field,
+                     NullModel.float_field,
+                     fn.first_value(NullModel.int_field).over(
+                         rows=Window.CURRENT_ROW))
+                 .order_by(NullModel.id))
+
+        self.assertEqual(list(query.tuples()), [
+            (1, 10.0, 1),
+            (1, 20.0, 1),
+            (2, 1.0, 2),
+            (2, 3.0, 2),
+            (3, 100.0, 3),
+        ])
+
+    def test_frame_clause_rows_with_value(self):
+        query = (NullModel
+                 .select(
+                     NullModel.int_field,
+                     NullModel.float_field,
+                     fn.first_value(NullModel.int_field).over(
+                         rows=[1, Window.PRECEDING]))
+                 .order_by(NullModel.id))
+
+        self.assertEqual(list(query.tuples()), [
+            (1, 10.0, 1),
+            (1, 20.0, 1),
+            (2, 1.0, 1),
+            (2, 3.0, 2),
+            (3, 100.0, 2),
+        ])
+
+    def test_frame_clause_rows_between(self):
+        query = (NullModel
+                 .select(
+                     NullModel.int_field,
+                     NullModel.float_field,
+                     fn.first_value(NullModel.int_field).over(
+                         rows=[
+                             Window.CURRENT_ROW,
+                             Window.UNBOUNDED_FOLLOWING]))
+                 .order_by(NullModel.id))
+
+        self.assertEqual(list(query.tuples()), [
+            (1, 10.0, 1),
+            (1, 20.0, 1),
+            (2, 1.0, 2),
+            (2, 3.0, 2),
+            (3, 100.0, 3),
+        ])
+
+    def test_frame_clause_rows_between_with_value(self):
+        query = (NullModel
+                 .select(
+                     NullModel.int_field,
+                     NullModel.float_field,
+                     fn.first_value(NullModel.int_field).over(
+                         rows=[
+                             1, Window.PRECEDING,
+                             2, Window.FOLLOWING]))
+                 .order_by(NullModel.id))
+
+        self.assertEqual(list(query.tuples()), [
+            (1, 10.0, 1),
+            (1, 20.0, 1),
+            (2, 1.0, 1),
+            (2, 3.0, 2),
+            (3, 100.0, 2),
+        ])
+
+    def test_frame_clause_range(self):
+        query = (NullModel
+                 .select(
+                     NullModel.int_field,
+                     NullModel.float_field,
+                     fn.first_value(NullModel.int_field).over(
+                         order_by=NullModel.int_field,
+                         range=Window.CURRENT_ROW))
+                 .order_by(NullModel.id))
+
+        self.assertEqual(list(query.tuples()), [
+            (1, 10.0, 1),
+            (1, 20.0, 1),
+            (2, 1.0, 2),
+            (2, 3.0, 2),
+            (3, 100.0, 3),
+        ])
+
+    def test_frame_clause_range_between(self):
+        query = (NullModel
+                 .select(
+                     NullModel.int_field,
+                     NullModel.float_field,
+                     fn.first_value(NullModel.int_field).over(
+                         order_by=NullModel.int_field,
+                         range=[
+                             Window.CURRENT_ROW,
+                             Window.UNBOUNDED_FOLLOWING]))
+                 .order_by(NullModel.id))
+
+        self.assertEqual(list(query.tuples()), [
+            (1, 10.0, 1),
+            (1, 20.0, 1),
+            (2, 1.0, 2),
+            (2, 3.0, 2),
+            (3, 100.0, 3),
+        ])
+
     def test_empty_over(self):
         query = (NullModel
                  .select(
