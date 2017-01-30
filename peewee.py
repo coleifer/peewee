@@ -1961,10 +1961,8 @@ class QueryCompiler(object):
         if query._offset is not None:
             clauses.append(SQL('OFFSET %s' % query._offset))
 
-        for_update, no_wait = query._for_update
-        if for_update:
-            stmt = 'FOR UPDATE NOWAIT' if no_wait else 'FOR UPDATE'
-            clauses.append(SQL(stmt))
+        if query._for_update:
+            clauses.append(SQL(query._for_update))
 
         return self.build_query(clauses, alias_map)
 
@@ -2937,7 +2935,7 @@ class SelectQuery(Query):
         self._limit = None
         self._offset = None
         self._distinct = False
-        self._for_update = (False, False)
+        self._for_update = None
         self._naive = False
         self._tuples = False
         self._dicts = False
@@ -3044,7 +3042,12 @@ class SelectQuery(Query):
 
     @returns_clone
     def for_update(self, for_update=True, nowait=False):
-        self._for_update = (for_update, nowait)
+        self._for_update = 'FOR UPDATE NOWAIT' if for_update and nowait else \
+                'FOR UPDATE' if for_update else None
+
+    @returns_clone
+    def with_lock(self, lock_type='UPDATE'):
+        self._for_update = ('FOR %s' % lock_type) if lock_type else None
 
     @returns_clone
     def naive(self, naive=True):

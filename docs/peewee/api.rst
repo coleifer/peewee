@@ -1155,6 +1155,22 @@ Query Types
         ``True`` then the database will raise an ``OperationalError`` if it
         cannot obtain the lock.
 
+    .. py:method:: with_lock([lock_type='UPDATE'])
+
+        :rtype: :py:class:`SelectQuery`
+
+        Indicates that this query shoudl lock rows. A more generic version of
+        the :py:meth:`~SelectQuery.for_update` method.
+
+        Example:
+
+        .. code-block:: python
+
+            # SELECT * FROM some_model FOR KEY SHARE NOWAIT;
+            SomeModel.select().with_lock('KEY SHARE NOWAIT')
+
+        .. note:: You do not need to include the word *FOR*.
+
     .. py:method:: naive()
 
         :rtype: :py:class:`SelectQuery`
