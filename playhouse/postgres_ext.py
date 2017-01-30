@@ -261,12 +261,17 @@ class TSVectorField(IndexedFieldMixin, TextField):
     db_field = 'tsvector'
     default_index_type = 'GIN'
 
-    def match(self, query):
-        return Expression(self, OP.TS_MATCH, fn.to_tsquery(query))
+    def match(self, query, language=None):
+        params = (language, query) if language is not None else (query,)
+        return Expression(self, OP.TS_MATCH, fn.to_tsquery(*params))
 
 
-def Match(field, query):
-    return Expression(fn.to_tsvector(field), OP.TS_MATCH, fn.to_tsquery(query))
+def Match(field, query, language=None):
+    params = (language, query) if language is not None else (query,)
+    return Expression(
+        fn.to_tsvector(field),
+        OP.TS_MATCH,
+        fn.to_tsquery(*params))
 
 
 OP.update(
