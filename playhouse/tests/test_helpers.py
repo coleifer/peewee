@@ -94,6 +94,23 @@ class TestDeclaredDependencies(PeeweeTestCase):
             ordering = sort_models_topologically(pmodels)
             self.assertEqual(ordering, ordered)
 
+    def test_declared_dependencies_simple(self):
+        class A(Model): pass
+        class B(Model):
+            class Meta:
+                depends_on = (A,)
+        class C(Model):
+            b = ForeignKeyField(B)  # Implicit dependency.
+        class D(Model):
+            class Meta:
+                depends_on = (C,)
+
+        models = [A, B, C, D]
+        ordered = list(models)
+        for pmodels in permutations(models):
+            ordering = sort_models_topologically(pmodels)
+            self.assertEqual(ordering, ordered)
+
 
 def permutations(xs):
     if not xs:
