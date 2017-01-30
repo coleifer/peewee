@@ -417,3 +417,15 @@ class TestConnectionPool(PeeweeTestCase):
                 for number in Number.select().order_by(Number.value)]
 
         self.assertEqual(numbers, [1, 3, 4, 5])
+
+    def test_bad_connection(self):
+        pooled_db.connect()
+        try:
+            pooled_db.execute_sql('select 1/0')
+        except Exception as exc:
+            pass
+        pooled_db.close()
+
+        pooled_db.connect()  # Re-connect.
+        pooled_db.execute_sql('select 1')  # Can execute queries.
+        pooled_db.close()

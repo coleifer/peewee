@@ -67,6 +67,11 @@ try:
 except ImportError:
     from queue import Queue
 
+try:
+    from psycopg2 import extensions as pg_extensions
+except ImportError:
+    pg_extensions = None
+
 from peewee import MySQLDatabase
 from peewee import PostgresqlDatabase
 from peewee import SqliteDatabase
@@ -174,10 +179,16 @@ class PooledDatabase(object):
         return conn
 
     def _is_stale(self, timestamp):
+        # Called on check-out and check-in to ensure the connection has
+        # not outlived the stale timeout.
         return (time.time() - timestamp) > self.stale_timeout
 
     def _is_closed(self, key, conn):
         return key in self._closed
+
+    def _can_reuse(self, conn):
+        # Called on check-in to make sure the connection can be re-used.
+        return True
 
     def _close(self, conn, close_conn=False):
         key = self.conn_key(conn)
@@ -190,9 +201,11 @@ class PooledDatabase(object):
             if self.stale_timeout and self._is_stale(ts):
                 logger.debug('Closing stale connection %s.', key)
                 super(PooledDatabase, self)._close(conn)
-            else:
+            elif self._can_reuse(conn):
                 logger.debug('Returning %s to pool.', key)
                 heapq.heappush(self._connections, (ts, conn))
+            else:
+                logger.debug('Closed %s.', key)
 
     def manual_close(self):
         """
@@ -228,6 +241,14 @@ class _PooledPostgresqlDatabase(PooledDatabase):
         if not closed:
             closed = bool(conn.closed)
         return closed
+
+    def _can_reuse(self, conn):
+        txn_status = conn.get_transaction_status()
+        # Do not return connection in an error state, as subsequent queries
+        # will all fail.
+        if txn_status == pg_extensions.TRANSACTION_STATUS_INERROR:
+            conn.reset()
+        return True
 
 class PooledPostgresqlDatabase(_PooledPostgresqlDatabase, PostgresqlDatabase):
     pass
