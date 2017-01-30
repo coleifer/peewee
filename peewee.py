@@ -1930,15 +1930,6 @@ class QueryCompiler(object):
             else:
                 clauses.append(CommaClause(*query._from))
 
-        if query._windows is not None:
-            clauses.append(SQL('WINDOW'))
-            clauses.append(CommaClause(*[
-                Clause(
-                    SQL(window._alias),
-                    SQL('AS'),
-                    window.__sql__())
-                for window in query._windows]))
-
         join_clauses = self.generate_joins(query._joins, model, alias_map)
         if join_clauses:
             clauses.extend(join_clauses)
@@ -1951,6 +1942,15 @@ class QueryCompiler(object):
 
         if query._having:
             clauses.extend([SQL('HAVING'), query._having])
+
+        if query._windows is not None:
+            clauses.append(SQL('WINDOW'))
+            clauses.append(CommaClause(*[
+                Clause(
+                    SQL(window._alias),
+                    SQL('AS'),
+                    window.__sql__())
+                for window in query._windows]))
 
         if query._order_by:
             clauses.extend([SQL('ORDER BY'), CommaClause(*query._order_by)])
