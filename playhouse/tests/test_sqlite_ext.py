@@ -1200,3 +1200,20 @@ class TestTransitiveClosureIntegration(PeeweeTestCase):
             ('westerns', 3),
             ('hard scifi', 4),
         ])
+
+    def test_id_not_overwritten(self):
+        class Node(BaseExtModel):
+            parent = ForeignKeyField('self', null=True)
+            name = CharField()
+
+        NodeClosure = ClosureTable(Node)
+        ext_db.create_tables([Node, NodeClosure], True)
+
+        root = Node.create(name='root')
+        c1 = Node.create(name='c1', parent=root)
+        c2 = Node.create(name='c2', parent=root)
+
+        query = NodeClosure.descendants(root)
+        self.assertEqual(sorted([(n.id, n.name) for n in query]),
+                         [(c1.id, 'c1'), (c2.id, 'c2')])
+        ext_db.drop_tables([Node, NodeClosure])

@@ -695,7 +695,8 @@ def ClosureTable(model_class, foreign_key=None):
             query = (model_class
                      .select(model_class, cls.depth.alias('depth'))
                      .join(cls, on=(primary_key == cls.id))
-                     .where(cls.root == node))
+                     .where(cls.root == node)
+                     .naive())
             if depth is not None:
                 query = query.where(cls.depth == depth)
             elif not include_node:
@@ -707,7 +708,8 @@ def ClosureTable(model_class, foreign_key=None):
             query = (model_class
                      .select(model_class, cls.depth.alias('depth'))
                      .join(cls, on=(primary_key == cls.root))
-                     .where(cls.id == node))
+                     .where(cls.id == node)
+                     .naive())
             if depth:
                 query = query.where(cls.depth == depth)
             elif not include_node:
