@@ -61,8 +61,7 @@ cpdef peewee_regexp(regex_str, value):
     if value is None or regex_str is None:
         return
 
-    regex = re.compile(regex_str, re.I)
-    if value and regex.search(value):
+    if value and re.search(regex_str, value, re.I):
         return True
     return False
 
