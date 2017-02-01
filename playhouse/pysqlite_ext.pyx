@@ -70,6 +70,7 @@ cdef extern from "sqlite3.h":
         void (*xFinal)(sqlite3_context *))
     cdef void *sqlite3_user_data(sqlite3_context *)
 
+
 cdef _sqlite_to_python(sqlite3_context *context, int n, sqlite3_value **args):
     cdef:
         int i
@@ -86,7 +87,6 @@ cdef _sqlite_to_python(sqlite3_context *context, int n, sqlite3_value **args):
         elif value_type == SQLITE_FLOAT:
             obj = sqlite3_value_double(value)
         elif value_type == SQLITE_TEXT:
-            accum.append(str(sqlite3_value_text(args[i])))
             obj = str(sqlite3_value_text(value))
         elif value_type == SQLITE_BLOB:
             obj = <bytes>sqlite3_value_blob(value)
@@ -95,6 +95,7 @@ cdef _sqlite_to_python(sqlite3_context *context, int n, sqlite3_value **args):
         accum.append(obj)
 
     return accum
+
 
 cdef _python_to_sqlite(sqlite3_context *context, value):
     if value is None:
@@ -114,15 +115,19 @@ cdef _python_to_sqlite(sqlite3_context *context, value):
 
     return SQLITE_OK
 
+
 cdef void _function_callback(sqlite3_context *context, int nparams,
-                        sqlite3_value **values):
+                        sqlite3_value **values) with gil:
     cdef:
         list params = _sqlite_to_python(context, nparams, values)
 
     fn = <object>sqlite3_user_data(context)
+    print fn
+    print params
     _python_to_sqlite(context, fn(*params))
 
 _function_map = {}
+
 
 cdef class ConnWrapper(object):
     cdef:
@@ -131,24 +136,26 @@ cdef class ConnWrapper(object):
     def __init__(self, conn):
         self.conn = <pysqlite_Connection *>conn
 
-    def func(self, fn, name=None, nparams=None, non_deterministic=False):
+    def create_function(self, fn, name=None, n=-1, non_deterministic=False):
         name = name or fn.__name__
         _function_map[name] = fn
 
-        nparams = nparams or 0
         flags = SQLITE_UTF8
         if non_deterministic:
             flags |= SQLITE_DETERMINISTIC
 
-        rc = sqlite3_create_function(
-            self.conn.db,
-            <const char *>name,
-            nparams,
-            flags,
-            <void *>fn,
-            _function_callback,
-            NULL,
-            NULL)
+        rc = sqlite3_create_function(self.conn.db, <const char *>name, n,
+                                     flags, <void *>fn, _function_callback,
+                                     NULL, NULL)
+
+        if rc != SQLITE_OK:
+            raise Exception('Error, invalid call to sqlite3_create_function.')
+
+    def func(self, *args, **kwargs):
+        def decorator(fn):
+            self.create_function(fn, *args, **kwargs)
+            return fn
+        return decorator
 
     def changes(self):
         return sqlite3_changes(self.conn.db)
