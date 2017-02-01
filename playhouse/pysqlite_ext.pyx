@@ -2,6 +2,7 @@ from peewee import DatabaseError, OperationalError, ProgrammingError
 from cpython.mem cimport PyMem_Free
 from cpython.object cimport PyObject
 from cpython.ref cimport Py_INCREF
+from libc.stdlib cimport rand
 
 
 cdef extern from "_pysqlite/connection.h":
@@ -203,16 +204,12 @@ cdef class Connection(object):
         return sqlite3_changes(self.conn.db)
 
     def set_busy_handler(self, timeout=5000):
-        return aggressive_busy_handler(self.conn, timeout)
+        cdef:
+            int n = timeout
+            sqlite3 *db = (<pysqlite_Connection *>self.conn).db
 
-
-def aggressive_busy_handler(sqlite_conn, timeout=5000):
-    cdef:
-        int n = timeout
-        sqlite3 *db = (<pysqlite_Connection *>sqlite_conn).db
-
-    sqlite3_busy_handler(db, _aggressive_busy_handler, <void *>n)
-    return True
+        sqlite3_busy_handler(db, _aggressive_busy_handler, <void *>n)
+        return True
 
 
 cdef int _aggressive_busy_handler(void *ptr, int n):
