@@ -1,7 +1,16 @@
+from peewee import DatabaseError, OperationalError, ProgrammingError
+from cpython.mem cimport PyMem_Free
+from cpython.object cimport PyObject
+from cpython.ref cimport Py_INCREF
+
+
 cdef extern from "_pysqlite/connection.h":
     ctypedef struct pysqlite_Connection:
-        sqlite3 *db
+        sqlite3* db
         double timeout
+        int initialized
+        PyObject* isolation_level
+        char* begin_statement
 
 
 cdef extern from "sqlite3.h":
@@ -59,6 +68,8 @@ cdef extern from "sqlite3.h":
     cdef void sqlite3_free(void *)
 
     cdef int sqlite3_changes(sqlite3 *db)
+    cdef int sqlite3_get_autocommit(sqlite3 *db)
+
     cdef int sqlite3_create_function(
         sqlite3 *db,
         const char *zFunctionName,
@@ -69,6 +80,10 @@ cdef extern from "sqlite3.h":
         void (*xStep)(sqlite3_context *, int, sqlite3_value **),
         void (*xFinal)(sqlite3_context *))
     cdef void *sqlite3_user_data(sqlite3_context *)
+
+    # Misc.
+    cdef int sqlite3_busy_handler(sqlite3 *db, int(*)(void *, int), void *)
+    cdef int sqlite3_sleep(int ms)
 
 
 cdef _sqlite_to_python(sqlite3_context *context, int n, sqlite3_value **args):
@@ -117,30 +132,49 @@ cdef _python_to_sqlite(sqlite3_context *context, value):
 
 
 cdef void _function_callback(sqlite3_context *context, int nparams,
-                        sqlite3_value **values) with gil:
+                             sqlite3_value **values) with gil:
     cdef:
         list params = _sqlite_to_python(context, nparams, values)
 
     fn = <object>sqlite3_user_data(context)
-    print fn
-    print params
     _python_to_sqlite(context, fn(*params))
 
-_function_map = {}
+
+cdef inline int _check_connection(pysqlite_Connection *conn) except -1:
+    if not conn.initialized:
+        raise DatabaseError('Connection not initialized.')
+    if not conn.db:
+        raise ProgrammingError('Cannot operate on closed database.')
+    return 1
 
 
-cdef class ConnWrapper(object):
+cdef class Connection(object):
     cdef:
+        dict _function_map
         pysqlite_Connection *conn
 
     def __init__(self, conn):
+        self._function_map = {}
         self.conn = <pysqlite_Connection *>conn
+        if self.conn.db:
+            self.initialize_connection()
+
+    cdef initialize_connection(self):
+        if self.conn.begin_statement:
+            PyMem_Free(self.conn.begin_statement)
+            self.conn.begin_statement = NULL
+
+        # Set the isolation level to `None` to enable autocommit.
+        Py_INCREF(None)
+        self.conn.isolation_level = <PyObject *>None
 
     def create_function(self, fn, name=None, n=-1, non_deterministic=False):
-        name = name or fn.__name__
-        _function_map[name] = fn
+        cdef:
+            int flags = SQLITE_UTF8
+            int rc
 
-        flags = SQLITE_UTF8
+        _check_connection(self.conn)
+        name = name or fn.__name__
         if non_deterministic:
             flags |= SQLITE_DETERMINISTIC
 
@@ -149,7 +183,9 @@ cdef class ConnWrapper(object):
                                      NULL, NULL)
 
         if rc != SQLITE_OK:
-            raise Exception('Error, invalid call to sqlite3_create_function.')
+            raise OperationalError('Error calling sqlite3_create_function.')
+        else:
+            self._function_map[fn] = name
 
     def func(self, *args, **kwargs):
         def decorator(fn):
@@ -157,5 +193,46 @@ cdef class ConnWrapper(object):
             return fn
         return decorator
 
+    @property
+    def autocommit(self):
+        _check_connection(self.conn)
+        return bool(sqlite3_get_autocommit(self.conn.db))
+
+    @property
     def changes(self):
         return sqlite3_changes(self.conn.db)
+
+    def set_busy_handler(self, timeout=5000):
+        return aggressive_busy_handler(self.conn, timeout)
+
+
+def aggressive_busy_handler(sqlite_conn, timeout=5000):
+    cdef:
+        int n = timeout
+        sqlite3 *db = (<pysqlite_Connection *>sqlite_conn).db
+
+    sqlite3_busy_handler(db, _aggressive_busy_handler, <void *>n)
+    return True
+
+
+cdef int _aggressive_busy_handler(void *ptr, int n):
+    cdef:
+        int busyTimeout = <int>ptr
+        int current, total
+
+    if n < 20:
+        current = 25 - (rand() % 10)  # ~20ms
+        total = n * 20
+    elif n < 40:
+        current = 50 - (rand() % 20)  # ~40ms
+        total = 400 + ((n - 20) * 40)
+    else:
+        current = 120 - (rand() % 40)  # ~100ms
+        total = 1200 + ((n - 40) * 100)
+
+    if total + current > busyTimeout:
+        current = busyTimeout - total
+    if current > 0:
+        sqlite3_sleep(current)
+        return 1
+    return 0
