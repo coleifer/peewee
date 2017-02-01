@@ -13,6 +13,7 @@ cdef extern from "sqlite3.h":
     cdef int SQLITE_UTF8 = 1
     cdef int SQLITE_OK = 0
     cdef int SQLITE_ERROR = 1
+    cdef int SQLITE_DETERMINISTIC = 0x800
 
     # sqlite_value_type.
     cdef int SQLITE_INTEGER = 1
@@ -67,7 +68,61 @@ cdef extern from "sqlite3.h":
         void (*xFunc)(sqlite3_context *, int, sqlite3_value **),
         void (*xStep)(sqlite3_context *, int, sqlite3_value **),
         void (*xFinal)(sqlite3_context *))
+    cdef void *sqlite3_user_data(sqlite3_context *)
 
+cdef _sqlite_to_python(sqlite3_context *context, int n, sqlite3_value **args):
+    cdef:
+        int i
+        int value_type
+        list accum = []
+        sqlite3_value *value
+
+    for i in range(n):
+        value = args[i]
+        value_type = sqlite3_value_type(value)
+
+        if value_type == SQLITE_INTEGER:
+            obj = sqlite3_value_int(value)
+        elif value_type == SQLITE_FLOAT:
+            obj = sqlite3_value_double(value)
+        elif value_type == SQLITE_TEXT:
+            accum.append(str(sqlite3_value_text(args[i])))
+            obj = str(sqlite3_value_text(value))
+        elif value_type == SQLITE_BLOB:
+            obj = <bytes>sqlite3_value_blob(value)
+        else:
+            obj = None
+        accum.append(obj)
+
+    return accum
+
+cdef _python_to_sqlite(sqlite3_context *context, value):
+    if value is None:
+        sqlite3_result_null(context)
+    elif isinstance(value, (int, long)):
+        sqlite3_result_int64(context, <sqlite3_int64>value)
+    elif isinstance(value, float):
+        sqlite3_result_double(context, <double>value)
+    elif isinstance(value, basestring):
+        sqlite3_result_text(context, <const char *>value, -1,
+                            <sqlite3_destructor_type>-1)
+    elif isinstance(value, bool):
+        sqlite3_result_int(context, int(value))
+    else:
+        sqlite3_result_error(context, 'Unsupported type %s' % type(value), -1)
+        return SQLITE_ERROR
+
+    return SQLITE_OK
+
+cdef void _function_callback(sqlite3_context *context, int nparams,
+                        sqlite3_value **values):
+    cdef:
+        list params = _sqlite_to_python(context, nparams, values)
+
+    fn = <object>sqlite3_user_data(context)
+    _python_to_sqlite(context, fn(*params))
+
+_function_map = {}
 
 cdef class ConnWrapper(object):
     cdef:
@@ -75,18 +130,25 @@ cdef class ConnWrapper(object):
 
     def __init__(self, conn):
         self.conn = <pysqlite_Connection *>conn
-        self._function_map = {}
 
-    def func(self, name=None, nparams=None, non_deterministic=False):
-        def decorator(fn):
-            name = name or fn.__name__
-            nparams = nparams or 0
-            flags = SQLITE_UTF8
-            if non_deterministic:
-                flags | SQLITE_DETERMINISTIC
+    def func(self, fn, name=None, nparams=None, non_deterministic=False):
+        name = name or fn.__name__
+        _function_map[name] = fn
 
-            return fn
-        return decorator
+        nparams = nparams or 0
+        flags = SQLITE_UTF8
+        if non_deterministic:
+            flags |= SQLITE_DETERMINISTIC
+
+        rc = sqlite3_create_function(
+            self.conn.db,
+            <const char *>name,
+            nparams,
+            flags,
+            <void *>fn,
+            _function_callback,
+            NULL,
+            NULL)
 
     def changes(self):
         return sqlite3_changes(self.conn.db)
