@@ -58,6 +58,15 @@ cdef extern from "sqlite3.h":
     cdef void sqlite3_free(void *)
 
     cdef int sqlite3_changes(sqlite3 *db)
+    cdef int sqlite3_create_function(
+        sqlite3 *db,
+        const char *zFunctionName,
+        int nArg,
+        int eEncoding,
+        void *pApp,
+        void (*xFunc)(sqlite3_context *, int, sqlite3_value **),
+        void (*xStep)(sqlite3_context *, int, sqlite3_value **),
+        void (*xFinal)(sqlite3_context *))
 
 
 cdef class ConnWrapper(object):
@@ -66,6 +75,18 @@ cdef class ConnWrapper(object):
 
     def __init__(self, conn):
         self.conn = <pysqlite_Connection *>conn
+        self._function_map = {}
+
+    def func(self, name=None, nparams=None, non_deterministic=False):
+        def decorator(fn):
+            name = name or fn.__name__
+            nparams = nparams or 0
+            flags = SQLITE_UTF8
+            if non_deterministic:
+                flags | SQLITE_DETERMINISTIC
+
+            return fn
+        return decorator
 
     def changes(self):
         return sqlite3_changes(self.conn.db)
