@@ -1,4 +1,5 @@
 from peewee import DatabaseError, OperationalError, ProgrammingError
+from playhouse.sqlite_ext import SqliteExtDatabase
 from cpython.mem cimport PyMem_Free
 from cpython.object cimport PyObject
 from cpython.ref cimport Py_INCREF
@@ -89,7 +90,7 @@ cdef extern from "sqlite3.h":
     cdef void *sqlite3_rollback_hook(sqlite3 *, void(*)(void *), void *)
     cdef void *sqlite3_update_hook(
         sqlite3 *,
-        void(*)(void *, int, char const *, char const *, sqlite3_int64),
+        void(*)(void *, int, char *, char *, sqlite3_int64),
         void *)
 
     cdef int SQLITE_STATUS_MEMORY_USED = 0
@@ -121,6 +122,58 @@ cdef extern from "sqlite3.h":
     # Misc.
     cdef int sqlite3_busy_handler(sqlite3 *db, int(*)(void *, int), void *)
     cdef int sqlite3_sleep(int ms)
+
+
+def status_property(flag, return_highwater=False):
+    def getter(self):
+        cdef int current, highwater
+        cdef int rc = sqlite3_status(flag, &current, &highwater, 0)
+        if rc == SQLITE_OK:
+            if return_highwater:
+                return highwater
+            else:
+                return (current, highwater)
+        else:
+            raise DatabaseError('Error requesting status: %s' % rc)
+    return property(getter)
+
+
+class Database(SqliteExtDatabase):
+    memory_used = status_property(SQLITE_STATUS_MEMORY_USED)
+    malloc_size = status_property(SQLITE_STATUS_MALLOC_SIZE, True)
+    malloc_count = status_property(SQLITE_STATUS_MALLOC_COUNT)
+    pagecache_used = status_property(SQLITE_STATUS_PAGECACHE_USED)
+    pagecache_overflow = status_property(SQLITE_STATUS_PAGECACHE_OVERFLOW)
+    pagecache_size = status_property(SQLITE_STATUS_PAGECACHE_SIZE, True)
+    scratch_used = status_property(SQLITE_STATUS_SCRATCH_USED)
+    scratch_overflow = status_property(SQLITE_STATUS_SCRATCH_OVERFLOW)
+    scratch_size = status_property(SQLITE_STATUS_SCRATCH_SIZE, True)
+
+    @property
+    def connection(self):
+        return Connection(self.get_conn())
+
+    def _add_conn_hooks(self, conn):
+        super(Database, self)._add_conn_hooks(conn)
+        Connection(conn).set_busy_handler(5000)
+
+    def func(self, name=None, num_params=-1, non_deterministic=False):
+        def decorator(fn):
+            self.register_function(fn, name, num_params, non_deterministic)
+            return fn
+        return decorator
+
+    def register_function(self, fn, name=None, num_params=-1,
+                          non_deterministic=False):
+        name = name or fn.__name__
+        self._functions[name] = (fn, num_params, non_deterministic)
+        if not self.is_closed():
+            self._load_functions(self.get_conn())
+
+    def _load_functions(self, conn):
+        wrapper = Connection(conn)
+        for name, (fn, num_params, non_dtm) in self._functions.items():
+            wrapper.create_function(fn, name, num_params, non_dtm)
 
 
 cdef _sqlite_to_python(sqlite3_context *context, int n, sqlite3_value **args):
@@ -185,10 +238,42 @@ cdef inline int _check_connection(pysqlite_Connection *conn) except -1:
     return 1
 
 
+def dbstatus_property(flag, return_highwater=False, return_current=False):
+    def getter(self):
+        cdef int current, hi
+        cdef int rc = sqlite3_db_status((<pysqlite_Connection *>self.conn).db, flag, &current, &hi, 0)
+        if rc == SQLITE_OK:
+            if return_highwater:
+                return hi
+            elif return_current:
+                return current
+            else:
+                return (current, hi)
+        else:
+            raise DatabaseError('Error requesting db status: %s' % rc)
+    return property(getter)
+
+
 cdef class Connection(object):
     cdef:
         dict _function_map
         pysqlite_Connection *conn
+
+    lookaside_used = dbstatus_property(SQLITE_DBSTATUS_LOOKASIDE_USED)
+    lookaside_hit = dbstatus_property(SQLITE_DBSTATUS_LOOKASIDE_HIT, True)
+    lookaside_miss = dbstatus_property(SQLITE_DBSTATUS_LOOKASIDE_MISS_SIZE,
+                                       True)
+    lookaside_miss_full = dbstatus_property(
+        SQLITE_DBSTATUS_LOOKASIDE_MISS_FULL,
+        True)
+    cache_used = dbstatus_property(SQLITE_DBSTATUS_CACHE_USED, False, True)
+    cache_used_shared = dbstatus_property(SQLITE_DBSTATUS_CACHE_USED_SHARED,
+                                          False, True)
+    schema_used = dbstatus_property(SQLITE_DBSTATUS_SCHEMA_USED, False, True)
+    statement_used = dbstatus_property(SQLITE_DBSTATUS_STMT_USED, False, True)
+    cache_hit = dbstatus_property(SQLITE_DBSTATUS_CACHE_HIT, False, True)
+    cache_miss = dbstatus_property(SQLITE_DBSTATUS_CACHE_MISS, False, True)
+    cache_write = dbstatus_property(SQLITE_DBSTATUS_CACHE_WRITE, False, True)
 
     def __init__(self, conn):
         self._function_map = {}
@@ -197,6 +282,9 @@ cdef class Connection(object):
             self.initialize_connection()
 
     cdef initialize_connection(self):
+        if <object>(self.conn.isolation_level) is None:
+            return
+
         if self.conn.begin_statement:
             PyMem_Free(self.conn.begin_statement)
             self.conn.begin_statement = NULL
