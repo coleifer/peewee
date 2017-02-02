@@ -25,7 +25,6 @@ class TestPysqliteDatabase(ModelTestCase):
 
     def test_commit_hook(self):
         state = {}
-        connection = db.connection
 
         @db.on_commit
         def on_commit():
@@ -53,3 +52,72 @@ class TestPysqliteDatabase(ModelTestCase):
 
         self.assertEqual(state['commits'], 3)
         self.assertEqual(User.select().count(), 4)
+
+    def test_rollback_hook(self):
+        state = {}
+
+        @db.on_rollback
+        def on_rollback():
+            state.setdefault('rollbacks', 0)
+            state['rollbacks'] += 1
+
+        user = User.create(username='u1')
+        self.assertEqual(state, {'rollbacks': 1})
+
+        with db.atomic() as txn:
+            User.create(username='u2')
+            txn.rollback()
+            self.assertEqual(state['rollbacks'], 2)
+
+        self.assertEqual(state['rollbacks'], 2)
+
+    def test_update_hook(self):
+        state = []
+
+        @db.on_update
+        def on_update(query, db, table, rowid):
+            state.append((query, db, table, rowid))
+
+        u = User.create(username='u1')
+        u.username = 'u2'
+        u.save()
+
+        self.assertEqual(state, [
+            ('INSERT', 'main', 'user', 1),
+            ('UPDATE', 'main', 'user', 1),
+        ])
+
+        with db.atomic():
+            User.create(username='u3')
+            User.create(username='u4')
+            u.delete_instance()
+            self.assertEqual(state, [
+                ('INSERT', 'main', 'user', 1),
+                ('UPDATE', 'main', 'user', 1),
+                ('INSERT', 'main', 'user', 2),
+                ('INSERT', 'main', 'user', 3),
+                ('DELETE', 'main', 'user', 1),
+            ])
+
+        self.assertEqual(len(state), 5)
+
+    def test_udf(self):
+        @db.func()
+        def backwards(s):
+            return s[::-1]
+
+        @db.func()
+        def titled(s):
+            return s.title()
+
+        query = db.execute_sql('SELECT titled(backwards(?));', ('hello',))
+        result, = query.fetchone()
+        self.assertEqual(result, 'Olleh')
+
+    def test_properties(self):
+        mem_used, mem_high = db.memory_used
+        self.assertTrue(mem_high >= mem_used)
+        self.assertFalse(mem_high == 0)
+
+        conn = db.connection
+        self.assertTrue(conn.cache_used is not None)

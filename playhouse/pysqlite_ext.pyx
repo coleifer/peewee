@@ -302,7 +302,8 @@ cdef inline int _check_connection(pysqlite_Connection *conn) except -1:
 def dbstatus_property(flag, return_highwater=False, return_current=False):
     def getter(self):
         cdef int current, hi
-        cdef int rc = sqlite3_db_status((<pysqlite_Connection *>self.conn).db, flag, &current, &hi, 0)
+        cdef Connection connection = <Connection>self
+        cdef int rc = sqlite3_db_status((<pysqlite_Connection *>connection.conn).db, flag, &current, &hi, 0)
         if rc == SQLITE_OK:
             if return_highwater:
                 return hi
