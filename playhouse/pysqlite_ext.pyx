@@ -119,6 +119,10 @@ cdef extern from "sqlite3.h":
     cdef int SQLITE_DBSTATUS_CACHE_USED_SHARED = 11
     cdef int sqlite3_db_status(sqlite3 *, int op, int *pCur, int *pHigh, int reset)
 
+    cdef int SQLITE_DELETE = 9
+    cdef int SQLITE_INSERT = 18
+    cdef int SQLITE_UPDATE = 23
+
     # Misc.
     cdef int sqlite3_busy_handler(sqlite3 *db, int(*)(void *, int), void *)
     cdef int sqlite3_sleep(int ms)
@@ -149,13 +153,44 @@ class Database(SqliteExtDatabase):
     scratch_overflow = status_property(SQLITE_STATUS_SCRATCH_OVERFLOW)
     scratch_size = status_property(SQLITE_STATUS_SCRATCH_SIZE, True)
 
+    def __init__(self, *args, **kwargs):
+        super(Database, self).__init__(*args, **kwargs)
+        self._update_callback = None
+        self._commit_callback = None
+        self._rollback_callback = None
+
     @property
     def connection(self):
         return Connection(self.get_conn())
 
     def _add_conn_hooks(self, conn):
         super(Database, self)._add_conn_hooks(conn)
-        Connection(conn).set_busy_handler(5000)
+        cxn = Connection(conn)
+        cxn.set_busy_handler(5000)
+        if self._update_callback is not None:
+            cxn.on_update(self._update_callback)
+        if self._commit_callback is not None:
+            cxn.on_commit(self._commit_callback)
+        if self._rollback_callback is not None:
+            cxn.on_rollback(self._rollback_callback)
+
+    def on_update(self, fn):
+        self._update_callback = fn
+        if not self.is_closed():
+            self.connection.on_update(fn)
+        return self
+
+    def on_commit(self, fn):
+        self._commit_callback = fn
+        if not self.is_closed():
+            self.connection.on_commit(fn)
+        return self
+
+    def on_rollback(self, fn):
+        self._rollback_callback = fn
+        if not self.is_closed():
+            self.connection.on_rollback(fn)
+        return self
 
     def func(self, name=None, num_params=-1, non_deterministic=False):
         def decorator(fn):
@@ -228,6 +263,32 @@ cdef void _function_callback(sqlite3_context *context, int nparams,
 
     fn = <object>sqlite3_user_data(context)
     _python_to_sqlite(context, fn(*params))
+
+cdef int _commit_callback(void *userData) with gil:
+    cdef object fn = <object>userData
+    try:
+        fn()
+    except ValueError:
+        return 1
+    else:
+        return SQLITE_OK
+
+cdef void _rollback_callback(void *userData) with gil:
+    cdef object fn = <object>userData
+    fn()
+
+cdef void _update_callback(void *userData, int queryType, char *database,
+                            char *table, sqlite3_int64 rowid) with gil:
+    cdef object fn = <object>userData
+    if queryType == SQLITE_INSERT:
+        query = 'INSERT'
+    elif queryType == SQLITE_UPDATE:
+        query = 'UPDATE'
+    elif queryType == SQLITE_DELETE:
+        query = 'DELETE'
+    else:
+        query = ''
+    fn(query, str(database), str(table), <int>rowid)
 
 
 cdef inline int _check_connection(pysqlite_Connection *conn) except -1:
@@ -317,6 +378,27 @@ cdef class Connection(object):
             self.create_function(fn, *args, **kwargs)
             return fn
         return decorator
+
+    def on_commit(self, fn):
+        if fn is None:
+            sqlite3_commit_hook(self.conn.db, NULL, NULL)
+        else:
+            sqlite3_commit_hook(self.conn.db, _commit_callback, <void *>fn)
+        return fn
+
+    def on_rollback(self, fn):
+        if fn is None:
+            sqlite3_rollback_hook(self.conn.db, NULL, NULL)
+        else:
+            sqlite3_rollback_hook(self.conn.db, _rollback_callback, <void *>fn)
+        return fn
+
+    def on_update(self, fn):
+        if fn is None:
+            sqlite3_update_hook(self.conn.db, NULL, NULL)
+        else:
+            sqlite3_update_hook(self.conn.db, _update_callback, <void *>fn)
+        return fn
 
     @property
     def autocommit(self):
