@@ -82,6 +82,42 @@ cdef extern from "sqlite3.h":
         void (*xFinal)(sqlite3_context *))
     cdef void *sqlite3_user_data(sqlite3_context *)
 
+    cdef void *sqlite3_get_auxdata(sqlite3_context *, int N)
+    cdef void sqlite3_set_auxdata(sqlite3_context *, int N, void *, void(*)(void *))
+
+    cdef void *sqlite3_commit_hook(sqlite3 *, int(*)(void *), void *)
+    cdef void *sqlite3_rollback_hook(sqlite3 *, void(*)(void *), void *)
+    cdef void *sqlite3_update_hook(
+        sqlite3 *,
+        void(*)(void *, int, char const *, char const *, sqlite3_int64),
+        void *)
+
+    cdef int SQLITE_STATUS_MEMORY_USED = 0
+    cdef int SQLITE_STATUS_PAGECACHE_USED = 1
+    cdef int SQLITE_STATUS_PAGECACHE_OVERFLOW = 2
+    cdef int SQLITE_STATUS_SCRATCH_USED = 3
+    cdef int SQLITE_STATUS_SCRATCH_OVERFLOW = 4
+    cdef int SQLITE_STATUS_MALLOC_SIZE = 5
+    cdef int SQLITE_STATUS_PARSER_STACK = 6
+    cdef int SQLITE_STATUS_PAGECACHE_SIZE = 7
+    cdef int SQLITE_STATUS_SCRATCH_SIZE = 8
+    cdef int SQLITE_STATUS_MALLOC_COUNT = 9
+    cdef int sqlite3_status(int op, int *pCurrent, int *pHighwater, int resetFlag)
+
+    cdef int SQLITE_DBSTATUS_LOOKASIDE_USED = 0
+    cdef int SQLITE_DBSTATUS_CACHE_USED = 1
+    cdef int SQLITE_DBSTATUS_SCHEMA_USED = 2
+    cdef int SQLITE_DBSTATUS_STMT_USED = 3
+    cdef int SQLITE_DBSTATUS_LOOKASIDE_HIT = 4
+    cdef int SQLITE_DBSTATUS_LOOKASIDE_MISS_SIZE = 5
+    cdef int SQLITE_DBSTATUS_LOOKASIDE_MISS_FULL = 6
+    cdef int SQLITE_DBSTATUS_CACHE_HIT = 7
+    cdef int SQLITE_DBSTATUS_CACHE_MISS = 8
+    cdef int SQLITE_DBSTATUS_CACHE_WRITE = 9
+    cdef int SQLITE_DBSTATUS_DEFERRED_FKS = 10
+    cdef int SQLITE_DBSTATUS_CACHE_USED_SHARED = 11
+    cdef int sqlite3_db_status(sqlite3 *, int op, int *pCur, int *pHigh, int reset)
+
     # Misc.
     cdef int sqlite3_busy_handler(sqlite3 *db, int(*)(void *, int), void *)
     cdef int sqlite3_sleep(int ms)
