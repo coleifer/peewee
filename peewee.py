@@ -1957,9 +1957,9 @@ class QueryCompiler(object):
 
         if query._limit is not None or (query._offset and db.limit_max):
             limit = query._limit if query._limit is not None else db.limit_max
-            clauses.append(SQL('LIMIT %s' % limit))
+            clauses.append(SQL('LIMIT %d' % limit))
         if query._offset is not None:
-            clauses.append(SQL('OFFSET %s' % query._offset))
+            clauses.append(SQL('OFFSET %d' % query._offset))
 
         if query._for_update:
             clauses.append(SQL(query._for_update))
