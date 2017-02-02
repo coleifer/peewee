@@ -220,9 +220,6 @@ class SqliteQueueDatabase(SqliteExtDatabase):
         # Get different objects depending on the threading implementation.
         self._thread_helper = self.get_thread_impl(use_gevent)(queue_max_size)
 
-        # Initialize threadlocal storage for tracking query pipelines.
-        self.pipeline = self._thread_helper.pipeline()(self)
-
         # Create the writer thread, optionally starting it.
         self._create_write_queue()
         if self._autostart:
@@ -252,10 +249,6 @@ class SqliteQueueDatabase(SqliteExtDatabase):
         return self._write_queue.qsize()
 
     def execute_sql(self, sql, params=None, require_commit=True, timeout=None):
-        if self.pipeline.active:
-            self.pipeline.write((sql, params, require_commit))
-            return
-
         if not require_commit:
             return self._execute(sql, params, require_commit=require_commit)
 
@@ -308,31 +301,6 @@ class SqliteQueueDatabase(SqliteExtDatabase):
     atomic = transaction = savepoint = __unsupported__
 
 
-class Pipeline(object):
-    def __init__(self, db):
-        self.db = db
-        self.active = False
-        self._pending = []
-        super(Pipeline, self).__init__()
-
-    def __enter__(self):
-        self.active = True
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.active = False
-        self.execute()
-
-    def execute(self):
-        self.db.pause()
-        for sql, params, commit in self._pending:
-            self.db.execute_sql(sql, params, commit)
-        self._pending = []
-        self.db.unpause()
-
-    def write(self, data):
-        self._pending.append(data)
-
-
 class ThreadHelper(object):
     __slots__ = ('queue_max_size',)
 
@@ -340,11 +308,6 @@ class ThreadHelper(object):
         self.queue_max_size = queue_max_size
 
     def event(self): return Event()
-
-    def pipeline(self):
-        class ThreadPipeline(Pipeline, thread_local):
-            pass
-        return ThreadPipeline
 
     def queue(self, max_size=None):
         max_size = max_size if max_size is not None else self.queue_max_size
@@ -360,11 +323,6 @@ class GreenletHelper(ThreadHelper):
     __slots__ = ()
 
     def event(self): return GEvent()
-
-    def pipeline(self):
-        class GPipeline(Pipeline, greenlet_local):
-            pass
-        return GPipeline
 
     def queue(self, max_size=None):
         max_size = max_size if max_size is not None else self.queue_max_size
