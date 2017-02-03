@@ -8,3 +8,5 @@ playhouse/tests/peewee_test.db
 .idea/
 MANIFEST
 peewee_test.db
+*.egg-info
+*.sublime-*

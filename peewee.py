@@ -402,6 +402,11 @@ def not_allowed(func):
             func, type(self).__name__))
     return inner
 
+def coerce_to_list(value):
+    if value is not None and not isinstance(value, (list, tuple, set)):
+        value = [value]
+    return list(value) if value else value
+
 class Proxy(object):
     """
     Proxy class useful for situations when you wish to defer the initialization
@@ -645,12 +650,15 @@ class Func(Node):
         res._coerce = self._coerce
         return res
 
-    def over(self, partition_by=None, order_by=None, window=None):
+    def over(
+            self, partition_by=None, order_by=None,
+            rows=None, range=None, window=None):
         if isinstance(partition_by, Window) and window is None:
             window = partition_by
         if window is None:
             sql = Window(
-                partition_by=partition_by, order_by=order_by).__sql__()
+                partition_by=partition_by, order_by=order_by,
+                rows=rows, range=range).__sql__()
         else:
             sql = SQL(window._alias)
         return Clause(self, SQL('OVER'), sql)
@@ -728,14 +736,74 @@ class EnclosedClause(CommaClause):
 Tuple = EnclosedClause
 
 class Window(Node):
-    def __init__(self, partition_by=None, order_by=None):
+
+    PRECEDING = 'PRECEDING'
+    FOLLOWING = 'FOLLOWING'
+    CURRENT_ROW = 'CURRENT ROW'
+    UNBOUNDED_PRECEDING = 'UNBOUNDED PRECEDING'
+    UNBOUNDED_FOLLOWING = 'UNBOUNDED FOLLOWING'
+    FRAME_CLAUSES = [
+        PRECEDING,
+        FOLLOWING,
+        CURRENT_ROW,
+        UNBOUNDED_PRECEDING,
+        UNBOUNDED_FOLLOWING
+    ]
+
+    def __init__(
+            self, partition_by=None, order_by=None,
+            rows=None, range=None):
         super(Window, self).__init__()
-        self.partition_by = partition_by
-        self.order_by = order_by
+        self.partition_by = coerce_to_list(partition_by)
+        self.order_by = coerce_to_list(order_by)
+        self.rows = coerce_to_list(rows)
+        self.range = coerce_to_list(range)
         self._alias = self._alias or 'w'
+
+    def _construct_frame_clause(self):
+        frame_clause = []
+
+        params = [f for f in (self.rows or self.range or []) if f]
+        if len(params) > 4:
+            raise ValueError('Too many parameters')
+
+        values = [v for v in params if isinstance(v, int)]
+        clauses = [v for v in params if isinstance(v, str)]
+        if len(values) > len(clauses):
+            raise ValueError('Missing clause')
+
+        invalid_params = filter(
+            lambda f: f not in self.FRAME_CLAUSES, clauses)
+        if any(invalid_params):
+            raise ValueError(
+                '%s is not a valid frame clause. ' % invalid_params[0] +
+                'Must be one of (%s)' % ','.join(self.FRAME_CLAUSES))
+
+        if params:
+            mode = 'ROWS' if self.rows else 'RANGE'
+            frame_clause.append(SQL(mode))
+            if len(params) == 1:
+                frame_clause.append(SQL(params[0]))
+            elif len(params) == 2 and isinstance(params[0], int):
+                frame_clause.append(Clause(
+                    SQL(str(params[0])), SQL(params[1])))
+            elif len(params) > 2 and isinstance(params[0], int):
+                frame_clause.append(Clause(
+                    SQL('BETWEEN'), SQL(str(params[0])), SQL(params[1]),
+                    SQL('AND'), SQL(str(params[2])), SQL(' '.join(params[3:]))
+                ))
+            else:
+                frame_clause.append(Clause(
+                    SQL('BETWEEN'), SQL(params[0]),
+                    SQL('AND'), SQL(str(params[1])), SQL(' '.join(params[2:]))
+                ))
+
+        return frame_clause
 
     def __sql__(self):
         over_clauses = []
+        frame_clause = self._construct_frame_clause()
+
         if self.partition_by:
             over_clauses.append(Clause(
                 SQL('PARTITION BY'),
@@ -744,10 +812,13 @@ class Window(Node):
             over_clauses.append(Clause(
                 SQL('ORDER BY'),
                 CommaClause(*self.order_by)))
+        if frame_clause:
+            over_clauses.append(Clause(*frame_clause))
+
         return EnclosedClause(Clause(*over_clauses))
 
     def clone_base(self):
-        return Window(self.partition_by, self.order_by)
+        return Window(self.partition_by, self.order_by, self.rows, self.range)
 
 def Check(value):
     return SQL('CHECK (%s)' % value)
