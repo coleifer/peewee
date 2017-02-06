@@ -1028,8 +1028,9 @@ class CompoundSelectQuery(SelectBase):
             with ctx.push(parentheses=ctx.compound_select_parentheses):
                 ctx.sql(self.lhs)
             ctx.literal(' %s ' % self.op)
-            with ctx.push(parentheses=ctx.compound_select_parentheses):
-                ctx.sql(self.rhs)
+            with ctx.push_alias():
+                with ctx.push(parentheses=ctx.compound_select_parentheses):
+                    ctx.sql(self.rhs)
 
         # Apply ORDER BY, LIMIT, OFFSET.
         self._apply_ordering(ctx)
@@ -1110,8 +1111,13 @@ class Select(SelectBase):
 
     def __sql__(self, ctx):
         super(Select, self).__sql__(ctx)
-        parentheses = ctx.subquery or (ctx.scope == SCOPE_SOURCE)
-        with ctx.push(scope=SCOPE_NORMAL, parentheses=parentheses, subquery=True):
+        is_subquery = ctx.subquery
+        parentheses = is_subquery or (ctx.scope == SCOPE_SOURCE)
+        if is_subquery:
+            ctx.alias_manager.push()
+
+        with ctx.push(scope=SCOPE_NORMAL, parentheses=parentheses,
+                      subquery=True):
             ctx.literal('SELECT ')
             if self._simple_distinct or self._distinct is not None:
                 ctx.literal('DISTINCT ')
@@ -1144,7 +1150,9 @@ class Select(SelectBase):
                 stmt = ' FOR UPDATE NOWAIT' if nowait else ' FOR UPDATE'
                 ctx.literal(stmt)
 
-        return self.apply_alias(ctx)
+        ctx = self.apply_alias(ctx)
+        ctx.alias_manager.pop()
+        return ctx
 
 
 class _WriteQuery(Query):
@@ -1203,7 +1211,7 @@ class Update(_WriteQuery):
     def __sql__(self, ctx):
         super(Update, self).__sql__(ctx)
 
-        with ctx.push(scope=SCOPE_VALUES):
+        with ctx.push(scope=SCOPE_VALUES, subquery=True):
             ctx.literal('UPDATE ')
             if self._on_conflict:
                 ctx.literal('OR %s ' % self._on_conflict)
@@ -1329,7 +1337,7 @@ class Delete(_WriteQuery):
     def __sql__(self, ctx):
         super(Delete, self).__sql__(ctx)
 
-        with ctx.push(scope=SCOPE_VALUES):
+        with ctx.push(scope=SCOPE_VALUES, subquery=True):
             (ctx
              .literal('DELETE FROM ')
              .sql(self.table))

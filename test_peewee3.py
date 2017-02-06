@@ -110,8 +110,7 @@ class TestComplexSelect(BaseTestCase):
 class TestCompoundSelect(BaseTestCase):
     def test_compound_select(self):
         lhs = User.select(User.c.id).where(User.c.username == 'charlie')
-        U2 = User.alias('UA')
-        rhs = U2.select(U2.c.username).where(U2.c.admin == True)
+        rhs = User.select(User.c.username).where(User.c.admin == True)
         q2 = (lhs | rhs)
         UA = User.alias('U2')
         q3 = q2 | UA.select(UA.c.id).where(UA.c.superuser == False)
@@ -122,9 +121,9 @@ class TestCompoundSelect(BaseTestCase):
             'FROM "users" AS "t1" '
             'WHERE ("t1"."username" = ?) '
             'UNION '
-            'SELECT "UA"."username" '
-            'FROM "users" AS "UA" '
-            'WHERE ("UA"."admin" = ?) '
+            'SELECT "a1"."username" '
+            'FROM "users" AS "a1" '
+            'WHERE ("a1"."admin" = ?) '
             'UNION '
             'SELECT "U2"."id" '
             'FROM "users" AS "U2" '
@@ -162,6 +161,31 @@ class TestUpdateQuery(BaseTestCase):
             'WHERE ("username" = ?)'))
         self.assertEqual(params, [False, 1, 'nuggie', 'nugz'])
 
+    def test_update_subquery(self):
+        subquery = (User
+                    .select(User.c.id, fn.COUNT(Tweet.c.id).alias('ct'))
+                    .join(Tweet, on=(Tweet.c.user_id == User.c.id))
+                    .group_by(User.c.id)
+                    .having(SQL('ct') > 100))
+        query = (User
+                 .update({
+                     User.c.muted: True,
+                     User.c.counter: 0})
+                 .where(User.c.id << subquery))
+        sql, params = __sql__(query)
+        self.assertEqual(sql, (
+            'UPDATE "users" SET '
+            '"counter" = ?, '
+            '"muted" = ? '
+            'WHERE ("id" IN ('
+            'SELECT "a1"."id", COUNT("a2"."id") AS ct '
+            'FROM "users" AS "a1" '
+            'INNER JOIN "tweets" AS "a2" '
+            'ON ("a2"."user_id" = "a1"."id") '
+            'GROUP BY "a1"."id" '
+            'HAVING (ct > ?)))'))
+        self.assertEqual(params, [0, True, 100])
+
 
 class TestDeleteQuery(BaseTestCase):
     def test_delete_query(self):
@@ -186,12 +210,12 @@ class TestDeleteQuery(BaseTestCase):
         sql, params = __sql__(query)
         self.assertEqual(sql, (
             'DELETE FROM "users" '
-            'WHERE ("id" IN '
-            'SELECT "t1"."id", COUNT("t2"."id") AS ct '
-            'FROM "users" AS "t1" '
-            'INNER JOIN "tweets" AS "t2" ON ("t2"."user_id" = "t1"."id") '
-            'GROUP BY "t1"."id" '
-            'HAVING (ct > ?))'))
+            'WHERE ("id" IN ('
+            'SELECT "a1"."id", COUNT("a2"."id") AS ct '
+            'FROM "users" AS "a1" '
+            'INNER JOIN "tweets" AS "a2" ON ("a2"."user_id" = "a1"."id") '
+            'GROUP BY "a1"."id" '
+            'HAVING (ct > ?)))'))
         self.assertEqual(params, [100])
 
 
