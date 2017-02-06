@@ -1671,6 +1671,35 @@ class TestWindowFunctions(ModelTestCase):
         for int_v, float_v in self.data:
             NullModel.create(int_field=int_v, float_field=float_v)
 
+    def test_frame(self):
+        query = (NullModel
+                 .select(
+                     NullModel.float_field,
+                     fn.AVG(NullModel.float_field).over(
+                         partition_by=[NullModel.int_field],
+                         start=Window.preceding(),
+                         end=Window.following(2))))
+        sql, params = query.sql()
+        self.assertEqual(sql, (
+            'SELECT "t1"."float_field", AVG("t1"."float_field") '
+            'OVER (PARTITION BY "t1"."int_field" RANGE BETWEEN '
+            'UNBOUNDED PRECEDING AND 2 FOLLOWING) FROM "nullmodel" AS t1'))
+        self.assertEqual(params, [])
+
+        query = (NullModel
+                 .select(
+                     NullModel.float_field,
+                     fn.AVG(NullModel.float_field).over(
+                         partition_by=[NullModel.int_field],
+                         start='CURRENT ROW',
+                         end=Window.following())))
+        sql, params = query.sql()
+        self.assertEqual(sql, (
+            'SELECT "t1"."float_field", AVG("t1"."float_field") '
+            'OVER (PARTITION BY "t1"."int_field" RANGE BETWEEN '
+            'CURRENT ROW AND UNBOUNDED FOLLOWING) FROM "nullmodel" AS t1'))
+        self.assertEqual(params, [])
+
     def test_partition_unordered(self):
         query = (NullModel
                  .select(

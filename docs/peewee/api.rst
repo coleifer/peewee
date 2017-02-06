@@ -2722,12 +2722,14 @@ Misc
     ``fn.Stddev(Employee.salary).alias('sdv')``  ``Stddev(t1."salary") AS sdv``
     ============================================ ============================================
 
-    .. py:method:: over([partition_by=None[, order_by=None[, window=None]]])
+    .. py:method:: over([partition_by=None[, order_by=None[, start=None[, end=None[, window=None]]]]])
 
         Basic support for SQL window functions.
 
         :param list partition_by: List of :py:class:`Node` instances to partition by.
         :param list order_by: List of :py:class:`Node` instances to use for ordering.
+        :param start: The start of the *frame* of the window query.
+        :param end: The end of the *frame* of the window query.
         :param Window window: A :py:class:`Window` instance to use for this aggregate.
 
         Examples:
@@ -2772,6 +2774,15 @@ Misc
                      .window(window)  # Need to include our Window here.
                      .order_by(PageView.timestamp))
 
+            # Get the list of times along with the last time.
+            query = (Times
+                     .select(
+                          Times.time,
+                          fn.LAST_VALUE(Times.time).over(
+                              order_by=[Times.time],
+                              start=Window.preceding(),
+                              end=Window.following())))
+
 .. py:class:: SQL(sql, *params)
 
     Add fragments of SQL to a peewee query.  For example you might want to reference
@@ -2792,12 +2803,14 @@ Misc
         # Sort the users by number of tweets.
         query = query.order_by(SQL('ct DESC'))
 
-.. py:class:: Window([partition_by=None[, order_by=None]])
+.. py:class:: Window([partition_by=None[, order_by=None[, start=None[, end=None]]]])
 
     Create a ``WINDOW`` definition.
 
     :param list partition_by: List of :py:class:`Node` instances to partition by.
     :param list order_by: List of :py:class:`Node` instances to use for ordering.
+    :param start: The start of the *frame* of the window query.
+    :param end: The end of the *frame* of the window query.
 
     Examples:
 
@@ -2813,6 +2826,18 @@ Misc
                      fn.Avg(Employee.salary).over(window))
                  .window(window)
                  .order_by(Employee.name))
+
+    .. py:staticmethod:: preceding([value=None])
+
+        Return an expression appropriate for passing in to the ``start`` or
+        ``end`` clause of a :py:class:`Window` object. If ``value`` is not
+        provided, then it will be ``UNBOUNDED PRECEDING``.
+
+    .. py:staticmethod:: following([value=None])
+
+        Return an expression appropriate for passing in to the ``start`` or
+        ``end`` clause of a :py:class:`Window` object. If ``value`` is not
+        provided, then it will be ``UNBOUNDED FOLLOWING``.
 
 .. py:class:: DeferredRelation()
 

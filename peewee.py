@@ -645,12 +645,18 @@ class Func(Node):
         res._coerce = self._coerce
         return res
 
-    def over(self, partition_by=None, order_by=None, window=None):
+    def over(self, partition_by=None, order_by=None, start=None, end=None,
+             window=None):
         if isinstance(partition_by, Window) and window is None:
             window = partition_by
+        if start is not None and not isinstance(start, SQL):
+            start = SQL(*start)
+        if end is not None and not isinstance(end, SQL):
+            end = SQL(*end)
+
         if window is None:
-            sql = Window(
-                partition_by=partition_by, order_by=order_by).__sql__()
+            sql = Window(partition_by=partition_by, order_by=order_by,
+                         start=start, end=end).__sql__()
         else:
             sql = SQL(window._alias)
         return Clause(self, SQL('OVER'), sql)
@@ -728,11 +734,29 @@ class EnclosedClause(CommaClause):
 Tuple = EnclosedClause
 
 class Window(Node):
-    def __init__(self, partition_by=None, order_by=None):
+    CURRENT_ROW = 'CURRENT ROW'
+
+    def __init__(self, partition_by=None, order_by=None, start=None, end=None):
         super(Window, self).__init__()
         self.partition_by = partition_by
         self.order_by = order_by
+        self.start = start
+        self.end = end
+        if self.start is None and self.end is not None:
+            raise ValueError('Cannot specify WINDOW end without start.')
         self._alias = self._alias or 'w'
+
+    @staticmethod
+    def following(value=None):
+        if value is None:
+            return SQL('UNBOUNDED FOLLOWING')
+        return SQL('%d FOLLOWING' % value)
+
+    @staticmethod
+    def preceding(value=None):
+        if value is None:
+            return SQL('UNBOUNDED PRECEDING')
+        return SQL('%d PRECEDING' % value)
 
     def __sql__(self):
         over_clauses = []
@@ -744,6 +768,14 @@ class Window(Node):
             over_clauses.append(Clause(
                 SQL('ORDER BY'),
                 CommaClause(*self.order_by)))
+        if self.start is not None and self.end is not None:
+            over_clauses.append(Clause(
+                SQL('RANGE BETWEEN'),
+                self.start,
+                SQL('AND'),
+                self.end))
+        elif self.start is not None:
+            over_clauses.append(Clause(SQL('RANGE'), self.start))
         return EnclosedClause(Clause(*over_clauses))
 
     def clone_base(self):
