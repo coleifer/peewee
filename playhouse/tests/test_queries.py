@@ -1691,7 +1691,7 @@ class TestWindowFunctions(ModelTestCase):
                      NullModel.float_field,
                      fn.AVG(NullModel.float_field).over(
                          partition_by=[NullModel.int_field],
-                         start='CURRENT ROW',
+                         start=SQL('CURRENT ROW'),
                          end=Window.following())))
         sql, params = query.sql()
         self.assertEqual(sql, (
