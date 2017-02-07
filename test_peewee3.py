@@ -219,16 +219,14 @@ class TestDeleteQuery(BaseTestCase):
         self.assertEqual(params, [100])
 
 
-('SELECT "t1"."first", "t1"."last", COUNT("t2"."id") AS ct FROM "person" AS "t1" INNER JOIN "note" AS "t2" ON ("t2"."author_id" = "t1"."id") WHERE (("t1"."last" = ?) AND ("t1"."id" < ?))', [u'Leifer', 4])
-
-
 db = SqliteDatabase(':memory:')
 
-class BM(Model):
+
+class TestModel(Model):
     class Meta:
         database = db
 
-class Person(BM):
+class Person(TestModel):
     first = CharField()
     last = CharField()
     dob = DateField(index=True)
@@ -238,54 +236,74 @@ class Person(BM):
             (('first', 'last'), True),
         )
 
-class Note(BM):
+class Note(TestModel):
     author = ForeignKeyField(Person)
     content = TextField()
 
-class Category(BM):
+class Category(TestModel):
     parent = ForeignKeyField('self', backref='children', null=True)
     name = CharField(max_length=20, primary_key=True)
 
-query = (Person
-         .select(Person.first, Person.last, fn.COUNT(Note.id).alias('ct'))
-         .join(Note)
-         .where((Person.last == 'Leifer') & (Person.id < 4)))
-pq(query)
 
-print
-print Person._schema.create_table(True).query()
-for create_index in Person._schema.create_indexes(True):
-    print create_index.query()
-print
-print Note._schema.create_table(True).query()
-for create_index in Note._schema.create_indexes(True):
-    print create_index.query()
-print
-print Category._schema.create_table(True).query()
-for create_index in Category._schema.create_indexes(True):
-    print create_index.query()
+class TestModelAPIs(BaseTestCase):
+    def assertCreateTable(self, model_class, expected):
+        sql, params = model_class._schema.create_table(False).query()
+        self.assertEqual(params, [])
 
-class UserM(Model):
-    username = CharField()
+        indexes = []
+        for create_index in model_class._schema.create_indexes(False):
+            isql, params = create_index.query()
+            self.assertEqual(params, [])
+            indexes.append(isql)
 
-class Note(Model):
-    author = ForeignKeyField(UserM)
-    content = TextField()
+        self.assertEqual([sql] + indexes, expected)
 
-class NoteTag(Model):
-    note = ForeignKeyField(Note)
-    tag = CharField()
+    def test_table_and_index_creation(self):
+        self.assertCreateTable(Person, [
+            ('CREATE TABLE "person" ('
+             '"id" INTEGER NOT NULL PRIMARY KEY, '
+             '"first" VARCHAR(255) NOT NULL, '
+             '"last" VARCHAR(255) NOT NULL, '
+             '"dob" DATE NOT NULL)'),
+            'CREATE INDEX "person_dob" ON "person" ("dob")',
+            ('CREATE UNIQUE INDEX "person_first_last" ON '
+             '"person" ("first", "last")'),
+        ])
 
-class Permission(Model):
-    user = ForeignKeyField(UserM)
-    name = CharField()
+        self.assertCreateTable(Note, [
+            ('CREATE TABLE "note" ('
+             '"id" INTEGER NOT NULL PRIMARY KEY, '
+             '"author_id" INTEGER NOT NULL, '
+             '"content" TEXT NOT NULL, '
+             'FOREIGN KEY ("author_id") REFERENCES "person" ("id"))'),
+            'CREATE INDEX "note_author" ON "note" ("author_id")',
+        ])
 
-query = UserM.select().join(Note).join(NoteTag).join(Permission, src=UserM)
-pq(query)
+        self.assertCreateTable(Category, [
+            ('CREATE TABLE "category" ('
+             '"name" VARCHAR(20) NOT NULL PRIMARY KEY, '
+             '"parent_id" VARCHAR(20), '
+             'FOREIGN KEY ("parent_id") REFERENCES "category" ("name"))'),
+            'CREATE INDEX "category_parent" ON "category" ("parent_id")',
+        ])
 
-UA = UserM.alias('Poop')
-q = UA.select().where(UA.username << UserM.select(UserM.username).where(UserM.id == 3))
-pq(q)
+    def test_select(self):
+        query = (Person
+                 .select(
+                     Person.first,
+                     Person.last,
+                     fn.COUNT(Note.id).alias('ct'))
+                 .join(Note)
+                 .where((Person.last == 'Leifer') & (Person.id < 4)))
+        sql, params = __sql__(query)
+        self.assertEqual(sql, (
+            'SELECT "t1"."first", "t1"."last", COUNT("t2"."id") AS ct '
+            'FROM "person" AS "t1" '
+            'INNER JOIN "note" AS "t2" ON ("t2"."author_id" = "t1"."id") '
+            'WHERE ('
+            '("t1"."last" = ?) AND '
+            '("t1"."id" < ?))'))
+        self.assertEqual(params, ['Leifer', 4])
 
 
 
