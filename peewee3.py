@@ -1113,8 +1113,6 @@ class Select(SelectBase):
         super(Select, self).__sql__(ctx)
         is_subquery = ctx.subquery
         parentheses = is_subquery or (ctx.scope == SCOPE_SOURCE)
-        if is_subquery:
-            ctx.alias_manager.push()
 
         with ctx.push(scope=SCOPE_NORMAL, parentheses=parentheses,
                       subquery=True):
@@ -1127,7 +1125,8 @@ class Select(SelectBase):
                      .sql(EnclosedNodeList(self._distinct))
                      .literal(' '))
 
-            ctx.sql(CommaNodeList(self._columns))
+            with ctx.push(scope=SCOPE_SOURCE):
+                ctx.sql(CommaNodeList(self._columns))
 
             if self._from_list:
                 with ctx.push(parentheses=False, scope=SCOPE_SOURCE):
@@ -1151,7 +1150,6 @@ class Select(SelectBase):
                 ctx.literal(stmt)
 
         ctx = self.apply_alias(ctx)
-        ctx.alias_manager.pop()
         return ctx
 
 

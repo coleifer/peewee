@@ -33,6 +33,24 @@ class TestSimpleJoin(BaseTestCase):
         self.assertEqual(params, [])
 
 
+class TestSubquery(BaseTestCase):
+    def test_subquery(self):
+        inner = (Tweet
+                 .select(fn.COUNT(Tweet.c.id).alias('ct'))
+                 .where(Tweet.c.user == User.c.id))
+        query = (User
+                 .select(User.c.username, inner.alias('iq'))
+                 .order_by(User.c.username))
+        sql, params = __sql__(query)
+        self.assertEqual(sql, (
+            'SELECT "t1"."username", '
+            '(SELECT COUNT("t2"."id") AS ct '
+            'FROM "tweets" AS "t2" '
+            'WHERE ("t2"."user" = "t1"."id")) AS "iq" '
+            'FROM "users" AS "t1" ORDER BY "t1"."username"'))
+        self.assertEqual(params, [])
+
+
 class TestUserDefinedAlias(BaseTestCase):
     def test_user_defined_alias(self):
         UA = User.alias('alt')
@@ -178,11 +196,11 @@ class TestUpdateQuery(BaseTestCase):
             '"counter" = ?, '
             '"muted" = ? '
             'WHERE ("id" IN ('
-            'SELECT "a1"."id", COUNT("a2"."id") AS ct '
-            'FROM "users" AS "a1" '
-            'INNER JOIN "tweets" AS "a2" '
-            'ON ("a2"."user_id" = "a1"."id") '
-            'GROUP BY "a1"."id" '
+            'SELECT "t1"."id", COUNT("t2"."id") AS ct '
+            'FROM "users" AS "t1" '
+            'INNER JOIN "tweets" AS "t2" '
+            'ON ("t2"."user_id" = "t1"."id") '
+            'GROUP BY "t1"."id" '
             'HAVING (ct > ?)))'))
         self.assertEqual(params, [0, True, 100])
 
@@ -211,10 +229,10 @@ class TestDeleteQuery(BaseTestCase):
         self.assertEqual(sql, (
             'DELETE FROM "users" '
             'WHERE ("id" IN ('
-            'SELECT "a1"."id", COUNT("a2"."id") AS ct '
-            'FROM "users" AS "a1" '
-            'INNER JOIN "tweets" AS "a2" ON ("a2"."user_id" = "a1"."id") '
-            'GROUP BY "a1"."id" '
+            'SELECT "t1"."id", COUNT("t2"."id") AS ct '
+            'FROM "users" AS "t1" '
+            'INNER JOIN "tweets" AS "t2" ON ("t2"."user_id" = "t1"."id") '
+            'GROUP BY "t1"."id" '
             'HAVING (ct > ?)))'))
         self.assertEqual(params, [100])
 
