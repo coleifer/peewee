@@ -223,6 +223,18 @@ class Context(object):
         self._settings = self.stack.pop()
         return self
 
+    def __scope_context__(scope):
+        @contextmanager
+        def inner(self, **kwargs):
+            with self.push(scope=scope, **kwargs):
+                yield self
+        return inner
+
+    scope_normal = __scope_context__(SCOPE_NORMAL)
+    scope_source = __scope_context__(SCOPE_SOURCE)
+    scope_values = __scope_context__(SCOPE_VALUES)
+    scope_cte = __scope_context__(SCOPE_CTE)
+
     @contextmanager
     def push_alias(self):
         self.alias_manager.push()
@@ -399,7 +411,7 @@ class Table(_HashableSource, Source):
 
     def select(self, *columns):
         if not columns and self._columns:
-            columns = [getattr(self, column) for column in self._columns]
+            columns = [Column(self, column) for column in self._columns]
         return Select((self,), columns)
 
     def insert(self, insert=None, columns=None):
@@ -473,7 +485,7 @@ class CTE(_HashableSource, Source):
             if self._columns:
                 ctx.literal(' ').sql(EnclosedNodeList(self._columns))
             ctx.literal(' AS (')
-            with ctx.push(scope=SCOPE_NORMAL):
+            with ctx.scope_normal():
                 ctx.sql(self._query)
             ctx.literal(')')
         return ctx
@@ -534,13 +546,11 @@ class ColumnBase(Node):
     __rxor__ = _e(OP.XOR, inv=True)
 
     def __eq__(self, rhs):
-        if rhs is None:
-            return build_expression(self, OP.IS, None)
-        return build_expression(self, OP.EQ, rhs)
+        op = OP.IS if rhs is None else OP.EQ
+        return build_expression(self, op, rhs)
     def __ne__(self, rhs):
-        if rhs is None:
-            return build_expression(self, OP.IS_NOT, None)
-        return build_expression(self, OP.NE, rhs)
+        op = OP.IS_NOT if rhs is None else OP.NE
+        return build_expression(self, op, rhs)
 
     __lt__ = _e(OP.LT)
     __le__ = _e(OP.LTE)
@@ -580,6 +590,8 @@ class ColumnBase(Node):
 
 
 class ColumnFactory(object):
+    __slots__ = ('node',)
+
     def __init__(self, node):
         self.node = node
 
@@ -601,8 +613,9 @@ class Column(ColumnBase):
     def __sql__(self, ctx):
         if ctx.scope == SCOPE_VALUES:
             return ctx.sql(Entity(self.name))
-        with ctx.push(scope=SCOPE_NORMAL):
-            return ctx.sql(self.source).literal('.').sql(Entity(self.name))
+        else:
+            with ctx.scope_normal():
+                return ctx.sql(self.source).literal('.').sql(Entity(self.name))
 
 
 class WrappedNode(ColumnBase):
@@ -784,7 +797,7 @@ class Function(ColumnBase):
             node = Window(partition_by=partition_by, order_by=order_by)
         else:
             node = SQL(window._alias)
-        return NodeList((self, SQL('OVER '), node))
+        return NodeList((self, SQL('OVER'), node))
 
     def coerce(self, coerce=True):
         self._coerce = coerce
@@ -922,9 +935,9 @@ class Query(Node):
              .sql(CommaNodeList(self._order_by)))
         if self._limit is not None or (self._offset is not None and
                                        ctx.limit_max):
-            ctx.literal(' LIMIT %s' % (self._limit or ctx.limit_max))
+            ctx.literal(' LIMIT %d' % (self._limit or ctx.limit_max))
         if self._offset is not None:
-            ctx.literal(' OFFSET %s' % self._offset)
+            ctx.literal(' OFFSET %d' % self._offset)
         return ctx
 
     def __sql__(self, ctx):
@@ -932,7 +945,7 @@ class Query(Node):
             # The CTE scope is only used at the very beginning of the query,
             # when we are describing the various CTEs we will be using.
             recursive = any(cte._recursive for cte in self._cte_list)
-            with ctx.push(scope=SCOPE_CTE):
+            with ctx.scope_cte():
                 (ctx
                  .literal('WITH RECURSIVE ' if recursive else 'WITH ')
                  .sql(CommaNodeList(self._cte_list))
@@ -1051,7 +1064,7 @@ class Select(SelectBase):
         self._order_by = order_by
         self._limit = limit
         self._offset = offset
-        self._ctx = None
+        self._for_update = 'FOR UPDATE' if for_update is True else for_update
 
         self._distinct = self._simple_distinct = None
         if distinct:
@@ -1059,11 +1072,6 @@ class Select(SelectBase):
                 self._simple_distinct = distinct
             else:
                 self._distinct = distinct
-
-        if isinstance(for_update, tuple):
-            self._for_update = for_update
-        else:
-            self._for_update = (for_update is True, False)
 
         self._cursor_wrapper = None
 
@@ -1103,8 +1111,8 @@ class Select(SelectBase):
             self._distinct = columns
 
     @Node.copy
-    def for_update(self, for_update=True, nowait=False):
-        self._for_update = (for_update, nowait)
+    def for_update(self, for_update=None):
+        self._for_update = 'FOR UPDATE' if for_update is True else for_update
 
     def _get_query_key(self):
         return self._alias
@@ -1114,8 +1122,7 @@ class Select(SelectBase):
         is_subquery = ctx.subquery
         parentheses = is_subquery or (ctx.scope == SCOPE_SOURCE)
 
-        with ctx.push(scope=SCOPE_NORMAL, parentheses=parentheses,
-                      subquery=True):
+        with ctx.scope_normal(parentheses=parentheses, subquery=True):
             ctx.literal('SELECT ')
             if self._simple_distinct or self._distinct is not None:
                 ctx.literal('DISTINCT ')
@@ -1125,11 +1132,11 @@ class Select(SelectBase):
                      .sql(EnclosedNodeList(self._distinct))
                      .literal(' '))
 
-            with ctx.push(scope=SCOPE_SOURCE):
+            with ctx.scope_source():
                 ctx.sql(CommaNodeList(self._columns))
 
             if self._from_list:
-                with ctx.push(parentheses=False, scope=SCOPE_SOURCE):
+                with ctx.scope_source(parentheses=False):
                     ctx.literal(' FROM ').sql(CommaNodeList(self._from_list))
 
             if self._where is not None:
@@ -1144,10 +1151,9 @@ class Select(SelectBase):
             # Apply ORDER BY, LIMIT, OFFSET.
             self._apply_ordering(ctx)
 
-            for_update, nowait = self._for_update
-            if for_update and ctx.db_for_update:
-                stmt = ' FOR UPDATE NOWAIT' if nowait else ' FOR UPDATE'
-                ctx.literal(stmt)
+            if self._for_update and ctx.db_for_update:
+                ctx.literal(' ')
+                ctx.sql(SQL(self._for_update))
 
         ctx = self.apply_alias(ctx)
         return ctx
@@ -1209,7 +1215,7 @@ class Update(_WriteQuery):
     def __sql__(self, ctx):
         super(Update, self).__sql__(ctx)
 
-        with ctx.push(scope=SCOPE_VALUES, subquery=True):
+        with ctx.scope_values(subquery=True):
             ctx.literal('UPDATE ')
             if self._on_conflict:
                 ctx.literal('OR %s ' % self._on_conflict)
@@ -1293,7 +1299,7 @@ class Insert(_WriteQuery):
 
     def __sql__(self, ctx):
         super(Insert, self).__sql__(ctx)
-        with ctx.push(scope=SCOPE_VALUES):
+        with ctx.scope_values():
             ctx.literal('INSERT ')
             if self._on_conflict:
                 ctx.literal('OR %s ' % self._on_conflict)
@@ -1335,7 +1341,7 @@ class Delete(_WriteQuery):
     def __sql__(self, ctx):
         super(Delete, self).__sql__(ctx)
 
-        with ctx.push(scope=SCOPE_VALUES, subquery=True):
+        with ctx.scope_values(subquery=True):
             (ctx
              .literal('DELETE FROM ')
              .sql(self.table))
@@ -1363,21 +1369,16 @@ class ProgrammingError(DatabaseError): pass
 
 
 class ExceptionWrapper(object):
-    __slots__ = ['exceptions']
-
+    __slots__ = ('exceptions',)
     def __init__(self, exceptions):
         self.exceptions = exceptions
-
     def __enter__(self): pass
     def __exit__(self, exc_type, exc_value, traceback):
         if exc_type is None:
             return
         if exc_type.__name__ in self.exceptions:
             new_type = self.exceptions[exc_type.__name__]
-            if PY26:
-                exc_args = exc_value
-            else:
-                exc_args = exc_value.args
+            exc_args = exc_value if PY26 else exc_value.args
             reraise(new_type, new_type(*exc_args), traceback)
 
 EXCEPTIONS = {
@@ -1542,14 +1543,16 @@ class Database(_callable_context_manager):
         return cursor
 
     def execute(self, query, **context_options):
-        ctx = self.create_sql_context(context_options)
-        return self.execute_sql(*ctx.sql(query).query())
+        ctx = self.get_sql_context(context_options)
+        sql, params = ctx.sql(query).query()
+        return self.execute_sql(sql, params)
 
-    def create_sql_context(self, context_options=None):
-        options = merge_dict(self.options, context_options)
+    def get_sql_context(self, context_options=None):
         if context_options:
-            options = options.copy()
+            options = self.options.copy()
             options.update(context_options)
+        else:
+            options = self.options
         return self.context_class(options)
 
     def last_insert_id(self, cursor):
@@ -2017,21 +2020,6 @@ class _savepoint_sqlite(_callable_context_manager):
         finally:
             if self._orig_isolation_level is not None:
                 self._conn.isolation_level = self._orig_isolation_level
-
-
-# Database-specific helpers.
-class SqliteTimeoutContext(_callable_context_manager):
-    def __init__(self, database, timeout):
-        self.database = database
-        self.timeout = timeout
-        self.original_timeout = None
-
-    def __enter__(self):
-        self.original_timeout = self.database.timeout
-        self.database.timeout = self.timeout
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.database.timeout = self.original_timeout
 
 
 # CURSOR REPRESENTATIONS.
@@ -2666,9 +2654,9 @@ class SchemaManager(object):
         self._database = value
 
     def _create_context(self):
-        return self.database.create_sql_context(self.context_options)
+        return self.database.get_sql_context(self.context_options)
 
-    def create_table(self, safe, **options):
+    def create_table(self, safe=True, **options):
         ctx = self._create_context()
         ctx.literal('CREATE TABLE ')
         if safe:
@@ -2699,7 +2687,7 @@ class SchemaManager(object):
         ctx.sql(EnclosedNodeList(columns + constraints + extra))
         return ctx
 
-    def drop_table(self, safe):
+    def drop_table(self, safe=True):
         ctx = self._create_context()
         return (ctx
                 .literal('DROP TABLE IF EXISTS ' if safe else 'DROP TABLE ')
@@ -2716,11 +2704,11 @@ class SchemaManager(object):
 
         return Entity(self.model._meta.schema, index_name)
 
-    def create_indexes(self, safe):
+    def create_indexes(self, safe=True):
         return [self.create_index(nodes, unique, safe)
                 for (nodes, unique) in self.model._meta.fields_to_index()]
 
-    def create_index(self, fields, unique, safe):
+    def create_index(self, fields, unique=False, safe=True):
         ctx = self._create_context()
         ctx.literal('CREATE UNIQUE INDEX ' if unique else 'CREATE INDEX ')
         if safe:
@@ -2733,7 +2721,7 @@ class SchemaManager(object):
                 .literal(' ')
                 .sql(EnclosedNodeList(fields)))
 
-    def drop_indexes(self, safe):
+    def drop_indexes(self, safe=True):
         return [self.drop_index(nodes, safe)
                 for (nodes, _) in self.model._meta.fields_to_index()]
 
