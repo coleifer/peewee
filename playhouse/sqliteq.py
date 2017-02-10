@@ -176,10 +176,9 @@ class Writer(object):
         try:
             cursor = self.database._execute(obj.sql, obj.params, obj.commit)
         except Exception as exc:
-            cursor = None
+            return obj.set_result(None, exc)
         else:
-            exc = None
-        return obj.set_result(cursor, exc)
+            return obj.set_result(cursor, None)
 
 
 class SqliteQueueDatabase(SqliteExtDatabase):
