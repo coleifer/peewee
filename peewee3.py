@@ -37,9 +37,6 @@ else:
         raise value
 
 
-Unsupported = object()
-
-
 class attrdict(dict):
     def __getattr__(self, attr): return self[attr]
     def __setattr__(self, attr, value): self[attr] = value
@@ -818,6 +815,58 @@ class Function(ColumnBase):
 fn = Function(None, None)
 
 
+class Window(Node):
+    CURRENT_ROW = 'CURRENT ROW'
+
+    def __init__(self, partition_by=None, order_by=None, start=None, end=None,
+                 alias=None):
+        super(Window, self).__init__()
+        self.partition_by = partition_by
+        self.order_by = order_by
+        self.start = start
+        self.end = end
+        if self.start is None and self.end is not None:
+            raise ValueError('Cannot specify WINDOW end without start.')
+        self._alias = alias or 'w'
+
+    def alias(self, alias=None):
+        self._alias = alias or 'w'
+        return self
+
+    @staticmethod
+    def following(value=None):
+        if value is None:
+            return SQL('UNBOUNDED FOLLOWING')
+        return SQL('%d FOLLOWING' % value)
+
+    @staticmethod
+    def preceding(value=None):
+        if value is None:
+            return SQL('UNBOUNDED PRECEDING')
+        return SQL('%d PRECEDING' % value)
+
+    def __sql__(self, ctx):
+        ctx.literal(self._alias)
+        if self.partition_by:
+            ctx.literal(' PARTITION BY ')
+            ctx.sql(CommaNodeList(self.partition_by))
+        if self.order_by:
+            ctx.literal(' ORDER BY ')
+            ctx.sql(CommaNodeList(self.order_by))
+        if self.start is not None and self.end is not None:
+            ctx.literal(' RANGE BETWEEN ')
+            ctx.sql(self.start)
+            ctx.literal(' AND ')
+            ctx.sql(self.end)
+        elif self.start is not None:
+            ctx.literal(' RANGE ')
+            ctx.sql(self.start)
+        return ctx
+
+    def clone_base(self):
+        return Window(self.partition_by, self.order_by)
+
+
 class NodeList(Node):
     def __init__(self, nodes, glue=' ', parens=False):
         self.nodes = nodes
@@ -1053,7 +1102,7 @@ class CompoundSelectQuery(SelectBase):
 class Select(SelectBase):
     def __init__(self, from_list=None, columns=None, where=None,
                  group_by=None, having=None, order_by=None, limit=None,
-                 offset=None, distinct=None, for_update=None):
+                 offset=None, distinct=None, windows=None, for_update=None):
         super(Select, self).__init__()
         self._from_list = (list(from_list) if isinstance(from_list, tuple)
                            else from_list) or []
@@ -1064,6 +1113,7 @@ class Select(SelectBase):
         self._order_by = order_by
         self._limit = limit
         self._offset = offset
+        self._windows = None
         self._for_update = 'FOR UPDATE' if for_update is True else for_update
 
         self._distinct = self._simple_distinct = None
@@ -1111,6 +1161,10 @@ class Select(SelectBase):
             self._distinct = columns
 
     @Node.copy
+    def window(self, *windows):
+        self._windows = windows if windows else None
+
+    @Node.copy
     def for_update(self, for_update=None):
         self._for_update = 'FOR UPDATE' if for_update is True else for_update
 
@@ -1147,6 +1201,10 @@ class Select(SelectBase):
 
             if self._having is not None:
                 ctx.literal(' HAVING ').sql(self._having)
+
+            if self._windows is not None:
+                ctx.literal(' WINDOW ')
+                ctx.sql(CommaNodeList(self._windows))
 
             # Apply ORDER BY, LIMIT, OFFSET.
             self._apply_ordering(ctx)
@@ -1392,7 +1450,7 @@ EXCEPTIONS = {
     'OperationalError': OperationalError,
     'ProgrammingError': ProgrammingError}
 
-exception_wrapper = ExceptionWrapper(EXCEPTIONS)
+__exception_wrapper__ = ExceptionWrapper(EXCEPTIONS)
 
 
 # DATABASE INTERFACE AND CONNECTION MANAGEMENT.
@@ -1538,8 +1596,12 @@ class Database(_callable_context_manager):
         return self._state.conn.cursor()
 
     def execute_sql(self, sql, params=None):
-        cursor = self.cursor()
-        cursor.execute(sql, params or ())
+        with __exception_wrapper__:
+            cursor = self.cursor()
+            cursor.execute(sql, params or ())
+            if self.commit_select or not sql.startswith('SELECT') and \
+               not self.in_transaction():
+                self.commit()
         return cursor
 
     def execute(self, query, **context_options):
@@ -1560,6 +1622,9 @@ class Database(_callable_context_manager):
 
     def rows_affected(self, cursor):
         return cursor.rowcount
+
+    def in_transaction(self):
+        return bool(self._state.transactions)
 
     def push_transaction(self, transaction):
         self._state.transactions.append(transaction)
