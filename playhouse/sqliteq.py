@@ -173,11 +173,13 @@ class Writer(object):
 
     def execute(self, obj):
         logger.debug('received query %s', obj.sql)
-        exc = None
         try:
             cursor = self.database._execute(obj.sql, obj.params, obj.commit)
-        except Exception as exc:
+        except Exception as execute_err:
             cursor = None
+            exc = execute_err  # python3 is so fucking lame.
+        else:
+            exc = None
         return obj.set_result(cursor, exc)
 
 
