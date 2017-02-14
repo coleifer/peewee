@@ -1402,7 +1402,7 @@ class TestDeleteRecursive(ModelTestCase):
         self.assertQueriesEqual(queries, sql_params)
 
     def test_recursive_delete_child_queries(self):
-        c2 = self.p1.child_set.order_by(Child.id.desc()).get()
+        c2 = self.p1.child_set.order_by(Child.id.desc()).first()
         with self.log_queries() as query_logger:
             with self.assertQueryCount(3):
                 c2.delete_instance(recursive=True, delete_nullable=False)
@@ -2000,7 +2000,7 @@ class TestInsertReturningModelAPI(PeeweeTestCase):
         res = query.execute()
         self.assertTrue(res is True)
         self.assertEqual(User.select().count(), 3)
-        z = User.select().order_by(-User.username).get()
+        z = User.select().order_by(-User.username).first()
         self.assertEqual(z.username, 'zaizee')
 
         usernames = ['foo', 'bar', 'baz']

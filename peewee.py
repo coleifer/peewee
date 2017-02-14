@@ -3147,13 +3147,14 @@ class SelectQuery(Query):
         return bool(clone.scalar())
 
     def get(self):
-        clone = self.paginate(1, 1)
-        try:
-            return next(clone.execute())
-        except StopIteration:
+        results = list(self.limit(2))
+        if len(results) == 0:
             raise self.model_class.DoesNotExist(
                 'Instance matching query does not exist:\nSQL: %s\nPARAMS: %s'
                 % self.sql())
+        if len(results) > 1:
+            raise DataError('Too many instances matching query exist:\nSQL: %s\nPARAMS: %s' % self.sql())
+        return results[0]
 
     def peek(self, n=1):
         res = self.execute()

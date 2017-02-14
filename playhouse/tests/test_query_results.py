@@ -284,7 +284,7 @@ class TestQueryResultWrapper(ModelTestCase):
         self.assertEqual([u.title for u in users], ['b1', 'b2'])
 
         query = Blog.select(Blog, User).join(User).order_by(Blog.title).naive()
-        self.assertEqual(query.get().user, User.get(User.username == 'u1'))
+        self.assertEqual(query.first().user, User.get(User.username == 'u1'))
 
     def test_tuples_dicts(self):
         u1 = User.create(username='u1')

@@ -367,7 +367,7 @@ class NoPKModel(TestModel):
         primary_key = False
 
 class TestingID(TestModel):
-    uniq = UUIDField()
+    uniq = UUIDField(unique=True)
 
 class UUIDData(TestModel):
     id = UUIDField(primary_key=True)
