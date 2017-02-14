@@ -24,7 +24,6 @@ cdef extern from "sqlite3.h":
     cdef int SQLITE_UTF8 = 1
     cdef int SQLITE_OK = 0
     cdef int SQLITE_ERROR = 1
-    cdef int SQLITE_DETERMINISTIC = 0x800
 
     # sqlite_value_type.
     cdef int SQLITE_INTEGER = 1
@@ -114,9 +113,6 @@ cdef extern from "sqlite3.h":
     cdef int SQLITE_DBSTATUS_LOOKASIDE_MISS_FULL = 6
     cdef int SQLITE_DBSTATUS_CACHE_HIT = 7
     cdef int SQLITE_DBSTATUS_CACHE_MISS = 8
-    cdef int SQLITE_DBSTATUS_CACHE_WRITE = 9
-    cdef int SQLITE_DBSTATUS_DEFERRED_FKS = 10
-    cdef int SQLITE_DBSTATUS_CACHE_USED_SHARED = 11
     cdef int sqlite3_db_status(sqlite3 *, int op, int *pCur, int *pHigh, int reset)
 
     cdef int SQLITE_DELETE = 9
@@ -126,6 +122,12 @@ cdef extern from "sqlite3.h":
     # Misc.
     cdef int sqlite3_busy_handler(sqlite3 *db, int(*)(void *, int), void *)
     cdef int sqlite3_sleep(int ms)
+
+
+cdef int SQLITE_DETERMINISTIC = 0x800
+cdef int SQLITE_DBSTATUS_CACHE_WRITE = 9
+cdef int SQLITE_DBSTATUS_DEFERRED_FKS = 10
+cdef int SQLITE_DBSTATUS_CACHE_USED_SHARED = 11
 
 
 def status_property(flag, return_highwater=False):
