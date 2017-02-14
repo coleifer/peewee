@@ -139,7 +139,7 @@ def collect_modules(options):
     if xtra(options.pwiz):
         from playhouse.tests import test_pwiz
         modules.append(test_pwiz)
-    if options.pysqlite_ext: # XXX: xtra(options.pysqlite_ext):
+    if xtra(options.pysqlite_ext):
         try:
             from playhouse.tests import test_pysqlite_ext
             modules.append(test_pysqlite_ext)
