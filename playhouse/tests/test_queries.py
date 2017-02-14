@@ -626,6 +626,29 @@ class TestSelectQuery(PeeweeTestCase):
             'GROUP BY "blog"."user_id") '
             'GROUP BY blog_ct'))
 
+    def test_alias_names(self):
+        UA = User.alias('user_alias')
+        query = UA.select().where(UA.username=='charles')
+        sql = normal_compiler.generate_select(query)
+        self.assertEqual(sql, (
+            'SELECT "user_alias"."id", "user_alias"."username" FROM "users" AS user_alias WHERE ("user_alias"."username" = ?)',
+            ['charles']))
+
+    def test_model_as(self):
+        UA = User.as_('user_alias2')
+        query = UA.select().where(UA.username=='charles')
+        sql = normal_compiler.generate_select(query)
+        self.assertEqual(sql, (
+            'SELECT "user_alias2"."id", "user_alias2"."username" FROM "users" AS user_alias2 WHERE ("user_alias2"."username" = ?)',
+            ['charles']))
+
+    def test_model_as_different_objects(self):
+        query = User.as_('u2').select().where(User.as_('u2').username=='charles')
+        sql = normal_compiler.generate_select(query)
+        self.assertEqual(sql, (
+            'SELECT "u2"."id", "u2"."username" FROM "users" AS u2 WHERE ("u2"."username" = ?)',
+            ['charles']))
+
     def test_from_multiple(self):
         q = (User
              .select()
