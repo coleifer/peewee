@@ -1585,6 +1585,11 @@ class AliasMap(object):
             self.add(obj)
         return self._alias_map[obj]
 
+    def lookup(self, obj):
+        if obj in self._alias_map:
+            return self._alias_map[obj]
+        raise ProgrammingError('%s is not a part of this query' % obj)
+
     def __contains__(self, obj):
         return obj in self._alias_map
 
@@ -1746,7 +1751,7 @@ class QueryCompiler(object):
     def _parse_field(self, node, alias_map, conv):
         if alias_map:
             sql = '.'.join((
-                self.quote(alias_map[node.model_class]),
+                self.quote(alias_map.lookup(node.model_class)),
                 self.quote(node.db_column)))
         else:
             sql = self.quote(node.db_column)
@@ -1960,6 +1965,7 @@ class QueryCompiler(object):
             if query._from is None:
                 clauses.append(model.as_entity().alias(alias_map[model]))
             else:
+                [alias_map[x] for x in query._from if not isinstance(x, Clause)] # seed the alias map
                 clauses.append(CommaClause(*query._from))
 
         join_clauses = self.generate_joins(query._joins, model, alias_map)
