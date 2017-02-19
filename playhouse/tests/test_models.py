@@ -164,6 +164,12 @@ class TestQueryingModels(ModelTestCase):
 
         self.assertRaises(KeyError, User.update, doesnotexist='invalid')
 
+    if sys.version_info >= (2,7):
+        def test_update_from_instance(self):
+            user = User(username='u1')
+            with self.assertRaises(TypeError):
+                user.update(username='u2')
+
     def test_update_subquery(self):
         User.create_users(3)
         u1, u2, u3 = [user for user in User.select().order_by(User.id)]
