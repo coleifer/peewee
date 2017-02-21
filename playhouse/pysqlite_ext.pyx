@@ -363,7 +363,7 @@ cdef class Connection(object):
 
         _check_connection(self.conn)
         name = name or fn.__name__
-        if non_deterministic:
+        if not non_deterministic:
             flags |= SQLITE_DETERMINISTIC
 
         rc = sqlite3_create_function(self.conn.db, <const char *>name, n,
