@@ -10,7 +10,6 @@ Below you will find a loosely organized listing of the various modules that make
 **Database drivers / vendor-specific database functionality**
 
 * :ref:`sqlite_ext`
-* :ref:`pysqlite_ext`
 * :ref:`sqliteq`
 * :ref:`sqlite_udf`
 * :ref:`apsw`
@@ -860,57 +859,6 @@ sqlite_ext API notes
             Retrieve all nodes that are children of the specified node's parent.
 
     .. note:: For an in-depth discussion of the SQLite transitive closure extension, check out this blog post, `Querying Tree Structures in SQLite using Python and the Transitive Closure Extension <http://charlesleifer.com/blog/querying-tree-structures-in-sqlite-using-python-and-the-transitive-closure-extension/>`_.
-
-.. _pysqlite_ext:
-
-Pysqlite Extension
-------------------
-
-The ``playhouse.pysqlite_ext`` module contains a subclass of
-:py:class:`SqliteExtDatabase` that exposes several SQLite C APIs. Using the
-:py:class:`pysqlite_ext.Database` class, you can:
-
-* create rollback, commit or update hooks
-* create deterministic user-defined functions (for optimizing indexes)
-* use a smarter busy handler for retrying queries that fail
-* access status information, such as cache utilization
-
-For details, see the source at
-https://github.com/coleifer/peewee/tree/master/playhouse/pysqlite_ext.pyx
-
-Example usage:
-
-.. code-block:: python
-
-    from peewee import *
-    from playhouse.pysqlite_ext import Database
-
-    db = Database(':memory:')
-
-    class User(Model):
-        username = CharField()
-        class Meta:
-            database = db
-
-    @db.on_update
-    def update_hook(query_type, db_name, table_name, rowid):
-        logger.info('%s of row %s on %s.', query_type, rowid, table_name)
-
-    @db.func()
-    def md5(s):
-        # Function will be deterministic, and can be used in indexes.
-        return hashlib.md5(s).hexdigest()
-
-    @db.func(non_deterministic=True)
-    def random_int(low, hi):
-        # Function is non-deterministic.
-        return random.randint(low, hi)
-
-    def print_stats():
-        print 'Memory used (current, max)', db.memory_used
-        conn = db.connection
-        print 'Cache hits for connection', conn.cache_hit
-        print 'Cache misses for connection', conn.cache_miss
 
 
 .. _sqliteq:
