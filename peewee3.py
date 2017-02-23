@@ -442,10 +442,10 @@ class Join(Source):
         self.lhs = lhs
         self.rhs = rhs
         self.join_type = join_type
-        self.on = on
+        self._on = on
 
     def on(self, predicate):
-        self.on = predicate
+        self._on = predicate
         return self
 
     def __sql__(self, ctx):
@@ -453,8 +453,8 @@ class Join(Source):
          .sql(self.lhs)
          .literal(' %s JOIN ' % self.join_type)
          .sql(self.rhs))
-        if self.on is not None:
-            ctx.literal(' ON ').sql(self.on)
+        if self._on is not None:
+            ctx.literal(' ON ').sql(self._on)
         return ctx
 
 
