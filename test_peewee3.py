@@ -3,17 +3,18 @@ import unittest
 
 from peewee3 import *
 
+
 def __sql__(q):
     return Context().sql(q).query()
 
-def pq(q):
-    print __sql__(q)
 
 User = Table('users')
 Tweet = Table('tweets')
 
+
 class BaseTestCase(unittest.TestCase):
     pass
+
 
 class TestSimpleJoin(BaseTestCase):
     def test_simple_join(self):
@@ -321,6 +322,62 @@ class TestModelAPIs(BaseTestCase):
             '("t1"."last" = ?) AND '
             '("t1"."id" < ?))'))
         self.assertEqual(params, ['Leifer', 4])
+
+    def test_insert(self):
+        query = (Person
+                 .insert({Person.first: 'huey',
+                          Person.last: 'cat',
+                          Person.dob: datetime.date(2011, 1, 1)}))
+        sql, params = __sql__(query)
+        self.assertEqual(sql, ('INSERT INTO "person" ("first", "last", "dob") '
+                               'VALUES (?, ?, ?)'))
+        self.assertEqual(params, ['huey', 'cat', datetime.date(2011, 1, 1)])
+
+        query = (Note
+                 .insert({Note.author: Person(id=1337),
+                          Note.content: 'leet'}))
+        sql, params = __sql__(query)
+        self.assertEqual(sql, ('INSERT INTO "note" ("author_id", "content") '
+                               'VALUES (?, ?)'))
+        self.assertEqual(params, [1337, 'leet'])
+
+    def test_insert_many(self):
+        query = (Note
+                 .insert_many((
+                     {Note.author: Person(id=1), Note.content: 'note-1'},
+                     {Note.author: Person(id=2), Note.content: 'note-2'},
+                     {Note.author: Person(id=3), Note.content: 'note-3'})))
+        sql, params = __sql__(query)
+        self.assertEqual(sql, ('INSERT INTO "note" ("author_id", "content") '
+                               'VALUES (?, ?), (?, ?), (?, ?)'))
+        self.assertEqual(params, [1, 'note-1', 2, 'note-2', 3, 'note-3'])
+
+    def test_insert_query(self):
+        select = (Person
+                  .select(Person.id, Person.first)
+                  .where(Person.last == 'cat'))
+        query = Note.insert_from(select, (Note.author, Note.content))
+        sql, params = __sql__(query)
+        self.assertEqual(sql, ('INSERT INTO "note" ("author_id", "content") '
+                               'SELECT "t1"."id", "t1"."first" '
+                               'FROM "person" AS "t1" '
+                               'WHERE ("t1"."last" = ?)'))
+        self.assertEqual(params, ['cat'])
+
+    def test_update(self):
+        class Stat(TestModel):
+            url = TextField()
+            count = IntegerField()
+            timestamp = TimestampField()
+
+        query = (Stat
+                 .update({Stat.count: Stat.count + 1,
+                          Stat.timestamp: datetime.datetime(2017, 1, 1)})
+                 .where(Stat.url == '/peewee'))
+        sql, params = __sql__(query)
+        self.assertEqual(sql, ('UPDATE "stat" SET "count" = ("count" + ?), '
+                               '"timestamp" = ? WHERE ("url" = ?)'))
+        self.assertEqual(params, [1, datetime.datetime(2017, 1, 1), '/peewee'])
 
 
 class TestModelSelect(BaseTestCase):

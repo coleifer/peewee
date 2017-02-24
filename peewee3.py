@@ -1240,20 +1240,20 @@ class Select(SelectBase):
 class _WriteQuery(Query):
     def __init__(self, table):
         self.table = table
-        self._columns = None
+        self._returning = None
         super(_WriteQuery, self).__init__()
 
     @Node.copy
-    def returning(self, *columns):
-        self._columns = columns
+    def returning(self, *returning):
+        self._returning = returning
 
     def apply_returning(self, ctx):
-        if self._columns:
-            ctx.literal(' RETURNING ').sql(CommaNodeList(self._columns))
+        if self._returning:
+            ctx.literal(' RETURNING ').sql(CommaNodeList(self._returning))
         return ctx
 
     def execute(self, database):
-        if self._columns:
+        if self._returning:
             return self.execute_returning(database)
         else:
             cursor = database.execute(self)
@@ -1316,11 +1316,13 @@ class Update(_WriteQuery):
 class Insert(_WriteQuery):
     class DefaultValuesException(Exception): pass
 
-    def __init__(self, table, insert=None, columns=None, on_conflict=None):
+    def __init__(self, table, insert=None, columns=None, on_conflict=None,
+                 returning=None):
+        super(Insert, self).__init__(table)
         self._insert = insert
         self._columns = columns
         self._on_conflict = on_conflict
-        super(Insert, self).__init__(table)
+        self._returning = returning
 
     @Node.copy
     def on_conflict(self, on_conflict):
@@ -1371,7 +1373,7 @@ class Insert(_WriteQuery):
 
     def _query_insert(self, ctx):
         return (ctx
-                .sql(CommaNodeList(self._columns))
+                .sql(EnclosedNodeList(self._columns))
                 .literal(' ')
                 .sql(self._insert))
 
@@ -1403,11 +1405,12 @@ class Insert(_WriteQuery):
 
 class Delete(_WriteQuery):
     def __init__(self, table, where=None, order_by=None, limit=None,
-                 offset=None):
+                 offset=None, returning=None):
         self._where = where
         self._order_by = order_by
         self._limit = limit
         self._offset = offset
+        self._returning = returning
         super(Delete, self).__init__(table)
 
     @Node.copy
@@ -3457,7 +3460,7 @@ class Model(with_metaclass(BaseModel, Node)):
         return not self == other
 
     def __sql__(self, ctx):
-        return ctx.bind_value(self.id)
+        return ctx.sql(self.id)
 
     @classmethod
     def bind(cls, database, bind_refs=True, bind_backrefs=True):
