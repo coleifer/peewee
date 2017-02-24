@@ -191,52 +191,68 @@ class AliasManager(object):
         return self
 
 
+class State(namedtuple('_State', ('scope', 'parentheses', 'subquery',
+                                  'settings'))):
+    """
+    Lightweight object for representing the rules applied at a given scope.
+    """
+    def __new__(cls, scope=SCOPE_NORMAL, parentheses=False, subquery=False,
+                **kwargs):
+        return super(State, cls).__new__(cls, scope, parentheses, subquery,
+                                         kwargs)
+
+    def __call__(self, scope=None, parentheses=None, subquery=None, **kwargs):
+        # All state is "inherited" except parentheses.
+        scope = self.scope if scope is None else scope
+        subquery = self.subquery if subquery is None else subquery
+        settings = self.settings
+        if kwargs:
+            settings.update(kwargs)
+        return State(scope, parentheses, subquery, **settings)
+
+    def __getattr__(self, attr_name):
+        return self.settings.get(attr_name)
+
+
+def __scope_context__(scope):
+    @contextmanager
+    def inner(self, **kwargs):
+        with self(scope=scope, **kwargs):
+            yield self
+    return inner
+
+
 class Context(object):
-    def __init__(self, settings=None):
+    def __init__(self, **settings):
         self.stack = []
-        self._settings = settings or {}
-        self._settings.setdefault('scope', SCOPE_NORMAL)
         self._sql = []
         self._bind_values = []
         self.alias_manager = AliasManager()
+        self.state = State(**settings)
+        self.refresh()
 
     def column_sort_key(self, item):
         return item[0].get_sort_key(self)
 
-    def push(self, **overrides):
+    def refresh(self):
+        self.scope = self.state.scope
+        self.parentheses = self.state.parentheses
+        self.subquery = self.state.subquery
+        self.settings = self.state.settings
+
+    def __call__(self, **overrides):
         if overrides and overrides.get('scope') == self.scope:
             del overrides['scope']
 
-        settings = self._settings.copy()
-        settings.pop('parentheses', None)
-        if overrides:
-            settings.update(overrides)
-
-        self.stack.append(self._settings)
-        self._settings = settings
+        self.stack.append(self.state)
+        self.state = self.state(**overrides)
+        self.refresh()
         return self
-
-    def pop(self):
-        self._settings = self.stack.pop()
-        return self
-
-    def __scope_context__(scope):
-        @contextmanager
-        def inner(self, **kwargs):
-            with self.push(scope=scope, **kwargs):
-                yield self
-        return inner
 
     scope_normal = __scope_context__(SCOPE_NORMAL)
     scope_source = __scope_context__(SCOPE_SOURCE)
     scope_values = __scope_context__(SCOPE_VALUES)
     scope_cte = __scope_context__(SCOPE_CTE)
-
-    @contextmanager
-    def push_alias(self):
-        self.alias_manager.push()
-        yield
-        self.alias_manager.pop()
 
     def __enter__(self):
         if self.parentheses:
@@ -246,21 +262,20 @@ class Context(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.parentheses:
             self.literal(')')
-        self.pop()
+        self.state = self.stack.pop()
+        self.refresh()
 
-    def __getattr__(self, attr_name):
-        return self._settings.get(attr_name)
-    __getitem__ = __getattr__
+    @contextmanager
+    def push_alias(self):
+        self.alias_manager.push()
+        yield
+        self.alias_manager.pop()
 
     def sql(self, obj):
-        if isinstance(obj, Node):
-            obj.__sql__(self)
-            return self
-        elif is_model(obj):
-            obj._meta.table.__sql__(self)
-            return self
-        elif isinstance(obj, Context):
+        if isinstance(obj, (Node, Context)):
             return obj.__sql__(self)
+        elif is_model(obj):
+            return obj._meta.table.__sql__(self)
         else:
             return self.sql(BindValue(obj))
 
@@ -270,7 +285,7 @@ class Context(object):
 
     def bind_value(self, value, converter=None):
         if converter is None:
-            converter = self._settings.get('converter')
+            converter = self.state.converter
         if converter is not None:
             value = converter(value)
         self._bind_values.append(value)
@@ -280,6 +295,9 @@ class Context(object):
         ctx._sql.extend(self._sql)
         ctx._bind_values.extend(self._bind_values)
         return ctx
+
+    def parse(self, node):
+        return self.sql(node).query()
 
     def query(self):
         return ''.join(self._sql), self._bind_values
@@ -664,7 +682,7 @@ class BindValue(ColumnBase):
             ctx.sql(EnclosedNodeList(self.bind_values))
         else:
             (ctx
-             .literal(ctx.param or '?')
+             .literal(ctx.state.param or '?')
              .bind_value(self.value, self.converter))
         return ctx
 
@@ -720,12 +738,12 @@ class Expression(ColumnBase):
         if isinstance(self.lhs, Field):
             overrides['converter'] = self.lhs.db_value
 
-        if ctx.operations:
-            op_sql = ctx.operations.get(self.op, self.op)
+        if ctx.state.operations:
+            op_sql = ctx.state.operations.get(self.op, self.op)
         else:
             op_sql = self.op
 
-        with ctx.push(**overrides):
+        with ctx(**overrides):
             return (ctx
                     .sql(self.lhs)
                     .literal(' %s ' % op_sql)
@@ -750,7 +768,7 @@ class Entity(ColumnBase):
         return hash((self.__class__.__name__, self._path))
 
     def __sql__(self, ctx):
-        return ctx.literal(self.quoted(ctx.quote or '"'))
+        return ctx.literal(self.quoted(ctx.state.quote or '"'))
 
 
 class SQL(ColumnBase):
@@ -881,7 +899,7 @@ class NodeList(Node):
         n_nodes = len(self.nodes)
         if n_nodes == 0:
             return ctx
-        with ctx.push(parentheses=self.parens):
+        with ctx(parentheses=self.parens):
             for i in range(n_nodes - 1):
                 ctx.sql(self.nodes[i])
                 ctx.literal(self.glue)
@@ -904,7 +922,7 @@ class Window(Node):
 
     def __sql__(self, ctx):
         over_clauses = []
-        with ctx.push(parentheses=True):
+        with ctx(parentheses=True):
             if self.partition_by:
                 ctx.sql(NodeList((
                     SQL('PARTITION BY '),
@@ -1086,12 +1104,13 @@ class CompoundSelectQuery(SelectBase):
         return (self.lhs.get_query_key(), self.rhs.get_query_key())
 
     def __sql__(self, ctx):
-        with ctx.push(parentheses=ctx.scope == SCOPE_SOURCE):
-            with ctx.push(parentheses=ctx.compound_select_parentheses):
+        parens_around_query = ctx.state.compound_select_parentheses
+        with ctx(parentheses=ctx.scope == SCOPE_SOURCE):
+            with ctx(parentheses=parens_around_query):
                 ctx.sql(self.lhs)
             ctx.literal(' %s ' % self.op)
             with ctx.push_alias():
-                with ctx.push(parentheses=ctx.compound_select_parentheses):
+                with ctx(parentheses=parens_around_query):
                     ctx.sql(self.rhs)
 
         # Apply ORDER BY, LIMIT, OFFSET.
@@ -1615,7 +1634,7 @@ class Database(_callable_context_manager):
             options.update(context_options)
         else:
             options = self.options
-        return self.context_class(options)
+        return self.context_class(**options)
 
     def last_insert_id(self, cursor):
         return cursor.lastrowid
@@ -2355,8 +2374,9 @@ class Field(ColumnBase):
         return
 
     def ddl_datatype(self, ctx):
-        if ctx.field_types:
-            column_type = ctx.field_types.get(self.field_type, self.field_type)
+        if ctx.state.field_types:
+            column_type = ctx.state.field_types.get(self.field_type,
+                                                    self.field_type)
         else:
             column_type = self.field_type
 
