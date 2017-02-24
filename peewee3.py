@@ -27,6 +27,7 @@ if sys.version_info[0] == 2:
     text_type = unicode
     bytes_type = str
     exec('def reraise(tp, value, tb=None): raise tp, value, tb')
+    PY26 = sys.version_info[1] == 6
 else:
     text_type = str
     bytes_type = bytes
@@ -2614,6 +2615,64 @@ class TimeField(_BaseFormattedField):
     second = property(_date_part('second'))
 
 
+class TimestampField(IntegerField):
+    # Support second -> microsecond resolution.
+    valid_resolutions = [10**i for i in range(7)]
+
+    def __init__(self, *args, **kwargs):
+        self.resolution = kwargs.pop('resolution', 1) or 1
+        if self.resolution not in self.valid_resolutions:
+            raise ValueError('TimestampField resolution must be one of: %s' %
+                             ', '.join(str(i) for i in self.valid_resolutions))
+
+        self.utc = kwargs.pop('utc', False) or False
+        _dt = datetime.datetime
+        self._conv = _dt.utcfromtimestamp if self.utc else _dt.fromtimestamp
+        _default = _dt.utcnow if self.utc else _dt.now
+        kwargs.setdefault('default', _default)
+        super(TimestampField, self).__init__(*args, **kwargs)
+
+    def get_db_field(self):
+        # For second resolution we can get away (for a while) with using
+        # 4 bytes to store the timestamp (as long as they're not > ~2038).
+        # Otherwise we'll need to use a BigInteger type.
+        return (self.db_field if self.resolution == 1
+                else BigIntegerField.db_field)
+
+    def db_value(self, value):
+        if value is None:
+            return
+
+        if isinstance(value, datetime.datetime):
+            pass
+        elif isinstance(value, datetime.date):
+            value = datetime.datetime(value.year, value.month, value.day)
+        else:
+            return int(round(value * self.resolution))
+
+        if self.utc:
+            timestamp = calendar.timegm(value.utctimetuple())
+        else:
+            timestamp = time.mktime(value.timetuple())
+        timestamp += (value.microsecond * .000001)
+        if self.resolution > 1:
+            timestamp *= self.resolution
+        return int(round(timestamp))
+
+    def python_value(self, value):
+        if value is not None and isinstance(value, (int, float, long)):
+            if value == 0:
+                return
+            elif self.resolution > 1:
+                ticks_to_microsecond = 1000000 // self.resolution
+                value, ticks = divmod(value, self.resolution)
+                microseconds = ticks * ticks_to_microsecond
+                return self._conv(value).replace(microsecond=microseconds)
+            else:
+                return self._conv(value)
+        return value
+
+
 class BooleanField(Field):
     field_type = 'BOOL'
     coerce = bool
@@ -2741,7 +2800,7 @@ class SchemaManager(object):
     def _create_context(self):
         return self.database.get_sql_context(self.context_options)
 
-    def create_table(self, safe=True, **options):
+    def _create_table(self, safe=True, **options):
         ctx = self._create_context()
         ctx.literal('CREATE TABLE ')
         if safe:
@@ -2772,11 +2831,17 @@ class SchemaManager(object):
         ctx.sql(EnclosedNodeList(columns + constraints + extra))
         return ctx
 
-    def drop_table(self, safe=True):
+    def create_table(self, safe=True, **options):
+        self.database.execute(self._create_table(safe=safe, **options))
+
+    def _drop_table(self, safe=True):
         ctx = self._create_context()
         return (ctx
                 .literal('DROP TABLE IF EXISTS ' if safe else 'DROP TABLE ')
                 .sql(self.model))
+
+    def drop_table(self, safe=True):
+        self.database.execute(self._drop_table(safe=safe))
 
     def index_entity(self, fields):
         index_name = '%s_%s' % (
@@ -2789,11 +2854,11 @@ class SchemaManager(object):
 
         return Entity(self.model._meta.schema, index_name)
 
-    def create_indexes(self, safe=True):
-        return [self.create_index(nodes, unique, safe)
+    def _create_indexes(self, safe=True):
+        return [self._create_index(nodes, unique, safe)
                 for (nodes, unique) in self.model._meta.fields_to_index()]
 
-    def create_index(self, fields, unique=False, safe=True):
+    def _create_index(self, fields, unique=False, safe=True):
         ctx = self._create_context()
         ctx.literal('CREATE UNIQUE INDEX ' if unique else 'CREATE INDEX ')
         if safe:
@@ -2806,23 +2871,31 @@ class SchemaManager(object):
                 .literal(' ')
                 .sql(EnclosedNodeList(fields)))
 
-    def drop_indexes(self, safe=True):
-        return [self.drop_index(nodes, safe)
+    def create_indexes(self, safe=True):
+        for query in self._create_indexes(safe=safe):
+            self.database.execute(query)
+
+    def _drop_indexes(self, safe=True):
+        return [self._drop_index(nodes, safe)
                 for (nodes, _) in self.model._meta.fields_to_index()]
 
-    def drop_index(self, fields, safe):
+    def _drop_index(self, fields, safe):
         return (self
                 ._create_context()
                 .literal('DROP INDEX IF NOT EXISTS ' if safe else
                          'DROP INDEX ')
                 .sql(self.index_entity(fields)))
 
+    def drop_indexes(self, safe=True):
+        for query in self._drop_indexes(safe=safe):
+            self.database.execute(query)
+
     def _check_sequences(self, field):
         if not field.sequence or not self.database.options.sequences:
             raise ValueError('Sequences are either not supported, or are not '
                              'defined for "%s".' % field.name)
 
-    def create_sequence(self, field):
+    def _create_sequence(self, field):
         self._check_sequences(field)
         if not self.database.sequence_exists(field.sequence):
             return (self
@@ -2830,7 +2903,10 @@ class SchemaManager(object):
                     .literal('CREATE SEQUENCE ')
                     .sql(Entity(field.sequence)))
 
-    def drop_sequence(self, field):
+    def create_sequence(self, field):
+        self.database.execute(self._create_sequence(field))
+
+    def _drop_sequence(self, field):
         self._check_sequences(field)
         if self.database.sequence_exists(field.sequence):
             return (self
@@ -2838,20 +2914,21 @@ class SchemaManager(object):
                     .literal('DROP SEQUENCE ')
                     .sql(Entity(field.sequence)))
 
+    def drop_sequence(self, field):
+        self.database.execute(self._drop_sequence(field))
+
     def create_all(self, safe=True, **table_options):
         if self.database.options.sequences:
             for field in self.model._meta.sorted_fields:
                 if field and field.sequence:
-                    self.database.execute(self.create_sequence(field))
+                    self.create_sequence(field)
 
-        self.database.execute(self.create_table(safe, **table_options))
-        for create_index in self.create_indexes(safe):
-            self.database.execute(create_index)
+        self.create_table(safe, **table_options)
+        self.create_indexes(safe=safe)
 
     def drop_all(self, safe=True):
-        self.database.execute(self.drop_table(safe))
-        for drop_index in self.drop_indexes(safe):
-            self.database.execute(drop_index)
+        self.drop_table(safe)
+        self.drop_indexes(safe)
 
 
 class ModelMetadata(object):
@@ -3655,6 +3732,8 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
         # Analyze joins to build list of processing rules to reconstruct
         # the model instance graph.
         self._model_graph = []
+        import ipdb; ipdb.set_trace()
+        # self._joins[src].append((dest, attr, constructor))
 
         def process_join(join, path=None):
             if path is None:
@@ -3662,23 +3741,15 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
             if isinstance(join.lhs, Join):
                 process_join(join.lhs, path)
             else:
-                path.append(join.lhs)
+                path.append((join.lhs, join._on))
 
             # Process lhs otherwise
             if isinstance(join.rhs, Join):
                 return process_join(join.rhs, path)
             else:
-                path.append(join.rhs)
+                path.append((join.rhs, join._on))
 
             return path
-
-        import ipdb
-        ipdb.set_trace()
-        for item in self.from_list:
-            if isinstance(item, Join):
-                self._model_graph.append(process_join(item))
-            elif item in keys:
-                self._model_graph.append((item,))
 
     def process_row(self, row):
         data = {}
@@ -3697,9 +3768,8 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
                 setattr(instance, column, value)
 
         prepared = [data[self.model]]
-        stack = deque(self.joins)
         # Need to do some analysis on the joins before this.
-        for (src, dest, attr) in self.join_list:
+        for (src, dest) in self._model_graph:
             instance = data[src]
             try:
                 joined_instance = data[dest]

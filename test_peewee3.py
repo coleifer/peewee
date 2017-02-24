@@ -239,7 +239,6 @@ class TestDeleteQuery(BaseTestCase):
 
 db = SqliteDatabase(':memory:')
 
-
 class TestModel(Model):
     class Meta:
         database = db
@@ -265,11 +264,11 @@ class Category(TestModel):
 
 class TestModelAPIs(BaseTestCase):
     def assertCreateTable(self, model_class, expected):
-        sql, params = model_class._schema.create_table(False).query()
+        sql, params = model_class._schema._create_table(False).query()
         self.assertEqual(params, [])
 
         indexes = []
-        for create_index in model_class._schema.create_indexes(False):
+        for create_index in model_class._schema._create_indexes(False):
             isql, params = create_index.query()
             self.assertEqual(params, [])
             indexes.append(isql)
@@ -323,6 +322,48 @@ class TestModelAPIs(BaseTestCase):
             '("t1"."id" < ?))'))
         self.assertEqual(params, ['Leifer', 4])
 
+
+class TestModelSelect(BaseTestCase):
+    def setUp(self):
+        super(TestModelSelect, self).setUp()
+        Person._schema.create_table()
+        Note._schema.create_table()
+
+    def tearDown(self):
+        super(TestModelSelect, self).tearDown()
+        db.close()
+
+    def add_person(self, first, last):
+        return Person.create(first=first, last=last,
+                             dob=datetime.date(2000, 1, 1))
+
+    def add_notes(self, person, *notes):
+        for note in notes:
+            Note.create(author=person, content=note)
+
+    def test_model_select(self):
+        query = (Note
+                 .select(Note.content, Person.first, Person.last)
+                 .join(Person)
+                 .order_by(Person.first, Person.last))
+        sql, params = __sql__(query)
+        self.assertEqual(sql, (
+            'SELECT "t1"."content", "t2"."first", "t2"."last" '
+            'FROM "note" AS "t1" '
+            'INNER JOIN "person" AS "t2" '
+            'ON ("t1"."author_id" = "t2"."id") '
+            'ORDER BY "t2"."first", "t2"."last"'))
+        self.assertEqual(params, [])
+
+        huey = self.add_person('huey', 'cat')
+        mickey = self.add_person('mickey', 'dog')
+        zaizee = self.add_person('zaizee', 'cat')
+
+        self.add_notes(huey, 'meow', 'hiss', 'purr')
+        self.add_notes(mickey, 'woof', 'whine')
+
+        results = list(query)
+        import ipdb; ipdb.set_trace()
 
 
 if __name__ == '__main__':
