@@ -3734,25 +3734,21 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
 
         # Analyze joins to build list of processing rules to reconstruct
         # the model instance graph.
-        self._model_graph = []
-        import ipdb; ipdb.set_trace()
-        # self._joins[src].append((dest, attr, constructor))
-
-        def process_join(join, path=None):
-            if path is None:
-                path = []
-            if isinstance(join.lhs, Join):
-                process_join(join.lhs, path)
-            else:
-                path.append((join.lhs, join._on))
-
-            # Process lhs otherwise
-            if isinstance(join.rhs, Join):
-                return process_join(join.rhs, path)
-            else:
-                path.append((join.rhs, join._on))
-
-            return path
+        self.join_list = []
+        stack = deque(self.from_list)
+        while stack:
+            current = stack.popleft()
+            if isinstance(current, Join):
+                stack.append(current.lhs)
+                stack.append(current.rhs)
+                continue
+            if current not in self.joins:
+                continue
+            for (dest, attr, constructor) in self.joins[current]:
+                if dest not in keys:
+                    continue
+                self.join_list.append((current, dest, attr))
+                stack.append(dest)
 
     def process_row(self, row):
         data = {}
@@ -3772,7 +3768,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
 
         prepared = [data[self.model]]
         # Need to do some analysis on the joins before this.
-        for (src, dest) in self._model_graph:
+        for (src, dest, attr) in self.join_list:
             instance = data[src]
             try:
                 joined_instance = data[dest]

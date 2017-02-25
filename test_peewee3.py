@@ -238,7 +238,18 @@ class TestDeleteQuery(BaseTestCase):
         self.assertEqual(params, [100])
 
 
-db = SqliteDatabase(':memory:')
+class QueryCountSqliteDatabase(SqliteDatabase):
+    def __init__(self, *a, **k):
+        super(QueryCountSqliteDatabase, self).__init__(*a, **k)
+        self.count = 0
+
+    def execute_sql(self, sql, *args):
+        self.count += 1
+        return super(QueryCountSqliteDatabase, self).execute_sql(sql, *args)
+
+
+db = QueryCountSqliteDatabase(':memory:')
+
 
 class TestModel(Model):
     class Meta:
@@ -263,7 +274,7 @@ class Category(TestModel):
     name = CharField(max_length=20, primary_key=True)
 
 
-class TestModelAPIs(BaseTestCase):
+class TestModelSQL(BaseTestCase):
     def assertCreateTable(self, model_class, expected):
         sql, params = model_class._schema._create_table(False).query()
         self.assertEqual(params, [])
@@ -379,15 +390,32 @@ class TestModelAPIs(BaseTestCase):
                                '"timestamp" = ? WHERE ("url" = ?)'))
         self.assertEqual(params, [1, datetime.datetime(2017, 1, 1), '/peewee'])
 
+    def test_delete(self):
+        query = (Note
+                 .delete()
+                 .where(Note.author << (Person.select(Person.id)
+                                        .where(Person.last == 'cat'))))
+        sql, params = __sql__(query)
+        self.assertEqual(sql, ('DELETE FROM "note" '
+                               'WHERE ("author_id" IN ('
+                               'SELECT "t1"."id" FROM "person" AS "t1" '
+                               'WHERE ("t1"."last" = ?)))'))
+        self.assertEqual(params, ['cat'])
 
-class TestModelSelect(BaseTestCase):
+        query = Note.delete().where(Note.author == Person(id=123))
+        sql, params = __sql__(query)
+        self.assertEqual(sql, 'DELETE FROM "note" WHERE ("author_id" = ?)')
+        self.assertEqual(params, [123])
+
+
+class TestModelAPIs(BaseTestCase):
     def setUp(self):
-        super(TestModelSelect, self).setUp()
+        super(TestModelAPIs, self).setUp()
         Person._schema.create_table()
         Note._schema.create_table()
 
     def tearDown(self):
-        super(TestModelSelect, self).tearDown()
+        super(TestModelAPIs, self).tearDown()
         db.close()
 
     def add_person(self, first, last):
@@ -398,18 +426,38 @@ class TestModelSelect(BaseTestCase):
         for note in notes:
             Note.create(author=person, content=note)
 
+    @contextmanager
+    def assertQueryCount(self, n):
+        curr = db.count
+        yield
+        self.assertEqual(db.count - curr, n)
+
+    def test_create(self):
+        with self.assertQueryCount(1):
+            huey = self.add_person('huey', 'cat')
+            self.assertEqual(huey.first, 'huey')
+            self.assertEqual(huey.last, 'cat')
+            self.assertEqual(huey.id, 1)
+
+        with self.assertQueryCount(1):
+            note = Note.create(author=huey, content='meow')
+            self.assertEqual(note.author.id, huey.id)
+            self.assertEqual(note.author.first, 'huey')
+            self.assertEqual(note.content, 'meow')
+            self.assertEqual(note.id, 1)
+
     def test_model_select(self):
         query = (Note
                  .select(Note.content, Person.first, Person.last)
                  .join(Person)
-                 .order_by(Person.first, Person.last))
+                 .order_by(Person.first, Note.content))
         sql, params = __sql__(query)
         self.assertEqual(sql, (
             'SELECT "t1"."content", "t2"."first", "t2"."last" '
             'FROM "note" AS "t1" '
             'INNER JOIN "person" AS "t2" '
             'ON ("t1"."author_id" = "t2"."id") '
-            'ORDER BY "t2"."first", "t2"."last"'))
+            'ORDER BY "t2"."first", "t1"."content"'))
         self.assertEqual(params, [])
 
         huey = self.add_person('huey', 'cat')
@@ -419,8 +467,15 @@ class TestModelSelect(BaseTestCase):
         self.add_notes(huey, 'meow', 'hiss', 'purr')
         self.add_notes(mickey, 'woof', 'whine')
 
-        results = list(query)
-        import ipdb; ipdb.set_trace()
+        with self.assertQueryCount(1):
+            notes = list(query)
+            self.assertEqual([(n.content, n.author.first, n.author.last)
+                              for n in notes], [
+                                  ('hiss', 'huey', 'cat'),
+                                  ('meow', 'huey', 'cat'),
+                                  ('purr', 'huey', 'cat'),
+                                  ('whine', 'mickey', 'dog'),
+                                  ('woof', 'mickey', 'dog')])
 
 
 if __name__ == '__main__':
