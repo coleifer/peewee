@@ -4365,7 +4365,10 @@ class transaction(_callable_context_manager):
         self.transaction_type = transaction_type
 
     def _begin(self):
-        self.db.begin()
+        if self.transaction_type:
+            self.db.begin(self.transaction_type)
+        else:
+            self.db.begin()
 
     def commit(self, begin=True):
         self.db.commit()
