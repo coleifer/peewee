@@ -477,6 +477,73 @@ class TestModelAPIs(BaseTestCase):
                                   ('whine', 'mickey', 'dog'),
                                   ('woof', 'mickey', 'dog')])
 
+    def test_multi_join(self):
+        class User(TestModel):
+            username = CharField()
+
+        class Tweet(TestModel):
+            user = ForeignKeyField(User, backref='tweets')
+            content = TextField()
+            timestamp = TimestampField()
+
+        class Favorite(TestModel):
+            user = ForeignKeyField(User, backref='favorites')
+            tweet = ForeignKeyField(Tweet, backref='favorites')
+
+        User._schema.create_table()
+        Tweet._schema.create_table()
+        Favorite._schema.create_table()
+
+        TweetUser = User.alias('u2')
+
+        query = (Favorite
+                 .select(Favorite.id,
+                         Tweet.content,
+                         User.username,
+                         TweetUser.username)
+                 .join(Tweet)
+                 .join(TweetUser, on=(Tweet.user == TweetUser.id))
+                 .switch(Favorite)
+                 .join(User)
+                 .order_by(Tweet.timestamp, Favorite.id))
+        sql, params = __sql__(query)
+        self.assertEqual(sql, (
+            'SELECT '
+            '"t1"."id", "t2"."content", "t3"."username", "u2"."username" '
+            'FROM "favorite" AS "t1" '
+            'INNER JOIN "tweet" AS "t2" ON ("t1"."tweet_id" = "t2"."id") '
+            'INNER JOIN "user" AS "u2" ON ("t2"."user_id" = "u2"."id") '
+            'INNER JOIN "user" AS "t3" ON ("t1"."user_id" = "t3"."id") '
+            'ORDER BY "t2"."timestamp", "t1"."id"'))
+        self.assertEqual(params, [])
+
+        u1 = User.create(username='u1')
+        u2 = User.create(username='u2')
+        u3 = User.create(username='u3')
+        t1_1 = Tweet.create(user=u1, content='t1-1')
+        t1_2 = Tweet.create(user=u1, content='t1-2')
+        t2_1 = Tweet.create(user=u2, content='t2-1')
+        t2_2 = Tweet.create(user=u2, content='t2-2')
+        favorites = ((u1, t2_1),
+                     (u1, t2_2),
+                     (u2, t1_1),
+                     (u3, t1_2),
+                     (u3, t2_2))
+        for user, tweet in favorites:
+            Favorite.create(user=user, tweet=tweet)
+
+        with self.assertQueryCount(1):
+            rows = list(query)
+            accum = [(f.tweet.user['username'], f.tweet.content, f.user.username)
+                     for f in query]
+            self.assertEqual(accum, [
+                ('u1', 't1-1', 'u2'),
+                ('u1', 't1-2', 'u3'),
+                ('u2', 't2-1', 'u1'),
+                ('u2', 't2-2', 'u1'),
+                ('u2', 't2-2', 'u3')])
+
+
 
 if __name__ == '__main__':
     unittest.main(argv=sys.argv)

@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from copy import deepcopy
 from functools import wraps
 from inspect import isclass
+import calendar
 import datetime
 import decimal
 import itertools
@@ -15,6 +16,7 @@ import operator
 import re
 import sys
 import threading
+import time
 import weakref
 
 try:
@@ -406,11 +408,12 @@ class _HashableSource(object):
 
 class Table(_HashableSource, Source):
     def __init__(self, name, columns=None, primary_key=None, schema=None,
-                 alias=None):
+                 alias=None, _model=None):
         self._name = name
         self._columns = columns
         self._schema = schema
         self._path = (schema, name) if schema else (name,)
+        self._model = _model
         super(Table, self).__init__(alias=alias)
 
         # Allow tables to restrict what columns are available.
@@ -3239,7 +3242,7 @@ class Model(with_metaclass(BaseModel, Node)):
     def alias(cls, alias=None):
         return Table(cls._meta.table_name, [
             field.column_name for field in cls._meta.sorted_fields],
-            alias=alias)
+            alias=alias, _model=cls)
 
     @classmethod
     def select(cls, *fields):
@@ -3728,6 +3731,8 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
                     key = node.source
                     if node.source != self.model._meta.table:
                         constructor = dict
+                    if isinstance(key, Table) and key._model:
+                        constructor = key._model
 
             keys.add(key)
             column_metadata.append((key, constructor))
@@ -3761,12 +3766,13 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
             if self.converters[idx]:
                 value = self.converters[idx](value)
 
-            if key is dict:
+            if constructor is dict:
                 instance[column] = value
             else:
                 setattr(instance, column, value)
 
         prepared = [data[self.model]]
+        import ipdb; ipdb.set_trace()
         # Need to do some analysis on the joins before this.
         for (src, dest, attr) in self.join_list:
             instance = data[src]
