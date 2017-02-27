@@ -20,9 +20,36 @@ import time
 import weakref
 
 try:
+    from pysqlite2 import dbapi2 as pysq3
+except ImportError:
+    pysq3 = None
+try:
     import sqlite3
 except ImportError:
-    sqlite3 = None
+    sqlite3 = pysq3
+else:
+    if pysq3 and pysq3.sqlite_version_info >= sqlite3.sqlite_version_info:
+        sqlite3 = pysq3
+try:
+    from psycopg2cffi import compat
+    compat.register()
+except ImportError:
+    pass
+try:
+    import psycopg2
+    from psycopg2 import extensions as pg_extensions
+except ImportError:
+    psycopg2 = None
+try:
+    import MySQLdb as mysql  # prefer the C module.
+except ImportError:
+    try:
+        import pymysql as mysql
+    except ImportError:
+        mysql = None
+
+
+__version__ = '3.0.0'
 
 
 if sys.version_info[0] == 2:
