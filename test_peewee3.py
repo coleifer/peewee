@@ -432,6 +432,17 @@ class TestModelAPIs(BaseTestCase):
         yield
         self.assertEqual(db.count - curr, n)
 
+    def test_assertQueryCount(self):
+        self.add_notes(self.add_person('charlie', 'l'), 'foo', 'bar', 'baz')
+        def do_test(n):
+            with self.assertQueryCount(n):
+                authors = [note.author.first for note in Note.select()]
+
+        self.assertRaises(AssertionError, fail, 1)
+        self.assertRaises(AssertionError, fail, 3)
+        do_test(4)
+        self.assertRaises(AssertionError, fail, 5)
+
     def test_create(self):
         with self.assertQueryCount(1):
             huey = self.add_person('huey', 'cat')
@@ -494,7 +505,7 @@ class TestModelAPIs(BaseTestCase):
         Tweet._schema.create_table()
         Favorite._schema.create_table()
 
-        TweetUser = User.alias('u2')
+        TweetUser = User.alias()
 
         query = (Favorite
                  .select(Favorite.id,
@@ -505,16 +516,16 @@ class TestModelAPIs(BaseTestCase):
                  .join(TweetUser, on=(Tweet.user == TweetUser.id))
                  .switch(Favorite)
                  .join(User)
-                 .order_by(Tweet.timestamp, Favorite.id))
+                 .order_by(Tweet.content, Favorite.id))
         sql, params = __sql__(query)
         self.assertEqual(sql, (
             'SELECT '
-            '"t1"."id", "t2"."content", "t3"."username", "u2"."username" '
+            '"t1"."id", "t2"."content", "t3"."username", "t4"."username" '
             'FROM "favorite" AS "t1" '
             'INNER JOIN "tweet" AS "t2" ON ("t1"."tweet_id" = "t2"."id") '
-            'INNER JOIN "user" AS "u2" ON ("t2"."user_id" = "u2"."id") '
+            'INNER JOIN "user" AS "t4" ON ("t2"."user_id" = "t4"."id") '
             'INNER JOIN "user" AS "t3" ON ("t1"."user_id" = "t3"."id") '
-            'ORDER BY "t2"."timestamp", "t1"."id"'))
+            'ORDER BY "t2"."content", "t1"."id"'))
         self.assertEqual(params, [])
 
         u1 = User.create(username='u1')
@@ -533,8 +544,7 @@ class TestModelAPIs(BaseTestCase):
             Favorite.create(user=user, tweet=tweet)
 
         with self.assertQueryCount(1):
-            rows = list(query)
-            accum = [(f.tweet.user['username'], f.tweet.content, f.user.username)
+            accum = [(f.tweet.user.username, f.tweet.content, f.user.username)
                      for f in query]
             self.assertEqual(accum, [
                 ('u1', 't1-1', 'u2'),
@@ -542,7 +552,6 @@ class TestModelAPIs(BaseTestCase):
                 ('u2', 't2-1', 'u1'),
                 ('u2', 't2-2', 'u1'),
                 ('u2', 't2-2', 'u3')])
-
 
 
 if __name__ == '__main__':

@@ -428,6 +428,9 @@ class Table(_HashableSource, Source):
         else:
             self.primary_key = None
 
+    def _get_hash(self):
+        return hash((self.__class__, self._path, self._alias, self._model))
+
     def select(self, *columns):
         if not columns and self._columns:
             columns = [Column(self, column) for column in self._columns]
@@ -3540,7 +3543,7 @@ class ModelSelect(_ModelQueryHelper, Select):
                 fk_field, is_backref = self._generate_on_clause(src, dest, on)
                 on = fk_field.expression()
                 attr = fk_field.backref if is_backref else fk_field.name
-            elif on._alias:
+            elif isinstance(on, Alias):
                 attr = on._alias
             else:
                 attr = dest._meta.name
@@ -3551,10 +3554,16 @@ class ModelSelect(_ModelQueryHelper, Select):
         # table name.
 
         elif isinstance(dest, Source):
-            attr = dest._alias
+            on_is_alias = isinstance(on, Alias)
+            attr = on._alias if on_is_alias else dest._alias
             constructor = dict
-            if isinstance(dest, Table) and not attr:
-                attr = dest.name
+            if isinstance(dest, Table):
+                attr = attr or dest._name
+                if dest._model is not None:
+                    constructor = dest._model
+                    if not on_is_alias:
+                        fk,_ = self._generate_on_clause(src, constructor, None)
+                        attr = fk.name
 
         if attr:
             self._joins.setdefault(src, [])
@@ -3714,74 +3723,69 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
 
     def initialize(self):
         self._initialize_columns()
-        self.column_metadata = column_metadata = []
         select, columns = self.select, self.columns
 
-        keys = set()
+        self.key_to_constructor = {self.model: self.model}
+        self.src_to_dest = []
+        accum = deque(self.from_list)
+        while accum:
+            curr = accum.popleft()
+            if isinstance(curr, Join):
+                accum.append(curr.lhs)
+                accum.append(curr.rhs)
+                continue
+
+            if curr not in self.joins:
+                continue
+
+            for key, attr, constructor in self.joins[curr]:
+                if key not in self.key_to_constructor:
+                    self.key_to_constructor[key] = constructor
+                    self.src_to_dest.append((curr, attr, key,
+                                             constructor is dict))
+                    accum.append(key)
+
+        self.column_keys = []
         for idx, node in enumerate(select):
-            key = constructor = self.model
+            key = self.model
             if self.fields[idx] is not None:
-                node = self.fields[idx]
-                key = constructor = node.model
+                key = self.fields[idx].model
             else:
                 if isinstance(node, WrappedNode):
                     node = node.node
-
                 if isinstance(node, Column):
                     key = node.source
-                    if node.source != self.model._meta.table:
-                        constructor = dict
-                    if isinstance(key, Table) and key._model:
-                        constructor = key._model
 
-            keys.add(key)
-            column_metadata.append((key, constructor))
-
-        # Analyze joins to build list of processing rules to reconstruct
-        # the model instance graph.
-        self.join_list = []
-        stack = deque(self.from_list)
-        while stack:
-            current = stack.popleft()
-            if isinstance(current, Join):
-                stack.append(current.lhs)
-                stack.append(current.rhs)
-                continue
-            if current not in self.joins:
-                continue
-            for (dest, attr, constructor) in self.joins[current]:
-                if dest not in keys:
-                    continue
-                self.join_list.append((current, dest, attr))
-                stack.append(dest)
+            self.column_keys.append(key)
 
     def process_row(self, row):
-        data = {}
-        for idx, (key, constructor) in enumerate(self.column_metadata):
-            if key not in data:
-                data[key] = constructor()
-            instance = data[key]
+        objects = {}
+        for key, constructor in self.key_to_constructor.iteritems():
+            objects[key] = constructor()
+
+        for idx, key in enumerate(self.column_keys):
+            instance = objects[key]
             column = self.columns[idx]
             value = row[idx]
             if self.converters[idx]:
                 value = self.converters[idx](value)
 
-            if constructor is dict:
+            if isinstance(instance, dict):
                 instance[column] = value
             else:
                 setattr(instance, column, value)
 
-        prepared = [data[self.model]]
-        import ipdb; ipdb.set_trace()
         # Need to do some analysis on the joins before this.
-        for (src, dest, attr) in self.join_list:
-            instance = data[src]
+        for (src, attr, dest, is_dict) in self.src_to_dest:
+            instance = objects[src]
             try:
-                joined_instance = data[dest]
+                joined_instance = objects[dest]
             except KeyError:
                 continue
 
-            setattr(instance, attr, joined_instance)
-            prepared.append(joined_instance)
+            if is_dict:
+                instance[attr] = joined_instance
+            else:
+                setattr(instance, attr, joined_instance)
 
-        return prepared[0]
+        return objects[self.model]
