@@ -256,7 +256,7 @@ class Context(object):
     def __init__(self, **settings):
         self.stack = []
         self._sql = []
-        self._bind_values = []
+        self._values = []
         self.alias_manager = AliasManager()
         self.state = State(**settings)
         self.refresh()
@@ -307,30 +307,30 @@ class Context(object):
         elif is_model(obj):
             return obj._meta.table.__sql__(self)
         else:
-            return self.sql(BindValue(obj))
+            return self.sql(Value(obj))
 
     def literal(self, keyword):
         self._sql.append(keyword)
         return self
 
-    def bind_value(self, value, converter=None):
+    def value(self, value, converter=None):
         if converter is None:
             converter = self.state.converter
         if converter is not None:
             value = converter(value)
-        self._bind_values.append(value)
+        self._values.append(value)
         return self
 
     def __sql__(self, ctx):
         ctx._sql.extend(self._sql)
-        ctx._bind_values.extend(self._bind_values)
+        ctx._values.extend(self._values)
         return ctx
 
     def parse(self, node):
         return self.sql(node).query()
 
     def query(self):
-        return ''.join(self._sql), self._bind_values
+        return ''.join(self._sql), self._values
 
 # AST.
 
@@ -542,9 +542,9 @@ class CTE(_HashableSource, Source):
 
 def build_expression(lhs, op, rhs, flat=False):
     if not isinstance(lhs, Node):
-        lhs = BindValue(lhs)
+        lhs = Value(lhs)
     if not isinstance(rhs, Node):
-        rhs = BindValue(rhs)
+        rhs = Value(rhs)
     return Expression(lhs, op, rhs, flat)
 
 
@@ -698,26 +698,26 @@ class Negated(WrappedNode):
         return ctx.literal('NOT ').sql(self.node)
 
 
-class BindValue(ColumnBase):
+class Value(ColumnBase):
     def __init__(self, value, converter=None):
         self.value = value
         self.converter = converter
         self.multi = isinstance(self.value, (list, tuple))
         if self.multi:
-            self.bind_values = []
+            self.values = []
             for item in self.value:
                 if isinstance(item, Node):
-                    self.bind_values.append(item)
+                    self.values.append(item)
                 else:
-                    self.bind_values.append(BindValue(item, self.converter))
+                    self.values.append(Value(item, self.converter))
 
     def __sql__(self, ctx):
         if self.multi:
-            ctx.sql(EnclosedNodeList(self.bind_values))
+            ctx.sql(EnclosedNodeList(self.values))
         else:
             (ctx
              .literal(ctx.state.param or '?')
-             .bind_value(self.value, self.converter))
+             .value(self.value, self.converter))
         return ctx
 
 
@@ -817,7 +817,7 @@ class SQL(ColumnBase):
                 if isinstance(param, Node):
                     ctx.sql(param)
                 else:
-                    ctx.bind_value(param)
+                    ctx.value(param)
         return ctx
 
 
@@ -859,7 +859,7 @@ class Function(ColumnBase):
         else:
             ctx.sql(EnclosedNodeList([
                 (argument if isinstance(argument, Node)
-                 else BindValue(argument))
+                 else Value(argument))
                 for argument in self.arguments]))
         return ctx
 
@@ -1374,7 +1374,7 @@ class Insert(_WriteQuery):
             columns.append(key)
             if not isinstance(value, Node):
                 converter = key.db_value if isinstance(key, Field) else None
-                value = BindValue(value, converter=converter)
+                value = Value(value, converter=converter)
             values.append(value)
         return (ctx
                 .sql(EnclosedNodeList(columns))
@@ -1403,7 +1403,7 @@ class Insert(_WriteQuery):
             for column, converter in columns_converters:
                 value = row[column]
                 if not isinstance(value, Node):
-                    value = BindValue(value, converter=converter)
+                    value = Value(value, converter=converter)
                 values.append(value)
 
             all_values.append(EnclosedNodeList(values))
