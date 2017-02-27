@@ -62,6 +62,12 @@ class BaseTestQueueDatabase(object):
         if os.path.exists(filename):
             os.unlink(filename)
 
+    def test_query_error(self):
+        self.db.start()
+        curs = self.db.execute_sql('foo bar baz')
+        self.assertRaises(OperationalError, curs.fetchone)
+        self.db.stop()
+
     def test_query_execution(self):
         qr = User.select().execute()
         self.assertEqual(self.db.queue_size(), 0)

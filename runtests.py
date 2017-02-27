@@ -46,7 +46,6 @@ def get_option_parser():
     cases.add_option('--pool', dest='pool', default=False, action='store_true', help='connection pool tests')
     cases.add_option('--postgres-ext', dest='postgres_ext', default=False, action='store_true', help='postgres_ext tests (requires psycopg2)')
     cases.add_option('--pwiz', dest='pwiz', default=False, action='store_true', help='pwiz, model code generator')
-    cases.add_option('--pysqlite-ext', dest='pysqlite_ext', default=False, action='store_true', help='pysqlite extension tests')
     cases.add_option('--read-slave', dest='read_slave', default=False, action='store_true', help='read_slave tests')
     cases.add_option('--reflection', dest='reflection', default=False, action='store_true', help='reflection schema introspector')
     cases.add_option('--signals', dest='signals', default=False, action='store_true', help='signals tests')
@@ -139,12 +138,6 @@ def collect_modules(options):
     if xtra(options.pwiz):
         from playhouse.tests import test_pwiz
         modules.append(test_pwiz)
-    if xtra(options.pysqlite_ext):
-        try:
-            from playhouse.tests import test_pysqlite_ext
-            modules.append(test_pysqlite_ext)
-        except ImportError:
-            print_('Unable to import pysqlite-ext tests, skipping')
     if xtra(options.read_slave):
         from playhouse.tests import test_read_slave
         modules.append(test_read_slave)
