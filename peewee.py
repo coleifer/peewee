@@ -1096,6 +1096,12 @@ class SelectBase(_HashableSource, Source, SelectQuery):
         self._cursor_wrapper = self._get_cursor_wrapper(cursor)
         return self._cursor_wrapper
 
+    def get(self, database):
+        try:
+            return self.execute(database)[0]
+        except IndexError:
+            pass
+
 
 # QUERY IMPLEMENTATIONS.
 
@@ -2324,6 +2330,10 @@ class ObjectIdAccessor(object):
         if instance is not None:
             return instance.__data__.get(self.name)
 
+    def __set__(self, instance, value):
+        setattr(instance, self.name, value)
+
+
 
 class Field(ColumnBase):
     _field_counter = 0
@@ -2545,6 +2555,15 @@ def _date_part(date_part):
     def dec(self):
         return self.model._meta.database.extract_date(date_part, self)
     return dec
+
+def format_date_time(value, formats, post_process=None):
+    post_process = post_process or (lambda x: x)
+    for fmt in formats:
+        try:
+            return post_process(datetime.datetime.strptime(value, fmt))
+        except ValueError:
+            pass
+    return value
 
 
 class _BaseFormattedField(Field):
@@ -3497,7 +3516,7 @@ class _ModelQueryHelper(object):
         if row_type == ROW.MODEL:
             if len(self._from_list) == 1 and not self._joins:
                 return ModelObjectCursorWrapper(cursor, self.model,
-                                                self._columns)
+                                                self._columns, self.model)
             return ModelCursorWrapper(cursor, self.model, self._columns,
                                       self._from_list, self._joins)
         elif row_type == ROW.DICT:
@@ -3508,8 +3527,8 @@ class _ModelQueryHelper(object):
             return ModelNamedTupleCursorWrapper(cursor, self.model,
                                                 self._columns)
         elif row_type == ROW.CONSTRUCTOR:
-            return ModelObjectCursorWrapper(cursor, self._constructor,
-                                            self._columns)
+            return ModelObjectCursorWrapper(cursor, self.model, self._columns,
+                                            self._constructor)
         else:
             raise ValueError('Unrecognized row type: "%s".' % row_type)
 
@@ -3602,6 +3621,12 @@ class ModelSelect(_ModelQueryHelper, Select):
         if not self._cursor_wrapper:
             self.execute()
         return iter(self._cursor_wrapper)
+
+    def get(self):
+        try:
+            return self.execute()[0]
+        except IndexError:
+            pass
 
 
 class _ModelWriteQueryHelper(_ModelQueryHelper):
@@ -3712,7 +3737,8 @@ class ModelObjectCursorWrapper(ModelDictCursorWrapper):
         super(ModelObjectCursorWrapper, self).__init__(cursor, model, select)
 
     def process_row(self, row):
-        return self.constructor(**self._process_row(row))
+        data = super(ModelObjectCursorWrapper, self).process_row(row)
+        return self.constructor(**data)
 
 
 class ModelCursorWrapper(BaseModelCursorWrapper):

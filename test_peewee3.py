@@ -1,7 +1,7 @@
 import sys
 import unittest
 
-from peewee3 import *
+from peewee import *
 
 
 def __sql__(q):
@@ -438,10 +438,10 @@ class TestModelAPIs(BaseTestCase):
             with self.assertQueryCount(n):
                 authors = [note.author.first for note in Note.select()]
 
-        self.assertRaises(AssertionError, fail, 1)
-        self.assertRaises(AssertionError, fail, 3)
+        self.assertRaises(AssertionError, do_test, 1)
+        self.assertRaises(AssertionError, do_test, 3)
         do_test(4)
-        self.assertRaises(AssertionError, fail, 5)
+        self.assertRaises(AssertionError, do_test, 5)
 
     def test_create(self):
         with self.assertQueryCount(1):
