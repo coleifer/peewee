@@ -607,14 +607,33 @@ class TestModelAPIs(BaseTestCase):
 
         queries = list(User(id=1).dependencies())
         accum = []
-        for expr, fk in sorted(list(queries)):
+        for expr, fk in list(queries):
             query = fk.model.delete().where(expr)
             accum.append(__sql__(query))
 
-        self.assertEqual(accum, [
-            ('DELETE FROM "like" WHERE ("tweet_id" IN ('
-             'SELECT "t1"."id", "t1"."user_id"
-        import ipdb; ipdb.set_trace()
+        self.assertEqual(sorted(accum), [
+            ('DELETE FROM "like" WHERE ('
+             '"tweet_id" IN ('
+             'SELECT "t1"."id" FROM "tweet" AS "t1" WHERE ('
+             '"t1"."user_id" IN ('
+             'SELECT "t2"."id" FROM "user" AS "t2" WHERE ("t2"."id" = ?)))))',
+             [1]),
+            ('DELETE FROM "like" WHERE ("user_id" IN ('
+             'SELECT "t1"."id" FROM "user" AS "t1" WHERE ("t1"."id" = ?)))',
+             [1]),
+            ('DELETE FROM "relationship" WHERE ('
+             '"from_user_id" IN ('
+             'SELECT "t1"."id" FROM "user" AS "t1" WHERE ("t1"."id" = ?)))',
+             [1]),
+            ('DELETE FROM "relationship" WHERE ('
+             '"to_user_id" IN ('
+             'SELECT "t1"."id" FROM "user" AS "t1" WHERE ("t1"."id" = ?)))',
+             [1]),
+            ('DELETE FROM "tweet" WHERE ('
+             '"user_id" IN ('
+             'SELECT "t1"."id" FROM "user" AS "t1" WHERE ("t1"."id" = ?)))',
+             [1]),
+        ])
 
 
 if __name__ == '__main__':

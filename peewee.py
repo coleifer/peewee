@@ -3443,7 +3443,7 @@ class Model(with_metaclass(BaseModel, Node)):
 
     def dependencies(self, search_nullable=False):
         model_class = type(self)
-        query = self.select().where(self._pk_expr())
+        query = self.select(self._meta.primary_key).where(self._pk_expr())
         stack = [(type(self), query)]
         seen = set()
 
@@ -3452,18 +3452,13 @@ class Model(with_metaclass(BaseModel, Node)):
             if klass in seen:
                 continue
             seen.add(klass)
-            for fk, foo in klass._meta.backrefs.items():
-                rel_model = fk.model
-                if fk.rel_model is model_class:
+            for fk, rel_model in klass._meta.backrefs.items():
+                if rel_model is model_class:
                     node = (fk == self.__data__[fk.rel_field.name])
-                    subquery = (rel_model
-                                .select(rel_model._meta.primary_key)
-                                .where(node))
                 else:
                     node = fk << query
-                    subquery = (rel_model
-                                .select(rel_model._meta.primary_key)
-                                .where(node))
+                subquery = (rel_model.select(rel_model._meta.primary_key)
+                            .where(node))
                 if not fk.null or search_nullable:
                     stack.append((rel_model, subquery))
                 yield (node, fk)
