@@ -332,7 +332,9 @@ class Context(object):
     def query(self):
         return ''.join(self._sql), self._values
 
+
 # AST.
+
 
 class Node(object):
     def clone(self):
@@ -1790,9 +1792,6 @@ class SqliteDatabase(Database):
         if not self.is_closed():
             self.execute_sql('PRAGMA busy_timeout=%d;' % (seconds * 1000))
 
-    def savepoint(self):
-        return _savepoint_sqlite(self)
-
     def get_tables(self, schema=None):
         cursor = self.execute_sql('SELECT name FROM sqlite_master WHERE '
                                   'type = ? ORDER BY name;', ('table',))
@@ -2124,29 +2123,6 @@ class _savepoint(_callable_context_manager):
             except:
                 self.rollback()
                 raise
-
-
-class _savepoint_sqlite(_callable_context_manager):
-    def __enter__(self):
-        self._conn = self.db.connection()
-
-        # For sqlite, the connection's isolation_level *must* be set to None.
-        # The act of setting it, though, will break any existing savepoints,
-        # so only write to it if necessary.
-        if self._conn.isolation_level is not None:
-            self._orig_isolation_level = self._conn.isolation_level
-            self._conn.isolation_level = None
-        else:
-            self._orig_isolation_level = None
-        return super(_savepoint_sqlite, self).__enter__()
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        try:
-            return super(_savepoint_sqlite, self).__exit__(
-                exc_type, exc_val, exc_tb)
-        finally:
-            if self._orig_isolation_level is not None:
-                self._conn.isolation_level = self._orig_isolation_level
 
 
 # CURSOR REPRESENTATIONS.
@@ -2986,7 +2962,7 @@ class SchemaManager(object):
         self.drop_indexes(safe)
 
 
-class ModelMetadata(object):
+class Metadata(object):
     def __init__(self, model, database=None, table_name=None, indexes=None,
                  primary_key=None, constraints=None, schema=None,
                  only_save_dirty=False, **kwargs):
@@ -3035,7 +3011,7 @@ class ModelMetadata(object):
 
         accum = []
         seen = set()
-        queue = deque(((None, self.model_class, None),))
+        queue = deque(((None, self.model, None),))
         method = queue.popright if depth_first else queue.popleft
 
         while queue:
@@ -3221,7 +3197,7 @@ class BaseModel(type):
                     attrs[k] = deepcopy(v.field)
 
         sopts = meta_options.pop('schema_options', None) or {}
-        Meta = meta_options.get('model_metadata_class', ModelMetadata)
+        Meta = meta_options.get('model_metadata_class', Metadata)
         Schema = meta_options.get('schema_manager_class', SchemaManager)
 
         # Construct the new class.
@@ -3476,14 +3452,18 @@ class Model(with_metaclass(BaseModel, Node)):
             if klass in seen:
                 continue
             seen.add(klass)
-            for rel_name, fk in klass._meta.backrefs.items():
-                rel_model = fk.model_class
+            for fk, foo in klass._meta.backrefs.items():
+                rel_model = fk.model
                 if fk.rel_model is model_class:
-                    node = (fk == self.__data__[fk.to_field.name])
-                    subquery = rel_model.select().where(node)
+                    node = (fk == self.__data__[fk.rel_field.name])
+                    subquery = (rel_model
+                                .select(rel_model._meta.primary_key)
+                                .where(node))
                 else:
                     node = fk << query
-                    subquery = rel_model.select().where(node)
+                    subquery = (rel_model
+                                .select(rel_model._meta.primary_key)
+                                .where(node))
                 if not fk.null or search_nullable:
                     stack.append((rel_model, subquery))
                 yield (node, fk)
@@ -3492,7 +3472,7 @@ class Model(with_metaclass(BaseModel, Node)):
         if recursive:
             dependencies = self.dependencies(delete_nullable)
             for query, fk in reversed(list(dependencies)):
-                model = fk.model_class
+                model = fk.model
                 if fk.null and not delete_nullable:
                     model.update(**{fk.name: None}).where(query).execute()
                 else:
@@ -3526,13 +3506,11 @@ class Model(with_metaclass(BaseModel, Node)):
 
     @classmethod
     def create_schema(cls, safe=True):
-        database = cls._meta.database
-        cls._schema.create_all(database, safe)
+        cls._schema.create_all(safe)
 
     @classmethod
-    def drop_schema(cls, database=None, safe=True):
-        database = database or cls._meta.database
-        cls._schema.drop_all(database, safe)
+    def drop_schema(cls, safe=True):
+        cls._schema.drop_all(safe)
 
 
 class _ModelQueryHelper(object):
@@ -3564,7 +3542,59 @@ class _ModelQueryHelper(object):
         return super(_ModelQueryHelper, self).execute(database)
 
 
-class ModelSelect(_ModelQueryHelper, Select):
+class BaseModelSelect(_ModelQueryHelper):
+    def __add__(self, rhs):
+        return ModelCompoundSelectQuery(self.model, self, 'UNION ALL', rhs)
+
+    def __or__(self, rhs):
+        return ModelCompoundSelectQuery(self.model, self, 'UNION', rhs)
+
+    def __and__(self, rhs):
+        return ModelCompoundSelectQuery(self.model, self, 'INTERSECT', rhs)
+
+    def __sub__(self, rhs):
+        return ModelCompoundSelectQuery(self.model, self, 'EXCEPT', rhs)
+
+    def __iter__(self):
+        if not self._cursor_wrapper:
+            self.execute()
+        return iter(self._cursor_wrapper)
+
+    def get(self):
+        try:
+            return self.execute()[0]
+        except IndexError:
+            pass
+
+    def execute(self, database=None):
+        database = self.model._meta.database if database is None else database
+        return super(BaseModelSelect, self).execute(database)
+
+
+class ModelCompoundSelectQuery(BaseModelSelect, CompoundSelectQuery):
+    def __init__(self, model, *args, **kwargs):
+        self.model = model
+        super(ModelCompoundSelectQuery, self).__init__(*args, **kwargs)
+
+    def _get_cursor_wrapper(self, cursor):
+        row_type = self._row_type or self.default_row_type
+        if row_type == ROW.MODEL:
+            return ModelObjectCursorWrapper(cursor, self.model,
+                                            [], self.model)
+        elif row_type == ROW.DICT:
+            return ModelDictCursorWrapper(cursor, self.model, [])
+        elif row_type == ROW.TUPLE:
+            return ModelTupleCursorWrapper(cursor, self.model, [])
+        elif row_type == ROW.NAMED_TUPLE:
+            return ModelNamedTupleCursorWrapper(cursor, self.model, [])
+        elif row_type == ROW.CONSTRUCTOR:
+            return ModelObjectCursorWrapper(cursor, self.model, [],
+                                            self._constructor)
+        else:
+            raise ValueError('Unrecognized row type: "%s".' % row_type)
+
+
+class ModelSelect(BaseModelSelect, Select):
     def __init__(self, model, fields_or_models):
         self.model = self._join_ctx = model
         self._joins = {}
@@ -3644,17 +3674,6 @@ class ModelSelect(_ModelQueryHelper, Select):
 
         return fk_field, backref
 
-    def __iter__(self):
-        if not self._cursor_wrapper:
-            self.execute()
-        return iter(self._cursor_wrapper)
-
-    def get(self):
-        try:
-            return self.execute()[0]
-        except IndexError:
-            pass
-
 
 class _ModelWriteQueryHelper(_ModelQueryHelper):
     def __init__(self, model, *args, **kwargs):
@@ -3678,7 +3697,7 @@ class BaseModelCursorWrapper(DictCursorWrapper):
     def __init__(self, cursor, model, columns):
         super(BaseModelCursorWrapper, self).__init__(cursor)
         self.model = model
-        self.select = columns
+        self.select = columns or []
 
     def _initialize_columns(self):
         combined = self.model._meta.combined
@@ -3696,8 +3715,11 @@ class BaseModelCursorWrapper(DictCursorWrapper):
                 column = column[dot_index + 1:]
 
             self.columns.append(column)
+            try:
+                node = self.select[idx]
+            except IndexError:
+                continue
 
-            node = self.select[idx]
             # Heuristics used to attempt to get the field associated with a
             # given SELECT column, so that we can accurately convert the value
             # returned by the database-cursor into a Python object.

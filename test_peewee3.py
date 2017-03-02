@@ -553,6 +553,69 @@ class TestModelAPIs(BaseTestCase):
                 ('u2', 't2-2', 'u1'),
                 ('u2', 't2-2', 'u3')])
 
+    def test_compound_select(self):
+        class Register(TestModel):
+            value = IntegerField()
+            class Meta:
+                table_name = 'tests_register1'
+
+        Register.create_schema()
+        for i in range(10):
+            Register.create(value=i)
+
+        q1 = Register.select().where(Register.value < 2)
+        q2 = Register.select().where(Register.value > 7)
+        c1 = (q1 | q2).order_by(SQL('1'))
+
+        sql, params = __sql__(c1)
+        self.assertEqual(sql, (
+            'SELECT "t1"."id", "t1"."value" FROM "tests_register1" AS "t1" '
+            'WHERE ("t1"."value" < ?) UNION '
+            'SELECT "a1"."id", "a1"."value" FROM "tests_register1" AS "a1" '
+            'WHERE ("a1"."value" > ?) ORDER BY 1'))
+        self.assertEqual(params, [2, 7])
+
+        self.assertEqual([row.value for row in c1], [0, 1, 8, 9])
+
+        q3 = Register.select().where(Register.value == 5)
+        c2 = (c1.order_by() | q3).order_by(SQL('"value"'))
+
+        sql, params = __sql__(c2)
+        self.assertEqual(sql, (
+            'SELECT "t1"."id", "t1"."value" FROM "tests_register1" AS "t1" '
+            'WHERE ("t1"."value" < ?) UNION '
+            'SELECT "a1"."id", "a1"."value" FROM "tests_register1" AS "a1" '
+            'WHERE ("a1"."value" > ?) UNION '
+            'SELECT "b1"."id", "b1"."value" FROM "tests_register1" AS "b1" '
+            'WHERE ("b1"."value" = ?) ORDER BY "value"'))
+        self.assertEqual(params, [2, 7, 5])
+
+        self.assertEqual([row.value for row in c2], [0, 1, 5, 8, 9])
+
+    def test_delete_recursive(self):
+        class User(TestModel):
+            username = CharField()
+        class Tweet(TestModel):
+            user = ForeignKeyField(User, backref='tweets')
+            content = TextField()
+        class Relationship(TestModel):
+            from_user = ForeignKeyField(User, backref='relationships')
+            to_user = ForeignKeyField(User, backref='related_to')
+        class Like(TestModel):
+            user = ForeignKeyField(User)
+            tweet = ForeignKeyField(Tweet)
+
+        queries = list(User(id=1).dependencies())
+        accum = []
+        for expr, fk in sorted(list(queries)):
+            query = fk.model.delete().where(expr)
+            accum.append(__sql__(query))
+
+        self.assertEqual(accum, [
+            ('DELETE FROM "like" WHERE ("tweet_id" IN ('
+             'SELECT "t1"."id", "t1"."user_id"
+        import ipdb; ipdb.set_trace()
+
 
 if __name__ == '__main__':
     unittest.main(argv=sys.argv)
