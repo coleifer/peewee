@@ -773,6 +773,8 @@ sqlite_ext API notes
 
     :param model_class: The model class containing the nodes in the tree.
     :param foreign_key: The self-referential parent-node field on the model class. If not provided, peewee will introspect the model to find a suitable key.
+    :param referencing_class: The intermediate table for a many-to-many relationship.
+    :param id_column: For a many-to-many relationship: the originating side of the relation.
     :return: Returns a :py:class:`VirtualModel` for working with a closure table.
 
     .. warning:: There are two caveats you should be aware of when using the ``transitive_closure`` extension. First, it requires that your *source model* have an integer primary key. Second, it is strongly recommended that you create an index on the self-referential foreign key.
