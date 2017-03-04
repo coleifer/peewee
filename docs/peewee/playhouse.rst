@@ -716,7 +716,7 @@ sqlite_ext API notes
 
 .. _sqlite_closure:
 
-.. py:function:: ClosureTable(model_class[, foreign_key=None])
+.. py:function:: ClosureTable(model_class[, foreign_key=None[, referencing_class=None, id_column=None]])
 
     Factory function for creating a model class suitable for working with a `transitive closure <http://www.sqlite.org/cgi/src/artifact/636024302cde41b2bf0c542f81c40c624cfb7012>`_ table. Closure tables are :py:class:`VirtualModel` subclasses that work with the transitive closure SQLite extension. These special tables are designed to make it easy to efficiently query heirarchical data. The SQLite extension manages an AVL tree behind-the-scenes, transparently updating the tree when your table changes and making it easy to perform common queries on heirarchical data.
 
@@ -735,7 +735,7 @@ sqlite_ext API notes
 
            $ gcc -g -fPIC -shared closure.c -o closure.so
 
-    3. Create a model for your heirarchical data. The only requirement here is that the model have an integer primary key and a self-referential foreign key. Any additional fields are fine.
+    3. Create a model for your hierarchical data. The only requirement here is that the model has an integer primary key and a self-referential foreign key. Any additional fields are fine.
 
        .. code-block:: python
 
@@ -746,6 +746,23 @@ sqlite_ext API notes
 
            # Generate a model for the closure virtual table.
            CategoryClosure = ClosureTable(Category)
+
+       The self-referentiality can also be achieved via an intermediate table (for a many-to-many relation).
+
+       .. code-block:: python
+
+           class User(Model):
+               name = CharField()
+
+           class UserRelations(Model):
+               user = ForeignKeyField(User)
+               knows = ForeignKeyField(User, related_name='_known_by')
+
+               class Meta:
+                   primary_key = CompositeKey('user', 'knows') # Alternatively, a unique index on both columns.
+
+           # Generate a model for the closure virtual table, specifying the UserRelations as the referencing table
+           UserClosure = ClosureTable(User, referencing_class=UserRelations, foreign_key=UserRelations.knows, id_column=UserRelations.user)
 
     4. In your application code, make sure you load the extension when you instantiate your :py:class:`Database` object. This is done by passing the path to the shared library to the :py:meth:`~SqliteExtDatabase.load_extension` method.
 
