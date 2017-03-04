@@ -682,8 +682,8 @@ def ClosureTable(model_class, foreign_key=None):
     class BaseClosureTable(VirtualModel):
         depth = VirtualIntegerField()
         id = VirtualIntegerField()
-        idcolumn = VirtualIntegerField()
-        parentcolumn = VirtualIntegerField()
+        idcolumn = VirtualCharField()
+        parentcolumn = VirtualCharField()
         root = VirtualIntegerField()
         tablename = VirtualCharField()
 
