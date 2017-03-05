@@ -716,7 +716,7 @@ sqlite_ext API notes
 
 .. _sqlite_closure:
 
-.. py:function:: ClosureTable(model_class[, foreign_key=None[, referencing_class=None, id_column=None]])
+.. py:function:: ClosureTable(model_class[, foreign_key=None[, referencing_class=None, referencing_key=None]])
 
     Factory function for creating a model class suitable for working with a `transitive closure <http://www.sqlite.org/cgi/src/artifact/636024302cde41b2bf0c542f81c40c624cfb7012>`_ table. Closure tables are :py:class:`VirtualModel` subclasses that work with the transitive closure SQLite extension. These special tables are designed to make it easy to efficiently query heirarchical data. The SQLite extension manages an AVL tree behind-the-scenes, transparently updating the tree when your table changes and making it easy to perform common queries on heirarchical data.
 
@@ -762,7 +762,11 @@ sqlite_ext API notes
                    primary_key = CompositeKey('user', 'knows') # Alternatively, a unique index on both columns.
 
            # Generate a model for the closure virtual table, specifying the UserRelations as the referencing table
-           UserClosure = ClosureTable(User, referencing_class=UserRelations, foreign_key=UserRelations.knows, id_column=UserRelations.user)
+           UserClosure = ClosureTable(
+               User,
+               referencing_class=UserRelations,
+               foreign_key=UserRelations.knows,
+               referencing_key=UserRelations.user)
 
     4. In your application code, make sure you load the extension when you instantiate your :py:class:`Database` object. This is done by passing the path to the shared library to the :py:meth:`~SqliteExtDatabase.load_extension` method.
 
@@ -774,7 +778,7 @@ sqlite_ext API notes
     :param model_class: The model class containing the nodes in the tree.
     :param foreign_key: The self-referential parent-node field on the model class. If not provided, peewee will introspect the model to find a suitable key.
     :param referencing_class: The intermediate table for a many-to-many relationship.
-    :param id_column: For a many-to-many relationship: the originating side of the relation.
+    :param referencing_key: For a many-to-many relationship: the originating side of the relation.
     :return: Returns a :py:class:`VirtualModel` for working with a closure table.
 
     .. warning:: There are two caveats you should be aware of when using the ``transitive_closure`` extension. First, it requires that your *source model* have an integer primary key. Second, it is strongly recommended that you create an index on the self-referential foreign key.
