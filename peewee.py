@@ -2822,11 +2822,13 @@ class Query(Node):
             if '__' in key and key.rsplit('__', 1)[1] in DJANGO_MAP:
                 key, op = key.rsplit('__', 1)
                 op = DJANGO_MAP[op]
+            elif value is None:
+                op = OP.IS
             else:
                 op = OP.EQ
             for piece in key.split('__'):
                 model_attr = getattr(curr, piece)
-                if isinstance(model_attr, relationship):
+                if value is not None and isinstance(model_attr, relationship):
                     curr = model_attr.rel_model
                     joins.append(model_attr)
             accum.append(Expression(model_attr, op, value))
