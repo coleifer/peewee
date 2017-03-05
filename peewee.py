@@ -4925,8 +4925,9 @@ class Model(with_metaclass(BaseModel)):
                 return cls.create(**kwargs), True
         except IntegrityError:
             for field_name, value in kwargs.items():
+                if value is None: continue
                 field = getattr(cls, field_name)
-                if field.primary_key or (field.unique and value is not None):
+                if field.primary_key or field.unique:
                     # identifying column --> be done
                     return cls.get(field == value), False
 
