@@ -667,7 +667,8 @@ class FTS5Model(BaseFTSModel):
         return getattr(cls, attr)
 
 
-def ClosureTable(model_class, foreign_key=None, referencing_class=None, id_column=None):
+def ClosureTable(model_class, foreign_key=None, referencing_class=None,
+                 referencing_key=None):
     """Model factory for the transitive closure extension."""
     if referencing_class is None:
         referencing_class = model_class
@@ -680,10 +681,9 @@ def ClosureTable(model_class, foreign_key=None, referencing_class=None, id_colum
         else:
             raise ValueError('Unable to find self-referential foreign key.')
 
-    primary_key = model_class._meta.primary_key
-
-    if id_column is None:
-        id_column = primary_key
+    source_key = model_class._meta.primary_key
+    if referencing_key is None:
+        referencing_key = source_key
 
     class BaseClosureTable(VirtualModel):
         depth = VirtualIntegerField()
@@ -700,7 +700,7 @@ def ClosureTable(model_class, foreign_key=None, referencing_class=None, id_colum
         def descendants(cls, node, depth=None, include_node=False):
             query = (model_class
                      .select(model_class, cls.depth.alias('depth'))
-                     .join(cls, on=(primary_key == cls.id))
+                     .join(cls, on=(source_key == cls.id))
                      .where(cls.root == node)
                      .naive())
             if depth is not None:
@@ -713,7 +713,7 @@ def ClosureTable(model_class, foreign_key=None, referencing_class=None, id_colum
         def ancestors(cls, node, depth=None, include_node=False):
             query = (model_class
                      .select(model_class, cls.depth.alias('depth'))
-                     .join(cls, on=(primary_key == cls.root))
+                     .join(cls, on=(source_key == cls.root))
                      .where(cls.id == node)
                      .naive())
             if depth:
@@ -731,18 +731,18 @@ def ClosureTable(model_class, foreign_key=None, referencing_class=None, id_colum
             else:
                 # siblings as given in reference_class
                 siblings = (referencing_class
-                        .select(id_column)
-                        .join(cls, on=(foreign_key == cls.root))
-                        .where((cls.id == node) & (cls.depth == 1)))
+                            .select(referencing_key)
+                            .join(cls, on=(foreign_key == cls.root))
+                            .where((cls.id == node) & (cls.depth == 1)))
 
                 # the according models
                 query = (model_class
-                     .select()
-                     .where(primary_key << siblings)
-                     .naive())
+                         .select()
+                         .where(source_key << siblings)
+                         .naive())
 
             if not include_node:
-                query = query.where(primary_key != node)
+                query = query.where(source_key != node)
 
             return query
 
@@ -750,7 +750,7 @@ def ClosureTable(model_class, foreign_key=None, referencing_class=None, id_colum
         database = referencing_class._meta.database
         extension_options = {
             'tablename': referencing_class._meta.db_table,
-            'idcolumn': id_column.db_column,
+            'idcolumn': referencing_key.db_column,
             'parentcolumn': foreign_key.db_column}
         primary_key = False
 

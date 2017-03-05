@@ -1031,6 +1031,61 @@ class TestFTS5Extension(ModelTestCase):
 
 
 @skip_if(lambda: not CLOSURE_EXTENSION)
+class TestTransitiveClosureManyToMany(PeeweeTestCase):
+    def setUp(self):
+        super(TestTransitiveClosureManyToMany, self).setUp()
+        ext_db.load_extension(CLOSURE_EXTENSION.rstrip('.so'))
+        ext_db.close()
+
+    def tearDown(self):
+        super(TestTransitiveClosureManyToMany, self).tearDown()
+        ext_db.unload_extension(CLOSURE_EXTENSION.rstrip('.so'))
+        ext_db.close()
+
+    def test_manytomany(self):
+        class Person(BaseExtModel):
+            name = CharField()
+
+        class Relationship(BaseExtModel):
+            person = ForeignKeyField(Person)
+            relation = ForeignKeyField(Person, related_name='related_to')
+
+        PersonClosure = ClosureTable(
+            Person,
+            referencing_class=Relationship,
+            foreign_key=Relationship.relation,
+            referencing_key=Relationship.person)
+
+        ext_db.drop_tables([Person, Relationship, PersonClosure], safe=True)
+        ext_db.create_tables([Person, Relationship, PersonClosure])
+
+        c = Person.create(name='charlie')
+        m = Person.create(name='mickey')
+        h = Person.create(name='huey')
+        z = Person.create(name='zaizee')
+        Relationship.create(person=c, relation=h)
+        Relationship.create(person=c, relation=m)
+        Relationship.create(person=h, relation=z)
+        Relationship.create(person=h, relation=m)
+
+        def assertPeople(query, expected):
+            self.assertEqual(sorted([p.name for p in query]), expected)
+
+        PC = PersonClosure
+        assertPeople(PC.descendants(c), [])
+        assertPeople(PC.ancestors(c), ['huey', 'mickey', 'zaizee'])
+        assertPeople(PC.siblings(c), ['huey'])
+
+        assertPeople(PC.descendants(h), ['charlie'])
+        assertPeople(PC.ancestors(h), ['mickey', 'zaizee'])
+        assertPeople(PC.siblings(h), ['charlie'])
+
+        assertPeople(PC.descendants(z), ['charlie', 'huey'])
+        assertPeople(PC.ancestors(z), [])
+        assertPeople(PC.siblings(z), [])
+
+
+@skip_if(lambda: not CLOSURE_EXTENSION)
 class TestTransitiveClosureIntegration(PeeweeTestCase):
     tree = {
         'books': [
