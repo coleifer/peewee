@@ -4953,7 +4953,8 @@ class Model(with_metaclass(BaseModel)):
                             # found a matching unique index
                             return cls.get(**match), False
 
-            raise ValueError('Could not determine selector to use.')
+            # if nothing fits so far, just try to get what we tried to insert
+            return cls.get(**kwargs), False
 
     @classmethod
     def filter(cls, *dq, **query):
