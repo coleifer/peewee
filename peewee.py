@@ -33,6 +33,7 @@ from bisect import bisect_left
 from bisect import bisect_right
 from collections import deque
 from collections import namedtuple
+from collections import defaultdict
 try:
     from collections import OrderedDict
 except ImportError:
@@ -4923,12 +4924,35 @@ class Model(with_metaclass(BaseModel)):
             with cls._meta.database.atomic():
                 return cls.create(**kwargs), True
         except IntegrityError:
-            query = []  # TODO: multi-column unique constraints.
             for field_name, value in kwargs.items():
                 field = getattr(cls, field_name)
-                if field.unique or field.primary_key:
-                    query.append(field == value)
-            return cls.get(*query), False
+                if field.primary_key or (field.unique and value is not None):
+                    # identifying column --> be done
+                    return cls.get(field == value), False
+
+            # nothing found the easy way, try again with compound keys and indexes
+            cols_with_unique = defaultdict(list)
+            matched_indexes = defaultdict(dict)
+            for cols, unique in cls._meta.indexes:
+                if not unique: continue
+                for col in cols:
+                    cols_with_unique[col].append(cols)
+
+            if isinstance(cls._meta.primary_key, CompositeKey):
+                cols = cls._meta.primary_key.field_names
+                for col in cols:
+                    cols_with_unique[col].append(cols)
+
+            for field_name, value in kwargs.items():
+                if value is not None and field_name in cols_with_unique:
+                    for idx_cols in cols_with_unique[field_name]:
+                        match = matched_indexes[idx_cols]
+                        match[field_name] = value
+                        if len(match) == len(idx_cols):
+                            # found a matching unique index
+                            return cls.get(**match), False
+
+            raise ValueError('Could not determine selector to use.')
 
     @classmethod
     def filter(cls, *dq, **query):
