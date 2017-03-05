@@ -667,8 +667,11 @@ class FTS5Model(BaseFTSModel):
         return getattr(cls, attr)
 
 
-def ClosureTable(model_class, foreign_key=None):
+def ClosureTable(model_class, foreign_key=None, referencing_class=None, id_column=None):
     """Model factory for the transitive closure extension."""
+    if referencing_class is None:
+        referencing_class = model_class
+
     if foreign_key is None:
         for field_obj in model_class._meta.rel.values():
             if field_obj.rel_model is model_class:
@@ -679,11 +682,14 @@ def ClosureTable(model_class, foreign_key=None):
 
     primary_key = model_class._meta.primary_key
 
+    if id_column is None:
+        id_column = primary_key
+
     class BaseClosureTable(VirtualModel):
         depth = VirtualIntegerField()
         id = VirtualIntegerField()
-        idcolumn = VirtualIntegerField()
-        parentcolumn = VirtualIntegerField()
+        idcolumn = VirtualCharField()
+        parentcolumn = VirtualCharField()
         root = VirtualIntegerField()
         tablename = VirtualCharField()
 
@@ -718,17 +724,33 @@ def ClosureTable(model_class, foreign_key=None):
 
         @classmethod
         def siblings(cls, node, include_node=False):
-            fk_value = node._data.get(foreign_key.name)
-            query = model_class.select().where(foreign_key == fk_value)
+            if referencing_class is model_class:
+                # self-join
+                fk_value = node._data.get(foreign_key.name)
+                query = model_class.select().where(foreign_key == fk_value)
+            else:
+                # siblings as given in reference_class
+                siblings = (referencing_class
+                        .select(id_column)
+                        .join(cls, on=(foreign_key == cls.root))
+                        .where((cls.id == node) & (cls.depth == 1)))
+
+                # the according models
+                query = (model_class
+                     .select()
+                     .where(primary_key << siblings)
+                     .naive())
+
             if not include_node:
                 query = query.where(primary_key != node)
+
             return query
 
     class Meta:
-        database = model_class._meta.database
+        database = referencing_class._meta.database
         extension_options = {
-            'tablename': model_class._meta.db_table,
-            'idcolumn': model_class._meta.primary_key.db_column,
+            'tablename': referencing_class._meta.db_table,
+            'idcolumn': id_column.db_column,
             'parentcolumn': foreign_key.db_column}
         primary_key = False
 
