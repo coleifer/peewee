@@ -951,24 +951,6 @@ def EnclosedNodeList(nodes):
     return NodeList(nodes, ', ', True)
 
 
-class Window(Node):
-    def __init__(self, partition_by=None, order_by=None):
-        self.partition_by = partition_by
-        self.order_by = order_by
-
-    def __sql__(self, ctx):
-        over_clauses = []
-        with ctx(parentheses=True):
-            if self.partition_by:
-                ctx.sql(NodeList((
-                    SQL('PARTITION BY '),
-                    CommaNodeList(self.partition_by))))
-            if self.order_by:
-                ctx.sql(NodeList((
-                    SQL('ORDER BY '),
-                    CommaNodeList(self.order_by))))
-            return ctx
-
 # BASE QUERY INTERFACE.
 
 class Query(Node):
