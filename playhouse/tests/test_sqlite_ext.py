@@ -26,6 +26,8 @@ ext_db = database_initializer.get_database(
 
 
 CLOSURE_EXTENSION = os.environ.get('CLOSURE_EXTENSION')
+if not CLOSURE_EXTENSION and os.path.exists('closure.so'):
+    CLOSURE_EXTENSION = 'closure.so'
 FTS5_EXTENSION = FTS5Model.fts5_installed()
 
 
