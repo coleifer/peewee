@@ -5,6 +5,15 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.9.0
+
+In this release there are two notable changes:
+
+* The ``Model.create_or_get()`` method was removed. See the [documentation](http://docs.peewee-orm.com/en/latest/peewee/querying.html#create-or-get)
+  for an example of the code one would write to replicate this functionality.
+* The SQLite closure table extension gained support for many-to-many
+  relationships thanks to a nice PR by @necoro. [Docs](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#ClosureTable).
+
 ## 2.8.8
 
 This release contains a single important bugfix for a regression in specifying
