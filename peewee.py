@@ -1772,6 +1772,14 @@ class Database(_callable_context_manager):
     def sequence_exists(self, seq):
         raise NotImplementedError
 
+    def create_tables(self, models, **kwargs):
+        for model in sort_models(models):
+            model._schema.create_all(**kwargs)
+
+    def drop_tables(self, models, **kwargs):
+        for model in reversed(sort_models(models)):
+            model._schema.drop_all(**kwargs)
+
 
 def __pragma__(name):
     def __get__(self):
@@ -1820,13 +1828,13 @@ class SqliteDatabase(Database):
             for pragma, value in self._pragmas:
                 cursor.execute('PRAGMA %s = %s;' % (pragma, value))
             cursor.close()
-    
+
     def pragma(self, key, value=SENTINEL):
         sql = 'PRAGMA %s' % key
         if value is not SENTINEL:
             sql += ' = %s' % (value or 0)
         return self.execute_sql(sql).fetchone()
-    
+
     cache_size = __pragma__('cache_size')
     foreign_keys = __pragma__('foreign_keys')
     journal_mode = __pragma__('journal_mode')
@@ -1849,7 +1857,7 @@ class SqliteDatabase(Database):
         self._timeout = seconds
         if not self.is_closed():
             self.execute_sql('PRAGMA busy_timeout=%d;' % (seconds * 1000))
-    
+
     def begin(self, lock_type=None):
         statement = 'BEGIN %s' % lock_type if lock_type else 'BEGIN'
         self.execute_sql(statement, require_commit=False)
@@ -2979,7 +2987,7 @@ class SchemaManager(object):
     def _drop_index(self, fields, safe):
         return (self
                 ._create_context()
-                .literal('DROP INDEX IF NOT EXISTS ' if safe else
+                .literal('DROP INDEX IF EXISTS ' if safe else
                          'DROP INDEX ')
                 .sql(self.index_entity(fields)))
 
@@ -3562,6 +3570,23 @@ class Model(with_metaclass(BaseModel, Node)):
     @classmethod
     def drop_schema(cls, safe=True):
         cls._schema.drop_all(safe)
+
+
+def sort_models(models):
+    models = set(models)
+    seen = set()
+    ordering = []
+    def dfs(model):
+        if model in models and model not in seen:
+            seen.add(model)
+            for rel_model in model._meta.backrefs.values():
+                dfs(rel_model)
+            ordering.append(model)
+
+    names = lambda m: (m._meta.name, m._meta.table_name)
+    for m in sorted(models, key=names, reverse=True):
+        dfs(m)
+    return list(reversed(ordering))
 
 
 class _ModelQueryHelper(object):

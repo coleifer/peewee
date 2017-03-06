@@ -6,7 +6,10 @@ about running tests, see the README located in the `playhouse/tests` directory.
 import sys
 import unittest
 
-from playhouse.tests.tests import *
+from .models import *
+from .model_sql import *
+from .sql import *
+from .transactions import *
 #from playhouse.tests.test_apis import *
 #from playhouse.tests.test_compound_queries import *
 #from playhouse.tests.test_database import *
