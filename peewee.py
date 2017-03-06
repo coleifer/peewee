@@ -3367,19 +3367,6 @@ class Model(with_metaclass(BaseModel, Node)):
                     raise exc
 
     @classmethod
-    def create_or_get(cls, **kwargs):
-        try:
-            with cls._meta.database.atomic():
-                return cls.create(**kwargs), True
-        except IntegrityError:
-            query = []  # TODO: multi-column unique constraints.
-            for field_name, value in kwargs.items():
-                field = getattr(cls, field_name)
-                if field.unique or field.primary_key:
-                    query.append(field == value)
-            return cls.get(*query), False
-
-    @classmethod
     def as_entity(cls):
         if cls._meta.schema:
             return Entity(cls._meta.schema, cls._meta.db_table)
