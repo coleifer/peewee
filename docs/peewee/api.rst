@@ -310,30 +310,6 @@ Models
                 last_name='Lennon',
                 defaults={'birthday': datetime.date(1940, 10, 9)})
 
-    .. py:classmethod:: create_or_get([**kwargs])
-
-        :param kwargs: Field name to value for attempting to create a new instance.
-        :returns: A 2-tuple containing the model instance and a boolean indicating whether the instance was created.
-
-        This function attempts to create a model instance based on the provided kwargs. If an ``IntegrityError`` occurs indicating the violation of a constraint, then Peewee will return the model matching the filters.
-
-        .. note:: Peewee will not attempt to match *all* the kwargs when an ``IntegrityError`` occurs. Rather, only primary key fields or fields that have a unique constraint will be used to retrieve the matching instance.
-
-        .. note:: Use care when calling ``create_or_get`` with ``autocommit=False``, as the ``create_or_get()`` method will call :py:meth:`Database.atomic` to create either a transaction or savepoint.
-
-        Example:
-
-        .. code-block:: python
-
-            # This will succeed, there is no user named 'charlie' currently.
-            charlie, created = User.create_or_get(username='charlie')
-
-            # This will return the above object, since an IntegrityError occurs
-            # when trying to create an object using "charlie's" primary key.
-            user2, created = User.create_or_get(username='foo', id=charlie.id)
-
-            assert user2.username == 'charlie'
-
     .. py:classmethod:: alias()
 
         :rtype: :py:class:`ModelAlias` instance

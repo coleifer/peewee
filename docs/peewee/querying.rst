@@ -277,12 +277,16 @@ For more information, see the documentation on:
 Create or get
 -------------
 
-Peewee has two methods for performing "get/create" type operations:
+Peewee has one helper method for performing "get/create" type operations:
 
-* :py:meth:`Model.create_or_get`, which will attempt to create a new row. If an ``IntegrityError`` occurs indicating the violation of a constraint, then Peewee will attempt to get the object instead.
 * :py:meth:`Model.get_or_create`, which first attempts to retrieve the matching row. Failing that, a new row will be created.
 
-Let's say we wish to implement registering a new user account using the :ref:`example User model <blog-models>`. The *User* model has a *unique* constraint on the username field, so we will rely on the database's integrity guarantees to ensure we don't end up with duplicate usernames:
+For "create or get" type logic, typically one would rely on a *unique* constraint
+or primary key to prevent the creation of duplicate objects. As an example, let's
+say we wish to implement registering a new user account using
+the :ref:`example User model <blog-models>`. The *User* model has a *unique*
+constraint on the username field, so we will rely on the database's integrity
+guarantees to ensure we don't end up with duplicate usernames:
 
 .. code-block:: python
 
@@ -294,15 +298,17 @@ Let's say we wish to implement registering a new user account using the :ref:`ex
         # making it safe to call .get().
         return User.get(User.username == username)
 
-Rather than writing all this code, you can instead call either :py:meth:`~Model.create_or_get`:
+You can easily encapsulate this type of logic as a ``classmethod`` on your own
+``Model`` classes.
 
-.. code-block:: python
-
-    user, created = User.create_or_get(username=username)
-
-The above example first attempts at creation, then falls back to retrieval, relying on the database to enforce a unique constraint.
-
-If you prefer to attempt to retrieve the record first, you can use :py:meth:`~Model.get_or_create`. This method is implemented along the same lines as the Django function of the same name. You can use the Django-style keyword argument filters to specify your ``WHERE`` conditions. The function returns a 2-tuple containing the instance and a boolean value indicating if the object was created.
+The above example first attempts at creation, then falls back to retrieval,
+relying on the database to enforce a unique constraint. If you prefer to
+attempt to retrieve the record first, you can use
+:py:meth:`~Model.get_or_create`. This method is implemented along the same
+lines as the Django function of the same name. You can use the Django-style
+keyword argument filters to specify your ``WHERE`` conditions. The function
+returns a 2-tuple containing the instance and a boolean value indicating if the
+object was created.
 
 Here is how you might implement user account creation using :py:meth:`~Model.get_or_create`:
 
@@ -310,7 +316,10 @@ Here is how you might implement user account creation using :py:meth:`~Model.get
 
     user, created = User.get_or_create(username=username)
 
-Suppose we have a different model ``Person`` and would like to get or create a person object. The only conditions we care about when retrieving the ``Person`` are their first and last names, **but** if we end up needing to create a new record, we will also specify their date-of-birth and favorite color:
+Suppose we have a different model ``Person`` and would like to get or create a
+person object. The only conditions we care about when retrieving the ``Person``
+are their first and last names, **but** if we end up needing to create a new
+record, we will also specify their date-of-birth and favorite color:
 
 .. code-block:: python
 
@@ -319,9 +328,11 @@ Suppose we have a different model ``Person`` and would like to get or create a p
         last_name=last_name,
         defaults={'dob': dob, 'favorite_color': 'green'})
 
-Any keyword argument passed to :py:meth:`~Model.get_or_create` will be used in the ``get()`` portion of the logic, except for the ``defaults`` dictionary, which will be used to populate values on newly-created instances.
+Any keyword argument passed to :py:meth:`~Model.get_or_create` will be used in
+the ``get()`` portion of the logic, except for the ``defaults`` dictionary,
+which will be used to populate values on newly-created instances.
 
-For more details check out the documentation for :py:meth:`Model.create_or_get` and :py:meth:`Model.get_or_create`.
+For more details check out the documentation for :py:meth:`Model.get_or_create`.
 
 Selecting multiple records
 --------------------------

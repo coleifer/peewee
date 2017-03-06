@@ -4918,19 +4918,6 @@ class Model(with_metaclass(BaseModel)):
                     raise exc
 
     @classmethod
-    def create_or_get(cls, **kwargs):
-        try:
-            with cls._meta.database.atomic():
-                return cls.create(**kwargs), True
-        except IntegrityError:
-            query = []  # TODO: multi-column unique constraints.
-            for field_name, value in kwargs.items():
-                field = getattr(cls, field_name)
-                if field.unique or field.primary_key:
-                    query.append(field == value)
-            return cls.get(*query), False
-
-    @classmethod
     def filter(cls, *dq, **query):
         return cls.select().filter(*dq, **query)
 
