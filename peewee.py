@@ -3068,6 +3068,8 @@ class Metadata(object):
         if self._table is None:
             self._table = Table(self.table_name, [
                 field.column_name for field in self.sorted_fields])
+            if self.database:
+                self._table.bind(self.database)
         return self._table
 
     @table.setter
