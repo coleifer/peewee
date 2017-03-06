@@ -57,10 +57,14 @@ if sys.version_info[0] == 2:
     bytes_type = str
     exec('def reraise(tp, value, tb=None): raise tp, value, tb')
     PY26 = sys.version_info[1] == 6
+    def print_(s):
+        sys.stdout.write(s)
+        sys.stdout.write('\n')
 else:
     text_type = str
     bytes_type = bytes
     basestring = str
+    print_ = getattr(builtins, 'print')
     def reraise(tp, value, tb=None):
         if value.__traceback__ is not tb:
             raise value.with_traceback(tb)
