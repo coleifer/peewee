@@ -51,6 +51,15 @@ except ImportError:
 
 __version__ = '3.0.0'
 
+try:  # Python 2.7+
+    from logging import NullHandler
+except ImportError:
+    class NullHandler(logging.Handler):
+        def emit(self, record):
+            pass
+
+logger = logging.getLogger('peewee')
+logger.addHandler(NullHandler())
 
 if sys.version_info[0] == 2:
     text_type = unicode
@@ -77,6 +86,7 @@ class attrdict(dict):
     def __iadd__(self, rhs): self.update(rhs); return self
     def __add__(self, rhs): d = attrdict(self); d.update(rhs); return d
 
+SENTINEL = object()
 
 OP = attrdict(
     AND='AND',
@@ -1683,6 +1693,7 @@ class Database(_callable_context_manager):
         return self._state.conn.cursor()
 
     def execute_sql(self, sql, params=None):
+        logger.debug((sql, params))
         with __exception_wrapper__:
             cursor = self.cursor()
             cursor.execute(sql, params or ())
@@ -1762,6 +1773,14 @@ class Database(_callable_context_manager):
         raise NotImplementedError
 
 
+def __pragma__(name):
+    def __get__(self):
+        return self.pragma(name)
+    def __set__(self, value):
+        return self.pragma(name, value)
+    return property(__get__, __set__)
+
+
 class SqliteDatabase(Database):
     options = Database.options + attrdict(
         field_types={
@@ -1801,6 +1820,22 @@ class SqliteDatabase(Database):
             for pragma, value in self._pragmas:
                 cursor.execute('PRAGMA %s = %s;' % (pragma, value))
             cursor.close()
+    
+    def pragma(self, key, value=SENTINEL):
+        sql = 'PRAGMA %s' % key
+        if value is not SENTINEL:
+            sql += ' = %s' % (value or 0)
+        return self.execute_sql(sql).fetchone()
+    
+    cache_size = __pragma__('cache_size')
+    foreign_keys = __pragma__('foreign_keys')
+    journal_mode = __pragma__('journal_mode')
+    journal_size_limit = __pragma__('journal_size_limit')
+    mmap_size = __pragma__('mmap_size')
+    page_size = __pragma__('page_size')
+    read_uncommitted = __pragma__('read_uncommitted')
+    synchronous = __pragma__('synchronous')
+    wal_autocheckpoint = __pragma__('wal_autocheckpoint')
 
     @property
     def timeout(self):
@@ -1814,6 +1849,10 @@ class SqliteDatabase(Database):
         self._timeout = seconds
         if not self.is_closed():
             self.execute_sql('PRAGMA busy_timeout=%d;' % (seconds * 1000))
+    
+    def begin(self, lock_type=None):
+        statement = 'BEGIN %s' % lock_type if lock_type else 'BEGIN'
+        self.execute_sql(statement, require_commit=False)
 
     def get_tables(self, schema=None):
         cursor = self.execute_sql('SELECT name FROM sqlite_master WHERE '
@@ -2085,11 +2124,15 @@ class _atomic(_callable_context_manager):
 
 
 class _transaction(_callable_context_manager):
-    def __init__(self, db):
+    def __init__(self, db, lock_type=None):
         self.db = db
+        self._lock_type = lock_type
 
     def _begin(self):
-        self.db.begin()
+        if self._lock_type:
+            self.db.begin(self._lock_type)
+        else:
+            self.db.begin()
 
     def commit(self, begin=True):
         self.db.commit()
