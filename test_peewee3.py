@@ -273,6 +273,10 @@ class Category(TestModel):
     parent = ForeignKeyField('self', backref='children', null=True)
     name = CharField(max_length=20, primary_key=True)
 
+class Relationship(TestModel):
+    from_person = ForeignKeyField(Person, backref='relations')
+    to_person = ForeignKeyField(Person, backref='related_to')
+
 
 class TestModelSQL(BaseTestCase):
     def assertCreateTable(self, model_class, expected):
@@ -314,6 +318,19 @@ class TestModelSQL(BaseTestCase):
              '"parent_id" VARCHAR(20), '
              'FOREIGN KEY ("parent_id") REFERENCES "category" ("name"))'),
             'CREATE INDEX "category_parent" ON "category" ("parent_id")',
+        ])
+
+        self.assertCreateTable(Relationship, [
+            ('CREATE TABLE "relationship" ('
+             '"id" INTEGER NOT NULL PRIMARY KEY, '
+             '"from_person_id" INTEGER NOT NULL, '
+             '"to_person_id" INTEGER NOT NULL, '
+             'FOREIGN KEY ("from_person_id") REFERENCES "person" ("id"), '
+             'FOREIGN KEY ("to_person_id") REFERENCES "person" ("id"))'),
+            ('CREATE INDEX "relationship_from_person" '
+             'ON "relationship" ("from_person_id")'),
+            ('CREATE INDEX "relationship_to_person" '
+             'ON "relationship" ("to_person_id")'),
         ])
 
     def test_select(self):
