@@ -3066,10 +3066,11 @@ class Metadata(object):
     @property
     def table(self):
         if self._table is None:
-            self._table = Table(self.table_name, [
-                field.column_name for field in self.sorted_fields])
-            if self.database:
-                self._table.bind(self.database)
+            self._table = Table(
+                self.table_name,
+                [field.column_name for field in self.sorted_fields],
+                _model=self.model,
+                _database=self.database)
         return self._table
 
     @table.setter
@@ -3288,7 +3289,7 @@ class Model(with_metaclass(BaseModel, Node)):
     def alias(cls, alias=None):
         return Table(cls._meta.table_name, [
             field.column_name for field in cls._meta.sorted_fields],
-            alias=alias, _model=cls)
+            alias=alias, _model=cls, _database=cls._meta.database)
 
     @classmethod
     def select(cls, *fields):

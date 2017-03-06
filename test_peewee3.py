@@ -505,7 +505,7 @@ class TestModelAPIs(BaseTestCase):
         Tweet._schema.create_table()
         Favorite._schema.create_table()
 
-        TweetUser = User.alias()
+        TweetUser = User.alias('u2')
 
         query = (Favorite
                  .select(Favorite.id,
@@ -520,10 +520,10 @@ class TestModelAPIs(BaseTestCase):
         sql, params = __sql__(query)
         self.assertEqual(sql, (
             'SELECT '
-            '"t1"."id", "t2"."content", "t3"."username", "t4"."username" '
+            '"t1"."id", "t2"."content", "t3"."username", "u2"."username" '
             'FROM "favorite" AS "t1" '
             'INNER JOIN "tweet" AS "t2" ON ("t1"."tweet_id" = "t2"."id") '
-            'INNER JOIN "user" AS "t4" ON ("t2"."user_id" = "t4"."id") '
+            'INNER JOIN "user" AS "u2" ON ("t2"."user_id" = "u2"."id") '
             'INNER JOIN "user" AS "t3" ON ("t1"."user_id" = "t3"."id") '
             'ORDER BY "t2"."content", "t1"."id"'))
         self.assertEqual(params, [])
