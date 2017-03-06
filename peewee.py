@@ -435,14 +435,25 @@ class _HashableSource(object):
         return not (self == other)
 
 
+def __bind_database__(meth):
+    @wraps(meth)
+    def inner(self, *args, **kwargs):
+        result = meth(self, *args, **kwargs)
+        if self._database:
+            return result.bind(self._database)
+        return result
+    return inner
+
+
 class Table(_HashableSource, Source):
     def __init__(self, name, columns=None, primary_key=None, schema=None,
-                 alias=None, _model=None):
+                 alias=None, _model=None, _database=None):
         self._name = name
         self._columns = columns
         self._schema = schema
         self._path = (schema, name) if schema else (name,)
         self._model = _model
+        self._database = _database
         super(Table, self).__init__(alias=alias)
 
         # Allow tables to restrict what columns are available.
@@ -457,20 +468,28 @@ class Table(_HashableSource, Source):
         else:
             self.primary_key = None
 
+    def bind(self, database=None):
+        self._database = database
+        return self
+
     def _get_hash(self):
         return hash((self.__class__, self._path, self._alias, self._model))
 
+    @__bind_database__
     def select(self, *columns):
         if not columns and self._columns:
             columns = [Column(self, column) for column in self._columns]
         return Select((self,), columns)
 
+    @__bind_database__
     def insert(self, insert=None, columns=None):
         return Insert(self, insert=insert, columns=columns)
 
+    @__bind_database__
     def update(self, update):
         return Update(self, update=update)
 
+    @__bind_database__
     def delete(self):
         return Delete(self)
 
@@ -956,13 +975,22 @@ def EnclosedNodeList(nodes):
 class Query(Node):
     default_row_type = ROW.DICT
 
-    def __init__(self, order_by=None, limit=None, offset=None, **kwargs):
+    def __init__(self, order_by=None, limit=None, offset=None, _database=None,
+                 **kwargs):
         super(Query, self).__init__(**kwargs)
-        self._order_by, self._limit, self._offset = (order_by, limit, offset)
+        self._order_by = order_by
+        self._limit = limit
+        self._offset = offset
+        self._database = _database
+
         self._cte_list = None
         self._cursor_wrapper = None
         self._row_type = None
         self._constructor = None
+
+    def bind(self, database=None):
+        self._database = database
+        return self
 
     @Node.copy
     def with_cte(self, *cte_list):
@@ -1051,21 +1079,31 @@ class Query(Node):
         else:
             raise ValueError('Unrecognized row type: "%s".' % row_type)
 
-    def execute(self, database):
+    def execute(self, database=None):
+        database = self._database if database is None else database
+        if not database:
+            raise ValueError('Database must be supplied or query must be '
+                             'bound to a database using the bind() method.')
+        return self._execute(database)
+
+    def _execute(self, database):
         raise NotImplementedError
 
-    def iterator(self, database):
+    def iterator(self, database=None):
         return iter(self.execute(database).iterator())
 
-    def __iter__(self):
+    def _ensure_execution(self):
         if not self._cursor_wrapper:
-            raise ValueError('Query has not been executed.')
+            if not self._database:
+                raise ValueError('Query has not been executed.')
+            self.execute()
+
+    def __iter__(self):
+        self._ensure_execution()
         return iter(self._cursor_wrapper)
 
     def __getitem__(self, value):
-        if not self._cursor_wrapper:
-            raise ValueError('Query has not been executed.')
-
+        self._ensure_execution()
         if isinstance(value, slice):
             index = value.stop
         else:
@@ -1076,8 +1114,7 @@ class Query(Node):
         return self._cursor_wrapper.row_cache[value]
 
     def __len__(self):
-        if not self._cursor_wrapper:
-            raise ValueError('Query has not been executed.')
+        self._ensure_execution()
         return len(self._cursor_wrapper)
 
 
@@ -1102,7 +1139,7 @@ class SelectBase(_HashableSource, Source, SelectQuery):
     def _get_hash(self):
         return hash((self.__class__, self._alias or id(self)))
 
-    def execute(self, database):
+    def _execute(self, database):
         cursor = database.execute(self)
         self._cursor_wrapper = self._get_cursor_wrapper(cursor)
         return self._cursor_wrapper
@@ -1275,7 +1312,7 @@ class _WriteQuery(Query):
             ctx.literal(' RETURNING ').sql(CommaNodeList(self._returning))
         return ctx
 
-    def execute(self, database):
+    def _execute(self, database):
         if self._returning:
             return self.execute_returning(database)
         else:
@@ -1417,10 +1454,10 @@ class Insert(_WriteQuery):
 
             return self.apply_returning(ctx)
 
-    def execute(self, database):
+    def _execute(self, database):
         if not self._columns and database.options.returning_clause:
             self._columns = (self.table.primary_key,)
-        return super(Insert, self).execute(database)
+        return super(Insert, self)._execute(database)
 
     def handle_result(self, database, cursor):
         return database.last_insert_id(cursor)
@@ -3493,6 +3530,11 @@ class Model(with_metaclass(BaseModel, Node)):
 class _ModelQueryHelper(object):
     default_row_type = ROW.MODEL
 
+    def __init__(self, *args, **kwargs):
+        super(_ModelQueryHelper, self).__init__(*args, **kwargs)
+        if not self._database:
+            self._database = self.model._meta.database
+
     def _get_cursor_wrapper(self, cursor):
         row_type = self._row_type or self.default_row_type
         if row_type == ROW.MODEL:
@@ -3513,10 +3555,6 @@ class _ModelQueryHelper(object):
                                             self._constructor)
         else:
             raise ValueError('Unrecognized row type: "%s".' % row_type)
-
-    def execute(self, database=None):
-        database = self.model._meta.database if database is None else database
-        return super(_ModelQueryHelper, self).execute(database)
 
 
 class BaseModelSelect(_ModelQueryHelper):
@@ -3542,10 +3580,6 @@ class BaseModelSelect(_ModelQueryHelper):
             return self.execute()[0]
         except IndexError:
             pass
-
-    def execute(self, database=None):
-        database = self.model._meta.database if database is None else database
-        return super(BaseModelSelect, self).execute(database)
 
 
 class ModelCompoundSelectQuery(BaseModelSelect, CompoundSelectQuery):
