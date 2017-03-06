@@ -46,6 +46,9 @@ class Testing(BaseModel):
     class Meta:
         order_by = ('name',)
 
+class TestingInterval(BaseModel):
+    duration = IntervalField()
+
 try:
     class TestingJson(BaseModel):
         data = JSONField()
@@ -988,6 +991,20 @@ class TestLateralJoin(ModelTestCase):
             'zaizee-9',
             'zaizee-8',
             'zaizee-7'])
+
+        
+class TestIntervalField(PeeweeTestCase):
+            
+    def test_interval_field(self):
+        compiler = test_db.compiler()
+                    
+        create_sql, _ = compiler.create_table(TestIntervalModel)
+        self.assertEqual(create_sql, (
+            'CREATE TABLE "testintervalmodel" ('
+            '"id" SERIAL NOT NULL PRIMARY KEY, '
+            '"duration" INTERVAL NOT NULL)'))
+                      
+        # @todo: Write some more assertions
 
 
 class TestIndexedField(PeeweeTestCase):

@@ -208,6 +208,10 @@ class HStoreField(IndexedFieldMixin, Field):
         return Expression(self, OP.HCONTAINS_ANY_KEY, Passthrough(list(keys)))
 
 
+class IntervalField(Field):
+    db_field = "interval"
+
+
 class JSONField(Field):
     db_field = 'json'
 
