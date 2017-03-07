@@ -1,3 +1,5 @@
+import datetime
+
 from peewee import *
 
 from .base import BaseTestCase
@@ -5,9 +7,54 @@ from .base import BaseTestCase
 
 User = Table('users')
 Tweet = Table('tweets')
+Person = Table('person', ['id', 'name', 'dob'])
+Note = Table('note', ['id', 'person_id', 'content'])
 
 
-class TestSimpleJoin(BaseTestCase):
+class TestSelectQuery(BaseTestCase):
+    def test_select(self):
+        query = (User
+                 .select(User.c.id, User.c.username)
+                 .where(User.c.username == 'foo'))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" '
+            'FROM "users" AS "t1" '
+            'WHERE ("t1"."username" = ?)'), ['foo'])
+
+    def test_select_explicit_columns(self):
+        query = (Person
+                 .select()
+                 .where(Person.dob < datetime.date(1980, 1, 1)))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."name", "t1"."dob" '
+            'FROM "person" AS "t1" '
+            'WHERE ("t1"."dob" < ?)'), [datetime.date(1980, 1, 1)])
+
+    def test_join_explicit_columns(self):
+        query = (Note
+                 .select(Note.content)
+                 .join(Person, on=(Note.person_id == Person.id))
+                 .where(Person.name == 'charlie')
+                 .order_by(Note.id.desc()))
+        self.assertSQL(query, (
+            'SELECT "t1"."content" '
+            'FROM "note" AS "t1" '
+            'INNER JOIN "person" AS "t2" ON ("t1"."person_id" = "t2"."id") '
+            'WHERE ("t2"."name" = ?) '
+            'ORDER BY "t1"."id" DESC'), ['charlie'])
+
+    def test_multiple_where(self):
+        """Ensure multiple calls to WHERE are AND-ed together."""
+        query = (Person
+                 .select(Person.name)
+                 .where(Person.dob < datetime.date(1980, 1, 1))
+                 .where(Person.dob > datetime.date(1950, 1, 1)))
+        self.assertSQL(query, (
+            'SELECT "t1"."name" '
+            'FROM "person" AS "t1" '
+            'WHERE (("t1"."dob" < ?) AND ("t1"."dob" > ?))'),
+            [datetime.date(1980, 1, 1), datetime.date(1950, 1, 1)])
+
     def test_simple_join(self):
         query = (User
                  .select(
@@ -22,8 +69,6 @@ class TestSimpleJoin(BaseTestCase):
             'INNER JOIN "tweets" AS "t2" ON ("t2"."user_id" = "t1"."id") '
             'GROUP BY "t1"."id", "t1"."username"'), [])
 
-
-class TestSubquery(BaseTestCase):
     def test_subquery(self):
         inner = (Tweet
                  .select(fn.COUNT(Tweet.c.id).alias('ct'))
@@ -38,8 +83,6 @@ class TestSubquery(BaseTestCase):
             'WHERE ("t2"."user" = "t1"."id")) AS "iq" '
             'FROM "users" AS "t1" ORDER BY "t1"."username"'), [])
 
-
-class TestUserDefinedAlias(BaseTestCase):
     def test_user_defined_alias(self):
         UA = User.alias('alt')
         query = (User
@@ -52,8 +95,6 @@ class TestUserDefinedAlias(BaseTestCase):
             'INNER JOIN "users" AS "alt" ON ("t1"."id" = "alt"."id") '
             'ORDER BY "alt"."nuggz"'), [])
 
-
-class TestComplexSelect(BaseTestCase):
     def test_complex_select(self):
         Order = Table('orders', columns=(
             'region',
@@ -109,8 +150,6 @@ class TestComplexSelect(BaseTestCase):
             'FROM "top_regions")'
             ') GROUP BY "t1"."region", "t1"."product"'), [10])
 
-
-class TestCompoundSelect(BaseTestCase):
     def test_compound_select(self):
         lhs = User.select(User.c.id).where(User.c.username == 'charlie')
         rhs = User.select(User.c.username).where(User.c.admin == True)
@@ -141,6 +180,24 @@ class TestInsertQuery(BaseTestCase):
         self.assertSQL(query, (
             'INSERT INTO "users" ("admin", "superuser", "username") '
             'VALUES (?, ?, ?)'), [True, False, 'charlie'])
+
+    def test_insert_list(self):
+        data = [
+            {Person.name: 'charlie'},
+            {Person.name: 'huey'},
+            {Person.name: 'zaizee'}]
+        query = Person.insert(data)
+        self.assertSQL(query, (
+            'INSERT INTO "person" ("name") VALUES (?), (?), (?)'),
+            ['charlie', 'huey', 'zaizee'])
+
+    def test_insert_query(self):
+        source = User.select(User.c.username).where(User.c.admin == False)
+        query = Person.insert(source, columns=[Person.name])
+        self.assertSQL(query, (
+            'INSERT INTO "person" ("name") '
+            'SELECT "t1"."username" FROM "users" AS "t1" '
+            'WHERE ("t1"."admin" = ?)'), [False])
 
 
 class TestUpdateQuery(BaseTestCase):
