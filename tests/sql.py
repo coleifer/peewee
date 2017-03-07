@@ -199,6 +199,15 @@ class TestInsertQuery(BaseTestCase):
             'SELECT "t1"."username" FROM "users" AS "t1" '
             'WHERE ("t1"."admin" = ?)'), [False])
 
+    def test_insert_query_cte(self):
+        cte = User.select(User.c.username).cte('foo')
+        source = cte.select(cte.c.username)
+        query = Person.insert(source, columns=[Person.name]).with_cte(cte)
+        self.assertSQL(query, (
+            'WITH "foo" AS (SELECT "a1"."username" FROM "users" AS "a1") '
+            'INSERT INTO "person" ("name") '
+            'SELECT "foo"."username" FROM "foo"'), [])
+
 
 class TestUpdateQuery(BaseTestCase):
     def test_update_query(self):
@@ -267,3 +276,18 @@ class TestDeleteQuery(BaseTestCase):
             'INNER JOIN "tweets" AS "t2" ON ("t2"."user_id" = "t1"."id") '
             'GROUP BY "t1"."id" '
             'HAVING (ct > ?)))'), [100])
+
+    def test_delete_cte(self):
+        cte = (User
+               .select(User.c.id)
+               .where(User.c.admin == True)
+               .cte('u'))
+        query = (User
+                 .delete()
+                 .where(User.c.id << cte.select(cte.c.id))
+                 .with_cte(cte))
+        self.assertSQL(query, (
+            'WITH "u" AS '
+            '(SELECT "a1"."id" FROM "users" AS "a1" WHERE ("a1"."admin" = ?)) '
+            'DELETE FROM "users" '
+            'WHERE ("id" IN (SELECT "u"."id" FROM "u"))'), [True])
