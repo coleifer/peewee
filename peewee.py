@@ -1834,7 +1834,9 @@ class SqliteDatabase(Database):
         sql = 'PRAGMA %s' % key
         if value is not SENTINEL:
             sql += ' = %s' % (value or 0)
-        return self.execute_sql(sql).fetchone()
+        row = self.execute_sql(sql).fetchone()
+        if row:
+            return row[0]
 
     cache_size = __pragma__('cache_size')
     foreign_keys = __pragma__('foreign_keys')

@@ -6,6 +6,7 @@ about running tests, see the README located in the `playhouse/tests` directory.
 import sys
 import unittest
 
+from .database import *
 from .models import *
 from .model_sql import *
 from .sql import *
