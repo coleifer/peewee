@@ -114,6 +114,7 @@ from peewee import OP
 
 class Operation(object):
     """Encapsulate a single schema altering operation."""
+
     def __init__(self, migrator, method, *args, **kwargs):
         self.migrator = migrator
         self.method = method
@@ -152,6 +153,7 @@ def operation(fn):
             return fn(self, *args, **kwargs)
         return Operation(self, fn.__name__, *args, **kwargs)
     return inner
+
 
 class SchemaMigrator(object):
     explicit_create_foreign_key = False
@@ -370,6 +372,7 @@ class PostgresqlMigrator(SchemaMigrator):
 
 _column_attributes = ('name', 'definition', 'null', 'pk', 'default', 'extra')
 
+
 class MySQLColumn(namedtuple('_Column', _column_attributes)):
     @property
     def is_pk(self):
@@ -425,11 +428,10 @@ class MySQLMigrator(SchemaMigrator):
                 return column
         return False
 
-    @operation
-    def add_foreign_key_constraint(self, table, column_name, rel, rel_column):
-        # TODO: refactor, this duplicates QueryCompiler._create_foreign_key
+    def _add_restrict_foreign_key_constraint(
+            self, table, column_name, rel, rel_column):
         constraint = 'fk_%s_%s_refs_%s' % (table, column_name, rel)
-        return Clause(
+        return [
             SQL('ALTER TABLE'),
             Entity(table),
             SQL('ADD CONSTRAINT'),
@@ -438,32 +440,49 @@ class MySQLMigrator(SchemaMigrator):
             EnclosedClause(Entity(column_name)),
             SQL('REFERENCES'),
             Entity(rel),
-            EnclosedClause(Entity(rel_column)))
+            EnclosedClause(Entity(rel_column))]
+
+    @operation
+    def add_foreign_key_constraint(
+            self, table, column_name, rel, rel_column, on_delete='RESTRICT', on_update='RESTRICT'):
+        # TODO: refactor, this duplicates QueryCompiler._create_foreign_key
+        nodes = self._add_restrict_foreign_key_constraint(
+            table, column_name, rel, rel_column)
+        if on_delete == 'CASCADE' and on_update == 'RESTRICT':
+            nodes.append(SQL('ON DELETE CASCADE ON UPDATE RESTRICT'))
+            return Clause(*nodes)
+        elif on_update == 'CASCADE' and on_delete == 'RESTRICT':
+            nodes.append(SQL('ON DELETE RESTRICT ON UPDATE CASCADE'))
+        elif on_delete == 'CASCADE' and on_update == 'CASCADE':
+            nodes.append(SQL('ON DELETE CASCADE ON UPDATE CASCADE'))
+        else:
+            nodes.append(SQL('ON DELETE RESTRICT ON UPDATE RESTRICT'))
+        return Clause(*nodes)
 
     def get_foreign_key_constraint(self, table, column_name):
         cursor = self.database.execute_sql(
             ('SELECT constraint_name '
-             'FROM information_schema.key_column_usage WHERE '
-             'table_schema = DATABASE() AND '
-             'table_name = %s AND '
-             'column_name = %s AND '
-             'referenced_table_name IS NOT NULL AND '
-             'referenced_column_name IS NOT NULL;'),
-            (table, column_name))
+             'FROM information_schema.key_column_usage '
+             'WHERE table_name="%s" AND '
+             'constraint_schema="%s" AND '
+             'column_name="%s"')
+            % (table, self.database.database, column_name))
         result = cursor.fetchone()
         if not result:
             raise AttributeError(
                 'Unable to find foreign key constraint for '
-                '"%s" on table "%s".' % (table, column_name))
+                '"%s" on table "%s" %s.' % (column_name, table, result))
         return result[0]
 
     @operation
     def drop_foreign_key_constraint(self, table, column_name):
-        return Clause(
-            SQL('ALTER TABLE'),
-            Entity(table),
-            SQL('DROP FOREIGN KEY'),
-            Entity(self.get_foreign_key_constraint(table, column_name)))
+        foreign_key = self.get_foreign_key_constraint(table, column_name)
+        if foreign_key is not None:
+            return Clause(
+                SQL('ALTER TABLE'),
+                Entity(table),
+                SQL('DROP FOREIGN KEY'),
+                Entity(foreign_key))
 
     def get_inline_fk_sql(self, field):
         return []
@@ -489,7 +508,8 @@ class MySQLMigrator(SchemaMigrator):
             column.sql(is_null=True))
 
     @operation
-    def rename_column(self, table, old_name, new_name):
+    def rename_column(
+            self, table, old_name, new_name, on_delete='RESTRICT', on_update='RESTRICT'):
         fk_objects = dict(
             (fk.column, fk)
             for fk in self.database.get_foreign_keys(table))
@@ -511,7 +531,9 @@ class MySQLMigrator(SchemaMigrator):
                     table,
                     new_name,
                     fk_metadata.dest_table,
-                    fk_metadata.dest_column),
+                    fk_metadata.dest_column,
+                    on_delete,
+                    on_update),
             ]
         else:
             return rename_clause
@@ -523,6 +545,7 @@ class MySQLMigrator(SchemaMigrator):
             Entity(index_name),
             SQL('ON'),
             Entity(table))
+
 
 class SqliteMigrator(SchemaMigrator):
     """
