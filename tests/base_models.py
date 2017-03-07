@@ -27,3 +27,7 @@ class Category(TestModel):
 class Relationship(TestModel):
     from_person = ForeignKeyField(Person, backref='relations')
     to_person = ForeignKeyField(Person, backref='related_to')
+
+
+class Register(TestModel):
+    value = IntegerField()

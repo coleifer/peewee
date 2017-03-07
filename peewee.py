@@ -17,6 +17,7 @@ import re
 import sys
 import threading
 import time
+import uuid
 import weakref
 
 try:
@@ -1692,13 +1693,13 @@ class Database(_callable_context_manager):
             self.connect()
         return self._state.conn.cursor()
 
-    def execute_sql(self, sql, params=None):
+    def execute_sql(self, sql, params=None, commit=True):
         logger.debug((sql, params))
         with __exception_wrapper__:
             cursor = self.cursor()
             cursor.execute(sql, params or ())
             if self.commit_select or not sql.startswith('SELECT') and \
-               not self.in_transaction():
+               not self.in_transaction() and commit:
                 self.commit()
         return cursor
 
@@ -1860,7 +1861,7 @@ class SqliteDatabase(Database):
 
     def begin(self, lock_type=None):
         statement = 'BEGIN %s' % lock_type if lock_type else 'BEGIN'
-        self.execute_sql(statement, require_commit=False)
+        self.execute_sql(statement, commit=False)
 
     def get_tables(self, schema=None):
         cursor = self.execute_sql('SELECT name FROM sqlite_master WHERE '
