@@ -448,15 +448,7 @@ class MySQLMigrator(SchemaMigrator):
         # TODO: refactor, this duplicates QueryCompiler._create_foreign_key
         nodes = self._add_restrict_foreign_key_constraint(
             table, column_name, rel, rel_column)
-        if on_delete == 'CASCADE' and on_update == 'RESTRICT':
-            nodes.append(SQL('ON DELETE CASCADE ON UPDATE RESTRICT'))
-            return Clause(*nodes)
-        elif on_update == 'CASCADE' and on_delete == 'RESTRICT':
-            nodes.append(SQL('ON DELETE RESTRICT ON UPDATE CASCADE'))
-        elif on_delete == 'CASCADE' and on_update == 'CASCADE':
-            nodes.append(SQL('ON DELETE CASCADE ON UPDATE CASCADE'))
-        else:
-            nodes.append(SQL('ON DELETE RESTRICT ON UPDATE RESTRICT'))
+        nodes.append(SQL('ON DELETE %s ON UPDATE %s' % (on_delete, on_update)))
         return Clause(*nodes)
 
     def get_foreign_key_constraint(self, table, column_name):
