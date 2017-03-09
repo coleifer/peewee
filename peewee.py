@@ -199,6 +199,30 @@ class cached_property(object):
             return instance.__dict__[self.fn.__name__]
         return self
 
+class DeferredRelation(object):
+    _unresolved = set()
+
+    def __init__(self, rel_model_name=None):
+        self.fields = []
+        if rel_model_name is not None:
+            self._rel_model_name = rel_model_name.lower()
+            self._unresolved.add(self)
+
+    def set_field(self, model_class, field, name):
+        self.fields.append((model_class, field, name))
+
+    def set_model(self, rel_model):
+        for model, field, name in self.fields:
+            field.bind(rel_model, name)
+
+    @staticmethod
+    def resolve(model_cls):
+        unresolved = list(DeferredRelation._unresolved)
+        for dr in unresolved:
+            if dr._rel_model_name == model_cls.__name__.lower():
+                dr.set_model(model_cls)
+                DeferredRelation._unresolved.discard(dr)
+
 # SQL Generation.
 
 class AliasManager(object):
@@ -3322,7 +3346,7 @@ class BaseModel(type):
         cls.validate_model()
 
         # TODO: Resolve any deferred relations waiting on this class.
-        #DeferredRelation.resolve(cls)
+        DeferredRelation.resolve(cls)
 
         return cls
 
