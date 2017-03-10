@@ -465,6 +465,7 @@ class Table(_HashableSource, Source):
                  alias=None, _model=None, _database=None):
         self._name = name
         self._columns = columns
+        self._primary_key = primary_key
         self._schema = schema
         self._path = (schema, name) if schema else (name,)
         self._model = _model
@@ -482,6 +483,17 @@ class Table(_HashableSource, Source):
             self.primary_key = getattr(col_src, primary_key)
         else:
             self.primary_key = None
+
+    def alias(self, name):
+        # Ensure a deep copy of the column instances.
+        return Table(
+            self._name,
+            columns=self._columns,
+            primary_key=self._primary_key,
+            schema=self._schema,
+            alias=name,
+            _model=self._model,
+            _database=self._database)
 
     def bind(self, database=None):
         self._database = database

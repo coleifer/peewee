@@ -43,6 +43,41 @@ class TestSelectQuery(BaseTestCase):
             'WHERE ("t2"."name" = ?) '
             'ORDER BY "t1"."id" DESC'), ['charlie'])
 
+    def test_multi_join(self):
+        Like = Table('likes')
+        LikeUser = User.alias('lu')
+        query = (Like
+                 .select(Tweet.c.content, User.c.username, LikeUser.c.username)
+                 .join(Tweet, on=(Like.c.tweet_id == Tweet.c.id))
+                 .join(User, on=(Tweet.c.user_id == User.c.id))
+                 .join(LikeUser, on=(Like.c.user_id == LikeUser.c.id))
+                 .where(LikeUser.c.username == 'charlie')
+                 .order_by(Tweet.c.timestamp))
+        self.assertSQL(query, (
+            'SELECT "t1"."content", "t2"."username", "lu"."username" '
+            'FROM "likes" AS "t3" '
+            'INNER JOIN "tweets" AS "t1" ON ("t3"."tweet_id" = "t1"."id") '
+            'INNER JOIN "users" AS "t2" ON ("t1"."user_id" = "t2"."id") '
+            'INNER JOIN "users" AS "lu" ON ("t3"."user_id" = "lu"."id") '
+            'WHERE ("lu"."username" = ?) '
+            'ORDER BY "t1"."timestamp"'), ['charlie'])
+
+    def test_correlated_subquery(self):
+        Employee = Table('employee', ['id', 'name', 'salary', 'dept'])
+        EA = Employee.alias('e2')
+        query = (Employee
+                 .select(Employee.id, Employee.name)
+                 .where(Employee.salary > (EA
+                                           .select(fn.AVG(EA.salary))
+                                           .where(EA.dept == Employee.dept))))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."name" '
+            'FROM "employee" AS "t1" '
+            'WHERE ("t1"."salary" > ('
+            'SELECT AVG("e2"."salary") '
+            'FROM "employee" AS "e2" '
+            'WHERE ("e2"."dept" = "t1"."dept")))'), [])
+
     def test_multiple_where(self):
         """Ensure multiple calls to WHERE are AND-ed together."""
         query = (Person
