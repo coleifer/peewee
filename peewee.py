@@ -484,14 +484,14 @@ class Table(_HashableSource, Source):
         else:
             self.primary_key = None
 
-    def alias(self, name):
+    def clone(self):
         # Ensure a deep copy of the column instances.
         return Table(
             self._name,
             columns=self._columns,
             primary_key=self._primary_key,
             schema=self._schema,
-            alias=name,
+            alias=self._alias,
             _model=self._model,
             _database=self._database)
 
