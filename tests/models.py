@@ -3,6 +3,7 @@ import unittest
 
 from peewee import *
 
+from .base import db
 from .base import ModelTestCase
 from .base import TestModel
 from .base_models import Note
@@ -171,3 +172,44 @@ class TestModelAPIs(ModelTestCase):
             'WHERE ("b1"."value" = ?) ORDER BY "value"'), [2, 7, 5])
 
         self.assertEqual([row.value for row in c2], [0, 1, 5, 8, 9])
+
+    def test_self_referential_fk(self):
+        class Category(TestModel):
+            parent = ForeignKeyField('self', backref='children', null=True)
+            name = CharField()
+
+        self.assertTrue(Category.parent.rel_model is Category)
+        db.create_tables([Category])
+
+        root = Category.create(name='root')
+        c1 = Category.create(parent=root, name='child-1')
+        c2 = Category.create(parent=root, name='child-2')
+
+        with self.assertQueryCount(1):
+            Parent = Category.alias('p')
+            query = (Category
+                     .select(
+                         Parent.name,
+                         Category.name)
+                     .join(Parent, on=(Category.parent == Parent.id))
+                     .where(Category.parent == root)
+                     .order_by(Category.name))
+            c1_db, c2_db = list(query)
+
+            self.assertEqual(c1_db.name, 'child-1')
+            self.assertEqual(c1_db.parent.name, 'root')
+            self.assertEqual(c2_db.name, 'child-2')
+            self.assertEqual(c2_db.parent.name, 'root')
+
+    def test_deferred_fk(self):
+        class Note(TestModel):
+            user = DeferredForeignKey('User', backref='notes')
+
+        class User(TestModel):
+            username = CharField()
+
+        self.assertTrue(Note.user.rel_model is User)
+        u = User(id=1337)
+        self.assertSQL(u.notes, (
+            'SELECT "t1"."id", "t1"."user_id" FROM "note" AS "t1" '
+            'WHERE ("t1"."user_id" = ?)'), [1337])

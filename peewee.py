@@ -199,30 +199,6 @@ class cached_property(object):
             return instance.__dict__[self.fn.__name__]
         return self
 
-class DeferredRelation(object):
-    _unresolved = set()
-
-    def __init__(self, rel_model_name=None):
-        self.fields = []
-        if rel_model_name is not None:
-            self._rel_model_name = rel_model_name.lower()
-            self._unresolved.add(self)
-
-    def set_field(self, model_class, field, name):
-        self.fields.append((model_class, field, name))
-
-    def set_model(self, rel_model):
-        for model, field, name in self.fields:
-            field.bind(rel_model, name)
-
-    @staticmethod
-    def resolve(model_cls):
-        unresolved = list(DeferredRelation._unresolved)
-        for dr in unresolved:
-            if dr._rel_model_name == model_cls.__name__.lower():
-                dr.set_model(model_cls)
-                DeferredRelation._unresolved.discard(dr)
-
 # SQL Generation.
 
 class AliasManager(object):
@@ -2877,6 +2853,30 @@ class ForeignKeyField(Field):
             EnclosedNodeList((self.rel_field,))))
 
 
+class DeferredForeignKey(Field):
+    _unresolved = set()
+
+    def __init__(self, rel_model_name, **kwargs):
+        self.field_kwargs = kwargs
+        self.rel_model_name = rel_model_name.lower()
+        DeferredForeignKey._unresolved.add(self)
+        super(DeferredForeignKey, self).__init__()
+
+    __hash__ = object.__hash__
+
+    def set_model(self, rel_model):
+        field = ForeignKeyField(rel_model, **self.field_kwargs)
+        self.model._meta.add_field(self.name, field)
+
+    @staticmethod
+    def resolve(model_cls):
+        unresolved = list(DeferredForeignKey._unresolved)
+        for dr in unresolved:
+            if dr.rel_model_name == model_cls.__name__.lower():
+                dr.set_model(model_cls)
+                DeferredForeignKey._unresolved.discard(dr)
+
+
 class _SortedFieldList(object):
     __slots__ = ('_keys', '_items')
 
@@ -3220,8 +3220,8 @@ class Metadata(object):
                 self._default_dict.pop(original, None)
                 self._default_by_name.pop(original.name, None)
 
-        if isinstance(field, ForeignKeyField):
-            self.remove_ref(field)
+        if isinstance(original, ForeignKeyField):
+            self.remove_ref(original)
 
     def set_primary_key(self, name, field):
         self.add_field(name, field)
@@ -3346,7 +3346,7 @@ class BaseModel(type):
         cls.validate_model()
 
         # TODO: Resolve any deferred relations waiting on this class.
-        DeferredRelation.resolve(cls)
+        DeferredForeignKey.resolve(cls)
 
         return cls
 
@@ -3801,6 +3801,7 @@ class BaseModelCursorWrapper(DictCursorWrapper):
 
     def _initialize_columns(self):
         combined = self.model._meta.combined
+        table = self.model._meta.table
         description = self.cursor.description
 
         self.ncols = len(self.cursor.description)
@@ -3828,7 +3829,8 @@ class BaseModelCursorWrapper(DictCursorWrapper):
                 fields[idx] = node
             elif column in combined:
                 converters[idx] = combined[column].python_value
-                fields[idx] = combined[column]
+                if isinstance(node, Column) and node.source == table:
+                    fields[idx] = combined[column]
             elif (isinstance(node, Function) and node.arguments and
                   node._coerce):
                 # Try to special-case functions calling fields.
