@@ -1,11 +1,21 @@
 from contextlib import contextmanager
 import logging
+import os
 import unittest
 
 from peewee import *
 
 
-db = SqliteDatabase(':memory:')
+BACKEND = os.environ.get('PEEWEE_TEST_BACKEND') or 'sqlite'
+if BACKEND == 'sqlite':
+    db = SqliteDatabase(':memory:')
+elif BACKEND == 'postgres':
+    db = PostgreqlDatabase('peewee_test')
+elif BACKEND == 'mysql':
+    db = MySQLDatabase('peewee_test')
+else:
+    raise Exception('Unsupported test backend. Use one of: "sqlite", '
+                    '"postgres", or "mysql".')
 
 
 class TestModel(Model):

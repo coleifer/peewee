@@ -6,26 +6,24 @@ from peewee import *
 from .base import db
 from .base import ModelTestCase
 from .base import TestModel
-from .base_models import Note
-from .base_models import Person
+from .base_models import *
 
 
 class TestModelAPIs(ModelTestCase):
-    requires = [Person, Note]
+    requires = [User, Tweet, Favorite, Register, Category]
 
-    def add_person(self, first, last):
-        return Person.create(first=first, last=last,
-                             dob=datetime.date(2000, 1, 1))
+    def add_user(self, username):
+        return User.create(username=username)
 
-    def add_notes(self, person, *notes):
-        for note in notes:
-            Note.create(author=person, content=note)
+    def add_tweets(self, user, *tweets):
+        for tweet in tweets:
+            Tweet.create(user=user, content=tweet)
 
     def test_assertQueryCount(self):
-        self.add_notes(self.add_person('charlie', 'l'), 'foo', 'bar', 'baz')
+        self.add_tweets(self.add_user('charlie'), 'foo', 'bar', 'baz')
         def do_test(n):
             with self.assertQueryCount(n):
-                authors = [note.author.first for note in Note.select()]
+                authors = [tweet.user.username for tweet in Tweet.select()]
 
         self.assertRaises(AssertionError, do_test, 1)
         self.assertRaises(AssertionError, do_test, 3)
@@ -34,64 +32,48 @@ class TestModelAPIs(ModelTestCase):
 
     def test_create(self):
         with self.assertQueryCount(1):
-            huey = self.add_person('huey', 'cat')
-            self.assertEqual(huey.first, 'huey')
-            self.assertEqual(huey.last, 'cat')
-            self.assertEqual(huey.id, 1)
+            huey = self.add_user('huey')
+            self.assertEqual(huey.username, 'huey')
+            self.assertTrue(isinstance(huey.id, int))
+            self.assertTrue(huey.id > 0)
 
         with self.assertQueryCount(1):
-            note = Note.create(author=huey, content='meow')
-            self.assertEqual(note.author.id, huey.id)
-            self.assertEqual(note.author.first, 'huey')
-            self.assertEqual(note.content, 'meow')
-            self.assertEqual(note.id, 1)
+            tweet = Tweet.create(user=huey, content='meow')
+            self.assertEqual(tweet.user.id, huey.id)
+            self.assertEqual(tweet.user.username, 'huey')
+            self.assertEqual(tweet.content, 'meow')
+            self.assertTrue(isinstance(tweet.id, int))
+            self.assertTrue(tweet.id > 0)
 
     def test_model_select(self):
-        query = (Note
-                 .select(Note.content, Person.first, Person.last)
-                 .join(Person)
-                 .order_by(Person.first, Note.content))
+        query = (Tweet
+                 .select(Tweet.content, User.username)
+                 .join(User)
+                 .order_by(User.username, Tweet.content))
         self.assertSQL(query, (
-            'SELECT "t1"."content", "t2"."first", "t2"."last" '
-            'FROM "note" AS "t1" '
-            'INNER JOIN "person" AS "t2" '
-            'ON ("t1"."author_id" = "t2"."id") '
-            'ORDER BY "t2"."first", "t1"."content"'), [])
+            'SELECT "t1"."content", "t2"."username" '
+            'FROM "tweet" AS "t1" '
+            'INNER JOIN "users" AS "t2" '
+            'ON ("t1"."user_id" = "t2"."id") '
+            'ORDER BY "t2"."username", "t1"."content"'), [])
 
-        huey = self.add_person('huey', 'cat')
-        mickey = self.add_person('mickey', 'dog')
-        zaizee = self.add_person('zaizee', 'cat')
+        huey = self.add_user('huey')
+        mickey = self.add_user('mickey')
+        zaizee = self.add_user('zaizee')
 
-        self.add_notes(huey, 'meow', 'hiss', 'purr')
-        self.add_notes(mickey, 'woof', 'whine')
+        self.add_tweets(huey, 'meow', 'hiss', 'purr')
+        self.add_tweets(mickey, 'woof', 'whine')
 
         with self.assertQueryCount(1):
-            notes = list(query)
-            self.assertEqual([(n.content, n.author.first, n.author.last)
-                              for n in notes], [
-                                  ('hiss', 'huey', 'cat'),
-                                  ('meow', 'huey', 'cat'),
-                                  ('purr', 'huey', 'cat'),
-                                  ('whine', 'mickey', 'dog'),
-                                  ('woof', 'mickey', 'dog')])
+            tweets = list(query)
+            self.assertEqual([(t.content, t.user.username) for t in tweets], [
+                ('hiss', 'huey'),
+                ('meow', 'huey'),
+                ('purr', 'huey'),
+                ('whine', 'mickey'),
+                ('woof', 'mickey')])
 
     def test_multi_join(self):
-        class User(TestModel):
-            username = CharField()
-
-        class Tweet(TestModel):
-            user = ForeignKeyField(User, backref='tweets')
-            content = TextField()
-            timestamp = TimestampField()
-
-        class Favorite(TestModel):
-            user = ForeignKeyField(User, backref='favorites')
-            tweet = ForeignKeyField(Tweet, backref='favorites')
-
-        User._schema.create_table()
-        Tweet._schema.create_table()
-        Favorite._schema.create_table()
-
         TweetUser = User.alias('u2')
 
         query = (Favorite
@@ -109,8 +91,8 @@ class TestModelAPIs(ModelTestCase):
             '"t1"."id", "t2"."content", "t3"."username", "u2"."username" '
             'FROM "favorite" AS "t1" '
             'INNER JOIN "tweet" AS "t2" ON ("t1"."tweet_id" = "t2"."id") '
-            'INNER JOIN "user" AS "u2" ON ("t2"."user_id" = "u2"."id") '
-            'INNER JOIN "user" AS "t3" ON ("t1"."user_id" = "t3"."id") '
+            'INNER JOIN "users" AS "u2" ON ("t2"."user_id" = "u2"."id") '
+            'INNER JOIN "users" AS "t3" ON ("t1"."user_id" = "t3"."id") '
             'ORDER BY "t2"."content", "t1"."id"'), [])
 
         u1 = User.create(username='u1')
@@ -139,12 +121,6 @@ class TestModelAPIs(ModelTestCase):
                 ('u2', 't2-2', 'u3')])
 
     def test_compound_select(self):
-        class Register(TestModel):
-            value = IntegerField()
-            class Meta:
-                table_name = 'tests_register1'
-
-        Register.create_schema()
         for i in range(10):
             Register.create(value=i)
 
@@ -153,9 +129,9 @@ class TestModelAPIs(ModelTestCase):
         c1 = (q1 | q2).order_by(SQL('1'))
 
         self.assertSQL(c1, (
-            'SELECT "t1"."id", "t1"."value" FROM "tests_register1" AS "t1" '
+            'SELECT "t1"."id", "t1"."value" FROM "register" AS "t1" '
             'WHERE ("t1"."value" < ?) UNION '
-            'SELECT "a1"."id", "a1"."value" FROM "tests_register1" AS "a1" '
+            'SELECT "a1"."id", "a1"."value" FROM "register" AS "a1" '
             'WHERE ("a1"."value" > ?) ORDER BY 1'), [2, 7])
 
         self.assertEqual([row.value for row in c1], [0, 1, 8, 9])
@@ -164,22 +140,17 @@ class TestModelAPIs(ModelTestCase):
         c2 = (c1.order_by() | q3).order_by(SQL('"value"'))
 
         self.assertSQL(c2, (
-            'SELECT "t1"."id", "t1"."value" FROM "tests_register1" AS "t1" '
+            'SELECT "t1"."id", "t1"."value" FROM "register" AS "t1" '
             'WHERE ("t1"."value" < ?) UNION '
-            'SELECT "a1"."id", "a1"."value" FROM "tests_register1" AS "a1" '
+            'SELECT "a1"."id", "a1"."value" FROM "register" AS "a1" '
             'WHERE ("a1"."value" > ?) UNION '
-            'SELECT "b1"."id", "b1"."value" FROM "tests_register1" AS "b1" '
+            'SELECT "b1"."id", "b1"."value" FROM "register" AS "b1" '
             'WHERE ("b1"."value" = ?) ORDER BY "value"'), [2, 7, 5])
 
         self.assertEqual([row.value for row in c2], [0, 1, 5, 8, 9])
 
     def test_self_referential_fk(self):
-        class Category(TestModel):
-            parent = ForeignKeyField('self', backref='children', null=True)
-            name = CharField()
-
         self.assertTrue(Category.parent.rel_model is Category)
-        db.create_tables([Category])
 
         root = Category.create(name='root')
         c1 = Category.create(parent=root, name='child-1')
@@ -191,7 +162,7 @@ class TestModelAPIs(ModelTestCase):
                      .select(
                          Parent.name,
                          Category.name)
-                     .join(Parent, on=(Category.parent == Parent.id))
+                     .join(Parent, on=(Category.parent == Parent.name))
                      .where(Category.parent == root)
                      .order_by(Category.name))
             c1_db, c2_db = list(query)
@@ -203,13 +174,13 @@ class TestModelAPIs(ModelTestCase):
 
     def test_deferred_fk(self):
         class Note(TestModel):
-            user = DeferredForeignKey('User', backref='notes')
+            foo = DeferredForeignKey('Foo', backref='notes')
 
-        class User(TestModel):
-            username = CharField()
+        class Foo(TestModel):
+            pass
 
-        self.assertTrue(Note.user.rel_model is User)
-        u = User(id=1337)
-        self.assertSQL(u.notes, (
-            'SELECT "t1"."id", "t1"."user_id" FROM "note" AS "t1" '
-            'WHERE ("t1"."user_id" = ?)'), [1337])
+        self.assertTrue(Note.foo.rel_model is Foo)
+        f = Foo(id=1337)
+        self.assertSQL(f.notes, (
+            'SELECT "t1"."id", "t1"."foo_id" FROM "note" AS "t1" '
+            'WHERE ("t1"."foo_id" = ?)'), [1337])

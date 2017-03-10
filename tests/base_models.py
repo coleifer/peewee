@@ -31,3 +31,21 @@ class Relationship(TestModel):
 
 class Register(TestModel):
     value = IntegerField()
+
+
+class User(TestModel):
+    username = CharField()
+
+    class Meta:
+        table_name = 'users'
+
+
+class Tweet(TestModel):
+    user = ForeignKeyField(User, backref='tweets')
+    content = TextField()
+    timestamp = TimestampField()
+
+
+class Favorite(TestModel):
+    user = ForeignKeyField(User, backref='favorites')
+    tweet = ForeignKeyField(Tweet, backref='favorites')

@@ -3525,7 +3525,7 @@ class Model(with_metaclass(BaseModel, Node)):
             else:
                 field_dict.pop(pk_field.name, None)
             rows = self.update(**field_dict).where(self._pk_expr()).execute()
-        elif pk_field is None:
+        elif pk_field is None or not isinstance(pk_field, AutoField):
             self.insert(**field_dict).execute()
             rows = 1
         else:
@@ -3590,7 +3590,7 @@ class Model(with_metaclass(BaseModel, Node)):
         return not self == other
 
     def __sql__(self, ctx):
-        return ctx.sql(self.id)
+        return ctx.sql(getattr(self, self._meta.primary_key.name))
 
     @classmethod
     def bind(cls, database, bind_refs=True, bind_backrefs=True):
