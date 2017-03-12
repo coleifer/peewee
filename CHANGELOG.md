@@ -5,6 +5,15 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.9.1
+
+* Fixed #1218, where the use of `playhouse.flask_utils` was requiring the
+  `sqlite3` module to be installed.
+* Fixed #1219 regarding the SQL generation for composite key sub-selects,
+  joins, etc.
+
+[View commits](https://github.com/coleifer/peewee/compare/2.9.0...2.9.1)
+
 ## 2.9.0
 
 In this release there are two notable changes:
@@ -13,6 +22,8 @@ In this release there are two notable changes:
   for an example of the code one would write to replicate this functionality.
 * The SQLite closure table extension gained support for many-to-many
   relationships thanks to a nice PR by @necoro. [Docs](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#ClosureTable).
+
+[View commits](https://github.com/coleifer/peewee/compare/2.8.8...2.9.0)
 
 ## 2.8.8
 
