@@ -1536,6 +1536,7 @@ class ForeignKeyField(IntegerField):
 
 class CompositeKey(object):
     """A primary key composed of multiple columns."""
+    _node_type = 'composite_key'
     sequence = None
 
     def __init__(self, *field_names):
@@ -1682,6 +1683,7 @@ class QueryCompiler(object):
             'select_query': self._parse_select_query,
             'compound_select_query': self._parse_compound_select_query,
             'strip_parens': self._parse_strip_parens,
+            'composite_key': self._parse_composite_key,
         }
 
     def quote(self, s):
@@ -1751,6 +1753,12 @@ class QueryCompiler(object):
         else:
             sql = self.quote(node.db_column)
         return sql, []
+
+    def _parse_composite_key(self, node, alias_map, conv):
+        fields = []
+        for field_name in node.field_names:
+            fields.append(node.model_class._meta.fields[field_name])
+        return self._parse_clause(CommaClause(*fields), alias_map, conv)
 
     def _parse_compound_select_query(self, node, alias_map, conv):
         csq = 'compound_select_query'
