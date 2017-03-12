@@ -326,3 +326,22 @@ class TestDeleteQuery(BaseTestCase):
             '(SELECT "a1"."id" FROM "users" AS "a1" WHERE ("a1"."admin" = ?)) '
             'DELETE FROM "users" '
             'WHERE ("id" IN (SELECT "u"."id" FROM "u"))'), [True])
+
+
+Register = Table('register', ('id', 'value', 'category'))
+
+
+class TestWindowQuery(BaseTestCase):
+    def test_frame(self):
+        query = (Register
+                 .select(
+                     Register.value,
+                     fn.AVG(Register.value).over(
+                         partition_by=[Register.category],
+                         start=Window.preceding(),
+                         end=Window.following(2))))
+        self.assertSQL(query, (
+            'SELECT "t1"."value", AVG("t1"."value") '
+            'OVER (PARTITION BY "t1"."category" '
+            'RANGE BETWEEN UNBOUNDED PRECEDING AND 2 FOLLOWING) '
+            'FROM "register" AS "t1"'), [])

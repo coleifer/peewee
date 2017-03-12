@@ -887,11 +887,18 @@ class Function(ColumnBase):
             return Function(attr, args)
         return decorator
 
-    def over(self, partition_by=None, order_by=None, window=None):
+    def over(self, partition_by=None, order_by=None, start=None, end=None,
+             window=None):
         if isinstance(partition_by, Window) and window is None:
             window = partition_by
+        if start is not None and not isinstance(start, SQL):
+            start = SQL(*start)
+        if end is not None and not isinstance(end, SQL):
+            end = SQL(*end)
+
         if window is None:
-            node = Window(partition_by=partition_by, order_by=order_by)
+            node = Window(partition_by=partition_by, order_by=order_by,
+                          start=start, end=end)
         else:
             node = SQL(window._alias)
         return NodeList((self, SQL('OVER'), node))
@@ -946,21 +953,24 @@ class Window(Node):
         return SQL('%d PRECEDING' % value)
 
     def __sql__(self, ctx):
-        ctx.literal(self._alias)
-        if self.partition_by:
-            ctx.literal(' PARTITION BY ')
-            ctx.sql(CommaNodeList(self.partition_by))
-        if self.order_by:
-            ctx.literal(' ORDER BY ')
-            ctx.sql(CommaNodeList(self.order_by))
-        if self.start is not None and self.end is not None:
-            ctx.literal(' RANGE BETWEEN ')
-            ctx.sql(self.start)
-            ctx.literal(' AND ')
-            ctx.sql(self.end)
-        elif self.start is not None:
-            ctx.literal(' RANGE ')
-            ctx.sql(self.start)
+        if ctx.scope != SCOPE_SOURCE:
+            ctx.literal(self._alias)
+        else:
+            with ctx(parentheses=True):
+                if self.partition_by:
+                    ctx.literal('PARTITION BY ')
+                    ctx.sql(CommaNodeList(self.partition_by))
+                if self.order_by:
+                    ctx.literal('ORDER BY ')
+                    ctx.sql(CommaNodeList(self.order_by))
+                if self.start is not None and self.end is not None:
+                    ctx.literal(' RANGE BETWEEN ')
+                    ctx.sql(self.start)
+                    ctx.literal(' AND ')
+                    ctx.sql(self.end)
+                elif self.start is not None:
+                    ctx.literal(' RANGE ')
+                    ctx.sql(self.start)
         return ctx
 
     def clone_base(self):
