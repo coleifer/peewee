@@ -1784,10 +1784,9 @@ class QueryCompiler(object):
         clone = node.clone()
         if not node._explicit_selection:
             if conv and isinstance(conv, ForeignKeyField):
-                select_field = conv.to_field
+                clone._select = (conv.to_field,)
             else:
-                select_field = clone.model_class._meta.primary_key
-            clone._select = (select_field,)
+                clone._select = clone.model_class._meta.get_primary_key_fields()
         sub, params = self.generate_select(clone, alias_map)
         return '(%s)' % strip_parens(sub), params
 
