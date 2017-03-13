@@ -345,3 +345,29 @@ class TestWindowQuery(BaseTestCase):
             'OVER (PARTITION BY "t1"."category" '
             'RANGE BETWEEN UNBOUNDED PRECEDING AND 2 FOLLOWING) '
             'FROM "register" AS "t1"'), [])
+
+        query = (Register
+                 .select(Register.value, fn.AVG(Register.value).over(
+                     partition_by=[Register.category],
+                     order_by=[Register.value],
+                     start=SQL('CURRENT ROW'),
+                     end=Window.following())))
+        self.assertSQL(query, (
+            'SELECT "t1"."value", AVG("t1"."value") '
+            'OVER (PARTITION BY "t1"."category" '
+            'ORDER BY "t1"."value" '
+            'RANGE BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING) '
+            'FROM "register" AS "t1"'), [])
+
+    def test_partition_unordered(self):
+        partition = [Register.category]
+        query = (Register
+                 .select(
+                     Register.category,
+                     Register.value,
+                     fn.AVG(Register.value).over(partition_by=partition))
+                 .order_by(Register.id))
+        self.assertSQL(query, (
+            'SELECT "t1"."category", "t1"."value", AVG("t1"."value") '
+            'OVER (PARTITION BY "t1"."category") '
+            'FROM "register" AS "t1" ORDER BY "t1"."id"'), [])

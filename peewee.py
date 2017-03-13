@@ -957,20 +957,24 @@ class Window(Node):
             ctx.literal(self._alias)
         else:
             with ctx(parentheses=True):
+                parts = []
                 if self.partition_by:
-                    ctx.literal('PARTITION BY ')
-                    ctx.sql(CommaNodeList(self.partition_by))
+                    parts.extend((
+                        SQL('PARTITION BY'),
+                        CommaNodeList(self.partition_by)))
                 if self.order_by:
-                    ctx.literal('ORDER BY ')
-                    ctx.sql(CommaNodeList(self.order_by))
+                    parts.extend((
+                        SQL('ORDER BY'),
+                        CommaNodeList(self.order_by)))
                 if self.start is not None and self.end is not None:
-                    ctx.literal(' RANGE BETWEEN ')
-                    ctx.sql(self.start)
-                    ctx.literal(' AND ')
-                    ctx.sql(self.end)
+                    parts.extend((
+                        SQL('RANGE BETWEEN'),
+                        self.start,
+                        SQL('AND'),
+                        self.end))
                 elif self.start is not None:
-                    ctx.literal(' RANGE ')
-                    ctx.sql(self.start)
+                    parts.extend((SQL('RANGE'), self.start))
+                ctx.sql(NodeList(parts))
         return ctx
 
     def clone_base(self):
