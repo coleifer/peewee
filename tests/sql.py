@@ -371,3 +371,57 @@ class TestWindowQuery(BaseTestCase):
             'SELECT "t1"."category", "t1"."value", AVG("t1"."value") '
             'OVER (PARTITION BY "t1"."category") '
             'FROM "register" AS "t1" ORDER BY "t1"."id"'), [])
+
+    def test_named_window(self):
+        window = Window(partition_by=[Register.category])
+        query = (Register
+                 .select(
+                     Register.category,
+                     Register.value,
+                     fn.AVG(Register.value).over(window))
+                 .window(window))
+
+        self.assertSQL(query, (
+            'SELECT "t1"."category", "t1"."value", AVG("t1"."value") '
+            'OVER w '
+            'FROM "register" AS "t1" '
+            'WINDOW w AS (PARTITION BY "t1"."category")'), [])
+
+        window = Window(
+            partition_by=[Register.category],
+            order_by=[Register.value.desc()])
+        query = (Register
+                 .select(
+                     Register.value,
+                     fn.RANK().over(window))
+                 .window(window))
+        self.assertSQL(query, (
+            'SELECT "t1"."value", RANK() OVER w '
+            'FROM "register" AS "t1" '
+            'WINDOW w AS ('
+            'PARTITION BY "t1"."category" '
+            'ORDER BY "t1"."value" DESC)'), [])
+
+    def test_multiple_windows(self):
+        w1 = Window(partition_by=[Register.category]).alias('w1')
+        w2 = Window(order_by=[Register.value]).alias('w2')
+        query = (Register
+                 .select(
+                     Register.value,
+                     fn.AVG(Register.value).over(w1),
+                     fn.RANK().over(w2))
+                 .window(w1, w2))
+        self.assertSQL(query, (
+            'SELECT "t1"."value", AVG("t1"."value") OVER w1, RANK() OVER w2 '
+            'FROM "register" AS "t1" '
+            'WINDOW w1 AS (PARTITION BY "t1"."category"), '
+            'w2 AS (ORDER BY "t1"."value")'), [])
+
+    def test_ordered_unpartitioned(self):
+        query = (Register
+                 .select(
+                     Register.value,
+                     fn.RANK().over(order_by=[Register.value])))
+        self.assertSQL(query, (
+            'SELECT "t1"."value", RANK() OVER (ORDER BY "t1"."value") '
+            'FROM "register" AS "t1"'), [])
