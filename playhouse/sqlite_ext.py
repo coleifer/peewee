@@ -67,7 +67,10 @@ if sys.version_info[0] == 3:
 
 FTS_MATCHINFO_FORMAT = 'pcnalx'
 FTS_MATCHINFO_FORMAT_SIMPLE = 'pcx'
-FTS_VER = sqlite3.sqlite_version_info[:3] >= (3, 7, 4) and 'FTS4' or 'FTS3'
+if sqlite3 is not None:
+    FTS_VER = sqlite3.sqlite_version_info[:3] >= (3, 7, 4) and 'FTS4' or 'FTS3'
+else:
+    FTS_VER = 'FTS3'
 FTS5_MIN_VERSION = (3, 9, 0)
 
 

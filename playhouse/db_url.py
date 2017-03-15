@@ -8,10 +8,7 @@ from playhouse.pool import PooledMySQLDatabase
 from playhouse.pool import PooledPostgresqlDatabase
 from playhouse.pool import PooledSqliteDatabase
 from playhouse.pool import PooledSqliteExtDatabase
-try:
-    from playhouse.sqlite_ext import SqliteExtDatabase
-except ImportError:
-    SqliteExtDatabase = None
+from playhouse.sqlite_ext import SqliteExtDatabase
 
 
 schemes = {
