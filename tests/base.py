@@ -23,8 +23,8 @@ class TestModel(Model):
         database = db
 
 
-def __sql__(q):
-    return Context().sql(q).query()
+def __sql__(q, **state):
+    return Context(**state).sql(q).query()
 
 
 class QueryLogHandler(logging.Handler):
@@ -54,8 +54,8 @@ class BaseTestCase(unittest.TestCase):
     def assertIsNotNone(self, value):
         self.assertTrue(value is not None, '%r is None' % value)
 
-    def assertSQL(self, query, sql, params=None):
-        qsql, qparams = __sql__(query)
+    def assertSQL(self, query, sql, params=None, **state):
+        qsql, qparams = __sql__(query, **state)
         self.assertEqual(qsql, sql)
         if params is not None:
             self.assertEqual(qparams, params)

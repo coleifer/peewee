@@ -243,6 +243,17 @@ class TestInsertQuery(BaseTestCase):
             'INSERT INTO "person" ("name") '
             'SELECT "foo"."username" FROM "foo"'), [])
 
+    def test_insert_returning(self):
+        query = (Person
+                 .insert({
+                     Person.name: 'zaizee',
+                     Person.dob: datetime.date(2000, 1, 2)})
+                 .returning(Person.id, Person.name, Person.dob))
+        self.assertSQL(query, (
+            'INSERT INTO "person" ("dob", "name") '
+            'VALUES (?, ?) RETURNING "id", "name", "dob"'),
+            [datetime.date(2000, 1, 2), 'zaizee'])
+
 
 class TestUpdateQuery(BaseTestCase):
     def test_update_query(self):
@@ -281,6 +292,15 @@ class TestUpdateQuery(BaseTestCase):
             'ON ("t2"."user_id" = "t1"."id") '
             'GROUP BY "t1"."id" '
             'HAVING (ct > ?)))'), [0, True, 100])
+
+    def test_update_returning(self):
+        query = (User
+                 .update({User.c.is_admin: True})
+                 .where(User.c.username == 'charlie')
+                 .returning(User.c.id))
+        self.assertSQL(query, (
+            'UPDATE "users" SET "is_admin" = ? WHERE ("username" = ?) '
+            'RETURNING "id"'), [True, 'charlie'])
 
 
 class TestDeleteQuery(BaseTestCase):
@@ -327,11 +347,27 @@ class TestDeleteQuery(BaseTestCase):
             'DELETE FROM "users" '
             'WHERE ("id" IN (SELECT "u"."id" FROM "u"))'), [True])
 
+    def test_delete_returning(self):
+        query = (User
+                 .delete()
+                 .where(User.c.id > 2)
+                 .returning(User.c.username))
+        self.assertSQL(query, (
+            'DELETE FROM "users" '
+            'WHERE ("id" > ?) '
+            'RETURNING "username"'), [2])
+
+        query = query.returning(User.c.id, User.c.username, SQL('1'))
+        self.assertSQL(query, (
+            'DELETE FROM "users" '
+            'WHERE ("id" > ?) '
+            'RETURNING "id", "username", 1'), [2])
+
 
 Register = Table('register', ('id', 'value', 'category'))
 
 
-class TestWindowQuery(BaseTestCase):
+class TestWindowFunctions(BaseTestCase):
     def test_frame(self):
         query = (Register
                  .select(
@@ -425,3 +461,54 @@ class TestWindowQuery(BaseTestCase):
         self.assertSQL(query, (
             'SELECT "t1"."value", RANK() OVER (ORDER BY "t1"."value") '
             'FROM "register" AS "t1"'), [])
+
+    def test_empty_over(self):
+        query = (Register
+                 .select(Register.value, fn.LAG(Register.value, 1).over())
+                 .order_by(Register.value))
+        self.assertSQL(query, (
+            'SELECT "t1"."value", LAG("t1"."value", ?) OVER () '
+            'FROM "register" AS "t1" '
+            'ORDER BY "t1"."value"'), [1])
+
+
+class TestSelectFeatures(BaseTestCase):
+    def test_distinct_on(self):
+        query = (Note
+                 .select(Person.name, Note.content)
+                 .join(Person, on=(Note.person_id == Person.id))
+                 .order_by(Person.name, Note.content)
+                 .distinct(Person.name))
+        self.assertSQL(query, (
+            'SELECT DISTINCT ON ("t1"."name") '
+            '"t1"."name", "t2"."content" '
+            'FROM "note" AS "t2" '
+            'INNER JOIN "person" AS "t1" ON ("t2"."person_id" = "t1"."id") '
+            'ORDER BY "t1"."name", "t2"."content"'), [])
+
+    def test_for_update(self):
+        query = (Person
+                 .select()
+                 .where(Person.name == 'charlie')
+                 .for_update())
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."name", "t1"."dob" '
+            'FROM "person" AS "t1" '
+            'WHERE ("t1"."name" = ?) '
+            'FOR UPDATE'), ['charlie'], for_update=True)
+
+        query = query.for_update('FOR SHARE NOWAIT')
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."name", "t1"."dob" '
+            'FROM "person" AS "t1" '
+            'WHERE ("t1"."name" = ?) '
+            'FOR SHARE NOWAIT'), ['charlie'], for_update=True)
+
+    def test_parentheses(self):
+        query = (Person
+                 .select(fn.MAX(
+                     fn.IFNULL(1, 10) * 151,
+                     fn.IFNULL(None, 10))))
+        self.assertSQL(query, (
+            'SELECT MAX((IFNULL(?, ?) * ?), IFNULL(?, ?)) '
+            'FROM "person" AS "t1"'), [1, 10, 151, None, 10])

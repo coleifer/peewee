@@ -1287,7 +1287,7 @@ class Select(SelectBase):
         self._windows = windows if windows else None
 
     @Node.copy
-    def for_update(self, for_update=None):
+    def for_update(self, for_update=True):
         self._for_update = 'FOR UPDATE' if for_update is True else for_update
 
     def _get_query_key(self):
@@ -1331,7 +1331,7 @@ class Select(SelectBase):
             # Apply ORDER BY, LIMIT, OFFSET.
             self._apply_ordering(ctx)
 
-            if self._for_update and ctx.db_for_update:
+            if self._for_update and ctx.state.for_update:
                 ctx.literal(' ')
                 ctx.sql(SQL(self._for_update))
 
@@ -1497,8 +1497,8 @@ class Insert(_WriteQuery):
             return self.apply_returning(ctx)
 
     def _execute(self, database):
-        if not self._columns and database.options.returning_clause:
-            self._columns = (self.table.primary_key,)
+        if not self._returning and database.options.returning_clause:
+            self._returning = (self.table.primary_key,)
         return super(Insert, self)._execute(database)
 
     def handle_result(self, database, cursor):
@@ -3093,7 +3093,7 @@ class SchemaManager(object):
 class Metadata(object):
     def __init__(self, model, database=None, table_name=None, indexes=None,
                  primary_key=None, constraints=None, schema=None,
-                 only_save_dirty=False, **kwargs):
+                 only_save_dirty=False, table_alias=None, **kwargs):
         self.model = model
         self.database = database
 
@@ -3123,6 +3123,7 @@ class Metadata(object):
         self.primary_key = primary_key
         self.composite_key = self.auto_increment = None
         self.only_save_dirty = only_save_dirty
+        self.table_alias = table_alias
 
         self.refs = {}
         self.backrefs = {}
@@ -3178,6 +3179,8 @@ class Metadata(object):
             self._table = Table(
                 self.table_name,
                 [field.column_name for field in self.sorted_fields],
+                schema=self.schema,
+                alias=self.table_alias,
                 _model=self.model,
                 _database=self.database)
         return self._table
@@ -3257,6 +3260,9 @@ class Metadata(object):
             isinstance(field, AutoField) or
             bool(field.sequence))
         #self.composite_key = isinstance(field, CompositeKey)
+
+    def get_primary_keys(self):
+        return (self.primary_key,)
 
     def get_default_dict(self):
         dd = self._default_by_name.copy()
@@ -3813,7 +3819,11 @@ class ModelUpdate(_ModelWriteQueryHelper, Update):
 
 
 class ModelInsert(_ModelWriteQueryHelper, Insert):
-    pass
+    def __init__(self, *args, **kwargs):
+        super(ModelInsert, self).__init__(*args, **kwargs)
+        if self._returning is None and self.model._meta.database is not None:
+            if self.model._meta.database.options.returning_clause:
+                self._returning = self.model._meta.get_primary_keys()
 
 
 class ModelDelete(_ModelWriteQueryHelper, Delete):

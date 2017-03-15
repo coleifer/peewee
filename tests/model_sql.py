@@ -7,6 +7,7 @@ from .base_models import Category
 from .base_models import Note
 from .base_models import Person
 from .base_models import Relationship
+from .base_models import User
 
 
 class TestModelSQL(BaseTestCase):
@@ -117,6 +118,31 @@ class TestModelSQL(BaseTestCase):
                                'FROM "person" AS "t1" '
                                'WHERE ("t1"."last" = ?)'), ['cat'])
 
+    def test_insert_returning(self):
+        class TestDB(Database):
+            options = Database.options + {'returning_clause': True}
+
+        class User(Model):
+            username = CharField()
+            class Meta:
+                database = TestDB(None)
+
+        query = User.insert({User.username: 'zaizee'})
+        self.assertSQL(query, (
+            'INSERT INTO "user" ("username") '
+            'VALUES (?) RETURNING "id"'), ['zaizee'])
+
+        class Person(Model):
+            name = CharField()
+            ssn = CharField(primary_key=True)
+            class Meta:
+                database = TestDB(None)
+
+        query = Person.insert({Person.name: 'charlie', Person.ssn: '123'})
+        self.assertSQL(query, (
+            'INSERT INTO "person" ("ssn", "name") VALUES (?, ?) '
+            'RETURNING "ssn"'), ['123', 'charlie'])
+
     def test_update(self):
         class Stat(TestModel):
             url = TextField()
@@ -188,3 +214,46 @@ class TestModelSQL(BaseTestCase):
              'SELECT "t1"."id" FROM "user" AS "t1" WHERE ("t1"."id" = ?)))',
              [1]),
         ])
+
+    def test_aliases(self):
+        class A(TestModel):
+            a = CharField()
+            class Meta:
+                table_alias = 'a_tbl'
+        class B(TestModel):
+            b = CharField()
+            a_link = ForeignKeyField(A)
+        class C(TestModel):
+            c = CharField()
+            b_link = ForeignKeyField(B)
+        class D(TestModel):
+            d = CharField()
+            c_link = ForeignKeyField(C)
+            class Meta:
+                table_alias = 'd_tbl'
+
+        query = (D
+                 .select(D.d, C.c)
+                 .join(C)
+                 .where(C.b_link << (
+                     B.select(B.id).join(A).where(A.a == 'a'))))
+        self.assertSQL(query, (
+            'SELECT "d_tbl"."d", "t1"."c" '
+            'FROM "d" AS "d_tbl" '
+            'INNER JOIN "c" AS "t1" ON ("d_tbl"."c_link_id" = "t1"."id") '
+            'WHERE ("t1"."b_link_id" IN ('
+            'SELECT "t2"."id" FROM "b" AS "t2" '
+            'INNER JOIN "a" AS "a_tbl" ON ("t2"."a_link_id" = "a_tbl"."id") '
+            'WHERE ("a_tbl"."a" = ?)))'), ['a'])
+
+    def test_schema(self):
+        class WithSchema(TestModel):
+            data = CharField(primary_key=True)
+            class Meta:
+                schema = 'huey'
+
+        query = WithSchema.select().where(WithSchema.data == 'zaizee')
+        self.assertSQL(query, (
+            'SELECT "t1"."data" '
+            'FROM "huey"."withschema" AS "t1" '
+            'WHERE ("t1"."data" = ?)'), ['zaizee'])
