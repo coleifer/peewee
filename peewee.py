@@ -302,8 +302,9 @@ def _sqlite_date_trunc(lookup_type, datetime_string):
     dt = format_date_time(datetime_string, SQLITE_DATETIME_FORMATS)
     return dt.strftime(SQLITE_DATE_TRUNC_MAPPING[lookup_type])
 
-def _sqlite_regexp(regex, value):
-    return re.search(regex, value, re.I) is not None
+def _sqlite_regexp(regex, value, case_sensitive=False):
+    flags = 0 if case_sensitive else re.I
+    return re.search(regex, value, flags) is not None
 
 class attrdict(dict):
     def __getattr__(self, attr):
@@ -3949,7 +3950,7 @@ class SqliteDatabase(Database):
         self._set_pragmas(conn)
         conn.create_function('date_part', 2, _sqlite_date_part)
         conn.create_function('date_trunc', 2, _sqlite_date_trunc)
-        conn.create_function('regexp', 2, _sqlite_regexp)
+        conn.create_function('regexp', -1, _sqlite_regexp)
 
     def _set_pragmas(self, conn):
         if self._pragmas:

@@ -861,7 +861,7 @@ class SqliteExtDatabase(SqliteDatabase):
             self._using_c_extensions = True
             self.register_function(_c_ext.peewee_date_part, 'date_part', 2)
             self.register_function(_c_ext.peewee_date_trunc, 'date_trunc', 2)
-            self.register_function(_c_ext.peewee_regexp, 'regexp', 2)
+            self.register_function(_c_ext.peewee_regexp, 'regexp', -1)
             self.register_function(_c_ext.peewee_rank, 'fts_rank', -1)
             self.register_function(_c_ext.peewee_lucene, 'fts_lucene', -1)
             self.register_function(_c_ext.peewee_bm25, 'fts_bm25', -1)
@@ -870,7 +870,7 @@ class SqliteExtDatabase(SqliteDatabase):
             self._using_c_extensions = False
             self.register_function(_sqlite_date_part, 'date_part', 2)
             self.register_function(_sqlite_date_trunc, 'date_trunc', 2)
-            self.register_function(_sqlite_regexp, 'regexp', 2)
+            self.register_function(_sqlite_regexp, 'regexp', -1)
             self.register_function(rank, 'fts_rank', -1)
             self.register_function(bm25, 'fts_bm25', -1)
 

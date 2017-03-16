@@ -57,13 +57,12 @@ cpdef peewee_date_trunc(lookup, date_str):
         return result[0].strftime(SQLITE_DATE_TRUNC_MAPPING[result[1]])
 
 
-cpdef peewee_regexp(regex_str, value):
+def peewee_regexp(regex_str, value, case_sensitive=False):
     if value is None or regex_str is None:
         return
 
-    if value and re.search(regex_str, value, re.I):
-        return True
-    return False
+    flags = 0 if case_sensitive else re.I
+    return re.search(regex_str, value, flags) is not None
 
 
 def peewee_rank(py_match_info, *raw_weights):
