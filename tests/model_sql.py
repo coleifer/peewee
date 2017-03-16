@@ -366,3 +366,46 @@ class TestModelCompoundSelect(BaseTestCase):
         lhs = Alpha.select(Alpha.alpha).where(Alpha.alpha < 2)
         rhs = Alpha.select(Alpha.alpha).where(Alpha.alpha > 5)
         compound = (lhs | rhs).alias('cq')
+        query = Alpha.select(compound.c.alpha).from_(compound)
+        self.assertSQL(query, (
+            'SELECT "cq"."alpha" FROM ('
+            'SELECT "t1"."alpha" FROM "alpha" AS "t1" '
+            'WHERE ("t1"."alpha" < ?) '
+            'UNION '
+            'SELECT "a1"."alpha" FROM "alpha" AS "a1" '
+            'WHERE ("a1"."alpha" > ?)) AS "cq"'), [2, 5])
+
+        b = Beta.select(Beta.beta).where(Beta.beta < 3)
+        g = Gamma.select(Gamma.gamma).where(Gamma.gamma < 0)
+        compound = (lhs | b | g).alias('cq')
+        query = Alpha.select(SQL('1')).from_(compound)
+        self.assertSQL(query, (
+            'SELECT 1 FROM ('
+            'SELECT "t1"."alpha" FROM "alpha" AS "t1" '
+            'WHERE ("t1"."alpha" < ?) '
+            'UNION SELECT "a1"."beta" FROM "beta" AS "a1" '
+            'WHERE ("a1"."beta" < ?) '
+            'UNION SELECT "b1"."gamma" FROM "gamma" AS "b1" '
+            'WHERE ("b1"."gamma" < ?)) AS "cq"'), [2, 3, 0])
+
+    def test_parentheses(self):
+        query = (Alpha.select().where(Alpha.alpha < 2) |
+                 Beta.select(Beta.id, Beta.beta).where(Beta.beta > 3))
+        self.assertSQL(query, (
+            '(SELECT "t1"."id", "t1"."alpha" FROM "alpha" AS "t1" '
+            'WHERE ("t1"."alpha" < ?)) '
+            'UNION '
+            '(SELECT "a1"."id", "a1"."beta" FROM "beta" AS "a1" '
+            'WHERE ("a1"."beta" > ?))'), [2, 3], compound_select_parentheses=True)
+
+    def test_where_in(self):
+        union = (Alpha.select(Alpha.alpha) |
+                 Beta.select(Beta.beta))
+        query = Alpha.select().where(Alpha.alpha << union)
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."alpha" '
+            'FROM "alpha" AS "t1" '
+            'WHERE ("t1"."alpha" IN '
+            '(SELECT "t1"."alpha" FROM "alpha" AS "t1" '
+            'UNION '
+            'SELECT "a1"."beta" FROM "beta" AS "a1"))'), [])

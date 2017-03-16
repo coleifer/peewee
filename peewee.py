@@ -156,6 +156,7 @@ SCOPE_NORMAL = 1
 SCOPE_SOURCE = 2
 SCOPE_VALUES = 3
 SCOPE_CTE = 4
+SCOPE_COLUMN = 5
 
 
 # Helper functions that are used in various parts of the codebase.
@@ -298,6 +299,7 @@ class Context(object):
     scope_source = __scope_context__(SCOPE_SOURCE)
     scope_values = __scope_context__(SCOPE_VALUES)
     scope_cte = __scope_context__(SCOPE_CTE)
+    scope_column = __scope_context__(SCOPE_COLUMN)
 
     def __enter__(self):
         if self.parentheses:
@@ -423,6 +425,11 @@ class Source(Node):
             ctx.literal(' AS ').sql(Entity(ctx.alias_manager.get(self)))
         return ctx
 
+    def apply_column(self, ctx):
+        if self._alias:
+            ctx.alias_manager.set(self, self._alias)
+        return ctx.sql(Entity(ctx.alias_manager.get(self)))
+
 
 class _HashableSource(object):
     def __init__(self, *args, **kwargs):
@@ -533,7 +540,7 @@ class Table(_HashableSource, Source):
             return self.apply_alias(ctx.sql(Entity(*self._path)))
         else:
             # Refer to the table using the alias.
-            return ctx.sql(Entity(ctx.alias_manager.get(self)))
+            return self.apply_column(ctx)
 
 
 class Join(Source):
@@ -711,7 +718,7 @@ class Column(ColumnBase):
         if ctx.scope == SCOPE_VALUES:
             return ctx.sql(Entity(self.name))
         else:
-            with ctx.scope_normal():
+            with ctx.scope_column():
                 return ctx.sql(self.source).literal('.').sql(Entity(self.name))
 
 
@@ -1207,13 +1214,19 @@ class CompoundSelectQuery(SelectBase):
         return (self.lhs.get_query_key(), self.rhs.get_query_key())
 
     def __sql__(self, ctx):
+        if ctx.scope == SCOPE_COLUMN:
+            return self.apply_column(ctx)
+
         parens_around_query = ctx.state.compound_select_parentheses
-        with ctx(parentheses=ctx.scope == SCOPE_SOURCE):
-            with ctx(parentheses=parens_around_query):
+        outer_parens = ctx.subquery or (ctx.scope == SCOPE_SOURCE)
+        with ctx(parentheses=outer_parens):
+            with ctx.scope_normal(parentheses=parens_around_query,
+                                  subquery=False):
                 ctx.sql(self.lhs)
             ctx.literal(' %s ' % self.op)
             with ctx.push_alias():
-                with ctx(parentheses=parens_around_query):
+                with ctx.scope_normal(parentheses=parens_around_query,
+                                      subquery=False):
                     ctx.sql(self.rhs)
 
         # Apply ORDER BY, LIMIT, OFFSET.
@@ -1246,6 +1259,10 @@ class Select(SelectBase):
                 self._distinct = distinct
 
         self._cursor_wrapper = None
+
+    @Node.copy
+    def from_(self, *sources):
+        self._from_list = list(sources)
 
     @Node.copy
     def join(self, dest, join_type='INNER', on=None):
@@ -1295,6 +1312,9 @@ class Select(SelectBase):
 
     def __sql__(self, ctx):
         super(Select, self).__sql__(ctx)
+        if ctx.scope == SCOPE_COLUMN:
+            return self.apply_column(ctx)
+
         is_subquery = ctx.subquery
         parentheses = is_subquery or (ctx.scope == SCOPE_SOURCE)
 
