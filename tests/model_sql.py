@@ -257,3 +257,112 @@ class TestModelSQL(BaseTestCase):
             'SELECT "t1"."data" '
             'FROM "huey"."withschema" AS "t1" '
             'WHERE ("t1"."data" = ?)'), ['zaizee'])
+
+
+compound_db = SqliteDatabase(':memory:')
+
+class CompoundTestModel(Model):
+    class Meta:
+        database = compound_db
+
+class Alpha(CompoundTestModel):
+    alpha = IntegerField()
+
+class Beta(CompoundTestModel):
+    beta = IntegerField()
+    other = IntegerField(default=0)
+
+class Gamma(CompoundTestModel):
+    gamma = IntegerField()
+    other = IntegerField(default=1)
+
+
+class TestModelCompoundSelect(BaseTestCase):
+    def setUp(self):
+        super(TestModelCompoundSelect, self).setUp()
+        compound_db.connect()
+
+    def tearDown(self):
+        super(TestModelCompoundSelect, self).tearDown()
+        compound_db.close()
+
+    def test_unions(self):
+        lhs = Alpha.select(Alpha.alpha)
+        rhs = Beta.select(Beta.beta)
+        self.assertSQL((lhs | rhs), (
+            'SELECT "t1"."alpha" FROM "alpha" AS "t1" UNION '
+            'SELECT "a1"."beta" FROM "beta" AS "a1"'), [])
+
+        rrhs = Gamma.select(Gamma.gamma)
+        query = (lhs | (rhs | rrhs))
+        self.assertSQL(query, (
+            'SELECT "t1"."alpha" FROM "alpha" AS "t1" UNION '
+            'SELECT "a1"."beta" FROM "beta" AS "a1" UNION '
+            'SELECT "b1"."gamma" FROM "gamma" AS "b1"'), [])
+
+    def test_union_same_model(self):
+        q1 = Alpha.select(Alpha.alpha)
+        q2 = Alpha.select(Alpha.alpha)
+        q3 = Alpha.select(Alpha.alpha)
+        compound = (q1 | q2) | q3
+        self.assertSQL(compound, (
+            'SELECT "t1"."alpha" FROM "alpha" AS "t1" UNION '
+            'SELECT "a1"."alpha" FROM "alpha" AS "a1" UNION '
+            'SELECT "b1"."alpha" FROM "alpha" AS "b1"'), [])
+
+        compound = q1 | (q2 | q3)
+        self.assertSQL(compound, (
+            'SELECT "t1"."alpha" FROM "alpha" AS "t1" UNION '
+            'SELECT "a1"."alpha" FROM "alpha" AS "a1" UNION '
+            'SELECT "b1"."alpha" FROM "alpha" AS "b1"'), [])
+
+    def test_where(self):
+        q1 = Alpha.select(Alpha.alpha).where(Alpha.alpha < 2)
+        q2 = Alpha.select(Alpha.alpha).where(Alpha.alpha > 5)
+        compound = q1 | q2
+        self.assertSQL(compound, (
+            'SELECT "t1"."alpha" FROM "alpha" AS "t1" '
+            'WHERE ("t1"."alpha" < ?) '
+            'UNION '
+            'SELECT "a1"."alpha" FROM "alpha" AS "a1" '
+            'WHERE ("a1"."alpha" > ?)'), [2, 5])
+
+        q3 = Beta.select(Beta.beta).where(Beta.beta < 3)
+        q4 = Beta.select(Beta.beta).where(Beta.beta > 4)
+        compound = q1 | q3
+        self.assertSQL(compound, (
+            'SELECT "t1"."alpha" FROM "alpha" AS "t1" '
+            'WHERE ("t1"."alpha" < ?) '
+            'UNION '
+            'SELECT "a1"."beta" FROM "beta" AS "a1" '
+            'WHERE ("a1"."beta" < ?)'), [2, 3])
+
+        compound = q1 | q3 | q2 | q4
+        self.assertSQL(compound, (
+            'SELECT "t1"."alpha" FROM "alpha" AS "t1" '
+            'WHERE ("t1"."alpha" < ?) '
+            'UNION '
+            'SELECT "a1"."beta" FROM "beta" AS "a1" '
+            'WHERE ("a1"."beta" < ?) '
+            'UNION '
+            'SELECT "b1"."alpha" FROM "alpha" AS "b1" '
+            'WHERE ("b1"."alpha" > ?) '
+            'UNION '
+            'SELECT "c1"."beta" FROM "beta" AS "c1" '
+            'WHERE ("c1"."beta" > ?)'), [2, 3, 5, 4])
+
+    def test_limit(self):
+        lhs = Alpha.select(Alpha.alpha).order_by(Alpha.alpha).limit(3)
+        rhs = Beta.select(Beta.beta).order_by(Beta.beta).limit(4)
+        compound = (lhs | rhs).limit(5)
+        # This may be invalid SQL, but this at least documents the behavior.
+        self.assertSQL(compound, (
+            'SELECT "t1"."alpha" FROM "alpha" AS "t1" '
+            'ORDER BY "t1"."alpha" LIMIT 3 UNION '
+            'SELECT "a1"."beta" FROM "beta" AS "a1" '
+            'ORDER BY "a1"."beta" LIMIT 4 LIMIT 5'), [])
+
+    def test_union_from(self):
+        lhs = Alpha.select(Alpha.alpha).where(Alpha.alpha < 2)
+        rhs = Alpha.select(Alpha.alpha).where(Alpha.alpha > 5)
+        compound = (lhs | rhs).alias('cq')
