@@ -457,7 +457,8 @@ class MySQLMigrator(SchemaMigrator):
              'FROM information_schema.key_column_usage '
              'WHERE table_name="%s" AND '
              'constraint_schema="%s" AND '
-             'column_name="%s"')
+             'column_name="%s" AND '
+             'constraint_name!="PRIMARY"')
             % (table, self.database.database, column_name))
         result = cursor.fetchone()
         if not result:
