@@ -91,7 +91,7 @@ class TestDataSet(PeeweeTestCase):
 
         db.execute_sql('create table "foo" (id INTEGER, data TEXT)')
         Foo = self.dataset['foo']
-        self.assertEqual(Foo.columns, ['id', 'data'])
+        self.assertEqual(sorted(Foo.columns), ['data', 'id'])
         self.assertTrue('foo' in self.dataset._models)
 
     def assertQuery(self, query, expected, sort_key='id'):
