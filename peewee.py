@@ -1128,6 +1128,13 @@ class Query(Node):
         else:
             raise ValueError('Unrecognized row type: "%s".' % row_type)
 
+    def sql(self):
+        if self._database:
+            context = self._database.get_sql_context()
+        else:
+            context = Context()
+        return context.parse(self)
+
     def execute(self, database=None):
         database = self._database if database is None else database
         if not database:
