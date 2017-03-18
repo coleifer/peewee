@@ -56,7 +56,7 @@ class DataSet(object):
             'json': JSONImporter}
 
     def __getitem__(self, table):
-        if table not in self._models:
+        if table not in self._models and table in self.tables:
             self.update_cache(table)
         return Table(self, table, self._models.get(table))
 
