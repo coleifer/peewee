@@ -85,6 +85,15 @@ class TestDataSet(PeeweeTestCase):
         columns = sorted(category.columns)
         self.assertEqual(columns, ['id', 'name', 'parent'])
 
+    def test_update_cache(self):
+        self.assertEqual(sorted(self.dataset.tables),
+                         ['category', 'note', 'user'])
+
+        db.execute_sql('create table "foo" (id INTEGER, data TEXT)')
+        Foo = self.dataset['foo']
+        self.assertEqual(Foo.columns, ['id', 'data'])
+        self.assertTrue('foo' in self.dataset._models)
+
     def assertQuery(self, query, expected, sort_key='id'):
         key = operator.itemgetter(sort_key)
         self.assertEqual(
