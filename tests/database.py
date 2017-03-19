@@ -5,12 +5,12 @@ from peewee import *
 
 from .base import DatabaseTestCase
 from .base import ModelTestCase
-from .base import get_in_memory_db
+from .base import db_loader
 from .base_models import User
 
 
 class TestDatabase(DatabaseTestCase):
-    database = get_in_memory_db()
+    database = db_loader('sqlite3')
 
     def test_pragmas(self):
         self.assertEqual(self.database.page_size, 4096)

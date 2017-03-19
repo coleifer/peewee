@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+from functools import wraps
 import logging
 import os
 import unittest
@@ -6,7 +7,14 @@ import unittest
 from peewee import *
 
 
-def db_loader(engine, name, **params):
+logger = logging.getLogger('peewee')
+
+if os.environ.get('VERBOSE'):
+    logger.addHandler(logging.StreamHandler())
+    logger.setLevel(logging.DEBUG)
+
+
+def db_loader(engine, name='peewee_test', **params):
     engine_aliases = {
         SqliteDatabase: ['sqlite', 'sqlite3'],
         MySQLDatabase: ['mysql'],
@@ -47,9 +55,6 @@ class QueryLogHandler(logging.Handler):
 
     def emit(self, record):
         self.queries.append(record)
-
-
-logger = logging.getLogger('peewee')
 
 
 class BaseTestCase(unittest.TestCase):
@@ -110,7 +115,7 @@ class ModelTestCase(DatabaseTestCase):
         if self.requires:
             for model in self.requires:
                 self._db_mapping[model] = model._meta.database
-                model._meta.database = self.database
+                model._meta.set_database(self.database)
             self.database.drop_tables(self.requires, safe=True)
             self.database.create_tables(self.requires)
 
@@ -119,6 +124,27 @@ class ModelTestCase(DatabaseTestCase):
         if self.requires:
             self.database.drop_tables(self.requires, safe=True)
             for model in self.requires:
-                model._meta.database = self._db_mapping[model]
+                model._meta.set_database(self._db_mapping[model])
 
         super(ModelTestCase, self).tearDown()
+
+
+def requires_models(*models):
+    def decorator(method):
+        @wraps(method)
+        def inner(self):
+            _db_mapping = {}
+            for model in models:
+                _db_mapping[model] = model._meta.database
+                model._meta.set_database(self.database)
+            self.database.drop_tables(models, safe=True)
+            self.database.create_tables(models)
+
+            try:
+                method(self)
+            finally:
+                self.database.drop_tables(models)
+                for model in models:
+                    model._meta.set_database(_db_mapping[model])
+        return inner
+    return decorator

@@ -1430,10 +1430,10 @@ class _WriteQuery(Query):
 
     def _execute(self, database):
         if self._returning:
-            return self.execute_returning(database)
+            cursor = self.execute_returning(database)
         else:
             cursor = database.execute(self)
-            return self.handle_result(database, cursor)
+        return self.handle_result(database, cursor)
 
     def execute_returning(self, database):
         if self._cursor_wrapper is None:
@@ -1799,8 +1799,8 @@ class Database(_callable_context_manager):
         with __exception_wrapper__:
             cursor = self.cursor()
             cursor.execute(sql, params or ())
-            if self.commit_select or not sql.startswith('SELECT') and \
-               not self.in_transaction() and commit:
+            if commit and not self.in_transaction() and \
+               (self.commit_select or not sql.startswith('SELECT')):
                 self.commit()
         return cursor
 
@@ -1894,14 +1894,14 @@ def __pragma__(name):
 class SqliteDatabase(Database):
     options = Database.options + attrdict(
         field_types={
-            FIELD.BIGINT: FIELD.INT,
-            FIELD.BOOL: FIELD.INT,
-            FIELD.DOUBLE: FIELD.FLOAT,
-            FIELD.SMALLINT: FIELD.INT,
-            FIELD.UUID: FIELD.TEXT},
+            'BIGINT': FIELD.INT,
+            'BOOL': FIELD.INT,
+            'DOUBLE': FIELD.FLOAT,
+            'SMALLINT': FIELD.INT,
+            'UUID': FIELD.TEXT},
         operations={
-            OP.LIKE: 'GLOB',
-            OP.ILIKE: 'LIKE'},
+            'LIKE': 'GLOB',
+            'ILIKE': 'LIKE'},
         insert_many=sqlite3 and sqlite3.sqlite_version_info >= (3, 7, 11),
         limit_max=-1)
 
@@ -2020,15 +2020,15 @@ class SqliteDatabase(Database):
 class PostgresqlDatabase(Database):
     options = Database.options + attrdict(
         field_types={
-            FIELD.AUTO: 'SERIAL',
-            FIELD.BLOB: 'BYTEA',
-            FIELD.BOOL: 'BOOLEAN',
-            FIELD.DATETIME: 'TIMESTAMP',
-            FIELD.DECIMAL: 'NUMERIC',
-            FIELD.DOUBLE: 'DOUBLE PRECISION',
-            FIELD.UUID: 'UUID',
+            'AUTO': 'SERIAL',
+            'BLOB': 'BYTEA',
+            'BOOL': 'BOOLEAN',
+            'DATETIME': 'TIMESTAMP',
+            'DECIMAL': 'NUMERIC',
+            'DOUBLE': 'DOUBLE PRECISION',
+            'UUID': 'UUID',
         },
-        operations={OP.REGEXP: '~'},
+        operations={'REGEXP': '~'},
         param='%s',
 
         compound_select_parentheses=True,
@@ -2044,19 +2044,17 @@ class PostgresqlDatabase(Database):
 
     def init(self, database, register_unicode=True, **kwargs):
         self._register_unicode = register_unicode
-        super(SqliteDatabase, self).init(database, **kwargs)
+        super(PostgresqlDatabase, self).init(database, **kwargs)
 
     def _connect(self):
         conn = psycopg2.connect(database=self.database, **self.connect_params)
         if self._register_unicode:
             pg_extensions.register_type(pg_extensions.UNICODE, conn)
             pg_extensions.register_type(pg_extensions.UNICODEARRAY, conn)
-        if encoding:
-            conn.set_client_encoding(encoding)
         return conn
 
     def last_insert_id(self, cursor):
-        return cursor.fetchone()[0]
+        return cursor[0][0]
 
     def get_tables(self, schema=None):
         query = ('SELECT tablename FROM pg_catalog.pg_tables '
@@ -2141,17 +2139,17 @@ class PostgresqlDatabase(Database):
 class MySQLDatabase(Database):
     options = Database.options + attrdict(
         field_types={
-            FIELD.AUTO: 'INTEGER AUTO_INCREMENT',
-            FIELD.BOOL: 'BOOL',
-            FIELD.DECIMAL: 'NUMERIC',
-            FIELD.DOUBLE: 'DOUBLE PRECISION',
-            FIELD.FLOAT: 'FLOAT',
-            FIELD.UUID: 'VARCHAR(40)',
+            'AUTO': 'INTEGER AUTO_INCREMENT',
+            'BOOL': 'BOOL',
+            'DECIMAL': 'NUMERIC',
+            'DOUBLE': 'DOUBLE PRECISION',
+            'FLOAT': 'FLOAT',
+            'UUID': 'VARCHAR(40)',
         },
         operations={
-            OP.LIKE: 'LIKE BINARY',
-            OP.ILIKE: 'LIKE',
-            OP.XOR: 'XOR',
+            'LIKE': 'LIKE BINARY',
+            'ILIKE': 'LIKE',
+            'XOR': 'XOR',
         },
         param='%s',
         quote='`',
@@ -3365,6 +3363,10 @@ class Metadata(object):
             fields.append((index_nodes, is_unique))
         return fields
 
+    def set_database(self, database):
+        self.database = database
+        self.model._schema._database = database
+
 
 class DoesNotExist(Exception): pass
 
@@ -3416,7 +3418,7 @@ class BaseModel(type):
         cls.__data__ = cls.__rel__ = None
 
         cls._meta = Meta(cls, **meta_options)
-        cls._schema = Schema(cls, cls._meta.database, **sopts)
+        cls._schema = Schema(cls, **sopts)
 
         fields = []
         for key, value in cls.__dict__.items():
@@ -3734,11 +3736,7 @@ class _ModelQueryHelper(object):
     def _get_cursor_wrapper(self, cursor):
         row_type = self._row_type or self.default_row_type
         if row_type == ROW.MODEL:
-            if len(self._from_list) == 1 and not self._joins:
-                return ModelObjectCursorWrapper(cursor, self.model,
-                                                self._columns, self.model)
-            return ModelCursorWrapper(cursor, self.model, self._columns,
-                                      self._from_list, self._joins)
+            return self._get_model_cursor_wrapper(cursor)
         elif row_type == ROW.DICT:
             return ModelDictCursorWrapper(cursor, self.model, self._columns)
         elif row_type == ROW.TUPLE:
@@ -3751,6 +3749,9 @@ class _ModelQueryHelper(object):
                                             self._constructor)
         else:
             raise ValueError('Unrecognized row type: "%s".' % row_type)
+
+    def _get_model_cursor_wrapper(self, cursor):
+        return ModelObjectCursorWrapper(cursor, self.model, [], self.model)
 
 
 class BaseModelSelect(_ModelQueryHelper):
@@ -3782,23 +3783,6 @@ class ModelCompoundSelectQuery(BaseModelSelect, CompoundSelectQuery):
     def __init__(self, model, *args, **kwargs):
         self.model = model
         super(ModelCompoundSelectQuery, self).__init__(*args, **kwargs)
-
-    def _get_cursor_wrapper(self, cursor):
-        row_type = self._row_type or self.default_row_type
-        if row_type == ROW.MODEL:
-            return ModelObjectCursorWrapper(cursor, self.model,
-                                            [], self.model)
-        elif row_type == ROW.DICT:
-            return ModelDictCursorWrapper(cursor, self.model, [])
-        elif row_type == ROW.TUPLE:
-            return ModelTupleCursorWrapper(cursor, self.model, [])
-        elif row_type == ROW.NAMED_TUPLE:
-            return ModelNamedTupleCursorWrapper(cursor, self.model, [])
-        elif row_type == ROW.CONSTRUCTOR:
-            return ModelObjectCursorWrapper(cursor, self.model, [],
-                                            self._constructor)
-        else:
-            raise ValueError('Unrecognized row type: "%s".' % row_type)
 
 
 class ModelSelect(BaseModelSelect, Select):
@@ -3881,6 +3865,13 @@ class ModelSelect(BaseModelSelect, Select):
 
         return fk_field, backref
 
+    def _get_model_cursor_wrapper(self, cursor):
+        if len(self._from_list) == 1 and not self._joins:
+            return ModelObjectCursorWrapper(cursor, self.model,
+                                            self._columns, self.model)
+        return ModelCursorWrapper(cursor, self.model, self._columns,
+                                  self._from_list, self._joins)
+
 
 class _ModelWriteQueryHelper(_ModelQueryHelper):
     def __init__(self, model, *args, **kwargs):
@@ -3898,6 +3889,7 @@ class ModelInsert(_ModelWriteQueryHelper, Insert):
         if self._returning is None and self.model._meta.database is not None:
             if self.model._meta.database.options.returning_clause:
                 self._returning = self.model._meta.get_primary_keys()
+                self._row_type = ROW.TUPLE
 
 
 class ModelDelete(_ModelWriteQueryHelper, Delete):

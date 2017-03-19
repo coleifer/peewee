@@ -1,5 +1,6 @@
 from peewee import *
 
+from .base import get_in_memory_db
 from .base import BaseTestCase
 from .base import TestModel
 from .base import __sql__
@@ -11,6 +12,21 @@ from .base_models import User
 
 
 class TestModelSQL(BaseTestCase):
+    database = get_in_memory_db()
+    model_list = [Category, Note, Person, Relationship, User]
+
+    def setUp(self):
+        super(TestModelSQL, self).setUp()
+        self._mapping = {}
+        for model in self.model_list:
+            self._mapping[model] = model._meta.database
+            model._meta.database = self.database
+
+    def tearDown(self):
+        super(TestModelSQL, self).tearDown()
+        for model, db in self._mapping.items():
+            model._meta.database = db
+
     def assertCreateTable(self, model_class, expected):
         sql, params = model_class._schema._create_table(False).query()
         self.assertEqual(params, [])

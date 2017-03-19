@@ -4,14 +4,14 @@ import unittest
 from peewee import *
 
 from .base import db
+from .base import get_in_memory_db
+from .base import requires_models
 from .base import ModelTestCase
 from .base import TestModel
 from .base_models import *
 
 
 class TestModelAPIs(ModelTestCase):
-    requires = [User, Tweet, Favorite, Register, Category]
-
     def add_user(self, username):
         return User.create(username=username)
 
@@ -19,6 +19,7 @@ class TestModelAPIs(ModelTestCase):
         for tweet in tweets:
             Tweet.create(user=user, content=tweet)
 
+    @requires_models(User, Tweet)
     def test_assertQueryCount(self):
         self.add_tweets(self.add_user('charlie'), 'foo', 'bar', 'baz')
         def do_test(n):
@@ -30,6 +31,7 @@ class TestModelAPIs(ModelTestCase):
         do_test(4)
         self.assertRaises(AssertionError, do_test, 5)
 
+    @requires_models(User, Tweet)
     def test_create(self):
         with self.assertQueryCount(1):
             huey = self.add_user('huey')
@@ -45,6 +47,7 @@ class TestModelAPIs(ModelTestCase):
             self.assertTrue(isinstance(tweet.id, int))
             self.assertTrue(tweet.id > 0)
 
+    @requires_models(User, Tweet)
     def test_model_select(self):
         query = (Tweet
                  .select(Tweet.content, User.username)
@@ -73,6 +76,7 @@ class TestModelAPIs(ModelTestCase):
                 ('whine', 'mickey'),
                 ('woof', 'mickey')])
 
+    @requires_models(User, Tweet, Favorite)
     def test_multi_join(self):
         TweetUser = User.alias('u2')
 
@@ -120,6 +124,7 @@ class TestModelAPIs(ModelTestCase):
                 ('u2', 't2-2', 'u1'),
                 ('u2', 't2-2', 'u3')])
 
+    @requires_models(Register)
     def test_compound_select(self):
         for i in range(10):
             Register.create(value=i)
@@ -149,6 +154,7 @@ class TestModelAPIs(ModelTestCase):
 
         self.assertEqual([row.value for row in c2], [0, 1, 5, 8, 9])
 
+    @requires_models(Category)
     def test_self_referential_fk(self):
         self.assertTrue(Category.parent.rel_model is Category)
 
