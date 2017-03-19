@@ -1019,6 +1019,16 @@ def EnclosedNodeList(nodes):
     return NodeList(nodes, ', ', True)
 
 
+def database_required(method):
+    @wraps(method)
+    def inner(self, database=None, *args, **kwargs):
+        database = self._database if database is None else database
+        if not database:
+            raise Exception('Query must be bound to a database in order '
+                            'to call "%s".' % method.__name__)
+        return method(self, database, *args, **kwargs)
+    return inner
+
 # BASE QUERY INTERFACE.
 
 class Query(Node):
@@ -1135,11 +1145,8 @@ class Query(Node):
             context = Context()
         return context.parse(self)
 
-    def execute(self, database=None):
-        database = self._database if database is None else database
-        if not database:
-            raise ValueError('Database must be supplied or query must be '
-                             'bound to a database using the bind() method.')
+    @database_required
+    def execute(self, database):
         return self._execute(database)
 
     def _execute(self, database):
@@ -1200,6 +1207,43 @@ class SelectBase(_HashableSource, Source, SelectQuery):
         self._cursor_wrapper = self._get_cursor_wrapper(cursor)
         return self._cursor_wrapper
 
+    @database_required
+    def peek(self, database, n=1):
+        res = self.execute(database)
+        res.fill_cache(n)
+        rows = res._result_cache[:n]
+        if rows:
+            return rows[0] if n == 1 else rows
+
+    @database_required
+    def first(self, database, n=1):
+        if self._limit != n:
+            self._limit = n
+            self._cursor_wrapper = None
+        return self.peek(database, n=n)
+
+    @database_required
+    def scalar(self, database, as_tuple=False):
+        row = self.tuples().first(database)
+        return row[0] if row and not as_tuple else row
+
+    @database_required
+    def count(self, database, clear_limit=False):
+        clone = self.order_by().alias('_wrapped')
+        if clear_limit:
+            clone._limit = clone._offset = None
+
+        query = Select([clone], [fn.COUNT(SQL('1'))]).tuples()
+        return query.execute(database)[0][0]
+
+    @database_required
+    def exists(self, database):
+        clone = self.columns(SQL('1'))
+        clone._limit = 1
+        clone._offset = None
+        return bool(clone.scalar())
+
+    @database_required
     def get(self, database):
         try:
             return self.execute(database)[0]
@@ -1244,8 +1288,9 @@ class CompoundSelectQuery(SelectBase):
 class Select(SelectBase):
     def __init__(self, from_list=None, columns=None, where=None,
                  group_by=None, having=None, order_by=None, limit=None,
-                 offset=None, distinct=None, windows=None, for_update=None):
-        super(Select, self).__init__()
+                 offset=None, distinct=None, windows=None, for_update=None,
+                 **kwargs):
+        super(Select, self).__init__(**kwargs)
         self._from_list = (list(from_list) if isinstance(from_list, tuple)
                            else from_list) or []
         self._columns = columns
@@ -1266,6 +1311,10 @@ class Select(SelectBase):
                 self._distinct = distinct
 
         self._cursor_wrapper = None
+
+    @Node.copy
+    def columns(self, *columns):
+        self._columns = columns
 
     @Node.copy
     def from_(self, *sources):

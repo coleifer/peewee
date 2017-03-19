@@ -6,16 +6,29 @@ import unittest
 from peewee import *
 
 
+def db_loader(engine, name, **params):
+    engine_aliases = {
+        SqliteDatabase: ['sqlite', 'sqlite3'],
+        MySQLDatabase: ['mysql'],
+        PostgresqlDatabase: ['postgres', 'postgresql'],
+    }
+    engine_map = dict((alias, db) for db, aliases in engine_aliases.items()
+                      for alias in aliases)
+    if engine.lower() not in engine_map:
+        raise Exception('Unsupported engine: %s.' % engine)
+    db_class = engine_map[engine.lower()]
+    if db_class is SqliteDatabase and not name.endswith('.db'):
+        name = '%s.db' % name
+    return engine_map[engine](name, **params)
+
+
+def get_in_memory_db(**params):
+    return db_loader('sqlite3', ':memory:', **params)
+
+
 BACKEND = os.environ.get('PEEWEE_TEST_BACKEND') or 'sqlite'
-if BACKEND == 'sqlite':
-    db = SqliteDatabase(':memory:')
-elif BACKEND == 'postgres':
-    db = PostgreqlDatabase('peewee_test')
-elif BACKEND == 'mysql':
-    db = MySQLDatabase('peewee_test')
-else:
-    raise Exception('Unsupported test backend. Use one of: "sqlite", '
-                    '"postgres", or "mysql".')
+
+db = db_loader(BACKEND, 'peewee_test')
 
 
 class TestModel(Model):
@@ -72,25 +85,40 @@ class BaseTestCase(unittest.TestCase):
 
 
 class DatabaseTestCase(BaseTestCase):
+    database = db
+
     def setUp(self):
-        db.connect()
+        self.database.connect()
         super(DatabaseTestCase, self).setUp()
 
     def tearDown(self):
         super(DatabaseTestCase, self).tearDown()
-        db.close()
+        self.database.close()
+
+    def execute(self, sql, params=None):
+        return self.database.execute_sql(sql, params)
 
 
 class ModelTestCase(DatabaseTestCase):
+    database = db
     requires = None
 
     def setUp(self):
         super(ModelTestCase, self).setUp()
+        self._db_mapping = {}
+        # Override the model's database object with test db.
         if self.requires:
-            db.drop_tables(self.requires, safe=True)
-            db.create_tables(self.requires)
+            for model in self.requires:
+                self._db_mapping[model] = model._meta.database
+                model._meta.database = self.database
+            self.database.drop_tables(self.requires, safe=True)
+            self.database.create_tables(self.requires)
 
     def tearDown(self):
+        # Restore the model's previous database object.
         if self.requires:
-            db.drop_tables(self.requires, safe=True)
+            self.database.drop_tables(self.requires, safe=True)
+            for model in self.requires:
+                model._meta.database = self._db_mapping[model]
+
         super(ModelTestCase, self).tearDown()
