@@ -1209,9 +1209,7 @@ class SelectBase(_HashableSource, Source, SelectQuery):
 
     @database_required
     def peek(self, database, n=1):
-        res = self.execute(database)
-        res.fill_cache(n)
-        rows = res._result_cache[:n]
+        rows = self.execute(database)[:n]
         if rows:
             return rows[0] if n == 1 else rows
 
