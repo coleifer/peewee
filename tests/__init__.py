@@ -10,6 +10,7 @@ from .database import *
 from .models import *
 from .model_sql import *
 from .queries import *
+from .schema import *
 from .sql import *
 from .transactions import *
 #from playhouse.tests.test_apis import *

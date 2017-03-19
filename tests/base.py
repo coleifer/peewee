@@ -9,10 +9,6 @@ from peewee import *
 
 logger = logging.getLogger('peewee')
 
-if os.environ.get('VERBOSE'):
-    logger.addHandler(logging.StreamHandler())
-    logger.setLevel(logging.DEBUG)
-
 
 def db_loader(engine, name='peewee_test', **params):
     engine_aliases = {
@@ -35,6 +31,12 @@ def get_in_memory_db(**params):
 
 
 BACKEND = os.environ.get('PEEWEE_TEST_BACKEND') or 'sqlite'
+VERBOSITY = int(os.environ.get('PEEWEE_TEST_VERBOSITY') or 1)
+
+if VERBOSITY > 1:
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.ERROR)
+    logger.addHandler(handler)
 
 db = db_loader(BACKEND, 'peewee_test')
 
@@ -104,18 +106,35 @@ class DatabaseTestCase(BaseTestCase):
         return self.database.execute_sql(sql, params)
 
 
-class ModelTestCase(DatabaseTestCase):
+class ModelDatabaseTestCase(DatabaseTestCase):
     database = db
     requires = None
 
     def setUp(self):
-        super(ModelTestCase, self).setUp()
+        super(ModelDatabaseTestCase, self).setUp()
         self._db_mapping = {}
         # Override the model's database object with test db.
         if self.requires:
             for model in self.requires:
                 self._db_mapping[model] = model._meta.database
                 model._meta.set_database(self.database)
+
+    def tearDown(self):
+        # Restore the model's previous database object.
+        if self.requires:
+            for model in self.requires:
+                model._meta.set_database(self._db_mapping[model])
+
+        super(ModelDatabaseTestCase, self).tearDown()
+
+
+class ModelTestCase(ModelDatabaseTestCase):
+    database = db
+    requires = None
+
+    def setUp(self):
+        super(ModelTestCase, self).setUp()
+        if self.requires:
             self.database.drop_tables(self.requires, safe=True)
             self.database.create_tables(self.requires)
 
@@ -123,9 +142,6 @@ class ModelTestCase(DatabaseTestCase):
         # Restore the model's previous database object.
         if self.requires:
             self.database.drop_tables(self.requires, safe=True)
-            for model in self.requires:
-                model._meta.set_database(self._db_mapping[model])
-
         super(ModelTestCase, self).tearDown()
 
 
@@ -148,3 +164,36 @@ def requires_models(*models):
                     model._meta.set_database(_db_mapping[model])
         return inner
     return decorator
+
+
+def skip_if(expr):
+    def decorator(method):
+        @wraps(method)
+        def inner(self):
+            should_skip = expr() if callable(expr) else expr
+            if not should_skip:
+                return method(self)
+            elif VERBOSITY > 1:
+                print('Skipping %s test.' % method.__name__)
+        return inner
+    return decorator
+
+
+def skip_unless(expr):
+    return skip_if((lambda: not expr()) if callable(expr) else not expr)
+
+
+def skip_case_if(expr):
+    def decorator(klass):
+        should_skip = expr() if callable(expr) else expr
+        if not should_skip:
+            return klass
+        elif VERBOSITY > 1:
+            print('Skipping %s test.' % method.__name__)
+            class Dummy(object): pass
+            return Dummy
+    return decorator
+
+
+def skip_case_unless(expr):
+    return skip_case_if((lambda: not expr()) if callable(expr) else not expr)

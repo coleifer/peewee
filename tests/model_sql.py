@@ -2,84 +2,18 @@ from peewee import *
 
 from .base import get_in_memory_db
 from .base import BaseTestCase
+from .base import ModelDatabaseTestCase
 from .base import TestModel
 from .base import __sql__
 from .base_models import Category
 from .base_models import Note
 from .base_models import Person
 from .base_models import Relationship
-from .base_models import User
 
 
-class TestModelSQL(BaseTestCase):
+class TestModelSQL(ModelDatabaseTestCase):
     database = get_in_memory_db()
-    model_list = [Category, Note, Person, Relationship, User]
-
-    def setUp(self):
-        super(TestModelSQL, self).setUp()
-        self._mapping = {}
-        for model in self.model_list:
-            self._mapping[model] = model._meta.database
-            model._meta.database = self.database
-
-    def tearDown(self):
-        super(TestModelSQL, self).tearDown()
-        for model, db in self._mapping.items():
-            model._meta.database = db
-
-    def assertCreateTable(self, model_class, expected):
-        sql, params = model_class._schema._create_table(False).query()
-        self.assertEqual(params, [])
-
-        indexes = []
-        for create_index in model_class._schema._create_indexes(False):
-            isql, params = create_index.query()
-            self.assertEqual(params, [])
-            indexes.append(isql)
-
-        self.assertEqual([sql] + indexes, expected)
-
-    def test_table_and_index_creation(self):
-        self.assertCreateTable(Person, [
-            ('CREATE TABLE "person" ('
-             '"id" INTEGER NOT NULL PRIMARY KEY, '
-             '"first" VARCHAR(255) NOT NULL, '
-             '"last" VARCHAR(255) NOT NULL, '
-             '"dob" DATE NOT NULL)'),
-            'CREATE INDEX "person_dob" ON "person" ("dob")',
-            ('CREATE UNIQUE INDEX "person_first_last" ON '
-             '"person" ("first", "last")'),
-        ])
-
-        self.assertCreateTable(Note, [
-            ('CREATE TABLE "note" ('
-             '"id" INTEGER NOT NULL PRIMARY KEY, '
-             '"author_id" INTEGER NOT NULL, '
-             '"content" TEXT NOT NULL, '
-             'FOREIGN KEY ("author_id") REFERENCES "person" ("id"))'),
-            'CREATE INDEX "note_author" ON "note" ("author_id")',
-        ])
-
-        self.assertCreateTable(Category, [
-            ('CREATE TABLE "category" ('
-             '"name" VARCHAR(20) NOT NULL PRIMARY KEY, '
-             '"parent_id" VARCHAR(20), '
-             'FOREIGN KEY ("parent_id") REFERENCES "category" ("name"))'),
-            'CREATE INDEX "category_parent" ON "category" ("parent_id")',
-        ])
-
-        self.assertCreateTable(Relationship, [
-            ('CREATE TABLE "relationship" ('
-             '"id" INTEGER NOT NULL PRIMARY KEY, '
-             '"from_person_id" INTEGER NOT NULL, '
-             '"to_person_id" INTEGER NOT NULL, '
-             'FOREIGN KEY ("from_person_id") REFERENCES "person" ("id"), '
-             'FOREIGN KEY ("to_person_id") REFERENCES "person" ("id"))'),
-            ('CREATE INDEX "relationship_from_person" '
-             'ON "relationship" ("from_person_id")'),
-            ('CREATE INDEX "relationship_to_person" '
-             'ON "relationship" ("to_person_id")'),
-        ])
+    requires = [Category, Note, Person, Relationship]
 
     def test_select(self):
         query = (Person
@@ -275,7 +209,7 @@ class TestModelSQL(BaseTestCase):
             'WHERE ("t1"."data" = ?)'), ['zaizee'])
 
 
-compound_db = SqliteDatabase(':memory:')
+compound_db = get_in_memory_db()
 
 class CompoundTestModel(Model):
     class Meta:
@@ -294,14 +228,6 @@ class Gamma(CompoundTestModel):
 
 
 class TestModelCompoundSelect(BaseTestCase):
-    def setUp(self):
-        super(TestModelCompoundSelect, self).setUp()
-        compound_db.connect()
-
-    def tearDown(self):
-        super(TestModelCompoundSelect, self).tearDown()
-        compound_db.close()
-
     def test_unions(self):
         lhs = Alpha.select(Alpha.alpha)
         rhs = Beta.select(Beta.beta)

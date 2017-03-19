@@ -10,6 +10,7 @@ from inspect import isclass
 import calendar
 import datetime
 import decimal
+import hashlib
 import itertools
 import logging
 import operator
@@ -2594,8 +2595,10 @@ class Field(ColumnBase):
             accum.append(SQL('NOT NULL'))
         if self.primary_key:
             accum.append(SQL('PRIMARY KEY'))
+        if self.sequence:
+            accum.append(SQL("DEFAULT NEXTVAL('%s')" % self.sequence))
         if self.constraints:
-            accum.extend(constraints)
+            accum.extend(self.constraints)
         if self.collation:
             accum.append(SQL('COLLATE %s' % self.collation))
         return NodeList(accum)
