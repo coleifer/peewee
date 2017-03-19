@@ -22,7 +22,7 @@ def db_loader(engine, name='peewee_test', **params):
         raise Exception('Unsupported engine: %s.' % engine)
     db_class = engine_map[engine.lower()]
     if db_class is SqliteDatabase and not name.endswith('.db'):
-        name = '%s.db' % name
+        name = '%s.db' % name if name != ':memory:' else name
     return engine_map[engine](name, **params)
 
 
