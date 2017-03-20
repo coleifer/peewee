@@ -137,12 +137,12 @@ FIELD = attrdict(
     VARCHAR='VARCHAR')
 
 JOIN = attrdict(
-    INNER='INNER JOIN',
-    LEFT_OUTER='LEFT OUTER JOIN',
-    RIGHT_OUTER='RIGHT OUTER JOIN',
-    FULL='FULL JOIN',
-    FULL_OUTER='FULL OUTER JOIN',
-    CROSS='CROSS JOIN')
+    INNER='INNER',
+    LEFT_OUTER='LEFT OUTER',
+    RIGHT_OUTER='RIGHT OUTER',
+    FULL='FULL',
+    FULL_OUTER='FULL OUTER',
+    CROSS='CROSS')
 
 # Row representations.
 ROW = attrdict(
@@ -392,6 +392,14 @@ class _ExplicitColumn(object):
         return self
 
 
+def __join__(join_type='INNER', inverted=False):
+    def method(self, other):
+        if inverted:
+            self, other = other, self
+        return Join(self, other, join_type=join_type)
+    return method
+
+
 class Source(Node):
     c = _DynamicColumn()
 
@@ -468,7 +476,20 @@ def __bind_database__(meth):
     return inner
 
 
-class Table(_HashableSource, Source):
+class BaseTable(Source):
+    __and__ = __join__(JOIN.INNER)
+    __add__ = __join__(JOIN.LEFT_OUTER)
+    __sub__ = __join__(JOIN.RIGHT_OUTER)
+    __or__ = __join__(JOIN.FULL_OUTER)
+    __mul__ = __join__(JOIN.CROSS)
+    __rand__ = __join__(JOIN.INNER, inverted=True)
+    __radd__ = __join__(JOIN.LEFT_OUTER, inverted=True)
+    __rsub__ = __join__(JOIN.RIGHT_OUTER, inverted=True)
+    __ror__ = __join__(JOIN.FULL_OUTER, inverted=True)
+    __rmul__ = __join__(JOIN.CROSS, inverted=True)
+
+
+class Table(_HashableSource, BaseTable):
     def __init__(self, name, columns=None, primary_key=None, schema=None,
                  alias=None, _model=None, _database=None):
         self._name = name
@@ -544,8 +565,8 @@ class Table(_HashableSource, Source):
             return self.apply_column(ctx)
 
 
-class Join(Source):
-    def __init__(self, lhs, rhs, join_type='INNER', on=None, alias=None):
+class Join(BaseTable):
+    def __init__(self, lhs, rhs, join_type=JOIN.INNER, on=None, alias=None):
         super(Join, self).__init__(alias=alias)
         self.lhs = lhs
         self.rhs = rhs
@@ -689,6 +710,19 @@ class ColumnBase(Node):
         return build_expression(self, OP.REGEXP, expression)
     def concat(self, rhs):
         return build_expression(self, OP.CONCAT, rhs)
+    def __getitem__(self, item):
+        if isinstance(item, slice):
+            if item.start is None or item.stop is None:
+                raise ValueError('BETWEEN range must have both a start- and '
+                                 'end-point.')
+            return self.between(item.start, item.stop)
+        return self == item
+    def op(self, operation, inverted=False):
+        def __op__(self, value):
+            if inverted:
+                self, value = value, self
+            return build_expression(self, operation, value)
+        return __op__
 
     def get_sort_key(self, ctx):
         return ()
@@ -1182,18 +1216,23 @@ class Query(Node):
         return len(self._cursor_wrapper)
 
 
+def __compound_select__(operation, inverted=False):
+    def method(self, other):
+        if inverted:
+            self, other = other, self
+        return CompoundSelectQuery(self, operation, other)
+    return method
+
+
 class SelectQuery(Query):
-    def __add__(self, rhs):
-        return CompoundSelectQuery(self, 'UNION ALL', rhs)
-
-    def __or__(self, rhs):
-        return CompoundSelectQuery(self, 'UNION', rhs)
-
-    def __and__(self, rhs):
-        return CompoundSelectQuery(self, 'INTERSECT', rhs)
-
-    def __sub__(self, rhs):
-        return CompoundSelectQuery(self, 'EXCEPT', rhs)
+    __add__ = __compound_select__('UNION ALL')
+    __or__ = __compound_select__('UNION')
+    __and__ = __compound_select__('INTERSECT')
+    __sub__ = __compound_select__('EXCEPT')
+    __radd__ = __compound_select__('UNION ALL', inverted=True)
+    __ror__ = __compound_select__('UNION', inverted=True)
+    __rand__ = __compound_select__('INTERSECT', inverted=True)
+    __rsub__ = __compound_select__('EXCEPT', inverted=True)
 
     def cte(self, name, recursive=False, columns=None):
         return CTE(name, self, recursive=recursive, columns=None)
