@@ -220,10 +220,10 @@ class SchemaMigrator(object):
         # present and the field is non-null, then we need to first add the
         # column as a nullable field, then set the value, then add a not null
         # constraint.
-        is_foreign_key = isinstance(field, ForeignKeyField)
-
-        if not field.null and field.default is None and not is_foreign_key:
+        if not field.null and field.default is None:
             raise ValueError('%s is not null but has no default' % column_name)
+
+        is_foreign_key = isinstance(field, ForeignKeyField)
 
         # Foreign key fields must explicitly specify a `to_field`.
         if is_foreign_key and not field.to_field:
