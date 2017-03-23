@@ -14,6 +14,7 @@ from .base import TestModel
 from .base import db
 from .base import db_loader
 from .base import skip_case_unless
+from .base_models import Category
 from .base_models import User
 
 
@@ -199,3 +200,32 @@ class TestSqliteIsolation(ModelTestCase):
 
         curs = new_db.execute_sql('SELECT COUNT(*) FROM users')
         self.assertEqual(curs.fetchone()[0], 2)
+
+
+class UniqueModel(TestModel):
+    name = CharField(unique=True)
+
+
+class IndexedModel(TestModel):
+    first = CharField()
+    last = CharField()
+    dob = DateField()
+
+    class Meta:
+        indexes = (
+            (('first', 'last', 'dob'), True),
+            (('first', 'last'), False),
+        )
+
+
+class TestIntrospection(ModelTestCase):
+    requires = [Category, User, UniqueModel, IndexedModel]
+
+    def test_get_tables(self):
+        tables = self.database.get_tables()
+        required = set(m._meta.table_name for m in self.requires)
+        self.assertTrue(required.issubset(set(tables)))
+
+        UniqueModel._schema.drop_all()
+        tables = self.database.get_tables()
+        self.assertFalse(UniqueModel._meta.table_name in tables)
