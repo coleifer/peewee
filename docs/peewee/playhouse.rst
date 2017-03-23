@@ -1309,6 +1309,7 @@ currently:
 * :ref:`full-text search <pg_fts>`
 * :py:class:`ArrayField` field type, for storing arrays.
 * :py:class:`HStoreField` field type, for storing key/value pairs.
+* :py:class:`IntervalField` field type, for storing ``timedelta`` objects.
 * :py:class:`JSONField` field type, for storing JSON data.
 * :py:class:`BinaryJSONField` field type for the ``jsonb`` JSON data type.
 * :py:class:`TSVectorField` field type, for storing full-text search data.
@@ -1461,6 +1462,38 @@ You can check for the existence of a key and filter rows accordingly:
     ...     print h.address, h.features['garage'] # <-- just houses w/garage data
 
     123 Main St 2 cars
+
+
+Interval support
+^^^^^^^^^^^^^^^^
+
+Postgres supports durations through the ``INTERVAL`` data-type (`docs <https://www.postgresql.org/docs/current/static/datatype-datetime.html>`_).
+
+.. py:class:: IntervalField([null=False, [...]])
+
+    Field class capable of storing Python ``datetime.timedelta`` instances.
+
+    Example:
+
+    .. code-block:: python
+
+        from datetime import timedelta
+
+        from playhouse.postgres_ext import *
+
+        db = PostgresqlExtDatabase('my_db')
+
+        class Event(Model):
+            location = CharField()
+            duration = IntervalField()
+            start_time = DateTimeField()
+
+            class Meta:
+                database = db
+
+            @classmethod
+            def get_long_meetings(cls):
+                return cls.select().where(cls.duration > timedelta(hours=1))
 
 .. _pgjson:
 
