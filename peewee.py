@@ -960,7 +960,14 @@ class Function(ColumnBase):
         if not len(self.arguments):
             ctx.literal('()')
         else:
-            ctx.sql(EnclosedNodeList([
+            # Special-case to avoid double-wrapping functions whose only
+            # argument is a sub-query.
+            if len(self.arguments) == 1 and isinstance(self.arguments[0],
+                                                       SelectQuery):
+                wrapper = CommaNodeList
+            else:
+                wrapper = EnclosedNodeList
+            ctx.sql(wrapper([
                 (argument if isinstance(argument, Node)
                  else Value(argument))
                 for argument in self.arguments]))

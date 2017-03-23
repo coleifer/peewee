@@ -512,3 +512,14 @@ class TestSelectFeatures(BaseTestCase):
         self.assertSQL(query, (
             'SELECT MAX((IFNULL(?, ?) * ?), IFNULL(?, ?)) '
             'FROM "person" AS "t1"'), [1, 10, 151, None, 10])
+
+        query = (Person
+                 .select(Person.name)
+                 .where(fn.EXISTS(
+                     User.select(User.c.id).where(
+                         User.c.username == Person.name))))
+        self.assertSQL(query, (
+            'SELECT "t1"."name" FROM "person" AS "t1" '
+            'WHERE EXISTS('
+            'SELECT "t2"."id" FROM "users" AS "t2" '
+            'WHERE ("t2"."username" = "t1"."name"))'), [])
