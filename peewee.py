@@ -82,6 +82,12 @@ else:
         raise value
 
 
+if sqlite3:
+    sqlite3.register_adapter(decimal.Decimal, str)
+    sqlite3.register_adapter(datetime.date, str)
+    sqlite3.register_adapter(datetime.time, str)
+
+
 class attrdict(dict):
     def __getattr__(self, attr): return self[attr]
     def __setattr__(self, attr, value): self[attr] = value

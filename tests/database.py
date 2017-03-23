@@ -21,9 +21,8 @@ class TestDatabase(DatabaseTestCase):
     database = db_loader('sqlite3')
 
     def test_pragmas(self):
-        self.assertEqual(self.database.page_size, 4096)
-        self.database.page_size = 1024
-        self.assertEqual(self.database.page_size, 1024)
+        self.database.cache_size = -2048
+        self.assertEqual(self.database.cache_size, -2048)
 
         self.database.foreign_keys = 'on'
         self.assertEqual(self.database.foreign_keys, 1)

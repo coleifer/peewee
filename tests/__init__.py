@@ -7,6 +7,7 @@ import sys
 import unittest
 
 from .database import *
+from .fields import *
 from .models import *
 from .model_sql import *
 from .queries import *
