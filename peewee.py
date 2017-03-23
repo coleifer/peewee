@@ -4420,8 +4420,12 @@ class savepoint(_callable_context_manager):
     def _execute(self, query):
         self.db.execute_sql(query, require_commit=False)
 
-    def commit(self):
+    def _begin(self):
+        self._execute('SAVEPOINT %s;' % self.quoted_sid)
+
+    def commit(self, begin=True):
         self._execute('RELEASE SAVEPOINT %s;' % self.quoted_sid)
+        if begin: self._begin()
 
     def rollback(self):
         self._execute('ROLLBACK TO SAVEPOINT %s;' % self.quoted_sid)
@@ -4429,7 +4433,7 @@ class savepoint(_callable_context_manager):
     def __enter__(self):
         self.autocommit = self.db.get_autocommit()
         self.db.set_autocommit(False)
-        self._execute('SAVEPOINT %s;' % self.quoted_sid)
+        self._begin()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -4438,7 +4442,7 @@ class savepoint(_callable_context_manager):
                 self.rollback()
             else:
                 try:
-                    self.commit()
+                    self.commit(begin=False)
                 except:
                     self.rollback()
                     raise
