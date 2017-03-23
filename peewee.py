@@ -2320,14 +2320,18 @@ class _savepoint(_callable_context_manager):
         self.sid = sid or 's' + uuid.uuid4().hex
         self.quoted_sid = '"%s"' % self.sid
 
-    def commit(self):
+    def _begin(self):
+        self.db.execute_sql('SAVEPOINT %s;' % self.quoted_sid)
+
+    def commit(self, begin=True):
         self.db.execute_sql('RELEASE SAVEPOINT %s;' % self.quoted_sid)
+        if begin: self._begin()
 
     def rollback(self):
         self.db.execute_sql('ROLLBACK TO SAVEPOINT %s;' % self.quoted_sid)
 
     def __enter__(self):
-        self.db.execute_sql('SAVEPOINT %s;' % self.quoted_sid)
+        self._begin()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -2335,7 +2339,7 @@ class _savepoint(_callable_context_manager):
             self.rollback()
         else:
             try:
-                self.commit()
+                self.commit(begin=False)
             except:
                 self.rollback()
                 raise
