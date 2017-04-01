@@ -3867,6 +3867,8 @@ class Database(object):
 
     def drop_table(self, model_class, fail_silently=False, cascade=False):
         qc = self.compiler()
+        if cascade and not self.drop_cascade:
+            raise ValueError('Database does not support DROP TABLE..CASCADE.')
         return self.execute_sql(*qc.drop_table(
             model_class, fail_silently, cascade))
 
