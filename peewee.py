@@ -597,7 +597,7 @@ class Node(object):
     def regexp(self, expression):
         return Expression(self, OP.REGEXP, expression)
     def concat(self, rhs):
-        return Expression(self, OP.CONCAT, rhs)
+        return StringExpression(self, OP.CONCAT, rhs)
 
 class SQL(Node):
     """An unescaped SQL string, with optional parameters."""
@@ -684,6 +684,12 @@ class Expression(Node):
 
     def clone_base(self):
         return Expression(self.lhs, self.op, self.rhs, self.flat)
+
+class StringExpression(Expression):
+    def __add__(self, other):
+        return self.concat(other)
+    def __radd__(self, other):
+        return other.concat(self)
 
 class Param(Node):
     """
@@ -1131,7 +1137,16 @@ def coerce_to_unicode(s, encoding='utf-8'):
             return s
     return unicode_type(s)
 
-class CharField(Field):
+class _StringField(Field):
+    def coerce(self, value):
+        return coerce_to_unicode(value or '')
+
+    def __add__(self, other):
+        return self.concat(other)
+    def __radd__(self, other):
+        return other.concat(self)
+
+class CharField(_StringField):
     db_field = 'string'
 
     def __init__(self, max_length=255, *args, **kwargs):
@@ -1146,9 +1161,6 @@ class CharField(Field):
     def get_modifiers(self):
         return self.max_length and [self.max_length] or None
 
-    def coerce(self, value):
-        return coerce_to_unicode(value or '')
-
 class FixedCharField(CharField):
     db_field = 'fixed_char'
 
@@ -1158,11 +1170,8 @@ class FixedCharField(CharField):
             value = value.strip()
         return value
 
-class TextField(Field):
+class TextField(_StringField):
     db_field = 'text'
-
-    def coerce(self, value):
-        return coerce_to_unicode(value or '')
 
 class BlobField(Field):
     db_field = 'blob'
