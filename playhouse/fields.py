@@ -317,7 +317,7 @@ if AES and Random:
         def get_cipher(self, key, iv):
             if len(key) > 32:
                 raise ValueError('Key length cannot exceed 32 bytes.')
-            key = key + ' ' * (32 - len(key))
+            key = key + bytes(' ') * (32 - len(key))
             return AES.new(key, AES.MODE_CFB, iv)
 
         def encrypt(self, value):
