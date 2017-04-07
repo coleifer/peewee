@@ -5,6 +5,26 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.9.2
+
+* Fixed significant bug in the `savepoint` commit/rollback implementation. Many
+  thanks to @Syeberman for raising the issue. See #1225 for details.
+* Added support for postgresql `INTERVAL` columns. The new `IntervalField` in
+  the `postgres_ext` module is suitable for storing `datetime.timedelta`.
+* Fixed bug where missing `sqlite3` library was causing other, unrelated
+  libraries to throw errors when attempting to import.
+* Added a `case_sensitive` parameter to the SQLite `REGEXP` function
+  implementation. The default is `False`, to preserve backwards-compatibility.
+* Fixed bug that caused tables not to be created when using the `dataset`
+  extension. See #1213 for details.
+* Modified `drop_table` to raise an exception if the user attempts to drop
+  tables with `CASCADE` when the database backend does not support it.
+* Fixed Python3 issue in the `AESEncryptedField`.
+* Modified the behavior of string-typed fields to treat the addition operator
+  as concatenation. See #1241 for details.
+
+[View commits](https://github.com/coleifer/peewee/compare/2.9.1...2.9.2)
+
 ## 2.9.1
 
 * Fixed #1218, where the use of `playhouse.flask_utils` was requiring the
