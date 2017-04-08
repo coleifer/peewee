@@ -623,12 +623,13 @@ class CTE(_HashableSource, Source):
         return ctx
 
 
-def build_expression(lhs, op, rhs, flat=False):
+def build_expression(lhs, op, rhs, flat=False, impl=None):
     if not isinstance(lhs, Node):
         lhs = Value(lhs)
     if not isinstance(rhs, Node):
         rhs = Value(rhs)
-    return Expression(lhs, op, rhs, flat)
+    Impl = Expression if impl is None else impl
+    return Impl(lhs, op, rhs, flat)
 
 
 class ColumnBase(Node):
@@ -715,7 +716,7 @@ class ColumnBase(Node):
     def regexp(self, expression):
         return build_expression(self, OP.REGEXP, expression)
     def concat(self, rhs):
-        return build_expression(self, OP.CONCAT, rhs)
+        return build_expression(self, OP.CONCAT, rhs, impl=StringExpression)
     def __getitem__(self, item):
         if isinstance(item, slice):
             if item.start is None or item.stop is None:
@@ -878,6 +879,13 @@ class Expression(ColumnBase):
                     .sql(self.lhs)
                     .literal(' %s ' % op_sql)
                     .sql(self.rhs))
+
+
+class StringExpression(Expression):
+    def __add__(self, rhs):
+        return self.concat(rhs)
+    def __radd__(self, lhs):
+        return build_expression(lhs, OP.CONCAT, self, impl=StringExpression)
 
 
 class Entity(ColumnBase):
