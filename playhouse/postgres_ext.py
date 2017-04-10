@@ -109,7 +109,7 @@ class _Array(object):
         self.items = items
 
     def __repr__(self):
-        return "[" + ", ".join(self.items) + "]"
+        return "[" + ", ".join(str(i) for i in self.items)) + "]"
 
 def adapt_array(arr):
     conn = arr.field.model_class._meta.database.get_conn()
