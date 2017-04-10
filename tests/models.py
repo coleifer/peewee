@@ -190,3 +190,84 @@ class TestModelAPIs(ModelTestCase):
         self.assertSQL(f.notes, (
             'SELECT "t1"."id", "t1"."foo_id" FROM "note" AS "t1" '
             'WHERE ("t1"."foo_id" = ?)'), [1337])
+
+    @requires_models(User, Tweet)
+    def test_joins_with_aliases(self):
+        data = (
+            ('huey', 'meow'),
+            ('mickey', 'bark'),
+            ('mickey', 'whine'),
+            ('huey', 'purr'),
+            ('mickey', 'woof'))
+        users = {}
+        for username, tweet in data:
+            if username not in users:
+                users[username] = user = User.create(username=username)
+            else:
+                user = users[username]
+            Tweet.create(user=user, content=tweet)
+
+        query = (Tweet
+                 .select(Tweet, User)
+                 .join(User)
+                 .order_by(User.username, Tweet.content))
+        with self.assertQueryCount(1):
+            results = [(tweet.user.username, tweet.content) for tweet in query]
+        self.assertEqual(results, sorted(data))
+
+        UA = User.alias('ua')
+        import ipdb
+        ipdb.set_trace()
+        query = (Tweet
+                 .select(Tweet, UA)
+                 .join(UA)
+                 .order_by(UA.username, Tweet.content))
+        with self.assertQueryCount(1):
+            results = [(tweet.user.username, tweet.content) for tweet in query]
+        self.assertEqual(results, sorted(data))
+
+        UA2 = User.alias('ua2')
+        query = (Tweet
+                 .select(Tweet, UA2)
+                 .join(UA2, on=(Tweet.user == UA2.id).alias('foo'))
+                 .order_by(UA2.username, Tweet.content))
+        with self.assertQueryCount(1):
+            results = [(tweet.foo.username, tweet.content) for tweet in query]
+        self.assertEqual(results, sorted(data))
+
+    @requires_models(User, Tweet)
+    def test_backref_joins(self):
+        data = (
+            ('huey', 'meow'),
+            ('huey', 'purr'),
+            ('zaizee', 'hiss'),
+            ('mickey', 'woof'))
+        users = {}
+
+        for username, tweet in data:
+            if username not in users:
+                users[username] = user = User.create(username=username)
+            else:
+                user = users[username]
+            Tweet.create(user=user, content=tweet)
+
+        query = (User
+                 .select(User, Tweet)
+                 .join(Tweet)
+                 .order_by(User.username, Tweet.id))
+
+        with self.assertQueryCount(1):
+            result = [(user.username, user.tweets.content) for user in query]
+
+        self.assertEqual(result, sorted(data))
+
+        TA = Tweet.alias('ta')
+        query = (User
+                 .select(User.username, TA.content)
+                 .join(TA, on=(User.id == TA.user_id).alias('foo'))
+                 .order_by(User.username, TA.id))
+
+        with self.assertQueryCount(1):
+            results = [(user.username, user.foo.content) for user in query]
+
+        self.assertEqual(result, sorted(data))

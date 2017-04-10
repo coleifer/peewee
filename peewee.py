@@ -774,9 +774,11 @@ class Alias(WrappedNode):
         super(Alias, self).__init__(node)
         self._alias = alias
 
-    @Node.copy
-    def alias(self, alias):
-        self._alias = alias
+    def alias(self, alias=None):
+        if alias is None:
+            return self.node
+        else:
+            return Alias(self.node, alias)
 
     def unalias(self):
         return self.node
@@ -3860,6 +3862,8 @@ class ModelSelect(BaseModelSelect, Select):
         for fm in fields_or_models:
             if is_model(fm):
                 fields.extend(fm._meta.sorted_fields)
+            elif isinstance(fm, Table) and fm._columns:
+                fields.extend([getattr(fm, col) for col in fm._columns])
             else:
                 fields.append(fm)
         super(ModelSelect, self).__init__([model], fields)
@@ -3879,6 +3883,7 @@ class ModelSelect(BaseModelSelect, Select):
                 attr = fk_field.backref if is_backref else fk_field.name
             elif isinstance(on, Alias):
                 attr = on._alias
+                on = on.alias()
             else:
                 attr = dest._meta.name
 
@@ -3889,7 +3894,11 @@ class ModelSelect(BaseModelSelect, Select):
 
         elif isinstance(dest, Source):
             on_is_alias = isinstance(on, Alias)
-            attr = on._alias if on_is_alias else dest._alias
+            if on_is_alias:
+                attr = on._alias
+                on = on.alias()
+            else:
+                attr = dest._alias
             constructor = dict
             if isinstance(dest, Table):
                 attr = attr or dest._name

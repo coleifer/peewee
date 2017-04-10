@@ -159,7 +159,10 @@ def requires_models(*models):
             try:
                 method(self)
             finally:
-                self.database.drop_tables(models)
+                try:
+                    self.database.drop_tables(models)
+                except:
+                    pass
                 for model in models:
                     model._meta.set_database(_db_mapping[model])
         return inner
