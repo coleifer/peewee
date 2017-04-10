@@ -202,19 +202,26 @@ except ImportError:
         seen = set()
         ordering = []
         def dfs(model):
+            # Omit models which are already sorted
+            # or should not be in the list at all
             if model in models and model not in seen:
                 seen.add(model)
-                for foreign_key in model._meta.reverse_rel.values():
-                    dfs(foreign_key.model_class)
-                ordering.append(model)  # parent will follow descendants
+
+                # First create models on which current model depends
+                # (either through foreign keys or through depends_on),
+                # then create current model itself
+                for foreign_key in model._meta.rel.values():
+                    dfs(foreign_key.rel_model)
                 if model._meta.depends_on:
                     for dependency in model._meta.depends_on:
                         dfs(dependency)
+                ordering.append(model)
+
         # Order models by name and table initially to guarantee total ordering.
         names = lambda m: (m._meta.name, m._meta.db_table)
-        for m in sorted(models, key=names, reverse=True):
+        for m in sorted(models, key=names):
             dfs(m)
-        return list(reversed(ordering))
+        return ordering
 
     def strip_parens(s):
         # Quick sanity check.
