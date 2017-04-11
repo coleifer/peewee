@@ -2570,14 +2570,15 @@ class BackrefAccessor(object):
 class ObjectIdAccessor(object):
     """Gives direct access to the underlying id"""
     def __init__(self, field):
-        self.name = field.name
+        self.field = field
 
     def __get__(self, instance, instance_type=None):
         if instance is not None:
-            return instance.__data__.get(self.name)
+            return instance.__data__.get(self.field.name)
+        return self.field
 
     def __set__(self, instance, value):
-        setattr(instance, self.name, value)
+        setattr(instance, self.field.name, value)
 
 
 
