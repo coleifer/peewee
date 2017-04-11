@@ -35,7 +35,7 @@ VERBOSITY = int(os.environ.get('PEEWEE_TEST_VERBOSITY') or 1)
 
 if VERBOSITY > 1:
     handler = logging.StreamHandler()
-    handler.setLevel(logging.ERROR)
+    handler.setLevel(logging.INFO)
     logger.addHandler(handler)
 
 db = db_loader(BACKEND, 'peewee_test')
@@ -192,7 +192,7 @@ def skip_case_if(expr):
         if not should_skip:
             return klass
         elif VERBOSITY > 1:
-            print('Skipping %s test.' % method.__name__)
+            print('Skipping %s test.' % klass.__name__)
             class Dummy(object): pass
             return Dummy
     return decorator

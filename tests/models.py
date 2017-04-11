@@ -6,6 +6,7 @@ from peewee import *
 from .base import db
 from .base import get_in_memory_db
 from .base import requires_models
+from .base import skip_case_unless
 from .base import ModelTestCase
 from .base import TestModel
 from .base_models import *
@@ -315,3 +316,56 @@ class TestJoinModelAlias(ModelTestCase):
             ('huey', 'purr', 'huey'),
             ('mickey', 'woof', 'mickey'),
             ('zaizee', 'hiss', 'zaizee')])
+
+
+@skip_case_unless(isinstance(db, PostgresqlDatabase))
+class TestReturning(ModelTestCase):
+    requires = [User]
+
+    def test_simple_returning(self):
+        query = User.insert(username='charlie')
+        self.assertSQL(query, (
+            'INSERT INTO "users" ("username") VALUES (?) RETURNING "id"'),
+            ['charlie'])
+
+        self.assertEqual(query.execute(), 1)
+
+    @requires_models(Category)
+    def test_non_int_pk_returning(self):
+        query = Category.insert(name='root')
+        self.assertSQL(query, (
+            'INSERT INTO "category" ("name") VALUES (?) RETURNING "name"'),
+            ['root'])
+
+        self.assertEqual(query.execute(), 'root')
+
+    def test_returning_multi(self):
+        data = [{'username': 'huey'}, {'username': 'mickey'}]
+        query = User.insert_many(data)
+        self.assertSQL(query, (
+            'INSERT INTO "users" ("username") VALUES (?), (?) RETURNING "id"'),
+            ['huey', 'mickey'])
+
+        data = query.execute()
+
+        # Check that the result wrapper is correctly set up.
+        self.assertTrue(len(data.select) == 1 and data.select[0] is User.id)
+        self.assertEqual(list(data), [(1,), (2,)])
+
+    @requires_models(Category)
+    def test_returning_query(self):
+        for name in ('huey', 'mickey', 'zaizee'):
+            Category.create(name=name)
+
+        source = Category.select(Category.name).order_by(Category.name)
+        query = User.insert_from(source, (User.username,))
+        self.assertSQL(query, (
+            'INSERT INTO "users" ("username") '
+            'SELECT "t1"."name" FROM "category" AS "t1" ORDER BY "t1"."name" '
+            'RETURNING "id"'), [])
+
+        data = query.execute()
+
+        # Check that the result wrapper is correctly set up.
+        self.assertTrue(len(data.select) == 1 and data.select[0] is User.id)
+        self.assertEqual(list(data), [(1,), (2,), (3,)])

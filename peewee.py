@@ -544,11 +544,19 @@ class Table(_HashableSource, BaseTable):
         return Select((self,), columns)
 
     @__bind_database__
-    def insert(self, insert=None, columns=None):
+    def insert(self, insert=None, columns=None, **kwargs):
+        if kwargs:
+            insert = {} if insert is None else insert
+            for key, value in kwargs.items():
+                insert[getattr(self, key)] = value
         return Insert(self, insert=insert, columns=columns)
 
     @__bind_database__
-    def update(self, update):
+    def update(self, update=None, **kwargs):
+        if kwargs:
+            update = {} if update is None else update
+            for key, value in kwargs.items():
+                update[getattr(self, key)] = value
         return Update(self, update=update)
 
     @__bind_database__
@@ -1354,7 +1362,7 @@ class Select(SelectBase):
         super(Select, self).__init__(**kwargs)
         self._from_list = (list(from_list) if isinstance(from_list, tuple)
                            else from_list) or []
-        self._columns = columns
+        self._returning = columns
         self._where = where
         self._group_by = group_by
         self._having = having
@@ -1375,7 +1383,7 @@ class Select(SelectBase):
 
     @Node.copy
     def columns(self, *columns):
-        self._columns = columns
+        self._returning = columns
 
     @Node.copy
     def from_(self, *sources):
@@ -1446,7 +1454,7 @@ class Select(SelectBase):
                      .literal(' '))
 
             with ctx.scope_source():
-                ctx.sql(CommaNodeList(self._columns))
+                ctx.sql(CommaNodeList(self._returning))
 
             if self._from_list:
                 with ctx.scope_source(parentheses=False):
@@ -1553,6 +1561,9 @@ class Update(_WriteQuery):
 
 
 class Insert(_WriteQuery):
+    SIMPLE = 0
+    QUERY = 1
+    MULTI = 2
     class DefaultValuesException(Exception): pass
 
     def __init__(self, table, insert=None, columns=None, on_conflict=None,
@@ -1562,6 +1573,7 @@ class Insert(_WriteQuery):
         self._columns = columns
         self._on_conflict = on_conflict
         self._returning = returning
+        self._query_type = None
 
     @Node.copy
     def on_conflict(self, on_conflict):
@@ -1570,12 +1582,12 @@ class Insert(_WriteQuery):
     def _simple_insert(self, ctx):
         columns = []
         values = []
-        for key, value in sorted(self._insert.items(), key=ctx.column_sort_key):
-            columns.append(key)
-            if not isinstance(value, Node):
-                converter = key.db_value if isinstance(key, Field) else None
-                value = Value(value, converter=converter)
-            values.append(value)
+        for k, v in sorted(self._insert.items(), key=ctx.column_sort_key):
+            columns.append(k)
+            if not isinstance(v, Node):
+                converter = k.db_value if isinstance(k, Field) else None
+                v = Value(v, converter=converter)
+            values.append(v)
         return (ctx
                 .sql(EnclosedNodeList(columns))
                 .literal(' VALUES ')
@@ -1589,8 +1601,21 @@ class Insert(_WriteQuery):
                 row = next(rows_iter)
             except StopIteration:
                 raise DefaultValuesException()
-            columns = sorted(row.keys(), key=lambda obj: obj.get_sort_key(ctx))
+            else:
+                accum = []
+                value_lookups = {}
+                for key in row:
+                    if isinstance(key, basestring):
+                        column = getattr(self.table, key)
+                    else:
+                        column = key
+                    accum.append(column)
+                    value_lookups[column] = key
+
+            columns = sorted(accum, key=lambda obj: obj.get_sort_key(ctx))
             rows_iter = itertools.chain(iter((row,)), rows_iter)
+        else:
+            value_lookups = dict((column, column) for column in columns)
 
         ctx.sql(EnclosedNodeList(columns)).literal(' VALUES ')
         columns_converters = [
@@ -1601,7 +1626,7 @@ class Insert(_WriteQuery):
         for row in rows_iter:
             values = []
             for column, converter in columns_converters:
-                value = row[column]
+                value = row[value_lookups[column]]
                 if not isinstance(value, Node):
                     value = Value(value, converter=converter)
                 values.append(value)
@@ -1626,10 +1651,13 @@ class Insert(_WriteQuery):
 
             if isinstance(self._insert, dict) and not self._columns:
                 self._simple_insert(ctx)
+                self._query_type = Insert.SIMPLE
             elif isinstance(self._insert, SelectQuery):
                 self._query_insert(ctx)
+                self._query_type = Insert.QUERY
             else:
                 self._multi_insert(ctx)
+                self._query_type = Insert.MULTI
 
             return self.apply_returning(ctx)
 
@@ -1639,7 +1667,7 @@ class Insert(_WriteQuery):
         return super(Insert, self)._execute(database)
 
     def handle_result(self, database, cursor):
-        return database.last_insert_id(cursor)
+        return database.last_insert_id(cursor, self._query_type)
 
 
 class Delete(_WriteQuery):
@@ -1888,7 +1916,7 @@ class Database(_callable_context_manager):
             options = self.options
         return self.context_class(**options)
 
-    def last_insert_id(self, cursor):
+    def last_insert_id(self, cursor, query_type=None):
         return cursor.lastrowid
 
     def rows_affected(self, cursor):
@@ -2131,8 +2159,8 @@ class PostgresqlDatabase(Database):
             pg_extensions.register_type(pg_extensions.UNICODEARRAY, conn)
         return conn
 
-    def last_insert_id(self, cursor):
-        return cursor[0][0]
+    def last_insert_id(self, cursor, query_type=None):
+        return cursor if query_type else cursor[0][0]
 
     def get_tables(self, schema=None):
         query = ('SELECT tablename FROM pg_catalog.pg_tables '
@@ -3843,15 +3871,15 @@ class _ModelQueryHelper(object):
         if row_type == ROW.MODEL:
             return self._get_model_cursor_wrapper(cursor)
         elif row_type == ROW.DICT:
-            return ModelDictCursorWrapper(cursor, self.model, self._columns)
+            return ModelDictCursorWrapper(cursor, self.model, self._returning)
         elif row_type == ROW.TUPLE:
-            return ModelTupleCursorWrapper(cursor, self.model, self._columns)
+            return ModelTupleCursorWrapper(cursor, self.model, self._returning)
         elif row_type == ROW.NAMED_TUPLE:
             return ModelNamedTupleCursorWrapper(cursor, self.model,
-                                                self._columns)
+                                                self._returning)
         elif row_type == ROW.CONSTRUCTOR:
-            return ModelObjectCursorWrapper(cursor, self.model, self._columns,
-                                            self._constructor)
+            return ModelObjectCursorWrapper(cursor, self.model,
+                                            self._returning, self._constructor)
         else:
             raise ValueError('Unrecognized row type: "%s".' % row_type)
 
@@ -4007,8 +4035,8 @@ class ModelSelect(BaseModelSelect, Select):
     def _get_model_cursor_wrapper(self, cursor):
         if len(self._from_list) == 1 and not self._joins:
             return ModelObjectCursorWrapper(cursor, self.model,
-                                            self._columns, self.model)
-        return ModelCursorWrapper(cursor, self.model, self._columns,
+                                            self._returning, self.model)
+        return ModelCursorWrapper(cursor, self.model, self._returning,
                                   self._from_list, self._joins)
 
 

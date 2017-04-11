@@ -33,8 +33,9 @@ class TestNullConstraint(ModelTestCase):
         self.assertIsNone(i_db.value_null)
 
     def test_empty_value(self):
-        with self.assertRaises(IntegrityError):
-            IntModel.create(value=None)
+        with self.database.atomic():
+            with self.assertRaises(IntegrityError):
+                IntModel.create(value=None)
 
 
 class TestIntegerField(ModelTestCase):
