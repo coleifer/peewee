@@ -3873,10 +3873,14 @@ class ModelSelect(BaseModelSelect, Select):
         self._join_ctx = ctx
         return self
 
-    @Node.copy
-    def join(self, dest, join_type='INNER', on=None, src=None, attr=None):
-        src = self._join_ctx if src is None else src
+    def _get_model(self, src):
+        if is_model(src):
+            return src, True
+        elif isinstance(src, Table) and src._model:
+            return src._model, False
+        return None, False
 
+    def _normalize_join(self, src, dest, on, attr):
         # Allow "on" expression to have an alias that determines the
         # destination attribute for the joined data.
         on_alias = isinstance(on, Alias)
@@ -3884,25 +3888,40 @@ class ModelSelect(BaseModelSelect, Select):
             attr = on._alias
             on = on.alias()
 
-        if is_model(dest):
-            self._join_ctx = constructor = dest
-            fk_field, is_backref = self._generate_on_clause(src, dest, on)
-            if on is None or isinstance(on, Field):
-                on = fk_field.expression()
-            if not attr:
-                attr = dest._meta.name if is_backref else fk_field.name
+        src_model, src_is_model = self._get_model(src)
+        dest_model, dest_is_model = self._get_model(dest)
+        if src_model and dest_model:
+            self._join_ctx = dest
+            constructor = dest_model
 
-        elif isinstance(dest, Table) and dest._model is not None:
-            constructor = dest._model
-            fk_field, is_backref = self._generate_on_clause(src, constructor)
-            if on is None:
-                to_field = fk_field.rel_field
-                if is_backref:
-                    on = getattr(dest, fk_field.column_name) == to_field
+            if not (src_is_model and dest_is_model) and isinstance(on, Column):
+                if on.source is src:
+                    to_field = src_model._meta.columns[on.name]
+                elif on.source is dest:
+                    to_field = dest_model._meta.columns[on.name]
                 else:
-                    on = fk_field == getattr(dest, to_field.column_name)
+                    raise AttributeError('"on" clause Column %s does not '
+                                         'belong to %s or %s.' %
+                                         (on, src_model, dest_model))
+                on = None
+            elif isinstance(on, Field):
+                to_field = on
+                on = None
+            else:
+                to_field = None
+
+            fk_field, is_backref = self._generate_on_clause(
+                src_model, dest_model, to_field)
+
+            if on is None:
+                fkc = fk_field.column_name
+                pkc = fk_field.rel_field.column_name
+                if is_backref:
+                    on = getattr(dest, fkc) == getattr(src, pkc)
+                else:
+                    on = getattr(src, fkc) == getattr(dest, pkc)
             if not attr:
-                attr = constructor._meta.name if is_backref else fk_field.name
+                attr = dest_model._meta.name if is_backref else fk_field.name
 
         elif isinstance(dest, Source):
             constructor = dict
@@ -3910,6 +3929,13 @@ class ModelSelect(BaseModelSelect, Select):
             if not attr and isinstance(dest, Table):
                 attr = attr or dest._name
 
+        return (on, attr, constructor)
+
+    @Node.copy
+    def join(self, dest, join_type='INNER', on=None, src=None, attr=None):
+        src = self._join_ctx if src is None else src
+
+        on, attr, constructor = self._normalize_join(src, dest, on, attr)
         if attr:
             self._joins.setdefault(src, [])
             self._joins[src].append((dest, attr, constructor))
@@ -3931,8 +3957,8 @@ class ModelSelect(BaseModelSelect, Select):
                              (src, dest))
         if to_field is not None:
             fk_fields = [f for f in fk_fields if (
-                         (backref and f.rel_field is to_field) or
-                         (not backref and f.to_field is to_field))]
+                         (f is to_field) or
+                         (backref and f.rel_field is to_field))]
 
         if len(fk_fields) > 1:
             raise ValueError('More than one foreign key between %s and %s. '

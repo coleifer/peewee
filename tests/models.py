@@ -236,6 +236,12 @@ class TestJoinModelAlias(ModelTestCase):
         query = query.join(UA, on=(Tweet.user == UA.id))
         self.assertTweets(query)
 
+    def test_join_on_field(self):
+        UA = User.alias('ua')
+        query = self._test_query(lambda: UA)
+        query = query.join(UA, on=Tweet.user)
+        self.assertTweets(query)
+
     def test_join_on_alias(self):
         UA = User.alias('ua')
         query = self._test_query(lambda: UA)
@@ -268,8 +274,34 @@ class TestJoinModelAlias(ModelTestCase):
         query = query.join(TA, on=(User.id == TA.user_id))
         self.assertUsers(query)
 
+    def test_join_on_field_backref(self):
+        TA = Tweet.alias('ta')
+        query = self._test_query_backref(lambda: TA)
+        query = query.join(TA, on=TA.user_id)
+        self.assertUsers(query)
+
     def test_join_on_alias_backref(self):
         TA = Tweet.alias('ta')
         query = self._test_query_backref(lambda: TA)
         query = query.join(TA, on=(User.id == TA.user_id).alias('foo'))
         self.assertUsers(query, 'foo')
+
+    def test_join_alias_twice(self):
+        # Test that a model-alias can be both the source and the dest by
+        # joining from User -> Tweet -> User (as "foo").
+        TA = Tweet.alias('ta')
+        UA = User.alias('ua')
+        query = (User
+                 .select(User, TA, UA)
+                 .join(TA)
+                 .join(UA, on=(TA.user_id == UA.id).alias('foo'))
+                 .order_by(User.username, TA.content))
+        with self.assertQueryCount(1):
+            data = [(row.username, row.tweet.content, row.tweet.foo.username)
+                    for row in query]
+
+        self.assertEqual(data, [
+            ('huey', 'meow', 'huey'),
+            ('huey', 'purr', 'huey'),
+            ('mickey', 'woof', 'mickey'),
+            ('zaizee', 'hiss', 'zaizee')])
