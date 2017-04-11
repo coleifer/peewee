@@ -1410,7 +1410,7 @@ class Select(SelectBase):
 
     @Node.copy
     def distinct(self, *columns):
-        if len(columns) == 1 and columns[0] is True or columns[0] is False:
+        if len(columns) == 1 and (columns[0] is True or columns[0] is False):
             self._simple_distinct = columns[0]
         else:
             self._simple_distinct = False
@@ -1783,7 +1783,9 @@ class Database(_callable_context_manager):
     commit_select = False
     reserved_tables = []
 
-    def __init__(self, database, thread_safe=True, **kwargs):
+    def __init__(self, database, thread_safe=True, autorollback=False,
+                 **kwargs):
+        self.autorollback = autorollback
         self.thread_safe = thread_safe
         if thread_safe:
             self._state = _ConnectionLocal()
@@ -1861,10 +1863,16 @@ class Database(_callable_context_manager):
         logger.debug((sql, params))
         with __exception_wrapper__:
             cursor = self.cursor()
-            cursor.execute(sql, params or ())
-            if commit and not self.in_transaction() and \
-               (self.commit_select or not sql.startswith('SELECT')):
-                self.commit()
+            try:
+                cursor.execute(sql, params or ())
+            except Exception:
+                if self.autorollback and not self.in_transaction():
+                    self.rollback()
+                raise
+            else:
+                if commit and not self.in_transaction() and \
+                   (self.commit_select or not sql.startswith('SELECT')):
+                    self.commit()
         return cursor
 
     def execute(self, query, **context_options):

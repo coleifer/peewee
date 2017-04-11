@@ -205,6 +205,24 @@ class TestSelectQuery(BaseTestCase):
             'FROM "users" AS "U2" '
             'WHERE ("U2"."superuser" = ?)'), ['charlie', True, False])
 
+    def test_join_on_query(self):
+        inner = User.select(User.c.id).alias('j1')
+        query = (Tweet
+                 .select(Tweet.c.content)
+                 .join(inner, on=(Tweet.c.user_id == inner.c.id)))
+        self.assertSQL(query, (
+            'SELECT "t1"."content" FROM "tweets" AS "t1" '
+            'INNER JOIN (SELECT "t2"."id" FROM "users" AS "t2") AS "j1" '
+            'ON ("t1"."user_id" = "j1"."id")'), [])
+
+    def test_join_on_misc(self):
+        cond = fn.Magic(Person.id, Note.id).alias('magic')
+        query = Person.select(Person.id).join(Note, on=cond)
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "person" AS "t1" '
+            'INNER JOIN "note" AS "t2" '
+            'ON Magic("t1"."id", "t2"."id") AS magic'), [])
+
 
 class TestInsertQuery(BaseTestCase):
     def test_insert_query(self):
@@ -473,6 +491,15 @@ class TestWindowFunctions(BaseTestCase):
 
 
 class TestSelectFeatures(BaseTestCase):
+    def test_reselect(self):
+        query = Person.select(Person.name)
+        self.assertSQL(query, 'SELECT "t1"."name" FROM "person" AS "t1"', [])
+
+        query = query.columns(Person.id, Person.name, Person.dob)
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."name", "t1"."dob" '
+            'FROM "person" AS "t1"'), [])
+
     def test_distinct_on(self):
         query = (Note
                  .select(Person.name, Note.content)
@@ -485,6 +512,18 @@ class TestSelectFeatures(BaseTestCase):
             'FROM "note" AS "t2" '
             'INNER JOIN "person" AS "t1" ON ("t2"."person_id" = "t1"."id") '
             'ORDER BY "t1"."name", "t2"."content"'), [])
+
+        query = (Person
+                 .select(Person.name)
+                 .distinct(Person.name))
+        self.assertSQL(query, (
+            'SELECT DISTINCT ON ("t1"."name") "t1"."name" '
+            'FROM "person" AS "t1"'), [])
+
+    def test_distinct(self):
+        query = Person.select(Person.name).distinct()
+        self.assertSQL(query,
+                       'SELECT DISTINCT "t1"."name" FROM "person" AS "t1"', [])
 
     def test_for_update(self):
         query = (Person

@@ -47,6 +47,27 @@ class TestTransaction(ModelTestCase):
 
         self.assertRegister([1, 3, 4, 6])
 
+    def test_commit_rollback(self):
+        with db.atomic() as txn:
+            self._save(1)
+            txn.commit()
+            self._save(2)
+            txn.rollback()
+
+        self.assertRegister([1])
+
+        with db.atomic() as txn:
+            self._save(3)
+            txn.rollback()
+            self._save(4)
+
+        self.assertRegister([1, 4])
+
+    def test_commit_rollback_nested(self):
+        with db.atomic():
+            self.test_commit_rollback()
+        self.assertRegister([1, 4])
+
     def test_nested_transaction_obj(self):
         self.assertRegister([])
 
@@ -76,6 +97,31 @@ class TestTransaction(ModelTestCase):
 
         self.assertRegister([2, 4])
 
+    def test_atomic_decorator(self):
+        @db.atomic()
+        def save(i):
+            self._save(i)
+
+        save(1)
+        self.assertRegister([1])
+
+    def text_atomic_exception(self):
+        def will_fail(self):
+            with db.atomic():
+                self._save(1)
+                self._save(None)
+
+        self.assertRaises(IntegrityError, will_fail)
+        self.assertRegister([])
+
+        def user_error(self):
+            with db.atomic():
+                self._save(2)
+                raise ValueError
+
+        self.assertRaises(ValueError, user_error)
+        self.assertRegister([])
+
     def test_manual_commit(self):
         with db.manual_commit():
             db.begin()
@@ -97,7 +143,7 @@ class TestTransaction(ModelTestCase):
 
         self.assertRegister([2, 4])
 
-    def test_manual_commit_close(self):
+    def test_mixing_manual_atomic(self):
         @db.manual_commit()
         def will_fail():
             pass

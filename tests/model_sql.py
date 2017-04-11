@@ -5,10 +5,7 @@ from .base import BaseTestCase
 from .base import ModelDatabaseTestCase
 from .base import TestModel
 from .base import __sql__
-from .base_models import Category
-from .base_models import Note
-from .base_models import Person
-from .base_models import Relationship
+from .base_models import *
 
 
 class TestModelSQL(ModelDatabaseTestCase):
@@ -30,6 +27,31 @@ class TestModelSQL(ModelDatabaseTestCase):
             'WHERE ('
             '("t1"."last" = ?) AND '
             '("t1"."id" < ?))'), ['Leifer', 4])
+
+    def test_where_coerce(self):
+        query = Person.select(Person.last).where(Person.id == '1337')
+        self.assertSQL(query, (
+            'SELECT "t1"."last" FROM "person" AS "t1" '
+            'WHERE ("t1"."id" = ?)'), [1337])
+
+        query = Person.select(Person.last).where(Person.id < (Person.id - '5'))
+        self.assertSQL(query, (
+            'SELECT "t1"."last" FROM "person" AS "t1" '
+            'WHERE ("t1"."id" < ("t1"."id" - ?))'), [5])
+
+    def test_join_ctx(self):
+        query = Tweet.select(Tweet.id).join(Favorite).switch(Tweet).join(User)
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "tweet" AS "t1" '
+            'INNER JOIN "favorite" AS "t2" ON ("t2"."tweet_id" = "t1"."id") '
+            'INNER JOIN "users" AS "t3" ON ("t1"."user_id" = "t3"."id")'), [])
+
+        query = Tweet.select(Tweet.id).join(User).switch(Tweet).join(Favorite)
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "tweet" AS "t1" '
+            'INNER JOIN "users" AS "t2" ON ("t1"."user_id" = "t2"."id") '
+            'INNER JOIN "favorite" AS "t3" ON ("t3"."tweet_id" = "t1"."id")'),
+            [])
 
     def test_insert(self):
         query = (Person
