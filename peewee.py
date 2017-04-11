@@ -3785,14 +3785,14 @@ def sort_models(models):
     def dfs(model):
         if model in models and model not in seen:
             seen.add(model)
-            for rel_model in model._meta.backrefs.values():
+            for rel_model in model._meta.refs.values():
                 dfs(rel_model)
             ordering.append(model)
 
     names = lambda m: (m._meta.name, m._meta.table_name)
-    for m in sorted(models, key=names, reverse=True):
+    for m in sorted(models, key=names):
         dfs(m)
-    return list(reversed(ordering))
+    return ordering
 
 
 class _ModelQueryHelper(object):

@@ -1,3 +1,4 @@
+from itertools import permutations
 try:
     from Queue import Queue
 except ImportError:
@@ -229,3 +230,22 @@ class TestIntrospection(ModelTestCase):
         UniqueModel._schema.drop_all()
         tables = self.database.get_tables()
         self.assertFalse(UniqueModel._meta.table_name in tables)
+
+
+class TestSortModels(BaseTestCase):
+    def test_sort_models(self):
+        class A(Model):
+            pass
+        class B(Model):
+            a = ForeignKeyField(A)
+        class C(Model):
+            b = ForeignKeyField(B)
+        class D(Model):
+            c = ForeignKeyField(C)
+        class E(Model):
+            pass
+
+        models = [A, B, C, D, E]
+        for list_of_models in permutations(models):
+            sorted_models = sort_models(list_of_models)
+            self.assertEqual(sorted_models, models)
