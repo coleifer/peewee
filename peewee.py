@@ -1042,12 +1042,12 @@ class Window(Node):
                     CommaNodeList(self.order_by)))
             if self.start is not None and self.end is not None:
                 parts.extend((
-                    SQL('RANGE BETWEEN'),
+                    SQL('ROWS BETWEEN'),
                     self.start,
                     SQL('AND'),
                     self.end))
             elif self.start is not None:
-                parts.extend((SQL('RANGE'), self.start))
+                parts.extend((SQL('ROWS'), self.start))
             ctx.sql(NodeList(parts))
         return ctx
 
@@ -1055,7 +1055,7 @@ class Window(Node):
         return Window(self.partition_by, self.order_by)
 
 
-class NodeList(Node):
+class NodeList(ColumnBase):
     def __init__(self, nodes, glue=' ', parens=False):
         self.nodes = nodes
         self.glue = glue
@@ -1274,8 +1274,9 @@ class SelectBase(_HashableSource, Source, SelectQuery):
         return hash((self.__class__, self._alias or id(self)))
 
     def _execute(self, database):
-        cursor = database.execute(self)
-        self._cursor_wrapper = self._get_cursor_wrapper(cursor)
+        if self._cursor_wrapper is None:
+            cursor = database.execute(self)
+            self._cursor_wrapper = self._get_cursor_wrapper(cursor)
         return self._cursor_wrapper
 
     @database_required
@@ -1314,6 +1315,7 @@ class SelectBase(_HashableSource, Source, SelectQuery):
 
     @database_required
     def get(self, database):
+        self._cursor_wrapper = None
         try:
             return self.execute(database)[0]
         except IndexError:
@@ -1513,6 +1515,8 @@ class _WriteQuery(Query):
         return self._cursor_wrapper
 
     def handle_result(self, database, cursor):
+        if self._returning:
+            return cursor
         return database.rows_affected(cursor)
 
 
@@ -1580,6 +1584,8 @@ class Insert(_WriteQuery):
         self._on_conflict = on_conflict
 
     def _simple_insert(self, ctx):
+        if not self._insert:
+            raise self.DefaultValuesException
         columns = []
         values = []
         for k, v in sorted(self._insert.items(), key=ctx.column_sort_key):
@@ -1600,7 +1606,7 @@ class Insert(_WriteQuery):
             try:
                 row = next(rows_iter)
             except StopIteration:
-                raise DefaultValuesException()
+                raise ValueError('Error: no rows to insert.')
             else:
                 accum = []
                 value_lookups = {}
@@ -1641,6 +1647,11 @@ class Insert(_WriteQuery):
                 .literal(' ')
                 .sql(self._insert))
 
+    def _default_values(self, ctx):
+        if not self._database:
+            return ctx.literal('DEFAULT VALUES')
+        return self._database.default_values_insert(ctx)
+
     def __sql__(self, ctx):
         super(Insert, self).__sql__(ctx)
         with ctx.scope_values():
@@ -1650,7 +1661,10 @@ class Insert(_WriteQuery):
             ctx.literal('INTO ').sql(self.table).literal(' ')
 
             if isinstance(self._insert, dict) and not self._columns:
-                self._simple_insert(ctx)
+                try:
+                    self._simple_insert(ctx)
+                except self.DefaultValuesException:
+                    self._default_values(ctx)
                 self._query_type = Insert.SIMPLE
             elif isinstance(self._insert, SelectQuery):
                 self._query_insert(ctx)
@@ -1921,6 +1935,9 @@ class Database(_callable_context_manager):
 
     def rows_affected(self, cursor):
         return cursor.rowcount
+
+    def default_values_insert(self, ctx):
+        return ctx.literal('DEFAULT VALUES')
 
     def in_transaction(self):
         return bool(self._state.transactions)
@@ -2277,6 +2294,9 @@ class MySQLDatabase(Database):
     def _connect(self):
         return mysql.connect(db=self.database, **self.connect_params)
 
+    def default_values_insert(self, ctx):
+        return ctx.literal('() VALUES ()')
+
     def get_tables(self, schema=None):
         return map(operator.itemgetter(0), self.execute_sql('SHOW TABLES'))
 
@@ -2464,6 +2484,10 @@ class CursorWrapper(object):
         else:
             raise ValueError('CursorWrapper only supports integer and slice '
                              'indexes.')
+
+    def __len__(self):
+        self.fill_cache()
+        return self.count
 
     def initialize(self):
         pass
@@ -3625,7 +3649,7 @@ class Model(with_metaclass(BaseModel, Node)):
     def update(cls, __data=None, **update):
         fdict = __data or {}
         for field in update:
-            fdict[cls._meta.fields[f]] = update[f]
+            fdict[cls._meta.fields[field]] = update[field]
         return ModelUpdate(cls, fdict)
 
     @classmethod
@@ -3906,6 +3930,7 @@ class BaseModelSelect(_ModelQueryHelper):
         return iter(self._cursor_wrapper)
 
     def get(self):
+        self._cursor_wrapper = None
         try:
             return self.execute()[0]
         except IndexError:
@@ -4109,7 +4134,7 @@ class BaseModelCursorWrapper(DictCursorWrapper):
                     first = first.node  # Unwrap node object.
 
                 if isinstance(first, Field):
-                    self.converters[column] = first.python_value
+                    converters[idx] = first.python_value
                 elif isinstance(first, Entity):
                     path = first.path[-1]
                     field = combined.get(path)

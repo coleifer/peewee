@@ -38,7 +38,12 @@ if VERBOSITY > 1:
     handler.setLevel(logging.INFO)
     logger.addHandler(handler)
 
-db = db_loader(BACKEND, 'peewee_test')
+
+def new_connection():
+    return db_loader(BACKEND, 'peewee_test')
+
+
+db = new_connection()
 
 
 class TestModel(Model):

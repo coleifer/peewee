@@ -3,6 +3,8 @@ import datetime
 from peewee import *
 
 from .base import BaseTestCase
+from .base import TestModel
+from .base import db
 
 
 User = Table('users')
@@ -272,6 +274,17 @@ class TestInsertQuery(BaseTestCase):
             'VALUES (?, ?) RETURNING "id", "name", "dob"'),
             [datetime.date(2000, 1, 2), 'zaizee'])
 
+    def test_empty(self):
+        class Empty(TestModel): pass
+        query = Empty.insert()
+        if isinstance(db, MySQLDatabase):
+            sql = 'INSERT INTO "empty" () VALUES ()'
+        elif isinstance(db, PostgresqlDatabase):
+            sql = 'INSERT INTO "empty" DEFAULT VALUES RETURNING "id"'
+        else:
+            sql = 'INSERT INTO "empty" DEFAULT VALUES'
+        self.assertSQL(query, sql, [])
+
 
 class TestUpdateQuery(BaseTestCase):
     def test_update_query(self):
@@ -397,7 +410,7 @@ class TestWindowFunctions(BaseTestCase):
         self.assertSQL(query, (
             'SELECT "t1"."value", AVG("t1"."value") '
             'OVER (PARTITION BY "t1"."category" '
-            'RANGE BETWEEN UNBOUNDED PRECEDING AND 2 FOLLOWING) '
+            'ROWS BETWEEN UNBOUNDED PRECEDING AND 2 FOLLOWING) '
             'FROM "register" AS "t1"'), [])
 
         query = (Register
@@ -410,7 +423,7 @@ class TestWindowFunctions(BaseTestCase):
             'SELECT "t1"."value", AVG("t1"."value") '
             'OVER (PARTITION BY "t1"."category" '
             'ORDER BY "t1"."value" '
-            'RANGE BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING) '
+            'ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING) '
             'FROM "register" AS "t1"'), [])
 
     def test_partition_unordered(self):

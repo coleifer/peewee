@@ -49,3 +49,8 @@ class Tweet(TestModel):
 class Favorite(TestModel):
     user = ForeignKeyField(User, backref='favorites')
     tweet = ForeignKeyField(Tweet, backref='favorites')
+
+
+class Sample(TestModel):
+    counter = IntegerField()
+    value = FloatField()

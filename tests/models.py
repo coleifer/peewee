@@ -5,6 +5,7 @@ from peewee import *
 
 from .base import db
 from .base import get_in_memory_db
+from .base import new_connection
 from .base import requires_models
 from .base import skip_case_unless
 from .base import ModelTestCase
@@ -192,6 +193,19 @@ class TestModelAPIs(ModelTestCase):
             'SELECT "t1"."id", "t1"."foo_id" FROM "note" AS "t1" '
             'WHERE ("t1"."foo_id" = ?)'), [1337])
 
+    @requires_models(Category)
+    def test_no_coerce_count(self):
+        for i in range(10):
+            Category.create(name=str(i))
+
+        # COUNT() does not result in the value being coerced.
+        query = Category.select(fn.COUNT(Category.name))
+        self.assertEqual(query.scalar(), 10)
+
+        # Force the value to be coerced using the field's db_value().
+        query = Category.select(fn.COUNT(Category.name).coerce(True))
+        self.assertEqual(query.scalar(), '10')
+
 
 class TestJoinModelAlias(ModelTestCase):
     data = (
@@ -319,7 +333,181 @@ class TestJoinModelAlias(ModelTestCase):
 
 
 @skip_case_unless(isinstance(db, PostgresqlDatabase))
-class TestReturning(ModelTestCase):
+class TestWindowFunctionIntegration(ModelTestCase):
+    requires = [Sample]
+
+    def setUp(self):
+        super(TestWindowFunctionIntegration, self).setUp()
+        values = ((1, 10), (1, 20), (2, 1), (2, 3), (3, 100))
+        with self.database.atomic():
+            for counter, value in values:
+                Sample.create(counter=counter, value=value)
+
+    def test_simple_partition(self):
+        query = (Sample
+                 .select(Sample.counter, Sample.value,
+                         fn.AVG(Sample.value).over(
+                             partition_by=[Sample.counter]))
+                 .order_by(Sample.counter)
+                 .tuples())
+        expected = [
+            (1, 10., 15.),
+            (1, 20., 15.),
+            (2, 1., 2.),
+            (2, 3., 2.),
+            (3, 100., 100.)]
+        self.assertEqual(list(query), expected)
+
+        window = Window(partition_by=[Sample.counter])
+        query = (Sample
+                 .select(Sample.counter, Sample.value,
+                         fn.AVG(Sample.value).over(window))
+                 .window(window)
+                 .order_by(Sample.counter)
+                 .tuples())
+        self.assertEqual(list(query), expected)
+
+    def test_ordered_window(self):
+        window = Window(partition_by=[Sample.counter],
+                        order_by=[Sample.value.desc()])
+        query = (Sample
+                 .select(Sample.counter, Sample.value,
+                         fn.RANK().over(window=window).alias('rank'))
+                 .window(window)
+                 .order_by(Sample.counter, SQL('rank'))
+                 .tuples())
+        self.assertEqual(list(query), [
+            (1, 20., 1),
+            (1, 10., 2),
+            (2, 3., 1),
+            (2, 1., 2),
+            (3, 100., 1)])
+
+    def test_two_windows(self):
+        w1 = Window(partition_by=[Sample.counter]).alias('w1')
+        w2 = Window(order_by=[Sample.counter]).alias('w2')
+        query = (Sample
+                 .select(Sample.counter, Sample.value,
+                         fn.AVG(Sample.value).over(window=w1),
+                         fn.RANK().over(window=w2))
+                 .window(w1, w2)
+                 .order_by(Sample.id)
+                 .tuples())
+        self.assertEqual(list(query), [
+            (1, 10., 15., 1),
+            (1, 20., 15., 1),
+            (2, 1., 2., 3),
+            (2, 3., 2., 3),
+            (3, 100., 100., 5)])
+
+    def test_empty_over(self):
+        query = (Sample
+                 .select(Sample.counter, Sample.value,
+                         fn.LAG(Sample.counter, 1).over())
+                 .order_by(Sample.id)
+                 .tuples())
+        self.assertEqual(list(query), [
+            (1, 10., None),
+            (1, 20., 1),
+            (2, 1., 1),
+            (2, 3., 2),
+            (3, 100., 2)])
+
+    def test_bounds(self):
+        query = (Sample
+                 .select(Sample.value,
+                         fn.SUM(Sample.value).over(
+                             partition_by=[Sample.counter],
+                             start=Window.preceding(),
+                             end=Window.following(1)))
+                 .order_by(Sample.id)
+                 .tuples())
+        self.assertEqual(list(query), [
+            (10., 30.),
+            (20., 30.),
+            (1., 4.),
+            (3., 4.),
+            (100., 100.)])
+
+        query = (Sample
+                 .select(Sample.counter, Sample.value,
+                         fn.SUM(Sample.value).over(
+                             order_by=[Sample.id],
+                             start=Window.preceding(2)))
+                 .order_by(Sample.id)
+                 .tuples())
+        self.assertEqual(list(query), [
+            (1, 10., 10.),
+            (1, 20., 30.),
+            (2, 1., 31.),
+            (2, 3., 24.),
+            (3, 100., 104.)])
+
+
+@skip_case_unless(isinstance(db, PostgresqlDatabase))
+class TestForUpdateIntegration(ModelTestCase):
+    requires = [User]
+
+    def setUp(self):
+        super(TestForUpdateIntegration, self).setUp()
+        self.alt_db = new_connection()
+        class AltUser(User):
+            class Meta:
+                database = self.alt_db
+                table_name = User._meta.table_name
+        self.AltUser = AltUser
+
+    def tearDown(self):
+        self.alt_db.close()
+        super(TestForUpdateIntegration, self).tearDown()
+
+    def test_for_update(self):
+        User.create(username='huey')
+        zaizee = User.create(username='zaizee')
+
+        AltUser = self.AltUser
+
+        with self.database.manual_commit():
+            users = User.select(User.username == 'zaizee').for_update()
+            updated = (User
+                       .update(username='ziggy')
+                       .where(User.username == 'zaizee')
+                       .execute())
+            self.assertEqual(updated, 1)
+
+            query = (AltUser
+                     .select(AltUser.username)
+                     .where(AltUser.id == zaizee.id))
+            self.assertEqual(query.get().username, 'zaizee')
+
+            self.database.commit()
+            self.assertEqual(query.get().username, 'ziggy')
+
+    def test_for_update_nowait(self):
+        User.create(username='huey')
+        zaizee = User.create(username='zaizee')
+
+        AltUser = self.AltUser
+
+        with self.database.manual_commit():
+            users = (User
+                     .select(User.username)
+                     .where(User.username == 'zaizee')
+                     .for_update('FOR UPDATE NOWAIT')
+                     .execute())
+
+            def will_fail():
+                return (AltUser
+                        .select()
+                        .where(AltUser.username == 'zaizee')
+                        .for_update('FOR UPDATE NOWAIT')
+                        .get())
+
+            self.assertRaises(OperationalError, will_fail)
+
+
+@skip_case_unless(isinstance(db, PostgresqlDatabase))
+class TestReturningIntegration(ModelTestCase):
     requires = [User]
 
     def test_simple_returning(self):
@@ -369,3 +557,38 @@ class TestReturning(ModelTestCase):
         # Check that the result wrapper is correctly set up.
         self.assertTrue(len(data.select) == 1 and data.select[0] is User.id)
         self.assertEqual(list(data), [(1,), (2,), (3,)])
+
+    def test_update_returning(self):
+        id_list = User.insert_many([{'username': 'huey'},
+                                    {'username': 'zaizee'}]).execute()
+        huey_id, zaizee_id = [pk for pk, in id_list]
+
+        query = (User
+                 .update(username='ziggy')
+                 .where(User.username == 'zaizee')
+                 .returning(User.id, User.username))
+        self.assertSQL(query, (
+            'UPDATE "users" SET "username" = ? '
+            'WHERE ("username" = ?) '
+            'RETURNING "id", "username"'), ['ziggy', 'zaizee'])
+        data = query.execute()
+        user = data[0]
+        self.assertEqual(user.username, 'ziggy')
+        self.assertEqual(user.id, zaizee_id)
+
+    def test_delete_returning(self):
+        id_list = User.insert_many([{'username': 'huey'},
+                                    {'username': 'zaizee'}]).execute()
+        huey_id, zaizee_id = [pk for pk, in id_list]
+
+        query = (User
+                 .delete()
+                 .where(User.username == 'zaizee')
+                 .returning(User.id, User.username))
+        self.assertSQL(query, (
+            'DELETE FROM "users" WHERE ("username" = ?) '
+            'RETURNING "id", "username"'), ['zaizee'])
+        data = query.execute()
+        user = data[0]
+        self.assertEqual(user.username, 'zaizee')
+        self.assertEqual(user.id, zaizee_id)
