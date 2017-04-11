@@ -248,6 +248,11 @@ class TestJoinModelAlias(ModelTestCase):
         query = query.join(UA, on=(Tweet.user == UA.id).alias('foo'))
         self.assertTweets(query, 'foo')
 
+    def test_join_attr(self):
+        UA = User.alias('ua')
+        query = self._test_query(lambda: UA).join(UA, attr='baz')
+        self.assertTweets(query, 'baz')
+
     def _test_query_backref(self, alias_expr):
         TA = alias_expr()
         return (User
@@ -285,6 +290,11 @@ class TestJoinModelAlias(ModelTestCase):
         query = self._test_query_backref(lambda: TA)
         query = query.join(TA, on=(User.id == TA.user_id).alias('foo'))
         self.assertUsers(query, 'foo')
+
+    def test_join_attr_backref(self):
+        TA = Tweet.alias('ta')
+        query = self._test_query_backref(lambda: TA).join(TA, attr='baz')
+        self.assertUsers(query, 'baz')
 
     def test_join_alias_twice(self):
         # Test that a model-alias can be both the source and the dest by
