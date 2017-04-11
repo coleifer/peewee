@@ -3873,40 +3873,41 @@ class ModelSelect(BaseModelSelect, Select):
         return self
 
     @Node.copy
-    def join(self, dest, join_type='INNER', on=None, src=None):
+    def join(self, dest, join_type='INNER', on=None, src=None, attr=None):
         src = self._join_ctx if src is None else src
+
+        # Allow "on" expression to have an alias that determines the
+        # destination attribute for the joined data.
+        on_alias = isinstance(on, Alias)
+        if on_alias:
+            attr = on._alias
+            on = on.alias()
+
         if is_model(dest):
             self._join_ctx = constructor = dest
+            fk_field, is_backref = self._generate_on_clause(src, dest, on)
             if on is None or isinstance(on, Field):
-                fk_field, is_backref = self._generate_on_clause(src, dest, on)
                 on = fk_field.expression()
-                attr = fk_field.backref if is_backref else fk_field.name
-            elif isinstance(on, Alias):
-                attr = on._alias
-                on = on.alias()
-            else:
-                attr = dest._meta.name
+            if not attr:
+                attr = dest._meta.name if is_backref else fk_field.name
 
-        # TODO: support for dest being a table. Will require being able to
-        # infer the correct foreign-key/primary-key ON expression to use by
-        # iterating the source model's refs and backrefs and matching on the
-        # table name.
+        elif isinstance(dest, Table) and dest._model is not None:
+            constructor = dest._model
+            fk_field, is_backref = self._generate_on_clause(src, constructor)
+            if on is None:
+                to_field = fk_field.rel_field
+                if is_backref:
+                    on = getattr(dest, fk_field.column_name) == to_field
+                else:
+                    on = fk_field == getattr(dest, to_field.column_name)
+            if not attr:
+                attr = constructor._meta.name if is_backref else fk_field.name
 
         elif isinstance(dest, Source):
-            on_is_alias = isinstance(on, Alias)
-            if on_is_alias:
-                attr = on._alias
-                on = on.alias()
-            else:
-                attr = dest._alias
             constructor = dict
-            if isinstance(dest, Table):
+            attr = attr or dest._alias
+            if not attr and isinstance(dest, Table):
                 attr = attr or dest._name
-                if dest._model is not None:
-                    constructor = dest._model
-                    if not on_is_alias:
-                        fk,_ = self._generate_on_clause(src, constructor, None)
-                        attr = fk.name
 
         if attr:
             self._joins.setdefault(src, [])

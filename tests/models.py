@@ -168,9 +168,9 @@ class TestModelAPIs(ModelTestCase):
                      .select(
                          Parent.name,
                          Category.name)
-                     .join(Parent, on=(Category.parent == Parent.name))
                      .where(Category.parent == root)
                      .order_by(Category.name))
+            query = query.join(Parent, on=(Category.parent == Parent.name))
             c1_db, c2_db = list(query)
 
             self.assertEqual(c1_db.name, 'child-1')
@@ -191,83 +191,85 @@ class TestModelAPIs(ModelTestCase):
             'SELECT "t1"."id", "t1"."foo_id" FROM "note" AS "t1" '
             'WHERE ("t1"."foo_id" = ?)'), [1337])
 
-    @requires_models(User, Tweet)
-    def test_joins_with_aliases(self):
-        data = (
-            ('huey', 'meow'),
-            ('mickey', 'bark'),
-            ('mickey', 'whine'),
-            ('huey', 'purr'),
-            ('mickey', 'woof'))
+
+class TestJoinModelAlias(ModelTestCase):
+    data = (
+        ('huey', 'meow'),
+        ('huey', 'purr'),
+        ('zaizee', 'hiss'),
+        ('mickey', 'woof'))
+    requires = [User, Tweet]
+
+    def setUp(self):
+        super(TestJoinModelAlias, self).setUp()
         users = {}
-        for username, tweet in data:
+        for username, tweet in self.data:
             if username not in users:
                 users[username] = user = User.create(username=username)
             else:
                 user = users[username]
             Tweet.create(user=user, content=tweet)
 
-        query = (Tweet
-                 .select(Tweet, User)
-                 .join(User)
-                 .order_by(User.username, Tweet.content))
-        with self.assertQueryCount(1):
-            results = [(tweet.user.username, tweet.content) for tweet in query]
-        self.assertEqual(results, sorted(data))
+    def _test_query(self, alias_expr):
+        UA = alias_expr()
+        return (Tweet
+                .select(Tweet, UA)
+                .order_by(UA.username, Tweet.content))
 
+    def assertTweets(self, query, user_attr='user'):
+        with self.assertQueryCount(1):
+            data = [(getattr(tweet, user_attr).username, tweet.content)
+                    for tweet in query]
+        self.assertEqual(sorted(self.data), data)
+
+    def test_control(self):
+        self.assertTweets(self._test_query(lambda: User).join(User))
+
+    def test_join(self):
         UA = User.alias('ua')
-        import ipdb
-        ipdb.set_trace()
-        query = (Tweet
-                 .select(Tweet, UA)
-                 .join(UA)
-                 .order_by(UA.username, Tweet.content))
+        query = self._test_query(lambda: UA).join(UA)
+        self.assertTweets(query)
+
+    def test_join_on(self):
+        UA = User.alias('ua')
+        query = self._test_query(lambda: UA)
+        query = query.join(UA, on=(Tweet.user == UA.id))
+        self.assertTweets(query)
+
+    def test_join_on_alias(self):
+        UA = User.alias('ua')
+        query = self._test_query(lambda: UA)
+        query = query.join(UA, on=(Tweet.user == UA.id).alias('foo'))
+        self.assertTweets(query, 'foo')
+
+    def _test_query_backref(self, alias_expr):
+        TA = alias_expr()
+        return (User
+                .select(User, TA)
+                .order_by(User.username, TA.content))
+
+    def assertUsers(self, query, tweet_attr='tweet'):
         with self.assertQueryCount(1):
-            results = [(tweet.user.username, tweet.content) for tweet in query]
-        self.assertEqual(results, sorted(data))
+            data = [(user.username, getattr(user, tweet_attr).content)
+                    for user in query]
+        self.assertEqual(sorted(self.data), data)
 
-        UA2 = User.alias('ua2')
-        query = (Tweet
-                 .select(Tweet, UA2)
-                 .join(UA2, on=(Tweet.user == UA2.id).alias('foo'))
-                 .order_by(UA2.username, Tweet.content))
-        with self.assertQueryCount(1):
-            results = [(tweet.foo.username, tweet.content) for tweet in query]
-        self.assertEqual(results, sorted(data))
+    def test_control_backref(self):
+        self.assertUsers(self._test_query_backref(lambda: Tweet).join(Tweet))
 
-    @requires_models(User, Tweet)
-    def test_backref_joins(self):
-        data = (
-            ('huey', 'meow'),
-            ('huey', 'purr'),
-            ('zaizee', 'hiss'),
-            ('mickey', 'woof'))
-        users = {}
-
-        for username, tweet in data:
-            if username not in users:
-                users[username] = user = User.create(username=username)
-            else:
-                user = users[username]
-            Tweet.create(user=user, content=tweet)
-
-        query = (User
-                 .select(User, Tweet)
-                 .join(Tweet)
-                 .order_by(User.username, Tweet.id))
-
-        with self.assertQueryCount(1):
-            result = [(user.username, user.tweets.content) for user in query]
-
-        self.assertEqual(result, sorted(data))
-
+    def test_join_backref(self):
         TA = Tweet.alias('ta')
-        query = (User
-                 .select(User.username, TA.content)
-                 .join(TA, on=(User.id == TA.user_id).alias('foo'))
-                 .order_by(User.username, TA.id))
+        query = self._test_query_backref(lambda: TA).join(TA)
+        self.assertUsers(query)
 
-        with self.assertQueryCount(1):
-            results = [(user.username, user.foo.content) for user in query]
+    def test_join_on_backref(self):
+        TA = Tweet.alias('ta')
+        query = self._test_query_backref(lambda: TA)
+        query = query.join(TA, on=(User.id == TA.user_id))
+        self.assertUsers(query)
 
-        self.assertEqual(result, sorted(data))
+    def test_join_on_alias_backref(self):
+        TA = Tweet.alias('ta')
+        query = self._test_query_backref(lambda: TA)
+        query = query.join(TA, on=(User.id == TA.user_id).alias('foo'))
+        self.assertUsers(query, 'foo')
