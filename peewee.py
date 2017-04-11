@@ -1893,10 +1893,17 @@ class Database(_callable_context_manager):
         self._state.transactions.append(transaction)
 
     def pop_transaction(self):
-        self._state.transactions.pop()
+        return self._state.transactions.pop()
 
     def transaction_depth(self):
         return len(self._state.transactions)
+
+    def top_transaction(self):
+        if self._state.transactions:
+            return self._state.transactions[-1]
+
+    def manual_commit(self):
+        return _manual(self)
 
     def atomic(self):
         return _atomic(self)
@@ -2281,6 +2288,23 @@ class MySQLDatabase(Database):
 # TRANSACTION CONTROL.
 
 
+class _manual(_callable_context_manager):
+    def __init__(self, db):
+        self.db = db
+
+    def __enter__(self):
+        top = self.db.top_transaction()
+        if top and not isinstance(self.db.top_transaction(), _manual):
+            raise ValueError('Cannot enter manual commit block while a '
+                             'transaction is active.')
+        self.db.push_transaction(self)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.db.pop_transaction() is not self:
+            raise ValueError('Transaction stack corrupted while exiting '
+                             'manual commit block.')
+
+
 class _atomic(_callable_context_manager):
     def __init__(self, db):
         self.db = db
@@ -2290,6 +2314,9 @@ class _atomic(_callable_context_manager):
             self._helper = self.db.transaction()
         else:
             self._helper = self.db.savepoint()
+            if isinstance(self.db.top_transaction(), _manual):
+                raise ValueError('Cannot enter atomic commit block while in '
+                                 'manual commit mode.')
         return self._helper.__enter__()
 
     def __exit__(self, exc_type, exc_val, exc_tb):

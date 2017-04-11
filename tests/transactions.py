@@ -75,3 +75,39 @@ class TestTransaction(ModelTestCase):
                 sp.commit()
 
         self.assertRegister([2, 4])
+
+    def test_manual_commit(self):
+        with db.manual_commit():
+            db.begin()
+            self._save(1)
+            db.rollback()
+
+            db.begin()
+            self._save(2)
+            db.commit()
+
+            with db.manual_commit():
+                db.begin()
+                self._save(3)
+                db.rollback()
+
+            db.begin()
+            self._save(4)
+            db.commit()
+
+        self.assertRegister([2, 4])
+
+    def test_manual_commit_close(self):
+        @db.manual_commit()
+        def will_fail():
+            pass
+
+        @db.atomic()
+        def also_fails():
+            pass
+
+        with db.atomic():
+            self.assertRaises(ValueError, will_fail)
+
+        with db.manual_commit():
+            self.assertRaises(ValueError, also_fails)
