@@ -360,7 +360,8 @@ class TestModelCompoundSelect(BaseTestCase):
             'WHERE ("t1"."alpha" < ?)) '
             'UNION '
             '(SELECT "a1"."id", "a1"."beta" FROM "beta" AS "a1" '
-            'WHERE ("a1"."beta" > ?))'), [2, 3], compound_select_parentheses=True)
+            'WHERE ("a1"."beta" > ?))'),
+            [2, 3], compound_select_parentheses=True)
 
     def test_where_in(self):
         union = (Alpha.select(Alpha.alpha) |

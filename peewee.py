@@ -172,16 +172,11 @@ MODEL_BASE = '_metaclass_helper_'
 def with_metaclass(meta, base=object):
     return meta(MODEL_BASE, (base,), {})
 
-def merge_dict(source, overrides, allow_no_copy=False):
-    if not overrides:
-        if allow_no_copy:
-            return source
-        else:
-            return source.copy()
-    else:
-        merged = source.copy()
+def merge_dict(source, overrides):
+    merged = source.copy()
+    if overrides:
         merged.update(overrides)
-        return merged
+    return merged
 
 class _callable_context_manager(object):
     def __call__(self, fn):
