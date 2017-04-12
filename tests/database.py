@@ -14,8 +14,11 @@ from .base import ModelTestCase
 from .base import TestModel
 from .base import db
 from .base import db_loader
+from .base import get_in_memory_db
+from .base import requires_models
 from .base import skip_case_unless
 from .base_models import Category
+from .base_models import Tweet
 from .base_models import User
 
 
@@ -230,6 +233,60 @@ class TestIntrospection(ModelTestCase):
         UniqueModel._schema.drop_all()
         tables = self.database.get_tables()
         self.assertFalse(UniqueModel._meta.table_name in tables)
+
+    def test_get_indexes(self):
+        indexes = self.database.get_indexes('uniquemodel')
+        data = [(index.name, index.columns, index.unique, index.table)
+                for index in indexes if index.name != 'uniquemodel_pkey']
+        self.assertEqual(data, [
+            ('uniquemodel_name', ['name'], True, 'uniquemodel')])
+
+        indexes = self.database.get_indexes('indexedmodel')
+        data = [(index.name, index.columns, index.unique, index.table)
+                for index in indexes if index.name != 'indexedmodel_pkey']
+        self.assertEqual(sorted(data), [
+            ('indexedmodel_first_last', ['first', 'last'], False,
+             'indexedmodel'),
+            ('indexedmodel_first_last_dob', ['first', 'last', 'dob'], True,
+             'indexedmodel')])
+
+    def test_get_columns(self):
+        columns = self.database.get_columns('indexedmodel')
+        data = [(c.name, c.null, c.primary_key, c.table)
+                for c in columns]
+        self.assertEqual(data, [
+            ('id', False, True, 'indexedmodel'),
+            ('first', False, False, 'indexedmodel'),
+            ('last', False, False, 'indexedmodel'),
+            ('dob', False, False, 'indexedmodel')])
+
+        columns = self.database.get_columns('category')
+        data = [(c.name, c.null, c.primary_key, c.table)
+                for c in columns]
+        self.assertEqual(data, [
+            ('name', False, True, 'category'),
+            ('parent_id', True, False, 'category')])
+
+    def test_get_primary_keys(self):
+        primary_keys = self.database.get_primary_keys('users')
+        self.assertEqual(primary_keys, ['id'])
+
+        primary_keys = self.database.get_primary_keys('category')
+        self.assertEqual(primary_keys, ['name'])
+
+    @requires_models(User, Tweet, Category)
+    def test_get_foreign_keys(self):
+        foreign_keys = self.database.get_foreign_keys('tweet')
+        data = [(fk.column, fk.dest_table, fk.dest_column, fk.table)
+                for fk in foreign_keys]
+        self.assertEqual(data, [
+            ('user_id', 'users', 'id', 'tweet')])
+
+        foreign_keys = self.database.get_foreign_keys('category')
+        data = [(fk.column, fk.dest_table, fk.dest_column, fk.table)
+                for fk in foreign_keys]
+        self.assertEqual(data, [
+            ('parent_id', 'category', 'name', 'category')])
 
 
 class TestSortModels(BaseTestCase):

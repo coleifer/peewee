@@ -1808,7 +1808,7 @@ class _NoopLock(object):
 
 class Database(_callable_context_manager):
     context_class = Context
-    options = attrdict(
+    base_options = attrdict(
         # Base options.
         field_types={},
         operations={},
@@ -1829,12 +1829,14 @@ class Database(_callable_context_manager):
         subquery_delete_same_table=True,
         window_functions=False,
     )
+    options = attrdict()
 
     commit_select = False
     reserved_tables = []
 
     def __init__(self, database, thread_safe=True, autorollback=False,
                  **kwargs):
+        self.options = self.base_options + self.options
         self.autorollback = autorollback
         self.thread_safe = thread_safe
         if thread_safe:
@@ -2023,7 +2025,7 @@ def __pragma__(name):
 
 
 class SqliteDatabase(Database):
-    options = Database.options + attrdict(
+    options = attrdict(
         field_types={
             'BIGINT': FIELD.INT,
             'BOOL': FIELD.INT,
@@ -2149,7 +2151,7 @@ class SqliteDatabase(Database):
 
 
 class PostgresqlDatabase(Database):
-    options = Database.options + attrdict(
+    options = attrdict(
         field_types={
             'AUTO': 'SERIAL',
             'BLOB': 'BYTEA',
@@ -2268,7 +2270,7 @@ class PostgresqlDatabase(Database):
 
 
 class MySQLDatabase(Database):
-    options = Database.options + attrdict(
+    options = attrdict(
         field_types={
             'AUTO': 'INTEGER AUTO_INCREMENT',
             'BOOL': 'BOOL',
