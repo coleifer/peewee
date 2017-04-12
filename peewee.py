@@ -377,6 +377,9 @@ class Node(object):
             return clone
         return inner
 
+    def unwrap(self):
+        return self
+
 
 class _DynamicColumn(object):
     __slots__ = ()
@@ -775,6 +778,9 @@ class Column(ColumnBase):
 class WrappedNode(ColumnBase):
     def __init__(self, node):
         self.node = node
+
+    def unwrap(self):
+        return self.node.unwrap()
 
 
 class Alias(WrappedNode):
@@ -4110,8 +4116,7 @@ class BaseModelCursorWrapper(DictCursorWrapper):
             except IndexError:
                 continue
             else:
-                if isinstance(node, WrappedNode):
-                    node = node.node
+                node = node.unwrap()
 
             # Heuristics used to attempt to get the field associated with a
             # given SELECT column, so that we can accurately convert the value
@@ -4130,8 +4135,8 @@ class BaseModelCursorWrapper(DictCursorWrapper):
                   node._coerce):
                 # Try to special-case functions calling fields.
                 first = node.arguments[0]
-                if isinstance(first, WrappedNode):
-                    first = first.node  # Unwrap node object.
+                if isinstance(first, Node):
+                    first = first.unwrap()
 
                 if isinstance(first, Field):
                     converters[idx] = first.python_value
@@ -4230,8 +4235,8 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
             if self.fields[idx] is not None:
                 key = self.fields[idx].model
             else:
-                if isinstance(node, WrappedNode):
-                    node = node.node
+                if isinstance(node, Node):
+                    node = node.unwrap()
                 if isinstance(node, Column):
                     key = node.source
 
