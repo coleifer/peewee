@@ -2,6 +2,7 @@ import sys
 import unittest
 
 from peewee import *
+from peewee import sqlite3
 
 from .base import db
 from .base import get_in_memory_db
@@ -180,6 +181,24 @@ class TestModelAPIs(ModelTestCase):
             self.assertEqual(c2_db.name, 'child-2')
             self.assertEqual(c2_db.parent.name, 'root')
 
+    @requires_models(Category)
+    def test_empty_joined_instance(self):
+        root = Category.create(name='a')
+        c1 = Category.create(name='c1', parent=root)
+        c2 = Category.create(name='c2', parent=root)
+
+        with self.assertQueryCount(1):
+            Parent = Category.alias('p')
+            query = (Category
+                     .select(Category, Parent)
+                     .join(Parent, JOIN.LEFT_OUTER,
+                           on=(Category.parent == Parent.name))
+                     .order_by(Category.name))
+            result = [(category.name, category.parent is None)
+                      for category in query]
+
+        self.assertEqual(result, [('a', True), ('c1', False), ('c2', False)])
+
     def test_deferred_fk(self):
         class Note(TestModel):
             foo = DeferredForeignKey('Foo', backref='notes')
@@ -192,6 +211,116 @@ class TestModelAPIs(ModelTestCase):
         self.assertSQL(f.notes, (
             'SELECT "t1"."id", "t1"."foo_id" FROM "note" AS "t1" '
             'WHERE ("t1"."foo_id" = ?)'), [1337])
+
+
+class TestDeleteInstance(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [User, Account, Tweet, Favorite]
+
+    def setUp(self):
+        super(TestDeleteInstance, self).setUp()
+        with self.database.atomic():
+            huey = User.create(username='huey')
+            acct = Account.create(user=huey, email='huey@meow.com')
+            for content in ('meow', 'purr'):
+                Tweet.create(user=huey, content=content)
+            mickey = User.create(username='mickey')
+            woof = Tweet.create(user=mickey, content='woof')
+            Favorite.create(user=huey, tweet=woof)
+            Favorite.create(user=mickey, tweet=Tweet.create(user=huey,
+                                                            content='hiss'))
+
+    def test_delete_instance_recursive(self):
+        huey = User.get(User.username == 'huey')
+        huey.delete_instance(recursive=True)
+        self.assertEqual(User.select().count(), 1)
+
+        acct = Account.get(Account.email == 'huey@meow.com')
+        self.assertTrue(acct.user is None)
+
+        self.assertEqual(Favorite.select().count(), 0)
+
+        self.assertEqual(Tweet.select().count(), 1)
+        tweet = Tweet.get()
+        self.assertEqual(tweet.content, 'woof')
+
+    def test_delete_nullable(self):
+        huey = User.get(User.username == 'huey')
+        huey.delete_instance(recursive=True, delete_nullable=True)
+        self.assertEqual(User.select().count(), 1)
+        self.assertEqual(Account.select().count(), 0)
+        self.assertEqual(Favorite.select().count(), 0)
+
+        self.assertEqual(Tweet.select().count(), 1)
+        tweet = Tweet.get()
+        self.assertEqual(tweet.content, 'woof')
+
+
+def incrementer():
+    d = {'value': 0}
+    def increment():
+        d['value'] += 1
+        return d['value']
+    return increment
+
+class AutoCounter(TestModel):
+    counter = IntegerField(default=incrementer())
+    control = IntegerField(default=1)
+
+
+class TestDefaultDirtyBehavior(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [AutoCounter]
+
+    def tearDown(self):
+        super(TestDefaultDirtyBehavior, self).tearDown()
+        AutoCounter._meta.only_save_dirty = False
+
+    def test_default_dirty(self):
+        AutoCounter._meta.only_save_dirty = True
+
+        ac = AutoCounter()
+        ac.save()
+        self.assertEqual(ac.counter, 1)
+        self.assertEqual(ac.control, 1)
+
+        ac_db = AutoCounter.get((AutoCounter.counter == 1) &
+                                (AutoCounter.control == 1))
+        self.assertEqual(ac_db.counter, 1)
+        self.assertEqual(ac_db.control, 1)
+
+        # No changes.
+        self.assertFalse(ac_db.save())
+
+        ac = AutoCounter.create()
+        self.assertEqual(ac.counter, 3)  # One extra when fetched from db.
+        self.assertEqual(ac.control, 1)
+
+        AutoCounter._meta.only_save_dirty = False
+
+        ac = AutoCounter()
+        self.assertEqual(ac.counter, 4)
+        self.assertEqual(ac.control, 1)
+        ac.save()
+
+        ac_db = AutoCounter.get(AutoCounter.id == ac.id)
+        self.assertEqual(ac_db.counter, 4)
+
+
+class TestFunctionCoerce(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [Sample]
+
+    def test_coerce(self):
+        for i in range(3):
+            Sample.create(counter=i, value=i)
+
+        counter_group = fn.GROUP_CONCAT(Sample.counter).coerce(False)
+        query = Sample.select(counter_group.alias('counter'))
+        self.assertEqual(query.get().counter, '0,1,2')
+
+        query = Sample.select(counter_group.alias('counter_group'))
+        self.assertEqual(query.get().counter_group, '0,1,2')
 
     @requires_models(Category)
     def test_no_coerce_count(self):
@@ -592,3 +721,23 @@ class TestReturningIntegration(ModelTestCase):
         user = data[0]
         self.assertEqual(user.username, 'zaizee')
         self.assertEqual(user.id, zaizee_id)
+
+
+supports_tuples = sqlite3.sqlite_version_info >= (3, 15, 0)
+
+
+@skip_case_unless(isinstance(db, PostgresqlDatabase) or
+                  (isinstance(db, SqliteDatabase) and supports_tuples))
+class TestTupleComparison(ModelTestCase):
+    requires = [User]
+
+    def test_tuples(self):
+        ua, ub, uc = [User.create(username=username) for username in 'abc']
+        query = User.select().where(
+            Tuple(User.username, User.id) == ('b', ub.id))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
+            'WHERE (("t1"."username", "t1"."id") = (?, ?))'), ['b', ub.id])
+        self.assertEqual(query.count(), 1)
+        obj = query.get()
+        self.assertEqual(obj, ub)

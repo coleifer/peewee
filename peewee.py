@@ -1084,6 +1084,8 @@ def CommaNodeList(nodes):
 def EnclosedNodeList(nodes):
     return NodeList(nodes, ', ', True)
 
+Tuple = lambda *a: EnclosedNodeList(a)
+
 
 def database_required(method):
     @wraps(method)
@@ -3679,7 +3681,6 @@ class Model(with_metaclass(BaseModel, Node)):
     def create(cls, **query):
         inst = cls(**query)
         inst.save(force_insert=True)
-        inst._prepare_instance()
         return inst
 
     @classmethod
@@ -3730,13 +3731,6 @@ class Model(with_metaclass(BaseModel, Node)):
 
     def _pk_expr(self):
         return self._meta.primary_key == self._pk
-
-    def _prepare_instance(self):
-        self._dirty.clear()
-        self.prepared()
-
-    def prepared(self):
-        pass
 
     def _prune_fields(self, field_dict, only):
         new_data = {}
@@ -4115,6 +4109,9 @@ class BaseModelCursorWrapper(DictCursorWrapper):
                 node = self.select[idx]
             except IndexError:
                 continue
+            else:
+                if isinstance(node, WrappedNode):
+                    node = node.node
 
             # Heuristics used to attempt to get the field associated with a
             # given SELECT column, so that we can accurately convert the value
@@ -4123,7 +4120,10 @@ class BaseModelCursorWrapper(DictCursorWrapper):
                 converters[idx] = node.python_value
                 fields[idx] = node
             elif column in combined:
-                converters[idx] = combined[column].python_value
+                if not (isinstance(node, Function) and not node._coerce):
+                    # Unlikely, but if a function was aliased to a column,
+                    # don't use that column's converter if coerce is False.
+                    converters[idx] = combined[column].python_value
                 if isinstance(node, Column) and node.source == table:
                     fields[idx] = combined[column]
             elif (isinstance(node, Function) and node.arguments and
@@ -4180,11 +4180,18 @@ class ModelNamedTupleCursorWrapper(ModelTupleCursorWrapper):
 class ModelObjectCursorWrapper(ModelDictCursorWrapper):
     def __init__(self, cursor, model, select, constructor):
         self.constructor = constructor
+        self.is_model = is_model(constructor)
         super(ModelObjectCursorWrapper, self).__init__(cursor, model, select)
 
     def process_row(self, row):
         data = super(ModelObjectCursorWrapper, self).process_row(row)
-        return self.constructor(**data)
+        if self.is_model:
+            # Clear out any dirty fields before returning to the user.
+            obj = self.constructor(**data)
+            obj._dirty.clear()
+            return obj
+        else:
+            return self.constructor(**data)
 
 
 class ModelCursorWrapper(BaseModelCursorWrapper):
@@ -4232,13 +4239,18 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
 
     def process_row(self, row):
         objects = {}
+        object_list = []
         for key, constructor in self.key_to_constructor.iteritems():
             objects[key] = constructor()
+            object_list.append(objects[key])
 
+        set_keys = set()
         for idx, key in enumerate(self.column_keys):
             instance = objects[key]
             column = self.columns[idx]
             value = row[idx]
+            if value is not None:
+                set_keys.add(key)
             if self.converters[idx]:
                 value = self.converters[idx](value)
 
@@ -4255,9 +4267,18 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
             except KeyError:
                 continue
 
+            # If no fields were set on the destination instance then do not
+            # assign an "empty" instance.
+            if instance is None or dest is None or (dest not in set_keys):
+                continue
+
             if is_dict:
                 instance[attr] = joined_instance
             else:
                 setattr(instance, attr, joined_instance)
+
+        # When instantiating models from a cursor, we clear the dirty fields.
+        for instance in object_list:
+            instance._dirty.clear()
 
         return objects[self.model]

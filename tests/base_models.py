@@ -40,6 +40,11 @@ class User(TestModel):
         table_name = 'users'
 
 
+class Account(TestModel):
+    email = CharField()
+    user = ForeignKeyField(User, backref='accounts', null=True)
+
+
 class Tweet(TestModel):
     user = ForeignKeyField(User, backref='tweets')
     content = TextField()
@@ -53,4 +58,4 @@ class Favorite(TestModel):
 
 class Sample(TestModel):
     counter = IntegerField()
-    value = FloatField()
+    value = FloatField(default=1.0)
