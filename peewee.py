@@ -3138,6 +3138,46 @@ class DeferredForeignKey(Field):
                 DeferredForeignKey._unresolved.discard(dr)
 
 
+class CompositeKey(object):
+    """A primary key composed of multiple columns."""
+    sequence = None
+
+    def __init__(self, *field_names):
+        self.field_names = field_names
+
+    def add_to_class(self, model, name):
+        self.name = name
+        self.model = model
+        setattr(model, name, self)
+
+    def __get__(self, instance, instance_type=None):
+        if instance is not None:
+            return tuple([getattr(instance, field_name)
+                          for field_name in self.field_names])
+        return self
+
+    def __set__(self, instance, value):
+        if not isinstance(value, (list, tuple)):
+            raise TypeError('A list or tuple must be used to set the value of '
+                            'a composite primary key.')
+        if len(value) != len(self.field_names):
+            raise ValueError('The length of the value must equal the number '
+                             'of columns of the composite primary key.')
+        for idx, field_value in enumerate(value):
+            setattr(instance, self.field_names[idx], field_value)
+
+    def __eq__(self, other):
+        expressions = [(self.model._meta.fields[field] == value)
+                       for field, value in zip(self.field_names, other)]
+        return reduce(operator.and_, expressions)
+
+    def __ne__(self, other):
+        return ~(self == other)
+
+    def __hash__(self):
+        return hash((self.model.__name__, self.field_names))
+
+
 class _SortedFieldList(object):
     __slots__ = ('_keys', '_items')
 
@@ -3203,12 +3243,19 @@ class SchemaManager(object):
         columns = []
         constraints = []
         extra = []
-        for field in self.model._meta.sorted_fields:
+        meta = self.model._meta
+        if meta.composite_key:
+            pk_columns = [meta.fields[field_name].column
+                          for field_name in meta.primary_key.field_names]
+            constraints.append(NodeList(SQL('PRIMARY KEY'),
+                                        EnclosedNodeList(pk_columns)))
+
+        for field in meta.sorted_fields:
             columns.append(field.ddl(ctx))
             if isinstance(field, ForeignKeyField):
                 constraints.append(field.foreign_key_constraint())
 
-        meta_options = getattr(self.model._meta, 'options', None) or {}
+        meta_options = getattr(meta, 'options', None) or {}
         if meta_options or options:
             meta_options.update(options or {})
             for key, value in sorted(meta_options.items()):
@@ -3219,7 +3266,7 @@ class SchemaManager(object):
                 else:
                     value = SQL(value)
 
-                extra.append(Clause((SQL(key), extra), glue='='))
+                extra.append(NodeList((SQL(key), extra), glue='='))
 
         ctx.sql(EnclosedNodeList(columns + constraints + extra))
         return ctx
@@ -3496,7 +3543,11 @@ class Metadata(object):
         #self.composite_key = isinstance(field, CompositeKey)
 
     def get_primary_keys(self):
-        return (self.primary_key,)
+        if self.composite_key:
+            return tuple([self.fields[field_name]
+                          for field_name in self.primary_key.field_names])
+        else:
+            return (self.primary_key,)
 
     def get_default_dict(self):
         dd = self._default_by_name.copy()
@@ -3596,6 +3647,9 @@ class BaseModel(type):
             pk, pk_name = ((parent_pk, parent_pk.name)
                            if parent_pk is not None else
                            (AutoField(), 'id'))
+        elif isinstance(pk, CompositeKey):
+            pk_name = '__composite_key__'
+            cls._meta.composite_key = True
 
         if pk is not False:
             cls._meta.set_primary_key(pk_name, pk)
