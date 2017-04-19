@@ -3374,7 +3374,8 @@ class SchemaManager(object):
 class Metadata(object):
     def __init__(self, model, database=None, table_name=None, indexes=None,
                  primary_key=None, constraints=None, schema=None,
-                 only_save_dirty=False, table_alias=None, **kwargs):
+                 only_save_dirty=False, table_alias=None, depends_on=None,
+                 **kwargs):
         self.model = model
         self.database = database
 
@@ -3405,6 +3406,7 @@ class Metadata(object):
         self.composite_key = self.auto_increment = None
         self.only_save_dirty = only_save_dirty
         self.table_alias = table_alias
+        self.depends_on = depends_on
 
         self.refs = {}
         self.backrefs = {}
