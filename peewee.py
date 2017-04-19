@@ -3927,6 +3927,9 @@ def sort_models(models):
             seen.add(model)
             for rel_model in model._meta.refs.values():
                 dfs(rel_model)
+            if model._meta.depends_on:
+                for dependency in model._meta.depends_on:
+                    dfs(dependency)
             ordering.append(model)
 
     names = lambda m: (m._meta.name, m._meta.table_name)
