@@ -32,6 +32,38 @@ class TestSelectQuery(BaseTestCase):
             'FROM "person" AS "t1" '
             'WHERE ("t1"."dob" < ?)'), [datetime.date(1980, 1, 1)])
 
+    def test_from_clause(self):
+        query = (Note
+                 .select(Note.content, Person.name)
+                 .from_(Note, Person)
+                 .where(Note.person_id == Person.id)
+                 .order_by(Note.id))
+        self.assertSQL(query, (
+            'SELECT "t1"."content", "t2"."name" '
+            'FROM "note" AS "t1", "person" AS "t2" '
+            'WHERE ("t1"."person_id" = "t2"."id") '
+            'ORDER BY "t1"."id"'), [])
+
+    def test_from_query(self):
+        inner = Person.select(Person.name)
+        query = (Person
+                 .select(Person.name)
+                 .from_(inner.alias('i1')))
+        self.assertSQL(query, (
+            'SELECT "t1"."name" '
+            'FROM (SELECT "t1"."name" FROM "person" AS "t1") AS "i1"'), [])
+
+        PA = Person.alias('pa')
+        inner = PA.select(PA.name).alias('i1')
+        query = (Person
+                 .select(inner.c.name)
+                 .from_(inner)
+                 .order_by(inner.c.name))
+        self.assertSQL(query, (
+            'SELECT "i1"."name" '
+            'FROM (SELECT "pa"."name" FROM "person" AS "pa") AS "i1" '
+            'ORDER BY "i1"."name"'), [])
+
     def test_join_explicit_columns(self):
         query = (Note
                  .select(Note.content)
