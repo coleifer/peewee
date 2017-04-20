@@ -199,6 +199,25 @@ class TestModelAPIs(ModelTestCase):
 
         self.assertEqual(result, [('a', True), ('c1', False), ('c2', False)])
 
+    @requires_models(User, Tweet)
+    def test_from_multi_table(self):
+        self.add_tweets(self.add_user('huey'), 'meow', 'hiss', 'purr')
+        self.add_tweets(self.add_user('mickey'), 'woof', 'wheeze')
+        query = (Tweet
+                 .select(Tweet, User)
+                 .from_(Tweet, User)
+                 .where(
+                     (Tweet.user == User.id) &
+                     (User.username == 'huey'))
+                 .order_by(Tweet.id)
+                 .dicts())
+
+        with self.assertQueryCount(1):
+            self.assertEqual([t['content'] for t in query],
+                             ['meow', 'hiss', 'purr'])
+            self.assertEqual([t['username'] for t in query],
+                             ['huey', 'huey', 'huey'])
+
     def test_deferred_fk(self):
         class Note(TestModel):
             foo = DeferredForeignKey('Foo', backref='notes')
