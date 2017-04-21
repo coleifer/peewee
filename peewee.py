@@ -1855,7 +1855,7 @@ class Database(_callable_context_manager):
         self.options.operations = merge_dict(OP, self.options.operations)
 
     def __enter__(self):
-        self.connect()
+        self.connect(reuse_if_open=True)
         self.transaction().__enter__()
         return self
 
@@ -1875,8 +1875,11 @@ class Database(_callable_context_manager):
             if self.deferred:
                 raise Exception('Error, database must be initialized before '
                                 'opening a connection.')
-            if reuse_if_open and not self.is_closed():
-                return False
+            if not self.is_closed():
+                if reuse_if_open:
+                    return False
+                else:
+                    raise OperationalError('Connection already opened.')
 
             self._state.reset()
             self._state.set_connection(self._connect())
@@ -3113,6 +3116,12 @@ class ForeignKeyField(Field):
             self.rel_model,
             EnclosedNodeList((self.rel_field,))))
 
+    def __getattr__(self, attr):
+        if attr in self.rel_model._meta.fields:
+            return self.rel_model._meta.fields[attr]
+        raise AttributeError('%r has no attribute %s, nor is it a valid field '
+                             'on %s.' % (self, attr, self.rel_model))
+
 
 class DeferredForeignKey(Field):
     _unresolved = set()
@@ -3144,11 +3153,14 @@ class CompositeKey(object):
 
     def __init__(self, *field_names):
         self.field_names = field_names
+        self.name = '__composite_key__'
 
     def add_to_class(self, model, name):
         self.name = name
         self.model = model
         setattr(model, name, self)
+
+    def bind(self, model, name, set_attribute=True): pass
 
     def __get__(self, instance, instance_type=None):
         if instance is not None:
@@ -3247,8 +3259,8 @@ class SchemaManager(object):
         if meta.composite_key:
             pk_columns = [meta.fields[field_name].column
                           for field_name in meta.primary_key.field_names]
-            constraints.append(NodeList(SQL('PRIMARY KEY'),
-                                        EnclosedNodeList(pk_columns)))
+            constraints.append(NodeList((SQL('PRIMARY KEY'),
+                                         EnclosedNodeList(pk_columns))))
 
         for field in meta.sorted_fields:
             columns.append(field.ddl(ctx))
@@ -3537,12 +3549,13 @@ class Metadata(object):
             self.remove_ref(original)
 
     def set_primary_key(self, name, field):
-        self.add_field(name, field)
+        self.composite_key = isinstance(field, CompositeKey)
+        if not self.composite_key:
+            self.add_field(name, field)
         self.primary_key = field
         self.auto_increment = (
             isinstance(field, AutoField) or
             bool(field.sequence))
-        #self.composite_key = isinstance(field, CompositeKey)
 
     def get_primary_keys(self):
         if self.composite_key:

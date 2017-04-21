@@ -145,9 +145,11 @@ class ModelTestCase(ModelDatabaseTestCase):
 
     def tearDown(self):
         # Restore the model's previous database object.
-        if self.requires:
-            self.database.drop_tables(self.requires, safe=True)
-        super(ModelTestCase, self).tearDown()
+        try:
+            if self.requires:
+                self.database.drop_tables(self.requires, safe=True)
+        finally:
+            super(ModelTestCase, self).tearDown()
 
 
 def requires_models(*models):

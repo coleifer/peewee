@@ -7,6 +7,8 @@ from peewee import *
 from .base import db
 from .base import ModelTestCase
 from .base import TestModel
+from .base_models import Tweet
+from .base_models import User
 
 
 class IntModel(TestModel):
@@ -22,6 +24,34 @@ class TestCoerce(ModelTestCase):
         i_db = IntModel.get(IntModel.id == i.id)
         self.assertEqual(i_db.value, 1337)
         self.assertEqual(i_db.value_null, 3)
+
+
+class DefaultValues(TestModel):
+    data = IntegerField(default=17)
+    data_callable = IntegerField(default=lambda: 1337)
+
+
+class TestDefaultValues(ModelTestCase):
+    requires = [DefaultValues]
+
+    def test_default_values(self):
+        d = DefaultValues()
+        self.assertEqual(d.data, 17)
+        self.assertEqual(d.data_callable, 1337)
+        d.save()
+
+        d_db = DefaultValues.get(DefaultValues.id == d.id)
+        self.assertEqual(d_db.data, 17)
+        self.assertEqual(d_db.data_callable, 1337)
+
+    def test_defaults_create(self):
+        d = DefaultValues.create()
+        self.assertEqual(d.data, 17)
+        self.assertEqual(d.data_callable, 1337)
+
+        d_db = DefaultValues.get(DefaultValues.id == d.id)
+        self.assertEqual(d_db.data, 17)
+        self.assertEqual(d_db.data_callable, 1337)
 
 
 class TestNullConstraint(ModelTestCase):
@@ -144,3 +174,58 @@ class TestDateFields(ModelTestCase):
         self.assertEqual(dm2_db.date, None)
         self.assertEqual(dm2_db.date_time, dt2)
         self.assertEqual(dm2_db.time, t2)
+
+
+class TestForeignKeyField(ModelTestCase):
+    requires = [User, Tweet]
+
+    def test_set_fk(self):
+        huey = User.create(username='huey')
+        zaizee = User.create(username='zaizee')
+
+        # Test resolution of attributes after creation does not trigger SELECT.
+        with self.assertQueryCount(1):
+            tweet = Tweet.create(content='meow', user=huey)
+            self.assertEqual(tweet.user.username, 'huey')
+
+        # Test we can set to an integer, in which case a query will occur.
+        with self.assertQueryCount(2):
+            tweet = Tweet.create(content='purr', user=zaizee.id)
+            self.assertEqual(tweet.user.username, 'zaizee')
+
+        # Test we can set the ID accessor directly.
+        with self.assertQueryCount(2):
+            tweet = Tweet.create(content='hiss', user_id=huey.id)
+            self.assertEqual(tweet.user.username, 'huey')
+
+    def test_follow_attributes(self):
+        huey = User.create(username='huey')
+        Tweet.create(content='meow', user=huey)
+        Tweet.create(content='hiss', user=huey)
+
+        with self.assertQueryCount(1):
+            query = (Tweet
+                     .select(Tweet.content, Tweet.user.username)
+                     .join(User)
+                     .order_by(Tweet.content))
+            self.assertEqual([(tweet.content, tweet.user.username)
+                              for tweet in query],
+                             [('hiss', 'huey'), ('meow', 'huey')])
+
+        self.assertRaises(AttributeError, lambda: Tweet.user.foo)
+
+
+class Composite(TestModel):
+    first = CharField()
+    last = CharField()
+    data = TextField()
+
+    class Meta:
+        primary_key = CompositeKey('first', 'last')
+
+
+class TestCompositePrimaryKeyField(ModelTestCase):
+    requires = [Composite]
+
+    def test_composite_primary_key(self):
+        pass

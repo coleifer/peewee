@@ -28,6 +28,8 @@ class TestDatabase(DatabaseTestCase):
     def test_pragmas(self):
         self.database.cache_size = -2048
         self.assertEqual(self.database.cache_size, -2048)
+        self.database.cache_size = -4096
+        self.assertEqual(self.database.cache_size, -4096)
 
         self.database.foreign_keys = 'on'
         self.assertEqual(self.database.foreign_keys, 1)
@@ -36,7 +38,7 @@ class TestDatabase(DatabaseTestCase):
 
     def test_context_settings(self):
         class TestDatabase(Database):
-            options = Database.options + attrdict(
+            options = attrdict(
                 field_types={
                     FIELD.BIGINT: 'TEST_BIGINT',
                     FIELD.TEXT: 'TEST_TEXT'},
@@ -66,7 +68,6 @@ class TestDatabase(DatabaseTestCase):
         class TestDatabase(SqliteDatabase):
             def _initialize_connection(self, conn):
                 state['count'] += 1
-
         db = TestDatabase(':memory:')
         self.assertEqual(state['count'], 0)
 
@@ -77,9 +78,37 @@ class TestDatabase(DatabaseTestCase):
         conn = db.connection()
         self.assertEqual(state['count'], 1)
 
-        db.close()
+    def test_connect_semantics(self):
+        state = {'count': 0}
+        class TestDatabase(SqliteDatabase):
+            def _initialize_connection(self, conn):
+                state['count'] += 1
+        db = TestDatabase(':memory:')
+
         db.connect()
-        self.assertEqual(state['count'], 2)
+        self.assertEqual(state['count'], 1)
+        self.assertRaises(OperationalError, db.connect)
+        self.assertEqual(state['count'], 1)
+
+        self.assertFalse(db.connect(reuse_if_open=True))
+        self.assertEqual(state['count'], 1)
+
+        with db:
+            self.assertEqual(state['count'], 1)
+            self.assertFalse(db.is_closed())
+        self.assertTrue(db.is_closed())
+
+        with db:
+            self.assertEqual(state['count'], 2)
+
+    def test_execute_sql(self):
+        self.database.execute_sql('CREATE TABLE register (val INTEGER);')
+        self.database.execute_sql('INSERT INTO register (val) VALUES (?), (?)',
+                                  (1337, 31337))
+        cursor = self.database.execute_sql(
+            'SELECT val FROM register ORDER BY val')
+        self.assertEqual(cursor.fetchall(), [(1337,), (31337,)])
+        self.database.execute_sql('DROP TABLE register;')
 
 
 class TestThreadSafety(ModelTestCase):
@@ -224,6 +253,10 @@ class IndexedModel(TestModel):
 
 class TestIntrospection(ModelTestCase):
     requires = [Category, User, UniqueModel, IndexedModel]
+
+    def test_table_exists(self):
+        self.assertTrue(self.database.table_exists(User._meta.table))
+        self.assertFalse(self.database.table_exists(Table('nuggies')))
 
     def test_get_tables(self):
         tables = self.database.get_tables()
