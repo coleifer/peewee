@@ -1448,7 +1448,8 @@ class Select(SelectBase):
         is_subquery = ctx.subquery
         parentheses = is_subquery or (ctx.scope == SCOPE_SOURCE)
 
-        with ctx.scope_normal(parentheses=parentheses, subquery=True):
+        with ctx.scope_normal(converter=None, parentheses=parentheses,
+                              subquery=True):
             ctx.literal('SELECT ')
             if self._simple_distinct or self._distinct is not None:
                 ctx.literal('DISTINCT ')
@@ -3148,114 +3149,104 @@ class DeferredForeignKey(Field):
 
 
 class DeferredThroughModel(object):
-    def set_field(self, model_class, field, name):
-        self.model_class = model_class
+    def set_field(self, model, field, name):
+        self.model = model
         self.field = field
         self.name = name
 
     def set_model(self, through_model):
-        self.field._through_model = through_model
-        self.field.bind(self.model_class, self.name)
+        self.field.through_model = through_model
+        self.field.bind(self.model, self.name)
 
 
-class MetaField(Field): pass
+class MetaField(Field):
+    column_name = default = model = name = None
+    primary_key = False
 
 
-class ManyToManyField(MetaField):
-    def __init__(self, rel_model, related_name=None, through_model=None,
-                 _is_backref=False):
-        if through_model is not None and not (
-                isinstance(through_model, (Proxy, DeferredThroughModel)) or
-                issubclass(through_model, Model)):
-            raise TypeError('Unexpected value for `through_model`.  Expected '
-                            '`Model`, `Proxy` or `DeferredThroughModel`.')
-        self.rel_model = rel_model
-        self._related_name = related_name
-        self._through_model = through_model
-        self._is_backref = _is_backref
-        self.primary_key = False
-        self.verbose_name = None
-
-    def _get_descriptor(self):
-        return ManyToManyFieldDescriptor(self)
-
-    def bind(self, model_class, name):
-        if isinstance(self._through_model, Proxy):
-            def callback(through_model):
-                self._through_model = through_model
-                self.bind(model_class, name)
-            self._through_model.attach_callback(callback)
-            return
-        elif isinstance(self._through_model, DeferredThroughModel):
-            self._through_model.set_field(model_class, self, name)
-            return
-
-        self.name = name
-        self.model_class = model_class
-        if not self.verbose_name:
-            self.verbose_name = re.sub('_+', ' ', name).title()
-        setattr(model_class, name, self._get_descriptor())
-
-        if not self._is_backref:
-            backref = ManyToManyField(
-                self.model_class,
-                through_model=self._through_model,
-                _is_backref=True)
-            related_name = self._related_name or model_class._meta.name + 's'
-            backref.bind(self.rel_model, related_name)
-
-    def get_models(self):
-        return [model for _, model in sorted((
-            (self._is_backref, self.model_class),
-            (not self._is_backref, self.rel_model)))]
-
-    def get_through_model(self):
-        if not self._through_model:
-            lhs, rhs = self.get_models()
-            tables = [model._meta.db_table for model in (lhs, rhs)]
-
-            class Meta:
-                database = self.model_class._meta.database
-                db_table = '%s_%s_through' % tuple(tables)
-                indexes = (
-                    ((lhs._meta.name, rhs._meta.name),
-                     True),)
-                validate_backrefs = False
-
-            attrs = {
-                lhs._meta.name: ForeignKeyField(rel_model=lhs),
-                rhs._meta.name: ForeignKeyField(rel_model=rhs)}
-            attrs['Meta'] = Meta
-
-            self._through_model = type(
-                '%s%sThrough' % (lhs.__name__, rhs.__name__),
-                (Model,),
-                attrs)
-
-        return self._through_model
-
-
-class ManyToManyFieldDescriptor(FieldAccessor):
-    def __init__(self, field):
-        super(ManyToManyFieldDescriptor, self).__init__(field)
-        self.model_class = field.model_class
+class ManyToManyFieldAccessor(FieldAccessor):
+    def __init__(self, model, field, name):
+        super(ManyToManyFieldAccessor, self).__init__(model, field, name)
+        self.model = field.model
         self.rel_model = field.rel_model
         self.through_model = field.get_through_model()
-        self.src_fk = self.through_model._meta.rel_for_model(self.model_class)
-        self.dest_fk = self.through_model._meta.rel_for_model(self.rel_model)
+        self.src_fk = self.through_model._meta.model_refs[self.model][0]
+        self.dest_fk = self.through_model._meta.model_refs[self.rel_model][0]
 
     def __get__(self, instance, instance_type=None):
         if instance is not None:
             return (ManyToManyQuery(instance, self, self.rel_model)
-                    .select()
                     .join(self.through_model)
-                    .join(self.model_class)
+                    .join(self.model)
                     .where(self.src_fk == instance))
         return self.field
 
     def __set__(self, instance, value):
         query = self.__get__(instance)
         query.add(value, clear_existing=True)
+
+
+class ManyToManyField(MetaField):
+    accessor_class = ManyToManyFieldAccessor
+
+    def __init__(self, rel_model, backref=None, through_model=None,
+                 _is_backref=False):
+        if through_model is not None and not (
+                isinstance(through_model, DeferredThroughModel) or
+                is_model(through_model)):
+            raise TypeError('Unexpected value for through_model. Expected '
+                            'Model or DeferredThroughModel.')
+        self.rel_model = rel_model
+        self.backref = backref
+        self.through_model = through_model
+        self._is_backref = _is_backref
+
+    def _get_descriptor(self):
+        return ManyToManyFieldAccessor(self)
+
+    def bind(self, model, name, set_attribute=True):
+        if isinstance(self.through_model, DeferredThroughModel):
+            self.through_model.set_field(model, self, name)
+            return
+
+        super(ManyToManyField, self).bind(model, name, set_attribute)
+
+        if not self._is_backref:
+            many_to_many_field = ManyToManyField(
+                self.model,
+                through_model=self.through_model,
+                _is_backref=True)
+            backref = self.backref or model._meta.name + 's'
+            many_to_many_field.bind(self.rel_model, backref)
+
+    def get_models(self):
+        return [model for _, model in sorted((
+            (self._is_backref, self.model),
+            (not self._is_backref, self.rel_model)))]
+
+    def get_through_model(self):
+        if not self.through_model:
+            lhs, rhs = self.get_models()
+            tables = [model._meta.table_name for model in (lhs, rhs)]
+
+            class Meta:
+                database = self.model._meta.database
+                db_table = '%s_%s_through' % tuple(tables)
+                indexes = (
+                    ((lhs._meta.name, rhs._meta.name),
+                     True),)
+
+            attrs = {
+                lhs._meta.name: ForeignKeyField(lhs),
+                rhs._meta.name: ForeignKeyField(rhs)}
+            attrs['Meta'] = Meta
+
+            self.through_model = type(
+                '%s%sThrough' % (lhs.__name__, rhs.__name__),
+                (Model,),
+                attrs)
+
+        return self.through_model
 
 
 class CompositeKey(MetaField):
@@ -3625,6 +3616,8 @@ class Metadata(object):
                 else:
                     self._default_dict[field] = field.default
                     self._default_by_name[field.name] = field.default
+        else:
+            field.bind(self.model, field_name, set_attribute)
 
         if isinstance(field, ForeignKeyField):
             self.add_ref(field)
@@ -3708,13 +3701,13 @@ class Metadata(object):
 class DoesNotExist(Exception): pass
 
 
-class BaseModel(type):
+class ModelBase(type):
     inheritable = set(['constraints', 'database', 'indexes', 'primary_key',
                        'schema'])
 
     def __new__(cls, name, bases, attrs):
         if name == MODEL_BASE or bases[0].__name__ == MODEL_BASE:
-            return super(BaseModel, cls).__new__(cls, name, bases, attrs)
+            return super(ModelBase, cls).__new__(cls, name, bases, attrs)
 
         meta_options = {}
         meta = attrs.pop('Meta', None)
@@ -3751,7 +3744,7 @@ class BaseModel(type):
         Schema = meta_options.get('schema_manager_class', SchemaManager)
 
         # Construct the new class.
-        cls = super(BaseModel, cls).__new__(cls, name, bases, attrs)
+        cls = super(ModelBase, cls).__new__(cls, name, bases, attrs)
         cls.__data__ = cls.__rel__ = None
 
         cls._meta = Meta(cls, **meta_options)
@@ -3803,7 +3796,7 @@ class BaseModel(type):
         return iter(self.select())
 
 
-class Model(with_metaclass(BaseModel, Node)):
+class Model(with_metaclass(ModelBase, Node)):
     def __init__(self, *args, **kwargs):
         self.__data__ = self._meta.get_default_dict()
         self._dirty = set(self.__data__)
@@ -4267,73 +4260,64 @@ class ModelDelete(_ModelWriteQueryHelper, Delete):
 
 
 class ManyToManyQuery(ModelSelect):
-    def __init__(self, instance, field_descriptor, *args, **kwargs):
+    def __init__(self, instance, accessor, rel, *args, **kwargs):
         self._instance = instance
-        self._field_descriptor = field_descriptor
-        super(ManyToManyQuery, self).__init__(*args, **kwargs)
-
-    def clone(self):
-        query = type(self)(
-            self._instance,
-            self._field_descriptor,
-            self.model_class)
-        query.database = self.database
-        return self._clone_attributes(query)
+        self._accessor = accessor
+        super(ManyToManyQuery, self).__init__(rel, (rel,), *args, **kwargs)
 
     def _id_list(self, model_or_id_list):
         if isinstance(model_or_id_list[0], Model):
-            return [obj.get_id() for obj in model_or_id_list]
+            return [obj._pk for obj in model_or_id_list]
         return model_or_id_list
 
     def add(self, value, clear_existing=False):
         if clear_existing:
             self.clear()
 
-        fd = self._field_descriptor
+        accessor = self._accessor
         if isinstance(value, SelectQuery):
-            query = value.select(
-                SQL(str(self._instance.get_id())),
-                fd.rel_model._meta.primary_key)
-            fd.through_model.insert_from(
-                fields=[fd.src_fk, fd.dest_fk],
+            query = value.columns(
+                SQL(str(self._instance._pk)),
+                accessor.rel_model._meta.primary_key)
+            accessor.through_model.insert_from(
+                fields=[accessor.src_fk, accessor.dest_fk],
                 query=query).execute()
         else:
             if not isinstance(value, (list, tuple)):
-                value = [value]
+                value = (value,)
             if not value:
                 return
             inserts = [{
-                fd.src_fk.name: self._instance.get_id(),
-                fd.dest_fk.name: rel_id}
+                accessor.src_fk.name: self._instance._pk,
+                accessor.dest_fk.name: rel_id}
                 for rel_id in self._id_list(value)]
-            fd.through_model.insert_many(inserts).execute()
+            accessor.through_model.insert_many(inserts).execute()
 
     def remove(self, value):
-        fd = self._field_descriptor
         if isinstance(value, SelectQuery):
-            subquery = value.select(value.model_class._meta.primary_key)
-            return (fd.through_model
+            subquery = value.columns(value.model._meta.primary_key)
+            return (self._accessor.through_model
                     .delete()
                     .where(
-                        (fd.dest_fk << subquery) &
-                        (fd.src_fk == self._instance.get_id()))
+                        (self._accessor.dest_fk << subquery) &
+                        (self._accessor.src_fk == self._instance._pk))
                     .execute())
         else:
             if not isinstance(value, (list, tuple)):
                 value = [value]
             if not value:
                 return
-            return (fd.through_model
+            return (self._accessor.through_model
                     .delete()
                     .where(
-                        (fd.dest_fk << self._id_list(value)) &
-                        (fd.src_fk == self._instance.get_id()))
+                        (self._accessor.dest_fk << self._id_list(value)) &
+                        (self._accessor.src_fk == self._instance._pk))
                     .execute())
 
     def clear(self):
-        return (self._field_descriptor.through_model
+        return (self._accessor.through_model
                 .delete()
-                .where(self._field_descriptor.src_fk == self._instance)
+                .where(self._accessor.src_fk == self._instance)
                 .execute())
 
 
