@@ -342,19 +342,19 @@ class TestManyToMany(ModelTestCase):
 class Person(TestModel):
     name = CharField()
 
-class Soul(TestModel):
+class Account(TestModel):
     person = ForeignKeyField(Person, primary_key=True)
 
-class SoulList(TestModel):
+class AccountList(TestModel):
     name = CharField()
-    souls = ManyToManyField(Soul, backref='lists')
+    accounts = ManyToManyField(Account, backref='lists')
 
-SoulListThrough = SoulList.souls.get_through_model()
+AccountListThrough = AccountList.accounts.get_through_model()
 
 
 class TestForeignKeyPrimaryKeyManyToMany(ModelTestCase):
     database = get_in_memory_db()
-    requires = [Person, Soul, SoulList, SoulListThrough]
+    requires = [Person, Account, AccountList, AccountListThrough]
     test_data = (
         ('huey', ('cats', 'evil')),
         ('zaizee', ('cats', 'good')),
@@ -368,14 +368,14 @@ class TestForeignKeyPrimaryKeyManyToMany(ModelTestCase):
         name2list = {}
         for name, lists in self.test_data:
             p = Person.create(name=name)
-            s = Soul.create(person=p)
+            a = Account.create(person=p)
             for l in lists:
                 if l not in name2list:
-                    name2list[l] = SoulList.create(name=l)
-                name2list[l].souls.add(s)
+                    name2list[l] = AccountList.create(name=l)
+                name2list[l].accounts.add(a)
 
-    def soul_for(self, name):
-        return Soul.select().join(Person).where(Person.name == name).get()
+    def account_for(self, name):
+        return Account.select().join(Person).where(Person.name == name).get()
 
     def assertLists(self, l1, l2):
         self.assertEqual(sorted(list(l1)), sorted(list(l2)))
@@ -383,18 +383,18 @@ class TestForeignKeyPrimaryKeyManyToMany(ModelTestCase):
     def test_pk_is_fk(self):
         list2names = {}
         for name, lists in self.test_data:
-            soul = self.soul_for(name)
-            self.assertLists([l.name for l in soul.lists],
+            account = self.account_for(name)
+            self.assertLists([l.name for l in account.lists],
                              lists)
             for l in lists:
                 list2names.setdefault(l, [])
                 list2names[l].append(name)
 
         for list_name, names in list2names.items():
-            soul_list = SoulList.get(SoulList.name == list_name)
-            self.assertLists([s.person.name for s in soul_list.souls],
+            account_list = AccountList.get(AccountList.name == list_name)
+            self.assertLists([s.person.name for s in account_list.accounts],
                              names)
 
     def test_empty(self):
-        sl = SoulList.create(name='empty')
-        self.assertEqual(list(sl.souls), [])
+        al = AccountList.create(name='empty')
+        self.assertEqual(list(al.accounts), [])
