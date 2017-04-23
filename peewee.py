@@ -3041,13 +3041,6 @@ class TimestampField(IntegerField):
         kwargs.setdefault('default', _default)
         super(TimestampField, self).__init__(*args, **kwargs)
 
-    def get_db_field(self):
-        # For second resolution we can get away (for a while) with using
-        # 4 bytes to store the timestamp (as long as they're not > ~2038).
-        # Otherwise we'll need to use a BigInteger type.
-        return (self.db_field if self.resolution == 1
-                else BigIntegerField.db_field)
-
     def db_value(self, value):
         if value is None:
             return

@@ -7,6 +7,7 @@ import logging
 import uuid
 
 from peewee import *
+from peewee import __exception_wrapper__
 
 try:
     from psycopg2cffi import compat
@@ -113,8 +114,6 @@ class JsonPath(_JsonLookupBase):
 
 
 class ObjectSlice(_LookupNode):
-    _node_type = 'object_slice'
-
     @classmethod
     def create(cls, node, value):
         if isinstance(value, slice):
@@ -124,6 +123,11 @@ class ObjectSlice(_LookupNode):
         else:
             parts = map(int, value.split(':'))
         return cls(node, parts)
+
+    def __sql__(self, ctx):
+        return (ctx
+                .sql(self.node)
+                .literal('[%s]' % ':'.join(str(p + 1) for p in self.parts)))
 
     def __getitem__(self, value):
         return ObjectSlice.create(self, value)
@@ -136,13 +140,16 @@ class _Array(object):
 
 
 def adapt_array(arr):
-    conn = arr.field.model_class._meta.database.get_conn()
+    db = arr.field.model._meta.database
+    conn = db.connection()
     items = adapt(arr.items)
     items.prepare(conn)
     return AsIs('%s::%s%s' % (
         items,
-        arr.field.get_column_type(),
+        db.options.field_types.get(arr.field_type, arr.field_type),
         '[]' * arr.field.dimensions))
+
+
 register_adapter(_Array, adapt_array)
 
 
@@ -165,13 +172,12 @@ class ArrayField(IndexedFieldMixin, Field):
                  **kwargs):
         self.__field = field_class(*args, **kwargs)
         self.dimensions = dimensions
-        self.db_field = self.__field.get_db_field()
+        self.field_type = self.__field.field_type
         super(ArrayField, self).__init__(*args, **kwargs)
 
-    def __ddl_column__(self, column_type):
-        sql = self.__field.__ddl_column__(column_type)
-        sql.value += '[]' * self.dimensions
-        return sql
+    def ddl_datatype(self, ctx):
+        data_type = self.__field.ddl_datatype(ctx)
+        return data_type + '[]' * self.dimensions
 
     def db_value(self, value):
         if value is None:
@@ -184,21 +190,21 @@ class ArrayField(IndexedFieldMixin, Field):
         return ObjectSlice.create(self, value)
 
     def contains(self, *items):
-        return Expression(self, OP.ACONTAINS, Param(items))
+        return Expression(self, ACONTAINS, Value(items, force_single=True))
 
     def contains_any(self, *items):
-        return Expression(self, OP.ACONTAINS_ANY, Param(items))
+        return Expression(self, ACONTAINS_ANY, Value(items, force_single=True))
 
 
 class DateTimeTZField(DateTimeField):
-    db_field = 'timestamptz'
+    field_type = 'TIMESTAMPTZ'
 
 
 class HStoreField(IndexedFieldMixin, Field):
-    db_field = 'hash'
+    field_type = 'HSTORE'
 
     def __getitem__(self, key):
-        return Expression(self, OP.HKEY, Param(key))
+        return Expression(self, HKEY, Value(key))
 
     def keys(self):
         return fn.akeys(self)
@@ -210,7 +216,7 @@ class HStoreField(IndexedFieldMixin, Field):
         return fn.hstore_to_matrix(self)
 
     def slice(self, *args):
-        return fn.slice(self, Passthrough(list(args)))
+        return fn.slice(self, Value(list(args), force_single=True))
 
     def exists(self, key):
         return fn.exist(self, key)
@@ -219,29 +225,31 @@ class HStoreField(IndexedFieldMixin, Field):
         return fn.defined(self, key)
 
     def update(self, **data):
-        return Expression(self, OP.HUPDATE, data)
+        return Expression(self, HUPDATE, data)
 
     def delete(self, *keys):
-        return fn.delete(self, Passthrough(list(keys)))
+        return fn.delete(self, Value(list(keys), force_single=True))
 
     def contains(self, value):
         if isinstance(value, dict):
-            return Expression(self, OP.HCONTAINS_DICT, Passthrough(value))
+            rhs = Value(value, force_single=True)
+            return Expression(self, HCONTAINS_DICT, rhs)
         elif isinstance(value, (list, tuple)):
-            return Expression(self, OP.HCONTAINS_KEYS, Passthrough(value))
-        return Expression(self, OP.HCONTAINS_KEY, value)
+            rhs = Value(value, force_single=True)
+            return Expression(self, HCONTAINS_KEYS, rhs)
+        return Expression(self, HCONTAINS_KEY, value)
 
     def contains_any(self, *keys):
-        return Expression(self, OP.HCONTAINS_ANY_KEY, Passthrough(list(keys)))
+        return Expression(self, HCONTAINS_ANY_KEY, Value(list(keys),
+                                                         force_single=True))
 
 
 class JSONField(Field):
-    db_field = 'json'
+    field_type = 'JSON'
 
     def __init__(self, dumps=None, *args, **kwargs):
         if Json is None:
             raise Exception('Your version of psycopg2 does not support JSON.')
-
         self.dumps = dumps
         super(JSONField, self).__init__(*args, **kwargs)
 
@@ -260,67 +268,48 @@ class JSONField(Field):
 
 
 class BinaryJSONField(IndexedFieldMixin, JSONField):
-    db_field = 'jsonb'
+    field_type = 'JSONB'
     default_index_type = 'GIN'
 
     def contains(self, other):
         if isinstance(other, (list, dict)):
-            return Expression(self, OP.JSONB_CONTAINS, Json(other))
-        return Expression(self, OP.JSONB_EXISTS, Passthrough(other))
+            return Expression(self, JSONB_CONTAINS, Json(other))
+        return Expression(self, JSONB_EXISTS, Value(other, force_single=True))
 
     def contained_by(self, other):
-        return Expression(self, OP.JSONB_CONTAINED_BY, Json(other))
+        return Expression(self, JSONB_CONTAINED_BY, Json(other))
 
     def contains_any(self, *items):
         return Expression(
             self,
-            OP.JSONB_CONTAINS_ANY_KEY,
-            Passthrough(list(items)),)
+            JSONB_CONTAINS_ANY_KEY,
+            Value(list(items), force_single=True))
 
     def contains_all(self, *items):
         return Expression(
             self,
-            OP.JSONB_CONTAINS_ALL_KEYS,
-            Passthrough(list(items)))
+            JSONB_CONTAINS_ALL_KEYS,
+            Value(list(items), force_single=True))
 
 
 class TSVectorField(IndexedFieldMixin, TextField):
-    db_field = 'tsvector'
+    field_type = 'TSVECTOR'
     default_index_type = 'GIN'
 
     def match(self, query, language=None):
         params = (language, query) if language is not None else (query,)
-        return Expression(self, OP.TS_MATCH, fn.to_tsquery(*params))
+        return Expression(self, TS_MATCH, fn.to_tsquery(*params))
 
 
 def Match(field, query, language=None):
     params = (language, query) if language is not None else (query,)
     return Expression(
         fn.to_tsvector(field),
-        OP.TS_MATCH,
+        TS_MATCH,
         fn.to_tsquery(*params))
 
 
-OP.update(
-    HKEY='key',
-    HUPDATE='H@>',
-    HCONTAINS_DICT='H?&',
-    HCONTAINS_KEYS='H?',
-    HCONTAINS_KEY='H?|',
-    HCONTAINS_ANY_KEY='H||',
-    ACONTAINS='A@>',
-    ACONTAINS_ANY='A||',
-    TS_MATCH='T@@',
-    JSONB_CONTAINS='JB@>',
-    JSONB_CONTAINED_BY='JB<@',
-    JSONB_CONTAINS_ANY_KEY='JB?|',
-    JSONB_CONTAINS_ALL_KEYS='JB?&',
-    JSONB_EXISTS='JB?',
-    CAST='::',
-)
-
-
-class PostgresqlExtCompiler(object):#QueryCompiler):
+class PostgresqlSchemaManager(object):#QueryCompiler):
     def _create_index(self, model_class, fields, unique=False):
         clause = super(PostgresqlExtCompiler, self)._create_index(
             model_class, fields, unique)
@@ -334,87 +323,43 @@ class PostgresqlExtCompiler(object):#QueryCompiler):
             clause.nodes.insert(-1, SQL('USING %s' % index_type))
         return clause
 
-    def _parse_object_slice(self, node, alias_map, conv):
-        sql, params = self.parse_node(node.node, alias_map, conv)
-        # Postgresql uses 1-based indexes.
-        parts = [str(part + 1) for part in node.parts]
-        sql = '%s[%s]' % (sql, ':'.join(parts))
-        return sql, params
-
-    def _parse_json_lookup(self, node, alias_map, conv):
-        sql, params = self.parse_node(node.node, alias_map, conv)
-        lookups = [sql]
-        for part in node.parts:
-            part_sql, part_params = self.parse_node(
-                part, alias_map, conv)
-            lookups.append(part_sql)
-            params.extend(part_params)
-
-        if node._as_json:
-            sql = '->'.join(lookups)
-        else:
-            # The last lookup should be converted to text.
-            head, tail = lookups[:-1], lookups[-1]
-            sql = '->>'.join(('->'.join(head), tail))
-
-        return sql, params
-
-    def _parse_json_path(self, node, alias_map, conv):
-        sql, params = self.parse_node(node.node, alias_map, conv)
-        if node._as_json:
-            operand = '#>'
-        else:
-            operand = '#>>'
-        params.append('{%s}' % ','.join(map(str, node.parts)))
-        return operand.join((sql, self.interpolation)), params
-
-    def get_parse_map(self):
-        parse_map = super(PostgresqlExtCompiler, self).get_parse_map()
-        parse_map.update(
-            object_slice=self._parse_object_slice,
-            json_lookup=self._parse_json_lookup,
-            json_path=self._parse_json_path)
-        return parse_map
-
 
 class PostgresqlExtDatabase(PostgresqlDatabase):
-    compiler_class = PostgresqlExtCompiler
-
     def __init__(self, *args, **kwargs):
         self.server_side_cursors = kwargs.pop('server_side_cursors', False)
         self.register_hstore = kwargs.pop('register_hstore', True)
         super(PostgresqlExtDatabase, self).__init__(*args, **kwargs)
 
-    def get_cursor(self, name=None):
+    def cursor(self, name=None):
         if name:
-            return self.get_conn().cursor(name=name)
-        return self.get_conn().cursor()
+            return self.connection().cursor(name=name)
+        return self.connection().cursor()
 
-    def execute_sql(self, sql, params=None, require_commit=True,
-                    named_cursor=False):
+    def execute_sql(self, sql, params=None, commit=True, named_cursor=False):
         logger.debug((sql, params))
         use_named_cursor = (named_cursor or (
                             self.server_side_cursors and
                             sql.lower().startswith('select')))
-        with self.exception_wrapper:
+        with __exception_wrapper__:
             if use_named_cursor:
-                cursor = self.get_cursor(name=str(uuid.uuid1()))
+                cursor = self.cursor(name=str(uuid.uuid1()))
                 require_commit = False
             else:
-                cursor = self.get_cursor()
-            try:
-                cursor.execute(sql, params or ())
-            except Exception as exc:
-                if self.get_autocommit() and self.autorollback:
-                    self.rollback()
-                raise
-            else:
-                if require_commit and self.get_autocommit():
-                    self.commit()
+                cursor = self.cursor()
+                try:
+                    cursor.execute(sql, params or ())
+                except Exception:
+                    if self.autorollback and not self.in_transaction():
+                        self.rollback()
+                    raise
+                else:
+                    if commit and not self.in_transaction() and \
+                       (self.commit_select or not sql.startswith('SELECT')):
+                        self.commit()
         return cursor
 
-    def _connect(self, database, **kwargs):
-        conn = super(PostgresqlExtDatabase, self)._connect(database, **kwargs)
+    def _connect(self):
+        conn = super(PostgresqlExtDatabase, self)._connect()
         if self.register_hstore:
             register_hstore(conn, globally=True)
         return conn
