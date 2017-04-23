@@ -16,6 +16,8 @@ from .results import *
 from .schema import *
 from .sql import *
 from .transactions import *
+
+from .shortcuts import *
 #from playhouse.tests.test_apis import *
 #from playhouse.tests.test_compound_queries import *
 #from playhouse.tests.test_database import *

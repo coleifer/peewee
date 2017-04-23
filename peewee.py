@@ -1056,6 +1056,18 @@ class Window(Node):
         return Window(self.partition_by, self.order_by)
 
 
+def Case(predicate, expression_tuples, default=None):
+    clauses = [SQL('CASE')]
+    if predicate is not None:
+        clauses.append(predicate)
+    for expr, value in expression_tuples:
+        clauses.extend((SQL('WHEN'), expr, SQL('THEN'), value))
+    if default is not None:
+        clauses.extend((SQL('ELSE'), default))
+    clauses.append(SQL('END'))
+    return NodeList(clauses)
+
+
 class NodeList(ColumnBase):
     def __init__(self, nodes, glue=' ', parens=False):
         self.nodes = nodes
@@ -3102,7 +3114,7 @@ class ForeignKeyField(Field):
             self.rel_field = self.rel_model._meta.primary_key
 
         if not self.backref:
-            self.backref = '%s_set' % self.rel_model._meta.name
+            self.backref = '%s_set' % model._meta.name
 
         super(ForeignKeyField, self).bind(model, name, set_attribute)
         if set_attribute:
@@ -3255,11 +3267,11 @@ class CompositeKey(MetaField):
 
     def __init__(self, *field_names):
         self.field_names = field_names
-        self.name = '__composite_key__'
 
     def bind(self, model, name, set_attribute=True):
         self.model = model
         self.name = name
+        setattr(model, self.name, self)
 
     def __get__(self, instance, instance_type=None):
         if instance is not None:
