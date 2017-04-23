@@ -132,17 +132,17 @@ class Operation(object):
 
     def run(self):
         kwargs = self.kwargs.copy()
-        kwargs['generate'] = True
+        kwargs['with_context'] = True
         ctx = self.migrator.database.get_sql_context()
-        self._handle_result(
-            getattr(self.migrator, self.method)(ctx, *self.args, **kwargs))
+        method = getattr(self.migrator, self.method)
+        self._handle_result(method(ctx, *self.args, **kwargs))
 
 
 def operation(fn):
     @functools.wraps(fn)
     def inner(self, *args, **kwargs):
-        generate = kwargs.pop('generate', False)
-        if generate:
+        with_context = kwargs.pop('with_context', False)
+        if with_context:
             return fn(self, *args, **kwargs)
         return Operation(self, fn.__name__, *args, **kwargs)
     return inner
@@ -180,30 +180,36 @@ class SchemaMigrator(object):
                     field.db_value(default),
                     flat=True)))
 
+    def _alter_table(self, ctx, table):
+        return ctx.literal('ALTER TABLE ').sql(Entity(table))
+
+    def _alter_column(self, ctx, table, column):
+        return (self
+                ._alter_table(ctx, table)
+                .literal(' ALTER COLUMN ')
+                .sql(Entity(column)))
+
     @operation
     def alter_add_column(self, ctx, table, column_name, field):
         # Make field null at first.
         field_null, field.null = field.null, True
         field.name = field.column_name = column_name
-        (ctx
-         .literal('ALTER TABLE ')
-         .sql(Entity(table))
+        (self
+         ._alter_table(ctx, table)
          .literal(' ADD COLUMN ')
          .sql(field.ddl(ctx)))
 
         field.null = field_null
         if isinstance(field, ForeignKeyField):
             self.add_inline_fk_sql(ctx, field)
-
         return ctx
 
     def add_inline_fk_sql(self, ctx, field):
         return (ctx
                 .literal(' REFERENCES ')
                 .sql(Entity(field.rel_model._meta.table_name))
-                .literal(' (')
-                .sql(Entity(field.rel_field.column_name))
-                .literal(')'))
+                .literal(' ')
+                .sql(EnclosedNodeList((Entity(field.rel_field.column_name),))))
 
     @operation
     def add_foreign_key_constraint(self, table, column_name, field):
@@ -240,8 +246,8 @@ class SchemaMigrator(object):
                     field.to_field.db_column))
 
         if field.index or field.unique:
-            operations.append(
-                self.add_index(table, (column_name,), field.unique))
+            operations.append(self.add_index(table, (column_name,),
+                                             field.unique))
 
         return operations
 
@@ -251,9 +257,7 @@ class SchemaMigrator(object):
 
     @operation
     def drop_column(self, ctx, table, column_name, cascade=True):
-        (ctx
-         .literal('ALTER TABLE ')
-         .sql(Entity(table))
+        (self._alter_table(ctx, table)
          .literal(' DROP COLUMN ')
          .sql(Entity(column_name)))
 
@@ -268,11 +272,6 @@ class SchemaMigrator(object):
 
         return ctx
 
-    def _alter_table(self, ctx, table):
-        return (ctx
-                .literal('ALTER TABLE ')
-                .sql(Entity(table)))
-
     @operation
     def rename_column(self, ctx, table, old_name, new_name):
         return (self
@@ -282,21 +281,13 @@ class SchemaMigrator(object):
                 .literal(' TO ')
                 .sql(Entity(new_name)))
 
-    def _alter_column(self, ctx, table, column):
-        return (self
-                ._alter_table(ctx, table)
-                .literal(' ALTER COLUMN ')
-                .sql(Entity(column)))
-
     @operation
     def add_not_null(self, ctx, table, column):
-        ctx = self._alter_column(ctx, table, column)
-        return ctx.literal(' SET NOT NULL')
+        return self._alter_column(ctx, table, column).literal(' SET NOT NULL')
 
     @operation
     def drop_not_null(self, ctx, table, column):
-        ctx = self._alter_column(ctx, table, column)
-        return ctx.literal(' DROP NOT NULL')
+        return self._alter_column(ctx, table, column).literal(' DROP NOT NULL')
 
     @operation
     def rename_table(self, ctx, old_name, new_name):
@@ -341,7 +332,7 @@ class PostgresqlMigrator(SchemaMigrator):
         ParentClass = super(PostgresqlMigrator, self)
 
         operations = [
-            ParentClass.rename_table(ctx, old_name, new_name, generate=True)]
+            ParentClass.rename_table(ctx, old_name, new_name, with_context=True)]
 
         if len(pk_names) == 1:
             # Check for existence of primary key sequence.

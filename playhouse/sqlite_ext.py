@@ -1,3 +1,4 @@
+raise ImportError
 """
 Sqlite3 extensions
 ==================
@@ -33,29 +34,16 @@ best_docs = Document.match('some phrase')
 """
 import glob
 import inspect
+import json
 import math
 import os
 import re
 import struct
 import sys
-try:
-    import simplejson as json
-except ImportError:
-    import json
 
 from peewee import *
-from peewee import EnclosedClause
-from peewee import Entity
-from peewee import Expression
-from peewee import Node
 from peewee import OP
-from peewee import SqliteQueryCompiler
-from peewee import _AutoPrimaryKeyField
 from peewee import sqlite3  # Import the best SQLite version.
-from peewee import transaction
-from peewee import _sqlite_date_part
-from peewee import _sqlite_date_trunc
-from peewee import _sqlite_regexp
 try:
     from playhouse import _sqlite_ext as _c_ext
 except ImportError:
@@ -65,35 +53,38 @@ except ImportError:
 if sys.version_info[0] == 3:
     basestring = str
 
+
 FTS_MATCHINFO_FORMAT = 'pcnalx'
 FTS_MATCHINFO_FORMAT_SIMPLE = 'pcx'
-FTS_VER = sqlite3.sqlite_version_info[:3] >= (3, 7, 4) and 'FTS4' or 'FTS3'
+FTS_VERSION = sqlite3.sqlite_version_info[:3] >= (3, 7, 4) and 4 or 3
 FTS5_MIN_VERSION = (3, 9, 0)
 
 
-class RowIDField(_AutoPrimaryKeyField):
+class RowIDField(VirtualField):
     """
     Field used to access hidden primary key on FTS5 or any other SQLite
     table that does not have a separately-defined primary key.
     """
-    _column_name = 'rowid'
+    column_name = 'rowid'
+    primary_key = True
 
 
-class DocIDField(_AutoPrimaryKeyField):
+class DocIDField(object):#_AutoPrimaryKeyField):
     """Field used to access hidden primary key on FTS3/4 tables."""
-    _column_name = 'docid'
+    column_name = 'docid'
+    primary_key = True
 
 
-class PrimaryKeyAutoIncrementField(PrimaryKeyField):
+class PrimaryKeyAutoIncrementField(AutoField):
     """
     SQLite by default uses MAX(primary key) + 1 to set the ID on a new row.
     Using the `AUTOINCREMENT` field, the IDs will increase monotonically
     even if rows are deleted. Use this if you need to guarantee IDs are not
     re-used in the event of deletion.
     """
-    def __ddl__(self, column_type):
-        ddl = super(PrimaryKeyAutoIncrementField, self).__ddl__(column_type)
-        return ddl + [SQL('AUTOINCREMENT')]
+    def ddl(self, ctx):
+        ddl = super(PrimaryKeyAutoIncrementField, self).ddl(column_type)
+        return NodeList((ddl, SQL('AUTOINCREMENT')))
 
 
 class JSONField(TextField):
@@ -178,7 +169,7 @@ class JSONField(TextField):
         return fn.json_tree(self)
 
 
-class SearchField(BareField):
+class SearchField(Field):
     """
     Field class to be used with full-text search extension. Since the FTS
     extensions do not support any field types besides `TEXT`, and furthermore
@@ -212,7 +203,7 @@ class _VirtualFieldMixin(object):
 # on virtual tables. These fields are exposed as attributes on the model class,
 # but are not included in any `CREATE TABLE` statements or by default when
 # performing an `INSERT` or `UPDATE` query.
-class VirtualField(_VirtualFieldMixin, BareField): pass
+class VirtualField(_VirtualFieldMixin, Field): pass
 class VirtualIntegerField(_VirtualFieldMixin, IntegerField): pass
 class VirtualCharField(_VirtualFieldMixin, CharField): pass
 class VirtualFloatField(_VirtualFieldMixin, FloatField): pass
@@ -269,7 +260,7 @@ class FTSModel(BaseFTSModel):
     docid = DocIDField()
 
     class Meta:
-        extension_module = FTS_VER
+        extension_module = FTS_VERSION
 
     @classmethod
     def validate_model(cls):
@@ -652,14 +643,14 @@ class FTS5Model(BaseFTSModel):
                     SQL(table_type))
 
             attrs = {
-                'term': BareField(),
+                'term': Field(),
                 'doc': IntegerField(),
                 'cnt': IntegerField(),
                 'rowid': RowIDField(),
                 'Meta': Meta,
             }
             if table_type == 'col':
-                attrs['col'] = BareField()
+                attrs['col'] = Field()
 
             class_name = '%sVocab' % cls.__name__
             setattr(cls, attr, type(class_name, (VirtualModel,), attrs))

@@ -815,11 +815,11 @@ class Negated(WrappedNode):
 
 
 class Value(ColumnBase):
-    def __init__(self, value, converter=None):
+    def __init__(self, value, converter=None, force_single=False):
         self.value = value
         self.converter = converter
         self.multi = isinstance(self.value, (list, tuple))
-        if self.multi:
+        if self.multi and not force_single:
             self.values = []
             for item in self.value:
                 if isinstance(item, Node):
@@ -2781,7 +2781,10 @@ class Field(ColumnBase):
             return SQL(column_type)
 
     def ddl(self, ctx):
-        accum = [Entity(self.column_name), self.ddl_datatype(ctx)]
+        accum = [Entity(self.column_name)]
+        data_type = self.ddl_datatype(ctx)
+        if data_type:
+            accum.append(data_type)
         if self.unindexed:
             accum.append(SQL('UNINDEXED'))
         if not self.null:
@@ -3282,17 +3285,19 @@ class ManyToManyField(MetaField):
         return self.through_model
 
 
-class CompositeKey(MetaField):
+class VirtualField(MetaField):
+    def bind(self, model, name, set_attribute=True):
+        self.model = model
+        self.name = name
+        setattr(model, self.name, self)
+
+
+class CompositeKey(VirtualField):
     """A primary key composed of multiple columns."""
     sequence = None
 
     def __init__(self, *field_names):
         self.field_names = field_names
-
-    def bind(self, model, name, set_attribute=True):
-        self.model = model
-        self.name = name
-        setattr(model, self.name, self)
 
     def __get__(self, instance, instance_type=None):
         if instance is not None:

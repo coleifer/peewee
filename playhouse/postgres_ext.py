@@ -3,19 +3,10 @@ Collection of postgres-specific extensions, currently including:
 
 * Support for hstore, a key/value type storage
 """
+import logging
 import uuid
 
 from peewee import *
-from peewee import Expression
-from peewee import logger
-from peewee import Node
-from peewee import OP
-from peewee import Param
-from peewee import Passthrough
-from peewee import returns_clone
-from peewee import QueryCompiler
-from peewee import SelectQuery
-from peewee import UUIDField  # For backwards-compatibility.
 
 try:
     from psycopg2cffi import compat
@@ -32,9 +23,26 @@ try:
 except:
     Json = None
 
-@Node.extend(clone=False)
-def cast(self, as_type):
-    return Expression(self, OP.CAST, SQL(as_type))
+
+logger = logging.getLogger('peewee')
+
+
+HCONTAINS_DICT = '@>'
+HCONTAINS_KEYS = '?&'
+HCONTAINS_KEY = '?'
+HCONTAINS_ANY_KEY = '?|'
+HKEY = '->'
+HUPDATE = '||'
+ACONTAINS = '@>'
+ACONTAINS_ANY = '&&'
+TS_MATCH = '@@'
+JSONB_CONTAINS = '@>'
+JSONB_CONTAINED_BY = '<@'
+JSONB_CONTAINS_ANY_KEY = '?|'
+JSONB_CONTAINS_ALL_KEYS = '?&'
+JSONB_EXISTS = '?'
+CAST = '::'
+
 
 class _LookupNode(Node):
     def __init__(self, node, parts):
@@ -42,50 +50,67 @@ class _LookupNode(Node):
         self.parts = parts
         super(_LookupNode, self).__init__()
 
-    def clone_base(self):
+    def clone(self):
         return type(self)(self.node, list(self.parts))
 
     def cast(self, as_type):
-        return Expression(Clause(self, parens=True), OP.CAST, SQL(as_type))
+        return Expression(NodeList(self, parens=True), CAST, SQL(as_type))
+
 
 class _JsonLookupBase(_LookupNode):
     def __init__(self, node, parts, as_json=False):
         super(_JsonLookupBase, self).__init__(node, parts)
         self._as_json = as_json
 
-    def clone_base(self):
+    def clone(self):
         return type(self)(self.node, list(self.parts), self._as_json)
 
-    @returns_clone
+    @Node.copy
     def as_json(self, as_json=True):
         self._as_json = as_json
 
     def contains(self, other):
         clone = self.as_json(True)
         if isinstance(other, (list, dict)):
-            return Expression(clone, OP.JSONB_CONTAINS, Json(other))
-        return Expression(clone, OP.JSONB_EXISTS, other)
+            return Expression(clone, JSONB_CONTAINS, Json(other))
+        return Expression(clone, JSONB_EXISTS, other)
 
     def contains_any(self, *keys):
         return Expression(
             self.as_json(True),
-            OP.JSONB_CONTAINS_ANY_KEY,
-            Passthrough(list(keys)))
+            JSONB_CONTAINS_ANY_KEY,
+            Value(list(keys), force_single=True))
 
     def contains_all(self, *keys):
         return Expression(
             self.as_json(True),
-            OP.JSONB_CONTAINS_ALL_KEYS,
-            Passthrough(list(keys)))
+            JSONB_CONTAINS_ALL_KEYS,
+            Value(list(keys), force_single=True))
+
 
 class JsonLookup(_JsonLookupBase):
-    _node_type = 'json_lookup'
-
     def __getitem__(self, value):
         return JsonLookup(self.node, self.parts + [value], self._as_json)
 
+    def __sql__(self, ctx):
+        ctx.sql(self.node)
+        for part in self.node.parts[:-1]:
+            ctx.literal('->').sql(part)
+        if self.node.parts:
+            (ctx
+             .literal('->' if self.node._as_json else '->>')
+             .sql(parts[-1]))
+
+        return ctx
+
+
 class JsonPath(_JsonLookupBase):
-    _node_type = 'json_path'
+    def __sql__(self, ctx):
+        return (ctx
+                .sql(self.node)
+                .literal('#>' if self.node._as_json else '#>>')
+                .sql(Value('{%s}' % ','.join(map(str, self.node.parts)))))
+
 
 class ObjectSlice(_LookupNode):
     _node_type = 'object_slice'
@@ -103,10 +128,12 @@ class ObjectSlice(_LookupNode):
     def __getitem__(self, value):
         return ObjectSlice.create(self, value)
 
+
 class _Array(object):
     def __init__(self, field, items):
         self.field = field
         self.items = items
+
 
 def adapt_array(arr):
     conn = arr.field.model_class._meta.database.get_conn()
@@ -293,7 +320,7 @@ OP.update(
 )
 
 
-class PostgresqlExtCompiler(QueryCompiler):
+class PostgresqlExtCompiler(object):#QueryCompiler):
     def _create_index(self, model_class, fields, unique=False):
         clause = super(PostgresqlExtCompiler, self)._create_index(
             model_class, fields, unique)
@@ -405,30 +432,30 @@ class ServerSideSelectQuery(SelectQuery):
             sql, params, require_commit=False, named_cursor=True)
 
 
-PostgresqlExtDatabase.register_fields({
-    'datetime_tz': 'timestamp with time zone',
-    'hash': 'hstore',
-    'json': 'json',
-    'jsonb': 'jsonb',
-    'tsvector': 'tsvector',
-})
-PostgresqlExtDatabase.register_ops({
-    OP.HCONTAINS_DICT: '@>',
-    OP.HCONTAINS_KEYS: '?&',
-    OP.HCONTAINS_KEY: '?',
-    OP.HCONTAINS_ANY_KEY: '?|',
-    OP.HKEY: '->',
-    OP.HUPDATE: '||',
-    OP.ACONTAINS: '@>',
-    OP.ACONTAINS_ANY: '&&',
-    OP.TS_MATCH: '@@',
-    OP.JSONB_CONTAINS: '@>',
-    OP.JSONB_CONTAINED_BY: '<@',
-    OP.JSONB_CONTAINS_ANY_KEY: '?|',
-    OP.JSONB_CONTAINS_ALL_KEYS: '?&',
-    OP.JSONB_EXISTS: '?',
-    OP.CAST: '::',
-})
+#PostgresqlExtDatabase.register_fields({
+#    'datetime_tz': 'timestamp with time zone',
+#    'hash': 'hstore',
+#    'json': 'json',
+#    'jsonb': 'jsonb',
+#    'tsvector': 'tsvector',
+#})
+#PostgresqlExtDatabase.register_ops({
+#    OP.HCONTAINS_DICT: '@>',
+#    OP.HCONTAINS_KEYS: '?&',
+#    OP.HCONTAINS_KEY: '?',
+#    OP.HCONTAINS_ANY_KEY: '?|',
+#    OP.HKEY: '->',
+#    OP.HUPDATE: '||',
+#    OP.ACONTAINS: '@>',
+#    OP.ACONTAINS_ANY: '&&',
+#    OP.TS_MATCH: '@@',
+#    OP.JSONB_CONTAINS: '@>',
+#    OP.JSONB_CONTAINED_BY: '<@',
+#    OP.JSONB_CONTAINS_ANY_KEY: '?|',
+#    OP.JSONB_CONTAINS_ALL_KEYS: '?&',
+#    OP.JSONB_EXISTS: '?',
+#    OP.CAST: '::',
+#})
 
 def ServerSide(select_query):
     # Flag query for execution using server-side cursors.
