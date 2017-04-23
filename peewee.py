@@ -2850,6 +2850,9 @@ class _StringField(Field):
             return value.decode('utf-8')
         return text_type(value)
 
+    def __add__(self, other): return self.concat(other)
+    def __radd__(self, other): return other.concat(self)
+
 
 class CharField(_StringField):
     field_type = 'VARCHAR'
