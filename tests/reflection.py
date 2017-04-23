@@ -71,14 +71,14 @@ class TestReflection(ModelTestCase):
 
     def test_generate_models(self):
         models = self.introspector.generate_models()
-        self.assertEqual(sorted(models.keys()), [
+        self.assertTrue(set((
             'category',
             'coltypes',
             'fkpk',
             'nugget',
             'nullable',
             'relmodel',
-            'underscores'])
+            'underscores')).issubset(set(models)))
 
         def assertIsInstance(obj, klass):
             self.assertTrue(isinstance(obj, klass))
@@ -111,6 +111,7 @@ class TestReflection(ModelTestCase):
         self.assertEqual(relmodel.col_types_nullable.rel_model,
                          models['coltypes'])
 
+    @skip_unless(isinstance(db, SqliteDatabase))
     def test_generate_models_indexes(self):
         models = self.introspector.generate_models()
 
@@ -356,7 +357,8 @@ class TestReflection(ModelTestCase):
 
         expected = (
             ('coltypes', (
-                ('f1', 'f1 = BigIntegerField(index=True)'),
+                ('f1', ('f1 = BigIntegerField(index=True)',
+                        'f1 = IntegerField(index=True)')),
                 ('f2', 'f2 = BlobField()'),
                 ('f4', 'f4 = CharField()'),
                 ('f5', 'f5 = DateField()'),
@@ -374,24 +376,21 @@ class TestReflection(ModelTestCase):
             )),
             ('fkpk', (
                 ('col_types_id', 'col_types = ForeignKeyField('
-                 'column_name=\'col_types_id\', primary_key=True, '
-                 'rel_model=Coltypes, to_field=\'f11\')'),
+                 "column_name='col_types_id', field='f11', model=Coltypes, "
+                 'primary_key=True)'),
             )),
             ('nugget', (
                 ('category_id', 'category_id = ForeignKeyField('
-                 'column_name=\'category_id\', rel_model=Category, '
-                 'to_field=\'id\')'),
+                 "column_name='category_id', field='id', model=Category)"),
                 ('category', 'category = CharField()'),
             )),
             ('relmodel', (
                 ('col_types_id', 'col_types = ForeignKeyField('
-                 'column_name=\'col_types_id\', rel_model=Coltypes, '
-                 'to_field=\'f11\')'),
+                 "column_name='col_types_id', field='f11', model=Coltypes)"),
                 ('col_types_nullable_id', 'col_types_nullable = '
-                 'ForeignKeyField(column_name=\'col_types_nullable_id\', '
-                 'null=True, rel_model=Coltypes, '
-                 'related_name=\'coltypes_col_types_nullable_set\', '
-                 'to_field=\'f11\')'),
+                 "ForeignKeyField(backref='coltypes_col_types_nullable_set', "
+                 "column_name='col_types_nullable_id', field='f11', "
+                 'model=Coltypes, null=True)'),
             )),
             ('underscores', (
                 ('_id', '_id = AutoField()'),
@@ -400,8 +399,8 @@ class TestReflection(ModelTestCase):
             ('category', (
                 ('name', 'name = CharField()'),
                 ('parent_id', 'parent = ForeignKeyField('
-                 'column_name=\'parent_id\', null=True, rel_model=\'self\', '
-                 'to_field=\'id\')'),
+                 "column_name='parent_id', field='id', model='self', "
+                 'null=True)'),
             )),
         )
 
@@ -409,4 +408,6 @@ class TestReflection(ModelTestCase):
             for field_name, fields in field_data:
                 if not isinstance(fields, tuple):
                     fields = (fields,)
-                self.assertTrue(columns[table][field_name].get_field(), fields)
+                actual = columns[table][field_name].get_field()
+                self.assertTrue(actual in fields,
+                                '%s not in %s' % (actual, fields))
