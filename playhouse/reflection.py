@@ -78,11 +78,11 @@ class Column(object):
 
         # Handle ForeignKeyField-specific attributes.
         if self.is_foreign_key():
-            params['rel_model'] = self.rel_model
+            params['model'] = self.rel_model
             if self.to_field:
-                params['to_field'] = "'%s'" % self.to_field
+                params['field'] = "'%s'" % self.to_field
             if self.related_name:
-                params['related_name'] = "'%s'" % self.related_name
+                params['backref'] = "'%s'" % self.related_name
 
         # Handle indexes on column.
         if not self.is_primary_key():
@@ -592,15 +592,15 @@ class Introspector(object):
                     params['primary_key'] = True
                 if column.is_foreign_key():
                     if column.is_self_referential_fk():
-                        params['rel_model'] = 'self'
+                        params['model'] = 'self'
                     else:
                         dest_table = column.foreign_key.dest_table
-                        params['rel_model'] = models[dest_table]
+                        params['model'] = models[dest_table]
                     if column.to_field:
-                        params['to_field'] = column.to_field
+                        params['field'] = column.to_field
 
                     # Generate a unique related name.
-                    params['related_name'] = '%s_%s_rel' % (table, column_name)
+                    params['backref'] = '%s_%s_rel' % (table, column_name)
                 if column_name in column_indexes and not column.is_primary_key():
                     if column_indexes[column_name]:
                         params['unique'] = True

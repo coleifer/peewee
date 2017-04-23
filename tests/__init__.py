@@ -21,6 +21,7 @@ from .db_url import *
 from .hybrid import *
 from .migrations import *
 from .pool import *
+from .reflection import *
 from .shortcuts import *
 from .signals import *
 #from playhouse.tests.test_introspection import *

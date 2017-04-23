@@ -2169,6 +2169,9 @@ class SqliteDatabase(Database):
         return [ForeignKeyMetadata(row[3], row[2], row[4], table)
                 for row in cursor.fetchall()]
 
+    def get_binary_type(self):
+        return sqlite3.Binary
+
 
 class PostgresqlDatabase(Database):
     options = attrdict(
@@ -2288,6 +2291,9 @@ class PostgresqlDatabase(Database):
                 AND relname=%s""", (sequence,))
         return bool(res.fetchone()[0])
 
+    def get_binary_type(self):
+        return psycopg2.Binary
+
 
 class MySQLDatabase(Database):
     options = attrdict(
@@ -2369,6 +2375,9 @@ class MySQLDatabase(Database):
         return [
             ForeignKeyMetadata(column, dest_table, dest_column, table)
             for column, dest_table, dest_column in cursor.fetchall()]
+
+    def get_binary_type(self):
+        return mysql.Binary
 
 
 # TRANSACTION CONTROL.

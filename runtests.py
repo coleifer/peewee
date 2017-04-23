@@ -142,8 +142,8 @@ def collect_modules(options):
         from playhouse.tests import test_read_slave
         modules.append(test_read_slave)
     if xtra(options.reflection):
-        from playhouse.tests import test_reflection
-        modules.append(test_reflection)
+        import tests.reflection
+        modules.append(tests.reflection)
     if xtra(options.signals):
         from playhouse.tests import test_signals
         modules.append(test_signals)
