@@ -92,14 +92,17 @@ class TestDatabase(DatabaseTestCase):
 
         self.assertFalse(db.connect(reuse_if_open=True))
         self.assertEqual(state['count'], 1)
-
-        with db:
-            self.assertEqual(state['count'], 1)
-            self.assertFalse(db.is_closed())
-        self.assertTrue(db.is_closed())
+        conn = db.connection()
 
         with db:
             self.assertEqual(state['count'], 2)
+            self.assertFalse(db.is_closed())
+
+        self.assertFalse(db.is_closed())
+        self.assertTrue(db.connection() is conn)
+
+        with db:
+            self.assertEqual(state['count'], 3)
 
     def test_execute_sql(self):
         self.database.execute_sql('CREATE TABLE register (val INTEGER);')

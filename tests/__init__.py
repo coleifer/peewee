@@ -18,7 +18,9 @@ from .sql import *
 from .transactions import *
 
 from .hybrid import *
+from .pool import *
 from .shortcuts import *
+from .signals import *
 #from playhouse.tests.test_introspection import *
 #from playhouse.tests.test_keys import *
 

@@ -50,7 +50,6 @@ post_save = Signal()
 pre_delete = Signal()
 post_delete = Signal()
 pre_init = Signal()
-post_init = Signal()
 
 
 class Model(_Model):
@@ -58,12 +57,8 @@ class Model(_Model):
         super(Model, self).__init__(*args, **kwargs)
         pre_init.send(self)
 
-    def prepared(self):
-        super(Model, self).prepared()
-        post_init.send(self)
-
     def save(self, *args, **kwargs):
-        pk_value = self._get_pk_value()
+        pk_value = self._pk
         created = kwargs.get('force_insert', False) or not bool(pk_value)
         pre_save.send(self, created=created)
         ret = super(Model, self).save(*args, **kwargs)

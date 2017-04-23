@@ -1790,17 +1790,12 @@ ForeignKeyMetadata = namedtuple(
 class _ConnectionState(object):
     def __init__(self, **kwargs):
         super(_ConnectionState, self).__init__(**kwargs)
+        self.reset()
+
+    def reset(self):
         self.closed = True
         self.conn = None
         self.transactions = []
-
-    def reset(self):
-        self.transactions = []
-        if not self.closed:
-            self.conn.close()
-            self.closed = True
-            return True
-        return False
 
     def set_connection(self, conn):
         self.conn = conn
@@ -1853,6 +1848,7 @@ class Database(_callable_context_manager):
         else:
             self._state = _ConnectionState()
             self._lock = _NoopLock()
+        self.connection_stack = []
 
         self.connect_params = {}
         self.init(database, **kwargs)
@@ -1868,17 +1864,20 @@ class Database(_callable_context_manager):
         self.options.operations = merge_dict(OP, self.options.operations)
 
     def __enter__(self):
-        self.connect(reuse_if_open=True)
-        self.transaction().__enter__()
+        with self._lock:
+            conn = self._connect()
+            self._initialize_connection(conn)
+            self.connection_stack.append(conn)
+            self.transaction().__enter__()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        top = self._state.transactions[-1]
-        try:
-            top.__exit__(exc_type, exc_val, exc_tb)
-        finally:
-            if not self.is_closed():
-                self.close()
+        with self._lock:
+            top = self._state.transactions[-1]
+            try:
+                top.__exit__(exc_type, exc_val, exc_tb)
+            finally:
+                self._close(self.connection_stack.pop())
 
     def _connect(self):
         raise NotImplementedError
@@ -1888,11 +1887,10 @@ class Database(_callable_context_manager):
             if self.deferred:
                 raise Exception('Error, database must be initialized before '
                                 'opening a connection.')
-            if not self.is_closed():
+            if not self._state.closed:
                 if reuse_if_open:
                     return False
-                else:
-                    raise OperationalError('Connection already opened.')
+                raise OperationalError('Connection already opened.')
 
             self._state.reset()
             self._state.set_connection(self._connect())
@@ -1907,12 +1905,21 @@ class Database(_callable_context_manager):
             if self.deferred:
                 raise Exception('Error, database must be initialized before '
                                 'opening a connection.')
-            return self._state.reset()
+            is_open = not self._state.closed
+            if is_open:
+                self._close(self._state.conn)
+            self._state.reset()
+            return is_open
+
+    def _close(self, conn):
+        conn.close()
 
     def is_closed(self):
-        return self._state.closed
+        return self._state.closed and not self.connection_stack
 
     def connection(self):
+        if self.connection_stack:
+            return self.connection_stack[-1]
         if self.is_closed():
             self.connect()
         return self._state.conn
