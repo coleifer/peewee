@@ -194,6 +194,7 @@ class SchemaMigrator(object):
         field.null = field_null
         if isinstance(field, ForeignKeyField):
             self.add_inline_fk_sql(ctx, field)
+
         return ctx
 
     def add_inline_fk_sql(self, ctx, field):
@@ -218,8 +219,6 @@ class SchemaMigrator(object):
             raise ValueError('%s is not null but has no default' % column_name)
 
         is_foreign_key = isinstance(field, ForeignKeyField)
-
-        # Foreign key fields must explicitly specify a `to_field`.
         if is_foreign_key and not field.rel_field:
             raise ValueError('Foreign keys must specify a `to_field`.')
 
@@ -265,26 +264,27 @@ class SchemaMigrator(object):
             foreign_key.column
             for foreign_key in self.database.get_foreign_keys(table)]
         if column_name in fk_columns and self.explicit_delete_foreign_key:
-            return [
-                self.drop_foreign_key_constraint(table, column_name),
-                ctx]
+            return [self.drop_foreign_key_constraint(table, column_name), ctx]
 
         return ctx
 
-    @operation
-    def rename_column(self, ctx, table, old_name, new_name):
+    def _alter_table(self, ctx, table):
         return (ctx
                 .literal('ALTER TABLE ')
-                .sql(Entity(table))
+                .sql(Entity(table)))
+
+    @operation
+    def rename_column(self, ctx, table, old_name, new_name):
+        return (self
+                ._alter_table(ctx, table)
                 .literal(' RENAME COLUMN ')
                 .sql(Entity(old_name))
                 .literal(' TO ')
                 .sql(Entity(new_name)))
 
     def _alter_column(self, ctx, table, column):
-        return (ctx
-                .literal('ALTER TABLE ')
-                .sql(Entity(table))
+        return (self
+                ._alter_table(ctx, table)
                 .literal(' ALTER COLUMN ')
                 .sql(Entity(column)))
 
@@ -300,9 +300,8 @@ class SchemaMigrator(object):
 
     @operation
     def rename_table(self, ctx, old_name, new_name):
-        return (ctx
-                .literal('ALTER TABLE ')
-                .sql(Entity(old_name))
+        return (self
+                ._alter_table(ctx, old_name)
                 .literal(' RENAME TO ')
                 .sql(Entity(new_name)))
 
@@ -360,9 +359,9 @@ class PostgresqlMigrator(SchemaMigrator):
 
         return operations
 
-_column_attributes = ('name', 'definition', 'null', 'pk', 'default', 'extra')
 
-class MySQLColumn(namedtuple('_Column', _column_attributes)):
+class MySQLColumn(namedtuple('_Column', ('name', 'definition', 'null', 'pk',
+                                         'default', 'extra'))):
     @property
     def is_pk(self):
         return self.pk == 'PRI'
@@ -516,6 +515,7 @@ class MySQLMigrator(SchemaMigrator):
             SQL('ON'),
             Entity(table))
 
+
 class SqliteMigrator(SchemaMigrator):
     """
     SQLite supports a subset of ALTER TABLE queries, view the docs for the
@@ -538,7 +538,7 @@ class SqliteMigrator(SchemaMigrator):
         return res.fetchone()
 
     @operation
-    def _update_column(self, table, column_to_update, fn):
+    def _update_column(self, ctx, table, column_to_update, fn):
         columns = set(column.name.lower()
                       for column in self.database.get_columns(table))
         if column_to_update.lower() not in columns:
@@ -618,7 +618,7 @@ class SqliteMigrator(SchemaMigrator):
         # Create the new table.
         columns = ', '.join(cleaned_columns)
         queries = [
-            NodeList((SQL('DROP TABLE IF EXISTS'), Entity(temp_table))),
+            NodeList([SQL('DROP TABLE IF EXISTS'), Entity(temp_table)]),
             SQL('%s (%s)' % (create.strip(), columns))]
 
         # Populate new table.
@@ -630,13 +630,13 @@ class SqliteMigrator(SchemaMigrator):
             CommaNodeList([Entity(col) for col in original_column_names]),
             SQL('FROM'),
             Entity(table)))
-        queries.append(populate_table)
+        drop_original = NodeList([SQL('DROP TABLE'), Entity(table)])
 
         # Drop existing table and rename temp table.
-        queries.append(Clause(
-            SQL('DROP TABLE'),
-            Entity(table)))
-        queries.append(self.rename_table(temp_table, table))
+        queries += [
+            populate_table,
+            drop_original,
+            self.rename_table(temp_table, table)]
 
         # Re-create user-defined indexes. User-defined indexes will have a
         # non-empty SQL attribute.
@@ -682,27 +682,26 @@ class SqliteMigrator(SchemaMigrator):
         return '%s(%s)' % (lhs, ', '.join('"%s"' % c for c in clean))
 
     @operation
-    def drop_column(self, table, column_name, cascade=True):
+    def drop_column(self, ctx, table, column_name, cascade=True):
         return self._update_column(table, column_name, lambda a, b: None)
 
     @operation
-    def rename_column(self, table, old_name, new_name):
+    def rename_column(self, ctx, table, old_name, new_name):
         def _rename(column_name, column_def):
             return column_def.replace(column_name, new_name)
         return self._update_column(table, old_name, _rename)
 
     @operation
     def add_not_null(self, ctx, table, column):
-        return ctx
         def _add_not_null(column_name, column_def):
             return column_def + ' NOT NULL'
-        return self._update_column(ctx, table, column, _add_not_null)
+        return self._update_column(table, column, _add_not_null)
 
     @operation
     def drop_not_null(self, ctx, table, column):
         def _drop_not_null(column_name, column_def):
             return column_def.replace('NOT NULL', '')
-        return self._update_column(ctx, table, column, _drop_not_null)
+        return self._update_column(table, column, _drop_not_null)
 
 
 def migrate(*operations, **kwargs):

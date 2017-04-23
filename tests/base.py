@@ -99,6 +99,9 @@ class BaseTestCase(unittest.TestCase):
     def history(self):
         return self._qh.queries
 
+    def reset_sql_history(self):
+        self._qh.queries = []
+
     @contextmanager
     def assertQueryCount(self, num):
         qc = len(self.history)

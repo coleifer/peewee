@@ -3422,7 +3422,7 @@ class SchemaManager(object):
         ctx = self.database.get_sql_context()
         index_name = ctx.make_index_name(
             self.model._meta.name,
-            *[field.name for field in fields])
+            *[field.column_name for field in fields])
         return Entity(self.model._meta.schema, index_name)
 
     def _create_indexes(self, safe=True):

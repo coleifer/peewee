@@ -67,14 +67,14 @@ class TestModelDDL(ModelDatabaseTestCase):
              '"author_id" INTEGER NOT NULL, '
              '"content" TEXT NOT NULL, '
              'FOREIGN KEY ("author_id") REFERENCES "person" ("id"))'),
-            'CREATE INDEX "note_author" ON "note" ("author_id")'])
+            'CREATE INDEX "note_author_id" ON "note" ("author_id")'])
 
         self.assertCreateTable(Category, [
             ('CREATE TABLE "category" ('
              '"name" VARCHAR(20) NOT NULL PRIMARY KEY, '
              '"parent_id" VARCHAR(20), '
              'FOREIGN KEY ("parent_id") REFERENCES "category" ("name"))'),
-            'CREATE INDEX "category_parent" ON "category" ("parent_id")'])
+            'CREATE INDEX "category_parent_id" ON "category" ("parent_id")'])
 
         self.assertCreateTable(Relationship, [
             ('CREATE TABLE "relationship" ('
@@ -83,9 +83,9 @@ class TestModelDDL(ModelDatabaseTestCase):
              '"to_person_id" INTEGER NOT NULL, '
              'FOREIGN KEY ("from_person_id") REFERENCES "person" ("id"), '
              'FOREIGN KEY ("to_person_id") REFERENCES "person" ("id"))'),
-            ('CREATE INDEX "relationship_from_person" '
+            ('CREATE INDEX "relationship_from_person_id" '
              'ON "relationship" ("from_person_id")'),
-            ('CREATE INDEX "relationship_to_person" '
+            ('CREATE INDEX "relationship_to_person_id" '
              'ON "relationship" ("to_person_id")')])
 
         self.assertCreateTable(TMUnique, [
