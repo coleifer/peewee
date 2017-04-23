@@ -259,7 +259,7 @@ try:
     class PooledPostgresqlExtDatabase(_PooledPostgresqlDatabase, PostgresqlExtDatabase):
         pass
 except ImportError:
-    pass
+    PooledPostgresqlExtDatabase = None
 
 
 class _PooledSqliteDatabase(PooledDatabase):
@@ -281,4 +281,4 @@ try:
     class PooledSqliteExtDatabase(_PooledSqliteDatabase, SqliteExtDatabase):
         pass
 except ImportError:
-    pass
+    PooledSqliteExtDatabase = None

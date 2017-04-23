@@ -17,6 +17,7 @@ from .schema import *
 from .sql import *
 from .transactions import *
 
+from .db_url import *
 from .hybrid import *
 from .pool import *
 from .shortcuts import *
