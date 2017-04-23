@@ -1848,7 +1848,6 @@ class Database(_callable_context_manager):
         else:
             self._state = _ConnectionState()
             self._lock = _NoopLock()
-        self.connection_stack = []
 
         self.connect_params = {}
         self.init(database, **kwargs)
@@ -1864,20 +1863,17 @@ class Database(_callable_context_manager):
         self.options.operations = merge_dict(OP, self.options.operations)
 
     def __enter__(self):
-        with self._lock:
-            conn = self._connect()
-            self._initialize_connection(conn)
-            self.connection_stack.append(conn)
-            self.transaction().__enter__()
+        if self.is_closed():
+            self.connect()
+        self.transaction().__enter__()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        with self._lock:
-            top = self._state.transactions[-1]
-            try:
-                top.__exit__(exc_type, exc_val, exc_tb)
-            finally:
-                self._close(self.connection_stack.pop())
+        top = self._state.transactions[-1]
+        try:
+            top.__exit__(exc_type, exc_val, exc_tb)
+        finally:
+            self.close()
 
     def _connect(self):
         raise NotImplementedError
@@ -1915,11 +1911,9 @@ class Database(_callable_context_manager):
         conn.close()
 
     def is_closed(self):
-        return self._state.closed and not self.connection_stack
+        return self._state.closed
 
     def connection(self):
-        if self.connection_stack:
-            return self.connection_stack[-1]
         if self.is_closed():
             self.connect()
         return self._state.conn

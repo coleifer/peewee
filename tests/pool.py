@@ -212,63 +212,17 @@ class TestPooledDatabase(BaseTestCase):
     def test_db_context(self):
         self.assertEqual(self.db.connection(), 1)
         with self.db:
-            self.assertEqual(self.db.connection(), 2)
-            self.assertEqual(self.db.transaction_history, ['O2'])
+            self.assertEqual(self.db.connection(), 1)
+            self.assertEqual(self.db.transaction_history, ['O1'])
 
         self.assertEqual(self.db.connection(), 1)
-        self.assertEqual(self.db.transaction_history, ['O2', 'X2'])
+        self.assertEqual(self.db.transaction_history, ['O1', 'X1'])
 
         with self.db:
-            self.assertEqual(self.db.connection(), 2)
+            self.assertEqual(self.db.connection(), 1)
 
         self.assertEqual(len(self.db._connections), 1)
-        self.assertEqual(len(self.db._in_use), 1)
-
-    def test_db_context_nested(self):
-        def assertInUse(n):
-            self.assertEqual(len(self.db._in_use), n)
-        def assertFree(n):
-            self.assertEqual(len(self.db._connections), n)
-        def assertHistory(n):
-            self.assertEqual(self.db.transaction_history, n)
-
-        @self.db
-        def subroutine():
-            pass
-
-        self.assertEqual(self.db.connection(), 1)
-        assertFree(0)
-        assertInUse(1)
-
-        with self.db:
-            self.assertEqual(self.db.connection(), 2)
-            assertFree(0)
-            assertInUse(2)
-            assertHistory(['O2'])
-
-            with self.db:
-                self.assertEqual(self.db.connection(), 3)
-                assertFree(0)
-                assertInUse(3)
-                assertHistory(['O2', 'O3'])
-
-                subroutine()
-                assertFree(1)
-                assertInUse(3)
-                assertHistory(['O2', 'O3', 'O4', 'X4'])
-
-            assertFree(2)
-            assertInUse(2)
-            assertHistory(['O2', 'O3', 'O4', 'X4', 'X3'])
-
-            subroutine()
-            assertFree(2)
-            assertInUse(2)
-            assertHistory(['O2', 'O3', 'O4', 'X4', 'X3', 'O3', 'X3'])
-
-        self.assertEqual(self.db.connection(), 1)
-        assertFree(3)
-        assertInUse(1)
+        self.assertEqual(len(self.db._in_use), 0)
 
     def test_db_context_threads(self):
         signal = threading.Event()
@@ -288,50 +242,6 @@ class TestPooledDatabase(BaseTestCase):
         self.assertEqual(self.db.counter, 5)
         self.assertEqual(len(self.db._connections), 5)
         self.assertEqual(len(self.db._in_use), 0)
-
-    def test_db_context_mixed_thread(self):
-        sig_sub = threading.Event()
-        sig_ctx = threading.Event()
-        sig_in_sub = threading.Event()
-        sig_in_ctx = threading.Event()
-        self.assertEqual(self.db.connection(), 1)
-
-        @self.db
-        def subroutine():
-            sig_in_sub.set()
-            sig_sub.wait()
-
-        def target():
-            with self.db:
-                subroutine()
-                sig_in_ctx.set()
-                sig_ctx.wait()
-
-        t = threading.Thread(target=target)
-        t.start()
-
-        sig_in_sub.wait()
-        self.assertEqual(len(self.db._in_use), 3)
-        self.assertEqual(len(self.db._connections), 0)
-        self.assertEqual(self.db.transaction_history, ['O2', 'O3'])
-
-        sig_sub.set()
-        sig_in_ctx.wait()
-
-        self.assertEqual(len(self.db._in_use), 2)
-        self.assertEqual(len(self.db._connections), 1)
-        self.assertEqual(
-            self.db.transaction_history,
-            ['O2', 'O3', 'X3'])
-
-        sig_ctx.set()
-        t.join()
-
-        self.assertEqual(len(self.db._in_use), 1)
-        self.assertEqual(len(self.db._connections), 2)
-        self.assertEqual(
-            self.db.transaction_history,
-            ['O2', 'O3', 'X3', 'X2'])
 
 
 class TestLivePooledDatabase(ModelTestCase):
