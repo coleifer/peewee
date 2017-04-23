@@ -351,6 +351,14 @@ class Context(object):
     def query(self):
         return ''.join(self._sql), self._values
 
+    def make_index_name(self, table, *columns):
+        index_name = '_'.join((table,) + columns)
+
+        if len(index_name) > 64:
+            index_hash = hashlib.md5(index_name.encode('utf-8')).hexdigest()
+            index_name = '%s_%s' % (index_name[:56], index_hash[:7])
+        return index_name
+
 
 # AST.
 
@@ -2764,7 +2772,7 @@ class Field(ColumnBase):
             return SQL(column_type)
 
     def ddl(self, ctx):
-        accum = [self.column, self.ddl_datatype(ctx)]
+        accum = [Entity(self.column_name), self.ddl_datatype(ctx)]
         if self.unindexed:
             accum.append(SQL('UNINDEXED'))
         if not self.null:
@@ -3083,7 +3091,7 @@ class ForeignKeyField(Field):
     def field_type(self):
         if not isinstance(self.rel_field, AutoField):
             return self.rel_field.field_type
-        return AutoField.field_type
+        return IntegerField.field_type
 
     def get_modifiers(self):
         if not isinstance(self.rel_field, AutoField):
@@ -3411,14 +3419,10 @@ class SchemaManager(object):
         self.database.execute(self._drop_table(safe=safe))
 
     def index_entity(self, fields):
-        index_name = '%s_%s' % (
+        ctx = self.database.get_sql_context()
+        index_name = ctx.make_index_name(
             self.model._meta.name,
-            '_'.join([field.name for field in fields]))
-
-        if len(index_name) > 64:
-            index_hash = hashlib.md5(index_name.encode('utf-8')).hexdigest()
-            index_name = '%s_%s' % (index_name[:56], index_hash[:7])
-
+            *[field.name for field in fields])
         return Entity(self.model._meta.schema, index_name)
 
     def _create_indexes(self, safe=True):

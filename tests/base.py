@@ -79,6 +79,16 @@ class BaseTestCase(unittest.TestCase):
     def assertIsNotNone(self, value):
         self.assertTrue(value is not None, '%r is None' % value)
 
+    @contextmanager
+    def assertRaisesCtx(self, exceptions):
+        try:
+            yield
+        except Exception as exc:
+            if not isinstance(exc, exceptions):
+                raise AssertionError('Got %s, expected %s' % (exc, exceptions))
+        else:
+            raise AssertionError('No exception was raised.')
+
     def assertSQL(self, query, sql, params=None, **state):
         qsql, qparams = __sql__(query, **state)
         self.assertEqual(qsql, sql)

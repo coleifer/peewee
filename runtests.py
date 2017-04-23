@@ -119,8 +119,8 @@ def collect_modules(options):
             modules.append(test_manytomany)
     if xtra(options.migrations):
         try:
-            from playhouse.tests import test_migrate
-            modules.append(test_migrate)
+            import tests.migrations
+            modules.append(tests.migrations)
         except ImportError:
             print_('Unable to import migration tests, skipping')
     if xtra(options.pool):

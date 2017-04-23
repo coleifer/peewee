@@ -19,6 +19,7 @@ from .transactions import *
 
 from .db_url import *
 from .hybrid import *
+from .migrations import *
 from .pool import *
 from .shortcuts import *
 from .signals import *
