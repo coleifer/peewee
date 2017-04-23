@@ -818,8 +818,8 @@ class Value(ColumnBase):
     def __init__(self, value, converter=None, force_single=False):
         self.value = value
         self.converter = converter
-        self.multi = isinstance(self.value, (list, tuple))
-        if self.multi and not force_single:
+        self.multi = isinstance(self.value, (list, tuple)) and not force_single
+        if self.multi:
             self.values = []
             for item in self.value:
                 if isinstance(item, Node):
