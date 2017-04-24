@@ -4175,7 +4175,6 @@ class ModelSelect(BaseModelSelect, Select):
     def _normalize_join(self, src, dest, on, attr):
         # Allow "on" expression to have an alias that determines the
         # destination attribute for the joined data.
-        on_is_none = on is None
         on_alias = isinstance(on, Alias)
         if on_alias:
             attr = on._alias
@@ -4204,7 +4203,7 @@ class ModelSelect(BaseModelSelect, Select):
                 to_field = None
 
             fk_field, is_backref = self._generate_on_clause(
-                src_model, dest_model, to_field, on_is_none)
+                src_model, dest_model, to_field)
 
             if on is None:
                 fkc = fk_field.column_name
@@ -4213,10 +4212,8 @@ class ModelSelect(BaseModelSelect, Select):
                     on = getattr(dest, fkc) == getattr(src, pkc)
                 else:
                     on = getattr(src, fkc) == getattr(dest, pkc)
-            if not attr and fk_field:
+            if not attr:
                 attr = dest_model._meta.name if is_backref else fk_field.name
-            else:
-                attr = src_model._meta.name
 
         elif isinstance(dest, Source):
             constructor = dict
@@ -4237,7 +4234,7 @@ class ModelSelect(BaseModelSelect, Select):
 
         return super(ModelSelect, self).join(dest, join_type, on)
 
-    def _generate_on_clause(self, src, dest, to_field=None, exceptions=True):
+    def _generate_on_clause(self, src, dest, to_field=None):
         meta = src._meta
         backref = fk_fields = False
         if dest in meta.model_refs:
@@ -4247,13 +4244,9 @@ class ModelSelect(BaseModelSelect, Select):
             backref = True
 
         if not fk_fields:
-            if exceptions:
-                raise ValueError('Unable to find foreign key between %s and '
-                                 '%s. Please specify explicit join condition.'
-                                 % (src, dest))
-            else:
-                return None, None
-
+            raise ValueError('Unable to find foreign key between %s and %s. '
+                             'Please specify an explicit join condition.' %
+                             (src, dest))
         if to_field is not None:
             fk_fields = [f for f in fk_fields if (
                          (f is to_field) or
