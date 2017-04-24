@@ -4,7 +4,6 @@ Collection of postgres-specific extensions, currently including:
 * Support for hstore, a key/value type storage
 """
 import logging
-import uuid
 
 from peewee import *
 from peewee import __exception_wrapper__
@@ -39,7 +38,6 @@ JSONB_CONTAINED_BY = '<@'
 JSONB_CONTAINS_ANY_KEY = '?|'
 JSONB_CONTAINS_ALL_KEYS = '?&'
 JSONB_EXISTS = '?'
-CAST = '::'
 
 
 class _LookupNode(ColumnBase):
@@ -50,9 +48,6 @@ class _LookupNode(ColumnBase):
 
     def clone(self):
         return type(self)(self.node, list(self.parts))
-
-    def cast(self, as_type):
-        return Expression(NodeList(self, parens=True), CAST, SQL(as_type))
 
 
 class _JsonLookupBase(_LookupNode):
@@ -92,12 +87,12 @@ class JsonLookup(_JsonLookupBase):
 
     def __sql__(self, ctx):
         ctx.sql(self.node)
-        for part in self.node.parts[:-1]:
+        for part in self.parts[:-1]:
             ctx.literal('->').sql(part)
-        if self.node.parts:
+        if self.parts:
             (ctx
-             .literal('->' if self.node._as_json else '->>')
-             .sql(parts[-1]))
+             .literal('->' if self._as_json else '->>')
+             .sql(self.parts[-1]))
 
         return ctx
 
@@ -106,8 +101,8 @@ class JsonPath(_JsonLookupBase):
     def __sql__(self, ctx):
         return (ctx
                 .sql(self.node)
-                .literal('#>' if self.node._as_json else '#>>')
-                .sql(Value('{%s}' % ','.join(map(str, self.node.parts)))))
+                .literal('#>' if self._as_json else '#>>')
+                .sql(Value('{%s}' % ','.join(map(str, self.parts)))))
 
 
 class ObjectSlice(_LookupNode):
@@ -261,7 +256,7 @@ class BinaryJSONField(IndexedFieldMixin, JSONField):
     def contains(self, other):
         if isinstance(other, (list, dict)):
             return Expression(self, JSONB_CONTAINS, Json(other))
-        return Expression(self, JSONB_EXISTS, Value(other, unpack=False))
+        return Expression(self, JSONB_EXISTS, other)
 
     def contained_by(self, other):
         return Expression(self, JSONB_CONTAINED_BY, Json(other))
@@ -298,95 +293,14 @@ def Match(field, query, language=None):
 
 class PostgresqlExtDatabase(PostgresqlDatabase):
     def __init__(self, *args, **kwargs):
-        self.server_side_cursors = kwargs.pop('server_side_cursors', False)
         self.register_hstore = kwargs.pop('register_hstore', True)
         super(PostgresqlExtDatabase, self).__init__(*args, **kwargs)
-
-    def cursor(self, name=None):
-        if name:
-            return self.connection().cursor(name=name)
-        return self.connection().cursor()
-
-    def execute_sql(self, sql, params=None, commit=True, named_cursor=False):
-        logger.debug((sql, params))
-        use_named_cursor = (named_cursor or (
-                            self.server_side_cursors and
-                            sql.lower().startswith('select')))
-        with __exception_wrapper__:
-            if use_named_cursor:
-                cursor = self.cursor(name=str(uuid.uuid1()))
-                require_commit = False
-            else:
-                cursor = self.cursor()
-                try:
-                    cursor.execute(sql, params or ())
-                except Exception:
-                    if self.autorollback and not self.in_transaction():
-                        self.rollback()
-                    raise
-                else:
-                    if commit and not self.in_transaction() and \
-                       (self.commit_select or not sql.startswith('SELECT')):
-                        self.commit()
-        return cursor
 
     def _connect(self):
         conn = super(PostgresqlExtDatabase, self)._connect()
         if self.register_hstore:
             register_hstore(conn, globally=True)
         return conn
-
-
-class ServerSideSelectQuery(SelectQuery):
-    @classmethod
-    def clone_from_query(cls, query):
-        clone = ServerSideSelectQuery(query.model_class)
-        return query._clone_attributes(clone)
-
-    def _execute(self):
-        sql, params = self.sql()
-        return self.database.execute_sql(
-            sql, params, require_commit=False, named_cursor=True)
-
-
-#PostgresqlExtDatabase.register_fields({
-#    'datetime_tz': 'timestamp with time zone',
-#    'hash': 'hstore',
-#    'json': 'json',
-#    'jsonb': 'jsonb',
-#    'tsvector': 'tsvector',
-#})
-#PostgresqlExtDatabase.register_ops({
-#    OP.HCONTAINS_DICT: '@>',
-#    OP.HCONTAINS_KEYS: '?&',
-#    OP.HCONTAINS_KEY: '?',
-#    OP.HCONTAINS_ANY_KEY: '?|',
-#    OP.HKEY: '->',
-#    OP.HUPDATE: '||',
-#    OP.ACONTAINS: '@>',
-#    OP.ACONTAINS_ANY: '&&',
-#    OP.TS_MATCH: '@@',
-#    OP.JSONB_CONTAINS: '@>',
-#    OP.JSONB_CONTAINED_BY: '<@',
-#    OP.JSONB_CONTAINS_ANY_KEY: '?|',
-#    OP.JSONB_CONTAINS_ALL_KEYS: '?&',
-#    OP.JSONB_EXISTS: '?',
-#    OP.CAST: '::',
-#})
-
-def ServerSide(select_query):
-    # Flag query for execution using server-side cursors.
-    clone = ServerSideSelectQuery.clone_from_query(select_query)
-    with clone.database.transaction():
-        # Execute the query.
-        query_result = clone.execute()
-
-        # Patch QueryResultWrapper onto original query.
-        select_query._qr = query_result
-
-        # Expose generator for iterating over query.
-        for obj in query_result.iterator():
-            yield obj
 
 
 def LateralJoin(lhs, rhs, join_type='LEFT', condition=True):
