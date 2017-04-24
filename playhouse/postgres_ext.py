@@ -249,6 +249,10 @@ class JSONField(Field):
         return JsonPath(self, keys)
 
 
+def cast_jsonb(node):
+    return NodeList((node, SQL('::jsonb')), glue='')
+
+
 class BinaryJSONField(IndexedFieldMixin, JSONField):
     field_type = 'JSONB'
     default_index_type = 'GIN'
@@ -256,20 +260,20 @@ class BinaryJSONField(IndexedFieldMixin, JSONField):
     def contains(self, other):
         if isinstance(other, (list, dict)):
             return Expression(self, JSONB_CONTAINS, Json(other))
-        return Expression(self, JSONB_EXISTS, other)
+        return Expression(cast_jsonb(self), JSONB_EXISTS, other)
 
     def contained_by(self, other):
-        return Expression(self, JSONB_CONTAINED_BY, Json(other))
+        return Expression(cast_jsonb(self), JSONB_CONTAINED_BY, Json(other))
 
     def contains_any(self, *items):
         return Expression(
-            self,
+            cast_jsonb(self),
             JSONB_CONTAINS_ANY_KEY,
             Value(list(items), unpack=False))
 
     def contains_all(self, *items):
         return Expression(
-            self,
+            cast_jsonb(self),
             JSONB_CONTAINS_ALL_KEYS,
             Value(list(items), unpack=False))
 
@@ -291,6 +295,10 @@ def Match(field, query, language=None):
         fn.to_tsquery(*params))
 
 
+class IntervalField(Field):
+    field_type = 'INTERVAL'
+
+
 class PostgresqlExtDatabase(PostgresqlDatabase):
     def __init__(self, *args, **kwargs):
         self.register_hstore = kwargs.pop('register_hstore', True)
@@ -301,11 +309,3 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
         if self.register_hstore:
             register_hstore(conn, globally=True)
         return conn
-
-
-def LateralJoin(lhs, rhs, join_type='LEFT', condition=True):
-    return Clause(
-        lhs,
-        SQL('%s JOIN LATERAL' % join_type),
-        rhs,
-        SQL('ON %s', condition))

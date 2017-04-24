@@ -1,7 +1,10 @@
 #coding:utf-8
+import datetime
+
 from peewee import *
 from playhouse.postgres_ext import *
 
+from .base import BaseTestCase
 from .base import ModelTestCase
 from .base import TestModel
 from .base import skip_case_if
@@ -34,7 +37,7 @@ try:
     class JsonModelNull(TestModel):
         data = JSONField(null=True)
 except:
-    JsonModel = None
+    JsonModel = JsonModelNull = None
 
 try:
     class BJson(TestModel):
@@ -45,6 +48,11 @@ except:
 
 class Normal(TestModel):
     data = TextField()
+
+
+class Event(TestModel):
+    name = CharField()
+    duration = IntervalField()
 
 
 class TZModel(TestModel):
@@ -63,7 +71,6 @@ class TestTZField(ModelTestCase):
         self.assertTrue(tz.dt.tzinfo is None)
 
         tz = TZModel.get(TZModel.id == tz.id)
-
 
 
 class TestHStoreField(ModelTestCase):
@@ -95,41 +102,41 @@ class TestHStoreField(ModelTestCase):
                 .order_by(HStoreModel.id))
 
     def test_hstore_selecting(self):
-        query = self.query(HStoreModel.data.keys().alias('keys'))
+        query = self.query(D.keys().alias('keys'))
         self.assertEqual([(x.name, sorted(x.keys)) for x in query], [
             ('t1', ['k1', 'k2']), ('t2', ['k2', 'k3'])])
 
-        query = self.query(HStoreModel.data.values().alias('vals'))
+        query = self.query(D.values().alias('vals'))
         self.assertEqual([(x.name, sorted(x.vals)) for x in query], [
             ('t1', ['v1', 'v2']), ('t2', ['v2', 'v3'])])
 
-        query = self.query(HStoreModel.data.items().alias('mtx'))
+        query = self.query(D.items().alias('mtx'))
         self.assertEqual([(x.name, sorted(x.mtx)) for x in query], [
             ('t1', [['k1', 'v1'], ['k2', 'v2']]),
             ('t2', [['k2', 'v2'], ['k3', 'v3']])])
 
-        query = self.query(HStoreModel.data.slice('k2', 'k3').alias('kz'))
+        query = self.query(D.slice('k2', 'k3').alias('kz'))
         self.assertEqual([(x.name, x.kz) for x in query], [
             ('t1', {'k2': 'v2'}),
             ('t2', {'k2': 'v2', 'k3': 'v3'})])
 
-        query = self.query(HStoreModel.data.slice('k4').alias('kz'))
+        query = self.query(D.slice('k4').alias('kz'))
         self.assertEqual([(x.name, x.kz) for x in query], [
             ('t1', {}), ('t2', {})])
 
-        query = self.query(HStoreModel.data.exists('k3').alias('ke'))
+        query = self.query(D.exists('k3').alias('ke'))
         self.assertEqual([(x.name, x.ke) for x in query], [
             ('t1', False), ('t2', True)])
 
-        query = self.query(HStoreModel.data.defined('k3').alias('ke'))
+        query = self.query(D.defined('k3').alias('ke'))
         self.assertEqual([(x.name, x.ke) for x in query], [
             ('t1', False), ('t2', True)])
 
-        query = self.query(HStoreModel.data['k1'].alias('k1'))
+        query = self.query(D['k1'].alias('k1'))
         self.assertEqual([(x.name, x.k1) for x in query], [
             ('t1', 'v1'), ('t2', None)])
 
-        query = self.query().where(HStoreModel.data['k1'] == 'v1')
+        query = self.query().where(D['k1'] == 'v1')
         self.assertEqual([x.name for x in query], ['t1'])
 
     def assertWhere(self, expr, names):
@@ -155,10 +162,10 @@ class TestHStoreField(ModelTestCase):
         self.assertWhere(D.contains_any('x', 'kx', 'y'), [])
 
     def test_hstore_filter_functions(self):
-        self.assertWhere(HStoreModel.data.exists('k2') == True, ['t1', 't2'])
-        self.assertWhere(HStoreModel.data.exists('k3') == True, ['t2'])
-        self.assertWhere(HStoreModel.data.defined('k2') == True, ['t1', 't2'])
-        self.assertWhere(HStoreModel.data.defined('k3') == True, ['t2'])
+        self.assertWhere(D.exists('k2') == True, ['t1', 't2'])
+        self.assertWhere(D.exists('k3') == True, ['t2'])
+        self.assertWhere(D.defined('k2') == True, ['t1', 't2'])
+        self.assertWhere(D.defined('k3') == True, ['t2'])
 
     def test_hstore_update(self):
         rc = (HStoreModel
@@ -551,77 +558,79 @@ class TestBinaryJsonField(BaseJsonFieldTestCase, ModelTestCase):
 
     def test_subscript_contains(self):
         self._create_test_data()
+        D = BJson.data
 
         # 'k3' is mapped to another dictioary {'k4': [...]}. Therefore,
         # 'k3' is said to contain 'k4', but *not* ['k4'] or ['k4', 'k5'].
-        self.assertObjects(BJson.data['k3'].contains('k4'), 0)
-        self.assertObjects(BJson.data['k3'].contains(['k4']))
-        self.assertObjects(BJson.data['k3'].contains(['k4', 'k5']))
+        self.assertObjects(D['k3'].contains('k4'), 0)
+        self.assertObjects(D['k3'].contains(['k4']))
+        self.assertObjects(D['k3'].contains(['k4', 'k5']))
 
         # We can check for the keys this way, though.
-        self.assertObjects(BJson.data['k3'].contains_all('k4', 'k5'), 0)
-        self.assertObjects(BJson.data['k3'].contains_any('k4', 'kx'), 0)
+        self.assertObjects(D['k3'].contains_all('k4', 'k5'), 0)
+        self.assertObjects(D['k3'].contains_any('k4', 'kx'), 0)
 
         # However, in test object index=2, 'k4' can be said to contain
         # both 'i1' and ['i1'].
-        self.assertObjects(BJson.data['k4'].contains('i1'), 2)
-        self.assertObjects(BJson.data['k4'].contains(['i1']), 2)
+        self.assertObjects(D['k4'].contains('i1'), 2)
+        self.assertObjects(D['k4'].contains(['i1']), 2)
 
         # Interestingly, we can also specify the list of contained values
         # out-of-order.
-        self.assertObjects(BJson.data['k4'].contains(['i2', 'i1']), 2)
+        self.assertObjects(D['k4'].contains(['i2', 'i1']), 2)
 
         # We can test whether an object contains another JSON object fragment.
-        self.assertObjects(BJson.data['k3'].contains({'k4': ['i1']}), 0)
-        self.assertObjects(BJson.data['k3'].contains({'k4': ['i1', 'i2']}), 0)
+        self.assertObjects(D['k3'].contains({'k4': ['i1']}), 0)
+        self.assertObjects(D['k3'].contains({'k4': ['i1', 'i2']}), 0)
 
         # Check multiple levels of nesting / containment.
-        self.assertObjects(BJson.data['k3']['k4'].contains('i2'), 0)
-        self.assertObjects(BJson.data['k3']['k4'].contains_all('i1', 'i2'), 0)
-        self.assertObjects(BJson.data['k3']['k4'].contains_all('i0', 'i2'))
-        self.assertObjects(BJson.data['k4'].contains_all('i1', 'i2'), 2)
+        self.assertObjects(D['k3']['k4'].contains('i2'), 0)
+        self.assertObjects(D['k3']['k4'].contains_all('i1', 'i2'), 0)
+        self.assertObjects(D['k3']['k4'].contains_all('i0', 'i2'))
+        self.assertObjects(D['k4'].contains_all('i1', 'i2'), 2)
 
         # Check array indexes.
-        self.assertObjects(BJson.data[2].contains('a3'), 1)
-        self.assertObjects(BJson.data[0].contains('a1'), 1)
-        self.assertObjects(BJson.data[0].contains('k1'))
+        self.assertObjects(D[2].contains('a3'), 1)
+        self.assertObjects(D[0].contains('a1'), 1)
+        self.assertObjects(D[0].contains('k1'))
 
     def test_contains(self):
         self._create_test_data()
+        D = BJson.data
 
         # Test for keys. 'k4' is both an object key and an array element.
-        self.assertObjects(BJson.data.contains('k4'), 2, 5)
-        self.assertObjects(BJson.data.contains('a1'), 1, 2)
-        self.assertObjects(BJson.data.contains('k3'), 0)
+        self.assertObjects(D.contains('k4'), 2, 5)
+        self.assertObjects(D.contains('a1'), 1, 2)
+        self.assertObjects(D.contains('k3'), 0)
 
         # We can test for multiple top-level keys/indexes.
-        self.assertObjects(BJson.data.contains_all('a1', 'a2'), 1, 2)
+        self.assertObjects(D.contains_all('a1', 'a2'), 1, 2)
 
         # If we test for both with .contains(), though, it is treated as
         # an object match.
-        self.assertObjects(BJson.data.contains(['a1', 'a2']), 1)
+        self.assertObjects(D.contains(['a1', 'a2']), 1)
 
         # Check numbers.
-        self.assertObjects(BJson.data.contains([2, 5, 6, 7, 8]), 3)
-        self.assertObjects(BJson.data.contains([5, 6, 7, 8, 9]), 3, 4)
+        self.assertObjects(D.contains([2, 5, 6, 7, 8]), 3)
+        self.assertObjects(D.contains([5, 6, 7, 8, 9]), 3, 4)
 
         # We can check for partial objects.
-        self.assertObjects(BJson.data.contains({'a1': 'x1'}), 2)
-        self.assertObjects(BJson.data.contains({'k3': {'k4': []}}), 0)
-        self.assertObjects(BJson.data.contains([{'a3': 'a4'}]), 1)
+        self.assertObjects(D.contains({'a1': 'x1'}), 2)
+        self.assertObjects(D.contains({'k3': {'k4': []}}), 0)
+        self.assertObjects(D.contains([{'a3': 'a4'}]), 1)
 
         # Check for simple keys.
-        self.assertObjects(BJson.data.contains('a1'), 1, 2)
-        self.assertObjects(BJson.data.contains('k3'), 0)
+        self.assertObjects(D.contains('a1'), 1, 2)
+        self.assertObjects(D.contains('k3'), 0)
 
         # Contains any.
-        self.assertObjects(BJson.data.contains_any('a1', 'k1'), 0, 1, 2, 5)
-        self.assertObjects(BJson.data.contains_any('k4', 'xx', 'yy', '2'), 2, 5)
-        self.assertObjects(BJson.data.contains_any('i1', 'i2', 'a3'))
+        self.assertObjects(D.contains_any('a1', 'k1'), 0, 1, 2, 5)
+        self.assertObjects(D.contains_any('k4', 'xx', 'yy', '2'), 2, 5)
+        self.assertObjects(D.contains_any('i1', 'i2', 'a3'))
 
         # Contains all.
-        self.assertObjects(BJson.data.contains_all('k1', 'k2', 'k3'), 0)
-        self.assertObjects(BJson.data.contains_all('k1', 'k2', 'k3', 'k4'))
+        self.assertObjects(D.contains_all('k1', 'k2', 'k3'), 0)
+        self.assertObjects(D.contains_all('k1', 'k2', 'k3', 'k4'))
 
     def test_integer_index_weirdness(self):
         self._create_test_data()
@@ -632,6 +641,7 @@ class TestBinaryJsonField(BaseJsonFieldTestCase, ModelTestCase):
                 results = list(BJson.select().where(
                     BJson.data.contains_any(2, 8, 12)))
 
+        # Complains of a missing cast/conversion for the data-type?
         self.assertRaises(ProgrammingError, fails)
 
     def test_selecting(self):
@@ -654,12 +664,67 @@ class TestBinaryJsonField(BaseJsonFieldTestCase, ModelTestCase):
                      BJson.data[2].as_json())
                  .order_by(BJson.id)
                  .tuples())
-        results = list(query)
-        self.assertEqual(results, [
+        self.assertEqual(list(query), [
             (None, None),
             ('a1', {'a3': 'a4'}),
             (None, None),
             (0, 2),
             (5, 7),
-            ('k4', None),
+            ('k4', None)])
+
+
+class TestIntervalField(ModelTestCase):
+    database = db
+    requires = [Event]
+
+    def test_interval_field(self):
+        e1 = Event.create(name='hour', duration=datetime.timedelta(hours=1))
+        e2 = Event.create(name='mix', duration=datetime.timedelta(
+            days=1,
+            hours=2,
+            minutes=3,
+            seconds=4))
+
+        events = [(e.name, e.duration)
+                  for e in Event.select().order_by(Event.duration)]
+        self.assertEqual(events, [
+            ('hour', datetime.timedelta(hours=1)),
+            ('mix', datetime.timedelta(days=1, hours=2, minutes=3, seconds=4))
         ])
+
+
+class TestIndexedField(BaseTestCase):
+    def test_indexed_field_ddl(self):
+        class FakeIndexedField(IndexedFieldMixin, CharField):
+            index_type = 'FAKE'
+
+        class IndexedModel(TestModel):
+            array_index = ArrayField(CharField)
+            array_noindex= ArrayField(IntegerField, index=False)
+            fake_index = FakeIndexedField()
+            fake_index_with_type = FakeIndexedField(index_type='MAGIC')
+            fake_noindex = FakeIndexedField(index=False)
+
+            class Meta:
+                database = db
+
+        create_sql, _ = IndexedModel._schema._create_table(False).query()
+        self.assertEqual(create_sql, (
+            'CREATE TABLE "indexedmodel" ('
+            '"id" SERIAL NOT NULL PRIMARY KEY, '
+            '"array_index" VARCHAR(255)[] NOT NULL, '
+            '"array_noindex" INTEGER[] NOT NULL, '
+            '"fake_index" VARCHAR(255) NOT NULL, '
+            '"fake_index_with_type" VARCHAR(255) NOT NULL, '
+            '"fake_noindex" VARCHAR(255) NOT NULL)'))
+
+        indexes = [idx.query()[0]
+                   for idx in IndexedModel._schema._create_indexes(False)]
+        self.assertEqual(indexes, [
+            ('CREATE INDEX "indexedmodel_array_index" ON "indexedmodel" '
+             'USING GIN ("array_index")'),
+            ('CREATE INDEX "indexedmodel_fake_index" ON "indexedmodel" '
+             'USING GiST ("fake_index")'),
+            ('CREATE INDEX "indexedmodel_fake_index_with_type" '
+             'ON "indexedmodel" '
+             'USING MAGIC ("fake_index_with_type")')])

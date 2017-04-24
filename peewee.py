@@ -4203,7 +4203,7 @@ class ModelSelect(BaseModelSelect, Select):
                 to_field = None
 
             fk_field, is_backref = self._generate_on_clause(
-                src_model, dest_model, to_field)
+                src_model, dest_model, to_field, on)
 
             if on is None:
                 fkc = fk_field.column_name
@@ -4212,8 +4212,12 @@ class ModelSelect(BaseModelSelect, Select):
                     on = getattr(dest, fkc) == getattr(src, pkc)
                 else:
                     on = getattr(src, fkc) == getattr(dest, pkc)
+
             if not attr:
-                attr = dest_model._meta.name if is_backref else fk_field.name
+                if is_backref or fk_field is None:
+                    attr = dest_model._meta.name
+                else:
+                    attr = fk_field.name
 
         elif isinstance(dest, Source):
             constructor = dict
@@ -4234,7 +4238,7 @@ class ModelSelect(BaseModelSelect, Select):
 
         return super(ModelSelect, self).join(dest, join_type, on)
 
-    def _generate_on_clause(self, src, dest, to_field=None):
+    def _generate_on_clause(self, src, dest, to_field=None, on=None):
         meta = src._meta
         backref = fk_fields = False
         if dest in meta.model_refs:
@@ -4244,6 +4248,8 @@ class ModelSelect(BaseModelSelect, Select):
             backref = True
 
         if not fk_fields:
+            if on is not None:
+                return None, False
             raise ValueError('Unable to find foreign key between %s and %s. '
                              'Please specify an explicit join condition.' %
                              (src, dest))
