@@ -92,7 +92,7 @@ def print_models(introspector, tables=None, preserve_order=False):
 
         print_('')
         print_('    class Meta:')
-        print_('        db_table = \'%s\'' % table)
+        print_('        table_name = \'%s\'' % table)
         multi_column_indexes = database.multi_column_indexes(table)
         if multi_column_indexes:
             print_('        indexes = (')

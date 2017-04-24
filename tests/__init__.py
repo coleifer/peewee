@@ -1,8 +1,3 @@
-"""
-
-Aggregate all the test modules and run from the command-line. For information
-about running tests, see the README located in the `playhouse/tests` directory.
-"""
 import sys
 import unittest
 
@@ -22,10 +17,10 @@ from .hybrid import *
 from .migrations import *
 from .pool import *
 from .postgres import *
+from .pwiz_integration import *
 from .reflection import *
 from .shortcuts import *
 from .signals import *
-#from playhouse.tests.test_introspection import *
 #from playhouse.tests.test_keys import *
 
 

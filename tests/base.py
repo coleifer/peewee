@@ -3,6 +3,10 @@ from functools import wraps
 import logging
 import os
 import unittest
+try:
+    from unittest import mock
+except ImportError:
+    from .libs import mock
 
 from peewee import *
 
