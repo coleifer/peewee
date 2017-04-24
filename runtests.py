@@ -131,8 +131,8 @@ def collect_modules(options):
             print_('Unable to import connection pool tests, skipping')
     if xtra(options.postgres_ext):
         try:
-            from playhouse.tests import test_postgres
-            modules.append(test_postgres)
+            import tests.postgres
+            modules.append(tests.postgres)
         except ImportError:
             print_('Unable to import postgres-ext tests, skipping')
     if xtra(options.pwiz):

@@ -815,10 +815,10 @@ class Negated(WrappedNode):
 
 
 class Value(ColumnBase):
-    def __init__(self, value, converter=None, force_single=False):
+    def __init__(self, value, converter=None, unpack=True):
         self.value = value
         self.converter = converter
-        self.multi = isinstance(self.value, (list, tuple)) and not force_single
+        self.multi = isinstance(self.value, (list, tuple)) and unpack
         if self.multi:
             self.values = []
             for item in self.value:
@@ -1573,14 +1573,17 @@ class Update(_WriteQuery):
             if self._on_conflict:
                 ctx.literal('OR %s ' % self._on_conflict)
 
-            update = sorted(self._update.items(), key=ctx.column_sort_key)
+            expressions = []
+            for k, v in sorted(self._update.items(), key=ctx.column_sort_key):
+                if not isinstance(v, Node):
+                    converter = k.db_value if isinstance(k, Field) else None
+                    v = Value(v, converter=converter, unpack=False)
+                expressions.append(NodeList((k, SQL('='), v)))
 
             (ctx
              .sql(self.table)
              .literal(' SET ')
-             .sql(CommaNodeList([
-                 NodeList((key, SQL('='), value))
-                 for key, value in update])))
+             .sql(CommaNodeList(expressions)))
 
             if self._where:
                 ctx.literal(' WHERE ').sql(self._where)
@@ -1616,7 +1619,7 @@ class Insert(_WriteQuery):
             columns.append(k)
             if not isinstance(v, Node):
                 converter = k.db_value if isinstance(k, Field) else None
-                v = Value(v, converter=converter)
+                v = Value(v, converter=converter, unpack=False)
             values.append(v)
         return (ctx
                 .sql(EnclosedNodeList(columns))
@@ -1656,10 +1659,10 @@ class Insert(_WriteQuery):
         for row in rows_iter:
             values = []
             for column, converter in columns_converters:
-                value = row[value_lookups[column]]
-                if not isinstance(value, Node):
-                    value = Value(value, converter=converter)
-                values.append(value)
+                val = row[value_lookups[column]]
+                if not isinstance(val, Node):
+                    val = Value(val, converter=converter, unpack=False)
+                values.append(val)
 
             all_values.append(EnclosedNodeList(values))
 
@@ -2713,6 +2716,7 @@ class Field(ColumnBase):
     _order = 0
     accessor_class = FieldAccessor
     field_type = 'DEFAULT'
+    passthrough = False
 
     def __init__(self, null=False, index=False, unique=False, column_name=None,
                  default=None, primary_key=False, constraints=None,
@@ -2767,7 +2771,7 @@ class Field(ColumnBase):
         return
 
     def ddl_datatype(self, ctx):
-        if ctx.state.field_types:
+        if ctx and ctx.state.field_types:
             column_type = ctx.state.field_types.get(self.field_type,
                                                     self.field_type)
         else:
@@ -3441,13 +3445,15 @@ class SchemaManager(object):
         ctx.literal('CREATE UNIQUE INDEX ' if unique else 'CREATE INDEX ')
         if safe:
             ctx.literal('IF NOT EXISTS ')
+        ctx.sql(self.index_entity(fields)).literal(' ON ').sql(self.model)
 
-        return (ctx
-                .sql(self.index_entity(fields))
-                .literal(' ON ')
-                .sql(self.model)
-                .literal(' ')
-                .sql(EnclosedNodeList(fields)))
+        # Allow fields to specify a type of index with the USING extension.
+        index_type = None
+        for field in fields:
+            if getattr(field, 'index_type', None):
+                ctx.literal(' USING %s' % field.index_type)
+
+        return ctx.literal(' ').sql(EnclosedNodeList(fields))
 
     def create_indexes(self, safe=True):
         for query in self._create_indexes(safe=safe):

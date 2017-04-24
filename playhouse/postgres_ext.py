@@ -15,9 +15,6 @@ try:
 except ImportError:
     pass
 
-from psycopg2.extensions import adapt
-from psycopg2.extensions import AsIs
-from psycopg2.extensions import register_adapter
 from psycopg2.extras import register_hstore
 try:
     from psycopg2.extras import Json
@@ -45,7 +42,7 @@ JSONB_EXISTS = '?'
 CAST = '::'
 
 
-class _LookupNode(Node):
+class _LookupNode(ColumnBase):
     def __init__(self, node, parts):
         self.node = node
         self.parts = parts
@@ -80,13 +77,13 @@ class _JsonLookupBase(_LookupNode):
         return Expression(
             self.as_json(True),
             JSONB_CONTAINS_ANY_KEY,
-            Value(list(keys), force_single=True))
+            Value(list(keys), unpack=False))
 
     def contains_all(self, *keys):
         return Expression(
             self.as_json(True),
             JSONB_CONTAINS_ALL_KEYS,
-            Value(list(keys), force_single=True))
+            Value(list(keys), unpack=False))
 
 
 class JsonLookup(_JsonLookupBase):
@@ -133,26 +130,6 @@ class ObjectSlice(_LookupNode):
         return ObjectSlice.create(self, value)
 
 
-class _Array(object):
-    def __init__(self, field, items):
-        self.field = field
-        self.items = items
-
-
-def adapt_array(arr):
-    db = arr.field.model._meta.database
-    conn = db.connection()
-    items = adapt(arr.items)
-    items.prepare(conn)
-    return AsIs('%s::%s%s' % (
-        items,
-        db.options.field_types.get(arr.field_type, arr.field_type),
-        '[]' * arr.field.dimensions))
-
-
-register_adapter(_Array, adapt_array)
-
-
 class IndexedFieldMixin(object):
     default_index_type = 'GiST'
 
@@ -167,6 +144,7 @@ class IndexedFieldMixin(object):
 
 class ArrayField(IndexedFieldMixin, Field):
     default_index_type = 'GIN'
+    passthrough = True
 
     def __init__(self, field_class=IntegerField, dimensions=1, *args,
                  **kwargs):
@@ -177,23 +155,32 @@ class ArrayField(IndexedFieldMixin, Field):
 
     def ddl_datatype(self, ctx):
         data_type = self.__field.ddl_datatype(ctx)
-        return data_type + '[]' * self.dimensions
+        return NodeList((data_type, SQL('[]' * self.dimensions)), glue='')
 
     def db_value(self, value):
-        if value is None:
-            return
-        if not isinstance(value, (list, _Array)):
-            value = list(value)
-        return _Array(self, value)
+        if value is not None:
+            return list(value) if not isinstance(value, Node) else value
 
     def __getitem__(self, value):
         return ObjectSlice.create(self, value)
 
     def contains(self, *items):
-        return Expression(self, ACONTAINS, Value(items, force_single=True))
+        return Expression(self, ACONTAINS, ArrayValue(self, items))
 
     def contains_any(self, *items):
-        return Expression(self, ACONTAINS_ANY, Value(items, force_single=True))
+        return Expression(self, ACONTAINS_ANY, ArrayValue(self, items))
+
+
+class ArrayValue(Node):
+    def __init__(self, field, value):
+        self.field = field
+        self.value = value
+
+    def __sql__(self, ctx):
+        return (ctx
+                .sql(Value(self.value, unpack=False))
+                .literal('::')
+                .sql(self.field.ddl_datatype(ctx)))
 
 
 class DateTimeTZField(DateTimeField):
@@ -216,7 +203,7 @@ class HStoreField(IndexedFieldMixin, Field):
         return fn.hstore_to_matrix(self)
 
     def slice(self, *args):
-        return fn.slice(self, Value(list(args), force_single=True))
+        return fn.slice(self, Value(list(args), unpack=False))
 
     def exists(self, key):
         return fn.exist(self, key)
@@ -228,20 +215,20 @@ class HStoreField(IndexedFieldMixin, Field):
         return Expression(self, HUPDATE, data)
 
     def delete(self, *keys):
-        return fn.delete(self, Value(list(keys), force_single=True))
+        return fn.delete(self, Value(list(keys), unpack=False))
 
     def contains(self, value):
         if isinstance(value, dict):
-            rhs = Value(value, force_single=True)
+            rhs = Value(value, unpack=False)
             return Expression(self, HCONTAINS_DICT, rhs)
         elif isinstance(value, (list, tuple)):
-            rhs = Value(value, force_single=True)
+            rhs = Value(value, unpack=False)
             return Expression(self, HCONTAINS_KEYS, rhs)
         return Expression(self, HCONTAINS_KEY, value)
 
     def contains_any(self, *keys):
         return Expression(self, HCONTAINS_ANY_KEY, Value(list(keys),
-                                                         force_single=True))
+                                                         unpack=False))
 
 
 class JSONField(Field):
@@ -274,7 +261,7 @@ class BinaryJSONField(IndexedFieldMixin, JSONField):
     def contains(self, other):
         if isinstance(other, (list, dict)):
             return Expression(self, JSONB_CONTAINS, Json(other))
-        return Expression(self, JSONB_EXISTS, Value(other, force_single=True))
+        return Expression(self, JSONB_EXISTS, Value(other, unpack=False))
 
     def contained_by(self, other):
         return Expression(self, JSONB_CONTAINED_BY, Json(other))
@@ -283,13 +270,13 @@ class BinaryJSONField(IndexedFieldMixin, JSONField):
         return Expression(
             self,
             JSONB_CONTAINS_ANY_KEY,
-            Value(list(items), force_single=True))
+            Value(list(items), unpack=False))
 
     def contains_all(self, *items):
         return Expression(
             self,
             JSONB_CONTAINS_ALL_KEYS,
-            Value(list(items), force_single=True))
+            Value(list(items), unpack=False))
 
 
 class TSVectorField(IndexedFieldMixin, TextField):
@@ -307,21 +294,6 @@ def Match(field, query, language=None):
         fn.to_tsvector(field),
         TS_MATCH,
         fn.to_tsquery(*params))
-
-
-class PostgresqlSchemaManager(object):#QueryCompiler):
-    def _create_index(self, model_class, fields, unique=False):
-        clause = super(PostgresqlExtCompiler, self)._create_index(
-            model_class, fields, unique)
-        # Allow fields to specify a type of index.  HStore and Array fields
-        # may want to use GiST indexes, for example.
-        index_type = None
-        for field in fields:
-            if isinstance(field, IndexedFieldMixin):
-                index_type = field.index_type
-        if index_type:
-            clause.nodes.insert(-1, SQL('USING %s' % index_type))
-        return clause
 
 
 class PostgresqlExtDatabase(PostgresqlDatabase):

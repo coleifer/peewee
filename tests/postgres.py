@@ -1,3 +1,4 @@
+#coding:utf-8
 from peewee import *
 from playhouse.postgres_ext import *
 
@@ -12,6 +13,11 @@ class HStoreModel(TestModel):
     name = CharField()
     data = HStoreField()
 D = HStoreModel.data
+
+
+class ArrayModel(TestModel):
+    tags = ArrayField(CharField)
+    ints = ArrayField(IntegerField, dimensions=2)
 
 
 class TZModel(TestModel):
@@ -168,3 +174,77 @@ class TestHStoreField(ModelTestCase):
         self.assertEqual([x.data for x in self.query(D)], [
             {},
             {'k3': 'v3', 'k6': 'v6'}])
+
+
+class TestArrayField(ModelTestCase):
+    database = db
+    requires = [ArrayModel]
+
+    def create_sample(self):
+        return ArrayModel.create(
+            tags=['alpha', 'beta', 'gamma', 'delta'],
+            ints=[[1, 2], [3, 4], [5, 6]])
+
+    def test_array_get_set(self):
+        am = self.create_sample()
+        am_db = ArrayModel.get(ArrayModel.id == am.id)
+        self.assertEqual(am_db.tags, ['alpha', 'beta', 'gamma', 'delta'])
+        self.assertEqual(am_db.ints, [[1, 2], [3, 4], [5, 6]])
+
+    def test_array_db_value(self):
+        am = ArrayModel.create(tags=('foo', 'bar'), ints=[])
+        am_db = ArrayModel.get(ArrayModel.id == am.id)
+        self.assertEqual(am_db.tags, ['foo', 'bar'])
+
+    def test_array_search(self):
+        def assertAM(where, *instances):
+            query = (ArrayModel
+                     .select()
+                     .where(where)
+                     .order_by(ArrayModel.id))
+            self.assertEqual([x.id for x in query], [x.id for x in instances])
+
+        am = self.create_sample()
+        am2 = ArrayModel.create(tags=['alpha', 'beta'], ints=[[1, 1]])
+        am3 = ArrayModel.create(tags=['delta'], ints=[[3, 4]])
+        am4 = ArrayModel.create(tags=['中文'], ints=[[3, 4]])
+        am5 = ArrayModel.create(tags=['中文', '汉语'], ints=[[3, 4]])
+
+        AM = ArrayModel
+        T = AM.tags
+
+        assertAM((Value('beta') == fn.ANY(T)), am, am2)
+        assertAM((Value('delta') == fn.Any(T)), am, am3)
+        assertAM(Value('omega') == fn.Any(T))
+
+        # Check the contains operator.
+        assertAM(SQL("tags::text[] @> ARRAY['beta']"), am, am2)
+
+        # Use the nicer API.
+        assertAM(T.contains('beta'), am, am2)
+        assertAM(T.contains('omega', 'delta'))
+        assertAM(T.contains('汉语'), am5)
+        assertAM(T.contains('alpha', 'delta'), am)
+
+        # Check for any.
+        assertAM(T.contains_any('beta'), am, am2)
+        assertAM(T.contains_any('中文'), am4, am5)
+        assertAM(T.contains_any('omega', 'delta'), am, am3)
+        assertAM(T.contains_any('alpha', 'delta'), am, am2, am3)
+
+    def test_array_index_slice(self):
+        self.create_sample()
+        AM = ArrayModel
+        I, T = AM.ints, AM.tags
+
+        row = AM.select(T[1].alias('arrtags')).dicts().get()
+        self.assertEqual(row['arrtags'], 'beta')
+
+        row = AM.select(T[2:4].alias('foo')).dicts().get()
+        self.assertEqual(row['foo'], ['gamma', 'delta'])
+
+        row = AM.select(I[1][1].alias('ints')).dicts().get()
+        self.assertEqual(row['ints'], 4)
+
+        row = AM.select(I[1:2][0].alias('ints')).dicts().get()
+        self.assertEqual(row['ints'], [[3], [5]])

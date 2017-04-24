@@ -128,7 +128,7 @@ class TestModelSQL(ModelDatabaseTestCase):
         self.assertSQL(query, (
             'UPDATE "stat" SET "count" = ("count" + ?), "timestamp" = ? '
             'WHERE ("url" = ?)'),
-            [1, datetime.datetime(2017, 1, 1), '/peewee'])
+            [1, 1483250400, '/peewee'])
 
     def test_delete(self):
         query = (Note

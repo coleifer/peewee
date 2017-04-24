@@ -37,6 +37,8 @@ if VERBOSITY > 1:
     handler = logging.StreamHandler()
     handler.setLevel(logging.INFO)
     logger.addHandler(handler)
+if VERBOSITY > 2:
+    handler.setLevel(logging.DEBUG)
 
 
 def new_connection():
