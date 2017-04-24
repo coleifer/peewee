@@ -4215,10 +4215,10 @@ class ModelSelect(BaseModelSelect, Select):
                     on = getattr(src, fkc) == getattr(dest, pkc)
 
             if not attr:
-                if is_backref or fk_field is None:
-                    attr = dest_model._meta.name
-                else:
+                if fk_field is not None and not is_backref:
                     attr = fk_field.name
+                else:
+                    attr = dest_model._meta.name
 
         elif isinstance(dest, Source):
             constructor = dict
