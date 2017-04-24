@@ -3,6 +3,7 @@ import unittest
 
 from .database import *
 from .fields import *
+from .keys import *
 from .manytomany import *
 from .models import *
 from .model_sql import *
@@ -21,7 +22,6 @@ from .pwiz_integration import *
 from .reflection import *
 from .shortcuts import *
 from .signals import *
-#from playhouse.tests.test_keys import *
 
 
 if __name__ == '__main__':

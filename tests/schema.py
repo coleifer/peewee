@@ -130,3 +130,70 @@ class TestModelDDL(ModelDatabaseTestCase):
             '"a123456789012345678901234567890", '
             '"b123456789012345678901234567890", '
             '"c123456789012345678901234567890")'), [])
+
+    def test_fk_non_pk_ddl(self):
+        class A(Model):
+            cf = CharField(max_length=100, unique=True)
+            df = DecimalField(
+                max_digits=4,
+                decimal_places=2,
+                auto_round=True,
+                unique=True)
+            class Meta:
+                database = self.database
+
+        class CF(TestModel):
+            a = ForeignKeyField(A, field='cf')
+            class Meta:
+                database = self.database
+
+        class DF(TestModel):
+            a = ForeignKeyField(A, field='df')
+            class Meta:
+                database = self.database
+
+        sql, params = CF._schema._create_table(safe=False).query()
+        self.assertEqual(sql, (
+            'CREATE TABLE "cf" ('
+            '"id" INTEGER NOT NULL PRIMARY KEY, '
+            '"a_id" VARCHAR(100) NOT NULL, '
+            'FOREIGN KEY ("a_id") REFERENCES "a" ("cf"))'))
+
+        sql, params = DF._schema._create_table(safe=False).query()
+        self.assertEqual(sql, (
+            'CREATE TABLE "df" ('
+            '"id" INTEGER NOT NULL PRIMARY KEY, '
+            '"a_id" DECIMAL(4, 2) NOT NULL, '
+            'FOREIGN KEY ("a_id") REFERENCES "a" ("df"))'))
+
+    def test_deferred_foreign_key(self):
+        class Language(TestModel):
+            name = CharField()
+            selected_snippet = DeferredForeignKey('Snippet', null=True)
+            class Meta:
+                database = self.database
+
+        class Snippet(TestModel):
+            code = TextField()
+            language = ForeignKeyField(Language, backref='snippets')
+            class Meta:
+                database = self.database
+
+        self.assertEqual(Snippet._meta.fields['language'].rel_model, Language)
+        self.assertEqual(Language._meta.fields['selected_snippet'].rel_model,
+                         Snippet)
+
+        sql, params = Snippet._schema._create_table(safe=False).query()
+        self.assertEqual(sql, (
+            'CREATE TABLE "snippet" ('
+            '"id" INTEGER NOT NULL PRIMARY KEY, '
+            '"code" TEXT NOT NULL, '
+            '"language_id" INTEGER NOT NULL, '
+            'FOREIGN KEY ("language_id") REFERENCES "language" ("id"))'))
+
+        sql, params = Language._schema._create_table(safe=False).query()
+        self.assertEqual(sql, (
+            'CREATE TABLE "language" ('
+            '"id" INTEGER NOT NULL PRIMARY KEY, '
+            '"name" VARCHAR(255) NOT NULL, '
+            '"selected_snippet_id" INTEGER)'))

@@ -3088,13 +3088,14 @@ class ForeignKeyField(Field):
     accessor_class = ForeignKeyAccessor
 
     def __init__(self, model, field=None, backref=None, on_delete=None,
-                 on_update=None, *args, **kwargs):
+                 on_update=None, _deferred=None, *args, **kwargs):
         super(ForeignKeyField, self).__init__(*args, **kwargs)
         self.rel_model = model
         self.rel_field = field
         self.backref = backref
         self.on_delete = on_delete
         self.on_update = on_update
+        self.deferred = _deferred
 
     @property
     def field_type(self):
@@ -3169,7 +3170,7 @@ class DeferredForeignKey(Field):
     __hash__ = object.__hash__
 
     def set_model(self, rel_model):
-        field = ForeignKeyField(rel_model, **self.field_kwargs)
+        field = ForeignKeyField(rel_model, _deferred=True, **self.field_kwargs)
         self.model._meta.add_field(self.name, field)
 
     @staticmethod
@@ -3398,7 +3399,7 @@ class SchemaManager(object):
 
         for field in meta.sorted_fields:
             columns.append(field.ddl(ctx))
-            if isinstance(field, ForeignKeyField):
+            if isinstance(field, ForeignKeyField) and not field.deferred:
                 constraints.append(field.foreign_key_constraint())
 
         meta_options = getattr(meta, 'options', None) or {}
@@ -4259,9 +4260,11 @@ class ModelSelect(BaseModelSelect, Select):
                          (backref and f.rel_field is to_field))]
 
         if len(fk_fields) > 1:
-            raise ValueError('More than one foreign key between %s and %s. '
-                             'Please specify which you are joining on.' %
-                             (src, dest))
+            if on is None:
+                raise ValueError('More than one foreign key between %s and %s.'
+                                 ' Please specify which you are joining on.' %
+                                 (src, dest))
+            return None, False
         else:
             fk_field = fk_fields[0]
 
