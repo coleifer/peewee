@@ -127,15 +127,44 @@ class SearchField(Field):
 
 
 class VirtualTableSchemaManager(SchemaManager):
-    pass
+    def _create_virtual_table(self, safe=True, **options):
+        ctx = self._create_context()
+        ctx.literal('CREATE VIRTUAL TABLE ')
+        if safe:
+            ctx.literal('IF NOT EXISTS ')
+        ctx.sql(self.model).literal(' USING %s ' % self.model._meta.extension)
+
+        arguments = []
+        meta = self.model._meta
+
+        # Constraints, data-types, foreign and primary keys are all omitted.
+        for field in meta.sorted_fields:
+            field_def = [Entity(field.column_name)]
+            if field.unindexed:
+                field_def.append(SQL('UNINDEXED'))
+            arguments.append(NodeList(field_def))
+
+        arguments.extend(self._create_table_option_sql(options))
+        return ctx.sql(EnclosedNodeList(arguments))
+
+    def _create_table(self, safe=True, **options):
+        if isinstance(self.model, VirtualModel):
+            ctx = self._create_virtual_table(safe, **options)
+        else:
+            ctx = super(VirtualTableSchemaManager, self)._create_table(
+                safe, **options)
+        if getattr(self.model._meta, 'without_rowid', False):
+            ctx.literal(' WITHOUT ROWID')
+        return ctx
 
 
 class VirtualModel(Model):
     class Meta:
-        virtual_table = True
         extension_module = None
         extension_options = None
+        primary_key = False
         schema_manager_class = VirtualTableSchemaManager
+        virtual_table = True
 
     @classmethod
     def clean_options(cls, options):

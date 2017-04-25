@@ -3421,7 +3421,6 @@ class SchemaManager(object):
 
         columns = []
         constraints = []
-        extra = []
         meta = self.model._meta
         if meta.composite_key:
             pk_columns = [meta.fields[field_name].column
@@ -3434,21 +3433,23 @@ class SchemaManager(object):
             if isinstance(field, ForeignKeyField) and not field.deferred:
                 constraints.append(field.foreign_key_constraint())
 
-        meta_options = getattr(meta, 'options', None) or {}
-        if meta_options or options:
-            meta_options.update(options or {})
-            for key, value in sorted(meta_options.items()):
-                if isinstance(value, Node):
-                    value = value
-                elif is_model(value):
+        constraints.extend(self._create_table_option_sql(options))
+        return ctx.sql(EnclosedNodeList(columns + constraints))
+
+    def _create_table_option_sql(self, options):
+        accum = []
+        options = merge_dict(self.model._meta.options or {}, options)
+        if not options:
+            return accum
+
+        for key, value in sorted(options.items()):
+            if not isinstance(value, Node):
+                if is_model(value):
                     value = value._meta.table
                 else:
                     value = SQL(value)
-
-                extra.append(NodeList((SQL(key), extra), glue='='))
-
-        ctx.sql(EnclosedNodeList(columns + constraints + extra))
-        return ctx
+            accum.append(NodeList((SQL(key), value), glue='='))
+        return accum
 
     def create_table(self, safe=True, **options):
         self.database.execute(self._create_table(safe=safe, **options))
@@ -3552,7 +3553,7 @@ class Metadata(object):
     def __init__(self, model, database=None, table_name=None, indexes=None,
                  primary_key=None, constraints=None, schema=None,
                  only_save_dirty=False, table_alias=None, depends_on=None,
-                 **kwargs):
+                 options=None, **kwargs):
         self.model = model
         self.database = database
 
@@ -3590,6 +3591,7 @@ class Metadata(object):
         self.model_refs = defaultdict(list)
         self.model_backrefs = defaultdict(list)
 
+        self.options = options or {}
         for key, value in kwargs.items():
             setattr(self, key, value)
         self._additional_keys = set(kwargs.keys())
