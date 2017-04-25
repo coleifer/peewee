@@ -158,11 +158,31 @@ ROW = attrdict(
     CONSTRUCTOR=4,
     MODEL=5)
 
-# Scope rules, affect the way various SQL clauses are represented.
+# The default scope. Sources are referred to by alias, columns by dotted-path
+# from the source.
 SCOPE_NORMAL = 1
+
+# Scope used when defining sources, e.g. in the column list and FROM clause of
+# a SELECT query. This scope is used for defining the fully-qualified name of
+# the source and assigning an alias.
 SCOPE_SOURCE = 2
+
+# Scope used for UPDATE, INSERT or DELETE queries, where instead of referencing
+# a source by an alias, we refer to it directly. Similarly, since there is a
+# single table, columns do not need to be referenced by dotted-path.
 SCOPE_VALUES = 3
+
+# Scope used when generating the contents of a common-table-expression. Used
+# after a WITH statement, when generating the definition for a CTE (as opposed
+# to merely a reference to one).
 SCOPE_CTE = 4
+
+# Scope used when generating SQL for a column. Ensures that the column is
+# rendered with it's correct alias. Was needed because when referencing the
+# inner projection of a sub-select, Peewee would render the full SELECT query
+# as the "source" of the column (instead of the query's alias + . + column).
+# This scope allows us to avoid rendering the full query when we only need the
+# alias.
 SCOPE_COLUMN = 5
 
 
@@ -382,6 +402,16 @@ class Node(object):
 
     def unwrap(self):
         return self
+
+
+class ColumnFactory(object):
+    __slots__ = ('node',)
+
+    def __init__(self, node):
+        self.node = node
+
+    def __getattr__(self, attr):
+        return Column(self.node, attr)
 
 
 class _DynamicColumn(object):
@@ -747,16 +777,6 @@ class ColumnBase(Node):
 
     def get_sort_key(self, ctx):
         return ()
-
-
-class ColumnFactory(object):
-    __slots__ = ('node',)
-
-    def __init__(self, node):
-        self.node = node
-
-    def __getattr__(self, attr):
-        return Column(self.node, attr)
 
 
 class Column(ColumnBase):
