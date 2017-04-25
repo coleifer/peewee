@@ -3879,9 +3879,10 @@ class Model(with_metaclass(ModelBase, Node)):
 
     @classmethod
     def alias(cls, alias=None):
-        return Table(cls._meta.table_name, [
-            field.column_name for field in cls._meta.sorted_fields],
-            alias=alias, _model=cls, _database=cls._meta.database)
+        return ModelAlias(cls, alias)
+        #return Table(cls._meta.table_name, [
+        #    field.column_name for field in cls._meta.sorted_fields],
+        #    alias=alias, _model=cls, _database=cls._meta.database)
 
     @classmethod
     def select(cls, *fields):
@@ -4101,6 +4102,69 @@ class Model(with_metaclass(ModelBase, Node)):
         cls._schema.drop_all(safe)
 
 
+class ModelAlias(Node):
+    def __init__(self, model, alias=None):
+        self.__dict__['model'] = model
+        self.__dict__['alias'] = alias
+
+    def __getattr__(self, attr):
+        model_attr = getattr(self.model, attr)
+        if isinstance(model_attr, Field):
+            return FieldAlias(self, model_attr)
+        return model_attr
+
+    def __setattr__(self, attr, value):
+        raise AttributeError('Cannot set attributes on model aliases.')
+
+    def get_field_aliases(self):
+        return [FieldAlias(self, f) for f in self.model._meta.sorted_fields]
+
+    def select(self, *selection):
+        if not selection:
+            selection = self.get_field_aliases()
+        return ModelSelect(self, selection)
+
+    def __call__(self, **kwargs):
+        return self.model(**kwargs)
+
+    def __sql__(self, ctx):
+        if ctx.scope == SCOPE_VALUES:
+            # Return the quoted table name.
+            return ctx.sql(self.model)
+
+        if self.alias:
+            ctx.alias_manager.set(self, self.alias)
+
+        if ctx.scope == SCOPE_SOURCE:
+            # Define the table and its alias.
+            return (ctx
+                    .sql(Entity(self.model._meta.table_name))
+                    .literal(' AS ')
+                    .sql(Entity(ctx.alias_manager.get(self))))
+        else:
+            # Refer to the table using the alias.
+            return ctx.sql(Entity(ctx.alias_manager.get(self)))
+
+
+class FieldAlias(Field):
+    def __init__(self, source, field):
+        self.source = source
+        self.model = source.model
+        self.field = field
+
+    def clone(self):
+        return FieldAlias(self.source, self.field)
+
+    def coerce(self, value): return self.field.coerce(value)
+    def python_value(self, value): return self.field.python_value(value)
+    def db_value(self, value): return self.field.db_value(value)
+    def __getattr__(self, attr):
+        return self.source if attr == 'model' else getattr(self.field, attr)
+
+    def __sql__(self, ctx):
+        return ctx.sql(Column(self.source, self.field.column_name))
+
+
 def sort_models(models):
     models = set(models)
     seen = set()
@@ -4190,6 +4254,8 @@ class ModelSelect(BaseModelSelect, Select):
         for fm in fields_or_models:
             if is_model(fm):
                 fields.extend(fm._meta.sorted_fields)
+            elif isinstance(fm, ModelAlias):
+                fields.extend(fm.get_field_aliases())
             elif isinstance(fm, Table) and fm._columns:
                 fields.extend([getattr(fm, col) for col in fm._columns])
             else:
@@ -4210,6 +4276,8 @@ class ModelSelect(BaseModelSelect, Select):
             return src, True
         elif isinstance(src, Table) and src._model:
             return src._model, False
+        elif isinstance(src, ModelAlias):
+            return src.model, False
         return None, False
 
     def _normalize_join(self, src, dest, on, attr):
@@ -4246,12 +4314,15 @@ class ModelSelect(BaseModelSelect, Select):
                 src_model, dest_model, to_field, on)
 
             if on is None:
-                fkc = fk_field.column_name
-                pkc = fk_field.rel_field.column_name
+                src_attr = 'name' if src_is_model else 'column_name'
+                dest_attr = 'name' if dest_is_model else 'column_name'
                 if is_backref:
-                    on = getattr(dest, fkc) == getattr(src, pkc)
+                    lhs = getattr(dest, getattr(fk_field, dest_attr))
+                    rhs = getattr(src, getattr(fk_field.rel_field, src_attr))
                 else:
-                    on = getattr(src, fkc) == getattr(dest, pkc)
+                    lhs = getattr(src, getattr(fk_field, src_attr))
+                    rhs = getattr(dest, getattr(fk_field.rel_field, dest_attr))
+                on = (lhs == rhs)
 
             if not attr:
                 if fk_field is not None and not is_backref:
@@ -4294,8 +4365,10 @@ class ModelSelect(BaseModelSelect, Select):
                              'Please specify an explicit join condition.' %
                              (src, dest))
         if to_field is not None:
+            target = (to_field.field if isinstance(to_field, FieldAlias)
+                      else to_field)
             fk_fields = [f for f in fk_fields if (
-                         (f is to_field) or
+                         (f is target) or
                          (backref and f.rel_field is to_field))]
 
         if len(fk_fields) > 1:
@@ -4546,8 +4619,12 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
         self.column_keys = []
         for idx, node in enumerate(select):
             key = self.model
-            if self.fields[idx] is not None:
-                key = self.fields[idx].model
+            field = self.fields[idx]
+            if field is not None:
+                if isinstance(field, FieldAlias):
+                    key = field.source
+                else:
+                    key = field.model
             else:
                 if isinstance(node, Node):
                     node = node.unwrap()

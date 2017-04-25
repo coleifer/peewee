@@ -446,7 +446,7 @@ class TestJoinModelAlias(ModelTestCase):
     def test_join_on_field_backref(self):
         TA = Tweet.alias('ta')
         query = self._test_query_backref(lambda: TA)
-        query = query.join(TA, on=TA.user_id)
+        query = query.join(TA, on=TA.user)
         self.assertUsers(query)
 
     def test_join_on_alias_backref(self):
