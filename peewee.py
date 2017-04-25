@@ -3304,6 +3304,18 @@ class ManyToManyField(MetaField):
 
 
 class VirtualField(MetaField):
+    field_class = None
+
+    def __init__(self, field_class=None, *args, **kwargs):
+        Field = field_class if field_class is not None else self.field_class
+        if Field is not None:
+            self.field_instance = Field()
+            self.db_value = self.field_instance.db_value
+            self.python_value = self.field_instance.python_value
+        else:
+            self.field_instance = None
+        super(VirtualField, self).__init__(*args, **kwargs)
+
     def bind(self, model, name, set_attribute=True):
         self.model = model
         self.column_name = self.name = name
