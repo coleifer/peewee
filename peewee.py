@@ -3829,9 +3829,12 @@ class ModelBase(type):
                     fields.append((key, value))
 
         if pk is None:
-            pk, pk_name = ((parent_pk, parent_pk.name)
-                           if parent_pk is not None else
-                           (AutoField(), 'id'))
+            if parent_pk is not False:
+                pk, pk_name = ((parent_pk, parent_pk.name)
+                               if parent_pk is not None else
+                               (AutoField(), 'id'))
+            else:
+                pk = False
         elif isinstance(pk, CompositeKey):
             pk_name = '__composite_key__'
             cls._meta.composite_key = True
@@ -4195,6 +4198,11 @@ class ModelSelect(BaseModelSelect, Select):
 
     def switch(self, ctx=None):
         self._join_ctx = ctx
+        return self
+
+    def objects(self, constructor=None):
+        self._row_type = ROW.CONSTRUCTOR
+        self._constructor = self.model if constructor is None else constructor
         return self
 
     def _get_model(self, src):

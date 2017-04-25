@@ -1,3 +1,6 @@
+import json
+import math
+import struct
 import sys
 
 from peewee import *
@@ -144,7 +147,10 @@ class VirtualTableSchemaManager(SchemaManager):
                 field_def.append(SQL('UNINDEXED'))
             arguments.append(NodeList(field_def))
 
-        arguments.extend(self._create_table_option_sql(options))
+        options = self.model.clean_options(
+            merge_dict(self.model._meta.options, options))
+        if options:
+            arguments.extend(self._create_table_option_sql(options))
         return ctx.sql(EnclosedNodeList(arguments))
 
     def _create_table(self, safe=True, **options):
@@ -169,3 +175,420 @@ class VirtualModel(Model):
     @classmethod
     def clean_options(cls, options):
         return options
+
+
+class BaseFTSModel(VirtualModel):
+    @classmethod
+    def clean_options(cls, **options):
+        tokenize = options.get('tokenize')
+        content = options.get('content')
+        if tokenize:
+            # Tokenizers need to be in quoted string.
+            options['tokenize'] = '"%s"' % tokenize
+        if isinstance(content, basestring) and content == '':
+            # Special-case content-less full-text search tables.
+            options['content'] = "''"
+        return options
+
+
+class FTSModel(BaseFTSModel):
+    """
+    VirtualModel class for creating tables that use either the FTS3 or FTS4
+    search extensions. Peewee automatically determines which version of the
+    FTS extension is supported and will use FTS4 if possible.
+
+    Note: because FTS5 is significantly different from FTS3 and FTS4, there is
+    a separate model class for FTS5 virtual tables.
+    """
+    # FTS3/4 does not support declared primary keys, but we can use the
+    # implicit docid.
+    docid = DocIDField()
+
+    class Meta:
+        extension_module = FTS_VERSION
+
+    @classmethod
+    def _fts_cmd(cls, cmd):
+        tbl = cls._meta.db_table
+        res = cls._meta.database.execute_sql(
+            "INSERT INTO %s(%s) VALUES('%s');" % (tbl, tbl, cmd))
+        return res.fetchone()
+
+    @classmethod
+    def optimize(cls):
+        return cls._fts_cmd('optimize')
+
+    @classmethod
+    def rebuild(cls):
+        return cls._fts_cmd('rebuild')
+
+    @classmethod
+    def integrity_check(cls):
+        return cls._fts_cmd('integrity-check')
+
+    @classmethod
+    def merge(cls, blocks=200, segments=8):
+        return cls._fts_cmd('merge=%s,%s' % (blocks, segments))
+
+    @classmethod
+    def automerge(cls, state=True):
+        return cls._fts_cmd('automerge=%s' % (state and '1' or '0'))
+
+    @classmethod
+    def match(cls, term):
+        """
+        Generate a `MATCH` expression appropriate for searching this table.
+        """
+        return match(cls.as_entity(), term)
+
+    @classmethod
+    def rank(cls, *weights):
+        matchinfo = fn.matchinfo(cls, FTS3_MATCHINFO)
+        return fn.fts_rank(matchinfo, *weights)
+
+    @classmethod
+    def bm25(cls, *weights):
+        match_info = fn.matchinfo(cls, FTS4_MATCHINFO)
+        return fn.fts_bm25(match_info, *weights)
+
+    @classmethod
+    def lucene(cls, *weights):
+        match_info = fn.matchinfo(cls, FTS4_MATCHINFO)
+        return fn.fts_lucene(match_info, *weights)
+
+    @classmethod
+    def _search(cls, term, weights, with_score, score_alias, score_fn,
+                explicit_ordering):
+        if not weights:
+            rank = score_fn()
+        elif isinstance(weights, dict):
+            weight_args = []
+            for field in cls._meta.declared_fields:
+                # Attempt to get the specified weight of the field by looking
+                # it up using it's field instance followed by name.
+                field_weight = weights.get(field, weights.get(field.name, 1.0))
+                weight_args.append(field_weight)
+            rank = score_fn(*weight_args)
+        else:
+            rank = score_fn(*weights)
+
+        selection = ()
+        order_by = rank
+        if with_score:
+            selection = (cls, rank.alias(score_alias))
+        if with_score and not explicit_ordering:
+            order_by = SQL(score_alias)
+
+        return (cls
+                .select(*selection)
+                .where(cls.match(term))
+                .order_by(order_by))
+
+    @classmethod
+    def search(cls, term, weights=None, with_score=False, score_alias='score',
+               explicit_ordering=False):
+        """Full-text search using selected `term`."""
+        return cls._search(
+            term,
+            weights,
+            with_score,
+            score_alias,
+            cls.rank,
+            explicit_ordering)
+
+    @classmethod
+    def search_bm25(cls, term, weights=None, with_score=False,
+                    score_alias='score', explicit_ordering=False):
+        """Full-text search for selected `term` using BM25 algorithm."""
+        return cls._search(
+            term,
+            weights,
+            with_score,
+            score_alias,
+            cls.bm25,
+            explicit_ordering)
+
+    @classmethod
+    def search_lucene(cls, term, weights=None, with_score=False,
+                      score_alias='score', explicit_ordering=False):
+        """Full-text search for selected `term` using BM25 algorithm."""
+        return cls._search(
+            term,
+            weights,
+            with_score,
+            score_alias,
+            cls.lucene,
+            explicit_ordering)
+
+
+def ClosureTable(model, foreign_key=None):
+    """Model factory for the transitive closure extension."""
+    if foreign_key is None:
+        for field in model._meta.refs:
+            if field.rel_model is model:
+                foreign_key = field
+                break
+        else:
+            raise ValueError('Unable to find self-referential foreign key.')
+
+    primary_key = model._meta.primary_key
+
+    class BaseClosureTable(VirtualModel):
+        depth = VirtualField(IntegerField)
+        id = VirtualField(IntegerField)
+        idcolumn = VirtualField(IntegerField)
+        parentcolumn = VirtualField(IntegerField)
+        root = VirtualField(IntegerField)
+        tablename = VirtualField(TextField)
+
+        class Meta:
+            extension_module = 'transitive_closure'
+
+        @classmethod
+        def descendants(cls, node, depth=None, include_node=False):
+            query = (model
+                     .select(model, cls.depth.alias('depth'))
+                     .join(cls, on=(primary_key == cls.id))
+                     .where(cls.root == node)
+                     .objects())
+            if depth is not None:
+                query = query.where(cls.depth == depth)
+            elif not include_node:
+                query = query.where(cls.depth > 0)
+            return query
+
+        @classmethod
+        def ancestors(cls, node, depth=None, include_node=False):
+            query = (model
+                     .select(model, cls.depth.alias('depth'))
+                     .join(cls, on=(primary_key == cls.root))
+                     .where(cls.id == node)
+                     .objects())
+            if depth:
+                query = query.where(cls.depth == depth)
+            elif not include_node:
+                query = query.where(cls.depth > 0)
+            return query
+
+        @classmethod
+        def siblings(cls, node, include_node=False):
+            fk_value = node._data.get(foreign_key.name)
+            query = model.select().where(foreign_key == fk_value)
+            if not include_node:
+                query = query.where(primary_key != node)
+            return query
+
+    class Meta:
+        database = model._meta.database
+        extension_options = {
+            'tablename': model._meta.table_name,
+            'idcolumn': model._meta.primary_key.column_name,
+            'parentcolumn': foreign_key.column_name}
+        primary_key = False
+
+    name = '%sClosure' % model.__name__
+    return type(name, (BaseClosureTable,), {'Meta': Meta})
+
+
+OP.MATCH = 'MATCH'
+
+
+class SqliteExtDatabase(SqliteDatabase):
+    options = attrdict(operations={OP.MATCH: OP.MATCH})
+
+    def __init__(self, database, *args, **kwargs):
+        super(SqliteExtDatabase, self).__init__(database, *args, **kwargs)
+        self._aggregates = {}
+        self._collations = {}
+        self._functions = {}
+        self._extensions = set()
+        self._row_factory = None
+
+        self.register_function(rank, 'fts_rank', -1)
+        self.register_function(bm25, 'fts_bm25', -1)
+
+    def _add_conn_hooks(self, conn):
+        super(SqliteExtDatabase, self)._add_conn_hooks(conn)
+        self._load_aggregates(conn)
+        self._load_collations(conn)
+        self._load_functions(conn)
+        if self._row_factory:
+            conn.row_factory = self._row_factory
+        if self._extensions:
+            self._load_extensions(conn)
+
+    def _load_aggregates(self, conn):
+        for name, (klass, num_params) in self._aggregates.items():
+            conn.create_aggregate(name, num_params, klass)
+
+    def _load_collations(self, conn):
+        for name, fn in self._collations.items():
+            conn.create_collation(name, fn)
+
+    def _load_functions(self, conn):
+        for name, (fn, num_params) in self._functions.items():
+            conn.create_function(name, num_params, fn)
+
+    def _load_extensions(self, conn):
+        conn.enable_load_extension(True)
+        for extension in self._extensions:
+            conn.load_extension(extension)
+
+    def register_aggregate(self, klass, name=None, num_params=-1):
+        self._aggregates[name or klass.__name__.lower()] = (klass, num_params)
+        if not self.is_closed():
+            self._load_aggregates(self.connection())
+
+    def aggregate(self, name=None, num_params=-1):
+        def decorator(klass):
+            self.register_aggregate(klass, name, num_params)
+            return klass
+        return decorator
+
+    def register_collation(self, fn, name=None):
+        name = name or fn.__name__
+        def _collation(*args):
+            expressions = args + (SQL('collate %s' % name),)
+            return Clause(*expressions)
+        fn.collation = _collation
+        self._collations[name] = fn
+        if not self.is_closed():
+            self._load_collations(self.connection())
+
+    def collation(self, name=None):
+        def decorator(fn):
+            self.register_collation(fn, name)
+            return fn
+        return decorator
+
+    def register_function(self, fn, name=None, num_params=-1):
+        self._functions[name or fn.__name__] = (fn, num_params)
+        if not self.is_closed():
+            self._load_functions(self.connection())
+
+    def func(self, name=None, num_params=-1):
+        def decorator(fn):
+            self.register_function(fn, name, num_params)
+            return fn
+        return decorator
+
+    def load_extension(self, extension):
+        self._extensions.add(extension)
+        if not self.is_closed():
+            conn = self.connection()
+            conn.enable_load_extension(True)
+            conn.load_extension(extension)
+
+    def unregister_aggregate(self, name):
+        del(self._aggregates[name])
+
+    def unregister_collation(self, name):
+        del(self._collations[name])
+
+    def unregister_function(self, name):
+        del(self._functions[name])
+
+    def unload_extension(self, extension):
+        self._extensions.remove(extension)
+
+    def row_factory(self, fn):
+        self._row_factory = fn
+
+
+def match(lhs, rhs):
+    return Expression(lhs, OP.MATCH, rhs)
+
+def _parse_match_info(buf):
+    # See http://sqlite.org/fts3.html#matchinfo
+    bufsize = len(buf)  # Length in bytes.
+    return [struct.unpack('@I', buf[i:i+4])[0] for i in range(0, bufsize, 4)]
+
+# Ranking implementation, which parse matchinfo.
+def rank(raw_match_info, *weights):
+    # Handle match_info called w/default args 'pcx' - based on the example rank
+    # function http://sqlite.org/fts3.html#appendix_a
+    match_info = _parse_match_info(raw_match_info)
+    score = 0.0
+
+    p, c = match_info[:2]
+    if not weights:
+        weights = [1] * c
+    else:
+        weights = [0] * c
+        for i, weight in enumerate(weights):
+            weights[i] = weight
+
+    for phrase_num in range(p):
+        phrase_info_idx = 2 + (phrase_num * c * 3)
+        for col_num in range(c):
+            weight = weights[col_num]
+            if not weight:
+                continue
+
+            col_idx = phrase_info_idx + (col_num * 3)
+            x1, x2 = match_info[col_idx:col_idx + 2]
+            if x1 > 0:
+                score += weight * (float(x1) / x2)
+
+    return -score
+
+# Okapi BM25 ranking implementation (FTS4 only).
+def bm25(raw_match_info, *args):
+    """
+    Usage:
+
+        # Format string *must* be pcnalx
+        # Second parameter to bm25 specifies the index of the column, on
+        # the table being queries.
+        bm25(matchinfo(document_tbl, 'pcnalx'), 1) AS rank
+    """
+    match_info = _parse_match_info(raw_match_info)
+    K = 1.2
+    B = 0.75
+    score = 0.0
+
+    P_O, C_O, N_O, A_O = range(4)
+    term_count = match_info[P_O]
+    col_count = match_info[C_O]
+    total_docs = match_info[N_O]
+    L_O = A_O + col_count
+    X_O = L_O + col_count
+
+    if not args:
+        weights = [1] * col_count
+    else:
+        weights = [0] * col_count
+        for i, weight in enumerate(args):
+            weights[i] = args[i]
+
+    for i in range(term_count):
+        for j in range(col_count):
+            weight = weights[j]
+            if weight == 0:
+                continue
+
+            avg_length = float(match_info[A_O + j])
+            doc_length = float(match_info[L_O + j])
+            if avg_length == 0:
+                D = 0
+            else:
+                D = 1 - B + (B * (doc_length / avg_length))
+
+            x = X_O + (3 * j * (i + 1))
+            term_frequency = float(match_info[x])
+            docs_with_term = float(match_info[x + 2])
+
+            idf = max(
+                math.log(
+                    (total_docs - docs_with_term + 0.5) /
+                    (docs_with_term + 0.5)),
+                0)
+            denom = term_frequency + (K * D)
+            if denom == 0:
+                rhs = 0
+            else:
+                rhs = (term_frequency * (K + 1)) / denom
+
+            score += (idf * rhs) * weight
+
+    return -score

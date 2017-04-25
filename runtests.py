@@ -45,7 +45,7 @@ def get_option_parser():
     #cases.add_option('--sqlcipher-ext', dest='sqlcipher', default=False, action='store_true', help='sqlcipher_ext tests (requires pysqlcipher)')
     #cases.add_option('--sqliteq', dest='sqliteq', default=False, action='store_true', help='sqliteq tests')
     #cases.add_option('--sqlite-c-ext', dest='sqlite_c', default=False, action='store_true', help='sqlite c extension tests')
-    #cases.add_option('--sqlite-ext', dest='sqlite_ext', default=False, action='store_true', help='sqlite_ext tests')
+    cases.add_option('--sqlite-ext', dest='sqlite_ext', default=False, action='store_true', help='sqlite_ext tests')
     #cases.add_option('--sqlite-udf', dest='sqlite_udf', default=False, action='store_true', help='sqlite_udf tests')
 
     parser.add_option_group(basic)
@@ -119,9 +119,9 @@ def collect_modules(options):
     #        modules.append(test_sqlite_c_ext)
     #    except ImportError:
     #        print_('Unable to import SQLite C extension tests, skipping')
-    #if xtra(options.sqlite_ext):
-    #    from playhouse.tests import test_sqlite_ext
-    #    modules.append(test_sqlite_ext)
+    if xtra(options.sqlite_ext):
+        import tests.sqlite
+        modules.append(tests.sqlite)
     #if xtra(options.sqlite_udf):
     #    from playhouse.tests import test_sqlite_udf
     #    modules.append(test_sqlite_udf)

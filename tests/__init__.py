@@ -22,6 +22,7 @@ from .pwiz_integration import *
 from .reflection import *
 from .shortcuts import *
 from .signals import *
+from .sqlite import *
 
 
 if __name__ == '__main__':

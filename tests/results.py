@@ -124,3 +124,25 @@ class TestCursorWrapper(ModelTestCase):
             cursor.fill_cache(11)
             self.assertTrue(cursor.populated)
             assertCache(cursor, 10)
+
+
+class TestModelObjectCursorWrapper(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [User, Tweet]
+
+    def test_model_objects(self):
+        huey = User.create(username='huey')
+        mickey = User.create(username='mickey')
+        for user, tweet in ((huey, 'meow'), (huey, 'purr'), (mickey, 'woof')):
+            Tweet.create(user=user, content=tweet)
+
+        query = (Tweet
+                 .select(Tweet, User.username)
+                 .join(User)
+                 .order_by(Tweet.id)
+                 .objects())
+        with self.assertQueryCount(1):
+            self.assertEqual([(t.username, t.content) for t in query], [
+                ('huey', 'meow'),
+                ('huey', 'purr'),
+                ('mickey', 'woof')])
