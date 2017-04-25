@@ -3286,7 +3286,7 @@ class ManyToManyField(MetaField):
 class VirtualField(MetaField):
     def bind(self, model, name, set_attribute=True):
         self.model = model
-        self.name = name
+        self.column_name = self.name = name
         setattr(model, self.name, self)
 
 
@@ -3566,10 +3566,10 @@ class Metadata(object):
         if not refs and not backrefs:
             raise ValueError('One of `refs` or `backrefs` must be True.')
 
-        accum = []
+        accum = [(None, self.model, None)]
         seen = set()
-        queue = deque(((None, self.model, None),))
-        method = queue.popright if depth_first else queue.popleft
+        queue = deque((self,))
+        method = queue.pop if depth_first else queue.popleft
 
         while queue:
             curr = method()
@@ -3579,11 +3579,11 @@ class Metadata(object):
             if refs:
                 for fk, model in curr.refs.items():
                     accum.append((fk, model, False))
-                    queue.append(model)
+                    queue.append(model._meta)
             if backrefs:
                 for fk, model in curr.backrefs.items():
                     accum.append((fk, model, True))
-                    queue.append(model)
+                    queue.append(model._meta)
 
         return accum
 
@@ -3820,10 +3820,7 @@ class ModelBase(type):
 
         # Call validation hook, allowing additional model validation.
         cls.validate_model()
-
-        # TODO: Resolve any deferred relations waiting on this class.
         DeferredForeignKey.resolve(cls)
-
         return cls
 
     def __iter__(self):
@@ -4059,11 +4056,11 @@ class Model(with_metaclass(ModelBase, Node)):
         return is_different
 
     @classmethod
-    def create_schema(cls, safe=True):
+    def create_table(cls, safe=True):
         cls._schema.create_all(safe)
 
     @classmethod
-    def drop_schema(cls, safe=True):
+    def drop_table(cls, safe=True):
         cls._schema.drop_all(safe)
 
 

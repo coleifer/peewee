@@ -9,6 +9,7 @@ from .base import get_in_memory_db
 from .base import new_connection
 from .base import requires_models
 from .base import skip_case_unless
+from .base import BaseTestCase
 from .base import ModelTestCase
 from .base import TestModel
 from .base_models import *
@@ -760,3 +761,22 @@ class TestTupleComparison(ModelTestCase):
         self.assertEqual(query.count(), 1)
         obj = query.get()
         self.assertEqual(obj, ub)
+
+
+class TestModelGraph(BaseTestCase):
+    def test_bind_model_database(self):
+        class User(Model): pass
+        class Tweet(Model):
+            user = ForeignKeyField(User)
+        class Relationship(Model):
+            from_user = ForeignKeyField(User, backref='relationships')
+            to_user = ForeignKeyField(User, backref='related_to')
+        class Flag(Model):
+            tweet = ForeignKeyField(Tweet)
+        class Unrelated(Model): pass
+
+        fake_db = SqliteDatabase(None)
+        User.bind(fake_db)
+        for model in (User, Tweet, Relationship, Flag):
+            self.assertTrue(model._meta.database is fake_db)
+        self.assertTrue(Unrelated._meta.database is None)
