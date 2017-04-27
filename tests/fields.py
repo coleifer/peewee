@@ -31,6 +31,15 @@ class DefaultValues(TestModel):
     data_callable = IntegerField(default=lambda: 1337)
 
 
+class TestTextField(TextField):
+    def first_char(self):
+        return fn.SUBSTR(self, 1, 1)
+
+
+class PhoneBook(TestModel):
+    name = TestTextField()
+
+
 class TestDefaultValues(ModelTestCase):
     requires = [DefaultValues]
 
@@ -229,3 +238,32 @@ class TestCompositePrimaryKeyField(ModelTestCase):
 
     def test_composite_primary_key(self):
         pass
+
+
+class TestFieldFunction(ModelTestCase):
+    requires = [PhoneBook]
+
+    def setUp(self):
+        super(TestFieldFunction, self).setUp()
+        names = ('huey', 'mickey', 'zaizee', 'beanie', 'scout', 'hallee')
+        for name in names:
+            PhoneBook.create(name=name)
+
+    def _test_field_function(self, PB):
+        query = (PB
+                 .select()
+                 .where(PB.name.first_char() == 'h')
+                 .order_by(PB.name))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."name" '
+            'FROM "phonebook" AS "t1" '
+            'WHERE (SUBSTR("t1"."name", ?, ?) = ?) '
+            'ORDER BY "t1"."name"'), [1, 1, 'h'])
+
+        self.assertEqual([pb.name for pb in query], ['hallee', 'huey'])
+
+    def test_field_function(self):
+        self._test_field_function(PhoneBook)
+
+    def test_field_function_alias(self):
+        self._test_field_function(PhoneBook.alias())

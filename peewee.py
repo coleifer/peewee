@@ -4110,14 +4110,15 @@ class ModelAlias(Node):
     def __getattr__(self, attr):
         model_attr = getattr(self.model, attr)
         if isinstance(model_attr, Field):
-            return FieldAlias(self, model_attr)
+            self.__dict__[attr] = FieldAlias.create(self, model_attr)
+            return self.__dict__[attr]
         return model_attr
 
     def __setattr__(self, attr, value):
         raise AttributeError('Cannot set attributes on model aliases.')
 
     def get_field_aliases(self):
-        return [FieldAlias(self, f) for f in self.model._meta.sorted_fields]
+        return [getattr(self, n) for n in self.model._meta.sorted_field_names]
 
     def select(self, *selection):
         if not selection:
@@ -4151,6 +4152,12 @@ class FieldAlias(Field):
         self.source = source
         self.model = source.model
         self.field = field
+
+    @classmethod
+    def create(cls, source, field):
+        class _FieldAlias(cls, type(field)):
+            pass
+        return _FieldAlias(source, field)
 
     def clone(self):
         return FieldAlias(self.source, self.field)

@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import importlib
 import optparse
 import os
 import shutil
@@ -53,9 +54,16 @@ def get_option_parser():
     parser.add_option_group(cases)
     return parser
 
-def collect_modules(options):
+def collect_modules(options, args):
     modules = []
     xtra = lambda op: op or options.extra or options.all
+
+    for arg in args:
+        try:
+            modules.append(importlib.import_module('tests.%s' % arg))
+        except ImportError:
+            print_('ERROR: unable to import requested tests: "tests.%s"' % arg)
+
     #if xtra(options.apsw):
     #    try:
     #        from playhouse.tests import test_apsw
@@ -142,8 +150,7 @@ if __name__ == '__main__':
     from peewee import print_
 
     suite = unittest.TestSuite()
-    for module in collect_modules(options):
-        print_('Adding tests for "%s"' % module.__name__)
+    for module in collect_modules(options, args):
         module_suite = unittest.TestLoader().loadTestsFromModule(module)
         suite.addTest(module_suite)
 
