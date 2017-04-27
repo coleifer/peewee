@@ -163,3 +163,127 @@ class TestJSONField(ModelTestCase):
 
         missing = self.Q.columns(APIData.data.extract('foo.bar')).tuples()
         self.assertEqual([row for row, in missing], [None] * 5)
+
+    def test_length(self):
+        tag_len = (self.Q
+                   .columns(APIData.data.length('metadata.tags').alias('len'))
+                   .dicts())
+        self.assertEqual(list(tag_len), [
+            {'len': 2},
+            {'len': 4},
+            {'len': 4},
+            {'len': 4},
+            {'len': 4},
+        ])
+
+    def test_remove(self):
+        query = (self.Q
+                 .columns(
+                     fn.json_extract(
+                         APIData.data.remove('metadata.tags'),
+                         '$.metadata'))
+                 .tuples())
+        self.assertEqual([row for row, in query], ['{}'] * 5)
+
+        Clone = APIData.alias()
+        query = (APIData
+                 .update(
+                     data=(Clone
+                           .select(Clone.data.remove('metadata.tags[2]'))
+                           .where(Clone.id == APIData.id)))
+                 .where(
+                     APIData.value.contains('LSM Storage') |
+                     APIData.value.contains('UnQLite Python')))
+        result = query.execute()
+        self.assertEqual(result, 2)
+
+        tag_len = (self.Q
+                   .columns(APIData.data.length('metadata.tags').alias('len'))
+                   .dicts())
+        self.assertEqual(list(tag_len), [
+            {'len': 2},
+            {'len': 3},
+            {'len': 4},
+            {'len': 3},
+            {'len': 4},
+        ])
+
+    def test_set(self):
+        query = (self.Q
+                 .columns(
+                     fn.json_extract(
+                         APIData.data.set(
+                             'metadata',
+                             {'k1': {'k2': 'bar'}}),
+                         '$.metadata.k1'))
+                 .tuples())
+        self.assertEqual(
+            [json.loads(row) for row, in query],
+            [{'k2': 'bar'}] * 5)
+
+        Clone = APIData.alias()
+        query = (APIData
+                 .update(
+                     data=(Clone
+                           .select(Clone.data.set('title', 'hello'))
+                           .where(Clone.id == APIData.id)))
+                 .where(APIData.value.contains('LSM Storage'))
+                 .execute())
+        self.assertEqual(query, 1)
+
+        titles = self.Q.columns(APIData.data.extract('title')).tuples()
+        for idx, (row,) in enumerate(titles):
+            if idx == 1:
+                self.assertEqual(row, 'hello')
+            else:
+                self.assertNotEqual(row, 'hello')
+
+    def test_multi_set(self):
+        Clone = APIData.alias()
+        set_query = (Clone
+                     .select(Clone.data.set(
+                         'foo', 'foo value',
+                         'tagz', ['list', 'of', 'tags'],
+                         'x.y.z', 3,
+                         'metadata.foo', None,
+                         'bar.baze', True))
+                     .where(Clone.id == APIData.id))
+        query = (APIData
+                 .update(data=set_query)
+                 .where(APIData.value.contains('LSM Storage'))
+                 .execute())
+        self.assertEqual(query, 1)
+
+        result = APIData.select().where(APIData.value.contains('LSM storage')).get()
+        self.assertEqual(result.data, {
+            'bar': {'baze': 1},
+            'foo': 'foo value',
+            'metadata': {'tags': ['nosql', 'python', 'sqlite', 'cython'], 'foo': None},
+            'tagz': ['list', 'of', 'tags'],
+            'title': 'Using SQLite4\'s LSM Storage Engine as a Stand-alone NoSQL Database with Python',
+            'url': 'http://charlesleifer.com/blog/using-sqlite4-s-lsm-storage-engine-as-a-stand-alone-nosql-database-with-python/',
+            'x': {'y': {'z': 3}},
+        })
+
+    """
+    def test_children(self):
+        children = APIData.data.children().alias('children')
+        query = (APIData
+                 .select(children.c.value.alias('value'))
+                 .from_(APIData, children)
+                 .where(children.c.key.in_(['title', 'url']))
+                 .order_by(SQL('1'))
+                 .tuples())
+        self.assertEqual([row for row, in query], [
+            'Alternative Redis-Like Databases with Python',
+            'Building the SQLite FTS5 Search Extension',
+            'Introduction to the fast new UnQLite Python Bindings',
+            'My List of Python and SQLite Resources',
+            'Using SQLite4\'s LSM Storage Engine as a Stand-alone NoSQL Database with Python',
+            'http://charlesleifer.com/blog/alternative-redis-like-databases-with-python/',
+            'http://charlesleifer.com/blog/building-the-sqlite-fts5-search-extension/',
+            'http://charlesleifer.com/blog/introduction-to-the-fast-new-unqlite-python-bindings/',
+            'http://charlesleifer.com/blog/my-list-of-python-and-sqlite-resources/',
+            'http://charlesleifer.com/blog/using-sqlite4-s-lsm-storage-engine-as-a-stand-alone-nosql-database-with-python/',
+        ])
+    """

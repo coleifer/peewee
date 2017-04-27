@@ -1563,6 +1563,17 @@ class _WriteQuery(Query):
             return cursor
         return database.rows_affected(cursor)
 
+    def _set_table_alias(self, ctx):
+        ctx.alias_manager.set(self.table, self.table._name)
+
+    def __sql__(self, ctx):
+        super(_WriteQuery, self).__sql__(ctx)
+        # We explicitly set the table alias to the table's name, which ensures
+        # that if a sub-select references a column on the outer table, we won't
+        # assign it a new alias (e.g. t2) but will refer to it as table.column.
+        self._set_table_alias(ctx)
+        return ctx
+
 
 class Update(_WriteQuery):
     def __init__(self, table, update=None, where=None, order_by=None,
@@ -4401,6 +4412,10 @@ class _ModelWriteQueryHelper(_ModelQueryHelper):
     def __init__(self, model, *args, **kwargs):
         self.model = model
         super(_ModelWriteQueryHelper, self).__init__(model, *args, **kwargs)
+
+    def _set_table_alias(self, ctx):
+        table = self.model._meta.table
+        ctx.alias_manager.set(table, table._name)
 
 
 class ModelUpdate(_ModelWriteQueryHelper, Update):
