@@ -4,6 +4,7 @@ from peewee import *
 from peewee import sqlite3
 from playhouse.sqlite_ext import *
 
+from .base import BaseTestCase
 from .base import ModelTestCase
 from .base import TestModel
 from .base import skip_case_unless
@@ -265,7 +266,6 @@ class TestJSONField(ModelTestCase):
             'x': {'y': {'z': 3}},
         })
 
-    """
     def test_children(self):
         children = APIData.data.children().alias('children')
         query = (APIData
@@ -286,4 +286,79 @@ class TestJSONField(ModelTestCase):
             'http://charlesleifer.com/blog/my-list-of-python-and-sqlite-resources/',
             'http://charlesleifer.com/blog/using-sqlite4-s-lsm-storage-engine-as-a-stand-alone-nosql-database-with-python/',
         ])
-    """
+
+
+class TestSqliteExtensions(BaseTestCase):
+    def test_virtual_model(self):
+        class Test(VirtualModel):
+            class Meta:
+                database = database
+                extension_module = 'ext1337'
+                options = {'huey': 'cat', 'mickey': 'dog'}
+                primary_key = False
+
+        class SubTest(Test): pass
+
+        self.assertSQL(Test._schema._create_table(), (
+            'CREATE VIRTUAL TABLE IF NOT EXISTS "test" '
+            'USING ext1337 '
+            '(huey=cat, mickey=dog)'), [])
+        self.assertSQL(SubTest._schema._create_table(), (
+            'CREATE VIRTUAL TABLE IF NOT EXISTS "subtest" '
+            'USING ext1337 '
+            '(huey=cat, mickey=dog)'), [])
+        self.assertSQL(
+            Test._schema._create_table(huey='kitten', zaizee='cat'),
+            ('CREATE VIRTUAL TABLE IF NOT EXISTS "test" '
+             'USING ext1337 (huey=kitten, mickey=dog, zaizee=cat)'), [])
+
+    def test_autoincrement_field(self):
+        class AutoIncrement(TestModel):
+            id = AutoIncrementField()
+            data = TextField()
+
+        self.assertSQL(AutoIncrement._schema._create_table(), (
+            'CREATE TABLE IF NOT EXISTS "autoincrement" '
+            '("id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, '
+            '"data" TEXT NOT NULL)'), [])
+
+
+class TestFullTextSearch(ModelTestCase):
+    database = database
+    requires = [
+        Post,
+        ContentPost,
+        ContentPostMessage,
+        Document,
+        MultiColumn]
+
+    messages = (
+        ('A faith is a necessity to a man. Woe to him who believes in '
+         'nothing.'),
+        ('All who call on God in true faith, earnestly from the heart, will '
+         'certainly be heard, and will receive what they have asked and '
+         'desired.'),
+        ('Be faithful in small things because it is in them that your '
+         'strength lies.'),
+        ('Faith consists in believing when it is beyond the power of reason '
+         'to believe.'),
+        ('Faith has to do with things that are not seen and hope with things '
+         'that are not at hand.'))
+    values = (
+        ('aaaaa bbbbb ccccc ddddd', 'aaaaa ccccc', 'zzzzz zzzzz', 1),
+        ('bbbbb ccccc ddddd eeeee', 'bbbbb', 'zzzzz', 2),
+        ('ccccc ccccc ddddd fffff', 'ccccc', 'yyyyy', 3),
+        ('ddddd', 'ccccc', 'xxxxx', 4))
+
+    def assertMessages(self, query, indexes):
+        self.assertEqual([obj.message for obj in query],
+                         [self.messages[idx] for idx in indexes])
+
+    def test_model_options(self):
+        messages = [Document.create(message=message)
+                    for message in self.messages]
+        #query = (Document
+        #         .select()
+        #         .where(Document.match('believe'))
+        #         .order_by(Document.docid))
+        #self.assertMessages(query, [0, 3])

@@ -806,7 +806,25 @@ class WrappedNode(ColumnBase):
         return self.node.unwrap()
 
 
+class EntityFactory(object):
+    __slots__ = ('node',)
+    def __init__(self, node):
+        self.node = node
+    def __getattr__(self, attr):
+        return Entity(self.node, attr)
+
+
+class _DynamicEntity(object):
+    __slots__ = ()
+    def __get__(self, instance, instance_type=None):
+        if instance is not None:
+            return EntityFactory(instance._alias)  # Implements __getattr__().
+        return self
+
+
 class Alias(WrappedNode):
+    c = _DynamicEntity()
+
     def __init__(self, node, alias):
         super(Alias, self).__init__(node)
         self._alias = alias
@@ -3782,7 +3800,7 @@ class DoesNotExist(Exception): pass
 
 class ModelBase(type):
     inheritable = set(['constraints', 'database', 'indexes', 'primary_key',
-                       'schema'])
+                       'options', 'schema'])
 
     def __new__(cls, name, bases, attrs):
         if name == MODEL_BASE or bases[0].__name__ == MODEL_BASE:
@@ -3968,12 +3986,6 @@ class Model(with_metaclass(ModelBase, Node)):
                     return query.get(), False
                 except cls.DoesNotExist:
                     raise exc
-
-    @classmethod
-    def as_entity(cls):
-        if cls._meta.schema:
-            return Entity(cls._meta.schema, cls._meta.db_table)
-        return Entity(cls._meta.db_table)
 
     @property
     def _pk(self):

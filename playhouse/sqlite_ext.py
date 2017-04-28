@@ -19,7 +19,10 @@ FTS_VERSION = 4 if sqlite3.sqlite_version_info[:3] >= (3, 7, 4) else 3
 class RowIDField(VirtualField):
     column_name = name = required_name = 'rowid'
     field_class = IntegerField
-    primary_key = True
+
+    def __init__(self, *args, **kwargs):
+        kwargs['primary_key'] = True
+        super(RowIDField, self).__init__(*args, **kwargs)
 
     def bind(self, model, name, *args):
         if name != self.required_name:
@@ -35,7 +38,7 @@ class DocIDField(RowIDField):
 class AutoIncrementField(AutoField):
     def ddl(self, ctx):
         node_list = super(AutoIncrementField, self).ddl(ctx)
-        return NodeList(node_list, SQL('AUTOINCREMENT'))
+        return NodeList((node_list, SQL('AUTOINCREMENT')))
 
 
 class JSONField(TextField):
@@ -135,7 +138,9 @@ class VirtualTableSchemaManager(SchemaManager):
         ctx.literal('CREATE VIRTUAL TABLE ')
         if safe:
             ctx.literal('IF NOT EXISTS ')
-        ctx.sql(self.model).literal(' USING %s ' % self.model._meta.extension)
+        (ctx
+         .sql(self.model)
+         .literal(' USING %s ' % self.model._meta.extension_module))
 
         arguments = []
         meta = self.model._meta
@@ -154,7 +159,7 @@ class VirtualTableSchemaManager(SchemaManager):
         return ctx.sql(EnclosedNodeList(arguments))
 
     def _create_table(self, safe=True, **options):
-        if isinstance(self.model, VirtualModel):
+        if issubclass(self.model, VirtualModel):
             ctx = self._create_virtual_table(safe, **options)
         else:
             ctx = super(VirtualTableSchemaManager, self)._create_table(
@@ -167,10 +172,8 @@ class VirtualTableSchemaManager(SchemaManager):
 class VirtualModel(Model):
     class Meta:
         extension_module = None
-        extension_options = None
         primary_key = False
         schema_manager_class = VirtualTableSchemaManager
-        virtual_table = True
 
     @classmethod
     def clean_options(cls, options):
@@ -179,7 +182,7 @@ class VirtualModel(Model):
 
 class BaseFTSModel(VirtualModel):
     @classmethod
-    def clean_options(cls, **options):
+    def clean_options(cls, options):
         tokenize = options.get('tokenize')
         content = options.get('content')
         if tokenize:
@@ -205,11 +208,11 @@ class FTSModel(BaseFTSModel):
     docid = DocIDField()
 
     class Meta:
-        extension_module = FTS_VERSION
+        extension_module = 'FTS%s' % FTS_VERSION
 
     @classmethod
     def _fts_cmd(cls, cmd):
-        tbl = cls._meta.db_table
+        tbl = cls._meta.table_name
         res = cls._meta.database.execute_sql(
             "INSERT INTO %s(%s) VALUES('%s');" % (tbl, tbl, cmd))
         return res.fetchone()
@@ -239,7 +242,7 @@ class FTSModel(BaseFTSModel):
         """
         Generate a `MATCH` expression appropriate for searching this table.
         """
-        return match(cls.as_entity(), term)
+        return match(cls, term)
 
     @classmethod
     def rank(cls, *weights):
