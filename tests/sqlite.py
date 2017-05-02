@@ -316,6 +316,8 @@ class TestSqliteExtensions(BaseTestCase):
         class AutoIncrement(TestModel):
             id = AutoIncrementField()
             data = TextField()
+            class Meta:
+                database = database
 
         self.assertSQL(AutoIncrement._schema._create_table(), (
             'CREATE TABLE IF NOT EXISTS "autoincrement" '

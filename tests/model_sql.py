@@ -119,7 +119,7 @@ class TestModelSQL(ModelDatabaseTestCase):
         class Stat(TestModel):
             url = TextField()
             count = IntegerField()
-            timestamp = TimestampField()
+            timestamp = TimestampField(utc=True)
 
         query = (Stat
                  .update({Stat.count: Stat.count + 1,
@@ -128,7 +128,7 @@ class TestModelSQL(ModelDatabaseTestCase):
         self.assertSQL(query, (
             'UPDATE "stat" SET "count" = ("count" + ?), "timestamp" = ? '
             'WHERE ("url" = ?)'),
-            [1, 1483250400, '/peewee'])
+            [1, 1483228800, '/peewee'])
 
     def test_delete(self):
         query = (Note

@@ -349,11 +349,11 @@ class TestUpdateQuery(BaseTestCase):
             '"counter" = ?, '
             '"muted" = ? '
             'WHERE ("id" IN ('
-            'SELECT "t1"."id", COUNT("t2"."id") AS ct '
-            'FROM "users" AS "t1" '
-            'INNER JOIN "tweets" AS "t2" '
-            'ON ("t2"."user_id" = "t1"."id") '
-            'GROUP BY "t1"."id" '
+            'SELECT "users"."id", COUNT("t1"."id") AS ct '
+            'FROM "users" AS "users" '
+            'INNER JOIN "tweets" AS "t1" '
+            'ON ("t1"."user_id" = "users"."id") '
+            'GROUP BY "users"."id" '
             'HAVING (ct > ?)))'), [0, True, 100])
 
     def test_update_returning(self):
@@ -389,10 +389,10 @@ class TestDeleteQuery(BaseTestCase):
         self.assertSQL(query, (
             'DELETE FROM "users" '
             'WHERE ("id" IN ('
-            'SELECT "t1"."id", COUNT("t2"."id") AS ct '
-            'FROM "users" AS "t1" '
-            'INNER JOIN "tweets" AS "t2" ON ("t2"."user_id" = "t1"."id") '
-            'GROUP BY "t1"."id" '
+            'SELECT "users"."id", COUNT("t1"."id") AS ct '
+            'FROM "users" AS "users" '
+            'INNER JOIN "tweets" AS "t1" ON ("t1"."user_id" = "users"."id") '
+            'GROUP BY "users"."id" '
             'HAVING (ct > ?)))'), [100])
 
     def test_delete_cte(self):
