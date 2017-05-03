@@ -3350,10 +3350,10 @@ class VirtualField(MetaField):
     def bind(self, model, name, set_attribute=True):
         self.model = model
         self.column_name = self.name = name
-        setattr(model, self.name, self)
+        setattr(model, name, self.accessor_class(model, self, name))
 
 
-class CompositeKey(VirtualField):
+class CompositeKey(MetaField):
     """A primary key composed of multiple columns."""
     sequence = None
 
@@ -3386,6 +3386,11 @@ class CompositeKey(VirtualField):
 
     def __hash__(self):
         return hash((self.model.__name__, self.field_names))
+
+    def bind(self, model, name, set_attribute=True):
+        self.model = model
+        self.column_name = self.name = name
+        setattr(model, self.name, self)
 
 
 class _SortedFieldList(object):
@@ -3842,8 +3847,6 @@ class ModelBase(type):
 
                 if isinstance(v, FieldAccessor) and not v.field.primary_key:
                     attrs[k] = deepcopy(v.field)
-                elif isinstance(v, Field) and not v.primary_key:
-                    attrs[k] = deepcopy(v)  # XXX: keep?
 
         sopts = meta_options.pop('schema_options', None) or {}
         Meta = meta_options.get('model_metadata_class', Metadata)
@@ -4048,7 +4051,7 @@ class Model(with_metaclass(ModelBase, Node)):
             else:
                 field_dict.pop(pk_field.name, None)
             rows = self.update(**field_dict).where(self._pk_expr()).execute()
-        elif pk_field is None or not isinstance(pk_field, AutoField):
+        elif pk_field is None or not self._meta.auto_increment:
             self.insert(**field_dict).execute()
             rows = 1
         else:
