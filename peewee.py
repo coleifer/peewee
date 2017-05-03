@@ -19,6 +19,7 @@ import sys
 import threading
 import time
 import uuid
+import warnings
 import weakref
 
 try:
@@ -86,6 +87,10 @@ if sqlite3:
     sqlite3.register_adapter(decimal.Decimal, str)
     sqlite3.register_adapter(datetime.date, str)
     sqlite3.register_adapter(datetime.time, str)
+
+
+def __deprecated__(s):
+    warnings.warn(s, DeprecationWarning)
 
 
 class attrdict(dict):
@@ -2770,7 +2775,17 @@ class Field(ColumnBase):
 
     def __init__(self, null=False, index=False, unique=False, column_name=None,
                  default=None, primary_key=False, constraints=None,
-                 sequence=None, collation=None, unindexed=False):
+                 sequence=None, collation=None, unindexed=False,
+                 db_column=None, related_name=None):
+        if db_column is not None:
+            __deprecated__('"db_column" has been deprecated in favor of '
+                           '"column_name" for Field objects.')
+            column_name = db_column
+        if related_name is not None:
+            __deprecated__('"related_name" has been deprecated in favor of '
+                           '"backref" for Field objects.')
+            backref = related_name
+
         self.null = null
         self.index = index
         self.unique = unique
@@ -3139,8 +3154,18 @@ class ForeignKeyField(Field):
     accessor_class = ForeignKeyAccessor
 
     def __init__(self, model, field=None, backref=None, on_delete=None,
-                 on_update=None, _deferred=None, *args, **kwargs):
+                 on_update=None, _deferred=None, rel_model=None, to_field=None,
+                 *args, **kwargs):
         super(ForeignKeyField, self).__init__(*args, **kwargs)
+        if rel_model is not None:
+            __deprecated__('"rel_model" has been deprecated in favor of '
+                           '"model" for ForeignKeyField objects.')
+            model = rel_model
+        if to_field is not None:
+            __deprecated__('"to_field" has been deprecated in favor of '
+                           '"field" for ForeignKeyField objects.')
+            field = to_field
+
         self.rel_model = model
         self.rel_field = field
         self.backref = backref
@@ -3589,7 +3614,11 @@ class Metadata(object):
     def __init__(self, model, database=None, table_name=None, indexes=None,
                  primary_key=None, constraints=None, schema=None,
                  only_save_dirty=False, table_alias=None, depends_on=None,
-                 options=None, **kwargs):
+                 options=None, db_table=None, **kwargs):
+        if db_table is not None:
+            __deprecated__('"db_table" has been deprecated in favor of '
+                           '"table_name" for Models.')
+            table_name = db_table
         self.model = model
         self.database = database
 
