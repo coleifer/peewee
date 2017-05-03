@@ -715,7 +715,7 @@ class TestTransitiveClosure(BaseTestCase):
         self.assertEqual(Closure._meta.columns, {})
         self.assertEqual(Closure._meta.fields, {})
         self.assertFalse(Closure._meta.primary_key)
-        self.assertEqual(Closure._meta.extension_options, {
+        self.assertEqual(Closure._meta.options, {
             'idcolumn': 'id',
             'parentcolumn': 'parent_id',
             'tablename': 'category',
@@ -729,7 +729,7 @@ class TestTransitiveClosure(BaseTestCase):
         self.assertEqual(Closure._meta.columns, {})
         self.assertEqual(Closure._meta.fields, {})
         self.assertFalse(Closure._meta.primary_key)
-        self.assertEqual(Closure._meta.extension_options, {
+        self.assertEqual(Closure._meta.options, {
             'idcolumn': 'pk',
             'parentcolumn': 'ref_id',
             'tablename': 'alt',

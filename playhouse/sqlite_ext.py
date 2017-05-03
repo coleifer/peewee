@@ -410,7 +410,7 @@ def ClosureTable(model_class, foreign_key=None, referencing_class=None,
 
     class Meta:
         database = referencing_class._meta.database
-        extension_options = {
+        options = {
             'tablename': referencing_class._meta.table_name,
             'idcolumn': referencing_key.column_name,
             'parentcolumn': foreign_key.column_name}
