@@ -28,8 +28,7 @@ from playhouse.sqlite_ext import SqliteExtDatabase
 
 
 class APSWDatabase(SqliteExtDatabase):
-    def __init__(self, database, timeout=None, **kwargs):
-        self.timeout = timeout
+    def __init__(self, database, **kwargs):
         self._modules = {}
         super(APSWDatabase, self).__init__(database, **kwargs)
 
@@ -39,8 +38,8 @@ class APSWDatabase(SqliteExtDatabase):
     def unregister_module(self, mod_name):
         del(self._modules[mod_name])
 
-    def _connect(self, database, **kwargs):
-        conn = apsw.Connection(database, **kwargs)
+    def _connect(self):
+        conn = apsw.Connection(self.database, **self.connect_params)
         if self.timeout is not None:
             conn.setbusytimeout(self.timeout)
         try:

@@ -13,6 +13,10 @@ from .schema import *
 from .sql import *
 from .transactions import *
 
+try:
+    from .apsw_ext import *
+except ImportError:
+    print('Unable to import APSW extension tests, skipping.')
 from .db_url import *
 from .hybrid import *
 from .migrations import *
@@ -25,7 +29,10 @@ from .pwiz_integration import *
 from .reflection import *
 from .shortcuts import *
 from .signals import *
-from .sqlite import *
+try:
+    from .sqlite import *
+except ImportError:
+    print('Unable to import sqlite extension tests, skipping.')
 
 
 if __name__ == '__main__':
