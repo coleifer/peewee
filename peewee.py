@@ -3838,9 +3838,12 @@ class ModelBase(type):
                     meta_options[k] = base_meta.__dict__[k]
 
             for (k, v) in b.__dict__.items():
-                if (k not in attrs) and isinstance(v, FieldAccessor) and \
-                   (not v.field.primary_key):
+                if k in attrs: continue
+
+                if isinstance(v, FieldAccessor) and not v.field.primary_key:
                     attrs[k] = deepcopy(v.field)
+                elif isinstance(v, Field) and not v.primary_key:
+                    attrs[k] = deepcopy(v)  # XXX: keep?
 
         sopts = meta_options.pop('schema_options', None) or {}
         Meta = meta_options.get('model_metadata_class', Metadata)

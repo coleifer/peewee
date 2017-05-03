@@ -329,23 +329,29 @@ class FTSModel(BaseFTSModel):
             explicit_ordering)
 
 
-def ClosureTable(model, foreign_key=None):
+def ClosureTable(model_class, foreign_key=None, referencing_class=None,
+                 referencing_key=None):
     """Model factory for the transitive closure extension."""
+    if referencing_class is None:
+        referencing_class = model_class
+
     if foreign_key is None:
-        for field in model._meta.refs:
-            if field.rel_model is model:
-                foreign_key = field
+        for field_obj in model_class._meta.refs:
+            if field_obj.rel_model is model_class:
+                foreign_key = field_obj
                 break
         else:
             raise ValueError('Unable to find self-referential foreign key.')
 
-    primary_key = model._meta.primary_key
+    source_key = model_class._meta.primary_key
+    if referencing_key is None:
+        referencing_key = source_key
 
     class BaseClosureTable(VirtualModel):
         depth = VirtualField(IntegerField)
         id = VirtualField(IntegerField)
-        idcolumn = VirtualField(IntegerField)
-        parentcolumn = VirtualField(IntegerField)
+        idcolumn = VirtualField(TextField)
+        parentcolumn = VirtualField(TextField)
         root = VirtualField(IntegerField)
         tablename = VirtualField(TextField)
 
@@ -354,9 +360,9 @@ def ClosureTable(model, foreign_key=None):
 
         @classmethod
         def descendants(cls, node, depth=None, include_node=False):
-            query = (model
-                     .select(model, cls.depth.alias('depth'))
-                     .join(cls, on=(primary_key == cls.id))
+            query = (model_class
+                     .select(model_class, cls.depth.alias('depth'))
+                     .join(cls, on=(source_key == cls.id))
                      .where(cls.root == node)
                      .objects())
             if depth is not None:
@@ -367,9 +373,9 @@ def ClosureTable(model, foreign_key=None):
 
         @classmethod
         def ancestors(cls, node, depth=None, include_node=False):
-            query = (model
-                     .select(model, cls.depth.alias('depth'))
-                     .join(cls, on=(primary_key == cls.root))
+            query = (model_class
+                     .select(model_class, cls.depth.alias('depth'))
+                     .join(cls, on=(source_key == cls.root))
                      .where(cls.id == node)
                      .objects())
             if depth:
@@ -380,21 +386,37 @@ def ClosureTable(model, foreign_key=None):
 
         @classmethod
         def siblings(cls, node, include_node=False):
-            fk_value = node._data.get(foreign_key.name)
-            query = model.select().where(foreign_key == fk_value)
+            if referencing_class is model_class:
+                # self-join
+                fk_value = node.__data__.get(foreign_key.name)
+                query = model_class.select().where(foreign_key == fk_value)
+            else:
+                # siblings as given in reference_class
+                siblings = (referencing_class
+                            .select(referencing_key)
+                            .join(cls, on=(foreign_key == cls.root))
+                            .where((cls.id == node) & (cls.depth == 1)))
+
+                # the according models
+                query = (model_class
+                         .select()
+                         .where(source_key << siblings)
+                         .objects())
+
             if not include_node:
-                query = query.where(primary_key != node)
+                query = query.where(source_key != node)
+
             return query
 
     class Meta:
-        database = model._meta.database
+        database = referencing_class._meta.database
         extension_options = {
-            'tablename': model._meta.table_name,
-            'idcolumn': model._meta.primary_key.column_name,
+            'tablename': referencing_class._meta.table_name,
+            'idcolumn': referencing_key.column_name,
             'parentcolumn': foreign_key.column_name}
         primary_key = False
 
-    name = '%sClosure' % model.__name__
+    name = '%sClosure' % model_class.__name__
     return type(name, (BaseClosureTable,), {'Meta': Meta})
 
 
