@@ -17,8 +17,9 @@ FTS_VERSION = 4 if sqlite3.sqlite_version_info[:3] >= (3, 7, 4) else 3
 
 
 class RowIDField(VirtualField):
+    auto_increment = True
     column_name = name = required_name = 'rowid'
-    field_class = IntegerField
+    field_class = AutoField
 
     def __init__(self, *args, **kwargs):
         kwargs['primary_key'] = True
@@ -191,6 +192,10 @@ class BaseFTSModel(VirtualModel):
         if isinstance(content, basestring) and content == '':
             # Special-case content-less full-text search tables.
             options['content'] = "''"
+        elif isinstance(content, Field):
+            # Special-case to ensure fields are fully-qualified.
+            options['content'] = Entity(content.model._meta.table_name,
+                                        content.column_name)
         return options
 
 
@@ -242,21 +247,21 @@ class FTSModel(BaseFTSModel):
         """
         Generate a `MATCH` expression appropriate for searching this table.
         """
-        return match(cls, term)
+        return match(cls._meta.entity, term)
 
     @classmethod
     def rank(cls, *weights):
-        matchinfo = fn.matchinfo(cls, FTS3_MATCHINFO)
+        matchinfo = fn.matchinfo(cls._meta.entity, FTS3_MATCHINFO)
         return fn.fts_rank(matchinfo, *weights)
 
     @classmethod
     def bm25(cls, *weights):
-        match_info = fn.matchinfo(cls, FTS4_MATCHINFO)
+        match_info = fn.matchinfo(cls._meta.entity, FTS4_MATCHINFO)
         return fn.fts_bm25(match_info, *weights)
 
     @classmethod
     def lucene(cls, *weights):
-        match_info = fn.matchinfo(cls, FTS4_MATCHINFO)
+        match_info = fn.matchinfo(cls._meta.entity, FTS4_MATCHINFO)
         return fn.fts_lucene(match_info, *weights)
 
     @classmethod
@@ -452,7 +457,7 @@ class SqliteExtDatabase(SqliteDatabase):
         name = name or fn.__name__
         def _collation(*args):
             expressions = args + (SQL('collate %s' % name),)
-            return Clause(*expressions)
+            return NodeList(expressions)
         fn.collation = _collation
         self._collations[name] = fn
         if not self.is_closed():

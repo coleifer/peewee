@@ -170,12 +170,12 @@ SCOPE_SOURCE = 2
 # Scope used for UPDATE, INSERT or DELETE queries, where instead of referencing
 # a source by an alias, we refer to it directly. Similarly, since there is a
 # single table, columns do not need to be referenced by dotted-path.
-SCOPE_VALUES = 3
+SCOPE_VALUES = 4
 
 # Scope used when generating the contents of a common-table-expression. Used
 # after a WITH statement, when generating the definition for a CTE (as opposed
 # to merely a reference to one).
-SCOPE_CTE = 4
+SCOPE_CTE = 8
 
 # Scope used when generating SQL for a column. Ensures that the column is
 # rendered with it's correct alias. Was needed because when referencing the
@@ -183,7 +183,7 @@ SCOPE_CTE = 4
 # as the "source" of the column (instead of the query's alias + . + column).
 # This scope allows us to avoid rendering the full query when we only need the
 # alias.
-SCOPE_COLUMN = 5
+SCOPE_COLUMN = 16
 
 
 # Helper functions that are used in various parts of the codebase.
@@ -2764,6 +2764,7 @@ class Field(ColumnBase):
     _field_counter = 0
     _order = 0
     accessor_class = FieldAccessor
+    auto_increment = False
     field_type = 'DEFAULT'
     passthrough = False
 
@@ -2867,6 +2868,7 @@ class SmallIntegerField(IntegerField):
 
 
 class AutoField(IntegerField):
+    auto_increment = True
     field_type = 'AUTO'
 
     def __init__(self, *args, **kwargs):
@@ -3684,6 +3686,10 @@ class Metadata(object):
     def table(self):
         self._table = None
 
+    @property
+    def entity(self):
+        return Entity(self.table_name)
+
     def _update_sorted_fields(self):
         self.sorted_fields = list(self._sorted_field_list)
         self.sorted_field_names = [f.name for f in self.sorted_fields]
@@ -3753,7 +3759,7 @@ class Metadata(object):
         self.add_field(name, field)
         self.primary_key = field
         self.auto_increment = (
-            isinstance(field, AutoField) or
+            field.auto_increment or
             bool(field.sequence))
 
     def get_primary_keys(self):

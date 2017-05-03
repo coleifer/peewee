@@ -17,7 +17,10 @@ from .db_url import *
 from .hybrid import *
 from .migrations import *
 from .pool import *
-from .postgres import *
+try:
+    from .postgres import *
+except ImportError:
+    print('Unable to import postgres extension tests, skipping.')
 from .pwiz_integration import *
 from .reflection import *
 from .shortcuts import *

@@ -52,7 +52,7 @@ def rstrip(s, n):
     return s.rstrip(n)
 
 database.register_aggregate(WeightedAverage, 'weighted_avg', 1)
-database.register_aggregate(WeightedAverage, 'weighted_avg', 2)
+database.register_aggregate(WeightedAverage, 'weighted_avg2', 2)
 database.register_collation(collate_reverse)
 database.register_function(title_case)
 
@@ -61,26 +61,26 @@ class Post(TestModel):
     message = TextField()
 
 
-class ContentPost(Post, FTSModel):
+class ContentPost(FTSModel, Post):
     class Meta:
         options = {
             'content': Post,
             'tokenize': 'porter'}
 
 
-class ContentPostMessage(TestModel, FTSModel):
+class ContentPostMessage(FTSModel, TestModel):
     message = TextField()
     class Meta:
         options = {'tokenize': 'porter', 'content': Post.message}
 
 
-class Document(TestModel, FTSModel):
+class Document(FTSModel, TestModel):
     message = TextField()
     class Meta:
         options = {'tokenize': 'porter'}
 
 
-class MultiColumn(TestModel, FTSModel):
+class MultiColumn(FTSModel, TestModel):
     c1 = TextField()
     c2 = TextField()
     c3 = TextField()
@@ -97,6 +97,12 @@ class RowIDModel(TestModel):
 class APIData(TestModel):
     data = JSONField()
     value = TextField()
+
+
+class Values(TestModel):
+    klass = IntegerField()
+    value = FloatField()
+    weight = FloatField()
 
 
 def json_installed():
@@ -356,11 +362,343 @@ class TestFullTextSearch(ModelTestCase):
         self.assertEqual([obj.message for obj in query],
                          [self.messages[idx] for idx in indexes])
 
-    def test_model_options(self):
+    def test_fts_manual(self):
         messages = [Document.create(message=message)
                     for message in self.messages]
-        #query = (Document
-        #         .select()
-        #         .where(Document.match('believe'))
-        #         .order_by(Document.docid))
-        #self.assertMessages(query, [0, 3])
+        query = (Document
+                 .select()
+                 .where(Document.match('believe'))
+                 .order_by(Document.docid))
+        self.assertMessages(query, [0, 3])
+
+        query = Document.search('believe')
+        self.assertMessages(query, [3, 0])
+
+        query = Document.search('things', with_score=True)
+        self.assertEqual([(row.message, row.score) for row in query], [
+            (self.messages[4], -2. / 3),
+            (self.messages[2], -1. / 3)])
+
+    def test_fts_delete_row(self):
+        posts = [Post.create(message=msg) for msg in self.messages]
+        ContentPost.rebuild()
+        query = (ContentPost
+                 .select(ContentPost, ContentPost.rank().alias('score'))
+                 .where(ContentPost.match('believe'))
+                 .order_by(ContentPost.docid))
+        self.assertMessages(query, [0, 3])
+
+        query = (ContentPost
+                 .select(ContentPost.docid)
+                 .order_by(ContentPost.docid))
+        for content_post in query:
+            self.assertEqual(content_post.delete_instance(), 1)
+
+        for post in posts:
+            self.assertEqual(
+                (ContentPost
+                 .delete()
+                 .where(ContentPost.message == post.message)
+                 .execute()), 1)
+
+        # None of the deletes were processed since the table is managed.
+        self.assertEqual(ContentPost.select().count(), 5)
+
+        documents = [Document.create(message=message) for message in
+                     self.messages]
+        self.assertEqual(Document.select().count(), 5)
+
+        for document in documents:
+            self.assertEqual(
+                (Document
+                 .delete()
+                 .where(Document.message == document.message)
+                 .execute()), 1)
+
+        self.assertEqual(Document.select().count(), 0)
+
+    def _create_multi_column(self):
+        for c1, c2, c3, c4 in self.values:
+            MultiColumn.create(c1=c1, c2=c2, c3=c3, c4=c4)
+
+    def test_fts_multi_column(self):
+        def assertResults(term, expected):
+            results = [(x.c4, round(x.score, 2))
+                       for x in MultiColumn.search(term, with_score=True)]
+            self.assertEqual(results, expected)
+
+        self._create_multi_column()
+        assertResults('bbbbb', [
+            (2, -1.5),  # 1/2 + 1/1
+            (1, -0.5)])  # 1/2
+
+        # `ccccc` appears four times in `c1`, three times in `c2`.
+        assertResults('ccccc', [
+            (3, -.83),  # 2/4 + 1/3
+            (1, -.58), # 1/4 + 1/3
+            (4, -.33), # 1/3
+            (2, -.25), # 1/4
+        ])
+
+        # `zzzzz` appears three times in c3.
+        assertResults('zzzzz', [
+            (1, -.67),
+            (2, -.33),
+        ])
+
+        self.assertEqual(
+            [x.score for x in MultiColumn.search('ddddd', with_score=True)],
+            [-.25, -.25, -.25, -.25])
+
+    def test_bm25(self):
+        def assertResults(term, col_idx, expected):
+            query = MultiColumn.search_bm25(term, [1.0, 0, 0, 0], True)
+            self.assertEqual(
+                [(mc.c4, round(mc.score, 2)) for mc in query],
+                expected)
+
+        self._create_multi_column()
+        MultiColumn.create(c1='aaaaa fffff', c4=5)
+
+        assertResults('aaaaa', 1, [
+            (5, -0.39),
+            (1, -0.3),
+        ])
+        assertResults('fffff', 1, [
+            (5, -0.39),
+            (3, -0.3),
+        ])
+        assertResults('eeeee', 1, [
+            (2, -0.97),
+        ])
+
+        # No column specified, use the first text field.
+        query = MultiColumn.search_bm25('fffff', [1.0, 0, 0, 0], True)
+        self.assertEqual([(mc.c4, round(mc.score, 2)) for mc in query], [
+            (5, -0.39),
+            (3, -0.3),
+        ])
+
+        # Use helpers.
+        query = (MultiColumn
+                 .select(
+                     MultiColumn.c4,
+                     MultiColumn.bm25(1.0).alias('score'))
+                 .where(MultiColumn.match('aaaaa'))
+                 .order_by(SQL('score')))
+        self.assertEqual([(mc.c4, round(mc.score, 2)) for mc in query], [
+            (5, -0.39),
+            (1, -0.3),
+        ])
+
+    def test_bm25_alt_corpus(self):
+        for message in self.messages:
+            Document.create(message=message)
+
+        def assertResults(term, expected):
+            query = Document.search_bm25(term, with_score=True)
+            cleaned = [
+                (round(doc.score, 2), ' '.join(doc.message.split()[:2]))
+                for doc in query]
+            self.assertEqual(cleaned, expected)
+
+        assertResults('things', [
+            (-0.45, 'Faith has'),
+            (-0.36, 'Be faithful'),
+        ])
+
+        # Indeterminate order since all are 0.0. All phrases contain the word
+        # faith, so there is no meaningful score.
+        results = [round(x.score, 2)
+                   for x in Document.search_bm25('faith', with_score=True)]
+        self.assertEqual(results, [
+            -0.,
+            -0.,
+            -0.,
+            -0.,
+            -0.])
+
+    def _test_fts_auto(self, ModelClass):
+        posts = []
+        for message in self.messages:
+            posts.append(Post.create(message=message))
+
+        # Nothing matches, index is not built.
+        pq = ModelClass.select().where(ModelClass.match('faith'))
+        self.assertEqual(list(pq), [])
+
+        ModelClass.rebuild()
+        ModelClass.optimize()
+
+        # it will stem faithful -> faith b/c we use the porter tokenizer
+        pq = (ModelClass
+              .select()
+              .where(ModelClass.match('faith'))
+              .order_by(ModelClass.docid))
+        self.assertMessages(pq, range(len(self.messages)))
+
+        pq = (ModelClass
+              .select()
+              .where(ModelClass.match('believe'))
+              .order_by(ModelClass.docid))
+        self.assertMessages(pq, [0, 3])
+
+        pq = (ModelClass
+              .select()
+              .where(ModelClass.match('thin*'))
+              .order_by(ModelClass.docid))
+        self.assertMessages(pq, [2, 4])
+
+        pq = (ModelClass
+              .select()
+              .where(ModelClass.match('"it is"'))
+              .order_by(ModelClass.docid))
+        self.assertMessages(pq, [2, 3])
+
+        pq = ModelClass.search('things', with_score=True)
+        self.assertEqual([(x.message, x.score) for x in pq], [
+            (self.messages[4], -2.0 / 3),
+            (self.messages[2], -1.0 / 3),
+        ])
+
+        pq = (ModelClass
+              .select(ModelClass.rank())
+              .where(ModelClass.match('faithful'))
+              .tuples())
+        self.assertEqual([x[0] for x in pq], [-.2] * 5)
+
+        pq = (ModelClass
+              .search('faithful', with_score=True)
+              .dicts())
+        self.assertEqual([x['score'] for x in pq], [-.2] * 5)
+
+    def test_fts_auto_model(self):
+        self._test_fts_auto(ContentPost)
+
+    def test_fts_auto_field(self):
+        self._test_fts_auto(ContentPostMessage)
+
+
+class TestUserDefinedCallbacks(ModelTestCase):
+    database = database
+    requires = [Post, Values]
+
+    def test_custom_agg(self):
+        data = (
+            (1, 3.4, 1.0),
+            (1, 6.4, 2.3),
+            (1, 4.3, 0.9),
+            (2, 3.4, 1.4),
+            (3, 2.7, 1.1),
+            (3, 2.5, 1.1),
+        )
+        for klass, value, wt in data:
+            Values.create(klass=klass, value=value, weight=wt)
+
+        vq = (Values
+              .select(
+                  Values.klass,
+                  fn.weighted_avg(Values.value).alias('wtavg'),
+                  fn.avg(Values.value).alias('avg'))
+              .group_by(Values.klass))
+        q_data = [(v.klass, v.wtavg, v.avg) for v in vq]
+        self.assertEqual(q_data, [
+            (1, 4.7, 4.7),
+            (2, 3.4, 3.4),
+            (3, 2.6, 2.6)])
+
+        vq = (Values
+              .select(
+                  Values.klass,
+                  fn.weighted_avg2(Values.value, Values.weight).alias('wtavg'),
+                  fn.avg(Values.value).alias('avg'))
+              .group_by(Values.klass))
+        q_data = [(v.klass, str(v.wtavg)[:4], v.avg) for v in vq]
+        self.assertEqual(q_data, [
+            (1, '5.23', 4.7),
+            (2, '3.4', 3.4),
+            (3, '2.6', 2.6)])
+
+    def test_custom_collation(self):
+        for i in [1, 4, 3, 5, 2]:
+            Post.create(message='p%d' % i)
+
+        pq = Post.select().order_by(NodeList((Post.message, SQL('collate collate_reverse'))))
+        self.assertEqual([p.message for p in pq], ['p5', 'p4', 'p3', 'p2', 'p1'])
+
+    def test_collation_decorator(self):
+        posts = [Post.create(message=m) for m in ['aaa', 'Aab', 'ccc', 'Bba', 'BbB']]
+        pq = Post.select().order_by(collate_case_insensitive.collation(Post.message))
+        self.assertEqual([p.message for p in pq], [
+            'aaa',
+            'Aab',
+            'Bba',
+            'BbB',
+            'ccc'])
+
+    def test_custom_function(self):
+        p1 = Post.create(message='this is a test')
+        p2 = Post.create(message='another TEST')
+
+        sq = Post.select().where(fn.title_case(Post.message) == 'This Is A Test')
+        self.assertEqual(list(sq), [p1])
+
+        sq = Post.select(fn.title_case(Post.message)).tuples()
+        self.assertEqual([x[0] for x in sq], [
+            'This Is A Test',
+            'Another Test',
+        ])
+
+    def test_function_decorator(self):
+        [Post.create(message=m) for m in ['testing', 'chatting  ', '  foo']]
+        pq = Post.select(fn.rstrip(Post.message, 'ing')).order_by(Post.id)
+        self.assertEqual([x[0] for x in pq.tuples()], [
+            'test', 'chatting  ', '  foo'])
+
+        pq = Post.select(fn.rstrip(Post.message, ' ')).order_by(Post.id)
+        self.assertEqual([x[0] for x in pq.tuples()], [
+            'testing', 'chatting', '  foo'])
+
+
+class TestRowIDField(ModelTestCase):
+    database = database
+    requires = [RowIDModel]
+
+    def test_model_meta(self):
+        self.assertEqual(RowIDModel._meta.sorted_field_names, ['data'])
+        self.assertEqual(RowIDModel._meta.primary_key.name, 'rowid')
+        self.assertTrue(RowIDModel._meta.auto_increment)
+
+    def test_rowid_field(self):
+        r1 = RowIDModel.create(data=10)
+        self.assertEqual(r1.rowid, 1)
+        self.assertEqual(r1.data, 10)
+
+        r2 = RowIDModel.create(data=20)
+        self.assertEqual(r2.rowid, 2)
+        self.assertEqual(r2.data, 20)
+
+        query = RowIDModel.select().where(RowIDModel.rowid == 2)
+        self.assertSQL(query, (
+            'SELECT "t1"."data" '
+            'FROM "rowidmodel" AS "t1" '
+            'WHERE ("t1"."rowid" = ?)'), [2])
+        r_db = query.get()
+        self.assertEqual(r_db.rowid, None)
+        self.assertEqual(r_db.data, 20)
+
+        r_db2 = query.columns(RowIDModel.rowid, RowIDModel.data).get()
+        self.assertEqual(r_db2.rowid, 2)
+        self.assertEqual(r_db2.data, 20)
+
+    def test_insert_with_rowid(self):
+        RowIDModel.insert({RowIDModel.rowid: 5, RowIDModel.data: 1}).execute()
+        self.assertEqual(5, RowIDModel.select(RowIDModel.rowid).first().rowid)
+
+    def test_insert_many_with_rowid_without_field_validation(self):
+        RowIDModel.insert_many([{RowIDModel.rowid: 5, RowIDModel.data: 1}]).execute()
+        self.assertEqual(5, RowIDModel.select(RowIDModel.rowid).first().rowid)
+
+    def test_insert_many_with_rowid_with_field_validation(self):
+        RowIDModel.insert_many([{RowIDModel.rowid: 5, RowIDModel.data: 1}]).execute()
+        self.assertEqual(5, RowIDModel.select(RowIDModel.rowid).first().rowid)
