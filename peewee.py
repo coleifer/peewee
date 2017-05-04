@@ -4159,6 +4159,10 @@ class Model(with_metaclass(ModelBase, Node)):
 
     @classmethod
     def create_table(cls, safe=True, **options):
+        if 'fail_silently' in kwargs:
+            __deprecated__('"fail_silently" has been deprecated in favor of '
+                           '"safe" for the create_table() method.')
+            safe = kwargs.pop('fail_silently')
         cls._schema.create_all(safe, **options)
 
     @classmethod
