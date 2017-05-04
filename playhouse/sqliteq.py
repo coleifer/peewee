@@ -239,15 +239,15 @@ class SqliteQueueDatabase(SqliteExtDatabase):
     def queue_size(self):
         return self._write_queue.qsize()
 
-    def execute_sql(self, sql, params=None, require_commit=True, timeout=None):
-        if not require_commit:
-            return self._execute(sql, params, require_commit=require_commit)
+    def execute_sql(self, sql, params=None, commit=True, timeout=None):
+        if not commit or sql.lower().startswith('select'):
+            return self._execute(sql, params, commit=commit)
 
         cursor = AsyncCursor(
             event=self._thread_helper.event(),
             sql=sql,
             params=params,
-            commit=require_commit,
+            commit=commit,
             timeout=self._results_timeout if timeout is None else timeout)
         self._write_queue.put(cursor)
         return cursor

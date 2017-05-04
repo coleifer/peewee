@@ -22,8 +22,6 @@ try:
 except ImportError:
     TableFunction = None
 
-from peewee import binary_construct
-from peewee import unicode_type
 try:
     from playhouse._speedups import format_date_time_sqlite
 except ImportError:
@@ -194,7 +192,7 @@ def file_read(filename):
 if sys.version_info[0] == 2:
     @udf(HELPER)
     def gzip(data, compression=9):
-        return binary_construct(zlib.compress(data, compression))
+        return buffer(zlib.compress(data, compression))
 
     @udf(HELPER)
     def gunzip(data):
@@ -202,7 +200,7 @@ if sys.version_info[0] == 2:
 else:
     @udf(HELPER)
     def gzip(data, compression=9):
-        return zlib.compress(binary_construct(data), compression)
+        return zlib.compress(buffer(data), compression)
 
     @udf(HELPER)
     def gunzip(data):
@@ -280,7 +278,7 @@ def substr_count(haystack, needle):
 
 @udf(STRING)
 def strip_chars(haystack, chars):
-    return unicode_type(haystack).strip(chars)
+    return haystack.strip(chars)
 
 def _hash(constructor, *args):
     hash_obj = constructor()
