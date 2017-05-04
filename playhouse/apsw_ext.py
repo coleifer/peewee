@@ -18,6 +18,7 @@ Here are just a few reasons to use APSW, taken from the documentation:
 """
 import apsw
 from peewee import *
+from peewee import __exception_wrapper__
 from peewee import BooleanField as _BooleanField
 from peewee import DateField as _DateField
 from peewee import DateTimeField as _DateTimeField
@@ -85,9 +86,8 @@ class APSWDatabase(SqliteExtDatabase):
             conn.enableloadextension(True)
             conn.loadextension(extension)
 
-    def last_insert_id(self, cursor, model):
-        if model._meta.auto_increment:
-            return cursor.getconnection().last_insert_rowid()
+    def last_insert_id(self, cursor, query_type=None):
+        return cursor.getconnection().last_insert_rowid()
 
     def rows_affected(self, cursor):
         return cursor.getconnection().changes()
@@ -100,6 +100,12 @@ class APSWDatabase(SqliteExtDatabase):
 
     def rollback(self):
         self.cursor().execute('rollback;')
+
+    def execute_sql(self, sql, params=None, commit=True):
+        with __exception_wrapper__:
+            cursor = self.cursor()
+            cursor.execute(sql, params or ())
+        return cursor
 
 
 def nh(s, v):
