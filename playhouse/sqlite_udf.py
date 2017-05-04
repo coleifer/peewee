@@ -22,14 +22,19 @@ try:
 except ImportError:
     TableFunction = None
 
-try:
-    from playhouse._speedups import format_date_time_sqlite
-except ImportError:
-    from peewee import format_date_time
-    from peewee import SQLITE_DATETIME_FORMATS
 
-    def format_date_time_sqlite(date_value):
-        return format_date_time(date_value, SQLITE_DATETIME_FORMATS)
+SQLITE_DATETIME_FORMATS = (
+    '%Y-%m-%d %H:%M:%S',
+    '%Y-%m-%d %H:%M:%S.%f',
+    '%Y-%m-%d',
+    '%H:%M:%S',
+    '%H:%M:%S.%f',
+    '%H:%M')
+
+from peewee import format_date_time
+
+def format_date_time_sqlite(date_value):
+    return format_date_time(date_value, SQLITE_DATETIME_FORMATS)
 
 try:
     from playhouse import _sqlite_udf as cython_udf

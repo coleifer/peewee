@@ -14,7 +14,6 @@ setup_kwargs = {}
 cython_min_version = '0.22.1'
 ext_modules = []
 
-"""
 try:
     from Cython.Distutils import build_ext
     from Cython import __version__ as cython_version
@@ -38,28 +37,28 @@ else:
     else:
         cython_installed = True
 
-speedups_ext_module = Extension(
-    'playhouse._speedups',
-    ['playhouse/_speedups.pyx'])
+#speedups_ext_module = Extension(
+#    'playhouse._speedups',
+#    ['playhouse/_speedups.pyx'])
 sqlite_udf_module = Extension(
     'playhouse._sqlite_udf',
     ['playhouse/_sqlite_udf.pyx'])
-sqlite_ext_module = Extension(
-    'playhouse._sqlite_ext',
-    ['playhouse/_sqlite_ext.pyx'])
+#sqlite_ext_module = Extension(
+#    'playhouse._sqlite_ext',
+#    ['playhouse/_sqlite_ext.pyx'])
 
 
 if cython_installed:
     ext_modules.extend([
-        speedups_ext_module,
+        #speedups_ext_module,
         sqlite_udf_module,
-        sqlite_ext_module])
+        #sqlite_ext_module,
+    ])
 
 if ext_modules:
     setup_kwargs.update(
         cmdclass={'build_ext': build_ext},
         ext_modules=ext_modules)
-"""
 
 setup(
     name='peewee',
