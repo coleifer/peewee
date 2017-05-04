@@ -14,20 +14,21 @@ from peewee import *
 logger = logging.getLogger('peewee')
 
 
-def db_loader(engine, name='peewee_test', **params):
-    engine_aliases = {
-        SqliteDatabase: ['sqlite', 'sqlite3'],
-        MySQLDatabase: ['mysql'],
-        PostgresqlDatabase: ['postgres', 'postgresql'],
-    }
-    engine_map = dict((alias, db) for db, aliases in engine_aliases.items()
-                      for alias in aliases)
-    if engine.lower() not in engine_map:
-        raise Exception('Unsupported engine: %s.' % engine)
-    db_class = engine_map[engine.lower()]
-    if db_class is SqliteDatabase and not name.endswith('.db'):
+def db_loader(engine, name='peewee_test', db_class=None, **params):
+    if db_class is None:
+        engine_aliases = {
+            SqliteDatabase: ['sqlite', 'sqlite3'],
+            MySQLDatabase: ['mysql'],
+            PostgresqlDatabase: ['postgres', 'postgresql'],
+        }
+        engine_map = dict((alias, db) for db, aliases in engine_aliases.items()
+                          for alias in aliases)
+        if engine.lower() not in engine_map:
+            raise Exception('Unsupported engine: %s.' % engine)
+        db_class = engine_map[engine.lower()]
+    if issubclass(db_class, SqliteDatabase) and not name.endswith('.db'):
         name = '%s.db' % name if name != ':memory:' else name
-    return engine_map[engine](name, **params)
+    return db_class(name, **params)
 
 
 def get_in_memory_db(**params):
