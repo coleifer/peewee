@@ -432,6 +432,7 @@ class TestScalarFunctions(BaseTestUDF):
 
 @requires_vtfunc
 class TestVirtualTableFunctions(ModelTestCase):
+    database = database
     requires = MODELS
 
     def sqln(self, sql, *p):
