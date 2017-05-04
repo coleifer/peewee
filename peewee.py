@@ -2084,9 +2084,9 @@ class Database(_callable_context_manager):
     def sequence_exists(self, seq):
         raise NotImplementedError
 
-    def create_tables(self, models, **kwargs):
+    def create_tables(self, models, **options):
         for model in sort_models(models):
-            model._schema.create_all(**kwargs)
+            model._schema.create_all(**options)
 
     def drop_tables(self, models, **kwargs):
         for model in reversed(sort_models(models)):
@@ -4158,8 +4158,8 @@ class Model(with_metaclass(ModelBase, Node)):
         return is_different
 
     @classmethod
-    def create_table(cls, safe=True):
-        cls._schema.create_all(safe)
+    def create_table(cls, safe=True, **options):
+        cls._schema.create_all(safe, **options)
 
     @classmethod
     def drop_table(cls, safe=True):

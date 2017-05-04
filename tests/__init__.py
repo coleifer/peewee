@@ -30,9 +30,15 @@ from .reflection import *
 from .shortcuts import *
 from .signals import *
 try:
+    from .sqlcipher_ext import *
+except ImportError:
+    print('Unable to import SQLCipher extension tests, skipping.')
+try:
     from .sqlite import *
 except ImportError:
     print('Unable to import sqlite extension tests, skipping.')
+from .sqliteq import *
+from .sqlite_udf import *
 
 
 if __name__ == '__main__':

@@ -69,9 +69,10 @@ sqlcipher.register_adapter(datetime.time, str)
 
 
 class _SqlCipherDatabase(object):
-    def _connect(self, database, **kwargs):
-        passphrase = kwargs.pop('passphrase', '')
-        kdf_iter = kwargs.pop('kdf_iter', 64000)
+    def _connect(self):
+        params = dict(self.connect_params)
+        passphrase = params.pop('passphrase', '')
+        kdf_iter = params.pop('kdf_iter', 64000)
 
         if len(passphrase) < 8:
             raise ImproperlyConfigured(
@@ -82,12 +83,18 @@ class _SqlCipherDatabase(object):
             raise ImproperlyConfigured(
                 'SqlCipherDatabase kdf_iter should be at least 10000.')
 
-        conn = sqlcipher.connect(database, **kwargs)
-        self._add_conn_hooks(conn)
-        conn.execute(
-            'PRAGMA key=\'{0}\''.format(passphrase.replace("'", "''")))
-        conn.execute('PRAGMA kdf_iter={0:d}'.format(kdf_iter))
-        return conn
+        conn = sqlcipher.connect(self.database, **params)
+        conn.isolation_level = None
+        try:
+            self._add_conn_hooks(conn)
+            conn.execute(
+                'PRAGMA key=\'{0}\''.format(passphrase.replace("'", "''")))
+            conn.execute('PRAGMA kdf_iter={0:d}'.format(kdf_iter))
+        except:
+            conn.close()
+            raise
+        else:
+            return conn
 
 
 class SqlCipherDatabase(_SqlCipherDatabase, SqliteDatabase):
@@ -95,20 +102,4 @@ class SqlCipherDatabase(_SqlCipherDatabase, SqliteDatabase):
 
 
 class SqlCipherExtDatabase(_SqlCipherDatabase, SqliteExtDatabase):
-    def __init__(self, *args, **kwargs):
-        kwargs['c_extensions'] = False
-        super(SqlCipherExtDatabase, self).__init__(*args, **kwargs)
-
-    def _connect(self, *args, **kwargs):
-        conn = super(SqlCipherExtDatabase, self)._connect(*args, **kwargs)
-
-        self._load_aggregates(conn)
-        self._load_collations(conn)
-        self._load_functions(conn)
-        if self._row_factory:
-            conn.row_factory = self._row_factory
-        if self._extensions:
-            conn.enable_load_extension(True)
-            for extension in self._extensions:
-                conn.load_extension(extension)
-        return conn
+    pass
