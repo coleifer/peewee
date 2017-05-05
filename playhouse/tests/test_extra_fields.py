@@ -81,7 +81,7 @@ class TestCompressedField(ModelTestCase):
 class TestAESEncryptedField(ModelTestCase):
     def setUp(self):
         class EncryptedModel(BaseModel):
-            data = AESEncryptedField(key='testing')
+            data = AESEncryptedField(key=b'testing')
 
         self.EncryptedModel = EncryptedModel
         self.requires = [EncryptedModel]
@@ -90,7 +90,7 @@ class TestAESEncryptedField(ModelTestCase):
     def test_encrypt_decrypt(self):
         field = self.EncryptedModel.data
 
-        keys = ['testing', 'abcdefghijklmnop', 'a' * 31, 'a' * 32]
+        keys = [b'testing', b'abcdefghijklmnop', b'a' * 31, b'a' * 32]
         for key in keys:
             field.key = key
             for i in range(128):
@@ -120,13 +120,13 @@ class TestAESEncryptedField(ModelTestCase):
         else:
             self.assertEqual(decrypted, convert_to_str(test_str))
 
-        EM.data.key = 'testingX'
+        EM.data.key = b'testingX'
         em_db_2 = EM.get(EM.id == em.id)
         self.assertNotEqual(em_db_2.data, test_str)
 
         # Because we pad the key with spaces until it is 32 bytes long, a
         # trailing space looks like the same key we used to encrypt with.
-        EM.data.key = 'testing  '
+        EM.data.key = b'testing  '
         em_db_3 = EM.get(EM.id == em.id)
         self.assertEqual(em_db_3.data, convert_to_str(test_str))
 
