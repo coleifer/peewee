@@ -4,10 +4,6 @@ import sys
 from peewee import *
 from playhouse.fields import *
 try:
-    from playhouse.fields import AESEncryptedField
-except ImportError:
-    AESEncryptedField = None
-try:
     from playhouse.fields import PasswordField
 except ImportError:
     PasswordField = None
@@ -75,60 +71,6 @@ class TestCompressedField(ModelTestCase):
         cm = CompressedModel.create(data=data)
         cm_db = CompressedModel.get(CompressedModel.id == cm.id)
         self.assertEqual(cm_db.data, data)
-
-
-@skip_if(lambda: AESEncryptedField is None)
-class TestAESEncryptedField(ModelTestCase):
-    def setUp(self):
-        class EncryptedModel(BaseModel):
-            data = AESEncryptedField(key='testing')
-
-        self.EncryptedModel = EncryptedModel
-        self.requires = [EncryptedModel]
-        super(TestAESEncryptedField, self).setUp()
-
-    def test_encrypt_decrypt(self):
-        field = self.EncryptedModel.data
-
-        keys = ['testing', 'abcdefghijklmnop', 'a' * 31, 'a' * 32]
-        for key in keys:
-            field.key = key
-            for i in range(128):
-                data = ''.join(chr(65 + (j % 26)) for j in range(i))
-                encrypted = field.encrypt(data)
-                decrypted = field.decrypt(encrypted)
-                self.assertEqual(len(decrypted), i)
-                if PY2:
-                    self.assertEqual(decrypted, data)
-                else:
-                    self.assertEqual(decrypted, convert_to_str(data))
-
-    def test_encrypted_field(self):
-        EM = self.EncryptedModel
-        test_str = 'abcdefghij'
-        em = EM.create(data=test_str)
-        em_db = EM.get(EM.id == em.id)
-        self.assertEqual(em_db.data, convert_to_str(test_str))
-
-        curs = db.execute_sql('SELECT data FROM %s WHERE id = %s' %
-                              (EM._meta.db_table, em.id))
-        raw_data = curs.fetchone()[0]
-        self.assertNotEqual(raw_data, test_str)
-        decrypted = EM.data.decrypt(raw_data)
-        if PY2:
-            self.assertEqual(decrypted, test_str)
-        else:
-            self.assertEqual(decrypted, convert_to_str(test_str))
-
-        EM.data.key = 'testingX'
-        em_db_2 = EM.get(EM.id == em.id)
-        self.assertNotEqual(em_db_2.data, test_str)
-
-        # Because we pad the key with spaces until it is 32 bytes long, a
-        # trailing space looks like the same key we used to encrypt with.
-        EM.data.key = 'testing  '
-        em_db_3 = EM.get(EM.id == em.id)
-        self.assertEqual(em_db_3.data, convert_to_str(test_str))
 
 
 @skip_if(lambda: PasswordField is None)

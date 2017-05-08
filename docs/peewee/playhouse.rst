@@ -2782,14 +2782,6 @@ These fields can be found in the ``playhouse.fields`` module.
 
     .. note:: This field requires `bcrypt <https://github.com/pyca/bcrypt/>`_, which can be installed by running ``pip install bcrypt``.
 
-.. py:class:: AESEncryptedField(key[, **kwargs])
-
-    ``AESEncryptedField`` encrypts its contents before storing them in the database.
-
-    :param str key: Encryption key.
-
-    .. note:: This field requires `pycrypto <https://www.dlitz.net/software/pycrypto/>`_, which can be installed by running ``pip install pycrypto``.
-
 
 .. py:class:: PickledField([**kwargs])
 
