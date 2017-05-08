@@ -150,6 +150,8 @@ FIELD = attrdict(
     UUID='TEXT',
     VARCHAR='VARCHAR')
 
+#: Join helpers (for convenience) -- all join types are supported, this object
+#: is just to help avoid introducing errors by using strings everywhere.
 JOIN = attrdict(
     INNER='INNER',
     LEFT_OUTER='LEFT OUTER',
@@ -349,7 +351,24 @@ class AliasManager(object):
 class State(namedtuple('_State', ('scope', 'parentheses', 'subquery',
                                   'settings'))):
     """
-    Lightweight object for representing the rules applied at a given scope.
+    Lightweight object for representing the state at a given scope. During SQL
+    generation, each object visited by the :py:class:`Context` can inspect the
+    state. The :py:class:`State` class allows Peewee to do things like:
+
+    * Use a common interface for field types or SQL expressions, but use
+      vendor-specific data-types or operators.
+    * Compile a :py:class:`Column` instance into a fully-qualified attribute,
+      as a named alias, etc, depending on the value of the ``scope``.
+    * Ensure parentheses are used appropriately.
+
+    :param int scope: The scope rules to be applied while the state is active.
+    :param bool parentheses: Wrap the contained SQL in parentheses.
+    :param bool subquery: Whether the current state is a child of an outer
+        query.
+    :param dict kwargs: Arbitrary settings which should be applied in the
+        current state.
+
+    #
     """
     def __new__(cls, scope=SCOPE_NORMAL, parentheses=False, subquery=False,
                 **kwargs):
