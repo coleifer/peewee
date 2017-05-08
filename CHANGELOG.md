@@ -5,6 +5,22 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.10.0
+
+The main change in this release is the removal of the `AESEncryptedField`,
+which was included as part of the `playhouse.fields` extension. It was brought
+to my attention that there was some serious potential for security
+vulnerabilities. Rather than give users a false sense of security, I've decided
+the best course of action is to remove the field.
+
+* Remove the `playhouse.fields.AESEncryptedField` over security concerns
+described in ticket #1264.
+* Correctly resolve explicit table dependencies when creating tables, refs
+  #1076. Thanks @maaaks.
+* Implement not equals comparison for `CompositeKey`.
+
+[View commits](https://github.com/coleifer/peewee/compare/2.9.2...2.10.0)
+
 ## 2.9.2
 
 * Fixed significant bug in the `savepoint` commit/rollback implementation. Many
