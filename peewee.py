@@ -129,6 +129,21 @@ OP = attrdict(
     REGEXP='REGEXP',
     CONCAT='||')
 
+# To support "django-style" double-underscore filters, create a mapping between
+# operation name and operation code, e.g. "__eq" == OP.EQ.
+DJANGO_MAP = attrdict({
+    'eq': OP.EQ,
+    'lt': OP.LT,
+    'lte': OP.LTE,
+    'gt': OP.GT,
+    'gte': OP.GTE,
+    'ne': OP.NE,
+    'in': OP.IN,
+    'is': OP.IS,
+    'like': OP.LIKE,
+    'ilike': OP.ILIKE,
+    'regexp': OP.REGEXP})
+
 #: Mapping of field type to the data-type supported by the database. Databases
 #: may override or add to this list.
 FIELD = attrdict(
@@ -1248,6 +1263,16 @@ def CommaNodeList(nodes):
 
 def EnclosedNodeList(nodes):
     return NodeList(nodes, ', ', True)
+
+
+class DQ(Node):
+    """A "django-style" filter expression, e.g. {'foo__eq': 'x'}."""
+    def __init__(self, **query):
+        super(DQ, self).__init__()
+        self.query = query
+
+    def clone(self):
+        return DQ(**self.query)
 
 Tuple = lambda *a: EnclosedNodeList(a)
 
@@ -4569,6 +4594,74 @@ class ModelSelect(BaseModelSelect, Select):
                                             self._returning, self.model)
         return ModelCursorWrapper(cursor, self.model, self._returning,
                                   self._from_list, self._joins)
+
+    def ensure_join(self, lm, rm, on=None, **join_kwargs):
+        join_ctx = self._join_ctx
+        for join in self._joins.get(lm, []):
+            if join.dest == rm:
+                return self
+        return self.switch(lm).join(rm, on=on, **join_kwargs).switch(join_ctx)
+
+    def convert_dict_to_node(self, qdict):
+        accum = []
+        joins = []
+        relationship = (ForeignKeyField, BackrefAccessor)
+        for key, value in sorted(qdict.items()):
+            curr = self.model_class
+            if '__' in key and key.rsplit('__', 1)[1] in DJANGO_MAP:
+                key, op = key.rsplit('__', 1)
+                op = DJANGO_MAP[op]
+            elif value is None:
+                op = OP.IS
+            else:
+                op = OP.EQ
+            for piece in key.split('__'):
+                model_attr = getattr(curr, piece)
+                if value is not None and isinstance(model_attr, relationship):
+                    curr = model_attr.rel_model
+                    joins.append(model_attr)
+            accum.append(Expression(model_attr, op, value))
+        return accum, joins
+
+    def filter(self, *args, **kwargs):
+        # normalize args and kwargs into a new expression
+        dq_node = Node()
+        if args:
+            dq_node &= reduce(operator.and_, [a.clone() for a in args])
+        if kwargs:
+            dq_node &= DQ(**kwargs)
+
+        # dq_node should now be an Expression, lhs = Node(), rhs = ...
+        q = deque([dq_node])
+        dq_joins = set()
+        while q:
+            curr = q.popleft()
+            if not isinstance(curr, Expression):
+                continue
+            for side, piece in (('lhs', curr.lhs), ('rhs', curr.rhs)):
+                if isinstance(piece, DQ):
+                    query, joins = self.convert_dict_to_node(piece.query)
+                    dq_joins.update(joins)
+                    expression = reduce(operator.and_, query)
+                    # Apply values from the DQ object.
+                    expression._negated = piece._negated
+                    expression._alias = piece._alias
+                    setattr(curr, side, expression)
+                else:
+                    q.append(piece)
+
+        dq_node = dq_node.rhs
+
+        query = self.clone()
+        for field in dq_joins:
+            if isinstance(field, ForeignKeyField):
+                lm, rm = field.model_class, field.rel_model
+                field_obj = field
+            elif isinstance(field, ReverseRelationDescriptor):
+                lm, rm = field.field.rel_model, field.rel_model
+                field_obj = field.field
+            query = query.ensure_join(lm, rm, field_obj)
+        return query.where(dq_node)
 
 
 class _ModelWriteQueryHelper(_ModelQueryHelper):
