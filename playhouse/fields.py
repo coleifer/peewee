@@ -27,12 +27,6 @@ except ImportError:
     zlib = None
 
 try:
-    from Crypto.Cipher import AES
-    from Crypto import Random
-except ImportError:
-    AES = Random = None
-
-try:
     from bcrypt import hashpw, gensalt
 except ImportError:
     hashpw = gensalt = None
@@ -306,43 +300,3 @@ class PickledField(BlobField):
             if isinstance(value, unicode_type):
                 value = value.encode('raw_unicode_escape')
             return pickle.loads(value)
-
-
-if AES and Random:
-    class AESEncryptedField(BlobField):
-        def __init__(self, key, *args, **kwargs):
-            self.key = key
-            super(AESEncryptedField, self).__init__(*args, **kwargs)
-
-        def get_cipher(self, key, iv):
-            if len(key) > 32:
-                raise ValueError('Key length cannot exceed 32 bytes.')
-            key = key + bytes(' ') * (32 - len(key))
-            return AES.new(key, AES.MODE_CFB, iv)
-
-        def encrypt(self, value):
-            iv = Random.get_random_bytes(AES.block_size)
-            cipher = self.get_cipher(self.key, iv)
-            return iv + cipher.encrypt(value)
-
-        def decrypt(self, value):
-            iv = value[:AES.block_size]
-            cipher = self.get_cipher(self.key, iv)
-            return cipher.decrypt(value[AES.block_size:])
-
-        if PY2:
-            def db_value(self, value):
-                if value is not None:
-                    return binary_construct(self.encrypt(value))
-
-            def python_value(self, value):
-                if value is not None:
-                    return self.decrypt(value)
-        else:
-            def db_value(self, value):
-                if value is not None:
-                    return self.encrypt(value)
-
-            def python_value(self, value):
-                if value is not None:
-                    return self.decrypt(value)
