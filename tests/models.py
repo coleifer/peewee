@@ -224,9 +224,10 @@ class TestModelAPIs(ModelTestCase):
             foo = DeferredForeignKey('Foo', backref='notes')
 
         class Foo(TestModel):
-            pass
+            note = ForeignKeyField(Note)
 
         self.assertTrue(Note.foo.rel_model is Foo)
+        self.assertTrue(Foo.note.rel_model is Note)
         f = Foo(id=1337)
         self.assertSQL(f.notes, (
             'SELECT "t1"."id", "t1"."foo_id" FROM "note" AS "t1" '

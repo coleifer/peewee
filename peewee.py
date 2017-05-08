@@ -101,6 +101,7 @@ class attrdict(dict):
 
 SENTINEL = object()
 
+#: Operations for use in SQL expressions.
 OP = attrdict(
     AND='AND',
     OR='OR',
@@ -128,6 +129,8 @@ OP = attrdict(
     REGEXP='REGEXP',
     CONCAT='||')
 
+#: Mapping of field type to the data-type supported by the database. Databases
+#: may override or add to this list.
 FIELD = attrdict(
     AUTO='INTEGER',
     BIGINT='BIGINT',
@@ -163,31 +166,32 @@ ROW = attrdict(
     CONSTRUCTOR=4,
     MODEL=5)
 
-# The default scope. Sources are referred to by alias, columns by dotted-path
-# from the source.
+#: The default scope. Sources are referred to by alias, columns by dotted-path
+#: from the source.
 SCOPE_NORMAL = 1
 
-# Scope used when defining sources, e.g. in the column list and FROM clause of
-# a SELECT query. This scope is used for defining the fully-qualified name of
-# the source and assigning an alias.
+#: Scope used when defining sources, e.g. in the column list and FROM clause of
+#: a SELECT query. This scope is used for defining the fully-qualified name of
+#: the source and assigning an alias.
 SCOPE_SOURCE = 2
 
-# Scope used for UPDATE, INSERT or DELETE queries, where instead of referencing
-# a source by an alias, we refer to it directly. Similarly, since there is a
-# single table, columns do not need to be referenced by dotted-path.
+#: Scope used for UPDATE, INSERT or DELETE queries, where instead of
+#: referencing a source by an alias, we refer to it directly. Similarly, since
+#: there is a single table, columns do not need to be referenced by
+#: dotted-path.
 SCOPE_VALUES = 4
 
-# Scope used when generating the contents of a common-table-expression. Used
-# after a WITH statement, when generating the definition for a CTE (as opposed
-# to merely a reference to one).
+#: Scope used when generating the contents of a common-table-expression. Used
+#: after a WITH statement, when generating the definition for a CTE (as opposed
+#: to merely a reference to one).
 SCOPE_CTE = 8
 
-# Scope used when generating SQL for a column. Ensures that the column is
-# rendered with it's correct alias. Was needed because when referencing the
-# inner projection of a sub-select, Peewee would render the full SELECT query
-# as the "source" of the column (instead of the query's alias + . + column).
-# This scope allows us to avoid rendering the full query when we only need the
-# alias.
+#: Scope used when generating SQL for a column. Ensures that the column is
+#: rendered with it's correct alias. Was needed because when referencing the
+#: inner projection of a sub-select, Peewee would render the full SELECT query
+#: as the "source" of the column (instead of the query's alias + . + column).
+#: This scope allows us to avoid rendering the full query when we only need the
+#: alias.
 SCOPE_COLUMN = 16
 
 
@@ -214,22 +218,58 @@ class _callable_context_manager(object):
 def is_model(obj):
     return isclass(obj) and issubclass(obj, Model)
 
-class cached_property(object):
-    __slots__ = ('fn',)
-
-    def __call__(self, fn):
-        self.fn = fn
-        return self
-
-    def __get__(self, instance, instance_type=None):
-        if instance is not None:
-            instance.__dict__[self.fn.__name__] = self.fn(instance)
-            return instance.__dict__[self.fn.__name__]
-        return self
-
 # SQL Generation.
 
 class AliasManager(object):
+    """
+    Manages the aliases assigned to :py:class:`Source` objects in SELECT
+    queries, so as to avoid ambiguous references when multiple sources are
+    used in a single query.
+
+    Suppose we are selecting columns from two sources that are joined. Both
+    sources we are selecting have an "id" column, so we need to tell the
+    database we want *both* "id" columns by using fully-qualified column
+    references:
+
+        query = (Tweet
+                 .select(Tweet.id, Tweet.message, Tweet.user,
+                         User.id, User.username)
+                 .join(User)
+                 .order_by(Tweet.timestamp.desc()))
+
+    This produces the following SQL:
+
+    .. code-block:: sql
+
+        SELECT "t1"."id", "t1"."message", "t1"."user_id",
+               "t2"."id", "t2"."username"
+        FROM "tweet" AS "t1"
+        INNER JOIN "users" AS "t2" ON ("t1"."user_id" = "t2"."id")
+        ORDER BY "t1"."timestamp" DESC
+
+    Another example: suppose we have a SELECT query that is selecting from the
+    UNION of two other SELECT queries. Something like this::
+
+        admins = User.select().where(User.is_admin == True)
+        editors = User.select().where(User.is_editor == True)
+        union = (admins | editors).alias('staff')
+        query = User.select(union.c.username).from_(union)
+
+    Because the User table is referenced three times, we want to make sure that
+    we don't create ambiguous references. The AliasManager ensures that the
+    above query will result in the following SQL:
+
+    .. code-block:: sql
+
+        SELECT "staff"."username"
+        FROM (
+            SELECT "t1"."username", "t1"."is_admin", "t1"."is_editor"
+            FROM "users" AS "t1" WHERE ("t1"."is_admin" = true)
+            UNION
+            SELECT "a1"."username", "a1"."is_admin", "a1"."is_editor"
+            FROM "users" AS "a1" WHERE ("a1"."is_editor" = true)
+        ) AS "staff"
+    """
     def __init__(self):
         self._mapping = []
         self._index = []
@@ -238,6 +278,23 @@ class AliasManager(object):
         self.push()
 
     def add(self, source):
+        """
+        Add a source to the AliasManager's internal registry at the current
+        scope. The alias will be automatically generated using the following
+        scheme (where each level of indentation refers to a new scope):
+
+        * t1
+        * t2
+            * a1
+            * a2
+                * b1
+            * a3
+        * t3
+
+        :param Source source: Make the manager aware of a new source. If the
+            source has already been added, the call is a no-op.
+        :rtype: AliasManager
+        """
         idx = self._current_index  # Obtain reference in local variable.
         if source in self._mapping[idx]:
             return
@@ -246,20 +303,45 @@ class AliasManager(object):
                                                self._index[idx])
 
     def get(self, source):
+        """
+        Return the alias for the source in the current scope. If the source
+        does not have an alias, it will be given the next available alias.
+
+        :param Source source: The source whose alias should be retrieved.
+        :return: The alias already assigned to the source, or the next
+            available alias.
+        :rtype: str
+        """
         self.add(source)
         return self._mapping[self._current_index][source]
 
     def set(self, source, alias):
+        """
+        Manually set the alias for the source at the current scope.
+
+        :param Source source: The source for which we set the alias.
+        :rtype: AliasManager
+        """
         self._mapping[self._current_index][source] = alias
         return self
 
     def push(self):
+        """
+        Push a new scope onto the stack.
+
+        :rtype: AliasManager
+        """
         self._mapping.append({})
         self._index.append(0)
         self._current_index = len(self._index) - 1
         return self
 
     def pop(self):
+        """
+        Pop scope from the stack.
+
+        :rtype: AliasManager
+        """
         self._current_index = 0
         return self
 
@@ -4424,6 +4506,10 @@ class ModelSelect(BaseModelSelect, Select):
             self._joins[src].append((dest, attr, constructor))
 
         return super(ModelSelect, self).join(dest, join_type, on)
+
+    @Node.copy
+    def join_from(self, src, dest, join_type='INNER', on=None, attr=None):
+        return self.join(dest, join_type, on, src, attr)
 
     def _generate_on_clause(self, src, dest, to_field=None, on=None):
         meta = src._meta
