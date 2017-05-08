@@ -17,7 +17,7 @@ Peewee is a simple and small ORM. It has few (but expressive) concepts, making i
   * `Encryption <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#sqlcipher-ext>`_
   * `and much, much more... <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html>`_
 
-.. image:: https://api.travis-ci.org/coleifer/peewee.png?branch=master
+.. image:: https://travis-ci.org/coleifer/peewee.svg?branch=master
   :target: https://travis-ci.org/coleifer/peewee
 
 New to peewee? Here is a list of documents you might find most helpful when getting
