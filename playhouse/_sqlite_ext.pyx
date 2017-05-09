@@ -41,31 +41,6 @@ cdef tuple validate_and_format_datetime(lookup, date_str):
             return (date_obj, lookup)
 
 
-cpdef peewee_date_part(lookup, date_str):
-    cdef:
-        tuple result = validate_and_format_datetime(lookup, date_str)
-
-    if result:
-        return getattr(result[0], result[1])
-
-
-cpdef peewee_date_trunc(lookup, date_str):
-    cdef:
-        tuple result = validate_and_format_datetime(lookup, date_str)
-
-    if result:
-        return result[0].strftime(SQLITE_DATE_TRUNC_MAPPING[result[1]])
-
-
-cpdef peewee_regexp(regex_str, value):
-    if value is None or regex_str is None:
-        return
-
-    if value and re.search(regex_str, value, re.I):
-        return True
-    return False
-
-
 def peewee_rank(py_match_info, *raw_weights):
     cdef:
         unsigned int *match_info
