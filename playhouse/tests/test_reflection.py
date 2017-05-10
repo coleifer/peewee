@@ -187,8 +187,8 @@ class TestReflection(PeeweeTestCase):
         introspector = self.get_introspector()
         models = introspector.generate_models(table_names=['numericcolumn'])
         NC = models['numericcolumn']
-        self.assertEqual(NC._meta.sorted_field_names,
-                         ['id', '_3data', '_555_value', '_7_eleven'])
+        self.assertEqual(sorted(NC._meta.fields),
+                         ['_3data', '_555_value', '_7_eleven', 'id'])
 
     def test_sqlite_fk_re(self):
         user_id_tests = [
