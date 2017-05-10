@@ -1578,6 +1578,7 @@ class Select(SelectBase):
     @Node.copy
     def columns(self, *columns):
         self._returning = columns
+    select = columns
 
     @Node.copy
     def from_(self, *sources):
