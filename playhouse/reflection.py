@@ -427,6 +427,8 @@ class Introspector(object):
         column = re.sub('[^\w]+', '_', column)
         if column in RESERVED_WORDS:
             column += '_'
+        if len(column) and column[0].isdigit():
+            column = '_' + column
         return column
 
     def introspect(self, table_names=None):
