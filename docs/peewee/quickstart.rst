@@ -50,6 +50,9 @@ When starting a project with peewee, it's typically best to begin with your data
 .. note::
     Note that we named our model ``Person`` instead of ``People``. This is a convention you should follow -- even though the table will contain multiple people, we always name the class using the singular form.
 
+.. note::
+    When you define models this way, make sure that other modules importing it call the same "db" variable as the model's module: ``modulename.db``.  This way you will be able to use things like transactions or anything else that requires the same db connection as defined in Meta.
+    
 There are lots of :ref:`field types <fields>` suitable for storing various types of data. Peewee handles converting between *pythonic* values those used by the database, so you can use Python types in your code without having to worry.
 
 Things get interesting when we set up relationships between models using `foreign keys (wikipedia) <http://en.wikipedia.org/wiki/Foreign_key>`_. This is easy to do with peewee:
