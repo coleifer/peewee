@@ -237,62 +237,23 @@ def is_model(obj):
 
 # SQL Generation.
 
+
 class AliasManager(object):
     """
     Manages the aliases assigned to :py:class:`Source` objects in SELECT
     queries, so as to avoid ambiguous references when multiple sources are
     used in a single query.
-
-    Suppose we are selecting columns from two sources that are joined. Both
-    sources we are selecting have an "id" column, so we need to tell the
-    database we want *both* "id" columns by using fully-qualified column
-    references:
-
-        query = (Tweet
-                 .select(Tweet.id, Tweet.message, Tweet.user,
-                         User.id, User.username)
-                 .join(User)
-                 .order_by(Tweet.timestamp.desc()))
-
-    This produces the following SQL:
-
-    .. code-block:: sql
-
-        SELECT "t1"."id", "t1"."message", "t1"."user_id",
-               "t2"."id", "t2"."username"
-        FROM "tweet" AS "t1"
-        INNER JOIN "users" AS "t2" ON ("t1"."user_id" = "t2"."id")
-        ORDER BY "t1"."timestamp" DESC
-
-    Another example: suppose we have a SELECT query that is selecting from the
-    UNION of two other SELECT queries. Something like this::
-
-        admins = User.select().where(User.is_admin == True)
-        editors = User.select().where(User.is_editor == True)
-        union = (admins | editors).alias('staff')
-        query = User.select(union.c.username).from_(union)
-
-    Because the User table is referenced three times, we want to make sure that
-    we don't create ambiguous references. The AliasManager ensures that the
-    above query will result in the following SQL:
-
-    .. code-block:: sql
-
-        SELECT "staff"."username"
-        FROM (
-            SELECT "t1"."username", "t1"."is_admin", "t1"."is_editor"
-            FROM "users" AS "t1" WHERE ("t1"."is_admin" = true)
-            UNION
-            SELECT "a1"."username", "a1"."is_admin", "a1"."is_editor"
-            FROM "users" AS "a1" WHERE ("a1"."is_editor" = true)
-        ) AS "staff"
     """
     def __init__(self):
-        self._mapping = []
-        self._index = []
+        # A list of dictionaries containing mappings at various depths.
+        self._counter = 0
         self._current_index = 0
-        self._prefixes = 'tabcdefghijklmnopqrstuvwxyz'
+        self._mapping = []
         self.push()
+
+    @property
+    def mapping(self):
+        return self._mapping[self._current_index - 1]
 
     def add(self, source):
         """
@@ -300,26 +261,15 @@ class AliasManager(object):
         scope. The alias will be automatically generated using the following
         scheme (where each level of indentation refers to a new scope):
 
-        * t1
-        * t2
-            * a1
-            * a2
-                * b1
-            * a3
-        * t3
-
         :param Source source: Make the manager aware of a new source. If the
             source has already been added, the call is a no-op.
-        :rtype: AliasManager
         """
-        idx = self._current_index  # Obtain reference in local variable.
-        if source in self._mapping[idx]:
-            return
-        self._index[idx] += 1
-        self._mapping[idx][source] = '%s%d' % (self._prefixes[idx],
-                                               self._index[idx])
+        if source not in self.mapping:
+            self._counter += 1
+            self[source] = 't%d' % self._counter
+        return self.mapping[source]
 
-    def get(self, source):
+    def get(self, source, any_depth=False):
         """
         Return the alias for the source in the current scope. If the source
         does not have an alias, it will be given the next available alias.
@@ -329,39 +279,38 @@ class AliasManager(object):
             available alias.
         :rtype: str
         """
-        self.add(source)
-        return self._mapping[self._current_index][source]
+        if any_depth:
+            for idx in reversed(range(self._current_index)):
+                if source in self._mapping[idx]:
+                    return self._mapping[idx][source]
+        return self.add(source)
 
-    def set(self, source, alias):
+    def __getitem__(self, source):
+        return self.get(source)
+
+    def __setitem__(self, source, alias):
         """
         Manually set the alias for the source at the current scope.
 
         :param Source source: The source for which we set the alias.
-        :rtype: AliasManager
         """
-        self._mapping[self._current_index][source] = alias
-        return self
+        self.mapping[source] = alias
 
     def push(self):
         """
         Push a new scope onto the stack.
-
-        :rtype: AliasManager
         """
-        self._mapping.append({})
-        self._index.append(0)
-        self._current_index = len(self._index) - 1
-        return self
+        self._current_index += 1
+        if self._current_index > len(self._mapping):
+            self._mapping.append({})
 
     def pop(self):
         """
         Pop scope from the stack.
-
-        :rtype: AliasManager
         """
-        self._current_index = 0
-        return self
-
+        if self._current_index == 1:
+            raise ValueError('Cannot pop() from empty alias manager.')
+        self._current_index -= 1
 
 class State(namedtuple('_State', ('scope', 'parentheses', 'subquery',
                                   'settings'))):
@@ -586,21 +535,21 @@ class Source(Node):
     def get_sort_key(self, ctx):
         if self._alias:
             return (self._alias,)
-        return (ctx.alias_manager.get(self),)
+        return (ctx.alias_manager[self],)
 
     def apply_alias(self, ctx):
         # If we are defining the source, include the "AS alias" declaration. An
         # alias is created for the source if one is not already defined.
         if ctx.scope == SCOPE_SOURCE:
             if self._alias:
-                ctx.alias_manager.set(self, self._alias)
-            ctx.literal(' AS ').sql(Entity(ctx.alias_manager.get(self)))
+                ctx.alias_manager[self] = self._alias
+            ctx.literal(' AS ').sql(Entity(ctx.alias_manager[self]))
         return ctx
 
     def apply_column(self, ctx):
         if self._alias:
-            ctx.alias_manager.set(self, self._alias)
-        return ctx.sql(Entity(ctx.alias_manager.get(self)))
+            ctx.alias_manager[self] = self._alias
+        return ctx.sql(Entity(ctx.alias_manager[self]))
 
 
 class _HashableSource(object):
@@ -726,7 +675,7 @@ class Table(_HashableSource, BaseTable):
             return ctx.sql(Entity(*self._path))
 
         if self._alias:
-            ctx.alias_manager.set(self, self._alias)
+            ctx.alias_manager[self] = self._alias
 
         if ctx.scope == SCOPE_SOURCE:
             # Define the table and its alias.
@@ -776,7 +725,7 @@ class CTE(_HashableSource, Source):
             return ctx.sql(Entity(self._alias))
 
         with ctx.push_alias():
-            ctx.alias_manager.set(self, self._alias)
+            ctx.alias_manager[self] = self._alias
             ctx.sql(Entity(self._alias))
 
             if self._columns:
@@ -1714,7 +1663,7 @@ class _WriteQuery(Query):
         return database.rows_affected(cursor)
 
     def _set_table_alias(self, ctx):
-        ctx.alias_manager.set(self.table, self.table._name)
+        ctx.alias_manager[self.table] = self.table._name
 
     def __sql__(self, ctx):
         super(_WriteQuery, self).__sql__(ctx)
@@ -4330,17 +4279,17 @@ class ModelAlias(Node):
             return ctx.sql(self.model)
 
         if self.alias:
-            ctx.alias_manager.set(self, self.alias)
+            ctx.alias_manager[self] = self.alias
 
         if ctx.scope == SCOPE_SOURCE:
             # Define the table and its alias.
             return (ctx
                     .sql(Entity(self.model._meta.table_name))
                     .literal(' AS ')
-                    .sql(Entity(ctx.alias_manager.get(self))))
+                    .sql(Entity(ctx.alias_manager[self])))
         else:
             # Refer to the table using the alias.
-            return ctx.sql(Entity(ctx.alias_manager.get(self)))
+            return ctx.sql(Entity(ctx.alias_manager[self]))
 
 
 class FieldAlias(Field):
@@ -4672,7 +4621,7 @@ class _ModelWriteQueryHelper(_ModelQueryHelper):
 
     def _set_table_alias(self, ctx):
         table = self.model._meta.table
-        ctx.alias_manager.set(table, table._name)
+        ctx.alias_manager[table] = table._name
 
 
 class ModelUpdate(_ModelWriteQueryHelper, Update):
