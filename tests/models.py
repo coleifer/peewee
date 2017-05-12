@@ -140,8 +140,8 @@ class TestModelAPIs(ModelTestCase):
         self.assertSQL(c1, (
             'SELECT "t1"."id", "t1"."value" FROM "register" AS "t1" '
             'WHERE ("t1"."value" < ?) UNION '
-            'SELECT "a1"."id", "a1"."value" FROM "register" AS "a1" '
-            'WHERE ("a1"."value" > ?) ORDER BY 1'), [2, 7])
+            'SELECT "t2"."id", "t2"."value" FROM "register" AS "t2" '
+            'WHERE ("t2"."value" > ?) ORDER BY 1'), [2, 7])
 
         self.assertEqual([row.value for row in c1], [0, 1, 8, 9])
 
@@ -151,10 +151,10 @@ class TestModelAPIs(ModelTestCase):
         self.assertSQL(c2, (
             'SELECT "t1"."id", "t1"."value" FROM "register" AS "t1" '
             'WHERE ("t1"."value" < ?) UNION '
-            'SELECT "a1"."id", "a1"."value" FROM "register" AS "a1" '
-            'WHERE ("a1"."value" > ?) UNION '
-            'SELECT "b1"."id", "b1"."value" FROM "register" AS "b1" '
-            'WHERE ("b1"."value" = ?) ORDER BY "value"'), [2, 7, 5])
+            'SELECT "t2"."id", "t2"."value" FROM "register" AS "t2" '
+            'WHERE ("t2"."value" > ?) UNION '
+            'SELECT "t2"."id", "t2"."value" FROM "register" AS "t2" '
+            'WHERE ("t2"."value" = ?) ORDER BY "value"'), [2, 7, 5])
 
         self.assertEqual([row.value for row in c2], [0, 1, 5, 8, 9])
 

@@ -198,9 +198,9 @@ class TestSelectQuery(BaseTestCase):
 
         self.assertSQL(query, (
             'WITH "regional_sales" AS ('
-            'SELECT "a1"."region", SUM("a1"."amount") AS total_sales '
-            'FROM "orders" AS "a1" '
-            'GROUP BY "a1"."region"'
+            'SELECT "t1"."region", SUM("t1"."amount") AS total_sales '
+            'FROM "orders" AS "t1" '
+            'GROUP BY "t1"."region"'
             '), '
             '"top_regions" AS ('
             'SELECT "regional_sales"."region" '
@@ -209,15 +209,15 @@ class TestSelectQuery(BaseTestCase):
             '(SELECT (SUM("regional_sales"."total_sales") / ?) '
             'FROM "regional_sales"))'
             ') '
-            'SELECT "t1"."region", "t1"."product", '
-            'SUM("t1"."quantity") AS product_units, '
-            'SUM("t1"."amount") AS product_sales '
-            'FROM "orders" AS "t1" '
+            'SELECT "t2"."region", "t2"."product", '
+            'SUM("t2"."quantity") AS product_units, '
+            'SUM("t2"."amount") AS product_sales '
+            'FROM "orders" AS "t2" '
             'WHERE ('
-            '"t1"."region" IN ('
+            '"t2"."region" IN ('
             'SELECT "top_regions"."region" '
             'FROM "top_regions")'
-            ') GROUP BY "t1"."region", "t1"."product"'), [10])
+            ') GROUP BY "t2"."region", "t2"."product"'), [10])
 
     def test_compound_select(self):
         lhs = User.select(User.c.id).where(User.c.username == 'charlie')
@@ -231,9 +231,9 @@ class TestSelectQuery(BaseTestCase):
             'FROM "users" AS "t1" '
             'WHERE ("t1"."username" = ?) '
             'UNION '
-            'SELECT "a1"."username" '
-            'FROM "users" AS "a1" '
-            'WHERE ("a1"."admin" = ?) '
+            'SELECT "t2"."username" '
+            'FROM "users" AS "t2" '
+            'WHERE ("t2"."admin" = ?) '
             'UNION '
             'SELECT "U2"."id" '
             'FROM "users" AS "U2" '
@@ -291,7 +291,7 @@ class TestInsertQuery(BaseTestCase):
         source = cte.select(cte.c.username)
         query = Person.insert(source, columns=[Person.name]).with_cte(cte)
         self.assertSQL(query, (
-            'WITH "foo" AS (SELECT "a1"."username" FROM "users" AS "a1") '
+            'WITH "foo" AS (SELECT "t1"."username" FROM "users" AS "t1") '
             'INSERT INTO "person" ("name") '
             'SELECT "foo"."username" FROM "foo"'), [])
 
@@ -406,7 +406,7 @@ class TestDeleteQuery(BaseTestCase):
                  .with_cte(cte))
         self.assertSQL(query, (
             'WITH "u" AS '
-            '(SELECT "a1"."id" FROM "users" AS "a1" WHERE ("a1"."admin" = ?)) '
+            '(SELECT "t1"."id" FROM "users" AS "t1" WHERE ("t1"."admin" = ?)) '
             'DELETE FROM "users" '
             'WHERE ("id" IN (SELECT "u"."id" FROM "u"))'), [True])
 

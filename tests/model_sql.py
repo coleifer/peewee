@@ -255,14 +255,14 @@ class TestModelCompoundSelect(BaseTestCase):
         rhs = Beta.select(Beta.beta)
         self.assertSQL((lhs | rhs), (
             'SELECT "t1"."alpha" FROM "alpha" AS "t1" UNION '
-            'SELECT "a1"."beta" FROM "beta" AS "a1"'), [])
+            'SELECT "t2"."beta" FROM "beta" AS "t2"'), [])
 
         rrhs = Gamma.select(Gamma.gamma)
         query = (lhs | (rhs | rrhs))
         self.assertSQL(query, (
             'SELECT "t1"."alpha" FROM "alpha" AS "t1" UNION '
-            'SELECT "a1"."beta" FROM "beta" AS "a1" UNION '
-            'SELECT "b1"."gamma" FROM "gamma" AS "b1"'), [])
+            'SELECT "t2"."beta" FROM "beta" AS "t2" UNION '
+            'SELECT "t3"."gamma" FROM "gamma" AS "t3"'), [])
 
     def test_union_same_model(self):
         q1 = Alpha.select(Alpha.alpha)
@@ -271,14 +271,14 @@ class TestModelCompoundSelect(BaseTestCase):
         compound = (q1 | q2) | q3
         self.assertSQL(compound, (
             'SELECT "t1"."alpha" FROM "alpha" AS "t1" UNION '
-            'SELECT "a1"."alpha" FROM "alpha" AS "a1" UNION '
-            'SELECT "b1"."alpha" FROM "alpha" AS "b1"'), [])
+            'SELECT "t2"."alpha" FROM "alpha" AS "t2" UNION '
+            'SELECT "t2"."alpha" FROM "alpha" AS "t2"'), [])
 
         compound = q1 | (q2 | q3)
         self.assertSQL(compound, (
             'SELECT "t1"."alpha" FROM "alpha" AS "t1" UNION '
-            'SELECT "a1"."alpha" FROM "alpha" AS "a1" UNION '
-            'SELECT "b1"."alpha" FROM "alpha" AS "b1"'), [])
+            'SELECT "t2"."alpha" FROM "alpha" AS "t2" UNION '
+            'SELECT "t3"."alpha" FROM "alpha" AS "t3"'), [])
 
     def test_where(self):
         q1 = Alpha.select(Alpha.alpha).where(Alpha.alpha < 2)
@@ -288,8 +288,8 @@ class TestModelCompoundSelect(BaseTestCase):
             'SELECT "t1"."alpha" FROM "alpha" AS "t1" '
             'WHERE ("t1"."alpha" < ?) '
             'UNION '
-            'SELECT "a1"."alpha" FROM "alpha" AS "a1" '
-            'WHERE ("a1"."alpha" > ?)'), [2, 5])
+            'SELECT "t2"."alpha" FROM "alpha" AS "t2" '
+            'WHERE ("t2"."alpha" > ?)'), [2, 5])
 
         q3 = Beta.select(Beta.beta).where(Beta.beta < 3)
         q4 = Beta.select(Beta.beta).where(Beta.beta > 4)
@@ -298,22 +298,22 @@ class TestModelCompoundSelect(BaseTestCase):
             'SELECT "t1"."alpha" FROM "alpha" AS "t1" '
             'WHERE ("t1"."alpha" < ?) '
             'UNION '
-            'SELECT "a1"."beta" FROM "beta" AS "a1" '
-            'WHERE ("a1"."beta" < ?)'), [2, 3])
+            'SELECT "t2"."beta" FROM "beta" AS "t2" '
+            'WHERE ("t2"."beta" < ?)'), [2, 3])
 
         compound = q1 | q3 | q2 | q4
         self.assertSQL(compound, (
             'SELECT "t1"."alpha" FROM "alpha" AS "t1" '
             'WHERE ("t1"."alpha" < ?) '
             'UNION '
-            'SELECT "a1"."beta" FROM "beta" AS "a1" '
-            'WHERE ("a1"."beta" < ?) '
+            'SELECT "t2"."beta" FROM "beta" AS "t2" '
+            'WHERE ("t2"."beta" < ?) '
             'UNION '
-            'SELECT "b1"."alpha" FROM "alpha" AS "b1" '
-            'WHERE ("b1"."alpha" > ?) '
+            'SELECT "t3"."alpha" FROM "alpha" AS "t3" '
+            'WHERE ("t3"."alpha" > ?) '
             'UNION '
-            'SELECT "c1"."beta" FROM "beta" AS "c1" '
-            'WHERE ("c1"."beta" > ?)'), [2, 3, 5, 4])
+            'SELECT "t2"."beta" FROM "beta" AS "t2" '
+            'WHERE ("t2"."beta" > ?)'), [2, 3, 5, 4])
 
     def test_limit(self):
         lhs = Alpha.select(Alpha.alpha).order_by(Alpha.alpha).limit(3)
@@ -323,8 +323,8 @@ class TestModelCompoundSelect(BaseTestCase):
         self.assertSQL(compound, (
             'SELECT "t1"."alpha" FROM "alpha" AS "t1" '
             'ORDER BY "t1"."alpha" LIMIT 3 UNION '
-            'SELECT "a1"."beta" FROM "beta" AS "a1" '
-            'ORDER BY "a1"."beta" LIMIT 4 LIMIT 5'), [])
+            'SELECT "t2"."beta" FROM "beta" AS "t2" '
+            'ORDER BY "t2"."beta" LIMIT 4 LIMIT 5'), [])
 
     def test_union_from(self):
         lhs = Alpha.select(Alpha.alpha).where(Alpha.alpha < 2)
@@ -336,8 +336,8 @@ class TestModelCompoundSelect(BaseTestCase):
             'SELECT "t1"."alpha" FROM "alpha" AS "t1" '
             'WHERE ("t1"."alpha" < ?) '
             'UNION '
-            'SELECT "a1"."alpha" FROM "alpha" AS "a1" '
-            'WHERE ("a1"."alpha" > ?)) AS "cq"'), [2, 5])
+            'SELECT "t2"."alpha" FROM "alpha" AS "t2" '
+            'WHERE ("t2"."alpha" > ?)) AS "cq"'), [2, 5])
 
         b = Beta.select(Beta.beta).where(Beta.beta < 3)
         g = Gamma.select(Gamma.gamma).where(Gamma.gamma < 0)
@@ -347,10 +347,10 @@ class TestModelCompoundSelect(BaseTestCase):
             'SELECT 1 FROM ('
             'SELECT "t1"."alpha" FROM "alpha" AS "t1" '
             'WHERE ("t1"."alpha" < ?) '
-            'UNION SELECT "a1"."beta" FROM "beta" AS "a1" '
-            'WHERE ("a1"."beta" < ?) '
-            'UNION SELECT "b1"."gamma" FROM "gamma" AS "b1" '
-            'WHERE ("b1"."gamma" < ?)) AS "cq"'), [2, 3, 0])
+            'UNION SELECT "t2"."beta" FROM "beta" AS "t2" '
+            'WHERE ("t2"."beta" < ?) '
+            'UNION SELECT "t3"."gamma" FROM "gamma" AS "t3" '
+            'WHERE ("t3"."gamma" < ?)) AS "cq"'), [2, 3, 0])
 
     def test_parentheses(self):
         query = (Alpha.select().where(Alpha.alpha < 2) |
@@ -359,8 +359,8 @@ class TestModelCompoundSelect(BaseTestCase):
             '(SELECT "t1"."id", "t1"."alpha" FROM "alpha" AS "t1" '
             'WHERE ("t1"."alpha" < ?)) '
             'UNION '
-            '(SELECT "a1"."id", "a1"."beta" FROM "beta" AS "a1" '
-            'WHERE ("a1"."beta" > ?))'),
+            '(SELECT "t2"."id", "t2"."beta" FROM "beta" AS "t2" '
+            'WHERE ("t2"."beta" > ?))'),
             [2, 3], compound_select_parentheses=True)
 
     def test_where_in(self):
@@ -373,4 +373,4 @@ class TestModelCompoundSelect(BaseTestCase):
             'WHERE ("t1"."alpha" IN '
             '(SELECT "t1"."alpha" FROM "alpha" AS "t1" '
             'UNION '
-            'SELECT "a1"."beta" FROM "beta" AS "a1"))'), [])
+            'SELECT "t2"."beta" FROM "beta" AS "t2"))'), [])
