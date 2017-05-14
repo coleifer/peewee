@@ -53,6 +53,18 @@ class TestModelSQL(ModelDatabaseTestCase):
             'INNER JOIN "favorite" AS "t3" ON ("t3"."tweet_id" = "t1"."id")'),
             [])
 
+    def test_filter_simple(self):
+        query = User.filter(username='huey')
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
+            'WHERE ("t1"."username" = ?)'), ['huey'])
+
+        query = User.filter(username='huey', id__gte=1, id__lt=5)
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
+            'WHERE ((("t1"."id" >= ?) AND ("t1"."id" < ?)) AND '
+            '("t1"."username" = ?))'), [1, 5, 'huey'])
+
     def test_insert(self):
         query = (Person
                  .insert({Person.first: 'huey',

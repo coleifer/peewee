@@ -4107,6 +4107,10 @@ class Model(with_metaclass(ModelBase, Node)):
                 except cls.DoesNotExist:
                     raise exc
 
+    @classmethod
+    def filter(cls, *dq_nodes, **filters):
+        return cls.select().filter(*dq_nodes, **filters)
+
     @property
     def _pk(self):
         return getattr(self, self._meta.primary_key.name)
