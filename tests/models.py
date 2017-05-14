@@ -52,6 +52,34 @@ class TestModelAPIs(ModelTestCase):
             self.assertTrue(tweet.id > 0)
 
     @requires_models(User, Tweet)
+    def test_get_shortcut(self):
+        huey = self.add_user('huey')
+        self.add_tweets(huey, 'meow', 'purr', 'wheeze')
+        mickey = self.add_user('mickey')
+        self.add_tweets(mickey, 'woof', 'yip')
+
+        huey_db = User.get(User.username == 'huey')
+        self.assertEqual(huey.id, huey_db.id)
+        mickey_db = User.get(User.username == 'mickey')
+        self.assertEqual(mickey.id, mickey_db.id)
+        # No results is an exception.
+        self.assertRaises(User.DoesNotExist, User.get, User.username == 'x')
+        # Multiple results is OK.
+        tweet = Tweet.get(Tweet.user == huey_db)
+        self.assertTrue(tweet.content in ('meow', 'purr', 'wheeze'))
+
+        # We cannot traverse a join like this.
+        self.assertRaises(OperationalError, Tweet.get, User.username == 'huey')
+
+        # This is OK, though.
+        tweet = Tweet.get(user__username='mickey')
+        self.assertTrue(tweet.content in ('woof', 'yip'))
+
+        tweet = Tweet.get(content__ilike='w%',
+                          user__username__ilike='%ck%')
+        self.assertEqual(tweet.content, 'woof')
+
+    @requires_models(User, Tweet)
     def test_model_select(self):
         query = (Tweet
                  .select(Tweet.content, User.username)

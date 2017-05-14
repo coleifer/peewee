@@ -337,7 +337,9 @@ class TestCompositePrimaryKey(ModelTestCase):
         # PK is lost (and hence cannot be used to update).
         c4.f1 = 'c'
         c4.save()
-        self.assertIsNone(CKM.get((CKM.f1 == 'c') & (CKM.f2 == 2)))
+        self.assertRaises(
+            CKM.DoesNotExist,
+            lambda: CKM.get((CKM.f1 == 'c') & (CKM.f2 == 2)))
 
     def test_count_composite_key(self):
         CKM = CompositeKeyModel

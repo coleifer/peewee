@@ -4074,10 +4074,12 @@ class Model(with_metaclass(ModelBase, Node)):
         return inst
 
     @classmethod
-    def get(cls, *query):
+    def get(cls, *query, **filters):
         sq = cls.select()
         if query:
             sq = sq.where(*query)
+        if filters:
+            sq = sq.filter(**filters)
         return sq.get()
 
     @classmethod
@@ -4389,7 +4391,10 @@ class BaseModelSelect(_ModelQueryHelper):
         try:
             return self.execute()[0]
         except IndexError:
-            pass
+            sql, params = self.sql()
+            raise self.model.DoesNotExist('%s instance matching query does '
+                                          'not exist:\nSQL: %s\nParams: %s' %
+                                          (self.model, sql, params))
 
 
 class ModelCompoundSelectQuery(BaseModelSelect, CompoundSelectQuery):
@@ -4557,7 +4562,7 @@ class ModelSelect(BaseModelSelect, Select):
         joins = []
         relationship = (ForeignKeyField, BackrefAccessor)
         for key, value in sorted(qdict.items()):
-            curr = self.model_class
+            curr = self.model
             if '__' in key and key.rsplit('__', 1)[1] in DJANGO_MAP:
                 key, op = key.rsplit('__', 1)
                 op = DJANGO_MAP[op]
@@ -4575,7 +4580,7 @@ class ModelSelect(BaseModelSelect, Select):
 
     def filter(self, *args, **kwargs):
         # normalize args and kwargs into a new expression
-        dq_node = Node()
+        dq_node = ColumnBase()
         if args:
             dq_node &= reduce(operator.and_, [a.clone() for a in args])
         if kwargs:
@@ -4594,8 +4599,8 @@ class ModelSelect(BaseModelSelect, Select):
                     dq_joins.update(joins)
                     expression = reduce(operator.and_, query)
                     # Apply values from the DQ object.
-                    expression._negated = piece._negated
-                    expression._alias = piece._alias
+                    #expression._negated = piece._negated
+                    #expression._alias = piece._alias
                     setattr(curr, side, expression)
                 else:
                     q.append(piece)
@@ -4605,7 +4610,7 @@ class ModelSelect(BaseModelSelect, Select):
         query = self.clone()
         for field in dq_joins:
             if isinstance(field, ForeignKeyField):
-                lm, rm = field.model_class, field.rel_model
+                lm, rm = field.model, field.rel_model
                 field_obj = field
             elif isinstance(field, ReverseRelationDescriptor):
                 lm, rm = field.field.rel_model, field.rel_model
