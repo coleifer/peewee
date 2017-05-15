@@ -69,7 +69,10 @@ class TestModelAPIs(ModelTestCase):
         self.assertTrue(tweet.content in ('meow', 'purr', 'wheeze'))
 
         # We cannot traverse a join like this.
-        self.assertRaises(OperationalError, Tweet.get, User.username == 'huey')
+        @self.database.atomic()
+        def has_error():
+            Tweet.get(User.username == 'huey')
+        self.assertRaises(Exception, has_error)
 
         # This is OK, though.
         tweet = Tweet.get(user__username='mickey')

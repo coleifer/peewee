@@ -1020,7 +1020,7 @@ class Entity(ColumnBase):
         self._path = filter(None, path)
 
     def quoted(self, quote):
-        return '.'.join('%s%s%s' % (quote, part, quote)
+        return '.'.join('%s%s%s' % (quote, part.replace('"', '""'), quote)
                         for part in self._path)
 
     def __getattr__(self, attr):
