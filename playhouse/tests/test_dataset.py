@@ -59,10 +59,10 @@ class TestDataSet(PeeweeTestCase):
         books = ds['books']
         books.insert(book_id='BOOK1')
         books.insert(bookId='BOOK2')
-        data = [(row['book_id'], row['bookId']) for row in books]
+        data = [(row['book_id'] or '', row['bookId'] or '') for row in books]
         self.assertEqual(sorted(data), [
-            (None, 'BOOK2'),
-            ('BOOK1', None)])
+            ('', 'BOOK2'),
+            ('BOOK1', '')])
 
     def test_case_insensitive(self):
         db.execute_sql('CREATE TABLE "SomeTable" (data TEXT);')
