@@ -85,7 +85,8 @@ class DataSet(object):
             dependencies = None  # Update all tables.
         updated = self._introspector.generate_models(
             skip_invalid=True,
-            table_names=dependencies)
+            table_names=dependencies,
+            literal_column_names=True)
         self._models.update(updated)
 
     def __enter__(self):

@@ -54,6 +54,16 @@ class TestDataSet(PeeweeTestCase):
         for i in range(min(n, len(self.names))):
             user.insert(username=self.names[i])
 
+    def test_column_preservation(self):
+        ds = DataSet('sqlite:///:memory:')
+        books = ds['books']
+        books.insert(book_id='BOOK1')
+        books.insert(bookId='BOOK2')
+        data = [(row['book_id'], row['bookId']) for row in books]
+        self.assertEqual(sorted(data), [
+            (None, 'BOOK2'),
+            ('BOOK1', None)])
+
     def test_case_insensitive(self):
         db.execute_sql('CREATE TABLE "SomeTable" (data TEXT);')
         tables = sorted(self.dataset.tables)
