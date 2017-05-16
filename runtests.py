@@ -33,6 +33,7 @@ def get_option_parser():
     cases = optparse.OptionGroup(parser, 'Individual test module options')
     #cases.add_option('--apsw', dest='apsw', default=False, action='store_true', help='apsw tests (requires apsw)')
     #cases.add_option('--berkeleydb', dest='berkeleydb', default=False, action='store_true', help='berkeleydb tests (requires pysqlite compiled against berkeleydb)')
+    cases.add_option('--dataset', dest='dataset', default=False, action='store_true', help='dataset tests')
     cases.add_option('--db-url', dest='db_url', default=False, action='store_true', help='db url tests')
     cases.add_option('--hybrid', dest='hybrid', default=False, action='store_true', help='hybrid property/method tests')
     cases.add_option('--migrations', dest='migrations', default=False, action='store_true', help='migration helper tests (requires psycopg2)')
@@ -76,6 +77,9 @@ def collect_modules(options, args):
     #        modules.append(test_berkeleydb)
     #    except ImportError:
     #        print_('Unable to import berkeleydb tests, skipping')
+    if xtra(options.dataset):
+        import tests.dataset
+        modules.append(tests.dataset)
     if xtra(options.db_url):
         import tests.db_url
         modules.append(tests.db_url)

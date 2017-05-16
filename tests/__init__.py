@@ -1,6 +1,7 @@
 import sys
 import unittest
 
+# Core modules.
 from .database import *
 from .fields import *
 from .keys import *
@@ -13,10 +14,12 @@ from .schema import *
 from .sql import *
 from .transactions import *
 
+# Extensions.
 try:
     from .apsw_ext import *
 except ImportError:
     print('Unable to import APSW extension tests, skipping.')
+from .dataset import *
 from .db_url import *
 from .hybrid import *
 from .migrations import *
