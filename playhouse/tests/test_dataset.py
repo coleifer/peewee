@@ -89,11 +89,11 @@ class TestDataSet(PeeweeTestCase):
 
         note = self.dataset['note']
         columns = sorted(note.columns)
-        self.assertEqual(columns, ['content', 'id', 'timestamp', 'user'])
+        self.assertEqual(columns, ['content', 'id', 'timestamp', 'user_id'])
 
         category = self.dataset['category']
         columns = sorted(category.columns)
-        self.assertEqual(columns, ['id', 'name', 'parent'])
+        self.assertEqual(columns, ['id', 'name', 'parent_id'])
 
     def test_update_cache(self):
         self.assertEqual(sorted(self.dataset.tables),
@@ -220,36 +220,36 @@ class TestDataSet(PeeweeTestCase):
             note.insert(
                 content='note %s' % i,
                 timestamp=datetime.date(2014, 1, i),
-                user='charlie')
+                user_id='charlie')
 
         notes = sorted(note.all(), key=operator.itemgetter('id'))
         self.assertEqual(notes[0], {
             'content': 'note 1',
             'id': 1,
             'timestamp': datetime.datetime(2014, 1, 1),
-            'user': 'charlie'})
+            'user_id': 'charlie'})
         self.assertEqual(notes[-1], {
             'content': 'note 3',
             'id': 3,
             'timestamp': datetime.datetime(2014, 1, 3),
-            'user': 'charlie'})
+            'user_id': 'charlie'})
 
         user.insert(username='mickey')
-        note.update(user='mickey', id=3, columns=['id'])
+        note.update(user_id='mickey', id=3, columns=['id'])
 
-        self.assertEqual(note.find(user='charlie').count(), 2)
-        self.assertEqual(note.find(user='mickey').count(), 1)
+        self.assertEqual(note.find(user_id='charlie').count(), 2)
+        self.assertEqual(note.find(user_id='mickey').count(), 1)
 
         category = self.dataset['category']
         category.insert(name='c1')
         c1 = category.find_one(name='c1')
-        self.assertEqual(c1, {'id': 1, 'name': 'c1', 'parent': None})
+        self.assertEqual(c1, {'id': 1, 'name': 'c1', 'parent_id': None})
 
-        category.insert(name='c2', parent=1)
-        c2 = category.find_one(parent=1)
-        self.assertEqual(c2, {'id': 2, 'name': 'c2', 'parent': 1})
+        category.insert(name='c2', parent_id=1)
+        c2 = category.find_one(parent_id=1)
+        self.assertEqual(c2, {'id': 2, 'name': 'c2', 'parent_id': 1})
 
-        self.assertEqual(category.delete(parent=1), 1)
+        self.assertEqual(category.delete(parent_id=1), 1)
         self.assertEqual(category.all(), [c1])
 
     def test_transactions(self):
