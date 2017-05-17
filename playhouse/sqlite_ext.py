@@ -7,10 +7,12 @@ from peewee import *
 from peewee import sqlite3
 try:
     from playhouse._sqlite_ext import peewee_bm25 as cy_bm25
+    from playhouse._sqlite_ext import peewee_lucene as cy_lucene
     from playhouse._sqlite_ext import peewee_murmurhash as cy_murmurhash
     from playhouse._sqlite_ext import peewee_rank as cy_rank
+    CYTHON_SQLITE_EXTENSIONS = True
 except ImportError:
-    cy_bm25 = cy_murmurhash = cy_rank = None
+    CYTHON_SQLITE_EXTENSIONS = False
 
 
 if sys.version_info[0] == 3:
@@ -432,7 +434,7 @@ OP.MATCH = 'MATCH'
 class SqliteExtDatabase(SqliteDatabase):
     operations = {OP.MATCH: 'MATCH'}
 
-    def __init__(self, database, *args, **kwargs):
+    def __init__(self, database, c_extensions=None, *args, **kwargs):
         super(SqliteExtDatabase, self).__init__(database, *args, **kwargs)
         self._aggregates = {}
         self._collations = {}
@@ -440,13 +442,20 @@ class SqliteExtDatabase(SqliteDatabase):
         self._extensions = set()
         self._row_factory = None
 
-        if cy_bm25 and cy_murmurhash and cy_rank:
-            self.register_function(cy_rank, 'fts_rank', -1)
+        if c_extensions and not CYTHON_SQLITE_EXTENSIONS:
+            raise ImproperlyConfigured('SqliteExtDatabase initialized with '
+                                       'C extensions, but shared library was '
+                                       'not found!')
+        elif CYTHON_SQLITE_EXTENSIONS and (c_extensions is not False):
             self.register_function(cy_bm25, 'fts_bm25', -1)
+            self.register_function(cy_lucene, 'fts_lucene', -1)
             self.register_function(cy_murmurhash, 'murmurhash', -1)
+            self.register_function(cy_rank, 'fts_rank', -1)
+            self._c_extensions = True
         else:
-            self.register_function(rank, 'fts_rank', -1)
             self.register_function(bm25, 'fts_bm25', -1)
+            self.register_function(rank, 'fts_rank', -1)
+            self._c_extensions = False
 
     def _add_conn_hooks(self, conn):
         super(SqliteExtDatabase, self)._add_conn_hooks(conn)

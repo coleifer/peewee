@@ -10,12 +10,18 @@ from .base import TestModel
 from .base import skip_case_unless
 
 
-database = SqliteExtDatabase(':memory:', timeout=0.1)
+database = SqliteExtDatabase(':memory:', c_extensions=False, timeout=0.1)
 
 
 CLOSURE_EXTENSION = os.environ.get('PEEWEE_CLOSURE_EXTENSION')
 if not CLOSURE_EXTENSION and os.path.exists('closure.so'):
     CLOSURE_EXTENSION = 'closure.so'
+
+try:
+    from playhouse._sqlite_ext import peewee_rank
+    CYTHON_EXTENSION = True
+except ImportError:
+    CYTHON_EXTENSION = False
 
 
 class WeightedAverage(object):
@@ -616,6 +622,32 @@ class TestFullTextSearch(ModelTestCase):
         assertResults(MultiColumn.search_bm25, 'bbbbb', [1., -1., 0.], [
             (1, -0.),
             (2, 0.85)])
+
+
+@skip_case_unless(CYTHON_EXTENSION)
+class TestFullTextSearchCython(TestFullTextSearch):
+    database = SqliteExtDatabase(':memory:', c_extensions=CYTHON_EXTENSION)
+
+    def test_c_extensions(self):
+        self.assertTrue(self.database._c_extensions)
+        self.assertTrue(Post._meta.database._c_extensions)
+
+
+@skip_case_unless(CYTHON_EXTENSION)
+class TestMurmurHash(ModelTestCase):
+    database = SqliteExtDatabase(':memory:', c_extensions=CYTHON_EXTENSION)
+
+    def assertHash(self, s, e):
+        query = Select(columns=[fn.murmurhash(s)])
+        cursor = self.database.execute(query)
+        self.assertEqual(cursor.fetchone()[0], e)
+
+    def test_murmur_hash(self):
+        self.assertHash('testkey', 3599487917)
+        self.assertHash('murmur', 4160318927)
+        self.assertHash('', 0)
+        self.assertHash('this is a test of a longer string', 3556042345)
+        self.assertHash(None, None)
 
 
 class TestUserDefinedCallbacks(ModelTestCase):
