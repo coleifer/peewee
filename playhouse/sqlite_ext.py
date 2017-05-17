@@ -990,18 +990,18 @@ def _parse_match_info(buf):
     return [struct.unpack('@I', buf[i:i+4])[0] for i in range(0, bufsize, 4)]
 
 # Ranking implementation, which parse matchinfo.
-def rank(raw_match_info, *weights):
+def rank(raw_match_info, *raw_weights):
     # Handle match_info called w/default args 'pcx' - based on the example rank
     # function http://sqlite.org/fts3.html#appendix_a
     match_info = _parse_match_info(raw_match_info)
     score = 0.0
 
     p, c = match_info[:2]
-    if not weights:
+    if not raw_weights:
         weights = [1] * c
     else:
         weights = [0] * c
-        for i, weight in enumerate(weights):
+        for i, weight in enumerate(raw_weights):
             weights[i] = weight
 
     for phrase_num in range(p):
