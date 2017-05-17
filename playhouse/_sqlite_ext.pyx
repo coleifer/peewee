@@ -71,14 +71,11 @@ def peewee_rank(py_match_info, *raw_weights):
         unsigned int *phrase_info
         bytes _match_info_buf = bytes(py_match_info)
         char *match_info_buf = _match_info_buf
-        int argc = len(raw_weights) + 1
+        int argc = len(raw_weights)
         int ncol, nphrase, icol, iphrase, hits, global_hits
         int P_O = 0, C_O = 1, X_O = 2
         double score = 0.0, weight
         double *weights
-
-    if argc < 1:
-        raise ValueError('Missing matchinfo().')
 
     match_info = <unsigned int *>match_info_buf
     nphrase = match_info[P_O]
@@ -86,7 +83,7 @@ def peewee_rank(py_match_info, *raw_weights):
 
     weights = <double *>malloc(sizeof(double) * ncol)
     for icol in range(ncol):
-        if icol < (argc - 1):
+        if icol < argc:
             weights[icol] = <double>raw_weights[icol]
         else:
             weights[icol] = 1.0
@@ -113,7 +110,7 @@ def peewee_lucene(py_match_info, *raw_weights):
         unsigned int *phrase_info
         bytes _match_info_buf = bytes(py_match_info)
         char *match_info_buf = _match_info_buf
-        int argc = len(raw_weights) + 1
+        int argc = len(raw_weights)
         int term_count, col_count
         double total_docs, term_frequency,
         double doc_length, docs_with_term, avg_length
@@ -134,7 +131,7 @@ def peewee_lucene(py_match_info, *raw_weights):
 
     weights = <double *>malloc(sizeof(double) * col_count)
     for i in range(col_count):
-        if i < (argc - 1):
+        if i < argc:
             weights[i] = <double>raw_weights[i]
         else:
             weights[i] = 0
@@ -166,7 +163,7 @@ def peewee_bm25(py_match_info, *raw_weights):
         unsigned int *phrase_info
         bytes _match_info_buf = bytes(py_match_info)
         char *match_info_buf = _match_info_buf
-        int argc = len(raw_weights) + 1
+        int argc = len(raw_weights)
         int term_count, col_count
         double B = 0.75, K = 1.2, D
         double total_docs, term_frequency,
@@ -188,7 +185,9 @@ def peewee_bm25(py_match_info, *raw_weights):
 
     weights = <double *>malloc(sizeof(double) * col_count)
     for i in range(col_count):
-        if i < (argc - 1):
+        if argc == 0:
+            weights[i] = 1.
+        elif i < argc:
             weights[i] = <double>raw_weights[i]
         else:
             weights[i] = 0
