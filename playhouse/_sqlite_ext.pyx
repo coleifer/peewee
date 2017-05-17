@@ -142,7 +142,7 @@ def peewee_bm25(py_match_info, *raw_weights):
         unsigned int *phrase_info
         bytes _match_info_buf = bytes(py_match_info)
         char *match_info_buf = _match_info_buf
-        int argc = len(raw_weights) + 1
+        int argc = len(raw_weights)
         int term_count, col_count
         double B = 0.75, K = 1.2, D
         double total_docs, term_frequency,
@@ -164,7 +164,9 @@ def peewee_bm25(py_match_info, *raw_weights):
 
     weights = <double *>malloc(sizeof(double) * col_count)
     for i in range(col_count):
-        if i < (argc - 1):
+        if argc == 0:
+            weights[i] = 1.
+        elif i < argc:
             weights[i] = <double>raw_weights[i]
         else:
             weights[i] = 0

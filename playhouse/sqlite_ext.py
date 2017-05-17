@@ -5,6 +5,12 @@ import sys
 
 from peewee import *
 from peewee import sqlite3
+try:
+    from playhouse._sqlite_ext import peewee_bm25 as cy_bm25
+    from playhouse._sqlite_ext import peewee_murmurhash as cy_murmurhash
+    from playhouse._sqlite_ext import peewee_rank as cy_rank
+except ImportError:
+    cy_bm25 = cy_murmurhash = cy_rank = None
 
 
 if sys.version_info[0] == 3:
@@ -271,7 +277,7 @@ class FTSModel(BaseFTSModel):
             rank = score_fn()
         elif isinstance(weights, dict):
             weight_args = []
-            for field in cls._meta.declared_fields:
+            for field in cls._meta.sorted_fields:
                 # Attempt to get the specified weight of the field by looking
                 # it up using it's field instance followed by name.
                 field_weight = weights.get(field, weights.get(field.name, 1.0))
@@ -434,8 +440,13 @@ class SqliteExtDatabase(SqliteDatabase):
         self._extensions = set()
         self._row_factory = None
 
-        self.register_function(rank, 'fts_rank', -1)
-        self.register_function(bm25, 'fts_bm25', -1)
+        if cy_bm25 and cy_murmurhash and cy_rank:
+            self.register_function(cy_rank, 'fts_rank', -1)
+            self.register_function(cy_bm25, 'fts_bm25', -1)
+            self.register_function(cy_murmurhash, 'murmurhash', -1)
+        else:
+            self.register_function(rank, 'fts_rank', -1)
+            self.register_function(bm25, 'fts_bm25', -1)
 
     def _add_conn_hooks(self, conn):
         super(SqliteExtDatabase, self)._add_conn_hooks(conn)
@@ -534,18 +545,18 @@ def _parse_match_info(buf):
     return [struct.unpack('@I', buf[i:i+4])[0] for i in range(0, bufsize, 4)]
 
 # Ranking implementation, which parse matchinfo.
-def rank(raw_match_info, *weights):
+def rank(raw_match_info, *raw_weights):
     # Handle match_info called w/default args 'pcx' - based on the example rank
     # function http://sqlite.org/fts3.html#appendix_a
     match_info = _parse_match_info(raw_match_info)
     score = 0.0
 
     p, c = match_info[:2]
-    if not weights:
+    if not raw_weights:
         weights = [1] * c
     else:
         weights = [0] * c
-        for i, weight in enumerate(weights):
+        for i, weight in enumerate(raw_weights):
             weights[i] = weight
 
     for phrase_num in range(p):
