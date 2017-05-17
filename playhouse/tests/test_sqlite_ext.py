@@ -512,6 +512,45 @@ class TestFTSModel(ModelTestCase):
             [x.score for x in MultiColumn.search('ddddd', with_score=True)],
             [-.25, -.25, -.25, -.25])
 
+    def test_weighting(self):
+        self._create_multi_column()
+        def assertResults(method, term, weights, expected):
+            results = [
+                (x.c4, round(x.score, 2))
+                for x in method(term, weights=weights, with_score=True)]
+            self.assertEqual(results, expected)
+
+        assertResults(MultiColumn.search, 'bbbbb', None, [
+            (2, -1.5),  # 1/2 + 1/1
+            (1, -0.5),  # 1/2
+        ])
+        assertResults(MultiColumn.search, 'bbbbb', [1., 5., 0.], [
+            (2, -5.5),  # 1/2 + (5 * 1/1)
+            (1, -0.5),  # 1/2 + (5 * 0)
+        ])
+        assertResults(MultiColumn.search, 'bbbbb', [1., .5, 0.], [
+            (2, -1.),  # 1/2 + (.5 * 1/1)
+            (1, -0.5),  # 1/2 + (.5 * 0)
+        ])
+        assertResults(MultiColumn.search, 'bbbbb', [1., -1., 0.], [
+            (1, -0.5),  # 1/2 + (-1 * 0)
+            (2, 0.5),  # 1/2 + (-1 * 1/1)
+        ])
+
+        # BM25
+        assertResults(MultiColumn.search_bm25, 'bbbbb', None, [
+            (2, -0.85),
+            (1, -0.)])
+        assertResults(MultiColumn.search_bm25, 'bbbbb', [1., 5., 0.], [
+            (2, -4.24),
+            (1, -0.)])
+        assertResults(MultiColumn.search_bm25, 'bbbbb', [1., .5, 0.], [
+            (2, -0.42),
+            (1, -0.)])
+        assertResults(MultiColumn.search_bm25, 'bbbbb', [1., -1., 0.], [
+            (1, -0.),
+            (2, 0.85)])
+
     def test_bm25(self):
         def assertResults(term, col_idx, expected):
             query = MultiColumn.search_bm25(term, [1.0, 0, 0, 0], True)
