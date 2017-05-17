@@ -1002,6 +1002,9 @@ class Expression(ColumnBase):
             op_sql = self.op
 
         with ctx(**overrides):
+            if self.op == OP.IN and not Context().sql(self.rhs).query()[0]:
+                return ctx.literal('0 = 1')
+
             return (ctx
                     .sql(self.lhs)
                     .literal(' %s ' % op_sql)
