@@ -1300,6 +1300,7 @@ class TimeField(_BaseFormattedField):
 class TimestampField(IntegerField):
     # Support second -> microsecond resolution.
     valid_resolutions = [10**i for i in range(7)]
+    zero_value = None
 
     def __init__(self, *args, **kwargs):
         self.resolution = kwargs.pop('resolution', 1) or 1
@@ -1312,6 +1313,7 @@ class TimestampField(IntegerField):
         self._conv = _dt.utcfromtimestamp if self.utc else _dt.fromtimestamp
         _default = _dt.utcnow if self.utc else _dt.now
         kwargs.setdefault('default', _default)
+        self.zero_value = kwargs.pop('zero_value', None)
         super(TimestampField, self).__init__(*args, **kwargs)
 
     def get_db_field(self):
@@ -1344,7 +1346,7 @@ class TimestampField(IntegerField):
     def python_value(self, value):
         if value is not None and isinstance(value, (int, float, long)):
             if value == 0:
-                return
+                return self.zero_value
             elif self.resolution > 1:
                 ticks_to_microsecond = 1000000 // self.resolution
                 value, ticks = divmod(value, self.resolution)
