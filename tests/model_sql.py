@@ -252,6 +252,16 @@ class TestStringsForFields(BaseTestCase):
                 'INSERT INTO "person" ("first", "last") VALUES (?, ?)'),
                 ['huey', 'kitty'])
 
+    def test_insert_many(self):
+        data = [
+            {'first': 'huey', 'last': 'cat'},
+            {'first': 'zaizee', 'last': 'cat'},
+            {'first': 'mickey', 'last': 'dog'}]
+        query = Person.insert_many(data)
+        self.assertSQL(query, (
+            'INSERT INTO "person" ("first", "last") VALUES (?, ?), (?, ?), '
+            '(?, ?)'), ['huey', 'cat', 'zaizee', 'cat', 'mickey', 'dog'])
+
     def test_update(self):
         qkwargs = Person.update(last='kitty').where(Person.last == 'cat')
         qliteral = Person.update({'last': 'kitty'}).where(Person.last == 'cat')
