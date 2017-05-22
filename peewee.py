@@ -323,6 +323,7 @@ class AliasManager(object):
             raise ValueError('Cannot pop() from empty alias manager.')
         self._current_index -= 1
 
+
 class State(namedtuple('_State', ('scope', 'parentheses', 'subquery',
                                   'settings'))):
     """
@@ -342,8 +343,6 @@ class State(namedtuple('_State', ('scope', 'parentheses', 'subquery',
         query.
     :param dict kwargs: Arbitrary settings which should be applied in the
         current state.
-
-    #
     """
     def __new__(cls, scope=SCOPE_NORMAL, parentheses=False, subquery=False,
                 **kwargs):
@@ -372,6 +371,14 @@ def __scope_context__(scope):
 
 
 class Context(object):
+    """
+    Converts Peewee structures into parameterized SQL queries.
+
+    Peewee structures should all implement a `__sql__` method, which will be
+    called by the `Context` class during SQL generation. The `__sql__` method
+    accepts a single parameter, the `Context` instance, which allows for
+    recursive descent and introspection of scope and state.
+    """
     def __init__(self, **settings):
         self.stack = []
         self._sql = []
@@ -468,6 +475,9 @@ class Context(object):
 
 
 class Node(object):
+    """
+    Base-class for all components which make up the AST for a SQL query.
+    """
     def clone(self):
         obj = self.__class__.__new__(self.__class__)
         obj.__dict__ = self.__dict__.copy()
@@ -478,6 +488,13 @@ class Node(object):
 
     @staticmethod
     def copy(method):
+        """
+        Decorator to use with Node methods that mutate the node's state.
+        This allows method-chaining, e.g.:
+
+            query = MyModel.select()
+            new_query = query.where(MyModel.field == 'value')
+        """
         def inner(self, *args, **kwargs):
             clone = self.clone()
             method(clone, *args, **kwargs)
@@ -516,14 +533,6 @@ class _ExplicitColumn(object):
                 '%s specifies columns explicitly, and does not support '
                 'dynamic column lookups.' % instance)
         return self
-
-
-def __join__(join_type='INNER', inverted=False):
-    def method(self, other):
-        if inverted:
-            self, other = other, self
-        return Join(self, other, join_type=join_type)
-    return method
 
 
 class Source(Node):
@@ -600,6 +609,14 @@ def __bind_database__(meth):
             return result.bind(self._database)
         return result
     return inner
+
+
+def __join__(join_type='INNER', inverted=False):
+    def method(self, other):
+        if inverted:
+            self, other = other, self
+        return Join(self, other, join_type=join_type)
+    return method
 
 
 class BaseTable(Source):
