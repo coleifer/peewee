@@ -39,18 +39,21 @@ class TestDatabase(DatabaseTestCase):
     def test_context_settings(self):
         class TestDatabase(Database):
             options = attrdict(
-                field_types={
-                    FIELD.BIGINT: 'TEST_BIGINT',
-                    FIELD.TEXT: 'TEST_TEXT'},
+                field_types={'BIGINT': 'TEST_BIGINT', 'TEXT': 'TEST_TEXT'},
+                operations={'LIKE': '~', 'NEW': '->>'},
                 param='$')
 
         test_db = TestDatabase(None)
         state = test_db.get_sql_context().state
 
-        self.assertEqual(state.field_types[FIELD.BIGINT], 'TEST_BIGINT')
-        self.assertEqual(state.field_types[FIELD.TEXT], 'TEST_TEXT')
+        self.assertEqual(state.field_types['BIGINT'], 'TEST_BIGINT')
+        self.assertEqual(state.field_types['TEXT'], 'TEST_TEXT')
         self.assertEqual(state.field_types['INT'], FIELD.INT)
         self.assertEqual(state.field_types['VARCHAR'], FIELD.VARCHAR)
+
+        self.assertEqual(state.operations['LIKE'], '~')
+        self.assertEqual(state.operations['NEW'], '->>')
+        self.assertEqual(state.operations['ILIKE'], 'ILIKE')
 
         self.assertEqual(state.param, '$')
         self.assertEqual(state.quote, '"')
