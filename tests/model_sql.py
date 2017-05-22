@@ -249,15 +249,19 @@ class TestStringsForFields(ModelDatabaseTestCase):
 
     def test_insert(self):
         qkwargs = Person.insert(first='huey', last='kitty')
-        self.assertSQL(qkwargs, (
-            'INSERT INTO "person" ("first", "last") VALUES (?, ?)'),
-            ['huey', 'kitty'])
+        qliteral = Person.insert({'first': 'huey', 'last': 'kitty'})
+        for query in (qkwargs, qliteral):
+            self.assertSQL(query, (
+                'INSERT INTO "person" ("first", "last") VALUES (?, ?)'),
+                ['huey', 'kitty'])
 
     def test_update(self):
         qkwargs = Person.update(last='kitty').where(Person.last == 'cat')
-        self.assertSQL(qkwargs, (
-            'UPDATE "person" SET "last" = ? WHERE ("last" = ?)'),
-            ['kitty', 'cat'])
+        qliteral = Person.update({'last': 'kitty'}).where(Person.last == 'cat')
+        for query in (qkwargs, qliteral):
+            self.assertSQL(query, (
+                'UPDATE "person" SET "last" = ? WHERE ("last" = ?)'),
+                ['kitty', 'cat'])
 
 
 compound_db = get_in_memory_db()

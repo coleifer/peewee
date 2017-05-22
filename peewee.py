@@ -4072,22 +4072,34 @@ class Model(with_metaclass(ModelBase, Node)):
         return ModelSelect(cls, fields)
 
     @classmethod
+    def _normalize_data(cls, data, kwargs):
+        normalized = {}
+        if data:
+            if not isinstance(data, dict):
+                if kwargs:
+                    raise ValueError('Data cannot be mixed with keyword '
+                                     'arguments: %s' % data)
+                return data
+            for key in data:
+                try:
+                    field = (key if isinstance(key, Field)
+                             else cls._meta.combined[key])
+                except KeyError:
+                    raise ValueError('Unrecognized field name: "%s" in %s.' %
+                                     (key, data))
+                normalized[field] = data[key]
+        if kwargs:
+            for key in kwargs:
+                normalized[cls._meta.combined[key]] = kwargs[key]
+        return normalized
+
+    @classmethod
     def update(cls, __data=None, **update):
-        fdict = __data or {}
-        for field in update:
-            fdict[cls._meta.combined[field]] = update[field]
-        return ModelUpdate(cls, fdict)
+        return ModelUpdate(cls, cls._normalize_data(__data, update))
 
     @classmethod
     def insert(cls, __data=None, **insert):
-        fdict = __data or {}
-        for field in insert:
-            if not isinstance(field, Field):
-                field_obj = cls._meta.combined[field]
-                fdict[field_obj] = insert[field]
-            else:
-                fdict[field] = insert[field]
-        return ModelInsert(cls, fdict)
+        return ModelInsert(cls, cls._normalize_data(__data, insert))
 
     @classmethod
     def insert_many(cls, rows, fields=None):
