@@ -243,10 +243,7 @@ class TestModelSQL(ModelDatabaseTestCase):
             'WHERE ("t1"."data" = ?)'), ['zaizee'])
 
 
-class TestStringsForFields(ModelDatabaseTestCase):
-    database = get_in_memory_db()
-    requires = [Person]
-
+class TestStringsForFields(BaseTestCase):
     def test_insert(self):
         qkwargs = Person.insert(first='huey', last='kitty')
         qliteral = Person.insert({'first': 'huey', 'last': 'kitty'})
