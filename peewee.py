@@ -536,6 +536,9 @@ class _ExplicitColumn(object):
 
 
 class Source(Node):
+    """
+    A source of tuples, for example a table, join, or select query.
+    """
     c = _DynamicColumn()
 
     def __init__(self, alias=None):
@@ -620,6 +623,10 @@ def __join__(join_type='INNER', inverted=False):
 
 
 class BaseTable(Source):
+    """
+    Base class for table-like objects, which support JOINs via operator
+    overloading.
+    """
     __and__ = __join__(JOIN.INNER)
     __add__ = __join__(JOIN.LEFT_OUTER)
     __sub__ = __join__(JOIN.RIGHT_OUTER)
@@ -4057,9 +4064,6 @@ class Model(with_metaclass(ModelBase, Node)):
     @classmethod
     def alias(cls, alias=None):
         return ModelAlias(cls, alias)
-        #return Table(cls._meta.table_name, [
-        #    field.column_name for field in cls._meta.sorted_fields],
-        #    alias=alias, _model=cls, _database=cls._meta.database)
 
     @classmethod
     def select(cls, *fields):
@@ -4071,7 +4075,7 @@ class Model(with_metaclass(ModelBase, Node)):
     def update(cls, __data=None, **update):
         fdict = __data or {}
         for field in update:
-            fdict[cls._meta.fields[field]] = update[field]
+            fdict[cls._meta.combined[field]] = update[field]
         return ModelUpdate(cls, fdict)
 
     @classmethod
@@ -4079,7 +4083,7 @@ class Model(with_metaclass(ModelBase, Node)):
         fdict = __data or {}
         for field in insert:
             if not isinstance(field, Field):
-                field_obj = cls._meta.fields[field]
+                field_obj = cls._meta.combined[field]
                 fdict[field_obj] = insert[field]
             else:
                 fdict[field] = insert[field]
