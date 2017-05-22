@@ -37,9 +37,9 @@ else:
     else:
         cython_installed = True
 
-#speedups_ext_module = Extension(
-#    'playhouse._speedups',
-#    ['playhouse/_speedups.pyx'])
+speedups_ext_module = Extension(
+    'playhouse._speedups',
+    ['playhouse/_speedups.pyx'])
 sqlite_udf_module = Extension(
     'playhouse._sqlite_udf',
     ['playhouse/_sqlite_udf.pyx'])
@@ -50,7 +50,7 @@ sqlite_ext_module = Extension(
 
 if cython_installed:
     ext_modules.extend([
-        #speedups_ext_module,
+        speedups_ext_module,
         sqlite_udf_module,
         sqlite_ext_module,
     ])
