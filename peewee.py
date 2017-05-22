@@ -64,6 +64,17 @@ except ImportError:
 logger = logging.getLogger('peewee')
 logger.addHandler(NullHandler())
 
+# Import any speedups or provide alternate implementations.
+try:
+    from playhouse._speedups import quote
+except ImportError:
+    def quote(path, quote_char):
+        quotes = (quote_char, quote_char)
+        if len(path) == 1:
+            return path.join(quotes)
+        return '.'.join([part.join(quotes) for part in path])
+
+
 if sys.version_info[0] == 2:
     text_type = unicode
     bytes_type = str
@@ -367,16 +378,21 @@ class Context(object):
         self._values = []
         self.alias_manager = AliasManager()
         self.state = State(**settings)
-        self.refresh()
 
     def column_sort_key(self, item):
         return item[0].get_sort_key(self)
 
-    def refresh(self):
-        self.scope = self.state.scope
-        self.parentheses = self.state.parentheses
-        self.subquery = self.state.subquery
-        self.settings = self.state.settings
+    @property
+    def scope(self):
+        return self.state.scope
+
+    @property
+    def parentheses(self):
+        return self.state.parentheses
+
+    @property
+    def subquery(self):
+        return self.state.subquery
 
     def __call__(self, **overrides):
         if overrides and overrides.get('scope') == self.scope:
@@ -384,7 +400,6 @@ class Context(object):
 
         self.stack.append(self.state)
         self.state = self.state(**overrides)
-        self.refresh()
         return self
 
     scope_normal = __scope_context__(SCOPE_NORMAL)
@@ -402,7 +417,6 @@ class Context(object):
         if self.parentheses:
             self.literal(')')
         self.state = self.stack.pop()
-        self.refresh()
 
     @contextmanager
     def push_alias(self):
@@ -1020,11 +1034,7 @@ class StringExpression(Expression):
 
 class Entity(ColumnBase):
     def __init__(self, *path):
-        self._path = filter(None, path)
-
-    def quoted(self, quote):
-        return '.'.join('%s%s%s' % (quote, part.replace('"', '""'), quote)
-                        for part in self._path)
+        self._path = [part.replace('"', '""') for part in path if part]
 
     def __getattr__(self, attr):
         return Entity(*self._path + (attr,))
@@ -1036,7 +1046,7 @@ class Entity(ColumnBase):
         return hash((self.__class__.__name__, self._path))
 
     def __sql__(self, ctx):
-        return ctx.literal(self.quoted(ctx.state.quote or '"'))
+        return ctx.literal(quote(self._path, ctx.state.quote or '"'))
 
 
 class SQL(ColumnBase):
