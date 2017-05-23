@@ -4827,7 +4827,7 @@ class BaseModel(type):
                 model_pk, pk_name = parent_pk, parent_pk.name
             else:
                 model_pk, pk_name = PrimaryKeyField(primary_key=True), 'id'
-        elif isinstance(model_pk, CompositeKey):
+        if isinstance(model_pk, CompositeKey):
             pk_name = '_composite_key'
             composite_key = True
 
