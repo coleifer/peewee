@@ -372,6 +372,29 @@ class TestCompositePrimaryKey(ModelTestCase):
             [x.thing for x in UserThing.select().order_by(UserThing.thing)],
             ['t1', 't2', 't3'])
 
+    def test_composite_key_inheritance(self):
+        class Person(TestModel):
+            first = TextField()
+            last = TextField()
+
+            class Meta:
+                primary_key = CompositeKey('first', 'last')
+
+        self.assertTrue(isinstance(Person._meta.primary_key, CompositeKey))
+        self.assertEqual(Person._meta.primary_key.field_names,
+                         ('first', 'last'))
+
+        class Employee(Person):
+            title = TextField()
+
+        self.assertTrue(isinstance(Employee._meta.primary_key, CompositeKey))
+        self.assertEqual(Employee._meta.primary_key.field_names,
+                         ('first', 'last'))
+        self.assertEqual(Employee._schema._create_table().query(), (
+            'CREATE TABLE IF NOT EXISTS "employee" ('
+            '"first" TEXT NOT NULL, "last" TEXT NOT NULL, '
+            '"title" TEXT NOT NULL, PRIMARY KEY ("first", "last"))', []))
+
 
 class TestForeignKeyConstraints(ModelTestCase):
     requires = [User, Note]

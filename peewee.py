@@ -71,7 +71,7 @@ except ImportError:
     def quote(path, quote_char):
         quotes = (quote_char, quote_char)
         if len(path) == 1:
-            return path.join(quotes)
+            return path[0].join(quotes)
         return '.'.join([part.join(quotes) for part in path])
 
 
