@@ -109,9 +109,7 @@ class _Array(object):
         self.items = items
 
 def adapt_array(arr):
-    conn = arr.field.model_class._meta.database.get_conn()
     items = adapt(arr.items)
-    items.prepare(conn)
     return AsIs('%s::%s%s' % (
         items,
         arr.field.get_column_type(),
