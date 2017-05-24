@@ -1336,16 +1336,19 @@ class TestDeleteQuery(PeeweeTestCase):
               .where(User.username == 'old'))
         self.assertWhere(dq, '(("users"."id" = ?) AND ("users"."username" = ?))', [2, 'old'])
 
+
 class TestRawQuery(PeeweeTestCase):
     def test_raw(self):
         q = 'SELECT * FROM "users" WHERE id=?'
         rq = RawQuery(User, q, 100)
         self.assertEqual(rq.sql(), (q, [100]))
 
+
 class TestSchema(PeeweeTestCase):
     def test_schema(self):
         class WithSchema(TestModel):
             data = CharField()
+
             class Meta:
                 schema = 'huey'
         query = WithSchema.select().where(WithSchema.data == 'mickey')
@@ -1354,6 +1357,7 @@ class TestSchema(PeeweeTestCase):
             'SELECT "withschema"."id", "withschema"."data" FROM '
             '"huey"."withschema" AS withschema '
             'WHERE ("withschema"."data" = ?)'))
+
 
 class TestDjangoFilters(PeeweeTestCase):
     # test things like filter, annotate, aggregate
@@ -1379,6 +1383,10 @@ class TestDjangoFilters(PeeweeTestCase):
             'INNER JOIN "comment" AS comment ON ("blog"."pk" = "comment"."blog_id")',
         ])
         self.assertWhere(sq, '(("users"."username" IN (?, ?)) AND ("comment"."comment" = ?))', ['u1', 'u2', 'hurp'])
+
+        sq = Blog.filter(user__username__not_in=['u1', 'u2'], pub_date__is_not=None)
+        self.assertJoins(sq, ['INNER JOIN "users" AS users ON ("blog"."user_id" = "users"."id")'])
+        self.assertWhere(sq, '(("blog"."pub_date" IS NOT ?) AND ("users"."username" NOT IN (?, ?)))', [None, 'u1', 'u2'])
 
     def test_filter_dq(self):
         sq = User.filter(~DQ(username='u1'))
@@ -1501,17 +1509,22 @@ class TestQueryCompiler(PeeweeTestCase):
     def test_alias_map(self):
         class A(TestModel):
             a = CharField()
+
             class Meta:
                 table_alias = 'a_tbl'
+
         class B(TestModel):
             b = CharField()
             a_link = ForeignKeyField(A)
+
         class C(TestModel):
             c = CharField()
             b_link = ForeignKeyField(B)
+
         class D(TestModel):
             d = CharField()
             c_link = ForeignKeyField(C)
+
             class Meta:
                 table_alias = 'd_tbl'
 
@@ -1631,6 +1644,7 @@ class TestProxy(PeeweeTestCase):
                 return 'foo'
 
         a = Proxy()
+
         def raise_error():
             a.foo()
         self.assertRaises(AttributeError, raise_error)
@@ -1643,6 +1657,7 @@ class TestProxy(PeeweeTestCase):
 
         class DummyModel(TestModel):
             test_field = CharField()
+
             class Meta:
                 database = database_proxy
 
