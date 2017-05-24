@@ -223,7 +223,7 @@ Let's make sure these are sorted alphabetically by adding an :py:meth:`~SelectQu
     Fido
     Kitty
 
-Let's list all the people now, youngest to oldest:
+Let's list all the people now, oldest to youngest:
 
 .. code-block:: pycon
 
