@@ -116,7 +116,7 @@ class ManyToManyField(Field):
         setattr(model_class, name, self._get_descriptor())
 
         if not self._is_backref:
-            backref = ManyToManyField(
+            backref = type(self)(
                 self.model_class,
                 through_model=self._through_model,
                 _is_backref=True)
