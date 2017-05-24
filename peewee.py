@@ -4771,9 +4771,9 @@ class BaseModel(type):
         meta_options = {}
         meta = attrs.pop('Meta', None)
         if meta:
-            for k, v in meta.__dict__.items():
+            for k in dir(meta):
                 if not k.startswith('_'):
-                    meta_options[k] = v
+                    meta_options[k] = getattr(meta, k)
 
         model_pk = getattr(meta, 'primary_key', None)
         parent_pk = None
