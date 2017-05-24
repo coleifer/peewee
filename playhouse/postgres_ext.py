@@ -305,7 +305,7 @@ class PostgresqlExtCompiler(QueryCompiler):
         # may want to use GiST indexes, for example.
         index_type = None
         for field in fields:
-            if isinstance(field, IndexedFieldMixin):
+            if hasattr(field, 'index_type'):
                 index_type = field.index_type
         if index_type:
             clause.nodes.insert(-1, SQL('USING %s' % index_type))
