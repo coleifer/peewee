@@ -2911,7 +2911,8 @@ class Query(Node):
 
     def _execute(self):
         sql, params = self.sql()
-        return self.database.execute_sql(sql, params, self.require_commit)
+        db = self.model_class.determine_database(self, sql, params)
+        return db.execute_sql(sql, params, self.require_commit)
 
     def execute(self):
         raise NotImplementedError
@@ -4871,6 +4872,21 @@ class Model(with_metaclass(BaseModel)):
 
         for k, v in kwargs.items():
             setattr(self, k, v)
+
+    @classmethod
+    def get_read_database(self):
+        return self._meta.database
+
+    @classmethod
+    def get_write_database(self):
+        return self._meta.database
+
+    @classmethod
+    def determine_database(self, query, sql, params):
+        if sql.lower().startswith('select'):
+            return self.get_read_database()
+        else:
+            return self.get_write_database()
 
     @classmethod
     def alias(cls):
