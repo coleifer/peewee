@@ -2362,6 +2362,9 @@ class QueryResultWrapper(object):
                 next(self)
             except StopIteration:
                 break
+    
+    def __len__(self):
+        return self.cursor.rowcount
 
 class ExtQueryResultWrapper(QueryResultWrapper):
     def initialize(self, description):
