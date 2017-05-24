@@ -1,13 +1,20 @@
 language: python
+cache:
+  pip: true
+  directories:
+    - $HOME/.ccache
 python:
   - "2.6"
   - "2.7"
   - "3.4"
   - "3.5"
 env:
-  - PEEWEE_TEST_BACKEND=sqlite
-  - PEEWEE_TEST_BACKEND=postgresql
-  - PEEWEE_TEST_BACKEND=mysql
+  global:
+    - PATH="/usr/lib/ccache:$PATH"
+  matrix:
+    - PEEWEE_TEST_BACKEND=sqlite
+    - PEEWEE_TEST_BACKEND=postgresql
+    - PEEWEE_TEST_BACKEND=mysql
 addons:
   postgresql: "9.4"
 services:
