@@ -133,7 +133,7 @@ class TestSelectQuery(BaseTestCase):
                  .join(Tweet, on=(Tweet.c.user_id == User.c.id))
                  .group_by(User.c.id, User.c.username))
         self.assertSQL(query, (
-            'SELECT "t1"."id", "t1"."username", COUNT("t2"."id") AS ct '
+            'SELECT "t1"."id", "t1"."username", COUNT("t2"."id") AS "ct" '
             'FROM "users" AS "t1" '
             'INNER JOIN "tweets" AS "t2" ON ("t2"."user_id" = "t1"."id") '
             'GROUP BY "t1"."id", "t1"."username"'), [])
@@ -147,7 +147,7 @@ class TestSelectQuery(BaseTestCase):
                  .order_by(User.c.username))
         self.assertSQL(query, (
             'SELECT "t1"."username", '
-            '(SELECT COUNT("t2"."id") AS ct '
+            '(SELECT COUNT("t2"."id") AS "ct" '
             'FROM "tweets" AS "t2" '
             'WHERE ("t2"."user" = "t1"."id")) AS "iq" '
             'FROM "users" AS "t1" ORDER BY "t1"."username"'), [])
@@ -198,7 +198,7 @@ class TestSelectQuery(BaseTestCase):
 
         self.assertSQL(query, (
             'WITH "regional_sales" AS ('
-            'SELECT "t1"."region", SUM("t1"."amount") AS total_sales '
+            'SELECT "t1"."region", SUM("t1"."amount") AS "total_sales" '
             'FROM "orders" AS "t1" '
             'GROUP BY "t1"."region"'
             '), '
@@ -210,8 +210,8 @@ class TestSelectQuery(BaseTestCase):
             'FROM "regional_sales"))'
             ') '
             'SELECT "t2"."region", "t2"."product", '
-            'SUM("t2"."quantity") AS product_units, '
-            'SUM("t2"."amount") AS product_sales '
+            'SUM("t2"."quantity") AS "product_units", '
+            'SUM("t2"."amount") AS "product_sales" '
             'FROM "orders" AS "t2" '
             'WHERE ('
             '"t2"."region" IN ('
@@ -255,7 +255,7 @@ class TestSelectQuery(BaseTestCase):
         self.assertSQL(query, (
             'SELECT "t1"."id" FROM "person" AS "t1" '
             'INNER JOIN "note" AS "t2" '
-            'ON Magic("t1"."id", "t2"."id") AS magic'), [])
+            'ON Magic("t1"."id", "t2"."id") AS "magic"'), [])
 
 
 class TestInsertQuery(BaseTestCase):
@@ -349,7 +349,7 @@ class TestUpdateQuery(BaseTestCase):
             '"counter" = ?, '
             '"muted" = ? '
             'WHERE ("id" IN ('
-            'SELECT "users"."id", COUNT("t1"."id") AS ct '
+            'SELECT "users"."id", COUNT("t1"."id") AS "ct" '
             'FROM "users" AS "users" '
             'INNER JOIN "tweets" AS "t1" '
             'ON ("t1"."user_id" = "users"."id") '
@@ -389,7 +389,7 @@ class TestDeleteQuery(BaseTestCase):
         self.assertSQL(query, (
             'DELETE FROM "users" '
             'WHERE ("id" IN ('
-            'SELECT "users"."id", COUNT("t1"."id") AS ct '
+            'SELECT "users"."id", COUNT("t1"."id") AS "ct" '
             'FROM "users" AS "users" '
             'INNER JOIN "tweets" AS "t1" ON ("t1"."user_id" = "users"."id") '
             'GROUP BY "users"."id" '

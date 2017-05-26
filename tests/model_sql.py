@@ -21,7 +21,7 @@ class TestModelSQL(ModelDatabaseTestCase):
                  .join(Note)
                  .where((Person.last == 'Leifer') & (Person.id < 4)))
         self.assertSQL(query, (
-            'SELECT "t1"."first", "t1"."last", COUNT("t2"."id") AS ct '
+            'SELECT "t1"."first", "t1"."last", COUNT("t2"."id") AS "ct" '
             'FROM "person" AS "t1" '
             'INNER JOIN "note" AS "t2" ON ("t2"."author_id" = "t1"."id") '
             'WHERE ('
@@ -64,6 +64,50 @@ class TestModelSQL(ModelDatabaseTestCase):
             'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
             'WHERE ((("t1"."id" >= ?) AND ("t1"."id" < ?)) AND '
             '("t1"."username" = ?))'), [1, 5, 'huey'])
+
+    def test_filter_expressions(self):
+        query = User.filter(
+            DQ(username__in=['huey', 'zaizee']) |
+            (DQ(id__gt=2) & DQ(id__lt=4)))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" '
+            'FROM "users" AS "t1" '
+            'WHERE (("t1"."username" IN (?, ?)) OR '
+            '(("t1"."id" > ?) AND ("t1"."id" < ?)))'),
+            ['huey', 'zaizee', 2, 4])
+
+    def test_filter_join(self):
+        query = Tweet.select(Tweet.content).filter(user__username='huey')
+        self.assertSQL(query, (
+            'SELECT "t1"."content" FROM "tweet" AS "t1" '
+            'INNER JOIN "users" AS "t2" ON ("t1"."user_id" = "t2"."id") '
+            'WHERE ("t2"."username" = ?)'), ['huey'])
+
+    def test_filter_join_combine_models(self):
+        query = (Tweet
+                 .select(Tweet.content)
+                 .filter(user__username='huey')
+                 .filter(DQ(user__id__gte=1) | DQ(id__lt=5)))
+        self.assertSQL(query, (
+            'SELECT "t1"."content" FROM "tweet" AS "t1" '
+            'INNER JOIN "users" AS "t2" ON ("t1"."user_id" = "t2"."id") '
+            'WHERE (("t2"."username" = ?) AND '
+            '(("t2"."id" >= ?) OR ("t1"."id" < ?)))'), ['huey', 1, 5])
+
+    def test_mix_filter_methods(self):
+        query = (User
+                 .select(User, fn.COUNT(Tweet.id).alias('count'))
+                 .filter(username__in=('huey', 'zaizee'))
+                 .join(Tweet, JOIN.LEFT_OUTER)
+                 .group_by(User.id, User.username)
+                 .order_by(fn.COUNT(Tweet.id).desc()))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username", COUNT("t2"."id") AS "count" '
+            'FROM "users" AS "t1" '
+            'LEFT OUTER JOIN "tweet" AS "t2" ON ("t2"."user_id" = "t1"."id") '
+            'WHERE ("t1"."username" IN (?, ?)) '
+            'GROUP BY "t1"."id", "t1"."username" '
+            'ORDER BY COUNT("t2"."id") DESC'), ['huey', 'zaizee'])
 
     def test_insert(self):
         query = (Person

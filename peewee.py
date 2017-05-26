@@ -949,7 +949,8 @@ class Alias(WrappedNode):
     def __sql__(self, ctx):
         return (ctx
                 .sql(self.node)
-                .literal(' AS %s' % self._alias))
+                .literal(' AS ')
+                .sql(Entity(self._alias)))
 
 
 class Negated(WrappedNode):
@@ -1251,7 +1252,7 @@ def EnclosedNodeList(nodes):
     return NodeList(nodes, ', ', True)
 
 
-class DQ(Node):
+class DQ(ColumnBase):
     """A "django-style" filter expression, e.g. {'foo__eq': 'x'}."""
     def __init__(self, **query):
         super(DQ, self).__init__()
@@ -4602,8 +4603,8 @@ class ModelSelect(BaseModelSelect, Select):
 
     def ensure_join(self, lm, rm, on=None, **join_kwargs):
         join_ctx = self._join_ctx
-        for join in self._joins.get(lm, []):
-            if join.dest == rm:
+        for dest, attr, constructor in self._joins.get(lm, []):
+            if dest == rm:
                 return self
         return self.switch(lm).join(rm, on=on, **join_kwargs).switch(join_ctx)
 
