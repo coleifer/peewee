@@ -13,7 +13,7 @@ This document describes how to perform typical database-related tasks with peewe
         username = CharField(unique=True)
 
     class Tweet(Model):
-        user = ForeignKeyField(User, related_name='tweets')
+        user = ForeignKeyField(User, backref='tweets')
         message = TextField()
         created_date = DateTimeField(default=datetime.datetime.now)
         is_published = BooleanField(default=True)
@@ -21,7 +21,7 @@ This document describes how to perform typical database-related tasks with peewe
 Creating a database connection and tables
 -----------------------------------------
 
-While it is not necessary to explicitly connect to the database before using it, **managing connections explicitly is a good practice**. This way if the connection fails, the exception can be caught during the *connect* step, rather than some arbitrary time later when a query is executed. Furthermore, if you're using a :ref:`connection pool <pool>`, it is actually necessary to call :py:meth:`~Database.connect` and :py:meth:`~Database.close` to ensure connections are recycled correctly.
+While it is not necessary to explicitly connect to the database before using it, **managing connections explicitly is a good practice**. This way if the connection fails, the exception can be caught during the *connect* step, rather than some arbitrary time later when a query is executed. Furthermore, if you're using a :ref:`connection pool <pool>`, it is necessary to call :py:meth:`~Database.connect` and :py:meth:`~Database.close` to ensure connections are recycled correctly.
 
 For web-apps you will typically open a connection when a request is started and close it when the response is delivered:
 
@@ -37,39 +37,39 @@ For web-apps you will typically open a connection when a request is started and 
 
 .. note:: For examples of configuring connection hooks for several popular web frameworks, see the :ref:`adding_request_hooks` section.
 
-.. note:: For advanced connection management techniques, see the :ref:`advanced connection management <advanced_connection_management>` section.
-
-To use this database with your models, set the ``database`` attribute on an inner :ref:`Meta <model-options>` class:
+To use a database with your models, set the ``database`` attribute on an inner :ref:`Meta <model-options>` class:
 
 .. code-block:: python
 
-    class MyModel(Model):
-        some_field = CharField()
+    app_db = PostgresqlDatabase('accounts')
+
+
+    class Account(Model):
+        name = CharField()
 
         class Meta:
-            database = database
+            database = app_db
 
-**Best practice:** define a base model class that points at the database object you wish to use, and then all your models will extend it:
+**Best practice:** define a base model class that points at the database object you wish to use, and then extend the base model for your application's models:
 
 .. code-block:: python
 
-    database = SqliteDatabase('my_app.db')
+    app_db = SqliteDatabase('my_app.db')
+
 
     class BaseModel(Model):
         class Meta:
-            database = database
+            database = app_db
 
-    class User(BaseModel):
+
+    class User(BaseModel):  # Note: extends BaseModel instead of Model.
         username = CharField()
+
 
     class Tweet(BaseModel):
         user = ForeignKeyField(User, related_name='tweets')
         message = TextField()
-        # etc, etc
 
-.. note::
-    Remember to specify a database on your model classes, otherwise peewee will
-    fall back to a default sqlite database named "peewee.db".
 
 .. _vendor-specific-parameters:
 
@@ -86,8 +86,7 @@ For instance, with Postgresql it is common to need to specify the ``host``, ``us
         'database_name',  # Required by Peewee.
         user='postgres',  # Will be passed directly to psycopg2.
         password='secret',  # Ditto.
-        host='db.mysite.com',  # Ditto.
-    )
+        host='db.mysite.com')  # Ditto.
 
 As another example, the ``pymysql`` driver accepts a ``charset`` parameter which is not a standard Peewee :py:class:`Database` parameter. To set this value, simply pass in ``charset`` alongside your other values:
 
@@ -766,11 +765,11 @@ See `Publish/Subscribe pattern <http://docs.cherrypy.org/en/latest/extend.html#p
 
     def _db_connect():
         db.connect()
-     
+
     def _db_close():
         if not db.is_closed():
             db.close()
-      
+
     cherrypy.engine.subscribe('before_request', _db_connect)
     cherrypy.engine.subscribe('after_request', _db_close)
 

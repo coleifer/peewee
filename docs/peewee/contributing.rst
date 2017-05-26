@@ -36,5 +36,5 @@ Questions
 If you have questions about how to do something with peewee, then I recommend either:
 
 * Ask on StackOverflow. I check SO just about every day for new peewee questions and try to answer them. This has the benefit also of preserving the question and answer for other people to find.
-* Ask in IRC, ``#peewee`` on freenode. I always answer questions, but it may take a bit to get to them.
+* Ask in IRC, ``#peewee`` on freenode. I'm not always available to answer questions, but someone else may be able to help. If I miss you, I'll generally still try to answer the question so please be patient.
 * Ask on the mailing list, https://groups.google.com/group/peewee-orm
