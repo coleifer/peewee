@@ -354,10 +354,12 @@ JOIN = attrdict(
     RIGHT_OUTER='RIGHT OUTER',
     FULL='FULL',
     CROSS='CROSS',
+    LATERAL='LATERAL',
 )
 JOIN_INNER = JOIN.INNER
 JOIN_LEFT_OUTER = JOIN.LEFT_OUTER
 JOIN_FULL = JOIN.FULL
+JOIN_NO_CONSTRAINTS = [JOIN.CROSS, JOIN.LATERAL]
 
 RESULTS_NAIVE = 1
 RESULTS_MODELS = 2
@@ -1678,6 +1680,7 @@ class QueryCompiler(object):
         JOIN.RIGHT_OUTER: 'RIGHT OUTER JOIN',
         JOIN.FULL: 'FULL JOIN',
         JOIN.CROSS: 'CROSS JOIN',
+        JOIN.LATERAL: 'LEFT JOIN LATERAL',
     }
     alias_map_class = AliasMap
 
@@ -1931,7 +1934,7 @@ class QueryCompiler(object):
                 if isinstance(join.on, (Expression, Func, Clause, Entity)):
                     # Clear any alias on the join expression.
                     constraint = join.on.clone().alias()
-                elif join_type != JOIN.CROSS:
+                elif join_type not in JOIN_NO_CONSTRAINTS:
                     metadata = join.metadata
                     if metadata.is_backref:
                         fk_model = join.dest
@@ -1960,6 +1963,8 @@ class QueryCompiler(object):
                 join_sql = SQL(self.join_map.get(join_type) or join_type)
                 if join_type == JOIN.CROSS:
                     clauses.append(Clause(join_sql, dest_n))
+                elif join_type == JOIN.LATERAL:
+                    clauses.append(Clause(join_sql, dest_n, SQL('ON %s', True)))
                 else:
                     clauses.append(Clause(join_sql, dest_n, SQL('ON'),
                                           constraint))
@@ -2816,7 +2821,7 @@ class Query(Node):
     def join(self, dest, join_type=None, on=None):
         src = self._query_ctx
         if on is None:
-            require_join_condition = join_type != JOIN.CROSS and (
+            require_join_condition = join_type not in JOIN_NO_CONSTRAINTS and (
                 isinstance(dest, SelectQuery) or
                 (isclass(dest) and not src._meta.rel_exists(dest)))
             if require_join_condition:
