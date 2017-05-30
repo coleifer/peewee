@@ -235,6 +235,10 @@ def merge_dict(source, overrides):
         merged.update(overrides)
     return merged
 
+def is_model(obj):
+    return isclass(obj) and issubclass(obj, Model)
+
+
 class _callable_context_manager(object):
     def __call__(self, fn):
         @wraps(fn)
@@ -243,8 +247,33 @@ class _callable_context_manager(object):
                 return fn(*args, **kwargs)
         return inner
 
-def is_model(obj):
-    return isclass(obj) and issubclass(obj, Model)
+
+class Proxy(object):
+    __slots__ = ('obj', '_callbacks')
+
+    def __init__(self):
+        self._callbacks = []
+        self.initialize(None)
+
+    def initialize(self, obj):
+        self.obj = obj
+        for callback in self._callbacks:
+            callback(obj)
+
+    def attach_callback(self, callback):
+        self._callbacks.append(callback)
+        return callback
+
+    def __getattr__(self, attr):
+        if self.obj is None:
+            raise AttributeError('Cannot use uninitialized Proxy.')
+        return getattr(self.obj, attr)
+
+    def __setattr__(self, attr, value):
+        if attr not in self.__slots__:
+            raise AttributeError('Cannot set attribute on proxy.')
+        return super(Proxy, self).__setattr__(attr, value)
+
 
 # SQL Generation.
 
