@@ -122,7 +122,7 @@ cdef class _QueryResultWrapper(object):
         self._populated = self._initialized = False
         self._result_cache = []
         if meta is not None:
-            self.column_meta, self.join_meta = meta
+            self.column_meta, self.join_meta = meta[0], dict(meta[1])
         else:
             self.column_meta = self.join_meta = None
 
