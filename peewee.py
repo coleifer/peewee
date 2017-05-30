@@ -315,7 +315,10 @@ def _sqlite_regexp(regex, value, case_sensitive=False):
 
 class attrdict(dict):
     def __getattr__(self, attr):
-        return self[attr]
+        try:
+            return self[attr]
+        except KeyError:
+            raise AttributeError(attr)
 
 SENTINEL = object()
 
