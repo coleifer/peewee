@@ -60,13 +60,13 @@ if ext_modules:
         ext_modules=ext_modules)
 
 setup(
-    name='peewee',
+    name='311devs_peewee',
     version=__import__('peewee').__version__,
     description='a little orm',
     long_description=readme,
-    author='Charles Leifer',
-    author_email='coleifer@gmail.com',
-    url='http://github.com/coleifer/peewee/',
+    author='',
+    author_email='',
+    url='https://github.com/311devs/peewee',
     packages=['playhouse'],
     py_modules=['peewee', 'pwiz'],
     classifiers=[
