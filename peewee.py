@@ -2113,12 +2113,12 @@ class QueryCompiler(object):
                 clauses.append(query.database.default_insert_clause(
                     query.model_class))
 
-        if query.is_insert_returning:
+        pks = [p for p in meta.get_primary_key_fields() if p is not False]
+
+        if query.is_insert_returning and pks:
             clauses.extend([
                 SQL('RETURNING'),
-                self._get_field_clause(
-                    meta.get_primary_key_fields(),
-                    clause_type=CommaClause)])
+                self._get_field_clause(pks, clause_type=CommaClause)])
         elif query._returning is not None:
             returning_clause = Clause(*query._returning)
             returning_clause.glue = ', '
@@ -3529,15 +3529,17 @@ class InsertQuery(_WriteQuery):
             return self._qr
         else:
             cursor = self._execute()
-            if not self._is_multi_row_insert:
+            meta = self.model_class._meta
+            pks = [p for p in meta.get_primary_key_fields() if p is not False]
+
+            if not self._is_multi_row_insert and pks:
                 if self.database.insert_returning:
                     pk_row = cursor.fetchone()
-                    meta = self.model_class._meta
                     clean_data = [
                         field.python_value(column)
                         for field, column
-                        in zip(meta.get_primary_key_fields(), pk_row)]
-                    if self.model_class._meta.composite_key:
+                        in zip(pks, pk_row)]
+                    if meta.composite_key:
                         return clean_data
                     return clean_data[0]
                 return self.database.last_insert_id(cursor, self.model_class)
