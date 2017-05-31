@@ -113,12 +113,18 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
             if field_data:
                 seen.add(field)
                 rel_obj = getattr(model, field.name)
+                recursive_extra_attrs = [
+                    attr_name[len(field.name) + 1:]
+                    for attr_name in extra_attrs
+                    if attr_name.startswith(field.name + '.')
+                ]
                 field_data = model_to_dict(
                     rel_obj,
                     recurse=recurse,
                     backrefs=backrefs,
                     only=only,
                     exclude=exclude,
+                    extra_attrs=recursive_extra_attrs,
                     seen=seen,
                     max_depth=max_depth - 1)
             else:
@@ -128,6 +134,8 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
 
     if extra_attrs:
         for attr_name in extra_attrs:
+            if '.' in attr_name:
+                continue
             attr = getattr(model, attr_name)
             if callable(attr):
                 data[attr_name] = attr()
