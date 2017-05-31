@@ -4875,6 +4875,21 @@ class Model(with_metaclass(BaseModel)):
         for k, v in kwargs.items():
             setattr(self, k, v)
 
+    def __getattribute__(self, item):
+        classmethods = [
+            'alias', 'select', 'update', 'insert', 'insert_many',
+            'insert_from', 'delete', 'raw', 'create', 'get', 'get_or_create',
+            'create_or_get', 'filter', 'table_exists', 'create_table',
+            'table_exists', '_fields_to_index', '_index_data',
+            '_create_indexes', '_drop_indexes', 'sqlall', 'drop_table',
+            'truncate_table', 'as_entity', 'noop']
+
+        if item in classmethods:
+            raise TypeError("'%s' should be called on the class "
+                            "and not the instance" % item)
+
+        return super(Model, self).__getattribute__(item)
+
     @classmethod
     def alias(cls):
         return ModelAlias(cls)
@@ -5105,12 +5120,12 @@ class Model(with_metaclass(BaseModel)):
                     field_dict.pop(pk_part_name, None)
             else:
                 field_dict.pop(pk_field.name, None)
-            rows = self.update(**field_dict).where(self._pk_expr()).execute()
+            rows = self.__class__.update(**field_dict).where(self._pk_expr()).execute()
         elif pk_field is None:
-            self.insert(**field_dict).execute()
+            self.__class__.insert(**field_dict).execute()
             rows = 1
         else:
-            pk_from_cursor = self.insert(**field_dict).execute()
+            pk_from_cursor = self.__class__.insert(**field_dict).execute()
             if pk_from_cursor is not None:
                 pk_value = pk_from_cursor
             self._set_pk_value(pk_value)
@@ -5127,7 +5142,7 @@ class Model(with_metaclass(BaseModel)):
 
     def dependencies(self, search_nullable=False):
         model_class = type(self)
-        query = self.select().where(self._pk_expr())
+        query = self.__class__.select().where(self._pk_expr())
         stack = [(type(self), query)]
         seen = set()
 
@@ -5157,7 +5172,7 @@ class Model(with_metaclass(BaseModel)):
                     model.update(**{fk.name: None}).where(query).execute()
                 else:
                     model.delete().where(query).execute()
-        return self.delete().where(self._pk_expr()).execute()
+        return self.__class__.delete().where(self._pk_expr()).execute()
 
     def __hash__(self):
         return hash((self.__class__, self._get_pk_value()))
