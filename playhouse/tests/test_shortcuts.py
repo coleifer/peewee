@@ -4,6 +4,7 @@ from peewee import OP
 from playhouse.hybrid import hybrid_method
 from playhouse.hybrid import hybrid_property
 from playhouse.shortcuts import *
+from playhouse.fields import ManyToManyField
 from playhouse.test_utils import assert_query_count
 from playhouse.tests.base import database_initializer
 from playhouse.tests.base import ModelTestCase
@@ -65,12 +66,24 @@ class NoteTag(BaseModel):
         primary_key = CompositeKey('note', 'tag')
 
 
+class Author(BaseModel):
+    name = TextField()
+
+
+class Book(BaseModel):
+    title = TextField()
+    authors = ManyToManyField(Author, related_name='books')
+
+
 MODELS = [
     Category,
     User,
     Note,
     Tag,
-    NoteTag]
+    NoteTag,
+    Author,
+    Book,
+    Book.authors.get_through_model()]
 
 
 class TestRetryDatabaseMixin(PeeweeTestCase):
@@ -569,6 +582,34 @@ class TestModelToDict(ModelTestCase):
                 {'text': 'n2'},
                 {'text': 'n3'},
             ]})
+
+    def test_deference_many_to_many_field(self):
+        b1 = Book.create(title='b1')
+        a1 = Author.create(name='a1')
+        b1.authors.add(a1)
+        d = model_to_dict(b1, dereference_many_to_many_fields=True)
+        self.assertEqual(d, {
+            'id': b1.id,
+            'title': 'b1',
+            'authors': [
+                {'id': a1.id, 'name': 'a1'}
+            ]
+        })
+
+    def test_deference_many_to_many_field_backref(self):
+        b1 = Book.create(title='b1')
+        a1 = Author.create(name='a1')
+        b1.authors.add(a1)
+        d = model_to_dict(b1, dereference_many_to_many_fields=True, backrefs=True)
+        self.assertEqual(d, {
+            'id': b1.id,
+            'title': 'b1',
+            'authors': [
+                {'id': a1.id,
+                 'name': 'a1',
+                 'books': [{'id': b1.id, 'title': 'b1'}]}
+            ]
+        })
 
 
 class TestDictToModel(ModelTestCase):
