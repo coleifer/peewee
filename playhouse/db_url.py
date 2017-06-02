@@ -94,6 +94,12 @@ def connect(url, **connect_params):
             raise RuntimeError('Unrecognized or unsupported scheme: "%s".' %
                                parsed.scheme)
 
+    # Adjust parameters for SQLite
+    if (database_class is SqliteDatabase and 'host' in connect_kwargs and
+        not connect_kwargs["database"]):
+        connect_kwargs['database'] = connect_kwargs['host']
+        del connect_kwargs['host']
+
     return database_class(**connect_kwargs)
 
 # Conditionally register additional databases.
