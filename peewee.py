@@ -1022,7 +1022,9 @@ class Field(Node):
 
     def as_entity(self, with_table=False):
         if with_table:
-            return Entity(self.model_class._meta.db_table, self.db_column)
+            if not self.model_class._meta.schema:
+                return Entity(self.model_class._meta.db_table, self.db_column)
+            return Entity(self.model_class._meta.schema, self.model_class._meta.db_table, self.db_column)
         return Entity(self.db_column)
 
     def __ddl_column__(self, column_type):
@@ -2178,7 +2180,7 @@ class QueryCompiler(object):
             *fk_clause.nodes)
     create_foreign_key = return_parsed_node('_create_foreign_key')
 
-    def _create_table(self, model_class, safe=False):
+    def _create_table(self, model_class, safe=False, schema=None):
         statement = 'CREATE TABLE IF NOT EXISTS' if safe else 'CREATE TABLE'
         meta = model_class._meta
 
@@ -3852,9 +3854,9 @@ class Database(object):
     def sequence_exists(self, seq):
         raise NotImplementedError
 
-    def create_table(self, model_class, safe=False):
+    def create_table(self, model_class, safe=False, schema=None):
         qc = self.compiler()
-        return self.execute_sql(*qc.create_table(model_class, safe))
+        return self.execute_sql(*qc.create_table(model_class, safe, schema=schema))
 
     def create_tables(self, models, safe=False):
         create_model_tables(models, fail_silently=safe)
@@ -4212,6 +4214,12 @@ class PostgresqlDatabase(Database):
                 AND pg_class.relnamespace = pg_namespace.oid
                 AND relname=%s""", (sequence,))
         return bool(res.fetchone()[0])
+
+    def create_table(self, model_class, safe=False, schema=None):
+        qc = self.compiler()
+        if model_class._meta.schema:
+            self.execute_sql('CREATE SCHEMA IF NOT EXISTS "%s"' % model_class._meta.schema)
+        return self.execute_sql(*qc.create_table(model_class, safe, schema=schema))
 
     def set_search_path(self, *search_path):
         path_params = ','.join(['%s'] * len(search_path))
@@ -4972,12 +4980,13 @@ class Model(with_metaclass(BaseModel)):
             return
 
         db = cls._meta.database
+        schema = cls._meta.schema or None
         pk = cls._meta.primary_key
         if db.sequences and pk is not False and pk.sequence:
             if not db.sequence_exists(pk.sequence):
                 db.create_sequence(pk.sequence)
 
-        db.create_table(cls)
+        db.create_table(cls, schema=schema)
         cls._create_indexes()
 
     @classmethod
