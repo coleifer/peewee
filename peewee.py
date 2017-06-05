@@ -808,15 +808,6 @@ class CTE(_HashableSource, Source):
         return ctx
 
 
-def build_expression(lhs, op, rhs, flat=False, impl=None):
-    if not isinstance(lhs, Node):
-        lhs = Value(lhs)
-    if not isinstance(rhs, Node):
-        rhs = Value(rhs)
-    Impl = Expression if impl is None else impl
-    return Impl(lhs, op, rhs, flat)
-
-
 class ColumnBase(Node):
     def alias(self, alias):
         if alias:
@@ -844,8 +835,8 @@ class ColumnBase(Node):
         """
         def inner(self, rhs):
             if inv:
-                return build_expression(rhs, op, self)
-            return build_expression(self, op, rhs)
+                return Expression(rhs, op, self)
+            return Expression(self, op, rhs)
         return inner
     __and__ = _e(OP.AND)
     __or__ = _e(OP.OR)
@@ -865,10 +856,10 @@ class ColumnBase(Node):
 
     def __eq__(self, rhs):
         op = OP.IS if rhs is None else OP.EQ
-        return build_expression(self, op, rhs)
+        return Expression(self, op, rhs)
     def __ne__(self, rhs):
         op = OP.IS_NOT if rhs is None else OP.NE
-        return build_expression(self, op, rhs)
+        return Expression(self, op, rhs)
 
     __lt__ = _e(OP.LT)
     __le__ = _e(OP.LTE)
@@ -884,24 +875,24 @@ class ColumnBase(Node):
 
     # Special expressions.
     def in_(self, rhs):
-        return build_expression(self, OP.IN, rhs)
+        return Expression(self, OP.IN, rhs)
     def not_in(self, rhs):
-        return build_expression(self, OP.NOT_IN, rhs)
+        return Expression(self, OP.NOT_IN, rhs)
     def is_null(self, is_null=True):
         op = OP.IS if is_null else OP.IS_NOT
-        return build_expression(self, op, None)
+        return Expression(self, op, None)
     def contains(self, rhs):
-        return build_expression(self, OP.ILIKE, '%%%s%%' % rhs)
+        return Expression(self, OP.ILIKE, '%%%s%%' % rhs)
     def startswith(self, rhs):
-        return build_expression(self, OP.ILIKE, '%s%%' % rhs)
+        return Expression(self, OP.ILIKE, '%s%%' % rhs)
     def endswith(self, rhs):
-        return build_expression(self, OP.ILIKE, '%%%s' % rhs)
+        return Expression(self, OP.ILIKE, '%%%s' % rhs)
     def between(self, lo, hi):
-        return build_expression(self, OP.BETWEEN, NodeList((lo, OP.AND, hi)))
+        return Expression(self, OP.BETWEEN, NodeList((lo, OP.AND, hi)))
     def regexp(self, expression):
-        return build_expression(self, OP.REGEXP, expression)
+        return Expression(self, OP.REGEXP, expression)
     def concat(self, rhs):
-        return build_expression(self, OP.CONCAT, rhs, impl=StringExpression)
+        return StringExpression(self, OP.CONCAT, rhs)
     def __getitem__(self, item):
         if isinstance(item, slice):
             if item.start is None or item.stop is None:
@@ -913,7 +904,7 @@ class ColumnBase(Node):
         def __op__(self, value):
             if inverted:
                 self, value = value, self
-            return build_expression(self, operation, value)
+            return Expression(self, operation, value)
         return __op__
 
     def get_sort_key(self, ctx):
@@ -1087,7 +1078,7 @@ class StringExpression(Expression):
     def __add__(self, rhs):
         return self.concat(rhs)
     def __radd__(self, lhs):
-        return build_expression(lhs, OP.CONCAT, self, impl=StringExpression)
+        return StringExpression(lhs, OP.CONCAT, self)
 
 
 class Entity(ColumnBase):
