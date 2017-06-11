@@ -41,7 +41,7 @@ from copy import deepcopy
 from functools import wraps
 from inspect import isclass
 
-__version__ = '2.8.8'
+__version__ = '2.10.1'
 __all__ = [
     'BareField',
     'BigIntegerField',
@@ -202,19 +202,26 @@ except ImportError:
         seen = set()
         ordering = []
         def dfs(model):
+            # Omit models which are already sorted
+            # or should not be in the list at all
             if model in models and model not in seen:
                 seen.add(model)
-                for foreign_key in model._meta.reverse_rel.values():
-                    dfs(foreign_key.model_class)
-                ordering.append(model)  # parent will follow descendants
+
+                # First create models on which current model depends
+                # (either through foreign keys or through depends_on),
+                # then create current model itself
+                for foreign_key in model._meta.rel.values():
+                    dfs(foreign_key.rel_model)
                 if model._meta.depends_on:
                     for dependency in model._meta.depends_on:
                         dfs(dependency)
+                ordering.append(model)
+
         # Order models by name and table initially to guarantee total ordering.
         names = lambda m: (m._meta.name, m._meta.db_table)
-        for m in sorted(models, key=names, reverse=True):
+        for m in sorted(models, key=names):
             dfs(m)
-        return list(reversed(ordering))
+        return ordering
 
     def strip_parens(s):
         # Quick sanity check.
@@ -302,12 +309,16 @@ def _sqlite_date_trunc(lookup_type, datetime_string):
     dt = format_date_time(datetime_string, SQLITE_DATETIME_FORMATS)
     return dt.strftime(SQLITE_DATE_TRUNC_MAPPING[lookup_type])
 
-def _sqlite_regexp(regex, value):
-    return re.search(regex, value, re.I) is not None
+def _sqlite_regexp(regex, value, case_sensitive=False):
+    flags = 0 if case_sensitive else re.I
+    return re.search(regex, value, flags) is not None
 
 class attrdict(dict):
     def __getattr__(self, attr):
-        return self[attr]
+        try:
+            return self[attr]
+        except KeyError:
+            raise AttributeError(attr)
 
 SENTINEL = object()
 
@@ -596,7 +607,7 @@ class Node(object):
     def regexp(self, expression):
         return Expression(self, OP.REGEXP, expression)
     def concat(self, rhs):
-        return Expression(self, OP.CONCAT, rhs)
+        return StringExpression(self, OP.CONCAT, rhs)
 
 class SQL(Node):
     """An unescaped SQL string, with optional parameters."""
@@ -683,6 +694,12 @@ class Expression(Node):
 
     def clone_base(self):
         return Expression(self.lhs, self.op, self.rhs, self.flat)
+
+class StringExpression(Expression):
+    def __add__(self, other):
+        return self.concat(other)
+    def __radd__(self, other):
+        return other.concat(self)
 
 class Param(Node):
     """
@@ -1130,7 +1147,16 @@ def coerce_to_unicode(s, encoding='utf-8'):
             return s
     return unicode_type(s)
 
-class CharField(Field):
+class _StringField(Field):
+    def coerce(self, value):
+        return coerce_to_unicode(value or '')
+
+    def __add__(self, other):
+        return self.concat(other)
+    def __radd__(self, other):
+        return other.concat(self)
+
+class CharField(_StringField):
     db_field = 'string'
 
     def __init__(self, max_length=255, *args, **kwargs):
@@ -1145,9 +1171,6 @@ class CharField(Field):
     def get_modifiers(self):
         return self.max_length and [self.max_length] or None
 
-    def coerce(self, value):
-        return coerce_to_unicode(value or '')
-
 class FixedCharField(CharField):
     db_field = 'fixed_char'
 
@@ -1157,11 +1180,8 @@ class FixedCharField(CharField):
             value = value.strip()
         return value
 
-class TextField(Field):
+class TextField(_StringField):
     db_field = 'text'
-
-    def coerce(self, value):
-        return coerce_to_unicode(value or '')
 
 class BlobField(Field):
     db_field = 'blob'
@@ -1283,6 +1303,7 @@ class TimeField(_BaseFormattedField):
 class TimestampField(IntegerField):
     # Support second -> microsecond resolution.
     valid_resolutions = [10**i for i in range(7)]
+    zero_value = None
 
     def __init__(self, *args, **kwargs):
         self.resolution = kwargs.pop('resolution', 1) or 1
@@ -1295,6 +1316,7 @@ class TimestampField(IntegerField):
         self._conv = _dt.utcfromtimestamp if self.utc else _dt.fromtimestamp
         _default = _dt.utcnow if self.utc else _dt.now
         kwargs.setdefault('default', _default)
+        self.zero_value = kwargs.pop('zero_value', None)
         super(TimestampField, self).__init__(*args, **kwargs)
 
     def get_db_field(self):
@@ -1327,7 +1349,7 @@ class TimestampField(IntegerField):
     def python_value(self, value):
         if value is not None and isinstance(value, (int, float, long)):
             if value == 0:
-                return
+                return self.zero_value
             elif self.resolution > 1:
                 ticks_to_microsecond = 1000000 // self.resolution
                 value, ticks = divmod(value, self.resolution)
@@ -1536,6 +1558,7 @@ class ForeignKeyField(IntegerField):
 
 class CompositeKey(object):
     """A primary key composed of multiple columns."""
+    _node_type = 'composite_key'
     sequence = None
 
     def __init__(self, *field_names):
@@ -1559,6 +1582,9 @@ class CompositeKey(object):
         expressions = [(self.model_class._meta.fields[field] == value)
                        for field, value in zip(self.field_names, other)]
         return reduce(operator.and_, expressions)
+
+    def __ne__(self, other):
+        return ~(self == other)
 
     def __hash__(self):
         return hash((self.model_class.__name__, self.field_names))
@@ -1682,6 +1708,7 @@ class QueryCompiler(object):
             'select_query': self._parse_select_query,
             'compound_select_query': self._parse_compound_select_query,
             'strip_parens': self._parse_strip_parens,
+            'composite_key': self._parse_composite_key,
         }
 
     def quote(self, s):
@@ -1752,6 +1779,12 @@ class QueryCompiler(object):
             sql = self.quote(node.db_column)
         return sql, []
 
+    def _parse_composite_key(self, node, alias_map, conv):
+        fields = []
+        for field_name in node.field_names:
+            fields.append(node.model_class._meta.fields[field_name])
+        return self._parse_clause(CommaClause(*fields), alias_map, conv)
+
     def _parse_compound_select_query(self, node, alias_map, conv):
         csq = 'compound_select_query'
         lhs, rhs = node.lhs, node.rhs
@@ -1784,10 +1817,9 @@ class QueryCompiler(object):
         clone = node.clone()
         if not node._explicit_selection:
             if conv and isinstance(conv, ForeignKeyField):
-                select_field = conv.to_field
+                clone._select = (conv.to_field,)
             else:
-                select_field = clone.model_class._meta.primary_key
-            clone._select = (select_field,)
+                clone._select = clone.model_class._meta.get_primary_key_fields()
         sub, params = self.generate_select(clone, alias_map)
         return '(%s)' % strip_parens(sub), params
 
@@ -3859,6 +3891,8 @@ class Database(object):
 
     def drop_table(self, model_class, fail_silently=False, cascade=False):
         qc = self.compiler()
+        if cascade and not self.drop_cascade:
+            raise ValueError('Database does not support DROP TABLE..CASCADE.')
         return self.execute_sql(*qc.drop_table(
             model_class, fail_silently, cascade))
 
@@ -3942,7 +3976,7 @@ class SqliteDatabase(Database):
         self._set_pragmas(conn)
         conn.create_function('date_part', 2, _sqlite_date_part)
         conn.create_function('date_trunc', 2, _sqlite_date_trunc)
-        conn.create_function('regexp', 2, _sqlite_regexp)
+        conn.create_function('regexp', -1, _sqlite_regexp)
 
     def _set_pragmas(self, conn):
         if self._pragmas:
@@ -4412,8 +4446,12 @@ class savepoint(_callable_context_manager):
     def _execute(self, query):
         self.db.execute_sql(query, require_commit=False)
 
-    def commit(self):
+    def _begin(self):
+        self._execute('SAVEPOINT %s;' % self.quoted_sid)
+
+    def commit(self, begin=True):
         self._execute('RELEASE SAVEPOINT %s;' % self.quoted_sid)
+        if begin: self._begin()
 
     def rollback(self):
         self._execute('ROLLBACK TO SAVEPOINT %s;' % self.quoted_sid)
@@ -4421,7 +4459,7 @@ class savepoint(_callable_context_manager):
     def __enter__(self):
         self.autocommit = self.db.get_autocommit()
         self.db.set_autocommit(False)
-        self._execute('SAVEPOINT %s;' % self.quoted_sid)
+        self._begin()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -4430,7 +4468,7 @@ class savepoint(_callable_context_manager):
                 self.rollback()
             else:
                 try:
-                    self.commit()
+                    self.commit(begin=False)
                 except:
                     self.rollback()
                     raise
@@ -4792,7 +4830,7 @@ class BaseModel(type):
                 model_pk, pk_name = parent_pk, parent_pk.name
             else:
                 model_pk, pk_name = PrimaryKeyField(primary_key=True), 'id'
-        elif isinstance(model_pk, CompositeKey):
+        if isinstance(model_pk, CompositeKey):
             pk_name = '_composite_key'
             composite_key = True
 
@@ -4916,19 +4954,6 @@ class Model(with_metaclass(BaseModel)):
                     return query.get(), False
                 except cls.DoesNotExist:
                     raise exc
-
-    @classmethod
-    def create_or_get(cls, **kwargs):
-        try:
-            with cls._meta.database.atomic():
-                return cls.create(**kwargs), True
-        except IntegrityError:
-            query = []  # TODO: multi-column unique constraints.
-            for field_name, value in kwargs.items():
-                field = getattr(cls, field_name)
-                if field.unique or field.primary_key:
-                    query.append(field == value)
-            return cls.get(*query), False
 
     @classmethod
     def filter(cls, *dq, **query):

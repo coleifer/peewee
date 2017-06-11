@@ -71,6 +71,11 @@ class Nugget(BaseModel):
     category_id = ForeignKeyField(Category, db_column='category_id')
     category = CharField()
 
+class NumericColumn(BaseModel):
+    three = CharField(db_column='3data')
+    five = CharField(db_column='555_value')
+    seven = CharField(db_column='7 eleven')
+
 MODELS = (
     ColTypes,
     Nullable,
@@ -176,6 +181,14 @@ class TestReflection(PeeweeTestCase):
             'coltypes',
             'foobarbaz'])
         self.assertEqual(sorted(models.keys()), ['category', 'coltypes'])
+
+    def test_invalid_python_field_names(self):
+        NumericColumn.create_table()
+        introspector = self.get_introspector()
+        models = introspector.generate_models(table_names=['numericcolumn'])
+        NC = models['numericcolumn']
+        self.assertEqual(sorted(NC._meta.fields),
+                         ['_3data', '_555_value', '_7_eleven', 'id'])
 
     def test_sqlite_fk_re(self):
         user_id_tests = [

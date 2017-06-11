@@ -293,6 +293,30 @@ class TestCompositePrimaryKey(ModelTestCase):
             [x.thing for x in UserThing.select().order_by(UserThing.thing)],
             ['t1', 't2', 't3'])
 
+    def test_composite_key_inheritance(self):
+        db = database_initializer.get_in_memory_database()
+
+        class Person(TestModel):
+            first = TextField()
+            last = TextField()
+            class Meta:
+                database = db
+                primary_key = CompositeKey('first', 'last')
+
+        class Employee(Person):
+            title = TextField()
+
+        self.assertTrue(Employee._meta.composite_key)
+        primary_key = Employee._meta.primary_key
+        self.assertTrue(isinstance(primary_key, CompositeKey))
+        self.assertEqual(primary_key.field_names, ('first', 'last'))
+
+        ddl, _ = compiler.create_table(Employee)
+        self.assertEqual(ddl, (
+            'CREATE TABLE "employee" ("first" TEXT NOT NULL, '
+            '"last" TEXT NOT NULL, "title" TEXT NOT NULL, '
+            'PRIMARY KEY ("first", "last"))'))
+
 
 class TestForeignKeyNonPrimaryKeyCreateTable(PeeweeTestCase):
     def test_create_table(self):

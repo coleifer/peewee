@@ -108,6 +108,10 @@ class TestingID(_TestingID):
     class Meta:
         database = test_db
 
+class Event(BaseModel):
+    name = CharField()
+    duration = IntervalField()
+
 MODELS = [
     Testing,
     TestingID,
@@ -1020,6 +1024,25 @@ class TestIndexedField(PeeweeTestCase):
             'CREATE INDEX "testindexmodel_fake_index_with_type" '
             'ON "testindexmodel" '
             'USING MAGIC ("fake_index_with_type")'))
+
+
+class TestIntervalField(ModelTestCase):
+    requires = [Event]
+
+    def test_interval_field(self):
+        e1 = Event.create(name='hour', duration=datetime.timedelta(hours=1))
+        e2 = Event.create(name='mix', duration=datetime.timedelta(
+            days=1,
+            hours=2,
+            minutes=3,
+            seconds=4))
+
+        events = [(e.name, e.duration)
+                  for e in Event.select().order_by(Event.duration)]
+        self.assertEqual(events, [
+            ('hour', datetime.timedelta(hours=1)),
+            ('mix', datetime.timedelta(days=1, hours=2, minutes=3, seconds=4))
+        ])
 
 
 if __name__ == '__main__':

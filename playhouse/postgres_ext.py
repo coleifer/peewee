@@ -167,6 +167,10 @@ class DateTimeTZField(DateTimeField):
     db_field = 'timestamptz'
 
 
+class IntervalField(Field):
+    db_field = 'interval'
+
+
 class HStoreField(IndexedFieldMixin, Field):
     db_field = 'hash'
 

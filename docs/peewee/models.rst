@@ -157,7 +157,7 @@ Parameters accepted by all field types and their default values:
 * ``verbose_name = None`` -- string representing the "user-friendly" name of this field
 * ``help_text = None`` -- string representing any helpful text for this field
 * ``db_column = None`` -- string representing the underlying column to use if different, useful for legacy databases
-* ``default = None`` -- any value to use as a default for uninitialized models
+* ``default = None`` -- any value to use as a default for uninitialized models; If ``callable``, will be called to produce value
 * ``choices = None`` -- an optional iterable containing 2-tuples of ``value``, ``display``
 * ``primary_key = False`` -- whether this field is the primary key for the table
 * ``sequence = None`` -- sequence to populate field (if backend supports it)

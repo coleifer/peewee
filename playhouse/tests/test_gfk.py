@@ -119,9 +119,6 @@ class GFKTestCase(ModelTestCase):
     def test_get_or_create(self):
         self._test_get_create(Tag.get_or_create)
 
-    def test_create_or_get(self):
-        self._test_get_create(Tag.create_or_get)
-
     def test_gfk_api(self):
         self.create()
 

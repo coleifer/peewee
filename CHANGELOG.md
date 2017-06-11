@@ -5,6 +5,62 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.10.0
+
+The main change in this release is the removal of the `AESEncryptedField`,
+which was included as part of the `playhouse.fields` extension. It was brought
+to my attention that there was some serious potential for security
+vulnerabilities. Rather than give users a false sense of security, I've decided
+the best course of action is to remove the field.
+
+* Remove the `playhouse.fields.AESEncryptedField` over security concerns
+described in ticket #1264.
+* Correctly resolve explicit table dependencies when creating tables, refs
+  #1076. Thanks @maaaks.
+* Implement not equals comparison for `CompositeKey`.
+
+[View commits](https://github.com/coleifer/peewee/compare/2.9.2...2.10.0)
+
+## 2.9.2
+
+* Fixed significant bug in the `savepoint` commit/rollback implementation. Many
+  thanks to @Syeberman for raising the issue. See #1225 for details.
+* Added support for postgresql `INTERVAL` columns. The new `IntervalField` in
+  the `postgres_ext` module is suitable for storing `datetime.timedelta`.
+* Fixed bug where missing `sqlite3` library was causing other, unrelated
+  libraries to throw errors when attempting to import.
+* Added a `case_sensitive` parameter to the SQLite `REGEXP` function
+  implementation. The default is `False`, to preserve backwards-compatibility.
+* Fixed bug that caused tables not to be created when using the `dataset`
+  extension. See #1213 for details.
+* Modified `drop_table` to raise an exception if the user attempts to drop
+  tables with `CASCADE` when the database backend does not support it.
+* Fixed Python3 issue in the `AESEncryptedField`.
+* Modified the behavior of string-typed fields to treat the addition operator
+  as concatenation. See #1241 for details.
+
+[View commits](https://github.com/coleifer/peewee/compare/2.9.1...2.9.2)
+
+## 2.9.1
+
+* Fixed #1218, where the use of `playhouse.flask_utils` was requiring the
+  `sqlite3` module to be installed.
+* Fixed #1219 regarding the SQL generation for composite key sub-selects,
+  joins, etc.
+
+[View commits](https://github.com/coleifer/peewee/compare/2.9.0...2.9.1)
+
+## 2.9.0
+
+In this release there are two notable changes:
+
+* The ``Model.create_or_get()`` method was removed. See the [documentation](http://docs.peewee-orm.com/en/latest/peewee/querying.html#create-or-get)
+  for an example of the code one would write to replicate this functionality.
+* The SQLite closure table extension gained support for many-to-many
+  relationships thanks to a nice PR by @necoro. [Docs](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#ClosureTable).
+
+[View commits](https://github.com/coleifer/peewee/compare/2.8.8...2.9.0)
+
 ## 2.8.8
 
 This release contains a single important bugfix for a regression in specifying

@@ -144,6 +144,31 @@ class TestSelectQuery(PeeweeTestCase):
             ')))))'))
         self.assertEqual(params, ['1', '2'])
 
+    def test_composite_subselect(self):
+        class Person(Model):
+            first = CharField()
+            last = CharField()
+            class Meta:
+                primary_key = CompositeKey('first', 'last')
+
+        sql, params = compiler.generate_select(Person.select())
+        self.assertEqual(sql, ('SELECT "person"."first", "person"."last" '
+                               'FROM "person" AS person'))
+        self.assertEqual(params, [])
+
+        cond = Person.select() == ('huey', 'cat')
+        class Note(Model):
+            pass
+
+        query = Note.select().where(cond)
+        sql, params = compiler.generate_select(query)
+        self.assertEqual(sql, (
+            'SELECT "note"."id" FROM "note" AS note '
+            'WHERE (('
+            'SELECT "person"."first", "person"."last" '
+            'FROM "person" AS person) = (?, ?))'))
+        self.assertEqual(params, ['huey', 'cat'])
+
     def test_select_cloning(self):
         ct = fn.Count(Blog.pk)
         sq = SelectQuery(User, User, User.id.alias('extra_id'), ct.alias('blog_ct')).join(

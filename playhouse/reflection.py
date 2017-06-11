@@ -427,9 +427,11 @@ class Introspector(object):
         column = re.sub('[^\w]+', '_', column)
         if column in RESERVED_WORDS:
             column += '_'
+        if len(column) and column[0].isdigit():
+            column = '_' + column
         return column
 
-    def introspect(self, table_names=None):
+    def introspect(self, table_names=None, literal_column_names=False):
         # Retrieve all the tables in the database.
         if self.schema:
             tables = self.metadata.database.get_tables(schema=self.schema)
@@ -471,7 +473,12 @@ class Introspector(object):
                                   for column_name in table_columns)
 
             for col_name, column in table_columns.items():
-                new_name = self.make_column_name(col_name)
+                if literal_column_names:
+                    # Simply try to make a valid Python identifier.
+                    new_name = re.sub('[^\w]+', '_', col_name)
+                else:
+                    # Snak-ify the name, stripping "_id" suffixes as well.
+                    new_name = self.make_column_name(col_name)
 
                 # If we have two columns, "parent" and "parent_id", ensure
                 # that when we don't introduce naming conflicts.
@@ -537,8 +544,10 @@ class Introspector(object):
             model_names,
             indexes)
 
-    def generate_models(self, skip_invalid=False, table_names=None):
-        database = self.introspect(table_names=table_names)
+    def generate_models(self, skip_invalid=False, table_names=None,
+                        literal_column_names=False):
+        database = self.introspect(table_names=table_names,
+                                   literal_column_names=literal_column_names)
         models = {}
 
         class BaseModel(Model):

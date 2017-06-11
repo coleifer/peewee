@@ -329,12 +329,12 @@ cdef tuple _sort_key(model):
 cdef _sort_models(model, set model_set, set seen, list accum):
     if model in model_set and model not in seen:
         seen.add(model)
-        for foreign_key in model._meta.reverse_rel.values():
-            _sort_models(foreign_key.model_class, model_set, seen, accum)
-        accum.append(model)
+        for foreign_key in model._meta.rel.values():
+            _sort_models(foreign_key.rel_model, model_set, seen, accum)
         if model._meta.depends_on is not None:
             for dependency in model._meta.depends_on:
                 _sort_models(dependency, model_set, seen, accum)
+        accum.append(model)
 
 def sort_models_topologically(models):
     cdef:
@@ -342,7 +342,7 @@ def sort_models_topologically(models):
         set seen = set()
         list accum = []
 
-    for model in sorted(model_set, key=_sort_key, reverse=True):
+    for model in sorted(model_set, key=_sort_key):
         _sort_models(model, model_set, seen, accum)
 
-    return list(reversed(accum))
+    return accum

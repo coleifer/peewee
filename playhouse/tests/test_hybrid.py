@@ -32,8 +32,17 @@ class Interval(BaseModel):
         return fn.abs(cls.length) / 2
 
 
+class Person(BaseModel):
+    first = CharField()
+    last = CharField()
+
+    @hybrid_property
+    def full_name(self):
+        return self.first + ' ' + self.last
+
+
 class TestHybrid(ModelTestCase):
-    requires = [Interval]
+    requires = [Interval, Person]
 
     def setUp(self):
         super(TestHybrid, self).setUp()
@@ -101,3 +110,18 @@ class TestHybrid(ModelTestCase):
         query = Interval.select().order_by(Interval.id)
         actuals = [interval.radius for interval in query]
         self.assertEqual(actuals, radii)
+
+    def test_string_fields(self):
+        huey = Person.create(first='huey', last='cat')
+        zaizee = Person.create(first='zaizee', last='kitty')
+
+        self.assertEqual(huey.full_name, 'huey cat')
+        self.assertEqual(zaizee.full_name, 'zaizee kitty')
+
+        query = Person.select().where(Person.full_name == 'zaizee kitty')
+        zaizee_db = query.get()
+        self.assertEqual(zaizee_db, zaizee)
+
+        query = Person.select().where(Person.full_name.startswith('huey c'))
+        huey_db = query.get()
+        self.assertEqual(huey_db, huey)

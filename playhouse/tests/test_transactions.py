@@ -85,6 +85,23 @@ class TestTransaction(ModelTestCase):
                 commit.assert_called_once_with()
                 self.assertEqual(rollback.call_count, 0)
 
+    def test_savepoint_explicit_commits(self):
+        with test_db.atomic() as txn:
+            User.create(username='txn-rollback')
+            txn.rollback()
+            User.create(username='txn-commit')
+            txn.commit()
+
+            with test_db.atomic() as sp:
+                User.create(username='sp-rollback')
+                sp.rollback()
+
+                User.create(username='sp-commit')
+                sp.commit()
+
+        usernames = [u.username for u in User.select().order_by(User.username)]
+        self.assertEqual(usernames, ['sp-commit', 'txn-commit'])
+
     def test_autocommit(self):
         test_db.set_autocommit(False)
         test_db.begin()

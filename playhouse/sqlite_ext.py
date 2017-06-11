@@ -67,7 +67,10 @@ if sys.version_info[0] == 3:
 
 FTS_MATCHINFO_FORMAT = 'pcnalx'
 FTS_MATCHINFO_FORMAT_SIMPLE = 'pcx'
-FTS_VER = sqlite3.sqlite_version_info[:3] >= (3, 7, 4) and 'FTS4' or 'FTS3'
+if sqlite3 is not None:
+    FTS_VER = sqlite3.sqlite_version_info[:3] >= (3, 7, 4) and 'FTS4' or 'FTS3'
+else:
+    FTS_VER = 'FTS3'
 FTS5_MIN_VERSION = (3, 9, 0)
 
 
@@ -858,7 +861,7 @@ class SqliteExtDatabase(SqliteDatabase):
             self._using_c_extensions = True
             self.register_function(_c_ext.peewee_date_part, 'date_part', 2)
             self.register_function(_c_ext.peewee_date_trunc, 'date_trunc', 2)
-            self.register_function(_c_ext.peewee_regexp, 'regexp', 2)
+            self.register_function(_c_ext.peewee_regexp, 'regexp', -1)
             self.register_function(_c_ext.peewee_rank, 'fts_rank', -1)
             self.register_function(_c_ext.peewee_lucene, 'fts_lucene', -1)
             self.register_function(_c_ext.peewee_bm25, 'fts_bm25', -1)
@@ -867,7 +870,7 @@ class SqliteExtDatabase(SqliteDatabase):
             self._using_c_extensions = False
             self.register_function(_sqlite_date_part, 'date_part', 2)
             self.register_function(_sqlite_date_trunc, 'date_trunc', 2)
-            self.register_function(_sqlite_regexp, 'regexp', 2)
+            self.register_function(_sqlite_regexp, 'regexp', -1)
             self.register_function(rank, 'fts_rank', -1)
             self.register_function(bm25, 'fts_bm25', -1)
 
@@ -987,18 +990,18 @@ def _parse_match_info(buf):
     return [struct.unpack('@I', buf[i:i+4])[0] for i in range(0, bufsize, 4)]
 
 # Ranking implementation, which parse matchinfo.
-def rank(raw_match_info, *weights):
+def rank(raw_match_info, *raw_weights):
     # Handle match_info called w/default args 'pcx' - based on the example rank
     # function http://sqlite.org/fts3.html#appendix_a
     match_info = _parse_match_info(raw_match_info)
     score = 0.0
 
     p, c = match_info[:2]
-    if not weights:
+    if not raw_weights:
         weights = [1] * c
     else:
         weights = [0] * c
-        for i, weight in enumerate(weights):
+        for i, weight in enumerate(raw_weights):
             weights[i] = weight
 
     for phrase_num in range(p):
