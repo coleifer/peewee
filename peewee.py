@@ -888,7 +888,7 @@ class ColumnBase(Node):
     def endswith(self, rhs):
         return Expression(self, OP.ILIKE, '%%%s' % rhs)
     def between(self, lo, hi):
-        return Expression(self, OP.BETWEEN, NodeList((lo, OP.AND, hi)))
+        return Expression(self, OP.BETWEEN, NodeList((lo, SQL('AND'), hi)))
     def regexp(self, expression):
         return Expression(self, OP.REGEXP, expression)
     def concat(self, rhs):

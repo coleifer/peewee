@@ -3,7 +3,8 @@
 Quickstart
 ==========
 
-This document presents a brief, high-level overview of Peewee's primary features. This guide will cover:
+This document presents a brief, high-level overview of Peewee's primary
+features. This guide will cover:
 
 * :ref:`model-definition`
 * :ref:`storing-data`
@@ -14,7 +15,8 @@ This document presents a brief, high-level overview of Peewee's primary features
     :ref:`creating a "twitter"-style web app <example-app>` using peewee and the
     Flask framework.
 
-I **strongly** recommend opening an interactive shell session and running the code. That way you can get a feel for typing in queries.
+I **strongly** recommend opening an interactive shell session and running the
+code. That way you can get a feel for typing in queries.
 
 .. _model-definition:
 
@@ -31,7 +33,8 @@ Field instance    Column on a table
 Model instance    Row in a database table
 ================= =================================
 
-When starting a project with peewee, it's typically best to begin with your data model, by defining one or more :py:class:`Model` classes:
+When starting a project with peewee, it's typically best to begin with your
+data model, by defining one or more :py:class:`Model` classes:
 
 .. code-block:: python
 
@@ -48,29 +51,44 @@ When starting a project with peewee, it's typically best to begin with your data
             database = db # This model uses the "people.db" database.
 
 .. note::
-    Note that we named our model ``Person`` instead of ``People``. This is a convention you should follow -- even though the table will contain multiple people, we always name the class using the singular form.
+    Note that we named our model ``Person`` instead of ``People``. This is a
+    convention you should follow -- even though the table will contain multiple
+    people, we always name the class using the singular form.
 
-There are lots of :ref:`field types <fields>` suitable for storing various types of data. Peewee handles converting between *pythonic* values those used by the database, so you can use Python types in your code without having to worry.
+There are lots of :ref:`field types <fields>` suitable for storing various
+types of data. Peewee handles converting between *pythonic* values those used
+by the database, so you can use Python types in your code without having to
+worry.
 
-Things get interesting when we set up relationships between models using `foreign keys (wikipedia) <http://en.wikipedia.org/wiki/Foreign_key>`_. This is easy to do with peewee:
+Things get interesting when we set up relationships between models using
+`foreign keys (wikipedia) <http://en.wikipedia.org/wiki/Foreign_key>`_. This is
+easy to do with peewee:
 
 .. code-block:: python
 
     class Pet(Model):
-        owner = ForeignKeyField(Person, related_name='pets')
+        owner = ForeignKeyField(Person, backref='pets')
         name = CharField()
         animal_type = CharField()
 
         class Meta:
             database = db # this model uses the "people.db" database
 
-Now that we have our models, let's connect to the database. Although it's not necessary to open the connection explicitly, it is good practice since it will reveal any errors with your database connection immediately, as opposed to some arbitrary time later when the first query is executed. It is also good to close the connection when you are done -- for instance, a web app might open a connection when it receives a request, and close the connection when it sends the response.
+Now that we have our models, let's connect to the database. Although it's not
+necessary to open the connection explicitly, it is good practice since it will
+reveal any errors with your database connection immediately, as opposed to some
+arbitrary time later when the first query is executed. It is also good to close
+the connection when you are done -- for instance, a web app might open a
+connection when it receives a request, and close the connection when it sends
+the response.
 
 .. code-block:: pycon
 
     >>> db.connect()
 
-We'll begin by creating the tables in the database that will store our data. This will create the tables with the appropriate columns, indexes, sequences, and foreign key constraints:
+We'll begin by creating the tables in the database that will store our data.
+This will create the tables with the appropriate columns, indexes, sequences,
+and foreign key constraints:
 
 .. code-block:: pycon
 
@@ -81,7 +99,9 @@ We'll begin by creating the tables in the database that will store our data. Thi
 Storing data
 ------------
 
-Let's begin by populating the database with some people. We will use the :py:meth:`~Model.save` and :py:meth:`~Model.create` methods to add and update people's records.
+Let's begin by populating the database with some people. We will use the
+:py:meth:`~Model.save` and :py:meth:`~Model.create` methods to add and update
+people's records.
 
 .. code-block:: pycon
 
@@ -90,16 +110,21 @@ Let's begin by populating the database with some people. We will use the :py:met
     >>> uncle_bob.save() # bob is now stored in the database
     1
 
-.. note:: When you call :py:meth:`~Model.save`, the number of rows modified is returned.
+.. note::
+    When you call :py:meth:`~Model.save`, the number of rows modified is
+    returned.
 
-You can also add a person by calling the :py:meth:`~Model.create` method, which returns a model instance:
+You can also add a person by calling the :py:meth:`~Model.create` method, which
+returns a model instance:
 
 .. code-block:: pycon
 
     >>> grandma = Person.create(name='Grandma', birthday=date(1935, 3, 1), is_relative=True)
     >>> herb = Person.create(name='Herb', birthday=date(1950, 5, 5), is_relative=False)
 
-To update a row, modify the model instance and call :py:meth:`~Model.save` to persist the changes. Here we will change Grandma's name and then save the changes in the database:
+To update a row, modify the model instance and call :py:meth:`~Model.save` to
+persist the changes. Here we will change Grandma's name and then save the
+changes in the database:
 
 .. code-block:: pycon
 
@@ -107,7 +132,9 @@ To update a row, modify the model instance and call :py:meth:`~Model.save` to pe
     >>> grandma.save()  # Update grandma's name in the database.
     1
 
-Now we have stored 3 people in the database. Let's give them some pets. Grandma doesn't like animals in the house, so she won't have any, but Herb is an animal lover:
+Now we have stored 3 people in the database. Let's give them some pets. Grandma
+doesn't like animals in the house, so she won't have any, but Herb is an animal
+lover:
 
 .. code-block:: pycon
 
@@ -116,16 +143,20 @@ Now we have stored 3 people in the database. Let's give them some pets. Grandma 
     >>> herb_mittens = Pet.create(owner=herb, name='Mittens', animal_type='cat')
     >>> herb_mittens_jr = Pet.create(owner=herb, name='Mittens Jr', animal_type='cat')
 
-After a long full life, Mittens sickens and dies. We need to remove him from the database:
+After a long full life, Mittens sickens and dies. We need to remove him from
+the database:
 
 .. code-block:: pycon
 
     >>> herb_mittens.delete_instance() # he had a great life
     1
 
-.. note:: The return value of :py:meth:`~Model.delete_instance` is the number of rows removed from the database.
+.. note::
+    The return value of :py:meth:`~Model.delete_instance` is the number of rows
+    removed from the database.
 
-Uncle Bob decides that too many animals have been dying at Herb's house, so he adopts Fido:
+Uncle Bob decides that too many animals have been dying at Herb's house, so he
+adopts Fido:
 
 .. code-block:: pycon
 
@@ -138,12 +169,15 @@ Uncle Bob decides that too many animals have been dying at Herb's house, so he a
 Retrieving Data
 ---------------
 
-The real strength of our database is in how it allows us to retrieve data through *queries*. Relational databases are excellent for making ad-hoc queries.
+The real strength of our database is in how it allows us to retrieve data
+through *queries*. Relational databases are excellent for making ad-hoc
+queries.
 
 Getting single records
 ^^^^^^^^^^^^^^^^^^^^^^
 
-Let's retrieve Grandma's record from the database. To get a single record from the database, use :py:meth:`SelectQuery.get`:
+Let's retrieve Grandma's record from the database. To get a single record from
+the database, use :py:meth:`SelectQuery.get`:
 
 .. code-block:: pycon
 
@@ -180,9 +214,14 @@ Let's list all the cats and their owner's name:
     Kitty Bob
     Mittens Jr Herb
 
-There is a big problem with the previous query: because we are accessing ``pet.owner.name`` and we did not select this value in our original query, peewee will have to perform an additional query to retrieve the pet's owner. This behavior is referred to as :ref:`N+1 <nplusone>` and it should generally be avoided.
+There is a big problem with the previous query: because we are accessing
+``pet.owner.name`` and we did not select this value in our original query,
+peewee will have to perform an additional query to retrieve the pet's owner.
+This behavior is referred to as :ref:`N+1 <nplusone>` and it should generally
+be avoided.
 
-We can avoid the extra queries by selecting both *Pet* and *Person*, and adding a *join*.
+We can avoid the extra queries by selecting both *Pet* and *Person*, and adding
+a *join*.
 
 .. code-block:: pycon
 
@@ -206,14 +245,16 @@ Let's get all the pets owned by Bob:
     Kitty
     Fido
 
-We can do another cool thing here to get bob's pets. Since we already have an object to represent Bob, we can do this instead:
+We can do another cool thing here to get bob's pets. Since we already have an
+object to represent Bob, we can do this instead:
 
 .. code-block:: pycon
 
     >>> for pet in Pet.select().where(Pet.owner == uncle_bob):
     ...     print pet.name
 
-Let's make sure these are sorted alphabetically by adding an :py:meth:`~SelectQuery.order_by` clause:
+Let's make sure these are sorted alphabetically by adding an
+:py:meth:`~SelectQuery.order_by` clause:
 
 .. code-block:: pycon
 
@@ -250,29 +291,23 @@ Now let's list all the people *and* some info about their pets:
     Herb 1 pets
         Mittens Jr cat
 
-Once again we've run into a classic example of :ref:`N+1 <nplusone>` query behavior. We can avoid this by performing a *JOIN* and aggregating the records:
+Once again we've run into a classic example of :ref:`N+1 <nplusone>` query
+behavior. We can avoid this by performing a *JOIN* and aggregating the records:
 
 .. code-block:: pycon
 
     >>> subquery = Pet.select(fn.COUNT(Pet.id)).where(Pet.owner == Person.id)
     >>> query = (Person
-    ...          .select(Person, Pet, subquery.alias('pet_count'))
+    ...          .select(Person, subquery.alias('pet_count'))
     ...          .join(Pet, JOIN.LEFT_OUTER)
     ...          .order_by(Person.name))
 
     >>> for person in query.aggregate_rows():  # Note the `aggregate_rows()` call.
     ...     print person.name, person.pet_count, 'pets'
-    ...     for pet in person.pets:
-    ...         print '    ', pet.name, pet.animal_type
     ...
     Bob 2 pets
-         Kitty cat
-         Fido dog
     Grandma L. 0 pets
     Herb 1 pets
-         Mittens Jr cat
-
-Even though we created the subquery separately, **only one** query is actually executed.
 
 Finally, let's do a complicated one. Let's get all the people whose birthday was
 either:
@@ -300,14 +335,15 @@ Now let's do the opposite. People whose birthday is between 1940 and 1960:
 
     >>> query = (Person
     ...          .select()
-    ...          .where((Person.birthday > d1940) & (Person.birthday < d1960)))
+    ...          .where(Person.birthday.between(d1940, d1960)))
     ...
     >>> for person in query:
     ...     print person.name, person.birthday
     ...
     Herb 1950-05-05
 
-One last query. This will use a SQL function to find all people whose names start with either an upper or lower-case *G*:
+One last query. This will use a SQL function to find all people whose names
+start with either an upper or lower-case *G*:
 
 .. code-block:: pycon
 
@@ -336,7 +372,9 @@ Check the documentation on :ref:`querying` for more info.
 Working with existing databases
 -------------------------------
 
-If you already have a database, you can autogenerate peewee models using :ref:`pwiz`. For instance, if I have a postgresql database named *charles_blog*, I might run:
+If you already have a database, you can autogenerate peewee models using
+:ref:`pwiz`. For instance, if I have a postgresql database named
+*charles_blog*, I might run:
 
 .. code-block:: console
 
@@ -345,4 +383,5 @@ If you already have a database, you can autogenerate peewee models using :ref:`p
 What next?
 ----------
 
-That's it for the quickstart. If you want to look at a full web-app, check out the :ref:`example-app`.
+That's it for the quickstart. If you want to look at a full web-app, check out
+the :ref:`example-app`.
