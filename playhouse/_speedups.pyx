@@ -112,7 +112,7 @@ cdef class _QueryResultWrapper(object):
         readonly bint _populated
         readonly int _ct
         readonly list _result_cache
-        object column_meta, cursor, model
+        readonly object column_meta, cursor, model
 
     def __init__(self, model, cursor, meta=None):
         self.model = model
