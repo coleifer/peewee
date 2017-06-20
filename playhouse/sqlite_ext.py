@@ -167,6 +167,9 @@ class VirtualTableSchemaManager(SchemaManager):
                 field_def.append(SQL('UNINDEXED'))
             arguments.append(NodeList(field_def))
 
+        if meta.arguments:
+            arguments.extend([SQL(a) for a in meta.arguments])
+
         options = self.model.clean_options(
             merge_dict(self.model._meta.options, options))
         if options:
@@ -186,6 +189,7 @@ class VirtualTableSchemaManager(SchemaManager):
 
 class VirtualModel(Model):
     class Meta:
+        arguments = None
         extension_module = None
         primary_key = False
         schema_manager_class = VirtualTableSchemaManager

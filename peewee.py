@@ -1903,6 +1903,19 @@ class Insert(_WriteQuery):
         return database.last_insert_id(cursor, self._query_type)
 
 
+class Replace(Insert):
+    def __init__(self, *args, **kwargs):
+        if kwargs.get('on_conflict'):
+            raise ValueError('Cannot specify an "on_conflict" clause with '
+                             'REPLACE queries.')
+        kwargs['on_conflict'] = 'REPLACE'
+        super(Replace, self).__init__(*args, **kwargs)
+
+    def on_conflict(self, _):
+        raise ValueError('Cannot specify an "on_conflict" clause with REPLACE '
+                         'queries.')
+
+
 class Delete(_WriteQuery):
     def __init__(self, table, where=None, order_by=None, limit=None,
                  offset=None, returning=None):
@@ -4135,6 +4148,14 @@ class Model(with_metaclass(ModelBase, Node)):
         return ModelInsert(cls, insert=query, columns=fields)
 
     @classmethod
+    def replace(cls, __data=None, **insert):
+        return ModelReplace(cls, cls._normalize_data(__data, insert))
+
+    @classmethod
+    def replace_many(cls, rows, fields=None):
+        return ModelReplace(cls, insert=rows, columns=fields)
+
+    @classmethod
     def delete(cls):
         return ModelDelete(cls)
 
@@ -4715,6 +4736,10 @@ class ModelInsert(_ModelWriteQueryHelper, Insert):
             if self.model._meta.database.options.returning_clause:
                 self._returning = self.model._meta.get_primary_keys()
                 self._row_type = ROW.TUPLE
+
+
+class ModelReplace(_ModelWriteQueryHelper, Replace):
+    pass
 
 
 class ModelDelete(_ModelWriteQueryHelper, Delete):
