@@ -1,5 +1,6 @@
 import json
 import math
+import re
 import struct
 import sys
 
@@ -21,7 +22,12 @@ if sys.version_info[0] == 3:
 
 FTS3_MATCHINFO = 'pcx'
 FTS4_MATCHINFO = 'pcnalx'
-FTS_VERSION = 4 if sqlite3.sqlite_version_info[:3] >= (3, 7, 4) else 3
+if sqlite3 is not None:
+    FTS_VERSION = 4 if sqlite3.sqlite_version_info[:3] >= (3, 7, 4) else 3
+else:
+    FTS_VERSION = 3
+
+FTS5_MIN_SQLITE_VERSION = (3, 9, 0)
 
 
 class RowIDField(VirtualField):
@@ -212,12 +218,8 @@ class FTSModel(BaseFTSModel):
     VirtualModel class for creating tables that use either the FTS3 or FTS4
     search extensions. Peewee automatically determines which version of the
     FTS extension is supported and will use FTS4 if possible.
-
-    Note: because FTS5 is significantly different from FTS3 and FTS4, there is
-    a separate model class for FTS5 virtual tables.
     """
-    # FTS3/4 does not support declared primary keys, but we can use the
-    # implicit docid.
+    # FTS3/4 uses "docid" in the same way a normal table uses "rowid".
     docid = DocIDField()
 
     class Meta:
@@ -335,6 +337,282 @@ class FTSModel(BaseFTSModel):
             score_alias,
             cls.lucene,
             explicit_ordering)
+
+
+_alphabet = 'abcdefghijklmnopqrstuvwxyz'
+_alphanum = (set('\t ,"(){}*:_+0123456789') |
+             set(_alphabet) |
+             set(_alphabet.upper()) |
+             set((chr(26),)))
+_invalid_ascii = set(chr(p) for p in range(128) if chr(p) not in _alphanum)
+_quote_re = re.compile('(?:[^\s"]|"(?:\\.|[^"])*")+')
+
+
+class FTS5Model(BaseFTSModel):
+    """
+    Requires SQLite >= 3.9.0.
+
+    Table options:
+
+    content: table name of external content, or empty string for "contentless"
+    content_rowid: column name of external content primary key
+    prefix: integer(s). Ex: '2' or '2 3 4'
+    tokenize: porter, unicode61, ascii. Ex: 'porter unicode61'
+
+    The unicode tokenizer supports the following parameters:
+
+    * remove_diacritics (1 or 0, default is 1)
+    * tokenchars (string of characters, e.g. '-_'
+    * separators (string of characters)
+
+    Parameters are passed as alternating parameter name and value, so:
+
+    {'tokenize': "unicode61 remove_diacritics 0 tokenchars '-_'"}
+
+    Content-less tables:
+
+    If you don't need the full-text content in it's original form, you can
+    specify a content-less table. Searches and auxiliary functions will work
+    as usual, but the only values returned when SELECT-ing can be rowid. Also
+    content-less tables do not support UPDATE or DELETE.
+
+    External content tables:
+
+    You can set up triggers to sync these, e.g.
+
+    -- Create a table. And an external content fts5 table to index it.
+    CREATE TABLE tbl(a INTEGER PRIMARY KEY, b);
+    CREATE VIRTUAL TABLE ft USING fts5(b, content='tbl', content_rowid='a');
+
+    -- Triggers to keep the FTS index up to date.
+    CREATE TRIGGER tbl_ai AFTER INSERT ON tbl BEGIN
+      INSERT INTO ft(rowid, b) VALUES (new.a, new.b);
+    END;
+    CREATE TRIGGER tbl_ad AFTER DELETE ON tbl BEGIN
+      INSERT INTO ft(fts_idx, rowid, b) VALUES('delete', old.a, old.b);
+    END;
+    CREATE TRIGGER tbl_au AFTER UPDATE ON tbl BEGIN
+      INSERT INTO ft(fts_idx, rowid, b) VALUES('delete', old.a, old.b);
+      INSERT INTO ft(rowid, b) VALUES (new.a, new.b);
+    END;
+
+    Built-in auxiliary functions:
+
+    * bm25(tbl[, weight_0, ... weight_n])
+    * highlight(tbl, col_idx, prefix, suffix)
+    * snippet(tbl, col_idx, prefix, suffix, ?, max_tokens)
+    """
+    # FTS5 does not support declared primary keys, but we can use the
+    # implicit rowid.
+    rowid = RowIDField()
+
+    class Meta:
+        extension_module = 'fts5'
+
+    _error_messages = {
+        'field_type': ('Besides the implicit `rowid` column, all columns must '
+                       'be instances of SearchField'),
+        'index': 'Secondary indexes are not supported for FTS5 models',
+        'pk': 'FTS5 models must use the default `rowid` primary key',
+    }
+
+    @classmethod
+    def validate_model(cls):
+        # Perform FTS5-specific validation and options post-processing.
+        if cls._meta.primary_key.name != 'rowid':
+            raise ImproperlyConfigured(cls._error_messages['pk'])
+        for field in cls._meta.fields.values():
+            if not isinstance(field, (SearchField, RowIDField)):
+                raise ImproperlyConfigured(cls._error_messages['field_type'])
+        if cls._meta.indexes:
+            raise ImproperlyConfigured(cls._error_messages['index'])
+
+    @classmethod
+    def fts5_installed(cls):
+        if sqlite3.sqlite_version_info[:3] < FTS5_MIN_VERSION:
+            return False
+
+        # Test in-memory DB to determine if the FTS5 extension is installed.
+        tmp_db = sqlite3.connect(':memory:')
+        try:
+            tmp_db.execute('CREATE VIRTUAL TABLE fts5test USING fts5 (data);')
+        except:
+            try:
+                sqlite3.enable_load_extension(True)
+                sqlite3.load_extension('fts5')
+            except:
+                return False
+            else:
+                cls._meta.database.load_extension('fts5')
+        finally:
+            tmp_db.close()
+
+        return True
+
+    @staticmethod
+    def validate_query(query):
+        """
+        Simple helper function to indicate whether a search query is a
+        valid FTS5 query. Note: this simply looks at the characters being
+        used, and is not guaranteed to catch all problematic queries.
+        """
+        tokens = _quote_re.findall(query)
+        for token in tokens:
+            if token.startswith('"') and token.endswith('"'):
+                continue
+            if set(token) & _invalid_ascii:
+                return False
+        return True
+
+    @staticmethod
+    def clean_query(query, replace=chr(26)):
+        """
+        Clean a query of invalid tokens.
+        """
+        accum = []
+        any_invalid = False
+        tokens = _quote_re.findall(query)
+        for token in tokens:
+            if token.startswith('"') and token.endswith('"'):
+                accum.append(token)
+                continue
+            token_set = set(token)
+            invalid_for_token = token_set & _invalid_ascii
+            if invalid_for_token:
+                any_invalid = True
+                for c in invalid_for_token:
+                    token = token.replace(c, replace)
+            accum.append(token)
+
+        if any_invalid:
+            return ' '.join(accum)
+        return query
+
+    @classmethod
+    def match(cls, term):
+        """
+        Generate a `MATCH` expression appropriate for searching this table.
+        """
+        return match(cls._meta.entity, term)
+
+    @classmethod
+    def rank(cls, *args):
+        if args:
+            return cls.bm25(*args)
+        else:
+            return SQL('rank')
+
+    @classmethod
+    def bm25(cls, *weights):
+        return fn.bm25(cls.as_entity(), *weights)
+
+    @classmethod
+    def search(cls, term, weights=None, with_score=False, score_alias='score',
+               explicit_ordering=False):
+        """Full-text search using selected `term`."""
+        return cls.search_bm25(
+            FTS5Model.clean_query(term),
+            weights,
+            with_score,
+            score_alias,
+            explicit_ordering)
+
+    @classmethod
+    def search_bm25(cls, term, weights=None, with_score=False,
+                    score_alias='score', explicit_ordering=False):
+        """Full-text search using selected `term`."""
+        if not weights:
+            rank = SQL('rank')
+        elif isinstance(weights, dict):
+            weight_args = []
+            for field in cls._meta.declared_fields:
+                weight_args.append(
+                    weights.get(field, weights.get(field.name, 1.0)))
+            rank = fn.bm25(cls.as_entity(), *weight_args)
+        else:
+            rank = fn.bm25(cls.as_entity(), *weights)
+
+        selection = ()
+        order_by = rank
+        if with_score:
+            selection = (cls, rank.alias(score_alias))
+        if with_score and not explicit_ordering:
+            order_by = SQL(score_alias)
+
+        return (cls
+                .select(*selection)
+                .where(cls.match(FTS5Model.clean_query(term)))
+                .order_by(order_by))
+
+    @classmethod
+    def _fts_cmd(cls, cmd, **extra_params):
+        tbl = cls.as_entity()
+        columns = [tbl]
+        values = [cmd]
+        for key, value in extra_params.items():
+            columns.append(Entity(key))
+            values.append(value)
+
+        inner_clause = EnclosedClause(tbl)
+        clause = Clause(
+            SQL('INSERT INTO'),
+            cls.as_entity(),
+            EnclosedClause(*columns),
+            SQL('VALUES'),
+            EnclosedClause(*values))
+        return cls._meta.database.execute(clause)
+
+    @classmethod
+    def automerge(cls, level):
+        if not (0 <= level <= 16):
+            raise ValueError('level must be between 0 and 16')
+        return cls._fts_cmd('automerge', rank=level)
+
+    @classmethod
+    def merge(cls, npages):
+        return cls._fts_cmd('merge', rank=npages)
+
+    @classmethod
+    def set_pgsz(cls, pgsz):
+        return cls._fts_cmd('pgsz', rank=pgsz)
+
+    @classmethod
+    def set_rank(cls, rank_expression):
+        return cls._fts_cmd('rank', rank=rank_expression)
+
+    @classmethod
+    def delete_all(cls):
+        return cls._fts_cmd('delete-all')
+
+    @classmethod
+    def VocabModel(cls, table_type='row', table_name=None):
+        if table_type not in ('row', 'col'):
+            raise ValueError('table_type must be either "row" or "col".')
+
+        attr = '_vocab_model_%s' % table_type
+
+        if not hasattr(cls, attr):
+            class Meta:
+                database = cls._meta.database
+                db_table = table_name or cls._meta.db_table + '_v'
+                extension_module = fn.fts5vocab(
+                    cls.as_entity(),
+                    SQL(table_type))
+
+            attrs = {
+                'term': BareField(),
+                'doc': IntegerField(),
+                'cnt': IntegerField(),
+                'rowid': RowIDField(),
+                'Meta': Meta,
+            }
+            if table_type == 'col':
+                attrs['col'] = BareField()
+
+            class_name = '%sVocab' % cls.__name__
+            setattr(cls, attr, type(class_name, (VirtualModel,), attrs))
+
+        return getattr(cls, attr)
 
 
 def ClosureTable(model_class, foreign_key=None, referencing_class=None,
