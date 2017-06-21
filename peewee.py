@@ -729,6 +729,12 @@ class Table(_HashableSource, BaseTable):
         return Insert(self, insert=insert, columns=columns)
 
     @__bind_database__
+    def replace(self, insert=None, columns=None, **kwargs):
+        return (self
+                .insert(insert=insert, columns=columns)
+                .on_conflict('REPLACE'))
+
+    @__bind_database__
     def update(self, update=None, **kwargs):
         if kwargs:
             update = {} if update is None else update
@@ -1901,19 +1907,6 @@ class Insert(_WriteQuery):
 
     def handle_result(self, database, cursor):
         return database.last_insert_id(cursor, self._query_type)
-
-
-class Replace(Insert):
-    def __init__(self, *args, **kwargs):
-        if kwargs.get('on_conflict'):
-            raise ValueError('Cannot specify an "on_conflict" clause with '
-                             'REPLACE queries.')
-        kwargs['on_conflict'] = 'REPLACE'
-        super(Replace, self).__init__(*args, **kwargs)
-
-    def on_conflict(self, _):
-        raise ValueError('Cannot specify an "on_conflict" clause with REPLACE '
-                         'queries.')
 
 
 class Delete(_WriteQuery):
@@ -4149,11 +4142,13 @@ class Model(with_metaclass(ModelBase, Node)):
 
     @classmethod
     def replace(cls, __data=None, **insert):
-        return ModelReplace(cls, cls._normalize_data(__data, insert))
+        return cls.insert(__data, **insert).on_conflict('REPLACE')
 
     @classmethod
     def replace_many(cls, rows, fields=None):
-        return ModelReplace(cls, insert=rows, columns=fields)
+        return (cls
+                .insert_many(insert=rows, columns=fields)
+                .on_conflict('REPLACE'))
 
     @classmethod
     def delete(cls):
@@ -4736,10 +4731,6 @@ class ModelInsert(_ModelWriteQueryHelper, Insert):
             if self.model._meta.database.options.returning_clause:
                 self._returning = self.model._meta.get_primary_keys()
                 self._row_type = ROW.TUPLE
-
-
-class ModelReplace(_ModelWriteQueryHelper, Replace):
-    pass
 
 
 class ModelDelete(_ModelWriteQueryHelper, Delete):

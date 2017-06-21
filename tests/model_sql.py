@@ -125,6 +125,14 @@ class TestModelSQL(ModelDatabaseTestCase):
             'INSERT INTO "note" ("author_id", "content") '
             'VALUES (?, ?)'), [1337, 'leet'])
 
+    def test_replace(self):
+        query = (Person
+                 .replace({Person.first: 'huey',
+                           Person.last: 'cat'}))
+        self.assertSQL(query, (
+            'INSERT OR REPLACE INTO "person" ("first", "last") '
+            'VALUES (?, ?)'), ['huey', 'cat'])
+
     def test_insert_many(self):
         query = (Note
                  .insert_many((

@@ -259,7 +259,7 @@ class TestSelectQuery(BaseTestCase):
 
 
 class TestInsertQuery(BaseTestCase):
-    def test_insert_query(self):
+    def test_isnert(self):
         query = User.insert({
             User.c.username: 'charlie',
             User.c.superuser: False,
@@ -267,6 +267,14 @@ class TestInsertQuery(BaseTestCase):
         self.assertSQL(query, (
             'INSERT INTO "users" ("admin", "superuser", "username") '
             'VALUES (?, ?, ?)'), [True, False, 'charlie'])
+
+    def test_replace(self):
+        query = User.replace({
+            User.c.username: 'charlie',
+            User.c.superuser: False})
+        self.assertSQL(query, (
+            'INSERT OR REPLACE INTO "users" ("superuser", "username") '
+            'VALUES (?, ?)'), [False, 'charlie'])
 
     def test_insert_list(self):
         data = [
