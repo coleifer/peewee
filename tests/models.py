@@ -812,3 +812,27 @@ class TestModelGraph(BaseTestCase):
         for model in (User, Tweet, Relationship, Flag):
             self.assertTrue(model._meta.database is fake_db)
         self.assertTrue(Unrelated._meta.database is None)
+
+
+class TestMetaInheritance(BaseTestCase):
+    def test_table_name(self):
+        class Foo(Model):
+            class Meta:
+                def table_function(klass):
+                    return 'xxx_%s' % klass.__name__.lower()
+
+        class Bar(Foo): pass
+        class Baze(Foo):
+            class Meta:
+                table_name = 'yyy_baze'
+        class Biz(Baze): pass
+        class Nug(Foo):
+            class Meta:
+                def table_function(klass):
+                    return 'zzz_%s' % klass.__name__.lower()
+
+        self.assertEqual(Foo._meta.table_name, 'xxx_foo')
+        self.assertEqual(Bar._meta.table_name, 'xxx_bar')
+        self.assertEqual(Baze._meta.table_name, 'yyy_baze')
+        self.assertEqual(Biz._meta.table_name, 'xxx_biz')
+        self.assertEqual(Nug._meta.table_name, 'zzz_nug')

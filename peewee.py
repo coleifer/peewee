@@ -3759,7 +3759,7 @@ class Metadata(object):
     def __init__(self, model, database=None, table_name=None, indexes=None,
                  primary_key=None, constraints=None, schema=None,
                  only_save_dirty=False, table_alias=None, depends_on=None,
-                 options=None, db_table=None, **kwargs):
+                 options=None, db_table=None, table_function=None, **kwargs):
         if db_table is not None:
             __deprecated__('"db_table" has been deprecated in favor of '
                            '"table_name" for Models.')
@@ -3782,8 +3782,11 @@ class Metadata(object):
         self._default_callable_list = []
 
         self.name = model.__name__.lower()
+        self.table_function = table_function
         if not table_name:
-            table_name = re.sub('[^\w]+', '_', self.name)
+            table_name = (self.table_function(model)
+                          if self.table_function
+                          else re.sub('[^\w]+', '_', self.name))
         self.table_name = table_name
         self._table = None
 
@@ -3985,7 +3988,7 @@ class DoesNotExist(Exception): pass
 
 class ModelBase(type):
     inheritable = set(['constraints', 'database', 'indexes', 'primary_key',
-                       'options', 'schema'])
+                       'options', 'schema', 'table_function'])
 
     def __new__(cls, name, bases, attrs):
         if name == MODEL_BASE or bases[0].__name__ == MODEL_BASE:
@@ -3994,9 +3997,9 @@ class ModelBase(type):
         meta_options = {}
         meta = attrs.pop('Meta', None)
         if meta:
-            for attr in dir(meta):
-                if not attr.startswith('_'):
-                    meta_options[attr] = getattr(meta, attr)
+            for k, v in meta.__dict__.items():
+                if not k.startswith('_'):
+                    meta_options[k] = v
 
         pk = getattr(meta, 'primary_key', None)
         pk_name = parent_pk = None
