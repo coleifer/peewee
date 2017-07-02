@@ -425,11 +425,10 @@ class MySQLMigrator(SchemaMigrator):
                 return column
         return False
 
-    @operation
-    def add_foreign_key_constraint(self, table, column_name, rel, rel_column):
-        # TODO: refactor, this duplicates QueryCompiler._create_foreign_key
+    def _add_restrict_foreign_key_constraint(
+            self, table, column_name, rel, rel_column):
         constraint = 'fk_%s_%s_refs_%s' % (table, column_name, rel)
-        return Clause(
+        return [
             SQL('ALTER TABLE'),
             Entity(table),
             SQL('ADD CONSTRAINT'),
@@ -438,7 +437,16 @@ class MySQLMigrator(SchemaMigrator):
             EnclosedClause(Entity(column_name)),
             SQL('REFERENCES'),
             Entity(rel),
-            EnclosedClause(Entity(rel_column)))
+            EnclosedClause(Entity(rel_column))]
+
+    @operation
+    def add_foreign_key_constraint(
+            self, table, column_name, rel, rel_column, on_delete='RESTRICT', on_update='RESTRICT'):
+        # TODO: refactor, this duplicates QueryCompiler._create_foreign_key
+        nodes = self._add_restrict_foreign_key_constraint(
+            table, column_name, rel, rel_column)
+        nodes.append(SQL('ON DELETE %s ON UPDATE %s' % (on_delete, on_update)))
+        return Clause(*nodes)
 
     def get_foreign_key_constraint(self, table, column_name):
         cursor = self.database.execute_sql(
@@ -489,7 +497,8 @@ class MySQLMigrator(SchemaMigrator):
             column.sql(is_null=True))
 
     @operation
-    def rename_column(self, table, old_name, new_name):
+    def rename_column(
+            self, table, old_name, new_name, on_delete='RESTRICT', on_update='RESTRICT'):
         fk_objects = dict(
             (fk.column, fk)
             for fk in self.database.get_foreign_keys(table))
@@ -511,7 +520,9 @@ class MySQLMigrator(SchemaMigrator):
                     table,
                     new_name,
                     fk_metadata.dest_table,
-                    fk_metadata.dest_column),
+                    fk_metadata.dest_column,
+                    on_delete,
+                    on_update),
             ]
         else:
             return rename_clause
