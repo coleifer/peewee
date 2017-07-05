@@ -874,3 +874,11 @@ class TestForeignKeyFieldDescriptors(BaseTestCase):
                 user = ForeignKeyField(User, object_id_name='user')
 
         self.assertRaises(ValueError, conflicts_with_field)
+
+    def test_column_name(self):
+        class User(Model): pass
+        class T1(Model):
+            user = ForeignKeyField(User, column_name='user')
+
+        self.assertEqual(T1.user.column_name, 'user')
+        self.assertEqual(T1.user.object_id_name, 'user_id')
