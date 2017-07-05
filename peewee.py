@@ -3300,7 +3300,7 @@ class ForeignKeyField(Field):
 
     def __init__(self, model, field=None, backref=None, on_delete=None,
                  on_update=None, _deferred=None, rel_model=None, to_field=None,
-                 *args, **kwargs):
+                 object_id_name=None, *args, **kwargs):
         super(ForeignKeyField, self).__init__(*args, **kwargs)
         if rel_model is not None:
             __deprecated__('"rel_model" has been deprecated in favor of '
@@ -3317,6 +3317,14 @@ class ForeignKeyField(Field):
         self.on_delete = on_delete
         self.on_update = on_update
         self.deferred = _deferred
+        self.object_id_name = object_id_name
+
+    def __repr__(self):
+        if hasattr(self, 'model') and getattr(self, 'name', None):
+            return '<%s: "%s"."%s">' % (type(self).__name__,
+                                        self.model._meta.name,
+                                        self.name)
+        return '<%s: (unbound)>' % type(self).__name__
 
     @property
     def field_type(self):
@@ -3349,6 +3357,12 @@ class ForeignKeyField(Field):
         self.column_name = self.column_name or name
         if self.column_name == name and not name.endswith('_id'):
             self.column_name += '_id'
+        if not self.object_id_name:
+            self.object_id_name = self.column_name
+        elif self.object_id_name == name:
+            raise ValueError('ForeignKeyField "%s"."%s" specifies an '
+                             'object_id_name that conflicts with its field '
+                             'name.' % (model._meta.name, name))
         if self.rel_model == 'self':
             self.rel_model = model
         if isinstance(self.rel_field, basestring):
@@ -3361,7 +3375,10 @@ class ForeignKeyField(Field):
 
         super(ForeignKeyField, self).bind(model, name, set_attribute)
         if set_attribute:
-            setattr(model, name + '_id', ObjectIdAccessor(self))
+            if self.object_id_name == name:
+                self.object_id_name += '_id'
+
+            setattr(model, self.object_id_name, ObjectIdAccessor(self))
             setattr(self.rel_model, self.backref, BackrefAccessor(self))
 
     def foreign_key_constraint(self):

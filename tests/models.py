@@ -836,3 +836,33 @@ class TestMetaInheritance(BaseTestCase):
         self.assertEqual(Baze._meta.table_name, 'yyy_baze')
         self.assertEqual(Biz._meta.table_name, 'xxx_biz')
         self.assertEqual(Nug._meta.table_name, 'zzz_nug')
+
+
+class TestForeignKeyFieldDescriptors(BaseTestCase):
+    def test_foreign_key_field_descriptors(self):
+        class User(Model): pass
+        class T0(Model):
+            user = ForeignKeyField(User)
+        class T1(Model):
+            user = ForeignKeyField(User, column_name='uid')
+        class T2(Model):
+            user = ForeignKeyField(User, object_id_name='uid')
+        class T3(Model):
+            user = ForeignKeyField(User, column_name='x', object_id_name='uid')
+
+        self.assertEqual(T0.user.object_id_name, 'user_id')
+        self.assertEqual(T1.user.object_id_name, 'uid')
+        self.assertEqual(T2.user.object_id_name, 'uid')
+        self.assertEqual(T3.user.object_id_name, 'uid')
+
+        user = User(id=1337)
+        self.assertEqual(T0(user=user).user_id, 1337)
+        self.assertEqual(T1(user=user).uid, 1337)
+        self.assertEqual(T2(user=user).uid, 1337)
+        self.assertEqual(T3(user=user).uid, 1337)
+
+        def conflicts_with_field():
+            class TE(Model):
+                user = ForeignKeyField(User, object_id_name='user')
+
+        self.assertRaises(ValueError, conflicts_with_field)
