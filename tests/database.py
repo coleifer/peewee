@@ -342,3 +342,31 @@ class TestSortModels(BaseTestCase):
         for list_of_models in permutations(models):
             sorted_models = sort_models(list_of_models)
             self.assertEqual(sorted_models, models)
+
+
+class TestDBProxy(BaseTestCase):
+    def test_db_proxy(self):
+        db = Proxy()
+        class BaseModel(Model):
+            class Meta:
+                database = db
+
+        class User(BaseModel):
+            username = TextField()
+
+        class Tweet(BaseModel):
+            user = ForeignKeyField(User, backref='tweets')
+            message = TextField()
+
+        sqlite_db = SqliteDatabase(':memory:')
+        db.initialize(sqlite_db)
+
+        self.assertEqual(User._meta.database.database, ':memory:')
+        self.assertEqual(Tweet._meta.database.database, ':memory:')
+
+        self.assertTrue(User._meta.database.is_closed())
+        self.assertTrue(Tweet._meta.database.is_closed())
+        sqlite_db.connect()
+        self.assertFalse(User._meta.database.is_closed())
+        self.assertFalse(Tweet._meta.database.is_closed())
+        sqlite_db.close()
