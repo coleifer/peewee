@@ -315,6 +315,22 @@ class TestQueryResultWrapper(ModelTestCase):
             {'id': u2.id, 'username': 'u2', 'pk': b2.pk, 'user': u2.id, 'title': 'b2', 'content': '', 'pub_date': None},
         ])
 
+        users = User.select().order_by(User.id).namedtuples()
+        self.assertEqual([(r.id, r.username) for r in users],
+                         [(u1.id, 'u1'), (u2.id, 'u2')])
+
+        users = (User
+                 .select(
+                     User.id,
+                     User.username,
+                     fn.UPPER(User.username).alias('USERNAME'),
+                     (User.id + 2).alias('xid'))
+                 .order_by(User.id)
+                 .namedtuples())
+        self.assertEqual(
+            [(r.id, r.username, r.USERNAME, r.xid) for r in users],
+            [(u1.id, 'u1', 'U1', u1.id + 2), (u2.id, 'u2', 'U2', u2.id + 2)])
+
     def test_slicing_dicing(self):
         def assertUsernames(users, nums):
             self.assertEqual([u.username for u in users], ['u%d' % i for i in nums])
