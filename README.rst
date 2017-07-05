@@ -1,3 +1,8 @@
+Attention
+---------
+
+I've pushed the alpha branch of Peewee 3.0, which is a more-or-less total rewrite. The APIs are all mostly backwards-compatible, though some features and extension modules have been removed. Check it out if you're curious: https://github.com/coleifer/peewee/tree/3.0a
+
 .. image:: http://media.charlesleifer.com/blog/photos/p1423749536.32.png
 
 peewee
