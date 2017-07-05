@@ -3354,11 +3354,12 @@ class ForeignKeyField(Field):
         return self.column == self.rel_field.column
 
     def bind(self, model, name, set_attribute=True):
-        self.column_name = self.column_name or name
-        if self.column_name == name and not name.endswith('_id'):
-            self.column_name += '_id'
+        if not self.column_name:
+            self.column_name = name if name.endswith('_id') else name + '_id'
         if not self.object_id_name:
             self.object_id_name = self.column_name
+            if self.object_id_name == name:
+                self.object_id_name += '_id'
         elif self.object_id_name == name:
             raise ValueError('ForeignKeyField "%s"."%s" specifies an '
                              'object_id_name that conflicts with its field '
@@ -3375,9 +3376,6 @@ class ForeignKeyField(Field):
 
         super(ForeignKeyField, self).bind(model, name, set_attribute)
         if set_attribute:
-            if self.object_id_name == name:
-                self.object_id_name += '_id'
-
             setattr(model, self.object_id_name, ObjectIdAccessor(self))
             setattr(self.rel_model, self.backref, BackrefAccessor(self))
 
