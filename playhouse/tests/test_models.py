@@ -2265,3 +2265,34 @@ class TestTupleComparison(ModelTestCase):
         self.assertEqual(query.count(), 1)
         obj = query.get()
         self.assertEqual(obj, ub)
+
+
+class TestModelObjectIDSpecification(PeeweeTestCase):
+    def test_specify_object_id_name(self):
+        class User(Model): pass
+        class T0(Model):
+            user = ForeignKeyField(User)
+        class T1(Model):
+            user = ForeignKeyField(User, db_column='uid')
+        class T2(Model):
+            user = ForeignKeyField(User, object_id_name='uid')
+        class T3(Model):
+            user = ForeignKeyField(User, db_column='x', object_id_name='uid')
+        class T4(Model):
+            foo = ForeignKeyField(User, db_column='user')
+        class T5(Model):
+            foo = ForeignKeyField(User, object_id_name='uid')
+
+        user = User(id=1337)
+        self.assertEqual(T0(user=user).user_id, 1337)
+        self.assertEqual(T1(user=user).uid, 1337)
+        self.assertEqual(T2(user=user).uid, 1337)
+        self.assertEqual(T3(user=user).uid, 1337)
+        self.assertEqual(T4(foo=user).user, 1337)
+        self.assertEqual(T5(foo=user).uid, 1337)
+
+        def conflicts_with_name():
+            class TE(Model):
+                user = ForeignKeyField(User, object_id_name='user')
+
+        self.assertRaises(ValueError, conflicts_with_name)

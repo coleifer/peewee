@@ -1426,7 +1426,8 @@ class ObjectIdDescriptor(object):
 
 class ForeignKeyField(IntegerField):
     def __init__(self, rel_model, related_name=None, on_delete=None,
-                 on_update=None, extra=None, to_field=None, *args, **kwargs):
+                 on_update=None, extra=None, to_field=None,
+                 object_id_name=None, *args, **kwargs):
         if rel_model != 'self' and not \
                 isinstance(rel_model, (Proxy, DeferredRelation)) and not \
                 issubclass(rel_model, Model):
@@ -1439,6 +1440,7 @@ class ForeignKeyField(IntegerField):
         self.on_update = on_update
         self.extra = extra
         self.to_field = to_field
+        self.object_id_name = object_id_name
         super(ForeignKeyField, self).__init__(*args, **kwargs)
 
     def clone_base(self, **kwargs):
@@ -1449,6 +1451,7 @@ class ForeignKeyField(IntegerField):
             on_update=self.on_update,
             extra=self.extra,
             to_field=self.to_field,
+            object_id_name=self.object_id_name,
             **kwargs)
 
     def _get_descriptor(self):
@@ -1478,9 +1481,17 @@ class ForeignKeyField(IntegerField):
 
         self.name = name
         self.model_class = model_class
-        self.db_column = obj_id_name = self.db_column or '%s_id' % self.name
-        if obj_id_name == self.name:
-            obj_id_name += '_id'
+        self.db_column = self.db_column or '%s_id' % self.name
+        obj_id_name = self.object_id_name
+
+        if not obj_id_name:
+            obj_id_name = self.db_column
+            if obj_id_name == self.name:
+                obj_id_name += '_id'
+        elif obj_id_name == self.name:
+            raise ValueError('Cannot set a foreign key object_id_name to '
+                             'the same name as the field itself.')
+
         if not self.verbose_name:
             self.verbose_name = re.sub('_+', ' ', name).title()
 
