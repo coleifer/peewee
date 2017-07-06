@@ -2611,6 +2611,34 @@ The easiest way to create transactions and savepoints is to use :py:meth:`Databa
     :param models: a list of :py:class:`Model` classes to use with the given database.
     :param with_transaction: Whether the wrapped block should be run in a transaction.
 
+    Example code:
+
+    .. code-block:: python
+
+    master = PostgresqlDatabase('master')
+    read_replica = PostgresqlDatabase('replica')
+
+    class Data(Model):
+        value = IntegerField()
+
+        class Meta:
+            database = master
+
+    # By default all queries go to the master, since that is what
+    # is defined on our model.
+    for i in range(10):
+        Data.create(value=i)
+
+    # But what if we want to explicitly use the read replica?
+    with Using(read_replica, [Data]):
+        # Query is executed against the read replica.
+        Data.get(Data.value == 5)
+
+        # Since we did not specify this model in the list of overrides
+        # it will use whatever database it was defined with.
+        SomeOtherModel.get(SomeOtherModel.field == 3)
+
+
 Metadata Types
 --------------
 
