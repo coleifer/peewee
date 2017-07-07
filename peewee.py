@@ -1053,6 +1053,10 @@ class Value(ColumnBase):
         return ctx
 
 
+def AsIs(value):
+    return Value(value, unpack=False)
+
+
 class Cast(WrappedNode):
     def __init__(self, node, cast):
         super(Cast, self).__init__(node)
