@@ -2611,6 +2611,42 @@ The easiest way to create transactions and savepoints is to use :py:meth:`Databa
     :param models: a list of :py:class:`Model` classes to use with the given database.
     :param with_transaction: Whether the wrapped block should be run in a transaction.
 
+    .. warning::
+
+        The :py:class:`Using` context manager does not do anything to manage
+        the database connections, so it the user's responsibility to make sure
+        that you close the database explicitly.
+
+    Example:
+
+    .. code-block:: python
+
+        master = PostgresqlDatabase('master')
+        replica = PostgresqlDatabase('replica')
+
+        class Data(Model):
+            value = IntegerField()
+            class Meta:
+                database = master
+
+        # All these queries use the "master" database,
+        # since that is what our Data model was configured
+        # to use.
+        for i in range(10):
+            Data.create(value=i)
+
+        Data.insert_many({Data.value: j} for j in range(100, 200)).execute()
+
+        # To use the read replica, we can use the Using context manager.
+        with Using(read_replica, [Data]):
+            # Query is executed against the read replica.
+            n_data = Data.select().count()
+
+            # Since we did not specify this model in the list passed
+            # to Using, it will use whatever database it was defined with.
+            other_count = SomeOtherModel.select().count()
+
+
 Metadata Types
 --------------
 
