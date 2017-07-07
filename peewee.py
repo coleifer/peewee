@@ -75,18 +75,23 @@ except ImportError:
         return '.'.join([part.join(quotes) for part in path])
 
 
+PY26 = sys.version_info[:2] == (2, 6)
 if sys.version_info[0] == 2:
     text_type = unicode
     bytes_type = str
     exec('def reraise(tp, value, tb=None): raise tp, value, tb')
-    PY26 = sys.version_info[1] == 6
     def print_(s):
         sys.stdout.write(s)
         sys.stdout.write('\n')
 else:
+    import builtins
+    from collections import Callable
+    from functools import reduce
+    callable = lambda c: isinstance(c, Callable)
     text_type = str
     bytes_type = bytes
     basestring = str
+    long = int
     print_ = getattr(builtins, 'print')
     def reraise(tp, value, tb=None):
         if value.__traceback__ is not tb:
@@ -966,6 +971,9 @@ class Column(ColumnBase):
             return (self.name,)
         else:
             return self.source.get_sort_key(ctx) + (self.name,)
+
+    def __hash__(self):
+        return hash((self.source, self.name))
 
     def __sql__(self, ctx):
         if ctx.scope == SCOPE_VALUES:
@@ -2443,7 +2451,7 @@ class SqliteDatabase(Database):
     def get_tables(self, schema=None):
         cursor = self.execute_sql('SELECT name FROM sqlite_master WHERE '
                                   'type = ? ORDER BY name;', ('table',))
-        return map(operator.itemgetter(0), cursor.fetchall())
+        return [row for row, in cursor.fetchall()]
 
     def get_indexes(self, table, schema=None):
         query = ('SELECT name, sql FROM sqlite_master '
@@ -2482,8 +2490,7 @@ class SqliteDatabase(Database):
 
     def get_primary_keys(self, table, schema=None):
         cursor = self.execute_sql('PRAGMA table_info("%s")' % table)
-        return map(operator.itemgetter(1),
-                   filter(lambda row: row[-1], cursor.fetchall()))
+        return [row[1] for row in filter(lambda r: r[-1], cursor.fetchall())]
 
     def get_foreign_keys(self, table, schema=None):
         cursor = self.execute_sql('PRAGMA foreign_key_list("%s")' % table)
@@ -2543,7 +2550,7 @@ class PostgresqlDatabase(Database):
         query = ('SELECT tablename FROM pg_catalog.pg_tables '
                  'WHERE schemaname = %s ORDER BY tablename')
         cursor = self.execute_sql(query, (schema or 'public',))
-        return map(operator.itemgetter(0), cursor.fetchall())
+        return [table for table, in cursor.fetchall()]
 
     def get_indexes(self, table, schema=None):
         query = """
@@ -2589,7 +2596,7 @@ class PostgresqlDatabase(Database):
                 tc.table_schema = %s"""
         ctype = 'PRIMARY KEY'
         cursor = self.execute_sql(query, (ctype, table, schema or 'public'))
-        return map(operator.itemgetter(0), cursor.fetchall())
+        return [pk for pk, in cursor.fetchall()]
 
     def get_foreign_keys(self, table, schema=None):
         sql = """
@@ -2667,7 +2674,7 @@ class MySQLDatabase(Database):
         return ctx.literal('() VALUES ()')
 
     def get_tables(self, schema=None):
-        return map(operator.itemgetter(0), self.execute_sql('SHOW TABLES'))
+        return [table for table, in self.execute_sql('SHOW TABLES')]
 
     def get_indexes(self, table, schema=None):
         cursor = self.execute_sql('SHOW INDEX FROM `%s`' % table)
@@ -2693,8 +2700,8 @@ class MySQLDatabase(Database):
 
     def get_primary_keys(self, table, schema=None):
         cursor = self.execute_sql('SHOW INDEX FROM `%s`' % table)
-        return map(operator.itemgetter(4),
-                   filter(lambda row: row[2] == 'PRIMARY', cursor.fetchall()))
+        return [row[4] for row in
+                filter(lambda row: row[2] == 'PRIMARY', cursor.fetchall())]
 
     def get_foreign_keys(self, table, schema=None):
         query = """
@@ -3126,7 +3133,7 @@ class Field(ColumnBase):
 
         modifiers = self.get_modifiers()
         if column_type and modifiers:
-            modifier_literal = ', '.join(map(str, modifiers))
+            modifier_literal = ', '.join([str(m) for m in modifiers])
             return SQL('%s(%s)' % (column_type, modifier_literal))
         else:
             return SQL(column_type)
@@ -5115,7 +5122,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
     def process_row(self, row):
         objects = {}
         object_list = []
-        for key, constructor in self.key_to_constructor.iteritems():
+        for key, constructor in self.key_to_constructor.items():
             objects[key] = constructor()
             object_list.append(objects[key])
 

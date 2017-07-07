@@ -205,7 +205,8 @@ if sys.version_info[0] == 2:
 else:
     @udf(HELPER)
     def gzip(data, compression=9):
-        return zlib.compress(buffer(data), compression)
+        data = bytes(data.encode('raw_unicode_escape'))
+        return zlib.compress(data, compression)
 
     @udf(HELPER)
     def gunzip(data):

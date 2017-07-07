@@ -5,6 +5,14 @@ from .base import ModelTestCase
 from .base_models import *
 
 
+def lange(x, y=None):
+    if y is None:
+        value = range(x)
+    else:
+        value = range(x, y)
+    return list(value)
+
+
 class TestCursorWrapper(ModelTestCase):
     database = get_in_memory_db()
     requires = [User]
@@ -21,13 +29,13 @@ class TestCursorWrapper(ModelTestCase):
             first_five.append(int(u.username))
             if i == 4: break
 
-        self.assertEqual(first_five, range(5))
+        self.assertEqual(first_five, lange(5))
         names = lambda i: [int(obj.username) for obj in i]
-        self.assertEqual(names(query[5:]), range(5, 10))
-        self.assertEqual(names(query[2:5]), range(2, 5))
+        self.assertEqual(names(query[5:]), lange(5, 10))
+        self.assertEqual(names(query[2:5]), lange(2, 5))
 
         for i in range(2):
-            self.assertEqual(names(cursor), range(10))
+            self.assertEqual(names(cursor), lange(10))
 
     def test_count(self):
         for i in range(5): User.create(username=str(i))
@@ -55,8 +63,8 @@ class TestCursorWrapper(ModelTestCase):
                 for i_user in query:
                     inner.append(int(i_user.username))
 
-            self.assertEqual(outer, range(4))
-            self.assertEqual(inner, range(4) * 4)
+            self.assertEqual(outer, lange(4))
+            self.assertEqual(inner, lange(4) * 4)
 
     def test_iterator_protocol(self):
         for i in range(3): User.create(username=str(i))
@@ -71,7 +79,7 @@ class TestCursorWrapper(ModelTestCase):
             for obj in it:
                 pass
             self.assertRaises(StopIteration, next, it)
-            self.assertEqual([int(u.username) for u in cursor], range(3))
+            self.assertEqual([int(u.username) for u in cursor], lange(3))
             self.assertEqual(query[0].username, '0')
             self.assertEqual(query[2].username, '2')
             self.assertRaises(StopIteration, next, it)
@@ -82,7 +90,7 @@ class TestCursorWrapper(ModelTestCase):
         with self.assertQueryCount(1):
             cursor = User.select().order_by(User.id).execute()
             usernames = [int(u.username) for u in cursor.iterator()]
-            self.assertEqual(usernames, range(3))
+            self.assertEqual(usernames, lange(3))
 
         self.assertTrue(cursor.populated)
         self.assertEqual(cursor.row_cache, [])
@@ -96,7 +104,7 @@ class TestCursorWrapper(ModelTestCase):
         with self.assertQueryCount(1):
             query = User.select().order_by(User.id)
             usernames = [int(u.username) for u in query.iterator()]
-            self.assertEqual(usernames, range(3))
+            self.assertEqual(usernames, lange(3))
 
         with self.assertQueryCount(0):
             self.assertEqual(list(query), [])
@@ -104,7 +112,7 @@ class TestCursorWrapper(ModelTestCase):
     def test_row_cache(self):
         def assertCache(cursor, n):
             self.assertEqual([int(u.username) for u in cursor.row_cache],
-                             range(n))
+                             lange(n))
 
         for i in range(10): User.create(username=str(i))
 
