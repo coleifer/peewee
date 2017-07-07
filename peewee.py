@@ -100,6 +100,45 @@ if sqlite3:
     sqlite3.register_adapter(datetime.time, str)
 
 
+__date_parts__ = set(('year', 'month', 'day', 'hour', 'minute', 'second'))
+
+# Sqlite does not support the `date_part` SQL function, so we will define an
+# implementation in python.
+__sqlite_datetime_formats__ = (
+    '%Y-%m-%d %H:%M:%S',
+    '%Y-%m-%d %H:%M:%S.%f',
+    '%Y-%m-%d',
+    '%H:%M:%S',
+    '%H:%M:%S.%f',
+    '%H:%M')
+
+__sqlite_date_trunc__ = {
+    'year': '%Y',
+    'month': '%Y-%m',
+    'day': '%Y-%m-%d',
+    'hour': '%Y-%m-%d %H',
+    'minute': '%Y-%m-%d %H:%M',
+    'second': '%Y-%m-%d %H:%M:%S'}
+
+__mysql_date_trunc__ = __sqlite_date_trunc__.copy()
+__mysql_date_trunc__['minute'] = '%Y-%m-%d %H:%i'
+__mysql_date_trunc__['second'] = '%Y-%m-%d %H:%i:%S'
+
+def _sqlite_date_part(lookup_type, datetime_string):
+    assert lookup_type in __date_parts__
+    if not datetime_string:
+        return
+    dt = format_date_time(datetime_string, __sqlite_datetime_formats__)
+    return getattr(dt, lookup_type)
+
+def _sqlite_date_trunc(lookup_type, datetime_string):
+    assert lookup_type in __sqlite_date_trunc__
+    if not datetime_string:
+        return
+    dt = format_date_time(datetime_string, __sqlite_datetime_formats__)
+    return dt.strftime(__sqlite_date_trunc__[lookup_type])
+
+
 def __deprecated__(s):
     warnings.warn(s, DeprecationWarning)
 
@@ -2237,6 +2276,12 @@ class Database(_callable_context_manager):
         for model in reversed(sort_models(models)):
             model._schema.drop_all(**kwargs)
 
+    def extract_date(self, date_part, date_field):
+        raise NotImplementedError
+
+    def truncate_date(self, date_part, date_field):
+        raise NotImplementedError
+
 
 def __pragma__(name):
     def __get__(self):
@@ -2278,6 +2323,8 @@ class SqliteDatabase(Database):
 
     def _add_conn_hooks(self, conn):
         self._set_pragmas(conn)
+        conn.create_function('date_part', 2, _sqlite_date_part)
+        conn.create_function('date_trunc', 2, _sqlite_date_trunc)
 
     def _set_pragmas(self, conn):
         if self._pragmas:
@@ -2373,6 +2420,12 @@ class SqliteDatabase(Database):
 
     def get_binary_type(self):
         return sqlite3.Binary
+
+    def extract_date(self, date_part, date_field):
+        return fn.date_part(date_part, date_field)
+
+    def truncate_date(self, date_part, date_field):
+        return fn.strftime(SQLITE_DATE_TRUNC_MAPPING[date_part], date_field)
 
 
 class PostgresqlDatabase(Database):
@@ -2496,6 +2549,12 @@ class PostgresqlDatabase(Database):
     def get_binary_type(self):
         return psycopg2.Binary
 
+    def extract_date(self, date_part, date_field):
+        return fn.EXTRACT(NodeList((date_part, SQL('FROM'), date_field)))
+
+    def truncate_date(self, date_part, date_field):
+        return fn.DATE_TRUNC(date_part, date_field)
+
 
 class MySQLDatabase(Database):
     options = attrdict(
@@ -2580,6 +2639,12 @@ class MySQLDatabase(Database):
 
     def get_binary_type(self):
         return mysql.Binary
+
+    def extract_date(self, date_part, date_field):
+        return fn.EXTRACT(NodeList((SQL(date_part), SQL('FROM'), date_field)))
+
+    def truncate_date(self, date_part, date_field):
+        return fn.DATE_FORMAT(date_field, __mysql_date_trunc__[date_part])
 
 
 # TRANSACTION CONTROL.

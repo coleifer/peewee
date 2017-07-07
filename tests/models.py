@@ -882,3 +882,51 @@ class TestForeignKeyFieldDescriptors(BaseTestCase):
 
         self.assertEqual(T1.user.column_name, 'user')
         self.assertEqual(T1.user.object_id_name, 'user_id')
+
+
+class TestModelAliasFieldProperties(ModelTestCase):
+    database = get_in_memory_db()
+
+    def test_field_properties(self):
+        class Person(TestModel):
+            name = TextField()
+            dob = DateField()
+
+        class Job(TestModel):
+            worker = ForeignKeyField(Person, backref='jobs')
+            client = ForeignKeyField(Person, backref='jobs_hired')
+
+        Worker = Person.alias()
+        Client = Person.alias()
+
+        expected_sql = (
+            'SELECT "t1"."id", "t1"."worker_id", "t1"."client_id" '
+            'FROM "job" AS "t1" '
+            'INNER JOIN "person" AS "t2" ON ("t1"."client_id" = "t2"."id") '
+            'INNER JOIN "person" AS "t3" ON ("t1"."worker_id" = "t3"."id") '
+            'WHERE (date_part(?, "t2"."dob") = ?)')
+        expected_params = ['year', 1983]
+
+        query = (Job
+                 .select()
+                 .join(Client, on=(Job.client == Client.id))
+                 .switch(Job)
+                 .join(Worker, on=(Job.worker == Worker.id))
+                 .where(Client.dob.year == 1983))
+        self.assertSQL(query, expected_sql, expected_params)
+
+        query = (Job
+                 .select()
+                 .join(Client, on=(Job.client == Client.id))
+                 .switch(Job)
+                 .join(Person, on=(Job.worker == Person.id))
+                 .where(Client.dob.year == 1983))
+        self.assertSQL(query, expected_sql, expected_params)
+
+        query = (Job
+                 .select()
+                 .join(Person, on=(Job.client == Person.id))
+                 .switch(Job)
+                 .join(Worker, on=(Job.worker == Worker.id))
+                 .where(Person.dob.year == 1983))
+        self.assertSQL(query, expected_sql, expected_params)
