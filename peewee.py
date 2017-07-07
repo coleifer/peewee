@@ -2309,6 +2309,14 @@ class SqliteDatabase(Database):
         insert_many=sqlite3 and sqlite3.sqlite_version_info >= (3, 7, 11),
         limit_max=-1)
 
+    def __init__(self, database, *args, **kwargs):
+        super(SqliteDatabase, self).__init__(database, *args, **kwargs)
+        self._aggregates = {}
+        self._collations = {}
+        self._functions = {}
+        self.register_function(_sqlite_date_part, 'date_part', 2)
+        self.register_function(_sqlite_date_trunc, 'date_trunc', 2)
+
     def init(self, database, pragmas=None, timeout=5, **kwargs):
         self._pragmas = pragmas or ()
         self._timeout = timeout
@@ -2327,8 +2335,9 @@ class SqliteDatabase(Database):
 
     def _add_conn_hooks(self, conn):
         self._set_pragmas(conn)
-        conn.create_function('date_part', 2, _sqlite_date_part)
-        conn.create_function('date_trunc', 2, _sqlite_date_trunc)
+        self._load_aggregates(conn)
+        self._load_collations(conn)
+        self._load_functions(conn)
 
     def _set_pragmas(self, conn):
         if self._pragmas:
@@ -2367,6 +2376,65 @@ class SqliteDatabase(Database):
         self._timeout = seconds
         if not self.is_closed():
             self.execute_sql('PRAGMA busy_timeout=%d;' % (seconds * 1000))
+
+    def _load_aggregates(self, conn):
+        for name, (klass, num_params) in self._aggregates.items():
+            conn.create_aggregate(name, num_params, klass)
+
+    def _load_collations(self, conn):
+        for name, fn in self._collations.items():
+            conn.create_collation(name, fn)
+
+    def _load_functions(self, conn):
+        for name, (fn, num_params) in self._functions.items():
+            conn.create_function(name, num_params, fn)
+
+    def register_aggregate(self, klass, name=None, num_params=-1):
+        self._aggregates[name or klass.__name__.lower()] = (klass, num_params)
+        if not self.is_closed():
+            self._load_aggregates(self.connection())
+
+    def aggregate(self, name=None, num_params=-1):
+        def decorator(klass):
+            self.register_aggregate(klass, name, num_params)
+            return klass
+        return decorator
+
+    def register_collation(self, fn, name=None):
+        name = name or fn.__name__
+        def _collation(*args):
+            expressions = args + (SQL('collate %s' % name),)
+            return NodeList(expressions)
+        fn.collation = _collation
+        self._collations[name] = fn
+        if not self.is_closed():
+            self._load_collations(self.connection())
+
+    def collation(self, name=None):
+        def decorator(fn):
+            self.register_collation(fn, name)
+            return fn
+        return decorator
+
+    def register_function(self, fn, name=None, num_params=-1):
+        self._functions[name or fn.__name__] = (fn, num_params)
+        if not self.is_closed():
+            self._load_functions(self.connection())
+
+    def func(self, name=None, num_params=-1):
+        def decorator(fn):
+            self.register_function(fn, name, num_params)
+            return fn
+        return decorator
+
+    def unregister_aggregate(self, name):
+        del(self._aggregates[name])
+
+    def unregister_collation(self, name):
+        del(self._collations[name])
+
+    def unregister_function(self, name):
+        del(self._functions[name])
 
     def begin(self, lock_type=None):
         statement = 'BEGIN %s' % lock_type if lock_type else 'BEGIN'

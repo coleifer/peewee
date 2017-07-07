@@ -718,9 +718,6 @@ class SqliteExtDatabase(SqliteDatabase):
 
     def __init__(self, database, c_extensions=None, *args, **kwargs):
         super(SqliteExtDatabase, self).__init__(database, *args, **kwargs)
-        self._aggregates = {}
-        self._collations = {}
-        self._functions = {}
         self._extensions = set()
         self._row_factory = None
 
@@ -741,68 +738,15 @@ class SqliteExtDatabase(SqliteDatabase):
 
     def _add_conn_hooks(self, conn):
         super(SqliteExtDatabase, self)._add_conn_hooks(conn)
-        self._load_aggregates(conn)
-        self._load_collations(conn)
-        self._load_functions(conn)
         if self._row_factory:
             conn.row_factory = self._row_factory
         if self._extensions:
             self._load_extensions(conn)
 
-    def _load_aggregates(self, conn):
-        for name, (klass, num_params) in self._aggregates.items():
-            conn.create_aggregate(name, num_params, klass)
-
-    def _load_collations(self, conn):
-        for name, fn in self._collations.items():
-            conn.create_collation(name, fn)
-
-    def _load_functions(self, conn):
-        for name, (fn, num_params) in self._functions.items():
-            conn.create_function(name, num_params, fn)
-
     def _load_extensions(self, conn):
         conn.enable_load_extension(True)
         for extension in self._extensions:
             conn.load_extension(extension)
-
-    def register_aggregate(self, klass, name=None, num_params=-1):
-        self._aggregates[name or klass.__name__.lower()] = (klass, num_params)
-        if not self.is_closed():
-            self._load_aggregates(self.connection())
-
-    def aggregate(self, name=None, num_params=-1):
-        def decorator(klass):
-            self.register_aggregate(klass, name, num_params)
-            return klass
-        return decorator
-
-    def register_collation(self, fn, name=None):
-        name = name or fn.__name__
-        def _collation(*args):
-            expressions = args + (SQL('collate %s' % name),)
-            return NodeList(expressions)
-        fn.collation = _collation
-        self._collations[name] = fn
-        if not self.is_closed():
-            self._load_collations(self.connection())
-
-    def collation(self, name=None):
-        def decorator(fn):
-            self.register_collation(fn, name)
-            return fn
-        return decorator
-
-    def register_function(self, fn, name=None, num_params=-1):
-        self._functions[name or fn.__name__] = (fn, num_params)
-        if not self.is_closed():
-            self._load_functions(self.connection())
-
-    def func(self, name=None, num_params=-1):
-        def decorator(fn):
-            self.register_function(fn, name, num_params)
-            return fn
-        return decorator
 
     def load_extension(self, extension):
         self._extensions.add(extension)
@@ -810,15 +754,6 @@ class SqliteExtDatabase(SqliteDatabase):
             conn = self.connection()
             conn.enable_load_extension(True)
             conn.load_extension(extension)
-
-    def unregister_aggregate(self, name):
-        del(self._aggregates[name])
-
-    def unregister_collation(self, name):
-        del(self._collations[name])
-
-    def unregister_function(self, name):
-        del(self._functions[name])
 
     def unload_extension(self, extension):
         self._extensions.remove(extension)
