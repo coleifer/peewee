@@ -891,10 +891,14 @@ class TestModelAliasFieldProperties(ModelTestCase):
         class Person(TestModel):
             name = TextField()
             dob = DateField()
+            class Meta:
+                database = self.database
 
         class Job(TestModel):
             worker = ForeignKeyField(Person, backref='jobs')
             client = ForeignKeyField(Person, backref='jobs_hired')
+            class Meta:
+                database = self.database
 
         Worker = Person.alias()
         Client = Person.alias()
