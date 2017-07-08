@@ -3,8 +3,12 @@ import datetime
 from peewee import *
 
 from .base import BaseTestCase
+from .base import IS_MYSQL
+from .base import IS_POSTGRESQL
+from .base import IS_SQLITE
 from .base import TestModel
 from .base import db
+from .base import skip_unless
 
 
 User = Table('users')
@@ -259,7 +263,7 @@ class TestSelectQuery(BaseTestCase):
 
 
 class TestInsertQuery(BaseTestCase):
-    def test_isnert(self):
+    def test_insert_simple(self):
         query = User.insert({
             User.c.username: 'charlie',
             User.c.superuser: False,
@@ -268,12 +272,22 @@ class TestInsertQuery(BaseTestCase):
             'INSERT INTO "users" ("admin", "superuser", "username") '
             'VALUES (?, ?, ?)'), [True, False, 'charlie'])
 
-    def test_replace(self):
+    @skip_unless(IS_SQLITE)
+    def test_replace_sqlite(self):
         query = User.replace({
             User.c.username: 'charlie',
             User.c.superuser: False})
         self.assertSQL(query, (
             'INSERT OR REPLACE INTO "users" ("superuser", "username") '
+            'VALUES (?, ?)'), [False, 'charlie'])
+
+    @skip_unless(IS_MYSQL)
+    def test_replace_mysql(self):
+        query = User.replace({
+            User.c.username: 'charlie',
+            User.c.superuser: False})
+        self.assertSQL(query, (
+            'REPLACE INTO "users" ("superuser", "username") '
             'VALUES (?, ?)'), [False, 'charlie'])
 
     def test_insert_list(self):
@@ -615,3 +629,101 @@ class TestSelectFeatures(BaseTestCase):
             'WHERE EXISTS('
             'SELECT "t2"."id" FROM "users" AS "t2" '
             'WHERE ("t2"."username" = "t1"."name"))'), [])
+
+
+#Person = Table('person', ['id', 'name', 'dob'])
+
+class TestOnConflictSqlite(BaseTestCase):
+    database = SqliteDatabase(None)
+
+    def test_replace(self):
+        query = Person.insert(name='huey').on_conflict('replace')
+        self.assertSQL(query, (
+            'INSERT OR REPLACE INTO "person" ("name") VALUES (?)'), ['huey'])
+
+    def test_ignore(self):
+        query = Person.insert(name='huey').on_conflict('ignore')
+        self.assertSQL(query, (
+            'INSERT OR IGNORE INTO "person" ("name") VALUES (?)'), ['huey'])
+
+
+class TestOnConflictMySQL(BaseTestCase):
+    database = MySQLDatabase(None)
+
+    def test_replace(self):
+        query = Person.insert(name='huey').on_conflict('replace')
+        self.assertSQL(query, (
+            'REPLACE INTO "person" ("name") VALUES (?)'), ['huey'])
+
+    def test_ignore(self):
+        query = Person.insert(name='huey').on_conflict('ignore')
+        self.assertSQL(query, (
+            'INSERT IGNORE INTO "person" ("name") VALUES (?)'), ['huey'])
+
+    def test_update(self):
+        dob = datetime.date(2010, 1, 1)
+        query = (Person
+                 .insert(name='huey', dob=dob)
+                 .on_conflict(
+                     preserve=(Person.dob,),
+                     update={Person.name: Person.name.concat('-x')}))
+        self.assertSQL(query, (
+            'INSERT INTO "person" ("dob", "name") VALUES (?, ?) '
+            'ON DUPLICATE KEY '
+            'UPDATE "dob" = VALUES("dob"), "name" = ("name" || ?)'),
+            [dob, 'huey', '-x'])
+
+        query = (Person
+                 .insert(name='huey', dob=dob)
+                 .on_conflict(preserve='dob'))
+        self.assertSQL(query, (
+            'INSERT INTO "person" ("dob", "name") VALUES (?, ?) '
+            'ON DUPLICATE KEY '
+            'UPDATE "dob" = VALUES("dob")'), [dob, 'huey'])
+
+
+class TestOnConflictPostgresql(BaseTestCase):
+    database = PostgresqlDatabase(None)
+
+    def test_ignore(self):
+        query = Person.insert(name='huey').on_conflict('ignore')
+        self.assertSQL(query, (
+            'INSERT INTO "person" ("name") VALUES (?) '
+            'ON CONFLICT DO NOTHING'), ['huey'])
+
+    def test_update(self):
+        dob = datetime.date(2010, 1, 1)
+        query = (Person
+                 .insert(name='huey', dob=dob)
+                 .on_conflict(
+                     conflict_target=(Person.name,),
+                     preserve=(Person.dob,),
+                     update={Person.name: Person.name.concat('-x')}))
+        self.assertSQL(query, (
+            'INSERT INTO "person" ("dob", "name") VALUES (?, ?) '
+            'ON CONFLICT ("name") DO '
+            'UPDATE SET "dob" = EXCLUDED."dob", "name" = ("name" || ?)'),
+            [dob, 'huey', '-x'])
+
+        query = (Person
+                 .insert(name='huey', dob=dob)
+                 .on_conflict(
+                     conflict_target='name',
+                     preserve='dob'))
+        self.assertSQL(query, (
+            'INSERT INTO "person" ("dob", "name") VALUES (?, ?) '
+            'ON CONFLICT ("name") DO '
+            'UPDATE SET "dob" = EXCLUDED."dob"'), [dob, 'huey'])
+
+        query = (Person
+                 .insert(name='huey')
+                 .on_conflict(
+                     conflict_target=Person.name,
+                     preserve=Person.dob,
+                     update={Person.name: Person.name.concat('-x')},
+                     where=(Person.name != 'zaizee')))
+        self.assertSQL(query, (
+            'INSERT INTO "person" ("name") VALUES (?) '
+            'ON CONFLICT ("name") DO '
+            'UPDATE SET "dob" = EXCLUDED."dob", "name" = ("name" || ?) '
+            'WHERE ("name" != ?)'), ['huey', '-x', 'zaizee'])

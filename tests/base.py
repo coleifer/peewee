@@ -38,6 +38,10 @@ def get_in_memory_db(**params):
 BACKEND = os.environ.get('PEEWEE_TEST_BACKEND') or 'sqlite'
 VERBOSITY = int(os.environ.get('PEEWEE_TEST_VERBOSITY') or 1)
 
+IS_SQLITE = BACKEND in ('sqlite', 'sqlite3')
+IS_MYSQL = BACKEND == 'mysql'
+IS_POSTGRESQL = BACKEND in ('postgres', 'postgresql')
+
 if VERBOSITY > 1:
     handler = logging.StreamHandler()
     handler.setLevel(logging.INFO)
@@ -97,6 +101,9 @@ class BaseTestCase(unittest.TestCase):
             raise AssertionError('No exception was raised.')
 
     def assertSQL(self, query, sql, params=None, **state):
+        database = getattr(self, 'database', None) or db
+        state.setdefault('conflict_statement', database.conflict_statement)
+        state.setdefault('conflict_update', database.conflict_update)
         qsql, qparams = __sql__(query, **state)
         self.assertEqual(qsql, sql)
         if params is not None:
