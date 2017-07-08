@@ -1345,6 +1345,68 @@ class DQ(ColumnBase):
 Tuple = lambda *a: EnclosedNodeList(a)
 
 
+class OnConflict(Node):
+    def __init__(self, action=None, update=None, preserve=None, where=None,
+                 conflict_target=None):
+        self._action = action
+        self._update = update
+        self._preserve = preserve
+        self._where = where
+        self._conflict_target = conflict_target
+
+    def get_sql_format(self, ctx, query):
+        statement = None
+        update = None
+
+        if self._action and not self._update:
+            statement = ctx.state.conflict_statement(self, query)
+
+        if statement is None or self._update:
+            update = ctx.state.conflict_update(self, query)
+
+        return (statement, update)
+
+    @Node.copy
+    def replace(self):
+        self._action = 'REPLACE'
+
+    @Node.copy
+    def ignore(self):
+        self._action = 'IGNORE'
+
+    def _normalize_update(self, data, kwargs):
+        if data and kwargs and not isinstance(data, dict):
+            raise ValueError('Cannot mix data with keyword arguments in the '
+                             'OnConflict update method.')
+        data = data or {}
+        if kwargs:
+            data.update(kwargs)
+        return data
+
+    @Node.copy
+    def update(self, _data=None, **kwargs):
+        self._update = self._normalize_update(_data, kwargs)
+
+    @Node.copy
+    def preserve(self, *columns):
+        self._preserve = columns
+
+    @Node.copy
+    def where(self, *expressions):
+        if self._where is not None:
+            expressions = (self._where,) + expressions
+        self._where = reduce(operator.and_, expressions)
+
+    @Node.copy
+    def conflict_target(self, *constraints):
+        self._conflict_target = constraints
+
+
+class SqliteOnConflict(OnConflict):
+    def __sql__(self, ctx):
+        pass
+
+
 def database_required(method):
     @wraps(method)
     def inner(self, database=None, *args, **kwargs):
@@ -1360,9 +1422,10 @@ def database_required(method):
 class Query(Node):
     default_row_type = ROW.DICT
 
-    def __init__(self, order_by=None, limit=None, offset=None, _database=None,
-                 **kwargs):
+    def __init__(self, where=None, order_by=None, limit=None, offset=None,
+                 _database=None, **kwargs):
         super(Query, self).__init__(**kwargs)
+        self._where = where
         self._order_by = order_by
         self._limit = limit
         self._offset = offset
@@ -1404,6 +1467,12 @@ class Query(Node):
         return self
 
     @Node.copy
+    def where(self, *expressions):
+        if self._where is not None:
+            expressions = (self._where,) + expressions
+        self._where = reduce(operator.and_, expressions)
+
+    @Node.copy
     def order_by(self, *values):
         self._order_by = values
 
@@ -1432,8 +1501,8 @@ class Query(Node):
              .literal(' ORDER BY ')
              .sql(CommaNodeList(self._order_by)))
         if self._limit is not None or (self._offset is not None and
-                                       ctx.limit_max):
-            ctx.literal(' LIMIT %d' % (self._limit or ctx.limit_max))
+                                       ctx.state.limit_max):
+            ctx.literal(' LIMIT %d' % (self._limit or ctx.state.limit_max))
         if self._offset is not None:
             ctx.literal(' OFFSET %d' % self._offset)
         return ctx
@@ -1617,20 +1686,15 @@ class CompoundSelectQuery(SelectBase):
 
 
 class Select(SelectBase):
-    def __init__(self, from_list=None, columns=None, where=None,
-                 group_by=None, having=None, order_by=None, limit=None,
-                 offset=None, distinct=None, windows=None, for_update=None,
+    def __init__(self, from_list=None, columns=None, group_by=None,
+                 having=None, distinct=None, windows=None, for_update=None,
                  **kwargs):
         super(Select, self).__init__(**kwargs)
         self._from_list = (list(from_list) if isinstance(from_list, tuple)
                            else from_list) or []
         self._returning = columns
-        self._where = where
         self._group_by = group_by
         self._having = having
-        self._order_by = order_by
-        self._limit = limit
-        self._offset = offset
         self._windows = None
         self._for_update = 'FOR UPDATE' if for_update is True else for_update
 
@@ -1658,12 +1722,6 @@ class Select(SelectBase):
             raise ValueError('No sources to join on.')
         item = self._from_list.pop()
         self._from_list.append(Join(item, dest, join_type, on))
-
-    @Node.copy
-    def where(self, *expressions):
-        if self._where is not None:
-            expressions = (self._where,) + expressions
-        self._where = reduce(operator.and_, expressions)
 
     @Node.copy
     def group_by(self, *columns):
@@ -1749,10 +1807,10 @@ class Select(SelectBase):
 
 
 class _WriteQuery(Query):
-    def __init__(self, table):
+    def __init__(self, table, returning=None, **kwargs):
         self.table = table
-        self._returning = None
-        super(_WriteQuery, self).__init__()
+        self._returning = returning
+        super(_WriteQuery, self).__init__(**kwargs)
 
     @Node.copy
     def returning(self, *returning):
@@ -1794,33 +1852,15 @@ class _WriteQuery(Query):
 
 
 class Update(_WriteQuery):
-    def __init__(self, table, update=None, where=None, order_by=None,
-                 limit=None, offset=None, on_conflict=None):
+    def __init__(self, table, update=None, **kwargs):
+        super(Update, self).__init__(table, **kwargs)
         self._update = update
-        self._where = where
-        self._order_by = order_by
-        self._limit = limit
-        self._offset = offset
-        self._on_conflict = on_conflict
-        super(Update, self).__init__(table)
-
-    @Node.copy
-    def where(self, *expressions):
-        if self._where is not None:
-            expressions = (self._where,) + expressions
-        self._where = reduce(operator.and_, expressions)
-
-    @Node.copy
-    def on_conflict(self, on_conflict):
-        self._on_conflict = on_conflict
 
     def __sql__(self, ctx):
         super(Update, self).__sql__(ctx)
 
         with ctx.scope_values(subquery=True):
             ctx.literal('UPDATE ')
-            if self._on_conflict:
-                ctx.literal('OR %s ' % self._on_conflict)
 
             expressions = []
             for k, v in sorted(self._update.items(), key=ctx.column_sort_key):
@@ -1847,13 +1887,15 @@ class Insert(_WriteQuery):
     class DefaultValuesException(Exception): pass
 
     def __init__(self, table, insert=None, columns=None, on_conflict=None,
-                 returning=None):
-        super(Insert, self).__init__(table)
+                 **kwargs):
+        super(Insert, self).__init__(table, **kwargs)
         self._insert = insert
         self._columns = columns
         self._on_conflict = on_conflict
-        self._returning = returning
         self._query_type = None
+
+    def where(self, *expressions):
+        raise NotImplementedError('INSERT queries cannot have a WHERE clause.')
 
     @Node.copy
     def on_conflict(self, on_conflict):
@@ -1882,7 +1924,7 @@ class Insert(_WriteQuery):
             try:
                 row = next(rows_iter)
             except StopIteration:
-                raise ValueError('Error: no rows to insert.')
+                raise self.DefaultValuesException('Error: no rows to insert.')
             else:
                 accum = []
                 value_lookups = {}
@@ -1946,7 +1988,10 @@ class Insert(_WriteQuery):
                 self._query_insert(ctx)
                 self._query_type = Insert.QUERY
             else:
-                self._multi_insert(ctx)
+                try:
+                    self._multi_insert(ctx)
+                except self.DefaultValuesException:
+                    return
                 self._query_type = Insert.MULTI
 
             return self.apply_returning(ctx)
@@ -1961,29 +2006,11 @@ class Insert(_WriteQuery):
 
 
 class Delete(_WriteQuery):
-    def __init__(self, table, where=None, order_by=None, limit=None,
-                 offset=None, returning=None):
-        self._where = where
-        self._order_by = order_by
-        self._limit = limit
-        self._offset = offset
-        self._returning = returning
-        super(Delete, self).__init__(table)
-
-    @Node.copy
-    def where(self, *expressions):
-        if self._where is not None:
-            expressions = (self._where,) + expressions
-        self._where = reduce(operator.and_, expressions)
-
     def __sql__(self, ctx):
         super(Delete, self).__sql__(ctx)
 
         with ctx.scope_values(subquery=True):
-            (ctx
-             .literal('DELETE FROM ')
-             .sql(self.table))
-
+            ctx.literal('DELETE FROM ').sql(self.table)
             if self._where is not None:
                 ctx.literal(' WHERE ').sql(self._where)
 
@@ -2211,7 +2238,17 @@ class Database(_callable_context_manager):
             options.update(context_options)
         else:
             options = self.options
-        return self.context_class(**options)
+
+        return self.context_class(
+            conflict_statement=self.conflict_statement,
+            conflict_update=self.conflict_update,
+            **options)
+
+    def conflict_statement(self, on_conflict, query):
+        raise NotImplementedError
+
+    def conflict_update(self, on_conflict, query):
+        raise NotImplementedError
 
     def last_insert_id(self, cursor, query_type=None):
         return cursor.lastrowid
@@ -2500,6 +2537,17 @@ class SqliteDatabase(Database):
     def get_binary_type(self):
         return sqlite3.Binary
 
+    def conflict_statement(self, on_conflict, query):
+        if on_conflict._action:
+            return SQL('INSERT OR %s' % on_conflict._action)
+
+    def conflict_update(self, on_conflict, query):
+        if any((on_conflict._update, on_conflict._where,
+                on_conflict._conflict_target)):
+            raise ValueError('SQLite does not support the specification of '
+                             'specific updates or where clauses for conflict '
+                             'resolution.')
+
     def extract_date(self, date_part, date_field):
         return fn.date_part(date_part, date_field)
 
@@ -2628,6 +2676,48 @@ class PostgresqlDatabase(Database):
     def get_binary_type(self):
         return psycopg2.Binary
 
+    def conflict_statement(self, on_conflict, query):
+        return
+
+    def conflict_update(self, on_conflict, query):
+        action = on_conflict._action.lower() if on_conflict._action else ''
+        if action in ('ignore', 'nothing'):
+            return SQL(' ON CONFLICT DO NOTHING')
+        elif action and action != 'update':
+            raise ValueError('The only supported actions for conflict '
+                             'resolution with Postgresql are "ignore" or '
+                             '"update".')
+        elif not on_conflict._update:
+            raise ValueError('If you are not performing any updates, then '
+                             'the conflict resolution action should be set '
+                             'to "IGNORE".')
+        elif not on_conflict._conflict_target:
+            raise ValueError('Postgresql requires that a conflict target be '
+                             'specified when doing an up-sert.')
+
+        conflict_target = on_conflict._conflict_target
+        if not isinstance(conflict_target, (list, tuple)):
+            conflict_target = (conflict_target,)
+
+        target = EnclosedNodeList([
+            Entity(col) if isinstance(col, basestring) else col
+            for col in conflict_target])
+
+        updates = []
+        for k, v in on_conflict._update.items():
+            if isinstance(k, basestring):
+                k = Entity(k)
+            if not isinstance(v, Node):
+                converter = k.db_value if isinstance(k, Field) else None
+                v = Value(v, converter=converter, unpack=False)
+            updates.append(NodeList((k, SQL('='), v)))
+
+        parts = [SQL('ON CONFLICT'), target, SQL('DO UPDATE SET'), updates]
+        if on_conflict._where:
+            parts.extend((SQL('WHERE'), on_conflict._where))
+
+        return NodeList(parts)
+
     def extract_date(self, date_part, date_field):
         return fn.EXTRACT(NodeList((date_part, SQL('FROM'), date_field)))
 
@@ -2718,6 +2808,32 @@ class MySQLDatabase(Database):
 
     def get_binary_type(self):
         return mysql.Binary
+
+    def conflict_statement(self, on_conflict, query):
+        action = on_conflict._action.lower() if on_conflict._action else ''
+        if action == 'replace':
+            return SQL('REPLACE')
+        elif action == 'ignore':
+            return SQL('INSERT IGNORE')
+        elif action:
+            raise ValueError('Un-supported action for conflict resolution. '
+                             'MySQL only supports REPLACE and IGNORE.')
+
+    def conflict_update(self, on_conflict, query):
+        if on_conflict._where or on_conflict._conflict_target:
+            raise ValueError('MySQL does not support the specification of '
+                             'specific where clauses or conflict targets for '
+                             'conflict resolution.')
+        if on_conflict._update:
+            updates = []
+            for k, v in on_conflict._update.items():
+                if isinstance(k, basestring):
+                    k = Entity(k)
+                if not isinstance(v, Node):
+                    converter = k.db_value if isinstance(k, Field) else None
+                    v = Value(v, converter=converter, unpack=False)
+                updates.append(NodeList((k, SQL('='), v)))
+            return NodeList([SQL(' ON DUPLICATE KEY UPDATE ')] + updates)
 
     def extract_date(self, date_part, date_field):
         return fn.EXTRACT(NodeList((SQL(date_part), SQL('FROM'), date_field)))
