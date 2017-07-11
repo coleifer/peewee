@@ -1393,11 +1393,6 @@ class OnConflict(Node):
         self._conflict_target = constraints
 
 
-class SqliteOnConflict(OnConflict):
-    def __sql__(self, ctx):
-        pass
-
-
 def database_required(method):
     @wraps(method)
     def inner(self, database=None, *args, **kwargs):
