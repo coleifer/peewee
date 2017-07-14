@@ -2215,8 +2215,16 @@ class Database(_callable_context_manager):
             self.connect()
         return self._state.conn.cursor()
 
-    def execute_sql(self, sql, params=None, commit=True):
+    def execute_sql(self, sql, params=None, commit=SENTINEL):
         logger.debug((sql, params))
+        if commit is SENTINEL:
+            if self.in_transaction():
+                commit = False
+            elif self.commit_select:
+                commit = True
+            else:
+                commit = not sql.lower().startswith('select')
+
         with __exception_wrapper__:
             cursor = self.cursor()
             try:
@@ -2226,16 +2234,14 @@ class Database(_callable_context_manager):
                     self.rollback()
                 raise
             else:
-                if commit and not self.in_transaction() and \
-                   (self.commit_select or not
-                    sql.lower().startswith('select')):
+                if commit and not self.in_transaction():
                     self.commit()
         return cursor
 
-    def execute(self, query, **context_options):
+    def execute(self, query, commit=SENTINEL, **context_options):
         ctx = self.get_sql_context(context_options)
         sql, params = ctx.sql(query).query()
-        return self.execute_sql(sql, params)
+        return self.execute_sql(sql, params, commit=commit)
 
     def get_sql_context(self, context_options=None):
         if context_options:

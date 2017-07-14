@@ -40,8 +40,10 @@ class BaseTestQueueDatabase(object):
 
     def setUp(self):
         super(BaseTestQueueDatabase, self).setUp()
+        User._meta.database = db
         with db:
-            User.create_table(True)
+            db.create_tables([User], safe=True)
+
         User._meta.database = \
                 self.database = get_db(**self.database_config)
 
@@ -217,17 +219,19 @@ class TestThreadedDatabaseThreads(BaseTestQueueDatabase, BaseTestCase):
         @self.database.func()
         def slow(n):
             time.sleep(n)
-            return 'I slept for %s seconds' % n
+            return 'slept %0.2f' % n
 
         self.database.start()
 
         # Make the result timeout very small, then call our function which
         # will cause the query results to time-out.
         self.database._results_timeout = 0.001
-        self.assertRaises(
-            ResultTimeout,
-            lambda: self.database.execute_sql(
-                'select slow(?)', (0.005,), commit=True).fetchone())
+        def do_query():
+            cursor = self.database.execute_sql('select slow(?)', (0.01,),
+                                               commit=True)
+            self.assertEqual(cursor.fetchone()[0], 'slept 0.01')
+
+        self.assertRaises(ResultTimeout, do_query)
         self.database.stop()
 
 

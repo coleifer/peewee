@@ -17,6 +17,7 @@ try:
 except ImportError:
     GThread = GQueue = GEvent = None
 
+from peewee import SENTINEL
 from playhouse.sqlite_ext import SqliteExtDatabase
 
 
@@ -239,8 +240,11 @@ class SqliteQueueDatabase(SqliteExtDatabase):
     def queue_size(self):
         return self._write_queue.qsize()
 
-    def execute_sql(self, sql, params=None, commit=True, timeout=None):
-        if not commit or sql.lower().startswith('select'):
+    def execute_sql(self, sql, params=None, commit=SENTINEL, timeout=None):
+        if commit is SENTINEL:
+            commit = not sql.lower().startswith('select')
+
+        if not commit:
             return self._execute(sql, params, commit=commit)
 
         cursor = AsyncCursor(
