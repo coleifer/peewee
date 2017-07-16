@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-import importlib
 import optparse
 import os
 import shutil
@@ -61,7 +60,8 @@ def collect_modules(options, args):
 
     for arg in args:
         try:
-            modules.append(importlib.import_module('tests.%s' % arg))
+            __import__('tests.%s' % arg)
+            modules.append(sys.modules['tests.%s' % arg])
         except ImportError:
             print_('ERROR: unable to import requested tests: "tests.%s"' % arg)
 
