@@ -133,9 +133,8 @@ class Operation(object):
     def run(self):
         kwargs = self.kwargs.copy()
         kwargs['with_context'] = True
-        ctx = self.migrator.database.get_sql_context()
         method = getattr(self.migrator, self.method)
-        self._handle_result(method(ctx, *self.args, **kwargs))
+        self._handle_result(method(*self.args, **kwargs))
 
 
 def operation(fn):
@@ -155,6 +154,9 @@ class SchemaMigrator(object):
     def __init__(self, database):
         self.database = database
 
+    def make_context(self):
+        return self.database.get_sql_context()
+
     @classmethod
     def from_database(cls, database):
         if isinstance(database, PostgresqlDatabase):
@@ -165,12 +167,12 @@ class SchemaMigrator(object):
             return SqliteMigrator(database)
 
     @operation
-    def apply_default(self, ctx, table, column_name, field):
+    def apply_default(self, table, column_name, field):
         default = field.default
         if callable(default):
             default = default()
 
-        return (ctx
+        return (self.make_context()
                 .literal('UPDATE ')
                 .sql(Entity(table))
                 .literal(' SET ')
@@ -190,8 +192,9 @@ class SchemaMigrator(object):
                 .sql(Entity(column)))
 
     @operation
-    def alter_add_column(self, ctx, table, column_name, field):
+    def alter_add_column(self, table, column_name, field):
         # Make field null at first.
+        ctx = self.make_context()
         field_null, field.null = field.null, True
         field.name = field.column_name = column_name
         (self
@@ -216,7 +219,7 @@ class SchemaMigrator(object):
         raise NotImplementedError
 
     @operation
-    def add_column(self, ctx, table, column_name, field):
+    def add_column(self, table, column_name, field):
         # Adding a column is complicated by the fact that if there are rows
         # present and the field is non-null, then we need to first add the
         # column as a nullable field, then set the value, then add a not null
@@ -256,7 +259,8 @@ class SchemaMigrator(object):
         raise NotImplementedError
 
     @operation
-    def drop_column(self, ctx, table, column_name, cascade=True):
+    def drop_column(self, table, column_name, cascade=True):
+        ctx = self.make_context()
         (self._alter_table(ctx, table)
          .literal(' DROP COLUMN ')
          .sql(Entity(column_name)))
@@ -273,31 +277,36 @@ class SchemaMigrator(object):
         return ctx
 
     @operation
-    def rename_column(self, ctx, table, old_name, new_name):
+    def rename_column(self, table, old_name, new_name):
         return (self
-                ._alter_table(ctx, table)
+                ._alter_table(self.make_context(), table)
                 .literal(' RENAME COLUMN ')
                 .sql(Entity(old_name))
                 .literal(' TO ')
                 .sql(Entity(new_name)))
 
     @operation
-    def add_not_null(self, ctx, table, column):
-        return self._alter_column(ctx, table, column).literal(' SET NOT NULL')
-
-    @operation
-    def drop_not_null(self, ctx, table, column):
-        return self._alter_column(ctx, table, column).literal(' DROP NOT NULL')
-
-    @operation
-    def rename_table(self, ctx, old_name, new_name):
+    def add_not_null(self, table, column):
         return (self
-                ._alter_table(ctx, old_name)
+                ._alter_column(self.make_context(), table, column)
+                .literal(' SET NOT NULL'))
+
+    @operation
+    def drop_not_null(self, table, column):
+        return (self
+                ._alter_column(self.make_context(), table, column)
+                .literal(' DROP NOT NULL'))
+
+    @operation
+    def rename_table(self, old_name, new_name):
+        return (self
+                ._alter_table(self.make_context(), old_name)
                 .literal(' RENAME TO ')
                 .sql(Entity(new_name)))
 
     @operation
-    def add_index(self, ctx, table, columns, unique=False):
+    def add_index(self, table, columns, unique=False):
+        ctx = self.make_context()
         index_name = ctx.make_index_name(table, *columns)
         return (ctx
                 .literal('CREATE UNIQUE INDEX ' if unique else 'CREATE INDEX ')
@@ -307,8 +316,11 @@ class SchemaMigrator(object):
                 .sql(EnclosedNodeList([Entity(column) for column in columns])))
 
     @operation
-    def drop_index(self, ctx, table, index_name):
-        return ctx.literal('DROP INDEX ').sql(Entity(index_name))
+    def drop_index(self, table, index_name):
+        return (self
+                .make_context()
+                .literal('DROP INDEX ')
+                .sql(Entity(index_name)))
 
 
 class PostgresqlMigrator(SchemaMigrator):
@@ -327,12 +339,12 @@ class PostgresqlMigrator(SchemaMigrator):
         return [row[0] for row in cursor.fetchall()]
 
     @operation
-    def rename_table(self, ctx, old_name, new_name):
+    def rename_table(self, old_name, new_name):
         pk_names = self._primary_key_columns(old_name)
         ParentClass = super(PostgresqlMigrator, self)
 
         operations = [
-            ParentClass.rename_table(ctx, old_name, new_name, with_context=True)]
+            ParentClass.rename_table(old_name, new_name, with_context=True)]
 
         if len(pk_names) == 1:
             # Check for existence of primary key sequence.
@@ -447,7 +459,7 @@ class MySQLMigrator(SchemaMigrator):
             SQL('DROP FOREIGN KEY'),
             Entity(self.get_foreign_key_constraint(table, column_name)))
 
-    def add_inline_fk_sql(self, ctx, field):
+    def add_inline_fk_sql(self, field):
         return []
 
     @operation
@@ -529,7 +541,7 @@ class SqliteMigrator(SchemaMigrator):
         return res.fetchone()
 
     @operation
-    def _update_column(self, ctx, table, column_to_update, fn):
+    def _update_column(self, table, column_to_update, fn):
         columns = set(column.name.lower()
                       for column in self.database.get_columns(table))
         if column_to_update.lower() not in columns:
@@ -673,23 +685,23 @@ class SqliteMigrator(SchemaMigrator):
         return '%s(%s)' % (lhs, ', '.join('"%s"' % c for c in clean))
 
     @operation
-    def drop_column(self, ctx, table, column_name, cascade=True):
+    def drop_column(self, table, column_name, cascade=True):
         return self._update_column(table, column_name, lambda a, b: None)
 
     @operation
-    def rename_column(self, ctx, table, old_name, new_name):
+    def rename_column(self, table, old_name, new_name):
         def _rename(column_name, column_def):
             return column_def.replace(column_name, new_name)
         return self._update_column(table, old_name, _rename)
 
     @operation
-    def add_not_null(self, ctx, table, column):
+    def add_not_null(self, table, column):
         def _add_not_null(column_name, column_def):
             return column_def + ' NOT NULL'
         return self._update_column(table, column, _add_not_null)
 
     @operation
-    def drop_not_null(self, ctx, table, column):
+    def drop_not_null(self, table, column):
         def _drop_not_null(column_name, column_def):
             return column_def.replace('NOT NULL', '')
         return self._update_column(table, column, _drop_not_null)
