@@ -2602,7 +2602,10 @@ class PostgresqlDatabase(Database):
         return conn
 
     def last_insert_id(self, cursor, query_type=None):
-        return cursor if query_type else cursor[0][0]
+        try:
+            return cursor if query_type else cursor[0][0]
+        except IndexError:
+            pass
 
     def get_tables(self, schema=None):
         query = ('SELECT tablename FROM pg_catalog.pg_tables '

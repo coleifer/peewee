@@ -646,6 +646,13 @@ class TestOnConflictSqlite(BaseTestCase):
         self.assertSQL(query, (
             'INSERT OR IGNORE INTO "person" ("name") VALUES (?)'), ['huey'])
 
+    def test_update_not_supported(self):
+        query = Person.insert(name='huey').on_conflict(
+            preserve=(Person.dob,),
+            update={Person.name: Person.name.concat(' (updated)')})
+        with self.assertRaisesCtx(ValueError):
+            self.database.get_sql_context().parse(query)
+
 
 class TestOnConflictMySQL(BaseTestCase):
     database = MySQLDatabase(None)
@@ -681,6 +688,13 @@ class TestOnConflictMySQL(BaseTestCase):
             'ON DUPLICATE KEY '
             'UPDATE "dob" = VALUES("dob")'), [dob, 'huey'])
 
+    def test_where_not_supported(self):
+        query = Person.insert(name='huey').on_conflict(
+            preserve=(Person.dob,),
+            where=(Person.name == 'huey'))
+        with self.assertRaisesCtx(ValueError):
+            self.database.get_sql_context().parse(query)
+
 
 class TestOnConflictPostgresql(BaseTestCase):
     database = PostgresqlDatabase(None)
@@ -690,6 +704,16 @@ class TestOnConflictPostgresql(BaseTestCase):
         self.assertSQL(query, (
             'INSERT INTO "person" ("name") VALUES (?) '
             'ON CONFLICT DO NOTHING'), ['huey'])
+
+    def test_conflict_target_required(self):
+        query = Person.insert(name='huey').on_conflict(preserve=(Person.dob,))
+        with self.assertRaisesCtx(ValueError):
+            self.database.get_sql_context().parse(query)
+
+    def test_conflict_resolution_required(self):
+        query = Person.insert(name='huey').on_conflict(conflict_target='name')
+        with self.assertRaisesCtx(ValueError):
+            self.database.get_sql_context().parse(query)
 
     def test_update(self):
         dob = datetime.date(2010, 1, 1)

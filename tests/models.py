@@ -9,10 +9,18 @@ from .base import get_in_memory_db
 from .base import new_connection
 from .base import requires_models
 from .base import skip_case_unless
+from .base import skip_unless
 from .base import BaseTestCase
+from .base import IS_MYSQL
+from .base import IS_POSTGRESQL
+from .base import IS_SQLITE
 from .base import ModelTestCase
 from .base import TestModel
 from .base_models import *
+
+
+if sys.version_info[0] >= 3:
+    long = int
 
 
 class TestModelAPIs(ModelTestCase):
@@ -40,7 +48,7 @@ class TestModelAPIs(ModelTestCase):
         with self.assertQueryCount(1):
             huey = self.add_user('huey')
             self.assertEqual(huey.username, 'huey')
-            self.assertTrue(isinstance(huey.id, int))
+            self.assertTrue(isinstance(huey.id, (int, long)))
             self.assertTrue(huey.id > 0)
 
         with self.assertQueryCount(1):
@@ -934,3 +942,115 @@ class TestModelAliasFieldProperties(ModelTestCase):
                  .join(Worker, on=(Job.worker == Worker.id))
                  .where(Person.dob.year == 1983))
         self.assertSQL(query, expected_sql, expected_params)
+
+
+class Emp(TestModel):
+    first = CharField()
+    last = CharField()
+    empno = CharField(unique=True)
+
+    class Meta:
+        indexes = (
+            (('first', 'last'), True),
+        )
+
+
+class OnConflictTestCase(ModelTestCase):
+    requires = [Emp]
+    test_data = (
+        ('huey', 'cat', '123'),
+        ('zaizee', 'cat', '124'),
+        ('mickey', 'dog', '125'),
+    )
+
+    def setUp(self):
+        super(OnConflictTestCase, self).setUp()
+        for first, last, empno in self.test_data:
+            Emp.create(first=first, last=last, empno=empno)
+
+    def assertData(self, expected):
+        query = (Emp
+                 .select(Emp.first, Emp.last, Emp.empno)
+                 .order_by(Emp.id)
+                 .tuples())
+        self.assertEqual(list(query), expected)
+
+    def test_ignore(self):
+        query = (Emp
+                 .insert(first='foo', last='bar', empno='123')
+                 .on_conflict('ignore')
+                 .execute())
+        self.assertData(list(self.test_data))
+
+
+class TestUpsertSqlite(OnConflictTestCase):
+    database = get_in_memory_db()
+
+    def test_replace(self):
+        query = (Emp
+                 .insert(first='mickey', last='dog', empno='1337')
+                 .on_conflict('replace')
+                 .execute())
+        self.assertData([
+            ('huey', 'cat', '123'),
+            ('zaizee', 'cat', '124'),
+            ('mickey', 'dog', '1337')])
+
+        query = (Emp
+                 .insert(first='nuggie', last='dog', empno='123')
+                 .on_conflict('replace')
+                 .execute())
+        self.assertData([
+            ('zaizee', 'cat', '124'),
+            ('mickey', 'dog', '1337'),
+            ('nuggie', 'dog', '123')])
+
+
+@skip_case_unless(IS_MYSQL)
+class TestUpsertMySQL(OnConflictTestCase):
+    def test_replace(self):
+        query = (Emp
+                 .insert(first='mickey', last='dog', empno='1337')
+                 .on_conflict('replace')
+                 .execute())
+        self.assertData([
+            ('huey', 'cat', '123'),
+            ('zaizee', 'cat', '124'),
+            ('mickey', 'dog', '1337')])
+
+        query = (Emp
+                 .insert(first='nuggie', last='dog', empno='123')
+                 .on_conflict('replace')
+                 .execute())
+        self.assertData([
+            ('zaizee', 'cat', '124'),
+            ('mickey', 'dog', '1337'),
+            ('nuggie', 'dog', '123')])
+
+
+@skip_case_unless(IS_POSTGRESQL)
+class TestUpsertPostgresql(OnConflictTestCase):
+    def test_update(self):
+        res = (Emp
+               .insert(first='foo', last='bar', empno='125')
+               .on_conflict(
+                   conflict_target=(Emp.empno,),
+                   preserve=(Emp.first, Emp.last),
+                   update={Emp.empno: '125.1'})
+               .execute())
+        self.assertData([
+            ('huey', 'cat', '123'),
+            ('zaizee', 'cat', '124'),
+            ('foo', 'bar', '125.1')])
+
+        res = (Emp
+               .insert(first='foo', last='bar', empno='126')
+               .on_conflict(
+                   conflict_target=(Emp.first, Emp.last),
+                   preserve=(Emp.first,),
+                   update={Emp.last: 'baze'})
+               .execute())
+        self.assertData([
+            ('huey', 'cat', '123'),
+            ('zaizee', 'cat', '124'),
+            ('foo', 'baze', '125.1')])
