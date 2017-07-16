@@ -229,7 +229,7 @@ class SchemaMigrator(object):
 
         is_foreign_key = isinstance(field, ForeignKeyField)
         if is_foreign_key and not field.rel_field:
-            raise ValueError('Foreign keys must specify a `to_field`.')
+            raise ValueError('Foreign keys must specify a `rel_field`.')
 
         operations = [self.alter_add_column(table, column_name, field)]
 
@@ -245,8 +245,8 @@ class SchemaMigrator(object):
                 self.add_foreign_key_constraint(
                     table,
                     column_name,
-                    field.rel_model._meta.db_table,
-                    field.to_field.db_column))
+                    field.rel_model._meta.table_name,
+                    field.rel_field.column_name))
 
         if field.index or field.unique:
             operations.append(self.add_index(table, (column_name,),
@@ -404,11 +404,12 @@ class MySQLMigrator(SchemaMigrator):
 
     @operation
     def rename_table(self, old_name, new_name):
-        return Clause(
-            SQL('RENAME TABLE'),
-            Entity(old_name),
-            SQL('TO'),
-            Entity(new_name))
+        return (self
+                .make_context()
+                .literal('RENAME TABLE ')
+                .sql(Entity(old_name))
+                .literal(' TO ')
+                .sql(Entity(new_name)))
 
     def _get_column_definition(self, table, column_name):
         cursor = self.database.execute_sql('DESCRIBE %s;' % table)
@@ -423,16 +424,19 @@ class MySQLMigrator(SchemaMigrator):
     def add_foreign_key_constraint(self, table, column_name, rel, rel_column):
         # TODO: refactor, this duplicates QueryCompiler._create_foreign_key
         constraint = 'fk_%s_%s_refs_%s' % (table, column_name, rel)
-        return Clause(
-            SQL('ALTER TABLE'),
-            Entity(table),
-            SQL('ADD CONSTRAINT'),
-            Entity(constraint),
-            SQL('FOREIGN KEY'),
-            EnclosedNodeList((Entity(column_name),)),
-            SQL('REFERENCES'),
-            Entity(rel),
-            EnclosedNodeList((Entity(rel_column),)))
+        return (self
+                .make_context()
+                .literal('ALTER TABLE ')
+                .sql(Entity(table))
+                .literal(' ADD CONSTRAINT ')
+                .sql(Entity(constraint))
+                .literal(' FOREIGN KEY ')
+                .sql(EnclosedNodeList((Entity(column_name),)))
+                .literal(' REFERENCES ')
+                .sql(Entity(rel))
+                .literal(' (')
+                .sql(Entity(rel_column))
+                .literal(')'))
 
     def get_foreign_key_constraint(self, table, column_name):
         cursor = self.database.execute_sql(
@@ -453,34 +457,38 @@ class MySQLMigrator(SchemaMigrator):
 
     @operation
     def drop_foreign_key_constraint(self, table, column_name):
-        return Clause(
-            SQL('ALTER TABLE'),
-            Entity(table),
-            SQL('DROP FOREIGN KEY'),
-            Entity(self.get_foreign_key_constraint(table, column_name)))
+        fk_constraint = self.get_foreign_key_constraint(table, column_name)
+        return (self
+                .make_context()
+                .literal('ALTER TABLE ')
+                .sql(Entity(table))
+                .literal(' DROP FOREIGN KEY ')
+                .sql(Entity(fk_constraint)))
 
-    def add_inline_fk_sql(self, field):
-        return []
+    def add_inline_fk_sql(self, ctx, field):
+        pass
 
     @operation
     def add_not_null(self, table, column):
         column = self._get_column_definition(table, column)
-        return Clause(
-            SQL('ALTER TABLE'),
-            Entity(table),
-            SQL('MODIFY'),
-            column.sql(is_null=False))
+        return (self
+                .make_context()
+                .literal('ALTER TABLE ')
+                .sql(Entity(table))
+                .literal(' MODIFY ')
+                .sql(column.sql(is_null=False)))
 
     @operation
     def drop_not_null(self, table, column):
         column = self._get_column_definition(table, column)
         if column.is_pk:
             raise ValueError('Primary keys can not be null')
-        return Clause(
-            SQL('ALTER TABLE'),
-            Entity(table),
-            SQL('MODIFY'),
-            column.sql(is_null=True))
+        return (self
+                .make_context()
+                .literal('ALTER TABLE ')
+                .sql(Entity(table))
+                .literal(' MODIFY ')
+                .sql(column.sql(is_null=True)))
 
     @operation
     def rename_column(self, table, old_name, new_name):
@@ -490,17 +498,19 @@ class MySQLMigrator(SchemaMigrator):
         is_foreign_key = old_name in fk_objects
 
         column = self._get_column_definition(table, old_name)
-        rename_clause = Clause(
-            SQL('ALTER TABLE'),
-            Entity(table),
-            SQL('CHANGE'),
-            Entity(old_name),
-            column.sql(column_name=new_name))
+        rename_ctx = (self
+                      .make_context()
+                      .literal('ALTER TABLE ')
+                      .sql(Entity(table))
+                      .literal(' CHANGE ')
+                      .sql(Entity(old_name))
+                      .literal(' ')
+                      .sql(column.sql(column_name=new_name)))
         if is_foreign_key:
             fk_metadata = fk_objects[old_name]
             return [
                 self.drop_foreign_key_constraint(table, old_name),
-                rename_clause,
+                rename_ctx,
                 self.add_foreign_key_constraint(
                     table,
                     new_name,
@@ -508,15 +518,16 @@ class MySQLMigrator(SchemaMigrator):
                     fk_metadata.dest_column),
             ]
         else:
-            return rename_clause
+            return rename_ctx
 
     @operation
     def drop_index(self, table, index_name):
-        return Clause(
-            SQL('DROP INDEX'),
-            Entity(index_name),
-            SQL('ON'),
-            Entity(table))
+        return (self
+                .make_context()
+                .literal('DROP INDEX ')
+                .sql(Entity(index_name))
+                .literal(' ON ')
+                .sql(Entity(table)))
 
 
 class SqliteMigrator(SchemaMigrator):

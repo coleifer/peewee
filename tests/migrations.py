@@ -5,6 +5,7 @@ from functools import partial
 from peewee import *
 from playhouse.migrate import *
 from .base import BaseTestCase
+from .base import IS_MYSQL
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db
@@ -56,7 +57,7 @@ class TestSchemaMigration(ModelTestCase):
     requires = [Person, Tag, User, Page, Session]
 
     # Each database behaves slightly differently.
-    _exception_add_not_null = True
+    _exception_add_not_null = not IS_MYSQL
 
     _person_data = [
         ('Charlie', 'Leifer', None),
@@ -621,15 +622,3 @@ class TestSchemaMigration(ModelTestCase):
             ('CREATE UNIQUE INDEX "indexmodel_first_name_last_name" '
              'ON "indexmodel" ("first", "last_name")', [])
         ])
-
-
-"""
-@skip_if(lambda: mysql is None)
-class MySQLMigrationTestCase(BaseMigrationTestCase, PeeweeTestCase):
-    database = mysql_db
-    migrator_class = MySQLMigrator
-
-    # MySQL does not raise an exception when adding a not null constraint
-    # to a column that contains NULL values.
-    _exception_add_not_null = False
-"""
