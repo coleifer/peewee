@@ -425,7 +425,7 @@ class TestSchemaMigration(ModelTestCase):
     def test_add_foreign_key(self):
         if hasattr(Person, 'newtag_set'):
             delattr(Person, 'newtag_set')
-            del Person._meta.reverse_rel['newtag_set']
+            del Person._meta.backrefs['newtag_set']
 
         # Ensure no foreign keys are present at the beginning of the test.
         self.assertEqual(self.database.get_foreign_keys('tag'), [])
