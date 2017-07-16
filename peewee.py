@@ -3991,8 +3991,8 @@ class SchemaManager(object):
     def _create_index(self, fields, unique=False, safe=True):
         ctx = self._create_context()
         ctx.literal('CREATE UNIQUE INDEX ' if unique else 'CREATE INDEX ')
-        if safe:
-            ctx.literal('IF NOT EXISTS ')
+        #if safe:
+        #    ctx.literal('IF NOT EXISTS ')
         ctx.sql(self.index_entity(fields)).literal(' ON ').sql(self.model)
 
         # Allow fields to specify a type of index with the USING extension.

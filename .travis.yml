@@ -5,6 +5,7 @@ python:
   - "3.4"
   - "3.5"
   - "3.6"
+dist: trusty
 env:
   - PEEWEE_TEST_BACKEND=sqlite
   - PEEWEE_TEST_BACKEND=postgresql
