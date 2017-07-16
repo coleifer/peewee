@@ -40,7 +40,7 @@ try:
     from .sqlite import *
 except ImportError:
     print('Unable to import sqlite extension tests, skipping.')
-#from .sqliteq import *
+from .sqliteq import *
 from .sqlite_udf import *
 
 

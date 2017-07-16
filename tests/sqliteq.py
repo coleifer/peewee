@@ -35,7 +35,7 @@ class User(TestModel):
 
 class BaseTestQueueDatabase(object):
     database_config = {}
-    n_rows = 50
+    n_rows = 20
     n_threads = 20
 
     def setUp(self):
@@ -238,8 +238,8 @@ class TestThreadedDatabaseThreads(BaseTestQueueDatabase, BaseTestCase):
 @skip_case_if(gevent is None)
 class TestThreadedDatabaseGreenlets(BaseTestQueueDatabase, BaseTestCase):
     database_config = {'use_gevent': True}
-    n_rows = 20
-    n_threads = 200
+    n_rows = 10
+    n_threads = 40
 
     def create_thread(self, fn, *args):
         return gevent.Greenlet(fn, *args)
