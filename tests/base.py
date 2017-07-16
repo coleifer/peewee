@@ -127,6 +127,8 @@ class DatabaseTestCase(BaseTestCase):
     database = db
 
     def setUp(self):
+        if not self.database.is_closed():
+            self.database.close()
         self.database.connect()
         super(DatabaseTestCase, self).setUp()
 
