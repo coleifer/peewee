@@ -4074,7 +4074,6 @@ class SchemaManager(object):
         self.create_indexes(safe=safe)
 
     def drop_all(self, safe=True):
-        self.drop_indexes(safe)
         self.drop_table(safe)
 
 

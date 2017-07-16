@@ -174,15 +174,16 @@ class TestModelAPIs(ModelTestCase):
 
         q1 = Register.select().where(Register.value < 2)
         q2 = Register.select().where(Register.value > 7)
-        c1 = (q1 | q2).order_by(SQL('1'))
+        c1 = (q1 | q2).order_by(SQL('2'))
 
         self.assertSQL(c1, (
             'SELECT "t1"."id", "t1"."value" FROM "register" AS "t1" '
             'WHERE ("t1"."value" < ?) UNION '
             'SELECT "t2"."id", "t2"."value" FROM "register" AS "t2" '
-            'WHERE ("t2"."value" > ?) ORDER BY 1'), [2, 7])
+            'WHERE ("t2"."value" > ?) ORDER BY 2'), [2, 7])
 
-        self.assertEqual([row.value for row in c1], [0, 1, 8, 9])
+        self.assertEqual([row.value for row in c1], [0, 1, 8, 9],
+                         [row.__data__ for row in c1])
 
         q3 = Register.select().where(Register.value == 5)
         c2 = (c1.order_by() | q3).order_by(SQL('"value"'))

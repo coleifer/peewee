@@ -118,6 +118,8 @@ class TestModelDDL(ModelDatabaseTestCase):
             a123456789012345678901234567890 = CharField()
             b123456789012345678901234567890 = CharField()
             c123456789012345678901234567890 = CharField()
+            class Meta:
+                database = self.database
 
         fields = LongIndex._meta.sorted_fields[1:]
         self.assertEqual(len(fields), 3)

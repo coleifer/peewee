@@ -22,7 +22,7 @@ def get_option_parser():
         '--engine',
         dest='engine',
         help=('Database engine to test, one of '
-              '[sqlite, postgres, mysql, apsw, sqlcipher, berkeleydb]'))
+              '[sqlite, postgres, mysql, apsw, sqlcipher]'))
     basic.add_option('-v', '--verbosity', dest='verbosity', default=1, type='int', help='Verbosity of output')
 
     suite = optparse.OptionGroup(parser, 'Simple test suite options')
@@ -30,8 +30,7 @@ def get_option_parser():
     suite.add_option('-x', '--extra', dest='extra', default=False, action='store_true', help='Run only extras tests')
 
     cases = optparse.OptionGroup(parser, 'Individual test module options')
-    #cases.add_option('--apsw', dest='apsw', default=False, action='store_true', help='apsw tests (requires apsw)')
-    #cases.add_option('--berkeleydb', dest='berkeleydb', default=False, action='store_true', help='berkeleydb tests (requires pysqlite compiled against berkeleydb)')
+    cases.add_option('--apsw', dest='apsw', default=False, action='store_true', help='apsw tests (requires apsw)')
     cases.add_option('--dataset', dest='dataset', default=False, action='store_true', help='dataset tests')
     cases.add_option('--db-url', dest='db_url', default=False, action='store_true', help='db url tests')
     cases.add_option('--hybrid', dest='hybrid', default=False, action='store_true', help='hybrid property/method tests')
@@ -65,18 +64,12 @@ def collect_modules(options, args):
         except ImportError:
             print_('ERROR: unable to import requested tests: "tests.%s"' % arg)
 
-    #if xtra(options.apsw):
-    #    try:
-    #        from playhouse.tests import test_apsw
-    #        modules.append(test_apsw)
-    #    except ImportError:
-    #        print_('Unable to import apsw tests, skipping')
-    #if xtra(options.berkeleydb):
-    #    try:
-    #        from playhouse.tests import test_berkeleydb
-    #        modules.append(test_berkeleydb)
-    #    except ImportError:
-    #        print_('Unable to import berkeleydb tests, skipping')
+    if xtra(options.apsw):
+        try:
+            import tests.apsw_ext
+            modules.append(tests.apsw_ext)
+        except ImportError:
+            print_('Unable to import apsw tests, skipping')
     if xtra(options.dataset):
         import tests.dataset
         modules.append(tests.dataset)
