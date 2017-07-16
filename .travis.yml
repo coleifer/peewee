@@ -11,7 +11,7 @@ env:
   - PEEWEE_TEST_BACKEND=postgresql
   - PEEWEE_TEST_BACKEND=mysql
 addons:
-  postgresql: "9.4"
+  postgresql: "9.5"
 services:
   - postgresql
   - mysql
