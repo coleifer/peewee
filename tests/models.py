@@ -9,6 +9,7 @@ from .base import get_in_memory_db
 from .base import new_connection
 from .base import requires_models
 from .base import skip_case_unless
+from .base import skip_if
 from .base import skip_unless
 from .base import BaseTestCase
 from .base import IS_MYSQL
@@ -168,6 +169,7 @@ class TestModelAPIs(ModelTestCase):
                 ('u2', 't2-2', 'u3')])
 
     @requires_models(Register)
+    @skip_if(IS_SQLITE and sqlite3.sqlite_version_info < (3, 9))
     def test_compound_select(self):
         for i in range(10):
             Register.create(value=i)
