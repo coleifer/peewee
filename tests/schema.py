@@ -124,7 +124,7 @@ class TestModelDDL(ModelDatabaseTestCase):
 
         ctx = LongIndex._schema._create_index(fields)
         self.assertSQL(ctx, (
-            'CREATE INDEX "'
+            'CREATE INDEX IF NOT EXISTS "'
             'longindex_a123456789012345678901234567890_b1234567890123_5088012'
             '" ON "longindex" ('
             '"a123456789012345678901234567890", '

@@ -2120,6 +2120,8 @@ class Database(_callable_context_manager):
         insert_many=True,
         limit_max=None,
         returning_clause=False,
+        safe_create_index=True,
+        safe_drop_index=True,
         sequences=False,
         subquery_delete_same_table=True,
         window_functions=False,
@@ -2330,11 +2332,11 @@ class Database(_callable_context_manager):
 
     def create_tables(self, models, **options):
         for model in sort_models(models):
-            model._schema.create_all(**options)
+            model.create_table(**options)
 
     def drop_tables(self, models, **kwargs):
         for model in reversed(sort_models(models)):
-            model._schema.drop_all(**kwargs)
+            model.drop_table(**kwargs)
 
     def extract_date(self, date_part, date_field):
         raise NotImplementedError
@@ -2585,6 +2587,7 @@ class PostgresqlDatabase(Database):
         for_update=True,
         for_update_nowait=True,
         returning_clause=True,
+        safe_create_index=False,
         sequences=True,
         window_functions=True)
 
@@ -2592,6 +2595,7 @@ class PostgresqlDatabase(Database):
 
     def init(self, database, register_unicode=True, **kwargs):
         self._register_unicode = register_unicode
+        self._need_server_version = True
         super(PostgresqlDatabase, self).init(database, **kwargs)
 
     def _connect(self):
@@ -2599,7 +2603,14 @@ class PostgresqlDatabase(Database):
         if self._register_unicode:
             pg_extensions.register_type(pg_extensions.UNICODE, conn)
             pg_extensions.register_type(pg_extensions.UNICODEARRAY, conn)
+        if self._need_server_version:
+            self.set_server_version(conn.server_version)
+            self._need_server_version = False
         return conn
+
+    def set_server_version(self, version):
+        if version >= 90600:
+            self.options['safe_create_index'] = True
 
     def last_insert_id(self, cursor, query_type=None):
         try:
@@ -2766,6 +2777,8 @@ class MySQLDatabase(Database):
         compound_operations=['UNION', 'UNION ALL'],
         for_update=True,
         limit_max=2 ** 64 - 1,
+        safe_create_index=False,
+        safe_drop_index=False,
         subquery_delete_same_table=False)
 
     commit_select = True
@@ -3991,8 +4004,8 @@ class SchemaManager(object):
     def _create_index(self, fields, unique=False, safe=True):
         ctx = self._create_context()
         ctx.literal('CREATE UNIQUE INDEX ' if unique else 'CREATE INDEX ')
-        #if safe:
-        #    ctx.literal('IF NOT EXISTS ')
+        if safe and self.database.options.safe_create_index:
+            ctx.literal('IF NOT EXISTS ')
         ctx.sql(self.index_entity(fields)).literal(' ON ').sql(self.model)
 
         # Allow fields to specify a type of index with the USING extension.
@@ -4012,10 +4025,12 @@ class SchemaManager(object):
                 for (nodes, _) in self.model._meta.fields_to_index()]
 
     def _drop_index(self, fields, safe):
+        statement = 'DROP INDEX '
+        if safe and self.database.options.safe_drop_index:
+            statement += 'IF EXISTS '
         return (self
                 ._create_context()
-                .literal('DROP INDEX IF EXISTS ' if safe else
-                         'DROP INDEX ')
+                .literal(statement)
                 .sql(self.index_entity(fields)))
 
     def drop_indexes(self, safe=True):
@@ -4059,8 +4074,8 @@ class SchemaManager(object):
         self.create_indexes(safe=safe)
 
     def drop_all(self, safe=True):
-        self.drop_table(safe)
         self.drop_indexes(safe)
+        self.drop_table(safe)
 
 
 class Metadata(object):
@@ -4639,15 +4654,26 @@ class Model(with_metaclass(ModelBase, Node)):
         return is_different
 
     @classmethod
+    def table_exists(cls):
+        return cls._meta.database.table_exists(cls._meta.table)
+
+    @classmethod
     def create_table(cls, safe=True, **options):
         if 'fail_silently' in options:
             __deprecated__('"fail_silently" has been deprecated in favor of '
                            '"safe" for the create_table() method.')
             safe = options.pop('fail_silently')
+
+        if safe and not cls._meta.database.options.safe_create_index \
+           and cls.table_exists():
+            return
         cls._schema.create_all(safe, **options)
 
     @classmethod
     def drop_table(cls, safe=True):
+        if safe and not cls._meta.database.options.safe_drop_index \
+           and not cls.table_exists():
+            return
         cls._schema.drop_all(safe)
 
 
