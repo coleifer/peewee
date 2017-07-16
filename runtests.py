@@ -41,10 +41,8 @@ def get_option_parser():
     cases.add_option('--reflection', dest='reflection', default=False, action='store_true', help='reflection schema introspector')
     cases.add_option('--signals', dest='signals', default=False, action='store_true', help='signals tests')
     cases.add_option('--shortcuts', dest='shortcuts', default=False, action='store_true', help='shortcuts tests')
-    #cases.add_option('--speedups', dest='speedups', default=False, action='store_true', help='speedups c extension tests')
     cases.add_option('--sqlcipher-ext', dest='sqlcipher', default=False, action='store_true', help='sqlcipher_ext tests (requires pysqlcipher)')
     cases.add_option('--sqliteq', dest='sqliteq', default=False, action='store_true', help='sqliteq tests')
-    #cases.add_option('--sqlite-c-ext', dest='sqlite_c', default=False, action='store_true', help='sqlite c extension tests')
     cases.add_option('--sqlite-ext', dest='sqlite_ext', default=False, action='store_true', help='sqlite_ext tests')
     cases.add_option('--sqlite-udf', dest='sqlite_udf', default=False, action='store_true', help='sqlite_udf tests')
 
@@ -103,12 +101,6 @@ def collect_modules(options, args):
     if xtra(options.shortcuts):
         import tests.shortcuts
         modules.append(tests.shortcuts)
-    #if xtra(options.speedups):
-    #    try:
-    #        import tests.speedups
-    #        modules.append(tests.speedups)
-    #    except ImportError:
-    #        print_('Unable to import speedups tests, skipping')
     if xtra(options.sqlcipher):
         try:
             import tests.sqlcipher_ext
@@ -118,12 +110,6 @@ def collect_modules(options, args):
     if xtra(options.sqliteq):
         import tests.sqliteq
         modules.append(tests.sqliteq)
-    #if xtra(options.sqlite_c):
-    #    try:
-    #        from playhouse.tests import test_sqlite_c_ext
-    #        modules.append(test_sqlite_c_ext)
-    #    except ImportError:
-    #        print_('Unable to import SQLite C extension tests, skipping')
     if xtra(options.sqlite_ext):
         import tests.sqlite
         modules.append(tests.sqlite)
@@ -145,6 +131,8 @@ if __name__ == '__main__':
     os.environ['PEEWEE_TEST_VERBOSITY'] = str(options.verbosity)
 
     from peewee import print_
+    from peewee import sqlite3
+    print_('sqlite3 version: %s' % sqlite3.sqlite_version)
 
     suite = unittest.TestSuite()
     for module in collect_modules(options, args):
