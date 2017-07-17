@@ -37,10 +37,10 @@ Defining models is similar to Django or SQLAlchemy:
 .. code-block:: python
 
     from peewee import *
-    from playhouse.sqlite_ext import SqliteExtDatabase
     import datetime
 
-    db = SqliteExtDatabase('my_database.db')
+
+    db = SqliteDatabase('my_database.db')
 
     class BaseModel(Model):
         class Meta:
@@ -50,7 +50,7 @@ Defining models is similar to Django or SQLAlchemy:
         username = CharField(unique=True)
 
     class Tweet(BaseModel):
-        user = ForeignKeyField(User, related_name='tweets')
+        user = ForeignKeyField(User, backref='tweets')
         message = TextField()
         created_date = DateTimeField(default=datetime.datetime.now)
         is_published = BooleanField(default=True)
@@ -81,17 +81,16 @@ Queries are expressive and composable:
     # A simple query selecting a user.
     User.get(User.username == 'charles')
 
-    # Get tweets created by one of several users. The "<<" operator
-    # corresponds to the SQL "IN" operator.
+    # Get tweets created by one of several users.
     usernames = ['charlie', 'huey', 'mickey']
-    users = User.select().where(User.username << usernames)
-    tweets = Tweet.select().where(Tweet.user << users)
+    users = User.select().where(User.username.in_(usernames))
+    tweets = Tweet.select().where(Tweet.user.in_(users))
 
     # We could accomplish the same using a JOIN:
     tweets = (Tweet
               .select()
               .join(User)
-              .where(User.username << usernames))
+              .where(User.username.in_(usernames)))
 
     # How many tweets were published today?
     tweets_today = (Tweet
