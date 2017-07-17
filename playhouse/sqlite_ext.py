@@ -139,11 +139,11 @@ class JSONField(TextField):
 
 
 class SearchField(Field):
-    def __init__(self, unindexed=False, column_name=None, coerce=None, **k):
+    def __init__(self, unindexed=False, column_name=None, **k):
         if k:
             raise ValueError('SearchField does not accept these keyword '
                              'arguments: %s.' % sorted(k))
-        super(SearchField, self).__init__(unindexed=unindexed, coerce=coerce,
+        super(SearchField, self).__init__(unindexed=unindexed,
                                           column_name=column_name, null=True)
 
 
@@ -508,7 +508,7 @@ class FTS5Model(BaseFTSModel):
 
     @classmethod
     def bm25(cls, *weights):
-        return fn.bm25(cls.as_entity(), *weights)
+        return fn.bm25(cls._meta.entity, *weights)
 
     @classmethod
     def search(cls, term, weights=None, with_score=False, score_alias='score',
@@ -532,9 +532,9 @@ class FTS5Model(BaseFTSModel):
             for field in cls._meta.declared_fields:
                 weight_args.append(
                     weights.get(field, weights.get(field.name, 1.0)))
-            rank = fn.bm25(cls.as_entity(), *weight_args)
+            rank = fn.bm25(cls._meta.entity, *weight_args)
         else:
-            rank = fn.bm25(cls.as_entity(), *weights)
+            rank = fn.bm25(cls._meta.entity, *weights)
 
         selection = ()
         order_by = rank
@@ -550,7 +550,7 @@ class FTS5Model(BaseFTSModel):
 
     @classmethod
     def _fts_cmd(cls, cmd, **extra_params):
-        tbl = cls.as_entity()
+        tbl = cls._meta.entity
         columns = [tbl]
         values = [cmd]
         for key, value in extra_params.items():
@@ -560,7 +560,7 @@ class FTS5Model(BaseFTSModel):
         inner_clause = EnclosedClause(tbl)
         clause = Clause(
             SQL('INSERT INTO'),
-            cls.as_entity(),
+            cls._meta.entity,
             EnclosedClause(*columns),
             SQL('VALUES'),
             EnclosedClause(*values))
@@ -589,7 +589,7 @@ class FTS5Model(BaseFTSModel):
         return cls._fts_cmd('delete-all')
 
     @classmethod
-    def VocabModel(cls, table_type='row', table_name=None):
+    def VocabModel(cls, table_type='row', table=None):
         if table_type not in ('row', 'col'):
             raise ValueError('table_type must be either "row" or "col".')
 
@@ -598,20 +598,20 @@ class FTS5Model(BaseFTSModel):
         if not hasattr(cls, attr):
             class Meta:
                 database = cls._meta.database
-                db_table = table_name or cls._meta.db_table + '_v'
+                table_name = table or cls._meta.table_name + '_v'
                 extension_module = fn.fts5vocab(
-                    cls.as_entity(),
+                    cls._meta.entity,
                     SQL(table_type))
 
             attrs = {
-                'term': BareField(),
+                'term': VirtualField(),
                 'doc': IntegerField(),
                 'cnt': IntegerField(),
                 'rowid': RowIDField(),
                 'Meta': Meta,
             }
             if table_type == 'col':
-                attrs['col'] = BareField()
+                attrs['col'] = VirtualField()
 
             class_name = '%sVocab' % cls.__name__
             setattr(cls, attr, type(class_name, (VirtualModel,), attrs))

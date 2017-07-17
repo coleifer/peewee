@@ -3226,8 +3226,9 @@ class Field(ColumnBase):
 
     def __init__(self, null=False, index=False, unique=False, column_name=None,
                  default=None, primary_key=False, constraints=None,
-                 sequence=None, collation=None, unindexed=False,
-                 db_column=None, related_name=None):
+                 sequence=None, collation=None, unindexed=False, choices=None,
+                 help_text=None, verbose_name=None, db_column=None,
+                 related_name=None):
         if db_column is not None:
             __deprecated__('"db_column" has been deprecated in favor of '
                            '"column_name" for Field objects.')
@@ -3247,6 +3248,9 @@ class Field(ColumnBase):
         self.sequence = sequence  # Name of sequence, e.g. foo_id_seq.
         self.collation = collation
         self.unindexed = unindexed
+        self.choices = choices
+        self.help_text = help_text
+        self.verbose_name = verbose_name
 
         # Used internally for recovering the order in which Fields were defined
         # on the Model class.
