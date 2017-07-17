@@ -4823,6 +4823,16 @@ class BaseModelSelect(_ModelQueryHelper):
                                           'not exist:\nSQL: %s\nParams: %s' %
                                           (self.model, sql, params))
 
+    @Node.copy
+    def group_by(self, *columns):
+        grouping = []
+        for column in columns:
+            if is_model(column):
+                grouping.extend(column._meta.sorted_fields)
+            else:
+                grouping.append(column)
+        self._group_by = grouping
+
 
 class ModelCompoundSelectQuery(BaseModelSelect, CompoundSelectQuery):
     def __init__(self, model, *args, **kwargs):
@@ -5381,12 +5391,6 @@ class PrefetchQuery(namedtuple('_PrefetchQuery', (
                 id_map[key].append(instance)
 
 
-#
-#rel = field.rel_model
-#self.refs[field] = rel
-#self.model_refs[rel].append(field)
-#rel._meta.backrefs[field] = self.model
-#rel._meta.model_backrefs[self.model].append(field)
 def prefetch_add_subquery(sq, subqueries):
     fixed_queries = [PrefetchQuery(sq)]
     for i, subquery in enumerate(subqueries):
@@ -5394,7 +5398,8 @@ def prefetch_add_subquery(sq, subqueries):
             subquery, target_model = subquery
         else:
             target_model = None
-        if not isinstance(subquery, Query) and is_model(subquery):
+        if not isinstance(subquery, Query) and is_model(subquery) or \
+           isinstance(subquery, ModelAlias):
             subquery = subquery.select()
         subquery_model = subquery.model
         fks = backrefs = None
