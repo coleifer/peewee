@@ -5336,3 +5336,126 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
             instance._dirty.clear()
 
         return objects[self.model]
+
+
+class PrefetchQuery(namedtuple('_PrefetchQuery', (
+    'query', 'fields', 'is_backref', 'rel_models', 'field_to_name', 'model'))):
+    def __new__(cls, query, fields=None, is_backref=None, rel_models=None,
+                field_to_name=None, model=None):
+        if fields:
+            if is_backref:
+                rel_models = [field.model for field in fields]
+                foreign_key_attrs = [field.rel_field.name for field in fields]
+            else:
+                rel_models = [field.rel_model for field in fields]
+                foreign_key_attrs = [field.name for field in fields]
+            field_to_name = list(zip(fields, foreign_key_attrs))
+        model = query.model
+        return super(PrefetchQuery, cls).__new__(
+            cls, query, fields, is_backref, rel_models, field_to_name, model)
+
+    def populate_instance(self, instance, id_map):
+        if self.is_backref:
+            for field in self.fields:
+                identifier = instance.__data__[field.name]
+                key = (field, identifier)
+                if key in id_map:
+                    setattr(instance, field.name, id_map[key])
+        else:
+            for field, attname in self.field_to_name:
+                identifier = instance.__data__[field.rel_field.name]
+                key = (field, identifier)
+                rel_instances = id_map.get(key, [])
+                for inst in rel_instances:
+                    setattr(inst, attname, instance)
+                setattr(instance, field.backref, rel_instances)
+
+    def store_instance(self, instance, id_map):
+        for field, attname in self.field_to_name:
+            identity = field.rel_field.python_value(instance.__data__[attname])
+            key = (field, identity)
+            if self.is_backref:
+                id_map[key] = instance
+            else:
+                id_map.setdefault(key, [])
+                id_map[key].append(instance)
+
+
+#
+#rel = field.rel_model
+#self.refs[field] = rel
+#self.model_refs[rel].append(field)
+#rel._meta.backrefs[field] = self.model
+#rel._meta.model_backrefs[self.model].append(field)
+def prefetch_add_subquery(sq, subqueries):
+    fixed_queries = [PrefetchQuery(sq)]
+    for i, subquery in enumerate(subqueries):
+        if isinstance(subquery, tuple):
+            subquery, target_model = subquery
+        else:
+            target_model = None
+        if not isinstance(subquery, Query) and is_model(subquery):
+            subquery = subquery.select()
+        subquery_model = subquery.model
+        fks = backrefs = None
+        for j in reversed(range(i + 1)):
+            fixed = fixed_queries[j]
+            last_query = fixed.query
+            last_model = fixed.model
+            rels = subquery_model._meta.model_refs.get(last_model, [])
+            if rels:
+                fks = [getattr(subquery_model, fk.name) for fk in rels]
+                pks = [getattr(last_model, fk.rel_field.name) for fk in rels]
+            else:
+                backrefs = last_model._meta.model_refs.get(subquery_model, [])
+            if (fks or backrefs) and ((target_model is last_model) or
+                                      (target_model is None)):
+                break
+
+        if not fks and not backrefs:
+            tgt_err = ' using %s' % target_model if target_model else ''
+            raise AttributeError('Error: unable to find foreign key for '
+                                 'query: %s%s' % (subquery, tgt_err))
+
+        if fks:
+            expr = reduce(operator.or_, [
+                (fk << last_query.select(pk))
+                for (fk, pk) in zip(fks, pks)])
+            subquery = subquery.where(expr)
+            fixed_queries.append(PrefetchQuery(subquery, fks, False))
+        elif backrefs:
+            expr = reduce(operator.or_, [
+                (backref.rel_field << last_query.select(backref))
+                for backref in backrefs])
+            subquery = subquery.where(expr)
+            fixed_queries.append(PrefetchQuery(subquery, backrefs, True))
+
+    return fixed_queries
+
+
+def prefetch(sq, *subqueries):
+    if not subqueries:
+        return sq
+
+    fixed_queries = prefetch_add_subquery(sq, subqueries)
+    deps = {}
+    rel_map = {}
+    for pq in reversed(fixed_queries):
+        query_model = pq.model
+        if pq.fields:
+            for rel_model in pq.rel_models:
+                rel_map.setdefault(rel_model, [])
+                rel_map[rel_model].append(pq)
+
+        deps[query_model] = {}
+        id_map = deps[query_model]
+        has_relations = bool(rel_map.get(query_model))
+
+        for instance in pq.query:
+            if pq.fields:
+                pq.store_instance(instance, id_map)
+            if has_relations:
+                for rel in rel_map[query_model]:
+                    rel.populate_instance(instance, deps[rel.model])
+
+    return pq.query

@@ -45,3 +45,31 @@ class TestPrefetch(ModelTestCase):
                 note = Note.create(person=person, content=note)
                 for item in items:
                     NoteItem.create(note=note, content=item)
+
+    def setUp(self):
+        super(TestPrefetch, self).setUp()
+        self.create_test_data()
+
+    def test_prefetch_simple(self):
+        with self.assertQueryCount(3):
+            people = Person.select().order_by(Person.name)
+            query = prefetch(people, Note, NoteItem)
+            accum = []
+            for person in query:
+                notes = []
+                for note in person.notes:
+                    items = []
+                    for item in note.items:
+                        items.append(item.content)
+                    notes.append((note.content, sorted(items)))
+                accum.append((person.name, sorted(notes)))
+
+        self.assertEqual(accum, [
+            ('huey', [
+                ('hiss', ['hiss-1', 'hiss-2']),
+                ('meow', ['meow-1', 'meow-2', 'meow-3']),
+                ('purr', [])]),
+            ('mickey', [
+                ('bark', ['bark-1', 'bark-2']),
+                ('woof', [])]),
+        ])
