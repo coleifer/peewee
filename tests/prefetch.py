@@ -102,7 +102,7 @@ class TestPrefetch(ModelTestCase):
     def test_prefetch_simple(self):
         with self.assertQueryCount(3):
             people = Person.select().order_by(Person.name)
-            query = prefetch(people, Note, NoteItem)
+            query = people.prefetch(Note, NoteItem)
             accum = self.accumulate_results(query, sort_items=True)
 
         self.assertEqual(accum, [

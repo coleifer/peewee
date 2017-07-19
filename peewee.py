@@ -4817,6 +4817,9 @@ class BaseModelSelect(_ModelQueryHelper):
             self.execute()
         return iter(self._cursor_wrapper)
 
+    def prefetch(self, *subqueries):
+        return prefetch(self, *subqueries)
+
     def get(self):
         self._cursor_wrapper = None
         try:

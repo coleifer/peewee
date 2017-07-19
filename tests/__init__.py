@@ -8,6 +8,7 @@ from .keys import *
 from .manytomany import *
 from .models import *
 from .model_sql import *
+from .prefetch import *
 from .queries import *
 from .results import *
 from .schema import *
