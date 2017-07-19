@@ -7,6 +7,7 @@ from .base_models import Category
 from .base_models import Note
 from .base_models import Person
 from .base_models import Relationship
+from .base_models import User
 
 
 class TMUnique(TestModel):
@@ -49,6 +50,16 @@ class TestModelDDL(ModelDatabaseTestCase):
             indexes.append(isql)
 
         self.assertEqual([sql] + indexes, expected)
+
+    def test_temporary_table(self):
+        sql, params = User._schema._create_table(temporary=True).query()
+        self.assertEqual(sql, (
+            'CREATE TEMPORARY TABLE IF NOT EXISTS "users" ('
+            '"id" INTEGER NOT NULL PRIMARY KEY, '
+            '"username" VARCHAR(255) NOT NULL)'))
+
+        sql, params = User._schema._drop_table(temporary=True).query()
+        self.assertEqual(sql, 'DROP TEMPORARY TABLE IF EXISTS "users"')
 
     def test_table_and_index_creation(self):
         self.assertCreateTable(Person, [

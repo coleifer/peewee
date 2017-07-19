@@ -24,6 +24,11 @@ if sys.version_info[0] >= 3:
     long = int
 
 
+class Color(TestModel):
+    name = TextField(primary_key=True)
+    is_neutral = BooleanField(default=False)
+
+
 class TestModelAPIs(ModelTestCase):
     def add_user(self, username):
         return User.create(username=username)
@@ -71,6 +76,8 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual(huey.id, huey_db.id)
         mickey_db = User.get(User.username == 'mickey')
         self.assertEqual(mickey.id, mickey_db.id)
+        self.assertEqual(User.get(username='mickey').id, mickey.id)
+
         # No results is an exception.
         self.assertRaises(User.DoesNotExist, User.get, User.username == 'x')
         # Multiple results is OK.
@@ -90,6 +97,104 @@ class TestModelAPIs(ModelTestCase):
         tweet = Tweet.get(content__ilike='w%',
                           user__username__ilike='%ck%')
         self.assertEqual(tweet.content, 'woof')
+
+    @requires_models(User, Color)
+    def test_get_by_id(self):
+        huey = self.add_user('huey')
+        self.assertEqual(User.get_by_id(huey.id).username, 'huey')
+
+        Color.insert_many([
+            {'name': 'red', 'is_neutral': False},
+            {'name': 'blue', 'is_neutral': False}]).execute()
+        self.assertEqual(Color.get_by_id('red').name, 'red')
+        self.assertRaises(Color.DoesNotExist, Color.get_by_id, 'green')
+
+    @requires_models(User)
+    def test_get_or_create(self):
+        huey, created = User.get_or_create(username='huey')
+        self.assertTrue(created)
+        huey2, created2 = User.get_or_create(username='huey')
+        self.assertFalse(created2)
+        self.assertEqual(huey.id, huey2.id)
+
+    @requires_models(Person)
+    def test_save(self):
+        huey = Person(first='huey', last='cat', dob=datetime.date(2010, 7, 1))
+        self.assertTrue(huey.save() > 0)
+        self.assertTrue(huey.id is not None)  # Ensure PK is set.
+        orig_id = huey.id
+
+        # Test initial save (INSERT) worked and data is all present.
+        huey_db = Person.get(first='huey', last='cat')
+        self.assertEqual(huey_db.id, huey.id)
+        self.assertEqual(huey_db.first, 'huey')
+        self.assertEqual(huey_db.last, 'cat')
+        self.assertEqual(huey_db.dob, datetime.date(2010, 7, 1))
+
+        # Make a change and do a second save (UPDATE).
+        huey.dob = datetime.date(2010, 7, 2)
+        self.assertTrue(huey.save() > 0)
+        self.assertEqual(huey.id, orig_id)
+
+        # Test UPDATE worked correctly.
+        huey_db = Person.get(first='huey', last='cat')
+        self.assertEqual(huey_db.id, huey.id)
+        self.assertEqual(huey_db.first, 'huey')
+        self.assertEqual(huey_db.last, 'cat')
+        self.assertEqual(huey_db.dob, datetime.date(2010, 7, 2))
+
+        self.assertEqual(Person.select().count(), 1)
+
+    @requires_models(Person)
+    def test_save_only(self):
+        huey = Person(first='huey', last='cat', dob=datetime.date(2010, 7, 1))
+        huey.save()
+
+        huey.first = 'huker'
+        huey.last = 'kitten'
+        self.assertTrue(huey.save(only=('first',)) > 0)
+
+        huey_db = Person.get_by_id(huey.id)
+        self.assertEqual(huey_db.first, 'huker')
+        self.assertEqual(huey_db.last, 'cat')
+        self.assertEqual(huey_db.dob, datetime.date(2010, 7, 1))
+
+        huey.first = 'hubie'
+        self.assertTrue(huey.save(only=[Person.last]) > 0)
+
+        huey_db = Person.get_by_id(huey.id)
+        self.assertEqual(huey_db.first, 'huker')
+        self.assertEqual(huey_db.last, 'kitten')
+        self.assertEqual(huey_db.dob, datetime.date(2010, 7, 1))
+
+        self.assertEqual(Person.select().count(), 1)
+
+    @requires_models(Color, User)
+    def test_save_force(self):
+        huey = User(username='huey')
+        self.assertTrue(huey.save() > 0)
+        huey_id = huey.id
+
+        huey.username = 'zaizee'
+        self.assertTrue(huey.save(force_insert=True, only=('username',)) > 0)
+        zaizee_id = huey.id
+        self.assertTrue(huey_id != zaizee_id)
+
+        query = User.select().order_by(User.username)
+        self.assertEqual([user.username for user in query], ['huey', 'zaizee'])
+
+        color = Color(name='red')
+        self.assertFalse(bool(color.save()))
+        self.assertEqual(Color.select().count(), 0)
+
+        color = Color(name='blue')
+        color.save(force_insert=True)
+        self.assertEqual(Color.select().count(), 1)
+
+        with self.database.atomic():
+            self.assertRaises(IntegrityError,
+                              color.save,
+                              force_insert=True)
 
     @requires_models(User, Tweet)
     def test_model_select(self):

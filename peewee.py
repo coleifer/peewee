@@ -3944,8 +3944,9 @@ class SchemaManager(object):
         return self.database.get_sql_context(self.context_options)
 
     def _create_table(self, safe=True, **options):
+        is_temp = options.pop('temporary', False)
         ctx = self._create_context()
-        ctx.literal('CREATE TABLE ')
+        ctx.literal('CREATE TEMPORARY TABLE ' if is_temp else 'CREATE TABLE ')
         if safe:
             ctx.literal('IF NOT EXISTS ')
         ctx.sql(self.model).literal(' ')
@@ -3985,14 +3986,16 @@ class SchemaManager(object):
     def create_table(self, safe=True, **options):
         self.database.execute(self._create_table(safe=safe, **options))
 
-    def _drop_table(self, safe=True):
+    def _drop_table(self, safe=True, **options):
+        is_temp = options.pop('temporary', False)
         ctx = self._create_context()
         return (ctx
-                .literal('DROP TABLE IF EXISTS ' if safe else 'DROP TABLE ')
+                .literal('DROP TEMPORARY ' if is_temp else 'DROP ')
+                .literal('TABLE IF EXISTS ' if safe else 'TABLE ')
                 .sql(self.model))
 
-    def drop_table(self, safe=True):
-        self.database.execute(self._drop_table(safe=safe))
+    def drop_table(self, safe=True, **options):
+        self.database.execute(self._drop_table(safe=safe), **options)
 
     def index_entity(self, fields):
         ctx = self.database.get_sql_context()
@@ -4467,7 +4470,9 @@ class Model(with_metaclass(ModelBase, Node)):
 
     @classmethod
     def insert_from(cls, query, fields):
-        return ModelInsert(cls, insert=query, columns=fields)
+        columns = [getattr(cls, field) if isinstance(field, basestring)
+                   else field for field in fields]
+        return ModelInsert(cls, insert=query, columns=columns)
 
     @classmethod
     def replace(cls, __data=None, **insert):
@@ -4541,6 +4546,8 @@ class Model(with_metaclass(ModelBase, Node)):
     def _prune_fields(self, field_dict, only):
         new_data = {}
         for field in only:
+            if isinstance(field, basestring):
+                field = self._meta.combined[field]
             if field.name in field_dict:
                 new_data[field.name] = field_dict[field.name]
         return new_data

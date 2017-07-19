@@ -137,6 +137,11 @@ class TestModelSQL(ModelDatabaseTestCase):
             'INSERT INTO "note" ("author_id", "content") '
             'VALUES (?, ?)'), [1337, 'leet'])
 
+        query = Person.insert(first='huey', last='cat')
+        self.assertSQL(query, (
+            'INSERT INTO "person" ("first", "last") VALUES (?, ?)'),
+            ['huey', 'cat'])
+
     def test_replace(self):
         query = (Person
                  .replace({Person.first: 'huey',
@@ -156,11 +161,26 @@ class TestModelSQL(ModelDatabaseTestCase):
             'VALUES (?, ?), (?, ?), (?, ?)'),
             [1, 'note-1', 2, 'note-2', 3, 'note-3'])
 
+        query = (Note
+                 .insert_many((
+                     {'author': Person(id=1), 'content': 'note-1'},
+                     {'author': Person(id=2), 'content': 'note-2'})))
+        self.assertSQL(query, (
+            'INSERT INTO "note" ("author_id", "content") '
+            'VALUES (?, ?), (?, ?)'),
+            [1, 'note-1', 2, 'note-2'])
+
     def test_insert_query(self):
         select = (Person
                   .select(Person.id, Person.first)
                   .where(Person.last == 'cat'))
         query = Note.insert_from(select, (Note.author, Note.content))
+        self.assertSQL(query, ('INSERT INTO "note" ("author_id", "content") '
+                               'SELECT "t1"."id", "t1"."first" '
+                               'FROM "person" AS "t1" '
+                               'WHERE ("t1"."last" = ?)'), ['cat'])
+
+        query = Note.insert_from(select, ('author', 'content'))
         self.assertSQL(query, ('INSERT INTO "note" ("author_id", "content") '
                                'SELECT "t1"."id", "t1"."first" '
                                'FROM "person" AS "t1" '
@@ -205,6 +225,14 @@ class TestModelSQL(ModelDatabaseTestCase):
             'UPDATE "stat" SET "count" = ("count" + ?), "timestamp" = ? '
             'WHERE ("url" = ?)'),
             [1, 1483228800, '/peewee'])
+
+        query = (Stat
+                 .update(count=Stat.count + 1)
+                 .where(Stat.url == '/peewee'))
+        self.assertSQL(query, (
+            'UPDATE "stat" SET "count" = ("count" + ?) '
+            'WHERE ("url" = ?)'),
+            [1, '/peewee'])
 
     def test_delete(self):
         query = (Note
