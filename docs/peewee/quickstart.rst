@@ -82,17 +82,17 @@ the connection when you are done -- for instance, a web app might open a
 connection when it receives a request, and close the connection when it sends
 the response.
 
-.. code-block:: pycon
+.. code-block:: python
 
-    >>> db.connect()
+    db.connect()
 
 We'll begin by creating the tables in the database that will store our data.
 This will create the tables with the appropriate columns, indexes, sequences,
 and foreign key constraints:
 
-.. code-block:: pycon
+.. code-block:: python
 
-    >>> db.create_tables([Person, Pet])
+    db.create_tables([Person, Pet])
 
 .. _storing-data:
 
@@ -103,12 +103,12 @@ Let's begin by populating the database with some people. We will use the
 :py:meth:`~Model.save` and :py:meth:`~Model.create` methods to add and update
 people's records.
 
-.. code-block:: pycon
+.. code-block:: python
 
-    >>> from datetime import date
-    >>> uncle_bob = Person(name='Bob', birthday=date(1960, 1, 15), is_relative=True)
-    >>> uncle_bob.save() # bob is now stored in the database
-    1
+    from datetime import date
+    uncle_bob = Person(name='Bob', birthday=date(1960, 1, 15), is_relative=True)
+    uncle_bob.save() # bob is now stored in the database
+    # Returns: 1
 
 .. note::
     When you call :py:meth:`~Model.save`, the number of rows modified is
@@ -117,39 +117,39 @@ people's records.
 You can also add a person by calling the :py:meth:`~Model.create` method, which
 returns a model instance:
 
-.. code-block:: pycon
+.. code-block:: python
 
-    >>> grandma = Person.create(name='Grandma', birthday=date(1935, 3, 1), is_relative=True)
-    >>> herb = Person.create(name='Herb', birthday=date(1950, 5, 5), is_relative=False)
+    grandma = Person.create(name='Grandma', birthday=date(1935, 3, 1), is_relative=True)
+    herb = Person.create(name='Herb', birthday=date(1950, 5, 5), is_relative=False)
 
 To update a row, modify the model instance and call :py:meth:`~Model.save` to
 persist the changes. Here we will change Grandma's name and then save the
 changes in the database:
 
-.. code-block:: pycon
+.. code-block:: python
 
-    >>> grandma.name = 'Grandma L.'
-    >>> grandma.save()  # Update grandma's name in the database.
-    1
+    grandma.name = 'Grandma L.'
+    grandma.save()  # Update grandma's name in the database.
+    # Returns: 1
 
 Now we have stored 3 people in the database. Let's give them some pets. Grandma
 doesn't like animals in the house, so she won't have any, but Herb is an animal
 lover:
 
-.. code-block:: pycon
+.. code-block:: python
 
-    >>> bob_kitty = Pet.create(owner=uncle_bob, name='Kitty', animal_type='cat')
-    >>> herb_fido = Pet.create(owner=herb, name='Fido', animal_type='dog')
-    >>> herb_mittens = Pet.create(owner=herb, name='Mittens', animal_type='cat')
-    >>> herb_mittens_jr = Pet.create(owner=herb, name='Mittens Jr', animal_type='cat')
+    bob_kitty = Pet.create(owner=uncle_bob, name='Kitty', animal_type='cat')
+    herb_fido = Pet.create(owner=herb, name='Fido', animal_type='dog')
+    herb_mittens = Pet.create(owner=herb, name='Mittens', animal_type='cat')
+    herb_mittens_jr = Pet.create(owner=herb, name='Mittens Jr', animal_type='cat')
 
 After a long full life, Mittens sickens and dies. We need to remove him from
 the database:
 
-.. code-block:: pycon
+.. code-block:: python
 
-    >>> herb_mittens.delete_instance() # he had a great life
-    1
+    herb_mittens.delete_instance() # he had a great life
+    # Returns: 1
 
 .. note::
     The return value of :py:meth:`~Model.delete_instance` is the number of rows
@@ -158,11 +158,11 @@ the database:
 Uncle Bob decides that too many animals have been dying at Herb's house, so he
 adopts Fido:
 
-.. code-block:: pycon
+.. code-block:: python
 
-    >>> herb_fido.owner = uncle_bob
-    >>> herb_fido.save()
-    >>> bob_fido = herb_fido # rename our variable for clarity
+    herb_fido.owner = uncle_bob
+    herb_fido.save()
+    bob_fido = herb_fido # rename our variable for clarity
 
 .. _retrieving-data:
 
@@ -179,40 +179,42 @@ Getting single records
 Let's retrieve Grandma's record from the database. To get a single record from
 the database, use :py:meth:`SelectQuery.get`:
 
-.. code-block:: pycon
+.. code-block:: python
 
-    >>> grandma = Person.select().where(Person.name == 'Grandma L.').get()
+    grandma = Person.select().where(Person.name == 'Grandma L.').get()
 
 We can also use the equivalent shorthand :py:meth:`Model.get`:
 
-.. code-block:: pycon
+.. code-block:: python
 
-    >>> grandma = Person.get(Person.name == 'Grandma L.')
+    grandma = Person.get(Person.name == 'Grandma L.')
 
 Lists of records
 ^^^^^^^^^^^^^^^^
 
 Let's list all the people in the database:
 
-.. code-block:: pycon
+.. code-block:: python
 
-    >>> for person in Person.select():
-    ...     print person.name, person.is_relative
-    ...
-    Bob True
-    Grandma L. True
-    Herb False
+    for person in Person.select():
+        print person.name, person.is_relative
+
+    # prints:
+    # Bob True
+    # Grandma L. True
+    # Herb False
 
 Let's list all the cats and their owner's name:
 
-.. code-block:: pycon
+.. code-block:: python
 
-    >>> query = Pet.select().where(Pet.animal_type == 'cat')
-    >>> for pet in query:
-    ...     print pet.name, pet.owner.name
-    ...
-    Kitty Bob
-    Mittens Jr Herb
+    query = Pet.select().where(Pet.animal_type == 'cat')
+    for pet in query:
+        print pet.name, pet.owner.name
+
+    # prints:
+    # Kitty Bob
+    # Mittens Jr Herb
 
 There is a big problem with the previous query: because we are accessing
 ``pet.owner.name`` and we did not select this value in our original query,
@@ -223,141 +225,220 @@ be avoided.
 We can avoid the extra queries by selecting both *Pet* and *Person*, and adding
 a *join*.
 
-.. code-block:: pycon
+.. code-block:: python
 
-    >>> query = (Pet
-    ...          .select(Pet, Person)
-    ...          .join(Person)
-    ...          .where(Pet.animal_type == 'cat'))
-    >>> for pet in query:
-    ...     print pet.name, pet.owner.name
-    ...
-    Kitty Bob
-    Mittens Jr Herb
+    query = (Pet
+             .select(Pet, Person)
+             .join(Person)
+             .where(Pet.animal_type == 'cat'))
+
+    for pet in query:
+        print pet.name, pet.owner.name
+
+    # prints:
+    # Kitty Bob
+    # Mittens Jr Herb
 
 Let's get all the pets owned by Bob:
 
-.. code-block:: pycon
+.. code-block:: python
 
-    >>> for pet in Pet.select().join(Person).where(Person.name == 'Bob'):
-    ...     print pet.name
-    ...
-    Kitty
-    Fido
+    for pet in Pet.select().join(Person).where(Person.name == 'Bob'):
+        print pet.name
+
+    # prints:
+    # Kitty
+    # Fido
 
 We can do another cool thing here to get bob's pets. Since we already have an
 object to represent Bob, we can do this instead:
 
-.. code-block:: pycon
+.. code-block:: python
 
-    >>> for pet in Pet.select().where(Pet.owner == uncle_bob):
-    ...     print pet.name
+    for pet in Pet.select().where(Pet.owner == uncle_bob):
+        print pet.name
+
+Sorting
+^^^^^^^
 
 Let's make sure these are sorted alphabetically by adding an
 :py:meth:`~SelectQuery.order_by` clause:
 
-.. code-block:: pycon
+.. code-block:: python
 
-    >>> for pet in Pet.select().where(Pet.owner == uncle_bob).order_by(Pet.name):
-    ...     print pet.name
-    ...
-    Fido
-    Kitty
+    for pet in Pet.select().where(Pet.owner == uncle_bob).order_by(Pet.name):
+        print pet.name
+
+    # prints:
+    # Fido
+    # Kitty
 
 Let's list all the people now, youngest to oldest:
 
-.. code-block:: pycon
+.. code-block:: python
 
-    >>> for person in Person.select().order_by(Person.birthday.desc()):
-    ...     print person.name, person.birthday
-    ...
-    Bob 1960-01-15
-    Herb 1950-05-05
-    Grandma L. 1935-03-01
+    for person in Person.select().order_by(Person.birthday.desc()):
+        print person.name, person.birthday
 
-Now let's list all the people *and* some info about their pets:
+    # prints:
+    # Bob 1960-01-15
+    # Herb 1950-05-05
+    # Grandma L. 1935-03-01
 
-.. code-block:: pycon
+Combining filter expressions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-    >>> for person in Person.select():
-    ...     print person.name, person.pets.count(), 'pets'
-    ...     for pet in person.pets:
-    ...         print '    ', pet.name, pet.animal_type
-    ...
-    Bob 2 pets
-        Kitty cat
-        Fido dog
-    Grandma L. 0 pets
-    Herb 1 pets
-        Mittens Jr cat
-
-Once again we've run into a classic example of :ref:`N+1 <nplusone>` query
-behavior. We can avoid this by performing a *JOIN* and aggregating the records:
-
-.. code-block:: pycon
-
-    >>> subquery = Pet.select(fn.COUNT(Pet.id)).where(Pet.owner == Person.id)
-    >>> query = (Person
-    ...          .select(Person, subquery.alias('pet_count'))
-    ...          .join(Pet, JOIN.LEFT_OUTER)
-    ...          .order_by(Person.name))
-
-    >>> for person in query.aggregate_rows():  # Note the `aggregate_rows()` call.
-    ...     print person.name, person.pet_count, 'pets'
-    ...
-    Bob 2 pets
-    Grandma L. 0 pets
-    Herb 1 pets
-
-Finally, let's do a complicated one. Let's get all the people whose birthday was
-either:
+Peewee supports arbitrarily-nested expressions. Let's get all the people whose
+birthday was either:
 
 * before 1940 (grandma)
 * after 1959 (bob)
 
-.. code-block:: pycon
+.. code-block:: python
 
-    >>> d1940 = date(1940, 1, 1)
-    >>> d1960 = date(1960, 1, 1)
-    >>> query = (Person
-    ...          .select()
-    ...          .where((Person.birthday < d1940) | (Person.birthday > d1960)))
-    ...
-    >>> for person in query:
-    ...     print person.name, person.birthday
-    ...
-    Bob 1960-01-15
-    Grandma L. 1935-03-01
+    d1940 = date(1940, 1, 1)
+    d1960 = date(1960, 1, 1)
+    query = (Person
+             .select()
+             .where((Person.birthday < d1940) | (Person.birthday > d1960)))
+
+    for person in query:
+        print person.name, person.birthday
+
+    # prints:
+    # Bob 1960-01-15
+    # Grandma L. 1935-03-01
 
 Now let's do the opposite. People whose birthday is between 1940 and 1960:
 
-.. code-block:: pycon
+.. code-block:: python
 
-    >>> query = (Person
-    ...          .select()
-    ...          .where(Person.birthday.between(d1940, d1960)))
-    ...
-    >>> for person in query:
-    ...     print person.name, person.birthday
-    ...
-    Herb 1950-05-05
+    query = (Person
+             .select()
+             .where(Person.birthday.between(d1940, d1960)))
+
+    for person in query:
+        print person.name, person.birthday
+
+    # prints:
+    # Herb 1950-05-05
+
+Aggregates and Prefetch
+^^^^^^^^^^^^^^^^^^^^^^^
+
+Now let's list all the people *and* how many pets they have:
+
+.. code-block:: python
+
+    for person in Person.select():
+        print person.name, person.pets.count(), 'pets'
+
+    # prints:
+    # Bob 2 pets
+    # Grandma L. 0 pets
+    # Herb 1 pets
+
+Once again we've run into a classic example of :ref:`N+1 <nplusone>` query
+behavior. In this case, we're executing an additional query for every
+``Person`` returned by the original ``SELECT``! We can avoid this by performing
+a *JOIN* and using a SQL function to aggregate the results.
+
+.. code-block:: python
+
+    query = (Person
+             .select(Person, fn.COUNT(Pet.id).alias('pet_count'))
+             .join(Pet, JOIN.LEFT_OUTER)  # include people without pets.
+             .group_by(Person)
+             .order_by(Person.name))
+
+    for person in query:
+        # "pet_count" becomes an attribute on the returned model instances.
+        print person.name, person.pet_count, 'pets'
+
+    # prints:
+    # Bob 2 pets
+    # Grandma L. 0 pets
+    # Herb 1 pets
+
+Now let's list all the people and the names of all their pets. As you may have
+guessed, this could easily turn into another :ref:`N+1 <nplusone>` situation if
+we're not careful.
+
+Before diving into the code, consider how this example is different from the
+earlier example where we listed all the pets and their owner's name. A pet can
+only have one owner, so when we performed the join from ``Pet`` to ``Person``,
+there was always going to be a single match. The situation is different when we
+are joining from ``Person`` to ``Pet`` because a person may have zero pets or
+they may have several pets. Because we're using a relational databases, if we
+were to do a join from ``Person`` to ``Pet`` then every person with multiple
+pets would be repeated, once for each pet.
+
+It would look like this:
+
+.. code-block:: python
+
+    query = (Person
+             .select(Person, Pet)
+             .join(Pet, JOIN.LEFT_OUTER)
+             .order_by(Person.name, Pet.name))
+    for person in query:
+        # We need to check if they have a pet instance attached, since not all
+        # people have pets.
+        if hasattr(person, 'pet'):
+            print person.name, person.pet.name
+        else:
+            print person.name, 'no pets'
+
+    # prints:
+    # Bob Fido
+    # Bob Kitty
+    # Grandma L. no pets
+    # Herb Mittens Jr
+
+Usually this type of duplication is undesirable. To accomodate the more common
+(and intuitive) workflow of listing a person and attaching **a list** of that
+person's pets, we can use a special method called
+:py:meth:`~ModelSelectQuery.prefetch`:
+
+.. code-block:: python
+
+    query = Person.select().order_by(Person.name).prefetch(Pet)
+    for person in query:
+        print person.name
+        for pet in person.pets:
+            print '  *', pet.name
+
+    # prints:
+    # Bob
+    #   * Kitty
+    #   * Fido
+    # Grandma L.
+    # Herb
+    #   * Mittens Jr
+
+SQL Functions
+^^^^^^^^^^^^^
 
 One last query. This will use a SQL function to find all people whose names
 start with either an upper or lower-case *G*:
 
-.. code-block:: pycon
+.. code-block:: python
 
-    >>> expression = (fn.Lower(fn.Substr(Person.name, 1, 1)) == 'g')
-    >>> for person in Person.select().where(expression):
-    ...     print person.name
-    ...
-    Grandma L.
+    expression = fn.Lower(fn.Substr(Person.name, 1, 1)) == 'g'
+    for person in Person.select().where(expression):
+        print person.name
+
+    # prints:
+    # Grandma L.
+
+Closing the database
+--------------------
 
 We're done with our database, let's close the connection:
 
-.. code-block:: pycon
+.. code-block:: python
 
-    >>> db.close()
+    db.close()
 
 This is just the basics! You can make your queries as complex as you like.
 
