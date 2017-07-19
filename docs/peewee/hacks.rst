@@ -3,7 +3,9 @@
 Hacks
 =====
 
-Collected hacks using peewee. Have a cool hack you'd like to share? Open `an issue on GitHub <https://github.com/coleifer/peewee/issues/new>`_ or `contact me <http://charlesleifer.com/contact/>`_.
+Collected hacks using peewee. Have a cool hack you'd like to share?
+Open `an issue on GitHub <https://github.com/coleifer/peewee/issues/new>`_ or
+`contact me <http://charlesleifer.com/contact/>`_.
 
 .. _optimistic_locking:
 

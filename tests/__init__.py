@@ -1,6 +1,8 @@
 import sys
 import unittest
 
+from peewee import OperationalError
+
 # Core modules.
 from .database import *
 from .fields import *
@@ -29,6 +31,9 @@ try:
     from .postgres import *
 except ImportError:
     print('Unable to import postgres extension tests, skipping.')
+except OperationalError:
+    print('Postgresql test database "peewee_test" not found, skipping '
+          'the postgres_ext tests.')
 from .pwiz_integration import *
 from .reflection import *
 from .shortcuts import *

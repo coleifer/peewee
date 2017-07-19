@@ -217,7 +217,7 @@ Let's list all the cats and their owner's name:
     # Mittens Jr Herb
 
 There is a big problem with the previous query: because we are accessing
-``pet.owner.name`` and we did not select this value in our original query,
+``pet.owner.name`` and we did not select this relation in our original query,
 peewee will have to perform an additional query to retrieve the pet's owner.
 This behavior is referred to as :ref:`N+1 <nplusone>` and it should generally
 be avoided.

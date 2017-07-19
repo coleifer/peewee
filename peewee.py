@@ -2183,8 +2183,9 @@ class Database(_callable_context_manager):
                 raise OperationalError('Connection already opened.')
 
             self._state.reset()
-            self._state.set_connection(self._connect())
-            self._initialize_connection(self._state.conn)
+            with __exception_wrapper__:
+                self._state.set_connection(self._connect())
+                self._initialize_connection(self._state.conn)
         return True
 
     def _initialize_connection(self, conn):
@@ -2197,7 +2198,8 @@ class Database(_callable_context_manager):
                                 'opening a connection.')
             is_open = not self._state.closed
             if is_open:
-                self._close(self._state.conn)
+                with __exception_wrapper__:
+                    self._close(self._state.conn)
             self._state.reset()
             return is_open
 
@@ -3153,6 +3155,7 @@ class FieldAccessor(object):
 
     def __set__(self, instance, value):
         instance.__data__[self.name] = value
+        instance._dirty.add(self.name)
 
 
 class ForeignKeyAccessor(FieldAccessor):

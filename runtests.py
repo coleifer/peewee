@@ -54,6 +54,7 @@ def get_option_parser():
 def collect_modules(options, args):
     modules = []
     xtra = lambda op: op or options.extra or options.all
+    from peewee import print_
 
     for arg in args:
         try:
@@ -129,10 +130,6 @@ if __name__ == '__main__':
     if options.engine:
         os.environ['PEEWEE_TEST_BACKEND'] = options.engine
     os.environ['PEEWEE_TEST_VERBOSITY'] = str(options.verbosity)
-
-    from peewee import print_
-    from peewee import sqlite3
-    print_('sqlite3 version: %s' % sqlite3.sqlite_version)
 
     suite = unittest.TestSuite()
     for module in collect_modules(options, args):
