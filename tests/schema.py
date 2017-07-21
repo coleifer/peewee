@@ -37,7 +37,7 @@ class TMConstraints(TestModel):
 class TestModelDDL(ModelDatabaseTestCase):
     database = get_in_memory_db()
     requires = [Category, Note, Person, Relationship, TMUnique,
-                TMSequence, TMIndexes, TMConstraints]
+                TMSequence, TMIndexes, TMConstraints, User]
 
     def assertCreateTable(self, model_class, expected):
         sql, params = model_class._schema._create_table(False).query()
