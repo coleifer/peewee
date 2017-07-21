@@ -65,7 +65,7 @@ class Account(BaseModel):
         return self.domain == url_domain
 
 class PageView(BaseModel):
-    account = ForeignKeyField(Account, related_name='pageviews')
+    account = ForeignKeyField(Account, backref='pageviews')
     url = TextField()
     timestamp = DateTimeField(default=datetime.datetime.now)
     title = TextField(default='')
