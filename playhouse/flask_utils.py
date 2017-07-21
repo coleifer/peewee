@@ -21,7 +21,7 @@ class PaginatedQuery(object):
 
         if isinstance(query_or_model, SelectQuery):
             self.query = query_or_model
-            self.model = self.query.model_class
+            self.model = self.query.model
         else:
             self.model = query_or_model
             self.query = self.model.select()

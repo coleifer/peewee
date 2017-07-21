@@ -94,12 +94,12 @@ class Entry(flask_db.Model):
         # allow us to use SQLite's awesome full-text search extension to
         # search our entries.
         query = (FTSEntry
-                 .select(FTSEntry.docid, FTSEntry.entry_id)
-                 .where(FTSEntry.entry_id == self.id))
+                 .select(FTSEntry.docid)
+                 .where(FTSEntry.docid == self.id))
         try:
             fts_entry = query.get()
         except FTSEntry.DoesNotExist:
-            fts_entry = FTSEntry(entry_id=self.id)
+            fts_entry = FTSEntry(docid=self.id)
             force_insert = True
         else:
             force_insert = False
@@ -116,6 +116,7 @@ class Entry(flask_db.Model):
 
     @classmethod
     def search(cls, query):
+        import ipdb; ipdb.set_trace()
         words = [word.strip() for word in query.split() if word.strip()]
         if not words:
             # Return an empty query.
@@ -126,19 +127,15 @@ class Entry(flask_db.Model):
         # Query the full-text search index for entries matching the given
         # search query, then join the actual Entry data on the matching
         # search result.
-        return (FTSEntry
-                .select(
-                    FTSEntry,
-                    Entry,
-                    FTSEntry.rank().alias('score'))
-                .join(Entry, on=(FTSEntry.entry_id == Entry.id).alias('entry'))
+        return (Entry
+                .select(Entry, FTSEntry.rank().alias('score'))
+                .join(FTSEntry, on=(FTSEntry.docid == Entry.id))
                 .where(
                     (Entry.published == True) &
                     (FTSEntry.match(search)))
                 .order_by(SQL('score').desc()))
 
 class FTSEntry(FTSModel):
-    entry_id = IntegerField(Entry)
     content = TextField()
 
     class Meta:
