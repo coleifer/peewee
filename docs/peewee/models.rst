@@ -3,10 +3,11 @@
 Models and Fields
 =================
 
-:py:class:`Model` classes, :py:class:`Field` instances and model instances all map to database concepts:
+:py:class:`Model` classes, :py:class:`Field` instances and model instances all
+map to database concepts:
 
 ================= =================================
-Thing             Corresponds to...
+Object            Corresponds to...
 ================= =================================
 Model class       Database table
 Field instance    Column on a table
@@ -31,7 +32,7 @@ The following code shows the typical way you will define your database connectio
         username = CharField(unique=True)
 
     class Tweet(BaseModel):
-        user = ForeignKeyField(User, related_name='tweets')
+        user = ForeignKeyField(User, backref='tweets')
         message = TextField()
         created_date = DateTimeField(default=datetime.datetime.now)
         is_published = BooleanField(default=True)
@@ -42,7 +43,9 @@ The following code shows the typical way you will define your database connectio
 
         db = SqliteDatabase('my_app.db')
 
-    The ``db`` object will be used to manage the connections to the Sqlite database. In this example we're using :py:class:`SqliteDatabase`, but you could also use one of the other :ref:`database engines <databases>`.
+    The ``db`` object will be used to manage the connections to the Sqlite
+    database. In this example we're using :py:class:`SqliteDatabase`, but you
+    could also use one of the other :ref:`database engines <databases>`.
 
 2. Create a base model class which specifies our database.
 
@@ -52,9 +55,15 @@ The following code shows the typical way you will define your database connectio
             class Meta:
                 database = db
 
-    It is good practice to define a base model class which establishes the database connection. This makes your code DRY as you will not have to specify the database for subsequent models.
+    It is good practice to define a base model class which establishes the
+    database connection. This makes your code DRY as you will not have to
+    specify the database for subsequent models.
 
-    Model configuration is kept namespaced in a special class called ``Meta``. This convention is borrowed from Django. :ref:`Meta <model-options>` configuration is passed on to subclasses, so our project's models will all subclass *BaseModel*. There are :ref:`many different attributes <model-options>` you can configure using *Model.Meta*.
+    Model configuration is kept namespaced in a special class called ``Meta``.
+    This convention is borrowed from Django. :ref:`Meta <model-options>`
+    configuration is passed on to subclasses, so our project's models will all
+    subclass *BaseModel*. There are :ref:`many different attributes
+    <model-options>` you can configure using *Model.Meta*.
 
 3. Define a model class.
 
@@ -63,21 +72,32 @@ The following code shows the typical way you will define your database connectio
         class User(BaseModel):
             username = CharField(unique=True)
 
-    Model definition uses the declarative style seen in other popular ORMs like SQLAlchemy or Django. Note that we are extending the *BaseModel* class so the *User* model will inherit the database connection.
+    Model definition uses the declarative style seen in other popular ORMs like
+    SQLAlchemy or Django. Note that we are extending the *BaseModel* class so
+    the *User* model will inherit the database connection.
 
-    We have explicitly defined a single *username* column with a unique constraint. Because we have not specified a primary key, peewee will automatically add an auto-incrementing integer primary key field named *id*.
+    We have explicitly defined a single *username* column with a unique
+    constraint. Because we have not specified a primary key, peewee will
+    automatically add an auto-incrementing integer primary key field named
+    *id*.
 
 .. note::
-    If you would like to start using peewee with an existing database, you can use :ref:`pwiz` to automatically generate model definitions.
+    If you would like to start using peewee with an existing database, you can
+    use :ref:`pwiz` to automatically generate model definitions.
 
 .. _fields:
 
 Fields
 ------
 
-The :py:class:`Field` class is used to describe the mapping of :py:class:`Model` attributes to database columns. Each field type has a corresponding SQL storage class (i.e. varchar, int), and conversion between python data types and underlying storage is handled transparently.
+The :py:class:`Field` class is used to describe the mapping of
+:py:class:`Model` attributes to database columns. Each field type has a
+corresponding SQL storage class (i.e. varchar, int), and conversion between
+python data types and underlying storage is handled transparently.
 
-When creating a :py:class:`Model` class, fields are defined as class attributes. This should look familiar to users of the django framework. Here's an example:
+When creating a :py:class:`Model` class, fields are defined as class
+attributes. This should look familiar to users of the django framework. Here's
+an example:
 
 .. code-block:: python
 
@@ -86,13 +106,13 @@ When creating a :py:class:`Model` class, fields are defined as class attributes.
         join_date = DateTimeField()
         about_me = TextField()
 
-There is one special type of field, :py:class:`ForeignKeyField`, which allows you
-to represent foreign-key relationships between models in an intuitive way:
+There is one special type of field, :py:class:`ForeignKeyField`, which allows
+you to represent foreign-key relationships between models in an intuitive way:
 
 .. code-block:: python
 
     class Message(Model):
-        user = ForeignKeyField(User, related_name='messages')
+        user = ForeignKeyField(User, backref='messages')
         body = TextField()
         send_date = DateTimeField()
 
@@ -130,14 +150,13 @@ Field Type              Sqlite              Postgresql          MySQL
 ``BigIntegerField``     integer             bigint              bigint
 ``SmallIntegerField``   integer             smallint            smallint
 ``DecimalField``        decimal             numeric             numeric
-``PrimaryKeyField``     integer             serial              integer
+``AutoField``           integer             serial              integer
 ``ForeignKeyField``     integer             integer             integer
 ``DateField``           date                date                date
 ``TimeField``           time                time                time
 ``TimestampField``      integer             integer             integer
 ``BlobField``           blob                bytea               blob
 ``UUIDField``           text                uuid                varchar(40)
-``BareField``           untyped             not supported       not supported
 =====================   =================   =================   =================
 
 .. note::
@@ -185,10 +204,9 @@ Some fields take special parameters...
 | :py:class:`DecimalField`       | ``max_digits``, ``decimal_places``,            |
 |                                | ``auto_round``, ``rounding``                   |
 +--------------------------------+------------------------------------------------+
-| :py:class:`ForeignKeyField`    | ``rel_model``, ``related_name``, ``to_field``, |
-|                                | ``on_delete``, ``on_update``, ``extra``        |
-+--------------------------------+------------------------------------------------+
-| :py:class:`BareField`          | ``coerce``                                     |
+| :py:class:`ForeignKeyField`    | ``model``, ``backref``, ``field``,             |
+|                                | ``on_delete``, ``on_update``,                  |
+|                                | ``object_id_name``                             |
 +--------------------------------+------------------------------------------------+
 
 .. note::
@@ -288,13 +306,13 @@ Sometimes you only need the associated primary key value from the foreign key co
         # in the column.
         print(tweet.user_id, tweet.message)
 
-:py:class:`ForeignKeyField` allows for a backreferencing property to be bound to the target model. Implicitly, this property will be named `classname_set`, where `classname` is the lowercase name of the class, but can be overridden via the parameter ``related_name``:
+:py:class:`ForeignKeyField` allows for a backreferencing property to be bound to the target model. Implicitly, this property will be named `classname_set`, where `classname` is the lowercase name of the class, but can be overridden via the parameter ``backref``:
 
 .. code-block:: python
 
     class Message(Model):
         from_user = ForeignKeyField(User)
-        to_user = ForeignKeyField(User, related_name='received_messages')
+        to_user = ForeignKeyField(User, backref='received_messages')
         text = TextField()
 
     for message in some_user.message_set:
@@ -774,7 +792,7 @@ When creating a heirarchical structure it is necessary to create a self-referent
 
     class Category(Model):
         name = CharField()
-        parent = ForeignKeyField('self', null=True, related_name='children')
+        parent = ForeignKeyField('self', null=True, backref='children')
 
 As you can see, the foreign key points *upward* to the parent object and the back-reference is named *children*.
 
@@ -811,7 +829,7 @@ Adding circular foreign keys with peewee is a bit tricky because at the time you
 
     class Tweet(Model):
         message = TextField()
-        user = ForeignKeyField(User, related_name='tweets')
+        user = ForeignKeyField(User, backref='tweets')
 
 One option is to simply use an :py:class:`IntegerField` to store the raw ID:
 
@@ -835,7 +853,7 @@ By using :py:class:`DeferredRelation` we can get around the problem and still us
 
     class Tweet(Model):
         message = TextField()
-        user = ForeignKeyField(User, related_name='tweets')
+        user = ForeignKeyField(User, backref='tweets')
 
     # Now that Tweet is defined, we can initialize the reference.
     DeferredTweet.set_model(Tweet)

@@ -1123,6 +1123,8 @@ class Expression(ColumnBase):
         overrides = {'parentheses': not self.flat}
         if isinstance(self.lhs, Field):
             overrides['converter'] = self.lhs.db_value
+        else:
+            overrides['converter'] = None
 
         if ctx.state.operations:
             op_sql = ctx.state.operations.get(self.op, self.op)
