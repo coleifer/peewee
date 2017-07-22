@@ -47,7 +47,6 @@ Contents:
    peewee/installation
    peewee/quickstart
    peewee/example
-   peewee/more-resources
    peewee/contributing
    peewee/database
    peewee/models
@@ -55,7 +54,6 @@ Contents:
    peewee/transactions
    peewee/playhouse
    peewee/api
-   peewee/hacks
 
 Note
 ----

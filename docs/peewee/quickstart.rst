@@ -26,7 +26,7 @@ Model Definition
 Model classes, fields and model instances all map to database concepts:
 
 ================= =================================
-Thing             Corresponds to...
+Object            Corresponds to...
 ================= =================================
 Model class       Database table
 Field instance    Column on a table

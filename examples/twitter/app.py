@@ -95,8 +95,8 @@ class Message(BaseModel):
 
 # simple utility function to create tables
 def create_tables():
-    database.connect()
-    database.create_tables([User, Relationship, Message])
+    with database:
+        database.create_tables([User, Relationship, Message])
 
 # flask provides a "session" object, which allows us to store information across
 # requests (stored by default in a secure cookie).  this function allows us to

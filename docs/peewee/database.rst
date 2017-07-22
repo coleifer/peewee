@@ -3,7 +3,8 @@
 Managing your Database
 ======================
 
-This document describes how to perform typical database-related tasks with peewee. Throughout this document we will use the following example models:
+This document describes how to perform typical database-related tasks with
+peewee. Throughout this document we will use the following example models:
 
 .. code-block:: python
 
@@ -21,9 +22,16 @@ This document describes how to perform typical database-related tasks with peewe
 Creating a database connection and tables
 -----------------------------------------
 
-While it is not necessary to explicitly connect to the database before using it, **managing connections explicitly is a good practice**. This way if the connection fails, the exception can be caught during the *connect* step, rather than some arbitrary time later when a query is executed. Furthermore, if you're using a :ref:`connection pool <pool>`, it is necessary to call :py:meth:`~Database.connect` and :py:meth:`~Database.close` to ensure connections are recycled correctly.
+While it is not necessary to explicitly connect to the database before using
+it, **managing connections explicitly is a good practice**. This way if the
+connection fails, the exception can be caught during the *connect* step, rather
+than some arbitrary time later when a query is executed. Furthermore, if you're
+using a :ref:`connection pool <pool>`, it is necessary to call
+:py:meth:`~Database.connect` and :py:meth:`~Database.close` to ensure
+connections are recycled correctly.
 
-For web-apps you will typically open a connection when a request is started and close it when the response is delivered:
+For web-apps you will typically open a connection when a request is started and
+close it when the response is delivered:
 
 .. code-block:: python
 
@@ -35,9 +43,12 @@ For web-apps you will typically open a connection when a request is started and 
     def after_request_handler():
         database.close()
 
-.. note:: For examples of configuring connection hooks for several popular web frameworks, see the :ref:`adding_request_hooks` section.
+.. note::
+    For examples of configuring connection hooks for several popular web
+    frameworks, see the :ref:`adding_request_hooks` section.
 
-To use a database with your models, set the ``database`` attribute on an inner :ref:`Meta <model-options>` class:
+To use a database with your models, set the ``database`` attribute on an inner
+:ref:`Meta <model-options>` class:
 
 .. code-block:: python
 
@@ -50,7 +61,8 @@ To use a database with your models, set the ``database`` attribute on an inner :
         class Meta:
             database = app_db
 
-**Best practice:** define a base model class that points at the database object you wish to use, and then extend the base model for your application's models:
+**Best practice:** define a base model class that points at the database object
+you wish to use, and then extend the base model for your application's models:
 
 .. code-block:: python
 
@@ -76,9 +88,14 @@ To use a database with your models, set the ``database`` attribute on an inner :
 Vendor-specific Parameters
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Some database drivers accept special parameters when being initialized. Rather than try to accommodate all these parameters, Peewee will pass back unrecognized parameters directly to the database driver.
+Some database drivers accept special parameters when being initialized. Rather
+than try to accommodate all these parameters, Peewee will pass back
+unrecognized parameters directly to the database driver.
 
-For instance, with Postgresql it is common to need to specify the ``host``, ``user`` and ``password`` when creating your connection. These are not standard Peewee :py:class:`Database` parameters, so they will be passed directly back to ``psycopg2`` when creating connections:
+For instance, with Postgresql it is common to need to specify the ``host``,
+``user`` and ``password`` when creating your connection. These are not standard
+Peewee :py:class:`Database` parameters, so they will be passed directly back to
+``psycopg2`` when creating connections:
 
 .. code-block:: python
 
@@ -88,7 +105,9 @@ For instance, with Postgresql it is common to need to specify the ``host``, ``us
         password='secret',  # Ditto.
         host='db.mysite.com')  # Ditto.
 
-As another example, the ``pymysql`` driver accepts a ``charset`` parameter which is not a standard Peewee :py:class:`Database` parameter. To set this value, simply pass in ``charset`` alongside your other values:
+As another example, the ``pymysql`` driver accepts a ``charset`` parameter
+which is not a standard Peewee :py:class:`Database` parameter. To set this
+value, simply pass in ``charset`` alongside your other values:
 
 .. code-block:: python
 
@@ -106,7 +125,10 @@ Consult your database driver's documentation for the available parameters:
 Using Postgresql
 ----------------
 
-To connect to a Postgresql database, we will use :py:class:`PostgresqlDatabase`. The first parameter is always the name of the database, and after that you can specify arbitrary `psycopg2 parameters <http://initd.org/psycopg/docs/module.html#psycopg2.connect>`_.
+To connect to a Postgresql database, we will use
+:py:class:`PostgresqlDatabase`. The first parameter is always the name of the
+database, and after that you can specify arbitrary `psycopg2 parameters
+<http://initd.org/psycopg/docs/module.html#psycopg2.connect>`_.
 
 .. code-block:: python
 
@@ -120,15 +142,17 @@ To connect to a Postgresql database, we will use :py:class:`PostgresqlDatabase`.
     class User(BaseModel):
         username = CharField()
 
-The :ref:`playhouse` contains a :ref:`Postgresql extension module <postgres_ext>` which provides many postgres-specific features such as:
+The :ref:`playhouse` contains a :ref:`Postgresql extension module
+<postgres_ext>` which provides many postgres-specific features such as:
 
 * :ref:`Arrays <pgarrays>`
 * :ref:`HStore <hstore>`
 * :ref:`JSON <pgjson>`
 * :ref:`Server-side cursors <server_side_cursors>`
-* And more!
+* :ref:`And more <postgres_ext>`
 
-If you would like to use these awesome features, use the :py:class:`PostgresqlExtDatabase` from the ``playhouse.postgres_ext`` module:
+If you would like to use these awesome features, use the
+:py:class:`PostgresqlExtDatabase` from the ``playhouse.postgres_ext`` module:
 
 .. code-block:: python
 
@@ -141,7 +165,11 @@ If you would like to use these awesome features, use the :py:class:`PostgresqlEx
 Using SQLite
 ------------
 
-To connect to a SQLite database, we will use :py:class:`SqliteDatabase`. The first parameter is the filename containing the database, or the string *:memory:* to create an in-memory database. After the database filename, you can specify arbitrary `sqlite3 parameters <https://docs.python.org/2/library/sqlite3.html#sqlite3.connect>`_.
+To connect to a SQLite database, we will use :py:class:`SqliteDatabase`. The
+first parameter is the filename containing the database, or the string
+*:memory:* to create an in-memory database. After the database filename, you
+can specify arbitrary `sqlite3 parameters
+<https://docs.python.org/2/library/sqlite3.html#sqlite3.connect>`_.
 
 .. code-block:: python
 
@@ -156,14 +184,17 @@ To connect to a SQLite database, we will use :py:class:`SqliteDatabase`. The fir
         username = CharField()
         # etc, etc
 
-The :ref:`playhouse` contains a :ref:`SQLite extension module <sqlite_ext>` which provides many SQLite-specific features such as:
+The :ref:`playhouse` contains a :ref:`SQLite extension module <sqlite_ext>`
+which provides many SQLite-specific features such as:
 
 * :ref:`Full-text search <sqlite_fts>` with :ref:`BM25 ranking <sqlite_bm25>`.
 * Support for custom functions, aggregates and collations
+* Virtual table support using ``sweepea`` or ``vtfunc``
 * Advanced transaction support
 * And more!
 
-If you would like to use these awesome features, use the :py:class:`SqliteExtDatabase` from the ``playhouse.sqlite_ext`` module:
+If you would like to use these awesome features, use the
+:py:class:`SqliteExtDatabase` from the ``playhouse.sqlite_ext`` module:
 
 .. code-block:: python
 
@@ -192,48 +223,24 @@ as a list or tuple of 2-tuples containing the pragma name and value:
         ('mmap_size', 1024 * 1024 * 32),
     ))
 
-SQLite and Autocommit
-^^^^^^^^^^^^^^^^^^^^^
-
-.. versionchanged:: 2.4.5
-
-In version 2.4.5, the default isolation level for SQLite databases is ``None``, which equates to *autocommit*. The reason for this change has to do with some idiosyncracies of ``pysqlite`` (or the standard library ``sqlite3``).
-
-If you are using your database in autocommit mode (the default) then you should not need to make any changes to your code.
-
-If you are using ``autocommit=False``, you will need to explicitly call :py:meth:`~Database.begin` before executing queries.
-
-.. note::
-    This does not apply to code executed within :py:meth:`~Database.transaction` or :py:meth:`~Database.atomic`.
-
-.. warning::
-    If you are using peewee with autocommit disabled, you must explicitly call :py:meth:`~Database.begin`, otherwise statements **will** be executed in autocommit mode.
-
-Example code:
+Using the ``pragmas`` parameter during database initialization applies the
+pragma statements to all new connections. To perform a one-time ``PRAGMA``
+query, most common options are specified as properites on the
+:py:class:`SqliteDatabase` itself:
 
 .. code-block:: python
 
-    # Define a database with autocommit turned off.
-    db = SqliteDatabase('my_app.db', autocommit=False)
+    db.cache_size = 2000  # PRAGMA cache_size=2000;
+    print db.cache_size   # prints result of PRAGMA cache_size;
 
-    # You must call begin()
-    db.begin()
-    User.create(username='charlie')
-    db.commit()
-
-    # If using a transaction, then no changes are necessary.
-    with db.transaction():
-        User.create(username='huey')
-
-    # If using a function decorated by transaction, no changes are necessary.
-    @db.transaction()
-    def create_user(username):
-        User.create(username=username)
 
 APSW, an Advanced SQLite Driver
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Peewee also comes with an alternate SQLite database that uses :ref:`apsw`, an advanced Python SQLite driver. More information on APSW can be obtained on the `APSW project website <https://code.google.com/p/apsw/>`_. APSW provides special features like:
+Peewee also comes with an alternate SQLite database that uses :ref:`apsw`, an
+advanced Python SQLite driver. More information on APSW can be obtained on the
+`APSW project website <https://code.google.com/p/apsw/>`_. APSW provides
+special features like:
 
 * Virtual tables, virtual file-systems, Blob I/O, backups and file control.
 * Connections can be shared across threads without any additional locking.
@@ -250,38 +257,14 @@ If you would like to use APSW, use the :py:class:`APSWDatabase` from the `apsw_e
 
     apsw_db = APSWDatabase('my_app.db')
 
-.. _using_berkeleydb:
-
-Using BerkeleyDB
-----------------
-
-The :ref:`playhouse <playhouse>` contains a special extension module for using a :ref:`BerkeleyDB database <berkeleydb>`. BerkeleyDB can be compiled with a SQLite-compatible API, then the python SQLite driver can be compiled to use the Berkeley version of SQLite.
-
-You can find up-to-date `step by step instructions <http://charlesleifer.com/blog/building-the-python-sqlite-driver-for-use-with-berkeleydb/>`_ on my blog for compling the BerkeleyDB + SQLite library, then building a statically-linked `pysqlite <https://github.com/ghaering/pysqlite>`_ that uses the custom sqlite library.
-
-To connect to a BerkeleyDB database, we will use :py:class:`BerkeleyDatabase`. Like :py:class:`SqliteDatabase`, the first parameter is the filename containing the database or the string *:memory:* to create an in-memory database.
-
-.. code-block:: python
-
-    from playhouse.berkeleydb import BerkeleyDatabase
-
-    berkeley_db = BerkeleyDatabase('my_app.db')
-
-    class BaseModel(Model):
-        """A base model that will use our BDB database."""
-        class Meta:
-            database = berkeley_db
-
-    class User(BaseModel):
-        username = CharField()
-        # etc, etc
-
 .. _using_mysql:
 
 Using MySQL
 -----------
 
-To connect to a MySQL database, we will use :py:class:`MySQLDatabase`. After the database name, you can specify arbitrary connection parameters that will be passed back to the driver (either MySQLdb or pymysql).
+To connect to a MySQL database, we will use :py:class:`MySQLDatabase`. After
+the database name, you can specify arbitrary connection parameters that will be
+passed back to the driver (either MySQLdb or pymysql).
 
 .. code-block:: python
 
@@ -296,22 +279,13 @@ To connect to a MySQL database, we will use :py:class:`MySQLDatabase`. After the
         username = CharField()
         # etc, etc
 
-Error 2006: MySQL server has gone away
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-This particular error can occur when MySQL kills an idle database connection. This typically happens with web apps that do not explicitly manage database connections. What happens is your application starts, a connection is opened to handle the first query that executes, and, since that connection is never closed, it remains open, waiting for more queries.
-
-To fix this, make sure you are explicitly connecting to the database when you need to execute queries, and close your connection when you are done. In a web-application, this typically means you will open a connection when a request comes in, and close the connection when you return a response.
-
-See the :ref:`adding_request_hooks` for more information.
-
-If you would like to automatically reconnect and retry queries that fail due to an ``OperationalError``, peewee provides a :py:class:`Database` mixin :py:class:`RetryOperationalError` that will handle reconnecting and retrying the query automatically. For more information see :ref:`automatic-reconnect`.
-
 
 Connecting using a Database URL
 -------------------------------
 
-The playhouse module :ref:`db_url` provides a helper :py:func:`connect` function that accepts a database URL and returns a :py:class:`Database` instance.
+The playhouse module :ref:`db_url` provides a helper :py:func:`connect`
+function that accepts a database URL and returns a :py:class:`Database`
+instance.
 
 Example code:
 
@@ -341,14 +315,18 @@ Example database URLs:
 Multi-threaded applications
 ---------------------------
 
-peewee stores the connection state in a thread local, so each thread gets its own separate connection. If you prefer to manage the connections yourself, you can disable this behavior by initializing your database with ``threadlocals=False``.
+peewee stores the connection state in a thread local, so each thread gets its
+own separate connection.
 
 .. _deferring_initialization:
 
 Run-time database configuration
 -------------------------------
 
-Sometimes the database connection settings are not known until run-time, when these values may be loaded from a configuration file or the environment. In these cases, you can *defer* the initialization of the database by specifying ``None`` as the database_name.
+Sometimes the database connection settings are not known until run-time, when
+these values may be loaded from a configuration file or the environment. In
+these cases, you can *defer* the initialization of the database by specifying
+``None`` as the database_name.
 
 .. code-block:: python
 
@@ -358,28 +336,35 @@ Sometimes the database connection settings are not known until run-time, when th
         class Meta:
             database = database
 
-If you try to connect or issue any queries while your database is uninitialized you will get an exception:
+If you try to connect or issue any queries while your database is uninitialized
+you will get an exception:
 
 .. code-block:: python
 
     >>> database.connect()
     Exception: Error, database not properly initialized before opening connection
 
-To initialize your database, call the :py:meth:`~Database.init` method with the database name and any additional keyword arguments:
+To initialize your database, call the :py:meth:`~Database.init` method with the
+database name and any additional keyword arguments:
 
 .. code-block:: python
 
     database_name = raw_input('What is the name of the db? ')
     database.init(database_name, host='localhost', user='postgres')
 
-For even more control over initializing your database, see the next section, :ref:`dynamic_db`.
+For even more control over initializing your database, see the next section,
+:ref:`dynamic_db`.
 
 .. _dynamic_db:
 
 Dynamically defining a database
 -------------------------------
 
-For even more control over how your database is defined/initialized, you can use the :py:class:`Proxy` helper. :py:class:`Proxy` objects act as a placeholder, and then at run-time you can swap it out for a different object. In the example below, we will swap out the database depending on how the app is configured:
+For even more control over how your database is defined/initialized, you can
+use the :py:class:`Proxy` helper. :py:class:`Proxy` objects act as a
+placeholder, and then at run-time you can swap it out for a different object.
+In the example below, we will swap out the database depending on how the app is
+configured:
 
 .. code-block:: python
 
@@ -404,21 +389,29 @@ For even more control over how your database is defined/initialized, you can use
     database_proxy.initialize(database)
 
 .. warning::
-    Only use this method if your actual database driver varies at run-time. For instance, if your tests and local dev environment run on SQLite, but your deployed app uses PostgreSQL, you can use the :py:class:`Proxy` to swap out engines at run-time.
+    Only use this method if your actual database driver varies at run-time. For
+    instance, if your tests and local dev environment run on SQLite, but your
+    deployed app uses PostgreSQL, you can use the :py:class:`Proxy` to swap out
+    engines at run-time.
 
-    However, if it is only connection values that vary at run-time, such as the path to the database file, or the database host, you should instead use :py:meth:`Database.init`. See :ref:`deferring_initialization` for more details.
+    However, if it is only connection values that vary at run-time, such as the
+    path to the database file, or the database host, you should instead use
+    :py:meth:`Database.init`. See :ref:`deferring_initialization` for more
+    details.
 
 .. _connection_pooling:
 
 Connection Pooling
 ------------------
 
-Connection pooling is provided by the :ref:`pool module <pool>`, included in the :ref:`playhouse` extensions library. The pool supports:
+Connection pooling is provided by the :ref:`pool module <pool>`, included in
+the :ref:`playhouse` extensions library. The pool supports:
 
 * Timeout after which connections will be recycled.
 * Upper bound on the number of open connections.
 
-The connection pool module comes with support for Postgres and MySQL (though adding support for other databases is trivial).
+The connection pool module comes with support for Postgres and MySQL (though
+adding support for other databases is trivial).
 
 .. code-block:: python
 
@@ -442,41 +435,16 @@ The following pooled database classes are available:
 * :py:class:`PooledSqliteDatabase`
 * :py:class:`PooledSqliteExtDatabase`
 
-For an in-depth discussion of peewee's connection pool, see the :ref:`pool` section of the :ref:`playhouse` documentation.
-
-.. _using_read_slaves:
-
-Read Slaves
------------
-
-Peewee can automatically run *SELECT* queries against one or more read replicas. The :ref:`read_slave module <read_slaves>`, included in the :ref:`playhouse` extensions library, contains a :py:class:`Model` subclass which provides this behavior.
-
-Here is how you might use the :py:class:`ReadSlaveModel`:
-
-.. code-block:: python
-
-    from peewee import *
-    from playhouse.read_slave import ReadSlaveModel
-
-    # Declare a master and two read-replicas.
-    master = PostgresqlDatabase('master')
-    replica_1 = PostgresqlDatabase('replica', host='192.168.1.2')
-    replica_2 = PostgresqlDatabase('replica', host='192.168.1.3')
-
-    class BaseModel(ReadSlaveModel):
-        class Meta:
-            database = master
-            read_slaves = (replica_1, replica_2)
-
-    class User(BaseModel):
-        username = CharField()
-
-Now when you execute writes (or deletes), they will be run on the master, while all read-only queries will be executed against one of the replicas. Queries are dispatched among the read slaves in round-robin fashion.
+For an in-depth discussion of peewee's connection pool, see the :ref:`pool`
+section of the :ref:`playhouse` documentation.
 
 Schema migrations
 -----------------
 
-Currently peewee does not have support for *automatic* schema migrations, but you can use the :ref:`migrate` module to create simple migration scripts. The schema migrations module works with SQLite, MySQL and Postgres, and will even allow you to do things like drop or rename columns in SQLite!
+Currently peewee does not have support for *automatic* schema migrations, but
+you can use the :ref:`migrate` module to create simple migration scripts. The
+schema migrations module works with SQLite, MySQL and Postgres, and will even
+allow you to do things like drop or rename columns in SQLite!
 
 Here is an example of how you might write a migration script:
 
@@ -502,7 +470,10 @@ Check the :ref:`migrate` documentation for more details.
 Generating Models from Existing Databases
 -----------------------------------------
 
-If you'd like to generate peewee model definitions for an existing database, you can try out the database introspection tool :ref:`pwiz` that comes with peewee. *pwiz* is capable of introspecting Postgresql, MySQL and SQLite databases.
+If you'd like to generate peewee model definitions for an existing database,
+you can try out the database introspection tool :ref:`pwiz` that comes with
+peewee. *pwiz* is capable of introspecting Postgresql, MySQL and SQLite
+databases.
 
 Introspecting a Postgresql database:
 
@@ -539,14 +510,21 @@ The generated code is written to stdout, and can easily be redirected to a file:
 Adding Request Hooks
 --------------------
 
-When building web-applications, it is very important that you manage your database connections correctly. In this section I will describe how to add hooks to your web app to ensure the database connection is handled properly.
+When building web-applications, it is very important that you manage your
+database connections correctly. In this section I will describe how to add
+hooks to your web app to ensure the database connection is handled properly.
 
-These steps will ensure that regardless of whether you're using a simple SQLite database, or a pool of multiple Postgres connections, peewee will handle the connections correctly.
+These steps will ensure that regardless of whether you're using a simple SQLite
+database, or a pool of multiple Postgres connections, peewee will handle the
+connections correctly.
 
 Flask
 ^^^^^
 
-Flask and peewee are a great combo and my go-to for projects of any size. Flask provides two hooks which we will use to open and close our db connection. We'll open the connection when a request is received, then close it when the response is returned.
+Flask and peewee are a great combo and my go-to for projects of any size. Flask
+provides two hooks which we will use to open and close our db connection. We'll
+open the connection when a request is received, then close it when the response
+is returned.
 
 .. code-block:: python
 
@@ -572,9 +550,15 @@ Flask and peewee are a great combo and my go-to for projects of any size. Flask 
 Django
 ^^^^^^
 
-While it's less common to see peewee used with Django, it is actually very easy to use the two. To manage your peewee database connections with Django, the easiest way in my opinion is to add a middleware to your app. The middleware should be the very first in the list of middlewares, to ensure it runs first when a request is handled, and last when the response is returned.
+While it's less common to see peewee used with Django, it is actually very easy
+to use the two. To manage your peewee database connections with Django, the
+easiest way in my opinion is to add a middleware to your app. The middleware
+should be the very first in the list of middlewares, to ensure it runs first
+when a request is handled, and last when the response is returned.
 
-If you have a django project named *my_blog* and your peewee database is defined in the module ``my_blog.db``, you might add the following middleware class:
+If you have a django project named *my_blog* and your peewee database is
+defined in the module ``my_blog.db``, you might add the following middleware
+class:
 
 .. code-block:: python
 
@@ -614,7 +598,8 @@ To ensure this middleware gets executed, add it to your ``settings`` module:
 Bottle
 ^^^^^^
 
-I haven't used bottle myself, but looking at the documentation I believe the following code should ensure the database connections are properly managed:
+I haven't used bottle myself, but looking at the documentation I believe the
+following code should ensure the database connections are properly managed:
 
 .. code-block:: python
 
@@ -657,7 +642,8 @@ See `application processors <http://webpy.org/cookbook/application_processors>`_
 Tornado
 ^^^^^^^
 
-It looks like Tornado's ``RequestHandler`` class implements two hooks which can be used to open and close connections when a request is handled.
+It looks like Tornado's ``RequestHandler`` class implements two hooks which can
+be used to open and close connections when a request is handled.
 
 .. code-block:: python
 
@@ -675,14 +661,17 @@ It looks like Tornado's ``RequestHandler`` class implements two hooks which can 
                 db.close()
             return super(PeeweeRequestHandler, self).on_finish()
 
-In your app, instead of extending the default ``RequestHandler``, now you can extend ``PeeweeRequestHandler``.
+In your app, instead of extending the default ``RequestHandler``, now you can
+extend ``PeeweeRequestHandler``.
 
-Note that this does not address how to use peewee asynchronously with Tornado or another event loop.
+Note that this does not address how to use peewee asynchronously with Tornado
+or another event loop.
 
 Wheezy.web
 ^^^^^^^^^^
 
-The connection handling code can be placed in a `middleware <https://pythonhosted.org/wheezy.http/userguide.html#middleware>`_.
+The connection handling code can be placed in a `middleware
+<https://pythonhosted.org/wheezy.http/userguide.html#middleware>`_.
 
 .. code-block:: python
 
@@ -705,7 +694,8 @@ Thanks to GitHub user *@tuukkamustonen* for submitting this code.
 Falcon
 ^^^^^^
 
-The connection handling code can be placed in a `middleware component <https://falcon.readthedocs.io/en/stable/api/middleware.html>`_.
+The connection handling code can be placed in a `middleware component
+<https://falcon.readthedocs.io/en/stable/api/middleware.html>`_.
 
 .. code-block:: python
 
@@ -781,89 +771,16 @@ Don't see your framework here? Please `open a GitHub ticket <https://github.com/
 Additional connection initialization
 ------------------------------------
 
-Peewee does a few basic things depending on your database to initialize a connection. For SQLite this means registering custom user-defined functions, for Postgresql this means registering unicode support.
+Peewee does a few basic things depending on your database to initialize a
+connection. For SQLite this means registering custom user-defined functions,
+for Postgresql this means registering unicode support.
 
-You may find it necessary to add additional initialization when a new connection is opened, however. For example you may want to tell SQLite to enforce all foreign key constraints (off by default). To do this, you can subclass the database and override the :py:meth:`~Database.initialize_connection` method.
+You may find it necessary to add additional initialization when a new
+connection is opened, however. To do this, you can subclass the database and
+override the :py:meth:`~Database._initialize_connection` method.
 
-This method contains no implementation on the base database classes, so you do not need to call ``super()`` with it.
-
-Example turning on SQLite foreign keys:
-
-.. code-block:: python
-
-    class SqliteFKDatabase(SqliteDatabase):
-        def initialize_connection(self, conn):
-            self.execute_sql('PRAGMA foreign_keys=ON;')
-
-.. _advanced_connection_management:
-
-Advanced Connection Management
-------------------------------
-
-Managing your database connections is as simple as calling :py:meth:`~Database.connect` when you need to open a connection, and :py:meth:`~Database.close` when you are finished. In a web-app, you would typically connect when you receive a request, and close the connection when you return a response. Because connection state is stored in a thread-local, you do not need to worry about juggling connection objects -- peewee will handle it for you.
-
-In some situations, however, you may want to manage your connections more explicitly. Since peewee stores the active connection in a threadlocal, this typically would mean that there could only ever be one connection open per thread. For most applications this is desirable, but if you would like to manually manage multiple connections you can create an :py:class:`ExecutionContext`.
-
-Execution contexts allow finer-grained control over managing multiple connections to the database. When an execution context is initialized (either as a context manager or as a decorated function), a separate connection will be used for the duration of the wrapped block. You can also choose whether to wrap the block in a transaction.
-
-Execution context examples:
-
-.. code-block:: python
-
-    with db.execution_context() as ctx:
-        # A new connection will be opened or, if using a connection pool,
-        # pulled from the pool of available connections. Additionally, a
-        # transaction will be started.
-        user = User.create(username='charlie')
-
-    # When the block ends, the transaction will be committed and the connection
-    # will be closed (or returned to the pool).
-
-    @db.execution_context(with_transaction=False)
-    def do_something(foo, bar):
-        # When this function is called, a separate connection is made and will
-        # be closed when the function returns.
-
-If you are using the peewee connection pool, then the new connections used by the :py:class:`ExecutionContext` will be pulled from the pool of available connections and recycled appropriately.
-
-Using multiple databases
-------------------------
-
-With peewee you can use as many databases as you want. Each model can define it's database by specifying a :ref:`Meta.database <model-options>`. What if you want to use the same model with multiple databases, though? Depending on your use-case, peewee provides several options.
-
-If you have a Master/Slave setup and want all writes to go to the master, but reads can go to any number of replicated copies, check out the :ref:`Read Slave extension <read_slaves>`.
-
-For finer-grained control, check out the :py:class:`Using` context manager / decorator. This allows you to specify the database to use with a given list of models for the duration of the wrapped block.
-
-Here is an example of how you might use the :py:class:`Using` context manager:
-
-.. code-block:: python
-
-    master = PostgresqlDatabase('master')
-    read_replica = PostgresqlDatabase('replica')
-
-    class Data(Model):
-        value = IntegerField()
-
-        class Meta:
-            database = master
-
-    # By default all queries go to the master, since that is what
-    # is defined on our model.
-    for i in range(10):
-        Data.create(value=i)
-
-    # But what if we want to explicitly use the read replica?
-    with Using(read_replica, [Data]):
-        # Query is executed against the read replica.
-        Data.get(Data.value == 5)
-
-        # Since we did not specify this model in the list of overrides
-        # it will use whatever database it was defined with.
-        SomeOtherModel.get(SomeOtherModel.field == 3)
-
-.. note::
-    For simple master/slave configurations, check out the :ref:`read_slaves` extension. This extension ensures writes are sent to the master database and reads occur from any of the listed read replicas.
+This method contains no implementation on the base database classes, so you do
+not need to call ``super()`` with it.
 
 .. _database-errors:
 
@@ -883,31 +800,13 @@ The Python DB-API 2.0 spec describes `several types of exceptions <https://www.p
 
 .. note:: All of these error classes extend ``PeeweeException``.
 
-.. _automatic-reconnect:
-
-Automatic Reconnect
--------------------
-
-Peewee provides very basic support for automatic reconnecting in the :ref:`shortcuts` module, through the use of the :py:class:`RetryOperationalError` mixin. This mixin will automatically reconnect to the database and retry any queries that fail with an ``OperationalError``. The query that failed will be retried only once, and if it fails twice an exception will be raised.
-
-Usage:
-
-.. code-block:: python
-
-    from peewee import *
-    from playhouse.shortcuts import RetryOperationalError
-
-
-    class MyRetryDB(RetryOperationalError, MySQLDatabase):
-        pass
-
-
-    db = MyRetryDB('my_app')
-
 Logging queries
 ---------------
 
-All queries are logged to the *peewee* namespace using the standard library ``logging`` module. Queries are logged using the *DEBUG* level.  If you're interested in doing something with the queries, you can simply register a handler.
+All queries are logged to the *peewee* namespace using the standard library
+``logging`` module. Queries are logged using the *DEBUG* level.  If you're
+interested in doing something with the queries, you can simply register a
+handler.
 
 .. code-block:: python
 
@@ -916,27 +815,6 @@ All queries are logged to the *peewee* namespace using the standard library ``lo
     logger = logging.getLogger('peewee')
     logger.setLevel(logging.DEBUG)
     logger.addHandler(logging.StreamHandler())
-
-Generating skeleton code
-------------------------
-
-For writing quick scripts, peewee comes with a helper script :ref:`pskel` which generates database connection and model boilerplate code. If you find yourself frequently writing small programs, :ref:`pskel` can really save you time.
-
-To generate a script, you can simply run:
-
-.. code-block:: console
-
-    pskel User Tweet SomeModel AnotherModel > my_script.py
-
-``pskel`` will generate code to connect to an in-memory SQLite database, as well as blank model definitions for the model names specified on the command line.
-
-Here is a more complete example, which will use the :py:class:`PostgresqlExtDatabase` with query logging enabled:
-
-.. code-block:: console
-
-    pskel -l -e postgres_ext -d my_database User Tweet > my_script.py
-
-You can now fill in the model definitions and get to hacking!
 
 Adding a new Database Driver
 ----------------------------
@@ -951,9 +829,13 @@ The db-api 2.0 spec should be familiar to you if you've used the standard librar
 * `Cursor.description`
 * `Cursor.fetchone`
 
-These methods are generally wrapped up in higher-level abstractions and exposed by the :py:class:`Database`, so even if your driver doesn't do these exactly you can still get a lot of mileage out of peewee.  An example is the `apsw sqlite driver <http://code.google.com/p/apsw/>`_ in the "playhouse" module.
+These methods are generally wrapped up in higher-level abstractions and exposed
+by the :py:class:`Database`, so even if your driver doesn't do these exactly
+you can still get a lot of mileage out of peewee.  An example is the `apsw
+sqlite driver <http://code.google.com/p/apsw/>`_ in the "playhouse" module.
 
-The first thing is to provide a subclass of :py:class:`Database` that will open a connection.
+The first thing is to provide a subclass of :py:class:`Database` that will open
+a connection.
 
 .. code-block:: python
 
@@ -965,13 +847,25 @@ The first thing is to provide a subclass of :py:class:`Database` that will open 
         def _connect(self, database, **kwargs):
             return foodb.connect(database, **kwargs)
 
-The :py:class:`Database` provides a higher-level API and is responsible for executing queries, creating tables and indexes, and introspecting the database to get lists of tables. The above implementation is the absolute minimum needed, though some features will not work -- for best results you will want to additionally add a method for extracting a list of tables and indexes for a table from the database.  We'll pretend that ``FooDB`` is a lot like MySQL and has special "SHOW" statements:
+The :py:class:`Database` provides a higher-level API and is responsible for
+executing queries, creating tables and indexes, and introspecting the database
+to get lists of tables. The above implementation is the absolute minimum
+needed, though some features will not work -- for best results you will want to
+additionally add a method for extracting a list of tables and indexes for a
+table from the database.  We'll pretend that ``FooDB`` is a lot like MySQL and
+has special "SHOW" statements:
 
 .. code-block:: python
 
+    from peewee import Database, attrdict
+
     class FooDatabase(Database):
-        def _connect(self, database, **kwargs):
-            return foodb.connect(database, **kwargs)
+        options = attrdict(
+            param='%s',
+            quote='`')
+
+        def _connect(self):
+            return foodb.connect(self.database, **self.connect_params)
 
         def get_tables(self):
             res = self.execute('SHOW TABLES;')
@@ -980,12 +874,14 @@ The :py:class:`Database` provides a higher-level API and is responsible for exec
 Other things the database handles that are not covered here include:
 
 * :py:meth:`~Database.last_insert_id` and :py:meth:`~Database.rows_affected`
-* :py:attr:`~Database.interpolation` and :py:attr:`~Database.quote_char`
-* :py:attr:`~Database.op_overrides` for mapping operations such as "LIKE/ILIKE" to their database equivalent
+* ``param`` and ``quote`` options.
 
-Refer to the :py:class:`Database` API reference or the `source code <https://github.com/coleifer/peewee/blob/master/peewee.py>`_. for details.
+Refer to the :py:class:`Database` API reference or the `source code
+<https://github.com/coleifer/peewee/blob/master/peewee.py>`_. for details.
 
-.. note:: If your driver conforms to the DB-API 2.0 spec, there shouldn't be much work needed to get up and running.
+.. note::
+    If your driver conforms to the DB-API 2.0 spec, there shouldn't be
+    much work needed to get up and running.
 
 Our new database can be used just like any of the other database subclasses:
 
