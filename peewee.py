@@ -2605,7 +2605,7 @@ class PostgresqlDatabase(Database):
 
     def set_server_version(self, version):
         if version >= 90600:
-            self.options['safe_create_index'] = True
+            self.safe_create_index = True
 
     def last_insert_id(self, cursor, query_type=None):
         try:
