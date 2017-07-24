@@ -301,11 +301,11 @@ class IntervalField(Field):
 
 class PostgresqlExtDatabase(PostgresqlDatabase):
     def __init__(self, *args, **kwargs):
-        self.register_hstore = kwargs.pop('register_hstore', True)
+        self._register_hstore = kwargs.pop('register_hstore', False)
         super(PostgresqlExtDatabase, self).__init__(*args, **kwargs)
 
     def _connect(self):
         conn = super(PostgresqlExtDatabase, self)._connect()
-        if self.register_hstore:
+        if self._register_hstore:
             register_hstore(conn, globally=True)
         return conn
