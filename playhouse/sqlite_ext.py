@@ -714,8 +714,6 @@ OP.MATCH = 'MATCH'
 
 
 class SqliteExtDatabase(SqliteDatabase):
-    operations = {OP.MATCH: 'MATCH'}
-
     def __init__(self, database, c_extensions=None, *args, **kwargs):
         super(SqliteExtDatabase, self).__init__(database, *args, **kwargs)
         self._extensions = set()
