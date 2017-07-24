@@ -284,7 +284,9 @@ def merge_dict(source, overrides):
     return merged
 
 def is_model(obj):
-    return isclass(obj) and issubclass(obj, Model)
+    if isclass(obj):
+        return issubclass(obj, Model)
+    return False
 
 def ensure_tuple(value):
     if value is not None:
@@ -3824,13 +3826,18 @@ class VirtualField(MetaField):
 
     def __init__(self, field_class=None, *args, **kwargs):
         Field = field_class if field_class is not None else self.field_class
-        if Field is not None:
-            self.field_instance = Field()
-            self.db_value = self.field_instance.db_value
-            self.python_value = self.field_instance.python_value
-        else:
-            self.field_instance = None
+        self.field_instance = Field() if Field is not None else None
         super(VirtualField, self).__init__(*args, **kwargs)
+
+    def db_value(self, value):
+        if self.field_instance is not None:
+            return self.field_instance.db_value(value)
+        return value
+
+    def python_value(self, value):
+        if self.field_instance is not None:
+            return self.field_instance.python_value(value)
+        return value
 
     def bind(self, model, name, set_attribute=True):
         self.model = model
