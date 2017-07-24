@@ -98,6 +98,13 @@ class TestModelAPIs(ModelTestCase):
                           user__username__ilike='%ck%')
         self.assertEqual(tweet.content, 'woof')
 
+    @requires_models(User, Tweet)
+    def test_get_or_none(self):
+        huey = self.add_user('huey')
+        self.assertEqual(User.get_or_none(User.username == 'huey').username,
+                         'huey')
+        self.assertIsNone(User.get_or_none(User.username == 'foo'))
+
     @requires_models(User, Color)
     def test_get_by_id(self):
         huey = self.add_user('huey')

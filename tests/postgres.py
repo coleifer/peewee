@@ -10,7 +10,7 @@ from .base import TestModel
 from .base import skip_case_if
 
 
-db = PostgresqlExtDatabase('peewee_test')
+db = PostgresqlExtDatabase('peewee_test', register_hstore=True)
 
 
 class HStoreModel(TestModel):

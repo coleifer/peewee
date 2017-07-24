@@ -51,6 +51,17 @@ class TestModelSQL(ModelDatabaseTestCase):
             'LEFT OUTER JOIN "tweet" AS "t2" ON ("t2"."user_id" = "t1"."id") '
             'GROUP BY "t1"."id", "t1"."username"'), [])
 
+    def test_subquery_correction(self):
+        users = User.select().where(User.username.in_(['foo', 'bar']))
+        query = Tweet.select().where(Tweet.user.in_(users))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."user_id", "t1"."content", '
+            '"t1"."timestamp" '
+            'FROM "tweet" AS "t1" '
+            'WHERE ("t1"."user_id" IN ('
+            'SELECT "t2"."id" FROM "users" AS "t2" '
+            'WHERE ("t2"."username" IN (?, ?))))'), ['foo', 'bar'])
+
     def test_join_ctx(self):
         query = Tweet.select(Tweet.id).join(Favorite).switch(Tweet).join(User)
         self.assertSQL(query, (

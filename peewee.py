@@ -958,12 +958,6 @@ class ColumnBase(Node):
                                  'end-point.')
             return self.between(item.start, item.stop)
         return self == item
-    def op(self, operation, inverted=False):
-        def __op__(self, value):
-            if inverted:
-                self, value = value, self
-            return Expression(self, operation, value)
-        return __op__
 
     def get_sort_key(self, ctx):
         return ()
@@ -1744,6 +1738,9 @@ class Select(SelectBase):
     def _get_query_key(self):
         return self._alias
 
+    def __sql_selection__(self, ctx, is_subquery=False):
+        return ctx.sql(CommaNodeList(self._returning))
+
     def __sql__(self, ctx):
         super(Select, self).__sql__(ctx)
         if ctx.scope == SCOPE_COLUMN:
@@ -1764,7 +1761,7 @@ class Select(SelectBase):
                      .literal(' '))
 
             with ctx.scope_source():
-                ctx.sql(CommaNodeList(self._returning))
+                ctx = self.__sql_selection__(ctx, is_subquery)
 
             if self._from_list:
                 with ctx.scope_source(parentheses=False):
@@ -2588,8 +2585,9 @@ class PostgresqlDatabase(Database):
     safe_create_index = False
     sequences = True
 
-    def init(self, database, register_unicode=True, **kwargs):
+    def init(self, database, register_unicode=True, encoding=None, **kwargs):
         self._register_unicode = register_unicode
+        self._encoding = encoding
         self._need_server_version = True
         super(PostgresqlDatabase, self).init(database, **kwargs)
 
@@ -2598,6 +2596,8 @@ class PostgresqlDatabase(Database):
         if self._register_unicode:
             pg_extensions.register_type(pg_extensions.UNICODE, conn)
             pg_extensions.register_type(pg_extensions.UNICODEARRAY, conn)
+        if self._encoding:
+            conn.set_client_encoding(self._encoding)
         if self._need_server_version:
             self.set_server_version(conn.server_version)
             self._need_server_version = False
@@ -3872,6 +3872,10 @@ class CompositeKey(MetaField):
     def __hash__(self):
         return hash((self.model.__name__, self.field_names))
 
+    def __sql__(self, ctx):
+        return ctx.sql(CommaNodeList([self.model._meta.fields[field]
+                                      for field in self.field_names]))
+
     def bind(self, model, name, set_attribute=True):
         self.model = model
         self.column_name = self.name = name
@@ -4494,6 +4498,13 @@ class Model(with_metaclass(ModelBase, Node)):
         return sq.get()
 
     @classmethod
+    def get_or_none(cls, *query, **filters):
+        try:
+            return cls.get(*query, **filters)
+        except DoesNotExist:
+            pass
+
+    @classmethod
     def get_by_id(cls, pk):
         return cls.get(cls._meta.primary_key == pk)
 
@@ -5058,6 +5069,13 @@ class ModelSelect(BaseModelSelect, Select):
                 field_obj = field.field
             query = query.ensure_join(lm, rm, field_obj)
         return query.where(dq_node)
+
+    def __sql_selection__(self, ctx, is_subquery=False):
+        if is_subquery and len(self._returning) > 1 and \
+           self.model._meta.primary_key is not False:
+            return ctx.sql(self.model._meta.primary_key)
+
+        return ctx.sql(CommaNodeList(self._returning))
 
 
 class _ModelWriteQueryHelper(_ModelQueryHelper):
