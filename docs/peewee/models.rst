@@ -163,7 +163,7 @@ Field Type              Sqlite              Postgresql          MySQL
     Don't see the field you're looking for in the above table? It's easy to create custom field types and use them with your models.
 
     * :ref:`custom-fields`
-    * :py:class:`Database`, particularly the ``fields`` parameter.
+    * :py:class:`Database`, particularly ``options.field_types``.
 
 Field initialization arguments
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -173,15 +173,16 @@ Parameters accepted by all field types and their default values:
 * ``null = False`` -- boolean indicating whether null values are allowed to be stored
 * ``index = False`` -- boolean indicating whether to create an index on this column
 * ``unique = False`` -- boolean indicating whether to create a unique index on this column. See also :ref:`adding composite indexes <model_indexes>`.
-* ``verbose_name = None`` -- string representing the "user-friendly" name of this field
-* ``help_text = None`` -- string representing any helpful text for this field
-* ``db_column = None`` -- string representing the underlying column to use if different, useful for legacy databases
+* ``column_name = None`` -- string representing the underlying column to use if different, useful for legacy databases
 * ``default = None`` -- any value to use as a default for uninitialized models
-* ``choices = None`` -- an optional iterable containing 2-tuples of ``value``, ``display``
 * ``primary_key = False`` -- whether this field is the primary key for the table
-* ``sequence = None`` -- sequence to populate field (if backend supports it)
 * ``constraints = None`` - a list of one or more constraints, e.g. ``[Check('price > 0')]``
-* ``schema = None`` -- optional name of the schema to use, if your db supports this.
+* ``sequence = None`` -- sequence to populate field (if backend supports it)
+* ``collation = None`` -- collation to use when indexing this field (SQLite-specific).
+* ``unindexed = None`` -- specify field should not be indexed (SQLite-specific).
+* ``choices = None`` -- an optional iterable containing 2-tuples of ``value``, ``display``
+* ``help_text = None`` -- string representing any helpful text for this field
+* ``verbose_name = None`` -- string representing the "user-friendly" name of this field
 
 Some fields take special parameters...
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -272,11 +273,19 @@ use the ``constraints`` parameter to specify the server default:
 ForeignKeyField
 ^^^^^^^^^^^^^^^
 
-:py:class:`ForeignKeyField` is a special field type that allows one model to reference another. Typically a foreign key will contain the primary key of the model it relates to (but you can specify a particular column by specifying a ``to_field``).
+:py:class:`ForeignKeyField` is a special field type that allows one model to
+reference another. Typically a foreign key will contain the primary key of the
+model it relates to (but you can specify a particular column by specifying a
+``field``).
 
-Foreign keys allow data to be `normalized <http://en.wikipedia.org/wiki/Database_normalization>`_. In our example models, there is a foreign key from ``Tweet`` to ``User``. This means that all the users are stored in their own table, as are the tweets, and the foreign key from tweet to user allows each tweet to *point* to a particular user object.
+Foreign keys allow data to be `normalized
+<http://en.wikipedia.org/wiki/Database_normalization>`_. In our example models,
+there is a foreign key from ``Tweet`` to ``User``. This means that all the
+users are stored in their own table, as are the tweets, and the foreign key
+from tweet to user allows each tweet to *point* to a particular user object.
 
-In peewee, accessing the value of a :py:class:`ForeignKeyField` will return the entire related object, e.g.:
+In peewee, accessing the value of a :py:class:`ForeignKeyField` will return the
+entire related object, e.g.:
 
 .. code-block:: python
 
@@ -284,9 +293,12 @@ In peewee, accessing the value of a :py:class:`ForeignKeyField` will return the 
     for tweet in tweets:
         print(tweet.user.username, tweet.message)
 
-In the example above the ``User`` data was selected as part of the query. For more examples of this technique, see the :ref:`Avoiding N+1 <nplusone>` document.
+In the example above the ``User`` data was selected as part of the query. For
+more examples of this technique, see the :ref:`Avoiding N+1 <nplusone>`
+document.
 
-If we did not select the ``User``, though, then an additional query would be issued to fetch the associated ``User`` data:
+If we did not select the ``User``, though, then an additional query would be
+issued to fetch the associated ``User`` data:
 
 .. code-block:: python
 
@@ -296,7 +308,10 @@ If we did not select the ``User``, though, then an additional query would be iss
         # to fetch the associated User data.
         print(tweet.user.username, tweet.message)
 
-Sometimes you only need the associated primary key value from the foreign key column. In this case, Peewee follows the convention established by Django, of allowing you to access the raw foreign key value by appending ``"_id"`` to the foreign key field's name:
+Sometimes you only need the associated primary key value from the foreign key
+column. In this case, Peewee follows the convention established by Django, of
+allowing you to access the raw foreign key value by appending ``"_id"`` to the
+foreign key field's name:
 
 .. code-block:: python
 
@@ -306,7 +321,10 @@ Sometimes you only need the associated primary key value from the foreign key co
         # in the column.
         print(tweet.user_id, tweet.message)
 
-:py:class:`ForeignKeyField` allows for a backreferencing property to be bound to the target model. Implicitly, this property will be named `classname_set`, where `classname` is the lowercase name of the class, but can be overridden via the parameter ``backref``:
+:py:class:`ForeignKeyField` allows for a backreferencing property to be bound
+to the target model. Implicitly, this property will be named `classname_set`,
+where `classname` is the lowercase name of the class, but can be overridden via
+the parameter ``backref``:
 
 .. code-block:: python
 
@@ -359,23 +377,26 @@ have an event attached:
         (Event.event_date.month == now.month))
 
 .. note::
-    SQLite does not have a native date type, so dates are stored in formatted text columns. To ensure that comparisons work correctly, the dates need to be formatted so they are sorted lexicographically. That is why they are stored, by default, as ``YYYY-MM-DD HH:MM:SS``.
-
-BareField
-^^^^^^^^^
-
-The :py:class:`BareField` class is intended to be used only with SQLite. Since SQLite uses dynamic typing and data-types are not enforced, it can be perfectly fine to declare fields without *any* data-type. In those cases you can use :py:class:`BareField`. It is also common for SQLite virtual tables to use meta-columns or untyped columns, so for those cases as well you may wish to use an untyped field.
-
-:py:class:`BareField` accepts a special parameter ``coerce``. This parameter is a function that takes a value coming from the database and converts it into the appropriate Python type. For instance, if you have a virtual table with an un-typed column but you know that it will return ``int`` objects, you can specify ``coerce=int``.
+    SQLite does not have a native date type, so dates are stored in formatted
+    text columns. To ensure that comparisons work correctly, the dates need to
+    be formatted so they are sorted lexicographically. That is why they are
+    stored, by default, as ``YYYY-MM-DD HH:MM:SS``.
 
 .. _custom-fields:
 
 Creating a custom field
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-It isn't too difficult to add support for custom field types in peewee. In this example we will create a UUID field for postgresql (which has a native UUID column type).
+It isn't too difficult to add support for custom field types in peewee. In this
+example we will create a UUID field for postgresql (which has a native UUID
+column type).
 
-To add a custom field type you need to first identify what type of column the field data will be stored in. If you just want to add python behavior atop, say, a decimal field (for instance to make a currency field) you would just subclass :py:class:`DecimalField`. On the other hand, if the database offers a custom column type you will need to let peewee know. This is controlled by the :py:attr:`Field.db_field` attribute.
+To add a custom field type you need to first identify what type of column the
+field data will be stored in. If you just want to add python behavior atop,
+say, a decimal field (for instance to make a currency field) you would just
+subclass :py:class:`DecimalField`. On the other hand, if the database offers a
+custom column type you will need to let peewee know. This is controlled by the
+:py:attr:`Field.db_field` attribute.
 
 Let's start by defining our UUID field:
 
@@ -384,7 +405,8 @@ Let's start by defining our UUID field:
     class UUIDField(Field):
         db_field = 'uuid'
 
-We will store the UUIDs in a native UUID column. Since psycopg2 treats the data as a string by default, we will add two methods to the field to handle:
+We will store the UUIDs in a native UUID column. Since psycopg2 treats the data
+as a string by default, we will add two methods to the field to handle:
 
 * The data coming out of the database to be used in our application
 * The data from our python app going into the database
@@ -394,7 +416,7 @@ We will store the UUIDs in a native UUID column. Since psycopg2 treats the data 
     import uuid
 
     class UUIDField(Field):
-        db_field = 'uuid'
+        field_type = 'uuid'
 
         def db_value(self, value):
             return str(value) # convert UUID to str
@@ -402,7 +424,8 @@ We will store the UUIDs in a native UUID column. Since psycopg2 treats the data 
         def python_value(self, value):
             return uuid.UUID(value) # convert str to UUID
 
-Now, we need to let the database know how to map this *uuid* label to an actual *uuid* column type in the database. There are 2 ways of doing this:
+Now, we need to let the database know how to map this *uuid* label to an actual
+*uuid* column type in the database. There are 2 ways of doing this:
 
 1. Specify the overrides in the :py:class:`Database` constructor:
 
