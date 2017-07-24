@@ -1,5 +1,6 @@
 from peewee import *
 
+from .base import IS_MYSQL
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db
@@ -257,13 +258,15 @@ class TestCompositePrimaryKey(ModelTestCase):
 
     def test_create_table_query(self):
         query, params = TagPostThrough._schema._create_table().query()
-        self.assertEqual(query, (
-            'CREATE TABLE IF NOT EXISTS "tagpostthrough" ('
-            '"tag_id" INTEGER NOT NULL, '
-            '"post_id" INTEGER NOT NULL, '
-            'PRIMARY KEY ("tag_id", "post_id"), '
-            'FOREIGN KEY ("tag_id") REFERENCES "tag" ("id"), '
-            'FOREIGN KEY ("post_id") REFERENCES "post" ("id"))'))
+        sql = ('CREATE TABLE IF NOT EXISTS "tagpostthrough" ('
+               '"tag_id" INTEGER NOT NULL, '
+               '"post_id" INTEGER NOT NULL, '
+               'PRIMARY KEY ("tag_id", "post_id"), '
+               'FOREIGN KEY ("tag_id") REFERENCES "tag" ("id"), '
+               'FOREIGN KEY ("post_id") REFERENCES "post" ("id"))')
+        if IS_MYSQL:
+            sql = sql.replace('"', '`')
+        self.assertEqual(query, sql)
 
     def test_get_set_id(self):
         tpt = (TagPostThrough
@@ -390,10 +393,12 @@ class TestCompositePrimaryKey(ModelTestCase):
         self.assertTrue(isinstance(Employee._meta.primary_key, CompositeKey))
         self.assertEqual(Employee._meta.primary_key.field_names,
                          ('first', 'last'))
-        self.assertEqual(Employee._schema._create_table().query(), (
-            'CREATE TABLE IF NOT EXISTS "employee" ('
-            '"first" TEXT NOT NULL, "last" TEXT NOT NULL, '
-            '"title" TEXT NOT NULL, PRIMARY KEY ("first", "last"))', []))
+        sql = ('CREATE TABLE IF NOT EXISTS "employee" ('
+               '"first" TEXT NOT NULL, "last" TEXT NOT NULL, '
+               '"title" TEXT NOT NULL, PRIMARY KEY ("first", "last"))')
+        if IS_MYSQL:
+            sql = sql.replace('"', '`')
+        self.assertEqual(Employee._schema._create_table().query(), (sql, []))
 
 
 class TestForeignKeyConstraints(ModelTestCase):

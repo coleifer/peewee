@@ -2960,7 +2960,7 @@ class _savepoint(_callable_context_manager):
     def __init__(self, db, sid=None):
         self.db = db
         self.sid = sid or 's' + uuid.uuid4().hex
-        self.quoted_sid = '"%s"' % self.sid
+        self.quoted_sid = self.sid.join((self.db.quote, self.db.quote))
 
     def _begin(self):
         self.db.execute_sql('SAVEPOINT %s;' % self.quoted_sid)

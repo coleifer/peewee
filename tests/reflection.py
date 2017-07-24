@@ -359,7 +359,7 @@ class TestReflection(ModelTestCase):
             ('coltypes', (
                 ('f1', ('f1 = BigIntegerField(index=True)',
                         'f1 = IntegerField(index=True)')),
-                ('f2', 'f2 = BlobField()'),
+                ('f2', ('f2 = BlobField()', 'f2 = TextField()')),
                 ('f4', 'f4 = CharField()'),
                 ('f5', 'f5 = DateField()'),
                 ('f6', 'f6 = DateTimeField()'),

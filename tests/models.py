@@ -25,7 +25,7 @@ if sys.version_info[0] >= 3:
 
 
 class Color(TestModel):
-    name = TextField(primary_key=True)
+    name = CharField(primary_key=True)
     is_neutral = BooleanField(default=False)
 
 
