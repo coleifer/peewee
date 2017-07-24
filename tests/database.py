@@ -38,10 +38,9 @@ class TestDatabase(DatabaseTestCase):
 
     def test_context_settings(self):
         class TestDatabase(Database):
-            options = attrdict(
-                field_types={'BIGINT': 'TEST_BIGINT', 'TEXT': 'TEST_TEXT'},
-                operations={'LIKE': '~', 'NEW': '->>'},
-                param='$')
+            field_types = {'BIGINT': 'TEST_BIGINT', 'TEXT': 'TEST_TEXT'}
+            operations = {'LIKE': '~', 'NEW': '->>'}
+            param = '$'
 
         test_db = TestDatabase(None)
         state = test_db.get_sql_context().state
@@ -57,6 +56,14 @@ class TestDatabase(DatabaseTestCase):
 
         self.assertEqual(state.param, '$')
         self.assertEqual(state.quote, '"')
+
+        test_db2 = TestDatabase(None, field_types={'BIGINT': 'XXX_BIGINT',
+                                                   'INT': 'XXX_INT'})
+        state = test_db2.get_sql_context().state
+        self.assertEqual(state.field_types['BIGINT'], 'XXX_BIGINT')
+        self.assertEqual(state.field_types['TEXT'], 'TEST_TEXT')
+        self.assertEqual(state.field_types['INT'], 'XXX_INT')
+        self.assertEqual(state.field_types['VARCHAR'], FIELD.VARCHAR)
 
     def test_connection_state(self):
         conn = self.database.connection()

@@ -188,7 +188,7 @@ class TestModelSQL(ModelDatabaseTestCase):
 
     def test_insert_returning(self):
         class TestDB(Database):
-            options = Database.options + {'returning_clause': True}
+            returning_clause = True
 
         class User(Model):
             username = CharField()

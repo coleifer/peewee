@@ -1786,7 +1786,10 @@ class Select(SelectBase):
             # Apply ORDER BY, LIMIT, OFFSET.
             self._apply_ordering(ctx)
 
-            if self._for_update and ctx.state.for_update:
+            if self._for_update:
+                if not ctx.state.for_update:
+                    raise ValueError('FOR UPDATE specified but not supported '
+                                     'by database.')
                 ctx.literal(' ')
                 ctx.sql(SQL(self._for_update))
 
@@ -2004,7 +2007,7 @@ class Insert(_WriteQuery):
             return self.apply_returning(ctx)
 
     def _execute(self, database):
-        if not self._returning and database.options.returning_clause:
+        if not self._returning and database.returning_clause:
             self._returning = (self.table.primary_key,)
         return super(Insert, self)._execute(database)
 
@@ -2105,37 +2108,30 @@ class _NoopLock(object):
 
 class Database(_callable_context_manager):
     context_class = Context
-    base_options = attrdict(
-        # Base options.
-        field_types={},
-        operations={},
-        param='?',
-        quote='"',
+    field_types = {}
+    operations = {}
+    param = '?'
+    quote = '"'
 
-        # Feature toggles.
-        compound_operations=['UNION', 'INTERSECT', 'EXCEPT', 'UNION ALL'],
-        compound_select_parentheses=False,
-        distinct_on=False,
-        drop_cascade=False,
-        for_update=False,
-        for_update_nowait=False,
-        insert_many=True,
-        limit_max=None,
-        returning_clause=False,
-        safe_create_index=True,
-        safe_drop_index=True,
-        sequences=False,
-        subquery_delete_same_table=True,
-        window_functions=False,
-    )
-    options = attrdict()
-
+    # Feature toggles.
     commit_select = False
-    reserved_tables = []
+    compound_select_parentheses = False
+    for_update = False
+    limit_max = None
+    returning_clause = False
+    safe_create_index = True
+    safe_drop_index = True
+    sequences = False
 
     def __init__(self, database, thread_safe=True, autorollback=False,
-                 **kwargs):
-        self.options = self.base_options + self.options
+                 field_types=None, operations=None, **kwargs):
+        self._field_types = merge_dict(FIELD, self.field_types)
+        self._operations = merge_dict(OP, self.operations)
+        if field_types:
+            self._field_types.update(field_types)
+        if operations:
+            self._operations.update(operations)
+
         self.autorollback = autorollback
         self.thread_safe = thread_safe
         if thread_safe:
@@ -2154,9 +2150,6 @@ class Database(_callable_context_manager):
         self.database = database
         self.connect_params.update(kwargs)
         self.deferred = not bool(database)
-
-        self.options.field_types = merge_dict(FIELD, self.options.field_types)
-        self.options.operations = merge_dict(OP, self.options.operations)
 
     def __enter__(self):
         if self.is_closed():
@@ -2245,21 +2238,28 @@ class Database(_callable_context_manager):
         return cursor
 
     def execute(self, query, commit=SENTINEL, **context_options):
-        ctx = self.get_sql_context(context_options)
+        ctx = self.get_sql_context(**context_options)
         sql, params = ctx.sql(query).query()
         return self.execute_sql(sql, params, commit=commit)
 
-    def get_sql_context(self, context_options=None):
-        if context_options:
-            options = self.options.copy()
-            options.update(context_options)
-        else:
-            options = self.options
+    def get_context_options(self):
+        return {
+            'field_types': self._field_types,
+            'operations': self._operations,
+            'param': self.param,
+            'quote': self.quote,
+            'compound_select_parentheses': self.compound_select_parentheses,
+            'conflict_statement': self.conflict_statement,
+            'conflict_update': self.conflict_update,
+            'for_update': self.for_update,
+            'limit_max': self.limit_max,
+        }
 
-        return self.context_class(
-            conflict_statement=self.conflict_statement,
-            conflict_update=self.conflict_update,
-            **options)
+    def get_sql_context(self, **context_options):
+        context = self.get_context_options()
+        if context_options:
+            context.update(context_options)
+        return self.context_class(**context)
 
     def conflict_statement(self, on_conflict):
         raise NotImplementedError
@@ -2358,18 +2358,16 @@ def __pragma__(name):
 
 
 class SqliteDatabase(Database):
-    options = attrdict(
-        field_types={
-            'BIGINT': FIELD.INT,
-            'BOOL': FIELD.INT,
-            'DOUBLE': FIELD.FLOAT,
-            'SMALLINT': FIELD.INT,
-            'UUID': FIELD.TEXT},
-        operations={
-            'LIKE': 'GLOB',
-            'ILIKE': 'LIKE'},
-        insert_many=sqlite3 and sqlite3.sqlite_version_info >= (3, 7, 11),
-        limit_max=-1)
+    field_types = {
+        'BIGINT': FIELD.INT,
+        'BOOL': FIELD.INT,
+        'DOUBLE': FIELD.FLOAT,
+        'SMALLINT': FIELD.INT,
+        'UUID': FIELD.TEXT}
+    operations = {
+        'LIKE': 'GLOB',
+        'ILIKE': 'LIKE'}
+    limit_max = -1
 
     def __init__(self, database, *args, **kwargs):
         super(SqliteDatabase, self).__init__(database, *args, **kwargs)
@@ -2572,30 +2570,23 @@ class SqliteDatabase(Database):
 
 
 class PostgresqlDatabase(Database):
-    options = attrdict(
-        field_types={
-            'AUTO': 'SERIAL',
-            'BLOB': 'BYTEA',
-            'BOOL': 'BOOLEAN',
-            'DATETIME': 'TIMESTAMP',
-            'DECIMAL': 'NUMERIC',
-            'DOUBLE': 'DOUBLE PRECISION',
-            'UUID': 'UUID',
-        },
-        operations={'REGEXP': '~'},
-        param='%s',
-
-        compound_select_parentheses=True,
-        distinct_on=True,
-        drop_cascade=True,
-        for_update=True,
-        for_update_nowait=True,
-        returning_clause=True,
-        safe_create_index=False,
-        sequences=True,
-        window_functions=True)
+    field_types = {
+        'AUTO': 'SERIAL',
+        'BLOB': 'BYTEA',
+        'BOOL': 'BOOLEAN',
+        'DATETIME': 'TIMESTAMP',
+        'DECIMAL': 'NUMERIC',
+        'DOUBLE': 'DOUBLE PRECISION',
+        'UUID': 'UUID'}
+    operations = {'REGEXP': '~'}
+    param = '%s'
 
     commit_select = True
+    compound_select_parentheses = True
+    for_update = True
+    returning_clause = True
+    safe_create_index = False
+    sequences = True
 
     def init(self, database, register_unicode=True, **kwargs):
         self._register_unicode = register_unicode
@@ -2761,31 +2752,25 @@ class PostgresqlDatabase(Database):
 
 
 class MySQLDatabase(Database):
-    options = attrdict(
-        field_types={
-            'AUTO': 'INTEGER AUTO_INCREMENT',
-            'BOOL': 'BOOL',
-            'DECIMAL': 'NUMERIC',
-            'DOUBLE': 'DOUBLE PRECISION',
-            'FLOAT': 'FLOAT',
-            'UUID': 'VARCHAR(40)',
-        },
-        operations={
-            'LIKE': 'LIKE BINARY',
-            'ILIKE': 'LIKE',
-            'XOR': 'XOR',
-        },
-        param='%s',
-        quote='`',
-
-        compound_operations=['UNION', 'UNION ALL'],
-        for_update=True,
-        limit_max=2 ** 64 - 1,
-        safe_create_index=False,
-        safe_drop_index=False,
-        subquery_delete_same_table=False)
+    field_types = {
+        'AUTO': 'INTEGER AUTO_INCREMENT',
+        'BOOL': 'BOOL',
+        'DECIMAL': 'NUMERIC',
+        'DOUBLE': 'DOUBLE PRECISION',
+        'FLOAT': 'FLOAT',
+        'UUID': 'VARCHAR(40)'}
+    operations = {
+        'LIKE': 'LIKE BINARY',
+        'ILIKE': 'LIKE',
+        'XOR': 'XOR'}
+    param = '%s'
+    quote = '`'
 
     commit_select = True
+    for_update = True
+    limit_max = 2 ** 64 - 1
+    safe_create_index = False
+    safe_drop_index = False
 
     def init(self, database, **kwargs):
         params = {'charset': 'utf8', 'use_unicode': True}
@@ -3946,7 +3931,7 @@ class SchemaManager(object):
         self._database = value
 
     def _create_context(self):
-        return self.database.get_sql_context(self.context_options)
+        return self.database.get_sql_context(**self.context_options)
 
     def _create_table(self, safe=True, **options):
         is_temp = options.pop('temporary', False)
@@ -4003,7 +3988,7 @@ class SchemaManager(object):
         self.database.execute(self._drop_table(safe=safe), **options)
 
     def index_entity(self, fields):
-        ctx = self.database.get_sql_context()
+        ctx = self._create_context()
         index_name = ctx.make_index_name(
             self.model._meta.name,
             *[field.column_name for field in fields])
@@ -4016,7 +4001,7 @@ class SchemaManager(object):
     def _create_index(self, fields, unique=False, safe=True):
         ctx = self._create_context()
         ctx.literal('CREATE UNIQUE INDEX ' if unique else 'CREATE INDEX ')
-        if safe and self.database.options.safe_create_index:
+        if safe and self.database.safe_create_index:
             ctx.literal('IF NOT EXISTS ')
         ctx.sql(self.index_entity(fields)).literal(' ON ').sql(self.model)
 
@@ -4038,7 +4023,7 @@ class SchemaManager(object):
 
     def _drop_index(self, fields, safe):
         statement = 'DROP INDEX '
-        if safe and self.database.options.safe_drop_index:
+        if safe and self.database.safe_drop_index:
             statement += 'IF EXISTS '
         return (self
                 ._create_context()
@@ -4050,7 +4035,7 @@ class SchemaManager(object):
             self.database.execute(query)
 
     def _check_sequences(self, field):
-        if not field.sequence or not self.database.options.sequences:
+        if not field.sequence or not self.database.sequences:
             raise ValueError('Sequences are either not supported, or are not '
                              'defined for "%s".' % field.name)
 
@@ -4077,7 +4062,7 @@ class SchemaManager(object):
         self.database.execute(self._drop_sequence(field))
 
     def create_all(self, safe=True, **table_options):
-        if self.database.options.sequences:
+        if self.database.sequences:
             for field in self.model._meta.sorted_fields:
                 if field and field.sequence:
                     self.create_sequence(field)
@@ -4679,14 +4664,14 @@ class Model(with_metaclass(ModelBase, Node)):
                            '"safe" for the create_table() method.')
             safe = options.pop('fail_silently')
 
-        if safe and not cls._meta.database.options.safe_create_index \
+        if safe and not cls._meta.database.safe_create_index \
            and cls.table_exists():
             return
         cls._schema.create_all(safe, **options)
 
     @classmethod
     def drop_table(cls, safe=True):
-        if safe and not cls._meta.database.options.safe_drop_index \
+        if safe and not cls._meta.database.safe_drop_index \
            and not cls.table_exists():
             return
         cls._schema.drop_all(safe)
@@ -5093,7 +5078,7 @@ class ModelInsert(_ModelWriteQueryHelper, Insert):
     def __init__(self, *args, **kwargs):
         super(ModelInsert, self).__init__(*args, **kwargs)
         if self._returning is None and self.model._meta.database is not None:
-            if self.model._meta.database.options.returning_clause:
+            if self.model._meta.database.returning_clause:
                 self._returning = self.model._meta.get_primary_keys()
                 self._row_type = ROW.TUPLE
 
