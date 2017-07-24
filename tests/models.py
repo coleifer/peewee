@@ -300,7 +300,7 @@ class TestModelAPIs(ModelTestCase):
                          [row.__data__ for row in c1])
 
         q3 = Register.select().where(Register.value == 5)
-        c2 = (c1.order_by() | q3).order_by(SQL('"value"'))
+        c2 = (c1.order_by() | q3).order_by(SQL('2'))
 
         self.assertSQL(c2, (
             'SELECT "t1"."id", "t1"."value" FROM "register" AS "t1" '
@@ -308,7 +308,7 @@ class TestModelAPIs(ModelTestCase):
             'SELECT "t2"."id", "t2"."value" FROM "register" AS "t2" '
             'WHERE ("t2"."value" > ?) UNION '
             'SELECT "t2"."id", "t2"."value" FROM "register" AS "t2" '
-            'WHERE ("t2"."value" = ?) ORDER BY "value"'), [2, 7, 5])
+            'WHERE ("t2"."value" = ?) ORDER BY 2'), [2, 7, 5])
 
         self.assertEqual([row.value for row in c2], [0, 1, 5, 8, 9])
 

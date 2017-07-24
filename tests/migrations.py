@@ -266,7 +266,9 @@ class TestSchemaMigration(ModelTestCase):
         if self._exception_add_not_null:
             self.assertRaises(IntegrityError, addNotNull)
 
-        Page.update(user=user).where(Page.user.is_null()).execute()
+        with self.database.transaction():
+            Page.update(user=user).where(Page.user.is_null()).execute()
+
         addNotNull()
 
         # And attempting to insert a null value results in an integrity error.

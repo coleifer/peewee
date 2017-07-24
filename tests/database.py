@@ -280,13 +280,15 @@ class TestIntrospection(ModelTestCase):
     def test_get_indexes(self):
         indexes = self.database.get_indexes('uniquemodel')
         data = [(index.name, index.columns, index.unique, index.table)
-                for index in indexes if index.name != 'uniquemodel_pkey']
+                for index in indexes
+                if index.name not in ('uniquemodel_pkey', 'PRIMARY')]
         self.assertEqual(data, [
             ('uniquemodel_name', ['name'], True, 'uniquemodel')])
 
         indexes = self.database.get_indexes('indexedmodel')
         data = [(index.name, index.columns, index.unique, index.table)
-                for index in indexes if index.name != 'indexedmodel_pkey']
+                for index in indexes
+                if index.name not in ('indexedmodel_pkey', 'PRIMARY')]
         self.assertEqual(sorted(data), [
             ('indexedmodel_first_last', ['first', 'last'], False,
              'indexedmodel'),

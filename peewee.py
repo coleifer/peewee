@@ -727,7 +727,7 @@ class BaseTable(Source):
 class Table(_HashableSource, BaseTable):
     def __init__(self, name, columns=None, primary_key=None, schema=None,
                  alias=None, _model=None, _database=None):
-        self._name = name
+        self.__name__ = name
         self._columns = columns
         self._primary_key = primary_key
         self._schema = schema
@@ -751,7 +751,7 @@ class Table(_HashableSource, BaseTable):
     def clone(self):
         # Ensure a deep copy of the column instances.
         return Table(
-            self._name,
+            self.__name__,
             columns=self._columns,
             primary_key=self._primary_key,
             schema=self._schema,
@@ -1828,7 +1828,7 @@ class _WriteQuery(Query):
         return database.rows_affected(cursor)
 
     def _set_table_alias(self, ctx):
-        ctx.alias_manager[self.table] = self.table._name
+        ctx.alias_manager[self.table] = self.table.__name__
 
     def __sql__(self, ctx):
         super(_WriteQuery, self).__sql__(ctx)
@@ -2311,7 +2311,7 @@ class Database(_callable_context_manager):
         return self._state.conn.rollback()
 
     def table_exists(self, table, schema=None):
-        return table._name in self.get_tables(schema=schema)
+        return table.__name__ in self.get_tables(schema=schema)
 
     def get_tables(self, schema=None):
         raise NotImplementedError
@@ -4943,7 +4943,7 @@ class ModelSelect(BaseModelSelect, Select):
             constructor = dict
             attr = attr or dest._alias
             if not attr and isinstance(dest, Table):
-                attr = attr or dest._name
+                attr = attr or dest.__name__
 
         return (on, attr, constructor)
 
@@ -5085,7 +5085,7 @@ class _ModelWriteQueryHelper(_ModelQueryHelper):
 
     def _set_table_alias(self, ctx):
         table = self.model._meta.table
-        ctx.alias_manager[table] = table._name
+        ctx.alias_manager[table] = table.__name__
 
 
 class ModelUpdate(_ModelWriteQueryHelper, Update):
