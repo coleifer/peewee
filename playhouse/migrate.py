@@ -470,13 +470,28 @@ class MySQLMigrator(SchemaMigrator):
 
     @operation
     def add_not_null(self, table, column):
-        column = self._get_column_definition(table, column)
-        return (self
-                .make_context()
-                .literal('ALTER TABLE ')
-                .sql(Entity(table))
-                .literal(' MODIFY ')
-                .sql(column.sql(is_null=False)))
+        column_def = self._get_column_definition(table, column)
+        add_not_null = (self
+                         .make_context()
+                         .literal('ALTER TABLE ')
+                         .sql(Entity(table))
+                         .literal(' MODIFY ')
+                         .sql(column_def.sql(is_null=False)))
+
+        fk_objects = dict(
+            (fk.column, fk)
+            for fk in self.database.get_foreign_keys(table))
+        if column not in fk_objects:
+            return add_not_null
+
+        fk_metadata = fk_objects[column]
+        return (self.drop_foreign_key_constraint(table, column),
+                add_not_null,
+                self.add_foreign_key_constraint(
+                    table,
+                    column,
+                    fk_metadata.dest_table,
+                    fk_metadata.dest_column))
 
     @operation
     def drop_not_null(self, table, column):
