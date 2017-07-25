@@ -73,7 +73,7 @@ class TestNullConstraint(ModelTestCase):
 
     def test_empty_value(self):
         with self.database.atomic():
-            with self.assertRaises(IntegrityError):
+            with self.assertRaisesCtx(IntegrityError):
                 IntModel.create(value=None)
 
 

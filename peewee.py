@@ -283,10 +283,17 @@ def merge_dict(source, overrides):
         merged.update(overrides)
     return merged
 
-def is_model(obj):
-    if isclass(obj):
-        return issubclass(obj, Model)
-    return False
+if sys.version_info[:2] == (2, 6):
+    import types
+    def is_model(obj):
+        if isinstance(obj, (type, types.ClassType)):
+            return issubclass(obj, Model)
+        return False
+else:
+    def is_model(obj):
+        if isclass(obj):
+            return issubclass(obj, Model)
+        return False
 
 def ensure_tuple(value):
     if value is not None:
