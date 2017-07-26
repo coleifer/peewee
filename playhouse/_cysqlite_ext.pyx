@@ -1,0 +1,397 @@
+from cpython.object cimport PyObject
+from libc.stdlib cimport rand
+
+import hashlib
+import re
+import zlib
+
+from peewee import InterfaceError
+from peewee import OperationalError
+from peewee import sqlite3 as pysqlite
+from playhouse.sqlite_ext import SqliteExtDatabase
+
+
+cdef extern from "sqlite3.h":
+    ctypedef struct sqlite3:
+        int busyTimeout
+    ctypedef struct sqlite3_backup
+    ctypedef long long sqlite3_int64
+
+    # Return values.
+    cdef int SQLITE_OK = 0
+    cdef int SQLITE_ERROR = 1
+    cdef int SQLITE_NOMEM = 7
+
+    ctypedef void (*sqlite3_destructor_type)(void*)
+
+    # Memory management.
+    cdef void* sqlite3_malloc(int)
+    cdef void sqlite3_free(void *)
+
+    cdef int sqlite3_changes(sqlite3 *db)
+    cdef int sqlite3_get_autocommit(sqlite3 *db)
+    cdef sqlite3_int64 sqlite3_last_insert_rowid(sqlite3 *db)
+
+    cdef void *sqlite3_commit_hook(sqlite3 *, int(*)(void *), void *)
+    cdef void *sqlite3_rollback_hook(sqlite3 *, void(*)(void *), void *)
+    cdef void *sqlite3_update_hook(
+        sqlite3 *,
+        void(*)(void *, int, char *, char *, sqlite3_int64),
+        void *)
+
+    cdef int SQLITE_STATUS_MEMORY_USED = 0
+    cdef int SQLITE_STATUS_PAGECACHE_USED = 1
+    cdef int SQLITE_STATUS_PAGECACHE_OVERFLOW = 2
+    cdef int SQLITE_STATUS_SCRATCH_USED = 3
+    cdef int SQLITE_STATUS_SCRATCH_OVERFLOW = 4
+    cdef int SQLITE_STATUS_MALLOC_SIZE = 5
+    cdef int SQLITE_STATUS_PARSER_STACK = 6
+    cdef int SQLITE_STATUS_PAGECACHE_SIZE = 7
+    cdef int SQLITE_STATUS_SCRATCH_SIZE = 8
+    cdef int SQLITE_STATUS_MALLOC_COUNT = 9
+    cdef int sqlite3_status(int op, int *pCurrent, int *pHighwater, int resetFlag)
+
+    cdef int SQLITE_DBSTATUS_LOOKASIDE_USED = 0
+    cdef int SQLITE_DBSTATUS_CACHE_USED = 1
+    cdef int SQLITE_DBSTATUS_SCHEMA_USED = 2
+    cdef int SQLITE_DBSTATUS_STMT_USED = 3
+    cdef int SQLITE_DBSTATUS_LOOKASIDE_HIT = 4
+    cdef int SQLITE_DBSTATUS_LOOKASIDE_MISS_SIZE = 5
+    cdef int SQLITE_DBSTATUS_LOOKASIDE_MISS_FULL = 6
+    cdef int SQLITE_DBSTATUS_CACHE_HIT = 7
+    cdef int SQLITE_DBSTATUS_CACHE_MISS = 8
+    cdef int SQLITE_DBSTATUS_CACHE_WRITE = 9
+    cdef int SQLITE_DBSTATUS_DEFERRED_FKS = 10
+    cdef int SQLITE_DBSTATUS_CACHE_USED_SHARED = 11
+    cdef int sqlite3_db_status(sqlite3 *, int op, int *pCur, int *pHigh, int reset)
+
+    cdef int SQLITE_DELETE = 9
+    cdef int SQLITE_INSERT = 18
+    cdef int SQLITE_UPDATE = 23
+
+    # Misc.
+    cdef int sqlite3_busy_handler(sqlite3 *db, int(*)(void *, int), void *)
+    cdef int sqlite3_sleep(int ms)
+    cdef sqlite3_backup *sqlite3_backup_init(
+        sqlite3 *pDest,
+        const char *zDestName,
+        sqlite3 *pSource,
+        const char *zSourceName)
+
+    # Backup.
+    cdef int sqlite3_backup_step(sqlite3_backup *p, int nPage)
+    cdef int sqlite3_backup_finish(sqlite3_backup *p)
+    cdef int sqlite3_backup_remaining(sqlite3_backup *p)
+    cdef int sqlite3_backup_pagecount(sqlite3_backup *p)
+
+    # Error handling.
+    cdef int sqlite3_errcode(sqlite3 *db)
+    cdef int sqlite3_errstr(int)
+    cdef const char *sqlite3_errmsg(sqlite3 *db)
+
+
+cdef extern from "_pysqlite/connection.h":
+    ctypedef struct pysqlite_Connection:
+        sqlite3* db
+        double timeout
+        int initialized
+        PyObject* isolation_level
+        char* begin_statement
+
+
+def __status__(flag, return_highwater=False):
+    """
+    Expose a sqlite3_status() call for a particular flag as a property of the
+    Database object.
+    """
+    def getter(self):
+        cdef int current, highwater
+        cdef int rc = sqlite3_status(flag, &current, &highwater, 0)
+        if rc == SQLITE_OK:
+            if return_highwater:
+                return highwater
+            else:
+                return (current, highwater)
+        else:
+            raise Exception('Error requesting status: %s' % rc)
+    return property(getter)
+
+
+def __dbstatus__(flag, return_highwater=False, return_current=False):
+    """
+    Expose a sqlite3_dbstatus() call for a particular flag as a property of the
+    Database instance. Unlike sqlite3_status(), the dbstatus properties pertain
+    to the current connection.
+    """
+    def getter(self):
+        cdef:
+            int current, hi
+            pysqlite_Connection *c = <pysqlite_Connection *>(self._state.conn)
+            int rc = sqlite3_db_status(c.db, flag, &current, &hi, 0)
+
+        if rc != SQLITE_OK:
+            raise Exception('Error requesting db status: %s' % rc)
+
+        if return_highwater:
+            return hi
+        elif return_current:
+            return current
+        else:
+            return (current, hi)
+    return property(getter)
+
+
+def regexp(basestring value, basestring regex):
+    # Expose regular expression matching in SQLite.
+    return re.search(regex, value, re.I) is not None
+
+
+def make_hash(hash_impl):
+    def inner(*items):
+        state = hash_impl()
+        for item in items:
+            state.update(item)
+        return state.hexdigest()
+    return inner
+
+
+hash_md5 = make_hash(hashlib.md5)
+hash_sha1 = make_hash(hashlib.sha1)
+hash_sha256 = make_hash(hashlib.sha256)
+
+
+class CySqliteExtDatabase(SqliteExtDatabase):
+    def __init__(self, database, pragmas=None, hash_functions=False, *args,
+                 **kwargs):
+        super(CySqliteExtDatabase, self).__init__(database, pragmas=pragmas,
+                                                  *args, **kwargs)
+        self._commit_hook = None
+        self._rollback_hook = None
+        self._update_hook = None
+        self._table_functions = []
+
+        self.register_function(regexp, 'regexp')
+        if hash_functions:
+            self.register_function(hash_md5, 'md5')
+            self.register_function(hash_sha1, 'sha1')
+            self.register_function(hash_sha256, 'sha256')
+            self.register_function(zlib.adler32, 'adler32')
+            self.register_function(zlib.crc32, 'crc32')
+
+    def _add_conn_hooks(self, conn):
+        super(CySqliteExtDatabase, self)._add_conn_hooks(conn)
+
+        if self._table_functions:
+            for table_function in self._table_functions:
+                table_function.register(conn)
+
+        if self._commit_hook is not None:
+            self._set_commit_hook(conn, self._commit_hook)
+        if self._rollback_hook is not None:
+            self._set_rollback_hook(conn, self._rollback_hook)
+        if self._update_hook is not None:
+            self._set_update_hook(conn, self._update_hook)
+
+    def table_function(self, name=None):
+        def decorator(klass):
+            if name is not None:
+                klass.name = name
+            self._table_functions.append(klass)
+            if not self.is_closed():
+                klass.register(self.connection())
+            return klass
+        return decorator
+
+    def on_commit(self, fn):
+        self._commit_hook = fn
+        if not self.is_closed():
+            self._set_commit_hook(self.connection(), fn)
+        return fn
+
+    def _set_commit_hook(self, connection, fn):
+        cdef pysqlite_Connection *conn = <pysqlite_Connection *>connection
+        if fn is None:
+            sqlite3_commit_hook(conn.db, NULL, NULL)
+        else:
+            sqlite3_commit_hook(conn.db, _commit_callback, <void *>fn)
+
+    def on_rollback(self, fn):
+        self._rollback_hook = fn
+        if not self.is_closed():
+            self._set_rollback_hook(self.connection(), fn)
+        return fn
+
+    def _set_rollback_hook(self, connection, fn):
+        cdef pysqlite_Connection *conn = <pysqlite_Connection *>connection
+        if fn is None:
+            sqlite3_rollback_hook(conn.db, NULL, NULL)
+        else:
+            sqlite3_rollback_hook(conn.db, _rollback_callback, <void *>fn)
+
+    def on_update(self, fn):
+        self._update_hook = fn
+        if not self.is_closed():
+            self._set_update_hook(self.connection(), fn)
+        return fn
+
+    def _set_update_hook(self, connection, fn):
+        cdef pysqlite_Connection *conn = <pysqlite_Connection *>connection
+        if fn is None:
+            sqlite3_update_hook(conn.db, NULL, NULL)
+        else:
+            sqlite3_update_hook(conn.db, _update_callback, <void *>fn)
+
+    def backup(self, destination):
+        return backup(self.connection(), destination.connection())
+
+    def backup_to_file(self, filename):
+        return backup_to_file(self.connection(), filename)
+
+    def set_busy_handler(self, timeout=5000):
+        """
+        Replace the default busy handler with one that introduces some "jitter"
+        into the amount of time delayed between checks.
+        """
+        cdef:
+            int n = timeout
+            pysqlite_Connection *c = <pysqlite_Connection *>(self._state.conn)
+
+        sqlite3_busy_handler(c.db, _aggressive_busy_handler, <void *>n)
+        return True
+
+    def changes(self):
+        cdef:
+            pysqlite_Connection *c = <pysqlite_Connection *>(self._state.conn)
+        return sqlite3_changes(c.db)
+
+    @property
+    def last_insert_rowid(self):
+        cdef:
+            pysqlite_Connection *c = <pysqlite_Connection *>(self._state.conn)
+        return <int>sqlite3_last_insert_rowid(c.db)
+
+    @property
+    def autocommit(self):
+        cdef:
+            pysqlite_Connection *c = <pysqlite_Connection *>(self._state.conn)
+        return sqlite3_get_autocommit(c.db) != 0
+
+    # Status properties.
+    memory_used = __status__(SQLITE_STATUS_MEMORY_USED)
+    malloc_size = __status__(SQLITE_STATUS_MALLOC_SIZE, True)
+    malloc_count = __status__(SQLITE_STATUS_MALLOC_COUNT)
+    pagecache_used = __status__(SQLITE_STATUS_PAGECACHE_USED)
+    pagecache_overflow = __status__(SQLITE_STATUS_PAGECACHE_OVERFLOW)
+    pagecache_size = __status__(SQLITE_STATUS_PAGECACHE_SIZE, True)
+    scratch_used = __status__(SQLITE_STATUS_SCRATCH_USED)
+    scratch_overflow = __status__(SQLITE_STATUS_SCRATCH_OVERFLOW)
+    scratch_size = __status__(SQLITE_STATUS_SCRATCH_SIZE, True)
+
+    # Connection status properties.
+    lookaside_used = __dbstatus__(SQLITE_DBSTATUS_LOOKASIDE_USED)
+    lookaside_hit = __dbstatus__(SQLITE_DBSTATUS_LOOKASIDE_HIT, True)
+    lookaside_miss = __dbstatus__(SQLITE_DBSTATUS_LOOKASIDE_MISS_SIZE, True)
+    lookaside_miss_full = __dbstatus__(SQLITE_DBSTATUS_LOOKASIDE_MISS_FULL,
+                                       True)
+    cache_used = __dbstatus__(SQLITE_DBSTATUS_CACHE_USED, False, True)
+    cache_used_shared = __dbstatus__(SQLITE_DBSTATUS_CACHE_USED_SHARED,
+                                     False, True)
+    schema_used = __dbstatus__(SQLITE_DBSTATUS_SCHEMA_USED, False, True)
+    statement_used = __dbstatus__(SQLITE_DBSTATUS_STMT_USED, False, True)
+    cache_hit = __dbstatus__(SQLITE_DBSTATUS_CACHE_HIT, False, True)
+    cache_miss = __dbstatus__(SQLITE_DBSTATUS_CACHE_MISS, False, True)
+    cache_write = __dbstatus__(SQLITE_DBSTATUS_CACHE_WRITE, False, True)
+
+
+cdef int _commit_callback(void *userData) with gil:
+    # C-callback that delegates to the Python commit handler. If the Python
+    # function raises a ValueError, then the commit is aborted and the
+    # transaction rolled back. Otherwise, regardless of the function return
+    # value, the transaction will commit.
+    cdef object fn = <object>userData
+    try:
+        fn()
+    except ValueError:
+        return 1
+    else:
+        return SQLITE_OK
+
+
+cdef void _rollback_callback(void *userData) with gil:
+    # C-callback that delegates to the Python rollback handler.
+    cdef object fn = <object>userData
+    fn()
+
+
+cdef void _update_callback(void *userData, int queryType, char *database,
+                            char *table, sqlite3_int64 rowid) with gil:
+    # C-callback that delegates to a Python function that is executed whenever
+    # the database is updated (insert/update/delete queries). The Python
+    # callback receives a string indicating the query type, the name of the
+    # database, the name of the table being updated, and the rowid of the row
+    # being updatd.
+    cdef object fn = <object>userData
+    if queryType == SQLITE_INSERT:
+        query = 'INSERT'
+    elif queryType == SQLITE_UPDATE:
+        query = 'UPDATE'
+    elif queryType == SQLITE_DELETE:
+        query = 'DELETE'
+    else:
+        query = ''
+    fn(query, str(database), str(table), <int>rowid)
+
+
+def backup(src_conn, dest_conn):
+    cdef:
+        pysqlite_Connection *src = <pysqlite_Connection *>src_conn
+        pysqlite_Connection *dest = <pysqlite_Connection *>dest_conn
+        sqlite3 *src_db = src.db
+        sqlite3 *dest_db = dest.db
+        sqlite3_backup *backup
+
+    backup = sqlite3_backup_init(dest_db, 'main', src_db, 'main')
+    if (backup == NULL):
+        raise OperationalError('Unable to initialize backup.')
+
+    sqlite3_backup_step(backup, -1)
+    sqlite3_backup_finish(backup)
+    if sqlite3_errcode(dest_db):
+        raise OperationalError('Error finishing backup: %s' %
+                               sqlite3_errmsg(dest_db))
+    return True
+
+
+def backup_to_file(src_conn, filename):
+    dest_conn = pysqlite.connect(filename)
+    backup(src_conn, dest_conn)
+    dest_conn.close()
+    return True
+
+
+cdef int _aggressive_busy_handler(void *ptr, int n):
+    # In concurrent environments, it often seems that if multiple queries are
+    # kicked off at around the same time, they proceed in lock-step to check
+    # for the availability of the lock. By introducing some "jitter" we can
+    # ensure that this doesn't happen. Furthermore, this function makes more
+    # attempts in the same time period than the default handler.
+    cdef:
+        int busyTimeout = <int>ptr
+        int current, total
+
+    if n < 20:
+        current = 25 - (rand() % 10)  # ~20ms
+        total = n * 20
+    elif n < 40:
+        current = 50 - (rand() % 20)  # ~40ms
+        total = 400 + ((n - 20) * 40)
+    else:
+        current = 120 - (rand() % 40)  # ~100ms
+        total = 1200 + ((n - 40) * 100)  # Estimate the amount of time slept.
+
+    if total + current > busyTimeout:
+        current = busyTimeout - total
+    if current > 0:
+        sqlite3_sleep(current)
+        return 1
+    return 0
