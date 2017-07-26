@@ -202,11 +202,10 @@ class VirtualModel(Model):
 class BaseFTSModel(VirtualModel):
     @classmethod
     def clean_options(cls, options):
-        tokenize = options.get('tokenize')
         content = options.get('content')
-        if tokenize:
-            # Tokenizers need to be in quoted string.
-            options['tokenize'] = '"%s"' % tokenize
+        prefix = options.get('prefix')
+        tokenize = options.get('tokenize')
+
         if isinstance(content, basestring) and content == '':
             # Special-case content-less full-text search tables.
             options['content'] = "''"
@@ -214,6 +213,16 @@ class BaseFTSModel(VirtualModel):
             # Special-case to ensure fields are fully-qualified.
             options['content'] = Entity(content.model._meta.table_name,
                                         content.column_name)
+
+        if prefix:
+            if isinstance(prefix, (list, tuple)):
+                prefix = ','.join([str(i) for i in prefix])
+            options['prefix'] = "'%s'" % prefix.strip("' ")
+
+        if tokenize:
+            # Tokenizers need to be in quoted string.
+            options['tokenize'] = '"%s"' % tokenize
+
         return options
 
 
@@ -433,7 +442,7 @@ class FTS5Model(BaseFTSModel):
 
     @classmethod
     def fts5_installed(cls):
-        if sqlite3.sqlite_version_info[:3] < FTS5_MIN_VERSION:
+        if sqlite3.sqlite_version_info[:3] < FTS5_MIN_SQLITE_VERSION:
             return False
 
         # Test in-memory DB to determine if the FTS5 extension is installed.

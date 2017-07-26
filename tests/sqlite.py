@@ -111,6 +111,12 @@ class Values(TestModel):
     weight = FloatField()
 
 
+class FTS5Test(FTS5Model):
+    title = SearchField()
+    data = SearchField()
+    misc = SearchField(unindexed=True)
+
+
 def json_installed():
     if sqlite3.sqlite_version_info < (3, 9, 0):
         return False
@@ -1060,3 +1066,62 @@ class TestTransitiveClosureIntegration(BaseTestCase):
         self.assertEqual(sorted([(n.id, n.name) for n in query]),
                          [(c1.id, 'c1'), (c2.id, 'c2')])
         database.drop_tables([Node, NodeClosure])
+
+
+@skip_case_unless(FTS5Model.fts5_installed)
+class TestFTS5(ModelTestCase):
+    database = database
+    requires = [FTS5Test]
+    test_corpus = (
+        ('foo aa bb', 'aa bb cc ' * 10, 1),
+        ('bar bb cc', 'bb cc dd ' * 9, 2),
+        ('baze cc dd', 'cc dd ee ' * 8, 3),
+        ('nug aa dd', 'bb cc ' * 7, 4))
+
+    def setUp(self):
+        super(TestFTS5, self).setUp()
+        for title, data, misc in self.test_corpus:
+            FTS5Test.create(title=title, data=data, misc=misc)
+
+    def test_create_table(self):
+        query = FTS5Test._schema._create_table()
+        self.assertSQL(query, (
+            'CREATE VIRTUAL TABLE IF NOT EXISTS "fts5test" USING fts5 '
+            '("title", "data", "misc" UNINDEXED)'), [])
+
+    def test_create_table_options(self):
+        class Test1(FTS5Model):
+            f1 = SearchField()
+            f2 = SearchField(unindexed=True)
+            f3 = SearchField()
+
+            class Meta:
+                database = self.database
+                options = {
+                    'prefix': (2, 3),
+                    'tokenize': 'porter unicode61',
+                    'content': Post,
+                    'content_rowid': Post.id}
+
+        query = Test1._schema._create_table()
+        self.assertSQL(query, (
+            'CREATE VIRTUAL TABLE IF NOT EXISTS "test1" USING fts5 ('
+            '"f1", "f2" UNINDEXED, "f3", '
+            'content="post", content_rowid="id", '
+            'prefix=\'2,3\', tokenize="porter unicode61")'), [])
+
+    def assertResults(self, query, expected, scores=False, alias='score'):
+        if scores:
+            results = [(obj.title, round(getattr(obj, alias), 7))
+                       for obj in query]
+        else:
+            results = [obj.title for obj in query]
+        self.assertEqual(results, expected)
+
+    def test_search(self):
+        query = FTS5Test.search('bb')
+        self.assertSQL(query, (
+            'SELECT "t1"."title", "t1"."data", "t1"."misc" '
+            'FROM "fts5test" AS "t1" '
+            'WHERE ("fts5test" MATCH ?) ORDER BY rank'), ['bb'])
+        self.assertResults(query, ['nug aa dd', 'foo aa bb', 'bar bb cc'])
