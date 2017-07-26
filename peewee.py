@@ -3973,6 +3973,9 @@ class SchemaManager(object):
             if isinstance(field, ForeignKeyField) and not field.deferred:
                 constraints.append(field.foreign_key_constraint())
 
+        if meta.constraints:
+            constraints.extend(meta.constraints)
+
         constraints.extend(self._create_table_option_sql(options))
         return ctx.sql(EnclosedNodeList(columns + constraints))
 

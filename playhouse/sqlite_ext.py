@@ -178,13 +178,10 @@ class VirtualTableSchemaManager(SchemaManager):
 
     def _create_table(self, safe=True, **options):
         if issubclass(self.model, VirtualModel):
-            ctx = self._create_virtual_table(safe, **options)
-        else:
-            ctx = super(VirtualTableSchemaManager, self)._create_table(
-                safe, **options)
-        if getattr(self.model._meta, 'without_rowid', False):
-            ctx.literal(' WITHOUT ROWID')
-        return ctx
+            return self._create_virtual_table(safe, **options)
+
+        return super(VirtualTableSchemaManager, self)._create_table(
+            safe, **options)
 
 
 class VirtualModel(Model):
