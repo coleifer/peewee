@@ -1,4 +1,5 @@
 import os
+import sys
 
 from peewee import *
 from peewee import sqlite3
@@ -9,6 +10,7 @@ from .base import BaseTestCase
 from .base import ModelTestCase
 from .base import TestModel
 from .base import skip_case_unless
+from .base import skip_if
 
 
 database = SqliteExtDatabase(':memory:', c_extensions=False, timeout=0.1)
@@ -848,6 +850,7 @@ class TestMurmurHash(ModelTestCase):
         self.assertHash('this is a test of a longer string', 3556042345)
         self.assertHash(None, None)
 
+    @skip_if(sys.version_info[0] == 3)
     def test_checksums(self):
         self.assertHash('testkey', -225678656, 'crc32')
         self.assertHash('murmur', 1507884895, 'crc32')

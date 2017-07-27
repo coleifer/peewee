@@ -22,10 +22,11 @@ try:
     from .apsw_ext import *
 except ImportError:
     print('Unable to import APSW extension tests, skipping.')
-try:
-    from .cysqlite import *
-except ImportError:
-    print('Unable to import cython sqlite extension tests, skipping.')
+if sys.version_info[0] == 2:
+    try:
+        from .cysqlite import *
+    except ImportError:
+        print('Unable to import cython sqlite extension tests, skipping.')
 from .dataset import *
 from .db_url import *
 from .hybrid import *
