@@ -1,3 +1,6 @@
+from cpython.bytes cimport PyBytes_AsStringAndSize
+from cpython.bytes cimport PyBytes_FromStringAndSize
+from cpython.bytes cimport PyBytes_AS_STRING
 from cpython.object cimport PyObject
 from libc.stdlib cimport rand
 
@@ -6,6 +9,7 @@ import re
 import zlib
 
 from peewee import InterfaceError
+from peewee import Node
 from peewee import OperationalError
 from peewee import sqlite3 as pysqlite
 from playhouse.sqlite_ext import SqliteExtDatabase
@@ -15,7 +19,9 @@ cdef extern from "sqlite3.h":
     ctypedef struct sqlite3:
         int busyTimeout
     ctypedef struct sqlite3_backup
+    ctypedef struct sqlite3_blob
     ctypedef long long sqlite3_int64
+    ctypedef unsigned long long sqlite_uint64
 
     # Return values.
     cdef int SQLITE_OK = 0
@@ -89,6 +95,21 @@ cdef extern from "sqlite3.h":
     cdef int sqlite3_errstr(int)
     cdef const char *sqlite3_errmsg(sqlite3 *db)
 
+    cdef int sqlite3_blob_open(
+          sqlite3*,
+          const char *zDb,
+          const char *zTable,
+          const char *zColumn,
+          sqlite3_int64 iRow,
+          int flags,
+          sqlite3_blob **ppBlob)
+    cdef int sqlite3_blob_reopen(sqlite3_blob *, sqlite3_int64)
+    cdef int sqlite3_blob_close(sqlite3_blob *)
+    cdef int sqlite3_blob_bytes(sqlite3_blob *)
+    cdef int sqlite3_blob_read(sqlite3_blob *, void *Z, int N, int iOffset)
+    cdef int sqlite3_blob_write(sqlite3_blob *, const void *z, int n,
+                                int iOffset)
+
 
 cdef extern from "_pysqlite/connection.h":
     ctypedef struct pysqlite_Connection:
@@ -97,6 +118,141 @@ cdef extern from "_pysqlite/connection.h":
         int initialized
         PyObject* isolation_level
         char* begin_statement
+
+
+class ZeroBlob(Node):
+    def __init__(self, length):
+        if not isinstance(length, int) or length < 0:
+            raise ValueError('Length must be a positive integer.')
+        self.length = length
+
+    def __sql__(self, ctx):
+        return ctx.literal('zeroblob(%s)' % self.length)
+
+
+cdef class Blob(object)  # Forward declaration.
+
+
+cdef inline int _check_closed(Blob blob) except -1:
+    if not blob.pBlob:
+        raise InterfaceError('Cannot operate on closed blob.')
+    return 1
+
+
+cdef class Blob(object):
+    cdef:
+        int offset
+        pysqlite_Connection *conn
+        sqlite3_blob *pBlob
+
+    def __init__(self, database, table, column, rowid,
+                 read_only=False):
+        cdef:
+            int flags = 0 if read_only else 1
+            sqlite3_blob *blob
+
+        self.conn = <pysqlite_Connection *>(database._state.conn)
+        sqlite3_blob_open(
+            self.conn.db,
+            'main',
+            <char *>table,
+            <char *>column,
+            <long long>rowid,
+            flags,
+            &blob)
+
+        self.pBlob = blob
+        self.offset = 0
+
+    cdef _close(self):
+        if self.pBlob:
+            sqlite3_blob_close(self.pBlob)
+        self.pBlob = <sqlite3_blob *>0
+
+    def __dealloc__(self):
+        self._close()
+
+    def __len__(self):
+        _check_closed(self)
+        return sqlite3_blob_bytes(self.pBlob)
+
+    def read(self, n=None):
+        cdef:
+            bytes pybuf
+            int length = -1
+            int size
+            char *buf
+
+        if n is not None:
+            length = n
+
+        _check_closed(self)
+        size = sqlite3_blob_bytes(self.pBlob)
+        if self.offset == size or length == 0:
+            return ''
+
+        if length < 0:
+            length = size - self.offset
+
+        if self.offset + length > size:
+            length = size - self.offset
+
+        pybuf = PyBytes_FromStringAndSize(NULL, length)
+        buf = PyBytes_AS_STRING(pybuf)
+        if sqlite3_blob_read(self.pBlob, buf, length, self.offset):
+            raise OperationalError('Error reading from blob.')
+
+        self.offset += length
+        return bytes(pybuf)
+
+    def seek(self, offset, frame_of_reference=0):
+        cdef int size
+        _check_closed(self)
+        size = sqlite3_blob_bytes(self.pBlob)
+        if frame_of_reference == 0:
+            if offset < 0 or offset > size:
+                raise ValueError('seek() offset outside of valid range.')
+            self.offset = offset
+        elif frame_of_reference == 1:
+            if self.offset + offset < 0 or self.offset + offset > size:
+                raise ValueError('seek() offset outside of valid range.')
+            self.offset += offset
+        elif frame_of_reference == 2:
+            if size + offset < 0 or size + offset > size:
+                raise ValueError('seek() offset outside of valid range.')
+            self.offset = size + offset
+        else:
+            raise ValueError('seek() frame of reference must be 0, 1 or 2.')
+
+    def tell(self):
+        _check_closed(self)
+        return self.offset
+
+    def write(self, data):
+        cdef:
+            char *buf
+            int size
+            Py_ssize_t buflen
+
+        _check_closed(self)
+        size = sqlite3_blob_bytes(self.pBlob)
+        PyBytes_AsStringAndSize(data, &buf, &buflen)
+        if (<int>(buflen + self.offset)) < self.offset:
+            raise ValueError('Data is too large (integer wrap)')
+        if (<int>(buflen + self.offset)) > size:
+            raise ValueError('Data would go beyond end of blob')
+        if sqlite3_blob_write(self.pBlob, buf, buflen, self.offset):
+            raise OperationalError('Error writing to blob.')
+        self.offset += <int>buflen
+
+    def close(self):
+        self._close()
+
+    def reopen(self, rowid):
+        _check_closed(self)
+        self.offset = 0
+        if sqlite3_blob_reopen(self.pBlob, <long long>rowid):
+            raise OperationalError('Unable to re-open blob.')
 
 
 def __status__(flag, return_highwater=False):
