@@ -724,6 +724,7 @@ class SqliteExtDatabase(SqliteDatabase):
         super(SqliteExtDatabase, self).__init__(database, *args, **kwargs)
         self._extensions = set()
         self._row_factory = None
+        self._table_functions = []
 
         if c_extensions and not CYTHON_SQLITE_EXTENSIONS:
             raise ImproperlyConfigured('SqliteExtDatabase initialized with '
@@ -746,6 +747,9 @@ class SqliteExtDatabase(SqliteDatabase):
             conn.row_factory = self._row_factory
         if self._extensions:
             self._load_extensions(conn)
+        if self._table_functions:
+            for table_function in self._table_functions:
+                table_function.register(conn)
 
     def _load_extensions(self, conn):
         conn.enable_load_extension(True)
@@ -758,6 +762,16 @@ class SqliteExtDatabase(SqliteDatabase):
             conn = self.connection()
             conn.enable_load_extension(True)
             conn.load_extension(extension)
+
+    def table_function(self, name=None):
+        def decorator(klass):
+            if name is not None:
+                klass.name = name
+            self._table_functions.append(klass)
+            if not self.is_closed():
+                klass.register(self.connection())
+            return klass
+        return decorator
 
     def unload_extension(self, extension):
         self._extensions.remove(extension)

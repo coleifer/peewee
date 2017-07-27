@@ -6,6 +6,7 @@ from libc.stdlib cimport rand
 
 import hashlib
 import re
+import weakref
 import zlib
 
 from peewee import InterfaceError
@@ -200,6 +201,7 @@ cdef class Blob(object):
         pybuf = PyBytes_FromStringAndSize(NULL, length)
         buf = PyBytes_AS_STRING(pybuf)
         if sqlite3_blob_read(self.pBlob, buf, length, self.offset):
+            self._close()
             raise OperationalError('Error reading from blob.')
 
         self.offset += length
@@ -242,6 +244,7 @@ cdef class Blob(object):
         if (<int>(buflen + self.offset)) > size:
             raise ValueError('Data would go beyond end of blob')
         if sqlite3_blob_write(self.pBlob, buf, buflen, self.offset):
+            self._close()
             raise OperationalError('Error writing to blob.')
         self.offset += <int>buflen
 
@@ -252,6 +255,7 @@ cdef class Blob(object):
         _check_closed(self)
         self.offset = 0
         if sqlite3_blob_reopen(self.pBlob, <long long>rowid):
+            self._close()
             raise OperationalError('Unable to re-open blob.')
 
 
@@ -324,7 +328,6 @@ class CySqliteExtDatabase(SqliteExtDatabase):
         self._commit_hook = None
         self._rollback_hook = None
         self._update_hook = None
-        self._table_functions = []
 
         self.register_function(regexp, 'regexp')
         if hash_functions:
@@ -337,26 +340,12 @@ class CySqliteExtDatabase(SqliteExtDatabase):
     def _add_conn_hooks(self, conn):
         super(CySqliteExtDatabase, self)._add_conn_hooks(conn)
 
-        if self._table_functions:
-            for table_function in self._table_functions:
-                table_function.register(conn)
-
         if self._commit_hook is not None:
             self._set_commit_hook(conn, self._commit_hook)
         if self._rollback_hook is not None:
             self._set_rollback_hook(conn, self._rollback_hook)
         if self._update_hook is not None:
             self._set_update_hook(conn, self._update_hook)
-
-    def table_function(self, name=None):
-        def decorator(klass):
-            if name is not None:
-                klass.name = name
-            self._table_functions.append(klass)
-            if not self.is_closed():
-                klass.register(self.connection())
-            return klass
-        return decorator
 
     def on_commit(self, fn):
         self._commit_hook = fn
@@ -396,6 +385,9 @@ class CySqliteExtDatabase(SqliteExtDatabase):
             sqlite3_update_hook(conn.db, NULL, NULL)
         else:
             sqlite3_update_hook(conn.db, _update_callback, <void *>fn)
+
+    def blob_open(self, table, column, rowid, read_only=False):
+        return Blob(self, table, column, rowid, read_only)
 
     def backup(self, destination):
         return backup(self.connection(), destination.connection())

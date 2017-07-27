@@ -330,7 +330,14 @@ class TestHashFunctions(CyDatabaseTestCase):
 
 
 class TestBackup(CyDatabaseTestCase):
-    def test_backup(self):
+    backup_filename = 'test_backup.db'
+
+    def tearDown(self):
+        super(TestBackup, self).tearDown()
+        if os.path.exists(self.backup_filename):
+            os.unlink(self.backup_filename)
+
+    def test_backup_to_file(self):
         # Populate the database with some test data.
         self.execute('CREATE TABLE register (id INTEGER NOT NULL PRIMARY KEY, '
                      'value INTEGER NOT NULL)')
@@ -338,23 +345,23 @@ class TestBackup(CyDatabaseTestCase):
             for i in range(100):
                 self.execute('INSERT INTO register (value) VALUES (?)', i)
 
-        self.database.backup_to_file('test_backup.db')
-        backup_db = CySqliteExtDatabase('test_backup.db')
+        self.database.backup_to_file(self.backup_filename)
+        backup_db = CySqliteExtDatabase(self.backup_filename)
         cursor = backup_db.execute_sql('SELECT value FROM register ORDER BY '
                                        'value;')
         self.assertEqual([val for val, in cursor.fetchall()], range(100))
         backup_db.close()
-        try:
-            os.unlink('test_backup.db')
-        except:
-            pass
 
 
 class TestBlob(CyDatabaseTestCase):
-    def test_blob(self):
-        Register = Table('register', ('id', 'data')).bind(self.database)
+    def setUp(self):
+        super(TestBlob, self).setUp()
+        self.Register = Table('register', ('id', 'data'))
         self.execute('CREATE TABLE register (id INTEGER NOT NULL PRIMARY KEY, '
                      'data BLOB NOT NULL)')
+
+    def test_blob(self):
+        Register = self.Register.bind(self.database)
 
         Register.insert({Register.data: ZeroBlob(1024)}).execute()
         rowid1024 = self.database.last_insert_rowid
@@ -383,3 +390,23 @@ class TestBlob(CyDatabaseTestCase):
         self.assertEqual(len(blob), 16)
 
         blob.write('x' * 15)
+        self.assertEqual(blob.tell(), 15)
+
+    def test_blob_errors(self):
+        Register = self.Register.bind(self.database)
+        Register.insert(data=ZeroBlob(16)).execute()
+        rowid = self.database.last_insert_rowid
+
+        blob = self.database.blob_open('register', 'data', rowid)
+        with self.assertRaisesCtx(ValueError):
+            blob.seek(17, 0)
+
+        with self.assertRaisesCtx(ValueError):
+            blob.write('x' * 17)
+
+        blob.write('x' * 16)
+        self.assertEqual(blob.tell(), 16)
+        blob.seek(0)
+        data = blob.read(17)  # Attempting to read more data is OK.
+        self.assertEqual(data, 'x' * 16)
+        blob.close()
