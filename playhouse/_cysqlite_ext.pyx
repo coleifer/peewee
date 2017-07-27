@@ -68,7 +68,7 @@ cdef extern from "sqlite3.h":
     cdef int SQLITE_DBSTATUS_CACHE_MISS = 8
     cdef int SQLITE_DBSTATUS_CACHE_WRITE = 9
     cdef int SQLITE_DBSTATUS_DEFERRED_FKS = 10
-    cdef int SQLITE_DBSTATUS_CACHE_USED_SHARED = 11
+    #cdef int SQLITE_DBSTATUS_CACHE_USED_SHARED = 11
     cdef int sqlite3_db_status(sqlite3 *, int op, int *pCur, int *pHigh, int reset)
 
     cdef int SQLITE_DELETE = 9
@@ -450,8 +450,8 @@ class CySqliteExtDatabase(SqliteExtDatabase):
     lookaside_miss_full = __dbstatus__(SQLITE_DBSTATUS_LOOKASIDE_MISS_FULL,
                                        True)
     cache_used = __dbstatus__(SQLITE_DBSTATUS_CACHE_USED, False, True)
-    cache_used_shared = __dbstatus__(SQLITE_DBSTATUS_CACHE_USED_SHARED,
-                                     False, True)
+    #cache_used_shared = __dbstatus__(SQLITE_DBSTATUS_CACHE_USED_SHARED,
+    #                                 False, True)
     schema_used = __dbstatus__(SQLITE_DBSTATUS_SCHEMA_USED, False, True)
     statement_used = __dbstatus__(SQLITE_DBSTATUS_STMT_USED, False, True)
     cache_hit = __dbstatus__(SQLITE_DBSTATUS_CACHE_HIT, False, True)
