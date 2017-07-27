@@ -3,6 +3,7 @@ import os
 from peewee import *
 from peewee import sqlite3
 from playhouse.sqlite_ext import *
+from playhouse._sqlite_ext import TableFunction
 
 from .base import BaseTestCase
 from .base import ModelTestCase
@@ -115,6 +116,182 @@ class FTS5Test(FTS5Model):
     title = SearchField()
     data = SearchField()
     misc = SearchField(unindexed=True)
+
+
+class Series(TableFunction):
+    columns = ['value']
+    params = ['start', 'stop', 'step']
+    name = 'series'
+
+    def initialize(self, start=0, stop=None, step=1):
+        self.start = start
+        self.stop = stop or float('inf')
+        self.step = step
+        self.curr = self.start
+
+    def iterate(self, idx):
+        if self.curr > self.stop:
+            raise StopIteration
+
+        ret = self.curr
+        self.curr += self.step
+        return (ret,)
+
+
+class RegexSearch(TableFunction):
+    columns = ['match']
+    params = ['regex', 'search_string']
+    name = 'regex_search'
+
+    def initialize(self, regex=None, search_string=None):
+        if regex and search_string:
+            self._iter = re.finditer(regex, search_string)
+        else:
+            self._iter = None
+
+    def iterate(self, idx):
+        # We do not need `idx`, so just ignore it.
+        if self._iter is None:
+            raise StopIteration
+        else:
+            return (next(self._iter).group(0),)
+
+
+class Split(TableFunction):
+    params = ['data']
+    columns = ['part']
+    name = 'str_split'
+
+    def initialize(self, data=None):
+        self._parts = data.split()
+        self._idx = 0
+
+    def iterate(self, idx):
+        if self._idx < len(self._parts):
+            result = (self._parts[self._idx],)
+            self._idx += 1
+            return result
+        raise StopIteration
+
+
+class TestTableFunction(BaseTestCase):
+    def setUp(self):
+        super(TestTableFunction, self).setUp()
+        self.conn = sqlite3.connect(':memory:')
+
+    def tearDown(self):
+        super(TestTableFunction, self).tearDown()
+        self.conn.close()
+
+    def test_split(self):
+        Split.register(self.conn)
+        curs = self.conn.execute('select part from str_split(?) order by part '
+                                 'limit 3', ('well hello huey and zaizee',))
+        self.assertEqual([row for row, in curs.fetchall()],
+                         ['and', 'hello', 'huey'])
+
+    def test_split_tbl(self):
+        Split.register(self.conn)
+        self.conn.execute('create table post (content TEXT);')
+        self.conn.execute('insert into post (content) values (?), (?), (?)',
+                          ('huey secret post',
+                           'mickey message',
+                           'zaizee diary'))
+        curs = self.conn.execute('SELECT * FROM post, str_split(post.content)')
+        results = curs.fetchall()
+        self.assertEqual(results, [
+            ('huey secret post', 'huey'),
+            ('huey secret post', 'secret'),
+            ('huey secret post', 'post'),
+            ('mickey message', 'mickey'),
+            ('mickey message', 'message'),
+            ('zaizee diary', 'zaizee'),
+            ('zaizee diary', 'diary'),
+        ])
+
+    def test_series(self):
+        Series.register(self.conn)
+
+        def assertSeries(params, values, extra_sql=''):
+            param_sql = ', '.join('?' * len(params))
+            sql = 'SELECT * FROM series(%s)' % param_sql
+            if extra_sql:
+                sql = ' '.join((sql, extra_sql))
+            curs = self.conn.execute(sql, params)
+            self.assertEqual([row for row, in curs.fetchall()], values)
+
+        assertSeries((0, 10, 2), [0, 2, 4, 6, 8, 10])
+        assertSeries((5, None, 20), [5, 25, 45, 65, 85], 'LIMIT 5')
+        assertSeries((4, 0, -1), [4, 3, 2], 'LIMIT 3')
+        assertSeries((3, 5, 3), [3])
+        assertSeries((3, 3, 1), [3])
+
+    def test_series_tbl(self):
+        Series.register(self.conn)
+        self.conn.execute('CREATE TABLE nums (id INTEGER PRIMARY KEY)')
+        self.conn.execute('INSERT INTO nums DEFAULT VALUES;')
+        self.conn.execute('INSERT INTO nums DEFAULT VALUES;')
+        curs = self.conn.execute(
+            'SELECT * FROM nums, series(nums.id, nums.id + 2)')
+        results = curs.fetchall()
+        self.assertEqual(results, [
+            (1, 1), (1, 2), (1, 3),
+            (2, 2), (2, 3), (2, 4)])
+
+        curs = self.conn.execute(
+            'SELECT * FROM nums, series(nums.id) LIMIT 3')
+        results = curs.fetchall()
+        self.assertEqual(results, [(1, 1), (1, 2), (1, 3)])
+
+    def test_regex(self):
+        RegexSearch.register(self.conn)
+
+        def assertResults(regex, search_string, values):
+            sql = 'SELECT * FROM regex_search(?, ?)'
+            curs = self.conn.execute(sql, (regex, search_string))
+            self.assertEqual([row for row, in curs.fetchall()], values)
+
+        assertResults(
+            '[0-9]+',
+            'foo 123 45 bar 678 nuggie 9.0',
+            ['123', '45', '678', '9', '0'])
+        assertResults(
+            '[\w]+@[\w]+\.[\w]{2,3}',
+            ('Dear charlie@example.com, this is nug@baz.com. I am writing on '
+             'behalf of zaizee@foo.io. He dislikes your blog.'),
+            ['charlie@example.com', 'nug@baz.com', 'zaizee@foo.io'])
+        assertResults(
+            '[a-z]+',
+            '123.pDDFeewXee',
+            ['p', 'eew', 'ee'])
+        assertResults(
+            '[0-9]+',
+            'hello',
+            [])
+
+    def test_regex_tbl(self):
+        messages = (
+            'hello foo@example.fap, this is nuggie@example.fap. How are you?',
+            'baz@example.com wishes to let charlie@crappyblog.com know that '
+            'huey@example.com hates his blog',
+            'testing no emails.',
+            '')
+        RegexSearch.register(self.conn)
+
+        self.conn.execute('create table posts (id integer primary key, msg)')
+        self.conn.execute('insert into posts (msg) values (?), (?), (?), (?)',
+                          messages)
+        cur = self.conn.execute('select posts.id, regex_search.rowid, regex_search.match '
+                                'FROM posts, regex_search(?, posts.msg)',
+                                ('[\w]+@[\w]+\.\w{2,3}',))
+        results = cur.fetchall()
+        self.assertEqual(results, [
+            (1, 1, 'foo@example.fap'),
+            (1, 2, 'nuggie@example.fap'),
+            (2, 3, 'baz@example.com'),
+            (2, 4, 'charlie@crappyblog.com'),
+            (2, 5, 'huey@example.com'),
+        ])
 
 
 def json_installed():
@@ -474,22 +651,17 @@ class TestFullTextSearch(ModelTestCase):
 
         assertResults('aaaaa', 1, [
             (5, -0.39),
-            (1, -0.3),
-        ])
+            (1, -0.3)])
         assertResults('fffff', 1, [
             (5, -0.39),
-            (3, -0.3),
-        ])
-        assertResults('eeeee', 1, [
-            (2, -0.97),
-        ])
+            (3, -0.3)])
+        assertResults('eeeee', 1, [(2, -0.97)])
 
         # No column specified, use the first text field.
         query = MultiColumn.search_bm25('fffff', [1.0, 0, 0, 0], True)
         self.assertEqual([(mc.c4, round(mc.score, 2)) for mc in query], [
             (5, -0.39),
-            (3, -0.3),
-        ])
+            (3, -0.3)])
 
         # Use helpers.
         query = (MultiColumn
@@ -500,8 +672,7 @@ class TestFullTextSearch(ModelTestCase):
                  .order_by(SQL('score')))
         self.assertEqual([(mc.c4, round(mc.score, 2)) for mc in query], [
             (5, -0.39),
-            (1, -0.3),
-        ])
+            (1, -0.3)])
 
     def test_bm25_alt_corpus(self):
         for message in self.messages:
@@ -516,19 +687,13 @@ class TestFullTextSearch(ModelTestCase):
 
         assertResults('things', [
             (-0.45, 'Faith has'),
-            (-0.36, 'Be faithful'),
-        ])
+            (-0.36, 'Be faithful')])
 
         # Indeterminate order since all are 0.0. All phrases contain the word
         # faith, so there is no meaningful score.
         results = [round(x.score, 2)
                    for x in Document.search_bm25('faith', with_score=True)]
-        self.assertEqual(results, [
-            -0.,
-            -0.,
-            -0.,
-            -0.,
-            -0.])
+        self.assertEqual(results, [-0., -0., -0., -0., -0.])
 
     def _test_fts_auto(self, ModelClass):
         posts = []
@@ -638,13 +803,40 @@ class TestFullTextSearchCython(TestFullTextSearch):
         self.assertTrue(self.database._c_extensions)
         self.assertTrue(Post._meta.database._c_extensions)
 
+    def test_bm25f(self):
+        def assertResults(term, col_idx, expected):
+            query = MultiColumn.search_bm25f(term, [1.0, 0, 0, 0], True)
+            self.assertEqual(
+                [(mc.c4, round(mc.score, 2)) for mc in query],
+                expected)
+
+        self._create_multi_column()
+        MultiColumn.create(c1='aaaaa fffff', c4=5)
+
+        assertResults('aaaaa', 1, [
+            (5, -0.76),
+            (1, -0.62)])
+        assertResults('fffff', 1, [
+            (5, -0.76),
+            (3, -0.65)])
+        assertResults('eeeee', 1, [(2, -2.13)])
+
+        # No column specified, use the first text field.
+        query = MultiColumn.search_bm25f('aaaaa OR fffff', [1., 3., 0, 0], 1)
+        self.assertEqual([(mc.c4, round(mc.score, 2)) for mc in query], [
+            (1, -14.46),
+            (5, -12.01),
+            (3, -11.16)])
+
 
 @skip_case_unless(CYTHON_EXTENSION)
 class TestMurmurHash(ModelTestCase):
-    database = SqliteExtDatabase(':memory:', c_extensions=CYTHON_EXTENSION)
+    database = SqliteExtDatabase(':memory:', c_extensions=CYTHON_EXTENSION,
+                                 hash_functions=True)
 
-    def assertHash(self, s, e):
-        query = Select(columns=[fn.murmurhash(s)])
+    def assertHash(self, s, e, fn_name='murmurhash'):
+        func = getattr(fn, fn_name)
+        query = Select(columns=[func(s)])
         cursor = self.database.execute(query)
         self.assertEqual(cursor.fetchone()[0], e)
 
@@ -654,6 +846,15 @@ class TestMurmurHash(ModelTestCase):
         self.assertHash('', 0)
         self.assertHash('this is a test of a longer string', 3556042345)
         self.assertHash(None, None)
+
+    def test_checksums(self):
+        self.assertHash('testkey', -225678656, 'crc32')
+        self.assertHash('murmur', 1507884895, 'crc32')
+        self.assertHash('', 0, 'crc32')
+
+        self.assertHash('testkey', 203686666, 'adler32')
+        self.assertHash('murmur', 155714217, 'adler32')
+        self.assertHash('', 1, 'adler32')
 
 
 class TestUserDefinedCallbacks(ModelTestCase):

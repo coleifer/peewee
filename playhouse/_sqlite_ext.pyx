@@ -1,3 +1,5 @@
+import hashlib
+import zlib
 from random import randint
 
 from cpython cimport datetime
@@ -8,6 +10,8 @@ from libc.float cimport DBL_MAX
 from libc.math cimport log, sqrt
 from libc.stdlib cimport free, malloc
 from libc.string cimport memcpy, memset
+
+from peewee import InterfaceError
 
 
 cdef struct sqlite3_index_constraint:
@@ -584,7 +588,7 @@ def peewee_rank(py_match_info, *raw_weights):
 
 
 def peewee_lucene(py_match_info, *raw_weights):
-    # Usage: peewee_lucene(matchinfo(table, 'pcxnal'), 1)
+    # Usage: peewee_lucene(matchinfo(table, 'pcnalx'), 1)
     cdef:
         unsigned int *match_info
         unsigned int *phrase_info
@@ -637,7 +641,7 @@ def peewee_lucene(py_match_info, *raw_weights):
 
 
 def peewee_bm25(py_match_info, *raw_weights):
-    # Usage: peewee_bm25(matchinfo(table, 'pcxnal'), 1)
+    # Usage: peewee_bm25(matchinfo(table, 'pcnalx'), 1)
     # where the second parameter is the index of the column and
     # the 3rd and 4th specify k and b.
     cdef:
@@ -699,6 +703,74 @@ def peewee_bm25(py_match_info, *raw_weights):
                 rhs = 0
             else:
                 rhs = (term_frequency * (K + 1)) / denom
+
+            score += (idf * rhs) * weight
+
+    free(weights)
+    return -1 * score
+
+
+def peewee_bm25f(py_match_info, *raw_weights):
+    # Usage: peewee_bm25f(matchinfo(table, 'pcnalx'), 1)
+    # where the second parameter is the index of the column and
+    # the 3rd and 4th specify k and b.
+    cdef:
+        unsigned int *match_info
+        unsigned int *phrase_info
+        bytes _match_info_buf = bytes(py_match_info)
+        char *match_info_buf = _match_info_buf
+        int argc = len(raw_weights)
+        int term_count, col_count
+        double B = 0.75, K1 = 1.2, D, epsilon
+        double total_docs, term_frequency, docs_with_term
+        double doc_length = 0.0, avg_length = 0.0
+        double idf, weight, rhs, denom
+        double *weights
+        int P_O = 0, C_O = 1, N_O = 2, A_O = 3, L_O, X_O
+        int i, j, current_x
+
+        double score = 0.0
+
+    match_info = <unsigned int *>match_info_buf
+    term_count = match_info[P_O]
+    col_count = match_info[C_O]
+    total_docs = match_info[N_O]
+
+    L_O = A_O + col_count
+    X_O = L_O + col_count
+
+    for j in range(col_count):
+        avg_length += match_info[A_O + j]
+        doc_length += match_info[L_O + j]
+
+    epsilon = 1.0 / (total_docs * avg_length)
+
+    weights = <double *>malloc(sizeof(double) * col_count)
+    for i in range(col_count):
+        if argc == 0:
+            weights[i] = 1.
+        elif i < argc:
+            weights[i] = <double>raw_weights[i]
+        else:
+            weights[i] = 0
+
+    for i in range(term_count):
+        for j in range(col_count):
+            weight = weights[j]
+            if weight == 0:
+                continue
+            current_x = X_O + (3 * j * (i + 1))
+            term_frequency = match_info[current_x]
+            docs_with_term = match_info[current_x + 2]
+            idf = log(
+                (total_docs - docs_with_term + 0.5) /
+                (docs_with_term + 0.5))
+            idf = epsilon if idf < 0 else idf
+
+            D = (term_frequency +
+                 (K1 * (1 - B + (B * (doc_length / avg_length)))))
+            rhs = (term_frequency * (K1 + 1)) / D
+            rhs += 1.
 
             score += (idf * rhs) * weight
 
@@ -773,6 +845,43 @@ def peewee_murmurhash(key, seed=None):
     if key:
         return murmurhash2(<char *>bkey, len(bkey), nseed)
     return 0
+
+
+def make_hash(hash_impl):
+    def inner(*items):
+        state = hash_impl()
+        for item in items:
+            state.update(item)
+        return state.hexdigest()
+    return inner
+
+
+peewee_md5 = make_hash(hashlib.md5)
+peewee_sha1 = make_hash(hashlib.sha1)
+peewee_sha256 = make_hash(hashlib.sha256)
+
+
+def _register_functions(database, pairs):
+    for func, name in pairs:
+        database.register_function(func, name)
+
+
+def register_hash_functions(database):
+    _register_functions(database, (
+        (peewee_murmurhash, 'murmurhash'),
+        (peewee_md5, 'md5'),
+        (peewee_sha1, 'sha1'),
+        (peewee_sha256, 'sha256'),
+        (zlib.adler32, 'adler32'),
+        (zlib.crc32, 'crc32')))
+
+
+def register_rank_functions(database):
+    _register_functions(database, (
+        (peewee_bm25, 'fts_bm25'),
+        (peewee_bm25f, 'fts_bm25f'),
+        (peewee_lucene, 'fts_lucene'),
+        (peewee_rank, 'fts_rank')))
 
 
 cdef class median(object):

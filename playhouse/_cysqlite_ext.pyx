@@ -4,10 +4,7 @@ from cpython.bytes cimport PyBytes_AS_STRING
 from cpython.object cimport PyObject
 from libc.stdlib cimport rand
 
-import hashlib
-import re
 import weakref
-import zlib
 
 from peewee import InterfaceError
 from peewee import Node
@@ -121,6 +118,20 @@ cdef extern from "_pysqlite/connection.h":
         char* begin_statement
 
 
+cdef inline int _check_connection(db) except -1:
+    """
+    Check that the underlying SQLite database connection is usable. Raises an
+    InterfaceError if the connection is either uninitialized or closed.
+    """
+    cdef:
+        pysqlite_Connection *conn = <pysqlite_Connection *>(db._state.conn)
+    if not conn.initialized:
+        raise InterfaceError('Connection not initialized.')
+    if not conn.db:
+        raise InterfaceError('Cannot operate on closed database.')
+    return 1
+
+
 class ZeroBlob(Node):
     def __init__(self, length):
         if not isinstance(length, int) or length < 0:
@@ -134,7 +145,7 @@ class ZeroBlob(Node):
 cdef class Blob(object)  # Forward declaration.
 
 
-cdef inline int _check_closed(Blob blob) except -1:
+cdef inline int _check_blob_closed(Blob blob) except -1:
     if not blob.pBlob:
         raise InterfaceError('Cannot operate on closed blob.')
     return 1
@@ -150,10 +161,13 @@ cdef class Blob(object):
                  read_only=False):
         cdef:
             int flags = 0 if read_only else 1
+            int rc
             sqlite3_blob *blob
 
+        _check_connection(database)
+
         self.conn = <pysqlite_Connection *>(database._state.conn)
-        sqlite3_blob_open(
+        rc = sqlite3_blob_open(
             self.conn.db,
             'main',
             <char *>table,
@@ -161,6 +175,8 @@ cdef class Blob(object):
             <long long>rowid,
             flags,
             &blob)
+        if rc != SQLITE_OK:
+            raise OperationalError('Unable to open blob.')
 
         self.pBlob = blob
         self.offset = 0
@@ -174,7 +190,7 @@ cdef class Blob(object):
         self._close()
 
     def __len__(self):
-        _check_closed(self)
+        _check_blob_closed(self)
         return sqlite3_blob_bytes(self.pBlob)
 
     def read(self, n=None):
@@ -187,7 +203,7 @@ cdef class Blob(object):
         if n is not None:
             length = n
 
-        _check_closed(self)
+        _check_blob_closed(self)
         size = sqlite3_blob_bytes(self.pBlob)
         if self.offset == size or length == 0:
             return ''
@@ -209,7 +225,7 @@ cdef class Blob(object):
 
     def seek(self, offset, frame_of_reference=0):
         cdef int size
-        _check_closed(self)
+        _check_blob_closed(self)
         size = sqlite3_blob_bytes(self.pBlob)
         if frame_of_reference == 0:
             if offset < 0 or offset > size:
@@ -227,7 +243,7 @@ cdef class Blob(object):
             raise ValueError('seek() frame of reference must be 0, 1 or 2.')
 
     def tell(self):
-        _check_closed(self)
+        _check_blob_closed(self)
         return self.offset
 
     def write(self, data):
@@ -236,7 +252,7 @@ cdef class Blob(object):
             int size
             Py_ssize_t buflen
 
-        _check_closed(self)
+        _check_blob_closed(self)
         size = sqlite3_blob_bytes(self.pBlob)
         PyBytes_AsStringAndSize(data, &buf, &buflen)
         if (<int>(buflen + self.offset)) < self.offset:
@@ -244,7 +260,6 @@ cdef class Blob(object):
         if (<int>(buflen + self.offset)) > size:
             raise ValueError('Data would go beyond end of blob')
         if sqlite3_blob_write(self.pBlob, buf, buflen, self.offset):
-            self._close()
             raise OperationalError('Error writing to blob.')
         self.offset += <int>buflen
 
@@ -252,7 +267,7 @@ cdef class Blob(object):
         self._close()
 
     def reopen(self, rowid):
-        _check_closed(self)
+        _check_blob_closed(self)
         self.offset = 0
         if sqlite3_blob_reopen(self.pBlob, <long long>rowid):
             self._close()
@@ -301,41 +316,13 @@ def __dbstatus__(flag, return_highwater=False, return_current=False):
     return property(getter)
 
 
-def regexp(basestring value, basestring regex):
-    # Expose regular expression matching in SQLite.
-    return re.search(regex, value, re.I) is not None
-
-
-def make_hash(hash_impl):
-    def inner(*items):
-        state = hash_impl()
-        for item in items:
-            state.update(item)
-        return state.hexdigest()
-    return inner
-
-
-hash_md5 = make_hash(hashlib.md5)
-hash_sha1 = make_hash(hashlib.sha1)
-hash_sha256 = make_hash(hashlib.sha256)
-
-
 class CySqliteExtDatabase(SqliteExtDatabase):
-    def __init__(self, database, pragmas=None, hash_functions=False, *args,
-                 **kwargs):
+    def __init__(self, database, pragmas=None, *args, **kwargs):
         super(CySqliteExtDatabase, self).__init__(database, pragmas=pragmas,
                                                   *args, **kwargs)
         self._commit_hook = None
         self._rollback_hook = None
         self._update_hook = None
-
-        self.register_function(regexp, 'regexp')
-        if hash_functions:
-            self.register_function(hash_md5, 'md5')
-            self.register_function(hash_sha1, 'sha1')
-            self.register_function(hash_sha256, 'sha256')
-            self.register_function(zlib.adler32, 'adler32')
-            self.register_function(zlib.crc32, 'crc32')
 
     def _add_conn_hooks(self, conn):
         super(CySqliteExtDatabase, self)._add_conn_hooks(conn)

@@ -7,10 +7,8 @@ import sys
 from peewee import *
 from peewee import sqlite3
 try:
-    from playhouse._sqlite_ext import peewee_bm25 as cy_bm25
-    from playhouse._sqlite_ext import peewee_lucene as cy_lucene
-    from playhouse._sqlite_ext import peewee_murmurhash as cy_murmurhash
-    from playhouse._sqlite_ext import peewee_rank as cy_rank
+    from playhouse._sqlite_ext import register_hash_functions
+    from playhouse._sqlite_ext import register_rank_functions
     CYTHON_SQLITE_EXTENSIONS = True
 except ImportError:
     CYTHON_SQLITE_EXTENSIONS = False
@@ -280,6 +278,11 @@ class FTSModel(BaseFTSModel):
         return fn.fts_bm25(match_info, *weights)
 
     @classmethod
+    def bm25f(cls, *weights):
+        match_info = fn.matchinfo(cls._meta.entity, FTS4_MATCHINFO)
+        return fn.fts_bm25f(match_info, *weights)
+
+    @classmethod
     def lucene(cls, *weights):
         match_info = fn.matchinfo(cls._meta.entity, FTS4_MATCHINFO)
         return fn.fts_lucene(match_info, *weights)
@@ -334,6 +337,18 @@ class FTSModel(BaseFTSModel):
             with_score,
             score_alias,
             cls.bm25,
+            explicit_ordering)
+
+    @classmethod
+    def search_bm25f(cls, term, weights=None, with_score=False,
+                     score_alias='score', explicit_ordering=False):
+        """Full-text search for selected `term` using BM25 algorithm."""
+        return cls._search(
+            term,
+            weights,
+            with_score,
+            score_alias,
+            cls.bm25f,
             explicit_ordering)
 
     @classmethod
@@ -718,9 +733,13 @@ def ClosureTable(model_class, foreign_key=None, referencing_class=None,
 
 OP.MATCH = 'MATCH'
 
+def _sqlite_regexp(value, regex):
+    return re.search(regex, value, re.I) is not None
+
 
 class SqliteExtDatabase(SqliteDatabase):
-    def __init__(self, database, c_extensions=None, *args, **kwargs):
+    def __init__(self, database, c_extensions=None, rank_functions=True,
+                 hash_functions=False, regexp_function=False, *args, **kwargs):
         super(SqliteExtDatabase, self).__init__(database, *args, **kwargs)
         self._extensions = set()
         self._row_factory = None
@@ -730,16 +749,22 @@ class SqliteExtDatabase(SqliteDatabase):
             raise ImproperlyConfigured('SqliteExtDatabase initialized with '
                                        'C extensions, but shared library was '
                                        'not found!')
-        elif CYTHON_SQLITE_EXTENSIONS and (c_extensions is not False):
-            self.register_function(cy_bm25, 'fts_bm25', -1)
-            self.register_function(cy_lucene, 'fts_lucene', -1)
-            self.register_function(cy_murmurhash, 'murmurhash', -1)
-            self.register_function(cy_rank, 'fts_rank', -1)
-            self._c_extensions = True
-        else:
-            self.register_function(bm25, 'fts_bm25', -1)
-            self.register_function(rank, 'fts_rank', -1)
-            self._c_extensions = False
+        prefer_c = CYTHON_SQLITE_EXTENSIONS and (c_extensions is not False)
+        if rank_functions:
+            if prefer_c:
+                register_rank_functions(self)
+            else:
+                self.register_function(bm25, 'fts_bm25')
+                self.register_function(rank, 'fts_rank')
+        if hash_functions:
+            if not prefer_c:
+                raise ValueError('C extension required to register hash '
+                                 'functions.')
+            register_hash_functions(self)
+        if regexp_function:
+            self.register_function(_sqlite_regexp, 'regexp', 2)
+
+        self._c_extensions = prefer_c
 
     def _add_conn_hooks(self, conn):
         super(SqliteExtDatabase, self)._add_conn_hooks(conn)

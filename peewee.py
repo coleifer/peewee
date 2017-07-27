@@ -20,7 +20,6 @@ import threading
 import time
 import uuid
 import warnings
-import weakref
 
 try:
     from pysqlite2 import dbapi2 as pysq3
