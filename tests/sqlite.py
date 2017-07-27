@@ -174,6 +174,7 @@ class Split(TableFunction):
         raise StopIteration
 
 
+@skip_case_unless(sqlite3.sqlite_version_info[:2] >= (3, 9))
 class TestTableFunction(BaseTestCase):
     def setUp(self):
         super(TestTableFunction, self).setUp()
