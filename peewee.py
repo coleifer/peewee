@@ -4323,6 +4323,18 @@ class Metadata(object):
         self.model._schema._database = database
 
 
+class SubclassAwareMetadata(Metadata):
+    models = []
+
+    def __init__(self, model, *args, **kwargs):
+        super(SubclassAwareMetadata, self).__init__(model, *args, **kwargs)
+        self.models.append(model)
+
+    def map_models(self, fn):
+        for model in self.models:
+            fn(model)
+
+
 class DoesNotExist(Exception): pass
 
 
@@ -4492,7 +4504,7 @@ class Model(with_metaclass(ModelBase, Node)):
     @classmethod
     def replace_many(cls, rows, fields=None):
         return (cls
-                .insert_many(insert=rows, columns=fields)
+                .insert_many(rows=rows, fields=fields)
                 .on_conflict('REPLACE'))
 
     @classmethod
