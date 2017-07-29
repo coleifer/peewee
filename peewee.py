@@ -15,6 +15,8 @@ import itertools
 import logging
 import operator
 import re
+import socket
+import struct
 import sys
 import threading
 import time
@@ -3596,6 +3598,14 @@ class TimestampField(IntegerField):
             else:
                 return self._conv(value)
         return value
+
+
+class IPField(IntegerField):
+    def db_value(self, val):
+        return struct.unpack('!I', socket.inet_aton(val))[0] if val else 0
+
+    def python_value(self, val):
+        return socket.inet_ntoa(struct.pack('!I', val)) if val else None
 
 
 class BooleanField(Field):
