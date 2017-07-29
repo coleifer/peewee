@@ -267,3 +267,20 @@ class TestFieldFunction(ModelTestCase):
 
     def test_field_function_alias(self):
         self._test_field_function(PhoneBook.alias())
+
+
+class IPModel(TestModel):
+    ip = IPField()
+    ip_null = IPField(null=True)
+
+
+class TestIPField(ModelTestCase):
+    requires = [IPModel]
+
+    def test_ip_field(self):
+        ips = ('0.0.0.0', '255.255.255.255', '192.168.1.1')
+        for ip in ips:
+            i = IPModel.create(ip=ip)
+            i_db = IPModel.get(ip=ip)
+            self.assertEqual(i_db.ip, ip)
+            self.assertEqual(i_db.ip_null, None)

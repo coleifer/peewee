@@ -3602,10 +3602,12 @@ class TimestampField(IntegerField):
 
 class IPField(IntegerField):
     def db_value(self, val):
-        return struct.unpack('!I', socket.inet_aton(val))[0] if val else 0
+        if val is not None:
+            return struct.unpack('!I', socket.inet_aton(val))[0]
 
     def python_value(self, val):
-        return socket.inet_ntoa(struct.pack('!I', val)) if val else None
+        if val is not None:
+            return socket.inet_ntoa(struct.pack('!I', val))
 
 
 class BooleanField(Field):
