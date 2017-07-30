@@ -3,15 +3,21 @@ import zlib
 from random import randint
 
 from cpython cimport datetime
+from cpython.bytes cimport PyBytes_AsStringAndSize
+from cpython.bytes cimport PyBytes_FromStringAndSize
+from cpython.bytes cimport PyBytes_AS_STRING
 from cpython.mem cimport PyMem_Free
 from cpython.object cimport PyObject
 from cpython.ref cimport Py_INCREF, Py_DECREF
 from libc.float cimport DBL_MAX
 from libc.math cimport log, sqrt
-from libc.stdlib cimport free, malloc
+from libc.stdlib cimport free, malloc, rand
 from libc.string cimport memcpy, memset
 
 from peewee import InterfaceError
+from peewee import Node
+from peewee import OperationalError
+from peewee import sqlite3 as pysqlite
 
 
 cdef struct sqlite3_index_constraint:
@@ -34,9 +40,12 @@ cdef struct sqlite3_index_constraint_usage:
 cdef extern from "sqlite3.h":
     ctypedef struct sqlite3:
         int busyTimeout
+    ctypedef struct sqlite3_backup
+    ctypedef struct sqlite3_blob
     ctypedef struct sqlite3_context
     ctypedef struct sqlite3_value
     ctypedef long long sqlite3_int64
+    ctypedef unsigned long long sqlite_uint64
 
     # Virtual tables.
     ctypedef struct sqlite3_module  # Forward reference.
@@ -152,6 +161,82 @@ cdef extern from "sqlite3.h":
     # Memory management.
     cdef void* sqlite3_malloc(int)
     cdef void sqlite3_free(void *)
+
+    cdef int sqlite3_changes(sqlite3 *db)
+    cdef int sqlite3_get_autocommit(sqlite3 *db)
+    cdef sqlite3_int64 sqlite3_last_insert_rowid(sqlite3 *db)
+
+    cdef void *sqlite3_commit_hook(sqlite3 *, int(*)(void *), void *)
+    cdef void *sqlite3_rollback_hook(sqlite3 *, void(*)(void *), void *)
+    cdef void *sqlite3_update_hook(
+        sqlite3 *,
+        void(*)(void *, int, char *, char *, sqlite3_int64),
+        void *)
+
+    cdef int SQLITE_STATUS_MEMORY_USED = 0
+    cdef int SQLITE_STATUS_PAGECACHE_USED = 1
+    cdef int SQLITE_STATUS_PAGECACHE_OVERFLOW = 2
+    cdef int SQLITE_STATUS_SCRATCH_USED = 3
+    cdef int SQLITE_STATUS_SCRATCH_OVERFLOW = 4
+    cdef int SQLITE_STATUS_MALLOC_SIZE = 5
+    cdef int SQLITE_STATUS_PARSER_STACK = 6
+    cdef int SQLITE_STATUS_PAGECACHE_SIZE = 7
+    cdef int SQLITE_STATUS_SCRATCH_SIZE = 8
+    cdef int SQLITE_STATUS_MALLOC_COUNT = 9
+    cdef int sqlite3_status(int op, int *pCurrent, int *pHighwater, int resetFlag)
+
+    cdef int SQLITE_DBSTATUS_LOOKASIDE_USED = 0
+    cdef int SQLITE_DBSTATUS_CACHE_USED = 1
+    cdef int SQLITE_DBSTATUS_SCHEMA_USED = 2
+    cdef int SQLITE_DBSTATUS_STMT_USED = 3
+    cdef int SQLITE_DBSTATUS_LOOKASIDE_HIT = 4
+    cdef int SQLITE_DBSTATUS_LOOKASIDE_MISS_SIZE = 5
+    cdef int SQLITE_DBSTATUS_LOOKASIDE_MISS_FULL = 6
+    cdef int SQLITE_DBSTATUS_CACHE_HIT = 7
+    cdef int SQLITE_DBSTATUS_CACHE_MISS = 8
+    cdef int SQLITE_DBSTATUS_CACHE_WRITE = 9
+    cdef int SQLITE_DBSTATUS_DEFERRED_FKS = 10
+    #cdef int SQLITE_DBSTATUS_CACHE_USED_SHARED = 11
+    cdef int sqlite3_db_status(sqlite3 *, int op, int *pCur, int *pHigh, int reset)
+
+    cdef int SQLITE_DELETE = 9
+    cdef int SQLITE_INSERT = 18
+    cdef int SQLITE_UPDATE = 23
+
+    # Misc.
+    cdef int sqlite3_busy_handler(sqlite3 *db, int(*)(void *, int), void *)
+    cdef int sqlite3_sleep(int ms)
+    cdef sqlite3_backup *sqlite3_backup_init(
+        sqlite3 *pDest,
+        const char *zDestName,
+        sqlite3 *pSource,
+        const char *zSourceName)
+
+    # Backup.
+    cdef int sqlite3_backup_step(sqlite3_backup *p, int nPage)
+    cdef int sqlite3_backup_finish(sqlite3_backup *p)
+    cdef int sqlite3_backup_remaining(sqlite3_backup *p)
+    cdef int sqlite3_backup_pagecount(sqlite3_backup *p)
+
+    # Error handling.
+    cdef int sqlite3_errcode(sqlite3 *db)
+    cdef int sqlite3_errstr(int)
+    cdef const char *sqlite3_errmsg(sqlite3 *db)
+
+    cdef int sqlite3_blob_open(
+          sqlite3*,
+          const char *zDb,
+          const char *zTable,
+          const char *zColumn,
+          sqlite3_int64 iRow,
+          int flags,
+          sqlite3_blob **ppBlob)
+    cdef int sqlite3_blob_reopen(sqlite3_blob *, sqlite3_int64)
+    cdef int sqlite3_blob_close(sqlite3_blob *)
+    cdef int sqlite3_blob_bytes(sqlite3_blob *)
+    cdef int sqlite3_blob_read(sqlite3_blob *, void *Z, int N, int iOffset)
+    cdef int sqlite3_blob_write(sqlite3_blob *, const void *z, int n,
+                                int iOffset)
 
 
 cdef extern from "_pysqlite/connection.h":
@@ -884,52 +969,334 @@ def register_rank_functions(database):
         (peewee_rank, 'fts_rank')))
 
 
-cdef class median(object):
+cdef inline int _check_connection(pysqlite_Connection *conn) except -1:
+    """
+    Check that the underlying SQLite database connection is usable. Raises an
+    InterfaceError if the connection is either uninitialized or closed.
+    """
+    if not conn.initialized:
+        raise InterfaceError('Connection not initialized.')
+    if not conn.db:
+        raise InterfaceError('Cannot operate on closed database.')
+    return 1
+
+
+class ZeroBlob(Node):
+    def __init__(self, length):
+        if not isinstance(length, int) or length < 0:
+            raise ValueError('Length must be a positive integer.')
+        self.length = length
+
+    def __sql__(self, ctx):
+        return ctx.literal('zeroblob(%s)' % self.length)
+
+
+cdef class Blob(object)  # Forward declaration.
+
+
+cdef inline int _check_blob_closed(Blob blob) except -1:
+    if not blob.pBlob:
+        raise InterfaceError('Cannot operate on closed blob.')
+    return 1
+
+
+cdef class Blob(object):
     cdef:
-        int ct
-        list items
+        int offset
+        pysqlite_Connection *conn
+        sqlite3_blob *pBlob
 
-    def __init__(self):
-        self.ct = 0
-        self.items = []
-
-    cdef selectKth(self, int k, int s=0, int e=-1):
+    def __init__(self, database, table, column, rowid,
+                 read_only=False):
         cdef:
-            int idx
-        if e < 0:
-            e = len(self.items)
-        idx = randint(s, e-1)
-        idx = self.partition_k(idx, s, e)
-        if idx > k:
-            return self.selectKth(k, s, idx)
-        elif idx < k:
-            return self.selectKth(k, idx + 1, e)
-        else:
-            return self.items[idx]
+            int flags = 0 if read_only else 1
+            int rc
+            sqlite3_blob *blob
 
-    cdef int partition_k(self, int pi, int s, int e):
+        self.conn = <pysqlite_Connection *>(database._state.conn)
+        _check_connection(self.conn)
+
+        rc = sqlite3_blob_open(
+            self.conn.db,
+            'main',
+            <char *>table,
+            <char *>column,
+            <long long>rowid,
+            flags,
+            &blob)
+        if rc != SQLITE_OK:
+            raise OperationalError('Unable to open blob.')
+        if not blob:
+            raise MemoryError('Unable to allocate blob.')
+
+        self.pBlob = blob
+        self.offset = 0
+
+    cdef _close(self):
+        if self.pBlob:
+            sqlite3_blob_close(self.pBlob)
+        self.pBlob = <sqlite3_blob *>0
+
+    def __dealloc__(self):
+        self._close()
+
+    def __len__(self):
+        _check_blob_closed(self)
+        return sqlite3_blob_bytes(self.pBlob)
+
+    def read(self, n=None):
         cdef:
-            int i, x
+            bytes pybuf
+            int length = -1
+            int size
+            char *buf
 
-        val = self.items[pi]
-        # Swap pivot w/last item.
-        self.items[e - 1], self.items[pi] = self.items[pi], self.items[e - 1]
-        x = s
-        for i in range(s, e):
-            if self.items[i] < val:
-                self.items[i], self.items[x] = self.items[x], self.items[i]
-                x += 1
-        self.items[x], self.items[e-1] = self.items[e-1], self.items[x]
-        return x
+        if n is not None:
+            length = n
 
-    def step(self, item):
-        self.items.append(item)
-        self.ct += 1
+        _check_blob_closed(self)
+        size = sqlite3_blob_bytes(self.pBlob)
+        if self.offset == size or length == 0:
+            return ''
 
-    def finalize(self):
-        if self.ct == 0:
-            return None
-        elif self.ct < 3:
-            return self.items[0]
+        if length < 0:
+            length = size - self.offset
+
+        if self.offset + length > size:
+            length = size - self.offset
+
+        pybuf = PyBytes_FromStringAndSize(NULL, length)
+        buf = PyBytes_AS_STRING(pybuf)
+        if sqlite3_blob_read(self.pBlob, buf, length, self.offset):
+            self._close()
+            raise OperationalError('Error reading from blob.')
+
+        self.offset += length
+        return bytes(pybuf)
+
+    def seek(self, offset, frame_of_reference=0):
+        cdef int size
+        _check_blob_closed(self)
+        size = sqlite3_blob_bytes(self.pBlob)
+        if frame_of_reference == 0:
+            if offset < 0 or offset > size:
+                raise ValueError('seek() offset outside of valid range.')
+            self.offset = offset
+        elif frame_of_reference == 1:
+            if self.offset + offset < 0 or self.offset + offset > size:
+                raise ValueError('seek() offset outside of valid range.')
+            self.offset += offset
+        elif frame_of_reference == 2:
+            if size + offset < 0 or size + offset > size:
+                raise ValueError('seek() offset outside of valid range.')
+            self.offset = size + offset
         else:
-            return self.selectKth(self.ct / 2)
+            raise ValueError('seek() frame of reference must be 0, 1 or 2.')
+
+    def tell(self):
+        _check_blob_closed(self)
+        return self.offset
+
+    def write(self, data):
+        cdef:
+            char *buf
+            int size
+            Py_ssize_t buflen
+
+        _check_blob_closed(self)
+        size = sqlite3_blob_bytes(self.pBlob)
+        PyBytes_AsStringAndSize(data, &buf, &buflen)
+        if (<int>(buflen + self.offset)) < self.offset:
+            raise ValueError('Data is too large (integer wrap)')
+        if (<int>(buflen + self.offset)) > size:
+            raise ValueError('Data would go beyond end of blob')
+        if sqlite3_blob_write(self.pBlob, buf, buflen, self.offset):
+            raise OperationalError('Error writing to blob.')
+        self.offset += <int>buflen
+
+    def close(self):
+        self._close()
+
+    def reopen(self, rowid):
+        _check_blob_closed(self)
+        self.offset = 0
+        if sqlite3_blob_reopen(self.pBlob, <long long>rowid):
+            self._close()
+            raise OperationalError('Unable to re-open blob.')
+
+
+def sqlite_get_status(flag):
+    cdef:
+        int current, highwater, rc
+
+    rc = sqlite3_status(flag, &current, &highwater, 0)
+    if rc == SQLITE_OK:
+        return (current, highwater)
+    raise Exception('Error requesting status: %s' % rc)
+
+
+def sqlite_get_db_status(conn, flag):
+    cdef:
+        int current, highwater, rc
+        pysqlite_Connection *c_conn = <pysqlite_Connection *>conn
+
+    rc = sqlite3_db_status(c_conn.db, flag, &current, &highwater, 0)
+    if rc == SQLITE_OK:
+        return (current, highwater)
+    raise Exception('Error requesting db status: %s' % rc)
+
+
+cdef class ConnectionHelper(object):
+    cdef:
+        object _commit_hook, _rollback_hook, _update_hook
+        pysqlite_Connection *conn
+
+    def __init__(self, connection):
+        self.conn = <pysqlite_Connection *>connection
+        self._commit_hook = self._rollback_hook = self._update_hook = None
+
+    def __dealloc__(self):
+        # When deallocating a Database object, we need to ensure that we clear
+        # any commit, rollback or update hooks that may have been applied.
+        if not self.conn.initialized or not self.conn.db:
+            return
+
+        if self._commit_hook is not None:
+            sqlite3_commit_hook(self.conn.db, NULL, NULL)
+        if self._rollback_hook is not None:
+            sqlite3_rollback_hook(self.conn.db, NULL, NULL)
+        if self._update_hook is not None:
+            sqlite3_update_hook(self.conn.db, NULL, NULL)
+
+    def set_commit_hook(self, fn):
+        self._commit_hook = fn
+        if fn is None:
+            sqlite3_commit_hook(self.conn.db, NULL, NULL)
+        else:
+            sqlite3_commit_hook(self.conn.db, _commit_callback, <void *>fn)
+
+    def set_rollback_hook(self, fn):
+        self._rollback_hook = fn
+        if fn is None:
+            sqlite3_rollback_hook(self.conn.db, NULL, NULL)
+        else:
+            sqlite3_rollback_hook(self.conn.db, _rollback_callback, <void *>fn)
+
+    def set_update_hook(self, fn):
+        self._update_hook = fn
+        if fn is None:
+            sqlite3_update_hook(self.conn.db, NULL, NULL)
+        else:
+            sqlite3_update_hook(self.conn.db, _update_callback, <void *>fn)
+
+    def set_busy_handler(self, timeout=5000):
+        """
+        Replace the default busy handler with one that introduces some "jitter"
+        into the amount of time delayed between checks.
+        """
+        cdef int n = timeout
+        sqlite3_busy_handler(self.conn.db, _aggressive_busy_handler, <void *>n)
+        return True
+
+    def changes(self):
+        return sqlite3_changes(self.conn.db)
+
+    def last_insert_rowid(self):
+        return <int>sqlite3_last_insert_rowid(self.conn.db)
+
+    def autocommit(self):
+        return sqlite3_get_autocommit(self.conn.db) != 0
+
+
+cdef int _commit_callback(void *userData) with gil:
+    # C-callback that delegates to the Python commit handler. If the Python
+    # function raises a ValueError, then the commit is aborted and the
+    # transaction rolled back. Otherwise, regardless of the function return
+    # value, the transaction will commit.
+    cdef object fn = <object>userData
+    try:
+        fn()
+    except ValueError:
+        return 1
+    else:
+        return SQLITE_OK
+
+
+cdef void _rollback_callback(void *userData) with gil:
+    # C-callback that delegates to the Python rollback handler.
+    cdef object fn = <object>userData
+    fn()
+
+
+cdef void _update_callback(void *userData, int queryType, char *database,
+                            char *table, sqlite3_int64 rowid) with gil:
+    # C-callback that delegates to a Python function that is executed whenever
+    # the database is updated (insert/update/delete queries). The Python
+    # callback receives a string indicating the query type, the name of the
+    # database, the name of the table being updated, and the rowid of the row
+    # being updatd.
+    cdef object fn = <object>userData
+    if queryType == SQLITE_INSERT:
+        query = 'INSERT'
+    elif queryType == SQLITE_UPDATE:
+        query = 'UPDATE'
+    elif queryType == SQLITE_DELETE:
+        query = 'DELETE'
+    else:
+        query = ''
+    fn(query, str(database), str(table), <int>rowid)
+
+
+def backup(src_conn, dest_conn):
+    cdef:
+        pysqlite_Connection *src = <pysqlite_Connection *>src_conn
+        pysqlite_Connection *dest = <pysqlite_Connection *>dest_conn
+        sqlite3 *src_db = src.db
+        sqlite3 *dest_db = dest.db
+        sqlite3_backup *backup
+
+    backup = sqlite3_backup_init(dest_db, 'main', src_db, 'main')
+    if (backup == NULL):
+        raise OperationalError('Unable to initialize backup.')
+
+    sqlite3_backup_step(backup, -1)
+    sqlite3_backup_finish(backup)
+    if sqlite3_errcode(dest_db):
+        raise OperationalError('Error finishing backup: %s' %
+                               sqlite3_errmsg(dest_db))
+    return True
+
+
+def backup_to_file(src_conn, filename):
+    dest_conn = pysqlite.connect(filename)
+    backup(src_conn, dest_conn)
+    dest_conn.close()
+    return True
+
+
+cdef int _aggressive_busy_handler(void *ptr, int n):
+    # In concurrent environments, it often seems that if multiple queries are
+    # kicked off at around the same time, they proceed in lock-step to check
+    # for the availability of the lock. By introducing some "jitter" we can
+    # ensure that this doesn't happen. Furthermore, this function makes more
+    # attempts in the same time period than the default handler.
+    cdef:
+        int busyTimeout = <int>ptr
+        int current, total
+
+    if n < 20:
+        current = 25 - (rand() % 10)  # ~20ms
+        total = n * 20
+    elif n < 40:
+        current = 50 - (rand() % 20)  # ~40ms
+        total = 400 + ((n - 20) * 40)
+    else:
+        current = 120 - (rand() % 40)  # ~100ms
+        total = 1200 + ((n - 40) * 100)  # Estimate the amount of time slept.
+
+    if total + current > busyTimeout:
+        current = busyTimeout - total
+    if current > 0:
+        sqlite3_sleep(current)
+        return 1
+    return 0

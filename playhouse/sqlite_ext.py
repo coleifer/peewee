@@ -7,8 +7,17 @@ import sys
 from peewee import *
 from peewee import sqlite3
 try:
-    from playhouse._sqlite_ext import register_hash_functions
-    from playhouse._sqlite_ext import register_rank_functions
+    from playhouse._sqlite_ext import (
+        backup,
+        backup_to_file,
+        Blob,
+        ConnectionHelper,
+        register_hash_functions,
+        register_rank_functions,
+        sqlite_get_db_status,
+        sqlite_get_status,
+        ZeroBlob,
+    )
     CYTHON_SQLITE_EXTENSIONS = True
 except ImportError:
     CYTHON_SQLITE_EXTENSIONS = False
@@ -803,6 +812,151 @@ class SqliteExtDatabase(SqliteDatabase):
 
     def row_factory(self, fn):
         self._row_factory = fn
+
+
+if CYTHON_SQLITE_EXTENSIONS:
+    SQLITE_STATUS_MEMORY_USED = 0
+    SQLITE_STATUS_PAGECACHE_USED = 1
+    SQLITE_STATUS_PAGECACHE_OVERFLOW = 2
+    SQLITE_STATUS_SCRATCH_USED = 3
+    SQLITE_STATUS_SCRATCH_OVERFLOW = 4
+    SQLITE_STATUS_MALLOC_SIZE = 5
+    SQLITE_STATUS_PARSER_STACK = 6
+    SQLITE_STATUS_PAGECACHE_SIZE = 7
+    SQLITE_STATUS_SCRATCH_SIZE = 8
+    SQLITE_STATUS_MALLOC_COUNT = 9
+    SQLITE_DBSTATUS_LOOKASIDE_USED = 0
+    SQLITE_DBSTATUS_CACHE_USED = 1
+    SQLITE_DBSTATUS_SCHEMA_USED = 2
+    SQLITE_DBSTATUS_STMT_USED = 3
+    SQLITE_DBSTATUS_LOOKASIDE_HIT = 4
+    SQLITE_DBSTATUS_LOOKASIDE_MISS_SIZE = 5
+    SQLITE_DBSTATUS_LOOKASIDE_MISS_FULL = 6
+    SQLITE_DBSTATUS_CACHE_HIT = 7
+    SQLITE_DBSTATUS_CACHE_MISS = 8
+    SQLITE_DBSTATUS_CACHE_WRITE = 9
+    SQLITE_DBSTATUS_DEFERRED_FKS = 10
+    #SQLITE_DBSTATUS_CACHE_USED_SHARED = 11
+
+    def __status__(flag, return_highwater=False):
+        """
+        Expose a sqlite3_status() call for a particular flag as a property of the
+        Database object.
+        """
+        def getter(self):
+            result = sqlite_get_status(flag)
+            return result[1] if return_highwater else result
+        return property(getter)
+
+    def __dbstatus__(flag, return_highwater=False, return_current=False):
+        """
+        Expose a sqlite3_dbstatus() call for a particular flag as a property of the
+        Database instance. Unlike sqlite3_status(), the dbstatus properties pertain
+        to the current connection.
+        """
+        def getter(self):
+            result = sqlite_get_db_status(self._state.conn, flag)
+            if return_current:
+                return result[0]
+            return result[1] if return_highwater else result
+        return property(getter)
+
+    class SqliteExtDatabaseExtra(SqliteExtDatabase):
+        def __init__(self, *args, **kwargs):
+            self._conn_helper = None
+            self._commit_hook = self._rollback_hook = self._update_hook = None
+            self._replace_busy_handler = False
+            super(SqliteExtDatabaseExtra, self).__init__(*args, **kwargs)
+
+        def init(self, database, replace_busy_handler=False, **kwargs):
+            super(SqliteExtDatabaseExtra, self).init(database, **kwargs)
+            self._replace_busy_handler = replace_busy_handler
+
+        def _close(self, conn):
+            if self._commit_hook:
+                self._conn_helper.set_commit_hook(None)
+            if self._rollback_hook:
+                self._conn_helper.set_rollback_hook(None)
+            if self._update_hook:
+                self._conn_helper.set_update_hook(None)
+            return super(SqliteExtDatabaseExtra, self)._close(conn)
+
+        def _add_conn_hooks(self, conn):
+            super(SqliteExtDatabaseExtra, self)._add_conn_hooks(conn)
+            self._conn_helper = ConnectionHelper(conn)
+            if self._commit_hook is not None:
+                self._conn_helper.set_commit_hook(self._commit_hook)
+            if self._rollback_hook is not None:
+                self._conn_helper.set_rollback_hook(self._rollback_hook)
+            if self._update_hook is not None:
+                self._conn_helper.set_update_hook(self._update_hook)
+            if self._replace_busy_handler:
+                self._conn_helper.set_busy_handler(self.timeout or 5000)
+
+        def on_commit(self, fn):
+            self._commit_hook = fn
+            if not self.is_closed():
+                self._conn_helper.set_commit_hook(fn)
+            return fn
+
+        def on_rollback(self, fn):
+            self._rollback_hook = fn
+            if not self.is_closed():
+                self._conn_helper.set_rollback_hook(fn)
+            return fn
+
+        def on_update(self, fn):
+            self._update_hook = fn
+            if not self.is_closed():
+                self._conn_helper.set_update_hook(fn)
+            return fn
+
+        def changes(self):
+            return self._conn_helper.changes()
+
+        @property
+        def last_insert_rowid(self):
+            return self._conn_helper.last_insert_rowid()
+
+        @property
+        def autocommit(self):
+            return self._conn_helper.autocommit()
+
+        def backup(self, destination):
+            return backup(self.connection(), destination.connection())
+
+        def backup_to_file(self, filename):
+            return backup_to_file(self.connection(), filename)
+
+        def blob_open(self, table, column, rowid, read_only=False):
+            return Blob(self, table, column, rowid, read_only)
+
+        # Status properties.
+        memory_used = __status__(SQLITE_STATUS_MEMORY_USED)
+        malloc_size = __status__(SQLITE_STATUS_MALLOC_SIZE, True)
+        malloc_count = __status__(SQLITE_STATUS_MALLOC_COUNT)
+        pagecache_used = __status__(SQLITE_STATUS_PAGECACHE_USED)
+        pagecache_overflow = __status__(SQLITE_STATUS_PAGECACHE_OVERFLOW)
+        pagecache_size = __status__(SQLITE_STATUS_PAGECACHE_SIZE, True)
+        scratch_used = __status__(SQLITE_STATUS_SCRATCH_USED)
+        scratch_overflow = __status__(SQLITE_STATUS_SCRATCH_OVERFLOW)
+        scratch_size = __status__(SQLITE_STATUS_SCRATCH_SIZE, True)
+
+        # Connection status properties.
+        lookaside_used = __dbstatus__(SQLITE_DBSTATUS_LOOKASIDE_USED)
+        lookaside_hit = __dbstatus__(SQLITE_DBSTATUS_LOOKASIDE_HIT, True)
+        lookaside_miss = __dbstatus__(SQLITE_DBSTATUS_LOOKASIDE_MISS_SIZE,
+                                      True)
+        lookaside_miss_full = __dbstatus__(SQLITE_DBSTATUS_LOOKASIDE_MISS_FULL,
+                                           True)
+        cache_used = __dbstatus__(SQLITE_DBSTATUS_CACHE_USED, False, True)
+        #cache_used_shared = __dbstatus__(SQLITE_DBSTATUS_CACHE_USED_SHARED,
+        #                                 False, True)
+        schema_used = __dbstatus__(SQLITE_DBSTATUS_SCHEMA_USED, False, True)
+        statement_used = __dbstatus__(SQLITE_DBSTATUS_STMT_USED, False, True)
+        cache_hit = __dbstatus__(SQLITE_DBSTATUS_CACHE_HIT, False, True)
+        cache_miss = __dbstatus__(SQLITE_DBSTATUS_CACHE_MISS, False, True)
+        cache_write = __dbstatus__(SQLITE_DBSTATUS_CACHE_WRITE, False, True)
 
 
 def match(lhs, rhs):

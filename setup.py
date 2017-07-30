@@ -47,10 +47,6 @@ sqlite_ext_module = Extension(
     'playhouse._sqlite_ext',
     ['playhouse/_sqlite_ext.pyx'],
     libraries=['sqlite3'])
-cysqlite_ext_module = Extension(
-    'playhouse._cysqlite_ext',
-    ['playhouse/_cysqlite_ext.pyx'],
-    libraries=['sqlite3'])
 
 
 if cython_installed:
@@ -58,7 +54,6 @@ if cython_installed:
         speedups_ext_module,
         sqlite_udf_module,
         sqlite_ext_module,
-        cysqlite_ext_module,
     ])
 
 if ext_modules:
