@@ -3988,7 +3988,11 @@ class SchemaManager(object):
             constraints.extend(meta.constraints)
 
         constraints.extend(self._create_table_option_sql(options))
-        return ctx.sql(EnclosedNodeList(columns + constraints))
+        ctx.sql(EnclosedNodeList(columns + constraints))
+
+        if meta.without_rowid:
+            ctx.literal(' WITHOUT ROWID')
+        return ctx
 
     def _create_table_option_sql(self, options):
         accum = []
@@ -4110,7 +4114,8 @@ class Metadata(object):
     def __init__(self, model, database=None, table_name=None, indexes=None,
                  primary_key=None, constraints=None, schema=None,
                  only_save_dirty=False, table_alias=None, depends_on=None,
-                 options=None, db_table=None, table_function=None, **kwargs):
+                 options=None, db_table=None, table_function=None,
+                 without_rowid=False, **kwargs):
         if db_table is not None:
             __deprecated__('"db_table" has been deprecated in favor of '
                            '"table_name" for Models.')
@@ -4149,6 +4154,7 @@ class Metadata(object):
         self.only_save_dirty = only_save_dirty
         self.table_alias = table_alias
         self.depends_on = depends_on
+        self.without_rowid = without_rowid
 
         self.refs = {}
         self.backrefs = {}

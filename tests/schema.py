@@ -34,6 +34,14 @@ class TMConstraints(TestModel):
     value = TextField(collation='NOCASE')
 
 
+class NoRowid(TestModel):
+    key = TextField(primary_key=True)
+    value = TextField()
+
+    class Meta:
+        without_rowid = True
+
+
 class TestModelDDL(ModelDatabaseTestCase):
     database = get_in_memory_db()
     requires = [Category, Note, Person, Relationship, TMUnique,
@@ -50,6 +58,15 @@ class TestModelDDL(ModelDatabaseTestCase):
             indexes.append(isql)
 
         self.assertEqual([sql] + indexes, expected)
+
+    def test_without_rowid(self):
+        NoRowid._meta.database = self.database
+        self.assertCreateTable(NoRowid, [
+            ('CREATE TABLE "norowid" ('
+             '"key" TEXT NOT NULL PRIMARY KEY, '
+             '"value" TEXT NOT NULL) WITHOUT ROWID')])
+
+        NoRowid._meta.database = None
 
     def test_temporary_table(self):
         sql, params = User._schema._create_table(temporary=True).query()
