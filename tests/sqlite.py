@@ -947,7 +947,7 @@ class TestRowIDField(ModelTestCase):
     requires = [RowIDModel]
 
     def test_model_meta(self):
-        self.assertEqual(RowIDModel._meta.sorted_field_names, ['data'])
+        self.assertEqual(RowIDModel._meta.sorted_field_names, ['rowid', 'data'])
         self.assertEqual(RowIDModel._meta.primary_key.name, 'rowid')
         self.assertTrue(RowIDModel._meta.auto_increment)
 
@@ -962,11 +962,11 @@ class TestRowIDField(ModelTestCase):
 
         query = RowIDModel.select().where(RowIDModel.rowid == 2)
         self.assertSQL(query, (
-            'SELECT "t1"."data" '
+            'SELECT "t1"."rowid", "t1"."data" '
             'FROM "rowidmodel" AS "t1" '
             'WHERE ("t1"."rowid" = ?)'), [2])
         r_db = query.get()
-        self.assertEqual(r_db.rowid, None)
+        self.assertEqual(r_db.rowid, 2)
         self.assertEqual(r_db.data, 20)
 
         r_db2 = query.columns(RowIDModel.rowid, RowIDModel.data).get()
@@ -1326,7 +1326,7 @@ class TestFTS5(ModelTestCase):
     def test_search(self):
         query = FTS5Test.search('bb')
         self.assertSQL(query, (
-            'SELECT "t1"."title", "t1"."data", "t1"."misc" '
+            'SELECT "t1"."rowid", "t1"."title", "t1"."data", "t1"."misc" '
             'FROM "fts5test" AS "t1" '
             'WHERE ("fts5test" MATCH ?) ORDER BY rank'), ['bb'])
         self.assertResults(query, ['nug aa dd', 'foo aa bb', 'bar bb cc'])

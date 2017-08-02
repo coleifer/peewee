@@ -37,14 +37,9 @@ else:
 FTS5_MIN_SQLITE_VERSION = (3, 9, 0)
 
 
-class RowIDField(VirtualField):
+class RowIDField(AutoField):
     auto_increment = True
     column_name = name = required_name = 'rowid'
-    field_class = AutoField
-
-    def __init__(self, *args, **kwargs):
-        kwargs['primary_key'] = True
-        super(RowIDField, self).__init__(*args, **kwargs)
 
     def bind(self, model, name, *args):
         if name != self.required_name:
@@ -169,6 +164,8 @@ class VirtualTableSchemaManager(SchemaManager):
 
         # Constraints, data-types, foreign and primary keys are all omitted.
         for field in meta.sorted_fields:
+            if isinstance(field, RowIDField):
+                continue
             field_def = [Entity(field.column_name)]
             if field.unindexed:
                 field_def.append(SQL('UNINDEXED'))
