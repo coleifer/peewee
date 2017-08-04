@@ -737,6 +737,29 @@ def ClosureTable(model_class, foreign_key=None, referencing_class=None,
     return type(name, (BaseClosureTable,), {'Meta': Meta})
 
 
+class LSMModel(Model):
+    key = VirtualField(TextField)
+    value = VirtualField(TextField)
+
+    class Meta:
+        extension_module = 'lsm1'
+        filename = None
+        primary_key = False
+
+    @classmethod
+    def clean_options(cls, options):
+        if not cls._meta.filename:
+            raise ValueError('LSM extension model classes must provide a '
+                             'filename for the LSM database.')
+        else:
+            cls._meta.arguments = (cls._meta.filename,)
+        return options
+
+    @classmethod
+    def load_extension(cls, path='lsm.so'):
+        cls._meta.database.load_extension(path)
+
+
 OP.MATCH = 'MATCH'
 
 def _sqlite_regexp(value, regex):
