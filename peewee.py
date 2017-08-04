@@ -3600,7 +3600,7 @@ class TimestampField(IntegerField):
         return value
 
 
-class IPField(IntegerField):
+class IPField(BigIntegerField):
     def db_value(self, val):
         if val is not None:
             return struct.unpack('!I', socket.inet_aton(val))[0]
