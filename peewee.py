@@ -3228,7 +3228,7 @@ class Field(ColumnBase):
                  default=None, primary_key=False, constraints=None,
                  sequence=None, collation=None, unindexed=False, choices=None,
                  help_text=None, verbose_name=None, db_column=None,
-                 related_name=None):
+                 related_name=None, _hidden=False):
         if db_column is not None:
             __deprecated__('"db_column" has been deprecated in favor of '
                            '"column_name" for Field objects.')
@@ -3251,6 +3251,7 @@ class Field(ColumnBase):
         self.choices = choices
         self.help_text = help_text
         self.verbose_name = verbose_name
+        self._hidden = _hidden
 
         # Used internally for recovering the order in which Fields were defined
         # on the Model class.
@@ -3613,6 +3614,14 @@ class IPField(BigIntegerField):
 class BooleanField(Field):
     field_type = 'BOOL'
     coerce = bool
+
+
+class BareField(Field):
+    def db_value(self, value): return value
+    def python_value(self, value): return value
+
+    def ddl(self, ctx):
+        return Entity(self.column_name)
 
 
 class ForeignKeyField(Field):
@@ -4450,6 +4459,23 @@ class ModelBase(type):
     def __iter__(self):
         return iter(self.select())
 
+    def __getitem__(self, key):
+        return self.get_by_id(key)
+
+    def __setitem__(self, key, value):
+        self.set_by_id(key, value)
+
+    def __delitem__(self, key):
+        self.delete_by_id(key)
+
+    def __contains__(self, key):
+        try:
+            self.get_by_id(key)
+        except self.DoesNotExist:
+            return False
+        else:
+            return True
+
 
 class Model(with_metaclass(ModelBase, Node)):
     def __init__(self, *args, **kwargs):
@@ -4493,7 +4519,10 @@ class Model(with_metaclass(ModelBase, Node)):
                 normalized[field] = data[key]
         if kwargs:
             for key in kwargs:
-                normalized[cls._meta.combined[key]] = kwargs[key]
+                try:
+                    normalized[cls._meta.combined[key]] = kwargs[key]
+                except KeyError:
+                    normalized[getattr(cls, key)] = kwargs[key]
         return normalized
 
     @classmethod
@@ -4553,6 +4582,14 @@ class Model(with_metaclass(ModelBase, Node)):
     @classmethod
     def get_by_id(cls, pk):
         return cls.get(cls._meta.primary_key == pk)
+
+    @classmethod
+    def set_by_id(cls, key, value):
+        return cls.update(value).where(cls._meta.primary_key == key).execute()
+
+    @classmethod
+    def delete_by_id(cls, pk):
+        return cls.delete().where(cls._meta.primary_key == pk).execute()
 
     @classmethod
     def get_or_create(cls, **kwargs):

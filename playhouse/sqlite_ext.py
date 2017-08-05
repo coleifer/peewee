@@ -6,6 +6,7 @@ import sys
 
 from peewee import *
 from peewee import sqlite3
+from peewee import text_type
 try:
     from playhouse._sqlite_ext import (
         backup,
@@ -151,6 +152,9 @@ class SearchField(Field):
 
 class VirtualTableSchemaManager(SchemaManager):
     def _create_virtual_table(self, safe=True, **options):
+        options = self.model.clean_options(
+            merge_dict(self.model._meta.options, options))
+
         ctx = self._create_context()
         ctx.literal('CREATE VIRTUAL TABLE ')
         if safe:
@@ -164,7 +168,7 @@ class VirtualTableSchemaManager(SchemaManager):
 
         # Constraints, data-types, foreign and primary keys are all omitted.
         for field in meta.sorted_fields:
-            if isinstance(field, RowIDField):
+            if isinstance(field, (RowIDField)) or field._hidden:
                 continue
             field_def = [Entity(field.column_name)]
             if field.unindexed:
@@ -174,8 +178,6 @@ class VirtualTableSchemaManager(SchemaManager):
         if meta.arguments:
             arguments.extend([SQL(a) for a in meta.arguments])
 
-        options = self.model.clean_options(
-            merge_dict(self.model._meta.options, options))
         if options:
             arguments.extend(self._create_table_option_sql(options))
         return ctx.sql(EnclosedNodeList(arguments))
@@ -737,27 +739,76 @@ def ClosureTable(model_class, foreign_key=None, referencing_class=None,
     return type(name, (BaseClosureTable,), {'Meta': Meta})
 
 
-class LSMModel(Model):
-    key = VirtualField(TextField)
-    value = VirtualField(TextField)
+class LSM(VirtualModel):
+    key = BareField(_hidden=True, primary_key=True)
+    value = BareField(_hidden=True)
 
     class Meta:
         extension_module = 'lsm1'
         filename = None
-        primary_key = False
 
     @classmethod
     def clean_options(cls, options):
-        if not cls._meta.filename:
+        filename = cls._meta.filename
+        if not filename:
             raise ValueError('LSM extension model classes must provide a '
                              'filename for the LSM database.')
         else:
-            cls._meta.arguments = (cls._meta.filename,)
+            if len(filename) >= 2 and filename[0] != '"':
+                filename = '"%s"' % filename
+            cls._meta.arguments = (filename,)
+        if set(cls._meta.fields) != set(('key', 'value')):
+            raise ValueError('LSM extension model classes may only have a '
+                             'key and a value field.')
         return options
 
     @classmethod
     def load_extension(cls, path='lsm.so'):
         cls._meta.database.load_extension(path)
+
+    @classmethod
+    def update(cls, **update):
+        cls.insert_many([{cls.key: key, cls.value: update[key]}
+                         for key in update]).execute()
+
+    @classmethod
+    def delete(cls):
+        raise NotImplementedError('DELETE statement is not supported by the '
+                                  'LSM1 extension. To remove a key, use an '
+                                  'INSERT query with a NULL value.')
+
+    def save(self, force_insert=True):
+        if not force_insert:
+            raise NotImplementedError('Cannot save() with force_insert=False. '
+                                      'LSM1 extension does not support UPDATE '
+                                      'statement, so INSERT must be used.')
+        return super(LSM, self).save(force_insert=True)
+
+    def delete_instance(self):
+        type(self).insert(key=self.key, value=None).execute()
+
+    @classmethod
+    def get_by_id(cls, pk):
+        # So the LSM1 extension has a limitation in that it does not decode
+        # the incoming key when doing an exact lookup. We'll prefix it
+        # ourselves for now.
+        if isinstance(pk, text_type):
+            pk = pk.encode('utf-8')
+        key = sqlite3.Binary('\x02%s' % pk)
+        try:
+            obj = cls.select(cls.value).where(cls.key == key).limit(1).get()
+        except cls.DoesNotExist:
+            raise KeyError(pk)
+        else:
+            return obj.value
+
+    @classmethod
+    def set_by_id(cls, key, value):
+        cls.insert(key=key, value=value).execute()
+
+    @classmethod
+    def delete_by_id(cls, pk):
+        cls.insert(key=pk, value=None).execute()
 
 
 OP.MATCH = 'MATCH'
