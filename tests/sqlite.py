@@ -1086,7 +1086,7 @@ class TestTransitiveClosureManyToMany(BaseTestCase):
         assertPeople(PC.siblings(z), [])
 
 
-@skip_case_unless(os.path.exists(CLOSURE_EXTENSION))
+@skip_case_unless(CLOSURE_EXTENSION and os.path.exists(CLOSURE_EXTENSION))
 class TestTransitiveClosureIntegration(BaseTestCase):
     tree = {
         'books': [
@@ -1342,7 +1342,7 @@ class KeyValue(LSM):
         filename = 'test_lsm.ldb'
 
 
-@skip_case_unless(os.path.exists(LSM_EXTENSION))
+@skip_case_unless(LSM_EXTENSION and os.path.exists(LSM_EXTENSION))
 class TestLSMExtension(BaseTestCase):
     def setUp(self):
         super(TestLSMExtension, self).setUp()
