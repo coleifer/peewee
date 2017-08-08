@@ -11,6 +11,8 @@ from cpython.object cimport PyObject
 from cpython.ref cimport Py_INCREF, Py_DECREF
 from libc.float cimport DBL_MAX
 from libc.math cimport log, sqrt
+#from libc.stdint cimport ssize_t
+from libc.stdint cimport uint32_t
 from libc.stdlib cimport free, malloc, rand
 from libc.string cimport memcpy, memset
 
@@ -863,23 +865,22 @@ def peewee_bm25f(py_match_info, *raw_weights):
     return -1 * score
 
 
-cdef unsigned int murmurhash2(const char *key, int nlen, unsigned int seed):
+cdef uint32_t murmurhash2(const unsigned char *key, ssize_t nlen,
+                          uint32_t seed):
     cdef:
-        unsigned int m = 0x5bd1e995
+        uint32_t m = 0x5bd1e995
         int r = 24
-        unsigned int l = nlen
-        unsigned char *data = <unsigned char *>key
-        unsigned int h = seed
-        unsigned int k
-        unsigned int t = 0
+        const unsigned char *data = key
+        uint32_t h = seed ^ nlen
+        uint32_t k
 
     while nlen >= 4:
-        k = <unsigned int>(<unsigned int *>data)[0]
+        k = <uint32_t>((<uint32_t *>data)[0])
 
-        # mmix(h, k).
         k *= m
         k = k ^ (k >> r)
         k *= m
+
         h *= m
         h = h ^ k
 
@@ -887,30 +888,16 @@ cdef unsigned int murmurhash2(const char *key, int nlen, unsigned int seed):
         nlen -= 4
 
     if nlen == 3:
-        t = t ^ (data[2] << 16)
+        h = h ^ (data[2] << 16)
     if nlen >= 2:
-        t = t ^ (data[1] << 8)
+        h = h ^ (data[1] << 8)
     if nlen >= 1:
-        t = t ^ (data[0])
-
-    # mmix(h, t).
-    t *= m
-    t = t ^ (t >> r)
-    t *= m
-    h *= m
-    h = h ^ t
-
-    # mmix(h, l).
-    l *= m
-    l = l ^ (l >> r)
-    l *= m
-    h *= m
-    h = h ^ l
+        h = h ^ (data[0])
+        h *= m
 
     h = h ^ (h >> 13)
     h *= m
     h = h ^ (h >> 15)
-
     return h
 
 
@@ -928,7 +915,7 @@ def peewee_murmurhash(key, seed=None):
         bkey = <bytes>key
 
     if key:
-        return murmurhash2(<char *>bkey, len(bkey), nseed)
+        return murmurhash2(<unsigned char *>bkey, len(bkey), nseed)
     return 0
 
 

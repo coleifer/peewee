@@ -848,10 +848,10 @@ class TestMurmurHash(ModelTestCase):
         self.assertEqual(cursor.fetchone()[0], e)
 
     def test_murmur_hash(self):
-        self.assertHash('testkey', 3599487917)
-        self.assertHash('murmur', 4160318927)
+        self.assertHash('testkey', 2871421366)
+        self.assertHash('murmur', 3883399899)
         self.assertHash('', 0)
-        self.assertHash('this is a test of a longer string', 3556042345)
+        self.assertHash('this is a test of a longer string', 2569735385)
         self.assertHash(None, None)
 
     @skip_if(sys.version_info[0] == 3)
