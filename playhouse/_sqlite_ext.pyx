@@ -8,6 +8,7 @@ from cpython.bytes cimport PyBytes_AsStringAndSize
 from cpython.bytes cimport PyBytes_FromStringAndSize
 from cpython.bytes cimport PyBytes_AS_STRING
 from cpython.mem cimport PyMem_Free
+from cpython.mem cimport PyMem_Malloc
 from cpython.object cimport PyObject
 from cpython.ref cimport Py_INCREF, Py_DECREF
 from libc.float cimport DBL_MAX
@@ -206,6 +207,29 @@ cdef extern from "sqlite3.h":
     cdef int SQLITE_DELETE = 9
     cdef int SQLITE_INSERT = 18
     cdef int SQLITE_UPDATE = 23
+
+    cdef int SQLITE_CONFIG_SINGLETHREAD = 1  # None
+    cdef int SQLITE_CONFIG_MULTITHREAD = 2  # None
+    cdef int SQLITE_CONFIG_SERIALIZED = 3  # None
+    cdef int SQLITE_CONFIG_SCRATCH = 6  # void *, int sz, int N
+    cdef int SQLITE_CONFIG_PAGECACHE = 7  # void *, int sz, int N
+    cdef int SQLITE_CONFIG_HEAP = 8  # void *, int nByte, int min
+    cdef int SQLITE_CONFIG_MEMSTATUS = 9  # boolean
+    cdef int SQLITE_CONFIG_LOOKASIDE = 13  # int, int
+    cdef int SQLITE_CONFIG_URI = 17  # int
+    cdef int SQLITE_CONFIG_MMAP_SIZE = 22  # sqlite3_int64, sqlite3_int64
+    cdef int SQLITE_CONFIG_STMTJRNL_SPILL = 26  # int nByte
+    cdef int SQLITE_DBCONFIG_MAINDBNAME = 1000  # const char*
+    cdef int SQLITE_DBCONFIG_LOOKASIDE = 1001  # void* int int
+    cdef int SQLITE_DBCONFIG_ENABLE_FKEY = 1002  # int int*
+    cdef int SQLITE_DBCONFIG_ENABLE_TRIGGER = 1003  # int int*
+    cdef int SQLITE_DBCONFIG_ENABLE_FTS3_TOKENIZER = 1004  # int int*
+    cdef int SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION = 1005  # int int*
+    cdef int SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE = 1006  # int int*
+    cdef int SQLITE_DBCONFIG_ENABLE_QPSG = 1007  # int int*
+
+    cdef int sqlite3_config(int, ...)
+    cdef int sqlite3_db_config(sqlite3*, int op, ...)
 
     # Misc.
     cdef int sqlite3_busy_handler(sqlite3 *db, int(*)(void *, int), void *)
