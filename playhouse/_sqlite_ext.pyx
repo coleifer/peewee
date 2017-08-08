@@ -2,6 +2,7 @@ import hashlib
 import zlib
 from random import randint
 
+cimport cython
 from cpython cimport datetime
 from cpython.bytes cimport PyBytes_AsStringAndSize
 from cpython.bytes cimport PyBytes_FromStringAndSize
@@ -12,9 +13,10 @@ from cpython.ref cimport Py_INCREF, Py_DECREF
 from libc.float cimport DBL_MAX
 from libc.math cimport log, sqrt
 #from libc.stdint cimport ssize_t
+from libc.stdint cimport uint8_t
 from libc.stdint cimport uint32_t
-from libc.stdlib cimport free, malloc, rand
-from libc.string cimport memcpy, memset
+from libc.stdlib cimport calloc, free, malloc, rand
+from libc.string cimport memcpy, memset, strlen
 
 from peewee import InterfaceError
 from peewee import Node
@@ -954,6 +956,103 @@ def register_rank_functions(database):
         (peewee_bm25f, 'fts_bm25f'),
         (peewee_lucene, 'fts_lucene'),
         (peewee_rank, 'fts_rank')))
+
+
+ctypedef struct bf_t:
+    void *bits
+    size_t size
+
+cdef bf_t *bf_create(size_t size):
+    cdef bf_t *bf = <bf_t *>calloc(1, sizeof(bf[0]))
+    bf.size = size
+    bf.bits = malloc(size)
+    return bf
+
+@cython.cdivision(True)
+cdef uint32_t bf_hash(bf_t *bf, unsigned char *key):
+    cdef:
+        uint32_t h = murmurhash2(key, strlen(<const char *>key), 0)
+    return h % (bf.size * 8)
+
+@cython.cdivision(True)
+cdef bf_add(bf_t *bf, unsigned char *key):
+    cdef:
+        int pos
+        uint8_t *bits = <uint8_t *>(bf.bits)
+        uint32_t h = bf_hash(bf, key)
+
+    pos = h / 8
+    bits[pos] = bits[pos] | (1 << (h % 8))
+
+@cython.cdivision(True)
+cdef int bf_contains(bf_t *bf, unsigned char *key):
+    cdef:
+        int pos
+        uint8_t *bits = <uint8_t *>(bf.bits)
+        uint32_t h = bf_hash(bf, key)
+
+    pos = h / 8
+    return 1 if (bits[pos] & (1 << (h % 8))) else 0
+
+cdef bf_free(bf_t *bf):
+    free(bf.bits)
+    free(bf)
+
+
+cdef class BloomFilterAggregate(object):
+    cdef:
+        bf_t *bf
+
+    def __init__(self):
+        self.bf = <bf_t *>0
+
+    def __dealloc__(self):
+        if self.bf:
+            bf_free(self.bf)
+
+    def step(self, value, size=None):
+        cdef:
+            bytes bvalue
+
+        if not self.bf:
+            size = size or 1024
+            self.bf = bf_create(<size_t>size)
+
+        if isinstance(value, unicode):
+            bvalue = <bytes>value.encode('utf-8')
+        else:
+            bvalue = <bytes>value
+
+        bf_add(self.bf, <unsigned char *>bvalue)
+
+    def finalize(self):
+        if not self.bf:
+            return None
+
+        # We have to do this so that embedded NULL bytes are preserved.
+        cdef bytes buf = PyBytes_FromStringAndSize(<char *>(self.bf.bits),
+                                                   self.bf.size)
+        # Similarly we wrap in a buffer object so pysqlite preserves the
+        # embedded NULL bytes.
+        return buffer(buf)
+
+
+def peewee_bloomfilter_contains(data, key):
+    cdef:
+        bf_t bf
+        bytes bkey
+        bytes bdata = bytes(data)
+        unsigned char *cdata = <unsigned char *>bdata
+
+    bf.size = len(data)
+    bf.bits = <void *>cdata
+
+    if isinstance(key, unicode):
+        bkey = <bytes>key.encode('utf-8')
+    else:
+        bkey = <bytes>key
+
+    return bf_contains(&bf, <unsigned char *>bkey)
 
 
 cdef inline int _check_connection(pysqlite_Connection *conn) except -1:
