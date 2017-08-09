@@ -1005,42 +1005,65 @@ cdef bf_free(bf_t *bf):
     free(bf)
 
 
-cdef class BloomFilterAggregate(object):
+cdef bytes encode(key):
+    cdef bytes bkey
+    if isinstance(key, unicode):
+        bkey = <bytes>key.encode('utf-8')
+    else:
+        bkey = <bytes>key
+    return bkey
+
+
+cdef class BloomFilter(object):
     cdef:
         bf_t *bf
 
-    def __init__(self):
-        self.bf = <bf_t *>0
+    def __init__(self, size=1024):
+        self.bf = bf_create(<size_t>size)
 
     def __dealloc__(self):
         if self.bf:
             bf_free(self.bf)
 
-    def step(self, value, size=None):
-        cdef:
-            bytes bvalue
+    def add(self, *keys):
+        cdef bytes bkey
 
-        if not self.bf:
-            size = size or 1024
-            self.bf = bf_create(<size_t>size)
+        for key in keys:
+            bkey = encode(key)
+            bf_add(self.bf, <unsigned char *>bkey)
 
-        if isinstance(value, unicode):
-            bvalue = <bytes>value.encode('utf-8')
-        else:
-            bvalue = <bytes>value
+    def __contains__(self, key):
+        cdef bytes bkey = encode(key)
+        return bf_contains(self.bf, <unsigned char *>bkey)
 
-        bf_add(self.bf, <unsigned char *>bvalue)
-
-    def finalize(self):
-        if not self.bf:
-            return None
-
+    def to_buffer(self):
         # We have to do this so that embedded NULL bytes are preserved.
         cdef bytes buf = PyBytes_FromStringAndSize(<char *>(self.bf.bits),
                                                    self.bf.size)
         # Similarly we wrap in a buffer object so pysqlite preserves the
         # embedded NULL bytes.
         return buffer(buf)
+
+
+cdef class BloomFilterAggregate(object):
+    cdef:
+        BloomFilter bf
+
+    def __init__(self):
+        self.bf = None
+
+    def step(self, value, size=None):
+        if not self.bf:
+            size = size or 1024
+            self.bf = BloomFilter(size)
+
+        self.bf.add(value)
+
+    def finalize(self):
+        if not self.bf:
+            return None
+
+        return self.bf.to_buffer()
 
 
 def peewee_bloomfilter_contains(data, key):
