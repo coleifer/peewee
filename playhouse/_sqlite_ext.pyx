@@ -1084,6 +1084,12 @@ def peewee_bloomfilter_contains(data, key):
     return bf_contains(&bf, <unsigned char *>bkey)
 
 
+def register_bloomfilter(database):
+    database.register_aggregate(BloomFilterAggregate, 'bloomfilter')
+    database.register_function(peewee_bloomfilter_contains,
+                               'bloomfilter_contains')
+
+
 cdef inline int _check_connection(pysqlite_Connection *conn) except -1:
     """
     Check that the underlying SQLite database connection is usable. Raises an

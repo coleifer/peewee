@@ -13,6 +13,7 @@ try:
         backup_to_file,
         Blob,
         ConnectionHelper,
+        register_bloomfilter,
         register_hash_functions,
         register_rank_functions,
         sqlite_get_db_status,
@@ -819,7 +820,8 @@ def _sqlite_regexp(value, regex):
 
 class SqliteExtDatabase(SqliteDatabase):
     def __init__(self, database, c_extensions=None, rank_functions=True,
-                 hash_functions=False, regexp_function=False, *args, **kwargs):
+                 hash_functions=False, regexp_function=False,
+                 bloomfilter=False, *args, **kwargs):
         super(SqliteExtDatabase, self).__init__(database, *args, **kwargs)
         self._extensions = set()
         self._row_factory = None
@@ -843,6 +845,8 @@ class SqliteExtDatabase(SqliteDatabase):
             register_hash_functions(self)
         if regexp_function:
             self.register_function(_sqlite_regexp, 'regexp', 2)
+        if bloomfilter:
+            register_bloomfilter(self)
 
         self._c_extensions = prefer_c
 
