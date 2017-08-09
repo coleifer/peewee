@@ -936,15 +936,15 @@ if CYTHON_SQLITE_EXTENSIONS:
             return result[1] if return_highwater else result
         return property(getter)
 
-    class SqliteExtDatabaseExtra(SqliteExtDatabase):
+    class CSqliteExtDatabase(SqliteExtDatabase):
         def __init__(self, *args, **kwargs):
             self._conn_helper = None
             self._commit_hook = self._rollback_hook = self._update_hook = None
             self._replace_busy_handler = False
-            super(SqliteExtDatabaseExtra, self).__init__(*args, **kwargs)
+            super(CSqliteExtDatabase, self).__init__(*args, **kwargs)
 
         def init(self, database, replace_busy_handler=False, **kwargs):
-            super(SqliteExtDatabaseExtra, self).init(database, **kwargs)
+            super(CSqliteExtDatabase, self).init(database, **kwargs)
             self._replace_busy_handler = replace_busy_handler
 
         def _close(self, conn):
@@ -954,10 +954,10 @@ if CYTHON_SQLITE_EXTENSIONS:
                 self._conn_helper.set_rollback_hook(None)
             if self._update_hook:
                 self._conn_helper.set_update_hook(None)
-            return super(SqliteExtDatabaseExtra, self)._close(conn)
+            return super(CSqliteExtDatabase, self)._close(conn)
 
         def _add_conn_hooks(self, conn):
-            super(SqliteExtDatabaseExtra, self)._add_conn_hooks(conn)
+            super(CSqliteExtDatabase, self)._add_conn_hooks(conn)
             self._conn_helper = ConnectionHelper(conn)
             if self._commit_hook is not None:
                 self._conn_helper.set_commit_hook(self._commit_hook)

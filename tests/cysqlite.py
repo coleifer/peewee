@@ -7,8 +7,8 @@ from playhouse.sqlite_ext import *
 from .base import DatabaseTestCase
 
 
-database = SqliteExtDatabaseExtra('peewee_test.db', timeout=0.1,
-                                  hash_functions=1)
+database = CSqliteExtDatabase('peewee_test.db', timeout=0.1,
+                              hash_functions=1)
 
 
 class CyDatabaseTestCase(DatabaseTestCase):
@@ -165,7 +165,7 @@ class TestBackup(CyDatabaseTestCase):
                 self.execute('INSERT INTO register (value) VALUES (?)', i)
 
         self.database.backup_to_file(self.backup_filename)
-        backup_db = SqliteExtDatabaseExtra(self.backup_filename)
+        backup_db = CSqliteExtDatabase(self.backup_filename)
         cursor = backup_db.execute_sql('SELECT value FROM register ORDER BY '
                                        'value;')
         self.assertEqual([val for val, in cursor.fetchall()], range(100))
