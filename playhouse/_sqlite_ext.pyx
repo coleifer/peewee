@@ -1029,7 +1029,7 @@ cdef bf_free(bf_t *bf):
     free(bf)
 
 
-cdef bytes encode(key):
+cdef inline bytes encode(key):
     cdef bytes bkey
     if isinstance(key, unicode):
         bkey = <bytes>key.encode('utf-8')
