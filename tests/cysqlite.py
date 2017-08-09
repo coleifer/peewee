@@ -272,3 +272,38 @@ class TestBlob(CyDatabaseTestCase):
 
         # BLOB is read-only.
         self.assertEqual(blob.read(), 'huey')
+
+
+class TestBloomFilter(CyDatabaseTestCase):
+    database = CSqliteExtDatabase(':memory:', bloomfilter=True)
+
+    def setUp(self):
+        super(TestBloomFilter, self).setUp()
+        self.execute('create table register (data TEXT);')
+
+    def populate(self):
+        accum = []
+        for i in 'abcdefghijklmnopqrstuvwxyz':
+            keys = [i * j for j in range(1, 10)]
+            accum.extend(keys)
+            self.execute('insert into register (data) values %s' %
+                         ', '.join(['(?)'] * len(keys)),
+                         *keys)
+
+        curs = self.execute('select * from register '
+                            'order by data limit 5 offset 6')
+        self.assertEqual([key for key, in curs.fetchall()],
+                         ['aaaaaaa', 'aaaaaaaa', 'aaaaaaaaa', 'b', 'bb'])
+        return accum
+
+    def test_bloomfilter(self):
+        all_keys = self.populate()
+
+        curs = self.execute('select bloomfilter(data, ?) from register',
+                            1024 * 16)
+        buf, = curs.fetchone()
+        self.assertEqual(len(buf), 1024 * 16)
+        for key in all_keys:
+            curs = self.execute('select bloomfilter_contains(?, ?)',
+                                key, buf)
+            self.assertEqual(curs.fetchone()[0], 1)

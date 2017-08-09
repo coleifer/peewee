@@ -1066,7 +1066,7 @@ cdef class BloomFilter(object):
                                                    self.bf.size)
         # Similarly we wrap in a buffer object so pysqlite preserves the
         # embedded NULL bytes.
-        return buffer(buf)
+        return buf
 
 
 cdef class BloomFilterAggregate(object):
@@ -1087,7 +1087,7 @@ cdef class BloomFilterAggregate(object):
         if not self.bf:
             return None
 
-        return self.bf.to_buffer()
+        return pysqlite.Binary(self.bf.to_buffer())
 
 
 def peewee_bloomfilter_contains(key, data):
