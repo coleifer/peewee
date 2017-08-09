@@ -1090,7 +1090,7 @@ cdef class BloomFilterAggregate(object):
         return self.bf.to_buffer()
 
 
-def peewee_bloomfilter_contains(data, key):
+def peewee_bloomfilter_contains(key, data):
     cdef:
         bf_t bf
         bytes bkey
