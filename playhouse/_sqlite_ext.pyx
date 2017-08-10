@@ -1119,8 +1119,6 @@ cdef inline int _check_connection(pysqlite_Connection *conn) except -1:
     Check that the underlying SQLite database connection is usable. Raises an
     InterfaceError if the connection is either uninitialized or closed.
     """
-    if not conn.initialized:
-        raise InterfaceError('Connection not initialized.')
     if not conn.db:
         raise InterfaceError('Cannot operate on closed database.')
     return 1
