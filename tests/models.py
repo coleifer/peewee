@@ -935,6 +935,13 @@ class TestModelGraph(BaseTestCase):
         for model in (User, Tweet, Relationship, Flag):
             self.assertTrue(model._meta.database is fake_db)
         self.assertTrue(Unrelated._meta.database is None)
+        User.bind(None)
+
+        with User.bind_ctx(fake_db) as FUser:
+            self.assertTrue(FUser._meta.database is fake_db)
+            self.assertTrue(Unrelated._meta.database is None)
+
+        self.assertTrue(User._meta.database is None)
 
 
 class TestMetaInheritance(BaseTestCase):

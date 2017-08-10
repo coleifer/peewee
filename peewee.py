@@ -734,6 +734,24 @@ class BaseTable(Source):
     __rmul__ = __join__(JOIN.CROSS, inverted=True)
 
 
+class _BoundTableContext(_callable_context_manager):
+    def __init__(self, table, database):
+        self.table = table
+        self.database = database
+
+    def __enter__(self):
+        self._orig_database = self.table._database
+        self.table.bind(self.database)
+        if self.table._model is not None:
+            self.table._model.bind(self.database)
+        return self.table
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.table.bind(self._orig_database)
+        if self.table._model is not None:
+            self.table._model.bind(self._orig_database)
+
+
 class Table(_HashableSource, BaseTable):
     def __init__(self, name, columns=None, primary_key=None, schema=None,
                  alias=None, _model=None, _database=None):
@@ -772,6 +790,9 @@ class Table(_HashableSource, BaseTable):
     def bind(self, database=None):
         self._database = database
         return self
+
+    def bind_ctx(self, database=None):
+        return _BoundTableContext(self, database)
 
     def _get_hash(self):
         return hash((self.__class__, self._path, self._alias, self._model))
@@ -4477,6 +4498,23 @@ class ModelBase(type):
             return True
 
 
+class _BoundModelContext(_callable_context_manager):
+    def __init__(self, model, database, bind_refs, bind_backrefs):
+        self.model = model
+        self.database = database
+        self.bind_refs = bind_refs
+        self.bind_backrefs = bind_backrefs
+
+    def __enter__(self):
+        self._orig_database = self.model._meta.database
+        self.model.bind(self.database, self.bind_refs, self.bind_backrefs)
+        return self.model
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.model.bind(self._orig_database, self.bind_refs,
+                        self.bind_backrefs)
+
+
 class Model(with_metaclass(ModelBase, Node)):
     def __init__(self, *args, **kwargs):
         self.__data__ = self._meta.get_default_dict()
@@ -4746,6 +4784,10 @@ class Model(with_metaclass(ModelBase, Node)):
             for _, model, is_backref in G:
                 model._meta.database = database
         return is_different
+
+    @classmethod
+    def bind_ctx(cls, database, bind_refs=True, bind_backrefs=True):
+        return _BoundModelContext(cls, database, bind_refs, bind_backrefs)
 
     @classmethod
     def table_exists(cls):
