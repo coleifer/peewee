@@ -1428,22 +1428,3 @@ class TestLSMExtension(BaseTestCase):
         self.assertData([])
         KeyValue.update(k0='v0', k1='v1', k2='v2')
         self.assertData([('k0', 'v0'), ('k1', 'v1'), ('k2', 'v2')])
-
-
-@skip_case_unless(CYTHON_EXTENSION)
-class TestBloomFilter(BaseTestCase):
-    def setUp(self):
-        super(TestBloomFilter, self).setUp()
-        self.bf = BloomFilter(1024)
-
-    def test_bloomfilter(self):
-        keys = ('charlie', 'huey', 'mickey', 'zaizee', 'nuggie', 'foo', 'bar',
-                'baz')
-        self.bf.add(*keys)
-        for key in keys:
-            self.assertTrue(key in self.bf)
-
-        for key in keys:
-            self.assertFalse(key + '-x' in self.bf)
-            self.assertFalse(key + '-y' in self.bf)
-            self.assertFalse(key + ' ' in self.bf)

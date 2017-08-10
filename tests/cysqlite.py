@@ -3,7 +3,9 @@ import os
 from peewee import *
 from playhouse.sqlite_ext import CYTHON_SQLITE_EXTENSIONS
 from playhouse.sqlite_ext import *
+from playhouse._sqlite_ext import BloomFilter
 
+from .base import BaseTestCase
 from .base import DatabaseTestCase
 
 
@@ -274,11 +276,11 @@ class TestBlob(CyDatabaseTestCase):
         self.assertEqual(blob.read(), 'huey')
 
 
-class TestBloomFilter(CyDatabaseTestCase):
+class TestBloomFilterIntegration(CyDatabaseTestCase):
     database = CSqliteExtDatabase(':memory:', bloomfilter=True)
 
     def setUp(self):
-        super(TestBloomFilter, self).setUp()
+        super(TestBloomFilterIntegration, self).setUp()
         self.execute('create table register (data TEXT);')
 
     def populate(self):
@@ -307,3 +309,27 @@ class TestBloomFilter(CyDatabaseTestCase):
             curs = self.execute('select bloomfilter_contains(?, ?)',
                                 key, buf)
             self.assertEqual(curs.fetchone()[0], 1)
+
+        for key in all_keys:
+            key += '-test'
+            curs = self.execute('select bloomfilter_contains(?, ?)',
+                                key, buf)
+            self.assertEqual(curs.fetchone()[0], 0)
+
+
+class TestBloomFilter(BaseTestCase):
+    def setUp(self):
+        super(TestBloomFilter, self).setUp()
+        self.bf = BloomFilter(1024)
+
+    def test_bloomfilter(self):
+        keys = ('charlie', 'huey', 'mickey', 'zaizee', 'nuggie', 'foo', 'bar',
+                'baz')
+        self.bf.add(*keys)
+        for key in keys:
+            self.assertTrue(key in self.bf)
+
+        for key in keys:
+            self.assertFalse(key + '-x' in self.bf)
+            self.assertFalse(key + '-y' in self.bf)
+            self.assertFalse(key + ' ' in self.bf)
