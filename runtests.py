@@ -15,7 +15,8 @@ def runtests(suite, verbosity):
     return results.failures, results.errors
 
 def get_option_parser():
-    parser = optparse.OptionParser()
+    usage = 'usage: %prog [-e engine_name, other options] module1, module2 ...'
+    parser = optparse.OptionParser(usage=usage)
     basic = optparse.OptionGroup(parser, 'Basic test options')
     basic.add_option(
         '-e',
