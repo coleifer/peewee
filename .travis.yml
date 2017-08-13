@@ -4,21 +4,24 @@ python:
   - "2.7"
   - "3.4"
   - "3.5"
+  - "3.6"
+dist: trusty
 env:
   - PEEWEE_TEST_BACKEND=sqlite
   - PEEWEE_TEST_BACKEND=postgresql
   - PEEWEE_TEST_BACKEND=mysql
 addons:
-  postgresql: "9.4"
+  postgresql: "9.6"
 services:
   - postgresql
   - mysql
 install: "pip install psycopg2 Cython pymysql"
 before_script:
-  - sh -c "python setup.py build_ext -i"
-  - sh -c "psql -c 'drop database if exists peewee_test;' -U postgres"
-  - sh -c "psql -c 'create database peewee_test;' -U postgres"
-  - sh -c "psql peewee_test -c 'create extension hstore;' -U postgres"
-  - sh -c "mysql -e 'drop database if exists peewee_test;'"
-  - sh -c "mysql -e 'create database peewee_test;'"
+  - python setup.py build_ext -i
+  - psql -c 'drop database if exists peewee_test;' -U postgres
+  - psql -c 'create database peewee_test;' -U postgres
+  - psql peewee_test -c 'create extension hstore;' -U postgres
+  - mysql -e 'drop database if exists peewee_test;'
+  - mysql -e 'create database peewee_test;'
+  - mysql -e 'grant all on *.* to travis@localhost;'
 script: "python runtests.py -a"
