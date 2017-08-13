@@ -5381,7 +5381,8 @@ class ModelTupleCursorWrapper(ModelDictCursorWrapper):
 class ModelNamedTupleCursorWrapper(ModelTupleCursorWrapper):
     def initialize(self):
         self._initialize_columns()
-        self.constructor = namedtuple('Row', self.columns)
+        self.tuple_class = namedtuple('Row', self.columns)
+        self.constructor = lambda row: self.tuple_class(*row)
 
 
 class ModelObjectCursorWrapper(ModelDictCursorWrapper):

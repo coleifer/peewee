@@ -844,6 +844,18 @@ class TestReturningIntegration(ModelTestCase):
         self.assertTrue(len(data.select) == 1 and data.select[0] is User.id)
         self.assertEqual(list(data), [(1,), (2,)])
 
+        query = (User
+                 .insert_many([{'username': 'foo'},
+                               {'username': 'bar'},
+                               {'username': 'baz'}])
+                 .returning(User.id, User.username)
+                 .namedtuples())
+        data = query.execute()
+        self.assertEqual([(row.id, row.username) for row in data], [
+            (3, 'foo'),
+            (4, 'bar'),
+            (5, 'baz')])
+
     @requires_models(Category)
     def test_returning_query(self):
         for name in ('huey', 'mickey', 'zaizee'):
