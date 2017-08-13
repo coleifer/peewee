@@ -1335,3 +1335,137 @@ class TestFTS5(ModelTestCase):
             'FROM "fts5test" AS "t1" '
             'WHERE ("fts5test" MATCH ?) ORDER BY rank'), ['bb'])
         self.assertResults(query, ['nug aa dd', 'foo aa bb', 'bar bb cc'])
+
+
+class KV(LSMTable):
+    key = TextField(primary_key=True)
+    val_b = BlobField()
+    val_i = IntegerField()
+    val_f = FloatField()
+    val_t = TextField()
+
+    class Meta:
+        database = database
+        filename = 'test_lsm.ldb'
+
+
+class KVSimple(LSMTable):
+    key = TextField(primary_key=True)
+    value = TextField()
+
+    class Meta:
+        database = database
+        filename = 'test_lsm.ldb'
+
+
+class KVUInt(LSMTable):
+    key = IntegerField(primary_key=True)
+    value = TextField()
+
+    class Meta:
+        database = database
+        filename = 'test_lsm.ldb'
+
+
+@skip_case_unless(LSM_EXTENSION and os.path.exists(LSM_EXTENSION))
+class TestLSM1Extension(BaseTestCase):
+    def setUp(self):
+        super(TestLSM1Extension, self).setUp()
+        if os.path.exists(KV._meta.filename):
+            os.unlink(KV._meta.filename)
+
+        database.connect()
+        database.load_extension(LSM_EXTENSION.rstrip('.so'))
+
+    def tearDown(self):
+        super(TestLSM1Extension, self).tearDown()
+        database.unload_extension(LSM_EXTENSION.rstrip('.so'))
+        database.close()
+        if os.path.exists(KV._meta.filename):
+            os.unlink(KV._meta.filename)
+
+    def test_lsm_extension(self):
+        self.assertSQL(KV._schema._create_table(), (
+            'CREATE VIRTUAL TABLE IF NOT EXISTS "kv" USING lsm1 '
+            '("test_lsm.ldb", "key", TEXT, "val_b", "val_i", '
+            '"val_f", "val_t")'), [])
+
+        self.assertSQL(KVSimple._schema._create_table(), (
+            'CREATE VIRTUAL TABLE IF NOT EXISTS "kvsimple" USING lsm1 '
+            '("test_lsm.ldb", "key", TEXT, "value")'), [])
+
+        self.assertSQL(KVUInt._schema._create_table(), (
+            'CREATE VIRTUAL TABLE IF NOT EXISTS "kvuint" USING lsm1 '
+            '("test_lsm.ldb", "key", UINT, "value")'), [])
+
+    def test_lsm_crud_operations(self):
+        database.create_tables([KV])
+
+        with database.transaction():
+            KV.create(key='k0', val_b=None, val_i=0, val_f=0.1, val_t='v0')
+
+        v0 = KV['k0']
+        self.assertEqual(v0.key, 'k0')
+        self.assertEqual(v0.val_b, None)
+        self.assertEqual(v0.val_i, 0)
+        self.assertEqual(v0.val_f, 0.1)
+        self.assertEqual(v0.val_t, 'v0')
+
+        self.assertRaises(KV.DoesNotExist, lambda: KV['k1'])
+
+        # Test that updates work as expected.
+        v0.val_i = 1338
+        v0.val_f = 3.14
+        v0.val_t = 'v2-e'
+        v0.save()
+
+        v0_db = KV['k0']
+        self.assertEqual(v0.val_i, 1338)
+        self.assertEqual(v0.val_f, 3.14)
+        self.assertEqual(v0.val_t, 'v2-e')
+
+        self.assertEqual(len([item for item in KV.select()]), 1)
+
+        v0.delete_instance()
+        self.assertEqual(len([item for item in KV.select()]), 0)
+
+    def test_index_performance(self):
+        database.create_tables([KVSimple])
+
+        data = [{'key': 'k%s' % i, 'value': 'v%s' % i} for i in range(20)]
+        KVSimple.insert_many(data).execute()
+
+        self.assertEqual(KVSimple.select().count(), 20)
+        self.assertEqual(KVSimple['k0'].value, 'v0')
+        self.assertEqual(KVSimple['k19'].value, 'v19')
+
+        query = KVSimple.select().where(KVSimple.key.between('k4.1', 'k8.9'))
+        keys = [row.key for row in query]
+        self.assertEqual(keys, ['k5', 'k6', 'k7', 'k8'])
+
+        query = KVSimple.select(KVSimple.key).where(KVSimple.key <= 'k13')
+        keys = [row.key for row in query]
+        self.assertEqual(keys, ['k0', 'k1', 'k10', 'k11', 'k12', 'k13'])
+
+        query = KVSimple.select(KVSimple.key).where(KVSimple.key >= 'k5')
+        keys = [row.key for row in query]
+        self.assertEqual(keys, ['k5', 'k6', 'k7', 'k8', 'k9'])
+
+    def test_index_uint(self):
+        database.create_tables([KVUInt])
+        data = [{'key': i, 'value': 'v%s' % i} for i in range(100)]
+
+        with database.transaction():
+            KVUInt.insert_many(data).execute()
+
+        query = KVUInt.select(KVUInt.key).where(KVUInt.key.between(27, 33))
+        keys = [row.key for row in query]
+        self.assertEqual(keys, [27, 28, 29, 30, 31, 32, 33])
+
+        query = KVUInt.select(KVUInt.key).where(KVUInt.key < 4)
+        keys = [row.key for row in query]
+        self.assertEqual(keys, [0, 1, 2, 3])
+
+        query = KVUInt.select(KVUInt.key).where(KVUInt.key > 95)
+        keys = [row.key for row in query]
+        self.assertEqual(keys, [96, 97, 98, 99])

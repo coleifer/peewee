@@ -167,6 +167,9 @@ class VirtualTableSchemaManager(SchemaManager):
         arguments = []
         meta = self.model._meta
 
+        if meta.prefix_arguments:
+            arguments.extend(meta.prefix_arguments)
+
         # Constraints, data-types, foreign and primary keys are all omitted.
         for field in meta.sorted_fields:
             if isinstance(field, (RowIDField)) or field._hidden:
@@ -195,6 +198,7 @@ class VirtualModel(Model):
     class Meta:
         arguments = None
         extension_module = None
+        prefix_arguments = None
         primary_key = False
         schema_manager_class = VirtualTableSchemaManager
 
@@ -738,6 +742,48 @@ def ClosureTable(model_class, foreign_key=None, referencing_class=None,
 
     name = '%sClosure' % model_class.__name__
     return type(name, (BaseClosureTable,), {'Meta': Meta})
+
+
+class LSMTable(VirtualModel):
+    class Meta:
+        extension_module = 'lsm1'
+        filename = None
+
+    @classmethod
+    def clean_options(cls, options):
+        filename = cls._meta.filename
+        if not filename:
+            raise ValueError('LSM1 extension requires that you specify a '
+                             'filename for the LSM database.')
+        else:
+            if len(filename) >= 2 and filename[0] != '"':
+                filename = '"%s"' % filename
+        if 'key' not in cls._meta.fields:
+            raise ValueError('LSM1 models must specify a "key" primary-key '
+                             'field.')
+        key = cls._meta.fields['key']
+        if not key.primary_key:
+            raise ValueError('LSM1 models must specify indicate the "key" '
+                             'field is a primary key.')
+        if not isinstance(key, (TextField, BlobField, IntegerField)):
+            raise ValueError('LSM1 key must be a TextField, BlobField, or '
+                             'IntegerField.')
+        key._hidden = True
+        if isinstance(key, TextField):
+            data_type = 'TEXT'
+        elif isinstance(key, BlobField):
+            data_type = 'BLOB'
+        else:
+            data_type = 'UINT'
+        cls._meta.prefix_arguments = [
+            SQL(filename),
+            Entity(key.name),
+            SQL(data_type)]
+        return options
+
+    @classmethod
+    def load_extension(cls, path='lsm.so'):
+        cls._meta.database.load_extension(path)
 
 
 OP.MATCH = 'MATCH'
