@@ -1846,7 +1846,7 @@ Query Types
     :param model_class: The type of model to return, by default the model class
         of the ``lhs`` query.
     :param lhs: Left-hand query, either a :py:class:`SelectQuery` or a :py:class:`CompoundQuery`.
-    :param operator: A :py:class:`Node` instance used to join the two queries, for example ``SQL('UNION')``.
+    :param operator: A string used to join the two queries, for example ``'UNION'``.
     :param rhs: Right query, either a :py:class:`SelectQuery` or a :py:class:`CompoundQuery`.
 
 
