@@ -1349,7 +1349,7 @@ class KV(LSMTable):
         filename = 'test_lsm.ldb'
 
 
-class KVSimple(LSMTable):
+class KVS(LSMTable):
     key = TextField(primary_key=True)
     value = TextField()
 
@@ -1358,7 +1358,7 @@ class KVSimple(LSMTable):
         filename = 'test_lsm.ldb'
 
 
-class KVUInt(LSMTable):
+class KVI(LSMTable):
     key = IntegerField(primary_key=True)
     value = TextField()
 
@@ -1390,12 +1390,12 @@ class TestLSM1Extension(BaseTestCase):
             '("test_lsm.ldb", "key", TEXT, "val_b", "val_i", '
             '"val_f", "val_t")'), [])
 
-        self.assertSQL(KVSimple._schema._create_table(), (
-            'CREATE VIRTUAL TABLE IF NOT EXISTS "kvsimple" USING lsm1 '
+        self.assertSQL(KVS._schema._create_table(), (
+            'CREATE VIRTUAL TABLE IF NOT EXISTS "kvs" USING lsm1 '
             '("test_lsm.ldb", "key", TEXT, "value")'), [])
 
-        self.assertSQL(KVUInt._schema._create_table(), (
-            'CREATE VIRTUAL TABLE IF NOT EXISTS "kvuint" USING lsm1 '
+        self.assertSQL(KVI._schema._create_table(), (
+            'CREATE VIRTUAL TABLE IF NOT EXISTS "kvi" USING lsm1 '
             '("test_lsm.ldb", "key", UINT, "value")'), [])
 
     def test_lsm_crud_operations(self):
@@ -1411,61 +1411,82 @@ class TestLSM1Extension(BaseTestCase):
         self.assertEqual(v0.val_f, 0.1)
         self.assertEqual(v0.val_t, 'v0')
 
-        self.assertRaises(KV.DoesNotExist, lambda: KV['k1'])
+        self.assertRaises(KeyError, lambda: KV['k1'])
 
         # Test that updates work as expected.
-        v0.val_i = 1338
-        v0.val_f = 3.14
-        v0.val_t = 'v2-e'
-        v0.save()
+        KV['k0'] = (None, 1338, 3.14, 'v2-e')
 
         v0_db = KV['k0']
-        self.assertEqual(v0.val_i, 1338)
-        self.assertEqual(v0.val_f, 3.14)
-        self.assertEqual(v0.val_t, 'v2-e')
+        self.assertEqual(v0_db.val_i, 1338)
+        self.assertEqual(v0_db.val_f, 3.14)
+        self.assertEqual(v0_db.val_t, 'v2-e')
 
         self.assertEqual(len([item for item in KV.select()]), 1)
 
-        v0.delete_instance()
+        del KV['k0']
         self.assertEqual(len([item for item in KV.select()]), 0)
 
+    def test_insert_replace(self):
+        database.create_tables([KVS])
+        KVS.insert({'key': 'k0', 'value': 'v0'}).execute()
+        self.assertEqual(KVS['k0'], 'v0')
+
+        KVS.replace({'key': 'k0', 'value': 'v0-e'}).execute()
+        self.assertEqual(KVS['k0'], 'v0-e')
+
+        # Implicit.
+        KVS['k0'] = 'v0-x'
+        self.assertEqual(KVS['k0'], 'v0-x')
+
     def test_index_performance(self):
-        database.create_tables([KVSimple])
+        database.create_tables([KVS])
 
         data = [{'key': 'k%s' % i, 'value': 'v%s' % i} for i in range(20)]
-        KVSimple.insert_many(data).execute()
+        KVS.insert_many(data).execute()
 
-        self.assertEqual(KVSimple.select().count(), 20)
-        self.assertEqual(KVSimple['k0'].value, 'v0')
-        self.assertEqual(KVSimple['k19'].value, 'v19')
+        self.assertEqual(KVS.select().count(), 20)
+        self.assertEqual(KVS['k0'], 'v0')
+        self.assertEqual(KVS['k19'], 'v19')
 
-        query = KVSimple.select().where(KVSimple.key.between('k4.1', 'k8.9'))
-        keys = [row.key for row in query]
+        keys = [row.key for row in KVS['k4.1':'k8.9']]
         self.assertEqual(keys, ['k5', 'k6', 'k7', 'k8'])
 
-        query = KVSimple.select(KVSimple.key).where(KVSimple.key <= 'k13')
-        keys = [row.key for row in query]
+        keys = [row.key for row in KVS[:'k13']]
         self.assertEqual(keys, ['k0', 'k1', 'k10', 'k11', 'k12', 'k13'])
 
-        query = KVSimple.select(KVSimple.key).where(KVSimple.key >= 'k5')
-        keys = [row.key for row in query]
+        keys = [row.key for row in KVS['k5':]]
         self.assertEqual(keys, ['k5', 'k6', 'k7', 'k8', 'k9'])
 
+        data = [tuple(row) for row in KVS[KVS.key > 'k5']]
+        self.assertEqual(data, [
+            ('k6', 'v6'),
+            ('k7', 'v7'),
+            ('k8', 'v8'),
+            ('k9', 'v9')])
+
+        del KVS[KVS.key.between('k10', 'k18')]
+        self.assertEqual([row.key for row in KVS[:'k2']],
+                         ['k0', 'k1', 'k19', 'k2'])
+
+        del KVS['k3.1':'k8.1']
+        self.assertEqual([row.key for row in KVS[:]],
+                         ['k0', 'k1', 'k19', 'k2', 'k3', 'k9'])
+
+        del KVS['k1']
+        self.assertRaises(KeyError, lambda: KVS['k1'])
+
     def test_index_uint(self):
-        database.create_tables([KVUInt])
+        database.create_tables([KVI])
         data = [{'key': i, 'value': 'v%s' % i} for i in range(100)]
 
         with database.transaction():
-            KVUInt.insert_many(data).execute()
+            KVI.insert_many(data).execute()
 
-        query = KVUInt.select(KVUInt.key).where(KVUInt.key.between(27, 33))
-        keys = [row.key for row in query]
+        keys = [row.key for row in KVI[27:33]]
         self.assertEqual(keys, [27, 28, 29, 30, 31, 32, 33])
 
-        query = KVUInt.select(KVUInt.key).where(KVUInt.key < 4)
-        keys = [row.key for row in query]
+        keys = [row.key for row in KVI[KVI.key < 4]]
         self.assertEqual(keys, [0, 1, 2, 3])
 
-        query = KVUInt.select(KVUInt.key).where(KVUInt.key > 95)
-        keys = [row.key for row in query]
+        keys = [row.key for row in KVI[KVI.key > 95]]
         self.assertEqual(keys, [96, 97, 98, 99])
