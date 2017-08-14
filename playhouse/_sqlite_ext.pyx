@@ -12,7 +12,8 @@ from cpython.mem cimport PyMem_Malloc
 from cpython.object cimport PyObject
 from cpython.ref cimport Py_INCREF, Py_DECREF
 from libc.float cimport DBL_MAX
-from libc.math cimport log, sqrt
+from libc.math cimport ceil, log, sqrt
+from libc.math cimport pow as cpow
 #from libc.stdint cimport ssize_t
 from libc.stdint cimport uint8_t
 from libc.stdint cimport uint32_t
@@ -986,6 +987,10 @@ ctypedef struct bf_t:
     void *bits
     size_t size
 
+cdef int seeds[10]
+seeds[:] = [0, 1337, 37, 0xabcd, 0xdead, 0xface, 97, 0xed11, 0xcad9, 0x827b]
+
+
 cdef bf_t *bf_create(size_t size):
     cdef bf_t *bf = <bf_t *>calloc(1, sizeof(bf[0]))
     bf.size = size
@@ -1005,7 +1010,7 @@ cdef bf_add(bf_t *bf, unsigned char *key):
         uint32_t h
         int pos, seed
 
-    for seed in (0, 1337, 37, 0xabcd):
+    for seed in seeds:
         h = bf_bitindex(bf, key, seed)
         pos = h / 8
         bits[pos] = bits[pos] | (1 << (h % 8))
@@ -1017,7 +1022,7 @@ cdef int bf_contains(bf_t *bf, unsigned char *key):
         uint32_t h
         int pos, seed
 
-    for seed in (0, 1337, 37, 0xabcd):
+    for seed in seeds:
         h = bf_bitindex(bf, key, seed)
         pos = h / 8
         if not (bits[pos] & (1 << (h % 8))):
@@ -1042,7 +1047,7 @@ cdef class BloomFilter(object):
     cdef:
         bf_t *bf
 
-    def __init__(self, size=1024):
+    def __init__(self, size=1024 * 32):
         self.bf = bf_create(<size_t>size)
 
     def __dealloc__(self):
@@ -1067,6 +1072,11 @@ cdef class BloomFilter(object):
         # Similarly we wrap in a buffer object so pysqlite preserves the
         # embedded NULL bytes.
         return buf
+
+    @classmethod
+    def calculate_size(cls, double n, double p):
+        cdef double m = ceil((n * log(p)) / log(1.0 / (pow(2.0, log(2.0)))))
+        return m
 
 
 cdef class BloomFilterAggregate(object):
@@ -1108,10 +1118,16 @@ def peewee_bloomfilter_contains(key, data):
     return bf_contains(&bf, <unsigned char *>bkey)
 
 
+def peewee_bloomfilter_calculate_size(n_items, error_p):
+    return BloomFilter.calculate_size(n_items, error_p)
+
+
 def register_bloomfilter(database):
     database.register_aggregate(BloomFilterAggregate, 'bloomfilter')
     database.register_function(peewee_bloomfilter_contains,
                                'bloomfilter_contains')
+    database.register_function(peewee_bloomfilter_calculate_size,
+                               'bloomfilter_calculate_size')
 
 
 cdef inline int _check_connection(pysqlite_Connection *conn) except -1:

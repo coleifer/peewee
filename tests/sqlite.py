@@ -25,7 +25,6 @@ if not LSM_EXTENSION and os.path.exists('lsm.so'):
     LSM_EXTENSION = 'lsm.so'
 
 try:
-    from playhouse._sqlite_ext import BloomFilter
     from playhouse._sqlite_ext import peewee_rank
     CYTHON_EXTENSION = True
 except ImportError:

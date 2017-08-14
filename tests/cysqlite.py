@@ -285,12 +285,13 @@ class TestBloomFilterIntegration(CyDatabaseTestCase):
 
     def populate(self):
         accum = []
-        for i in 'abcdefghijklmnopqrstuvwxyz':
-            keys = [i * j for j in range(1, 10)]
-            accum.extend(keys)
-            self.execute('insert into register (data) values %s' %
-                         ', '.join(['(?)'] * len(keys)),
-                         *keys)
+        with self.database.atomic():
+            for i in 'abcdefghijklmnopqrstuvwxyz':
+                keys = [i * j for j in range(1, 10)]
+                accum.extend(keys)
+                self.execute('insert into register (data) values %s' %
+                             ', '.join(['(?)'] * len(keys)),
+                             *keys)
 
         curs = self.execute('select * from register '
                             'order by data limit 5 offset 6')
