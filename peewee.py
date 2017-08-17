@@ -3748,8 +3748,10 @@ class Database(object):
             if self.deferred:
                 raise Exception('Error, database not properly initialized '
                                 'before closing connection')
-            with self.exception_wrapper:
-                self._close(self._local.conn)
+            try:
+                with self.exception_wrapper:
+                    self._close(self._local.conn)
+            finally:
                 self._local.closed = True
 
     def get_conn(self):
