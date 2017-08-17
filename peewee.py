@@ -2220,10 +2220,12 @@ class Database(_callable_context_manager):
                 raise Exception('Error, database must be initialized before '
                                 'opening a connection.')
             is_open = not self._state.closed
-            if is_open:
-                with __exception_wrapper__:
-                    self._close(self._state.conn)
-            self._state.reset()
+            try:
+                if is_open:
+                    with __exception_wrapper__:
+                        self._close(self._state.conn)
+            finally:
+                self._state.reset()
             return is_open
 
     def _close(self, conn):
