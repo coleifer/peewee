@@ -979,6 +979,51 @@ class TestMetaInheritance(BaseTestCase):
         self.assertEqual(Biz._meta.table_name, 'xxx_biz')
         self.assertEqual(Nug._meta.table_name, 'zzz_nug')
 
+    def test_composite_key_inheritance(self):
+        class Foo(Model):
+            key = TextField()
+            value = TextField()
+
+            class Meta:
+                primary_key = CompositeKey('key', 'value')
+
+        class Bar(Foo): pass
+        class Baze(Foo):
+            value = IntegerField()
+
+        foo = Foo(key='k1', value='v1')
+        self.assertEqual(foo.__composite_key__, ('k1', 'v1'))
+
+        bar = Bar(key='k2', value='v2')
+        self.assertEqual(bar.__composite_key__, ('k2', 'v2'))
+
+        baze = Baze(key='k3', value=3)
+        self.assertEqual(baze.__composite_key__, ('k3', 3))
+
+    def test_no_primary_key_inheritable(self):
+        class Foo(Model):
+            data = TextField()
+
+            class Meta:
+                primary_key = False
+
+        class Bar(Foo): pass
+        class Baze(Foo):
+            pk = AutoField()
+        class Zai(Foo):
+            zee = TextField(primary_key=True)
+
+        self.assertFalse(Foo._meta.primary_key)
+        self.assertEqual(Foo._meta.sorted_field_names, ['data'])
+        self.assertFalse(Bar._meta.primary_key)
+        self.assertEqual(Bar._meta.sorted_field_names, ['data'])
+
+        self.assertTrue(Baze._meta.primary_key is Baze.pk)
+        self.assertEqual(Baze._meta.sorted_field_names, ['pk', 'data'])
+
+        self.assertTrue(Zai._meta.primary_key is Zai.zee)
+        self.assertEqual(Zai._meta.sorted_field_names, ['zee', 'data'])
+
 
 class TestForeignKeyFieldDescriptors(BaseTestCase):
     def test_foreign_key_field_descriptors(self):
