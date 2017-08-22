@@ -101,6 +101,9 @@ the columns as :py:class:`Field` instances on the class.
         to_user = ForeignKeyField(User, backref='related_to')
 
         class Meta:
+            # `indexes` is a tuple of 2-tuples, where the 2-tuples are
+            # a tuple of column names to index and a boolean indicating
+            # whether the index is unique or not.
             indexes = (
                 # Specify a unique multi-column index on from/to-user.
                 (('from_user', 'to_user'), True),
@@ -301,9 +304,9 @@ the users that you follow. In order to implement this cleanly, we can use a
 subquery:
 
 .. note::
-    The subquery, ``user.following()``, by default will select all the columns
-    on the ``User`` model. Because we're using it as a subquery, we need to
-    explicitly indicate we only want to select the user's id.
+    The subquery, ``user.following()``, by default would ordinarily select all
+    the columns on the ``User`` model. Because we're using it as a subquery,
+    peewee will only select the primary key.
 
 .. code-block:: python
 
@@ -311,7 +314,7 @@ subquery:
     user = get_current_user()
     messages = (Message
                 .select()
-                .where(Message.user << user.following().select(User.id))
+                .where(Message.user << user.following())
                 .order_by(Message.pub_date.desc()))
 
 This code corresponds to the following SQL query:

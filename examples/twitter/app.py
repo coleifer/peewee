@@ -179,7 +179,7 @@ def private_timeline():
     user = get_current_user()
     messages = (Message
                 .select()
-                .where(Message.user << user.following().select(User.id))
+                .where(Message.user << user.following())
                 .order_by(Message.pub_date.desc()))
     return object_list('private_messages.html', messages, 'message_list')
 
