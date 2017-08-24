@@ -4536,9 +4536,10 @@ class Model(with_metaclass(ModelBase, Node)):
 
     @classmethod
     def select(cls, *fields):
+        is_default = not fields
         if not fields:
             fields = cls._meta.sorted_fields
-        return ModelSelect(cls, fields)
+        return ModelSelect(cls, fields, is_default=is_default)
 
     @classmethod
     def _normalize_data(cls, data, kwargs):
@@ -4983,9 +4984,10 @@ class ModelCompoundSelectQuery(BaseModelSelect, CompoundSelectQuery):
 
 
 class ModelSelect(BaseModelSelect, Select):
-    def __init__(self, model, fields_or_models):
+    def __init__(self, model, fields_or_models, is_default=False):
         self.model = self._join_ctx = model
         self._joins = {}
+        self._is_default = is_default
         fields = []
         for fm in fields_or_models:
             if is_model(fm):
@@ -5198,7 +5200,8 @@ class ModelSelect(BaseModelSelect, Select):
         return query.where(dq_node)
 
     def __sql_selection__(self, ctx, is_subquery=False):
-        if is_subquery and len(self._returning) > 1 and \
+        ## XXX: fixme.
+        if self._is_default and is_subquery and len(self._returning) > 1 and \
            self.model._meta.primary_key is not False:
             return ctx.sql(self.model._meta.primary_key)
 
