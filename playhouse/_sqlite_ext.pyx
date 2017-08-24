@@ -1218,7 +1218,7 @@ cdef class Blob(object):
         _check_blob_closed(self)
         size = sqlite3_blob_bytes(self.pBlob)
         if self.offset == size or length == 0:
-            return ''
+            return b''
 
         if length < 0:
             length = size - self.offset
