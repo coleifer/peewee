@@ -1405,7 +1405,7 @@ cdef void _update_callback(void *userData, int queryType, char *database,
         query = 'DELETE'
     else:
         query = ''
-    fn(query, str(database), str(table), <int>rowid)
+    fn(query, database.decode('utf-8'), table.decode('utf-8'), <int>rowid)
 
 
 def backup(src_conn, dest_conn):

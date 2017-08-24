@@ -193,25 +193,25 @@ class TestBlob(CyDatabaseTestCase):
         blob = Blob(self.database, 'register', 'data', rowid1024)
         self.assertEqual(len(blob), 1024)
 
-        blob.write('x' * 1022)
-        blob.write('zz')
+        blob.write(b'x' * 1022)
+        blob.write(b'zz')
         blob.seek(1020)
         self.assertEqual(blob.tell(), 1020)
 
         data = blob.read(3)
-        self.assertEqual(data, 'xxz')
-        self.assertEqual(blob.read(), 'z')
-        self.assertEqual(blob.read(), '')
+        self.assertEqual(data, b'xxz')
+        self.assertEqual(blob.read(), b'z')
+        self.assertEqual(blob.read(), b'')
 
         blob.seek(-10, 2)
         self.assertEqual(blob.tell(), 1014)
-        self.assertEqual(blob.read(), 'xxxxxxxxzz')
+        self.assertEqual(blob.read(), b'xxxxxxxxzz')
 
         blob.reopen(rowid16)
         self.assertEqual(blob.tell(), 0)
         self.assertEqual(len(blob), 16)
 
-        blob.write('x' * 15)
+        blob.write(b'x' * 15)
         self.assertEqual(blob.tell(), 15)
 
     def test_blob_exceed_size(self):
@@ -222,13 +222,13 @@ class TestBlob(CyDatabaseTestCase):
             blob.seek(17, 0)
 
         with self.assertRaisesCtx(ValueError):
-            blob.write('x' * 17)
+            blob.write(b'x' * 17)
 
-        blob.write('x' * 16)
+        blob.write(b'x' * 16)
         self.assertEqual(blob.tell(), 16)
         blob.seek(0)
         data = blob.read(17)  # Attempting to read more data is OK.
-        self.assertEqual(data, 'x' * 16)
+        self.assertEqual(data, b'x' * 16)
         blob.close()
 
     def test_blob_errors_opening(self):
@@ -253,7 +253,7 @@ class TestBlob(CyDatabaseTestCase):
             len(blob)
 
         self.assertRaises(InterfaceError, blob.read)
-        self.assertRaises(InterfaceError, blob.write, 'foo')
+        self.assertRaises(InterfaceError, blob.write, b'foo')
         self.assertRaises(InterfaceError, blob.seek, 0, 0)
         self.assertRaises(InterfaceError, blob.tell)
         self.assertRaises(InterfaceError, blob.reopen, rowid)
@@ -261,19 +261,19 @@ class TestBlob(CyDatabaseTestCase):
     def test_blob_readonly(self):
         rowid = self.create_blob_row(4)
         blob = self.database.blob_open('register', 'data', rowid)
-        blob.write('huey')
+        blob.write(b'huey')
         blob.seek(0)
-        self.assertEqual(blob.read(), 'huey')
+        self.assertEqual(blob.read(), b'huey')
         blob.close()
 
         blob = self.database.blob_open('register', 'data', rowid, True)
-        self.assertEqual(blob.read(), 'huey')
+        self.assertEqual(blob.read(), b'huey')
         blob.seek(0)
         with self.assertRaisesCtx(OperationalError):
-            blob.write('meow')
+            blob.write(b'meow')
 
         # BLOB is read-only.
-        self.assertEqual(blob.read(), 'huey')
+        self.assertEqual(blob.read(), b'huey')
 
 
 class TestBloomFilterIntegration(CyDatabaseTestCase):
