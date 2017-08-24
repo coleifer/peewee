@@ -5200,7 +5200,6 @@ class ModelSelect(BaseModelSelect, Select):
         return query.where(dq_node)
 
     def __sql_selection__(self, ctx, is_subquery=False):
-        ## XXX: fixme.
         if self._is_default and is_subquery and len(self._returning) > 1 and \
            self.model._meta.primary_key is not False:
             return ctx.sql(self.model._meta.primary_key)
