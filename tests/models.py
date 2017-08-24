@@ -1233,3 +1233,59 @@ class TestUpsertPostgresql(OnConflictTestCase):
             ('huey', 'cat', '123'),
             ('zaizee', 'cat', '124'),
             ('foo', 'baze', '125.1')])
+
+
+class TestJoinSubquery(ModelTestCase):
+    requires = [Person, Relationship]
+
+    def test_join_subquery(self):
+        # Set up some relationships such that there exists a relationship from
+        # the left-hand to the right-hand name.
+        data = (
+            ('charlie', None),
+            ('huey', 'charlie'),
+            ('mickey', 'charlie'),
+            ('zaizee', 'charlie'),
+            ('zaizee', 'huey'))
+        people = {}
+        def get_person(name):
+            if name not in people:
+                people[name] = Person.create(first=name, last=name,
+                                             dob=datetime.date(2017, 1, 1))
+            return people[name]
+
+        for person, related_to in data:
+            p1 = get_person(person)
+            if related_to is not None:
+                p2 = get_person(related_to)
+                Relationship.create(from_person=p1, to_person=p2)
+
+        # Create the subquery.
+        Friend = Person.alias('friend')
+        subq = (Relationship
+                .select(Friend.first.alias('friend_name'),
+                        Relationship.from_person)
+                .join(Friend, on=(Relationship.to_person == Friend.id))
+                .alias('subq'))
+
+        # Outer query does a LEFT OUTER JOIN. We join on the subquery because
+        # it uses an INNER JOIN, saving us doing two LEFT OUTER joins in the
+        # single query.
+        query = (Person
+                 .select(Person.first, subq.c.friend_name)
+                 .join(subq, JOIN.LEFT_OUTER,
+                       on=(Person.id == subq.c.from_person_id))
+                 .order_by(Person.first, subq.c.friend_name))
+        self.assertSQL(query, (
+            'SELECT "t1"."first", "subq"."friend_name" '
+            'FROM "person" AS "t1" '
+            'LEFT OUTER JOIN ('
+            'SELECT "friend"."first" AS "friend_name", "t2"."from_person_id" '
+            'FROM "relationship" AS "t2" '
+            'INNER JOIN "person" AS "friend" '
+            'ON ("t2"."to_person_id" = "friend"."id")) AS "subq" '
+            'ON ("t1"."id" = "subq"."from_person_id") '
+            'ORDER BY "t1"."first", "subq"."friend_name"'), [])
+
+        db_data = [row for row in query.tuples()]
+        self.assertEqual(db_data, list(data))
