@@ -663,6 +663,15 @@ cdef tuple validate_and_format_datetime(lookup, date_str):
             return (date_obj, lookup)
 
 
+cdef inline bytes encode(key):
+    cdef bytes bkey
+    if isinstance(key, unicode):
+        bkey = <bytes>key.encode('utf-8')
+    else:
+        bkey = <bytes>key
+    return bkey
+
+
 def peewee_rank(py_match_info, *raw_weights):
     cdef:
         unsigned int *match_info
@@ -950,7 +959,7 @@ def make_hash(hash_impl):
     def inner(*items):
         state = hash_impl()
         for item in items:
-            state.update(item)
+            state.update(encode(item))
         return state.hexdigest()
     return inner
 
@@ -1032,15 +1041,6 @@ cdef int bf_contains(bf_t *bf, unsigned char *key):
 cdef bf_free(bf_t *bf):
     free(bf.bits)
     free(bf)
-
-
-cdef inline bytes encode(key):
-    cdef bytes bkey
-    if isinstance(key, unicode):
-        bkey = <bytes>key.encode('utf-8')
-    else:
-        bkey = <bytes>key
-    return bkey
 
 
 cdef class BloomFilter(object):
@@ -1168,6 +1168,8 @@ cdef class Blob(object):
     def __init__(self, database, table, column, rowid,
                  read_only=False):
         cdef:
+            bytes btable = encode(table)
+            bytes bcolumn = encode(column)
             int flags = 0 if read_only else 1
             int rc
             sqlite3_blob *blob
@@ -1178,8 +1180,8 @@ cdef class Blob(object):
         rc = sqlite3_blob_open(
             self.conn.db,
             'main',
-            <char *>table,
-            <char *>column,
+            <char *>btable,
+            <char *>bcolumn,
             <long long>rowid,
             flags,
             &blob)
@@ -1256,7 +1258,7 @@ cdef class Blob(object):
         _check_blob_closed(self)
         return self.offset
 
-    def write(self, data):
+    def write(self, bytes data):
         cdef:
             char *buf
             int size

@@ -170,7 +170,7 @@ class TestBackup(CyDatabaseTestCase):
         backup_db = CSqliteExtDatabase(self.backup_filename)
         cursor = backup_db.execute_sql('SELECT value FROM register ORDER BY '
                                        'value;')
-        self.assertEqual([val for val, in cursor.fetchall()], range(100))
+        self.assertEqual([val for val, in cursor.fetchall()], list(range(100)))
         backup_db.close()
 
 
