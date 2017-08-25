@@ -261,6 +261,26 @@ class TestSelectQuery(BaseTestCase):
             'INNER JOIN "note" AS "t2" '
             'ON Magic("t1"."id", "t2"."id") AS "magic"'), [])
 
+    def test_all_clauses(self):
+        count = fn.COUNT(Tweet.c.id).alias('ct')
+        query = (User
+                 .select(User.c.username, count)
+                 .join(Tweet, JOIN.LEFT_OUTER,
+                       on=(User.c.id == Tweet.c.user_id))
+                 .where(User.c.is_admin == 1)
+                 .group_by(User.c.username)
+                 .having(count > 10)
+                 .order_by(count.desc()))
+        self.assertSQL(query, (
+            'SELECT "t1"."username", COUNT("t2"."id") AS "ct" '
+            'FROM "users" AS "t1" '
+            'LEFT OUTER JOIN "tweets" AS "t2" '
+            'ON ("t1"."id" = "t2"."user_id") '
+            'WHERE ("t1"."is_admin" = ?) '
+            'GROUP BY "t1"."username" '
+            'HAVING ("ct" > ?) '
+            'ORDER BY "ct" DESC'), [1, 10])
+
 
 class TestInsertQuery(BaseTestCase):
     def test_insert_simple(self):
@@ -356,11 +376,12 @@ class TestUpdateQuery(BaseTestCase):
             'WHERE ("username" = ?)'), [False, 1, 'nuggie', 'nugz'])
 
     def test_update_subquery(self):
+        count = fn.COUNT(Tweet.c.id).alias('ct')
         subquery = (User
-                    .select(User.c.id, fn.COUNT(Tweet.c.id).alias('ct'))
+                    .select(User.c.id, count)
                     .join(Tweet, on=(Tweet.c.user_id == User.c.id))
                     .group_by(User.c.id)
-                    .having(SQL('ct') > 100))
+                    .having(count > 100))
         query = (User
                  .update({
                      User.c.muted: True,
@@ -376,7 +397,7 @@ class TestUpdateQuery(BaseTestCase):
             'INNER JOIN "tweets" AS "t1" '
             'ON ("t1"."user_id" = "users"."id") '
             'GROUP BY "users"."id" '
-            'HAVING (ct > ?)))'), [0, True, 100])
+            'HAVING ("ct" > ?)))'), [0, True, 100])
 
     def test_update_returning(self):
         query = (User
@@ -400,11 +421,12 @@ class TestDeleteQuery(BaseTestCase):
             ['charlie'])
 
     def test_delete_subquery(self):
+        count = fn.COUNT(Tweet.c.id).alias('ct')
         subquery = (User
-                    .select(User.c.id, fn.COUNT(Tweet.c.id).alias('ct'))
+                    .select(User.c.id, count)
                     .join(Tweet, on=(Tweet.c.user_id == User.c.id))
                     .group_by(User.c.id)
-                    .having(SQL('ct') > 100))
+                    .having(count > 100))
         query = (User
                  .delete()
                  .where(User.c.id << subquery))
@@ -415,7 +437,7 @@ class TestDeleteQuery(BaseTestCase):
             'FROM "users" AS "users" '
             'INNER JOIN "tweets" AS "t1" ON ("t1"."user_id" = "users"."id") '
             'GROUP BY "users"."id" '
-            'HAVING (ct > ?)))'), [100])
+            'HAVING ("ct" > ?)))'), [100])
 
     def test_delete_cte(self):
         cte = (User

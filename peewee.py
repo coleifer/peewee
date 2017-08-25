@@ -1057,10 +1057,13 @@ class Alias(WrappedNode):
         return self.node
 
     def __sql__(self, ctx):
-        return (ctx
-                .sql(self.node)
-                .literal(' AS ')
-                .sql(Entity(self._alias)))
+        if ctx.scope == SCOPE_SOURCE:
+            return (ctx
+                    .sql(self.node)
+                    .literal(' AS ')
+                    .sql(Entity(self._alias)))
+        else:
+            return ctx.sql(Entity(self._alias))
 
 
 class Negated(WrappedNode):
