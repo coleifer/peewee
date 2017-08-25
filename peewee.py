@@ -5141,7 +5141,7 @@ class ModelSelect(BaseModelSelect, Select):
     def convert_dict_to_node(self, qdict):
         accum = []
         joins = []
-        relationship = (ForeignKeyField, BackrefAccessor)
+        fk_types = (ForeignKeyField, BackrefAccessor)
         for key, value in sorted(qdict.items()):
             curr = self.model
             if '__' in key and key.rsplit('__', 1)[1] in DJANGO_MAP:
@@ -5152,10 +5152,16 @@ class ModelSelect(BaseModelSelect, Select):
             else:
                 op = OP.EQ
             for piece in key.split('__'):
-                model_attr = getattr(curr, piece)
-                if value is not None and isinstance(model_attr, relationship):
-                    curr = model_attr.rel_model
-                    joins.append(model_attr)
+                for dest, attr, _ in self._joins.get(curr, ()):
+                    if attr == piece or (isinstance(dest, ModelAlias) and
+                                         dest.alias == piece):
+                        curr = dest
+                        break
+                else:
+                    model_attr = getattr(curr, piece)
+                    if value is not None and isinstance(model_attr, fk_types):
+                        curr = model_attr.rel_model
+                        joins.append(model_attr)
             accum.append(Expression(model_attr, op, value))
         return accum, joins
 

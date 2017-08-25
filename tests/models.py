@@ -635,6 +635,26 @@ class TestJoinModelAlias(ModelTestCase):
             ('mickey', 'woof', 'mickey'),
             ('zaizee', 'hiss', 'zaizee')])
 
+    def test_alias_filter(self):
+        UA = User.alias('ua')
+        lookups = ({'ua__username': 'huey'}, {'user__username': 'huey'})
+        for lookup in lookups:
+            query = (Tweet
+                     .select(Tweet.content, UA.username)
+                     .join(UA)
+                     .filter(**lookup)
+                     .order_by(Tweet.content))
+            self.assertSQL(query, (
+                'SELECT "t1"."content", "ua"."username" '
+                'FROM "tweet" AS "t1" '
+                'INNER JOIN "users" AS "ua" '
+                'ON ("t1"."user_id" = "ua"."id") '
+                'WHERE ("ua"."username" = ?) '
+                'ORDER BY "t1"."content"'), ['huey'])
+            with self.assertQueryCount(1):
+                data = [(t.content, t.user.username) for t in query]
+                self.assertEqual(data, [('meow', 'huey'), ('purr', 'huey')])
+
 
 @skip_case_unless(isinstance(db, PostgresqlDatabase))
 class TestWindowFunctionIntegration(ModelTestCase):

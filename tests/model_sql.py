@@ -106,6 +106,16 @@ class TestModelSQL(ModelDatabaseTestCase):
             'INNER JOIN "users" AS "t2" ON ("t1"."user_id" = "t2"."id") '
             'WHERE ("t2"."username" = ?)'), ['huey'])
 
+        UA = User.alias('ua')
+        query = (Tweet
+                 .select(Tweet.content)
+                 .join(UA)
+                 .filter(ua__username='huey'))
+        self.assertSQL(query, (
+            'SELECT "t1"."content" FROM "tweet" AS "t1" '
+            'INNER JOIN "users" AS "ua" ON ("t1"."user_id" = "ua"."id") '
+            'WHERE ("ua"."username" = ?)'), ['huey'])
+
     def test_filter_join_combine_models(self):
         query = (Tweet
                  .select(Tweet.content)
