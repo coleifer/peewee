@@ -4,7 +4,7 @@ import sys
 import warnings
 from distutils.core import setup
 from distutils.extension import Extension
-from distutils.version import StrictVersion
+from distutils.version import LooseVersion
 
 f = open(os.path.join(os.path.dirname(__file__), 'README.rst'))
 readme = f.read()
@@ -26,7 +26,7 @@ else:
         cython_installed = False
         warnings.warn('Cython C extensions disabled as you are not using '
                       'CPython.')
-    elif StrictVersion(cython_version) < StrictVersion(cython_min_version):
+    elif LooseVersion(cython_version) < LooseVersion(cython_min_version):
         cython_installed = False
         warnings.warn('Cython C extensions for peewee will NOT be built, '
                       'because the installed Cython version '
