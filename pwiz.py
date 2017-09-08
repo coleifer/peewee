@@ -39,6 +39,11 @@ def make_introspector(database_type, database_name, **kwargs):
         sys.exit(1)
 
     schema = kwargs.pop('schema', None)
+    ssl = kwargs.pop('ssl', False)
+    # According to postgres docs, ssl is attempted by default, so nothing
+    # should be needed for postgres.
+    if database_type in ['mysql','mysqldb'] and ssl:
+        kwargs['ssl'] = {'ca': None}
     DatabaseClass = DATABASE_MAP[database_type]
     db = DatabaseClass(database_name, **kwargs)
     return Introspector.from_database(db, schema=schema)
@@ -144,6 +149,7 @@ def get_option_parser():
     ao('-p', '--port', dest='port', type='int')
     ao('-u', '--user', dest='user')
     ao('-P', '--password', dest='password', action='store_true')
+    ao('--ssl', dest='ssl', action='store_true', help='Use secure connection')
     engines = sorted(DATABASE_MAP)
     ao('-e', '--engine', dest='engine', default='postgresql', choices=engines,
        help=('Database type, e.g. sqlite, mysql or postgresql. Default '
@@ -160,7 +166,7 @@ def get_option_parser():
     return parser
 
 def get_connect_kwargs(options):
-    ops = ('host', 'port', 'user', 'schema')
+    ops = ('host', 'port', 'user', 'schema', 'ssl')
     kwargs = dict((o, getattr(options, o)) for o in ops if getattr(options, o))
     if options.password:
         kwargs['password'] = getpass()
