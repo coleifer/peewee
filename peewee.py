@@ -922,8 +922,9 @@ class FieldDescriptor(object):
         return self.field
 
     def __set__(self, instance, value):
-        instance._data[self.att_name] = value
-        instance._dirty.add(self.att_name)
+        if instance._data.get(self.att_name) != value:
+            instance._data[self.att_name] = value
+            instance._dirty.add(self.att_name)
 
 class Field(Node):
     """A column on a table."""
