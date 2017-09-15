@@ -1840,6 +1840,8 @@ class _WriteQuery(Query):
 
     def apply_returning(self, ctx):
         if self._returning:
+            if len(self._returning) == 1 and self._returning[0] is None:
+                return ctx
             ctx.literal(' RETURNING ').sql(CommaNodeList(self._returning))
         return ctx
 
