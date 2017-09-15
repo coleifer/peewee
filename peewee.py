@@ -1838,15 +1838,18 @@ class _WriteQuery(Query):
     def returning(self, *returning):
         self._returning = returning
 
+    @property
+    def _empty_returning(self):
+        return self._returning and len(self._returning) == 1 and \
+                self._returning[0] is None
+
     def apply_returning(self, ctx):
-        if self._returning:
-            if len(self._returning) == 1 and self._returning[0] is None:
-                return ctx
+        if self._returning and not self._empty_returning:
             ctx.literal(' RETURNING ').sql(CommaNodeList(self._returning))
         return ctx
 
     def _execute(self, database):
-        if self._returning:
+        if self._returning and not self._empty_returning:
             cursor = self.execute_returning(database)
         else:
             cursor = database.execute(self)
