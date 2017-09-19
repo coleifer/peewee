@@ -8,6 +8,9 @@ In a single-threaded application, only one connection will be created. It will
 be continually recycled until either it exceeds the stale timeout or is closed
 explicitly (using `.manual_close()`).
 
+Stale connections will either be closed (default) or will be released back to
+the pool (using `close_stale=False`).
+
 By default, all your application needs to do is ensure that connections are
 closed when you are finished with them, and they will be returned to the pool.
 For web applications, this typically means that at the beginning of a request,
@@ -23,6 +26,7 @@ Simple Postgres pool example code:
         'my_app',
         max_connections=32,
         stale_timeout=300,  # 5 minutes.
+        close_stale=True,  # Close stale connections.
         user='postgres')
 
     class BaseModel(Model):
@@ -90,9 +94,10 @@ class MaxConnectionsExceeded(ValueError): pass
 
 class PooledDatabase(object):
     def __init__(self, database, max_connections=20, stale_timeout=None,
-                 timeout=None, **kwargs):
+                 close_stale=True, timeout=None, **kwargs):
         self.max_connections = make_int(max_connections)
         self.stale_timeout = make_int(stale_timeout)
+        self.close_stale = close_stale
         self.timeout = make_int(timeout)
         if self.timeout == 0:
             self.timeout = float('inf')
@@ -156,12 +161,15 @@ class PooledDatabase(object):
                     self._closed.discard(key)
                 elif self.stale_timeout and self._is_stale(ts):
                     # If we are attempting to check out a stale connection,
-                    # then close it. We don't need to mark it in the "closed"
-                    # set, because it is not in the list of available conns
-                    # anymore.
-                    logger.debug('Connection %s was stale, closing.', key)
-                    self._close(conn, True)
-                    self._closed.discard(key)
+                    # then close or release it. We don't need to mark it in
+                    # the "closed" set, because it is not in the list of
+                    # available conns anymore.
+                    self._close(conn, self.close_stale)
+                    if self.close_stale:
+                        logger.debug('Connection %s was stale, closing.', key)
+                        self._closed.discard(key)
+                    else:
+                        logger.debug('Connection %s was stale, releasing.', key)
                     ts = conn = None
                 else:
                     break
@@ -198,12 +206,12 @@ class PooledDatabase(object):
         elif key in self._in_use:
             ts = self._in_use[key]
             del self._in_use[key]
-            if self.stale_timeout and self._is_stale(ts):
+            if self.stale_timeout and self._is_stale(ts) and self.close_stale:
                 logger.debug('Closing stale connection %s.', key)
                 super(PooledDatabase, self)._close(conn)
             elif self._can_reuse(conn):
                 logger.debug('Returning %s to pool.', key)
-                heapq.heappush(self._connections, (ts, conn))
+                heapq.heappush(self._connections, (time.time(), conn))
             else:
                 logger.debug('Closed %s.', key)
 
