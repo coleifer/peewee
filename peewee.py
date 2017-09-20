@@ -2651,7 +2651,7 @@ class PostgresqlDatabase(Database):
     def last_insert_id(self, cursor, query_type=None):
         try:
             return cursor if query_type else cursor[0][0]
-        except IndexError:
+        except (IndexError, TypeError):
             pass
 
     def get_tables(self, schema=None):

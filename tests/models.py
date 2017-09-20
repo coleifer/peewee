@@ -842,6 +842,14 @@ class TestReturningIntegration(ModelTestCase):
 
         self.assertEqual(query.execute(), 1)
 
+    def test_no_return(self):
+        query = User.insert(username='huey').returning(None)
+        self.assertIsNone(query.execute())
+
+        user = User.get(User.username == 'huey')
+        self.assertEqual(user.username, 'huey')
+        self.assertTrue(user.id >= 1)
+
     @requires_models(Category)
     def test_non_int_pk_returning(self):
         query = Category.insert(name='root')
