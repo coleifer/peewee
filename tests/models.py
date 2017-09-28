@@ -124,6 +124,14 @@ class TestModelAPIs(ModelTestCase):
         self.assertFalse(created2)
         self.assertEqual(huey.id, huey2.id)
 
+    @requires_models(Category)
+    def test_get_or_create_self_referential_fk(self):
+        parent = Category.create(name='parent')
+        child, created = Category.get_or_create(parent=parent, name='child')
+        child_db = Category.get(Category.parent == parent)
+        self.assertEqual(child_db.parent.name, 'parent')
+        self.assertEqual(child_db.name, 'child')
+
     @requires_models(Person)
     def test_save(self):
         huey = Person(first='huey', last='cat', dob=datetime.date(2010, 7, 1))
@@ -1317,3 +1325,26 @@ class TestJoinSubquery(ModelTestCase):
 
         db_data = [row for row in query.tuples()]
         self.assertEqual(db_data, list(data))
+
+
+class User2(TestModel):
+    username = TextField()
+
+
+class Category2(TestModel):
+    name = TextField()
+    parent = ForeignKeyField('self', backref='children', null=True)
+    user = ForeignKeyField(User2)
+
+
+class TestGithub1354(ModelTestCase):
+    @requires_models(Category2, User2)
+    def test_get_or_create_self_referential_fk2(self):
+        huey = User2.create(username='huey')
+        parent = Category2.create(name='parent', user=huey)
+        child, created = Category2.get_or_create(parent=parent, name='child',
+                                                 user=huey)
+        child_db = Category2.get(Category2.parent == parent)
+        self.assertEqual(child_db.user.username, 'huey')
+        self.assertEqual(child_db.parent.name, 'parent')
+        self.assertEqual(child_db.name, 'child')
