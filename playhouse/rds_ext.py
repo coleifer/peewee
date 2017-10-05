@@ -7,9 +7,9 @@ except ImportError:
     from urllib.parse import ParseResult
 
 
-class UnsupportedRdsEngine(Exception):
+class UnsupportedAwsRdsEngine(Exception):
     """
-    Raised when the RDS DB engine is not supported by the URL building code.
+    Raised when the AWS RDS DB engine is not supported by the URL building code.
     """
     pass
 
@@ -33,15 +33,15 @@ def parse_from_rds(parsed):
     Retrieve the parsed database endpoint URL from a parsed rds:// or rdsro://
     URL.
 
-    The RDS cluster or RDS instance id is read from parsed.hostname (it is case
-    insensitive), then boto3 is used to retrieve the DB information (db engine,
-    db name, db endpoint address and port) so that the parsed database URL can
-    be built.
+    The AWS RDS cluster or AWS RDS instance id is read from parsed.hostname (it
+    is case insensitive), then boto3 is used to retrieve the DB information (db
+    engine, db name, db endpoint address and port) so that the parsed database
+    URL can be built.
 
-    The rds:// scheme retrieves the read-write endpoint of the RDS cluster or
-    RDS instance, while rdsro:// retrieves the read-only endpoint of the RDS
-    cluster. Since there are no read-only endpoints for an RDS instance, in
-    this case rdsro:// is equivalent to rds:// .
+    The rds:// scheme retrieves the read-write endpoint of the AWS RDS cluster
+    or AWS RDS instance, while rdsro:// retrieves the read-only endpoint of the
+    AWS RDS cluster. Since there are no read-only endpoints for an AWS RDS
+    instance, in this case rdsro:// is equivalent to rds:// .
 
     See also:
     https://boto3.readthedocs.io/en/latest/reference/services/rds.html#client
@@ -49,7 +49,7 @@ def parse_from_rds(parsed):
     :type parsed: urlparse.ParseResult
     :param parsed: rds:// or rdsro:// parsed URL.
     :rtype: urlparse.ParseResult
-    :returns: Parsed URL for the RDS database.
+    :returns: Parsed URL for the AWS RDS database.
     """
     assert parsed.scheme in ['rds', 'rdsro'], "rds_ext only supports the " \
         "rds:// and rdsro:// schemes: '{}://' provided".format(parsed.scheme)
@@ -77,7 +77,8 @@ def parse_from_rds(parsed):
     try:
         scheme = rds_scheme_map[engine]
     except KeyError:
-        raise UnsupportedRdsEngine('Unsupported RDS Engine "{}"'.format(engine))
+        raise UnsupportedAwsRdsEngine('Unsupported AWS RDS Engine '
+                                      '"{}"'.format(engine))
     # 1. hostname and port are provided by RDS
     netloc = '{}:{}'.format(hostname, port)
     # 2. if dbname or username was provided, overwrite the default ones from RDS
