@@ -24,10 +24,24 @@ schemes = {
     'sqliteext+pool': PooledSqliteExtDatabase,
 }
 
+scheme_resolvers = {
+}
+
 def register_database(db_class, *names):
     global schemes
     for name in names:
         schemes[name] = db_class
+
+def register_resolver(url_resolver, *names):
+    global scheme_resolvers
+    for name in names:
+        scheme_resolvers[name] = url_resolver
+
+def resolve(parsed):
+    # could be made recursive with some safe-guards.
+    if parsed.scheme in scheme_resolvers:
+        parsed = scheme_resolvers[parsed.scheme](parsed)
+    return parsed
 
 def parseresult_to_dict(parsed):
 
@@ -77,11 +91,11 @@ def parseresult_to_dict(parsed):
     return connect_kwargs
 
 def parse(url):
-    parsed = urlparse(url)
+    parsed = resolve(urlparse(url))
     return parseresult_to_dict(parsed)
 
 def connect(url, **connect_params):
-    parsed = urlparse(url)
+    parsed = resolve(urlparse(url))
     connect_kwargs = parseresult_to_dict(parsed)
     connect_kwargs.update(connect_params)
     database_class = schemes.get(parsed.scheme)
@@ -127,3 +141,10 @@ except ImportError:
     pass
 else:
     register_database(PostgresqlExtDatabase, 'postgresext', 'postgresqlext')
+
+try:
+    from playhouse.rds_ext import parse_from_rds
+except ImportError:
+    pass
+else:
+    register_resolver(parse_from_rds, 'rds', 'rdsro')
