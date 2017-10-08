@@ -5,6 +5,27 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 2.10.2
+
+* Update travis-ci build scripts to use Postgres 9.6 and test against Python
+  3.6.
+* Added support for returning `namedtuple` objects when iterating over a
+  cursor.
+* Added support for specifying the "object id" attribute used when declaring a
+  foreign key. By default, it is `foreign-key-name_id`, but it can now be
+  customized.
+* Fixed small bug in the calculation of search scores when using the SQLite C
+  extension or the `sqlite_ext` module.
+* Support literal column names with the `dataset` module.
+
+[View commits](https://github.com/coleifer/peewee/compare/2.10.1...2.10.2)
+
+## 2.10.1
+
+Removed `AESEncryptedField`.
+
+[View commits](https://github.com/coleifer/peewee/compare/2.10.0...2.10.1)
+
 ## 2.10.0
 
 The main change in this release is the removal of the `AESEncryptedField`,
