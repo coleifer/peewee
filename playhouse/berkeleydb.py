@@ -4,10 +4,7 @@ import decimal
 import sys
 
 from peewee import ImproperlyConfigured
-from peewee import sqlite3
 from playhouse.sqlite_ext import *
-
-sqlite3_lib_version = sqlite3.sqlite_version_info
 
 # Peewee assumes that the `pysqlite2` module was compiled against the
 # BerkeleyDB SQLite libraries.
@@ -15,6 +12,8 @@ try:
     from pysqlite2 import dbapi2 as berkeleydb
 except ImportError:
     import sqlite3 as berkeleydb
+
+sqlite3_lib_version = sqlite3.sqlite_version_info
 
 berkeleydb.register_adapter(decimal.Decimal, str)
 berkeleydb.register_adapter(datetime.date, str)
