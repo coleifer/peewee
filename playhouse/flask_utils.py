@@ -33,7 +33,10 @@ class PaginatedQuery(object):
         return 1
 
     def get_page_count(self):
-        return int(math.ceil(float(self.query.count()) / self.paginate_by))
+        if not hasattr(self, '_page_count'):
+            self._page_count = int(math.ceil(
+                float(self.query.count()) / self.paginate_by))
+        return self._page_count
 
     def get_object_list(self):
         if self.check_bounds and self.get_page() > self.get_page_count():
