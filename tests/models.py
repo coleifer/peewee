@@ -395,6 +395,11 @@ class TestModelAPIs(ModelTestCase):
             'SELECT "t1"."id", "t1"."foo_id" FROM "note" AS "t1" '
             'WHERE ("t1"."foo_id" = ?)'), [1337])
 
+    @requires_models(User)
+    def test_noop(self):
+        query = User.noop()
+        self.assertEqual(list(query), [])
+
 
 class TestDeleteInstance(ModelTestCase):
     database = get_in_memory_db()
