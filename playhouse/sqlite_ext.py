@@ -162,7 +162,13 @@ class VirtualTableSchemaManager(SchemaManager):
             ctx.literal('IF NOT EXISTS ')
         (ctx
          .sql(self.model)
-         .literal(' USING %s ' % self.model._meta.extension_module))
+         .literal(' USING '))
+
+        ext_module = self.model._meta.extension_module
+        if not isinstance(ext_module, Node):
+            ext_module = SQL(ext_module)
+
+        ctx.sql(ext_module).literal(' ')
 
         arguments = []
         meta = self.model._meta
