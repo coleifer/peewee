@@ -52,6 +52,7 @@ except ImportError:
     print('Unable to import sqlite extension tests, skipping.')
 from .sqliteq import *
 from .sqlite_udf import *
+from .test_utils import *
 
 
 if __name__ == '__main__':
