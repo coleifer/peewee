@@ -1376,9 +1376,16 @@ class DQ(ColumnBase):
     def __init__(self, **query):
         super(DQ, self).__init__()
         self.query = query
+        self._negated = False
+
+    @Node.copy
+    def __invert__(self):
+        self._negated = not self._negated
 
     def clone(self):
-        return DQ(**self.query)
+        node = DQ(**self.query)
+        node._negated = self._negated
+        return node
 
 Tuple = lambda *a: EnclosedNodeList(a)
 
@@ -5207,7 +5214,8 @@ class ModelSelect(BaseModelSelect, Select):
                     dq_joins.update(joins)
                     expression = reduce(operator.and_, query)
                     # Apply values from the DQ object.
-                    #expression._negated = piece._negated
+                    if piece._negated:
+                        expression = Negated(expression)
                     #expression._alias = piece._alias
                     setattr(curr, side, expression)
                 else:
