@@ -76,6 +76,18 @@ class TestModelSQL(ModelDatabaseTestCase):
             'INNER JOIN "favorite" AS "t3" ON ("t3"."tweet_id" = "t1"."id")'),
             [])
 
+    def test_model_alias(self):
+        TA = Tweet.alias()
+        query = (User
+                 .select(User, fn.COUNT(TA.id).alias('tc'))
+                 .join(TA, on=(User.id == TA.user))
+                 .group_by(User))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username", COUNT("t2"."id") AS "tc" '
+            'FROM "users" AS "t1" '
+            'INNER JOIN "tweet" AS "t2" ON ("t1"."id" = "t2"."user_id") '
+            'GROUP BY "t1"."id", "t1"."username"'), [])
+
     def test_filter_simple(self):
         query = User.filter(username='huey')
         self.assertSQL(query, (
