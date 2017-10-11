@@ -6,6 +6,13 @@ try:
     import zlib
 except ImportError:
     zlib = None
+import sys
+
+from peewee import BlobField
+
+
+PY2 = sys.version_info[0] == 2
+
 
 class CompressedField(BlobField):
     ZLIB = 'zlib'
