@@ -2149,6 +2149,15 @@ class _NoopLock(object):
     def __exit__(self, exc_type, exc_val, exc_tb): pass
 
 
+class ConnectionContext(_callable_context_manager):
+    __slots__ = ('db',)
+    def __init__(self, db): self.db = db
+    def __enter__(self):
+        if self.db.is_closed():
+            self.db.connect()
+    def __exit__(self, exc_type, exc_val, exc_tb): self.db.close()
+
+
 class Database(_callable_context_manager):
     context_class = Context
     field_types = {}
@@ -2206,6 +2215,9 @@ class Database(_callable_context_manager):
             top.__exit__(exc_type, exc_val, exc_tb)
         finally:
             self.close()
+
+    def connection_context(self):
+        return ConnectionContext(self)
 
     def _connect(self):
         raise NotImplementedError
