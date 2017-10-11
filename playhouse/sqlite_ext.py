@@ -165,11 +165,10 @@ class VirtualTableSchemaManager(SchemaManager):
          .literal(' USING '))
 
         ext_module = self.model._meta.extension_module
-        if not isinstance(ext_module, Node):
-            ext_module = SQL(ext_module)
+        if isinstance(ext_module, Node):
+            return ctx.sql(ext_module)
 
-        ctx.sql(ext_module).literal(' ')
-
+        ctx.sql(SQL(ext_module)).literal(' ')
         arguments = []
         meta = self.model._meta
 
