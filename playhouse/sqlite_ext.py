@@ -860,7 +860,7 @@ class LSMTable(VirtualModel):
 
 OP.MATCH = 'MATCH'
 
-def _sqlite_regexp(value, regex):
+def _sqlite_regexp(regex, value):
     return re.search(regex, value, re.I) is not None
 
 
