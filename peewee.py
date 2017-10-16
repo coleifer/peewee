@@ -2405,8 +2405,8 @@ class Database(_callable_context_manager):
     def truncate_date(self, date_part, date_field):
         raise NotImplementedError
 
-    def get_noop_select(self):
-        return 'SELECT 0 WHERE 0'
+    def get_noop_select(self, ctx):
+        return ctx.sql(Select().columns(SQL('0')).where(SQL('0')))
 
 
 def __pragma__(name):
@@ -2813,8 +2813,8 @@ class PostgresqlDatabase(Database):
     def truncate_date(self, date_part, date_field):
         return fn.DATE_TRUNC(date_part, date_field)
 
-    def get_noop_select(self):
-        return 'SELECT 0 WHERE false'
+    def get_noop_select(self, ctx):
+        return ctx.sql(Select().columns(SQL('0')).where(SQL('false')))
 
 
 class MySQLDatabase(Database):
@@ -2942,8 +2942,8 @@ class MySQLDatabase(Database):
     def truncate_date(self, date_part, date_field):
         return fn.DATE_FORMAT(date_field, __mysql_date_trunc__[date_part])
 
-    def get_noop_select(self):
-        return 'DO 0'
+    def get_noop_select(self, ctx):
+        return ctx.literal('DO 0')
 
 
 # TRANSACTION CONTROL.
@@ -5256,8 +5256,7 @@ class ModelSelect(BaseModelSelect, Select):
 
 class NoopModelSelect(ModelSelect):
     def __sql__(self, ctx):
-        noop_sql = self.model._meta.database.get_noop_select()
-        return ctx.literal(noop_sql)
+        return self.model._meta.database.get_noop_select(ctx)
 
     def _get_cursor_wrapper(self, cursor):
         return CursorWrapper(cursor)
