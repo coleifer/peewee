@@ -728,7 +728,7 @@ Fields
 
     :param rel_model: related :py:class:`Model` class or the string 'self' if declaring a self-referential foreign key
     :param string related_name: attribute to expose on related model
-    :param string on_delete: on delete behavior, e.g. ``on_delete='CASCADE'``.
+    :param string on_delete: on delete behavior, e.g. ``on_delete='CASCADE'``. Note this has no effect in SQLite if you don't specify `pragmas=(('foreign_keys', 'on'),)` on database init.
     :param string on_update: on update behavior.
     :param to_field: the field (or field name) on ``rel_model`` the foreign key
         references. Defaults to the primary key field for ``rel_model``.
@@ -759,6 +759,8 @@ Fields
 
     .. note:: If you manually specify a ``to_field``, that field must be either
         a primary key or have a unique constraint.
+
+    .. note:: Take care with foreign keys in SQLite. By default, ON DELETE has no effect, which can have surprising (and usually unwanted) effects on your database integrity. This can affect you even if you don't specify on_delete, since the default ON DELETE behaviour (to fail without modifying your data) does not happen, and your data can be silently relinked. The safest thing to do is to specify `pragmas=(('foreign_keys', 'on'),)` when you instantiate `SqliteDatabase`.
 
 .. py:class:: CompositeKey(*fields)
 
