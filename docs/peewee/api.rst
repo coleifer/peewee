@@ -515,6 +515,9 @@ Fields
 
     Stores: auto-incrementing integer fields suitable for use as primary key.
 
+    .. note::
+        In SQLite, for performance reasons, the default primary key type simply uses the max existing value + 1 for new values, as opposed to the max ever value + 1. This means deleted records can have their primary keys reused. In conjunction with SQLite having foreign keys disabled by default (meaning ON DELETE is ignored, even if you specify it explicitly), this can lead to surprising and dangerous behaviour. To avoid this, you may want to use one or both of :py:class:`PrimaryKeyAutoIncrementField` and `pragmas=(('foreign_keys', 'on'),)` when you instantiate `SqliteDatabase`.
+
     .. py:attribute:: db_field = 'primary_key'
 
 .. py:class:: FloatField
