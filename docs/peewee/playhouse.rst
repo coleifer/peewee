@@ -3963,7 +3963,7 @@ CSV Loader API
 Dumping CSV
 ^^^^^^^^^^^
 
-.. py:function:: dump_csv(query, file_or_name[, include_header=True[, close_file=True[, append=True[, csv_writer=None]]]])
+.. py:function:: dump_csv(query, file_or_name[, include_header=True[, close_file=True[, append=True[, csv_writer=None[, verbose_header=False]]]]])
 
     :param query: A peewee :py:class:`SelectQuery` to dump as CSV.
     :param file_or_name: Either a filename or a file-like object.
@@ -3971,6 +3971,7 @@ Dumping CSV
     :param close_file: Whether the file should be closed after writing the query data.
     :param append: Whether new data should be appended to the end of the file.
     :param csv_writer: A python ``csv.writer`` instance to use.
+    :param verbose_header: Whether to use verbose column names when writing the header row.
 
     Example usage:
 

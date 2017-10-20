@@ -311,7 +311,7 @@ def load_csv(db_or_model, file_or_name, fields=None, field_names=None,
 load_csv.__doc__ = Loader.__doc__
 
 def dump_csv(query, file_or_name, include_header=True, close_file=True,
-             append=True, csv_writer=None):
+             append=True, csv_writer=None, verbose_header=False):
     """
     Create a CSV dump of a query.
     """
@@ -333,7 +333,10 @@ def dump_csv(query, file_or_name, include_header=True, close_file=True,
             if node._alias:
                 header.append(node._alias)
             elif isinstance(node, (Field, Func)):
-                header.append(node.name)
+                if verbose_header and node.verbose_name:
+                    header.append(node.verbose_name)
+                else:
+                    header.append(node.name)
             else:
                 header.append('col_%s' % idx)
         writer.writerow(header)
