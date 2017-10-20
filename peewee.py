@@ -1654,6 +1654,8 @@ class SelectBase(_HashableSource, Source, SelectQuery):
         clone = self.order_by().alias('_wrapped')
         if clear_limit:
             clone._limit = clone._offset = None
+        if clone._having is None and clone._windows is None:
+            clone = clone.select(SQL('1'))
 
         query = Select([clone], [fn.COUNT(SQL('1'))]).tuples()
         return query.execute(database)[0][0]

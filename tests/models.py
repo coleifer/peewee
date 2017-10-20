@@ -288,6 +288,9 @@ class TestModelAPIs(ModelTestCase):
                 ('u2', 't2-2', 'u1'),
                 ('u2', 't2-2', 'u3')])
 
+        res = query.count()
+        self.assertEqual(res, 5)
+
     @requires_models(Register)
     @skip_if(IS_SQLITE and sqlite3.sqlite_version_info < (3, 9))
     def test_compound_select(self):
