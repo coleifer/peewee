@@ -10,13 +10,14 @@ Models
 
 .. py:class:: Model(**kwargs)
 
-    Models provide a 1-to-1 mapping to database tables. Subclasses of
-    ``Model`` declare any number of :py:class:`Field` instances as class
-    attributes. These fields correspond to columns on the table.
+    Models provide a 1-to-1 mapping to database tables. Subclasses of ``Model``
+    declare any number of :py:class:`Field` instances as class attributes.
+    These fields correspond to columns on the table.
 
-    Table-level operations, such as :py:meth:`~Model.select`, :py:meth:`~Model.update`,
-    :py:meth:`~Model.insert`, and :py:meth:`~Model.delete`, are implemented
-    as classmethods. Row-level operations such as :py:meth:`~Model.save` and
+    Table-level operations, such as :py:meth:`~Model.select`,
+    :py:meth:`~Model.update`, :py:meth:`~Model.insert`, and
+    :py:meth:`~Model.delete`, are implemented as classmethods. Row-level
+    operations such as :py:meth:`~Model.save` and
     :py:meth:`~Model.delete_instance` are implemented as instancemethods.
 
     :param kwargs: Initialize the model, assigning the given key/values to the
@@ -33,12 +34,43 @@ Models
 
         u = User(username='charlie', is_admin=True)
 
-    .. py:classmethod:: select(*selection)
+    .. py:classmethod:: validate_model(cls)
 
-        :param selection: A list of model classes, field instances, functions
-          or expressions. If no argument is provided, all columns for the given model
-          will be selected.
-        :rtype: a :py:class:`SelectQuery` for the given :py:class:`Model`.
+        Hook called once after class-creation. Can be used to ensure that model
+        definition is valid. For example, the SQLite FTS5 extension uses this
+        hook to ensure that models using the full-text search extension do not
+        break any of SQLite's assumptions about the table definition.
+
+        Typically, if validation fails, an ``ImproperlyConfigured`` exception
+        should be raised.
+
+    .. py:classmethod:: alias([alias=None])
+
+        :param str alias: name to use for table alias
+        :return: a :py:class:`ModelAlias` instance
+
+        In some circumstances it may be necessary to reference a table twice in
+        a single query (e.g. self-join, sub-select). This method creates a
+        separate reference to the given table.
+
+        Example:
+
+        .. code-block:: python
+
+            Parent = Category.alias()
+            query = (Category
+                     .select(Category.name, Category.parent, Parent.name)
+                     .join(Parent, on=(Category.parent == Parent.id))
+                     .order_by(Category.name))
+            for category in query:
+                print category.parent.name, '->', category.name
+
+    .. py:classmethod:: select(*fields)
+
+        :param fields: A list of model classes, field instances, functions or
+          expressions. If no argument is provided, all columns for the given
+          model will be selected.
+        :rtype: a :py:class:`ModelSelectQuery` for the given :py:class:`Model`.
 
         Examples of selecting all columns (default):
 
@@ -53,15 +85,18 @@ Models
 
         .. code-block:: python
 
-            (Tweet
-              .select(Tweet, User)
-              .join(User)
-              .order_by(Tweet.created_date.desc()))
+            query = (Tweet
+                     .select(Tweet, User)
+                     .join(User)
+                     .order_by(Tweet.created_date.desc()))
+            for tweet in query:
+                print tweet.user.username, tweet.content
 
-    .. py:classmethod:: update(**update)
+    .. py:classmethod:: update([__data=None[, **kwargs]])
 
-        :param update: mapping of field-name to expression
-        :rtype: an :py:class:`UpdateQuery` for the given :py:class:`Model`
+        :param __data: a dictionary object mapping fields to values.
+        :param kwargs: mapping of fields to values.
+        :rtype: a :py:class:`ModelUpdateQuery` for the given :py:class:`Model`
 
         Example showing users being marked inactive if their registration
         expired:
@@ -78,32 +113,38 @@ Models
             q = PageView.update(count=PageView.count + 1).where(PageView.url == url)
             q.execute()  # execute the query, updating the database.
 
-        .. note:: When an update query is executed, the number of rows modified will be returned.
+        .. note::
+            When an update query is executed, the number of rows modified
+            will be returned.
 
-    .. py:classmethod:: insert(**insert)
+    .. py:classmethod:: insert([__data=None[, **kwargs]])
+
+        :param __data: a dictionary object mapping fields to values.
+        :param kwargs: mapping of fields or field-names to values.
+        :rtype: a :py:class:`ModelInsertQuery` for the given :py:class:`Model`.
 
         Insert a new row into the database. If any fields on the model have
-        default values, these values will be used if the fields are not explicitly
-        set in the ``insert`` dictionary.
-
-        :param insert: mapping of field or field-name to expression.
-        :rtype: an :py:class:`InsertQuery` for the given :py:class:`Model`.
+        default values, these values will be used if the fields are not
+        explicitly set in the ``kwargs`` dictionary.
 
         Example showing creation of a new user:
 
         .. code-block:: python
 
-            q = User.insert(username='admin', active=True, registration_expired=False)
+            q = User.insert(
+                username='admin',
+                active=True,
+                registration_expired=False)
             q.execute()  # perform the insert.
 
         You can also use :py:class:`Field` objects as the keys:
 
         .. code-block:: python
 
-            User.insert(**{User.username: 'admin'}).execute()
+            User.insert({User.username: 'admin'}).execute()
 
         If you have a model with a default value on one of the fields, and
-        that field is not specified in the ``insert`` parameter, the default
+        that field is not specified in the ``kwargs`` parameter, the default
         will be used:
 
         .. code-block:: python
@@ -115,14 +156,21 @@ Models
             # This INSERT query will automatically specify `active=True`:
             User.insert(username='charlie')
 
-        .. note:: When an insert query is executed on a table with an auto-incrementing primary key, the primary key of the new row will be returned.
+        .. note::
+            When an insert query is executed on a table with an
+            auto-incrementing primary key, the primary key of the new row will
+            be returned.
 
-    .. py:method:: insert_many(rows)
+    .. py:method:: insert_many(rows[, fields=None])
 
-        Insert multiple rows at once. The ``rows`` parameter must be an iterable
-        that yields dictionaries. As with :py:meth:`~Model.insert`, fields that
-        are not specified in the dictionary will use their default value, if
-        one exists.
+        :param rows: An iterable containing dictionaries of fields to values.
+        :param list fields: An optional list of fields used for each row.
+        :rtype: a :py:class:`ModelInsertQuery` for the given :py:class:`Model`.
+
+        Insert multiple rows at once. The ``rows`` parameter must be an
+        iterable that yields dictionaries. As with :py:meth:`~Model.insert`,
+        fields that are not specified in the dictionary will use their default
+        value, if one exists.
 
         .. note::
             Due to the nature of bulk inserts, each row must contain the same
@@ -134,9 +182,6 @@ Models
                     {'first_name': 'Peewee', 'last_name': 'Herman'},
                     {'first_name': 'Huey'},  # Missing "last_name"!
                 ])
-
-        :param rows: An iterable containing dictionaries of field-name-to-value.
-        :rtype: an :py:class:`InsertQuery` for the given :py:class:`Model`.
 
         Example of inserting multiple Users:
 
@@ -174,14 +219,14 @@ Models
             * `Changing run-time limits <https://www.sqlite.org/c3ref/limit.html>`_
             * `SQLite compile-time flags <https://www.sqlite.org/compile.html>`_
 
-    .. py:classmethod:: insert_from(fields, query)
+    .. py:classmethod:: insert_from(query, fields)
 
-        Insert rows into the table using a query as the data source. This API should
-        be used for *INSERT INTO...SELECT FROM* queries.
-
-        :param fields: The field objects to map the selected data into.
         :param query: The source of the new rows.
-        :rtype: an :py:class:`InsertQuery` for the given :py:class:`Model`.
+        :param fields: The field objects to map the selected data into.
+        :rtype: a :py:class:`ModelInsertQuery` for the given :py:class:`Model`.
+
+        Insert rows into the table using a query as the data source. This API
+        should be used for *INSERT INTO...SELECT FROM* queries.
 
         Example of inserting data across tables for denormalization purposes:
 
@@ -194,6 +239,32 @@ Models
             UserTweetDenorm.insert_from(
                 [UserTweetDenorm.username, UserTweetDenorm.num_tweets],
                 source).execute()
+
+    .. py:classmethod:: replace([__data=None[, **insert]])
+
+        :param __data: a dictionary object mapping fields to values.
+        :param kwargs: mapping of fields or field-names to values.
+        :rtype: a :py:class:`ModelInsertQuery` for the given :py:class:`Model`.
+
+        Insert **or replace** a new row into the database. Depending on the
+        database you are using, this may be implemented in one of several ways:
+
+        * SQLite uses ``INSERT OR REPLACE INTO``.
+        * MySQL uses ``REPLACE INTO``.
+        * Postgres does not support the ``replace()`` method.
+
+    .. py:method:: replace_many(rows[, fields=None])
+
+        :param rows: An iterable containing dictionaries of fields to values.
+        :param list fields: An optional list of fields used for each row.
+        :rtype: a :py:class:`ModelInsertQuery` for the given :py:class:`Model`.
+
+        Insert **or replace** multiple rows at once. The ``rows`` parameter
+        must be an iterable that yields dictionaries.
+
+        * SQLite uses ``INSERT OR REPLACE INTO``.
+        * MySQL uses ``REPLACE INTO``.
+        * Postgres does not support the ``replace()`` method.
 
     .. py:classmethod:: delete()
 
@@ -210,28 +281,9 @@ Models
             This method performs a delete on the *entire table*. To delete a
             single instance, see :py:meth:`Model.delete_instance`.
 
-    .. py:classmethod:: raw(sql, *params)
+    .. py:classmethod:: create(**query)
 
-        :param sql: a string SQL expression
-        :param params: any number of parameters to interpolate
-        :rtype: a :py:class:`RawQuery` for the given ``Model``
-
-        Example selecting rows from the User table:
-
-        .. code-block:: python
-
-            q = User.raw('select id, username from users')
-            for user in q:
-                print user.id, user.username
-
-        .. note::
-            Generally the use of ``raw`` is reserved for those cases where you
-            can significantly optimize a select query. It is useful for select
-            queries since it will return instances of the model.
-
-    .. py:classmethod:: create(**attributes)
-
-        :param attributes: key/value pairs of model attributes
+        :param query: key/value pairs of model attributes
         :rtype: a model instance with the provided attributes
 
         Example showing the creation of a user (a row will be added to the
@@ -242,11 +294,18 @@ Models
             user = User.create(username='admin', password='test')
 
         .. note::
-            The create() method is a shorthand for instantiate-then-save.
+            The ``create()`` method is a shorthand for instantiate-then-save.
 
-    .. py:classmethod:: get(*args)
+    .. py:classmethod:: noop()
+
+        Create a :py:class:`ModelSelectQuery` that always returns an empty set.
+        This can be composed with normal query methods to short-circuit the
+        evaluation of a query that is known to return no results.
+
+    .. py:classmethod:: get(*args, **filters)
 
         :param args: a list of query expressions, e.g. ``User.username == 'foo'``
+        :param filters: Django-style keyword-argument filters.
         :rtype: :py:class:`Model` instance or raises ``DoesNotExist`` exception
 
         Get a single row from the database that matches the given query.
@@ -256,8 +315,8 @@ Models
 
             user = User.get(User.username == username, User.active == True)
 
-        This method is also exposed via the :py:class:`SelectQuery`, though it
-        takes no parameters:
+        This method is also exposed via the :py:class:`ModelSelectQuery`,
+        though it takes no parameters:
 
         .. code-block:: python
 
@@ -271,20 +330,72 @@ Models
                 user = None
 
         .. note::
-            The :py:meth:`~Model.get` method is shorthand for selecting with a limit of 1. It
-            has the added behavior of raising an exception when no matching row is
-            found. If more than one row is found, the first row returned by the
-            database cursor will be used.
+            The :py:meth:`~Model.get` method is shorthand for selecting with a
+            limit of 1. It has the added behavior of raising an exception when
+            no matching row is found. If more than one row is found, the first
+            row returned by the database cursor will be used.
+
+    .. py:classmethod:: get_or_none(*args, **filters)
+
+        :param args: a list of query expressions, e.g. ``User.username == 'foo'``
+        :param filters: Django-style keyword-argument filters.
+        :rtype: :py:class:`Model` instance or ``None``.
+
+        Same as :py:meth:`Model.get` except if no results are found then
+        ``None`` will be returned.
+
+    .. py:classmethod:: get_by_id(pk)
+
+        :param pk: The primary key value to filter by.
+        :rtype: :py:class:`Model` instance or ``DoesNotExist`` exception.
+
+        Short-hand for calling the :py:meth:`~Model.get` method and performing
+        a lookup on the model's primary key.
+
+    .. py:classmethod:: set_by_id(key, value)
+
+        :param key: The primary key value.
+        :param value: A dictionary mapping fields to values to update.\
+        :rtype: The number of rows updated.
+
+        Short-hand for calling the :py:meth:`~Model.update` method and
+        restricting the updated rows by primary-key.
+
+        .. note::
+            The implicit update query will be executed and the number of
+            affected rows returned.
+
+    .. py:classmethod:: delete_by_id(pk)
+
+        :param pk: The primary key value.
+        :rtype: The number of rows deleted.
+
+        Short-hand for calling the :py:meth:`~Model.delete` method and
+        restricting the deleted rows by primary-key.
+
+        .. note::
+            The implicit delete query will be executed and the number of
+            deleted rows returned.
 
     .. py:classmethod:: get_or_create([defaults=None[, **kwargs]])
 
-        :param dict defaults: A dictionary of values to set on newly-created model instances.
-        :param kwargs: Django-style filters specifying which model to get, and what values to apply to new instances.
-        :returns: A 2-tuple containing the model instance and a boolean indicating whether the instance was created.
+        :param dict defaults: A dictionary of values to set on newly-created
+            model instances.
+        :param kwargs: Django-style filters specifying which model to get, and
+            what values to apply to new instances.
+        :return: A 2-tuple containing the model instance and a boolean
+            indicating whether the instance was created.
 
-        This function attempts to retrieve a model instance based on the provided filters. If no matching model can be found, a new model is created using the parameters specified by the filters and any values in the ``defaults`` dictionary.
+        This function attempts to retrieve a model instance based on the
+        provided filters. If no matching model can be found, a new model is
+        created using the parameters specified by the filters and any values in
+        the ``defaults`` dictionary.
 
-        .. note:: Use care when calling ``get_or_create`` with ``autocommit=False``, as the ``get_or_create()`` method will call :py:meth:`Database.atomic` to create either a transaction or savepoint.
+        .. note::
+            Use care when calling ``get_or_create`` with ``autocommit=False``,
+            as the ``get_or_create()`` method will call
+            :py:meth:`Database.atomic` to create either a transaction or
+            savepoint.
 
         Example **without** ``get_or_create``:
 
@@ -310,87 +421,26 @@ Models
                 last_name='Lennon',
                 defaults={'birthday': datetime.date(1940, 10, 9)})
 
-    .. py:classmethod:: create_or_get([**kwargs])
+    .. py:classmethod:: filter(*dq_nodes, **filters)
 
-        :param kwargs: Field name to value for attempting to create a new instance.
-        :returns: A 2-tuple containing the model instance and a boolean indicating whether the instance was created.
+        :param dq_nodes: Arbitrary number of :py:class:`DQ` nodes, composed to
+            form complex expressions.
+        :param filters: Django-style keyword-argument filter expressions.
+        :rtype: A :py:class:`ModelSelectQuery` query with the ``WHERE`` clause
+            corresponding to the specified filters.
 
-        This function attempts to create a model instance based on the provided kwargs. If an ``IntegrityError`` occurs indicating the violation of a constraint, then Peewee will return the model matching the filters.
-
-        .. note:: Peewee will not attempt to match *all* the kwargs when an ``IntegrityError`` occurs. Rather, only primary key fields or fields that have a unique constraint will be used to retrieve the matching instance.
-
-        .. note:: Use care when calling ``create_or_get`` with ``autocommit=False``, as the ``create_or_get()`` method will call :py:meth:`Database.atomic` to create either a transaction or savepoint.
-
-        Example:
-
-        .. code-block:: python
-
-            # This will succeed, there is no user named 'charlie' currently.
-            charlie, created = User.create_or_get(username='charlie')
-
-            # This will return the above object, since an IntegrityError occurs
-            # when trying to create an object using "charlie's" primary key.
-            user2, created = User.create_or_get(username='foo', id=charlie.id)
-
-            assert user2.username == 'charlie'
-
-    .. py:classmethod:: alias()
-
-        :rtype: :py:class:`ModelAlias` instance
-
-        The :py:meth:`alias` method is used to create self-joins.
-
-        Example:
-
-        .. code-block:: pycon
-
-            Parent = Category.alias()
-            sq = (Category
-                  .select(Category, Parent)
-                  .join(Parent, on=(Category.parent == Parent.id))
-                  .where(Parent.name == 'parent category'))
-
-        .. note:: When using a :py:class:`ModelAlias` in a join, you must explicitly specify the join condition.
-
-    .. py:classmethod:: create_table([fail_silently=False])
-
-        :param bool fail_silently: If set to ``True``, the method will check
-          for the existence of the table before attempting to create.
-
-        Create the table for the given model, along with any constraints and indexes.
-
-        Example:
-
-        .. code-block:: python
-
-            database.connect()
-            SomeModel.create_table()  # Execute the create table query.
-
-    .. py:classmethod:: drop_table([fail_silently=False[, cascade=False]])
-
-        :param bool fail_silently: If set to ``True``, the query will check for
-          the existence of the table before attempting to remove.
-        :param bool cascade: Drop table with ``CASCADE`` option.
-
-        Drop the table for the given model.
-
-    .. py:classmethod:: table_exists()
-
-        :rtype: Boolean whether the table for this model exists in the database
-
-    .. py:classmethod:: sqlall()
-
-        :returns: A list of queries required to create the table and indexes.
+        Convenience API for performing ``SELECT`` queries and specifying the
+        ``WHERE`` clause.
 
     .. py:method:: save([force_insert=False[, only=None]])
 
         :param bool force_insert: Whether to force execution of an insert
-        :param list only: A list of fields to persist -- when supplied, only the given
-            fields will be persisted.
+        :param list only: A list of fields to persist -- when supplied, only
+            the given fields will be persisted.
 
-        Save the given instance, creating or updating depending on whether it has a
-        primary key.  If ``force_insert=True`` an *INSERT* will be issued regardless
-        of whether or not the primary key exists.
+        Save the given instance, creating or updating depending on whether it
+        has a primary key.  If ``force_insert=True`` an *INSERT* will be issued
+        regardless of whether or not the primary key exists.
 
         Example showing saving a model instance:
 
@@ -400,34 +450,11 @@ Models
             user.username = 'some-user'  # does not touch the database
             user.save()  # change is persisted to the db
 
-    .. py:method:: delete_instance([recursive=False[, delete_nullable=False]])
+    .. py:method:: is_dirty()
 
-        :param recursive: Delete this instance and anything that depends on it,
-            optionally updating those that have nullable dependencies
-        :param delete_nullable: If doing a recursive delete, delete all dependent
-            objects regardless of whether it could be updated to NULL
+        Return whether any fields were manually set.
 
-        Delete the given instance.  Any foreign keys set to cascade on
-        delete will be deleted automatically.  For more programmatic control,
-        you can call with recursive=True, which will delete any non-nullable
-        related models (those that *are* nullable will be set to NULL).  If you
-        wish to delete all dependencies regardless of whether they are nullable,
-        set ``delete_nullable=True``.
-
-        example:
-
-        .. code-block:: python
-
-            some_obj.delete_instance()  # it is gone forever
-
-    .. py:method:: dependencies([search_nullable=False])
-
-        :param bool search_nullable: Search models related via a nullable foreign key
-        :rtype: Generator expression yielding queries and foreign key fields
-
-        Generate a list of queries of dependent models.  Yields a 2-tuple containing
-        the query and corresponding foreign key field.  Useful for searching dependencies
-        of a model, i.e. things that would be orphaned in the event of a delete.
+        :rtype: bool
 
     .. py:attribute:: dirty_fields
 
@@ -454,16 +481,77 @@ Models
                         database = db
                         only_save_dirty = True
 
-    .. py:method:: is_dirty()
+    .. py:method:: delete_instance([recursive=False[, delete_nullable=False]])
 
-        Return whether any fields were manually set.
+        :param recursive: Delete this instance and anything that depends on it,
+            optionally updating those that have nullable dependencies
+        :param delete_nullable: If doing a recursive delete, delete all dependent
+            objects regardless of whether it could be updated to NULL
 
-        :rtype: bool
+        Delete the given instance.  Any foreign keys set to cascade on
+        delete will be deleted automatically.  For more programmatic control,
+        you can call with recursive=True, which will delete any non-nullable
+        related models (those that *are* nullable will be set to NULL).  If you
+        wish to delete all dependencies regardless of whether they are nullable,
+        set ``delete_nullable=True``.
 
-    .. py:method:: prepared()
+        example:
 
-        This method provides a hook for performing model initialization *after*
-        the row data has been populated.
+        .. code-block:: python
+
+            some_obj.delete_instance()  # it is gone forever
+
+    .. py:classmethod:: bind(database[, bind_refs=True[, bind_backrefs=True]])
+
+        :param database: a :py:class:`Database` instance.
+        :param bool bind_refs: Also bind any models the given model has a
+            foreign-key relationship to.
+        :param bool bind_backrefs: Also bind any models that have a foreign-key
+            relationship to the given model.
+        :rtype: Returns boolean indicating whether the database was actually
+            updated or if no action was necessary.
+
+        Associate the :py:class:`Model` with the given :py:class:`Database`
+        instance, optionally updating any related models.
+
+    .. py:classmethod:: bind_ctx(database[, bind_refs=True[, bind_backrefs=True]])
+
+        Like the :py:meth:`~Model.bind` method, but exposed as a
+        context-manager.
+
+    .. py:classmethod:: table_exists()
+
+        :rtype: Boolean whether the table for this model exists in the database
+
+    .. py:classmethod:: create_table([safe=True[, **options]])
+
+        :param bool safe: If set to ``True``, the method will include an
+            ``IF NOT EXISTS`` clause with the create table query.
+        :param options: Arbitrary options to specify when creating the table.
+            Implementation-specific.
+
+        Create the table for the given model, along with any constraints and
+        indexes.
+
+        .. note::
+            MySQL and older versions of Postgres do not support the
+            ``IF NOT EXISTS`` clause when creating indexes. Because of that, if
+            the table exists then it is assumed that the associated indexes
+            also exists and the call is a no-op.
+
+        Example:
+
+        .. code-block:: python
+
+            database.connect()
+            SomeModel.create_table()  # Execute the create table query.
+
+    .. py:classmethod:: drop_table([safe=True])
+
+        :param bool fail_silently: If set to ``True``, the query will include
+            an ``IF EXISTS`` clause.
+
+        Drop the table and associated indexes for the given model.
 
 
 .. _fields-api:

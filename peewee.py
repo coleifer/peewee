@@ -4999,14 +4999,15 @@ class BaseModelSelect(_ModelQueryHelper):
         return prefetch(self, *subqueries)
 
     def get(self):
-        self._cursor_wrapper = None
+        clone = self.paginate(1, 1)
+        clone._cursor_wrapper = None
         try:
-            return self.execute()[0]
+            return clone.execute()[0]
         except IndexError:
-            sql, params = self.sql()
+            sql, params = clone.sql()
             raise self.model.DoesNotExist('%s instance matching query does '
                                           'not exist:\nSQL: %s\nParams: %s' %
-                                          (self.model, sql, params))
+                                          (clone.model, sql, params))
 
     @Node.copy
     def group_by(self, *columns):
