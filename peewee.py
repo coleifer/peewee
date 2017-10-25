@@ -4557,7 +4557,10 @@ class _BoundModelContext(_callable_context_manager):
 
 class Model(with_metaclass(ModelBase, Node)):
     def __init__(self, *args, **kwargs):
-        self.__data__ = self._meta.get_default_dict()
+        if kwargs.pop('__no_default__', None):
+            self.__data__ = {}
+        else:
+            self.__data__ = self._meta.get_default_dict()
         self._dirty = set(self.__data__)
         self.__rel__ = {}
 
@@ -5457,7 +5460,7 @@ class ModelObjectCursorWrapper(ModelDictCursorWrapper):
         data = super(ModelObjectCursorWrapper, self).process_row(row)
         if self.is_model:
             # Clear out any dirty fields before returning to the user.
-            obj = self.constructor(**data)
+            obj = self.constructor(__no_default__=1, **data)
             obj._dirty.clear()
             return obj
         else:
@@ -5515,7 +5518,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
         objects = {}
         object_list = []
         for key, constructor in self.key_to_constructor.items():
-            objects[key] = constructor()
+            objects[key] = constructor(__no_default__=True)
             object_list.append(objects[key])
 
         set_keys = set()

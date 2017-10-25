@@ -123,9 +123,9 @@ Models
         :param kwargs: mapping of fields or field-names to values.
         :rtype: a :py:class:`ModelInsertQuery` for the given :py:class:`Model`.
 
-        Insert a new row into the database. If any fields on the model have
-        default values, these values will be used if the fields are not
-        explicitly set in the ``kwargs`` dictionary.
+        Insert a new row into the database. Only those fields explicitly
+        specified in the ``__data`` or ``kwargs`` parameters will be inserted.
+        Field default values are **not** included.
 
         Example showing creation of a new user:
 
@@ -143,19 +143,6 @@ Models
 
             User.insert({User.username: 'admin'}).execute()
 
-        If you have a model with a default value on one of the fields, and
-        that field is not specified in the ``kwargs`` parameter, the default
-        will be used:
-
-        .. code-block:: python
-
-            class User(Model):
-                username = CharField()
-                active = BooleanField(default=True)
-
-            # This INSERT query will automatically specify `active=True`:
-            User.insert(username='charlie')
-
         .. note::
             When an insert query is executed on a table with an
             auto-incrementing primary key, the primary key of the new row will
@@ -169,8 +156,8 @@ Models
 
         Insert multiple rows at once. The ``rows`` parameter must be an
         iterable that yields dictionaries. As with :py:meth:`~Model.insert`,
-        fields that are not specified in the dictionary will use their default
-        value, if one exists.
+        only fields that are explicitly specified in the dictionary will be
+        inserted.
 
         .. note::
             Due to the nature of bulk inserts, each row must contain the same

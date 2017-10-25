@@ -59,3 +59,8 @@ class Favorite(TestModel):
 class Sample(TestModel):
     counter = IntegerField()
     value = FloatField(default=1.0)
+
+
+class SampleMeta(TestModel):
+    sample = ForeignKeyField(Sample, backref='metadata')
+    value = FloatField(default=0.0)

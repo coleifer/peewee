@@ -484,18 +484,67 @@ class TestDefaultDirtyBehavior(ModelTestCase):
         self.assertFalse(ac_db.save())
 
         ac = AutoCounter.create()
-        self.assertEqual(ac.counter, 3)  # One extra when fetched from db.
+        self.assertEqual(ac.counter, 2)
         self.assertEqual(ac.control, 1)
 
         AutoCounter._meta.only_save_dirty = False
 
         ac = AutoCounter()
-        self.assertEqual(ac.counter, 4)
+        self.assertEqual(ac.counter, 3)
         self.assertEqual(ac.control, 1)
         ac.save()
 
         ac_db = AutoCounter.get(AutoCounter.id == ac.id)
-        self.assertEqual(ac_db.counter, 4)
+        self.assertEqual(ac_db.counter, 3)
+
+
+class TestDefaultValues(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [Sample, SampleMeta]
+
+    def test_default_absent_on_insert(self):
+        query = Sample.insert(counter=0)
+        self.assertSQL(query, 'INSERT INTO "sample" ("counter") VALUES (?)',
+                       [0])
+
+        query = Sample.insert_many([{'counter': 0}, {'counter': 1}])
+        self.assertSQL(query,
+                       'INSERT INTO "sample" ("counter") VALUES (?), (?)',
+                       [0, 1])
+
+    def test_default_present_on_create(self):
+        s = Sample.create(counter=3)
+        s_db = Sample.get(Sample.counter == 3)
+        self.assertEqual(s_db.value, 1.)
+
+    def test_defaults_from_cursor(self):
+        s = Sample.create(counter=1)
+        sm1 = SampleMeta.create(sample=s, value=1.)
+        sm2 = SampleMeta.create(sample=s, value=2.)
+
+        # Simple query.
+        query = SampleMeta.select(SampleMeta.sample).order_by(SampleMeta.value)
+
+        with self.assertQueryCount(1):
+            sm1_db, sm2_db = list(query)
+            self.assertIsNone(sm1_db.value)
+            self.assertIsNone(sm2_db.value)
+
+        # Join-graph query.
+        query = (SampleMeta
+                 .select(SampleMeta.sample,
+                         Sample.counter)
+                 .join(Sample)
+                 .order_by(SampleMeta.value))
+
+        with self.assertQueryCount(1):
+            sm1_db, sm2_db = list(query)
+            self.assertIsNone(sm1_db.value)
+            self.assertIsNone(sm2_db.value)
+            self.assertIsNone(sm1_db.sample.value)
+            self.assertIsNone(sm2_db.sample.value)
+            self.assertEqual(sm1_db.sample.counter, 1)
+            self.assertEqual(sm2_db.sample.counter, 1)
 
 
 class TestFunctionCoerce(ModelTestCase):
