@@ -232,8 +232,9 @@ class BaseFTSModel(VirtualModel):
                 prefix = ','.join([str(i) for i in prefix])
             options['prefix'] = "'%s'" % prefix.strip("' ")
 
-        if tokenize:
-            # Tokenizers need to be in quoted string.
+        if tokenize and cls._meta.extension_module.lower() == 'fts5':
+            # Tokenizers need to be in quoted string for FTS5, but not for FTS3
+            # or FTS4.
             options['tokenize'] = '"%s"' % tokenize
 
         return options
