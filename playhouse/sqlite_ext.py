@@ -249,7 +249,7 @@ class BaseFTSModel(VirtualModel):
     def clean_options(cls, **options):
         tokenize = options.get('tokenize')
         content = options.get('content')
-        if tokenize:
+        if tokenize and cls._meta.extension_module.lower() == 'fts5':
             # Tokenizers need to be in quoted string.
             options['tokenize'] = '"%s"' % tokenize
         if isinstance(content, basestring) and content == '':
