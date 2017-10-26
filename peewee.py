@@ -527,6 +527,13 @@ class Context(object):
         self.alias_manager.pop()
 
     def sql(self, obj):
+        """
+        Append a composable Node object, sub-context, or other object to the
+        query AST. Python values, such as integers, strings, floats, etc. are
+        treated as parameterized values.
+
+        :return: The updated Context object.
+        """
         if isinstance(obj, (Node, Context)):
             return obj.__sql__(self)
         elif is_model(obj):
@@ -535,6 +542,11 @@ class Context(object):
             return self.sql(Value(obj))
 
     def literal(self, keyword):
+        """
+        Append a string-literal to the current query AST.
+
+        :return: The updated Context object.
+        """
         self._sql.append(keyword)
         return self
 
@@ -552,9 +564,16 @@ class Context(object):
         return ctx
 
     def parse(self, node):
+        """
+        Convert the given node to a SQL AST and return a 2-tuple consisting
+        of the SQL query and the parameters.
+        """
         return self.sql(node).query()
 
     def query(self):
+        """
+        Return a 2-tuple consisting of the SQL query and the parameters.
+        """
         return ''.join(self._sql), self._values
 
     def make_index_name(self, table, *columns):
@@ -597,6 +616,10 @@ class Node(object):
         return inner
 
     def unwrap(self):
+        """
+        API for recursively unwrapping "wrapped" nodes. Base case is to
+        return self.
+        """
         return self
 
 
@@ -632,7 +655,15 @@ class _ExplicitColumn(object):
 
 class Source(Node):
     """
-    A source of tuples, for example a table, join, or select query.
+    A source of row tuples, for example a table, join, or select query. By
+    default provides a "magic" attribute named "c" that is a factory for
+    column/attribute lookups, for example::
+
+        User = Table('users')
+        query = (User
+                 .select(User.c.username)
+                 .where(User.c.active == True)
+                 .order_by(User.c.username))
     """
     c = _DynamicColumn()
 
@@ -642,15 +673,27 @@ class Source(Node):
 
     @Node.copy
     def alias(self, name):
+        """
+        Returns a copy of the object with the given alias applied.
+        """
         self._alias = name
 
     def select(self, *columns):
+        """
+        Create a SELECT query on the given source.
+        """
         return Select((self,), columns)
 
     def join(self, dest, join_type='INNER', on=None):
+        """
+        Join this source with another source.
+        """
         return Join(self, dest, join_type, on)
 
     def left_outer_join(self, dest, on=None):
+        """
+        Short-hand API for performing a LEFT OUTER JOIN.
+        """
         return Join(self, dest, JOIN.LEFT_OUTER, on)
 
     def get_sort_key(self, ctx):
@@ -753,6 +796,9 @@ class _BoundTableContext(_callable_context_manager):
 
 
 class Table(_HashableSource, BaseTable):
+    """
+    Represents a table in the database (or a table-like object such as a view).
+    """
     def __init__(self, name, columns=None, primary_key=None, schema=None,
                  alias=None, _model=None, _database=None):
         self.__name__ = name
