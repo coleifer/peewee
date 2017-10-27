@@ -3329,7 +3329,6 @@ class Field(ColumnBase):
     accessor_class = FieldAccessor
     auto_increment = False
     field_type = 'DEFAULT'
-    passthrough = False
 
     def __init__(self, null=False, index=False, unique=False, column_name=None,
                  default=None, primary_key=False, constraints=None,

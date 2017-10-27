@@ -546,33 +546,44 @@ Models
 Fields
 ------
 
-.. py:class:: Field(null=False, index=False, unique=False, verbose_name=None, help_text=None, db_column=None, default=None, choices=None, primary_key=False, sequence=None, constraints=None, schema=None, **kwargs):
+.. py:class:: Field(null=False, index=False, unique=False, column_name=None,
+    default=None, primary_key=False, constraints=None, sequence=None,
+    collation=None, unindexed=False, choices=None, help_text=None,
+    verbose_name=None, **kwargs):
 
     The base class from which all other field types extend.
 
     :param bool null: whether this column can accept ``None`` or ``NULL`` values
     :param bool index: whether to create an index for this column when creating the table
     :param bool unique: whether to create a unique index for this column when creating the table
-    :param string verbose_name: specify a "verbose name" for this field, useful for metadata purposes
-    :param string help_text: specify some instruction text for the usage/meaning of this field
-    :param string db_column: column name to use for underlying storage, useful for compatibility with legacy databases
+    :param string column_name: column name to use for underlying storage, useful for compatibility with legacy databases
     :param default: a value to use as an uninitialized default
-    :param choices: an iterable of 2-tuples mapping ``value`` to ``display``
     :param bool primary_key: whether to use this as the primary key for the table
-    :param string sequence: name of sequence (if backend supports it)
     :param list constraints: a list of constraints, e.g. ``[Check('price > 0')]``.
-    :param string schema: name of schema (if backend supports it)
+    :param string sequence: name of sequence (if backend supports it)
+    :param string collation: name of collation (if backend supports it)
+    :param bool unindexed: whether to explicitly mark field as unindexed (if backend supports it)
+    :param choices: an iterable of 2-tuples mapping ``value`` to ``display``
+    :param string help_text: specify some instruction text for the usage/meaning of this field
+    :param string verbose_name: specify a "verbose name" for this field, useful for metadata purposes
     :param kwargs: named attributes containing values that may pertain to specific field subclasses, such as "max_length" or "decimal_places"
 
-    .. py:attribute:: db_field = '<some field type>'
+    .. py:attribute:: field_type = '<some field type>'
 
-        Attribute used to map this field to a column type, e.g. "string" or "datetime"
+        Attribute used to map this field to a storage data-type, e.g. "TEXT".
 
-    .. py:attribute:: _is_bound
+    .. py:attribute:: auto_increment
 
-        Boolean flag indicating if the field is attached to a model class.
+        Boolean flag indicating if the field is populated automatically when a
+        new row is inserted.
 
-    .. py:attribute:: model_class
+    .. py:attribute:: accessor_class
+
+        Implementation that defines the behavior of the field accessor. For
+        example, foreign keys have a special implementation that can look-up
+        the related model instance from a field value.
+
+    .. py:attribute:: model
 
         The model the field belongs to. *Only applies to bound fields.*
 
@@ -602,35 +613,41 @@ Fields
 
     Stores: integers
 
-    .. py:attribute:: db_field = 'int'
+    .. py:attribute:: field_type = 'INT'
 
 .. py:class:: BigIntegerField
 
     Stores: big integers
 
-    .. py:attribute:: db_field = 'bigint'
+    .. py:attribute:: field_type = 'BIGINT'
 
-.. py:class:: PrimaryKeyField
+.. py:class:: SmallIntegerField
 
-    Stores: auto-incrementing integer fields suitable for use as primary key.
+    Stores: small integers
 
-    .. py:attribute:: db_field = 'primary_key'
+    .. py:attribute:: field_type = 'SMALLINT'
+
+.. py:class:: AutoField
+
+    Stores: auto-incrementing integer fields for use as primary key.
+
+    .. py:attribute:: field_type = 'AUTO'
 
 .. py:class:: FloatField
 
     Stores: floating-point numbers
 
-    .. py:attribute:: db_field = 'float'
+    .. py:attribute:: field_type = 'FLOAT'
 
 .. py:class:: DoubleField
 
     Stores: double-precision floating-point numbers
 
-    .. py:attribute:: db_field = 'double'
+    .. py:attribute:: field_type = 'DOUBLE'
 
 .. py:class:: DecimalField
 
-    Stores: decimal numbers, using python standard library ``Decimal`` objects
+    Stores: decimal numbers, using python standard library ``Decimal`` objects.
 
     Additional attributes and values:
 
@@ -641,7 +658,7 @@ Fields
     ``rounding``        ``decimal.DefaultContext.rounding``
     ==================  ===================================
 
-    .. py:attribute:: db_field = 'decimal'
+    .. py:attribute:: field_type = 'DECIMAL'
 
 .. py:class:: CharField
 
@@ -653,13 +670,42 @@ Fields
     ``max_length``    ``255``
     ================  =========================
 
-    .. py:attribute:: db_field = 'string'
+    .. py:attribute:: field_type = 'VARCHAR'
+
+.. py:class:: FixedCharField
+
+    Stores: small fixed-length strings (0-255 bytes)
+
+    Additional attributes and values:
+
+    ================  =========================
+    ``max_length``    ``255``
+    ================  =========================
+
+    .. py:attribute:: field_type = 'CHAR'
 
 .. py:class:: TextField
 
     Stores: arbitrarily large strings
 
-    .. py:attribute:: db_field = 'text'
+    .. py:attribute:: field_type = 'TEXT'
+
+.. py:class:: BlobField
+
+    Store arbitrary binary data.
+
+    .. py:attribute:: field_type = 'BLOB'
+
+.. py:class:: UUIDField
+
+    Store ``UUID`` values.
+
+    .. note::
+        This field is only natively supported by
+        :py:class:`PostgresqlDatabase`, other databases will store UUIDs
+        as strings.
+
+    .. py:attribute:: field_type = 'UUID'
 
 .. py:class:: DateTimeField
 
@@ -677,7 +723,7 @@ Fields
     .. note::
         If the incoming value does not match a format, it will be returned as-is
 
-    .. py:attribute:: db_field = 'datetime'
+    .. py:attribute:: field_type = 'DATETIME'
 
     .. py:attribute:: year
 
@@ -724,7 +770,7 @@ Fields
     .. note::
         If the incoming value does not match a format, it will be returned as-is
 
-    .. py:attribute:: db_field = 'date'
+    .. py:attribute:: field_type = 'DATE'
 
     .. py:attribute:: year
 
@@ -761,7 +807,7 @@ Fields
     .. note::
         If the incoming value does not match a format, it will be returned as-is
 
-    .. py:attribute:: db_field = 'time'
+    .. py:attribute:: field_type = 'TIME'
 
     .. py:attribute:: hour
 
@@ -794,40 +840,39 @@ Fields
     Finally, the field ``default`` is the current timestamp. If you do not want
     this behavior, then explicitly pass in ``default=None``.
 
+    .. py:attribute:: field_type = 'INTEGER'
+
+.. py:class:: IPField
+
+    Stores: IPv4 values encoded as integers.
+
+    .. py:attribute:: field_type = 'BIGINT'
+
 .. py:class:: BooleanField
 
     Stores: ``True`` / ``False``
 
-    .. py:attribute:: db_field = 'bool'
-
-.. py:class:: BlobField
-
-    Store arbitrary binary data.
-
-.. py:class:: UUIDField
-
-    Store ``UUID`` values.
-
-    .. note:: Currently this field is only supported by :py:class:`PostgresqlDatabase`.
+    .. py:attribute:: field_type = 'BOOL'
 
 .. py:class:: BareField
 
-    Intended to be used only with SQLite. Since data-types are not enforced, you can declare fields without *any* data-type. It is also common for SQLite virtual tables to use meta-columns or untyped columns, so for those cases as well you may wish to use an untyped field.
+    Intended to be used only with SQLite. Since data-types are not enforced,
+    you can declare fields without *any* data-type. It is also common for
+    SQLite virtual tables to use meta-columns or untyped columns, so for those
+    cases as well you may wish to use an untyped field.
 
-    Accepts a special ``coerce`` parameter, a function that takes a value coming from the database and converts it into the appropriate Python type.
-
-    .. note:: Currently this field is only supported by :py:class:`SqliteDatabase`.
-
-.. py:class:: ForeignKeyField(rel_model[, related_name=None[, on_delete=None[, on_update=None[, to_field=None[, ...]]]]])
+.. py:class:: ForeignKeyField(model[, field=None[, backref=None[,
+    on_delete=None[, on_update=None[, object_id_name=None[, ...]]]]]])
 
     Stores: relationship to another model
 
-    :param rel_model: related :py:class:`Model` class or the string 'self' if declaring a self-referential foreign key
-    :param string related_name: attribute to expose on related model
+    :param model: related :py:class:`Model` class or the string 'self' if declaring a self-referential foreign key
+    :param field: the field (or field name) on ``model`` the foreign key
+        references. Defaults to the primary key field for ``model``.
+    :param string backref: attribute to expose on related model.
     :param string on_delete: on delete behavior, e.g. ``on_delete='CASCADE'``.
     :param string on_update: on update behavior.
-    :param to_field: the field (or field name) on ``rel_model`` the foreign key
-        references. Defaults to the primary key field for ``rel_model``.
+    :param string object_id_name: attribute name to use for ID descriptor.
 
     .. code-block:: python
 
@@ -849,12 +894,197 @@ Fields
         Another tweet
         Yet another tweet
 
-    .. note:: Foreign keys do not have a particular ``db_field`` as they will
-        take their field type depending on the type of primary key on the model they are
-        related to.
+    .. note:: Foreign keys do not have a particular ``field_type`` as they will
+        take their field type depending on the type of field on the model they
+        are related to.
 
-    .. note:: If you manually specify a ``to_field``, that field must be either
+    .. note:: If you manually specify a ``field``, that field must be either
         a primary key or have a unique constraint.
+
+.. py:class:: ManyToManyField(rel_model[, backref=None[, through_model=None]])
+
+    :param rel_model: :py:class:`Model` class.
+    :param str backref: Name for the automatically-created backref. If not
+        provided, the pluralized version of the model will be used.
+    :param through_model: :py:class:`Model` to use for the intermediary table. If
+        not provided, a simple through table will be automatically created.
+
+    The :py:class:`ManyToManyField` provides a simple interface for working with many-to-many relationships, inspired by Django. A many-to-many relationship is typically implemented by creating a junction table with foreign keys to the two models being related. For instance, if you were building a syllabus manager for college students, the relationship between students and courses would be many-to-many. Here is the schema using standard APIs:
+
+    .. code-block:: python
+
+        class Student(Model):
+            name = CharField()
+
+        class Course(Model):
+            name = CharField()
+
+        class StudentCourse(Model):
+            student = ForeignKeyField(Student)
+            course = ForeignKeyField(Course)
+
+    To query the courses for a particular student, you would join through the junction table:
+
+    .. code-block:: python
+
+        # List the courses that "Huey" is enrolled in:
+        courses = (Course
+                   .select()
+                   .join(StudentCourse)
+                   .join(Student)
+                   .where(Student.name == 'Huey'))
+        for course in courses:
+            print course.name
+
+    The :py:class:`ManyToManyField` is designed to simplify this use-case by providing a *field-like* API for querying and modifying data in the junction table. Here is how our code looks using :py:class:`ManyToManyField`:
+
+    .. code-block:: python
+
+        class Student(Model):
+            name = CharField()
+
+        class Course(Model):
+            name = CharField()
+            students = ManyToManyField(Student, related_name='courses')
+
+    .. note:: It does not matter from Peewee's perspective which model the :py:class:`ManyToManyField` goes on, since the back-reference is just the mirror image. In order to write valid Python, though, you will need to add the ``ManyToManyField`` on the second model so that the name of the first model is in the scope.
+
+    We still need a junction table to store the relationships between students and courses. This model can be accessed by calling the :py:meth:`~ManyToManyField.get_through_model` method. This is useful when creating tables.
+
+    .. code-block:: python
+
+        # Create tables for the students, courses, and relationships between
+        # the two.
+        db.create_tables([
+            Student,
+            Course,
+            Course.students.get_through_model()])
+
+    When accessed from a model instance, the :py:class:`ManyToManyField` exposes a :py:class:`SelectQuery` representing the set of related objects. Let's use the interactive shell to see how all this works:
+
+    .. code-block:: pycon
+
+        >>> huey = Student.get(Student.name == 'huey')
+        >>> [course.name for course in huey.courses]
+        ['English 101', 'CS 101']
+
+        >>> engl_101 = Course.get(Course.name == 'English 101')
+        >>> [student.name for student in engl_101.students]
+        ['Huey', 'Mickey', 'Zaizee']
+
+    To add new relationships between objects, you can either assign the objects directly to the ``ManyToManyField`` attribute, or call the :py:meth:`~ManyToManyField.add` method. The difference between the two is that simply assigning will clear out any existing relationships, whereas ``add()`` can preserve existing relationships.
+
+    .. code-block:: pycon
+
+        >>> huey.courses = Course.select().where(Course.name.contains('english'))
+        >>> for course in huey.courses.order_by(Course.name):
+        ...     print course.name
+        English 101
+        English 151
+        English 201
+        English 221
+
+        >>> cs_101 = Course.get(Course.name == 'CS 101')
+        >>> cs_151 = Course.get(Course.name == 'CS 151')
+        >>> huey.courses.add([cs_101, cs_151])
+        >>> [course.name for course in huey.courses.order_by(Course.name)]
+        ['CS 101', 'CS151', 'English 101', 'English 151', 'English 201',
+         'English 221']
+
+    This is quite a few courses, so let's remove the 200-level english courses. To remove objects, use the :py:meth:`~ManyToManyField.remove` method.
+
+    .. code-block:: pycon
+
+        >>> huey.courses.remove(Course.select().where(Course.name.contains('2'))
+        2
+        >>> [course.name for course in huey.courses.order_by(Course.name)]
+        ['CS 101', 'CS151', 'English 101', 'English 151']
+
+    To remove all relationships from a collection, you can use the :py:meth:`~SelectQuery.clear` method. Let's say that English 101 is canceled, so we need to remove all the students from it:
+
+    .. code-block:: pycon
+
+        >>> engl_101 = Course.get(Course.name == 'English 101')
+        >>> engl_101.students.clear()
+
+    .. note:: For an overview of implementing many-to-many relationships using standard Peewee APIs, check out the :ref:`manytomany` section. For all but the most simple cases, you will be better off implementing many-to-many using the standard APIs.
+
+    .. py:method:: add(value[, clear_existing=True])
+
+        :param value: Either a :py:class:`Model` instance, a list of model instances, or a :py:class:`SelectQuery`.
+        :param bool clear_existing: Whether to remove existing relationships first.
+
+        Associate ``value`` with the current instance. You can pass in a single model instance, a list of model instances, or even a :py:class:`SelectQuery`.
+
+        Example code:
+
+        .. code-block:: python
+
+            # Huey needs to enroll in a bunch of courses, including all
+            # the English classes, and a couple Comp-Sci classes.
+            huey = Student.get(Student.name == 'Huey')
+
+            # We can add all the objects represented by a query.
+            english_courses = Course.select().where(
+                Course.name.contains('english'))
+            huey.courses.add(english_courses)
+
+            # We can also add lists of individual objects.
+            cs101 = Course.get(Course.name == 'CS 101')
+            cs151 = Course.get(Course.name == 'CS 151')
+            huey.courses.add([cs101, cs151])
+
+    .. py:method:: remove(value)
+
+        :param value: Either a :py:class:`Model` instance, a list of model instances, or a :py:class:`SelectQuery`.
+
+        Disassociate ``value`` from the current instance. Like :py:meth:`~ManyToManyField.add`, you can pass in a model instance, a list of model instances, or even a :py:class:`SelectQuery`.
+
+        Example code:
+
+        .. code-block:: python
+
+            # Huey is currently enrolled in a lot of english classes
+            # as well as some Comp-Sci. He is changing majors, so we
+            # will remove all his courses.
+            english_courses = Course.select().where(
+                Course.name.contains('english'))
+            huey.courses.remove(english_courses)
+
+            # Remove the two Comp-Sci classes Huey is enrolled in.
+            cs101 = Course.get(Course.name == 'CS 101')
+            cs151 = Course.get(Course.name == 'CS 151')
+            huey.courses.remove([cs101, cs151])
+
+    .. py:method:: clear()
+
+        Remove all associated objects.
+
+        Example code:
+
+        .. code-block:: python
+
+            # English 101 is canceled this semester, so remove all
+            # the enrollments.
+            english_101 = Course.get(Course.name == 'English 101')
+            english_101.students.clear()
+
+    .. py:method:: get_through_model()
+
+        Return the :py:class:`Model` representing the many-to-many junction table. This can be specified manually when the field is being instantiated using the ``through_model`` parameter. If a ``through_model`` is not specified, one will automatically be created.
+
+        When creating tables for an application that uses :py:class:`ManyToManyField`, **you must create the through table expicitly**.
+
+        .. code-block:: python
+
+            # Get a reference to the automatically-created through table.
+            StudentCourseThrough = Course.students.get_through_model()
+
+            # Create tables for our two models as well as the through model.
+            db.create_tables([
+                Student,
+                Course,
+                StudentCourseThrough])
 
 .. py:class:: CompositeKey(*fields)
 
