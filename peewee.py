@@ -798,6 +798,14 @@ class _BoundTableContext(_callable_context_manager):
 class Table(_HashableSource, BaseTable):
     """
     Represents a table in the database (or a table-like object such as a view).
+
+    :param str name: Database table name
+    :param tuple columns: List of column names (optional).
+    :param str primary_key: Name of primary key column.
+    :param str schema: Schema name used to access table (if necessary).
+    :param str alias: Alias to use for table in SQL queries.
+
+    If columns are specified, then the magic "c" attribute will be disabled.
     """
     def __init__(self, name, columns=None, primary_key=None, schema=None,
                  alias=None, _model=None, _database=None):
@@ -834,10 +842,21 @@ class Table(_HashableSource, BaseTable):
             _database=self._database)
 
     def bind(self, database=None):
+        """
+        Bind this table to the given database (or unbind by leaving empty).
+
+        When a table is *bound* to a database, queries may be executed against
+        it without the need to specify the database in the query's execute
+        method.
+        """
         self._database = database
         return self
 
     def bind_ctx(self, database=None):
+        """
+        Return a context manager that will bind the table to the given database
+        for the duration of the wrapped block.
+        """
         return _BoundTableContext(self, database)
 
     def _get_hash(self):
@@ -845,34 +864,69 @@ class Table(_HashableSource, BaseTable):
 
     @__bind_database__
     def select(self, *columns):
+        """
+        Create a :py:class:`Select` query on the table. If the table explicitly
+        declares columns and no columns are provided, then by default all the
+        table's defined columns will be selected.
+        """
         if not columns and self._columns:
             columns = [Column(self, column) for column in self._columns]
         return Select((self,), columns)
 
     @__bind_database__
     def insert(self, insert=None, columns=None, **kwargs):
+        """
+        Create a :py:class:`Insert` query into the table.
+
+        :param insert: A dictionary mapping column to value, an iterable that
+            yields dictionaries (i.e. list), or a :py:class:`Select` query.
+        :param list columns: The list of columns to insert into when the
+            data being inserted is not a dictionary.
+        :param kwargs: Mapping of column-name to value.
+        """
         if kwargs:
             insert = {} if insert is None else insert
+            src = self if self._columns else self.c
             for key, value in kwargs.items():
-                insert[getattr(self, key)] = value
+                insert[getattr(src, key)] = value
         return Insert(self, insert=insert, columns=columns)
 
     @__bind_database__
     def replace(self, insert=None, columns=None, **kwargs):
+        """
+        Create a :py:class:`Insert` query into the table whose conflict
+        resolution method is to replace.
+
+        :param insert: A dictionary mapping column to value, an iterable that
+            yields dictionaries (i.e. list), or a :py:class:`Select` query.
+        :param list columns: The list of columns to insert into when the
+            data being inserted is not a dictionary.
+        :param kwargs: Mapping of column-name to value.
+        """
         return (self
                 .insert(insert=insert, columns=columns)
                 .on_conflict('REPLACE'))
 
     @__bind_database__
     def update(self, update=None, **kwargs):
+        """
+        Create a :py:class:`Update` query for the table.
+
+        :param update: A dictionary mapping column to value.
+        :param kwargs: Mapping of column-name to value.
+        """
         if kwargs:
             update = {} if update is None else update
             for key, value in kwargs.items():
+                src = self if self._columns else self.c
                 update[getattr(self, key)] = value
         return Update(self, update=update)
 
     @__bind_database__
     def delete(self):
+        """
+        Create a :py:class:`Delete` query for the table.
+        """
         return Delete(self)
 
     def __sql__(self, ctx):
@@ -892,6 +946,15 @@ class Table(_HashableSource, BaseTable):
 
 
 class Join(BaseTable):
+    """
+    Represent a JOIN between to table-like objects.
+
+    :param lhs: Left-hand side of the join.
+    :param rhs: Right-hand side of the join.
+    :param join_type: Type of join. e.g. JOIN.INNER, JOIN.LEFT_OUTER, etc.
+    :param on: Expression describing the join predicate.
+    :param str alias: Alias to apply to joined data.
+    """
     def __init__(self, lhs, rhs, join_type=JOIN.INNER, on=None, alias=None):
         super(Join, self).__init__(alias=alias)
         self.lhs = lhs
@@ -900,6 +963,9 @@ class Join(BaseTable):
         self._on = on
 
     def on(self, predicate):
+        """
+        Specify the JOIN predicate.
+        """
         self._on = predicate
         return self
 
@@ -914,6 +980,14 @@ class Join(BaseTable):
 
 
 class CTE(_HashableSource, Source):
+    """
+    Represent a common-table-expression.
+
+    :param name: Name for the CTE.
+    :param query: :py:class:`Select` query describing CTE.
+    :param bool recursive: Whether the CTE is recursive.
+    :param list columns: Explicit list of columns produced by CTE (optional).
+    """
     def __init__(self, name, query, recursive=False, columns=None):
         self._alias = name
         self._nested_cte_list = query._cte_list
@@ -944,6 +1018,7 @@ class CTE(_HashableSource, Source):
 
 
 class ColumnBase(Node):
+    """Base-class for column-like objects, attributes or expressions."""
     def alias(self, alias):
         if alias:
             return Alias(self, alias)
