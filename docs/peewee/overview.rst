@@ -11,8 +11,8 @@ Design
 
 This is the third iteration of Peewee and, as such, represents a snapshot of my
 understanding of what constitutes a **consistent and composable** database API
-using Python. By providing **consistent and composable** APIs, it is my hope
-that Peewee users:
+using Python. By providing consistent and composable APIs, it is my hope that
+Peewee users:
 
 * Quickly develop confidence; learn something once and apply it everywhere.
 * Remember APIs, and when guessing, guess correctly.
@@ -20,13 +20,14 @@ that Peewee users:
   data-structures.
 
 At the end of the day, we all want to spend more time coding and less time
-reading docs or debugging.
+reading docs or debugging. Peewee aims to help. Have an idea on how to make
+things better? [Open a ticket](https://github.com/coleifer/peewee/issues/new).
 
 Components
 ----------
 
 Peewee is composed of several different components, which, taken together,
-provide everything you need to work with a relational database. These
+provide most everything you need to work with a relational database. These
 compoments are:
 
 * :py:class:`Database` object (vendor-specific subclasses are provided for
@@ -51,9 +52,9 @@ Django users.
     the database tables.
 
 Begin by subclassing ``Model``, then assign field instances as class attributes
-to define the table's schema. It's a good practice to declare a ``BaseModel``
-class, as it allows you to keep global configuration settings in one place. For
-now ours will be empty, but we'll add to it later on.
+to define the table's structure. It's a good practice to declare a
+``BaseModel`` class, as it allows you to keep global configuration settings in
+one place. For now ours will be empty, but we'll add to it later on.
 
 Here's an example data-model for a very simple note-taking application:
 
@@ -74,5 +75,10 @@ Here's an example data-model for a very simple note-taking application:
     class Note(BaseModel):
         user = ForeignKeyField(User, backref='notes')
         content = TextField()
-        timestamp = DateTimeField(default=datetime.datetime.now)
+        timestamp = DateTimeField(default=datetime.datetime.now, index=True)
         is_published = BooleanField(default=True)
+
+We can create foreign-key relationships using the :py:class:`ForeignKeyField`.
+In the above example, a *user* may have any number of *notes*. We can also
+specify some constraints, for instance the *User* table will have a *UNIQUE*
+constraint on the *username* column.
