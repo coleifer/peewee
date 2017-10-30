@@ -78,7 +78,13 @@ Here's an example data-model for a very simple note-taking application:
         timestamp = DateTimeField(default=datetime.datetime.now, index=True)
         is_published = BooleanField(default=True)
 
-We can create foreign-key relationships using the :py:class:`ForeignKeyField`.
-In the above example, a *user* may have any number of *notes*. We can also
-specify some constraints, for instance the *User* table will have a *UNIQUE*
-constraint on the *username* column.
+Some things to note:
+
+* We can create relationships using the :py:class:`ForeignKeyField`. In the
+  above example, a *user* may have any number of associated *notes*.
+* We can also specify some constraints, for instance the *User* table will have
+  a *UNIQUE* constraint on the *username* column.
+* We can specify single-column indexes by adding ``index=True`` to the field
+  constructor.
+* Fields may have a default value, which can either be a scalar value *or* in
+  the case of the *timestamp* field, a callable.
