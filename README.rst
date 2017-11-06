@@ -79,7 +79,7 @@ Queries are expressive and composable:
 .. code-block:: python
 
     # A simple query selecting a user.
-    User.get(User.username == 'charles')
+    User.get(User.username == 'charlie')
 
     # Get tweets created by one of several users.
     usernames = ['charlie', 'huey', 'mickey']
