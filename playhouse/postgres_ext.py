@@ -272,8 +272,9 @@ class TSVectorField(IndexedFieldMixin, TextField):
 
 def Match(field, query, language=None):
     params = (language, query) if language is not None else (query,)
+    field_params = (language, field) if language is not None else (field,)
     return Expression(
-        fn.to_tsvector(field),
+        fn.to_tsvector(*field_params),
         OP.TS_MATCH,
         fn.to_tsquery(*params))
 
