@@ -5,21 +5,24 @@ from contextlib import contextmanager
 from functools import wraps
 from unittest import TestCase
 
+from psycopg2.extras import RealDictCursor
+
 from peewee import *
 from peewee import AliasMap
 from peewee import logger
 from peewee import print_
 from peewee import QueryCompiler
 from peewee import SelectQuery
+
 try:
     from unittest import mock
 except ImportError:
     from playhouse.tests.libs import mock
 
-
 # Register psycopg2 compatibility hooks.
 try:
     from pyscopg2cffi import compat
+
     compat.register()
 except ImportError:
     pass
@@ -27,6 +30,7 @@ except ImportError:
 # Python 2/3 compatibility.
 if sys.version_info[0] < 3:
     import codecs
+
     ulit = lambda s: codecs.unicode_escape_decode(s)[0]
     binary_construct = buffer
     binary_types = buffer
@@ -34,7 +38,6 @@ else:
     ulit = lambda s: s
     binary_construct = lambda s: bytes(s.encode('raw_unicode_escape'))
     binary_types = (bytes, memoryview)
-
 
 TEST_BACKEND = os.environ.get('PEEWEE_TEST_BACKEND') or 'sqlite'
 TEST_DATABASE = os.environ.get('PEEWEE_TEST_DATABASE') or 'peewee_test'
@@ -190,6 +193,10 @@ database_initializer = DatabaseInitializer(TEST_BACKEND, TEST_DATABASE)
 
 database_class = database_initializer.get_database_class()
 test_db = database_initializer.get_database()
+test_psql_db = PostgresqlDatabase('peewee_test', host='127.0.0.1', port=5432,
+                                  user='postgres', password='postgres',
+
+                                  cursor_factory=RealDictCursor)
 query_db = TestDatabase(':memory:')
 
 compiler = query_db.compiler()
@@ -258,6 +265,7 @@ class PeeweeTestCase(TestCase):
             sql, params = fn(query, att, compiler=compiler)
             self.assertEqual(sql, expected)
             self.assertEqual(params, expected_params)
+
         return inner
 
     assertSelect = make_fn('parse_node', '_select')
@@ -276,6 +284,14 @@ class PeeweeTestCase(TestCase):
         return database_initializer.get_database()
 
 
+class IntPKModel(Model):
+    pk = PrimaryKeyField()
+    data = CharField()
+
+    class Meta:
+        database = test_psql_db
+
+
 class ModelTestCase(PeeweeTestCase):
     requires = None
 
@@ -290,6 +306,7 @@ class ModelTestCase(PeeweeTestCase):
         if self.requires:
             test_db.drop_tables(self.requires, True)
 
+
 # TestCase class decorators that allow skipping entire test-cases.
 
 def skip_if(expression):
@@ -297,14 +314,19 @@ def skip_if(expression):
         if expression():
             if TEST_VERBOSITY > 0:
                 print_('Skipping %s tests.' % klass.__name__)
+
             class Dummy(object):
                 pass
+
             return Dummy
         return klass
+
     return decorator
+
 
 def skip_unless(expression):
     return skip_if(lambda: not expression())
+
 
 # TestCase method decorators that allow skipping single test methods.
 
@@ -317,11 +339,15 @@ def skip_test_if(expression):
                     print_('Skipping %s test.' % fn.__name__)
             else:
                 return fn(*args, **kwargs)
+
         return inner
+
     return decorator
+
 
 def skip_test_unless(expression):
     return skip_test_if(lambda: not expression())
+
 
 def log_console(s):
     if TEST_VERBOSITY > 1:
@@ -341,4 +367,4 @@ class QueryLogger(object):
         all_queries = self.test_case.queries()
         self._final_query_count = len(all_queries)
         self.queries = all_queries[
-            self._initial_query_count:self._final_query_count]
+                       self._initial_query_count:self._final_query_count]
