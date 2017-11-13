@@ -78,6 +78,7 @@ Here's an example data-model for a very simple note-taking application:
         timestamp = DateTimeField(default=datetime.datetime.now, index=True)
         is_published = BooleanField(default=True)
 
+
 Some things to note:
 
 * We can create relationships using the :py:class:`ForeignKeyField`. In the
@@ -88,3 +89,42 @@ Some things to note:
   constructor.
 * Fields may have a default value, which can either be a scalar value *or* in
   the case of the *timestamp* field, a callable.
+
+
+Composable Expressions
+----------------------
+
+The main goal of Peewee can be summed up in two words: **composable** and
+**consistent** APIs. What do we mean by that? Simply, that a technique learned
+once can be applied anywhere (consistent), and that small pieces can be treated
+like building blocks to build larger, reusable pieces.
+
+Let's take a look at how this plays out in practice, using the *User* and
+*Note* example models from the earlier section.
+
+We can define a query object representing all published notes in the following
+manner:
+
+.. code-block:: python
+
+    published = Note.select().where(Note.is_published == True)
+
+Suppose we wanted to sort the above query by timestamp, newest-to-oldest, and
+additionally filter by the user that created the note. We could implement the
+following:
+
+.. code-block:: python
+
+    def published_notes():
+        return Note.select().where(Note.is_published == True)
+
+    def user_timeline(username):
+        published = published_notes()
+        return (published
+                .join(User)
+                .where(User.username == username)
+                .order_by(Note.timestamp.desc()))
+
+In the example above, we take the query returned by the *published_notes()*
+function and then further filter/extend it with a join, additional where
+clause, and an order by clause.
