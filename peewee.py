@@ -2679,6 +2679,9 @@ class SqliteDatabase(Database):
     def unregister_function(self, name):
         del(self._functions[name])
 
+    def transaction(self, lock_type=None):
+        return _transaction(self, lock_type=lock_type)
+
     def begin(self, lock_type=None):
         statement = 'BEGIN %s' % lock_type if lock_type else 'BEGIN'
         self.execute_sql(statement, commit=False)
@@ -3409,15 +3412,11 @@ class Field(ColumnBase):
                  default=None, primary_key=False, constraints=None,
                  sequence=None, collation=None, unindexed=False, choices=None,
                  help_text=None, verbose_name=None, db_column=None,
-                 related_name=None, _hidden=False):
+                 _hidden=False):
         if db_column is not None:
             __deprecated__('"db_column" has been deprecated in favor of '
                            '"column_name" for Field objects.')
             column_name = db_column
-        if related_name is not None:
-            __deprecated__('"related_name" has been deprecated in favor of '
-                           '"backref" for Field objects.')
-            backref = related_name
 
         self.null = null
         self.index = index
@@ -3810,7 +3809,7 @@ class ForeignKeyField(Field):
 
     def __init__(self, model, field=None, backref=None, on_delete=None,
                  on_update=None, _deferred=None, rel_model=None, to_field=None,
-                 object_id_name=None, *args, **kwargs):
+                 object_id_name=None, related_name=None, *args, **kwargs):
         super(ForeignKeyField, self).__init__(*args, **kwargs)
         if rel_model is not None:
             __deprecated__('"rel_model" has been deprecated in favor of '
@@ -3820,6 +3819,10 @@ class ForeignKeyField(Field):
             __deprecated__('"to_field" has been deprecated in favor of '
                            '"field" for ForeignKeyField objects.')
             field = to_field
+        if related_name is not None:
+            __deprecated__('"related_name" has been deprecated in favor of '
+                           '"backref" for Field objects.')
+            backref = related_name
 
         self.rel_model = model
         self.rel_field = field
@@ -4011,7 +4014,7 @@ class ManyToManyField(MetaField):
 
             class Meta:
                 database = self.model._meta.database
-                db_table = '%s_%s_through' % tuple(tables)
+                table_name = '%s_%s_through' % tuple(tables)
                 indexes = (
                     ((lhs._meta.name, rhs._meta.name),
                      True),)
