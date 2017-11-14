@@ -403,6 +403,20 @@ class TestModelAPIs(ModelTestCase):
         query = User.noop()
         self.assertEqual(list(query), [])
 
+    @requires_models(User)
+    def test_raw(self):
+        with self.database.atomic():
+            for username in ('charlie', 'chuck', 'huey', 'zaizee'):
+                User.create(username=username)
+
+        query = (User
+                 .raw('SELECT username, SUBSTR(username, 1, 1) AS first '
+                      'FROM users '
+                      'WHERE SUBSTR(username, 1, 1) = ? '
+                      'ORDER BY username DESC', 'c'))
+        self.assertEqual([(row.username, row.first) for row in query],
+                         [('chuck', 'c'), ('charlie', 'c')])
+
 
 class TestDeleteInstance(ModelTestCase):
     database = get_in_memory_db()

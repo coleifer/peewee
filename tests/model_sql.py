@@ -154,6 +154,16 @@ class TestModelSQL(ModelDatabaseTestCase):
             'GROUP BY "t1"."id", "t1"."username" '
             'ORDER BY COUNT("t2"."id") DESC'), ['huey', 'zaizee'])
 
+    def test_raw(self):
+        query = (Person
+                 .raw('SELECT first, last, dob FROM person '
+                      'WHERE first = ? AND substr(last, 1, 1) = ? '
+                      'ORDER BY last', 'huey', 'l'))
+        self.assertSQL(query, (
+            'SELECT first, last, dob FROM person '
+            'WHERE first = ? AND substr(last, 1, 1) = ? '
+            'ORDER BY last'), ['huey', 'l'])
+
     def test_insert(self):
         query = (Person
                  .insert({Person.first: 'huey',

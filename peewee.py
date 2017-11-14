@@ -1563,33 +1563,22 @@ def database_required(method):
 
 # BASE QUERY INTERFACE.
 
-class Query(Node):
+class BaseQuery(Node):
     default_row_type = ROW.DICT
 
-    def __init__(self, where=None, order_by=None, limit=None, offset=None,
-                 _database=None, **kwargs):
-        super(Query, self).__init__(**kwargs)
-        self._where = where
-        self._order_by = order_by
-        self._limit = limit
-        self._offset = offset
+    def __init__(self, _database=None, **kwargs):
         self._database = _database
-
-        self._cte_list = None
         self._cursor_wrapper = None
         self._row_type = None
         self._constructor = None
+        super(BaseQuery, self).__init__(**kwargs)
 
     def bind(self, database=None):
         self._database = database
         return self
 
-    @Node.copy
-    def with_cte(self, *cte_list):
-        self._cte_list = cte_list
-
     def clone(self):
-        query = super(Query, self).clone()
+        query = super(BaseQuery, self).clone()
         query._cursor_wrapper = None
         return query
 
@@ -1609,6 +1598,104 @@ class Query(Node):
         self._row_type = ROW.CONSTRUCTOR if constructor else None
         self._constructor = constructor
         return self
+
+    def _get_cursor_wrapper(self, cursor):
+        row_type = self._row_type or self.default_row_type
+
+        if row_type == ROW.DICT:
+            return DictCursorWrapper(cursor)
+        elif row_type == ROW.TUPLE:
+            return CursorWrapper(cursor)
+        elif row_type == ROW.NAMED_TUPLE:
+            return NamedTupleCursorWrapper(cursor)
+        elif row_type == ROW.CONSTRUCTOR:
+            return ObjectCursorWrapper(cursor, self._constructor)
+        else:
+            raise ValueError('Unrecognized row type: "%s".' % row_type)
+
+    def __sql__(self, ctx):
+        raise NotImplementedError
+
+    def sql(self):
+        if self._database:
+            context = self._database.get_sql_context()
+        else:
+            context = Context()
+        return context.parse(self)
+
+    @database_required
+    def execute(self, database):
+        return self._execute(database)
+
+    def _execute(self, database):
+        raise NotImplementedError
+
+    def iterator(self, database=None):
+        return iter(self.execute(database).iterator())
+
+    def _ensure_execution(self):
+        if not self._cursor_wrapper:
+            if not self._database:
+                raise ValueError('Query has not been executed.')
+            self.execute()
+
+    def __iter__(self):
+        self._ensure_execution()
+        return iter(self._cursor_wrapper)
+
+    def __getitem__(self, value):
+        self._ensure_execution()
+        if isinstance(value, slice):
+            index = value.stop
+        else:
+            index = value
+        if index is not None and index >= 0:
+            index += 1
+        self._cursor_wrapper.fill_cache(index)
+        return self._cursor_wrapper.row_cache[value]
+
+    def __len__(self):
+        self._ensure_execution()
+        return len(self._cursor_wrapper)
+
+
+class RawQuery(BaseQuery):
+    def __init__(self, sql=None, params=None, **kwargs):
+        super(RawQuery, self).__init__(**kwargs)
+        self._sql = sql
+        self._params = params
+
+    def __sql__(self, ctx):
+        ctx.literal(self._sql)
+        if self._params:
+            for param in self._params:
+                if isinstance(param, Node):
+                    ctx.sql(param)
+                else:
+                    ctx.value(param)
+        return ctx
+
+    def _execute(self, database):
+        if self._cursor_wrapper is None:
+            cursor = database.execute(self)
+            self._cursor_wrapper = self._get_cursor_wrapper(cursor)
+        return self._cursor_wrapper
+
+
+class Query(BaseQuery):
+    def __init__(self, where=None, order_by=None, limit=None, offset=None,
+                 **kwargs):
+        super(Query, self).__init__(**kwargs)
+        self._where = where
+        self._order_by = order_by
+        self._limit = limit
+        self._offset = offset
+
+        self._cte_list = None
+
+    @Node.copy
+    def with_cte(self, *cte_list):
+        self._cte_list = cte_list
 
     @Node.copy
     def where(self, *expressions):
@@ -1662,62 +1749,6 @@ class Query(Node):
                  .sql(CommaNodeList(self._cte_list))
                  .literal(' '))
         return ctx
-
-    def _get_cursor_wrapper(self, cursor):
-        row_type = self._row_type or self.default_row_type
-
-        if row_type == ROW.DICT:
-            return DictCursorWrapper(cursor)
-        elif row_type == ROW.TUPLE:
-            return CursorWrapper(cursor)
-        elif row_type == ROW.NAMED_TUPLE:
-            return NamedTupleCursorWrapper(cursor)
-        elif row_type == ROW.CONSTRUCTOR:
-            return ObjectCursorWrapper(cursor, self._constructor)
-        else:
-            raise ValueError('Unrecognized row type: "%s".' % row_type)
-
-    def sql(self):
-        if self._database:
-            context = self._database.get_sql_context()
-        else:
-            context = Context()
-        return context.parse(self)
-
-    @database_required
-    def execute(self, database):
-        return self._execute(database)
-
-    def _execute(self, database):
-        raise NotImplementedError
-
-    def iterator(self, database=None):
-        return iter(self.execute(database).iterator())
-
-    def _ensure_execution(self):
-        if not self._cursor_wrapper:
-            if not self._database:
-                raise ValueError('Query has not been executed.')
-            self.execute()
-
-    def __iter__(self):
-        self._ensure_execution()
-        return iter(self._cursor_wrapper)
-
-    def __getitem__(self, value):
-        self._ensure_execution()
-        if isinstance(value, slice):
-            index = value.stop
-        else:
-            index = value
-        if index is not None and index >= 0:
-            index += 1
-        self._cursor_wrapper.fill_cache(index)
-        return self._cursor_wrapper.row_cache[value]
-
-    def __len__(self):
-        self._ensure_execution()
-        return len(self._cursor_wrapper)
 
 
 def __compound_select__(operation, inverted=False):
@@ -4759,6 +4790,10 @@ class Model(with_metaclass(ModelBase, Node)):
                 .on_conflict('REPLACE'))
 
     @classmethod
+    def raw(cls, sql, *params):
+        return ModelRaw(cls, sql, params)
+
+    @classmethod
     def delete(cls):
         return ModelDelete(cls)
 
@@ -5101,6 +5136,21 @@ class _ModelQueryHelper(object):
 
     def _get_model_cursor_wrapper(self, cursor):
         return ModelObjectCursorWrapper(cursor, self.model, [], self.model)
+
+
+class ModelRaw(_ModelQueryHelper, RawQuery):
+    def __init__(self, model, sql, params, **kwargs):
+        self.model = model
+        super(ModelRaw, self).__init__(sql=sql, params=params, **kwargs)
+
+    def get(self):
+        try:
+            return self.execute()[0]
+        except IndexError:
+            sql, params = self.sql()
+            raise self.model.DoesNotExist('%s instance matching query does '
+                                          'not exist:\nSQL: %s\nParams: %s' %
+                                          (self.model, sql, params))
 
 
 class BaseModelSelect(_ModelQueryHelper):
