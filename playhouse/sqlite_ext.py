@@ -775,12 +775,12 @@ class LSMTable(VirtualModel):
             raise ValueError('LSM1 key must be a TextField, BlobField, or '
                              'IntegerField.')
         key._hidden = True
-        if isinstance(key, TextField):
-            data_type = 'TEXT'
+        if isinstance(key, IntegerField):
+            data_type = 'UINT'
         elif isinstance(key, BlobField):
             data_type = 'BLOB'
         else:
-            data_type = 'UINT'
+            data_type = 'TEXT'
         cls._meta.prefix_arguments = [
             SQL(filename),
             Entity(key.name),
