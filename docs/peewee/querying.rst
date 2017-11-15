@@ -1303,7 +1303,7 @@ If you would like to join the same table twice, use the :py:meth:`~Query.switch`
 
 .. code-block:: python
 
-    # Join the Artist table on both `Ablum` and `Genre`.
+    # Join the Artist table on both `Album` and `Genre`.
     Artist.select().join(Album).switch(Artist).join(Genre)
 
 .. _manytomany:
