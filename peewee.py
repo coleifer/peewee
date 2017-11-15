@@ -2559,6 +2559,9 @@ class Database(_callable_context_manager):
     def truncate_date(self, date_part, date_field):
         raise NotImplementedError
 
+    def bind(self, models, bind_refs=True, bind_backrefs=True):
+        return _BoundModelsContext(models, self, bind_refs, bind_backrefs)
+
     def get_noop_select(self, ctx):
         return ctx.sql(Select().columns(SQL('0')).where(SQL('0')))
 
@@ -4692,21 +4695,23 @@ class ModelBase(type):
             return True
 
 
-class _BoundModelContext(_callable_context_manager):
-    def __init__(self, model, database, bind_refs, bind_backrefs):
-        self.model = model
+class _BoundModelsContext(_callable_context_manager):
+    def __init__(self, models, database, bind_refs, bind_backrefs):
+        self.models = models
         self.database = database
         self.bind_refs = bind_refs
         self.bind_backrefs = bind_backrefs
 
     def __enter__(self):
-        self._orig_database = self.model._meta.database
-        self.model.bind(self.database, self.bind_refs, self.bind_backrefs)
-        return self.model
+        self._orig_database = []
+        for model in self.models:
+            self._orig_database.append(model._meta.database)
+            model.bind(self.database, self.bind_refs, self.bind_backrefs)
+        return self.models
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.model.bind(self._orig_database, self.bind_refs,
-                        self.bind_backrefs)
+        for model, db in zip(self.models, self._orig_database):
+            model.bind(db, self.bind_refs, self.bind_backrefs)
 
 
 class Model(with_metaclass(ModelBase, Node)):
@@ -4993,7 +4998,7 @@ class Model(with_metaclass(ModelBase, Node)):
 
     @classmethod
     def bind_ctx(cls, database, bind_refs=True, bind_backrefs=True):
-        return _BoundModelContext(cls, database, bind_refs, bind_backrefs)
+        return _BoundModelsContext((cls,), database, bind_refs, bind_backrefs)
 
     @classmethod
     def table_exists(cls):

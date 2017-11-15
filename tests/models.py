@@ -1056,7 +1056,7 @@ class TestModelGraph(BaseTestCase):
         self.assertTrue(Unrelated._meta.database is None)
         User.bind(None)
 
-        with User.bind_ctx(fake_db) as FUser:
+        with User.bind_ctx(fake_db) as (FUser,):
             self.assertTrue(FUser._meta.database is fake_db)
             self.assertTrue(Unrelated._meta.database is None)
 
