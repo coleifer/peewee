@@ -128,3 +128,22 @@ following:
 In the example above, we take the query returned by the *published_notes()*
 function and then further filter/extend it with a join, additional where
 clause, and an order by clause.
+
+The individual components of a query are reusable and composable. In the
+following example, we'll define a SQL function that captures the first letter
+of a user's username, and use that in a WHERE clause:
+
+.. code-block:: python
+
+    # Corresponds to LOWER(SUBSTR("user"."username", 1, 1))
+    first_letter = fn.LOWER(fn.SUBSTR(User.username, 1, 1))
+
+    # WHERE LOWER(SUBSTR("user"."username", 1, 1)) = 'a'
+    a_users = User.select().where(first_letter == 'a')
+
+    # Example of composing expressions:
+    # WHERE (LOWER(SUBSTR("user"."username", 1, 1)) = 'a'
+    #        OR LOWER(SUBSTR("user"."username", 1, 1)) = 'b'
+    a_or_b_users = (User
+                    .select()
+                    .where((first_letter == 'a') | (first_letter == 'b')))
