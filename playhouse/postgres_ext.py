@@ -300,6 +300,79 @@ class IntervalField(Field):
     field_type = 'INTERVAL'
 
 
+class FetchManyCursor(object):
+    __slots__ = ('cursor', 'array_size', 'exhausted', 'iterable')
+
+    def __init__(self, cursor, array_size=None):
+        self.cursor = cursor
+        self.array_size = array_size or cursor.itersize
+        self.exhausted = False
+        self.iterable = self.row_gen()
+
+    @property
+    def description(self):
+        return self.cursor.description
+
+    def close(self):
+        self.cursor.close()
+
+    def row_gen(self):
+        while True:
+            rows = self.cursor.fetchmany(self.array_size)
+            if not rows:
+                raise StopIteration
+            for row in rows:
+                yield row
+
+    def fetchone(self):
+        if self.exhausted:
+            return
+        try:
+            return next(self.iterable)
+        except StopIteration:
+            self.exhausted = True
+
+
+class ServerSideQuery(Node):
+    def __init__(self, query, array_size=None):
+        self.query = query
+        self.array_size = array_size
+        self._cursor_wrapper = None
+
+    def __sql__(self, ctx):
+        return self.query.__sql__(ctx)
+
+    def __iter__(self):
+        if self._cursor_wrapper is None:
+            self._execute(self.query._database)
+        return iter(self._cursor_wrapper)
+
+    def _execute(self, database):
+        if self._cursor_wrapper is None:
+            cursor = database.execute(self.query, named_cursor=True)
+            fetch_many_cursor = FetchManyCursor(cursor, self.array_size)
+            self._cursor_wrapper = self.query._get_cursor_wrapper(fetch_many_cursor)
+        return self._cursor_wrapper
+
+
+def ServerSide(query, database=None, array_size=None):
+    if database is None:
+        database = query._database
+    with database.transaction():
+        server_side_query = ServerSideQuery(query, array_size=array_size)
+        for row in server_side_query:
+            yield row
+
+
+class _empty_object(object):
+    __slots__ = ()
+    def __nonzero__(self):
+        return False
+    __bool__ = __nonzero__
+
+__named_cursor__ = _empty_object()
+
+
 class PostgresqlExtDatabase(PostgresqlDatabase):
     def __init__(self, *args, **kwargs):
         self._register_hstore = kwargs.pop('register_hstore', False)
@@ -310,3 +383,18 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
         if self._register_hstore:
             register_hstore(conn, globally=True)
         return conn
+
+    def cursor(self, commit):
+        if self.is_closed():
+            self.connect()
+        if commit is __named_cursor__:
+            return self._state.conn.cursor(name=str(uuid.uuid1()))
+        return self._state.conn.cursor()
+
+    def execute(self, query, commit=SENTINEL, named_cursor=False,
+                **context_options):
+        ctx = self.get_sql_context(**context_options)
+        sql, params = ctx.sql(query).query()
+        if named_cursor:
+            commit = __named_cursor__
+        return self.execute_sql(sql, params, commit=commit)

@@ -2420,7 +2420,7 @@ class Database(_callable_context_manager):
             self.connect()
         return self._state.conn
 
-    def cursor(self):
+    def cursor(self, commit=None):
         if self.is_closed():
             self.connect()
         return self._state.conn.cursor()
@@ -2433,10 +2433,10 @@ class Database(_callable_context_manager):
             elif self.commit_select:
                 commit = True
             else:
-                commit = not sql.lower().startswith('select')
+                commit = not sql[:6].lower().startswith('select')
 
         with __exception_wrapper__:
-            cursor = self.cursor()
+            cursor = self.cursor(commit)
             try:
                 cursor.execute(sql, params or ())
             except Exception:
