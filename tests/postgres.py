@@ -1,5 +1,6 @@
 #coding:utf-8
 import datetime
+from types import MethodType
 
 from peewee import *
 from playhouse.postgres_ext import *
@@ -8,6 +9,7 @@ from .base import BaseTestCase
 from .base import ModelTestCase
 from .base import TestModel
 from .base import skip_case_if
+from .base_models import Register
 
 
 db = PostgresqlExtDatabase('peewee_test', register_hstore=True)
@@ -728,3 +730,26 @@ class TestIndexedField(BaseTestCase):
             ('CREATE INDEX "indexedmodel_fake_index_with_type" '
              'ON "indexedmodel" '
              'USING MAGIC ("fake_index_with_type")')])
+
+
+class TestServerSide(ModelTestCase):
+    database = db
+    requires = [Register]
+
+    def setUp(self):
+        super(TestServerSide, self).setUp()
+        with db.atomic():
+            for i in range(100):
+                Register.create(value=i)
+
+    def test_server_side_cursor(self):
+        query = Register.select().order_by(Register.value)
+        with self.assertQueryCount(1):
+            data = [row.value for row in ServerSide(query)]
+            self.assertEqual(data, list(range(100)))
+
+        ss_query = ServerSide(query.limit(10), array_size=3)
+        self.assertEqual([row.value for row in ss_query], list(range(10)))
+
+        ss_query = ServerSide(query.where(SQL('1 = 0')))
+        self.assertEqual(list(ss_query), [])
