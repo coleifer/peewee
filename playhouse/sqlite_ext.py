@@ -173,7 +173,7 @@ class VirtualTableSchemaManager(SchemaManager):
         meta = self.model._meta
 
         if meta.prefix_arguments:
-            arguments.extend(meta.prefix_arguments)
+            arguments.extend([SQL(a) for a in meta.prefix_arguments])
 
         # Constraints, data-types, foreign and primary keys are all omitted.
         for field in meta.sorted_fields:
@@ -781,10 +781,7 @@ class LSMTable(VirtualModel):
             data_type = 'BLOB'
         else:
             data_type = 'TEXT'
-        cls._meta.prefix_arguments = [
-            SQL(filename),
-            Entity(key.name),
-            SQL(data_type)]
+        cls._meta.prefix_arguments = [filename, '"%s"' % key.name, data_type]
 
         # Does the key map to a scalar value, or a tuple of values?
         if len(cls._meta.sorted_fields) == 2:
