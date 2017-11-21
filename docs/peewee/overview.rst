@@ -99,6 +99,11 @@ The main goal of Peewee can be summed up in two words: **composable** and
 once can be applied anywhere (consistent), and that small pieces can be treated
 like building blocks to build larger, reusable pieces.
 
+By promoting re-use and query composition, the likelihood of introducing typos
+and one-off errors is significantly reduced. Furthermore, there's no messy
+string concatenation voodoo or other hacks that seem to crop up when working
+with SQL strings.
+
 Let's take a look at how this plays out in practice, using the *User* and
 *Note* example models from the earlier section.
 
@@ -147,3 +152,8 @@ of a user's username, and use that in a WHERE clause:
     a_or_b_users = (User
                     .select()
                     .where((first_letter == 'a') | (first_letter == 'b')))
+
+    # Even better: WHERE (LOWER(SUBSTR("user."username", 1, 1)) IN ('a', 'b'))
+    a_or_b_users = (User
+                    .select()
+                    .where(first_letter.in_(['a', 'b'])))
