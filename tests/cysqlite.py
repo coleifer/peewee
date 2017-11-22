@@ -114,10 +114,6 @@ class TestCySqliteHelpers(CyDatabaseTestCase):
             ('DELETE', 'main', 'register', 2)])
 
     def test_properties(self):
-        mem_used, mem_high = self.database.memory_used
-        self.assertTrue(mem_high >= mem_used)
-        self.assertFalse(mem_high == 0)
-
         self.assertTrue(self.database.cache_used is not None)
 
 
