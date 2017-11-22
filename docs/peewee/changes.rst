@@ -21,10 +21,17 @@ Model Meta options
 * ``validate_backrefs`` has been removed. Back-references are no longer
   validated.
 
+Models
+^^^^^^
+
+* Accessing raw model data is now done using ``__data__`` instead of ``_data``
+
 Fields
 ^^^^^^
 
 * ``db_column`` has changed to ``column_name``
+* ``model_class`` attribute has changed to ``model``
+* :py:class:`PrimaryKeyField` has been renamed to :py:class:`AutoField`
 * :py:class:`ForeignKeyField` constructor has the following changes:
   * ``rel_model`` has changed to ``model``
   * ``to_field`` has changed to ``field``
