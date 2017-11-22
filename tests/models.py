@@ -404,7 +404,12 @@ class TestModelAPIs(ModelTestCase):
         query = User.noop()
         self.assertEqual(list(query), [])
 
-    @requires_models(User)
+
+
+class TestRaw(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [User]
+
     def test_raw(self):
         with self.database.atomic():
             for username in ('charlie', 'chuck', 'huey', 'zaizee'):
