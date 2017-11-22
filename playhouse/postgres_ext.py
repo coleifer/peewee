@@ -349,9 +349,9 @@ class ServerSideQuery(Node):
 
     def _execute(self, database):
         if self._cursor_wrapper is None:
-            cursor = database.execute(self.query, named_cursor=True)
-            fetch_many_cursor = FetchManyCursor(cursor, self.array_size)
-            self._cursor_wrapper = self.query._get_cursor_wrapper(fetch_many_cursor)
+            cursor = database.execute(self.query, named_cursor=True,
+                                      array_size=self.array_size)
+            self._cursor_wrapper = self.query._get_cursor_wrapper(cursor)
         return self._cursor_wrapper
 
 
@@ -376,6 +376,7 @@ __named_cursor__ = _empty_object()
 class PostgresqlExtDatabase(PostgresqlDatabase):
     def __init__(self, *args, **kwargs):
         self._register_hstore = kwargs.pop('register_hstore', False)
+        self._server_side_cursors = kwargs.pop('server_side_cursors', False)
         super(PostgresqlExtDatabase, self).__init__(*args, **kwargs)
 
     def _connect(self):
@@ -392,9 +393,14 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
         return self._state.conn.cursor()
 
     def execute(self, query, commit=SENTINEL, named_cursor=False,
-                **context_options):
+                array_size=None, **context_options):
         ctx = self.get_sql_context(**context_options)
         sql, params = ctx.sql(query).query()
+        named_cursor = named_cursor or (self._server_side_cursors and
+                                        sql[:6].lower() == 'select')
         if named_cursor:
             commit = __named_cursor__
-        return self.execute_sql(sql, params, commit=commit)
+        cursor = self.execute_sql(sql, params, commit=commit)
+        if named_cursor:
+            cursor = FetchManyCursor(cursor, array_size)
+        return cursor

@@ -4865,9 +4865,10 @@ class Model(with_metaclass(ModelBase, Node)):
     def filter(cls, *dq_nodes, **filters):
         return cls.select().filter(*dq_nodes, **filters)
 
-    @property
-    def _pk(self):
+    def get_id(self):
         return getattr(self, self._meta.primary_key.name)
+
+    _pk = property(get_id)
 
     @_pk.setter
     def _pk(self, value):
