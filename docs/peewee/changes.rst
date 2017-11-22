@@ -14,6 +14,7 @@ places, APIs that have changed will trigger a ``DeprecationWarning``.
 Database
 ^^^^^^^^
 
+* ``get_conn()`` has changed to :py:meth:`Database.connection`
 * ``execution_context()`` is replaced by simply using the database instance as
   a context-manager.
 * For a connection context *without* a transaction, use
@@ -59,6 +60,12 @@ Querying
 
 The C extension that contained implementations of the query result wrappers has
 been removed.
+
+Additionally, :py:meth:`Select.aggregate_rows` has been removed. This helper
+was used to de-duplicate left-join queries to give the appearance of efficiency
+when iterating a model and it's relations. In practice, the complexity of the
+code and it's somewhat limited usefulness convinced me to scrap it. You can
+instead use :py:func:`prefetch` to achieve the same result.
 
 * :py:class:`Select` query attribute ``_select`` has changed to ``_returning``
 
@@ -119,3 +126,4 @@ has been folded into the peewee codebase.
 * Incremental :py:class:`Blob` I/O support.
 * Support for update, commit and rollback hooks.
 * Support for SQLite online backup API.
+* :py:class:`LSMTable` implementation to support the lsm1 extension.
