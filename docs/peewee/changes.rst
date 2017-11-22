@@ -11,6 +11,18 @@ Backwards-incompatible
 I tried to keep changes backwards-compatible as much as possible. In some
 places, APIs that have changed will trigger a ``DeprecationWarning``.
 
+Database
+^^^^^^^^
+
+* ``execution_context()`` is replaced by simply using the database instance as
+  a context-manager.
+* For a connection context *without* a transaction, use
+  :py:meth:`Database.connection_context`.
+* :py:meth:`Database.create_tables` and :py:meth:`Database.drop_tables`, as
+  well as :py:meth:`Model.create_table` and :py:meth:`Model.drop_table` all
+  default to ``safe=True`` (create if not exists, drop if exists).
+* ``connect_kwargs`` attribute has been renamed to ``connect_params``
+
 Model Meta options
 ^^^^^^^^^^^^^^^^^^
 
@@ -30,6 +42,8 @@ Fields
 ^^^^^^
 
 * ``db_column`` has changed to ``column_name``
+* ``db_field`` class attribute changed to ``field_type`` (used if you are
+  implementing custom field subclasses)
 * ``model_class`` attribute has changed to ``model``
 * :py:class:`PrimaryKeyField` has been renamed to :py:class:`AutoField`
 * :py:class:`ForeignKeyField` constructor has the following changes:
@@ -37,6 +51,16 @@ Fields
   * ``to_field`` has changed to ``field``
   * ``related_name`` has changed to ``backref``
 * :py:class:`ManyToManyField` is now included in the main ``peewee.py`` module
+* Removed the extension fields ``PasswordField``, ``PickledField`` and
+  ``AESEncryptedField``.
+
+Querying
+^^^^^^^^
+
+The C extension that contained implementations of the query result wrappers has
+been removed.
+
+* :py:class:`Select` query attribute ``_select`` has changed to ``_returning``
 
 Removed Extensions
 ^^^^^^^^^^^^^^^^^^
@@ -81,3 +105,17 @@ New stuff
 
 The query-builder has been rewritten from the ground-up to be more flexible and
 powerful. There is now a generic, lower-level API for constructing queries.
+
+SQLite Extension
+^^^^^^^^^^^^^^^^
+
+The virtual-table implementation from `sqlite-vtfunc <https://github.com/coleifer/sqlite-vtfunc>`_
+has been folded into the peewee codebase.
+
+* Murmurhash implementation has been corrected.
+* Couple small quirks in the BM25 ranking code have been addressed.
+* Numerous user-defined functions for hashing and ranking are now included.
+* :py:class:`BloomFilter` implementation.
+* Incremental :py:class:`Blob` I/O support.
+* Support for update, commit and rollback hooks.
+* Support for SQLite online backup API.

@@ -5,8 +5,11 @@ except ImportError:
     from queue import Queue
 import threading
 
-from peewee import attrdict
 from peewee import *
+from peewee import Database
+from peewee import FIELD
+from peewee import attrdict
+from peewee import sort_models
 
 from .base import BaseTestCase
 from .base import DatabaseTestCase

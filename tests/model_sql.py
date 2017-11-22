@@ -1,4 +1,7 @@
+import datetime
+
 from peewee import *
+from peewee import Database
 
 from .base import get_in_memory_db
 from .base import BaseTestCase

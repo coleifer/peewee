@@ -1,6 +1,7 @@
 import sys
 
 from peewee import *
+from peewee import Alias
 
 if sys.version_info[0] == 3:
     from collections import Callable

@@ -104,10 +104,14 @@ import functools
 import re
 
 from peewee import *
+from peewee import CommaNodeList
+from peewee import EnclosedNodeList
 from peewee import Entity
 from peewee import Expression
 from peewee import Node
+from peewee import NodeList
 from peewee import OP
+from peewee import sort_models
 
 
 class Operation(object):
