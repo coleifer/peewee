@@ -773,3 +773,41 @@ class TestOnConflictPostgresql(BaseTestCase):
             'ON CONFLICT ("name") DO '
             'UPDATE SET "dob" = EXCLUDED."dob", "name" = ("name" || ?) '
             'WHERE ("name" != ?)'), ['huey', '-x', 'zaizee'])
+
+
+#Person = Table('person', ['id', 'name', 'dob'])
+#Note = Table('note', ['id', 'person_id', 'content'])
+
+class TestIndex(BaseTestCase):
+    database = SqliteDatabase(None)
+
+    def test_simple_index(self):
+        pidx = Index('person_name', Person, (Person.name,), unique=True)
+        self.assertSQL(pidx, (
+            'CREATE UNIQUE INDEX "person_name" ON "person" ("name")'), [])
+
+        pidx = pidx.where(Person.dob > datetime.date(1950, 1, 1))
+        self.assertSQL(pidx, (
+            'CREATE UNIQUE INDEX "person_name" ON "person" '
+            '("name") WHERE ("dob" > ?)'), [datetime.date(1950, 1, 1)])
+
+    def test_advanced_index(self):
+        Article = Table('article')
+        aidx = Index('foo_idx', Article, (
+            Article.c.status,
+            Article.c.timestamp.desc(),
+            fn.SUBSTR(Article.c.title, 1, 1)), safe=True)
+        self.assertSQL(aidx, (
+            'CREATE INDEX IF NOT EXISTS "foo_idx" ON "article" '
+            '("status", "timestamp" DESC, SUBSTR("title", ?, ?))'), [1, 1])
+
+        aidx = aidx.where(Article.c.flags.bin_and(4) == 4)
+        self.assertSQL(aidx, (
+            'CREATE INDEX IF NOT EXISTS "foo_idx" ON "article" '
+            '("status", "timestamp" DESC, SUBSTR("title", ?, ?)) '
+            'WHERE (("flags" & ?) = ?)'), [1, 1, 4, 4])
+
+    def test_str_cols(self):
+        uidx = Index('users_info', User, ('username DESC', 'id'))
+        self.assertSQL(uidx, (
+            'CREATE INDEX "users_info" ON "users" (username DESC, id)'), [])

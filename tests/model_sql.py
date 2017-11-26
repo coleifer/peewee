@@ -2,6 +2,7 @@ import datetime
 
 from peewee import *
 from peewee import Database
+from peewee import ModelIndex
 
 from .base import get_in_memory_db
 from .base import BaseTestCase
@@ -558,3 +559,31 @@ class TestModelCompoundSelect(BaseTestCase):
             '(SELECT "t1"."alpha" FROM "alpha" AS "t1" '
             'UNION '
             'SELECT "t2"."beta" FROM "beta" AS "t2"))'), [])
+
+
+class TestModelIndex(BaseTestCase):
+    database = SqliteDatabase(None)
+
+    def test_model_index(self):
+        class Article(Model):
+            name = TextField()
+            timestamp = TimestampField()
+            status = IntegerField()
+            flags = IntegerField()
+
+        aidx = ModelIndex(Article, (Article.name, Article.timestamp),)
+        self.assertSQL(aidx, (
+            'CREATE INDEX IF NOT EXISTS "article_name_timestamp" ON "article" '
+            '("name", "timestamp")'), [])
+
+        aidx = aidx.where(Article.status == 1)
+        self.assertSQL(aidx, (
+            'CREATE INDEX IF NOT EXISTS "article_name_timestamp" ON "article" '
+            '("name", "timestamp") '
+            'WHERE ("status" = ?)'), [1])
+
+        aidx = ModelIndex(Article, (Article.timestamp.desc(),
+                                    Article.flags.bin_and(4)), unique=True)
+        self.assertSQL(aidx, (
+            'CREATE UNIQUE INDEX IF NOT EXISTS "article_timestamp" '
+            'ON "article" ("timestamp" DESC, ("flags" & ?))'), [4])
