@@ -1077,6 +1077,9 @@ class ColumnBase(Node):
     def unalias(self):
         return self
 
+    def cast(self, as_type):
+        return Cast(self, as_type)
+
     def asc(self):
         return Asc(self)
     __pos__ = asc
