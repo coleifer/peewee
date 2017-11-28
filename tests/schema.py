@@ -42,9 +42,25 @@ class NoRowid(TestModel):
         without_rowid = True
 
 
+class Article(TestModel):
+    name = TextField(unique=True)
+    timestamp = TimestampField()
+    status = IntegerField()
+    flags = IntegerField()
+
+
+Article._meta.indexes = [
+    Article.index(Article.timestamp.desc(), Article.status),
+    (Article
+     .index(Article.name, Article.timestamp, Article.flags.bin_and(4))
+     .where(Article.status == 1)),
+    SQL('CREATE INDEX "article_foo" ON "article" ("flags" & 3)'),
+]
+
+
 class TestModelDDL(ModelDatabaseTestCase):
     database = get_in_memory_db()
-    requires = [Category, Note, Person, Relationship, TMUnique,
+    requires = [Article, Category, Note, Person, Relationship, TMUnique,
                 TMSequence, TMIndexes, TMConstraints, User]
 
     def assertCreateTable(self, model_class, expected):
@@ -58,6 +74,24 @@ class TestModelDDL(ModelDatabaseTestCase):
             indexes.append(isql)
 
         self.assertEqual([sql] + indexes, expected)
+
+    def assertIndexes(self, model_class, expected):
+        indexes = []
+        for create_index in model_class._schema._create_indexes(False):
+            indexes.append(create_index.query())
+
+        self.assertEqual(indexes, expected)
+
+    def test_model_indexes(self):
+        self.assertIndexes(Article, [
+            ('CREATE UNIQUE INDEX "article_name" ON "article" ("name")', []),
+            ('CREATE INDEX "article_timestamp_status" ON "article" ('
+             '"timestamp" DESC, "status")', []),
+            ('CREATE INDEX "article_name_timestamp" ON "article" ('
+             '"name", "timestamp", ("flags" & ?)) '
+             'WHERE ("status" = ?)', [4, 1]),
+            ('CREATE INDEX "article_foo" ON "article" ("flags" & 3)', []),
+        ])
 
     def test_without_rowid(self):
         NoRowid._meta.database = self.database

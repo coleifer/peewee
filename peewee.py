@@ -4396,7 +4396,7 @@ class SchemaManager(object):
                 for index in self.model._meta.fields_to_index()]
 
     def _create_index(self, index, safe=True):
-        if index._safe != safe:
+        if isinstance(index, Index) and index._safe != safe:
             index = index.safe(safe)
         return self._create_context().sql(index)
 
