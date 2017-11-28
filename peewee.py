@@ -634,14 +634,6 @@ class Context(object):
         """
         return ''.join(self._sql), self._values
 
-    def make_index_name(self, table, *columns):
-        index_name = '_'.join((table,) + columns)
-
-        if len(index_name) > 64:
-            index_hash = hashlib.md5(index_name.encode('utf-8')).hexdigest()
-            index_name = '%s_%s' % (index_name[:56], index_hash[:7])
-        return index_name
-
 
 # AST.
 
@@ -2295,6 +2287,10 @@ class Index(Node):
         self._using = using
 
     @Node.copy
+    def safe(self, _safe=True):
+        self._safe = _safe
+
+    @Node.copy
     def where(self, *expressions):
         if self._where is not None:
             expressions = (self._where,) + expressions
@@ -2333,6 +2329,10 @@ class ModelIndex(Index):
         self._model = model
         if name is None:
             name = self._generate_name_from_fields(model, fields)
+        if using is None:
+            for field in fields:
+                if getattr(field, 'index_type', None):
+                    using = field.index_type
         super(ModelIndex, self).__init__(
             name=name,
             table=model._meta.table,
@@ -2351,14 +2351,19 @@ class ModelIndex(Index):
                 if isinstance(field, Node) and not isinstance(field, Field):
                     field = field.unwrap()
                 if isinstance(field, Field):
-                    accum.append(field.name)
+                    accum.append(field.column_name)
 
         if not accum:
             raise ValueError('Unable to generate a name for the index, please '
                              'explicitly specify a name.')
 
-        return re.sub('[^\w]+', '',
-                      '%s_%s' % (model._meta.name, '_'.join(accum)))
+        index_name = re.sub('[^\w]+', '',
+                            '%s_%s' % (model._meta.name, '_'.join(accum)))
+        if len(index_name) > 64:
+            index_hash = hashlib.md5(index_name.encode('utf-8')).hexdigest()
+            index_name = '%s_%s' % (index_name[:56], index_hash[:7])
+        return index_name
+
 
 
 # DB-API 2.0 EXCEPTIONS.
@@ -4386,48 +4391,32 @@ class SchemaManager(object):
     def drop_table(self, safe=True, **options):
         self.database.execute(self._drop_table(safe=safe), **options)
 
-    def index_entity(self, fields):
-        ctx = self._create_context()
-        index_name = ctx.make_index_name(
-            self.model._meta.name,
-            *[field.column_name for field in fields])
-        return Entity(self.model._meta.schema, index_name)
-
     def _create_indexes(self, safe=True):
-        return [self._create_index(nodes, unique, safe)
-                for (nodes, unique) in self.model._meta.fields_to_index()]
+        return [self._create_index(index, safe)
+                for index in self.model._meta.fields_to_index()]
 
-    def _create_index(self, fields, unique=False, safe=True):
-        ctx = self._create_context()
-        ctx.literal('CREATE UNIQUE INDEX ' if unique else 'CREATE INDEX ')
-        if safe and self.database.safe_create_index:
-            ctx.literal('IF NOT EXISTS ')
-        ctx.sql(self.index_entity(fields)).literal(' ON ').sql(self.model)
-
-        # Allow fields to specify a type of index with the USING extension.
-        index_type = None
-        for field in fields:
-            if getattr(field, 'index_type', None):
-                ctx.literal(' USING %s' % field.index_type)
-
-        return ctx.literal(' ').sql(EnclosedNodeList(fields))
+    def _create_index(self, index, safe=True):
+        if index._safe != safe:
+            index = index.safe(safe)
+        return self._create_context().sql(index)
 
     def create_indexes(self, safe=True):
         for query in self._create_indexes(safe=safe):
             self.database.execute(query)
 
     def _drop_indexes(self, safe=True):
-        return [self._drop_index(nodes, safe)
-                for (nodes, _) in self.model._meta.fields_to_index()]
+        return [self._drop_index(index, safe)
+                for index in self.model._meta.fields_to_index()
+                if isinstance(index, Index)]
 
-    def _drop_index(self, fields, safe):
+    def _drop_index(self, index, safe):
         statement = 'DROP INDEX '
         if safe and self.database.safe_drop_index:
             statement += 'IF EXISTS '
         return (self
                 ._create_context()
                 .literal(statement)
-                .sql(self.index_entity(fields)))
+                .sql(Entity(index._name)))
 
     def drop_indexes(self, safe=True):
         for query in self._drop_indexes(safe=safe):
@@ -4678,25 +4667,30 @@ class Metadata(object):
         return dd
 
     def fields_to_index(self):
-        fields = []
+        indexes = []
         for f in self.sorted_fields:
             if f.primary_key:
                 continue
             if f.index or f.unique or isinstance(f, ForeignKeyField):
-                fields.append(((f,), f.unique))
+                indexes.append(self.model.index(f, unique=f.unique))
 
-        for index_parts, is_unique in self.indexes:
-            index_nodes = []
-            for part in index_parts:
-                if isinstance(part, basestring):
-                    index_nodes.append(self.combined[part])
-                elif isinstance(part, Node):
-                    index_nodes.append(part)
-                else:
-                    raise ValueError('Expected either a field name or a '
-                                     'subclass of Node. Got: %s' % part)
-            fields.append((index_nodes, is_unique))
-        return fields
+        for index_obj in self.indexes:
+            if isinstance(index_obj, Node):
+                indexes.append(index_obj)
+            elif isinstance(index_obj, (list, tuple)):
+                index_parts, unique = index_obj
+                fields = []
+                for part in index_parts:
+                    if isinstance(part, basestring):
+                        fields.append(self.combined[part])
+                    elif isinstance(part, Node):
+                        fields.append(part)
+                    else:
+                        raise ValueError('Expected either a field name or a '
+                                         'subclass of Node. Got: %s' % part)
+                indexes.append(ModelIndex(self.model, fields, unique=unique))
+
+        return indexes
 
     def set_database(self, database):
         self.database = database
@@ -5159,6 +5153,10 @@ class Model(with_metaclass(ModelBase, Node)):
            and not cls.table_exists():
             return
         cls._schema.drop_all(safe)
+
+    @classmethod
+    def index(cls, *fields, **kwargs):
+        return ModelIndex(cls, fields, **kwargs)
 
 
 class ModelAlias(Node):

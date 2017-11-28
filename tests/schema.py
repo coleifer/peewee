@@ -152,7 +152,8 @@ class TestModelDDL(ModelDatabaseTestCase):
         fields = LongIndex._meta.sorted_fields[1:]
         self.assertEqual(len(fields), 3)
 
-        ctx = LongIndex._schema._create_index(fields)
+        idx = LongIndex.index(*fields)
+        ctx = LongIndex._schema._create_index(idx)
         self.assertSQL(ctx, (
             'CREATE INDEX IF NOT EXISTS "'
             'longindex_a123456789012345678901234567890_b1234567890123_5088012'

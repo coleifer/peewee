@@ -151,6 +151,14 @@ def operation(fn):
     return inner
 
 
+def make_index_name(table_name, columns):
+    index_name = '_'.join((table_name,) + columns)
+    if len(index_name) > 64:
+        index_hash = hashlib.md5(index_name.encode('utf-8')).hexdigest()
+        index_name = '%s_%s' % (index_name[:56], index_hash[:7])
+    return index_name
+
+
 class SchemaMigrator(object):
     explicit_create_foreign_key = False
     explicit_delete_foreign_key = False
@@ -311,7 +319,7 @@ class SchemaMigrator(object):
     @operation
     def add_index(self, table, columns, unique=False):
         ctx = self.make_context()
-        index_name = ctx.make_index_name(table, *columns)
+        index_name = make_index_name(table, columns)
         return (ctx
                 .literal('CREATE UNIQUE INDEX ' if unique else 'CREATE INDEX ')
                 .sql(Entity(index_name))
