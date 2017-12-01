@@ -50,10 +50,10 @@ class Article(TestModel):
 
 
 Article._meta.indexes = [
-    Article.index(Article.timestamp.desc(), Article.status),
-    (Article
-     .index(Article.name, Article.timestamp, Article.flags.bin_and(4))
-     .where(Article.status == 1)),
+    ModelIndex(Article, (Article.timestamp.desc(), Article.status)),
+    ModelIndex(Article, (Article.name, Article.timestamp,
+                         Article.flags.bin_and(4))).where(
+                             Article.status == 1),
     SQL('CREATE INDEX "article_foo" ON "article" ("flags" & 3)'),
 ]
 
@@ -186,7 +186,7 @@ class TestModelDDL(ModelDatabaseTestCase):
         fields = LongIndex._meta.sorted_fields[1:]
         self.assertEqual(len(fields), 3)
 
-        idx = LongIndex.index(*fields)
+        idx = ModelIndex(LongIndex, fields)
         ctx = LongIndex._schema._create_index(idx)
         self.assertSQL(ctx, (
             'CREATE INDEX IF NOT EXISTS "'

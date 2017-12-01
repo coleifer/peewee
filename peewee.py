@@ -92,6 +92,7 @@ __all__ = [
     'JOIN',
     'ManyToManyField',
     'Model',
+    'ModelIndex',
     'MySQLDatabase',
     'NotSupportedError',
     'OperationalError',
@@ -4678,7 +4679,7 @@ class Metadata(object):
             if f.primary_key:
                 continue
             if f.index or f.unique or isinstance(f, ForeignKeyField):
-                indexes.append(self.model.index(f, unique=f.unique))
+                indexes.append(ModelIndex(self.model, (f,), unique=f.unique))
 
         for index_obj in self.indexes:
             if isinstance(index_obj, Node):
@@ -5159,10 +5160,6 @@ class Model(with_metaclass(ModelBase, Node)):
            and not cls.table_exists():
             return
         cls._schema.drop_all(safe)
-
-    @classmethod
-    def index(cls, *fields, **kwargs):
-        return ModelIndex(cls, fields, **kwargs)
 
 
 class ModelAlias(Node):
