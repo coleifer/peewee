@@ -18,7 +18,7 @@ except ImportError:
     from urllib.parse import urlparse
 
 try:
-    from vtfunc import TableFunction
+    from playhouse._sqlite_ext import TableFunction
 except ImportError:
     TableFunction = None
 
