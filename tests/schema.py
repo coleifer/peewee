@@ -49,13 +49,10 @@ class Article(TestModel):
     flags = IntegerField()
 
 
-Article._meta.indexes = [
-    ModelIndex(Article, (Article.timestamp.desc(), Article.status)),
-    ModelIndex(Article, (Article.name, Article.timestamp,
-                         Article.flags.bin_and(4))).where(
-                             Article.status == 1),
-    SQL('CREATE INDEX "article_foo" ON "article" ("flags" & 3)'),
-]
+Article.add_index(Article.timestamp.desc(), Article.status)
+Article.add_index(Article.name, Article.timestamp, Article.flags.bin_and(4),
+                  where=(Article.status == 1))
+Article.add_index(SQL('CREATE INDEX "article_foo" ON "article" ("flags" & 3)'))
 
 
 class TestModelDDL(ModelDatabaseTestCase):

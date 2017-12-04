@@ -5161,6 +5161,13 @@ class Model(with_metaclass(ModelBase, Node)):
             return
         cls._schema.drop_all(safe)
 
+    @classmethod
+    def add_index(cls, *fields, **kwargs):
+        if len(fields) == 1 and isinstance(fields[0], SQL):
+            cls._meta.indexes.append(fields[0])
+        else:
+            cls._meta.indexes.append(ModelIndex(cls, fields, **kwargs))
+
 
 class ModelAlias(Node):
     def __init__(self, model, alias=None):
