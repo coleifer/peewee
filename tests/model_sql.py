@@ -158,6 +158,19 @@ class TestModelSQL(ModelDatabaseTestCase):
             'GROUP BY "t1"."id", "t1"."username" '
             'ORDER BY COUNT("t2"."id") DESC'), ['huey', 'zaizee'])
 
+    def test_join_parent(self):
+        query = (Category
+                 .select()
+                 .where(Category.parent == 'test'))
+        self.assertSQL(query, (
+            'SELECT "t1"."name", "t1"."parent_id" FROM "category" AS "t1" '
+            'WHERE ("t1"."parent_id" = ?)'), ['test'])
+
+        query = Category.filter(parent='test')
+        self.assertSQL(query, (
+            'SELECT "t1"."name", "t1"."parent_id" FROM "category" AS "t1" '
+            'WHERE ("t1"."parent_id" = ?)'), ['test'])
+
     def test_raw(self):
         query = (Person
                  .raw('SELECT first, last, dob FROM person '
@@ -388,7 +401,8 @@ class TestModelSQL(ModelDatabaseTestCase):
 
 class TestStringsForFieldsa(ModelDatabaseTestCase):
     database = get_in_memory_db()
-    requires = [Category, Note, Person, Relationship]
+    requires = [Note, Person, Relationship]
+
     def test_insert(self):
         qkwargs = Person.insert(first='huey', last='kitty')
         qliteral = Person.insert({'first': 'huey', 'last': 'kitty'})

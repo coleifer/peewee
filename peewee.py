@@ -5503,7 +5503,7 @@ class ModelSelect(BaseModelSelect, Select):
     def convert_dict_to_node(self, qdict):
         accum = []
         joins = []
-        fk_types = (ForeignKeyField, BackrefAccessor)
+        fks = (ForeignKeyField, BackrefAccessor)
         for key, value in sorted(qdict.items()):
             curr = self.model
             if '__' in key and key.rsplit('__', 1)[1] in DJANGO_MAP:
@@ -5513,17 +5513,23 @@ class ModelSelect(BaseModelSelect, Select):
                 op = OP.IS
             else:
                 op = OP.EQ
-            for piece in key.split('__'):
-                for dest, attr, _ in self._joins.get(curr, ()):
-                    if attr == piece or (isinstance(dest, ModelAlias) and
-                                         dest.alias == piece):
-                        curr = dest
-                        break
-                else:
-                    model_attr = getattr(curr, piece)
-                    if value is not None and isinstance(model_attr, fk_types):
-                        curr = model_attr.rel_model
-                        joins.append(model_attr)
+
+            if '__' not in key:
+                # Handle simplest case. This avoids joining over-eagerly when a
+                # direct FK lookup is all that is required.
+                model_attr = getattr(curr, key)
+            else:
+                for piece in key.split('__'):
+                    for dest, attr, _ in self._joins.get(curr, ()):
+                        if attr == piece or (isinstance(dest, ModelAlias) and
+                                             dest.alias == piece):
+                            curr = dest
+                            break
+                    else:
+                        model_attr = getattr(curr, piece)
+                        if value is not None and isinstance(model_attr, fks):
+                            curr = model_attr.rel_model
+                            joins.append(model_attr)
             accum.append(Expression(model_attr, op, value))
         return accum, joins
 
