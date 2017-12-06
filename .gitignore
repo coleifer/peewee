@@ -1,6 +1,7 @@
 *.pyc
 build
 prof/
+docs/_build/
 playhouse/*.c
 playhouse/*.h
 playhouse/*.so

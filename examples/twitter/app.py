@@ -193,7 +193,7 @@ def public_timeline():
 def join():
     if request.method == 'POST' and request.form['username']:
         try:
-            with database.transaction():
+            with database.atomic():
                 # Attempt to create the user. If the username is taken, due to the
                 # unique constraint, the database will raise an IntegrityError.
                 user = User.create(
@@ -267,7 +267,7 @@ def user_detail(username):
 def user_follow(username):
     user = get_object_or_404(User, User.username == username)
     try:
-        with database.transaction():
+        with database.atomic():
             Relationship.create(
                 from_user=get_current_user(),
                 to_user=user)

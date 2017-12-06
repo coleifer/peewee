@@ -48,8 +48,8 @@ Contents:
    peewee/quickstart
    peewee/example
    peewee/contributing
-   peewee/overview
    peewee/transactions
+   peewee/changes
    peewee/api
 
 Note

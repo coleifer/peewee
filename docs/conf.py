@@ -27,7 +27,7 @@ import sys, os
 
 # Add any Sphinx extension module names here, as strings. They can be extensions
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
-extensions = []
+extensions = ['sphinx.ext.autodoc']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -79,7 +79,7 @@ exclude_patterns = ['_build']
 
 # If true, the current module name will be prepended to all description
 # unit titles (such as .. function::).
-#add_module_names = True
+add_module_names = False
 
 # If true, sectionauthor and moduleauthor directives will be shown in the
 # output. They are ignored by default.
@@ -211,6 +211,9 @@ latex_documents = [
 
 # If false, no module index is generated.
 #latex_domain_indices = True
+
+autodoc_default_flags = ['members', 'show-inheritance']
+autodoc_member_order = 'bysource'
 
 
 # -- Options for manual page output --------------------------------------------
