@@ -1501,6 +1501,9 @@ class Ordering(WrappedNode):
         self.nulls = nulls
 
     def collate(self, collation=None):
+        """
+        :param str collation: Collation name to use for sorting.
+        """
         return Ordering(self.node, self.direction, collation)
 
     def __sql__(self, ctx):
@@ -1521,6 +1524,14 @@ def Desc(node, collation=None, nulls=None):
 
 
 class Expression(ColumnBase):
+    """
+    :param lhs: Left-hand side.
+    :param op: Operation.
+    :param rhs: Right-hand side.
+    :param bool flat: Whether to wrap expression in parentheses.
+
+    Represent a binary expression of the form (lhs op rhs), e.g. (foo + 1).
+    """
     def __init__(self, lhs, op, rhs, flat=False):
         self.lhs = lhs
         self.op = op
@@ -1557,10 +1568,19 @@ class StringExpression(Expression):
 
 
 class Entity(ColumnBase):
+    """
+    :param path: Components that make up the dotted-path of the entity name.
+
+    Represent a quoted entity in a query, such as a table, column, alias. The
+    name may consist of multiple components, e.g. "a_table"."column_name".
+    """
     def __init__(self, *path):
         self._path = [part.replace('"', '""') for part in path if part]
 
     def __getattr__(self, attr):
+        """
+        Factory method for creating sub-entities.
+        """
         return Entity(*self._path + [attr])
 
     def get_sort_key(self, ctx):
@@ -1574,6 +1594,12 @@ class Entity(ColumnBase):
 
 
 class SQL(ColumnBase):
+    """
+    :param str sql: SQL query string.
+    :param tuple params: Parameters for query (optional).
+
+    Represent a parameterized SQL query or query-fragment.
+    """
     def __init__(self, sql, params=None):
         self.sql = sql
         self.params = params
@@ -1590,10 +1616,36 @@ class SQL(ColumnBase):
 
 
 def Check(constraint):
+    """
+    :param str constraint: Constraint SQL.
+
+    Represent a CHECK constraint.
+    """
     return SQL('CHECK (%s)' % constraint)
 
 
 class Function(ColumnBase):
+    """
+    :param str name: Function name.
+    :param tuple arguments: Arguments to function.
+    :param bool coerce: Whether to coerce the function result to a particular
+        data-type when reading function return values from the cursor.
+
+    Represent an arbitrary SQL function call.
+
+    .. note::
+        Rather than instantiating this class directly, it is recommended to use
+        the ``fn`` helper.
+
+    Example of using ``fn`` to call an arbitrary SQL function::
+
+        # Query users and count of tweets authored.
+        query = (User
+                 .select(User.username, fn.COUNT(Tweet.id).alias('ct'))
+                 .join(Tweet, JOIN.LEFT_OUTER, on=(User.id == Tweet.user_id))
+                 .group_by(User.username)
+                 .order_by(fn.COUNT(Tweet.id).desc()))
+    """
     def __init__(self, name, arguments, coerce=True):
         self.name = name
         self.arguments = arguments
@@ -1609,6 +1661,48 @@ class Function(ColumnBase):
 
     def over(self, partition_by=None, order_by=None, start=None, end=None,
              window=None):
+        """
+        :param list partition_by: List of columns to partition by.
+        :param list order_by: List of columns / expressions to order window by.
+        :param start: A :py:class:`SQL` instance or a string expressing the
+            start of the window range.
+        :param end: A :py:class:`SQL` instance or a string expressing the
+            end of the window range.
+        :param Window window: A :py:class:`Window` instance.
+
+        .. note::
+            For simplicity, it is permissible to call ``over()`` with a
+            :py:class:`Window` instance as the first and only parameter.
+
+        Examples::
+
+            # Using a simple partition on a single column.
+            query = (Sample
+                     .select(
+                        Sample.counter,
+                        Sample.value,
+                        fn.AVG(Sample.value).over([Sample.counter]))
+                     .order_by(Sample.counter))
+
+            # Equivalent example Using a Window() instance instead.
+            window = Window(partition_by=[Sample.counter])
+            query = (Sample
+                     .select(
+                        Sample.counter,
+                        Sample.value,
+                        fn.AVG(Sample.value).over(window))
+                     .window(window)  # Note call to ".window()"
+                     .order_by(Sample.counter))
+
+            # Example using bounded window.
+            query = (Sample
+                     .select(Sample.value,
+                             fn.SUM(Sample.value).over(
+                                partition_by=[Sample.counter],
+                                start=Window.preceding(),  # unbounded.
+                                end=Window.following(1)))  # 1 following.
+                     .order_by(Sample.id))
+        """
         if isinstance(partition_by, Window) and window is None:
             window = partition_by
         if start is not None and not isinstance(start, SQL):
@@ -1650,6 +1744,17 @@ fn = Function(None, None)
 
 
 class Window(Node):
+    """
+    :param list partition_by: List of columns to partition by.
+    :param list order_by: List of columns to order by.
+    :param start: A :py:class:`SQL` instance or a string expressing the start
+        of the window range.
+    :param end: A :py:class:`SQL` instance or a string expressing the end of
+        the window range.
+    :param str alias: Alias for the window.
+
+    Represent a WINDOW clause.
+    """
     CURRENT_ROW = 'CURRENT ROW'
 
     def __init__(self, partition_by=None, order_by=None, start=None, end=None,
@@ -1664,17 +1769,32 @@ class Window(Node):
         self._alias = alias or 'w'
 
     def alias(self, alias=None):
+        """
+        :param str alias: Alias to use for window.
+        """
         self._alias = alias or 'w'
         return self
 
     @staticmethod
     def following(value=None):
+        """
+        :param value: Number of rows following. If ``None`` is UNBOUNDED.
+
+        Convenience method for generating SQL suitable for passing in as the
+        ``end`` parameter for a window range.
+        """
         if value is None:
             return SQL('UNBOUNDED FOLLOWING')
         return SQL('%d FOLLOWING' % value)
 
     @staticmethod
     def preceding(value=None):
+        """
+        :param value: Number of rows preceding. If ``None`` is UNBOUNDED.
+
+        Convenience method for generating SQL suitable for passing in as the
+        ``start`` parameter for a window range.
+        """
         if value is None:
             return SQL('UNBOUNDED PRECEDING')
         return SQL('%d PRECEDING' % value)
@@ -1710,6 +1830,47 @@ class Window(Node):
 
 
 def Case(predicate, expression_tuples, default=None):
+    """
+    :param predicate: Predicate for CASE query (optional).
+    :param expression_tuples: One or more cases to evaluate.
+    :param default: Default value (optional).
+    :returns: Representation of CASE statement.
+
+    Examples::
+
+        Number = Table('numbers', ('val',))
+
+        num_as_str = Case(Number.val, (
+            (1, 'one'),
+            (2, 'two'),
+            (3, 'three')), 'a lot')
+
+        query = Number.select(Number.val, num_as_str.alias('num_str'))
+
+        # The above is equivalent to:
+        # SELECT "val",
+        #   CASE "val"
+        #       WHEN 1 THEN 'one'
+        #       WHEN 2 THEN 'two'
+        #       WHEN 3 THEN 'three'
+        #       ELSE 'a lot' END AS "num_str"
+        # FROM "numbers"
+
+        num_as_str = Case(None, (
+            (Number.val == 1, 'one'),
+            (Number.val == 2, 'two'),
+            (Number.val == 3, 'three')), 'a lot')
+        query = Number.select(Number.val, num_as_str.alias('num_str'))
+
+        # The above is equivalent to:
+        # SELECT "val",
+        #   CASE
+        #       WHEN "val" = 1 THEN 'one'
+        #       WHEN "val" = 2 THEN 'two'
+        #       WHEN "val" = 3 THEN 'three'
+        #       ELSE 'a lot' END AS "num_str"
+        # FROM "numbers"
+    """
     clauses = [SQL('CASE')]
     if predicate is not None:
         clauses.append(predicate)
@@ -1722,6 +1883,13 @@ def Case(predicate, expression_tuples, default=None):
 
 
 class NodeList(ColumnBase):
+    """
+    :param list nodes: Zero or more nodes.
+    :param str glue: How to join the nodes when converting to SQL.
+    :param bool parens: Whether to wrap the resulting SQL in parentheses.
+
+    Represent a list of nodes, a multi-part clause, a list of parameters, etc.
+    """
     def __init__(self, nodes, glue=' ', parens=False):
         self.nodes = nodes
         self.glue = glue
@@ -1744,15 +1912,32 @@ class NodeList(ColumnBase):
 
 
 def CommaNodeList(nodes):
+    """
+    :param list nodes: Zero or more nodes.
+    :returns: a :py:class:`NodeList`
+
+    Represent a list of nodes joined by commas.
+    """
     return NodeList(nodes, ', ')
 
 
 def EnclosedNodeList(nodes):
+    """
+    :param list nodes: Zero or more nodes.
+    :returns: a :py:class:`NodeList`
+
+    Represent a list of nodes joined by commas and wrapped in parentheses.
+    """
     return NodeList(nodes, ', ', True)
 
 
 class DQ(ColumnBase):
-    """A "django-style" filter expression, e.g. {'foo__eq': 'x'}."""
+    """
+    :param query: Arbitrary filter expressions using Django-style lookups.
+
+    Represent a composable Django-style filter expression suitable for use with
+    the :py:meth:`Model.filter` or :py:meth:`ModelSelect.filter` methods.
+    """
     def __init__(self, **query):
         super(DQ, self).__init__()
         self.query = query
@@ -1767,10 +1952,23 @@ class DQ(ColumnBase):
         node._negated = self._negated
         return node
 
+#: Represent a row tuple.
 Tuple = lambda *a: EnclosedNodeList(a)
 
 
 class OnConflict(Node):
+    """
+    :param str action: Action to take when resolving conflict.
+    :param update: A dictionary mapping column to new value.
+    :param preserve: A list of columns whose values should be preserved.
+    :param where: Expression to restrict the conflict resolution.
+    :param conflict_target: Name of column or constraint to check.
+
+    Represent a conflict resolution clause for a data-modification query.
+
+    Depending on the database-driver being used, one or more of the above
+    parameters may be required.
+    """
     def __init__(self, action=None, update=None, preserve=None, where=None,
                  conflict_target=None):
         self._action = action
@@ -1787,10 +1985,20 @@ class OnConflict(Node):
 
     @Node.copy
     def preserve(self, *columns):
+        """
+        :param columns: Columns whose values should be preserved.
+        """
         self._preserve = columns
 
     @Node.copy
     def update(self, _data=None, **kwargs):
+        """
+        :param dict _data: Dictionary mapping column to new value.
+        :param kwargs: Dictionary mapping column name to new value.
+
+        The ``update()`` method supports being called with either a dictionary
+        of column-to-value, **or** keyword arguments representing the same.
+        """
         if _data and kwargs and not isinstance(_data, dict):
             raise ValueError('Cannot mix data with keyword arguments in the '
                              'OnConflict update method.')
@@ -1801,12 +2009,20 @@ class OnConflict(Node):
 
     @Node.copy
     def where(self, *expressions):
+        """
+        :param expressions: Expressions that restrict the action of the
+            conflict resolution clause.
+        """
         if self._where is not None:
             expressions = (self._where,) + expressions
         self._where = reduce(operator.and_, expressions)
 
     @Node.copy
     def conflict_target(self, *constraints):
+        """
+        :param constraints: Name(s) of columns/constraints that are the target
+            of the conflict resolution.
+        """
         self._conflict_target = constraints
 
 
