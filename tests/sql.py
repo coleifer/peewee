@@ -579,6 +579,33 @@ class TestWindowFunctions(BaseTestCase):
             'ORDER BY "t1"."value"'), [1])
 
 
+class TestCaseFunction(BaseTestCase):
+    def test_case_function(self):
+        NameNum = Table('nn', ('name', 'number'))
+
+        query = (NameNum
+                 .select(NameNum.name, Case(NameNum.number, (
+                     (1, 'one'),
+                     (2, 'two')), '?').alias('num_str')))
+        self.assertSQL(query, (
+            'SELECT "t1"."name", CASE "t1"."number" '
+            'WHEN ? THEN ? '
+            'WHEN ? THEN ? '
+            'ELSE ? END AS "num_str" '
+            'FROM "nn" AS "t1"'), [1, 'one', 2, 'two', '?'])
+
+        query = (NameNum
+                 .select(NameNum.name, Case(None, (
+                     (NameNum.number == 1, 'one'),
+                     (NameNum.number == 2, 'two')), '?')))
+        self.assertSQL(query, (
+            'SELECT "t1"."name", CASE '
+            'WHEN ("t1"."number" = ?) THEN ? '
+            'WHEN ("t1"."number" = ?) THEN ? '
+            'ELSE ? END '
+            'FROM "nn" AS "t1"'), [1, 'one', 2, 'two', '?'])
+
+
 class TestSelectFeatures(BaseTestCase):
     def test_reselect(self):
         query = Person.select(Person.name)
