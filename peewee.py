@@ -1170,7 +1170,41 @@ class CTE(_HashableSource, Source):
 
 
 class ColumnBase(Node):
-    """Base-class for column-like objects, attributes or expressions."""
+    """
+    Base-class for column-like objects, attributes or expressions.
+
+    Column-like objects can be composed using various operators and special
+    methods.
+
+    * ``&``: Logical AND
+    * ``|``: Logical OR
+    * ``+``: Addition
+    * ``-``: Subtraction
+    * ``*``: Multiplication
+    * ``/``: Division
+    * ``^``: Exclusive-OR
+    * ``==``: Equality
+    * ``!=``: Inequality
+    * ``>``: Greater-than
+    * ``<``: Less-than
+    * ``>=``: Greater-than or equal
+    * ``<=``: Less-than or equal
+    * ``<<``: ``IN``
+    * ``>>``: ``IS`` (i.e. ``IS NULL``)
+    * ``%``: ``LIKE``
+    * ``**``: ``ILIKE``
+    * ``bin_and()``: Binary AND
+    * ``bin_or()``: Binary OR
+    * ``in_()``: ``IN``
+    * ``not_in()``: ``NOT IN``
+    * ``regexp()``: ``REGEXP``
+    * ``is_null(True/False)``: ``IS NULL`` or ``IS NOT NULL``
+    * ``contains(s)``: ``LIKE %s%``
+    * ``startswith(s)``: ``LIKE s%``
+    * ``endswith(s)``: ``LIKE %s``
+    * ``between(low, high)``: ``BETWEEN low AND high``
+    * ``concat()``: ``||``
+    """
     def alias(self, alias):
         """
         :param str alias: Alias for the given column-like object.
@@ -1290,6 +1324,12 @@ class ColumnBase(Node):
 
 
 class Column(ColumnBase):
+    """
+    :param Source source: Source for column.
+    :param str name: Column name.
+
+    Column on a table or a column returned by a sub-query.
+    """
     def __init__(self, source, name):
         self.source = source
         self.name = name
@@ -1336,6 +1376,12 @@ class _DynamicEntity(object):
 
 
 class Alias(WrappedNode):
+    """
+    :param Node node: a column-like object.
+    :param str alias: alias to assign to column.
+
+    Create a named alias for the given column-like object.
+    """
     c = _DynamicEntity()
 
     def __init__(self, node, alias):
@@ -1343,6 +1389,13 @@ class Alias(WrappedNode):
         self._alias = alias
 
     def alias(self, alias=None):
+        """
+        :param str alias: new name (or None) for aliased column.
+
+        Create a new :py:class:`Alias` for the aliased column-like object. If
+        the new alias is ``None``, then the original column-like object is
+        returned.
+        """
         if alias is None:
             return self.node
         else:
@@ -1362,6 +1415,9 @@ class Alias(WrappedNode):
 
 
 class Negated(WrappedNode):
+    """
+    Represents a negated column-like object.
+    """
     def __invert__(self):
         return self.node
 
@@ -1370,6 +1426,17 @@ class Negated(WrappedNode):
 
 
 class Value(ColumnBase):
+    """
+    :param value: Python object or scalar value.
+    :param converter: Function used to convert value into type the database
+        understands.
+    :param bool unpack: Whether lists or tuples should be unpacked into a list
+        of values or treated as-is.
+
+    Value to be used in a parameterized query. It is the responsibility of the
+    caller to ensure that the value passed in can be adapted to a type the
+    database driver understands.
+    """
     def __init__(self, value, converter=None, unpack=True):
         self.value = value
         self.converter = converter
@@ -1393,10 +1460,20 @@ class Value(ColumnBase):
 
 
 def AsIs(value):
+    """
+    Represents a :py:class:`Value` that is treated as-is, and passed directly
+    back to the database driver.
+    """
     return Value(value, unpack=False)
 
 
 class Cast(WrappedNode):
+    """
+    :param node: A column-like object.
+    :param str cast: Type to cast to.
+
+    Represents a ``CAST(<node> AS <cast>)`` expression.
+    """
     def __init__(self, node, cast):
         super(Cast, self).__init__(node)
         self.cast = cast
