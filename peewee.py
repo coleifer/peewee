@@ -2039,6 +2039,9 @@ def database_required(method):
 # BASE QUERY INTERFACE.
 
 class BaseQuery(Node):
+    """
+    Base-class implementing common query methods.
+    """
     default_row_type = ROW.DICT
 
     def __init__(self, _database=None, **kwargs):
@@ -2049,6 +2052,11 @@ class BaseQuery(Node):
         super(BaseQuery, self).__init__(**kwargs)
 
     def bind(self, database=None):
+        """
+        :param Database database: Database to execute query against.
+
+        Bind the query to the given database for execution.
+        """
         self._database = database
         return self
 
@@ -2058,18 +2066,40 @@ class BaseQuery(Node):
         return query
 
     def dicts(self, as_dict=True):
+        """
+        :param bool as_dict: Specify whether to return rows as dictionaries.
+
+        Return rows as dictionaries.
+        """
         self._row_type = ROW.DICT if as_dict else None
         return self
 
     def tuples(self, as_tuple=True):
+        """
+        :param bool as_tuple: Specify whether to return rows as tuples.
+
+        Return rows as tuples.
+        """
         self._row_type = ROW.TUPLE if as_tuple else None
         return self
 
     def namedtuples(self, as_namedtuple=True):
+        """
+        :param bool as_namedtuple: Specify whether to return rows as named
+            tuples.
+
+        Return rows as named tuples.
+        """
         self._row_type = ROW.NAMED_TUPLE if as_namedtuple else None
         return self
 
     def objects(self, constructor=None):
+        """
+        :param constructor: Function that accepts row dict and returns an
+            arbitrary object.
+
+        Return rows as arbitrary objects using the given constructor.
+        """
         self._row_type = ROW.CONSTRUCTOR if constructor else None
         self._constructor = constructor
         return self
@@ -2092,6 +2122,9 @@ class BaseQuery(Node):
         raise NotImplementedError
 
     def sql(self):
+        """
+        :returns: A 2-tuple consisting of the query's SQL and parameters.
+        """
         if self._database:
             context = self._database.get_sql_context()
         else:
@@ -2100,12 +2133,32 @@ class BaseQuery(Node):
 
     @database_required
     def execute(self, database):
+        """
+        :param Database database: Database to execute query against. Not
+            required if query was previously bound to a database.
+
+        Execute the query and return result (depends on type of query being
+        executed).
+        """
         return self._execute(database)
 
     def _execute(self, database):
         raise NotImplementedError
 
     def iterator(self, database=None):
+        """
+        :param Database database: Database to execute query against. Not
+            required if query was previously bound to a database.
+
+        Execute the query and return an iterator over the result-set. For large
+        result-sets this method is preferable as rows are not cached in-memory
+        during iteration.
+
+        .. note::
+            Because rows are not cached, the query may only be iterated over
+            once. Subsequent iterations will return empty result-sets as the
+            cursor will have been consumed.
+        """
         return iter(self.execute(database).iterator())
 
     def _ensure_execution(self):
@@ -2115,10 +2168,19 @@ class BaseQuery(Node):
             self.execute()
 
     def __iter__(self):
+        """
+        Execute the query and return an iterator over the result-set.
+
+        Unlike :py:meth:`~BaseQuery.iterator`, this method will cause rows to
+        be cached in order to allow efficient iteration, indexing and slicing.
+        """
         self._ensure_execution()
         return iter(self._cursor_wrapper)
 
     def __getitem__(self, value):
+        """
+        Retrieve a row or range of rows from the result-set.
+        """
         self._ensure_execution()
         if isinstance(value, slice):
             index = value.stop
@@ -2130,11 +2192,25 @@ class BaseQuery(Node):
         return self._cursor_wrapper.row_cache[value]
 
     def __len__(self):
+        """
+        Return the number of rows in the result-set.
+
+        .. warning::
+            This does not issue a ``COUNT()`` query. Instead, the result-set
+            is loaded as it would be during normal iteration, and the length
+            is determined from the size of the result set.
+        """
         self._ensure_execution()
         return len(self._cursor_wrapper)
 
 
 class RawQuery(BaseQuery):
+    """
+    :param str sql: SQL query.
+    :param tuple params: Parameters (optional).
+
+    Create a query by directly specifying the SQL to execute.
+    """
     def __init__(self, sql=None, params=None, **kwargs):
         super(RawQuery, self).__init__(**kwargs)
         self._sql = sql
