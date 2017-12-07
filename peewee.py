@@ -1486,6 +1486,14 @@ class Cast(WrappedNode):
 
 
 class Ordering(WrappedNode):
+    """
+    :param node: A column-like object.
+    :param str direction: ASC or DESC
+    :param str collation: Collation name to use for sorting.
+    :param str nulls: Sort nulls (FIRST or LAST).
+
+    Represent ordering by a column-like object.
+    """
     def __init__(self, node, direction, collation=None, nulls=None):
         super(Ordering, self).__init__(node)
         self.direction = direction

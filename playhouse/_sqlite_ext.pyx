@@ -547,11 +547,9 @@ cdef class _TableFunctionImpl(object):
     def __cinit__(self, table_function):
         self.table_function = table_function
 
-    def __dealloc__(self):
-        Py_DECREF(self)
-
     cdef create_module(self, pysqlite_Connection* sqlite_conn):
         cdef:
+            bytes name = encode(self.table_function.name)
             sqlite3 *db = sqlite_conn.db
             int rc
 
@@ -580,11 +578,9 @@ cdef class _TableFunctionImpl(object):
         # Create the SQLite virtual table.
         rc = sqlite3_create_module(
             db,
-            <const char *>self.table_function.name,
+            <const char *>name,
             &self.module,
             <void *>(self.table_function))
-
-        Py_INCREF(self)
 
         return rc == SQLITE_OK
 
