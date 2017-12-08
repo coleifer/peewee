@@ -1718,6 +1718,9 @@ class Function(ColumnBase):
         return NodeList((self, SQL('OVER'), node))
 
     def coerce(self, coerce=True):
+        """
+        :param bool coerce: Whether to coerce function-call result.
+        """
         self._coerce = coerce
         return self
 
@@ -1755,6 +1758,7 @@ class Window(Node):
 
     Represent a WINDOW clause.
     """
+    #: Constant for indicating current row for the start/end of range.
     CURRENT_ROW = 'CURRENT ROW'
 
     def __init__(self, partition_by=None, order_by=None, start=None, end=None,
@@ -2179,6 +2183,8 @@ class BaseQuery(Node):
 
     def __getitem__(self, value):
         """
+        :param value: Either an integer index or a slice.
+
         Retrieve a row or range of rows from the result-set.
         """
         self._ensure_execution()
@@ -2234,6 +2240,14 @@ class RawQuery(BaseQuery):
 
 
 class Query(BaseQuery):
+    """
+    :param where: Representation of WHERE clause.
+    :param tuple order_by: Columns or values to order by.
+    :param int limit: Value of LIMIT clause.
+    :param int offset: Value of OFFSET clause.
+
+    Base-class for queries that support method-chaining APIs.
+    """
     def __init__(self, where=None, order_by=None, limit=None, offset=None,
                  **kwargs):
         super(Query, self).__init__(**kwargs)
@@ -2246,32 +2260,70 @@ class Query(BaseQuery):
 
     @Node.copy
     def with_cte(self, *cte_list):
+        """
+        :param cte_list: zero or more CTE objects.
+
+        Include the given common-table-expressions in the query. Any previously
+        specified CTEs will be overwritten.
+        """
         self._cte_list = cte_list
 
     @Node.copy
     def where(self, *expressions):
+        """
+        :param expressions: zero or more expressions to include in the WHERE
+            clause.
+
+        Include the given expressions in the WHERE clause of the query. The
+        expressions will be AND-ed together with any previously-specified
+        WHERE expressions.
+        """
         if self._where is not None:
             expressions = (self._where,) + expressions
         self._where = reduce(operator.and_, expressions)
 
     @Node.copy
     def order_by(self, *values):
+        """
+        :param values: zero or more Column-like objects to order by.
+
+        Define the ORDER BY clause. Any previously-specified values will be
+        overwritten.
+        """
         self._order_by = values
 
     @Node.copy
     def order_by_extend(self, *values):
+        """
+        :param values: zero or more Column-like objects to order by.
+
+        Extend any previously-specified ORDER BY clause with the given values.
+        """
         self._order_by = ((self._order_by or ()) + values) or None
 
     @Node.copy
     def limit(self, value=None):
+        """
+        :param int value: specify value for LIMIT clause.
+        """
         self._limit = value
 
     @Node.copy
     def offset(self, value=None):
+        """
+        :param int value: specify value for OFFSET clause.
+        """
         self._offset = value
 
     @Node.copy
     def paginate(self, page, paginate_by=20):
+        """
+        :param int page: Page number of results (starting from 1).
+        :param int paginate_by: Rows-per-page.
+
+        Convenience method for specifying the LIMIT and OFFSET in a more
+        intuitive way.
+        """
         if page > 0:
             page -= 1
         self._limit = paginate_by
