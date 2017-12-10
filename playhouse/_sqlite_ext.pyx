@@ -582,6 +582,8 @@ cdef class _TableFunctionImpl(object):
             &self.module,
             <void *>(self.table_function))
 
+        Py_INCREF(self)
+
         return rc == SQLITE_OK
 
 
