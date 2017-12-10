@@ -5777,6 +5777,12 @@ class SchemaManager(object):
         return accum
 
     def create_table(self, safe=True, **options):
+        """
+        :param bool safe: Specify IF NOT EXISTS clause.
+        :param options: Arbitrary options.
+
+        Execute CREATE TABLE query for the given model.
+        """
         self.database.execute(self._create_table(safe=safe, **options))
 
     def _drop_table(self, safe=True, **options):
@@ -5788,6 +5794,12 @@ class SchemaManager(object):
                 .sql(self.model))
 
     def drop_table(self, safe=True, **options):
+        """
+        :param bool safe: Specify IF EXISTS clause.
+        :param options: Arbitrary options.
+
+        Execute DROP TABLE query for the given model.
+        """
         self.database.execute(self._drop_table(safe=safe), **options)
 
     def _create_indexes(self, safe=True):
@@ -5803,6 +5815,11 @@ class SchemaManager(object):
         return self._create_context().sql(index)
 
     def create_indexes(self, safe=True):
+        """
+        :param bool safe: Specify IF NOT EXISTS clause.
+
+        Execute CREATE INDEX queries for the indexes defined for the model.
+        """
         for query in self._create_indexes(safe=safe):
             self.database.execute(query)
 
@@ -5821,6 +5838,11 @@ class SchemaManager(object):
                 .sql(Entity(index._name)))
 
     def drop_indexes(self, safe=True):
+        """
+        :param bool safe: Specify IF EXISTS clause.
+
+        Execute DROP INDEX queries for the indexes defined for the model.
+        """
         for query in self._drop_indexes(safe=safe):
             self.database.execute(query)
 
@@ -5838,6 +5860,11 @@ class SchemaManager(object):
                     .sql(Entity(field.sequence)))
 
     def create_sequence(self, field):
+        """
+        :param Field field: Field instance which specifies a sequence.
+
+        Create sequence for the given :py:class:`Field`.
+        """
         self.database.execute(self._create_sequence(field))
 
     def _drop_sequence(self, field):
@@ -5849,9 +5876,19 @@ class SchemaManager(object):
                     .sql(Entity(field.sequence)))
 
     def drop_sequence(self, field):
+        """
+        :param Field field: Field instance which specifies a sequence.
+
+        Drop sequence for the given :py:class:`Field`.
+        """
         self.database.execute(self._drop_sequence(field))
 
     def create_all(self, safe=True, **table_options):
+        """
+        :param bool safe: Whether to specify IF NOT EXISTS.
+
+        Create sequence(s), index(es) and table for the model.
+        """
         if self.database.sequences:
             for field in self.model._meta.sorted_fields:
                 if field and field.sequence:
@@ -5861,10 +5898,33 @@ class SchemaManager(object):
         self.create_indexes(safe=safe)
 
     def drop_all(self, safe=True):
+        """
+        :param bool safe: Whether to specify IF EXISTS.
+
+        Drop table for the model.
+        """
         self.drop_table(safe)
 
 
 class Metadata(object):
+    """
+    :param Model model: Model class.
+    :param Database database: database model is bound to.
+    :param str table_name: Specify table name for model.
+    :param list indexes: List of :py:class:`ModelIndex` objects.
+    :param primary_key: Primary key for model (only specified if this is a
+        :py:class:`CompositeKey` or ``False`` for no primary key.
+    :param list constraints: List of table constraints.
+    :param str schema: Schema table exists in.
+    :param bool only_save_dirty: When :py:meth:`~Model.save` is called, only
+        save the fields which have been modified.
+    :param str table_alias: Specify preferred alias for table in queries.
+    :param dict options: Arbitrary options for the model.
+    :param bool without_rowid: Specify WITHOUT ROWID (sqlite only).
+    :param kwargs: Arbitrary setting attributes and values.
+
+    Store metadata for a :py:class:`Model`.
+    """
     def __init__(self, model, database=None, table_name=None, indexes=None,
                  primary_key=None, constraints=None, schema=None,
                  only_save_dirty=False, table_alias=None, depends_on=None,
@@ -5921,6 +5981,15 @@ class Metadata(object):
         self._additional_keys = set(kwargs.keys())
 
     def model_graph(self, refs=True, backrefs=True, depth_first=True):
+        """
+        :param bool refs: Follow foreign-key references.
+        :param bool backrefs: Follow foreign-key back-references.
+        :param bool depth_first: Do a depth-first search (``False`` for
+            breadth-first).
+
+        Traverse the model graph and return a list of 3-tuples, consisting of
+        ``(foreign key field, model class, is_backref)``.
+        """
         if not refs and not backrefs:
             raise ValueError('One of `refs` or `backrefs` must be True.')
 
@@ -5961,6 +6030,9 @@ class Metadata(object):
 
     @property
     def table(self):
+        """
+        Return a reference to the underlying :py:class:`Table` instance.
+        """
         if self._table is None:
             self._table = Table(
                 self.table_name,
@@ -6100,6 +6172,9 @@ class Metadata(object):
 
 
 class SubclassAwareMetadata(Metadata):
+    """
+    Metadata subclass that tracks subclasses.
+    """
     models = []
 
     def __init__(self, model, *args, **kwargs):
@@ -6107,6 +6182,9 @@ class SubclassAwareMetadata(Metadata):
         self.models.append(model)
 
     def map_models(self, fn):
+        """
+        Apply a function to all subclasses.
+        """
         for model in self.models:
             fn(model)
 
@@ -6247,6 +6325,12 @@ class _BoundModelsContext(_callable_context_manager):
 
 
 class Model(with_metaclass(ModelBase, Node)):
+    """
+    :param kwargs: Mapping of field-name to value to initialize model with.
+
+    Model class provides a high-level abstraction for working with database
+    tables.
+    """
     def __init__(self, *args, **kwargs):
         if kwargs.pop('__no_default__', None):
             self.__data__ = {}
@@ -6264,10 +6348,23 @@ class Model(with_metaclass(ModelBase, Node)):
 
     @classmethod
     def alias(cls, alias=None):
+        """
+        :param str alias: Optional name for alias.
+        :returns: :py:class:`ModelAlias` instance.
+
+        Create an alias to the model-class. Allows you to reference the same
+        :py:class:`Model` multiple times in a query, for example when doing a
+        self-join.
+        """
         return ModelAlias(cls, alias)
 
     @classmethod
     def select(cls, *fields):
+        """
+        :param fields: Zero or more :py:class:`Field` or field-like objects.
+
+        Create a SELECT query.
+        """
         is_default = not fields
         if not fields:
             fields = cls._meta.sorted_fields
@@ -6300,42 +6397,90 @@ class Model(with_metaclass(ModelBase, Node)):
 
     @classmethod
     def update(cls, __data=None, **update):
+        """
+        :param dict __data: ``dict`` of fields to values.
+        :param update: Field-name to value mapping.
+
+        Create an UPDATE query.
+        """
         return ModelUpdate(cls, cls._normalize_data(__data, update))
 
     @classmethod
     def insert(cls, __data=None, **insert):
+        """
+        :param dict __data: ``dict`` of fields to values to insert.
+        :param insert: Field-name to value mapping.
+
+        Create an INSERT query.
+        """
         return ModelInsert(cls, cls._normalize_data(__data, insert))
 
     @classmethod
     def insert_many(cls, rows, fields=None):
+        """
+        :param rows: An iterable that yields rows to insert.
+        :param list fields: List of fields being inserted.
+
+        INSERT multiple rows of data.
+        """
         return ModelInsert(cls, insert=rows, columns=fields)
 
     @classmethod
     def insert_from(cls, query, fields):
+        """
+        :param Select query: SELECT query to use as source of data.
+        :param fields: Fields to insert data into.
+
+        INSERT data using a SELECT query as the source.
+        """
         columns = [getattr(cls, field) if isinstance(field, basestring)
                    else field for field in fields]
         return ModelInsert(cls, insert=query, columns=columns)
 
     @classmethod
     def replace(cls, __data=None, **insert):
+        """
+        :param dict __data: ``dict`` of fields to values to insert.
+        :param insert: Field-name to value mapping.
+
+        Create an INSERT query that uses REPLACE for conflict-resolution.
+        """
         return cls.insert(__data, **insert).on_conflict('REPLACE')
 
     @classmethod
     def replace_many(cls, rows, fields=None):
+        """
+        :param rows: An iterable that yields rows to insert.
+        :param list fields: List of fields being inserted.
+
+        INSERT multiple rows of data using REPLACE for conflict-resolution.
+        """
         return (cls
                 .insert_many(rows=rows, fields=fields)
                 .on_conflict('REPLACE'))
 
     @classmethod
     def raw(cls, sql, *params):
+        """
+        :param str sql: SQL query to execute.
+        :param params: Parameters for query.
+
+        Execute a SQL query directly.
+        """
         return ModelRaw(cls, sql, params)
 
     @classmethod
     def delete(cls):
+        """Create a DELETE query."""
         return ModelDelete(cls)
 
     @classmethod
     def create(cls, **query):
+        """
+        :param query: Mapping of field-name to value.
+
+        INSERT new row into table and return corresponding model instance.
+        """
         inst = cls(**query)
         inst.save(force_insert=True)
         return inst
@@ -6346,6 +6491,15 @@ class Model(with_metaclass(ModelBase, Node)):
 
     @classmethod
     def get(cls, *query, **filters):
+        """
+        :param query: Zero or more :py:class:`Expression` objects.
+        :param filters: Mapping of field-name to value for Django-style filter.
+        :raises: :py:class:`DoesNotExist`
+        :returns: Model instance matching the specified filters.
+
+        Retrieve a single model instance matching the given filters. If no
+        model is returned, a :py:class:`DoesNotExist` is raised.
+        """
         sq = cls.select()
         if query:
             sq = sq.where(*query)
@@ -6355,6 +6509,10 @@ class Model(with_metaclass(ModelBase, Node)):
 
     @classmethod
     def get_or_none(cls, *query, **filters):
+        """
+        Identical to :py:meth:`Model.get` but returns ``None`` if no model
+        matches the given filters.
+        """
         try:
             return cls.get(*query, **filters)
         except DoesNotExist:
@@ -6362,18 +6520,44 @@ class Model(with_metaclass(ModelBase, Node)):
 
     @classmethod
     def get_by_id(cls, pk):
+        """
+        :param pk: Primary-key value.
+
+        Short-hand for calling :py:meth:`Model.get` specifying a lookup by id.
+        """
         return cls.get(cls._meta.primary_key == pk)
 
     @classmethod
     def set_by_id(cls, key, value):
+        """
+        :param key: Primary-key value.
+        :param dict value: Mapping of field to value to update.
+
+        Short-hand for updating the data with the given primary-key.
+        """
         return cls.update(value).where(cls._meta.primary_key == key).execute()
 
     @classmethod
     def delete_by_id(cls, pk):
+        """
+        :param pk: Primary-key value.
+
+        Short-hand for deleting the row with the given primary-key.
+        """
         return cls.delete().where(cls._meta.primary_key == pk).execute()
 
     @classmethod
     def get_or_create(cls, **kwargs):
+        """
+        :param kwargs: Mapping of field-name to value.
+        :param defaults: Default values to use if creating a new row.
+        :returns: :py:class:`Model` instance.
+
+        Attempt to get the row matching the given filters. If no matching row
+        is found, create a new row.
+
+        .. warning:: Race-conditions are possible when using this method.
+        """
         defaults = kwargs.pop('defaults', {})
         query = cls.select()
         for field, value in kwargs.items():
@@ -6395,9 +6579,17 @@ class Model(with_metaclass(ModelBase, Node)):
 
     @classmethod
     def filter(cls, *dq_nodes, **filters):
+        """
+        :param dq_nodes: Zero or more :py:class:`DQ` objects.
+        :param filters: Django-style filters.
+        :returns: :py:class:`ModelSelect` query.
+        """
         return cls.select().filter(*dq_nodes, **filters)
 
     def get_id(self):
+        """
+        :returns: The primary-key of the model instance.
+        """
         return getattr(self, self._meta.primary_key.name)
 
     _pk = property(get_id)
@@ -6430,6 +6622,14 @@ class Model(with_metaclass(ModelBase, Node)):
                 field_dict[foreign_key] = self._data[foreign_key]
 
     def save(self, force_insert=False, only=None):
+        """
+        :param bool force_insert: Force INSERT query.
+        :param list only: Only save the given :py:class:`Field` instances.
+        :returns: Number of rows modified.
+
+        Save the data in the model instance. By default, the presence of a
+        primary-key value will cause an UPDATE query to be executed.
+        """
         field_dict = self.__data__.copy()
         if self._meta.primary_key is not False:
             pk_field = self._meta.primary_key
@@ -6469,6 +6669,7 @@ class Model(with_metaclass(ModelBase, Node)):
 
     @property
     def dirty_fields(self):
+        """Return list of fields that have been modified."""
         return [f for f in self._meta.sorted_fields if f.name in self._dirty]
 
     def dependencies(self, search_nullable=False):
@@ -6494,6 +6695,13 @@ class Model(with_metaclass(ModelBase, Node)):
                 yield (node, fk)
 
     def delete_instance(self, recursive=False, delete_nullable=False):
+        """
+        :param bool recursive: Delete related models.
+        :param bool delete_nullable: Delete related models that have a null
+            foreign key. If ``False`` nullable relations will be set to NULL.
+
+        Delete the model instance row.
+        """
         if recursive:
             dependencies = self.dependencies(delete_nullable)
             for query, fk in reversed(list(dependencies)):
@@ -6521,6 +6729,13 @@ class Model(with_metaclass(ModelBase, Node)):
 
     @classmethod
     def bind(cls, database, bind_refs=True, bind_backrefs=True):
+        """
+        :param Database database: database to bind to.
+        :param bool bind_refs: Bind related models.
+        :param bool bind_backrefs: Bind back-reference related models.
+
+        Bind the model (and specified relations) to the given database.
+        """
         is_different = cls._meta.database is not database
         cls._meta.database = database
         if bind_refs or bind_backrefs:
@@ -6531,14 +6746,20 @@ class Model(with_metaclass(ModelBase, Node)):
 
     @classmethod
     def bind_ctx(cls, database, bind_refs=True, bind_backrefs=True):
+        """
+        Like :py:meth:`~Model.bind`, but returns a context manager that only
+        binds the models for the duration of the wrapped block.
+        """
         return _BoundModelsContext((cls,), database, bind_refs, bind_backrefs)
 
     @classmethod
     def table_exists(cls):
+        """Return boolean indicating whether the table exists."""
         return cls._meta.database.table_exists(cls._meta.table)
 
     @classmethod
     def create_table(cls, safe=True, **options):
+        """Create the model table, indexes and sequences."""
         if 'fail_silently' in options:
             __deprecated__('"fail_silently" has been deprecated in favor of '
                            '"safe" for the create_table() method.')
@@ -6551,6 +6772,7 @@ class Model(with_metaclass(ModelBase, Node)):
 
     @classmethod
     def drop_table(cls, safe=True):
+        """Drop the model table."""
         if safe and not cls._meta.database.safe_drop_index \
            and not cls.table_exists():
             return
@@ -6558,6 +6780,14 @@ class Model(with_metaclass(ModelBase, Node)):
 
     @classmethod
     def add_index(cls, *fields, **kwargs):
+        """
+        :param fields: Field(s) to index, or a :py:class:`SQL` instance that
+            contains the SQL for creating the index.
+        :param kwargs: Keyword arguments passed to :py:class:`ModelIndex`
+            constructor.
+
+        Add an index to the model's definition.
+        """
         if len(fields) == 1 and isinstance(fields[0], SQL):
             cls._meta.indexes.append(fields[0])
         else:
@@ -6565,6 +6795,7 @@ class Model(with_metaclass(ModelBase, Node)):
 
 
 class ModelAlias(Node):
+    """Provide a separate reference to a model in a query."""
     def __init__(self, model, alias=None):
         self.__dict__['model'] = model
         self.__dict__['alias'] = alias
