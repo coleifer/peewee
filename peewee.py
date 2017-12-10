@@ -2363,6 +2363,10 @@ def __compound_select__(operation, inverted=False):
 
 
 class SelectQuery(Query):
+    """
+    Select query helper-class that implements operator-overloads for creating
+    compound queries.
+    """
     __add__ = __compound_select__('UNION ALL')
     __or__ = __compound_select__('UNION')
     __and__ = __compound_select__('INTERSECT')
@@ -2377,6 +2381,9 @@ class SelectQuery(Query):
 
 
 class SelectBase(_HashableSource, Source, SelectQuery):
+    """
+    Base-class for :py:class:`Select` and :py:class:`CompoundSelect` queries.
+    """
     def _get_hash(self):
         return hash((self.__class__, self._alias or id(self)))
 
@@ -2388,6 +2395,14 @@ class SelectBase(_HashableSource, Source, SelectQuery):
 
     @database_required
     def peek(self, database, n=1):
+        """
+        :param Database database: database to execute query against.
+        :param int n: Number of rows to return.
+
+        Execute the query and return the given number of rows from the start
+        of the cursor. This function may be called multiple times safely, and
+        will always return the first N rows of results.
+        """
         rows = self.execute(database)[:n]
         if rows:
             return rows[0] if n == 1 else rows

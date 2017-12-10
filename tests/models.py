@@ -241,6 +241,17 @@ class TestModelAPIs(ModelTestCase):
                 ('whine', 'mickey'),
                 ('woof', 'mickey')])
 
+    @requires_models(User)
+    def test_peek(self):
+        for username in ('huey', 'mickey', 'zaizee'):
+            self.add_user(username)
+
+        query = User.select(User.username).order_by(User.username).dicts()
+        with self.assertQueryCount(1):
+            self.assertEqual(query.peek(n=1), {'username': 'huey'})
+            self.assertEqual(query.peek(n=2), [{'username': 'huey'},
+                                               {'username': 'mickey'}])
+
     @requires_models(User, Tweet, Favorite)
     def test_multi_join(self):
         TweetUser = User.alias('u2')
