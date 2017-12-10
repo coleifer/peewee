@@ -2398,6 +2398,7 @@ class SelectBase(_HashableSource, Source, SelectQuery):
         """
         :param Database database: database to execute query against.
         :param int n: Number of rows to return.
+        :returns: A single row if n = 1, else a list of rows.
 
         Execute the query and return the given number of rows from the start
         of the cursor. This function may be called multiple times safely, and
@@ -2409,6 +2410,16 @@ class SelectBase(_HashableSource, Source, SelectQuery):
 
     @database_required
     def first(self, database, n=1):
+        """
+        :param Database database: database to execute query against.
+        :param int n: Number of rows to return.
+        :returns: A single row if n = 1, else a list of rows.
+
+        Like the :py:meth:`~SelectBase.peek` method, except a ``LIMIT`` is
+        applied to the query to ensure that only ``n`` rows are returned.
+        Multiple calls for the same value of ``n`` will not result in multiple
+        executions.
+        """
         if self._limit != n:
             self._limit = n
             self._cursor_wrapper = None
@@ -2416,22 +2427,52 @@ class SelectBase(_HashableSource, Source, SelectQuery):
 
     @database_required
     def scalar(self, database, as_tuple=False):
-        row = self.tuples().first(database)
+        """
+        :param Database database: database to execute query against.
+        :param bool as_tuple: Return the result as a tuple?
+        :returns: Single scalar value if ``as_tuple = False``, else row tuple.
+
+        Return a scalar value from the first row of results. If multiple
+        scalar values are anticipated (e.g. multiple aggregations in a single
+        query) then you may specify ``as_tuple=True`` to get the row tuple.
+
+        Example::
+
+            query = Note.select(fn.MAX(Note.timestamp))
+            max_ts = query.scalar(db)
+
+            query = Note.select(fn.MAX(Note.timestamp), fn.COUNT(Note.id))
+            max_ts, n_notes = query.scalar(db, as_tuple=True)
+        """
+        row = self.tuples().peek(database)
         return row[0] if row and not as_tuple else row
 
     @database_required
     def count(self, database, clear_limit=False):
+        """
+        :param Database database: database to execute query against.
+        :param bool clear_limit: Clear any LIMIT clause when counting.
+        :return: Number of rows in the query result-set.
+
+        Return number of rows in the query result-set.
+
+        Implemented by running SELECT COUNT(1) FROM (<current query>).
+        """
         clone = self.order_by().alias('_wrapped')
         if clear_limit:
             clone._limit = clone._offset = None
         if clone._having is None and clone._windows is None:
             clone = clone.select(SQL('1'))
-
-        query = Select([clone], [fn.COUNT(SQL('1'))]).tuples()
-        return query.execute(database)[0][0]
+        return Select([clone], [fn.COUNT(SQL('1'))]).scalar(database)
 
     @database_required
     def exists(self, database):
+        """
+        :param Database database: database to execute query against.
+        :return: Whether any results exist for the current query.
+
+        Return a boolean indicating whether the current query has any results.
+        """
         clone = self.columns(SQL('1'))
         clone._limit = 1
         clone._offset = None
@@ -2439,6 +2480,13 @@ class SelectBase(_HashableSource, Source, SelectQuery):
 
     @database_required
     def get(self, database):
+        """
+        :param Database database: database to execute query against.
+        :return: A single row from the database or ``None``.
+
+        Execute the query and return the first row, if it exists. Multiple
+        calls will result in multiple queries being executed.
+        """
         self._cursor_wrapper = None
         try:
             return self.execute(database)[0]
@@ -2450,6 +2498,13 @@ class SelectBase(_HashableSource, Source, SelectQuery):
 
 
 class CompoundSelectQuery(SelectBase):
+    """
+    :param SelectBase lhs: A Select or CompoundSelect query.
+    :param str op: Operation (e.g. UNION, INTERSECT, EXCEPT).
+    :param SelectBase rhs: A Select or CompoundSelect query.
+
+    Class representing a compound SELECT query.
+    """
     def __init__(self, lhs, op, rhs):
         super(CompoundSelectQuery, self).__init__()
         self.lhs = lhs
