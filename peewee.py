@@ -2536,6 +2536,21 @@ class CompoundSelectQuery(SelectBase):
 
 
 class Select(SelectBase):
+    """
+    :param list from_list: List of sources for FROM clause.
+    :param list columns: Columns or values to select.
+    :param list group_by: List of columns or values to group by.
+    :param Expression having: Expression for HAVING clause.
+    :param distinct: Either a boolean or a list of column-like objects.
+    :param list windows: List of :py:class:`Window` clauses.
+    :param for_update: Boolean or str indicating if SELECT...FOR UPDATE.
+
+    Class representing a SELECT query.
+
+    .. note::
+        While it is possible to instantiate the query, more commonly you will
+        build the query using the method-chaining APIs.
+    """
     def __init__(self, from_list=None, columns=None, group_by=None,
                  having=None, distinct=None, windows=None, for_update=None,
                  **kwargs):
@@ -2559,15 +2574,39 @@ class Select(SelectBase):
 
     @Node.copy
     def columns(self, *columns):
+        """
+        :param columns: Zero or more column-like objects to SELECT.
+
+        Specify which columns or column-like values to SELECT.
+        """
         self._returning = columns
     select = columns
 
     @Node.copy
     def from_(self, *sources):
+        """
+        :param sources: Zero or more sources for the FROM clause.
+
+        Specify which table-like objects should be used in the FROM clause.
+        """
         self._from_list = list(sources)
 
     @Node.copy
     def join(self, dest, join_type='INNER', on=None):
+        """
+        :param dest: A table or table-like object.
+        :param str join_type: Type of JOIN, default is "INNER".
+        :param Expression on: Join predicate.
+
+        Express a JOIN::
+
+            User = Table('users', ('id', 'username'))
+            Note = Table('notes', ('id', 'user_id', 'content'))
+
+            query = (Note
+                     .select(Note.content, User.username)
+                     .join(User, on=(Note.user_id == User.id)))
+        """
         if not self._from_list:
             raise ValueError('No sources to join on.')
         item = self._from_list.pop()
@@ -2575,20 +2614,46 @@ class Select(SelectBase):
 
     @Node.copy
     def group_by(self, *columns):
+        """
+        :param values: zero or more Column-like objects to order by.
+
+        Define the GROUP BY clause. Any previously-specified values will be
+        overwritten.
+        """
         self._group_by = columns
 
     @Node.copy
     def group_by_extend(self, *values):
+        """
+        :param values: zero or more Column-like objects to order by.
+
+        Extend the GROUP BY clause.
+        """
         self._group_by = ((self._group_by or ()) + values) or None
 
     @Node.copy
     def having(self, *expressions):
+        """
+        :param expressions: zero or more expressions to include in the HAVING
+            clause.
+
+        Include the given expressions in the HAVING clause of the query. The
+        expressions will be AND-ed together with any previously-specified
+        HAVING expressions.
+        """
         if self._having is not None:
             expressions = (self._having,) + expressions
         self._having = reduce(operator.and_, expressions)
 
     @Node.copy
     def distinct(self, *columns):
+        """
+        :param columns: Zero or more column-like objects.
+
+        Indicate whether this query should use a DISTINCT clause. By specifying
+        a single value of ``True`` the query will use a simple SELECT DISTINCT.
+        Specifying one or more columns will result in a SELECT DISTINCT ON.
+        """
         if len(columns) == 1 and (columns[0] is True or columns[0] is False):
             self._simple_distinct = columns[0]
         else:
@@ -2597,10 +2662,20 @@ class Select(SelectBase):
 
     @Node.copy
     def window(self, *windows):
+        """
+        :param windows: zero or more :py:class:`Window` objects.
+
+        Define the WINDOW clause. Any previously-specified values will be
+        overwritten.
+        """
         self._windows = windows if windows else None
 
     @Node.copy
     def for_update(self, for_update=True):
+        """
+        :param for_update: Either a boolean or a string indicating the
+            desired expression, e.g. "FOR UPDATE NOWAIT".
+        """
         self._for_update = 'FOR UPDATE' if for_update is True else for_update
 
     def _get_query_key(self):
