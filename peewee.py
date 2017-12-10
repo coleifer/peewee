@@ -4870,6 +4870,23 @@ class ObjectIdAccessor(object):
 
 
 class Field(ColumnBase):
+    """
+    :param bool null: Field allows NULLs.
+    :param bool index: Create an index on field.
+    :param bool unique: Create a unique index on field.
+    :param str column_name: Specify column name for field.
+    :param default: Default value (enforced in Python, not on server).
+    :param bool primary_key: Field is the primary key.
+    :param list constraints: List of constraints to apply to column.
+    :param str sequence: Sequence name for field.
+    :param str collation: Collation name for field.
+    :param bool unindexed: Declare field UNINDEXED (sqlite only).
+    :param list choices: A list of choices, metadata purposes only.
+    :param str help_text: Help-text for field, metadata purposes only.
+    :param str verbose_name: Verbose name for field, metadata purposes only.
+
+    Fields represent a column on a table.
+    """
     _field_counter = 0
     _order = 0
     accessor_class = FieldAccessor
@@ -4919,15 +4936,24 @@ class Field(ColumnBase):
 
     @property
     def column(self):
+        """
+        Retrieve a reference to the underlying :py:class:`Column` object.
+        """
         return Column(self.model._meta.table, self.column_name)
 
     def coerce(self, value):
         return value
 
     def db_value(self, value):
+        """
+        Coerce Python value into a value suitable for storage in the database.
+        """
         return value if value is None else self.coerce(value)
 
     def python_value(self, value):
+        """
+        Coerce database value into a Python object.
+        """
         return value if value is None else self.coerce(value)
 
     def get_sort_key(self, ctx):
@@ -4974,19 +5000,23 @@ class Field(ColumnBase):
 
 
 class IntegerField(Field):
+    """Field class for storing integers."""
     field_type = 'INT'
     coerce = int
 
 
 class BigIntegerField(IntegerField):
+    """Field class for storing big integers."""
     field_type = 'BIGINT'
 
 
 class SmallIntegerField(IntegerField):
+    """Field class for storing small integers."""
     field_type = 'SMALLINT'
 
 
 class AutoField(IntegerField):
+    """Field class for storing auto-incrementing primary keys."""
     auto_increment = True
     field_type = 'AUTO'
 
@@ -4998,15 +5028,18 @@ class AutoField(IntegerField):
 
 
 class FloatField(Field):
+    """Field class for storing floating-point numbers."""
     field_type = 'FLOAT'
     coerce = float
 
 
 class DoubleField(FloatField):
+    """Field class for storing double-precision floating-point numbers."""
     field_type = 'DOUBLE'
 
 
 class DecimalField(Field):
+    """Field class for storing decimal numbers."""
     field_type = 'DECIMAL'
 
     def __init__(self, max_digits=10, decimal_places=5, auto_round=False,
@@ -5050,6 +5083,7 @@ class _StringField(Field):
 
 
 class CharField(_StringField):
+    """Field class for storing strings."""
     field_type = 'VARCHAR'
 
     def __init__(self, max_length=255, *args, **kwargs):
@@ -5061,6 +5095,7 @@ class CharField(_StringField):
 
 
 class FixedCharField(CharField):
+    """Field class for storing fixed-width strings."""
     field_type = 'CHAR'
 
     def python_value(self, value):
@@ -5071,10 +5106,12 @@ class FixedCharField(CharField):
 
 
 class TextField(_StringField):
+    """Field class for storing text."""
     field_type = 'TEXT'
 
 
 class BlobField(Field):
+    """Field class for storing binary data."""
     field_type = 'BLOB'
 
     def bind(self, model, name, set_attribute=True):
@@ -5090,6 +5127,7 @@ class BlobField(Field):
 
 
 class UUIDField(Field):
+    """Field class for storing UUIDs."""
     field_type = 'UUID'
 
     def db_value(self, value):
@@ -5131,6 +5169,7 @@ class _BaseFormattedField(Field):
 
 
 class DateTimeField(_BaseFormattedField):
+    """Field class for storing date-times."""
     field_type = 'DATETIME'
     formats = [
         '%Y-%m-%d %H:%M:%S.%f',
@@ -5143,15 +5182,27 @@ class DateTimeField(_BaseFormattedField):
             return format_date_time(value, self.formats)
         return value
 
+    #: Reference the year of the value stored in the column.
     year = property(_date_part('year'))
+
+    #: Reference the month of the value stored in the column.
     month = property(_date_part('month'))
+
+    #: Reference the day of the value stored in the column.
     day = property(_date_part('day'))
+
+    #: Reference the hour of the value stored in the column.
     hour = property(_date_part('hour'))
+
+    #: Reference the minute of the value stored in the column.
     minute = property(_date_part('minute'))
+
+    #: Reference the second of the value stored in the column.
     second = property(_date_part('second'))
 
 
 class DateField(_BaseFormattedField):
+    """Field class for storing dates."""
     field_type = 'DATE'
     formats = [
         '%Y-%m-%d',
@@ -5167,12 +5218,18 @@ class DateField(_BaseFormattedField):
             return value.date()
         return value
 
+    #: Reference the year of the value stored in the column.
     year = property(_date_part('year'))
+
+    #: Reference the month of the value stored in the column.
     month = property(_date_part('month'))
+
+    #: Reference the day of the value stored in the column.
     day = property(_date_part('day'))
 
 
 class TimeField(_BaseFormattedField):
+    """Field class for storing times."""
     field_type = 'TIME'
     formats = [
         '%H:%M:%S.%f',
@@ -5193,12 +5250,24 @@ class TimeField(_BaseFormattedField):
             return (datetime.datetime.min + value).time()
         return value
 
+    #: Reference the hour of the value stored in the column.
     hour = property(_date_part('hour'))
+
+    #: Reference the minute of the value stored in the column.
     minute = property(_date_part('minute'))
+
+    #: Reference the second of the value stored in the column.
     second = property(_date_part('second'))
 
 
 class TimestampField(IntegerField):
+    """
+    :param resolution: A power of 10, 1=second, 1000=ms, 1000000=us, etc.
+    :param bool utc: Treat timestamps as UTC.
+
+    Field class for storing date-times as integer timestamps. Sub-second
+    resolution is supported by multiplying by a power of 10 to get an integer.
+    """
     # Support second -> microsecond resolution.
     valid_resolutions = [10**i for i in range(7)]
 
@@ -5250,6 +5319,7 @@ class TimestampField(IntegerField):
 
 
 class IPField(BigIntegerField):
+    """Field class for storing IPv4 addresses efficiently."""
     def db_value(self, val):
         if val is not None:
             return struct.unpack('!I', socket.inet_aton(val))[0]
@@ -5260,11 +5330,13 @@ class IPField(BigIntegerField):
 
 
 class BooleanField(Field):
+    """Field class for storing boolean values."""
     field_type = 'BOOL'
     coerce = bool
 
 
 class BareField(Field):
+    """Field class that does not specify a data-type (sqlite only)."""
     def db_value(self, value): return value
     def python_value(self, value): return value
 
@@ -5273,6 +5345,17 @@ class BareField(Field):
 
 
 class ForeignKeyField(Field):
+    """
+    :param Model model: Model to reference.
+    :param Field field: Field to reference on ``model`` (default is primary
+        key).
+    :param str backref: Accessor name for back-reference.
+    :param str on_delete: ON DELETE action.
+    :param str on_update: ON UPDATE action.
+    :param str object_id_name: Name for object-id accessor.
+
+    Field class for storing a foreign key.
+    """
     accessor_class = ForeignKeyAccessor
 
     def __init__(self, model, field=None, backref=None, on_delete=None,
@@ -5376,6 +5459,11 @@ class ForeignKeyField(Field):
 
 
 class DeferredForeignKey(Field):
+    """
+    :param str rel_model_name: Model name to reference.
+
+    Field class for representing a deferred foreign key.
+    """
     _unresolved = set()
 
     def __init__(self, rel_model_name, **kwargs):
@@ -5438,16 +5526,23 @@ class ManyToManyFieldAccessor(FieldAccessor):
 
 
 class ManyToManyField(MetaField):
+    """
+    :param Model model: Model to create relationship with.
+    :param str backref: Accessor name for back-reference
+    :param Model through_model: Through-model class.
+
+    Declare a many-to-many relationship with the given model.
+    """
     accessor_class = ManyToManyFieldAccessor
 
-    def __init__(self, rel_model, backref=None, through_model=None,
+    def __init__(self, model, backref=None, through_model=None,
                  _is_backref=False):
         if through_model is not None and not (
                 isinstance(through_model, DeferredThroughModel) or
                 is_model(through_model)):
             raise TypeError('Unexpected value for through_model. Expected '
                             'Model or DeferredThroughModel.')
-        self.rel_model = rel_model
+        self.rel_model = model
         self.backref = backref
         self.through_model = through_model
         self._is_backref = _is_backref
@@ -5525,7 +5620,11 @@ class VirtualField(MetaField):
 
 
 class CompositeKey(MetaField):
-    """A primary key composed of multiple columns."""
+    """
+    :param field_names: Names of fields that comprise the primary key.
+
+    A primary key composed of multiple columns.
+    """
     sequence = None
 
     def __init__(self, *field_names):
@@ -5606,6 +5705,13 @@ class _SortedFieldList(object):
 
 
 class SchemaManager(object):
+    """
+    :param Model model: Model class.
+    :param Database database: If unspecified defaults to model._meta.database.
+
+    Provides methods for managing the creation and deletion of tables and
+    indexes for the given model.
+    """
     def __init__(self, model, database=None, **context_options):
         self.model = model
         self._database = database
