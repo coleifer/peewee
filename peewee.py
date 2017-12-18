@@ -1828,12 +1828,6 @@ class Select(SelectBase):
 
 
 class _WriteQuery(Query):
-    """
-    :param Table table: Table to write to.
-    :param list returning: List of columns for RETURNING clause.
-
-    Base-class for write queries.
-    """
     def __init__(self, table, returning=None, **kwargs):
         self.table = table
         self._returning = returning
@@ -1841,11 +1835,6 @@ class _WriteQuery(Query):
 
     @Node.copy
     def returning(self, *returning):
-        """
-        :param returning: Zero or more column-like objects for RETURNING clause
-
-        Specify the RETURNING clause of query (if supported by your database).
-        """
         self._returning = returning
 
     @property
@@ -1889,20 +1878,6 @@ class _WriteQuery(Query):
 
 
 class Update(_WriteQuery):
-    """
-    :param Table table: Table to update.
-    :param dict update: Data to update.
-
-    Class representing an UPDATE query.
-
-    Example::
-
-        PageView = Table('page_views')
-        query = (PageView
-                 .update({PageView.c.page_views: PageView.c.page_views + 1})
-                 .where(PageView.c.url == url))
-        query.execute(database)
-    """
     def __init__(self, table, update=None, **kwargs):
         super(Update, self).__init__(table, **kwargs)
         self._update = update
@@ -1932,14 +1907,6 @@ class Update(_WriteQuery):
 
 
 class Insert(_WriteQuery):
-    """
-    :param Table table: Table to INSERT data into.
-    :param insert: Either a dict, a list, or a query.
-    :param list columns: List of columns when ``insert`` is a list or query.
-    :param on_conflict: Conflict resolution strategy.
-
-    Class representing an INSERT query.
-    """
     SIMPLE = 0
     QUERY = 1
     MULTI = 2
@@ -1958,28 +1925,14 @@ class Insert(_WriteQuery):
 
     @Node.copy
     def on_conflict_ignore(self, ignore=True):
-        """
-        :param bool ignore: Whether to add ON CONFLICT IGNORE clause.
-
-        Specify IGNORE conflict resolution strategy.
-        """
         self._on_conflict = OnConflict('IGNORE') if ignore else None
 
     @Node.copy
     def on_conflict_replace(self, replace=True):
-        """
-        :param bool ignore: Whether to add ON CONFLICT REPLACE clause.
-
-        Specify REPLACE conflict resolution strategy.
-        """
         self._on_conflict = OnConflict('REPLACE') if replace else None
 
     @Node.copy
     def on_conflict(self, *args, **kwargs):
-        """
-        Specify an ON CONFLICT clause by populating a :py:class:`OnConflict`
-        object.
-        """
         self._on_conflict = (OnConflict(*args, **kwargs) if (args or kwargs)
                              else None)
 
@@ -2098,9 +2051,6 @@ class Insert(_WriteQuery):
 
 
 class Delete(_WriteQuery):
-    """
-    Class representing a DELETE query.
-    """
     def __sql__(self, ctx):
         super(Delete, self).__sql__(ctx)
 
@@ -2114,15 +2064,6 @@ class Delete(_WriteQuery):
 
 
 class Index(Node):
-    """
-    :param str name: Index name.
-    :param Table table: Table to create index on.
-    :param expressions: List of columns to index on (or expressions).
-    :param bool unique: Whether index is UNIQUE.
-    :param bool safe: Whether to add IF NOT EXISTS clause.
-    :param Expression where: Optional WHERE clause for index.
-    :param str using: Index algorithm.
-    """
     def __init__(self, name, table, expressions, unique=False, safe=False,
                  where=None, using=None):
         self._name = name
@@ -2135,30 +2076,16 @@ class Index(Node):
 
     @Node.copy
     def safe(self, _safe=True):
-        """
-        :param bool _safe: Whether to add IF NOT EXISTS clause.
-        """
         self._safe = _safe
 
     @Node.copy
     def where(self, *expressions):
-        """
-        :param expressions: zero or more expressions to include in the WHERE
-            clause.
-
-        Include the given expressions in the WHERE clause of the index. The
-        expressions will be AND-ed together with any previously-specified
-        WHERE expressions.
-        """
         if self._where is not None:
             expressions = (self._where,) + expressions
         self._where = reduce(operator.and_, expressions)
 
     @Node.copy
     def using(self, _using=None):
-        """
-        :param str _using: Specify index algorithm for USING clause.
-        """
         self._using = _using
 
     def __sql__(self, ctx):
@@ -2185,15 +2112,6 @@ class Index(Node):
 
 
 class ModelIndex(Index):
-    """
-    :param Model model: Model class to create index on.
-    :param list fields: Fields to index.
-    :param bool unique: Whether index is UNIQUE.
-    :param bool safe: Whether to add IF NOT EXISTS clause.
-    :param Expression where: Optional WHERE clause for index.
-    :param str using: Index algorithm.
-    :param str name: Optional index name.
-    """
     def __init__(self, model, fields, unique=False, safe=True, where=None,
                  using=None, name=None):
         self._model = model

@@ -1577,6 +1577,109 @@ Query-builder
             desired expression, e.g. "FOR UPDATE NOWAIT".
 
 
+.. py:class:: _WriteQuery(table[, returning=None[, **kwargs]])
+
+    :param Table table: Table to write to.
+    :param list returning: List of columns for RETURNING clause.
+
+    Base-class for write queries.
+
+    .. py:method:: returning(*returning)
+
+        :param returning: Zero or more column-like objects for RETURNING clause
+
+        Specify the RETURNING clause of query (if supported by your database).
+
+.. py:class:: Update(table[, update=None[, **kwargs]])
+
+    :param Table table: Table to update.
+    :param dict update: Data to update.
+
+    Class representing an UPDATE query.
+
+    Example::
+
+        PageView = Table('page_views')
+        query = (PageView
+                 .update({PageView.c.page_views: PageView.c.page_views + 1})
+                 .where(PageView.c.url == url))
+        query.execute(database)
+
+
+.. py:class:: Insert(table[, insert=None[, columns=None[, on_conflict=None[,
+    **kwargs]]]])
+
+    :param Table table: Table to INSERT data into.
+    :param insert: Either a dict, a list, or a query.
+    :param list columns: List of columns when ``insert`` is a list or query.
+    :param on_conflict: Conflict resolution strategy.
+
+    Class representing an INSERT query.
+
+    .. py:method:: on_conflict_ignore([ignore=True])
+
+        :param bool ignore: Whether to add ON CONFLICT IGNORE clause.
+
+        Specify IGNORE conflict resolution strategy.
+
+    .. py:method:: on_conflict_replace([replace=True])
+
+        :param bool ignore: Whether to add ON CONFLICT REPLACE clause.
+
+        Specify REPLACE conflict resolution strategy.
+
+    .. py:method:: on_conflict(*args, **kwargs)
+
+        Specify an ON CONFLICT clause by populating a :py:class:`OnConflict`
+        object.
+
+
+.. py:class:: Delete()
+
+    Class representing a DELETE query.
+
+
+.. py:class:: Index(name, table, expressions[, unique=False[, safe=False[,
+    where=None[, using=None]]]])
+
+    :param str name: Index name.
+    :param Table table: Table to create index on.
+    :param expressions: List of columns to index on (or expressions).
+    :param bool unique: Whether index is UNIQUE.
+    :param bool safe: Whether to add IF NOT EXISTS clause.
+    :param Expression where: Optional WHERE clause for index.
+    :param str using: Index algorithm.
+
+    .. py:method:: safe([_safe=True])
+
+        :param bool _safe: Whether to add IF NOT EXISTS clause.
+
+    .. py:method:: where(*expressions)
+
+        :param expressions: zero or more expressions to include in the WHERE
+            clause.
+
+        Include the given expressions in the WHERE clause of the index. The
+        expressions will be AND-ed together with any previously-specified
+        WHERE expressions.
+
+    .. py:method:: using([_using=None])
+
+        :param str _using: Specify index algorithm for USING clause.
+
+
+.. py:class:: ModelIndex(model, fields[, unique=False[, safe=True[,
+    where=None[, using=None[, name=None]]]]])
+
+    :param Model model: Model class to create index on.
+    :param list fields: Fields to index.
+    :param bool unique: Whether index is UNIQUE.
+    :param bool safe: Whether to add IF NOT EXISTS clause.
+    :param Expression where: Optional WHERE clause for index.
+    :param str using: Index algorithm.
+    :param str name: Optional index name.
+
+
 Query-builder Internals
 -----------------------
 
