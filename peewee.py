@@ -1614,9 +1614,6 @@ class SelectQuery(Query):
 
 
 class SelectBase(_HashableSource, Source, SelectQuery):
-    """
-    Base-class for :py:class:`Select` and :py:class:`CompoundSelect` queries.
-    """
     def _get_hash(self):
         return hash((self.__class__, self._alias or id(self)))
 
@@ -1628,31 +1625,12 @@ class SelectBase(_HashableSource, Source, SelectQuery):
 
     @database_required
     def peek(self, database, n=1):
-        """
-        :param Database database: database to execute query against.
-        :param int n: Number of rows to return.
-        :returns: A single row if n = 1, else a list of rows.
-
-        Execute the query and return the given number of rows from the start
-        of the cursor. This function may be called multiple times safely, and
-        will always return the first N rows of results.
-        """
         rows = self.execute(database)[:n]
         if rows:
             return rows[0] if n == 1 else rows
 
     @database_required
     def first(self, database, n=1):
-        """
-        :param Database database: database to execute query against.
-        :param int n: Number of rows to return.
-        :returns: A single row if n = 1, else a list of rows.
-
-        Like the :py:meth:`~SelectBase.peek` method, except a ``LIMIT`` is
-        applied to the query to ensure that only ``n`` rows are returned.
-        Multiple calls for the same value of ``n`` will not result in multiple
-        executions.
-        """
         if self._limit != n:
             self._limit = n
             self._cursor_wrapper = None
@@ -1660,37 +1638,11 @@ class SelectBase(_HashableSource, Source, SelectQuery):
 
     @database_required
     def scalar(self, database, as_tuple=False):
-        """
-        :param Database database: database to execute query against.
-        :param bool as_tuple: Return the result as a tuple?
-        :returns: Single scalar value if ``as_tuple = False``, else row tuple.
-
-        Return a scalar value from the first row of results. If multiple
-        scalar values are anticipated (e.g. multiple aggregations in a single
-        query) then you may specify ``as_tuple=True`` to get the row tuple.
-
-        Example::
-
-            query = Note.select(fn.MAX(Note.timestamp))
-            max_ts = query.scalar(db)
-
-            query = Note.select(fn.MAX(Note.timestamp), fn.COUNT(Note.id))
-            max_ts, n_notes = query.scalar(db, as_tuple=True)
-        """
         row = self.tuples().peek(database)
         return row[0] if row and not as_tuple else row
 
     @database_required
     def count(self, database, clear_limit=False):
-        """
-        :param Database database: database to execute query against.
-        :param bool clear_limit: Clear any LIMIT clause when counting.
-        :return: Number of rows in the query result-set.
-
-        Return number of rows in the query result-set.
-
-        Implemented by running SELECT COUNT(1) FROM (<current query>).
-        """
         clone = self.order_by().alias('_wrapped')
         if clear_limit:
             clone._limit = clone._offset = None
@@ -1700,12 +1652,6 @@ class SelectBase(_HashableSource, Source, SelectQuery):
 
     @database_required
     def exists(self, database):
-        """
-        :param Database database: database to execute query against.
-        :return: Whether any results exist for the current query.
-
-        Return a boolean indicating whether the current query has any results.
-        """
         clone = self.columns(SQL('1'))
         clone._limit = 1
         clone._offset = None
@@ -1713,13 +1659,6 @@ class SelectBase(_HashableSource, Source, SelectQuery):
 
     @database_required
     def get(self, database):
-        """
-        :param Database database: database to execute query against.
-        :return: A single row from the database or ``None``.
-
-        Execute the query and return the first row, if it exists. Multiple
-        calls will result in multiple queries being executed.
-        """
         self._cursor_wrapper = None
         try:
             return self.execute(database)[0]
@@ -1731,13 +1670,6 @@ class SelectBase(_HashableSource, Source, SelectQuery):
 
 
 class CompoundSelectQuery(SelectBase):
-    """
-    :param SelectBase lhs: A Select or CompoundSelect query.
-    :param str op: Operation (e.g. UNION, INTERSECT, EXCEPT).
-    :param SelectBase rhs: A Select or CompoundSelect query.
-
-    Class representing a compound SELECT query.
-    """
     def __init__(self, lhs, op, rhs):
         super(CompoundSelectQuery, self).__init__()
         self.lhs = lhs
@@ -1769,21 +1701,6 @@ class CompoundSelectQuery(SelectBase):
 
 
 class Select(SelectBase):
-    """
-    :param list from_list: List of sources for FROM clause.
-    :param list columns: Columns or values to select.
-    :param list group_by: List of columns or values to group by.
-    :param Expression having: Expression for HAVING clause.
-    :param distinct: Either a boolean or a list of column-like objects.
-    :param list windows: List of :py:class:`Window` clauses.
-    :param for_update: Boolean or str indicating if SELECT...FOR UPDATE.
-
-    Class representing a SELECT query.
-
-    .. note::
-        While it is possible to instantiate the query, more commonly you will
-        build the query using the method-chaining APIs.
-    """
     def __init__(self, from_list=None, columns=None, group_by=None,
                  having=None, distinct=None, windows=None, for_update=None,
                  **kwargs):
@@ -1807,39 +1724,15 @@ class Select(SelectBase):
 
     @Node.copy
     def columns(self, *columns):
-        """
-        :param columns: Zero or more column-like objects to SELECT.
-
-        Specify which columns or column-like values to SELECT.
-        """
         self._returning = columns
     select = columns
 
     @Node.copy
     def from_(self, *sources):
-        """
-        :param sources: Zero or more sources for the FROM clause.
-
-        Specify which table-like objects should be used in the FROM clause.
-        """
         self._from_list = list(sources)
 
     @Node.copy
     def join(self, dest, join_type='INNER', on=None):
-        """
-        :param dest: A table or table-like object.
-        :param str join_type: Type of JOIN, default is "INNER".
-        :param Expression on: Join predicate.
-
-        Express a JOIN::
-
-            User = Table('users', ('id', 'username'))
-            Note = Table('notes', ('id', 'user_id', 'content'))
-
-            query = (Note
-                     .select(Note.content, User.username)
-                     .join(User, on=(Note.user_id == User.id)))
-        """
         if not self._from_list:
             raise ValueError('No sources to join on.')
         item = self._from_list.pop()
@@ -1847,46 +1740,20 @@ class Select(SelectBase):
 
     @Node.copy
     def group_by(self, *columns):
-        """
-        :param values: zero or more Column-like objects to order by.
-
-        Define the GROUP BY clause. Any previously-specified values will be
-        overwritten.
-        """
         self._group_by = columns
 
     @Node.copy
     def group_by_extend(self, *values):
-        """
-        :param values: zero or more Column-like objects to order by.
-
-        Extend the GROUP BY clause.
-        """
         self._group_by = ((self._group_by or ()) + values) or None
 
     @Node.copy
     def having(self, *expressions):
-        """
-        :param expressions: zero or more expressions to include in the HAVING
-            clause.
-
-        Include the given expressions in the HAVING clause of the query. The
-        expressions will be AND-ed together with any previously-specified
-        HAVING expressions.
-        """
         if self._having is not None:
             expressions = (self._having,) + expressions
         self._having = reduce(operator.and_, expressions)
 
     @Node.copy
     def distinct(self, *columns):
-        """
-        :param columns: Zero or more column-like objects.
-
-        Indicate whether this query should use a DISTINCT clause. By specifying
-        a single value of ``True`` the query will use a simple SELECT DISTINCT.
-        Specifying one or more columns will result in a SELECT DISTINCT ON.
-        """
         if len(columns) == 1 and (columns[0] is True or columns[0] is False):
             self._simple_distinct = columns[0]
         else:
@@ -1895,20 +1762,10 @@ class Select(SelectBase):
 
     @Node.copy
     def window(self, *windows):
-        """
-        :param windows: zero or more :py:class:`Window` objects.
-
-        Define the WINDOW clause. Any previously-specified values will be
-        overwritten.
-        """
         self._windows = windows if windows else None
 
     @Node.copy
     def for_update(self, for_update=True):
-        """
-        :param for_update: Either a boolean or a string indicating the
-            desired expression, e.g. "FOR UPDATE NOWAIT".
-        """
         self._for_update = 'FOR UPDATE' if for_update is True else for_update
 
     def _get_query_key(self):

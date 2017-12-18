@@ -1411,6 +1411,172 @@ Query-builder
         Create an EXCEPT query with ``dest``.
 
 
+.. py:class:: SelectBase()
+
+    Base-class for :py:class:`Select` and :py:class:`CompoundSelect` queries.
+
+    .. py:method:: peek(database[, n=1])
+
+        :param Database database: database to execute query against.
+        :param int n: Number of rows to return.
+        :returns: A single row if n = 1, else a list of rows.
+
+        Execute the query and return the given number of rows from the start
+        of the cursor. This function may be called multiple times safely, and
+        will always return the first N rows of results.
+
+    .. py:method:: first(database[, n=1])
+
+        :param Database database: database to execute query against.
+        :param int n: Number of rows to return.
+        :returns: A single row if n = 1, else a list of rows.
+
+        Like the :py:meth:`~SelectBase.peek` method, except a ``LIMIT`` is
+        applied to the query to ensure that only ``n`` rows are returned.
+        Multiple calls for the same value of ``n`` will not result in multiple
+        executions.
+
+    .. py:method:: scalar(database[, as_tuple=False])
+
+        :param Database database: database to execute query against.
+        :param bool as_tuple: Return the result as a tuple?
+        :returns: Single scalar value if ``as_tuple = False``, else row tuple.
+
+        Return a scalar value from the first row of results. If multiple
+        scalar values are anticipated (e.g. multiple aggregations in a single
+        query) then you may specify ``as_tuple=True`` to get the row tuple.
+
+        Example::
+
+            query = Note.select(fn.MAX(Note.timestamp))
+            max_ts = query.scalar(db)
+
+            query = Note.select(fn.MAX(Note.timestamp), fn.COUNT(Note.id))
+            max_ts, n_notes = query.scalar(db, as_tuple=True)
+
+    .. py:method:: count(database[, clear_limit=False])
+
+        :param Database database: database to execute query against.
+        :param bool clear_limit: Clear any LIMIT clause when counting.
+        :return: Number of rows in the query result-set.
+
+        Return number of rows in the query result-set.
+
+        Implemented by running SELECT COUNT(1) FROM (<current query>).
+
+    .. py:method:: exists(database)
+
+        :param Database database: database to execute query against.
+        :return: Whether any results exist for the current query.
+
+        Return a boolean indicating whether the current query has any results.
+
+    .. py:method:: get(database)
+
+        :param Database database: database to execute query against.
+        :return: A single row from the database or ``None``.
+
+        Execute the query and return the first row, if it exists. Multiple
+        calls will result in multiple queries being executed.
+
+
+.. py:class:: CompoundSelectQuery(lhs, op, rhs)
+
+    :param SelectBase lhs: A Select or CompoundSelect query.
+    :param str op: Operation (e.g. UNION, INTERSECT, EXCEPT).
+    :param SelectBase rhs: A Select or CompoundSelect query.
+
+    Class representing a compound SELECT query.
+
+
+.. py:class:: Select([from_list=None[, columns=None[, group_by=None[,
+    having=None[, distinct=None[, windows=None[, for_update=None[,
+    **kwargs]]]]]]]])
+
+    :param list from_list: List of sources for FROM clause.
+    :param list columns: Columns or values to select.
+    :param list group_by: List of columns or values to group by.
+    :param Expression having: Expression for HAVING clause.
+    :param distinct: Either a boolean or a list of column-like objects.
+    :param list windows: List of :py:class:`Window` clauses.
+    :param for_update: Boolean or str indicating if SELECT...FOR UPDATE.
+
+    Class representing a SELECT query.
+
+    .. note::
+        While it is possible to instantiate the query, more commonly you will
+        build the query using the method-chaining APIs.
+
+    .. py:method:: columns(*columns)
+
+        :param columns: Zero or more column-like objects to SELECT.
+
+        Specify which columns or column-like values to SELECT.
+
+    .. py:method:: from_(*sources)
+
+        :param sources: Zero or more sources for the FROM clause.
+
+        Specify which table-like objects should be used in the FROM clause.
+
+    .. py:method:: join(dest[, join_type='INNER'[, on=None]])
+
+        :param dest: A table or table-like object.
+        :param str join_type: Type of JOIN, default is "INNER".
+        :param Expression on: Join predicate.
+
+        Express a JOIN::
+
+            User = Table('users', ('id', 'username'))
+            Note = Table('notes', ('id', 'user_id', 'content'))
+
+            query = (Note
+                     .select(Note.content, User.username)
+                     .join(User, on=(Note.user_id == User.id)))
+
+    .. py:method:: group_by(*columns)
+
+        :param values: zero or more Column-like objects to group by.
+
+        Define the GROUP BY clause. Any previously-specified values will be
+        overwritten.
+
+    .. py:method:: group_by_extend(*columns)
+
+        :param values: zero or more Column-like objects to group by.
+
+        Extend the GROUP BY clause with the given columns.
+
+    .. py:method:: having(*expressions)
+
+        :param expressions: zero or more expressions to include in the HAVING
+            clause.
+
+        Include the given expressions in the HAVING clause of the query. The
+        expressions will be AND-ed together with any previously-specified
+        HAVING expressions.
+
+    .. py:method:: distinct(*columns)
+
+        :param columns: Zero or more column-like objects.
+
+        Indicate whether this query should use a DISTINCT clause. By specifying
+        a single value of ``True`` the query will use a simple SELECT DISTINCT.
+        Specifying one or more columns will result in a SELECT DISTINCT ON.
+
+    .. py:method:: window(*windows)
+
+        :param windows: zero or more :py:class:`Window` objects.
+
+        Define the WINDOW clause. Any previously-specified values will be
+        overwritten.
+
+    .. py:method:: for_update([for_update=True])
+
+        :param for_update: Either a boolean or a string indicating the
+            desired expression, e.g. "FOR UPDATE NOWAIT".
+
+
 Query-builder Internals
 -----------------------
 
