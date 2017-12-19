@@ -1676,6 +1676,10 @@ class CompoundSelectQuery(SelectBase):
         self.op = op
         self.rhs = rhs
 
+    @property
+    def _returning(self):
+        return self.lhs._returning
+
     def _get_query_key(self):
         return (self.lhs.get_query_key(), self.rhs.get_query_key())
 
