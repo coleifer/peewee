@@ -954,6 +954,9 @@ class ColumnBase(Node):
             return self.between(item.start, item.stop)
         return self == item
 
+    def distinct(self):
+        return NodeList((SQL('DISTINCT'), self))
+
     def get_sort_key(self, ctx):
         return ()
 
@@ -1649,7 +1652,8 @@ class SelectBase(_HashableSource, Source, SelectQuery):
         clone = self.order_by().alias('_wrapped')
         if clear_limit:
             clone._limit = clone._offset = None
-        if clone._having is None and clone._windows is None:
+        if clone._having is None and clone._windows is None and \
+           clone._distinct is None and clone._simple_distinct is not True:
             clone = clone.select(SQL('1'))
         return Select([clone], [fn.COUNT(SQL('1'))]).scalar(database)
 
