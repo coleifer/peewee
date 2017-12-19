@@ -835,6 +835,9 @@ class CTE(_HashableSource, Source):
         query._cte_list = ()
         self._query = query
         self._recursive = recursive
+        if columns is not None:
+            columns = [Entity(c) if isinstance(c, basestring) else c
+                       for c in columns]
         self._columns = columns
         super(CTE, self).__init__(alias=name)
 
@@ -1610,7 +1613,7 @@ class SelectQuery(Query):
     __rsub__ = __compound_select__('EXCEPT', inverted=True)
 
     def cte(self, name, recursive=False, columns=None):
-        return CTE(name, self, recursive=recursive, columns=None)
+        return CTE(name, self, recursive=recursive, columns=columns)
 
 
 class SelectBase(_HashableSource, Source, SelectQuery):
@@ -1885,6 +1888,11 @@ class Update(_WriteQuery):
     def __init__(self, table, update=None, **kwargs):
         super(Update, self).__init__(table, **kwargs)
         self._update = update
+        self._from = None
+
+    @Node.copy
+    def from_(self, *sources):
+        self._from = sources
 
     def __sql__(self, ctx):
         super(Update, self).__sql__(ctx)
@@ -1903,6 +1911,9 @@ class Update(_WriteQuery):
              .sql(self.table)
              .literal(' SET ')
              .sql(CommaNodeList(expressions)))
+
+            if self._from:
+                ctx.literal(' FROM ').sql(CommaNodeList(self._from))
 
             if self._where:
                 ctx.literal(' WHERE ').sql(self._where)
