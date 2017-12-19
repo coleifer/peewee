@@ -1680,6 +1680,549 @@ Query-builder
     :param str name: Optional index name.
 
 
+Fields
+------
+
+.. py:class:: Field([null=False[, index=False[, unique=False[,
+    column_name=None[, default=None[, primary_key=False[, constraints=None[,
+    sequence=None[, collation=None[, unindexed=False[, choices=None[,
+    help_text=None[, verbose_name=None]]]]]]]]]]]]])
+
+    :param bool null: Field allows NULLs.
+    :param bool index: Create an index on field.
+    :param bool unique: Create a unique index on field.
+    :param str column_name: Specify column name for field.
+    :param default: Default value (enforced in Python, not on server).
+    :param bool primary_key: Field is the primary key.
+    :param list constraints: List of constraints to apply to column.
+    :param str sequence: Sequence name for field.
+    :param str collation: Collation name for field.
+    :param bool unindexed: Declare field UNINDEXED (sqlite only).
+    :param list choices: A list of choices, metadata purposes only.
+    :param str help_text: Help-text for field, metadata purposes only.
+    :param str verbose_name: Verbose name for field, metadata purposes only.
+
+    Fields on a :py:class:`Model` are analagous to columns on a table.
+
+    .. py:attribute:: column
+
+        Retrieve a reference to the underlying :py:class:`Column` object.
+
+    .. py:method:: db_value(value)
+
+        Coerce a Python value into a value suitable for storage in the
+        database. Sub-classes operating on special data-types will most likely
+        want to override this method.
+
+    .. py:method:: python_value(value)
+
+        Coerce a value from the database into a Python object. Sub-classes
+        operating on special data-types will most likely want to override this
+        method.
+
+.. py:class:: IntegerField
+
+    Field class for storing integers.
+
+.. py:class:: BigIntegerField
+
+    Field class for storing big integers (if supported by database).
+
+.. py:class:: SmallIntegerField
+
+    Field class for storing small integers (if supported by database).
+
+.. py:class:: AutoField
+
+    Field class for storing auto-incrementing primary keys.
+
+.. py:class:: FloatField
+
+    Field class for storing floating-point numbers.
+
+.. py:class:: DoubleField
+
+    Field class for storing double-precision floating-point numbers.
+
+.. py:class:: DecimalField([max_digits=10[, decimal_places=5[,
+    auto_round=False[, rounding=None[, **kwargs]]]]])
+
+   :param int max_digits: Maximum digits to store.
+   :param int decimal_places: Maximum precision.
+   :param bool auto_round: Automatically round values.
+   :param rounding: Defaults to ``decimal.DefaultContext.rounding``.
+
+    Field class for storing decimal numbers. Values are represented as
+    ``decimal.Decimal`` objects.
+
+.. py:class:: CharField
+
+    Field class for storing strings.
+
+    .. note:: Values that exceed length are not truncated automatically.
+
+.. py:class:: FixedCharField
+
+    Field class for storing fixed-length strings.
+
+    .. note:: Values that exceed length are not truncated automatically.
+
+.. py:class:: TextField
+
+    Field class for storing text.
+
+.. py:class:: BlobField
+
+    Field class for storing binary data.
+
+.. py:class:: UUIDField
+
+    Field class for storing ``uuid.UUID`` objects.
+
+.. py:class:: DateTimeField([formats=None[, **kwargs]])
+
+    :param list formats: A list of format strings to use when coercing a string
+        to a date-time.
+
+    Field class for storing ``datetime.datetime`` objects.
+
+    .. py:attribute:: year
+
+        Reference the year of the value stored in the column in a query.
+
+    .. py:attribute:: month
+
+        Reference the month of the value stored in the column in a query.
+
+    .. py:attribute:: day
+
+        Reference the day of the value stored in the column in a query.
+
+    .. py:attribute:: hour
+
+        Reference the hour of the value stored in the column in a query.
+
+    .. py:attribute:: minute
+
+        Reference the minute of the value stored in the column in a query.
+
+    .. py:attribute:: second
+
+        Reference the second of the value stored in the column in a query.
+
+.. py:class:: DateField([formats=None[, **kwargs]])
+
+    :param list formats: A list of format strings to use when coercing a string
+        to a date.
+
+    Field class for storing ``datetime.date`` objects.
+
+    .. py:attribute:: year
+
+        Reference the year of the value stored in the column in a query.
+
+    .. py:attribute:: month
+
+        Reference the month of the value stored in the column in a query.
+
+    .. py:attribute:: day
+
+        Reference the day of the value stored in the column in a query.
+
+.. py:class:: TimeField([formats=None[, **kwargs]])
+
+    :param list formats: A list of format strings to use when coercing a string
+        to a time.
+
+    Field class for storing ``datetime.time`` objects (not ``timedelta``).
+
+    .. py:attribute:: hour
+
+        Reference the hour of the value stored in the column in a query.
+
+    .. py:attribute:: minute
+
+        Reference the minute of the value stored in the column in a query.
+
+    .. py:attribute:: second
+
+        Reference the second of the value stored in the column in a query.
+
+.. py:class:: TimestampField([resolution=1[, utc=False[, **kwargs]]])
+
+    :param resolution: A power of 10, 1=second, 1000=ms, 1000000=us, etc.
+    :param bool utc: Treat timestamps as UTC.
+
+    Field class for storing date-times as integer timestamps. Sub-second
+    resolution is supported by multiplying by a power of 10 to get an integer.
+
+.. py:class:: IPField
+
+    Field class for storing IPv4 addresses efficiently (as integers).
+
+.. py:class:: BooleanField
+
+    Field class for storing boolean values.
+
+.. py:class:: BareField
+
+    Field class that does not specify a data-type (SQLite-only).
+
+.. py:class:: ForeignKeyField(model[, field=None[, backref=None[,
+    on_delete=None[, on_update=None[, object_id_name=None[, **kwargs]]]]]])
+
+    :param Model model: Model to reference.
+    :param Field field: Field to reference on ``model`` (default is primary
+        key).
+    :param str backref: Accessor name for back-reference.
+    :param str on_delete: ON DELETE action.
+    :param str on_update: ON UPDATE action.
+    :param str object_id_name: Name for object-id accessor.
+
+    Field class for storing a foreign key.
+
+.. py:class:: DeferredForeignKey(rel_model_name[, **kwargs])
+
+    :param str rel_model_name: Model name to reference.
+
+    Field class for representing a deferred foreign key.
+
+.. py:class:: ManyToManyField(model[, backref=None[, through_model=None]])
+
+    :param Model model: Model to create relationship with.
+    :param str backref: Accessor name for back-reference
+    :param Model through_model: Through-model class.
+
+    Declare a many-to-many relationship with the given model. This is not a
+    field in the sense that there is no column associated with it. Rather, it
+    provides a convenient interface for accessing rows of data related via a
+    through model.
+
+    If the ``through_model`` is not provided, one will automatically be
+    created.
+
+    .. py:attribute:: through_model
+
+        The :py:class:`Model` representing the many-to-many junction table.
+        Will be auto-generated if not explicitly declared.
+
+.. py:class:: CompositeKey(*field_names)
+
+    :param field_names: Names of fields that comprise the primary key.
+
+    A primary key composed of multiple columns.
+
+
+Schema Manager
+--------------
+
+.. py:class:: SchemaManager(model[, database=None[, **context_options]])
+
+    :param Model model: Model class.
+    :param Database database: If unspecified defaults to model._meta.database.
+
+    Provides methods for managing the creation and deletion of tables and
+    indexes for the given model.
+
+    .. py:method:: create_table([safe=True[, **options]])
+
+        :param bool safe: Specify IF NOT EXISTS clause.
+        :param options: Arbitrary options.
+
+        Execute CREATE TABLE query for the given model.
+
+    .. py:method:: drop_table([safe=True[, **options]])
+
+        :param bool safe: Specify IF EXISTS clause.
+        :param options: Arbitrary options.
+
+        Execute DROP TABLE query for the given model.
+
+    .. py:method:: create_indexes([safe=True])
+
+        :param bool safe: Specify IF NOT EXISTS clause.
+
+        Execute CREATE INDEX queries for the indexes defined for the model.
+
+    .. py:method:: drop_indexes([safe=True])
+
+        :param bool safe: Specify IF EXISTS clause.
+
+        Execute DROP INDEX queries for the indexes defined for the model.
+
+    .. py:method:: create_sequence(field)
+
+        :param Field field: Field instance which specifies a sequence.
+
+        Create sequence for the given :py:class:`Field`.
+
+    .. py:method:: drop_sequence(field)
+
+        :param Field field: Field instance which specifies a sequence.
+
+        Drop sequence for the given :py:class:`Field`.
+
+    .. py:method:: create_all([safe=True[, **table_options]])
+
+        :param bool safe: Whether to specify IF NOT EXISTS.
+
+        Create sequence(s), index(es) and table for the model.
+
+    .. py:method:: drop_all([safe=True])
+
+        :param bool safe: Whether to specify IF EXISTS.
+
+        Drop table for the model.
+
+
+Model
+-----
+
+.. py:class:: Metadata(model[, database=None[, table_name=None[, indexes=None[,
+    primary_key=None[, constraints=None[, schema=None[, only_save_dirty=False[,
+    table_alias=None[, depends_on=None[, options=None[, without_rowid=False[,
+    **kwargs]]]]]]]]]]]])
+
+    :param Model model: Model class.
+    :param Database database: database model is bound to.
+    :param str table_name: Specify table name for model.
+    :param list indexes: List of :py:class:`ModelIndex` objects.
+    :param primary_key: Primary key for model (only specified if this is a
+        :py:class:`CompositeKey` or ``False`` for no primary key.
+    :param list constraints: List of table constraints.
+    :param str schema: Schema table exists in.
+    :param bool only_save_dirty: When :py:meth:`~Model.save` is called, only
+        save the fields which have been modified.
+    :param str table_alias: Specify preferred alias for table in queries.
+    :param dict options: Arbitrary options for the model.
+    :param bool without_rowid: Specify WITHOUT ROWID (sqlite only).
+    :param kwargs: Arbitrary setting attributes and values.
+
+    Store metadata for a :py:class:`Model`.
+
+    This class should not be instantiated directly, but is instantiated using
+    the attributes of a :py:class:`Model` class' inner ``Meta`` class. Metadata
+    attributes are then available on ``Model._meta``.
+
+    .. py:attribute:: table
+
+        Return a reference to the underlying :py:class:`Table` object.
+
+    .. py:method:: model_graph([refs=True[, backrefs=True[,
+        depth_first=True]]])
+
+        :param bool refs: Follow foreign-key references.
+        :param bool backrefs: Follow foreign-key back-references.
+        :param bool depth_first: Do a depth-first search (``False`` for
+            breadth-first).
+
+        Traverse the model graph and return a list of 3-tuples, consisting of
+        ``(foreign key field, model class, is_backref)``.
+
+
+.. py:class:: SubclassAwareMetadata
+
+    Metadata subclass that tracks :py:class:`Model` subclasses.
+
+    .. py:method:: map_models(fn)
+
+        Apply a function to all subclasses.
+
+
+.. py:class:: Model(**kwargs)
+
+    :param kwargs: Mapping of field-name to value to initialize model with.
+
+    Model class provides a high-level abstraction for working with database
+    tables.
+
+    .. py:classmethod:: alias([alias=None])
+
+        :param str alias: Optional name for alias.
+        :returns: :py:class:`ModelAlias` instance.
+
+        Create an alias to the model-class. Allows you to reference the same
+        :py:class:`Model` multiple times in a query, for example when doing a
+        self-join.
+
+    .. py:classmethod:: select(*fields)
+
+        :param fields: Zero or more :py:class:`Field` or field-like objects.
+
+        Create a SELECT query. If no fields are explicitly provided, the query
+        will by default SELECT all the fields defined on the model.
+
+    .. py:classmethod:: update([__data=None[, **update]])
+
+        :param dict __data: ``dict`` of fields to values.
+        :param update: Field-name to value mapping.
+
+        Create an UPDATE query.
+
+    .. py:classmethod:: insert([__data=None[, **insert]])
+
+        :param dict __data: ``dict`` of fields to values to insert.
+        :param insert: Field-name to value mapping.
+
+        Create an INSERT query.
+
+    .. py:classmethod:: insert_many(rows[, fields=None])
+
+        :param rows: An iterable that yields rows to insert.
+        :param list fields: List of fields being inserted.
+
+        INSERT multiple rows of data.
+
+    .. py:classmethod:: insert_from(query, fields)
+
+        :param Select query: SELECT query to use as source of data.
+        :param fields: Fields to insert data into.
+
+        INSERT data using a SELECT query as the source.
+
+    .. py:classmethod:: replace([__data=None[, **insert]])
+
+        :param dict __data: ``dict`` of fields to values to insert.
+        :param insert: Field-name to value mapping.
+
+        Create an INSERT query that uses REPLACE for conflict-resolution.
+
+    .. py:classmethod:: replace_many(rows[, fields=None])
+
+        :param rows: An iterable that yields rows to insert.
+        :param list fields: List of fields being inserted.
+
+        INSERT multiple rows of data using REPLACE for conflict-resolution.
+
+    .. py:classmethod:: raw(sql, *params)
+
+        :param str sql: SQL query to execute.
+        :param params: Parameters for query.
+
+        Execute a SQL query directly.
+
+    .. py:classmethod:: delete()
+
+        Create a DELETE query.
+
+    .. py:classmethod:: create(**query)
+
+        :param query: Mapping of field-name to value.
+
+        INSERT new row into table and return corresponding model instance.
+
+    .. py:classmethod:: get(*query, **filters)
+
+        :param query: Zero or more :py:class:`Expression` objects.
+        :param filters: Mapping of field-name to value for Django-style filter.
+        :raises: :py:class:`DoesNotExist`
+        :returns: Model instance matching the specified filters.
+
+        Retrieve a single model instance matching the given filters. If no
+        model is returned, a :py:class:`DoesNotExist` is raised.
+
+    .. py:classmethod:: get_or_none(*query, **filters)
+
+        Identical to :py:meth:`Model.get` but returns ``None`` if no model
+        matches the given filters.
+
+    .. py:classmethod:: get_by_id(pk)
+
+        :param pk: Primary-key value.
+
+        Short-hand for calling :py:meth:`Model.get` specifying a lookup by id.
+
+    .. py:classmethod:: set_by_id(key, value)
+
+        :param key: Primary-key value.
+        :param dict value: Mapping of field to value to update.
+
+        Short-hand for updating the data with the given primary-key.
+
+    .. py:classmethod:: delete_by_id(pk)
+
+        :param pk: Primary-key value.
+
+        Short-hand for deleting the row with the given primary-key.
+
+    .. py:classmethod:: get_or_create(**kwargs)
+
+        :param kwargs: Mapping of field-name to value.
+        :param defaults: Default values to use if creating a new row.
+        :returns: :py:class:`Model` instance.
+
+        Attempt to get the row matching the given filters. If no matching row
+        is found, create a new row.
+
+        .. warning:: Race-conditions are possible when using this method.
+
+    .. py:classmethod:: filter(*dq_nodes, **filters)
+
+        :param dq_nodes: Zero or more :py:class:`DQ` objects.
+        :param filters: Django-style filters.
+        :returns: :py:class:`ModelSelect` query.
+
+    .. py:method:: get_id()
+
+        :returns: The primary-key of the model instance.
+
+    .. py:method:: save([force_insert=False[, only=None]])
+
+        :param bool force_insert: Force INSERT query.
+        :param list only: Only save the given :py:class:`Field` instances.
+        :returns: Number of rows modified.
+
+        Save the data in the model instance. By default, the presence of a
+        primary-key value will cause an UPDATE query to be executed.
+
+    .. py:attribute:: dirty_fields
+
+        Return list of fields that have been modified.
+
+    .. py:method:: delete_instance([recursive=False[, delete_nullable=False]])
+
+        :param bool recursive: Delete related models.
+        :param bool delete_nullable: Delete related models that have a null
+            foreign key. If ``False`` nullable relations will be set to NULL.
+
+        Delete the model instance row.
+
+    .. py:classmethod:: bind(database[, bind_refs=True[, bind_backrefs=True]])
+
+        :param Database database: database to bind to.
+        :param bool bind_refs: Bind related models.
+        :param bool bind_backrefs: Bind back-reference related models.
+
+        Bind the model (and specified relations) to the given database.
+
+    .. py:classmethod:: bind_ctx(database[, bind_refs=True[,
+        bind_backrefs=True]])
+
+        Like :py:meth:`~Model.bind`, but returns a context manager that only
+        binds the models for the duration of the wrapped block.
+
+    .. py:classmethod:: table_exists()
+
+        :returns: boolean indicating whether the table exists.
+
+    .. py:classmethod:: create_table([safe=True[, **options]])
+
+        Create the model table, indexes and sequences.
+
+    .. py:classmethod:: drop_table([safe=True[, **options]])
+
+        Drop the model table.
+
+    .. py:classmethod:: add_index(*fields, **kwargs)
+
+        :param fields: Field(s) to index, or a :py:class:`SQL` instance that
+            contains the SQL for creating the index.
+        :param kwargs: Keyword arguments passed to :py:class:`ModelIndex`
+            constructor.
+
+        Add an index to the model's definition.
+
+
 Query-builder Internals
 -----------------------
 
