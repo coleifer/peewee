@@ -105,6 +105,7 @@ __all__ = [
     'Proxy',
     'SchemaManager',
     'SmallIntegerField',
+    'Select',
     'SQL',
     'SqliteDatabase',
     'Table',
