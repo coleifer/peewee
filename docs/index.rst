@@ -51,6 +51,7 @@ Contents:
    peewee/query_examples
    peewee/database
    peewee/models
+   peewee/metadata
    peewee/transactions
    peewee/changes
    peewee/api
