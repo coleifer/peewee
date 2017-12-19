@@ -49,9 +49,12 @@ Contents:
    peewee/example
    peewee/contributing
    peewee/query_examples
+   peewee/database
+   peewee/models
    peewee/transactions
    peewee/changes
    peewee/api
+   peewee/playhouse
 
 Note
 ----

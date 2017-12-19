@@ -1,0 +1,4 @@
+.. _database:
+
+Database
+========
