@@ -124,4 +124,168 @@ SchemaManager
 ^^^^^^^^^^^^^
 
 The :py:class:`Model` embeds a :py:class:`SchemaManager` instance, accessible
-at ``ModelClass._schema``, which provides
+at ``ModelClass._schema``, which provides finer-grained control of schema
+management. Calling :py:meth:`Model.create_table` is equivalent to calling the
+:py:meth:`SchemaManager.create_all` method.
+
+In turn, :py:meth:`SchemaManager.create_all` will:
+
+* Create sequences for any fields that define a ``sequence``.
+* Create the table itself (:py:meth:`~SchemaManager.create_table`).
+* Create indexes (:py:meth:`~SchemaManager.create_indexes`).
+
+To drop a table, :py:meth:`SchemaManager.drop_all` is equivalent to
+:py:meth:`Model.drop_table`.
+
+See :py:class:`SchemaManager` API documentation for more details.
+
+Model Metadata
+--------------
+
+In order to avoid polluting the model namespace, model-specific configuration
+is placed in a special class named ``Meta`` (a convention borrowed from the
+Django framework).
+
+For example:
+
+.. code-block:: python
+
+    from peewee import *
+
+    db = SqliteDatabase(':memory:')
+
+    class User(Model):
+        username = TextField()
+
+        class Meta:
+            database = db
+
+This instructs peewee that the ``User`` model should be bound to the SQLite
+database ``db``.
+
+When your application has more than one model, it is common to place global
+configuration in a base model class:
+
+.. code-block:: python
+
+    class BaseModel(Model):
+        class Meta:
+            database = db
+
+
+    class User(BaseModel):
+        username = TextField()
+
+
+Attributes defined on a Model's inner ``Meta`` class are translated into
+parameters passed to a :py:class:`Metadata` object, which is accessible using
+the ``ModelClass._meta`` attribute.
+
+.. warning::
+
+    After class creation, do not attempt to read or modify a model's metadata
+    using ``ModelClass.Meta``. Instead use ``ModelClass._meta``.
+
+The :py:class:`Metadata` class implements several methods for introspecting a
+model class:
+
+.. code-block:: pycon
+
+    >>> User._meta.fields
+    {'id': <peewee.AutoField at 0x7ffb64b09110>,
+     'username': <peewee.TextField at 0x7ffb64b09890>}
+
+    >>> Tweet._meta.fields
+    {'content': <peewee.TextField at 0x7ffb64b28650>,
+     'id': <peewee.AutoField at 0x7ffb64b28790>,
+     'timestamp': <peewee.TimestampField at 0x7ffb64b28690>,
+     'user': <ForeignKeyField: "tweet"."user">}
+
+    >>> Tweet._meta.sorted_fields
+    [<peewee.AutoField at 0x7ffb64b28790>,
+     <ForeignKeyField: "tweet"."user">,
+     <peewee.TextField at 0x7ffb64b28650>,
+     <peewee.TimestampField at 0x7ffb64b28690>]
+
+    >>> Tweet._meta.primary_key
+    <peewee.AutoField at 0x7ffb64b28790>
+
+    >>> Tweet._meta.database
+    <peewee.SqliteDatabase at 0x7ffb64b69b90>
+
+    >>> Tweet._meta.refs
+    {<ForeignKeyField: "tweet"."user">: __main__.User}
+
+    >>> User._meta.backrefs:
+    {<ForeignKeyField: "tweet"."user">: __main__.Tweet}
+
+Metadata Options
+----------------
+
+The following table lists the names of supported ``Meta`` attributes. While
+most of these settings are inheritable, some are table-specific and will not be
+inherited by subclasses.
+
+===================== =================================================================== ================
+Option                Meaning                                                             Inheritable?
+===================== =================================================================== ================
+``database``          database model is bound to                                          yes
+``table_name``        name of the underlying database table                               no
+``table_function``    callable used to dynamically generate table name from class         yes
+``indexes``           list of indexes for the table                                       yes
+``primary_key``       a :py:class:`CompositeKey` object                                   yes
+``constraints``       a list of table constraints                                         yes
+``schema``            the database schema for the table                                   yes
+``only_save_dirty``   when calling ``model.save()``, only save fields that were modified. yes
+``table_alias``       an alias to use for the table in queries                            no
+``depends_on``        a list of :py:class:`Model` classes this class depends on           no
+``options``           a dictionary of options (used by SQLite)                            yes
+``without_rowid``     create table without rowid (SQLite only)                            no
+===================== =================================================================== ================
+
+Here is an example showing how inheritable and non-inheritable attributes work:
+
+.. code-block:: pycon
+
+    >>> db = SqliteDatabase(':memory:')
+    >>> class ModelOne(Model):
+    ...     class Meta:
+    ...         database = db
+    ...         db_table = 'model_one_tbl'
+    ...
+    >>> class ModelTwo(ModelOne):
+    ...     pass
+    ...
+    >>> ModelOne._meta.database is ModelTwo._meta.database
+    True
+    >>> ModelOne._meta.db_table == ModelTwo._meta.db_table
+    False
+
+Meta.primary_key
+^^^^^^^^^^^^^^^^
+
+The ``Metadata.primary_key`` attribute is used to specify either a
+:py:class:`CompositeKey` or to indicate that the model has *no* primary key.
+
+Composite primary keys are keys that consist of more than one column. For
+example, a many-to-many through table might declare a primary key like this:
+
+.. code-block:: python
+
+    class Relationship(BaseModel):
+        from_user = ForeignKeyField(User, backref='relationships')
+        to_user = ForeignKeyField(User, backref='related_to')
+
+        class Meta:
+            primary_key = CompositeKey('from_user', 'to_user')
+
+To indicate that a model does not have a primary key, set the attribute to
+``False``:
+
+.. code-block:: python
+
+    class NoPrimaryKey(BaseModel):
+        data = IntegerField()
+
+        class Meta:
+            primary_key = False

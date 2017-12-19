@@ -4524,7 +4524,8 @@ class DoesNotExist(Exception): pass
 
 class ModelBase(type):
     inheritable = set(['constraints', 'database', 'indexes', 'primary_key',
-                       'options', 'schema', 'table_function'])
+                       'options', 'schema', 'table_function',
+                       'only_save_dirty'])
 
     def __new__(cls, name, bases, attrs):
         if name == MODEL_BASE or bases[0].__name__ == MODEL_BASE:
@@ -4930,11 +4931,11 @@ class Model(with_metaclass(ModelBase, Node)):
     @classmethod
     def bind(cls, database, bind_refs=True, bind_backrefs=True):
         is_different = cls._meta.database is not database
-        cls._meta.database = database
+        cls._meta.set_database(database)
         if bind_refs or bind_backrefs:
             G = cls._meta.model_graph(refs=bind_refs, backrefs=bind_backrefs)
             for _, model, is_backref in G:
-                model._meta.database = database
+                model._meta.set_database(database)
         return is_different
 
     @classmethod
