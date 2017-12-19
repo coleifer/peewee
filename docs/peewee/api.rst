@@ -2223,6 +2223,97 @@ Model
         Add an index to the model's definition.
 
 
+.. py:class:: ModelAlias(model[, alias=None])
+
+    :param Model model: Model class to reference.
+    :param str alias: (optional) name for alias.
+
+    Provide a separate reference to a model in a query.
+
+
+.. py:class:: ModelSelect(model, fields_or_models)
+
+    :param Model model: Model class to select.
+    :param fields_or_models: List of fields or model classes to select.
+
+    Model-specific implementation of SELECT query.
+
+    .. py:method:: switch([ctx=None])
+
+        :param ctx: A :py:class:`Model`, :py:class:`ModelAlias`, subquery, or
+            other object that was joined-on.
+
+        Switch the *join context* - the source which subsequent calls to
+        :py:meth:`~ModelSelect.join` will be joined against.
+
+    .. py:method:: objects([constructor=None])
+
+        :param constructor: Constructor (defaults to returning model instances)
+
+        Return result rows as objects created using the given constructor. The
+        default behavior is to create model instances.
+
+    .. py:method:: join(dest[, join_type='INNER'[, on=None[, src=None[,
+        attr=None]]]])
+
+        :param dest: A :py:class:`Model`, :py:class:`ModelAlias`, subquery,
+            or other object to join to.
+        :param str join_type: Join type, defaults to INNER.
+        :param on: Join predicate or a :py:class:`ForeignKeyField` to join on.
+        :param src: Explicitly specify the source of the join. If not specified
+            then the current *join context* will be used.
+        :param str attr: Attribute to use when projecting columns from the
+            joined model.
+
+        Join with another table-like object.
+
+    .. py:method:: join_from(src, dest[, join_type='INNER'[, on=None[,
+        attr=None]]])
+
+        :param src: Source for join.
+        :param dest: Table to join to.
+
+        Use same parameter order as the non-model-specific
+        :py:meth:`~ModelSelect.join`. Bypasses the *join context* by requiring
+        the join source to be specified.
+
+    .. py:method:: filter(*args, **kwargs)
+
+        :param args: Zero or more :py:class:`DQ` objects.
+        :param kwargs: Django-style keyword-argument filters.
+
+        Use Django-style filters to express a WHERE clause.
+
+
+.. py:function:: prefetch(sq, *subqueries)
+
+    :param sq: Query to use as starting-point.
+    :param subqueries: One or more models or :py:class:`ModelSelect` queries
+        to eagerly fetch.
+
+    Eagerly fetch related objects, allowing efficient querying of multiple
+    tables when a 1-to-many relationship exists.
+
+    For example, it is simple to query a many-to-1 relationship efficiently::
+
+        query = (Tweet
+                 .select(Tweet, User)
+                 .join(User))
+        for tweet in query:
+            # Looking up tweet.user.username does not require a query since
+            # the related user's columns were selected.
+            print(tweet.user.username, '->', tweet.content)
+
+    To efficiently do the inverse, query users and their tweets, you can use
+    prefetch::
+
+        query = User.select()
+        for user in prefetch(query, Tweet):
+            print(user.username)
+            for tweet in user.tweets:  # Does not require additional query.
+                print('    ', tweet.content)
+
+
 Query-builder Internals
 -----------------------
 

@@ -5154,23 +5154,10 @@ class ModelSelect(BaseModelSelect, Select):
         super(ModelSelect, self).__init__([model], fields)
 
     def switch(self, ctx=None):
-        """
-        :param ctx: A :py:class:`Model`, :py:class:`ModelAlias`, subquery, or
-            other object that was joined-on.
-
-        Switch the *join context* - the source which subsequent calls to
-        :py:meth:`~ModelSelect.join` will be joined against.
-        """
         self._join_ctx = ctx
         return self
 
     def objects(self, constructor=None):
-        """
-        :param constructor: Constructor (defaults to returning model instances)
-
-        Return result rows as objects created using the given constructor. The
-        default behavior is to create model instances.
-        """
         self._row_type = ROW.CONSTRUCTOR
         self._constructor = self.model if constructor is None else constructor
         return self
@@ -5244,18 +5231,6 @@ class ModelSelect(BaseModelSelect, Select):
 
     @Node.copy
     def join(self, dest, join_type='INNER', on=None, src=None, attr=None):
-        """
-        :param dest: A :py:class:`Model`, :py:class:`ModelAlias`, subquery,
-            or other object to join to.
-        :param str join_type: Join type, defaults to INNER.
-        :param on: Join predicate or a :py:class:`ForeignKeyField` to join on.
-        :param src: Explicitly specify the source of the join. If not specified
-            then the current *join context* will be used.
-        :param str attr: Attribute to use when projecting columns from the
-            joined model.
-
-        Join with another table-like object.
-        """
         src = self._join_ctx if src is None else src
 
         on, attr, constructor = self._normalize_join(src, dest, on, attr)
@@ -5267,14 +5242,6 @@ class ModelSelect(BaseModelSelect, Select):
 
     @Node.copy
     def join_from(self, src, dest, join_type='INNER', on=None, attr=None):
-        """
-        :param src: Source for join.
-        :param dest: Table to join to.
-
-        Use same parameter order as the non-model-specific
-        :py:meth:`~ModelSelect.join`. Bypasses the *join context* by requiring
-        the join source to be specified.
-        """
         return self.join(dest, join_type, on, src, attr)
 
     def _generate_on_clause(self, src, dest, to_field=None, on=None):
@@ -5358,12 +5325,6 @@ class ModelSelect(BaseModelSelect, Select):
         return accum, joins
 
     def filter(self, *args, **kwargs):
-        """
-        :param args: Zero or more :py:class:`DQ` objects.
-        :param kwargs: Django-style keyword-argument filters.
-
-        Use Django-style filters to express a WHERE clause.
-        """
         # normalize args and kwargs into a new expression
         dq_node = ColumnBase()
         if args:
@@ -5804,33 +5765,6 @@ def prefetch_add_subquery(sq, subqueries):
 
 
 def prefetch(sq, *subqueries):
-    """
-    :param sq: Query to use as starting-point.
-    :param subqueries: One or more models or :py:class:`ModelSelect` queries
-        to eagerly fetch.
-
-    Eagerly fetch related objects, allowing efficient querying of multiple
-    tables when a 1-to-many relationship exists.
-
-    For example, it is simple to query a many-to-1 relationship efficiently::
-
-        query = (Tweet
-                 .select(Tweet, User)
-                 .join(User))
-        for tweet in query:
-            # Looking up tweet.user.username does not require a query since
-            # the related user's columns were selected.
-            print(tweet.user.username, '->', tweet.content)
-
-    To efficiently do the inverse, query users and their tweets, you can use
-    prefetch::
-
-        query = User.select()
-        for user in prefetch(query, Tweet):
-            print(user.username)
-            for tweet in user.tweets:  # Does not require additional query.
-                print('    ', tweet.content)
-    """
     if not subqueries:
         return sq
 
