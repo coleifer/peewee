@@ -10,8 +10,7 @@ This document specifies Peewee's APIs.
 Database
 --------
 
-.. py:class:: Database(database[, thread_safe=True[, autorollback=False[,
-    field_types=None[, operations=None[, **kwargs]]]]])
+.. py:class:: Database(database[, thread_safe=True[, autorollback=False[, field_types=None[, operations=None[, **kwargs]]]]])
 
     :param str database: Database name or filename for SQLite.
     :param bool thread_safe: Whether to store connection state in a
@@ -582,8 +581,7 @@ Database
         strategy (defaults to DEFERRED).
 
 
-.. py:class:: PostgresqlDatabase(database[, register_unicode=True[,
-    encoding=None]])
+.. py:class:: PostgresqlDatabase(database[, register_unicode=True[, encoding=None]])
 
     Postgresql database implementation.
 
@@ -687,8 +685,7 @@ Query-builder
         Perform a CROSS join on ``dest``.
 
 
-.. py:class:: Table(name[, columns=None[, primary_key=None[, schema=None[,
-    alias=None]]]])
+.. py:class:: Table(name[, columns=None[, primary_key=None[, schema=None[, alias=None]]]])
 
     Represents a table in the database (or a table-like object such as a view).
 
@@ -1035,8 +1032,7 @@ Query-builder
                  .group_by(User.username)
                  .order_by(fn.COUNT(Tweet.id).desc()))
 
-    .. py:method:: over([partition_by=None[, order_by=None[, start=None[,
-        end=None[, window=None]]]]])
+    .. py:method:: over([partition_by=None[, order_by=None[, start=None[, end=None[, window=None]]]]])
 
         :param list partition_by: List of columns to partition by.
         :param list order_by: List of columns / expressions to order window by.
@@ -1084,8 +1080,7 @@ Query-builder
         :param bool coerce: Whether to coerce function-call result.
 
 
-.. py:class:: Window([partition_by=None[, order_by=None[, start=None[,
-    end=None[, alias=None]]]]])
+.. py:class:: Window([partition_by=None[, order_by=None[, start=None[, end=None[, alias=None]]]]])
 
     :param list partition_by: List of columns to partition by.
     :param list order_by: List of columns to order by.
@@ -1201,8 +1196,7 @@ Query-builder
     Represent a SQL row tuple.
 
 
-.. py:class:: OnConflict([action=None[, update=None[, preserve=None[,
-    where=None[, conflict_target=None]]]]])
+.. py:class:: OnConflict([action=None[, update=None[, preserve=None[, where=None[, conflict_target=None]]]]])
 
     :param str action: Action to take when resolving conflict.
     :param update: A dictionary mapping column to new value.
@@ -1333,8 +1327,7 @@ Query-builder
     Create a query by directly specifying the SQL to execute.
 
 
-.. py:class:: Query([where=None[, order_by=None[, limit=None[, offset=None[,
-    **kwargs]]]]])
+.. py:class:: Query([where=None[, order_by=None[, limit=None[, offset=None[, **kwargs]]]]])
 
     :param where: Representation of WHERE clause.
     :param tuple order_by: Columns or values to order by.
@@ -1489,9 +1482,7 @@ Query-builder
     Class representing a compound SELECT query.
 
 
-.. py:class:: Select([from_list=None[, columns=None[, group_by=None[,
-    having=None[, distinct=None[, windows=None[, for_update=None[,
-    **kwargs]]]]]]]])
+.. py:class:: Select([from_list=None[, columns=None[, group_by=None[, having=None[, distinct=None[, windows=None[, for_update=None[, **kwargs]]]]]]]])
 
     :param list from_list: List of sources for FROM clause.
     :param list columns: Columns or values to select.
@@ -1606,8 +1597,7 @@ Query-builder
         query.execute(database)
 
 
-.. py:class:: Insert(table[, insert=None[, columns=None[, on_conflict=None[,
-    **kwargs]]]])
+.. py:class:: Insert(table[, insert=None[, columns=None[, on_conflict=None[, **kwargs]]]])
 
     :param Table table: Table to INSERT data into.
     :param insert: Either a dict, a list, or a query.
@@ -1639,8 +1629,7 @@ Query-builder
     Class representing a DELETE query.
 
 
-.. py:class:: Index(name, table, expressions[, unique=False[, safe=False[,
-    where=None[, using=None]]]])
+.. py:class:: Index(name, table, expressions[, unique=False[, safe=False[, where=None[, using=None]]]])
 
     :param str name: Index name.
     :param Table table: Table to create index on.
@@ -1668,8 +1657,7 @@ Query-builder
         :param str _using: Specify index algorithm for USING clause.
 
 
-.. py:class:: ModelIndex(model, fields[, unique=False[, safe=True[,
-    where=None[, using=None[, name=None]]]]])
+.. py:class:: ModelIndex(model, fields[, unique=False[, safe=True[, where=None[, using=None[, name=None]]]]])
 
     :param Model model: Model class to create index on.
     :param list fields: Fields to index.
@@ -1683,10 +1671,7 @@ Query-builder
 Fields
 ------
 
-.. py:class:: Field([null=False[, index=False[, unique=False[,
-    column_name=None[, default=None[, primary_key=False[, constraints=None[,
-    sequence=None[, collation=None[, unindexed=False[, choices=None[,
-    help_text=None[, verbose_name=None]]]]]]]]]]]]])
+.. py:class:: Field([null=False[, index=False[, unique=False[, column_name=None[, default=None[, primary_key=False[, constraints=None[, sequence=None[, collation=None[, unindexed=False[, choices=None[, help_text=None[, verbose_name=None]]]]]]]]]]]]])
 
     :param bool null: Field allows NULLs.
     :param bool index: Create an index on field.
@@ -1744,8 +1729,7 @@ Fields
 
     Field class for storing double-precision floating-point numbers.
 
-.. py:class:: DecimalField([max_digits=10[, decimal_places=5[,
-    auto_round=False[, rounding=None[, **kwargs]]]]])
+.. py:class:: DecimalField([max_digits=10[, decimal_places=5[, auto_round=False[, rounding=None[, **kwargs]]]]])
 
    :param int max_digits: Maximum digits to store.
    :param int decimal_places: Maximum precision.
@@ -1868,8 +1852,7 @@ Fields
 
     Field class that does not specify a data-type (SQLite-only).
 
-.. py:class:: ForeignKeyField(model[, field=None[, backref=None[,
-    on_delete=None[, on_update=None[, object_id_name=None[, **kwargs]]]]]])
+.. py:class:: ForeignKeyField(model[, field=None[, backref=None[, on_delete=None[, on_update=None[, object_id_name=None[, **kwargs]]]]]])
 
     :param Model model: Model to reference.
     :param Field field: Field to reference on ``model`` (default is primary
@@ -1978,10 +1961,7 @@ Schema Manager
 Model
 -----
 
-.. py:class:: Metadata(model[, database=None[, table_name=None[, indexes=None[,
-    primary_key=None[, constraints=None[, schema=None[, only_save_dirty=False[,
-    table_alias=None[, depends_on=None[, options=None[, without_rowid=False[,
-    **kwargs]]]]]]]]]]]])
+.. py:class:: Metadata(model[, database=None[, table_name=None[, indexes=None[, primary_key=None[, constraints=None[, schema=None[, only_save_dirty=False[, table_alias=None[, depends_on=None[, options=None[, without_rowid=False[, **kwargs]]]]]]]]]]]])
 
     :param Model model: Model class.
     :param Database database: database model is bound to.
@@ -2008,8 +1988,7 @@ Model
 
         Return a reference to the underlying :py:class:`Table` object.
 
-    .. py:method:: model_graph([refs=True[, backrefs=True[,
-        depth_first=True]]])
+    .. py:method:: model_graph([refs=True[, backrefs=True[, depth_first=True]]])
 
         :param bool refs: Follow foreign-key references.
         :param bool backrefs: Follow foreign-key back-references.
@@ -2195,8 +2174,7 @@ Model
 
         Bind the model (and specified relations) to the given database.
 
-    .. py:classmethod:: bind_ctx(database[, bind_refs=True[,
-        bind_backrefs=True]])
+    .. py:classmethod:: bind_ctx(database[, bind_refs=True[, bind_backrefs=True]])
 
         Like :py:meth:`~Model.bind`, but returns a context manager that only
         binds the models for the duration of the wrapped block.
@@ -2253,8 +2231,7 @@ Model
         Return result rows as objects created using the given constructor. The
         default behavior is to create model instances.
 
-    .. py:method:: join(dest[, join_type='INNER'[, on=None[, src=None[,
-        attr=None]]]])
+    .. py:method:: join(dest[, join_type='INNER'[, on=None[, src=None[, attr=None]]]])
 
         :param dest: A :py:class:`Model`, :py:class:`ModelAlias`, subquery,
             or other object to join to.
@@ -2267,8 +2244,7 @@ Model
 
         Join with another table-like object.
 
-    .. py:method:: join_from(src, dest[, join_type='INNER'[, on=None[,
-        attr=None]]])
+    .. py:method:: join_from(src, dest[, join_type='INNER'[, on=None[, attr=None]]])
 
         :param src: Source for join.
         :param dest: Table to join to.

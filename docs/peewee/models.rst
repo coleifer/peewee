@@ -89,3 +89,39 @@ Breaking down the above code, let's look at each part in detail.
     use :ref:`pwiz` to automatically generate model definitions.
 
 
+Creating tables and indexes
+---------------------------
+
+To create the table, indexes and constraints for a given model, you can use the
+:py:meth:`~Model.create_table` classmethod:
+
+.. code-block:: python
+
+    User.create_table()
+
+When models have foreign-key dependencies, it is important to ensure that
+models are created in the proper order. To create table(s) and automatically
+resolve the dependency order, you can use :py:class:`Database.create_tables`:
+
+.. code-block:: python
+
+    db.create_tables([User, Tweet])
+
+To drop a table, you can use the :py:meth:`~Model.drop_table` classmethod:
+
+.. code-block:: python
+
+    User.drop_table()
+
+Similarly, to drop multiple tables in the proper order, you can use
+:py:class:`Database.drop_tables`:
+
+.. code-block:: python
+
+    db.drop_tables([User, Tweet])
+
+SchemaManager
+^^^^^^^^^^^^^
+
+The :py:class:`Model` embeds a :py:class:`SchemaManager` instance, accessible
+at ``ModelClass._schema``, which provides
