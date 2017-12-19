@@ -48,6 +48,7 @@ Contents:
    peewee/quickstart
    peewee/example
    peewee/contributing
+   peewee/query_examples
    peewee/transactions
    peewee/changes
    peewee/api
