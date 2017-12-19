@@ -121,6 +121,10 @@ Retrieve names of facilities and cost to members.
 
     query = Facility.select(Facility.name, Facility.membercost)
 
+    # To iterate:
+    for facility in query:
+        print(facility.name)
+
 Control which rows are retrieved
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -170,7 +174,7 @@ name?
 
     query = Facility.select().where(Facility.name.contains('tennis'))
 
-    # OR:
+    # OR use the exponent operator. Note: you must include wildcards here:
     query = Facility.select().where(Facility.name ** '%tennis%')
 
 
