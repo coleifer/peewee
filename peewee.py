@@ -3867,6 +3867,8 @@ class ForeignKeyField(Field):
         elif self.rel_field is None:
             self.rel_field = self.rel_model._meta.primary_key
 
+        if callable(self.backref):
+            self.backref = self.backref(self)
         if not self.backref:
             self.backref = '%s_set' % model._meta.name
 
