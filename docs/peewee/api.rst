@@ -2717,6 +2717,22 @@ Metadata Types
 
         The name of the table containing this foreign key.
 
+Exception Hierarchy
+-------------------
+
+::
+
+  PeeweeException
+   +-- DatabaseError
+        +-- DataError
+        +-- IntegrityError
+        +-- InternalError
+        +-- NotSupportedError
+        +-- OperationalError
+        +-- ProgrammingError
+   +-- ImproperlyConfigured
+   +-- InterfaceError
+
 Misc
 ----
 
