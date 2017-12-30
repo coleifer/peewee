@@ -32,7 +32,7 @@ Here is an example showing how inheritable and non-inheritable attributes work:
     >>> class ModelOne(Model):
     ...     class Meta:
     ...         database = db
-    ...         db_table = 'model_one_tbl'
+    ...         table_name  = 'model_one_tbl'
     ...
     >>> class ModelTwo(ModelOne):
     ...     pass
