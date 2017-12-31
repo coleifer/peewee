@@ -2,6 +2,7 @@ import sys
 
 from peewee import *
 from peewee import Node
+from playhouse.fields import ManyToManyFieldDescriptor
 
 if sys.version_info[0] == 3:
     from collections import Callable
@@ -68,7 +69,8 @@ def _clone_set(s):
 
 def model_to_dict(model, recurse=True, backrefs=False, only=None,
                   exclude=None, seen=None, extra_attrs=None,
-                  fields_from_query=None, max_depth=None):
+                  fields_from_query=None, max_depth=None,
+                  dereference_many_to_many_fields=False):
     """
     Convert a model instance (and any related objects) to a dictionary.
 
@@ -83,7 +85,35 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
     :param SelectQuery fields_from_query: Query that was source of model. Take
         fields explicitly selected by the query and serialize them.
     :param int max_depth: Maximum depth to recurse, value <= 0 means no max.
+    :param bool dereference_many_to_many_fields: Whether ManyToManyFields
+        should be handled through the junction table (default, requires
+        backrefs=True) or handled as fields of the model itself (the junction
+        table is hidden, fields included when recurse=True, backrefs control
+        whether to mirror the many-to-many field or not)
     """
+
+    def recursive(sub_model, pass_seen=False):
+        """
+        Recursively calls model_to_dict with the same parameters as the current
+        call. Helps avoiding mistakes when new parameters are included.
+        """
+        recursive_seen = seen if pass_seen else None
+        return model_to_dict(
+            sub_model,
+            recurse=recurse,
+            backrefs=backrefs,
+            only=only,
+            exclude=exclude,
+            seen=recursive_seen,
+            max_depth=max_depth - 1,
+            dereference_many_to_many_fields=dereference_many_to_many_fields)
+
+    def recursive_list(iterable):
+        """
+        Applies recursive() for each item of the given iterable, returning a list
+        """
+        return list(recursive(m) for m in iterable)
+
     max_depth = -1 if max_depth is None else max_depth
     if max_depth == 0:
         recurse = False
@@ -113,14 +143,7 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
             if field_data:
                 seen.add(field)
                 rel_obj = getattr(model, field.name)
-                field_data = model_to_dict(
-                    rel_obj,
-                    recurse=recurse,
-                    backrefs=backrefs,
-                    only=only,
-                    exclude=exclude,
-                    seen=seen,
-                    max_depth=max_depth - 1)
+                field_data = recursive(rel_obj, pass_seen=True)
             else:
                 field_data = None
 
@@ -134,6 +157,24 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
             else:
                 data[attr_name] = attr
 
+    if recurse and dereference_many_to_many_fields:
+        for field_name, field_descriptor in vars(model_class).items():
+            if not isinstance(field_descriptor, ManyToManyFieldDescriptor):
+                continue
+
+            if not backrefs:
+                exclude.add(field_descriptor.src_fk)
+
+            if field_descriptor.dest_fk not in exclude:
+                exclude.add(field_descriptor.dest_fk)
+                related_query = getattr(model, field_name)
+                data[field_name] = recursive_list(related_query)
+
+            # The source foreign key MUST be excluded with or without backrefs
+            # to prevent the implicit backref from the junction table showing
+            # up the dict.
+            exclude.add(field_descriptor.src_fk)
+
     if backrefs and recurse:
         for related_name, foreign_key in model._meta.reverse_rel.items():
             descriptor = getattr(model_class, related_name)
@@ -142,23 +183,12 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
             if only and (descriptor not in only) and (foreign_key not in only):
                 continue
 
-            accum = []
             exclude.add(foreign_key)
             related_query = getattr(
                 model,
                 related_name + '_prefetch',
                 getattr(model, related_name))
-
-            for rel_obj in related_query:
-                accum.append(model_to_dict(
-                    rel_obj,
-                    recurse=recurse,
-                    backrefs=backrefs,
-                    only=only,
-                    exclude=exclude,
-                    max_depth=max_depth - 1))
-
-            data[related_name] = accum
+            data[related_name] = recursive_list(related_query)
 
     return data
 
