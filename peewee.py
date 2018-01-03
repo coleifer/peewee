@@ -57,7 +57,9 @@ __version__ = '3.0.0'
 __all__ = [
     'AutoField',
     'BareField',
+    'BigBitField',
     'BigIntegerField',
+    'BitField',
     'BlobField',
     'BooleanField',
     'Case',
@@ -143,6 +145,8 @@ PY26 = sys.version_info[:2] == (2, 6)
 if sys.version_info[0] == 2:
     text_type = unicode
     bytes_type = str
+    buffer_type = buffer
+    b_lit = lambda x: x
     exec('def reraise(tp, value, tb=None): raise tp, value, tb')
     def print_(s):
         sys.stdout.write(s)
@@ -154,6 +158,8 @@ else:
     callable = lambda c: isinstance(c, Callable)
     text_type = str
     bytes_type = bytes
+    buffer_type = memoryview
+    b_lit = lambda x: x.encode('latin-1') if not isinstance(x, bytes) else x
     basestring = str
     long = int
     print_ = getattr(builtins, 'print')
@@ -250,7 +256,8 @@ OP = attrdict(
     ILIKE='ILIKE',
     BETWEEN='BETWEEN',
     REGEXP='REGEXP',
-    CONCAT='||')
+    CONCAT='||',
+    BITWISE_NEGATION='~')
 
 # To support "django-style" double-underscore filters, create a mapping between
 # operation name and operation code, e.g. "__eq" == OP.EQ.
@@ -1040,6 +1047,32 @@ class Negated(WrappedNode):
 
     def __sql__(self, ctx):
         return ctx.literal('NOT ').sql(self.node)
+
+
+class BitwiseMixin(object):
+    def __and__(self, other):
+        return self.bin_and(other)
+
+    def __or__(self, other):
+        return self.bin_or(other)
+
+    def __sub__(self, other):
+        return self.bin_and(other.bin_negated())
+
+    def __invert__(self):
+        return BitwiseNegated(self)
+
+
+class BitwiseNegated(BitwiseMixin, WrappedNode):
+    def __invert__(self):
+        return self.node
+
+    def __sql__(self, ctx):
+        if ctx.state.operations:
+            op_sql = ctx.state.operations.get(self.op, self.op)
+        else:
+            op_sql = self.op
+        return ctx.literal(op_sql).sql(self.node)
 
 
 class Value(ColumnBase):
@@ -3593,7 +3626,10 @@ class BlobField(Field):
     field_type = 'BLOB'
 
     def bind(self, model, name, set_attribute=True):
-        self._constructor = model._meta.database.get_binary_type()
+        if model._meta.database:
+            self._constructor = model._meta.database.get_binary_type()
+        else:
+            self._constructor = bytearray
         return super(BlobField, self).bind(model, name, set_attribute)
 
     def db_value(self, value):
@@ -3602,6 +3638,105 @@ class BlobField(Field):
         if isinstance(value, bytes_type):
             return self._constructor(value)
         return value
+
+
+class BitField(BitwiseMixin, BigIntegerField):
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault('default', 0)
+        super(BitField, self).__init__(*args, **kwargs)
+
+    def flag(self, value):
+        class FlagDescriptor(object):
+            def __init__(self, field, value):
+                self._field = field
+                self._value = value
+            def __get__(self, instance, instance_type=None):
+                if instance is None:
+                    return self._field.bin_and(self._value) != 0
+                value = getattr(instance, self._field.name) or 0
+                return (value & self._value) != 0
+            def __set__(self, instance, is_set):
+                if is_set not in (True, False):
+                    raise ValueError('Value must be either True or False')
+                value = getattr(instance, self._field.name) or 0
+                if is_set:
+                    value |= self._value
+                else:
+                    value &= ~self._value
+                setattr(instance, self._field.name, value)
+        return FlagDescriptor(self, value)
+
+
+class BigBitFieldData(object):
+    def __init__(self, instance, name):
+        self.instance = instance
+        self.name = name
+        value = self.instance.__data__.get(self.name)
+        if not value:
+            value = bytearray()
+        elif not isinstance(value, bytearray):
+            value = bytearray(value)
+        self._buffer = self.instance.__data__[self.name] = value
+
+    def _ensure_length(self, idx):
+        byte_num, byte_offset = divmod(idx, 8)
+        cur_size = len(self._buffer)
+        if cur_size <= byte_num:
+            self._buffer.extend(b_lit('\x00') * ((byte_num + 1) - cur_size))
+        return byte_num, byte_offset
+
+    def set_bit(self, idx):
+        byte_num, byte_offset = self._ensure_length(idx)
+        self._buffer[byte_num] |= (1 << byte_offset)
+
+    def clear_bit(self, idx):
+        byte_num, byte_offset = self._ensure_length(idx)
+        self._buffer[byte_num] &= ~(1 << byte_offset)
+
+    def toggle_bit(self, idx):
+        byte_num, byte_offset = self._ensure_length(idx)
+        self._buffer[byte_num] ^= (1 << byte_offset)
+        return bool(self[byte_num] & (1 << byte_offset))
+
+    def is_set(self, idx):
+        byte_num, byte_offset = self._ensure_length(idx)
+        return bool(self._buffer[byte_num] & (1 << byte_offset))
+
+    def __repr__(self):
+        return repr(self._buffer)
+
+
+class BigBitFieldAccessor(FieldAccessor):
+    def __get__(self, instance, instance_type=None):
+        if instance is None:
+            return self.field
+        return BigBitFieldData(instance, self.name)
+    def __set__(self, instance, value):
+        if isinstance(value, memoryview):
+            value = value.tobytes()
+        elif isinstance(value, buffer_type):
+            value = bytes(value)
+        elif isinstance(value, bytearray):
+            value = bytes_type(value)
+        elif isinstance(value, BigBitFieldData):
+            value = bytes_type(value._buffer)
+        elif isinstance(value, text_type):
+            value = value.encode('utf-8')
+        elif not isinstance(value, bytes_type):
+            raise ValueError('Value must be either a bytes, memoryview or '
+                             'BigBitFieldData instance.')
+        super(BigBitFieldAccessor, self).__set__(instance, value)
+
+
+class BigBitField(BlobField):
+    accessor_class = BigBitFieldAccessor
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault('default', bytes_type)
+        super(BigBitField, self).__init__(*args, **kwargs)
+
+    def db_value(self, value):
+        return bytes_type(value) if value is not None else value
 
 
 class UUIDField(Field):

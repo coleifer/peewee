@@ -2,6 +2,8 @@ import datetime
 from decimal import Decimal as D
 from decimal import ROUND_UP
 
+from peewee import b_lit
+from peewee import bytes_type
 from peewee import *
 
 from .base import db
@@ -38,6 +40,19 @@ class TestTextField(TextField):
 
 class PhoneBook(TestModel):
     name = TestTextField()
+
+
+class Bits(TestModel):
+    F_STICKY = 1
+    F_FAVORITE = 2
+    F_MINIMIZED = 4
+
+    flags = BitField()
+    is_sticky = flags.flag(F_STICKY)
+    is_favorite = flags.flag(F_FAVORITE)
+    is_minimized = flags.flag(F_MINIMIZED)
+
+    data = BigBitField()
 
 
 class TestDefaultValues(ModelTestCase):
@@ -284,3 +299,83 @@ class TestIPField(ModelTestCase):
             i_db = IPModel.get(ip=ip)
             self.assertEqual(i_db.ip, ip)
             self.assertEqual(i_db.ip_null, None)
+
+
+class TestBitFields(ModelTestCase):
+    requires = [Bits]
+
+    def test_bit_field_instance_flags(self):
+        b = Bits()
+        self.assertEqual(b.flags, 0)
+        self.assertFalse(b.is_sticky)
+        self.assertFalse(b.is_favorite)
+        self.assertFalse(b.is_minimized)
+
+        b.is_sticky = True
+        b.is_minimized = True
+        self.assertEqual(b.flags, 5)  # 1 | 4
+
+        self.assertTrue(b.is_sticky)
+        self.assertFalse(b.is_favorite)
+        self.assertTrue(b.is_minimized)
+
+        b.flags = 3
+        self.assertTrue(b.is_sticky)
+        self.assertTrue(b.is_favorite)
+        self.assertFalse(b.is_minimized)
+
+    def test_bit_field(self):
+        b1 = Bits.create(flags=1)
+        b2 = Bits.create(flags=2)
+        b3 = Bits.create(flags=3)
+
+        query = Bits.select().where(Bits.is_sticky).order_by(Bits.id)
+        self.assertEqual([x.id for x in query], [b1.id, b3.id])
+
+        query = Bits.select().where(Bits.is_favorite).order_by(Bits.id)
+        self.assertEqual([x.id for x in query], [b2.id, b3.id])
+
+        # "&" operator does bitwise and for BitField.
+        query = Bits.select().where((Bits.flags & 1) == 1).order_by(Bits.id)
+        self.assertEqual([x.id for x in query], [b1.id, b3.id])
+
+    def test_bigbit_field_instance_data(self):
+        b = Bits()
+        values_to_set = (1, 11, 63, 31, 55, 48, 100, 99)
+        for value in values_to_set:
+            b.data.set_bit(value)
+
+        for i in range(128):
+            self.assertEqual(b.data.is_set(i), i in values_to_set)
+
+        for i in range(128):
+            b.data.clear_bit(i)
+
+        buf = bytes_type(b.data._buffer)
+        self.assertEqual(len(buf), 16)
+
+        self.assertEqual(bytes_type(buf), b_lit('\x00\x00\x00\x00'
+                                                '\x00\x00\x00\x00'
+                                                '\x00\x00\x00\x00'
+                                                '\x00\x00\x00\x00'))
+
+    def test_bigbit_zero_idx(self):
+        b = Bits()
+        b.data.set_bit(0)
+        self.assertTrue(b.data.is_set(0))
+        b.data.clear_bit(0)
+        self.assertFalse(b.data.is_set(0))
+
+    def test_bigbit_field(self):
+        b = Bits.create()
+        b.data.set_bit(1)
+        b.data.set_bit(3)
+        b.data.set_bit(5)
+        b.save()
+
+        b_db = Bits.get(Bits.id == b.id)
+        for x in range(7):
+            if x % 2 == 1:
+                self.assertTrue(b_db.data.is_set(x))
+            else:
+                self.assertFalse(b_db.data.is_set(x))
