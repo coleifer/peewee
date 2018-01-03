@@ -5679,7 +5679,7 @@ class BaseModelCursorWrapper(DictCursorWrapper):
                 if isinstance(first, Field):
                     converters[idx] = first.python_value
                 elif isinstance(first, Entity):
-                    path = first.path[-1]
+                    path = first._path[-1]
                     field = combined.get(path)
                     if field is not None:
                         converters[idx] = field.python_value
