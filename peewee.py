@@ -5827,7 +5827,8 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
 
         # When instantiating models from a cursor, we clear the dirty fields.
         for instance in object_list:
-            instance._dirty.clear()
+            if isinstance(instance, Model):
+                instance._dirty.clear()
 
         return objects[self.model]
 
