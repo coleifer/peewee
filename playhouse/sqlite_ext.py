@@ -580,9 +580,10 @@ class FTS5Model(BaseFTSModel):
             rank = SQL('rank')
         elif isinstance(weights, dict):
             weight_args = []
-            for field in cls._meta.declared_fields:
-                weight_args.append(
-                    weights.get(field, weights.get(field.name, 1.0)))
+            for field in cls._meta.sorted_fields:
+                if isinstance(field, SearchField) and not field.unindexed:
+                    weight_args.append(
+                        weights.get(field, weights.get(field.name, 1.0)))
             rank = fn.bm25(cls._meta.entity, *weight_args)
         else:
             rank = fn.bm25(cls._meta.entity, *weights)
