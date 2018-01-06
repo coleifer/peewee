@@ -937,7 +937,7 @@ class Field(Node):
                  default=None, choices=None, primary_key=False, sequence=None,
                  constraints=None, schema=None, undeclared=False):
         self.null = null
-        self.index = index
+        self.index = index if unique is False else True
         self.unique = unique
         self.verbose_name = verbose_name
         self.help_text = help_text
