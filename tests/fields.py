@@ -238,6 +238,20 @@ class TestForeignKeyField(ModelTestCase):
 
         self.assertRaises(AttributeError, lambda: Tweet.user.foo)
 
+    def test_disable_backref(self):
+        class Person(TestModel):
+            pass
+        class Pet(TestModel):
+            owner = ForeignKeyField(Person, backref='!')
+
+        self.assertEqual(Pet.owner.backref, '!')
+
+        # No attribute/accessor is added to the related model.
+        self.assertRaises(AttributeError, lambda: Person.pet_set)
+
+        # We still preserve the metadata about the relationship.
+        self.assertTrue(Pet.owner in Person._meta.backrefs)
+
 
 class Composite(TestModel):
     first = CharField()

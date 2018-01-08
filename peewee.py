@@ -4010,7 +4010,8 @@ class ForeignKeyField(Field):
         super(ForeignKeyField, self).bind(model, name, set_attribute)
         if set_attribute:
             setattr(model, self.object_id_name, ObjectIdAccessor(self))
-            setattr(self.rel_model, self.backref, BackrefAccessor(self))
+            if self.backref not in '!+':
+                setattr(self.rel_model, self.backref, BackrefAccessor(self))
 
     def foreign_key_constraint(self):
         return NodeList((
