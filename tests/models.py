@@ -538,10 +538,11 @@ class TestDefaultValues(ModelTestCase):
         self.assertSQL(query, 'INSERT INTO "sample" ("counter") VALUES (?)',
                        [0])
 
-        query = Sample.insert_many([{'counter': 0}, {'counter': 1}])
+        query = Sample.insert_many([{'counter': '0'}, {'counter': 1},
+                                    {'counter': '2'}])
         self.assertSQL(query,
-                       'INSERT INTO "sample" ("counter") VALUES (?), (?)',
-                       [0, 1])
+                       'INSERT INTO "sample" ("counter") VALUES (?), (?), (?)',
+                       [0, 1, 2])
 
     def test_default_present_on_create(self):
         s = Sample.create(counter=3)
