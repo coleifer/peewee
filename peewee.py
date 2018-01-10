@@ -1991,24 +1991,21 @@ class Insert(_WriteQuery):
 
     def _simple_insert(self, ctx):
         if not self._insert:
-            raise self.DefaultValuesException
-        columns = []
-        values = []
-        for k, v in sorted(self._insert.items(), key=ctx.column_sort_key):
-            columns.append(k)
-            if not isinstance(v, Node):
-                converter = k.db_value if isinstance(k, Field) else None
-                v = Value(v, converter=converter, unpack=False)
-            values.append(v)
-        return (ctx
-                .sql(EnclosedNodeList(columns))
-                .literal(' VALUES ')
-                .sql(EnclosedNodeList(values)))
+            raise self.DefaultValuesException('Error: no data to insert.')
+        return self._generate_insert((self._insert,), ctx)
 
-    def _multi_insert(self, ctx):
-        rows_iter = iter(self._insert)
+    def get_default_data(self):
+        return {}
+
+    def _generate_insert(self, insert, ctx):
+        rows_iter = iter(insert)
         columns = self._columns
+
+        # Load and organize column defaults (if provided).
+        defaults = self.get_default_data()
+
         if not columns:
+            uses_strings = False
             try:
                 row = next(rows_iter)
             except StopIteration:
@@ -2019,15 +2016,26 @@ class Insert(_WriteQuery):
                 for key in row:
                     if isinstance(key, basestring):
                         column = getattr(self.table, key)
+                        uses_strings = True
                     else:
                         column = key
                     accum.append(column)
                     value_lookups[column] = key
 
+            column_set = set(accum)
+            for column in (set(defaults) - column_set):
+                accum.append(column)
+                value_lookups[column] = column.name if uses_strings else column
+
             columns = sorted(accum, key=lambda obj: obj.get_sort_key(ctx))
             rows_iter = itertools.chain(iter((row,)), rows_iter)
         else:
+            columns = list(columns)
             value_lookups = dict((column, column) for column in columns)
+            for col in sorted(defaults, key=lambda obj: obj.get_sort_key(ctx)):
+                if col not in value_lookups:
+                    columns.append(col)
+                    value_lookups[col] = col
 
         ctx.sql(EnclosedNodeList(columns)).literal(' VALUES ')
         columns_converters = [
@@ -2037,8 +2045,21 @@ class Insert(_WriteQuery):
         all_values = []
         for row in rows_iter:
             values = []
-            for column, converter in columns_converters:
-                val = row[value_lookups[column]]
+            is_dict = isinstance(row, dict)
+            for i, (column, converter) in enumerate(columns_converters):
+                try:
+                    if is_dict:
+                        val = row[value_lookups[column]]
+                    else:
+                        val = row[i]
+                except (KeyError, IndexError):
+                    if column in defaults:
+                        val = defaults[column]
+                        if callable(val):
+                            val = val()
+                    else:
+                        raise ValueError('Missing value for "%s".' % column)
+
                 if not isinstance(val, Node):
                     val = Value(val, converter=converter, unpack=False)
                 values.append(val)
@@ -2082,7 +2103,7 @@ class Insert(_WriteQuery):
                 self._query_type = Insert.QUERY
             else:
                 try:
-                    self._multi_insert(ctx)
+                    self._generate_insert(self._insert, ctx)
                 except self.DefaultValuesException:
                     return
                 self._query_type = Insert.MULTI
@@ -5561,6 +5582,9 @@ class ModelInsert(_ModelWriteQueryHelper, Insert):
             if self.model._meta.database.returning_clause:
                 self._returning = self.model._meta.get_primary_keys()
                 self._row_type = ROW.TUPLE
+
+    def get_default_data(self):
+        return self.model._meta.defaults
 
 
 class ModelDelete(_ModelWriteQueryHelper, Delete):

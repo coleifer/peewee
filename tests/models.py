@@ -535,14 +535,24 @@ class TestDefaultValues(ModelTestCase):
 
     def test_default_absent_on_insert(self):
         query = Sample.insert(counter=0)
-        self.assertSQL(query, 'INSERT INTO "sample" ("counter") VALUES (?)',
-                       [0])
+        self.assertSQL(query, (
+            'INSERT INTO "sample" ("counter", "value") '
+            'VALUES (?, ?)'), [0, 1.0])
 
-        query = Sample.insert_many([{'counter': '0'}, {'counter': 1},
-                                    {'counter': '2'}])
-        self.assertSQL(query,
-                       'INSERT INTO "sample" ("counter") VALUES (?), (?), (?)',
-                       [0, 1, 2])
+        query = Sample.insert_many([
+            {'counter': '0'},
+            {'counter': 1, 'value': 2},
+            {'counter': '2'}])
+        self.assertSQL(query, (
+            'INSERT INTO "sample" ("counter", "value") '
+            'VALUES (?, ?), (?, ?), (?, ?)'), [0, 1.0, 1, 2.0, 2, 1.0])
+
+        query = Sample.insert_many([(0,), (1, 2.)],
+                                   fields=[Sample.counter])
+        self.assertSQL(query, (
+            'INSERT INTO "sample" ("counter", "value") '
+            'VALUES (?, ?), (?, ?)'), [0, 1.0, 1, 2.0])
+
 
     def test_default_present_on_create(self):
         s = Sample.create(counter=3)
