@@ -571,6 +571,7 @@ class Introspector(object):
             column_indexes = database.column_indexes(table)
 
             class Meta:
+                db_table = table
                 indexes = multi_column_indexes
 
             # Fix models with multi-column primary keys.
