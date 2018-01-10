@@ -571,6 +571,7 @@ class Introspector(object):
 
             class Meta:
                 indexes = multi_column_indexes
+                table_name = table
 
             # Fix models with multi-column primary keys.
             composite_key = False

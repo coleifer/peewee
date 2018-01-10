@@ -54,6 +54,15 @@ class TestDataSet(ModelTestCase):
         for i in range(min(n, len(self.names))):
             user.insert(username=self.names[i])
 
+    def test_special_char_table(self):
+        self.database.execute_sql('CREATE TABLE "hello!!world" ("data" TEXT);')
+        self.database.execute_sql('INSERT INTO "hello!!world" VALUES (?)',
+                                  ('test',))
+        ds = DataSet('sqlite:///%s' % self.database.database)
+        table = ds['hello!!world']
+        model = table.model_class
+        self.assertEqual(model._meta.table_name, 'hello!!world')
+
     def test_column_preservation(self):
         ds = DataSet('sqlite:///:memory:')
         books = ds['books']
