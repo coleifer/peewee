@@ -21,7 +21,7 @@ if sys.version_info[0] == 3:
 
 
 class DataSet(object):
-    def __init__(self, url):
+    def __init__(self, url, bare_fields=False):
         self._url = url
         parse_result = urlparse(url)
         self._database_path = parse_result.path[1:]
@@ -33,7 +33,9 @@ class DataSet(object):
         # Introspect the database and generate models.
         self._introspector = Introspector.from_database(self._database)
         self._models = self._introspector.generate_models(
-            skip_invalid=True, literal_column_names=True)
+            skip_invalid=True,
+            literal_column_names=True,
+            bare_fields=bare_fields)
         self._migrator = SchemaMigrator.from_database(self._database)
 
         class BaseModel(Model):

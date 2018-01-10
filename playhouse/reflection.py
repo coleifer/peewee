@@ -544,7 +544,7 @@ class Introspector(object):
             indexes)
 
     def generate_models(self, skip_invalid=False, table_names=None,
-                        literal_column_names=False):
+                        literal_column_names=False, bare_fields=False):
         database = self.introspect(table_names=table_names,
                                    literal_column_names=literal_column_names)
         models = {}
@@ -585,7 +585,9 @@ class Introspector(object):
             attrs = {'Meta': Meta}
             for column_name, column in columns.items():
                 FieldClass = column.field_class
-                if FieldClass is UnknownField:
+                if FieldClass is not ForeignKeyField and bare_fields:
+                    FieldClass = BareField
+                elif FieldClass is UnknownField:
                     FieldClass = BareField
 
                 params = {
