@@ -307,7 +307,8 @@ cdef int pwConnect(sqlite3 *db, void *pAux, int argc, char **argv,
 
     rc = sqlite3_declare_vtab(
         db,
-        'CREATE TABLE x(%s);' % table_func_cls.get_table_columns_declaration())
+        encode('CREATE TABLE x(%s);' %
+               table_func_cls.get_table_columns_declaration()))
     if rc == SQLITE_OK:
         pNew = <peewee_vtab *>sqlite3_malloc(sizeof(pNew[0]))
         memset(<char *>pNew, 0, sizeof(pNew[0]))
@@ -404,6 +405,7 @@ cdef int pwColumn(sqlite3_vtab_cursor *pBase, sqlite3_context *ctx,
     elif isinstance(value, float):
         sqlite3_result_double(ctx, <double>value)
     elif isinstance(value, basestring):
+        value = encode(value)
         sqlite3_result_text(
             ctx,
             <const char *>value,
@@ -451,7 +453,7 @@ cdef int pwFilter(sqlite3_vtab_cursor *pBase, int idxNum,
     if not idxStr or argc == 0 and len(table_func.params):
         return SQLITE_ERROR
     elif idxStr:
-        params = str(idxStr).split(',')
+        params = idxStr.decode('utf-8').split(',')
     else:
         params = []
 
@@ -527,7 +529,7 @@ cdef int pwBestIndex(sqlite3_vtab *pBase, sqlite3_index_info *pIdxInfo) \
             pIdxInfo.estimatedRows = 10 ** (nParams - nArg)
 
         # Store a reference to the columns in the index info structure.
-        joinedCols = ','.join(columns)
+        joinedCols = encode(','.join(columns))
         idxStr = <char *>sqlite3_malloc((len(joinedCols) + 1) * sizeof(char))
         memcpy(idxStr, <char *>joinedCols, len(joinedCols))
         idxStr[len(joinedCols)] = '\x00'
