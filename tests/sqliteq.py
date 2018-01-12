@@ -69,6 +69,11 @@ class BaseTestQueueDatabase(object):
         self.assertRaises(OperationalError, curs.fetchone)
         self.database.stop()
 
+    def test_integrity_error(self):
+        self.database.start()
+        u = User.create(name='u')
+        self.assertRaises(IntegrityError, User.create, name='u')
+
     def test_query_execution(self):
         qr = User.select().execute()
         self.assertEqual(self.database.queue_size(), 0)
