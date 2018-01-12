@@ -388,6 +388,7 @@ cdef int pwNext(sqlite3_vtab_cursor *pBase) with gil:
 cdef int pwColumn(sqlite3_vtab_cursor *pBase, sqlite3_context *ctx,
                   int iCol) with gil:
     cdef:
+        bytes bval
         peewee_cursor *pCur = <peewee_cursor *>pBase
         sqlite3_int64 x = 0
         tuple row_data
@@ -405,16 +406,19 @@ cdef int pwColumn(sqlite3_vtab_cursor *pBase, sqlite3_context *ctx,
     elif isinstance(value, float):
         sqlite3_result_double(ctx, <double>value)
     elif isinstance(value, basestring):
-        value = encode(value)
+        bval = encode(value)
         sqlite3_result_text(
             ctx,
-            <const char *>value,
+            <const char *>bval,
             -1,
             <sqlite3_destructor_type>-1)
     elif isinstance(value, bool):
         sqlite3_result_int(ctx, int(value))
     else:
-        sqlite3_result_error(ctx, 'Unsupported type %s' % type(value), -1)
+        sqlite3_result_error(
+            ctx,
+            encode('Unsupported type %s' % type(value)),
+            -1)
         return SQLITE_ERROR
 
     return SQLITE_OK
@@ -453,7 +457,7 @@ cdef int pwFilter(sqlite3_vtab_cursor *pBase, int idxNum,
     if not idxStr or argc == 0 and len(table_func.params):
         return SQLITE_ERROR
     elif idxStr:
-        params = idxStr.decode('utf-8').split(',')
+        params = decode(idxStr).split(',')
     else:
         params = []
 
@@ -469,7 +473,7 @@ cdef int pwFilter(sqlite3_vtab_cursor *pBase, int idxNum,
         elif value_type == SQLITE_FLOAT:
             query[param] = sqlite3_value_double(value)
         elif value_type == SQLITE_TEXT:
-            query[param] = str(sqlite3_value_text(value))
+            query[param] = decode(sqlite3_value_text(value))
         elif value_type == SQLITE_BLOB:
             query[param] = <bytes>sqlite3_value_blob(value)
         elif value_type == SQLITE_NULL:
@@ -670,6 +674,15 @@ cdef inline bytes encode(key):
     else:
         bkey = <bytes>key
     return bkey
+
+
+cdef inline unicode decode(key):
+    cdef unicode ukey
+    if isinstance(key, bytes):
+        ukey = key.decode('utf-8')
+    else:
+        ukey = key
+    return ukey
 
 
 def peewee_rank(py_match_info, *raw_weights):
