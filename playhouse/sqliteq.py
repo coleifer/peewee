@@ -297,6 +297,15 @@ class SqliteQueueDatabase(SqliteExtDatabase):
         with self._conn_lock:
             self._write_queue.put(UNPAUSE)
 
+    def last_insert_id(self, cursor, model):
+        try:
+            cursor.next()
+        except StopIteration:
+            if model._meta.auto_increment:
+                return cursor.lastrowid
+        except Exception as exc:
+            raise exc
+
     def __unsupported__(self, *args, **kwargs):
         raise ValueError('This method is not supported by %r.' % type(self))
     atomic = transaction = savepoint = __unsupported__
