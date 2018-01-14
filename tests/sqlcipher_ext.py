@@ -16,7 +16,7 @@ ext_db = SqlCipherExtDatabase('peewee_test.dbx', passphrase='testing sqlcipher')
 
 @ext_db.func('shazam')
 def shazam(s):
-    return sha1(s or '').hexdigest()[:5]
+    return sha1((s or '').encode('utf-8')).hexdigest()[:5]
 
 
 class Thing(TestModel):
