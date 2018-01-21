@@ -17,6 +17,11 @@ Model Definitions
 To begin working with the data, we'll define the model classes that correspond
 to the tables in the diagram.
 
+.. note::
+    In some cases we explicitly specify column names for a particular field.
+    This is so our models are compatible with the database schema used for the
+    postgres exercises.
+
 .. code-block:: python
 
     from functools import partial
@@ -30,7 +35,7 @@ to the tables in the diagram.
             database = db
 
     class Member(BaseModel):
-        memid = AutoField()
+        memid = AutoField()  # Auto-incrementing primary key.
         surname = CharField()
         firstname = CharField()
         address = CharField(max_length=300)
@@ -44,6 +49,7 @@ to the tables in the diagram.
             table_name = 'members'
 
 
+    # Conveniently declare decimal fields suitable for storing currency.
     MoneyField = partial(DecimalField, decimal_places=2)
 
 
@@ -79,7 +85,8 @@ load the data into a PostgreSQL database using the following commands::
     createdb peewee_test
     psql -U postgres -f clubdata.sql -d peewee_test -x -q
 
-To create the schema using Peewee, you can run the following:
+To create the schema using Peewee, without loading the sample data, you can run
+the following:
 
 .. code-block:: python
 

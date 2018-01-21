@@ -52,7 +52,6 @@ Contents:
    peewee/database
    peewee/models
    peewee/metadata
-   peewee/transactions
    peewee/changes
    peewee/api
    peewee/playhouse
