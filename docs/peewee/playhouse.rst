@@ -1709,6 +1709,10 @@ postgres_ext API notes
     :param field_class: a subclass of :py:class:`Field`, e.g. :py:class:`IntegerField`.
     :param int dimensions: dimensions of array.
 
+    .. note::
+        By default ArrayField will use a GIN index. To disable this, initialize
+        the field with ``index=False``.
+
     You can store and retrieve lists (or lists-of-lists):
 
     .. code-block:: python
@@ -1774,6 +1778,10 @@ postgres_ext API notes
 
     A field for storing and retrieving arbitrary key/value pairs.  For details
     on usage, see :ref:`hstore`.
+
+    .. note::
+        By default HStoreFIeld will use a GiST index. To disable this,
+        initialize the field with ``index=False``.
 
     .. py:method:: keys()
 
@@ -1993,6 +2001,10 @@ postgres_ext API notes
 
     For examples of basic query operations, see the above code samples for :py:class:`JSONField`. The example queries below will use the same ``APIResponse`` model described above.
 
+    .. note::
+        By default BinaryJSONField will use a GiST index. To disable this,
+        initialize the field with ``index=False``.
+
     :param dumps: The default is to call json.dumps() or the dumps function. You can override this method to create a customized JSON wrapper.
 
     .. note:: You must be using Postgres 9.4 / psycopg2 2.5 or newer. If you are using Postgres 9.2 or 9.3, you can use the regular :py:class:`JSONField` instead.
@@ -2103,6 +2115,10 @@ postgres_ext API notes
 
     .. note::
         Data stored in this field will still need to be manually converted to the ``tsvector`` type.
+
+    .. note::
+        By default TSVectorField will use a GIN index. To disable this,
+        initialize the field with ``index=False``.
 
      Example usage:
 
