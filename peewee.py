@@ -2046,7 +2046,9 @@ class QueryCompiler(object):
         model = query.model_class
         alias_map = self.alias_map_class()
         alias_map.add(model, model._meta.db_table)
-        if query._on_conflict:
+        if query._ignore:
+            statement = 'UPDATE IGNORE'
+        elif query._on_conflict:
             statement = 'UPDATE OR %s' % query._on_conflict
         else:
             statement = 'UPDATE'
@@ -2084,6 +2086,8 @@ class QueryCompiler(object):
         alias_map.add(model, model._meta.db_table)
         if query._upsert:
             statement = meta.database.upsert_sql
+        elif query._ignore:
+            statement = 'INSERT IGNORE INTO'
         elif query._on_conflict:
             statement = 'INSERT OR %s INTO' % query._on_conflict
         else:
@@ -3433,17 +3437,23 @@ class UpdateQuery(_WriteQuery):
     def __init__(self, model_class, update=None):
         self._update = update
         self._on_conflict = None
+        self._ignore = False
         super(UpdateQuery, self).__init__(model_class)
 
     def _clone_attributes(self, query):
         query = super(UpdateQuery, self)._clone_attributes(query)
         query._update = dict(self._update)
         query._on_conflict = self._on_conflict
+        query._ignore = self._ignore
         return query
 
     @returns_clone
     def on_conflict(self, action=None):
         self._on_conflict = action
+
+    @returns_clone
+    def ignore(self, ignore=True):
+        self._ignore = ignore
 
     join = not_allowed('joining')
 
@@ -3485,6 +3495,7 @@ class InsertQuery(_WriteQuery):
         self._query = query
         self._validate_fields = validate_fields
         self._on_conflict = None
+        self._ignore = False
 
     def _iter_rows(self):
         model_meta = self.model_class._meta
@@ -3519,6 +3530,7 @@ class InsertQuery(_WriteQuery):
         query = super(InsertQuery, self)._clone_attributes(query)
         query._rows = self._rows
         query._upsert = self._upsert
+        query._ignore = self._ignore
         query._is_multi_row_insert = self._is_multi_row_insert
         query._fields = self._fields
         query._query = self._query
@@ -3537,6 +3549,10 @@ class InsertQuery(_WriteQuery):
     @returns_clone
     def on_conflict(self, action=None):
         self._on_conflict = action
+
+    @returns_clone
+    def ignore(self, ignore=True):
+        self._ignore = ignore
 
     @returns_clone
     def return_id_list(self, return_id_list=True):
@@ -4008,7 +4024,7 @@ class SqliteDatabase(Database):
         OP.LIKE: 'GLOB',
         OP.ILIKE: 'LIKE',
     }
-    upsert_sql = 'INSERT OR REPLACE INTO'
+    upsert_sql = 'REPLACE INTO'
 
     def __init__(self, database, pragmas=None, *args, **kwargs):
         self._pragmas = pragmas or []
