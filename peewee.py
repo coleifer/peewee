@@ -4142,7 +4142,7 @@ class ManyToManyField(MetaField):
                 through_model=self.through_model,
                 _is_backref=True)
             backref = self.backref or model._meta.name + 's'
-            many_to_many_field.bind(self.rel_model, backref)
+            self.rel_model._meta.add_field(backref, many_to_many_field)
 
     def get_models(self):
         return [model for _, model in sorted((
@@ -4481,6 +4481,7 @@ class Metadata(object):
         self.backrefs = {}
         self.model_refs = defaultdict(list)
         self.model_backrefs = defaultdict(list)
+        self.manytomany = {}
 
         self.options = options or {}
         for key, value in kwargs.items():
@@ -4526,6 +4527,12 @@ class Metadata(object):
         del rel._meta.backrefs[field]
         rel._meta.model_backrefs[self.model].remove(field)
 
+    def add_manytomany(self, field):
+        self.manytomany[field.name] = field
+
+    def remove_manytomany(self, field):
+        del self.manytomany[field.name]
+
     @property
     def table(self):
         if self._table is None:
@@ -4557,6 +4564,8 @@ class Metadata(object):
     def add_field(self, field_name, field, set_attribute=True):
         if field_name in self.fields:
             self.remove_field(field_name)
+        elif field_name in self.manytomany:
+            self.remove_manytomany(self.manytomany[field_name])
 
         if not isinstance(field, MetaField):
             del self.table
@@ -4584,6 +4593,8 @@ class Metadata(object):
 
         if isinstance(field, ForeignKeyField):
             self.add_ref(field)
+        elif isinstance(field, ManyToManyField):
+            self.add_manytomany(field)
 
     def remove_field(self, field_name):
         if field_name not in self.fields:

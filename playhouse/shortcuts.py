@@ -13,7 +13,7 @@ _clone_set = lambda s: set(s) if s else set()
 
 def model_to_dict(model, recurse=True, backrefs=False, only=None,
                   exclude=None, seen=None, extra_attrs=None,
-                  fields_from_query=None, max_depth=None):
+                  fields_from_query=None, max_depth=None, manytomany=False):
     """
     Convert a model instance (and any related objects) to a dictionary.
 
@@ -28,6 +28,7 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
     :param SelectQuery fields_from_query: Query that was source of model. Take
         fields explicitly selected by the query and serialize them.
     :param int max_depth: Maximum depth to recurse, value <= 0 means no max.
+    :param bool manytomany: Process many-to-many fields.
     """
     max_depth = -1 if max_depth is None else max_depth
     if max_depth == 0:
@@ -48,6 +49,26 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
     seen = _clone_set(seen)
     exclude |= seen
     model_class = type(model)
+
+    if manytomany:
+        for name, m2m in model._meta.manytomany.items():
+            if (name in exclude) or (only and (name not in only)):
+                continue
+
+            exclude.update((m2m, m2m.rel_model._meta.manytomany[m2m.backref]))
+            for fkf in m2m.through_model._meta.refs:
+                exclude.add(fkf)
+
+            accum = []
+            for rel_obj in getattr(model, name):
+                accum.append(model_to_dict(
+                    rel_obj,
+                    recurse=recurse,
+                    backrefs=backrefs,
+                    only=only,
+                    exclude=exclude,
+                    max_depth=max_depth - 1))
+            data[name] = accum
 
     for field in model._meta.sorted_fields:
         if field in exclude or (only and (field not in only)):

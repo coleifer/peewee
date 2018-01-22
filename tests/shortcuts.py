@@ -29,6 +29,19 @@ class TweetTag(TestModel):
     class Meta:
         primary_key = CompositeKey('tweet', 'tag')
 
+class Owner(TestModel):
+    name = TextField()
+
+class Label(TestModel):
+    label = TextField()
+
+class Gallery(TestModel):
+    name = TextField()
+    labels = ManyToManyField(Label, backref='galleries')
+    owner = ForeignKeyField(Owner, backref='galleries')
+
+GalleryLabel = Gallery.labels.through_model
+
 
 class TestModelToDict(ModelTestCase):
     database = get_in_memory_db()
@@ -139,6 +152,44 @@ class TestModelToDict(ModelTestCase):
                     'tweettag_set': [
                         {'tag': {'id': tag1.id, 'tag': 't1'}},
                         {'tag': {'id': tag2.id, 'tag': 't2'}}]}]})
+
+    @requires_models(Label, Gallery, GalleryLabel, Owner)
+    def test_manytomany_field(self):
+        data = (
+            ('charlie', 'family', ('nuggie', 'bearbe')),
+            ('charlie', 'pets', ('huey', 'zaizee', 'beanie')),
+            ('peewee', 'misc', ('nuggie', 'huey')))
+        for owner_name, gallery, labels in data:
+            owner, _ = Owner.get_or_create(name=owner_name)
+            gallery = Gallery.create(name=gallery, owner=owner)
+            label_objects = [Label.get_or_create(label=l)[0] for l in labels]
+            gallery.labels.add(label_objects)
+
+        query = (Gallery
+                 .select(Gallery, Owner)
+                 .join(Owner)
+                 .switch(Gallery)
+                 .join(GalleryLabel)
+                 .join(Label)
+                 .where(Label.label == 'nuggie')
+                 .order_by(Gallery.id))
+        rows = [model_to_dict(gallery, backrefs=True, manytomany=True)
+                for gallery in query]
+        self.assertEqual(rows, [
+            {
+                'id': 1,
+                'name': 'family',
+                'owner': {'id': 1, 'name': 'charlie'},
+                'labels': [{'id': 1, 'label': 'nuggie'},
+                           {'id': 2, 'label': 'bearbe'}],
+            },
+            {
+                'id': 3,
+                'name': 'misc',
+                'owner': {'id': 2, 'name': 'peewee'},
+                'labels': [{'id': 1, 'label': 'nuggie'},
+                           {'id': 3, 'label': 'huey'}],
+            }])
 
     def test_recurse_max_depth(self):
         t0, t1, t2 = [Tweet.create(user=self.user, content='t%s' % i)
