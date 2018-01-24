@@ -88,13 +88,16 @@ class JSONField(TextField):
             return '$%s' % path
         return '$.%s' % path
 
-    def length(self, path=None):
-        if path:
-            return fn.json_array_length(self, self.clean_path(path))
+    def clean_paths(self, paths):
+        return [self.clean_path(path) for path in paths]
+
+    def length(self, *paths):
+        if paths:
+            return fn.json_array_length(self, *self.clean_paths(paths))
         return fn.json_array_length(self)
 
-    def extract(self, path):
-        return fn.json_extract(self, self.clean_path(path))
+    def extract(self, *paths):
+        return fn.json_extract(self, *self.clean_paths(paths))
 
     def _value_for_insertion(self, value):
         if isinstance(value, (list, tuple, dict)):
@@ -121,7 +124,10 @@ class JSONField(TextField):
         return self._insert_like(fn.json_set, pairs)
 
     def remove(self, *paths):
-        return fn.json_remove(self, *[self.clean_path(path) for path in paths])
+        return fn.json_remove(self, *self.clean_paths(paths))
+
+    def update(self, data):
+        return fn.json_patch(self, data)
 
     def json_type(self, path=None):
         if path:
