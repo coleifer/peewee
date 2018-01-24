@@ -2519,7 +2519,8 @@ class Database(_callable_context_manager):
         return _savepoint(self)
 
     def begin(self):
-        pass
+        if self.is_closed():
+            self.connect()
 
     def commit(self):
         return self._state.conn.commit()
