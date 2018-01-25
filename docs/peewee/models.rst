@@ -572,7 +572,8 @@ subclasses.
 Option                  Meaning                                                Inheritable?
 =====================   ====================================================== ====================
 ``database``            database for model                                     yes
-``table_name``          name of the table to store data                        no (yes if function)
+``table_name``          name of the table to store data                        no
+``table_function``      function to generate table name dynamically            yes
 ``indexes``             a list of fields to index                              yes
 ``primary_key``         a :py:class:`CompositeKey` instance                    yes
 ``constraints``         a list of table constraints                            yes
