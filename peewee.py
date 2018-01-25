@@ -1785,11 +1785,23 @@ class Select(SelectBase):
 
     @Node.copy
     def group_by(self, *columns):
-        self._group_by = columns
+        grouping = []
+        for column in columns:
+            if isinstance(column, Table):
+                if not column._columns:
+                    raise ValueError('Cannot pass a table to group_by() that '
+                                     'does not have columns explicitly '
+                                     'declared.')
+                grouping.extend([getattr(column, col_name)
+                                 for col_name in column._columns])
+            else:
+                grouping.append(column)
+        self._group_by = grouping
 
     @Node.copy
     def group_by_extend(self, *values):
-        self._group_by = ((self._group_by or ()) + values) or None
+        group_by = tuple(self._group_by or ()) + values
+        return self.group_by(*group_by)
 
     @Node.copy
     def having(self, *expressions):
@@ -5319,6 +5331,13 @@ class BaseModelSelect(_ModelQueryHelper):
         for column in columns:
             if is_model(column):
                 grouping.extend(column._meta.sorted_fields)
+            elif isinstance(column, Table):
+                if not column._columns:
+                    raise ValueError('Cannot pass a table to group_by() that '
+                                     'does not have columns explicitly '
+                                     'declared.')
+                grouping.extend([getattr(column, col_name)
+                                 for col_name in column._columns])
             else:
                 grouping.append(column)
         self._group_by = grouping

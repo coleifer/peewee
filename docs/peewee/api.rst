@@ -649,6 +649,15 @@ Query-builder
         :param on: Expression to use as join predicate.
         :returns: a :py:class:`Join` instance.
 
+        Join type may be one of:
+
+        * ``JOIN.INNER``
+        * ``JOIN.LEFT_OUTER``
+        * ``JOIN.RIGHT_OUTER``
+        * ``JOIN.FULL``
+        * ``JOIN.FULL_OUTER``
+        * ``JOIN.CROSS``
+
     .. py:method:: left_outer_join(dest[, on=None])
 
         :param Source dest: Join the table with the given destination.
@@ -1282,7 +1291,8 @@ Query-builder
             required if query was previously bound to a database.
 
         Execute the query and return result (depends on type of query being
-        executed).
+        executed). For example, select queries the return result will be an
+        iterator over the query results.
 
     .. py:method:: iterator([database=None])
 
@@ -1297,6 +1307,14 @@ Query-builder
             Because rows are not cached, the query may only be iterated over
             once. Subsequent iterations will return empty result-sets as the
             cursor will have been consumed.
+
+         Example:
+
+         .. code-block:: python
+
+              query = StatTbl.select().order_by(StatTbl.timestamp).tuples()
+              for row in query.iterator(db):
+                  process_row(row)
 
     .. py:method:: __iter__()
 
@@ -1527,8 +1545,37 @@ Query-builder
     Class representing a SELECT query.
 
     .. note::
-        While it is possible to instantiate the query, more commonly you will
-        build the query using the method-chaining APIs.
+        Rather than instantiating this directly, most-commonly you will use a
+        factory method like :py:meth:`Table.select` or :py:meth:`Model.select`.
+
+    Methods on the select query can be chained together.
+
+    Example selecting some user instances from the database.  Only the ``id``
+    and ``username`` columns are selected.  When iterated, will return instances
+    of the ``User`` model:
+
+    .. code-block:: python
+
+        query = User.select(User.id, User.username)
+        for user in query:
+            print(user.username)
+
+    Example selecting users and additionally the number of tweets made by the
+    user.  The ``User`` instances returned will have an additional attribute,
+    'count', that corresponds to the number of tweets made:
+
+    .. code-block:: python
+
+        query = (User
+                 .select(User, fn.COUNT(Tweet.id).alias('count'))
+                 .join(Tweet, JOIN.LEFT_OUTER)
+                 .group_by(User))
+        for user in query:
+            print(user.username, 'has tweeted', user.count, 'times')
+
+    .. note::
+        While it is possible to instantiate :py:class:`Select` directly, more
+        commonly you will build the query using the method-chaining APIs.
 
     .. py:method:: columns(*columns)
 
@@ -1536,17 +1583,44 @@ Query-builder
 
         Specify which columns or column-like values to SELECT.
 
+    .. py:method:: select(*columns)
+
+        :param columns: Zero or more column-like objects to SELECT.
+
+        Same as :py:meth:`Select.columns`, provided for
+        backwards-compatibility.
+
     .. py:method:: from_(*sources)
 
         :param sources: Zero or more sources for the FROM clause.
 
         Specify which table-like objects should be used in the FROM clause.
 
+        .. code-block:: python
+
+            User = Table('users')
+            Tweet = Table('tweets')
+            query = (User
+                     .select(User.c.username, Tweet.c.content)
+                     .from_(User, Tweet)
+                     .where(User.c.id == Tweet.c.user_id))
+            for row in query.execute(db):
+                print(row['username'], '->', row['content'])
+
     .. py:method:: join(dest[, join_type='INNER'[, on=None]])
 
         :param dest: A table or table-like object.
         :param str join_type: Type of JOIN, default is "INNER".
         :param Expression on: Join predicate.
+
+        Join type may be one of:
+
+        * ``JOIN.INNER``
+        * ``JOIN.LEFT_OUTER``
+        * ``JOIN.RIGHT_OUTER``
+        * ``JOIN.FULL``
+        * ``JOIN.FULL_OUTER``
+        * ``JOIN.CROSS``
 
         Express a JOIN::
 
@@ -1563,6 +1637,18 @@ Query-builder
 
         Define the GROUP BY clause. Any previously-specified values will be
         overwritten.
+
+        Additionally, to specify all columns on a given table, you can pass the
+        table/model object in place of the individual columns.
+
+        Example:
+
+        .. code-block:: python
+
+            query = (User
+                     .select(User, fn.Count(Tweet.id).alias('count'))
+                     .join(Tweet)
+                     .group_by(User))
 
     .. py:method:: group_by_extend(*columns)
 
@@ -1594,6 +1680,20 @@ Query-builder
         Define the WINDOW clause. Any previously-specified values will be
         overwritten.
 
+        Example:
+
+        .. code-block:: python
+
+            # Equivalent example Using a Window() instance instead.
+            window = Window(partition_by=[Sample.counter])
+            query = (Sample
+                     .select(
+                        Sample.counter,
+                        Sample.value,
+                        fn.AVG(Sample.value).over(window))
+                     .window(window)  # Note call to ".window()"
+                     .order_by(Sample.counter))
+
     .. py:method:: for_update([for_update=True])
 
         :param for_update: Either a boolean or a string indicating the
@@ -1612,6 +1712,18 @@ Query-builder
         :param returning: Zero or more column-like objects for RETURNING clause
 
         Specify the RETURNING clause of query (if supported by your database).
+
+        .. code-block:: python
+
+            query = (User
+                     .insert_many([{'username': 'foo'},
+                                   {'username': 'bar'},
+                                   {'username': 'baz'}])
+                     .returning(User.id, User.username)
+                     .namedtuples())
+            data = query.execute()
+            for row in data:
+                print('added:', row.username, 'with id=', row.id)
 
 .. py:class:: Update(table[, update=None[, **kwargs]])
 
@@ -2791,7 +2903,15 @@ Model
             other object that was joined-on.
 
         Switch the *join context* - the source which subsequent calls to
-        :py:meth:`~ModelSelect.join` will be joined against.
+        :py:meth:`~ModelSelect.join` will be joined against. Used for
+        specifying multiple joins against a single table.
+
+        The following example selects from tweet and joins on both user and
+        tweet-flag:
+
+        .. code-block:: python
+
+            sq = Tweet.select().join(User).switch(Tweet).join(TweetFlag)
 
     .. py:method:: objects([constructor=None])
 
@@ -2802,8 +2922,8 @@ Model
 
     .. py:method:: join(dest[, join_type='INNER'[, on=None[, src=None[, attr=None]]]])
 
-        :param dest: A :py:class:`Model`, :py:class:`ModelAlias`, subquery,
-            or other object to join to.
+        :param dest: A :py:class:`Model`, :py:class:`ModelAlias`,
+            :py:class:`Select` query, or other object to join to.
         :param str join_type: Join type, defaults to INNER.
         :param on: Join predicate or a :py:class:`ForeignKeyField` to join on.
         :param src: Explicitly specify the source of the join. If not specified
@@ -2812,6 +2932,29 @@ Model
             joined model.
 
         Join with another table-like object.
+
+        Join type may be one of:
+
+        * ``JOIN.INNER``
+        * ``JOIN.LEFT_OUTER``
+        * ``JOIN.RIGHT_OUTER``
+        * ``JOIN.FULL``
+        * ``JOIN.FULL_OUTER``
+        * ``JOIN.CROSS``
+
+        Example selecting tweets and joining on user in order to restrict to
+        only those tweets made by "admin" users:
+
+        .. code-block:: python
+
+            sq = Tweet.select().join(User).where(User.is_admin == True)
+
+        Example selecting users and joining on a particular foreign key field.
+        See the :py:ref:`example app <example-app>` for a real-life usage:
+
+        .. code-block:: python
+
+            sq = User.select().join(Relationship, on=Relationship.to_user)
 
     .. py:method:: join_from(src, dest[, join_type='INNER'[, on=None[, attr=None]]])
 
