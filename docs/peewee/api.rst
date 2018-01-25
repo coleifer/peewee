@@ -2374,7 +2374,9 @@ Model
         :returns: :py:class:`ModelSelect` query.
 
         Create a SELECT query. If no fields are explicitly provided, the query
-        will by default SELECT all the fields defined on the model.
+        will by default SELECT all the fields defined on the model, unless you
+        are using the query as a sub-query, in which case only the primary key
+        will be selected by default.
 
         Example of selecting all columns:
 
@@ -2396,6 +2398,16 @@ Model
 
             for tweet in query:
                 print(tweet.user.username, '->', tweet.content)
+
+        Example of subquery only selecting the primary key:
+
+        .. code-block:: python
+
+            inactive_users = User.select().where(User.active == False)
+
+            # Here, instead of defaulting to all columns, Peewee will default
+            # to only selecting the primary key.
+            Tweet.delete().where(Tweet.user.in_(inactive_users)).execute()
 
     .. py:classmethod:: update([__data=None[, **update]])
 
