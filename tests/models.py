@@ -339,9 +339,10 @@ class TestModelAPIs(ModelTestCase):
             data = [(user.username, user.tweet.content) for user in query]
 
         # Failing on travis-ci...old SQLite?
-        #self.assertEqual(data, [
-        #    ('huey', 'hiss'),
-        #    ('mickey', 'grr')])
+        if not IS_SQLITE:
+            self.assertEqual(data, [
+                ('huey', 'hiss'),
+                ('mickey', 'grr')])
 
         query = (Tweet
                  .select(Tweet, User)
