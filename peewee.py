@@ -5361,6 +5361,8 @@ class ModelSelect(BaseModelSelect, Select):
             return src._model, False
         elif isinstance(src, ModelAlias):
             return src.model, False
+        elif isinstance(src, ModelSelect):
+            return src.model, False
         return None, False
 
     def _normalize_join(self, src, dest, on, attr):
@@ -5802,7 +5804,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
                 if key not in self.key_to_constructor:
                     self.key_to_constructor[key] = constructor
                     self.src_to_dest.append((curr, attr, key,
-                                             constructor is dict))
+                                             isinstance(curr, dict)))
                     accum.append(key)
 
         self.column_keys = []

@@ -1,5 +1,6 @@
 import datetime
 import sys
+import time
 import unittest
 
 from peewee import *
@@ -302,6 +303,56 @@ class TestModelAPIs(ModelTestCase):
 
         res = query.count()
         self.assertEqual(res, 5)
+
+    @requires_models(User, Tweet)
+    def test_join_subquery(self):
+        data = (('huey', ('meow', 'purr', 'hiss')),
+                ('zaizee', ()),
+                ('mickey', ('woof', 'grr')))
+
+        ts = int(time.time())
+        for username, tweets in data:
+            user = User.create(username=username)
+            for tweet in tweets:
+                Tweet.create(user=user, content=tweet, timestamp=ts)
+                ts += 1
+
+        # Select note user and timestamp of most recent tweet.
+        TA = Tweet.alias()
+        max_q = (TA
+                 .select(TA.user, fn.MAX(TA.timestamp).alias('max_ts'))
+                 .group_by(TA.user)
+                 .alias('max_q'))
+
+        predicate = ((Tweet.user == max_q.c.user_id) &
+                     (Tweet.timestamp == max_q.c.max_ts))
+        latest = (Tweet
+                  .select(Tweet.user, Tweet.content, Tweet.timestamp)
+                  .join(max_q, on=predicate)
+                  .alias('latest'))
+
+        query = (User
+                 .select(User, latest.c.content, latest.c.timestamp)
+                 .join(latest, on=(User.id == latest.c.user_id)))
+
+        with self.assertQueryCount(1):
+            data = [(user.username, user.tweet.content) for user in query]
+
+        self.assertEqual(data, [
+            ('huey', 'hiss'),
+            ('mickey', 'grr')])
+
+        query = (Tweet
+                 .select(Tweet, User)
+                 .join(max_q, on=predicate)
+                 .switch(Tweet)
+                 .join(User))
+        with self.assertQueryCount(1):
+            data = [(note.user.username, note.content) for note in query]
+
+        self.assertEqual(data, [
+            ('huey', 'hiss'),
+            ('mickey', 'grr')])
 
     @requires_models(Register)
     @skip_if(IS_SQLITE and sqlite3.sqlite_version_info < (3, 9))
