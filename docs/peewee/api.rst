@@ -1234,7 +1234,9 @@ Query-builder
 
 .. py:class:: BaseQuery()
 
-    Base-class implementing common query methods.
+    The parent class from which all other query classes are derived. While you
+    will not deal with :py:class:`BaseQuery` directly in your code, it
+    implements some methods that are common across all query types.
 
     .. py:attribute:: default_row_type = ROW.DICT
 
@@ -1351,6 +1353,36 @@ Query-builder
         Include the given expressions in the WHERE clause of the query. The
         expressions will be AND-ed together with any previously-specified
         WHERE expressions.
+
+        Example selection users where the username is equal to 'somebody':
+
+        .. code-block:: python
+
+            sq = User.select().where(User.username == 'somebody')
+
+        Example selecting tweets made by users who are either editors or
+        administrators:
+
+        .. code-block:: python
+
+            sq = Tweet.select().join(User).where(
+                (User.is_editor == True) |
+                (User.is_admin == True))
+
+        Example of deleting tweets by users who are no longer active:
+
+        .. code-block:: python
+
+            inactive_users = User.select().where(User.active == False)
+            dq = (Tweet
+                  .delete()
+                  .where(Tweet.user.in_(inactive_users)))
+            dq.execute()  # Return number of tweets deleted.
+
+        .. note::
+
+            :py:meth:`~Query.where` calls are chainable.  Multiple calls will
+            be "AND"-ed together.
 
     .. py:method:: order_by(*values)
 
@@ -1679,19 +1711,35 @@ Fields
     :param str column_name: Specify column name for field.
     :param default: Default value (enforced in Python, not on server).
     :param bool primary_key: Field is the primary key.
-    :param list constraints: List of constraints to apply to column.
+    :param list constraints: List of constraints to apply to column, for
+        example: ``[Check('price > 0')]``.
     :param str sequence: Sequence name for field.
     :param str collation: Collation name for field.
     :param bool unindexed: Declare field UNINDEXED (sqlite only).
-    :param list choices: A list of choices, metadata purposes only.
+    :param list choices: An iterable of 2-tuples mapping column values to
+        display labels. Used for metadata purposes only, to help when
+        displaying a dropdown of choices for field values, for example.
     :param str help_text: Help-text for field, metadata purposes only.
     :param str verbose_name: Verbose name for field, metadata purposes only.
 
     Fields on a :py:class:`Model` are analagous to columns on a table.
 
+    .. py:attribute:: field_type = '<some field type>'
+
+        Attribute used to map this field to a column type, e.g. "INT". See
+        the ``FIELD`` object in the source for more information.
+
     .. py:attribute:: column
 
         Retrieve a reference to the underlying :py:class:`Column` object.
+
+    .. py:attribute:: model
+
+        The model the field is bound to.
+
+    .. py:attribute:: name
+
+        The name of the field.
 
     .. py:method:: db_value(value)
 
@@ -1704,6 +1752,14 @@ Fields
         Coerce a value from the database into a Python object. Sub-classes
         operating on special data-types will most likely want to override this
         method.
+
+    .. py:method:: coerce(value)
+
+        This method is a shorthand that is used, by default, by both
+        :py:meth:`~Field.db_value` and :py:meth:`~Field.python_value`.
+
+        :param value: arbitrary data from app or backend
+        :rtype: python data type
 
 .. py:class:: IntegerField
 
@@ -1720,6 +1776,17 @@ Fields
 .. py:class:: AutoField
 
     Field class for storing auto-incrementing primary keys.
+
+    .. note::
+        In SQLite, for performance reasons, the default primary key type simply
+        uses the max existing value + 1 for new values, as opposed to the max
+        ever value + 1. This means deleted records can have their primary keys
+        reused. In conjunction with SQLite having foreign keys disabled by
+        default (meaning ON DELETE is ignored, even if you specify it
+        explicitly), this can lead to surprising and dangerous behaviour. To
+        avoid this, you may want to use one or both of
+        :py:class:`AutoIncrementField` and ``pragmas=[('foreign_keys', 'on')]``
+        when you instantiate :py:class:`SqliteDatabase`.
 
 .. py:class:: FloatField
 
@@ -1739,7 +1806,7 @@ Fields
     Field class for storing decimal numbers. Values are represented as
     ``decimal.Decimal`` objects.
 
-.. py:class:: CharField
+.. py:class:: CharField([max_length=255])
 
     Field class for storing strings.
 
@@ -1770,9 +1837,26 @@ Fields
 
     Field class for storing ``datetime.datetime`` objects.
 
+    Accepts a special parameter ``formats``, which contains a list of formats
+    the datetime can be encoded with (for databases that do not have support
+    for a native datetime data-type). The default supported formats are:
+
+    .. note::
+        If the incoming value does not match a format, it is returned as-is.
+
+    .. code-block:: python
+
+        '%Y-%m-%d %H:%M:%S.%f' # year-month-day hour-minute-second.microsecond
+        '%Y-%m-%d %H:%M:%S' # year-month-day hour-minute-second
+        '%Y-%m-%d' # year-month-day
+
     .. py:attribute:: year
 
         Reference the year of the value stored in the column in a query.
+
+        .. code-block:: python
+
+            Blog.select().where(Blog.pub_date.year == 2018)
 
     .. py:attribute:: month
 
@@ -1801,9 +1885,26 @@ Fields
 
     Field class for storing ``datetime.date`` objects.
 
+    Accepts a special parameter ``formats``, which contains a list of formats
+    the datetime can be encoded with (for databases that do not have support
+    for a native date data-type). The default supported formats are:
+
+    .. code-block:: python
+
+        '%Y-%m-%d' # year-month-day
+        '%Y-%m-%d %H:%M:%S' # year-month-day hour-minute-second
+        '%Y-%m-%d %H:%M:%S.%f' # year-month-day hour-minute-second.microsecond
+
+    .. note::
+        If the incoming value does not match a format, it is returned as-is.
+
     .. py:attribute:: year
 
         Reference the year of the value stored in the column in a query.
+
+        .. code-block:: python
+
+            Person.select().where(Person.dob.year == 1983)
 
     .. py:attribute:: month
 
@@ -1820,9 +1921,28 @@ Fields
 
     Field class for storing ``datetime.time`` objects (not ``timedelta``).
 
+    Accepts a special parameter ``formats``, which contains a list of formats
+    the datetime can be encoded with (for databases that do not have support
+    for a native time data-type). The default supported formats are:
+
+    .. code-block:: python
+
+        '%H:%M:%S.%f' # hour:minute:second.microsecond
+        '%H:%M:%S' # hour:minute:second
+        '%H:%M' # hour:minute
+        '%Y-%m-%d %H:%M:%S.%f' # year-month-day hour-minute-second.microsecond
+        '%Y-%m-%d %H:%M:%S' # year-month-day hour-minute-second
+
+    .. note::
+        If the incoming value does not match a format, it is returned as-is.
+
     .. py:attribute:: hour
 
         Reference the hour of the value stored in the column in a query.
+
+        .. code-block:: python
+
+            evening_events = Event.select().where(Event.time.hour > 17)
 
     .. py:attribute:: minute
 
@@ -1840,6 +1960,16 @@ Fields
     Field class for storing date-times as integer timestamps. Sub-second
     resolution is supported by multiplying by a power of 10 to get an integer.
 
+    Accepts a special parameter ``resolution``, which is a power-of-10 up to
+    ``10^6``. This allows sub-second precision while still using an
+    :py:class:`IntegerField` for storage. Default is ``1`` (second precision).
+
+    Also accepts a boolean parameter ``utc``, used to indicate whether the
+    timestamps should be UTC. Default is ``False``.
+
+    Finally, the field ``default`` is the current timestamp. If you do not want
+    this behavior, then explicitly pass in ``default=None``.
+
 .. py:class:: IPField
 
     Field class for storing IPv4 addresses efficiently (as integers).
@@ -1848,21 +1978,72 @@ Fields
 
     Field class for storing boolean values.
 
-.. py:class:: BareField
+.. py:class:: BareField([coerce=None[, **kwargs]])
 
-    Field class that does not specify a data-type (SQLite-only).
+    :param coerce: Optional function to use for converting raw values into a
+        specific format.
+
+    Field class that does not specify a data-type (**SQLite-only**).
+
+    Since data-types are not enforced, you can declare fields without *any*
+    data-type. It is also common for SQLite virtual tables to use meta-columns
+    or untyped columns, so for those cases as well you may wish to use an
+    untyped field.
+
+    Accepts a special ``coerce`` parameter, a function that takes a value
+    coming from the database and converts it into the appropriate Python type.
 
 .. py:class:: ForeignKeyField(model[, field=None[, backref=None[, on_delete=None[, on_update=None[, object_id_name=None[, **kwargs]]]]]])
 
-    :param Model model: Model to reference.
+    :param Model model: Model to reference or the string 'self' if declaring a
+        self-referential foreign key.
     :param Field field: Field to reference on ``model`` (default is primary
         key).
     :param str backref: Accessor name for back-reference.
-    :param str on_delete: ON DELETE action.
+    :param str on_delete: ON DELETE action, e.g. ``'CASCADE'``..
     :param str on_update: ON UPDATE action.
     :param str object_id_name: Name for object-id accessor.
 
     Field class for storing a foreign key.
+
+    .. code-block:: python
+
+        class User(Model):
+            name = TextField()
+
+        class Tweet(Model):
+            user = ForeignKeyField(User, backref='tweets')
+            content = TextField()
+
+        # "user" attribute
+        >>> some_tweet.user
+        <User: charlie>
+
+        # "tweets" backref attribute
+        >>> for tweet in charlie.tweets:
+        ...     print(tweet.content)
+        Some tweet
+        Another tweet
+        Yet another tweet
+
+    .. note::
+        Foreign keys do not have a particular ``field_type`` as they will take
+        their field type depending on the type of primary key on the model they
+        are related to.
+
+    .. note::
+        If you manually specify a ``field``, that field must be either a
+        primary key or have a unique constraint.
+
+    .. note::
+        Take care with foreign keys in SQLite. By default, ON DELETE has no
+        effect, which can have surprising (and usually unwanted) effects on
+        your database integrity. This can affect you even if you don't specify
+        on_delete, since the default ON DELETE behaviour (to fail without
+        modifying your data) does not happen, and your data can be silently
+        relinked. The safest thing to do is to specify
+        ``pragmas=(('foreign_keys', 'on'),)`` when you instantiate
+        :py:class:`SqliteDatabase`.
 
 .. py:class:: DeferredForeignKey(rel_model_name[, **kwargs])
 
@@ -1893,7 +2074,19 @@ Fields
 
     :param field_names: Names of fields that comprise the primary key.
 
-    A primary key composed of multiple columns.
+    A primary key composed of multiple columns. Unlike the other fields, a
+    composite key is defined in the model's ``Meta`` class after the fields
+    have been defined. It takes as parameters the string names of the fields to
+    use as the primary key:
+
+    .. code-block:: python
+
+        class BlogTagThrough(Model):
+            blog = ForeignKeyField(Blog, backref='tags')
+            tag = ForeignKeyField(Tag, backref='blogs')
+
+            class Meta:
+                primary_key = CompositeKey('blog', 'tag')
 
 
 Schema Manager
@@ -2013,23 +2206,84 @@ Model
     :param kwargs: Mapping of field-name to value to initialize model with.
 
     Model class provides a high-level abstraction for working with database
-    tables.
+    tables. Models are a one-to-one mapping with a database table (or a
+    table-like object, such as a view). Subclasses of ``Model`` declare any
+    number of :py:class:`Field` instances as class attributes. These fields
+    correspond to columns on the table.
+
+    Table-level operations, such as :py:meth:`~Model.select`,
+    :py:meth:`~Model.update`, :py:meth:`~Model.insert` and
+    :py:meth:`~Model.delete` are implemented as classmethods. Row-level
+    operations, such as :py:meth:`~Model.save` and
+    :py:meth:`~Model.delete_instance` are implemented as instancemethods.
+
+    Example:
+
+    .. code-block:: python
+
+        db = SqliteDatabase(':memory:')
+
+        class User(Model):
+            username = TextField()
+            join_date = DateTimeField(default=datetime.datetime.now)
+            is_admin = BooleanField(default=False)
+
+        admin = User(username='admin', is_admin=True)
+        admin.save()
 
     .. py:classmethod:: alias([alias=None])
 
         :param str alias: Optional name for alias.
         :returns: :py:class:`ModelAlias` instance.
 
-        Create an alias to the model-class. Allows you to reference the same
-        :py:class:`Model` multiple times in a query, for example when doing a
-        self-join.
+        Create an alias to the model-class. Model aliases allow you to
+        reference the same :py:class:`Model` multiple times in a query, for
+        example when doing a self-join or sub-query.
+
+        Example:
+
+        .. code-block:: pycon
+
+            Parent = Category.alias()
+            sq = (Category
+                  .select(Category, Parent)
+                  .join(Parent, on=(Category.parent == Parent.id))
+                  .where(Parent.name == 'parent category'))
+
+        .. note::
+            When using a :py:class:`ModelAlias` in a join, you must explicitly
+            specify the join condition.
 
     .. py:classmethod:: select(*fields)
 
-        :param fields: Zero or more :py:class:`Field` or field-like objects.
+        :param fields: A list of model classes, field instances, functions or
+            expressions. If no arguments are provided, all columns for the
+            given model will be selected by default.
+        :returns: :py:class:`ModelSelect` query.
 
         Create a SELECT query. If no fields are explicitly provided, the query
         will by default SELECT all the fields defined on the model.
+
+        Example of selecting all columns:
+
+        .. code-block:: python
+
+            query = User.select().where(User.active == True).order_by(User.username)
+
+        Example of selecting all columns on *Tweet* and the parent model,
+        *User*. When the ``user`` foreign key is accessed on a *Tweet*
+        instance no additional query will be needed (see :ref:`N+1 <nplusone>`
+        for more details):
+
+        .. code-block:: python
+
+            query = (Tweet
+                     .select(Tweet, User)
+                     .join(User)
+                     .order_by(Tweet.created_date.desc()))
+
+            for tweet in query:
+                print(tweet.user.username, '->', tweet.content)
 
     .. py:classmethod:: update([__data=None[, **update]])
 
@@ -2038,12 +2292,70 @@ Model
 
         Create an UPDATE query.
 
+        Example showing users being marked inactive if their registration has
+        expired:
+
+        .. code-block:: python
+
+            q = (User
+                 .update({User.active: False})
+                 .where(User.registration_expired == True))
+            q.execute()  # Execute the query, returning number of rows updated.
+
+        Example showing an atomic update:
+
+        .. code-block:: python
+
+            q = (PageView
+                 .update({PageView.count: PageView.count + 1})
+                 .where(PageView.url == url))
+            q.execute()  # Execute the query.
+
+        .. note::
+            When an update query is executed, the number of rows modified will
+            be returned.
+
     .. py:classmethod:: insert([__data=None[, **insert]])
 
         :param dict __data: ``dict`` of fields to values to insert.
         :param insert: Field-name to value mapping.
 
         Create an INSERT query.
+
+        Insert a new row into the database. If any fields on the model have
+        default values, these values will be used if the fields are not
+        explicitly set in the ``insert`` dictionary.
+
+        Example showing creation of a new user:
+
+        .. code-block:: python
+
+            q = User.insert(username='admin', active=True, registration_expired=False)
+            q.execute()  # perform the insert.
+
+        You can also use :py:class:`Field` objects as the keys:
+
+        .. code-block:: python
+
+            new_id = User.insert({User.username: 'admin'}).execute()
+
+        If you have a model with a default value on one of the fields, and
+        that field is not specified in the ``insert`` parameter, the default
+        will be used:
+
+        .. code-block:: python
+
+            class User(Model):
+                username = CharField()
+                active = BooleanField(default=True)
+
+            # This INSERT query will automatically specify `active=True`:
+            User.insert(username='charlie')
+
+        .. note::
+            When an insert query is executed on a table with an
+            auto-incrementing primary key, the primary key of the new row will
+            be returned.
 
     .. py:classmethod:: insert_many(rows[, fields=None])
 
@@ -2052,12 +2364,92 @@ Model
 
         INSERT multiple rows of data.
 
+        The ``rows`` parameter must be an iterable that yields dictionaries or
+        tuples, where the ordering of the tuple values corresponds to the
+        fields specified in the ``fields`` argument. As with
+        :py:meth:`~Model.insert`, fields that are not specified in the
+        dictionary will use their default value, if one exists.
+
+        .. note::
+            Due to the nature of bulk inserts, each row must contain the same
+            fields. The following will not work:
+
+            .. code-block:: python
+
+                Person.insert_many([
+                    {'first_name': 'Peewee', 'last_name': 'Herman'},
+                    {'first_name': 'Huey'},  # Missing "last_name"!
+                ]).execute()
+
+        Example of inserting multiple Users:
+
+        .. code-block:: python
+
+            data = [
+                ('charlie', True),
+                ('huey', False),
+                ('zaizee', False)]
+            query = User.insert_many(data, fields=[User.username, User.is_admin])
+            query.execute()
+
+        Equivalent example using dictionaries:
+
+        .. code-block:: python
+
+            data = [
+                {'username': 'charlie', 'is_admin': True},
+                {'username': 'huey', 'is_admin': False},
+                {'username': 'zaizee', 'is_admin': False}]
+
+            # Insert new rows.
+            User.insert_many(data).execute()
+
+        Because the ``rows`` parameter can be an arbitrary iterable, you can
+        also use a generator:
+
+        .. code-block:: python
+
+            def get_usernames():
+                for username in ['charlie', 'huey', 'peewee']:
+                    yield {'username': username}
+            User.insert_many(get_usernames()).execute()
+
+        .. warning::
+            If you are using SQLite, your SQLite library must be version 3.7.11
+            or newer to take advantage of bulk inserts.
+
+        .. note::
+            SQLite has a default limit of 999 bound variables per statement.
+            This limit can be modified at compile-time or at run-time, **but**
+            if modifying at run-time, you can only specify a *lower* value than
+            the default limit.
+
+            For more information, check out the following SQLite documents:
+
+            * `Max variable number limit <https://www.sqlite.org/limits.html#max_variable_number>`_
+            * `Changing run-time limits <https://www.sqlite.org/c3ref/limit.html>`_
+            * `SQLite compile-time flags <https://www.sqlite.org/compile.html>`_
+
     .. py:classmethod:: insert_from(query, fields)
 
         :param Select query: SELECT query to use as source of data.
         :param fields: Fields to insert data into.
 
-        INSERT data using a SELECT query as the source.
+        INSERT data using a SELECT query as the source. This API should be used
+        for queries of the form *INSERT INTO ... SELECT FROM ...*.
+
+        Example of inserting data across tables for denormalization purposes:
+
+        .. code-block:: python
+
+            source = (User
+                      .select(User.username, fn.COUNT(Tweet.id))
+                      .join(Tweet, JOIN.LEFT_OUTER)
+                      .group_by(User.username))
+
+            UserTweetDenorm.insert_from(
+                source,
+                [UserTweetDenorm.username, UserTweetDenorm.num_tweets]).execute()
 
     .. py:classmethod:: replace([__data=None[, **insert]])
 
@@ -2066,12 +2458,16 @@ Model
 
         Create an INSERT query that uses REPLACE for conflict-resolution.
 
+        See :py:meth:`Model.insert` for examples.
+
     .. py:classmethod:: replace_many(rows[, fields=None])
 
         :param rows: An iterable that yields rows to insert.
         :param list fields: List of fields being inserted.
 
         INSERT multiple rows of data using REPLACE for conflict-resolution.
+
+        See :py:meth:`Model.insert_many` for examples.
 
     .. py:classmethod:: raw(sql, *params)
 
@@ -2080,15 +2476,49 @@ Model
 
         Execute a SQL query directly.
 
+        Example selecting rows from the User table:
+
+        .. code-block:: python
+
+            q = User.raw('select id, username from users')
+            for user in q:
+                print user.id, user.username
+
+        .. note::
+            Generally the use of ``raw`` is reserved for those cases where you
+            can significantly optimize a select query. It is useful for select
+            queries since it will return instances of the model.
+
     .. py:classmethod:: delete()
 
         Create a DELETE query.
+
+        Example showing the deletion of all inactive users:
+
+        .. code-block:: python
+
+            q = User.delete().where(User.active == False)
+            q.execute()  # Remove the rows, return number of rows removed.
+
+        .. warning::
+            This method performs a delete on the *entire table*. To delete a
+            single instance, see :py:meth:`Model.delete_instance`.
 
     .. py:classmethod:: create(**query)
 
         :param query: Mapping of field-name to value.
 
         INSERT new row into table and return corresponding model instance.
+
+        Example showing the creation of a user (a row will be added to the
+        database):
+
+        .. code-block:: python
+
+            user = User.create(username='admin', password='test')
+
+        .. note::
+            The create() method is a shorthand for instantiate-then-save.
 
     .. py:classmethod:: get(*query, **filters)
 
@@ -2100,6 +2530,30 @@ Model
         Retrieve a single model instance matching the given filters. If no
         model is returned, a :py:class:`DoesNotExist` is raised.
 
+        .. code-block:: python
+
+            user = User.get(User.username == username, User.active == True)
+
+        This method is also exposed via the :py:class:`SelectQuery`, though it
+        takes no parameters:
+
+        .. code-block:: python
+
+            active = User.select().where(User.active == True)
+            try:
+                user = active.where(
+                    (User.username == username) &
+                    (User.active == True)
+                ).get()
+            except User.DoesNotExist:
+                user = None
+
+        .. note::
+            The :py:meth:`~Model.get` method is shorthand for selecting with a
+            limit of 1. It has the added behavior of raising an exception when
+            no matching row is found. If more than one row is found, the first
+            row returned by the database cursor will be used.
+
     .. py:classmethod:: get_or_none(*query, **filters)
 
         Identical to :py:meth:`Model.get` but returns ``None`` if no model
@@ -2109,20 +2563,37 @@ Model
 
         :param pk: Primary-key value.
 
-        Short-hand for calling :py:meth:`Model.get` specifying a lookup by id.
+        Short-hand for calling :py:meth:`Model.get` specifying a lookup by
+        primary key. Raises a :py:class:`DoesNotExist` if instance with the
+        given primary key value does not exist.
+
+        Example:
+
+        .. code-block:: python
+
+            user = User.get_by_id(1)  # Returns user with id = 1.
 
     .. py:classmethod:: set_by_id(key, value)
 
         :param key: Primary-key value.
         :param dict value: Mapping of field to value to update.
 
-        Short-hand for updating the data with the given primary-key.
+        Short-hand for updating the data with the given primary-key. If no row
+        exists with the given primary key, no exception will be raised.
+
+        Example:
+
+        .. code-block:: python
+
+            # Set "is_admin" to True on user with id=3.
+            User.set_by_id(3, {'is_admin': True})
 
     .. py:classmethod:: delete_by_id(pk)
 
         :param pk: Primary-key value.
 
-        Short-hand for deleting the row with the given primary-key.
+        Short-hand for deleting the row with the given primary-key. If no row
+        exists with the given primary key, no exception will be raised.
 
     .. py:classmethod:: get_or_create(**kwargs)
 
@@ -2134,6 +2605,30 @@ Model
         is found, create a new row.
 
         .. warning:: Race-conditions are possible when using this method.
+
+        Example **without** ``get_or_create``:
+
+        .. code-block:: python
+
+            # Without `get_or_create`, we might write:
+            try:
+                person = Person.get(
+                    (Person.first_name == 'John') &
+                    (Person.last_name == 'Lennon'))
+            except Person.DoesNotExist:
+                person = Person.create(
+                    first_name='John',
+                    last_name='Lennon',
+                    birthday=datetime.date(1940, 10, 9))
+
+        Equivalent code using ``get_or_create``:
+
+        .. code-block:: python
+
+            person, created = Person.get_or_create(
+                first_name='John',
+                last_name='Lennon',
+                defaults={'birthday': datetime.date(1940, 10, 9)})
 
     .. py:classmethod:: filter(*dq_nodes, **filters)
 
@@ -2154,9 +2649,42 @@ Model
         Save the data in the model instance. By default, the presence of a
         primary-key value will cause an UPDATE query to be executed.
 
+        Example showing saving a model instance:
+
+        .. code-block:: python
+
+            user = User()
+            user.username = 'some-user'  # does not touch the database
+            user.save()  # change is persisted to the db
+
     .. py:attribute:: dirty_fields
 
         Return list of fields that have been modified.
+
+        :rtype: list
+
+        .. note::
+            If you just want to persist modified fields, you can call
+            ``model.save(only=model.dirty_fields)``.
+
+            If you **always** want to only save a model's dirty fields, you can use the Meta
+            option ``only_save_dirty = True``. Then, any time you call :py:meth:`Model.save()`,
+            by default only the dirty fields will be saved, e.g.
+
+            .. code-block:: python
+
+                class Person(Model):
+                    first_name = CharField()
+                    last_name = CharField()
+                    dob = DateField()
+
+                    class Meta:
+                        database = db
+                        only_save_dirty = True
+
+    .. py:method:: is_dirty()
+
+        Return boolean indicating whether any fields were manually set.
 
     .. py:method:: delete_instance([recursive=False[, delete_nullable=False]])
 
@@ -2164,7 +2692,18 @@ Model
         :param bool delete_nullable: Delete related models that have a null
             foreign key. If ``False`` nullable relations will be set to NULL.
 
-        Delete the model instance row.
+        Delete the given instance.  Any foreign keys set to cascade on
+        delete will be deleted automatically.  For more programmatic control,
+        you can specify ``recursive=True``, which will delete any non-nullable
+        related models (those that *are* nullable will be set to NULL).  If you
+        wish to delete all dependencies regardless of whether they are nullable,
+        set ``delete_nullable=True``.
+
+        example:
+
+        .. code-block:: python
+
+            some_obj.delete_instance()  # it is gone forever
 
     .. py:classmethod:: bind(database[, bind_refs=True[, bind_backrefs=True]])
 
@@ -2185,9 +2724,22 @@ Model
 
     .. py:classmethod:: create_table([safe=True[, **options]])
 
-        Create the model table, indexes and sequences.
+        :param bool safe: If set to ``True``, the create table query will
+            include an ``IF NOT EXISTS`` clause.
+
+        Create the model table, indexes, constraints and sequences.
+
+        Example:
+
+        .. code-block:: python
+
+            with database:
+                SomeModel.create_table()  # Execute the create table query.
 
     .. py:classmethod:: drop_table([safe=True[, **options]])
+
+        :param bool safe: If set to ``True``, the create table query will
+            include an ``IF EXISTS`` clause.
 
         Drop the model table.
 
@@ -2199,6 +2751,23 @@ Model
             constructor.
 
         Add an index to the model's definition.
+
+        .. note::
+            This method does not actually create the index in the database.
+            Rather, it adds the index definition to the model's metadata, so
+            that a subsequent call to :py:meth:`~Model.create_table` will
+            create the new index (along with the table).
+
+    .. py:method:: dependencies([search_nullable=False])
+
+        :param bool search_nullable: Search models related via a nullable
+            foreign key
+        :rtype: Generator expression yielding queries and foreign key fields.
+
+        Generate a list of queries of dependent models. Yields a 2-tuple
+        containing the query and corresponding foreign key field.  Useful for
+        searching dependencies of a model, i.e. things that would be orphaned
+        in the event of a delete.
 
 
 .. py:class:: ModelAlias(model[, alias=None])
