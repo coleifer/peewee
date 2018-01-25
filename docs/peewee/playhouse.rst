@@ -3,9 +3,13 @@
 Playhouse, extensions to Peewee
 ===============================
 
-Peewee comes with numerous extension modules which are collected under the ``playhouse`` namespace. Despite the silly name, there are some very useful extensions, particularly those that expose vendor-specific database features like the :ref:`sqlite_ext` and :ref:`postgres_ext` extensions.
+Peewee comes with numerous extension modules which are collected under the
+``playhouse`` namespace. Despite the silly name, there are some very useful
+extensions, particularly those that expose vendor-specific database features
+like the :ref:`sqlite_ext` and :ref:`postgres_ext` extensions.
 
-Below you will find a loosely organized listing of the various modules that make up the ``playhouse``.
+Below you will find a loosely organized listing of the various modules that
+make up the ``playhouse``.
 
 **Database drivers / vendor-specific database functionality**
 
@@ -13,7 +17,6 @@ Below you will find a loosely organized listing of the various modules that make
 * :ref:`sqliteq`
 * :ref:`sqlite_udf`
 * :ref:`apsw`
-* :ref:`berkeleydb`
 * :ref:`sqlcipher_ext`
 * :ref:`postgres_ext`
 
@@ -24,9 +27,6 @@ Below you will find a loosely organized listing of the various modules that make
 * :ref:`hybrid`
 * :ref:`signals`
 * :ref:`dataset`
-* :ref:`kv`
-* :ref:`gfk`
-* :ref:`csv_utils`
 
 **Database management and framework integration**
 
@@ -35,11 +35,8 @@ Below you will find a loosely organized listing of the various modules that make
 * :ref:`pool`
 * :ref:`reflection`
 * :ref:`db_url`
-* :ref:`read_slaves`
 * :ref:`test_utils`
-* :ref:`pskel`
 * :ref:`flask_utils`
-* :ref:`djpeewee`
 
 .. _sqlite_ext:
 
@@ -51,11 +48,13 @@ features:
 
 * Define custom aggregates, collations and functions.
 * Support for FTS3/4 (sqlite full-text search) with :ref:`BM25 ranking <sqlite_bm25>`.
-* C extension providing fast implementations of ranking and other utility functions.
 * Support for the new FTS5 search extension.
+* Support for the JSON1 and LSM1 extensions.
+* C extension providing fast implementations of ranking and other utility functions.
 * Specify isolation level in transactions.
 * Support for virtual tables and SQLite C extensions.
-* Support for the `closure table <http://charlesleifer.com/blog/querying-tree-structures-in-sqlite-using-python-and-the-transitive-closure-extension/>`_ extension, which allows efficient querying of heirarchical tables.
+* Support for the `closure table <http://charlesleifer.com/blog/querying-tree-structures-in-sqlite-using-python-and-the-transitive-closure-extension/>`_
+  extension, which allows efficient querying of heirarchical tables.
 
 sqlite_ext API notes
 ^^^^^^^^^^^^^^^^^^^^
@@ -227,7 +226,7 @@ sqlite_ext API notes
     .. code-block:: python
 
         class Document(Model):
-            author = ForeignKeyField(User, related_name='documents')
+            author = ForeignKeyField(User, backref='documents')
             title = TextField(null=False, unique=True)
             content = TextField(null=False)
             timestamp = DateTimeField()
@@ -756,7 +755,7 @@ sqlite_ext API notes
 
            class UserRelations(Model):
                user = ForeignKeyField(User)
-               knows = ForeignKeyField(User, related_name='_known_by')
+               knows = ForeignKeyField(User, backref='_known_by')
 
                class Meta:
                    primary_key = CompositeKey('user', 'knows') # Alternatively, a unique index on both columns.
@@ -1135,62 +1134,6 @@ apsw_ext API notes
 
     For example, instead of using ``peewee.DateTimeField``, be sure you are importing
     and using ``playhouse.apsw_ext.DateTimeField``.
-
-.. _berkeleydb:
-
-BerkeleyDB backend
-------------------
-
-BerkeleyDB provides a `SQLite-compatible API <http://www.oracle.com/technetwork/database/database-technologies/berkeleydb/overview/sql-160887.html>`_. BerkeleyDB's SQL API has many advantages over SQLite:
-
-* Higher transactions-per-second in multi-threaded environments.
-* Built-in replication and hot backup.
-* Fewer system calls, less resource utilization.
-* Multi-version concurrency control.
-
-For more details, Oracle has published a short `technical overview <http://www.oracle.com/technetwork/database/berkeleydb/learnmore/bdbvssqlite-wp-186779.pdf>`_.
-
-In order to use peewee with BerkeleyDB, you need to compile BerkeleyDB with the SQL API enabled. Then compile the Python SQLite driver against BerkeleyDB's sqlite replacement.
-
-Begin by downloading and compiling BerkeleyDB:
-
-.. code-block:: console
-
-    wget http://download.oracle.com/berkeley-db/db-6.0.30.tar.gz
-    tar xzf db-6.0.30.tar.gz
-    cd db-6.0.30/build_unix
-    export CFLAGS='-DSQLITE_ENABLE_FTS3=1 -DSQLITE_ENABLE_FTS3_PARENTHESIS=1 -DSQLITE_ENABLE_UPDATE_DELETE_LIMIT -DSQLITE_SECURE_DELETE -DSQLITE_SOUNDEX -DSQLITE_ENABLE_RTREE=1 -fPIC'
-    ../dist/configure --enable-static --enable-shared --enable-sql --enable-sql-compat
-    make
-    sudo make prefix=/usr/local/ install
-
-Then get a copy of the standard library SQLite driver and build it against BerkeleyDB:
-
-.. code-block:: console
-
-    git clone https://github.com/ghaering/pysqlite
-    cd pysqlite
-    sed -i "s|#||g" setup.cfg
-    python setup.py build
-    sudo python setup.py install
-
-You can also find up-to-date `step by step instructions <http://charlesleifer.com/blog/building-the-python-sqlite-driver-for-use-with-berkeleydb/>`_ on my blog.
-
-.. py:class:: BerkeleyDatabase(database, **kwargs)
-
-    :param bool multiversion: Enable multiversion concurrency control. Default is ``False``.
-    :param int page_size: Set the page size ``PRAGMA``. This option only works on new databases.
-    :param int cache_size: Set the cache size ``PRAGMA``.
-
-    Subclass of the :py:class:`SqliteExtDatabase` that supports connecting to BerkeleyDB-backed version of SQLite.
-
-    .. py:classmethod:: check_pysqlite()
-
-        Check whether ``pysqlite2`` was compiled against the BerkeleyDB SQLite. Returns ``True`` or ``False``.
-
-    .. py:classmethod:: check_libsqlite()
-
-        Check whether ``libsqlite3`` is the BerkeleyDB SQLite implementation. Returns ``True`` or ``False``.
 
 
 .. _sqlcipher_ext:
@@ -2449,116 +2392,6 @@ API
         :param bool strict: Whether to store values for columns that do not already exist on the table.
         :param kwargs: Arbitrary parameters for import-specific functionality.
 
-
-.. _djpeewee:
-
-Django Integration
-------------------
-
-The Django ORM provides a very high-level abstraction over SQL and as a consequence is in some ways
-`limited in terms of flexibility or expressiveness <http://charlesleifer.com/blog/shortcomings-in-the-django-orm-and-a-look-at-peewee-a-lightweight-alternative/>`_. I
-wrote a `blog post <http://charlesleifer.com/blog/the-search-for-the-missing-link-what-lies-between-sql-and-django-s-orm-/>`_
-describing my search for a "missing link" between Django's ORM and the SQL it
-generates, concluding that no such layer exists.  The ``djpeewee`` module attempts
-to provide an easy-to-use, structured layer for generating SQL queries for use
-with Django's ORM.
-
-A couple use-cases might be:
-
-* Joining on fields that are not related by foreign key (for example UUID fields).
-* Performing aggregate queries on calculated values.
-* Features that Django does not support such as ``CASE`` statements.
-* Utilizing SQL functions that Django does not support, such as ``SUBSTR``.
-* Replacing nearly-identical SQL queries with reusable, composable data-structures.
-
-Below is an example of how you might use this:
-
-.. code-block:: python
-
-    # Django model.
-    class Event(models.Model):
-        start_time = models.DateTimeField()
-        end_time = models.DateTimeField()
-        title = models.CharField(max_length=255)
-
-    # Suppose we want to find all events that are longer than an hour.  Django
-    # does not support this, but we can use peewee.
-    from playhouse.djpeewee import translate
-    P = translate(Event)
-    query = (P.Event
-             .select()
-             .where(
-                 (P.Event.end_time - P.Event.start_time) > timedelta(hours=1)))
-
-    # Now feed our peewee query into Django's `raw()` method:
-    sql, params = query.sql()
-    Event.objects.raw(sql, params)
-
-Foreign keys and Many-to-many relationships
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-The :py:func:`translate` function will recursively traverse the graph of models
-and return a dictionary populated with everything it finds.  Back-references are
-not searched by default, but can be included by specifying ``backrefs=True``.
-
-Example:
-
-.. code-block:: pycon
-
-    >>> from django.contrib.auth.models import User, Group
-    >>> from playhouse.djpeewee import translate
-    >>> translate(User, Group)
-    {'ContentType': peewee.ContentType,
-     'Group': peewee.Group,
-     'Group_permissions': peewee.Group_permissions,
-     'Permission': peewee.Permission,
-     'User': peewee.User,
-     'User_groups': peewee.User_groups,
-     'User_user_permissions': peewee.User_user_permissions}
-
-As you can see in the example above, although only `User` and `Group` were passed
-in to :py:func:`translate`, several other models which are related by foreign key
-were also created. Additionally, the many-to-many "through" tables were created
-as separate models since peewee does not abstract away these types of relationships.
-
-Using the above models it is possible to construct joins.  The following example
-will get all users who belong to a group that starts with the letter "A":
-
-.. code-block:: pycon
-
-    >>> P = translate(User, Group)
-    >>> query = P.User.select().join(P.User_groups).join(P.Group).where(
-    ...     fn.Lower(fn.Substr(P.Group.name, 1, 1)) == 'a')
-    >>> sql, params = query.sql()
-    >>> print sql  # formatted for legibility
-    SELECT t1."id", t1."password", ...
-    FROM "auth_user" AS t1
-    INNER JOIN "auth_user_groups" AS t2 ON (t1."id" = t2."user_id")
-    INNER JOIN "auth_group" AS t3 ON (t2."group_id" = t3."id")
-    WHERE (Lower(Substr(t3."name", %s, %s)) = %s)
-
-djpeewee API
-^^^^^^^^^^^^
-
-.. py:function:: translate(*models, **options)
-
-    Translate the given Django models into roughly equivalent peewee models
-    suitable for use constructing queries. Foreign keys and many-to-many relationships
-    will be followed and models generated, although back references are not traversed.
-
-    :param models: One or more Django model classes.
-    :param options: A dictionary of options, see note below.
-    :returns: A dict-like object containing the generated models, but which supports
-        dotted-name style lookups.
-
-    The following are valid options:
-
-    * ``recurse``: Follow foreign keys and many to many (default: ``True``).
-    * ``max_depth``: Maximum depth to recurse (default: ``None``, unlimited).
-    * ``backrefs``: Follow backrefs (default: ``False``).
-    * ``exclude``: A list of models to exclude.
-
-
 .. _extra-fields:
 
 Fields
@@ -2568,220 +2401,6 @@ This module also contains several field classes that implement additional logic 
 
 These fields can be found in the ``playhouse.fields`` module.
 
-.. py:class:: ManyToManyField(rel_model[, related_name=None[, through_model=None]])
-
-    :param rel_model: :py:class:`Model` class.
-    :param str related_name: Name for the automatically-created backref. If not
-        provided, the pluralized version of the model will be used.
-    :param through_model: :py:class:`Model` to use for the intermediary table. If
-        not provided, a simple through table will be automatically created.
-
-    The :py:class:`ManyToManyField` provides a simple interface for working with many-to-many relationships, inspired by Django. A many-to-many relationship is typically implemented by creating a junction table with foreign keys to the two models being related. For instance, if you were building a syllabus manager for college students, the relationship between students and courses would be many-to-many. Here is the schema using standard APIs:
-
-    .. code-block:: python
-
-        class Student(Model):
-            name = CharField()
-
-        class Course(Model):
-            name = CharField()
-
-        class StudentCourse(Model):
-            student = ForeignKeyField(Student)
-            course = ForeignKeyField(Course)
-
-    To query the courses for a particular student, you would join through the junction table:
-
-    .. code-block:: python
-
-        # List the courses that "Huey" is enrolled in:
-        courses = (Course
-                   .select()
-                   .join(StudentCourse)
-                   .join(Student)
-                   .where(Student.name == 'Huey'))
-        for course in courses:
-            print course.name
-
-    The :py:class:`ManyToManyField` is designed to simplify this use-case by providing a *field-like* API for querying and modifying data in the junction table. Here is how our code looks using :py:class:`ManyToManyField`:
-
-    .. code-block:: python
-
-        class Student(Model):
-            name = CharField()
-
-        class Course(Model):
-            name = CharField()
-            students = ManyToManyField(Student, related_name='courses')
-
-    .. note:: It does not matter from Peewee's perspective which model the :py:class:`ManyToManyField` goes on, since the back-reference is just the mirror image. In order to write valid Python, though, you will need to add the ``ManyToManyField`` on the second model so that the name of the first model is in the scope.
-
-    We still need a junction table to store the relationships between students and courses. This model can be accessed by calling the :py:meth:`~ManyToManyField.get_through_model` method. This is useful when creating tables.
-
-    .. code-block:: python
-
-        # Create tables for the students, courses, and relationships between
-        # the two.
-        db.create_tables([
-            Student,
-            Course,
-            Course.students.get_through_model()])
-
-    When accessed from a model instance, the :py:class:`ManyToManyField` exposes a :py:class:`SelectQuery` representing the set of related objects. Let's use the interactive shell to see how all this works:
-
-    .. code-block:: pycon
-
-        >>> huey = Student.get(Student.name == 'huey')
-        >>> [course.name for course in huey.courses]
-        ['English 101', 'CS 101']
-
-        >>> engl_101 = Course.get(Course.name == 'English 101')
-        >>> [student.name for student in engl_101.students]
-        ['Huey', 'Mickey', 'Zaizee']
-
-    To add new relationships between objects, you can either assign the objects directly to the ``ManyToManyField`` attribute, or call the :py:meth:`~ManyToManyField.add` method. The difference between the two is that simply assigning will clear out any existing relationships, whereas ``add()`` can preserve existing relationships.
-
-    .. code-block:: pycon
-
-        >>> huey.courses = Course.select().where(Course.name.contains('english'))
-        >>> for course in huey.courses.order_by(Course.name):
-        ...     print course.name
-        English 101
-        English 151
-        English 201
-        English 221
-
-        >>> cs_101 = Course.get(Course.name == 'CS 101')
-        >>> cs_151 = Course.get(Course.name == 'CS 151')
-        >>> huey.courses.add([cs_101, cs_151])
-        >>> [course.name for course in huey.courses.order_by(Course.name)]
-        ['CS 101', 'CS151', 'English 101', 'English 151', 'English 201',
-         'English 221']
-
-    This is quite a few courses, so let's remove the 200-level english courses. To remove objects, use the :py:meth:`~ManyToManyField.remove` method.
-
-    .. code-block:: pycon
-
-        >>> huey.courses.remove(Course.select().where(Course.name.contains('2'))
-        2
-        >>> [course.name for course in huey.courses.order_by(Course.name)]
-        ['CS 101', 'CS151', 'English 101', 'English 151']
-
-    To remove all relationships from a collection, you can use the :py:meth:`~SelectQuery.clear` method. Let's say that English 101 is canceled, so we need to remove all the students from it:
-
-    .. code-block:: pycon
-
-        >>> engl_101 = Course.get(Course.name == 'English 101')
-        >>> engl_101.students.clear()
-
-    .. note:: For an overview of implementing many-to-many relationships using standard Peewee APIs, check out the :ref:`manytomany` section. For all but the most simple cases, you will be better off implementing many-to-many using the standard APIs.
-
-    .. py:method:: add(value[, clear_existing=True])
-
-        :param value: Either a :py:class:`Model` instance, a list of model instances, or a :py:class:`SelectQuery`.
-        :param bool clear_existing: Whether to remove existing relationships first.
-
-        Associate ``value`` with the current instance. You can pass in a single model instance, a list of model instances, or even a :py:class:`SelectQuery`.
-
-        Example code:
-
-        .. code-block:: python
-
-            # Huey needs to enroll in a bunch of courses, including all
-            # the English classes, and a couple Comp-Sci classes.
-            huey = Student.get(Student.name == 'Huey')
-
-            # We can add all the objects represented by a query.
-            english_courses = Course.select().where(
-                Course.name.contains('english'))
-            huey.courses.add(english_courses)
-
-            # We can also add lists of individual objects.
-            cs101 = Course.get(Course.name == 'CS 101')
-            cs151 = Course.get(Course.name == 'CS 151')
-            huey.courses.add([cs101, cs151])
-
-    .. py:method:: remove(value)
-
-        :param value: Either a :py:class:`Model` instance, a list of model instances, or a :py:class:`SelectQuery`.
-
-        Disassociate ``value`` from the current instance. Like :py:meth:`~ManyToManyField.add`, you can pass in a model instance, a list of model instances, or even a :py:class:`SelectQuery`.
-
-        Example code:
-
-        .. code-block:: python
-
-            # Huey is currently enrolled in a lot of english classes
-            # as well as some Comp-Sci. He is changing majors, so we
-            # will remove all his courses.
-            english_courses = Course.select().where(
-                Course.name.contains('english'))
-            huey.courses.remove(english_courses)
-
-            # Remove the two Comp-Sci classes Huey is enrolled in.
-            cs101 = Course.get(Course.name == 'CS 101')
-            cs151 = Course.get(Course.name == 'CS 151')
-            huey.courses.remove([cs101, cs151])
-
-    .. py:method:: clear()
-
-        Remove all associated objects.
-
-        Example code:
-
-        .. code-block:: python
-
-            # English 101 is canceled this semester, so remove all
-            # the enrollments.
-            english_101 = Course.get(Course.name == 'English 101')
-            english_101.students.clear()
-
-    .. py:method:: get_through_model()
-
-        Return the :py:class:`Model` representing the many-to-many junction table. This can be specified manually when the field is being instantiated using the ``through_model`` parameter. If a ``through_model`` is not specified, one will automatically be created.
-
-        When creating tables for an application that uses :py:class:`ManyToManyField`, **you must create the through table expicitly**.
-
-        .. code-block:: python
-
-            # Get a reference to the automatically-created through table.
-            StudentCourseThrough = Course.students.get_through_model()
-
-            # Create tables for our two models as well as the through model.
-            db.create_tables([
-                Student,
-                Course,
-                StudentCourseThrough])
-
-.. py:class:: DeferredThroughModel()
-
-    In some instances, you may need to obtain a reference to a through model before that model is actually defined. In order to avoid weird circular logic, you can use the ``DeferredThroughModel`` as a placeholder, then "fill it in" when you're ready.
-
-    Example:
-
-    .. code-block:: python
-
-        class User(Model):
-            username = CharField()
-
-        NoteThroughDeferred = DeferredThroughModel()  # Create placeholder.
-
-        class Note(Model):
-            text = TextField()
-            users = ManyToManyField(User, through_model=NoteThroughDeferred)
-
-        class NoteThrough(Model):
-            user = ForeignKeyField(User)
-            note = ForeignKeyField(Note)
-            sort_order = IntegerField(default=0)
-
-        # Now that all the models are defined, we can replace the placeholder
-        # with the actual through model implementation.
-        NoteThroughDeferred.set_model(NoteThrough)
-
-    .. py:method:: set_model(model_class)
-
-        Initialize the deferred placeholder with the appropriate model class.
 
 .. py:class:: CompressedField([compression_level=6[, algorithm='zlib'[, **kwargs]]])
 
@@ -2789,126 +2408,6 @@ These fields can be found in the ``playhouse.fields`` module.
 
     :param int compression_level: A value from 0 to 9.
     :param str algorithm: Either ``'zlib'`` or ``'bz2'``.
-
-.. py:class:: PasswordField([iterations=12[, **kwargs]])
-
-    ``PasswordField`` stores a password hash and lets you verify it. The password is hashed when it is saved to the database and after reading it from the database you can call ``check_password (password) -> bool`` on it.
-
-    :param int iterations: Indicates the work factor, it does 2^n iterations.
-
-    .. note:: This field requires `bcrypt <https://github.com/pyca/bcrypt/>`_, which can be installed by running ``pip install bcrypt``.
-
-
-.. py:class:: PickledField([**kwargs])
-
-    A field capable of storing arbitrary Python objects.
-
-    .. note:: If the ``cPickle`` module is available, it will be used.
-
-.. _gfk:
-
-Generic foreign keys
---------------------
-
-The ``gfk`` module provides a Generic ForeignKey (GFK), similar to Django.  A GFK
-is composed of two columns: an object ID and an object type identifier.  The
-object types are collected in a global registry (``all_models``).
-
-How a :py:class:`GFKField` is resolved:
-
-1. Look up the object type in the global registry (returns a model class)
-2. Look up the model instance by object ID
-
-.. note:: In order to use Generic ForeignKeys, your application's models *must*
-    subclass ``playhouse.gfk.Model``.  This ensures that the model class will
-    be added to the global registry.
-
-.. note:: GFKs themselves are not actually a field and will not add a column
-    to your table.
-
-Like regular ForeignKeys, GFKs support a "back-reference" via the :py:class:`ReverseGFK`
-descriptor.
-
-How to use GFKs
-^^^^^^^^^^^^^^^
-
-1. Be sure your model subclasses ``playhouse.gfk.Model``
-2. Add a :py:class:`CharField` to store the ``object_type``
-3. Add a field to store the ``object_id`` (usually a :py:class:`IntegerField`)
-4. Add a :py:class:`GFKField` and instantiate it with the names of the ``object_type``
-   and ``object_id`` fields.
-5. (optional) On any other models, add a :py:class:`ReverseGFK` descriptor
-
-Example:
-
-.. code-block:: python
-
-    from playhouse.gfk import *
-
-    class Tag(Model):
-        tag = CharField()
-        object_type = CharField(null=True)
-        object_id = IntegerField(null=True)
-        object = GFKField('object_type', 'object_id')
-
-    class Blog(Model):
-        tags = ReverseGFK(Tag, 'object_type', 'object_id')
-
-    class Photo(Model):
-        tags = ReverseGFK(Tag, 'object_type', 'object_id')
-
-How you use these is pretty straightforward hopefully:
-
-.. code-block:: pycon
-
-    >>> b = Blog.create(name='awesome post')
-    >>> Tag.create(tag='awesome', object=b)
-    >>> b2 = Blog.create(name='whiny post')
-    >>> Tag.create(tag='whiny', object=b2)
-
-    >>> b.tags # <-- a select query
-    <class '__main__.Tag'> SELECT t1."id", t1."tag", t1."object_type", t1."object_id" FROM "tag" AS t1 WHERE ((t1."object_type" = ?) AND (t1."object_id" = ?)) [u'blog', 1]
-
-    >>> [x.tag for x in b.tags]
-    [u'awesome']
-
-    >>> [x.tag for x in b2.tags]
-    [u'whiny']
-
-    >>> p = Photo.create(name='picture of cat')
-    >>> Tag.create(object=p, tag='kitties')
-    >>> Tag.create(object=p, tag='cats')
-
-    >>> [x.tag for x in p.tags]
-    [u'kitties', u'cats']
-
-    >>> [x.tag for x in Blog.tags]
-    [u'awesome', u'whiny']
-
-    >>> t = Tag.get(Tag.tag == 'awesome')
-    >>> t.object
-    <__main__.Blog at 0x268f450>
-
-    >>> t.object.name
-    u'awesome post'
-
-GFK API
-^^^^^^^
-
-.. py:class:: GFKField([model_type_field='object_type'[, model_id_field='object_id']])
-
-    Provide a clean API for storing "generic" foreign keys.  Generic foreign keys
-    are comprised of an object type, which maps to a model class, and an object id,
-    which maps to the primary key of the related model class.
-
-    Setting the GFKField on a model will automatically populate the ``model_type_field``
-    and ``model_id_field``.  Similarly, getting the GFKField on a model instance
-    will "resolve" the two fields, first looking up the model class, then looking
-    up the instance by ID.
-
-.. py:class:: ReverseGFK(model, [model_type_field='object_type'[, model_id_field='object_id']])
-
-    Back-reference support for :py:class:`GFKField`.
 
 .. _hybrid:
 
@@ -3084,103 +2583,6 @@ Hybrid API
             (("t1"."end" - "t1"."start") > 6) AND
             ((abs("t1"."end" - "t1"."start") / 2) >= 3)
         )
-
-.. _kv:
-
-Key/Value Store
----------------
-
-Provides a simple key/value store, using a dictionary API.  By default the
-the :py:class:`KeyStore` will use an in-memory sqlite database, but any database
-will work.
-
-To start using the key-store, create an instance and pass it a field to use
-for the values.
-
-.. code-block:: python
-
-    >>> kv = KeyStore(TextField())
-    >>> kv['a'] = 'A'
-    >>> kv['a']
-    'A'
-
-.. note::
-  To store arbitrary python objects, use the :py:class:`PickledKeyStore`, which
-  stores values in a pickled :py:class:`BlobField`.
-
-  If your objects are JSON-serializable, you can also use the :py:class:`JSONKeyStore`, which stores the values as JSON-encoded strings.
-
-Using the :py:class:`KeyStore` it is possible to use "expressions" to retrieve
-values from the dictionary.  For instance, imagine you want to get all keys
-which contain a certain substring:
-
-.. code-block:: python
-
-    >>> keys_matching_substr = kv[kv.key % '%substr%']
-    >>> keys_start_with_a = kv[fn.Lower(fn.Substr(kv.key, 1, 1)) == 'a']
-
-KeyStore API
-^^^^^^^^^^^^
-
-.. py:class:: KeyStore(value_field[, ordered=False[, database=None]])
-
-    Lightweight dictionary interface to a model containing a key and value.
-    Implements common dictionary methods, such as ``__getitem__``, ``__setitem__``,
-    ``get``, ``pop``, ``items``, ``keys``, and ``values``.
-
-    :param Field value_field: Field instance to use as value field, e.g. an
-        instance of :py:class:`TextField`.
-    :param boolean ordered: Whether the keys should be returned in sorted order
-    :param Database database: :py:class:`Database` class to use for the storage
-        backend.  If none is supplied, an in-memory Sqlite DB will be used.
-
-    Example:
-
-    .. code-block:: pycon
-
-        >>> from playhouse.kv import KeyStore
-        >>> kv = KeyStore(TextField())
-        >>> kv['a'] = 'foo'
-        >>> for k, v in kv:
-        ...     print k, v
-        a foo
-
-        >>> 'a' in kv
-        True
-        >>> 'b' in kv
-        False
-
-.. py:class:: JSONKeyStore([ordered=False[, database=None]])
-
-    Identical to the :py:class:`KeyStore` except the values are stored as JSON-encoded strings, so you can store complex data-types like dictionaries and lists.
-
-    Example:
-
-    .. code-block:: pycon
-
-        >>> from playhouse.kv import JSONKeyStore
-        >>> jkv = JSONKeyStore()
-        >>> jkv['a'] = 'A'
-        >>> jkv['b'] = [1, 2, 3]
-        >>> list(jkv.items())
-        [(u'a', 'A'), (u'b', [1, 2, 3])]
-
-.. py:class:: PickledKeyStore([ordered=False[, database=None]])
-
-    Identical to the :py:class:`KeyStore` except *anything* can be stored as
-    a value in the dictionary.  The storage for the value will be a pickled
-    :py:class:`BlobField`.
-
-    Example:
-
-    .. code-block:: pycon
-
-        >>> from playhouse.kv import PickledKeyStore
-        >>> pkv = PickledKeyStore()
-        >>> pkv['a'] = 'A'
-        >>> pkv['b'] = 1.0
-        >>> list(pkv.items())
-        [(u'a', 'A'), (u'b', 1.0)]
 
 .. _shortcuts:
 
@@ -3899,104 +3301,6 @@ This module contains a helper function to generate a database connection from a 
         register_database(FirebirdDatabase, 'firebird')
         db = connect('firebird://my-firebird-db')
 
-.. _csv_utils:
-
-CSV Utils
----------
-
-This module contains helpers for dumping queries into CSV, and for loading CSV data into a database.  CSV files can be introspected to generate an appropriate model class for working with the data. This makes it really easy to explore the data in a CSV file using Peewee and SQL.
-
-Here is how you would load a CSV file into an in-memory SQLite database.  The call to :py:func:`load_csv` returns a :py:class:`Model` instance suitable for working with the CSV data:
-
-.. code-block:: python
-
-    from peewee import *
-    from playhouse.csv_loader import load_csv
-    db = SqliteDatabase(':memory:')
-    ZipToTZ = load_csv(db, 'zip_to_tz.csv')
-
-Now we can run queries using the new model.
-
-.. code-block:: pycon
-
-    # Get the timezone for a zipcode.
-    >>> ZipToTZ.get(ZipToTZ.zip == 66047).timezone
-    'US/Central'
-
-    # Get all the zipcodes for my town.
-    >>> [row.zip for row in ZipToTZ.select().where(
-    ...     (ZipToTZ.city == 'Lawrence') && (ZipToTZ.state == 'KS'))]
-    [66044, 66045, 66046, 66047, 66049]
-
-For more information and examples check out this `blog post <http://charlesleifer.com/blog/using-peewee-to-explore-csv-files/>`_.
-
-CSV Loader API
-^^^^^^^^^^^^^^
-
-.. py:function:: load_csv(db_or_model, filename[, fields=None[, field_names=None[, has_header=True[, sample_size=10[, converter=None[, db_table=None[, **reader_kwargs]]]]]]])
-
-    Load a CSV file into the provided database or model class, returning a
-    :py:class:`Model` suitable for working with the CSV data.
-
-    :param db_or_model: Either a :py:class:`Database` instance or a :py:class:`Model` class.  If a model is not provided, one will be automatically generated for you.
-    :param str filename: Path of CSV file to load.
-    :param list fields: A list of :py:class:`Field` instances mapping to each column in the CSV.  This allows you to manually specify the column types.  If not provided, and a model is not provided, the field types will be determined automatically.
-    :param list field_names: A list of strings to use as field names for each column in the CSV.  If not provided, and a model is not provided, the field names will be determined by looking at the header row of the file.  If no header exists, then the fields will be given generic names.
-    :param bool has_header: Whether the first row is a header.
-    :param int sample_size: Number of rows to look at when introspecting data types.  If set to ``0``, then a generic field type will be used for all fields.
-    :param RowConverter converter: a :py:class:`RowConverter` instance to use for introspecting the CSV.  If not provided, one will be created.
-    :param str db_table: The name of the database table to load data into.  If this value is not provided, it will be determined using the filename of the CSV file.  If a model is provided, this value is ignored.
-    :param reader_kwargs: Arbitrary keyword arguments to pass to the ``csv.reader`` object, such as the dialect, separator, etc.
-    :rtype: A :py:class:`Model` suitable for querying the CSV data.
-
-    Basic example -- field names and types will be introspected:
-
-    .. code-block:: python
-
-        from peewee import *
-        from playhouse.csv_loader import *
-        db = SqliteDatabase(':memory:')
-        User = load_csv(db, 'users.csv')
-
-    Using a pre-defined model:
-
-    .. code-block:: python
-
-        class ZipToTZ(Model):
-            zip = IntegerField()
-            timezone = CharField()
-
-        load_csv(ZipToTZ, 'zip_to_tz.csv')
-
-    Specifying fields:
-
-    .. code-block:: python
-
-        fields = [DecimalField(), IntegerField(), IntegerField(), DateField()]
-        field_names = ['amount', 'from_acct', 'to_acct', 'timestamp']
-        Payments = load_csv(db, 'payments.csv', fields=fields, field_names=field_names, has_header=False)
-
-Dumping CSV
-^^^^^^^^^^^
-
-.. py:function:: dump_csv(query, file_or_name[, include_header=True[, close_file=True[, append=True[, csv_writer=None]]]])
-
-    :param query: A peewee :py:class:`SelectQuery` to dump as CSV.
-    :param file_or_name: Either a filename or a file-like object.
-    :param include_header: Whether to generate a CSV header row consisting of the names of the selected columns.
-    :param close_file: Whether the file should be closed after writing the query data.
-    :param append: Whether new data should be appended to the end of the file.
-    :param csv_writer: A python ``csv.writer`` instance to use.
-
-    Example usage:
-
-    .. code-block:: python
-
-        with open('account-export.csv', 'w') as fh:
-            query = Account.select().order_by(Account.id)
-            dump_csv(query, fh)
-
-
 .. _pool:
 
 Connection pool
@@ -4079,63 +3383,6 @@ Pool APIs
 .. py:class:: PooledSqliteExtDatabase
 
     Persistent connections for SQLite apps, using the :ref:`sqlite_ext` advanced database driver :py:class:`SqliteExtDatabase`.
-
-
-.. _read_slaves:
-
-Read Slaves
------------
-
-The ``read_slave`` module contains a :py:class:`Model` subclass that can be used
-to automatically execute ``SELECT`` queries against different database(s). This
-might be useful if you have your databases in a master / slave configuration.
-
-.. py:class:: ReadSlaveModel
-
-    Model subclass that will route ``SELECT`` queries to a different database.
-
-    Master and read-slaves are specified using ``Model.Meta``:
-
-    .. code-block:: python
-
-        # Declare a master and two read-replicas.
-        master = PostgresqlDatabase('master')
-        replica_1 = PostgresqlDatabase('replica_1')
-        replica_2 = PostgresqlDatabase('replica_2')
-
-        # Declare a BaseModel, the normal best-practice.
-        class BaseModel(ReadSlaveModel):
-            class Meta:
-                database = master
-                read_slaves = (replica_1, replica_2)
-
-        # Declare your models.
-        class User(BaseModel):
-            username = CharField()
-
-    When you execute writes (or deletes), they will be executed against the
-    master database:
-
-    .. code-block:: python
-
-        User.create(username='Peewee')  # Executed against master.
-
-    When you execute a read query, it will run against one of the replicas:
-
-    .. code-block:: python
-
-        users = User.select().where(User.username == 'Peewee')
-
-    .. note::
-        To force a ``SELECT`` query against the master database, manually create
-        the :py:class:`SelectQuery`.
-
-        .. code-block:: python
-
-            SelectQuery(User)  # master database.
-
-    .. note::
-        Queries will be dispatched among the ``read_slaves`` in round-robin fashion.
 
 .. _test_utils:
 
@@ -4242,60 +3489,6 @@ Contains utilities helpful when testing peewee projects.
                 with assert_query_count(1):
                     perform_expensive_operation()
 
-.. _pskel:
-
-pskel
------
-
-I often find myself writing very small scripts with peewee. *pskel* will generate the boilerplate code for a basic peewee script.
-
-Usage::
-
-    pskel [options] model1 model2 ...
-
-*pskel* accepts the following options:
-
-=================  =============  =======================================
-Option             Default        Description
-=================  =============  =======================================
-``-l,--logging``   False          Log all queries to stdout.
-``-e,--engine``    sqlite         Database driver to use.
-``-d,--database``  ``:memory:``   Database to connect to.
-=================  =============  =======================================
-
-Example::
-
-    $ pskel -e postgres -d my_database User Tweet
-
-This will print the following code to *stdout* (which you can redirect into a file using ``>``):
-
-.. code-block:: python
-
-    #!/usr/bin/env python
-
-    import logging
-
-    from peewee import *
-    from peewee import create_model_tables
-
-    db = PostgresqlDatabase('my_database')
-
-    class BaseModel(Model):
-        class Meta:
-            database = db
-
-    class User(BaseModel):
-        pass
-
-    class Tweet(BaseModel):
-        pass
-
-    def main():
-        create_model_tables([User, Tweet], fail_silently=True)
-
-    if __name__ == '__main__':
-        main()
-
 
 .. _flask_utils:
 
@@ -4337,7 +3530,7 @@ Basic usage:
         username = CharField(unique=True)
 
     class Tweet(db_wrapper.Model):
-        user = ForeignKeyField(User, related_name='tweets')
+        user = ForeignKeyField(User, backref='tweets')
         content = TextField()
         timestamp = DateTimeField(default=datetime.datetime.now)
 
