@@ -3937,8 +3937,10 @@ class BooleanField(Field):
 
 
 class BareField(Field):
-    def db_value(self, value): return value
-    def python_value(self, value): return value
+    def __init__(self, coerce=None, *args, **kwargs):
+        super(BareField, self).__init__(*args, **kwargs)
+        if coerce is not None:
+            self.coerce = coerce
 
     def ddl(self, ctx):
         return Entity(self.column_name)
