@@ -9,6 +9,7 @@ from playhouse._sqlite_ext import TableFunction
 from .base import BaseTestCase
 from .base import ModelTestCase
 from .base import TestModel
+from .base import requires_models
 from .base import skip_case_unless
 from .base import skip_if
 
@@ -342,6 +343,16 @@ class TestJSONField(ModelTestCase):
         for entry in self.test_data:
             APIData.create(data=entry, value=entry['title'])
         self.Q = APIData.select().order_by(APIData.id)
+
+    def test_extract_array_agg(self):
+        value = (APIData
+                 .select(fn.json_group_array(
+                     APIData.data.extract('metadata.tags[0]')))
+                 .order_by(APIData.id)
+                 .scalar())
+        data = json.loads(value)
+        self.assertEqual(data, ['python', 'nosql', 'sqlite', 'nosql',
+                                'python'])
 
     def test_extract(self):
         titles = self.Q.columns(APIData.data.extract('title')).tuples()
