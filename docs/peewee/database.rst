@@ -193,6 +193,90 @@ as a list or tuple of 2-tuples containing the pragma name and value:
         ('mmap_size', 1024 * 1024 * 32),
     ))
 
+User-defined functions
+^^^^^^^^^^^^^^^^^^^^^^
+
+SQLite can be extended with user-defined Python code. The
+:py:class:`SqliteDatabase` class supports three types of user-defined
+extensions:
+
+* Functions - which take any number of parameters and return a single value.
+* Aggregates - which aggregate parameters from multiple rows and return a
+  single value.
+* Collations - which describe how to sort some value.
+
+.. note::
+    For even more extension support, see :py:class:`SqliteExtDatabase`, which
+    is in the ``playhouse.sqlite_ext`` module.
+
+Example user-defined function:
+
+.. code-block:: python
+
+    db = SqliteDatabase('analytics.db')
+
+    from urllib.parse import urlparse
+
+    @db.func('hostname')
+    def hostname(url):
+        if url is not None:
+            return urlparse(url).netloc
+
+    # Call this function in our code:
+    # The following finds the most common hostnames of referrers by count:
+    query = (PageView
+             .select(fn.hostname(PageView.referrer), fn.COUNT(PageView.id))
+             .group_by(fn.hostname(PageView.referrer))
+             .order_by(fn.COUNT(PageView.id).desc()))
+
+Example user-defined aggregate:
+
+.. code-block:: python
+
+    from hashlib import md5
+
+    @db.aggregate('md5')
+    class MD5Checksum(object):
+        def __init__(self):
+            self.checksum = md5()
+
+        def step(self, value):
+            self.checksum.update(value.encode('utf-8'))
+
+        def finalize(self):
+            return self.checksum.hexdigest()
+
+    # Usage:
+    # The following computes an aggregate MD5 checksum for files broken
+    # up into chunks and stored in the database.
+    query = (FileChunk
+             .select(FileChunk.filename, fn.MD5(FileChunk.data))
+             .group_by(FileChunk.filename)
+             .order_by(FileChunk.filename, FileChunk.sequence))
+
+Example collation:
+
+.. code-block:: python
+
+    @db.collation('ireverse')
+    def collate_reverse(s1, s2):
+        # Case-insensitive reverse.
+        s1, s2 = s1.lower(), s2.lower()
+        return (s1 < s2) - (s1 > s2)  # Equivalent to -cmp(s1, s2)
+
+    # To use this collation to sort books in reverse order...
+    Book.select().order_by(collate_reverse.collation(Book.title))
+
+    # Or...
+    Book.select().order_by(Book.title.asc(collation='reverse'))
+
+For more information, see:
+
+* :py:meth:`SqliteDatabase.func`
+* :py:meth:`SqliteDatabase.aggregate`
+* :py:meth:`SqliteDatabase.collation`
+* :ref:`sqlite_ext`
+
 APSW, an Advanced SQLite Driver
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

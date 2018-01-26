@@ -386,13 +386,17 @@ Database
 
 .. py:class:: SqliteDatabase(database[, pragmas=None[, timeout=5[, **kwargs]]])
 
-    Sqlite database implementation.
-
-    Additional optional keyword-parameters:
-
     :param list pragmas: A list of 2-tuples containing pragma key and value to
-        set whenever a connection is opened.
+        set every time a connection is opened.
     :param timeout: Set the busy-timeout on the SQLite driver (in seconds).
+
+    Sqlite database implementation. :py:class:`SqliteDatabase` that provides
+    some advanced features only offered by Sqlite.
+
+    * Register custom aggregates, collations and functions
+    * Load C extensions
+    * Advanced transactions (specify isolation level)
+    * For even more features, see :py:class:`SqliteExtDatabase`.
 
     Example of using PRAGMAs::
 
@@ -401,26 +405,32 @@ Database
             ('journal_mode', 'wal'),  # Use write-ahead-log journal mode.
         ))
 
-    .. py:method:: pragma(key[, value=SENTINEL])
+    .. py:method:: pragma(key[, value=SENTINEL[, permanent=False]])
 
         :param key: Setting name.
         :param value: New value for the setting (optional).
+        :param permanent: Apply this pragma whenever a connection is opened.
 
         Execute a PRAGMA query once on the active connection. If a value is not
         specified, then the current value will be returned.
 
+        If ``permanent`` is specified, then the PRAGMA query will also be
+        executed whenever a new connection is opened, ensuring it is always
+        in-effect.
+
         .. note::
-            This only affects the current connection. If the PRAGMA being
-            executed is not persistent, then it will only be in effect for the
-            lifetime of the connection (or until over-written).
+            By default this only affects the current connection. If the PRAGMA
+            being executed is not persistent, then you must specify
+            ``permanent=True`` to ensure the pragma is set on subsequent
+            connections.
 
     .. py:attribute:: cache_size
 
-        Get or set the cache_size pragma.
+        Get or set the cache_size pragma for the current connection.
 
     .. py:attribute:: foreign_keys
 
-        Get or set the foreign_keys pragma.
+        Get or set the foreign_keys pragma for the current connection.
 
     .. py:attribute:: journal_mode
 
@@ -432,7 +442,7 @@ Database
 
     .. py:attribute:: mmap_size
 
-        Get or set the mmap_size pragma.
+        Get or set the mmap_size pragma for the current connection.
 
     .. py:attribute:: page_size
 
@@ -440,15 +450,15 @@ Database
 
     .. py:attribute:: read_uncommitted
 
-        Get or set the read_uncommitted pragma.
+        Get or set the read_uncommitted pragma for the current connection.
 
     .. py:attribute:: synchronous
 
-        Get or set the synchronous pragma.
+        Get or set the synchronous pragma for the current connection.
 
     .. py:attribute:: wal_autocheckpoint
 
-        Get or set the wal_autocheckpoint pragma.
+        Get or set the wal_autocheckpoint pragma for the current connection.
 
     .. py:attribute:: timeout
 
@@ -473,7 +483,7 @@ Database
         :param int num_params: Number of parameters the aggregate accepts,
             or -1 for any number.
 
-        Decorator to register a user-defined aggregate function.
+        Class decorator to register a user-defined aggregate function.
 
         Example::
 
@@ -526,6 +536,14 @@ Database
             # Usage:
             Book.select().order_by(collate_reverse.collation(Book.title))
 
+            # Equivalent:
+            Book.select().order_by(Book.title.asc(collation='reverse'))
+
+        As you might have noticed, the original ``collate_reverse`` function
+        has a special attribute called ``collation`` attached to it.  This
+        extra attribute provides a shorthand way to generate the SQL necessary
+        to use our custom collation.
+
     .. py:method:: register_function(fn[, name=None[, num_params=-1]])
 
         :param fn: The user-defined scalar function.
@@ -572,6 +590,20 @@ Database
         :param name: Name of the user-defined scalar function.
 
         Unregister the user-defined scalar function.
+
+    .. py:method:: load_extension(extension_module)
+
+        Load the given C extension. If a connection is currently open in the
+        calling thread, then the extension will be loaded for that connection
+        as well as all subsequent connections.
+
+        For example, if you've compiled the closure table extension and wish to
+        use it in your application, you might write:
+
+        .. code-block:: python
+
+            db = SqliteExtDatabase('my_app.db')
+            db.load_extension('closure')
 
     .. py:method:: transaction([lock_type=None])
 

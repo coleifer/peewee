@@ -881,12 +881,12 @@ class ColumnBase(Node):
     def cast(self, as_type):
         return Cast(self, as_type)
 
-    def asc(self):
-        return Asc(self)
+    def asc(self, collation=None, nulls=None):
+        return Asc(self, collation=collation, nulls=nulls)
     __pos__ = asc
 
-    def desc(self):
-        return Desc(self)
+    def desc(self, collation=None, nulls=None):
+        return Desc(self, collation=collation, nulls=nulls)
     __neg__ = desc
 
     def __invert__(self):
@@ -2607,6 +2607,7 @@ class SqliteDatabase(Database):
         self._aggregates = {}
         self._collations = {}
         self._functions = {}
+        self._extensions = set()
         self.register_function(_sqlite_date_part, 'date_part', 2)
         self.register_function(_sqlite_date_trunc, 'date_trunc', 2)
 
@@ -2631,6 +2632,8 @@ class SqliteDatabase(Database):
         self._load_aggregates(conn)
         self._load_collations(conn)
         self._load_functions(conn)
+        if self._extensions:
+            self._load_extensions(conn)
 
     def _set_pragmas(self, conn):
         if self._pragmas:
@@ -2639,10 +2642,16 @@ class SqliteDatabase(Database):
                 cursor.execute('PRAGMA %s = %s;' % (pragma, value))
             cursor.close()
 
-    def pragma(self, key, value=SENTINEL):
+    def pragma(self, key, value=SENTINEL, permanent=False):
         sql = 'PRAGMA %s' % key
         if value is not SENTINEL:
             sql += ' = %s' % (value or 0)
+            if permanent:
+                pragmas = dict(self._pragmas or ())
+                pragmas[key] = value
+                self._pragmas = list(pragmas.items())
+        elif permanent:
+            raise ValueError('Cannot specify a permanent pragma without value')
         row = self.execute_sql(sql).fetchone()
         if row:
             return row[0]
@@ -2728,6 +2737,21 @@ class SqliteDatabase(Database):
 
     def unregister_function(self, name):
         del(self._functions[name])
+
+    def _load_extensions(self, conn):
+        conn.enable_load_extension(True)
+        for extension in self._extensions:
+            conn.load_extension(extension)
+
+    def load_extension(self, extension):
+        self._extensions.add(extension)
+        if not self.is_closed():
+            conn = self.connection()
+            conn.enable_load_extension(True)
+            conn.load_extension(extension)
+
+    def unload_extension(self, extension):
+        self._extensions.remove(extension)
 
     def transaction(self, lock_type=None):
         return _transaction(self, lock_type=lock_type)

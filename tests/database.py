@@ -39,6 +39,17 @@ class TestDatabase(DatabaseTestCase):
         self.database.foreign_keys = 'off'
         self.assertEqual(self.database.foreign_keys, 0)
 
+    def test_pragmas_permanent(self):
+        db = SqliteDatabase(':memory:')
+        self.assertEqual(db.foreign_keys, 0)
+
+        db.pragma('foreign_keys', 1, True)
+        self.assertEqual(db.foreign_keys, 1)
+
+        db.close()
+        db.connect()
+        self.assertEqual(db.foreign_keys, 1)
+
     def test_context_settings(self):
         class TestDatabase(Database):
             field_types = {'BIGINT': 'TEST_BIGINT', 'TEXT': 'TEST_TEXT'}

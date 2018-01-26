@@ -499,8 +499,8 @@ class FTS5Model(BaseFTSModel):
             tmp_db.execute('CREATE VIRTUAL TABLE fts5test USING fts5 (data);')
         except:
             try:
-                sqlite3.enable_load_extension(True)
-                sqlite3.load_extension('fts5')
+                tmp_db.enable_load_extension(True)
+                tmp_db.load_extension('fts5')
             except:
                 return False
             else:
@@ -885,7 +885,6 @@ class SqliteExtDatabase(SqliteDatabase):
                  hash_functions=False, regexp_function=False,
                  bloomfilter=False, *args, **kwargs):
         super(SqliteExtDatabase, self).__init__(database, *args, **kwargs)
-        self._extensions = set()
         self._row_factory = None
         self._table_functions = []
 
@@ -916,23 +915,9 @@ class SqliteExtDatabase(SqliteDatabase):
         super(SqliteExtDatabase, self)._add_conn_hooks(conn)
         if self._row_factory:
             conn.row_factory = self._row_factory
-        if self._extensions:
-            self._load_extensions(conn)
         if self._table_functions:
             for table_function in self._table_functions:
                 table_function.register(conn)
-
-    def _load_extensions(self, conn):
-        conn.enable_load_extension(True)
-        for extension in self._extensions:
-            conn.load_extension(extension)
-
-    def load_extension(self, extension):
-        self._extensions.add(extension)
-        if not self.is_closed():
-            conn = self.connection()
-            conn.enable_load_extension(True)
-            conn.load_extension(extension)
 
     def table_function(self, name=None):
         def decorator(klass):
@@ -943,9 +928,6 @@ class SqliteExtDatabase(SqliteDatabase):
                 klass.register(self.connection())
             return klass
         return decorator
-
-    def unload_extension(self, extension):
-        self._extensions.remove(extension)
 
     def row_factory(self, fn):
         self._row_factory = fn
