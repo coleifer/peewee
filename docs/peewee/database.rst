@@ -158,15 +158,10 @@ can specify arbitrary `sqlite3 parameters
         # etc, etc
 
 The :ref:`playhouse` contains a :ref:`SQLite extension module <sqlite_ext>`
-which provides many SQLite-specific features such as:
-
-* :ref:`Full-text search <sqlite_fts>` with :ref:`BM25 ranking <sqlite_bm25>`.
-* JSON extension support
-* LSM extension support
-* And more!
-
-If you would like to use these awesome features, use the
-:py:class:`SqliteExtDatabase` from the ``playhouse.sqlite_ext`` module:
+which provides many SQLite-specific features such as :ref:`full-text search
+<sqlite_fts>`, json extension support, and much, much more. If you would like
+to use these awesome features, use the :py:class:`SqliteExtDatabase` from the
+``playhouse.sqlite_ext`` module:
 
 .. code-block:: python
 
@@ -192,6 +187,35 @@ as a list or tuple of 2-tuples containing the pragma name and value:
         ('cache_size', 10000),
         ('mmap_size', 1024 * 1024 * 32),
     ))
+
+PRAGMAs may also be configured dynamically using either the
+:py:meth:`~SqliteDatabase.pragma` method or the special properties exposed on
+the :py:class:`SqliteDatabase` object:
+
+.. code-block:: python
+
+    # Set cache size to 64MB for current connection.
+    db.pragma('cache_size', -1024 * 64)
+
+    # Same as above.
+    db.cache_size = -1024 * 64
+
+    # Read the value of several pragmas:
+    print('cache_size:', db.cache_size)
+    print('foreign_keys:', db.foreign_keys)
+    print('journal_mode:', db.journal_mode)
+    print('page_size:', db.page_size)
+
+    # Set foreign_keys pragma on current connection *AND* on all
+    # connections opened subsequently.
+    db.pragma('foreign_keys', 1, permanent=True)
+
+.. attention::
+    Pragmas set using the :py:meth:`~SqliteDatabase.pragma` method, by default,
+    do not persist after the connection is closed. To configure a pragma to be
+    run whenever a connection is opened, specify ``permanent=True``.
+
+.. _sqlite-user-functions:
 
 User-defined functions
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -275,7 +299,47 @@ For more information, see:
 * :py:meth:`SqliteDatabase.func`
 * :py:meth:`SqliteDatabase.aggregate`
 * :py:meth:`SqliteDatabase.collation`
-* :ref:`sqlite_ext`
+* For even more SQLite extensions, see :ref:`sqlite_ext`
+
+.. _sqlite-locking:
+
+Set locking mode for transaction
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+SQLite transactions can be opened in three different modes:
+
+* *Deferred* (**default**) - only acquires lock when a read or write is
+  performed. The first read creates a `shared lock <https://sqlite.org/lockingv3.html#locking>`_
+  and the first write creates a `reserved lock <https://sqlite.org/lockingv3.html#locking>`_.
+  Because the acquisition of the lock is deferred until actually needed, it is
+  possible that another thread or process could create a separate transaction
+  and write to the database after the BEGIN on the current thread has executed.
+* *Immediate* - a `reserved lock <https://sqlite.org/lockingv3.html#locking>`_
+  is acquired immediately. In this mode, no other database may write to the
+  database or open an *immediate* or *exclusive* transaction. Other processes
+  can continue to read from the database, however.
+* *Exclusive* - opens an `exclusive lock <https://sqlite.org/lockingv3.html#locking>`_
+  which prevents all (except for read uncommitted) connections from accessing
+  the database until the transaction is complete.
+
+Example specifying the locking mode:
+
+.. code-block:: python
+
+    db = SqliteDatabase('app.db')
+
+    with db.atomic('EXCLUSIVE'):
+        do_something()
+
+
+    @db.atomic('IMMEDIATE')
+    def some_other_function():
+        # This function is wrapped in an "IMMEDIATE" transaction.
+        do_something_else()
+
+For more information, see the SQLite `locking documentation <https://sqlite.org/lockingv3.html#locking>`_.
+To learn more about transactions in Peewee, see the :ref:`transactions`
+documentation.
 
 APSW, an Advanced SQLite Driver
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
