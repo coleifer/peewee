@@ -274,7 +274,7 @@ sqlite_ext API notes
             for doc in query:
                 print 'match: ', doc.title
 
-    .. py:classmethod:: search(term[, weights=None[, with_score=False[, score_alias='score']]])
+    .. py:classmethod:: search(term[, weights=None[, with_score=False[, score_alias='score'[, explicit_ordering=False]]]])
 
         Shorthand way of searching for a term and sorting results by the
         quality of the match. This is equivalent to the :py:meth:`~FTSModel.rank`
@@ -488,7 +488,9 @@ sqlite_ext API notes
 
         Remove values referenced by the given path(s). The ``remove`` function returns a **new** JSON string formed by removing the specified paths from the input JSON string.
 
-        The process for removing fields from a JSON column is similar to the way you :py:meth:`~JSONField.set` them. For a code example, see :ref:`updating JSON data <updating-json>`.
+        The process for removing fields from a JSON column is similar to the
+        way you :py:meth:`~JSONField.set` them. For a code example, see
+        :ref:`updating JSON data <updating-json>`.
 
         `SQLite documentation <https://www.sqlite.org/json1.html#jrm>`_.
 
@@ -529,9 +531,13 @@ sqlite_ext API notes
 
     .. py:method:: tree([path=None])
 
-        The ``tree`` function corresponds to ``json_tree``, a table-valued function that walks the JSON value provided and recursively returns all descendants of the given root node. If a path is specified, then that path is treated as the root node element.
+        The ``tree`` function corresponds to ``json_tree``, a table-valued
+        function that walks the JSON value provided and recursively returns all
+        descendants of the given root node. If a path is specified, then that
+        path is treated as the root node element.
 
-        The rows returned by calls to ``tree()`` have the same attributes as rows returned by calls to :py:meth:`~JSONField.children`.
+        The rows returned by calls to ``tree()`` have the same attributes as
+        rows returned by calls to :py:meth:`~JSONField.children`.
 
         For examples, see `my blog post on JSON1 <http://charlesleifer.com/blog/using-the-sqlite-json1-and-fts5-extensions-with-python/>`_.
 
@@ -568,11 +574,20 @@ sqlite_ext API notes
 
 .. py:class:: FTS5Model()
 
-    Model class that should be used to implement virtual tables using the FTS5 extension. Documentation on the FTS5 extension `can be found here <http://sqlite.org/fts5.html>`_. This extension behaves very similarly to the FTS3 and FTS4 extensions, and the ``FTS5Model`` supports many of the same APIs as :py:class:`FTSModel`.
+    Model class that should be used to implement virtual tables using the FTS5
+    extension. Documentation on the FTS5 extension `can be found here
+    <http://sqlite.org/fts5.html>`_. This extension behaves very similarly to
+    the FTS3 and FTS4 extensions, and the ``FTS5Model`` supports many of the
+    same APIs as :py:class:`FTSModel`.
 
-    The ``FTS5`` extension is more strict in enforcing that no column define any type or constraints. For this reason, only :py:class:`SearchField` objects can be used with ``FTS5Model`` implementations.
+    The ``FTS5`` extension is more strict in enforcing that no column define
+    any type or constraints. For this reason, only :py:class:`SearchField`
+    objects can be used with ``FTS5Model`` implementations.
 
-    Additionally, ``FTS5`` comes with a built-in implementation of the BM25 ranking function. Therefore, the ``search`` and ``search_bm25`` methods have been overridden to use the builtin ranking functions rather than user-defined functions.
+    Additionally, ``FTS5`` comes with a built-in implementation of the BM25
+    ranking function. Therefore, the ``search`` and ``search_bm25`` methods
+    have been overridden to use the builtin ranking functions rather than
+    user-defined functions.
 
     .. py:classmethod:: fts5_installed()
 

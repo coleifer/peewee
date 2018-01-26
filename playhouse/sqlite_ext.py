@@ -99,6 +99,11 @@ class JSONField(TextField):
     def extract(self, *paths):
         return fn.json_extract(self, *self.clean_paths(paths))
 
+    def __getitem__(self, paths):
+        if not isinstance(paths, tuple):
+            paths = (paths,)
+        return self.extract(*paths)
+
     def _value_for_insertion(self, value):
         if isinstance(value, (list, tuple, dict)):
             return fn.json(json.dumps(value))
@@ -648,8 +653,9 @@ class FTS5Model(BaseFTSModel):
 
     @classmethod
     def VocabModel(cls, table_type='row', table=None):
-        if table_type not in ('row', 'col'):
-            raise ValueError('table_type must be either "row" or "col".')
+        if table_type not in ('row', 'col', 'instance'):
+            raise ValueError('table_type must be either "row", "col" or '
+                             '"instance".')
 
         attr = '_vocab_model_%s' % table_type
 
@@ -662,14 +668,16 @@ class FTS5Model(BaseFTSModel):
                     SQL(table_type))
 
             attrs = {
-                'term': VirtualField(),
+                'term': VirtualField(TextField),
                 'doc': IntegerField(),
                 'cnt': IntegerField(),
                 'rowid': RowIDField(),
                 'Meta': Meta,
             }
             if table_type == 'col':
-                attrs['col'] = VirtualField()
+                attrs['col'] = VirtualField(TextField)
+            elif table_type == 'instance':
+                attrs['offset'] = VirtualField(IntegerField)
 
             class_name = '%sVocab' % cls.__name__
             setattr(cls, attr, type(class_name, (VirtualModel,), attrs))
