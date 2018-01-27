@@ -71,6 +71,27 @@ class AutoIncrementField(AutoField):
         return NodeList((node_list, SQL('AUTOINCREMENT')))
 
 
+class JSONPath(object):
+    def __init__(self, field, path):
+        self.field = field
+        self._path = path
+
+    @property
+    def path(self):
+        return ''.join(self._path).lstrip('.')
+
+    def update_path(self, part):
+        new_path = list(self._path)
+        if isinstance(part, int):
+            new_path.append('[%s]' % part)
+        else:
+            new_path.append('.%s' % part)
+        return new_path
+
+    def __getitem__(self, idx):
+        return JSONPath(self.field, self.update_path(idx))
+
+
 class JSONField(TextField):
     def python_value(self, value):
         if value is not None:
@@ -109,24 +130,35 @@ class JSONField(TextField):
             return fn.json(json.dumps(value))
         return value
 
-    def _insert_like(self, fn, pairs):
+    def _insert_like(self, fn, pairs, mapping):
         npairs = len(pairs)
-        if npairs % 2 != 0:
+        if npairs == 1 and isinstance(pairs[0], dict):
+            # We were passed a single dictionary to update the field with.
+            mapping.update(pairs[0])
+            npairs = 0
+        elif npairs % 2 != 0:
             raise ValueError('Unequal key and value parameters.')
+
         accum = []
-        for i in range(0, npairs, 2):
-            accum.append(self.clean_path(pairs[i]))
-            accum.append(self._value_for_insertion(pairs[i + 1]))
+        if npairs:
+            for i in range(0, npairs, 2):
+                accum.append(self.clean_path(pairs[i]))
+                accum.append(self._value_for_insertion(pairs[i + 1]))
+        if mapping:
+            for key in mapping:
+                val = mapping[key]
+                accum.append(self.clean_path(key))
+                accum.append(self._value_for_insertion(val))
         return fn(self, *accum)
 
-    def insert(self, *pairs):
-        return self._insert_like(fn.json_insert, pairs)
+    def insert(self, *pairs, **data):
+        return self._insert_like(fn.json_insert, pairs, data)
 
-    def replace(self, *pairs):
-        return self._insert_like(fn.json_replace, pairs)
+    def replace(self, *pairs, **data):
+        return self._insert_like(fn.json_replace, pairs, data)
 
-    def set(self, *pairs):
-        return self._insert_like(fn.json_set, pairs)
+    def set(self, *pairs, **data):
+        return self._insert_like(fn.json_set, pairs, data)
 
     def remove(self, *paths):
         return fn.json_remove(self, *self.clean_paths(paths))

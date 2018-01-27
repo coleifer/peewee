@@ -380,11 +380,12 @@ APIs
             # ('Post 2', ['baz', 'nug'])
             # ('Post 3', [])
 
-    .. py:method:: insert(*pairs)
+    .. py:method:: insert(*pairs, **data)
 
         :param pairs: A flat list consisting of *key*, *value* pairs. E.g.,
             k1, v1, k2, v2, k3, v3. The key may be a simple string or a JSON
             path.
+        :param data: keyword arguments mapping paths to values to insert.
 
         Insert the values at the given keys (or paths) in the column data. If
         the key/path specified already has a value, it will **not** be
@@ -403,11 +404,12 @@ APIs
                      .where(APIResponse.json_data['category'] == 'posts')
                      .execute())
 
-    .. py:method:: replace(*pairs)
+    .. py:method:: replace(*pairs, **data)
 
         :param pairs: A flat list consisting of *key*, *value* pairs. E.g.,
             k1, v1, k2, v2, k3, v3. The key may be a simple string or a JSON
             path.
+        :param data: keyword arguments mapping paths to values to replace.
 
         Replace the values at the given keys (or paths) in the column data. If
         the key/path specified does not exist, a new key will not be created.
@@ -424,11 +426,12 @@ APIs
                      .where(APIResponse.json_data['category'] == 'posts')
                      .execute())
 
-    .. py:method:: set(*pairs)
+    .. py:method:: set(*pairs, **data)
 
         :param pairs: A flat list consisting of *key*, *value* pairs. E.g.,
             k1, v1, k2, v2, k3, v3. The key may be a simple string or a JSON
             path.
+        :param data: keyword arguments mapping paths to values to set.
 
         Set the values at the given keys (or paths) in the column data. The
         values will be created/updated regardless of whether the key exists
