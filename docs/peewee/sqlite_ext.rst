@@ -124,11 +124,29 @@ APIs
         However, if the callback raises a :py:class:`ValueError`, the
         transaction will be aborted and rolled-back.
 
+        Example:
+
+        .. code-block:: python
+
+            db = CSqliteExtDatabase(':memory:')
+
+            @db.on_commit
+            def on_commit():
+                logger.info('COMMITing changes')
+
     .. py:method:: on_rollback(fn)
 
         Register a callback to be executed whenever a transaction is rolled
         back on the current connection. The callback accepts no parameters and
         the return value is ignored.
+
+        Example:
+
+        .. code-block:: python
+
+            @db.on_rollback
+            def on_rollback():
+                logger.info('Rolling back changes')
 
     .. py:method:: on_update(fn)
 
@@ -143,6 +161,17 @@ APIs
 
         The callback's return value is ignored.
 
+        Example:
+
+        .. code-block:: python
+
+            db = CSqliteExtDatabase(':memory:')
+
+            @db.on_update
+            def on_update(query_type, db, table, rowid):
+                # e.g. INSERT row 3 into table users.
+                logger.info('%s row %s into table %s', query_type, rowid, table)
+
     .. py:method:: changes()
 
         Return the number of rows modified in the currently-open transaction.
@@ -152,6 +181,20 @@ APIs
         Property which returns a boolean indicating if autocommit is enabled.
         By default, this value will be ``True`` except when inside a
         transaction (or :py:meth:`~Database.atomic` block).
+
+        Example:
+
+        .. code-block:: pycon
+
+            >>> db = CSqliteExtDatabase(':memory:')
+            >>> db.autocommit
+            True
+            >>> with db.atomic():
+            ...     print(db.autocommit)
+            ...
+            False
+            >>> db.autocommit
+            True
 
     .. py:method:: backup(destination)
 
@@ -175,6 +218,16 @@ APIs
         Backup the current database to a file. The backed-up data is not a
         database dump, but an actual SQLite database file.
 
+        Example:
+
+        .. code-block:: python
+
+            db = CSqliteExtDatabase('app.db')
+
+            def nightly_backup():
+                filename = 'backup-%s.db' % (datetime.date.today())
+                db.backup_to_file(filename)
+
     .. py:method:: blob_open(table, column, rowid[, read_only=False])
 
         :param str table: Name of table containing data.
@@ -184,6 +237,8 @@ APIs
         :returns: :py:class:`Blob` instance which provides efficient access to
             the underlying binary data.
         :rtype: Blob
+
+        See :py:class:`Blob` and :py:class:`ZeroBlob` for more information.
 
         Example:
 
@@ -213,12 +268,35 @@ APIs
     Primary-key field that corresponds to the SQLite ``rowid`` field. For more
     information, see the SQLite documentation on `rowid tables <https://www.sqlite.org/rowidtable.html>`_..
 
+    Example:
+
+    .. code-block:: python
+
+        class Note(Model):
+            rowid = RowIDField()  # Will be primary key.
+            content = TextField()
+            timestamp = TimestampField()
+
 .. py:class:: DocIDField()
 
     Subclass of :py:class:`RowIDField` for use on virtual tables that
     specifically use the convention of ``docid`` for the primary key. As far as
     I know this only pertains to tables using the FTS3 and FTS4 full-text
     search extensions.
+
+    .. attention::
+        In FTS3 and FTS4, "docid" is simply an alias for "rowid". To reduce
+        confusion, it's probably best to just always use :py:class:`RowIDField`
+        and never use :py:class:`DocIDField`.
+
+    .. code-block:: python
+
+        class NoteIndex(FTSModel):
+            docid = DocIDField()  # "docid" is used as an alias for "rowid".
+            content = SearchField()
+
+            class Meta:
+                database = db
 
 .. py:class:: AutoIncrementField()
 
@@ -377,6 +455,18 @@ APIs
 
         Remove the data at the given paths from the column data.
 
+        Example of removing two paths:
+
+        .. code-block:: python
+
+            # Update the data, removing "key1" and "key2" from the "metadata"
+            # object.
+            (APIResponse
+             .update(json_data=APIResponse.json_data.remove(
+                'metadata.key1',
+                'metadata.key2'))
+             .execute())
+
     .. py:method:: update(data)
 
         :param data: A JSON value.
@@ -385,6 +475,23 @@ APIs
         already present in the column. This is different than
         :py:meth:`~JSONField.set`, as sub-dictionaries will be merged with
         other sub-dictionaries, recursively.
+
+        .. code-block:: pycon
+
+            >>> data = {'k1': {'foo': 1, 'bar': 2}, 'k2': {'baz': 3}}
+            >>> resp = APIResponse.create(json_data=data)
+            >>> resp
+            <__main__.APIResponse at 0x7f0b28115cc0>
+
+            >>> patch = {'k1': {'foo': 1337, 'nug': 0}, 'k3': [1, 2]}
+            >>> (APIResponse
+            ...  .update(json_data=APIResponse.json_data.update(patch))
+            ...  .where(APIResponse.id == resp.id)
+            ...  .execute())
+            1
+
+            >>> APIResponse.get(APIResponse.id == resp.id).json_data
+            {'k1': {'bar': 2, 'foo': 1337, 'nug': 0}, 'k2': {'baz': 3}, 'k3': [1, 2]}
 
     .. py:method:: json_type([path=None])
 
@@ -460,6 +567,17 @@ APIs
     :py:class:`SearchField`, which raises an exception if any configuration is
     attempted that would be incompatible with the full-text search extensions.
 
+    Example model for document search index (timestamp is stored in the table
+    but it's data is not searchable):
+
+    .. code-block:: python
+
+        class DocumentIndex(FTSModel):
+            title = SearchField()
+            content = SearchField()
+            tags = SearchField()
+            timestamp = SearchField(unindexed=True)
+
 
 .. py:class:: VirtualModel()
 
@@ -490,14 +608,14 @@ APIs
     * Indexes on fields and multi-column indexes are ignored completely
     * Sqlite will treat all column types as ``TEXT`` (although you
       can store other data types, Sqlite will treat them as text).
-    * FTS models contain a ``docid`` field which is automatically created and
+    * FTS models contain a ``rowid`` field which is automatically created and
       managed by SQLite (unless you choose to explicitly set it during model
       creation). Lookups on this column **are fast and efficient**.
 
     Given these constraints, it is strongly recommended that all fields
     declared on an ``FTSModel`` subclass be instances of
     :py:class:`SearchField` (though an exception is made for explicitly
-    declaring a :py:class:`DocIDField`). Using :py:class:`SearchField` will
+    declaring a :py:class:`RowIDField`). Using :py:class:`SearchField` will
     help prevent you accidentally creating invalid column constraints. If you
     wish to store metadata in the index but would not like it to be included in
     the full-text index, then specify ``unindexed=True`` when instantiating the
@@ -506,10 +624,10 @@ APIs
     The only exception to the above is for the ``rowid`` primary key, which can
     be declared using :py:class:`RowIDField`. Lookups on the ``rowid`` are very
     efficient. If you are using FTS4 you can also use :py:class:`DocIDField`,
-    which is an alias for the rowid.
+    which is an alias for the rowid (though there is no benefit to doing so).
 
     Because of the lack of secondary indexes, it usually makes sense to use
-    the ``docid`` primary key as a pointer to a row in a regular table. For
+    the ``rowid`` primary key as a pointer to a row in a regular table. For
     example:
 
     .. code-block:: python
@@ -526,6 +644,7 @@ APIs
 
         class DocumentIndex(FTSModel):
             # Full-text search index.
+            rowid = RowIDField()
             title = SearchField()
             content = SearchField()
 
@@ -535,20 +654,20 @@ APIs
                 options = {'tokenize': 'porter'}
 
     To store a document in the document index, we will ``INSERT`` a row into
-    the ``DocumentIndex`` table, manually setting the ``docid`` so that it
+    the ``DocumentIndex`` table, manually setting the ``rowid`` so that it
     matches the primary-key of the corresponding ``Document``:
 
     .. code-block:: python
 
         def store_document(document):
             DocumentIndex.insert({
-                DocumentIndex.docid: document.id,
+                DocumentIndex.rowid: document.id,
                 DocumentIndex.title: document.title,
                 DocumentIndex.content: document.content}).execute()
 
     To perform a search and return ranked results, we can query the
     ``Document`` table and join on the ``DocumentIndex``. This join will be
-    efficient because lookups on an FTSModel's ``docid`` field are fast:
+    efficient because lookups on an FTSModel's ``rowid`` field are fast:
 
     .. code-block:: python
 
@@ -559,13 +678,13 @@ APIs
                     .select()
                     .join(
                         DocumentIndex,
-                        on=(Document.id == DocumentIndex.docid))
+                        on=(Document.id == DocumentIndex.rowid))
                     .where(DocumentIndex.match(phrase))
                     .order_by(DocumentIndex.bm25()))
 
     .. warning::
         All SQL queries on ``FTSModel`` classes will be slow **except**
-        full-text searches and ``docid`` lookups.
+        full-text searches and ``rowid`` lookups.
 
     If the primary source of the content you are indexing exists in a separate
     table, you can save some disk space by instructing SQLite to not store an
