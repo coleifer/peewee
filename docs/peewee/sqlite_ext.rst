@@ -15,11 +15,9 @@ The ``playhouse.sqlite_ext`` includes even more SQLite features, including:
 
 * :ref:`Full-text search <sqlite-fts>`
 * :ref:`JSON extension integration <sqlite-json1>`
-* :ref:`LSM1 extension support <sqlite-lsm1>`
 * :ref:`Closure table extension support <sqlite-closure-table>`
-* User-defined virtual tables, which return rows of tabular data as opposed to
-  :ref:`scalar or aggregate <sqlite-user-functions>` functions. For API
-  details, see: :py:class:`TableFunction` and :py:meth:`~SqliteExtDatabase.table_function`.
+* :ref:`LSM1 extension support <sqlite-lsm1>`
+* :ref:`User-defined table functions <sqlite-vtfunc>`
 * Support for online backups using backup API: :py:meth:`~CSqliteExtDatabase.backup_to_file`
 * :ref:`BLOB API support, for efficient binary data storage <sqlite-blob>`.
 * Additional helpers, like a :ref:`bloom filter <sqlite-bloomfilter>`.
@@ -42,174 +40,6 @@ Instantiating a :py:class:`SqliteExtDatabase`:
         ('cache_size', -1024 * 64),  # 64MB page-cache.
         ('journal_mode', 'wal'),  # Use WAL-mode (you should always use this!).
         ('foreign_keys', 1))  # Enforce foreign-key constraints.
-
-.. _sqlite-fts:
-
-Full-text Search
-----------------
-
-SQLite provides excellent full-text search via the :ref:`FTS3/4 <https://sqlite.org/fts3.html>`_
-and :ref:`FTS5 <https://sqlite.org/fts5.html>`_ extension libraries. Peewee
-provides base model-classes for working with these extensions:
-
-* :py:class:`FTSModel` for versions 3 and 4.
-* :py:class:`FTS5Model` for version 5.
-
-Because the APIs are so similar, and because versions 3 and 4 are the most
-widely deployed, the following examples will focus on :py:class:`FTSModel`.
-However, most everything will apply also to :py:class:`FTS5Model`.
-
-One limitation that applies to all versions of the full-text extension is that
-columns do not support constraints, data-types, or indexes. For this reason,
-when declaring your search index model, all fields should be
-:py:class:`SearchField` instances. If you wish to store metadata in the index
-but would not like it to be included in the full-text index, then specify
-``unindexed=True`` when instantiating the :py:class:`SearchField`.
-
-The only exception to the above is for the ``rowid`` primary key, which can
-be declared using :py:class:`RowIDField`. Lookups on the ``rowid`` are very
-efficient.
-
-Example model and associated index:
-
-.. code-block:: python
-
-    db = SqliteExtDatabase('app.db', pragmas=[('journal_mode', 'wal')])
-
-    class Document(Model):
-        title = TextField(unique=True)
-        content = TextField()
-        timestamp = DateTimeField(default=datetime.datetime.now)
-
-        class Meta:
-            database = db
-
-    class DocumentIndex(FTSModel):
-        rowid = RowIDField()
-        title = SearchField()
-        content = SearchField()
-
-        class Meta:
-            database = db
-            options = {'tokenize': 'porter'}
-
-    db.create_tables([Document, DocumentIndex])
-
-To store a document in the document index, we will ``INSERT`` a row into the
-``DocumentIndex`` table, manually setting the ``rowid`` to correspond to the
-value of the ``Document`` it is associated with (this allows us to do efficient
-joins when searching):
-
-.. code-block:: python
-
-    def store_document(document):
-        DocumentIndex.insert({
-            DocumentIndex.rowid: document.id,
-            DocumentIndex.title: document.title,
-            DocumentIndex.content: document.content}).execute()
-
-To perform a search and return ranked results, we can query the ``Document``
-table and join on the ``DocumentIndex``:
-
-.. code-block:: python
-
-    def search(phrase):
-        # Query the search index and join the corresponding Document
-        # object on each search result.
-        return (Document
-                .select()
-                .join(DocumentIndex, on=(Document.id == DocumentIndex.rowid))
-                .where(DocumentIndex.match(phrase))
-                .order_by(DocumentIndex.bm25()))
-
-.. warning::
-    All SQL queries on ``FTSModel`` classes will be slow **except** full-text
-    searches and ``rowid`` lookups.
-
-Continued examples:
-
-.. code-block:: python
-
-    # To sort by best match, use the "rank" function.
-    best = (DocumentIndex
-            .select()
-            .where(DocumentIndex.match('some query'))
-            .order_by(DocumentIndex.rank()))
-
-    # Or use the shortcut method:
-    best = DocumentIndex.search('some phrase')
-
-    # Peewee allows you to specify weights for columns.
-    # Matches in the title will be 2x more valuable than matches
-    # in the content field:
-    best = DocumentIndex.search('some phrase', weights=[2.0, 1.0])
-
-Peewee supports the more sophisticated BM25 ranking algorithm for FTS4 and
-FTS5. Example of using BM25 to rank search results:
-
-.. code-block:: python
-
-    # You can also use the BM25 algorithm to rank documents:
-    best = (Document
-            .select(Document, DocumentIndex.bm25().alias('score'))
-            .join(DocumentIndex, on=(Document.id == DocumentIndex.rowid))
-            .where(DocumentIndex.match('some query'))
-            .order_by(SQL('score')))
-
-    # There is a shortcut method for bm25 as well:
-    best_bm25 = DocumentIndex.search_bm25('some phrase')
-
-    # BM25 allows you to specify weights for columns.
-    # Matches in the title will be 2x more valuable than matches
-    # in the content field:
-    best_bm25 = DocumentIndex.search_bm25('some phrase', weights={
-        'title': 2.0, 'content': 1.0})
-
-If the primary source of the content you are indexing exists in a separate
-table, you can save some disk space by instructing SQLite to not store an
-additional copy of the search index content. SQLite will still create the
-metadata and data-structures needed to perform searches on the content, but the
-content itself will not be stored in the search index.
-
-To accomplish this, you can specify a table or column using the ``content``
-option. The `FTS4 documentation <http://sqlite.org/fts3.html#section_6_2>`_ has
-more information.
-
-Here is a short code snippet illustrating how to implement this with peewee:
-
-.. code-block:: python
-
-    class Blog(Model):
-        title = TextField()
-        pub_date = DateTimeField(default=datetime.datetime.now)
-        content = TextField()  # We want to search this.
-
-        class Meta:
-            database = db
-
-    class BlogIndex(FTSModel):
-        content = SearchField()
-
-        class Meta:
-            database = db
-            options = {'content': Blog.content}
-
-    db.create_tables([Blog, BlogIndex])
-
-    # Now, we can manage content in the FTSBlog. To populate the search index:
-    BlogIndex.rebuild()
-
-    # Optimize the index.
-    BlogIndex.optimize()
-
-The ``content`` option accepts either a single :py:class:`Field` or a :py:class:`Model`
-and can reduce the amount of storage used by the database file. However,
-content will need to be manually moved to/from the associated ``FTSModel``.
-
-.. _sqlite-vtfunc:
-
-User-defined Table Functions
-----------------------------
 
 .. _sqlite-backups:
 
@@ -667,6 +497,7 @@ API
           constructor.
     * ``primary_key`` - defaults to ``False``, indicating no primary key.
 
+.. _sqlite-fts:
 
 .. py:class:: FTSModel()
 
@@ -696,7 +527,8 @@ API
 
     The only exception to the above is for the ``rowid`` primary key, which can
     be declared using :py:class:`RowIDField`. Lookups on the ``rowid`` are very
-    efficient.
+    efficient. If you are using FTS4 you can also use :py:class:`DocIDField`,
+    which is an alias for the rowid.
 
     Because of the lack of secondary indexes, it usually makes sense to use
     the ``docid`` primary key as a pointer to a row in a regular table. For
@@ -756,6 +588,49 @@ API
     .. warning::
         All SQL queries on ``FTSModel`` classes will be slow **except**
         full-text searches and ``docid`` lookups.
+
+    If the primary source of the content you are indexing exists in a separate
+    table, you can save some disk space by instructing SQLite to not store an
+    additional copy of the search index content. SQLite will still create the
+    metadata and data-structures needed to perform searches on the content, but
+    the content itself will not be stored in the search index.
+
+    To accomplish this, you can specify a table or column using the ``content``
+    option. The `FTS4 documentation <http://sqlite.org/fts3.html#section_6_2>`_
+    has more information.
+
+    Here is a short example illustrating how to implement this with peewee:
+
+    .. code-block:: python
+
+        class Blog(Model):
+            title = TextField()
+            pub_date = DateTimeField(default=datetime.datetime.now)
+            content = TextField()  # We want to search this.
+
+            class Meta:
+                database = db
+
+        class BlogIndex(FTSModel):
+            content = SearchField()
+
+            class Meta:
+                database = db
+                options = {'content': Blog.content}  # <-- specify data source.
+
+        db.create_tables([Blog, BlogIndex])
+
+        # Now, we can manage content in the BlogIndex. To populate the
+        # search index:
+        BlogIndex.rebuild()
+
+        # Optimize the index.
+        BlogIndex.optimize()
+
+    The ``content`` option accepts either a single :py:class:`Field` or a
+    :py:class:`Model` and can reduce the amount of storage used by the database
+    file. However, content will need to be manually moved to/from the
+    associated ``FTSModel``.
 
     .. py:classmethod:: match(term)
 
@@ -1062,6 +937,136 @@ API
 
         Generate a model class suitable for accessing the `vocab table <http://sqlite.org/fts5.html#the_fts5vocab_virtual_table_module>`_
         corresponding to FTS5 search index.
+
+.. _sqlite-vtfunc:
+
+.. py:class:: TableFunction()
+
+    Implement a user-defined table-valued function. Unlike a simple
+    :ref:`scalar or aggregate <sqlite-user-functions>` function, which returns
+    a single scalar value, a table-valued function can return any number of
+    rows of tabular data.
+
+    Simple example:
+
+    .. code-block:: python
+
+        from playhouse.sqlite_ext import TableFunction
+
+
+        class Series(TableFunction):
+            # Name of columns in each row of generated data.
+            columns = ['value']
+
+            # Name of parameters the function may be called with.
+            params = ['start', 'stop', 'step']
+
+            def initialize(self, start=0, stop=None, step=1):
+                """
+                Table-functions declare an initialize() method, which is
+                called with whatever arguments the user has called the
+                function with.
+                """
+                self.start = self.current = start
+                self.stop = stop or float('Inf')
+                self.step = step
+
+            def iterate(self, idx):
+                """
+                Iterate is called repeatedly by the SQLite database engine
+                until the required number of rows has been read **or** the
+                function raises a `StopIteration` signalling no more rows
+                are available.
+                """
+                if self.current > self.stop:
+                    raise StopIteration
+
+                ret, self.current = self.current, self.current + self.step
+                return (ret,)
+
+        # Register the table-function with our database, which ensures it
+        # is declared whenever a connection is opened.
+        db.table_function('series')(Series)
+
+        # Usage:
+        cursor = db.execute_sql('SELECT * FROM series(?, ?, ?)', (0, 5, 2))
+        for value, in cursor:
+            print(value)
+
+    .. note::
+        A :py:class:`TableFunction` must be registered with a database
+        connection before it can be used. To ensure the table function is
+        always available, you can use the
+        :py:meth:`SqliteExtDatabase.table_function` decorator to register the
+        function with the database.
+
+    :py:class:`TableFunction` implementations must provide two attributes and
+    implement two methods, described below.
+
+    .. py:attribute:: columns
+
+        A list containing the names of the columns for the data returned by the
+        function. For example, a function that is used to split a string on a
+        delimiter might specify 3 columns: ``[substring, start_idx, end_idx]``.
+
+    .. py:attribute:: params
+
+        The names of the parameters the function may be called with. All
+        parameters, including optional parameters, should be listed. For
+        example, a function that is used to split a string on a delimiter might
+        specify 2 params: ``[string, delimiter]``.
+
+    .. py:attribute:: name
+
+        *Optional* - specify the name for the table function. If not provided,
+        name will be taken from the class name.
+
+    .. py:method:: initialize(**parameter_values)
+
+        :param parameter_values: Parameters the function was called with.
+        :returns: No return value.
+
+        The ``initialize`` method is called to initialize the table function
+        with the parameters the user specified when calling the function.
+
+    .. py:method:: iterate(idx)
+
+        :param int idx: current iteration step
+        :returns: A tuple of row data corresponding to the columns named
+            in the :py:attr:`~TableFunction.columns` attribute.
+        :raises StopIteration: To signal that no more rows are available.
+
+        This function is called repeatedly and returns successive rows of data.
+        The function may terminate before all rows are consumed (especially if
+        the user specified a ``LIMIT`` on the results). Alternatively, the
+        function can signal that no more data is available by raising a
+        ``StopIteration`` exception.
+
+    .. py:classmethod:: register(conn)
+
+        :param conn: A ``sqlite3.Connection`` object.
+
+        Register the table function with a DB-API 2.0 ``sqlite3.Connection``
+        object. Table-valued functions **must** be registered before they can
+        be used in a query.
+
+        Example:
+
+        .. code-block:: python
+
+            class MyTableFunction(TableFunction):
+                name = 'my_func'
+                # ... other attributes and methods ...
+
+            db = SqliteDatabase(':memory:')
+            db.connect()
+
+            MyTableFunction.register(db.connection())
+
+        To ensure the :py:class:`TableFunction` is registered every time a
+        connection is opened, use the :py:meth:`~SqliteDatabase.table_function`
+        decorator.
+
 
 .. _sqlite-closure-table:
 
