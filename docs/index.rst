@@ -55,6 +55,7 @@ Contents:
    peewee/transactions
    peewee/changes
    peewee/api
+   peewee/sqlite_ext
    peewee/playhouse
    peewee/hacks
 

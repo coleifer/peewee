@@ -20,7 +20,7 @@ The ``playhouse.sqlite_ext`` includes even more SQLite features, including:
 * :ref:`User-defined table functions <sqlite-vtfunc>`
 * Support for online backups using backup API: :py:meth:`~CSqliteExtDatabase.backup_to_file`
 * :ref:`BLOB API support, for efficient binary data storage <sqlite-blob>`.
-* Additional helpers, like a :ref:`bloom filter <sqlite-bloomfilter>`.
+* :ref:`Additional helpers <sqlite-extras>`, including bloom filter, more.
 
 Getting started
 ---------------
@@ -41,28 +41,8 @@ Instantiating a :py:class:`SqliteExtDatabase`:
         ('journal_mode', 'wal'),  # Use WAL-mode (you should always use this!).
         ('foreign_keys', 1))  # Enforce foreign-key constraints.
 
-.. _sqlite-backups:
-
-Online Backups API
-------------------
-
-.. _sqlite-blob:
-
-SQLite Blob-store
------------------
-
-.. _sqlite-extras:
-
-Additional Features
--------------------
-
-.. _sqlite-bloomfilter:
-
-Bloom Filter
-^^^^^^^^^^^^
-
-API
----
+APIs
+----
 
 .. py:module:: playhouse.sqlite_ext
 
@@ -1297,7 +1277,7 @@ API
     .. code-block:: python
 
         db = SqliteExtDatabase('my_app.db')
-
+        db.load_extension('lsm.so')  # Load shared library.
 
         class EventLog(LSMTable):
             timestamp = IntegerField(primary_key=True)
@@ -1310,7 +1290,7 @@ API
                 filename = 'eventlog.ldb'  # LSM data is stored in separate db.
 
         # Declare virtual table.
-        db.create_table(EventLog)
+        EventLog.create_table()
 
     Example queries:
 
@@ -1340,3 +1320,245 @@ API
             action='signup',
             sender='newsletter',
             target='sqlite-news')
+
+    Simple key/value model declaration:
+
+    .. code-block:: python
+
+        class KV(LSMTable):
+            key = TextField(primary_key=True)
+            value = TextField()
+
+            class Meta:
+                database = db
+                filename = 'kv.ldb'
+
+        db.create_tables([KV])
+
+    For tables consisting of a single value field, Peewee will return the value
+    directly when getting a single item. You can also request slices of rows,
+    in which case Peewee returns a corresponding :py:class:`Select` query,
+    which can be iterated over. Below are some examples:
+
+    .. code-block:: pycon
+
+        >>> KV['k0'] = 'v0'
+        >>> print(KV['k0'])
+        'v0'
+
+        >>> data = [{'key': 'k%d' % i, 'value': 'v%d' % i} for i in range(20)]
+        >>> KV.insert_many(data).execute()
+
+        >>> KV.select().count()
+        20
+
+        >>> KV['k8']
+        'v8'
+
+        >>> list(KV['k4.1':'k7.x']
+        [Row(key='k5', value='v5'),
+         Row(key='k6', value='v6'),
+         Row(key='k7', value='v7')]
+
+        >>> list(KV['k6xxx':])
+        [Row(key='k7', value='v7'),
+         Row(key='k8', value='v8'),
+         Row(key='k9', value='v9')]
+
+    You can also index the :py:class:`LSMTable` using expressions:
+
+    .. code-block:: pycon
+
+        >>> list(KV[KV.key > 'k6'])
+        [Row(key='k7', value='v7'),
+         Row(key='k8', value='v8'),
+         Row(key='k9', value='v9')]
+
+        >>> list(KV[(KV.key > 'k6') & (KV.value != 'v8')])
+        [Row(key='k7', value='v7'),
+         Row(key='k9', value='v9')]
+
+    You can delete single rows using ``del`` or multiple rows using slices
+    or expressions:
+
+    .. code-block:: pycon
+
+        >>> del KV['k1']
+        >>> del KV['k3x':'k8']
+        >>> del KV[KV.key.between('k10', 'k18')]
+
+        >>> list(KV[:])
+        [Row(key='k0', value='v0'),
+         Row(key='k19', value='v19'),
+         Row(key='k2', value='v2'),
+         Row(key='k3', value='v3'),
+         Row(key='k9', value='v9')]
+
+    Attempting to get a single non-existant key will result in a ``KeyError``,
+    but slices will not raise an exception:
+
+    .. code-block:: pycon
+
+        >>> KV['k1']
+        ...
+        KeyError: 'k1'
+
+        >>> list(KV['k1':'k1'])
+        []
+
+
+.. _sqlite-blob:
+
+.. py:class:: ZeroBlob(length)
+
+    :param int length: Size of blob in bytes.
+
+    :py:class:`ZeroBlob` is used solely to reserve space for storing a BLOB
+    that supports incremental I/O. To use the :ref:`SQLite BLOB-store <https://www.sqlite.org/c3ref/blob_open.html>`_
+    it is necessary to first insert a ZeroBlob of the desired size into the
+    row you wish to use with incremental I/O.
+
+    For example, see :py:class:`Blob`.
+
+.. py:class:: Blob(database, table, column, rowid[, read_only=False])
+
+    :param database: :py:class:`SqliteExtDatabase` instance.
+    :param str table: Name of table being accessed.
+    :param str column: Name of column being accessed.
+    :param int rowid: Primary-key of row being accessed.
+    :param bool read_only: Prevent any modifications to the blob data.
+
+    Open a blob, stored in the given table/column/row, for incremental I/O.
+    To allocate storage for new data, you can use the :py:class:`ZeroBlob`,
+    which is very efficient.
+
+    .. code-block:: python
+
+        class RawData(Model):
+            data = BlobField()
+
+        # Allocate 100MB of space for writing a large file incrementally:
+        query = RawData.insert({'data': ZeroBlob(1024 * 1024 * 100)})
+        rowid = query.execute()
+
+        # Now we can open the row for incremental I/O:
+        blob = Blob(db, 'rawdata', 'data', rowid)
+
+        # Read from the file and write to the blob in chunks of 4096 bytes.
+        while True:
+            data = file_handle.read(4096)
+            if not data:
+                break
+            blob.write(data)
+
+        bytes_written = blob.tell()
+        blob.close()
+
+    .. py:method:: read([n=None])
+
+        :param int n: Only read up to *n* bytes from current position in file.
+
+        Read up to *n* bytes from the current position in the blob file. If *n*
+        is not specified, the entire blob will be read.
+
+    .. py:method:: seek(offset[, whence=0])
+
+        :param int offset: Seek to the given offset in the file.
+        :param int whence: Seek relative to the specified frame of reference.
+
+        Values for ``whence``:
+
+        * ``0``: beginning of file
+        * ``1``: current position
+        * ``2``: end of file
+
+    .. py:method:: tell()
+
+        Return current offset within the file.
+
+    .. py:method:: write(data)
+
+        :param bytes data: Data to be written
+
+        Writes the given data, starting at the current position in the file.
+
+    .. py:method:: close()
+
+        Close the file and free associated resources.
+
+    .. py:method:: reopen(rowid)
+
+        :param int rowid: Primary key of row to open.
+
+        If a blob has already been opened for a given table/column, you can use
+        the :py:meth:`~Blob.reopen` method to re-use the same :py:class:`Blob`
+        object for accessing multiple rows in the table.
+
+.. _sqlite-extras:
+
+Additional Features
+-------------------
+
+The :py:class:`SqliteExtDatabase` accepts an initialization option to register
+support for a simple `bloom filter <https://en.wikipedia.org/wiki/Bloom_filter>`_.
+The bloom filter, once initialized, can then be used for efficient membership
+queries on large set of data.
+
+Here's an example:
+
+.. code-block:: python
+
+    db = CSqliteExtDatabase(':memory:', bloomfilter=True)
+
+    # Create and define a table to store some data.
+    db.execute_sql('CREATE TABLE "register" ("data" TEXT)')
+    Register = Table('register', ('data',)).bind(db)
+
+    # Populate the database with a bunch of text.
+    with db.atomic():
+        for i in 'abcdefghijklmnopqrstuvwxyz':
+            keys = [i * j for j in range(1, 10)]  # a, aa, aaa, ... aaaaaaaaa
+            Register.insert([{'data': key} for key in keys]).execute()
+
+    # Collect data into a 16KB bloomfilter.
+    query = Register.select(fn.bloomfilter(Register.data, 16 * 1024).alias('buf'))
+    row = query.get()
+    buf = row['buf']
+
+    # Use bloomfilter buf to test whether other keys are members.
+    test_keys = (
+        ('aaaa', True),
+        ('abc', False),
+        ('zzzzzzz', True),
+        ('zyxwvut', False))
+    for key, is_present in test_keys:
+        query = Register.select(fn.bloomfilter_contains(key, buf).alias('is_member'))
+        answer = query.get()['is_member']
+        assert answer == is_present
+
+
+The :py:class:`SqliteExtDatabase` can also register other useful functions:
+
+* ``rank_functions`` (enabled by default): registers functions for ranking
+  search results, such as *bm25* and *lucene*.
+* ``hash_functions``: registers md5, sha1, sha256, adler32, crc32 and
+  murmurhash functions.
+* ``regexp_function``: registers a regexp function.
+
+Examples:
+
+.. code-block:: python
+
+    def create_new_user(username, password):
+        # DO NOT DO THIS IN REAL LIFE. PLEASE.
+        query = User.insert({'username': username, 'password': fn.sha1(password)})
+        new_user_id = query.execute()
+
+You can use the *murmurhash* function to hash bytes to an integer for compact
+storage:
+
+.. code-block:: pycon
+
+    >>> db = SqliteExtDatabase(':memory:', hash_functions=True)
+    >>> db.execute_sql('SELECT murmurhash(?)', ('abcdefg',)).fetchone()
+    (4188131059,)
