@@ -9,6 +9,7 @@ from peewee import Alias
 from peewee import EnclosedNodeList
 from peewee import Entity
 from peewee import Expression
+from peewee import Function
 from peewee import Node
 from peewee import NodeList
 from peewee import OP
@@ -71,14 +72,24 @@ class AutoIncrementField(AutoField):
         return NodeList((node_list, SQL('AUTOINCREMENT')))
 
 
-class JSONPath(object):
+class JSONPath(Function):
     def __init__(self, field, path):
         self.field = field
         self._path = path
+        self.name = 'json_extract'
+        self.arguments = (self.field, self.sql_path)
 
     @property
     def path(self):
-        return ''.join(self._path).lstrip('.')
+        return ''.join(self._path)
+
+    @property
+    def sql_path(self):
+        path = self.path
+        if path[0] == '[':
+            path = '$%s' % path
+        else:
+            path = '$.%s' % path
 
     def update_path(self, part):
         new_path = list(self._path)
@@ -120,7 +131,7 @@ class JSONField(TextField):
     def extract(self, *paths):
         return fn.json_extract(self, *self.clean_paths(paths))
 
-    def __getitem__(self, paths):
+    def __getitem__(self, path):
         if not isinstance(paths, tuple):
             paths = (paths,)
         return self.extract(*paths)
