@@ -69,6 +69,12 @@ instead use :py:func:`prefetch` to achieve the same result.
 
 * :py:class:`Select` query attribute ``_select`` has changed to ``_returning``
 
+The :py:func:`case` helper has moved from the ``playhouse.shortcuts`` module
+into the main peewee module.
+
+The :py:meth:`~BaseColumn.cast` method is no longer a function, but instead is
+a method on all column-like objects.
+
 Removed Extensions
 ^^^^^^^^^^^^^^^^^^
 
