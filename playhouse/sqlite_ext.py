@@ -132,7 +132,7 @@ class JSONField(TextField):
         return fn.json_remove(self, *self.clean_paths(paths))
 
     def update(self, data):
-        return fn.json_patch(self, data)
+        return fn.json_patch(self, self._value_for_insertion(data))
 
     def json_type(self, path=None):
         if path:
