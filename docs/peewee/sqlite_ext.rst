@@ -44,8 +44,6 @@ Instantiating a :py:class:`SqliteExtDatabase`:
 APIs
 ----
 
-.. py:module:: playhouse.sqlite_ext
-
 .. py:class:: SqliteExtDatabase(database[, pragmas=None[, timeout=5[, c_extensions=None[, rank_functions=True[, hash_functions=False[, regexp_function=False[, bloomfilter=False]]]]]]])
 
     :param list pragmas: A list of 2-tuples containing pragma key and value to
@@ -62,7 +60,7 @@ APIs
     Extends :py:class:`SqliteDatabase` and inherits methods for declaring
     user-defined functions, pragmas, etc.
 
-    .. py:method table_function([name=None])
+    .. py:method:: table_function([name=None])
 
         Class-decorator for registering a :py:class:`TableFunction`. Table
         functions are user-defined functions that, rather than returning a

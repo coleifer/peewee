@@ -1,7 +1,5 @@
 .. _api:
 
-.. py:module:: peewee
-
 API Documentation
 =================
 
