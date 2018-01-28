@@ -531,7 +531,7 @@ its advanced features.
 
     .. py:method:: register_module(mod_name, mod_inst)
 
-        Provides a way of globally registering a module.  For more information,
+        Provides a way of globally registering a module. For more information,
         see the `documentation on virtual tables <http://rogerbinns.github.io/apsw/vtable.html>`_.
 
         :param string mod_name: name to use for module
@@ -661,7 +661,7 @@ The postgresql extensions module provides a number of "postgres-only" functions,
 currently:
 
 * :ref:`hstore support <hstore>`
-* :ref:`json support <pgjson>`, including ``jsonb`` for Postgres 9.4.
+* :ref:`json support <pgjson>`, including *jsonb* for Postgres 9.4.
 * :ref:`server-side cursors <server_side_cursors>`
 * :ref:`full-text search <pg_fts>`
 * :py:class:`ArrayField` field type, for storing arrays.
@@ -695,9 +695,9 @@ The code below will assume you are using the following database and base model:
 hstore support
 ^^^^^^^^^^^^^^
 
-`Postgresql hstore <http://www.postgresql.org/docs/current/static/hstore.html>`_ is
-an embedded key/value store.  With hstore, you can store arbitrary key/value pairs
-in your database alongside structured relational data.
+`Postgresql hstore <http://www.postgresql.org/docs/current/static/hstore.html>`_
+is an embedded key/value store. With hstore, you can store arbitrary key/value
+pairs in your database alongside structured relational data.
 
 Currently the ``postgres_ext`` module supports the following operations:
 
@@ -710,13 +710,12 @@ Currently the ``postgres_ext`` module supports the following operations:
 * Test for the existence of a key
 * Test that a key has a non-NULL value
 
-
 Using hstore
 ^^^^^^^^^^^^
 
 To start with, you will need to import the custom database class and the hstore
-functions from ``playhouse.postgres_ext`` (see above code snippet).  Then, it is
-as simple as adding a :py:class:`HStoreField` to your model:
+functions from ``playhouse.postgres_ext`` (see above code snippet). Then, it
+is as simple as adding a :py:class:`HStoreField` to your model:
 
 .. code-block:: python
 
@@ -724,31 +723,31 @@ as simple as adding a :py:class:`HStoreField` to your model:
         address = CharField()
         features = HStoreField()
 
-
 You can now store arbitrary key/value pairs on ``House`` instances:
 
 .. code-block:: pycon
 
-    >>> h = House.create(address='123 Main St', features={'garage': '2 cars', 'bath': '2 bath'})
+    >>> h = House.create(
+    ...     address='123 Main St',
+    ...     features={'garage': '2 cars', 'bath': '2 bath'})
+    ...
     >>> h_from_db = House.get(House.id == h.id)
     >>> h_from_db.features
     {'bath': '2 bath', 'garage': '2 cars'}
 
-
-You can filter by keys or partial dictionary:
+You can filter by individual key, multiple keys or partial dictionary:
 
 .. code-block:: pycon
 
-    >>> f = House.features
-    >>> House.select().where(f.contains('garage')) # <-- all houses w/garage key
-    >>> House.select().where(f.contains(['garage', 'bath'])) # <-- all houses w/garage & bath
-    >>> House.select().where(f.contains({'garage': '2 cars'})) # <-- houses w/2-car garage
+    >>> query = House.select()
+    >>> garage = query.where(House.features.contains('garage'))
+    >>> garage_and_bath = query.where(House.features.contains(['garage', 'bath']))
+    >>> twocar = query.where(House.features.contains({'garage': '2 cars'}))
 
 Suppose you want to do an atomic update to the house:
 
 .. code-block:: pycon
 
-    >>> f = House.features
     >>> new_features = House.features.update({'bath': '2.5 bath', 'sqft': '1100'})
     >>> query = House.update(features=new_features)
     >>> query.where(House.id == h.id).execute()
@@ -757,42 +756,39 @@ Suppose you want to do an atomic update to the house:
     >>> h.features
     {'bath': '2.5 bath', 'garage': '2 cars', 'sqft': '1100'}
 
-
 Or, alternatively an atomic delete:
 
 .. code-block:: pycon
 
-    >>> query = House.update(features=f.delete('bath'))
+    >>> query = House.update(features=House.features.delete('bath'))
     >>> query.where(House.id == h.id).execute()
     1
     >>> h = House.get(House.id == h.id)
     >>> h.features
     {'garage': '2 cars', 'sqft': '1100'}
 
-
 Multiple keys can be deleted at the same time:
 
 .. code-block:: pycon
 
-    >>> query = House.update(features=f.delete('garage', 'sqft'))
+    >>> query = House.update(features=House.features.delete('garage', 'sqft'))
 
 You can select just keys, just values, or zip the two:
 
 .. code-block:: pycon
 
-    >>> f = House.features
-    >>> for h in House.select(House.address, f.keys().alias('keys')):
-    ...     print h.address, h.keys
+    >>> for h in House.select(House.address, House.features.keys().alias('keys')):
+    ...     print(h.address, h.keys)
 
     123 Main St [u'bath', u'garage']
 
-    >>> for h in House.select(House.address, f.values().alias('vals')):
-    ...     print h.address, h.vals
+    >>> for h in House.select(House.address, House.features.values().alias('vals')):
+    ...     print(h.address, h.vals)
 
     123 Main St [u'2 bath', u'2 cars']
 
-    >>> for h in House.select(House.address, f.items().alias('mtx')):
-    ...     print h.address, h.mtx
+    >>> for h in House.select(House.address, House.features.items().alias('mtx')):
+    ...     print(h.address, h.mtx)
 
     123 Main St [[u'bath', u'2 bath'], [u'garage', u'2 cars']]
 
@@ -800,9 +796,9 @@ You can retrieve a slice of data, for example, all the garage data:
 
 .. code-block:: pycon
 
-    >>> f = House.features
-    >>> for h in House.select(House.address, f.slice('garage').alias('garage_data')):
-    ...     print h.address, h.garage_data
+    >>> query = House.select(House.address, House.features.slice('garage').alias('garage_data'))
+    >>> for house in query:
+    ...     print(house.address, house.garage_data)
 
     123 Main St {'garage': '2 cars'}
 
@@ -810,13 +806,14 @@ You can check for the existence of a key and filter rows accordingly:
 
 .. code-block:: pycon
 
-    >>> for h in House.select(House.address, f.exists('garage').alias('has_garage')):
-    ...     print h.address, h.has_garage
+    >>> has_garage = House.features.exists('garage')
+    >>> for house in House.select(House.address, has_garage.alias('has_garage')):
+    ...     print(house.address, house.has_garage)
 
     123 Main St True
 
-    >>> for h in House.select().where(f.exists('garage')):
-    ...     print h.address, h.features['garage'] # <-- just houses w/garage data
+    >>> for house in House.select().where(House.features.exists('garage')):
+    ...     print(house.address, house.features['garage'])  # <-- just houses w/garage data
 
     123 Main St 2 cars
 
@@ -858,18 +855,20 @@ JSON Support
 ^^^^^^^^^^^^
 
 peewee has basic support for Postgres' native JSON data type, in the form of
-:py:class:`JSONField`. As of version 2.4.7, peewee also supports the Postgres 9.4 binary json ``jsonb`` type, via :py:class:`BinaryJSONField`.
+:py:class:`JSONField`. As of version 2.4.7, peewee also supports the Postgres
+9.4 binary json ``jsonb`` type, via :py:class:`BinaryJSONField`.
 
 .. warning::
-  Postgres supports a JSON data type natively as of 9.2 (full support in 9.3). In
-  order to use this functionality you must be using the correct version of Postgres
-  with `psycopg2` version 2.5 or greater.
+  Postgres supports a JSON data type natively as of 9.2 (full support in 9.3).
+  In order to use this functionality you must be using the correct version of
+  Postgres with `psycopg2` version 2.5 or greater.
 
-  To use :py:class:`BinaryJSONField`, which has many performance and querying advantages, you must have Postgres 9.4 or later.
+  To use :py:class:`BinaryJSONField`, which has many performance and querying
+  advantages, you must have Postgres 9.4 or later.
 
 .. note::
-  You must be sure your database is an instance of :py:class:`PostgresqlExtDatabase`
-  in order to use the `JSONField`.
+  You must be sure your database is an instance of
+  :py:class:`PostgresqlExtDatabase` in order to use the `JSONField`.
 
 Here is an example of how you might declare a model with a JSON field:
 
@@ -879,7 +878,7 @@ Here is an example of how you might declare a model with a JSON field:
     import urllib2
     from playhouse.postgres_ext import *
 
-    db = PostgresqlExtDatabase('my_database')  # note
+    db = PostgresqlExtDatabase('my_database')
 
     class APIResponse(Model):
         url = CharField()
@@ -896,12 +895,12 @@ Here is an example of how you might declare a model with a JSON field:
     APIResponse.create_table()
 
     # Store a JSON response.
-    offense = APIResponse.request('http://wtf.charlesleifer.com/api/offense/')
-    booking = APIResponse.request('http://wtf.charlesleifer.com/api/booking/')
+    offense = APIResponse.request('http://crime-api.com/api/offense/')
+    booking = APIResponse.request('http://crime-api.com/api/booking/')
 
     # Query a JSON data structure using a nested key lookup:
     offense_responses = APIResponse.select().where(
-      APIResponse.response['meta']['model'] == 'offense')
+        APIResponse.response['meta']['model'] == 'offense')
 
     # Retrieve a sub-key for each APIResponse. By calling .as_json(), the
     # data at the sub-key will be returned as Python objects (dicts, lists,
@@ -909,25 +908,32 @@ Here is an example of how you might declare a model with a JSON field:
     q = (APIResponse
          .select(
            APIResponse.data['booking']['person'].as_json().alias('person'))
-         .where(
-           APIResponse.data['meta']['model'] == 'booking'))
+         .where(APIResponse.data['meta']['model'] == 'booking'))
 
     for result in q:
-        print result.person['name'], result.person['dob']
+        print(result.person['name'], result.person['dob'])
 
-The :py:class:`BinaryJSONField` works the same and supports the same operations as the regular :py:class:`JSONField`, but provides several additional operations for testing *containment*. Using the binary json field, you can test whether your JSON data contains other partial JSON structures (:py:meth:`~BinaryJSONField.contains`, :py:meth:`~BinaryJSONField.contains_any`, :py:meth:`~BinaryJSONField.contains_all`), or whether it is a subset of a larger JSON document (:py:meth:`~BinaryJSONField.contained_by`).
+The :py:class:`BinaryJSONField` works the same and supports the same operations
+as the regular :py:class:`JSONField`, but provides several additional
+operations for testing **containment**. Using the binary json field, you can
+test whether your JSON data contains other partial JSON structures
+(:py:meth:`~BinaryJSONField.contains`, :py:meth:`~BinaryJSONField.contains_any`,
+:py:meth:`~BinaryJSONField.contains_all`), or whether it is a subset of a
+larger JSON document (:py:meth:`~BinaryJSONField.contained_by`).
 
-For more examples, see the :py:class:`JSONField` and :py:class:`BinaryJSONField` API documents below.
+For more examples, see the :py:class:`JSONField` and
+:py:class:`BinaryJSONField` API documents below.
 
 .. _server_side_cursors:
 
 Server-side cursors
 ^^^^^^^^^^^^^^^^^^^
 
-When psycopg2 executes a query, normally all results are fetched and returned to
-the client by the backend.  This can cause your application to use a lot of memory
-when making large queries.  Using server-side cursors, results are returned a
-little at a time (by default 2000 records).  For the definitive reference, please see the `psycopg2 documentation <http://initd.org/psycopg/docs/usage.html#server-side-cursors>`_.
+When psycopg2 executes a query, normally all results are fetched and returned
+to the client by the backend. This can cause your application to use a lot of
+memory when making large queries. Using server-side cursors, results are
+returned a little at a time (by default 2000 records). For the definitive
+reference, please see the `psycopg2 documentation <http://initd.org/psycopg/docs/usage.html#server-side-cursors>`_.
 
 .. note:: To use server-side (or named) cursors, you must be using :py:class:`PostgresqlExtDatabase`.
 
@@ -957,9 +963,9 @@ cursor, you can specify this when creating your :py:class:`PostgresqlExtDatabase
 .. note::
     Server-side cursors live only as long as the transaction, so for this reason
     peewee will not automatically call ``commit()`` after executing a ``SELECT``
-    query.  If you do not ``commit`` after you are done iterating, you will not
+    query. If you do not ``commit`` after you are done iterating, you will not
     release the server-side resources until the connection is closed (or the
-    transaction is committed later).  Furthermore, since peewee will by default
+    transaction is committed later). Furthermore, since peewee will by default
     cache rows returned by the cursor, you should always call ``.iterator()``
     when iterating over a large query.
 
@@ -972,9 +978,15 @@ cursor, you can specify this when creating your :py:class:`PostgresqlExtDatabase
 Full-text search
 ^^^^^^^^^^^^^^^^
 
-Postgresql provides `sophisticated full-text search <http://www.postgresql.org/docs/9.3/static/textsearch.html>`_ using special data-types (``tsvector`` and ``tsquery``). Documents should be stored or converted to the ``tsvector`` type, and search queries should be converted to ``tsquery``.
+Postgresql provides `sophisticated full-text search
+<http://www.postgresql.org/docs/9.3/static/textsearch.html>`_ using special
+data-types (``tsvector`` and ``tsquery``). Documents should be stored or
+converted to the ``tsvector`` type, and search queries should be converted to
+``tsquery``.
 
-For simple cases, you can simply use the :py:func:`Match` function, which will automatically perform the appropriate conversions, and requires no schema changes:
+For simple cases, you can simply use the :py:func:`Match` function, which will
+automatically perform the appropriate conversions, and requires no schema
+changes:
 
 .. code-block:: python
 
@@ -983,13 +995,17 @@ For simple cases, you can simply use the :py:func:`Match` function, which will a
             (Blog.status == Blog.STATUS_PUBLISHED) &
             Match(Blog.content, query))
 
-The :py:func:`Match` function will automatically convert the left-hand operand to a ``tsvector``, and the right-hand operand to a ``tsquery``. For better performance, it is recommended you create a ``GIN`` index on the column you plan to search:
+The :py:func:`Match` function will automatically convert the left-hand operand
+to a ``tsvector``, and the right-hand operand to a ``tsquery``. For better
+performance, it is recommended you create a ``GIN`` index on the column you
+plan to search:
 
 .. code-block:: sql
 
     CREATE INDEX blog_full_text_search ON blog USING gin(to_tsvector(content));
 
-Alternatively, you can use the :py:class:`TSVectorField` to maintain a dedicated column for storing ``tsvector`` data:
+Alternatively, you can use the :py:class:`TSVectorField` to maintain a
+dedicated column for storing ``tsvector`` data:
 
 .. code-block:: python
 
@@ -997,7 +1013,8 @@ Alternatively, you can use the :py:class:`TSVectorField` to maintain a dedicated
         content = TextField()
         search_content = TSVectorField()
 
-You will need to explicitly convert the incoming text data to ``tsvector`` when inserting or updating the ``search_content`` field:
+You will need to explicitly convert the incoming text data to ``tsvector`` when
+inserting or updating the ``search_content`` field:
 
 .. code-block:: python
 
@@ -1012,9 +1029,14 @@ You will need to explicitly convert the incoming text data to ``tsvector`` when 
 postgres_ext API notes
 ^^^^^^^^^^^^^^^^^^^^^^
 
-.. py:class:: PostgresqlExtDatabase(database[, server_side_cursors=False[, register_hstore=True[, ...]]])
+.. py:class:: PostgresqlExtDatabase(database[, server_side_cursors=False[, register_hstore=False[, ...]]])
 
     Identical to :py:class:`PostgresqlDatabase` but required in order to support:
+
+    :param str database: Name of database to connect to.
+    :param bool server_side_cursors: Whether ``SELECT`` queries should utilize
+        server-side cursors.
+    :param bool register_hstore: Register the HStore extension with the connection.
 
     * :ref:`server_side_cursors`
     * :py:class:`ArrayField`
@@ -1024,27 +1046,20 @@ postgres_ext API notes
     * :py:class:`HStoreField`
     * :py:class:`TSVectorField`
 
-    :param str database: Name of database to connect to.
-    :param bool server_side_cursors: Whether ``SELECT`` queries should utilize
-        server-side cursors.
-    :param bool register_hstore: Register the HStore extension with the connection.
+    If you wish to use the HStore extension, you must specify ``register_hstore=True``.
 
     If using ``server_side_cursors``, also be sure to wrap your queries with
     :py:func:`ServerSide`.
 
-    If you do not wish to use the HStore extension, you can specify ``register_hstore=False``.
-
-    .. warning::
-        The :py:class:`PostgresqlExtDatabase` by default will attempt to register the ``HSTORE`` extension. Most distributions and recent versions include this, but in some cases the extension may not be available. If you **do not** plan to use the :ref:`HStore features of peewee <hstore>`, you can pass ``register_hstore=False`` when initializing your :py:class:`PostgresqlExtDatabase`.
-
 .. py:function:: ServerSide(select_query)
 
-    Wrap the given select query in a transaction, and call it's :py:meth:`~SelectQuery.iterator`
-    method to avoid caching row instances.  In order for the server-side resources
-    to be released, be sure to exhaust the generator (iterate over all the rows).
-
     :param select_query: a :py:class:`SelectQuery` instance.
-    :rtype: ``generator``
+    :rtype generator:
+
+    Wrap the given select query in a transaction, and call it's
+    :py:meth:`~SelectQuery.iterator` method to avoid caching row instances. In
+    order for the server-side resources to be released, be sure to exhaust the
+    generator (iterate over all the rows).
 
     Usage:
 
@@ -1061,10 +1076,10 @@ postgres_ext API notes
 
 .. py:class:: ArrayField([field_class=IntegerField[, dimensions=1]])
 
-    Field capable of storing arrays of the provided `field_class`.
-
     :param field_class: a subclass of :py:class:`Field`, e.g. :py:class:`IntegerField`.
     :param int dimensions: dimensions of array.
+
+    Field capable of storing arrays of the provided `field_class`.
 
     .. note::
         By default ArrayField will use a GIN index. To disable this, initialize
@@ -1133,11 +1148,17 @@ postgres_ext API notes
 
 .. py:class:: HStoreField(*args, **kwargs)
 
-    A field for storing and retrieving arbitrary key/value pairs.  For details
+    A field for storing and retrieving arbitrary key/value pairs. For details
     on usage, see :ref:`hstore`.
 
+    .. attention::
+        To use the :py:class:`HStoreField` you will need to be sure the
+        *hstore* extension is registered with the connection. To accomplish
+        this, instantiate the :py:class:`PostgresqlExtDatabase` with
+        ``register_hstore=True``.
+
     .. note::
-        By default HStoreFIeld will use a GiST index. To disable this,
+        By default ``HStoreField`` will use a *GiST* index. To disable this,
         initialize the field with ``index=False``.
 
     .. py:method:: keys()
@@ -1146,9 +1167,8 @@ postgres_ext API notes
 
         .. code-block:: pycon
 
-            >>> f = House.features
-            >>> for h in House.select(House.address, f.keys().alias('keys')):
-            ...     print h.address, h.keys
+            >>> for h in House.select(House.address, House.features.keys().alias('keys')):
+            ...     print(h.address, h.keys)
 
             123 Main St [u'bath', u'garage']
 
@@ -1158,8 +1178,8 @@ postgres_ext API notes
 
         .. code-block:: pycon
 
-            >>> for h in House.select(House.address, f.values().alias('vals')):
-            ...     print h.address, h.vals
+            >>> for h in House.select(House.address, House.features.values().alias('vals')):
+            ...     print(h.address, h.vals)
 
             123 Main St [u'2 bath', u'2 cars']
 
@@ -1169,8 +1189,8 @@ postgres_ext API notes
 
         .. code-block:: pycon
 
-            >>> for h in House.select(House.address, f.items().alias('mtx')):
-            ...     print h.address, h.mtx
+            >>> for h in House.select(House.address, House.features.items().alias('mtx')):
+            ...     print(h.address, h.mtx)
 
             123 Main St [[u'bath', u'2 bath'], [u'garage', u'2 cars']]
 
@@ -1180,9 +1200,8 @@ postgres_ext API notes
 
         .. code-block:: pycon
 
-            >>> f = House.features
-            >>> for h in House.select(House.address, f.slice('garage').alias('garage_data')):
-            ...     print h.address, h.garage_data
+            >>> for h in House.select(House.address, House.features.slice('garage').alias('garage_data')):
+            ...     print(h.address, h.garage_data)
 
             123 Main St {'garage': '2 cars'}
 
@@ -1192,13 +1211,13 @@ postgres_ext API notes
 
         .. code-block:: pycon
 
-            >>> for h in House.select(House.address, f.exists('garage').alias('has_garage')):
-            ...     print h.address, h.has_garage
+            >>> for h in House.select(House.address, House.features.exists('garage').alias('has_garage')):
+            ...     print(h.address, h.has_garage)
 
             123 Main St True
 
-            >>> for h in House.select().where(f.exists('garage')):
-            ...     print h.address, h.features['garage'] # <-- just houses w/garage data
+            >>> for h in House.select().where(House.features.exists('garage')):
+            ...     print(h.address, h.features['garage']) # <-- just houses w/garage data
 
             123 Main St 2 cars
 
@@ -1241,10 +1260,10 @@ postgres_ext API notes
 
         .. code-block:: pycon
 
-            >>> f = House.features
-            >>> House.select().where(f.contains('garage')) # <-- all houses w/garage key
-            >>> House.select().where(f.contains(['garage', 'bath'])) # <-- all houses w/garage & bath
-            >>> House.select().where(f.contains({'garage': '2 cars'})) # <-- houses w/2-car garage
+            >>> query = House.select()
+            >>> has_garage = query.where(House.features.contains('garage'))
+            >>> garage_bath = query.where(House.features.contains(['garage', 'bath']))
+            >>> twocar = query.where(House.features.contains({'garage': '2 cars'}))
 
     .. py:method:: contains_any(*keys)
 
@@ -1254,16 +1273,20 @@ postgres_ext API notes
 
 .. py:class:: JSONField(dumps=None, *args, **kwargs)
 
-    Field class suitable for storing and querying arbitrary JSON.  When using
-    this on a model, set the field's value to a Python object (either a ``dict``
-    or a ``list``).  When you retrieve your value from the database it will be
-    returned as a Python data structure.
+    :param dumps: The default is to call json.dumps() or the dumps function.
+        You can override this method to create a customized JSON wrapper.
 
-    :param dumps: The default is to call json.dumps() or the dumps function. You can override this method to create a customized JSON wrapper.
+    Field class suitable for storing and querying arbitrary JSON. When using
+    this on a model, set the field's value to a Python object (either a
+    ``dict`` or a ``list``). When you retrieve your value from the database it
+    will be returned as a Python data structure.
 
     .. note:: You must be using Postgres 9.2 / psycopg2 2.5 or greater.
 
-    .. note:: If you are using Postgres 9.4, strongly consider using the :py:class:`BinaryJSONField` instead as it offers better performance and more powerful querying options.
+    .. note::
+        If you are using Postgres 9.4, strongly consider using the
+        :py:class:`BinaryJSONField` instead as it offers better performance and
+        more powerful querying options.
 
     Example model declaration:
 
@@ -1295,7 +1318,8 @@ postgres_ext API notes
         APIResponse.select().where(
             APIResponse.response['key1']['nested-key'] == 'some-value')
 
-    To illustrate the use of the ``[]`` operators, imagine we have the following data stored in an ``APIResponse``:
+    To illustrate the use of the ``[]`` operators, imagine we have the
+    following data stored in an ``APIResponse``:
 
     .. code-block:: javascript
 
@@ -1354,15 +1378,20 @@ postgres_ext API notes
 
 .. py:class:: BinaryJSONField(dumps=None, *args, **kwargs)
 
-    Store and query arbitrary JSON documents. Data should be stored using normal Python ``dict`` and ``list`` objects, and when data is returned from the database, it will be returned using ``dict`` and ``list`` as well.
+    :param dumps: The default is to call json.dumps() or the dumps function.
+      You can override this method to create a customized JSON wrapper.
 
-    For examples of basic query operations, see the above code samples for :py:class:`JSONField`. The example queries below will use the same ``APIResponse`` model described above.
+    Store and query arbitrary JSON documents. Data should be stored using
+    normal Python ``dict`` and ``list`` objects, and when data is returned from
+    the database, it will be returned using ``dict`` and ``list`` as well.
+
+    For examples of basic query operations, see the above code samples for
+    :py:class:`JSONField`. The example queries below will use the same
+    ``APIResponse`` model described above.
 
     .. note::
         By default BinaryJSONField will use a GiST index. To disable this,
         initialize the field with ``index=False``.
-
-    :param dumps: The default is to call json.dumps() or the dumps function. You can override this method to create a customized JSON wrapper.
 
     .. note:: You must be using Postgres 9.4 / psycopg2 2.5 or newer. If you are using Postgres 9.2 or 9.3, you can use the regular :py:class:`JSONField` instead.
 
@@ -1455,7 +1484,9 @@ postgres_ext API notes
 
 .. py:function:: Match(field, query)
 
-    Generate a full-text search expression, automatically converting the left-hand operand to a ``tsvector``, and the right-hand operand to a ``tsquery``.
+    Generate a full-text search expression, automatically converting the
+    left-hand operand to a ``tsvector``, and the right-hand operand to a
+    ``tsquery``.
 
     Example:
 
@@ -1468,10 +1499,13 @@ postgres_ext API notes
 
 .. py:class:: TSVectorField
 
-    Field type suitable for storing ``tsvector`` data. This field will automatically be created with a ``GIN`` index for improved search performance.
+    Field type suitable for storing ``tsvector`` data. This field will
+    automatically be created with a ``GIN`` index for improved search
+    performance.
 
     .. note::
-        Data stored in this field will still need to be manually converted to the ``tsvector`` type.
+        Data stored in this field will still need to be manually converted to
+        the ``tsvector`` type.
 
     .. note::
         By default TSVectorField will use a GIN index. To disable this,
@@ -1496,7 +1530,9 @@ postgres_ext API notes
 DataSet
 -------
 
-The *dataset* module contains a high-level API for working with databases modeled after the popular `project of the same name <https://dataset.readthedocs.io/en/latest/index.html>`_. The aims of the *dataset* module are to provide:
+The *dataset* module contains a high-level API for working with databases
+modeled after the popular `project of the same name <https://dataset.readthedocs.io/en/latest/index.html>`_.
+The aims of the *dataset* module are to provide:
 
 * A simplified API for working with relational data, along the lines of working with JSON.
 * An easy way to export relational data as JSON or CSV.
@@ -1523,7 +1559,8 @@ A minimal data-loading script might look like this:
     # {'age': 3, 'gender': None, 'id': 1, 'name': 'Huey'}
     # {'age': 5, 'gender': 'male', 'id': 2, 'name': 'Mickey'}
 
-You can export or import data using :py:meth:`~DataSet.freeze` and :py:meth:`~DataSet.thaw`:
+You can export or import data using :py:meth:`~DataSet.freeze` and
+:py:meth:`~DataSet.thaw`:
 
 .. code-block:: python
 
@@ -1538,7 +1575,9 @@ You can export or import data using :py:meth:`~DataSet.freeze` and :py:meth:`~Da
 Getting started
 ^^^^^^^^^^^^^^^
 
-:py:class:`DataSet` objects are initialized by passing in a database URL of the format ``dialect://user:password@host/dbname``. See the :ref:`db_url` section for examples of connecting to various databases.
+:py:class:`DataSet` objects are initialized by passing in a database URL of the
+format ``dialect://user:password@host/dbname``. See the :ref:`db_url` section
+for examples of connecting to various databases.
 
 .. code-block:: python
 
@@ -1548,21 +1587,26 @@ Getting started
 Storing data
 ^^^^^^^^^^^^
 
-To store data, we must first obtain a reference to a table. If the table does not exist, it will be created automatically:
+To store data, we must first obtain a reference to a table. If the table does
+not exist, it will be created automatically:
 
 .. code-block:: python
 
     # Get a table reference, creating the table if it does not exist.
     table = db['users']
 
-We can now :py:meth:`~Table.insert` new rows into the table. If the columns do not exist, they will be created automatically:
+We can now :py:meth:`~Table.insert` new rows into the table. If the columns do
+not exist, they will be created automatically:
 
 .. code-block:: python
 
     table.insert(name='Huey', age=3, color='white')
     table.insert(name='Mickey', age=5, gender='male')
 
-To update existing entries in the table, pass in a dictionary containing the new values and filter conditions. The list of columns to use as filters is specified in the *columns* argument. If no filter columns are specified, then all rows will be updated.
+To update existing entries in the table, pass in a dictionary containing the
+new values and filter conditions. The list of columns to use as filters is
+specified in the *columns* argument. If no filter columns are specified, then
+all rows will be updated.
 
 .. code-block:: python
 
@@ -1575,7 +1619,10 @@ To update existing entries in the table, pass in a dictionary containing the new
 Importing data
 ^^^^^^^^^^^^^^
 
-To import data from an external source, such as a JSON or CSV file, you can use the :py:meth:`~Table.thaw` method. By default, new columns will be created for any attributes encountered. If you wish to only populate columns that are already defined on a table, you can pass in ``strict=True``.
+To import data from an external source, such as a JSON or CSV file, you can use
+the :py:meth:`~Table.thaw` method. By default, new columns will be created for
+any attributes encountered. If you wish to only populate columns that are
+already defined on a table, you can pass in ``strict=True``.
 
 .. code-block:: python
 
@@ -1611,7 +1658,8 @@ DataSet supports nesting transactions using a simple context manager.
 Inspecting the database
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-You can use the :py:meth:`tables` method to list the tables in the current database:
+You can use the :py:meth:`tables` method to list the tables in the current
+database:
 
 .. code-block:: pycon
 
@@ -1647,7 +1695,8 @@ To retrieve all rows, you can use the :py:meth:`~Table.all` method:
     for user in db['user']:
         print user['name']
 
-Specific objects can be retrieved using :py:meth:`~Table.find` and :py:meth:`~Table.find_one`.
+Specific objects can be retrieved using :py:meth:`~Table.find` and
+:py:meth:`~Table.find_one`.
 
 .. code-block:: python
 
@@ -1660,7 +1709,8 @@ Specific objects can be retrieved using :py:meth:`~Table.find` and :py:meth:`~Ta
 Exporting data
 ^^^^^^^^^^^^^^
 
-To export data, use the :py:meth:`~DataSet.freeze` method, passing in the query you wish to export:
+To export data, use the :py:meth:`~DataSet.freeze` method, passing in the query
+you wish to export:
 
 .. code-block:: python
 
@@ -1672,17 +1722,20 @@ API
 
 .. py:class:: DataSet(url)
 
-    The *DataSet* class provides a high-level API for working with relational databases.
-
     :param str url: A database URL. See :ref:`db_url` for examples.
+
+    The *DataSet* class provides a high-level API for working with relational
+    databases.
 
     .. py:attribute:: tables
 
-        Return a list of tables stored in the database. This list is computed dynamically each time it is accessed.
+        Return a list of tables stored in the database. This list is computed
+        dynamically each time it is accessed.
 
     .. py:method:: __getitem__(table_name)
 
-        Provide a :py:class:`Table` reference to the specified table. If the table does not exist, it will be created.
+        Provide a :py:class:`Table` reference to the specified table. If the
+        table does not exist, it will be created.
 
     .. py:method:: query(sql[, params=None[, commit=True]])
 
@@ -1716,7 +1769,9 @@ API
 
     .. py:method:: connect()
 
-        Open a connection to the underlying database. If a connection is not opened explicitly, one will be opened the first time a query is executed.
+        Open a connection to the underlying database. If a connection is not
+        opened explicitly, one will be opened the first time a query is
+        executed.
 
     .. py:method:: close()
 
@@ -1724,7 +1779,7 @@ API
 
 .. py:class:: Table(dataset, name, model_class)
 
-    The *Table* class provides a high-level API for working with rows in a given table.
+    Provides a high-level API for working with rows in a given table.
 
     .. py:attribute:: columns
 
@@ -1745,11 +1800,14 @@ API
 
     .. py:method:: insert(**data)
 
-        Insert the given data dictionary into the table, creating new columns as needed.
+        Insert the given data dictionary into the table, creating new columns
+        as needed.
 
     .. py:method:: update(columns=None, conjunction=None, **data)
 
-        Update the table using the provided data. If one or more columns are specified in the *columns* parameter, then those columns' values in the *data* dictionary will be used to determine which rows to update.
+        Update the table using the provided data. If one or more columns are
+        specified in the *columns* parameter, then those columns' values in the
+        *data* dictionary will be used to determine which rows to update.
 
         .. code-block:: python
 
@@ -1761,7 +1819,8 @@ API
 
     .. py:method:: find(**query)
 
-        Query the table for rows matching the specified equality conditions. If no query is specified, then all rows are returned.
+        Query the table for rows matching the specified equality conditions. If
+        no query is specified, then all rows are returned.
 
         .. code-block:: python
 
@@ -1769,7 +1828,8 @@ API
 
     .. py:method:: find_one(**query)
 
-        Return a single row matching the specified equality conditions. If no matching row is found then ``None`` will be returned.
+        Return a single row matching the specified equality conditions. If no
+        matching row is found then ``None`` will be returned.
 
         .. code-block:: python
 
@@ -1781,7 +1841,8 @@ API
 
     .. py:method:: delete(**query)
 
-        Delete all rows matching the given equality conditions. If no query is provided, then all rows will be deleted.
+        Delete all rows matching the given equality conditions. If no query is
+        provided, then all rows will be deleted.
 
         .. code-block:: python
 
@@ -1811,24 +1872,26 @@ API
 Fields
 ------
 
-This module also contains several field classes that implement additional logic like encryption and compression. There is also a :py:class:`ManyToManyField` that makes it easy to work with simple many-to-many relationships.
-
 These fields can be found in the ``playhouse.fields`` module.
-
 
 .. py:class:: CompressedField([compression_level=6[, algorithm='zlib'[, **kwargs]]])
 
-    ``CompressedField`` stores compressed data using the specified algorithm. This field extends :py:class:`BlobField`, transparently storing a compressed representation of the data in the database.
-
     :param int compression_level: A value from 0 to 9.
     :param str algorithm: Either ``'zlib'`` or ``'bz2'``.
+
+    Stores compressed data using the specified algorithm. This field extends
+    :py:class:`BlobField`, transparently storing a compressed representation of
+    the data in the database.
 
 .. _hybrid:
 
 Hybrid Attributes
 -----------------
 
-Hybrid attributes encapsulate functionality that operates at both the Python *and* SQL levels. The idea for hybrid attributes comes from a feature of the `same name in SQLAlchemy <http://docs.sqlalchemy.org/en/improve_toc/orm/extensions/hybrid.html>`_. Consider the following example:
+Hybrid attributes encapsulate functionality that operates at both the Python
+*and* SQL levels. The idea for hybrid attributes comes from a feature of the
+`same name in SQLAlchemy <http://docs.sqlalchemy.org/en/improve_toc/orm/extensions/hybrid.html>`_.
+Consider the following example:
 
 .. code-block:: python
 
@@ -1844,11 +1907,14 @@ Hybrid attributes encapsulate functionality that operates at both the Python *an
         def contains(self, point):
             return (self.start <= point) & (point < self.end)
 
-The *hybrid attribute* gets its name from the fact that the ``length`` attribute will behave differently depending on whether it is accessed via the ``Interval`` class or an ``Interval`` instance.
+The *hybrid attribute* gets its name from the fact that the ``length``
+attribute will behave differently depending on whether it is accessed via the
+``Interval`` class or an ``Interval`` instance.
 
 If accessed via an instance, then it behaves just as you would expect.
 
-If accessed via the ``Interval.length`` class attribute, however, the length calculation will be expressed as a SQL expression. For example:
+If accessed via the ``Interval.length`` class attribute, however, the length
+calculation will be expressed as a SQL expression. For example:
 
 .. code-block:: python
 
@@ -1862,7 +1928,11 @@ This query will be equivalent to the following SQL:
     FROM "interval" AS t1
     WHERE (("t1"."end" - "t1"."start") > 5)
 
-The ``hybrid`` module also contains a decorator for implementing hybrid methods which can accept parameters. As with hybrid properties, when accessed via a model instance, then the function executes normally as-written. When the hybrid method is called on the class, however, it will generate a SQL expression.
+The ``playhouse.hybrid`` module also contains a decorator for implementing
+hybrid methods which can accept parameters. As with hybrid properties, when
+accessed via a model instance, then the function executes normally as-written.
+When the hybrid method is called on the class, however, it will generate a SQL
+expression.
 
 Example:
 
@@ -1898,7 +1968,10 @@ There is an additional API for situations where the python implementation differ
         def radius(cls):
             return fn.ABS(cls.length) / 2
 
-What is neat is that both the ``radius`` implementations refer to the ``length`` hybrid attribute! When accessed via an ``Interval`` instance, the radius calculation will be executed in Python. When invoked via an ``Interval`` class, we will get the appropriate SQL.
+What is neat is that both the ``radius`` implementations refer to the
+``length`` hybrid attribute! When accessed via an ``Interval`` instance, the
+radius calculation will be executed in Python. When invoked via an ``Interval``
+class, we will get the appropriate SQL.
 
 Example:
 
@@ -1921,7 +1994,8 @@ Hybrid API
 
 .. py:class:: hybrid_method(func[, expr=None])
 
-    Method decorator that allows the definition of a Python object method with both instance-level and class-level behavior.
+    Method decorator that allows the definition of a Python object method with
+    both instance-level and class-level behavior.
 
     Example:
 
@@ -1935,7 +2009,9 @@ Hybrid API
             def contains(self, point):
                 return (self.start <= point) & (point < self.end)
 
-    When called with an ``Interval`` instance, the ``contains`` method will behave as you would expect. When called as a classmethod, though, a SQL expression will be generated:
+    When called with an ``Interval`` instance, the ``contains`` method will
+    behave as you would expect. When called as a classmethod, though, a SQL
+    expression will be generated:
 
     .. code-block:: python
 
@@ -1955,7 +2031,8 @@ Hybrid API
 
 .. py:class:: hybrid_property(fget[, fset=None[, fdel=None[, expr=None]]])
 
-    Method decorator that allows the definition of a Python object property with both instance-level and class-level behavior.
+    Method decorator that allows the definition of a Python object property
+    with both instance-level and class-level behavior.
 
     Examples:
 
@@ -1977,7 +2054,9 @@ Hybrid API
             def radius(cls):
                 return fn.ABS(cls.length) / 2
 
-    When accessed on an ``Interval`` instance, the ``length`` and ``radius`` properties will behave as you would expect. When accessed as class attributes, though, a SQL expression will be generated instead:
+    When accessed on an ``Interval`` instance, the ``length`` and ``radius``
+    properties will behave as you would expect. When accessed as class
+    attributes, though, a SQL expression will be generated instead:
 
     .. code-block:: python
 
@@ -2100,9 +2179,11 @@ helpers for serializing models to dictionaries and vice-versa.
 Signal support
 --------------
 
-Models with hooks for signals (a-la django) are provided in ``playhouse.signals``. To use the signals, you will need all of your project's models to be a subclass of ``playhouse.signals.Model``, which overrides the necessary methods to provide support for the various signals.
+Models with hooks for signals (a-la django) are provided in
+``playhouse.signals``. To use the signals, you will need all of your project's
+models to be a subclass of ``playhouse.signals.Model``, which overrides the
+necessary methods to provide support for the various signals.
 
-.. highlight:: python
 .. code-block:: python
 
     from playhouse.signals import Model, post_save
@@ -2116,18 +2197,24 @@ Models with hooks for signals (a-la django) are provided in ``playhouse.signals`
         put_data_in_cache(instance.data)
 
 .. warning::
-    For what I hope are obvious reasons, Peewee signals do not work when you use the :py:meth:`Model.insert`, :py:meth:`Model.update`, or :py:meth:`Model.delete` methods. These methods generate queries that execute beyond the scope of the ORM, and the ORM does not know about which model instances might or might not be affected when the query executes.
+    For what I hope are obvious reasons, Peewee signals do not work when you
+    use the :py:meth:`Model.insert`, :py:meth:`Model.update`, or
+    :py:meth:`Model.delete` methods. These methods generate queries that
+    execute beyond the scope of the ORM, and the ORM does not know about which
+    model instances might or might not be affected when the query executes.
 
-    Signals work by hooking into the higher-level peewee APIs like :py:meth:`Model.save` and :py:meth:`Model.delete_instance`, where the affected model instance is known ahead of time.
+    Signals work by hooking into the higher-level peewee APIs like
+    :py:meth:`Model.save` and :py:meth:`Model.delete_instance`, where the
+    affected model instance is known ahead of time.
 
 The following signals are provided:
 
 ``pre_save``
-    Called immediately before an object is saved to the database.  Provides an
+    Called immediately before an object is saved to the database. Provides an
     additional keyword argument ``created``, indicating whether the model is being
     saved for the first time or updated.
 ``post_save``
-    Called immediately after an object is saved to the database.  Provides an
+    Called immediately after an object is saved to the database. Provides an
     additional keyword argument ``created``, indicating whether the model is being
     saved for the first time or updated.
 ``pre_delete``
@@ -2146,14 +2233,16 @@ The following signals are provided:
 Connecting handlers
 ^^^^^^^^^^^^^^^^^^^
 
-Whenever a signal is dispatched, it will call any handlers that have been registered.
-This allows totally separate code to respond to events like model save and delete.
+Whenever a signal is dispatched, it will call any handlers that have been
+registered. This allows totally separate code to respond to events like model
+save and delete.
 
-The :py:class:`Signal` class provides a :py:meth:`~Signal.connect` method, which takes
-a callback function and two optional parameters for "sender" and "name".  If specified,
-the "sender" parameter should be a single model class and allows your callback to only
-receive signals from that one model class.  The "name" parameter is used as a convenient alias
-in the event you wish to unregister your signal handler.
+The :py:class:`Signal` class provides a :py:meth:`~Signal.connect` method,
+which takes a callback function and two optional parameters for "sender" and
+"name". If specified, the "sender" parameter should be a single model class
+and allows your callback to only receive signals from that one model class.
+The "name" parameter is used as a convenient alias in the event you wish to
+unregister your signal handler.
 
 Example usage:
 
@@ -2167,12 +2256,12 @@ Example usage:
     # our handler will only be called when we save instances of SomeModel
     post_save.connect(post_save_handler, sender=SomeModel)
 
-All signal handlers accept as their first two arguments ``sender`` and ``instance``,
-where ``sender`` is the model class and ``instance`` is the actual model being acted
-upon.
+All signal handlers accept as their first two arguments ``sender`` and
+``instance``, where ``sender`` is the model class and ``instance`` is the
+actual model being acted upon.
 
-If you'd like, you can also use a decorator to connect signal handlers.  This is
-functionally equivalent to the above example:
+If you'd like, you can also use a decorator to connect signal handlers. This
+is functionally equivalent to the above example:
 
 .. code-block:: python
 
@@ -2186,12 +2275,10 @@ Signal API
 
 .. py:class:: Signal()
 
-    Stores a list of receivers (callbacks) and calls them when the "send" method is invoked.
+    Stores a list of receivers (callbacks) and calls them when the "send"
+    method is invoked.
 
     .. py:method:: connect(receiver[, sender=None[, name=None]])
-
-        Add the receiver to the internal list of receivers, which will be called
-        whenever the signal is sent.
 
         :param callable receiver: a callable that takes at least two parameters,
             a "sender", which is the Model subclass that triggered the signal, and
@@ -2199,6 +2286,9 @@ Signal API
         :param Model sender: if specified, only instances of this model class will
             trigger the receiver callback.
         :param string name: a short alias
+
+        Add the receiver to the internal list of receivers, which will be called
+        whenever the signal is sent.
 
         .. code-block:: python
 
@@ -2209,12 +2299,12 @@ Signal API
 
     .. py:method:: disconnect([receiver=None[, name=None]])
 
-        Disconnect the given receiver (or the receiver with the given name alias)
-        so that it no longer is called.  Either the receiver or the name must be
-        provided.
-
         :param callable receiver: the callback to disconnect
         :param string name: a short alias
+
+        Disconnect the given receiver (or the receiver with the given name alias)
+        so that it no longer is called. Either the receiver or the name must be
+        provided.
 
         .. code-block:: python
 
@@ -2222,11 +2312,11 @@ Signal API
 
     .. py:method:: send(instance, *args, **kwargs)
 
-        Iterates over the receivers and will call them in the order in which
-        they were connected.  If the receiver specified a sender, it will only
-        be called if the instance is an instance of the sender.
-
         :param instance: a model instance
+
+        Iterates over the receivers and will call them in the order in which
+        they were connected. If the receiver specified a sender, it will only
+        be called if the instance is an instance of the sender.
 
 
     .. py:method __call__([sender=None[, name=None]])
@@ -2247,28 +2337,26 @@ Signal API
 pwiz, a model generator
 -----------------------
 
-``pwiz`` is a little script that ships with peewee and is capable of introspecting
-an existing database and generating model code suitable for interacting with the
-underlying data.  If you have a database already, pwiz can give you a nice boost
-by generating skeleton code with correct column affinities and foreign keys.
+``pwiz`` is a little script that ships with peewee and is capable of
+introspecting an existing database and generating model code suitable for
+interacting with the underlying data. If you have a database already, pwiz can
+give you a nice boost by generating skeleton code with correct column
+affinities and foreign keys.
 
-If you install peewee using ``setup.py install``, pwiz will be installed as a "script"
-and you can just run:
+If you install peewee using ``setup.py install``, pwiz will be installed as a
+"script" and you can just run:
 
-.. highlight:: console
 .. code-block:: console
 
     python -m pwiz -e postgresql -u postgres my_postgres_db
 
-This will print a bunch of models to standard output.  So you can do this:
+This will print a bunch of models to standard output. So you can do this:
 
 .. code-block:: console
 
     python -m pwiz -e postgresql my_postgres_db > mymodels.py
     python # <-- fire up an interactive shell
 
-
-.. highlight:: pycon
 .. code-block:: pycon
 
     >>> from mymodels import Blog, Entry, Tag, Whatever
@@ -2299,15 +2387,17 @@ Schema Migrations
 -----------------
 
 Peewee now supports schema migrations, with well-tested support for Postgresql,
-SQLite and MySQL. Unlike other schema migration tools, peewee's migrations
-do not handle introspection and database "versioning". Rather, peewee provides a number of
-helper functions for generating and running schema-altering statements. This engine provides
-the basis on which a more sophisticated tool could some day be built.
+SQLite and MySQL. Unlike other schema migration tools, peewee's migrations do
+not handle introspection and database "versioning". Rather, peewee provides a
+number of helper functions for generating and running schema-altering
+statements. This engine provides the basis on which a more sophisticated tool
+could some day be built.
 
-Migrations can be written as simple python scripts and executed from the command-line. Since
-the migrations only depend on your applications :py:class:`Database` object, it should be
-easy to manage changing your model definitions and maintaining a set of migration scripts without
-introducing dependencies.
+Migrations can be written as simple python scripts and executed from the
+command-line. Since the migrations only depend on your applications
+:py:class:`Database` object, it should be easy to manage changing your model
+definitions and maintaining a set of migration scripts without introducing
+dependencies.
 
 Example usage
 ^^^^^^^^^^^^^
@@ -2318,9 +2408,9 @@ Begin by importing the helpers from the `migrate` module:
 
     from playhouse.migrate import *
 
-Instantiate a ``migrator``. The :py:class:`SchemaMigrator` class is responsible for
-generating schema altering operations, which can then be run sequentially by the
-:py:func:`migrate` helper.
+Instantiate a ``migrator``. The :py:class:`SchemaMigrator` class is responsible
+for generating schema altering operations, which can then be run sequentially
+by the :py:func:`migrate` helper.
 
 .. code-block:: python
 
@@ -2346,9 +2436,9 @@ Use :py:func:`migrate` to execute one or more operations:
     )
 
 .. warning::
-    Migrations are not run inside a transaction. If you wish the migration to run
-    in a transaction you will need to wrap the call to `migrate` in a transaction
-    block, e.g.
+    Migrations are not run inside a transaction. If you wish the migration to
+    run in a transaction you will need to wrap the call to `migrate` in a
+    transaction block, e.g.
 
     .. code-block:: python
 
@@ -2533,18 +2623,24 @@ Migrations API
 Reflection
 ----------
 
-The reflection module contains helpers for introspecting existing databases. This module is used internally by several other modules in the playhouse, including :ref:`dataset` and :ref:`pwiz`.
+The reflection module contains helpers for introspecting existing databases.
+This module is used internally by several other modules in the playhouse,
+including :ref:`dataset` and :ref:`pwiz`.
 
 .. py:class:: Introspector(metadata[, schema=None])
 
-    Metadata can be extracted from a database by instantiating an :py:class:`Introspector`. Rather than instantiating this class directly, it is recommended to use the factory method :py:meth:`~Introspector.from_database`.
+    Metadata can be extracted from a database by instantiating an
+    :py:class:`Introspector`. Rather than instantiating this class directly, it
+    is recommended to use the factory method
+    :py:meth:`~Introspector.from_database`.
 
     .. py:classmethod:: from_database(database[, schema=None])
 
-        Creates an :py:class:`Introspector` instance suitable for use with the given database.
-
         :param database: a :py:class:`Database` instance.
         :param str schema: an optional schema (supported by some databases).
+
+        Creates an :py:class:`Introspector` instance suitable for use with the
+        given database.
 
         Usage:
 
@@ -2561,9 +2657,11 @@ The reflection module contains helpers for introspecting existing databases. Thi
 
     .. py:method:: generate_models()
 
-        Introspect the database, reading in the tables, columns, and foreign key constraints, then generate a dictionary mapping each database table to a dynamically-generated :py:class:`Model` class.
-
         :return: A dictionary mapping table-names to model classes.
+
+        Introspect the database, reading in the tables, columns, and foreign
+        key constraints, then generate a dictionary mapping each database table
+        to a dynamically-generated :py:class:`Model` class.
 
 
 .. _db_url:
@@ -2571,7 +2669,8 @@ The reflection module contains helpers for introspecting existing databases. Thi
 Database URL
 ------------
 
-This module contains a helper function to generate a database connection from a URL connection string.
+This module contains a helper function to generate a database connection from a
+URL connection string.
 
 .. py:function:: connect(url, **connect_params)
 
@@ -2612,16 +2711,23 @@ This module contains a helper function to generate a database connection from a 
 
 .. py:function:: parse(url)
 
-    Parse the information in the given URL into a dictionary containing ``database``, ``host``, ``port``, ``user`` and/or ``password``. Additional connection arguments can be passed in the URL query string.
+    Parse the information in the given URL into a dictionary containing
+    ``database``, ``host``, ``port``, ``user`` and/or ``password``. Additional
+    connection arguments can be passed in the URL query string.
 
-    If you are using a custom database class, you can use the ``parse()`` function to extract information from a URL which can then be passed in to your database object.
+    If you are using a custom database class, you can use the ``parse()``
+    function to extract information from a URL which can then be passed in to
+    your database object.
 
 .. py:function:: register_database(db_class, *names)
 
     :param db_class: A subclass of :py:class:`Database`.
     :param names: A list of names to use as the scheme in the URL, e.g. 'sqlite' or 'firebird'
 
-    Register additional database class under the specified names. This function can be used to extend the ``connect()`` function to support additional schemes. Suppose you have a custom database class for ``Firebird`` named ``FirebirdDatabase``.
+    Register additional database class under the specified names. This function
+    can be used to extend the ``connect()`` function to support additional
+    schemes. Suppose you have a custom database class for ``Firebird`` named
+    ``FirebirdDatabase``.
 
     .. code-block:: python
 
@@ -2635,13 +2741,25 @@ This module contains a helper function to generate a database connection from a 
 Connection pool
 ---------------
 
-The ``pool`` module contains a number of :py:class:`Database` classes that provide connection pooling for PostgreSQL and MySQL databases. The pool works by overriding the methods on the :py:class:`Database` class that open and close connections to the backend. The pool can specify a timeout after which connections are recycled, as well as an upper bound on the number of open connections.
+The ``pool`` module contains a number of :py:class:`Database` classes that
+provide connection pooling for PostgreSQL and MySQL databases. The pool works
+by overriding the methods on the :py:class:`Database` class that open and close
+connections to the backend. The pool can specify a timeout after which
+connections are recycled, as well as an upper bound on the number of open
+connections.
 
-In a multi-threaded application, up to `max_connections` will be opened. Each thread (or, if using gevent, greenlet) will have it's own connection.
+In a multi-threaded application, up to `max_connections` will be opened. Each
+thread (or, if using gevent, greenlet) will have it's own connection.
 
-In a single-threaded application, only one connection will be created. It will be continually recycled until either it exceeds the stale timeout or is closed explicitly (using `.manual_close()`).
+In a single-threaded application, only one connection will be created. It will
+be continually recycled until either it exceeds the stale timeout or is closed
+explicitly (using `.manual_close()`).
 
-**By default, all your application needs to do is ensure that connections are closed when you are finished with them, and they will be returned to the pool**. For web applications, this typically means that at the beginning of a request, you will open a connection, and when you return a response, you will close the connection.
+**By default, all your application needs to do is ensure that connections are
+closed when you are finished with them, and they will be returned to the
+pool**. For web applications, this typically means that at the beginning of a
+request, you will open a connection, and when you return a response, you will
+close the connection.
 
 Simple Postgres pool example code:
 
@@ -2660,20 +2778,21 @@ Simple Postgres pool example code:
         class Meta:
             database = db
 
-That's it! If you would like finer-grained control over the pool of connections, check out the :ref:`advanced_connection_management` section.
+That's it! If you would like finer-grained control over the pool of
+connections, check out the :ref:`advanced_connection_management` section.
 
 Pool APIs
 ^^^^^^^^^
 
 .. py:class:: PooledDatabase(database[, max_connections=20[, stale_timeout=None[, timeout=None[, **kwargs]]]])
 
-    Mixin class intended to be used with a subclass of :py:class:`Database`.
-
     :param str database: The name of the database or database file.
     :param int max_connections: Maximum number of connections. Provide ``None`` for unlimited.
     :param int stale_timeout: Number of seconds to allow connections to be used.
     :param int timeout: Number of seconds block when pool is full. By default peewee does not block when the pool is full but simply throws an exception. To block indefinitely set this value to ``0``.
     :param kwargs: Arbitrary keyword arguments passed to database class.
+
+    Mixin class intended to be used with a subclass of :py:class:`Database`.
 
     .. note:: Connections will not be closed exactly when they exceed their `stale_timeout`. Instead, stale connections are only closed when a new connection is requested.
 
@@ -2776,7 +2895,8 @@ Contains utilities helpful when testing peewee projects.
 Flask Utils
 -----------
 
-The ``playhouse.flask_utils`` module contains several helpers for integrating peewee with the `Flask <http://flask.pocoo.org/>`_ web framework.
+The ``playhouse.flask_utils`` module contains several helpers for integrating
+peewee with the `Flask <http://flask.pocoo.org/>`_ web framework.
 
 Database Wrapper
 ^^^^^^^^^^^^^^^^
@@ -2815,7 +2935,12 @@ Basic usage:
         content = TextField()
         timestamp = DateTimeField(default=datetime.datetime.now)
 
-The above code example will create and instantiate a peewee :py:class:`PostgresqlDatabase` specified by the given database URL. Request hooks will be configured to establish a connection when a request is received, and automatically close the connection when the response is sent. Lastly, the :py:class:`FlaskDB` class exposes a :py:attr:`FlaskDB.Model` property which can be used as a base for your application's models.
+The above code example will create and instantiate a peewee
+:py:class:`PostgresqlDatabase` specified by the given database URL. Request
+hooks will be configured to establish a connection when a request is received,
+and automatically close the connection when the response is sent. Lastly, the
+:py:class:`FlaskDB` class exposes a :py:attr:`FlaskDB.Model` property which can
+be used as a base for your application's models.
 
 Here is how you can access the wrapped Peewee database instance that is
 configured for you by the ``FlaskDB`` wrapper:
@@ -2841,7 +2966,9 @@ Here is another way to configure a Peewee database using ``FlaskDB``:
     app = Flask(__name__)
     db_wrapper = FlaskDB(app, 'sqlite:///my_app.db')
 
-While the above examples show using a database URL, for more advanced usages you can specify a dictionary of configuration options, or simply pass in a peewee :py:class:`Database` instance:
+While the above examples show using a database URL, for more advanced usages
+you can specify a dictionary of configuration options, or simply pass in a
+peewee :py:class:`Database` instance:
 
 .. code-block:: python
 
@@ -2871,7 +2998,8 @@ Using a peewee :py:class:`Database` object:
 Database with Application Factory
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-If you prefer to use the `application factory pattern <http://flask.pocoo.org/docs/0.10/patterns/appfactories/>`_, the :py:class:`FlaskDB` class implements an ``init_app()`` method.
+If you prefer to use the `application factory pattern <http://flask.pocoo.org/docs/0.10/patterns/appfactories/>`_,
+the :py:class:`FlaskDB` class implements an ``init_app()`` method.
 
 Using as a factory:
 
@@ -2898,10 +3026,12 @@ The ``flask_utils`` module provides several helpers for managing queries in your
 
 .. py:function:: get_object_or_404(query_or_model, *query)
 
-    Retrieve the object matching the given query, or return a 404 not found response. A common use-case might be a detail page for a weblog. You want to either retrieve the post matching the given URL, or return a 404.
-
     :param query_or_model: Either a :py:class:`Model` class or a pre-filtered :py:class:`SelectQuery`.
     :param query: An arbitrarily complex peewee expression.
+
+    Retrieve the object matching the given query, or return a 404 not found
+    response. A common use-case might be a detail page for a weblog. You want
+    to either retrieve the post matching the given URL, or return a 404.
 
     Example:
 
@@ -2915,10 +3045,6 @@ The ``flask_utils`` module provides several helpers for managing queries in your
 
 .. py:function:: object_list(template_name, query[, context_variable='object_list'[, paginate_by=20[, page_var='page'[, check_bounds=True[, **kwargs]]]]])
 
-    Retrieve a paginated list of objects specified by the given query. The paginated object list will be dropped into the context using the given ``context_variable``, as well as metadata about the current page and total number of pages, and finally any arbitrary context data passed as keyword-arguments.
-
-    The page is specified using the ``page`` ``GET`` argument, e.g. ``/my-object-list/?page=3`` would return the third page of objects.
-
     :param template_name: The name of the template to render.
     :param query: A :py:class:`SelectQuery` instance to paginate.
     :param context_variable: The context variable name to use for the paginated object list.
@@ -2926,6 +3052,15 @@ The ``flask_utils`` module provides several helpers for managing queries in your
     :param page_var: The name of the ``GET`` argument which contains the page.
     :param check_bounds: Whether to check that the given page is a valid page. If ``check_bounds`` is ``True`` and an invalid page is specified, then a 404 will be returned.
     :param kwargs: Arbitrary key/value pairs to pass into the template context.
+
+    Retrieve a paginated list of objects specified by the given query. The
+    paginated object list will be dropped into the context using the given
+    ``context_variable``, as well as metadata about the current page and total
+    number of pages, and finally any arbitrary context data passed as
+    keyword-arguments.
+
+    The page is specified using the ``page`` ``GET`` argument, e.g.
+    ``/my-object-list/?page=3`` would return the third page of objects.
 
     Example:
 
@@ -2952,16 +3087,18 @@ The ``flask_utils`` module provides several helpers for managing queries in your
 
 .. py:class:: PaginatedQuery(query_or_model, paginate_by[, page_var='page'[, check_bounds=False]])
 
-    Helper class to perform pagination based on ``GET`` arguments.
-
     :param query_or_model: Either a :py:class:`Model` or a :py:class:`SelectQuery` instance containing the collection of records you wish to paginate.
     :param paginate_by: Number of objects per-page.
     :param page_var: The name of the ``GET`` argument which contains the page.
     :param check_bounds: Whether to check that the given page is a valid page. If ``check_bounds`` is ``True`` and an invalid page is specified, then a 404 will be returned.
 
+    Helper class to perform pagination based on ``GET`` arguments.
+
     .. py:method:: get_page()
 
-        Return the currently selected page, as indicated by the value of the ``page_var`` ``GET`` parameter. If no page is explicitly selected, then this method will return 1, indicating the first page.
+        Return the currently selected page, as indicated by the value of the
+        ``page_var`` ``GET`` parameter. If no page is explicitly selected, then
+        this method will return 1, indicating the first page.
 
     .. py:method:: get_page_count()
 
@@ -2969,6 +3106,10 @@ The ``flask_utils`` module provides several helpers for managing queries in your
 
     .. py:method:: get_object_list()
 
-        Using the value of :py:meth:`~PaginatedQuery.get_page`, return the page of objects requested by the user. The return value is a :py:class:`SelectQuery` with the appropriate ``LIMIT`` and ``OFFSET`` clauses.
+        Using the value of :py:meth:`~PaginatedQuery.get_page`, return the page
+        of objects requested by the user. The return value is a
+        :py:class:`SelectQuery` with the appropriate ``LIMIT`` and ``OFFSET``
+        clauses.
 
-        If ``check_bounds`` was set to ``True`` and the requested page contains no objects, then a 404 will be raised.
+        If ``check_bounds`` was set to ``True`` and the requested page contains
+        no objects, then a 404 will be raised.
