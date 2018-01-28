@@ -102,39 +102,44 @@ def udf(*groups):
     return decorator
 
 # Register aggregates / functions with connection.
-def register_aggregate_groups(conn, *groups):
+def register_aggregate_groups(db, *groups):
     seen = set()
     for group in groups:
-        klasses = AGGREGATE_COLLECTION[group]
+        klasses = AGGREGATE_COLLECTION.get(group, ())
         for klass in klasses:
             name = getattr(klass, 'name', klass.__name__)
             if name not in seen:
                 seen.add(name)
-                conn.create_aggregate(name, -1, klass)
+                db.register_aggregate(klass, name)
 
-def register_table_function_groups(conn, *groups):
+def register_table_function_groups(db, *groups):
     seen = set()
     for group in groups:
-        klasses = TABLE_FUNCTION_COLLECTION[group]
+        klasses = TABLE_FUNCTION_COLLECTION.get(group, ())
         for klass in klasses:
             if klass.name not in seen:
                 seen.add(klass.name)
-                klass.register(conn)
+                db.register_table_function(klass)
 
-def register_udf_groups(conn, *groups):
+def register_udf_groups(db, *groups):
     seen = set()
     for group in groups:
-        functions = UDF_COLLECTION[group]
+        functions = UDF_COLLECTION.get(group, ())
         for function in functions:
             name = function.__name__
             if name not in seen:
                 seen.add(name)
-                conn.create_function(name, -1, function)
+                db.register_function(function, name)
 
-def register_all(conn):
-    register_aggregate_groups(conn, *AGGREGATE_COLLECTION)
-    register_table_function_groups(conn, *TABLE_FUNCTION_COLLECTION)
-    register_udf_groups(conn, *UDF_COLLECTION)
+def register_groups(db, *groups):
+    register_aggregate_groups(db, *groups)
+    register_table_function_groups(db, *groups)
+    register_udf_groups(db, *groups)
+
+def register_all(db):
+    register_aggregate_groups(db, *AGGREGATE_COLLECTION)
+    register_table_function_groups(db, *TABLE_FUNCTION_COLLECTION)
+    register_udf_groups(db, *UDF_COLLECTION)
 
 
 # Begin actual user-defined functions and aggregates.
@@ -205,12 +210,13 @@ if sys.version_info[0] == 2:
 else:
     @udf(HELPER)
     def gzip(data, compression=9):
-        data = bytes(data.encode('raw_unicode_escape'))
+        if isinstance(data, str):
+            data = bytes(data.encode('raw_unicode_escape'))
         return zlib.compress(data, compression)
 
     @udf(HELPER)
     def gunzip(data):
-        return zlib.decompress(data).decode('utf-8')
+        return zlib.decompress(data)
 
 @udf(HELPER)
 def hostname(url):

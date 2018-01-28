@@ -157,64 +157,106 @@ determine whether the database writer is up and running.
 Sqlite User-Defined Functions
 -----------------------------
 
-The ``sqlite_udf`` playhouse module contains a number of user-defined functions, aggregates, and table-valued functions, which you may find useful. The functions are grouped in collections and you can register these user-defined extensions individually, by collection, or register everything.
+The ``sqlite_udf`` playhouse module contains a number of user-defined
+functions, aggregates, and table-valued functions, which you may find useful.
+The functions are grouped in collections and you can register these
+user-defined extensions individually, by collection, or register everything.
 
-Scalar functions are functions which take a number of parameters and return a single value. For example, converting a string to upper-case, or calculating the MD5 hex digest.
+Scalar functions are functions which take a number of parameters and return a
+single value. For example, converting a string to upper-case, or calculating
+the MD5 hex digest.
 
-Aggregate functions are like scalar functions that operate on multiple rows of data, producing a single result. For example, calculating the sum of a list of integers, or finding the smallest value in a particular column.
+Aggregate functions are like scalar functions that operate on multiple rows of
+data, producing a single result. For example, calculating the sum of a list of
+integers, or finding the smallest value in a particular column.
 
-Table-valued functions are simply functions that can return multiple rows of data. For example, a regular-expression search function that returns all the matches in a given string, or a function that accepts two dates and generates all the intervening days.
+Table-valued functions are simply functions that can return multiple rows of
+data. For example, a regular-expression search function that returns all the
+matches in a given string, or a function that accepts two dates and generates
+all the intervening days.
 
-.. note:: To use table-valued functions, you will need to install the ``vtfunc`` module. The ``vtfunc`` module is available `on GitHub <https://github.com/coleifer/sqlite-vtfunc>`_ or can be installed using ``pip``.
+.. note::
+    To use table-valued functions, you will need to build the
+    ``playhouse._sqlite_ext`` C extension.
+
+Registering user-defined functions:
+
+.. code-block:: python
+
+    db = SqliteDatabase('my_app.db')
+
+    # Register *all* functions.
+    register_all(db)
+
+    # Alternatively, you can register individual groups. This will just
+    # register the DATE and MATH groups of functions.
+    register_groups(db, 'DATE', 'MATH')
+
+    # If you only wish to register, say, the aggregate functions for a
+    # particular group or groups, you can:
+    register_aggregate_groups(db, 'DATE')
+
 
 Functions, listed by collection name
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Scalar functions are indicated by ``(f)``, aggregate functions by ``(a)``, and table-valued functions by ``(t)``.
+Scalar functions are indicated by ``(f)``, aggregate functions by ``(a)``, and
+table-valued functions by ``(t)``.
 
-* ``CONTROL_FLOW``
-  * :py:func:`if_then_else` (f)
-* ``DATE``
-  * :py:func:`strip_tz` (f)
-  * :py:func:`human_delta` (f)
-  * :py:func:`mintdiff` (a)
-  * :py:func:`avgtdiff` (a)
-  * :py:func:`duration` (a)
-  * :py:func:`date_series` (t)
-* ``FILE``
-  * :py:func:`file_ext` (f)
-  * :py:func:`file_read` (f)
-* ``HELPER``
-  * :py:func:`gzip` (f)
-  * :py:func:`gunzip` (f)
-  * :py:func:`hostname` (f)
-  * :py:func:`toggle` (f)
-  * :py:func:`setting` (f)
-  * :py:func:`clear_toggles` (f)
-  * :py:func:`clear_settings` (f)
-* ``MATH``
-  * :py:func:`randomrange` (f)
-  * :py:func:`gauss_distribution` (f)
-  * :py:func:`sqrt` (f)
-  * :py:func:`tonumber` (f)
-  * :py:func:`mode` (a)
-  * :py:func:`minrange` (a)
-  * :py:func:`avgrange` (a)
-  * :py:func:`range` (a)
-  * :py:func:`median` (a) (requires cython)
-* ``STRING``
-  * :py:func:`substr_count` (f)
-  * :py:func:`strip_chars` (f)
-  * :py:func:`md5` (f)
-  * :py:func:`sha1` (f)
-  * :py:func:`sha256` (f)
-  * :py:func:`sha512` (f)
-  * :py:func:`adler32` (f)
-  * :py:func:`crc32` (f)
-  * :py:func:`damerau_levenshtein_dist` (f) (requires cython)
-  * :py:func:`levenshtein_dist` (f) (requires cython)
-  * :py:func:`str_dist` (f) (requires cython)
-  * :py:func:`regex_search` (t)
+**CONTROL_FLOW**
+
+* :py:func:`if_then_else` (f)
+
+**DATE**
+
+* :py:func:`strip_tz` (f)
+* :py:func:`human_delta` (f)
+* :py:func:`mintdiff` (a)
+* :py:func:`avgtdiff` (a)
+* :py:func:`duration` (a)
+* :py:func:`date_series` (t)
+
+**FILE**
+
+* :py:func:`file_ext` (f)
+* :py:func:`file_read` (f)
+
+**HELPER**
+
+* :py:func:`gzip` (f)
+* :py:func:`gunzip` (f)
+* :py:func:`hostname` (f)
+* :py:func:`toggle` (f)
+* :py:func:`setting` (f)
+* :py:func:`clear_toggles` (f)
+* :py:func:`clear_settings` (f)
+
+**MATH**
+
+* :py:func:`randomrange` (f)
+* :py:func:`gauss_distribution` (f)
+* :py:func:`sqrt` (f)
+* :py:func:`tonumber` (f)
+* :py:func:`mode` (a)
+* :py:func:`minrange` (a)
+* :py:func:`avgrange` (a)
+* :py:func:`range` (a)
+* :py:func:`median` (a) (requires cython)
+
+**STRING**
+
+* :py:func:`substr_count` (f)
+* :py:func:`strip_chars` (f)
+* :py:func:`md5` (f)
+* :py:func:`sha1` (f)
+* :py:func:`sha256` (f)
+* :py:func:`sha512` (f)
+* :py:func:`adler32` (f)
+* :py:func:`crc32` (f)
+* :py:func:`damerau_levenshtein_dist` (f) (requires cython)
+* :py:func:`levenshtein_dist` (f) (requires cython)
+* :py:func:`str_dist` (f) (requires cython)
+* :py:func:`regex_search` (t)
 
 .. _apsw:
 
@@ -263,7 +305,8 @@ How to use the APSWDatabase
 apsw_ext API notes
 ^^^^^^^^^^^^^^^^^^
 
-:py:class:`APSWDatabase` extends the :py:class:`SqliteExtDatabase` and inherits its advanced features.
+:py:class:`APSWDatabase` extends the :py:class:`SqliteExtDatabase` and inherits
+its advanced features.
 
 .. py:class:: APSWDatabase(database, **connect_kwargs)
 
@@ -370,7 +413,7 @@ Example:
 
     # Derive our model subclasses
     class Person(BaseModel):
-        name = CharField(primary_key=True)
+        name = TextField(primary_key=True)
 
     right_passphrase = False
     while not right_passphrase:
@@ -381,18 +424,17 @@ Example:
         try:  # Actually execute a query against the db to test passphrase.
             db.get_tables()
         except DatabaseError as exc:
-            # We only allow a specific [somewhat cryptic] error message.
-            if exc.args[0] != 'file is encrypted or is not a database':
-                raise exc
-            else:
+            # This error indicates the password was wrong.
+            if exc.args[0] == 'file is encrypted or is not a database':
                 tell_user_the_passphrase_was_wrong()
                 db.init(None)  # Reset the db.
+            else:
+                raise exc
         else:
             # The password was correct.
             right_passphrase = True
 
 See also: a slightly more elaborate `example <https://gist.github.com/thedod/11048875#file-testpeeweesqlcipher-py>`_.
-
 
 .. _postgres_ext:
 

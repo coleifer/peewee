@@ -937,7 +937,6 @@ class SqliteExtDatabase(SqliteDatabase):
                  bloomfilter=False, *args, **kwargs):
         super(SqliteExtDatabase, self).__init__(database, *args, **kwargs)
         self._row_factory = None
-        self._table_functions = []
 
         if c_extensions and not CYTHON_SQLITE_EXTENSIONS:
             raise ImproperlyConfigured('SqliteExtDatabase initialized with '
@@ -966,19 +965,6 @@ class SqliteExtDatabase(SqliteDatabase):
         super(SqliteExtDatabase, self)._add_conn_hooks(conn)
         if self._row_factory:
             conn.row_factory = self._row_factory
-        if self._table_functions:
-            for table_function in self._table_functions:
-                table_function.register(conn)
-
-    def table_function(self, name=None):
-        def decorator(klass):
-            if name is not None:
-                klass.name = name
-            self._table_functions.append(klass)
-            if not self.is_closed():
-                klass.register(self.connection())
-            return klass
-        return decorator
 
     def row_factory(self, fn):
         self._row_factory = fn

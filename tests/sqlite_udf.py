@@ -31,15 +31,8 @@ def requires_vtfunc(testcase):
     return skip_case_unless(lambda: vtfunc is not None)(testcase)
 
 
-class UDFDatabase(SqliteExtDatabase):
-    def _add_conn_hooks(self, conn):
-        super(UDFDatabase, self)._add_conn_hooks(conn)
-        register_all(conn)
-
-
-database = db_loader(
-    'sqlite',
-    db_class=UDFDatabase)
+database = db_loader('sqlite')
+register_all(database)
 
 
 class User(TestModel):
@@ -293,7 +286,7 @@ class TestScalarFunctions(BaseTestUDF):
             for s in data:
                 compressed = self.sql1('select gzip(?)', s)
                 decompressed = self.sql1('select gunzip(?)', compressed)
-                self.assertEqual(decompressed, s)
+                self.assertEqual(decompressed.decode('utf-8'), s)
 
     def test_hostname(self):
         r = json.dumps({'success': True})

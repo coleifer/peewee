@@ -60,56 +60,6 @@ APIs
     Extends :py:class:`SqliteDatabase` and inherits methods for declaring
     user-defined functions, pragmas, etc.
 
-    .. py:method:: table_function([name=None])
-
-        Class-decorator for registering a :py:class:`TableFunction`. Table
-        functions are user-defined functions that, rather than returning a
-        single, scalar value, can return any number of rows of tabular data.
-
-        Example:
-
-        .. code-block:: python
-
-            from playhouse.sqlite_ext import TableFunction
-
-            @db.table_function('series')
-            class Series(TableFunction):
-                columns = ['value']
-                params = ['start', 'stop', 'step']
-
-                def initialize(self, start=0, stop=None, step=1):
-                    """
-                    Table-functions declare an initialize() method, which is
-                    called with whatever arguments the user has called the
-                    function with.
-                    """
-                    self.start = self.current = start
-                    self.stop = stop or float('Inf')
-                    self.step = step
-
-                def iterate(self, idx):
-                    """
-                    Iterate is called repeatedly by the SQLite database engine
-                    until the required number of rows has been read **or** the
-                    function raises a `StopIteration` signalling no more rows
-                    are available.
-                    """
-                    if self.current > self.stop:
-                        raise StopIteration
-
-                    ret, self.current = self.current, self.current + self.step
-                    return (ret,)
-
-            # Usage:
-            cursor = db.execute_sql('SELECT * FROM series(?, ?, ?)', (0, 5, 2))
-            for value, in cursor:
-                print(value)
-
-            # Prints:
-            # 0
-            # 2
-            # 4
-
 .. py:class:: CSqliteExtDatabase(database[, pragmas=None[, timeout=5[, c_extensions=None[, rank_functions=True[, hash_functions=False[, regexp_function=False[, bloomfilter=False]]]]]]])
 
     Extends :py:class:`SqliteExtDatabase` and requires that the
@@ -1097,7 +1047,7 @@ APIs
         A :py:class:`TableFunction` must be registered with a database
         connection before it can be used. To ensure the table function is
         always available, you can use the
-        :py:meth:`SqliteExtDatabase.table_function` decorator to register the
+        :py:meth:`SqliteDatabase.table_function` decorator to register the
         function with the database.
 
     :py:class:`TableFunction` implementations must provide two attributes and
