@@ -196,6 +196,22 @@ Registering user-defined functions:
     # particular group or groups, you can:
     register_aggregate_groups(db, 'DATE')
 
+Using a library function ("hostname"):
+
+.. code-block:: python
+
+    # Assume we have a model, Link, that contains lots of arbitrary URLs.
+    # We want to discover the most common hosts that have been linked.
+    query = (Link
+             .select(fn.hostname(Link.url).alias('host'), fn.COUNT(Link.id))
+             .group_by(fn.hostname(Link.url))
+             .order_by(fn.COUNT(Link.id).desc())
+             .tuples())
+
+    # Print the hostname along with number of links associated with it.
+    for host, count in query:
+        print('%s: %s' % (host, count))
+
 
 Functions, listed by collection name
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -205,58 +221,258 @@ table-valued functions by ``(t)``.
 
 **CONTROL_FLOW**
 
-* :py:func:`if_then_else` (f)
+.. py:function:: if_then_else(cond, truthy[, falsey=None])
+
+    Simple ternary-type operator, where, depending on the truthiness of the
+    ``cond`` parameter, either the ``truthy`` or ``falsey`` value will be
+    returned.
 
 **DATE**
 
-* :py:func:`strip_tz` (f)
-* :py:func:`human_delta` (f)
-* :py:func:`mintdiff` (a)
-* :py:func:`avgtdiff` (a)
-* :py:func:`duration` (a)
-* :py:func:`date_series` (t)
+.. py:function:: strip_tz(date_str)
+
+    :param date_str: A datetime, encoded as a string.
+    :returns: The datetime with any timezone info stripped off.
+
+    The time is not adjusted in any way, the timezone is simply removed.
+
+.. py:function:: humandelta(nseconds[, glue=', '])
+
+    :param int nseconds: Number of seconds, total, in timedelta.
+    :param str glue: Fragment to join values.
+    :returns: Easy-to-read description of timedelta.
+
+    Example, 86471 -> "1 day, 1 minute, 11 seconds"
+
+.. py:function:: mintdiff(datetime_value)
+
+    :param datetime_value: A date-time.
+    :returns: Minimum difference between any two values in list.
+
+    Aggregate function that computes the minimum difference between any two
+    datetimes.
+
+.. py:function:: avgtdiff(datetime_value)
+
+    :param datetime_value: A date-time.
+    :returns: Average difference between values in list.
+
+    Aggregate function that computes the average difference between consecutive
+    values in the list.
+
+.. py:function:: duration(datetime_value)
+
+    :param datetime_value: A date-time.
+    :returns: Duration from smallest to largest value in list, in seconds.
+
+    Aggregate function that computes the duration from the smallest to the
+    largest value in the list, returned in seconds.
+
+.. py:function:: date_series(start, stop[, step_seconds=86400])
+
+    :param datetime start: Start datetime
+    :param datetime stop: Stop datetime
+    :param int step_seconds: Number of seconds comprising a step.
+
+    Table-value function that returns rows consisting of the date/+time values
+    encountered iterating from start to stop, ``step_seconds`` at a time.
+
+    Additionally, if start does not have a time component and step_seconds is
+    greater-than-or-equal-to one day (86400 seconds), the values returned will
+    be dates. Conversely, if start does not have a date component, values will
+    be returned as times. Otherwise values are returned as datetimes.
+
+    Example:
+
+    .. code-block:: sql
+
+        SELECT * FROM date_series('2017-01-28', '2017-02-02');
+
+        value
+        -----
+        2017-01-28
+        2017-01-29
+        2017-01-30
+        2017-01-31
+        2017-02-01
+        2017-02-02
 
 **FILE**
 
-* :py:func:`file_ext` (f)
-* :py:func:`file_read` (f)
+.. py:function:: file_ext(filename)
+
+    :param str filename: Filename to extract extension from.
+    :return: Returns the file extension, including the leading ".".
+
+.. py:function:: file_read(filename)
+
+    :param str filename: Filename to read.
+    :return: Contents of the file.
 
 **HELPER**
 
-* :py:func:`gzip` (f)
-* :py:func:`gunzip` (f)
-* :py:func:`hostname` (f)
-* :py:func:`toggle` (f)
-* :py:func:`setting` (f)
-* :py:func:`clear_toggles` (f)
-* :py:func:`clear_settings` (f)
+.. py:function:: gzip(data[, compression=9])
+
+    :param bytes data: Data to compress.
+    :param int compression: Compression level (9 is max).
+    :returns: Compressed binary data.
+
+.. py:function:: gunzip(data)
+
+    :param bytes data: Compressed data.
+    :returns: Uncompressed binary data.
+
+.. py:function:: hostname(url)
+
+    :param str url: URL to extract hostname from.
+    :returns: hostname portion of URL
+
+.. py:function:: toggle(key)
+
+    :param key: Key to toggle.
+
+    Toggle a key between True/False state. Example:
+
+    .. code-block:: pycon
+
+        >>> toggle('my-key')
+        True
+        >>> toggle('my-key')
+        False
+        >>> toggle('my-key')
+        True
+
+.. py:function:: setting(key[, value=None])
+
+    :param key: Key to set/retrieve.
+    :param value: Value to set.
+    :returns: Value associated with key.
+
+    Store/retrieve a setting in memory and persist during lifetime of
+    application. To get the current value, only specify the key. To set a new
+    value, call with key and new value.
+
+.. py:function:: clear_toggles()
+
+    Clears all state associated with the :py:func:`toggle` function.
+
+.. py:function:: clear_settings()
+
+    Clears all state associated with the :py:func:`setting` function.
 
 **MATH**
 
-* :py:func:`randomrange` (f)
-* :py:func:`gauss_distribution` (f)
-* :py:func:`sqrt` (f)
-* :py:func:`tonumber` (f)
-* :py:func:`mode` (a)
-* :py:func:`minrange` (a)
-* :py:func:`avgrange` (a)
-* :py:func:`range` (a)
-* :py:func:`median` (a) (requires cython)
+.. py:function:: randomrange(start[, stop=None[, step=None]])
+
+    :param int start: Start of range (inclusive)
+    :param int end: End of range(not inclusive)
+    :param int step: Interval at which to return a value.
+
+    Return a random integer between ``[start, end)``.
+
+.. py:function:: gauss_distribution(mean, sigma)
+
+    :param float mean: Mean value
+    :param float sigma: Standard deviation
+
+.. py:function:: sqrt(n)
+
+    Calculate the square root of ``n``.
+
+.. py:function:: tonumber(s)
+
+    :param str s: String to convert to number.
+    :returns: Integer, floating-point or NULL on failure.
+
+.. py:function:: mode(val)
+
+    :param val: Numbers in list.
+    :returns: The mode, or most-common, number observed.
+
+    Aggregate function which calculates *mode* of values.
+
+.. py:function:: minrange(val)
+
+    :param val: Value
+    :returns: Min difference between two values.
+
+    Aggregate function which calculates the minimal distance between two
+    numbers in the sequence.
+
+.. py:function:: avgrange(val)
+
+    :param val: Value
+    :returns: Average difference between values.
+
+    Aggregate function which calculates the average distance between two
+    consecutive numbers in the sequence.
+
+.. py:function:: range(val)
+
+    :param val: Value
+    :returns: The range from the smallest to largest value in sequence.
+
+    Aggregate function which returns range of values observed.
+
+.. py:function:: median(val)
+
+    :param val: Value
+    :returns: The median, or middle, value in a sequence.
+
+    Aggregate function which calculates the middle value in a sequence.
+
+    .. note:: Only available if you compiled the ``_sqlite_udf`` extension.
 
 **STRING**
 
-* :py:func:`substr_count` (f)
-* :py:func:`strip_chars` (f)
-* :py:func:`md5` (f)
-* :py:func:`sha1` (f)
-* :py:func:`sha256` (f)
-* :py:func:`sha512` (f)
-* :py:func:`adler32` (f)
-* :py:func:`crc32` (f)
-* :py:func:`damerau_levenshtein_dist` (f) (requires cython)
-* :py:func:`levenshtein_dist` (f) (requires cython)
-* :py:func:`str_dist` (f) (requires cython)
-* :py:func:`regex_search` (t)
+.. py:function:: substr_count(haystack, needle)
+
+    Returns number of times ``needle`` appears in ``haystack``.
+
+.. py:function:: strip_chars(haystack, chars)
+
+    Strips any characters in ``chars`` from beginning and end of ``haystack``.
+
+.. py:function:: damerau_levenshtein_dist(s1, s2)
+
+    Computes the edit distance from s1 to s2 using the damerau variant of the
+    levenshtein algorithm.
+
+    .. note:: Only available if you compiled the ``_sqlite_udf`` extension.
+
+.. py:function:: levenshtein_dist(s1, s2)
+
+    Computes the edit distance from s1 to s2 using the levenshtein algorithm.
+
+    .. note:: Only available if you compiled the ``_sqlite_udf`` extension.
+
+.. py:function:: str_dist(s1, s2)
+
+    Computes the edit distance from s1 to s2 using the standard library
+    SequenceMatcher's algorithm.
+
+    .. note:: Only available if you compiled the ``_sqlite_udf`` extension.
+
+.. py:function:: regex_search(regex, search_string)
+
+    :param str regex: Regular expression
+    :param str search_string: String to search for instances of regex.
+
+    Table-value function that searches a string for substrings that match
+    the provided ``regex``. Returns rows for each match found.
+
+    Example:
+
+    .. code-block:: python
+
+        SELECT * FROM regex_search('\w+', 'extract words, ignore! symbols');
+
+        value
+        -----
+        extract
+        words
+        ignore
+        symbols
 
 .. _apsw:
 

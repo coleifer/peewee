@@ -225,22 +225,18 @@ def hostname(url):
         return parse_result.netloc
 
 @udf(HELPER)
-def toggle(key, on=None):
+def toggle(key):
     key = key.lower()
-    if on is not None:
-        STATE[key] = on
-    else:
-        STATE[key] = on = not STATE.get(key)
-    return on
+    STATE[key] = ret = not STATE.get(key)
+    return ret
 
 @udf(HELPER)
-def setting(key, *args):
-    if not args:
+def setting(key, value=None):
+    if value is None:
         return SETTINGS.get(key)
-    elif len(args) == 1:
-        SETTINGS[key] = args[0]
     else:
-        return False
+        SETTINGS[key] = value
+        return value
 
 @udf(HELPER)
 def clear_settings():
@@ -297,30 +293,6 @@ def _hash(constructor, *args):
     for arg in args:
         hash_obj.update(arg)
     return hash_obj.hexdigest()
-
-@udf(STRING)
-def md5(*vals):
-    return _hash(hashlib.md5)
-
-@udf(STRING)
-def sha1(*vals):
-    return _hash(hashlib.sha1)
-
-@udf(STRING)
-def sha256(*vals):
-    return _hash(hashlib.sha256)
-
-@udf(STRING)
-def sha512(*vals):
-    return _hash(hashlib.sha512)
-
-@udf(STRING)
-def adler32(s):
-    return zlib.adler32(s)
-
-@udf(STRING)
-def crc32(s):
-    return zlib.crc32(s)
 
 # Aggregates.
 class _heap_agg(object):
