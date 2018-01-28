@@ -2025,6 +2025,122 @@ Fields
 
     Field class for storing binary data.
 
+.. py:class:: BitField
+
+    Field class for storing options in a 64-bit integer column.
+
+    Usage:
+
+    .. code-block:: python
+
+        class Post(Model):
+            content = TextField()
+            flags = BitField()
+
+            is_favorite = flags.flag(1)
+            is_sticky = flags.flag(2)
+            is_minimized = flags.flag(4)
+            is_deleted = flags.flag(8)
+
+        >>> p = Post()
+        >>> p.is_sticky = True
+        >>> p.is_minimized = True
+        >>> print(p.flags)  # Prints 4 | 2 --> "6"
+        6
+        >>> p.is_favorite
+        False
+        >>> p.is_sticky
+        True
+
+    We can use the flags on the Post class to build expressions in queries as
+    well:
+
+    .. code-block:: python
+
+        # Generates a WHERE clause that looks like:
+        # WHERE (post.flags & 1 != 0)
+        query = Post.select().where(Post.is_favorite)
+
+        # Query for sticky + favorite posts:
+        query = Post.select().where(Post.is_sticky & Post.is_favorite)
+
+    .. py:method:: flag(value)
+
+        Returns a descriptor that can get or set specific bits in the overall
+        value. When accessed on the class itself, it returns a
+        :py:class:`Expression` object suitable for use in a query.
+
+.. py:class:: BigBitField
+
+    Field class for storing arbitrarily-large bitmaps in a ``BLOB``. The field
+    will grow the underlying buffer as necessary, ensuring there are enough
+    bytes of data to support the number of bits of data being stored.
+
+    Example usage:
+
+    .. code-block:: python
+
+        class Bitmap(Model):
+            data = BigBitField()
+
+        bitmap = Bitmap()
+
+        # Sets the ith bit, e.g. the 1st bit, the 11th bit, the 63rd, etc.
+        bits_to_set = (1, 11, 63, 31, 55, 48, 100, 99)
+        for bit_idx in bits_to_set:
+            bitmap.data.set_bit(bit_idx)
+
+        # We can test whether a bit is set using "is_set":
+        assert bitmap.data.is_set(11)
+        assert not bitmap.data.is_set(12)
+
+        # We can clear a bit:
+        bitmap.data.clear_bit(11)
+        assert not bitmap.data.is_set(11)
+
+        # We can also "toggle" a bit. Recall that the 63rd bit was set earlier.
+        assert bitmap.data.toggle_bit(63) is False
+        assert bitmap.data.toggle_bit(63) is True
+        assert bitmap.data.is_set(63)
+
+    .. py:method:: set_bit(idx)
+
+        :param int idx: Bit to set, indexed starting from zero.
+
+        Sets the *idx*-th bit in the bitmap.
+
+    .. py:method:: clear_bit(idx)
+
+        :param int idx: Bit to clear, indexed starting from zero.
+
+        Clears the *idx*-th bit in the bitmap.
+
+    .. py:method:: toggle_bit(idx)
+
+        :param int idx: Bit to toggle, indexed starting from zero.
+        :returns: Whether the bit is set or not.
+
+        Toggles the *idx*-th bit in the bitmap and returns whether the bit is
+        set or not.
+
+        Example:
+
+        .. code-block:: pycon
+
+            >>> bitmap = Bitmap()
+            >>> bitmap.data.toggle_bit(10)  # Toggle the 10th bit.
+            True
+            >>> bitmap.data.toggle_bit(10)  # This will clear the 10th bit.
+            False
+
+    .. py:method:: is_set(idx)
+
+        :param int idx: Bit index, indexed starting from zero.
+        :returns: Whether the bit is set or not.
+
+        Returns boolean indicating whether the *idx*-th bit is set or not.
+
+
 .. py:class:: UUIDField
 
     Field class for storing ``uuid.UUID`` objects.

@@ -3785,7 +3785,7 @@ class BigBitFieldData(object):
     def toggle_bit(self, idx):
         byte_num, byte_offset = self._ensure_length(idx)
         self._buffer[byte_num] ^= (1 << byte_offset)
-        return bool(self[byte_num] & (1 << byte_offset))
+        return bool(self._buffer[byte_num] & (1 << byte_offset))
 
     def is_set(self, idx):
         byte_num, byte_offset = self._ensure_length(idx)
