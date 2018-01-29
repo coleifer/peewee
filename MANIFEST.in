@@ -12,3 +12,4 @@ include playhouse/README.md
 include playhouse/tests/README
 recursive-include examples *
 recursive-include docs *
+recursive-include playhouse/_pysqlite/*
