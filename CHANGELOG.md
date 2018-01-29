@@ -5,6 +5,14 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.0.0
+
+* Complete rewrite of SQL AST and code-generation.
+* Inclusion of new, low-level query builder APIs.
+* List of [backwards-incompatible changes](http://docs.peewee-orm.com/en/latest/peewee/changes.html).
+
+[View commits](https://github.com/coleifer/peewee/compare/2.10.2...3.0.0)
+
 ## 2.10.2
 
 * Update travis-ci build scripts to use Postgres 9.6 and test against Python
