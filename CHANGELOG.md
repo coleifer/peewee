@@ -5,6 +5,11 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.0.2
+
+Ensures that the pysqlite headers are included in the source distribution so
+that certain C extensions can be compiled.
+
 ## 3.0.0
 
 * Complete rewrite of SQL AST and code-generation.
