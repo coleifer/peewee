@@ -37,6 +37,7 @@ Model Meta options
 Models
 ^^^^^^
 
+* :py:class:`BaseModel` has been renamed to :py:class:`ModelBase`
 * Accessing raw model data is now done using ``__data__`` instead of ``_data``
 
 Fields
