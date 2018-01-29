@@ -6,7 +6,7 @@
 peewee
 ======
 
-.. image:: peewee-logo.png
+.. image:: peewee3-logo.png
 
 .. attention::
     Peewee 3.0 has been released (you are looking at the 3.0 documentation). To

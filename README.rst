@@ -2,7 +2,7 @@
 
     Peewee 3.0a has been merged into master and pushed to PyPI.
 
-.. image:: http://media.charlesleifer.com/blog/photos/p1423749536.32.png
+.. image:: http://media.charlesleifer.com/blog/photos/peewee3-logo.png
 
 peewee
 ======
