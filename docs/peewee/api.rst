@@ -1175,6 +1175,37 @@ Query-builder
 
         :param bool coerce: Whether to coerce function-call result.
 
+.. py:function:: fn()
+
+    The :py:func:`fn` helper is actually an instance of :py:class:`Function`
+    that implements a ``__getattr__`` hook to provide a nice API for calling
+    SQL functions.
+
+    To create a node representative of a SQL function call, use the function
+    name as an attribute on ``fn`` and then provide the arguments as you would
+    if calling a Python function:
+
+    .. code-block:: python
+
+        # List users and the number of tweets they have authored,
+        # from highest-to-lowest:
+        sql_count = fn.COUNT(Tweet.id)
+        query = (User
+                 .select(User, sql_count.alias('count'))
+                 .join(Tweet, JOIN.LEFT_OUTER)
+                 .group_by(User)
+                 .order_by(sql_count.desc()))
+
+        # Get the timestamp of the most recent tweet:
+        query = Tweet.select(fn.MAX(Tweet.timestamp))
+        max_timestamp = query.scalar()  # Retrieve scalar result from query.
+
+    Function calls can, like anything else, be composed and nested:
+
+    .. code-block:: python
+
+        # Get users whose username begins with "A" or "a":
+        a_users = User.select().where(fn.LOWER(fn.SUBSTR(User.username, 1, 1)) == 'a')
 
 .. py:class:: Window([partition_by=None[, order_by=None[, start=None[, end=None[, alias=None]]]]])
 
