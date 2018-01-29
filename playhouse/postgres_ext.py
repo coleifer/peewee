@@ -351,7 +351,7 @@ class ServerSideQuery(Node):
     def __iter__(self):
         if self._cursor_wrapper is None:
             self._execute(self.query._database)
-        return iter(self._cursor_wrapper)
+        return iter(self._cursor_wrapper.iterator())
 
     def _execute(self, database):
         if self._cursor_wrapper is None:
