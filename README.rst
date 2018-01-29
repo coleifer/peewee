@@ -1,3 +1,8 @@
+.. attention::
+
+    Peewee 3.0a has been merged into master! I'm going to allow a couple days
+    before pushing a new release to PyPI, but plan on doing so by end-of-week.
+
 .. image:: http://media.charlesleifer.com/blog/photos/p1423749536.32.png
 
 peewee
