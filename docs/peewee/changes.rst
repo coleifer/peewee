@@ -69,11 +69,15 @@ instead use :py:func:`prefetch` to achieve the same result.
 
 * :py:class:`Select` query attribute ``_select`` has changed to ``_returning``
 
-The :py:func:`case` helper has moved from the ``playhouse.shortcuts`` module
+The :py:func:`Case` helper has moved from the ``playhouse.shortcuts`` module
 into the main peewee module.
 
 The :py:meth:`~BaseColumn.cast` method is no longer a function, but instead is
 a method on all column-like objects.
+
+When using :py:func:`prefetch`, the collected instances will be stored in the
+same attribute as the foreign-key's ``backref``. Previously, you would access
+joined instances using ``(backref)_prefetch``.
 
 Removed Extensions
 ^^^^^^^^^^^^^^^^^^
@@ -117,7 +121,21 @@ New stuff
 ---------
 
 The query-builder has been rewritten from the ground-up to be more flexible and
-powerful. There is now a generic, lower-level API for constructing queries.
+powerful. There is now a generic, :ref:`lower-level API <query-builder>` for
+constructing queries.
+
+SQLite
+^^^^^^
+
+Many SQLite-specific features have been moved from the ``playhouse.sqlite_ext``
+module into ``peewee``, such as:
+
+* User-defined functions, aggregates, collations, and table-functions.
+* Loading extensions.
+* Specifying pragmas.
+
+See the :ref:`"Using SQLite" section <using_sqlite>` and :ref:`"SQLite extensions" <sqlite_ext>`
+documents for more details.
 
 SQLite Extension
 ^^^^^^^^^^^^^^^^
@@ -125,11 +143,11 @@ SQLite Extension
 The virtual-table implementation from `sqlite-vtfunc <https://github.com/coleifer/sqlite-vtfunc>`_
 has been folded into the peewee codebase.
 
+* Support for SQLite online backup API.
 * Murmurhash implementation has been corrected.
 * Couple small quirks in the BM25 ranking code have been addressed.
 * Numerous user-defined functions for hashing and ranking are now included.
 * :py:class:`BloomFilter` implementation.
 * Incremental :py:class:`Blob` I/O support.
 * Support for update, commit and rollback hooks.
-* Support for SQLite online backup API.
 * :py:class:`LSMTable` implementation to support the lsm1 extension.

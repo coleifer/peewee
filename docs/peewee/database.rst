@@ -294,11 +294,59 @@ Example collation:
     # Or...
     Book.select().order_by(Book.title.asc(collation='reverse'))
 
+Example user-defined table-value function (see :py:class:`TableFunction`
+and :py:class:`~SqliteDatabase.table_function`) for additional details:
+
+.. code-block:: python
+
+    from playhouse.sqlite_ext import TableFunction
+
+    db = SqliteDatabase('my_app.db')
+
+    @db.table_function('series')
+    class Series(TableFunction):
+        columns = ['value']
+        params = ['start', 'stop', 'step']
+
+        def initialize(self, start=0, stop=None, step=1):
+            """
+            Table-functions declare an initialize() method, which is
+            called with whatever arguments the user has called the
+            function with.
+            """
+            self.start = self.current = start
+            self.stop = stop or float('Inf')
+            self.step = step
+
+        def iterate(self, idx):
+            """
+            Iterate is called repeatedly by the SQLite database engine
+            until the required number of rows has been read **or** the
+            function raises a `StopIteration` signalling no more rows
+            are available.
+            """
+            if self.current > self.stop:
+                raise StopIteration
+
+            ret, self.current = self.current, self.current + self.step
+            return (ret,)
+
+    # Usage:
+    cursor = db.execute_sql('SELECT * FROM series(?, ?, ?)', (0, 5, 2))
+    for value, in cursor:
+        print(value)
+
+    # Prints:
+    # 0
+    # 2
+    # 4
+
 For more information, see:
 
 * :py:meth:`SqliteDatabase.func`
 * :py:meth:`SqliteDatabase.aggregate`
 * :py:meth:`SqliteDatabase.collation`
+* :py:meth:`SqliteDatabase.table_function`
 * For even more SQLite extensions, see :ref:`sqlite_ext`
 
 .. _sqlite-locking:
