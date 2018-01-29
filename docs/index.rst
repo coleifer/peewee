@@ -8,6 +8,10 @@ peewee
 
 .. image:: peewee-logo.png
 
+.. attention::
+    Peewee 3.0 has been released (you are looking at the 3.0 documentation). To
+    see a list of backwards-incompatible changes, see :ref:`the list of changes <changes>`.
+
 Peewee is a simple and small ORM. It has few (but expressive) concepts, making
 it easy to learn and intuitive to use.
 
