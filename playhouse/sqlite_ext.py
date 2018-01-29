@@ -1,102 +1,106 @@
-"""
-Sqlite3 extensions
-==================
-
-* Define custom aggregates, collations and functions
-* Basic support for virtual tables
-* Basic support for FTS3/4
-* Specify isolation level in transactions
-
-Example usage of the Full-text search:
-
-class Document(FTSModel):
-    title = TextField()  # type affinities are ignored in FTS
-    content = TextField()
-
-Document.create_table(tokenize='porter')  # use the porter stemmer
-
-# populate the documents using normal operations.
-for doc in documents:
-    Document.create(title=doc['title'], content=doc['content'])
-
-# use the "match" operation for FTS queries.
-matching_docs = Document.select().where(match(Document.title, 'some query'))
-
-# to sort by best match, use the custom "rank" function.
-best_docs = (Document
-             .select(Document, Document.rank('score'))
-             .where(match(Document.title, 'some query'))
-             .order_by(SQL('score')))
-
-# or use the shortcut method.
-best_docs = Document.match('some phrase')
-"""
-import glob
-import inspect
+import json
 import math
-import os
 import re
 import struct
 import sys
-try:
-    import simplejson as json
-except ImportError:
-    import json
 
 from peewee import *
-from peewee import EnclosedClause
+from peewee import Alias
+from peewee import EnclosedNodeList
 from peewee import Entity
 from peewee import Expression
+from peewee import Function
 from peewee import Node
+from peewee import NodeList
 from peewee import OP
-from peewee import SqliteQueryCompiler
-from peewee import _AutoPrimaryKeyField
-from peewee import sqlite3  # Import the best SQLite version.
-from peewee import transaction
-from peewee import _sqlite_date_part
-from peewee import _sqlite_date_trunc
-from peewee import _sqlite_regexp
+from peewee import Select
+from peewee import VirtualField
+from peewee import merge_dict
+from peewee import sort_models
+from peewee import sqlite3
+from peewee import text_type
 try:
-    from playhouse import _sqlite_ext as _c_ext
+    from playhouse._sqlite_ext import (
+        backup,
+        backup_to_file,
+        Blob,
+        ConnectionHelper,
+        register_bloomfilter,
+        register_hash_functions,
+        register_rank_functions,
+        sqlite_get_db_status,
+        sqlite_get_status,
+        ZeroBlob,
+    )
+    CYTHON_SQLITE_EXTENSIONS = True
 except ImportError:
-    _c_ext = None
+    CYTHON_SQLITE_EXTENSIONS = False
 
 
 if sys.version_info[0] == 3:
     basestring = str
 
-FTS_MATCHINFO_FORMAT = 'pcnalx'
-FTS_MATCHINFO_FORMAT_SIMPLE = 'pcx'
+
+FTS3_MATCHINFO = 'pcx'
+FTS4_MATCHINFO = 'pcnalx'
 if sqlite3 is not None:
-    FTS_VER = sqlite3.sqlite_version_info[:3] >= (3, 7, 4) and 'FTS4' or 'FTS3'
+    FTS_VERSION = 4 if sqlite3.sqlite_version_info[:3] >= (3, 7, 4) else 3
 else:
-    FTS_VER = 'FTS3'
-FTS5_MIN_VERSION = (3, 9, 0)
+    FTS_VERSION = 3
+
+FTS5_MIN_SQLITE_VERSION = (3, 9, 0)
 
 
-class RowIDField(_AutoPrimaryKeyField):
-    """
-    Field used to access hidden primary key on FTS5 or any other SQLite
-    table that does not have a separately-defined primary key.
-    """
-    _column_name = 'rowid'
+class RowIDField(AutoField):
+    auto_increment = True
+    column_name = name = required_name = 'rowid'
+
+    def bind(self, model, name, *args):
+        if name != self.required_name:
+            raise ValueError('%s must be named "%s".' %
+                             (type(self), self.required_name))
+        super(RowIDField, self).bind(model, name, *args)
 
 
-class DocIDField(_AutoPrimaryKeyField):
-    """Field used to access hidden primary key on FTS3/4 tables."""
-    _column_name = 'docid'
+class DocIDField(RowIDField):
+    column_name = name = required_name = 'docid'
 
 
-class PrimaryKeyAutoIncrementField(PrimaryKeyField):
-    """
-    SQLite by default uses MAX(primary key) + 1 to set the ID on a new row.
-    Using the `AUTOINCREMENT` field, the IDs will increase monotonically
-    even if rows are deleted. Use this if you need to guarantee IDs are not
-    re-used in the event of deletion.
-    """
-    def __ddl__(self, column_type):
-        ddl = super(PrimaryKeyAutoIncrementField, self).__ddl__(column_type)
-        return ddl + [SQL('AUTOINCREMENT')]
+class AutoIncrementField(AutoField):
+    def ddl(self, ctx):
+        node_list = super(AutoIncrementField, self).ddl(ctx)
+        return NodeList((node_list, SQL('AUTOINCREMENT')))
+
+
+class JSONPath(Function):
+    def __init__(self, field, path):
+        self.field = field
+        self._path = path
+        self.name = 'json_extract'
+        self.arguments = (self.field, self.sql_path)
+
+    @property
+    def path(self):
+        return ''.join(self._path)
+
+    @property
+    def sql_path(self):
+        path = self.path
+        if path[0] == '[':
+            path = '$%s' % path
+        else:
+            path = '$.%s' % path
+
+    def update_path(self, part):
+        new_path = list(self._path)
+        if isinstance(part, int):
+            new_path.append('[%s]' % part)
+        else:
+            new_path.append('.%s' % part)
+        return new_path
+
+    def __getitem__(self, idx):
+        return JSONPath(self.field, self.update_path(idx))
 
 
 class JSONField(TextField):
@@ -116,40 +120,62 @@ class JSONField(TextField):
             return '$%s' % path
         return '$.%s' % path
 
-    def length(self, path=None):
-        if path:
-            return fn.json_array_length(self, self.clean_path(path))
+    def clean_paths(self, paths):
+        return [self.clean_path(path) for path in paths]
+
+    def length(self, *paths):
+        if paths:
+            return fn.json_array_length(self, *self.clean_paths(paths))
         return fn.json_array_length(self)
 
-    def extract(self, path):
-        return fn.json_extract(self, self.clean_path(path))
+    def extract(self, *paths):
+        return fn.json_extract(self, *self.clean_paths(paths))
+
+    def __getitem__(self, path):
+        if not isinstance(paths, tuple):
+            paths = (paths,)
+        return self.extract(*paths)
 
     def _value_for_insertion(self, value):
         if isinstance(value, (list, tuple, dict)):
             return fn.json(json.dumps(value))
         return value
 
-    def _insert_like(self, fn, pairs):
+    def _insert_like(self, fn, pairs, mapping):
         npairs = len(pairs)
-        if npairs % 2 != 0:
-            raise ValueError('Mismatched path and value parameters.')
+        if npairs == 1 and isinstance(pairs[0], dict):
+            # We were passed a single dictionary to update the field with.
+            mapping.update(pairs[0])
+            npairs = 0
+        elif npairs % 2 != 0:
+            raise ValueError('Unequal key and value parameters.')
+
         accum = []
-        for i in range(0, npairs, 2):
-            accum.append(self.clean_path(pairs[i]))
-            accum.append(self._value_for_insertion(pairs[i + 1]))
+        if npairs:
+            for i in range(0, npairs, 2):
+                accum.append(self.clean_path(pairs[i]))
+                accum.append(self._value_for_insertion(pairs[i + 1]))
+        if mapping:
+            for key in mapping:
+                val = mapping[key]
+                accum.append(self.clean_path(key))
+                accum.append(self._value_for_insertion(val))
         return fn(self, *accum)
 
-    def insert(self, *pairs):
-        return self._insert_like(fn.json_insert, pairs)
+    def insert(self, *pairs, **data):
+        return self._insert_like(fn.json_insert, pairs, data)
 
-    def replace(self, *pairs):
-        return self._insert_like(fn.json_replace, pairs)
+    def replace(self, *pairs, **data):
+        return self._insert_like(fn.json_replace, pairs, data)
 
-    def set(self, *pairs):
-        return self._insert_like(fn.json_set, pairs)
+    def set(self, *pairs, **data):
+        return self._insert_like(fn.json_set, pairs, data)
 
     def remove(self, *paths):
-        return fn.json_remove(self, *[self.clean_path(path) for path in paths])
+        return fn.json_remove(self, *self.clean_paths(paths))
+
+    def update(self, data):
+        return fn.json_patch(self, self._value_for_insertion(data))
 
     def json_type(self, path=None):
         if path:
@@ -181,80 +207,101 @@ class JSONField(TextField):
         return fn.json_tree(self)
 
 
-class SearchField(BareField):
-    """
-    Field class to be used with full-text search extension. Since the FTS
-    extensions do not support any field types besides `TEXT`, and furthermore
-    do not support secondary indexes, using this field will prevent you
-    from mistakenly creating the wrong kind of field on your FTS table.
-    """
-    def __init__(self, unindexed=False, db_column=None, coerce=None, **_):
-        kwargs = {'null': True, 'db_column': db_column, 'coerce': coerce}
-        self._unindexed = unindexed
-        if unindexed:
-            kwargs['constraints'] = [SQL('UNINDEXED')]
-        super(SearchField, self).__init__(**kwargs)
-
-    def clone_base(self, **kwargs):
-        clone = super(SearchField, self).clone_base(**kwargs)
-        clone._unindexed = self._unindexed
-        return clone
+class SearchField(Field):
+    def __init__(self, unindexed=False, column_name=None, **k):
+        if k:
+            raise ValueError('SearchField does not accept these keyword '
+                             'arguments: %s.' % sorted(k))
+        super(SearchField, self).__init__(unindexed=unindexed,
+                                          column_name=column_name, null=True)
 
 
-class _VirtualFieldMixin(object):
-    """
-    Field mixin to support virtual table attributes that may not correspond
-    to actual columns in the database.
-    """
-    def add_to_class(self, model_class, name):
-        super(_VirtualFieldMixin, self).add_to_class(model_class, name)
-        model_class._meta.remove_field(name)
+class VirtualTableSchemaManager(SchemaManager):
+    def _create_virtual_table(self, safe=True, **options):
+        options = self.model.clean_options(
+            merge_dict(self.model._meta.options, options))
 
+        ctx = self._create_context()
+        ctx.literal('CREATE VIRTUAL TABLE ')
+        if safe:
+            ctx.literal('IF NOT EXISTS ')
+        (ctx
+         .sql(self.model)
+         .literal(' USING '))
 
-# Virtual field types that can be used to reference specially-created fields
-# on virtual tables. These fields are exposed as attributes on the model class,
-# but are not included in any `CREATE TABLE` statements or by default when
-# performing an `INSERT` or `UPDATE` query.
-class VirtualField(_VirtualFieldMixin, BareField): pass
-class VirtualIntegerField(_VirtualFieldMixin, IntegerField): pass
-class VirtualCharField(_VirtualFieldMixin, CharField): pass
-class VirtualFloatField(_VirtualFieldMixin, FloatField): pass
+        ext_module = self.model._meta.extension_module
+        if isinstance(ext_module, Node):
+            return ctx.sql(ext_module)
+
+        ctx.sql(SQL(ext_module)).literal(' ')
+        arguments = []
+        meta = self.model._meta
+
+        if meta.prefix_arguments:
+            arguments.extend([SQL(a) for a in meta.prefix_arguments])
+
+        # Constraints, data-types, foreign and primary keys are all omitted.
+        for field in meta.sorted_fields:
+            if isinstance(field, (RowIDField)) or field._hidden:
+                continue
+            field_def = [Entity(field.column_name)]
+            if field.unindexed:
+                field_def.append(SQL('UNINDEXED'))
+            arguments.append(NodeList(field_def))
+
+        if meta.arguments:
+            arguments.extend([SQL(a) for a in meta.arguments])
+
+        if options:
+            arguments.extend(self._create_table_option_sql(options))
+        return ctx.sql(EnclosedNodeList(arguments))
+
+    def _create_table(self, safe=True, **options):
+        if issubclass(self.model, VirtualModel):
+            return self._create_virtual_table(safe, **options)
+
+        return super(VirtualTableSchemaManager, self)._create_table(
+            safe, **options)
 
 
 class VirtualModel(Model):
     class Meta:
-        virtual_table = True
+        arguments = None
         extension_module = None
-        extension_options = {}
+        prefix_arguments = None
+        primary_key = False
+        schema_manager_class = VirtualTableSchemaManager
 
     @classmethod
-    def clean_options(cls, **options):
-        # Called by the QueryCompiler when generating the virtual table's
-        # options clauses.
+    def clean_options(cls, options):
         return options
-
-    @classmethod
-    def create_table(cls, fail_silently=False, **options):
-        # Modified to support **options, which are passed back to the
-        # query compiler.
-        if fail_silently and cls.table_exists():
-            return
-
-        cls._meta.database.create_table(cls, options=options)
-        cls._create_indexes()
 
 
 class BaseFTSModel(VirtualModel):
     @classmethod
-    def clean_options(cls, **options):
-        tokenize = options.get('tokenize')
+    def clean_options(cls, options):
         content = options.get('content')
-        if tokenize and cls._meta.extension_module.lower() == 'fts5':
-            # Tokenizers need to be in quoted string.
-            options['tokenize'] = '"%s"' % tokenize
+        prefix = options.get('prefix')
+        tokenize = options.get('tokenize')
+
         if isinstance(content, basestring) and content == '':
             # Special-case content-less full-text search tables.
             options['content'] = "''"
+        elif isinstance(content, Field):
+            # Special-case to ensure fields are fully-qualified.
+            options['content'] = Entity(content.model._meta.table_name,
+                                        content.column_name)
+
+        if prefix:
+            if isinstance(prefix, (list, tuple)):
+                prefix = ','.join([str(i) for i in prefix])
+            options['prefix'] = "'%s'" % prefix.strip("' ")
+
+        if tokenize and cls._meta.extension_module.lower() == 'fts5':
+            # Tokenizers need to be in quoted string for FTS5, but not for FTS3
+            # or FTS4.
+            options['tokenize'] = '"%s"' % tokenize
+
         return options
 
 
@@ -263,26 +310,16 @@ class FTSModel(BaseFTSModel):
     VirtualModel class for creating tables that use either the FTS3 or FTS4
     search extensions. Peewee automatically determines which version of the
     FTS extension is supported and will use FTS4 if possible.
-
-    Note: because FTS5 is significantly different from FTS3 and FTS4, there is
-    a separate model class for FTS5 virtual tables.
     """
-    # FTS3/4 does not support declared primary keys, but we can use the
-    # implicit docid.
+    # FTS3/4 uses "docid" in the same way a normal table uses "rowid".
     docid = DocIDField()
 
     class Meta:
-        extension_module = FTS_VER
-
-    @classmethod
-    def validate_model(cls):
-        if cls._meta.primary_key.name != 'docid':
-            raise ImproperlyConfigured(
-                'FTSModel classes must use the default `docid` primary key.')
+        extension_module = 'FTS%s' % FTS_VERSION
 
     @classmethod
     def _fts_cmd(cls, cmd):
-        tbl = cls._meta.db_table
+        tbl = cls._meta.table_name
         res = cls._meta.database.execute_sql(
             "INSERT INTO %s(%s) VALUES('%s');" % (tbl, tbl, cmd))
         return res.fetchone()
@@ -312,21 +349,26 @@ class FTSModel(BaseFTSModel):
         """
         Generate a `MATCH` expression appropriate for searching this table.
         """
-        return match(cls.as_entity(), term)
+        return match(cls._meta.entity, term)
 
     @classmethod
     def rank(cls, *weights):
-        return fn.fts_rank(fn.matchinfo(
-            cls.as_entity(), FTS_MATCHINFO_FORMAT_SIMPLE), *weights)
+        matchinfo = fn.matchinfo(cls._meta.entity, FTS3_MATCHINFO)
+        return fn.fts_rank(matchinfo, *weights)
 
     @classmethod
     def bm25(cls, *weights):
-        match_info = fn.matchinfo(cls.as_entity(), FTS_MATCHINFO_FORMAT)
+        match_info = fn.matchinfo(cls._meta.entity, FTS4_MATCHINFO)
         return fn.fts_bm25(match_info, *weights)
 
     @classmethod
+    def bm25f(cls, *weights):
+        match_info = fn.matchinfo(cls._meta.entity, FTS4_MATCHINFO)
+        return fn.fts_bm25f(match_info, *weights)
+
+    @classmethod
     def lucene(cls, *weights):
-        match_info = fn.matchinfo(cls.as_entity(), FTS_MATCHINFO_FORMAT)
+        match_info = fn.matchinfo(cls._meta.entity, FTS4_MATCHINFO)
         return fn.fts_lucene(match_info, *weights)
 
     @classmethod
@@ -336,9 +378,11 @@ class FTSModel(BaseFTSModel):
             rank = score_fn()
         elif isinstance(weights, dict):
             weight_args = []
-            for field in cls._meta.declared_fields:
-                weight_args.append(
-                    weights.get(field, weights.get(field.name, 1.0)))
+            for field in cls._meta.sorted_fields:
+                # Attempt to get the specified weight of the field by looking
+                # it up using it's field instance followed by name.
+                field_weight = weights.get(field, weights.get(field.name, 1.0))
+                weight_args.append(field_weight)
             rank = score_fn(*weight_args)
         else:
             rank = score_fn(*weights)
@@ -380,6 +424,18 @@ class FTSModel(BaseFTSModel):
             explicit_ordering)
 
     @classmethod
+    def search_bm25f(cls, term, weights=None, with_score=False,
+                     score_alias='score', explicit_ordering=False):
+        """Full-text search for selected `term` using BM25 algorithm."""
+        return cls._search(
+            term,
+            weights,
+            with_score,
+            score_alias,
+            cls.bm25f,
+            explicit_ordering)
+
+    @classmethod
     def search_lucene(cls, term, weights=None, with_score=False,
                       score_alias='score', explicit_ordering=False):
         """Full-text search for selected `term` using BM25 algorithm."""
@@ -393,13 +449,11 @@ class FTSModel(BaseFTSModel):
 
 
 _alphabet = 'abcdefghijklmnopqrstuvwxyz'
-_alphanum = set([
-    '\t', ' ', ',', '"',
-    chr(26),  # Substitution control character.
-    '(', ')', '{', '}',
-    '*', ':', '_', '+',
-]) | set('0123456789') | set(_alphabet) | set(_alphabet.upper())
-_invalid_ascii = set([chr(p) for p in range(128) if chr(p) not in _alphanum])
+_alphanum = (set('\t ,"(){}*:_+0123456789') |
+             set(_alphabet) |
+             set(_alphabet.upper()) |
+             set((chr(26),)))
+_invalid_ascii = set(chr(p) for p in range(128) if chr(p) not in _alphanum)
 _quote_re = re.compile('(?:[^\s"]|"(?:\\.|[^"])*")+')
 
 
@@ -484,7 +538,7 @@ class FTS5Model(BaseFTSModel):
 
     @classmethod
     def fts5_installed(cls):
-        if sqlite3.sqlite_version_info[:3] < FTS5_MIN_VERSION:
+        if sqlite3.sqlite_version_info[:3] < FTS5_MIN_SQLITE_VERSION:
             return False
 
         # Test in-memory DB to determine if the FTS5 extension is installed.
@@ -493,8 +547,8 @@ class FTS5Model(BaseFTSModel):
             tmp_db.execute('CREATE VIRTUAL TABLE fts5test USING fts5 (data);')
         except:
             try:
-                sqlite3.enable_load_extension(True)
-                sqlite3.load_extension('fts5')
+                tmp_db.enable_load_extension(True)
+                tmp_db.load_extension('fts5')
             except:
                 return False
             else:
@@ -548,7 +602,7 @@ class FTS5Model(BaseFTSModel):
         """
         Generate a `MATCH` expression appropriate for searching this table.
         """
-        return match(cls.as_entity(), term)
+        return match(cls._meta.entity, term)
 
     @classmethod
     def rank(cls, *args):
@@ -559,7 +613,7 @@ class FTS5Model(BaseFTSModel):
 
     @classmethod
     def bm25(cls, *weights):
-        return fn.bm25(cls.as_entity(), *weights)
+        return fn.bm25(cls._meta.entity, *weights)
 
     @classmethod
     def search(cls, term, weights=None, with_score=False, score_alias='score',
@@ -580,12 +634,13 @@ class FTS5Model(BaseFTSModel):
             rank = SQL('rank')
         elif isinstance(weights, dict):
             weight_args = []
-            for field in cls._meta.declared_fields:
-                weight_args.append(
-                    weights.get(field, weights.get(field.name, 1.0)))
-            rank = fn.bm25(cls.as_entity(), *weight_args)
+            for field in cls._meta.sorted_fields:
+                if isinstance(field, SearchField) and not field.unindexed:
+                    weight_args.append(
+                        weights.get(field, weights.get(field.name, 1.0)))
+            rank = fn.bm25(cls._meta.entity, *weight_args)
         else:
-            rank = fn.bm25(cls.as_entity(), *weights)
+            rank = fn.bm25(cls._meta.entity, *weights)
 
         selection = ()
         order_by = rank
@@ -601,7 +656,7 @@ class FTS5Model(BaseFTSModel):
 
     @classmethod
     def _fts_cmd(cls, cmd, **extra_params):
-        tbl = cls.as_entity()
+        tbl = cls._meta.entity
         columns = [tbl]
         values = [cmd]
         for key, value in extra_params.items():
@@ -611,7 +666,7 @@ class FTS5Model(BaseFTSModel):
         inner_clause = EnclosedClause(tbl)
         clause = Clause(
             SQL('INSERT INTO'),
-            cls.as_entity(),
+            cls._meta.entity,
             EnclosedClause(*columns),
             SQL('VALUES'),
             EnclosedClause(*values))
@@ -640,29 +695,32 @@ class FTS5Model(BaseFTSModel):
         return cls._fts_cmd('delete-all')
 
     @classmethod
-    def VocabModel(cls, table_type='row', table_name=None):
-        if table_type not in ('row', 'col'):
-            raise ValueError('table_type must be either "row" or "col".')
+    def VocabModel(cls, table_type='row', table=None):
+        if table_type not in ('row', 'col', 'instance'):
+            raise ValueError('table_type must be either "row", "col" or '
+                             '"instance".')
 
         attr = '_vocab_model_%s' % table_type
 
         if not hasattr(cls, attr):
             class Meta:
                 database = cls._meta.database
-                db_table = table_name or cls._meta.db_table + '_v'
+                table_name = table or cls._meta.table_name + '_v'
                 extension_module = fn.fts5vocab(
-                    cls.as_entity(),
+                    cls._meta.entity,
                     SQL(table_type))
 
             attrs = {
-                'term': BareField(),
+                'term': VirtualField(TextField),
                 'doc': IntegerField(),
                 'cnt': IntegerField(),
                 'rowid': RowIDField(),
                 'Meta': Meta,
             }
             if table_type == 'col':
-                attrs['col'] = BareField()
+                attrs['col'] = VirtualField(TextField)
+            elif table_type == 'instance':
+                attrs['offset'] = VirtualField(IntegerField)
 
             class_name = '%sVocab' % cls.__name__
             setattr(cls, attr, type(class_name, (VirtualModel,), attrs))
@@ -677,7 +735,7 @@ def ClosureTable(model_class, foreign_key=None, referencing_class=None,
         referencing_class = model_class
 
     if foreign_key is None:
-        for field_obj in model_class._meta.rel.values():
+        for field_obj in model_class._meta.refs:
             if field_obj.rel_model is model_class:
                 foreign_key = field_obj
                 break
@@ -689,12 +747,12 @@ def ClosureTable(model_class, foreign_key=None, referencing_class=None,
         referencing_key = source_key
 
     class BaseClosureTable(VirtualModel):
-        depth = VirtualIntegerField()
-        id = VirtualIntegerField()
-        idcolumn = VirtualCharField()
-        parentcolumn = VirtualCharField()
-        root = VirtualIntegerField()
-        tablename = VirtualCharField()
+        depth = VirtualField(IntegerField)
+        id = VirtualField(IntegerField)
+        idcolumn = VirtualField(TextField)
+        parentcolumn = VirtualField(TextField)
+        root = VirtualField(IntegerField)
+        tablename = VirtualField(TextField)
 
         class Meta:
             extension_module = 'transitive_closure'
@@ -705,7 +763,7 @@ def ClosureTable(model_class, foreign_key=None, referencing_class=None,
                      .select(model_class, cls.depth.alias('depth'))
                      .join(cls, on=(source_key == cls.id))
                      .where(cls.root == node)
-                     .naive())
+                     .objects())
             if depth is not None:
                 query = query.where(cls.depth == depth)
             elif not include_node:
@@ -718,7 +776,7 @@ def ClosureTable(model_class, foreign_key=None, referencing_class=None,
                      .select(model_class, cls.depth.alias('depth'))
                      .join(cls, on=(source_key == cls.root))
                      .where(cls.id == node)
-                     .naive())
+                     .objects())
             if depth:
                 query = query.where(cls.depth == depth)
             elif not include_node:
@@ -729,7 +787,7 @@ def ClosureTable(model_class, foreign_key=None, referencing_class=None,
         def siblings(cls, node, include_node=False):
             if referencing_class is model_class:
                 # self-join
-                fk_value = node._data.get(foreign_key.name)
+                fk_value = node.__data__.get(foreign_key.name)
                 query = model_class.select().where(foreign_key == fk_value)
             else:
                 # siblings as given in reference_class
@@ -742,7 +800,7 @@ def ClosureTable(model_class, foreign_key=None, referencing_class=None,
                 query = (model_class
                          .select()
                          .where(source_key << siblings)
-                         .naive())
+                         .objects())
 
             if not include_node:
                 query = query.where(source_key != node)
@@ -751,235 +809,311 @@ def ClosureTable(model_class, foreign_key=None, referencing_class=None,
 
     class Meta:
         database = referencing_class._meta.database
-        extension_options = {
-            'tablename': referencing_class._meta.db_table,
-            'idcolumn': referencing_key.db_column,
-            'parentcolumn': foreign_key.db_column}
+        options = {
+            'tablename': referencing_class._meta.table_name,
+            'idcolumn': referencing_key.column_name,
+            'parentcolumn': foreign_key.column_name}
         primary_key = False
 
     name = '%sClosure' % model_class.__name__
     return type(name, (BaseClosureTable,), {'Meta': Meta})
 
 
-class SqliteExtQueryCompiler(SqliteQueryCompiler):
-    """
-    Subclass of QueryCompiler that can be used to construct virtual tables.
-    """
-    def _create_table(self, model_class, safe=False, options=None):
-        clause = super(SqliteExtQueryCompiler, self)._create_table(
-            model_class, safe=safe)
+class LSMTable(VirtualModel):
+    class Meta:
+        extension_module = 'lsm1'
+        filename = None
 
-        if issubclass(model_class, VirtualModel):
-            statement = 'CREATE VIRTUAL TABLE'
-
-            # If we are using a special extension, need to insert that after
-            # the table name node.
-            extension = model_class._meta.extension_module
-
-            if isinstance(extension, Node):
-                # If the `extension_module` attribute is a `Node` subclass,
-                # then we assume the VirtualModel will be responsible for
-                # defining not only the extension, but also the columns.
-                parts = clause.nodes[:2] + [SQL('USING'), extension]
-                clause = Clause(*parts)
-            else:
-                # The extension name is a simple string.
-                clause.nodes.insert(2, SQL('USING %s' % extension))
+    @classmethod
+    def clean_options(cls, options):
+        filename = cls._meta.filename
+        if not filename:
+            raise ValueError('LSM1 extension requires that you specify a '
+                             'filename for the LSM database.')
         else:
-            statement = 'CREATE TABLE'
+            if len(filename) >= 2 and filename[0] != '"':
+                filename = '"%s"' % filename
+        if not cls._meta.primary_key:
+            raise ValueError('LSM1 models must specify a primary-key field.')
 
-        if safe:
-            statement += ' IF NOT EXISTS'
-
-        clause.nodes[0] = SQL(statement)  # Overwrite the statement.
-
-        table_options = self.clean_options(model_class, clause, options)
-        if table_options:
-            columns_constraints = clause.nodes[-1]
-            for k, v in sorted(table_options.items()):
-                if isinstance(v, Field):
-                    # Special hack here for FTS5. We want to include the
-                    # fully-qualified column entity in most cases, but for
-                    # FTS5 we only want the string column name.
-                    v = v.as_entity(extension != 'fts5')
-                elif inspect.isclass(v) and issubclass(v, Model):
-                    # The option points to a table name.
-                    v = v.as_entity()
-                elif isinstance(v, (list, tuple)):
-                    # Lists will be quoted and joined by commas.
-                    v = SQL("'%s'" % ','.join(map(str, v)))
-                elif not isinstance(v, Node):
-                    v = SQL(v)
-                option = Clause(SQL(k), v)
-                option.glue = '='
-                columns_constraints.nodes.append(option)
-
-        if getattr(model_class._meta, 'without_rowid', None):
-            clause.nodes.append(SQL('WITHOUT ROWID'))
-
-        return clause
-
-    def clean_options(self, model_class, clause, extra_options):
-        model_options = getattr(model_class._meta, 'extension_options', None)
-        if model_options:
-            options = model_class.clean_options(**model_options)
+        key = cls._meta.primary_key
+        if isinstance(key, AutoField):
+            raise ValueError('LSM1 models must explicitly declare a primary '
+                             'key field.')
+        if not isinstance(key, (TextField, BlobField, IntegerField)):
+            raise ValueError('LSM1 key must be a TextField, BlobField, or '
+                             'IntegerField.')
+        key._hidden = True
+        if isinstance(key, IntegerField):
+            data_type = 'UINT'
+        elif isinstance(key, BlobField):
+            data_type = 'BLOB'
         else:
-            options = {}
-        if extra_options:
-            options.update(model_class.clean_options(**extra_options))
+            data_type = 'TEXT'
+        cls._meta.prefix_arguments = [filename, '"%s"' % key.name, data_type]
+
+        # Does the key map to a scalar value, or a tuple of values?
+        if len(cls._meta.sorted_fields) == 2:
+            cls._meta._value_field = cls._meta.sorted_fields[1]
+        else:
+            cls._meta._value_field = None
+
         return options
 
-    def create_table(self, model_class, safe=False, options=None):
-        return self.parse_node(self._create_table(model_class, safe, options))
+    @classmethod
+    def load_extension(cls, path='lsm.so'):
+        cls._meta.database.load_extension(path)
+
+    @staticmethod
+    def slice_to_expr(key, idx):
+        if idx.start is not None and idx.stop is not None:
+            return key.between(idx.start, idx.stop)
+        elif idx.start is not None:
+            return key >= idx.start
+        elif idx.stop is not None:
+            return key <= idx.stop
+
+    @staticmethod
+    def _apply_lookup_to_query(query, key, lookup):
+        if isinstance(lookup, slice):
+            expr = LSMTable.slice_to_expr(key, lookup)
+            if expr is not None:
+                query = query.where(expr)
+            return query, False
+        elif isinstance(lookup, Expression):
+            return query.where(lookup), False
+        else:
+            return query.where(key == lookup), True
+
+    @classmethod
+    def get_by_id(cls, pk):
+        query, is_single = cls._apply_lookup_to_query(
+            cls.select().namedtuples(),
+            cls._meta.primary_key,
+            pk)
+
+        if is_single:
+            try:
+                row = query.get()
+            except cls.DoesNotExist:
+                raise KeyError(pk)
+            return row[1] if cls._meta._value_field is not None else row
+        else:
+            return query
+
+    @classmethod
+    def set_by_id(cls, key, value):
+        if cls._meta._value_field is not None:
+            data = {cls._meta._value_field: value}
+        elif isinstance(value, tuple):
+            data = {}
+            for field, fval in zip(cls._meta.sorted_fields[1:], value):
+                data[field] = fval
+        elif isinstance(value, dict):
+            data = value
+        elif isinstance(value, cls):
+            data = value.__dict__
+        data[cls._meta.primary_key] = key
+        cls.replace(data).execute()
+
+    @classmethod
+    def delete_by_id(cls, pk):
+        query, is_single = cls._apply_lookup_to_query(
+            cls.delete(),
+            cls._meta.primary_key,
+            pk)
+        return query.execute()
 
 
-@Node.extend(clone=False)
-def disqualify(self):
-    # In the where clause, prevent the given node/expression from constraining
-    # an index.
-    return Clause('+', self, glue='')
+OP.MATCH = 'MATCH'
+
+def _sqlite_regexp(regex, value):
+    return re.search(regex, value, re.I) is not None
 
 
 class SqliteExtDatabase(SqliteDatabase):
-    """
-    Database class which provides additional Sqlite-specific functionality:
-
-    * Register custom aggregates, collations and functions
-    * Specify a row factory
-    * Advanced transactions (specify isolation level)
-    """
-    compiler_class = SqliteExtQueryCompiler
-
-    def __init__(self, database, c_extensions=True, *args, **kwargs):
+    def __init__(self, database, c_extensions=None, rank_functions=True,
+                 hash_functions=False, regexp_function=False,
+                 bloomfilter=False, *args, **kwargs):
         super(SqliteExtDatabase, self).__init__(database, *args, **kwargs)
-        self._aggregates = {}
-        self._collations = {}
-        self._functions = {}
-        self._extensions = set([])
         self._row_factory = None
-        if _c_ext and c_extensions:
-            self._using_c_extensions = True
-            self.register_function(_c_ext.peewee_date_part, 'date_part', 2)
-            self.register_function(_c_ext.peewee_date_trunc, 'date_trunc', 2)
-            self.register_function(_c_ext.peewee_regexp, 'regexp', -1)
-            self.register_function(_c_ext.peewee_rank, 'fts_rank', -1)
-            self.register_function(_c_ext.peewee_lucene, 'fts_lucene', -1)
-            self.register_function(_c_ext.peewee_bm25, 'fts_bm25', -1)
-            self.register_function(_c_ext.peewee_murmurhash, 'murmurhash', 1)
-        else:
-            self._using_c_extensions = False
-            self.register_function(_sqlite_date_part, 'date_part', 2)
-            self.register_function(_sqlite_date_trunc, 'date_trunc', 2)
-            self.register_function(_sqlite_regexp, 'regexp', -1)
-            self.register_function(rank, 'fts_rank', -1)
-            self.register_function(bm25, 'fts_bm25', -1)
 
-    @property
-    def using_c_extensions(self):
-        return self._using_c_extensions
+        if c_extensions and not CYTHON_SQLITE_EXTENSIONS:
+            raise ImproperlyConfigured('SqliteExtDatabase initialized with '
+                                       'C extensions, but shared library was '
+                                       'not found!')
+        prefer_c = CYTHON_SQLITE_EXTENSIONS and (c_extensions is not False)
+        if rank_functions:
+            if prefer_c:
+                register_rank_functions(self)
+            else:
+                self.register_function(bm25, 'fts_bm25')
+                self.register_function(rank, 'fts_rank')
+        if hash_functions:
+            if not prefer_c:
+                raise ValueError('C extension required to register hash '
+                                 'functions.')
+            register_hash_functions(self)
+        if regexp_function:
+            self.register_function(_sqlite_regexp, 'regexp', 2)
+        if bloomfilter:
+            register_bloomfilter(self)
+
+        self._c_extensions = prefer_c
 
     def _add_conn_hooks(self, conn):
-        self._set_pragmas(conn)
-        self._load_aggregates(conn)
-        self._load_collations(conn)
-        self._load_functions(conn)
+        super(SqliteExtDatabase, self)._add_conn_hooks(conn)
         if self._row_factory:
             conn.row_factory = self._row_factory
-        if self._extensions:
-            self._load_extensions(conn)
-
-    def _load_aggregates(self, conn):
-        for name, (klass, num_params) in self._aggregates.items():
-            conn.create_aggregate(name, num_params, klass)
-
-    def _load_collations(self, conn):
-        for name, fn in self._collations.items():
-            conn.create_collation(name, fn)
-
-    def _load_functions(self, conn):
-        for name, (fn, num_params) in self._functions.items():
-            conn.create_function(name, num_params, fn)
-
-    def _load_extensions(self, conn):
-        conn.enable_load_extension(True)
-        for extension in self._extensions:
-            conn.load_extension(extension)
-
-    def register_aggregate(self, klass, name=None, num_params=-1):
-        self._aggregates[name or klass.__name__.lower()] = (klass, num_params)
-        if not self.is_closed():
-            self._load_aggregates(self.get_conn())
-
-    def aggregate(self, name=None, num_params=-1):
-        def decorator(klass):
-            self.register_aggregate(klass, name, num_params)
-            return klass
-        return decorator
-
-    def register_collation(self, fn, name=None):
-        name = name or fn.__name__
-        def _collation(*args):
-            expressions = args + (SQL('collate %s' % name),)
-            return Clause(*expressions)
-        fn.collation = _collation
-        self._collations[name] = fn
-        if not self.is_closed():
-            self._load_collations(self.get_conn())
-
-    def collation(self, name=None):
-        def decorator(fn):
-            self.register_collation(fn, name)
-            return fn
-        return decorator
-
-    def register_function(self, fn, name=None, num_params=-1):
-        self._functions[name or fn.__name__] = (fn, num_params)
-        if not self.is_closed():
-            self._load_functions(self.get_conn())
-
-    def func(self, name=None, num_params=-1):
-        def decorator(fn):
-            self.register_function(fn, name, num_params)
-            return fn
-        return decorator
-
-    def load_extension(self, extension):
-        self._extensions.add(extension)
-        if not self.is_closed():
-            conn = self.get_conn()
-            conn.enable_load_extension(True)
-            conn.load_extension(extension)
-
-    def unregister_aggregate(self, name):
-        del(self._aggregates[name])
-
-    def unregister_collation(self, name):
-        del(self._collations[name])
-
-    def unregister_function(self, name):
-        del(self._functions[name])
-
-    def unload_extension(self, extension):
-        self._extensions.remove(extension)
 
     def row_factory(self, fn):
         self._row_factory = fn
 
-    def create_table(self, model_class, safe=False, options=None):
-        sql, params = self.compiler().create_table(model_class, safe, options)
-        return self.execute_sql(sql, params)
 
-    def create_index(self, model_class, field_name, unique=False):
-        if issubclass(model_class, FTSModel):
-            return
-        return super(SqliteExtDatabase, self).create_index(
-            model_class, field_name, unique)
+if CYTHON_SQLITE_EXTENSIONS:
+    SQLITE_STATUS_MEMORY_USED = 0
+    SQLITE_STATUS_PAGECACHE_USED = 1
+    SQLITE_STATUS_PAGECACHE_OVERFLOW = 2
+    SQLITE_STATUS_SCRATCH_USED = 3
+    SQLITE_STATUS_SCRATCH_OVERFLOW = 4
+    SQLITE_STATUS_MALLOC_SIZE = 5
+    SQLITE_STATUS_PARSER_STACK = 6
+    SQLITE_STATUS_PAGECACHE_SIZE = 7
+    SQLITE_STATUS_SCRATCH_SIZE = 8
+    SQLITE_STATUS_MALLOC_COUNT = 9
+    SQLITE_DBSTATUS_LOOKASIDE_USED = 0
+    SQLITE_DBSTATUS_CACHE_USED = 1
+    SQLITE_DBSTATUS_SCHEMA_USED = 2
+    SQLITE_DBSTATUS_STMT_USED = 3
+    SQLITE_DBSTATUS_LOOKASIDE_HIT = 4
+    SQLITE_DBSTATUS_LOOKASIDE_MISS_SIZE = 5
+    SQLITE_DBSTATUS_LOOKASIDE_MISS_FULL = 6
+    SQLITE_DBSTATUS_CACHE_HIT = 7
+    SQLITE_DBSTATUS_CACHE_MISS = 8
+    SQLITE_DBSTATUS_CACHE_WRITE = 9
+    SQLITE_DBSTATUS_DEFERRED_FKS = 10
+    #SQLITE_DBSTATUS_CACHE_USED_SHARED = 11
 
+    def __status__(flag, return_highwater=False):
+        """
+        Expose a sqlite3_status() call for a particular flag as a property of the
+        Database object.
+        """
+        def getter(self):
+            result = sqlite_get_status(flag)
+            return result[1] if return_highwater else result
+        return property(getter)
 
-OP.MATCH = 'match'
-SqliteExtDatabase.register_ops({
-    OP.MATCH: 'MATCH',
-})
+    def __dbstatus__(flag, return_highwater=False, return_current=False):
+        """
+        Expose a sqlite3_dbstatus() call for a particular flag as a property of the
+        Database instance. Unlike sqlite3_status(), the dbstatus properties pertain
+        to the current connection.
+        """
+        def getter(self):
+            result = sqlite_get_db_status(self._state.conn, flag)
+            if return_current:
+                return result[0]
+            return result[1] if return_highwater else result
+        return property(getter)
+
+    class CSqliteExtDatabase(SqliteExtDatabase):
+        def __init__(self, *args, **kwargs):
+            self._conn_helper = None
+            self._commit_hook = self._rollback_hook = self._update_hook = None
+            self._replace_busy_handler = False
+            super(CSqliteExtDatabase, self).__init__(*args, **kwargs)
+
+        def init(self, database, replace_busy_handler=False, **kwargs):
+            super(CSqliteExtDatabase, self).init(database, **kwargs)
+            self._replace_busy_handler = replace_busy_handler
+
+        def _close(self, conn):
+            if self._commit_hook:
+                self._conn_helper.set_commit_hook(None)
+            if self._rollback_hook:
+                self._conn_helper.set_rollback_hook(None)
+            if self._update_hook:
+                self._conn_helper.set_update_hook(None)
+            return super(CSqliteExtDatabase, self)._close(conn)
+
+        def _add_conn_hooks(self, conn):
+            super(CSqliteExtDatabase, self)._add_conn_hooks(conn)
+            self._conn_helper = ConnectionHelper(conn)
+            if self._commit_hook is not None:
+                self._conn_helper.set_commit_hook(self._commit_hook)
+            if self._rollback_hook is not None:
+                self._conn_helper.set_rollback_hook(self._rollback_hook)
+            if self._update_hook is not None:
+                self._conn_helper.set_update_hook(self._update_hook)
+            if self._replace_busy_handler:
+                self._conn_helper.set_busy_handler(self.timeout or 5000)
+
+        def on_commit(self, fn):
+            self._commit_hook = fn
+            if not self.is_closed():
+                self._conn_helper.set_commit_hook(fn)
+            return fn
+
+        def on_rollback(self, fn):
+            self._rollback_hook = fn
+            if not self.is_closed():
+                self._conn_helper.set_rollback_hook(fn)
+            return fn
+
+        def on_update(self, fn):
+            self._update_hook = fn
+            if not self.is_closed():
+                self._conn_helper.set_update_hook(fn)
+            return fn
+
+        def changes(self):
+            return self._conn_helper.changes()
+
+        @property
+        def last_insert_rowid(self):
+            return self._conn_helper.last_insert_rowid()
+
+        @property
+        def autocommit(self):
+            return self._conn_helper.autocommit()
+
+        def backup(self, destination):
+            return backup(self.connection(), destination.connection())
+
+        def backup_to_file(self, filename):
+            return backup_to_file(self.connection(), filename)
+
+        def blob_open(self, table, column, rowid, read_only=False):
+            return Blob(self, table, column, rowid, read_only)
+
+        # Status properties.
+        memory_used = __status__(SQLITE_STATUS_MEMORY_USED)
+        malloc_size = __status__(SQLITE_STATUS_MALLOC_SIZE, True)
+        malloc_count = __status__(SQLITE_STATUS_MALLOC_COUNT)
+        pagecache_used = __status__(SQLITE_STATUS_PAGECACHE_USED)
+        pagecache_overflow = __status__(SQLITE_STATUS_PAGECACHE_OVERFLOW)
+        pagecache_size = __status__(SQLITE_STATUS_PAGECACHE_SIZE, True)
+        scratch_used = __status__(SQLITE_STATUS_SCRATCH_USED)
+        scratch_overflow = __status__(SQLITE_STATUS_SCRATCH_OVERFLOW)
+        scratch_size = __status__(SQLITE_STATUS_SCRATCH_SIZE, True)
+
+        # Connection status properties.
+        lookaside_used = __dbstatus__(SQLITE_DBSTATUS_LOOKASIDE_USED)
+        lookaside_hit = __dbstatus__(SQLITE_DBSTATUS_LOOKASIDE_HIT, True)
+        lookaside_miss = __dbstatus__(SQLITE_DBSTATUS_LOOKASIDE_MISS_SIZE,
+                                      True)
+        lookaside_miss_full = __dbstatus__(SQLITE_DBSTATUS_LOOKASIDE_MISS_FULL,
+                                           True)
+        cache_used = __dbstatus__(SQLITE_DBSTATUS_CACHE_USED, False, True)
+        #cache_used_shared = __dbstatus__(SQLITE_DBSTATUS_CACHE_USED_SHARED,
+        #                                 False, True)
+        schema_used = __dbstatus__(SQLITE_DBSTATUS_SCHEMA_USED, False, True)
+        statement_used = __dbstatus__(SQLITE_DBSTATUS_STMT_USED, False, True)
+        cache_hit = __dbstatus__(SQLITE_DBSTATUS_CACHE_HIT, False, True)
+        cache_miss = __dbstatus__(SQLITE_DBSTATUS_CACHE_MISS, False, True)
+        cache_write = __dbstatus__(SQLITE_DBSTATUS_CACHE_WRITE, False, True)
+
 
 def match(lhs, rhs):
     return Expression(lhs, OP.MATCH, rhs)

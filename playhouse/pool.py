@@ -91,17 +91,17 @@ class MaxConnectionsExceeded(ValueError): pass
 class PooledDatabase(object):
     def __init__(self, database, max_connections=20, stale_timeout=None,
                  timeout=None, **kwargs):
-        self.max_connections = make_int(max_connections)
-        self.stale_timeout = make_int(stale_timeout)
-        self.timeout = make_int(timeout)
-        if self.timeout == 0:
-            self.timeout = float('inf')
+        self._max_connections = make_int(max_connections)
+        self._stale_timeout = make_int(stale_timeout)
+        self._wait_timeout = make_int(timeout)
+        if self._wait_timeout == 0:
+            self._wait_timeout = float('inf')
         self._closed = set()
         self._connections = []
         self._in_use = {}
         self.conn_key = id
 
-        if self.timeout:
+        if self._wait_timeout:
             self._event = threading.Event()
             self._ready_queue = Queue()
 
@@ -111,18 +111,18 @@ class PooledDatabase(object):
              timeout=None, **connect_kwargs):
         super(PooledDatabase, self).init(database, **connect_kwargs)
         if max_connections is not None:
-            self.max_connections = make_int(max_connections)
+            self._max_connections = make_int(max_connections)
         if stale_timeout is not None:
-            self.stale_timeout = make_int(stale_timeout)
+            self._stale_timeout = make_int(stale_timeout)
         if timeout is not None:
-            self.timeout = make_int(timeout)
-            if self.timeout == 0:
-                self.timeout = float('inf')
+            self._wait_timeout = make_int(timeout)
+            if self._wait_timeout == 0:
+                self._wait_timeout = float('inf')
 
-    def connect(self):
-        if self.timeout:
-            start = time.time()
-            while start + self.timeout > time.time():
+    def connect(self, reuse_if_open=False):
+        if self._wait_timeout:
+            expires = time.time() + self._wait_timeout
+            while expires > time.time():
                 try:
                     super(PooledDatabase, self).connect()
                 except MaxConnectionsExceeded:
@@ -134,7 +134,7 @@ class PooledDatabase(object):
         else:
             super(PooledDatabase, self).connect()
 
-    def _connect(self, *args, **kwargs):
+    def _connect(self):
         while True:
             try:
                 # Remove the oldest connection from the heap.
@@ -154,7 +154,7 @@ class PooledDatabase(object):
                     logger.debug('Connection %s was closed.', key)
                     ts = conn = None
                     self._closed.discard(key)
-                elif self.stale_timeout and self._is_stale(ts):
+                elif self._stale_timeout and self._is_stale(ts):
                     # If we are attempting to check out a stale connection,
                     # then close it. We don't need to mark it in the "closed"
                     # set, because it is not in the list of available conns
@@ -167,10 +167,10 @@ class PooledDatabase(object):
                     break
 
         if conn is None:
-            if self.max_connections and (
-                    len(self._in_use) >= self.max_connections):
+            if self._max_connections and (
+                    len(self._in_use) >= self._max_connections):
                 raise MaxConnectionsExceeded('Exceeded maximum connections.')
-            conn = super(PooledDatabase, self)._connect(*args, **kwargs)
+            conn = super(PooledDatabase, self)._connect()
             ts = time.time()
             key = self.conn_key(conn)
             logger.debug('Created new connection %s.', key)
@@ -181,7 +181,7 @@ class PooledDatabase(object):
     def _is_stale(self, timestamp):
         # Called on check-out and check-in to ensure the connection has
         # not outlived the stale timeout.
-        return (time.time() - timestamp) > self.stale_timeout
+        return (time.time() - timestamp) > self._stale_timeout
 
     def _is_closed(self, key, conn):
         return key in self._closed
@@ -198,7 +198,7 @@ class PooledDatabase(object):
         elif key in self._in_use:
             ts = self._in_use[key]
             del self._in_use[key]
-            if self.stale_timeout and self._is_stale(ts):
+            if self._stale_timeout and self._is_stale(ts):
                 logger.debug('Closing stale connection %s.', key)
                 super(PooledDatabase, self)._close(conn)
             elif self._can_reuse(conn):
@@ -211,7 +211,7 @@ class PooledDatabase(object):
         """
         Close the underlying connection without returning it to the pool.
         """
-        conn = self.get_conn()
+        conn = self.connection()
         self.close()
         if not self._is_closed(self.conn_key(conn), conn):
             self._close(conn, close_conn=True)
@@ -259,7 +259,7 @@ try:
     class PooledPostgresqlExtDatabase(_PooledPostgresqlDatabase, PostgresqlExtDatabase):
         pass
 except ImportError:
-    pass
+    PooledPostgresqlExtDatabase = None
 
 
 class _PooledSqliteDatabase(PooledDatabase):
@@ -281,4 +281,4 @@ try:
     class PooledSqliteExtDatabase(_PooledSqliteDatabase, SqliteExtDatabase):
         pass
 except ImportError:
-    pass
+    PooledSqliteExtDatabase = None

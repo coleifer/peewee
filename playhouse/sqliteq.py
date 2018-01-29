@@ -17,6 +17,7 @@ try:
 except ImportError:
     GThread = GQueue = GEvent = None
 
+from peewee import SENTINEL
 from playhouse.sqlite_ext import SqliteExtDatabase
 
 
@@ -124,13 +125,13 @@ class Writer(object):
         self.queue = queue
 
     def run(self):
-        conn = self.database.get_conn()
+        conn = self.database.connection()
         try:
             while True:
                 try:
                     if conn is None:  # Paused.
                         if self.wait_unpause():
-                            conn = self.database.get_conn()
+                            conn = self.database.connection()
                     else:
                         conn = self.loop(conn)
                 except ShutdownException:
@@ -139,7 +140,7 @@ class Writer(object):
         finally:
             if conn is not None:
                 self.database._close(conn)
-                self.database._local.closed = True
+                self.database._state.reset()
 
     def wait_unpause(self):
         obj = self.queue.get()
@@ -161,7 +162,7 @@ class Writer(object):
         elif obj is PAUSE:
             logger.info('writer paused - closing database connection.')
             self.database._close(conn)
-            self.database._local.closed = True
+            self.database._state.reset()
             return
         elif obj is UNPAUSE:
             logger.error('writer received unpause, but is already running.')
@@ -192,18 +193,11 @@ class SqliteQueueDatabase(SqliteExtDatabase):
 
     def __init__(self, database, use_gevent=False, autostart=True,
                  queue_max_size=None, results_timeout=None, *args, **kwargs):
-        if 'threadlocals' in kwargs and not kwargs['threadlocals']:
-            raise ValueError('"threadlocals" must be true to use the '
-                             'SqliteQueueDatabase.')
-
-        kwargs['threadlocals'] = True
         kwargs['check_same_thread'] = False
 
         # Ensure that journal_mode is WAL. This value is passed to the parent
         # class constructor below.
-        pragmas = self._validate_journal_mode(
-            kwargs.pop('journal_mode', None),
-            kwargs.pop('pragmas', None))
+        pragmas = self._validate_journal_mode(kwargs.pop('pragmas', None))
 
         # Reference to execute_sql on the parent class. Since we've overridden
         # execute_sql(), this is just a handy way to reference the real
@@ -229,10 +223,7 @@ class SqliteQueueDatabase(SqliteExtDatabase):
     def get_thread_impl(self, use_gevent):
         return GreenletHelper if use_gevent else ThreadHelper
 
-    def _validate_journal_mode(self, journal_mode=None, pragmas=None):
-        if journal_mode and journal_mode.lower() != 'wal':
-            raise ValueError(self.WAL_MODE_ERROR_MESSAGE)
-
+    def _validate_journal_mode(self, pragmas=None):
         if pragmas:
             pdict = dict((k.lower(), v) for (k, v) in pragmas)
             if pdict.get('journal_mode', 'wal').lower() != 'wal':
@@ -249,21 +240,24 @@ class SqliteQueueDatabase(SqliteExtDatabase):
     def queue_size(self):
         return self._write_queue.qsize()
 
-    def execute_sql(self, sql, params=None, require_commit=True, timeout=None):
-        if not require_commit:
-            return self._execute(sql, params, require_commit=require_commit)
+    def execute_sql(self, sql, params=None, commit=SENTINEL, timeout=None):
+        if commit is SENTINEL:
+            commit = not sql.lower().startswith('select')
+
+        if not commit:
+            return self._execute(sql, params, commit=commit)
 
         cursor = AsyncCursor(
             event=self._thread_helper.event(),
             sql=sql,
             params=params,
-            commit=require_commit,
+            commit=commit,
             timeout=self._results_timeout if timeout is None else timeout)
         self._write_queue.put(cursor)
         return cursor
 
     def start(self):
-        with self._conn_lock:
+        with self._lock:
             if not self._is_stopped:
                 return False
             def run():
@@ -277,7 +271,7 @@ class SqliteQueueDatabase(SqliteExtDatabase):
 
     def stop(self):
         logger.debug('environment stop requested.')
-        with self._conn_lock:
+        with self._lock:
             if self._is_stopped:
                 return False
             self._write_queue.put(SHUTDOWN)
@@ -286,15 +280,15 @@ class SqliteQueueDatabase(SqliteExtDatabase):
             return True
 
     def is_stopped(self):
-        with self._conn_lock:
+        with self._lock:
             return self._is_stopped
 
     def pause(self):
-        with self._conn_lock:
+        with self._lock:
             self._write_queue.put(PAUSE)
 
     def unpause(self):
-        with self._conn_lock:
+        with self._lock:
             self._write_queue.put(UNPAUSE)
 
     def __unsupported__(self, *args, **kwargs):

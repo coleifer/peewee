@@ -8,11 +8,12 @@ peewee
 
 .. image:: peewee-logo.png
 
-Peewee is a simple and small ORM. It has few (but expressive) concepts, making it easy to learn and intuitive to use.
+Peewee is a simple and small ORM. It has few (but expressive) concepts, making
+it easy to learn and intuitive to use.
 
 * A small, expressive ORM
-* Written in python with support for versions 2.6+ and 3.2+.
-* built-in support for sqlite, mysql and postgresql
+* Written in python with support for versions 2.7+ and 3.2+.
+* Built-in support for SQLite, MySQL and Postgresql.
 * :ref:`numerous extensions available <playhouse>` (:ref:`postgres hstore/json/arrays <postgres_ext>`, :ref:`sqlite full-text-search <sqlite_ext>`, :ref:`schema migrations <migrate>`, and much more).
 
 .. image:: postgresql.png
@@ -46,14 +47,17 @@ Contents:
    peewee/installation
    peewee/quickstart
    peewee/example
-   peewee/more-resources
    peewee/contributing
+   peewee/query_examples
    peewee/database
    peewee/models
    peewee/querying
    peewee/transactions
-   peewee/playhouse
+   peewee/changes
    peewee/api
+   peewee/sqlite_ext
+   peewee/playhouse
+   peewee/query_builder
    peewee/hacks
 
 Note

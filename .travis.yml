@@ -23,4 +23,4 @@ before_script:
   - mysql -e 'drop database if exists peewee_test;'
   - mysql -e 'create database peewee_test;'
   - mysql -e 'grant all on *.* to travis@localhost;'
-script: "python runtests.py -a"
+script: "python runtests.py"

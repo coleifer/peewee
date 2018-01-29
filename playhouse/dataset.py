@@ -21,7 +21,7 @@ if sys.version_info[0] == 3:
 
 
 class DataSet(object):
-    def __init__(self, url):
+    def __init__(self, url, bare_fields=False):
         self._url = url
         parse_result = urlparse(url)
         self._database_path = parse_result.path[1:]
@@ -33,7 +33,9 @@ class DataSet(object):
         # Introspect the database and generate models.
         self._introspector = Introspector.from_database(self._database)
         self._models = self._introspector.generate_models(
-            skip_invalid=True, literal_column_names=True)
+            skip_invalid=True,
+            literal_column_names=True,
+            bare_fields=bare_fields)
         self._migrator = SchemaMigrator.from_database(self._database)
 
         class BaseModel(Model):
@@ -80,8 +82,8 @@ class DataSet(object):
             if table in self._models:
                 model_class = self._models[table]
                 dependencies.extend([
-                    related._meta.db_table for related in
-                    model_class._meta.related_models(backrefs=True)])
+                    related._meta.table_name for _, related, _ in
+                    model_class._meta.model_graph()])
         else:
             dependencies = None  # Update all tables.
         updated = self._introspector.generate_models(
@@ -170,7 +172,7 @@ class Table(object):
 
     def _create_model(self):
         class Meta:
-            db_table = self.name
+            table_name = self.name
         return type(
             str(self.name),
             (self.dataset._base_model,),
@@ -210,7 +212,7 @@ class Table(object):
                 field = field_class(null=True)
                 operations.append(
                     self.dataset._migrator.add_column(self.name, key, field))
-                field.add_to_class(self.model_class, key)
+                field.bind(self.model_class, key)
 
             migrate(*operations)
 
@@ -294,8 +296,8 @@ class JSONExporter(Exporter):
 class CSVExporter(Exporter):
     def export(self, file_obj, header=True, **kwargs):
         writer = csv.writer(file_obj, **kwargs)
-        if header and hasattr(self.query, '_select'):
-            writer.writerow([field.name for field in self.query._select])
+        if header and hasattr(self.query, '_returning'):
+            writer.writerow([field.name for field in self.query._returning])
         for row in self.query.tuples():
             writer.writerow(row)
 

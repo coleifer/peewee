@@ -34,16 +34,17 @@ class Column(object):
     """
     Store metadata about a database column.
     """
-    primary_key_types = (IntegerField, PrimaryKeyField)
+    primary_key_types = (IntegerField, AutoField)
 
     def __init__(self, name, field_class, raw_column_type, nullable,
-                 primary_key=False, db_column=None, index=False, unique=False):
+                 primary_key=False, column_name=None, index=False,
+                 unique=False):
         self.name = name
         self.field_class = field_class
         self.raw_column_type = raw_column_type
         self.nullable = nullable
         self.primary_key = primary_key
-        self.db_column = db_column
+        self.column_name = column_name
         self.index = index
         self.unique = unique
 
@@ -58,7 +59,7 @@ class Column(object):
             'raw_column_type',
             'nullable',
             'primary_key',
-            'db_column']
+            'column_name']
         keyword_args = ', '.join(
             '%s=%s' % (attr, getattr(self, attr))
             for attr in attrs)
@@ -70,18 +71,18 @@ class Column(object):
         # Set up default attributes.
         if self.nullable:
             params['null'] = True
-        if self.field_class is ForeignKeyField or self.name != self.db_column:
-            params['db_column'] = "'%s'" % self.db_column
-        if self.primary_key and self.field_class is not PrimaryKeyField:
+        if self.field_class is ForeignKeyField or self.name != self.column_name:
+            params['column_name'] = "'%s'" % self.column_name
+        if self.primary_key and self.field_class is not AutoField:
             params['primary_key'] = True
 
         # Handle ForeignKeyField-specific attributes.
         if self.is_foreign_key():
-            params['rel_model'] = self.rel_model
+            params['model'] = self.rel_model
             if self.to_field:
-                params['to_field'] = "'%s'" % self.to_field
+                params['field'] = "'%s'" % self.to_field
             if self.related_name:
-                params['related_name'] = "'%s'" % self.related_name
+                params['backref'] = "'%s'" % self.related_name
 
         # Handle indexes on column.
         if not self.is_primary_key():
@@ -93,7 +94,7 @@ class Column(object):
         return params
 
     def is_primary_key(self):
-        return self.field_class is PrimaryKeyField or self.primary_key
+        return self.field_class is AutoField or self.primary_key
 
     def is_foreign_key(self):
         return self.field_class is ForeignKeyField
@@ -153,7 +154,7 @@ class Metadata(object):
         if len(pk_names) == 1:
             pk = pk_names[0]
             if column_types[pk] is IntegerField:
-                column_types[pk] = PrimaryKeyField
+                column_types[pk] = AutoField
 
         columns = OrderedDict()
         for name, column_data in metadata.items():
@@ -163,7 +164,7 @@ class Metadata(object):
                 raw_column_type=column_data.data_type,
                 nullable=column_data.null,
                 primary_key=column_data.primary_key,
-                db_column=name)
+                column_name=name)
 
         return columns
 
@@ -382,7 +383,7 @@ class DatabaseMetadata(_DatabaseMetadata):
 
 
 class Introspector(object):
-    pk_classes = [PrimaryKeyField, IntegerField]
+    pk_classes = [AutoField, IntegerField]
 
     def __init__(self, metadata, schema=None):
         self.metadata = metadata
@@ -408,7 +409,7 @@ class Introspector(object):
         return self.metadata.database.database
 
     def get_database_kwargs(self):
-        return self.metadata.database.connect_kwargs
+        return self.metadata.database.connect_params
 
     def get_additional_imports(self):
         if self.metadata.requires_extension:
@@ -474,10 +475,8 @@ class Introspector(object):
 
             for col_name, column in table_columns.items():
                 if literal_column_names:
-                    # Simply try to make a valid Python identifier.
                     new_name = re.sub('[^\w]+', '_', col_name)
                 else:
-                    # Snak-ify the name, stripping "_id" suffixes as well.
                     new_name = self.make_column_name(col_name)
 
                 # If we have two columns, "parent" and "parent_id", ensure
@@ -545,7 +544,7 @@ class Introspector(object):
             indexes)
 
     def generate_models(self, skip_invalid=False, table_names=None,
-                        literal_column_names=False):
+                        literal_column_names=False, bare_fields=False):
         database = self.introspect(table_names=table_names,
                                    literal_column_names=literal_column_names)
         models = {}
@@ -563,7 +562,7 @@ class Introspector(object):
 
             primary_keys = []
             columns = database.columns[table]
-            for db_column, column in columns.items():
+            for column_name, column in columns.items():
                 if column.primary_key:
                     primary_keys.append(column.name)
 
@@ -571,8 +570,8 @@ class Introspector(object):
             column_indexes = database.column_indexes(table)
 
             class Meta:
-                db_table = table
                 indexes = multi_column_indexes
+                table_name = table
 
             # Fix models with multi-column primary keys.
             composite_key = False
@@ -585,33 +584,35 @@ class Introspector(object):
                 composite_key = True
 
             attrs = {'Meta': Meta}
-            for db_column, column in columns.items():
+            for column_name, column in columns.items():
                 FieldClass = column.field_class
-                if FieldClass is UnknownField:
+                if FieldClass is not ForeignKeyField and bare_fields:
+                    FieldClass = BareField
+                elif FieldClass is UnknownField:
                     FieldClass = BareField
 
                 params = {
-                    'db_column': db_column,
+                    'column_name': column_name,
                     'null': column.nullable}
                 if column.primary_key and composite_key:
-                    if FieldClass is PrimaryKeyField:
+                    if FieldClass is AutoField:
                         FieldClass = IntegerField
                     params['primary_key'] = False
-                elif column.primary_key and FieldClass is not PrimaryKeyField:
+                elif column.primary_key and FieldClass is not AutoField:
                     params['primary_key'] = True
                 if column.is_foreign_key():
                     if column.is_self_referential_fk():
-                        params['rel_model'] = 'self'
+                        params['model'] = 'self'
                     else:
                         dest_table = column.foreign_key.dest_table
-                        params['rel_model'] = models[dest_table]
+                        params['model'] = models[dest_table]
                     if column.to_field:
-                        params['to_field'] = column.to_field
+                        params['field'] = column.to_field
 
                     # Generate a unique related name.
-                    params['related_name'] = '%s_%s_rel' % (table, db_column)
-                if db_column in column_indexes and not column.is_primary_key():
-                    if column_indexes[db_column]:
+                    params['backref'] = '%s_%s_rel' % (table, column_name)
+                if column_name in column_indexes and not column.is_primary_key():
+                    if column_indexes[column_name]:
                         params['unique'] = True
                     elif not column.is_foreign_key():
                         params['index'] = True

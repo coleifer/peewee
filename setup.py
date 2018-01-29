@@ -12,6 +12,7 @@ f.close()
 
 setup_kwargs = {}
 cython_min_version = '0.22.1'
+ext_modules = []
 
 try:
     from Cython.Distutils import build_ext
@@ -44,15 +45,16 @@ sqlite_udf_module = Extension(
     ['playhouse/_sqlite_udf.pyx'])
 sqlite_ext_module = Extension(
     'playhouse._sqlite_ext',
-    ['playhouse/_sqlite_ext.pyx'])
+    ['playhouse/_sqlite_ext.pyx'],
+    libraries=['sqlite3'])
 
 
-ext_modules = []
 if cython_installed:
     ext_modules.extend([
         speedups_ext_module,
         sqlite_udf_module,
-        sqlite_ext_module])
+        sqlite_ext_module,
+    ])
 
 if ext_modules:
     setup_kwargs.update(
@@ -77,6 +79,5 @@ setup(
         'Programming Language :: Python',
         'Programming Language :: Python :: 3',
     ],
-    scripts = ['pwiz.py', 'playhouse/pskel'],
-    **setup_kwargs
-)
+    scripts = ['pwiz.py'],
+    **setup_kwargs)

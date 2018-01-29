@@ -21,7 +21,7 @@ class Entry(Model):
 
 def initialize(passphrase):
     db.init('diary.db', passphrase=passphrase, kdf_iter=64000)
-    Entry.create_table(fail_silently=True)
+    db.create_tables([Entry])
 
 def menu_loop():
     choice = None
