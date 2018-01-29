@@ -328,20 +328,16 @@ class TestScalarFunctions(BaseTestUDF):
         self.assertEqual(self.sql1('select toggle(?)', 'foo'), 1)
         self.assertEqual(self.sql1('select toggle(?)', 'bar'), 0)
 
-        self.assertEqual(self.sql1('select toggle(?, ?)', 'bar', False), 0)
-        self.assertEqual(self.sql1('select toggle(?, ?)', 'bar', True), 1)
-        self.assertEqual(self.sql1('select toggle(?, ?)', 'bar', True), 1)
-
         self.assertEqual(self.sql1('select clear_toggles()'), None)
         self.assertEqual(self.sql1('select toggle(?)', 'foo'), 1)
 
     def test_setting(self):
-        self.assertEqual(self.sql1('select setting(?, ?)', 'k1', 'v1'), None)
-        self.assertEqual(self.sql1('select setting(?, ?)', 'k2', 'v2'), None)
+        self.assertEqual(self.sql1('select setting(?, ?)', 'k1', 'v1'), 'v1')
+        self.assertEqual(self.sql1('select setting(?, ?)', 'k2', 'v2'), 'v2')
 
         self.assertEqual(self.sql1('select setting(?)', 'k1'), 'v1')
 
-        self.assertEqual(self.sql1('select setting(?, ?)', 'k2', 'v2-x'), None)
+        self.assertEqual(self.sql1('select setting(?, ?)', 'k2', 'v2-x'), 'v2-x')
         self.assertEqual(self.sql1('select setting(?)', 'k2'), 'v2-x')
 
         self.assertEqual(self.sql1('select setting(?)', 'kx'), None)

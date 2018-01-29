@@ -1375,6 +1375,79 @@ By default peewee will use an *INNER* join, but you can use *LEFT OUTER*,
     for user in users:
         print(user.username, 'has created', user.num_tweets, 'tweet(s).')
 
+Selecting from multiple models
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+SQL makes it easy to select columns from multiple tables and return it all at
+once. Peewee makes this possible, too, but since Peewee models form a graph
+(via foreign-keys), the selected data is returned as a graph of model
+instances. To see what I mean, consider this query:
+
+.. code-block:: sql
+
+    SELECT tweet.content, tweet.timestamp, user.username
+    FROM tweet
+    INNER JOIN user ON tweet.user_id = user.id
+    ORDER BY tweet.timestamp DESC;
+
+    -- Returns rows like
+    -- "Meow I'm a tweet" | 2017-01-17 13:37:00 | huey
+    -- "Woof woof" | 2017-01-17 11:59:00 | mickey
+    -- "Purr" | 2017-01-17 10:00:00 | huey
+
+With Peewee we would write this query:
+
+.. code-block:: python
+
+    query = (Tweet
+             .select(Tweet.content, Tweet.timestamp, User.username)
+             .join(User)
+             .order_by(Tweet.timestamp.desc()))
+
+The question is: where is the "username" attribute to be found? The answer is
+that Peewee, because there is a foreign-key relationship between Tweet and
+User, will return each row as a Tweet model *with* the associated User model,
+which has it's username attribute set:
+
+.. code-block:: python
+
+    for tweet in query:
+        print(tweet.content, tweet.timestamp, tweet.user.username)
+
+When doing complicated joins, joins where no foreign-key exists (for example
+joining on a subquery), etc., it is necessary to tell Peewee where to place the
+joined attributes. This is done by putting an *alias* on the join predicate
+expression.
+
+For example, let's say that in the above query we want to put the joined user
+data in the *Tweet.foo* attribute:
+
+.. code-block:: python
+
+    query = (Tweet
+             .select(Tweet.content, Tweet.timestamp, User.username)
+             .join(User, on=(Tweet.user == User.id).alias('foo'))
+             .order_by(Tweet.timestamp.desc()))
+
+    for tweet in query:
+        # Joined user data is stored in "tweet.foo":
+        print(tweet.content, tweet.timestamp, tweet.foo.username)
+
+For queries with complex joins and selections from several models, constructing
+this graph can be expensive. If you wish, instead, to have *all* columns as
+attributes on a single model, you can use :py:meth:`~ModelSelect.objects`
+method:
+
+.. code-block:: python
+
+    for tweet in query.objects():
+        # Now "username" is on the Tweet model itself:
+        print(tweet.content, tweet.timestamp, tweet.username)
+
+For additional performance gains, consider using :py:meth:`~BaseQuery.dicts`,
+:py:meth:`~BaseQuery.tuples` or :py:meth:`~BaseQuery.namedtuples` when
+iterating large and/or complex result-sets.
+
 Multiple Foreign Keys to the Same Model
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

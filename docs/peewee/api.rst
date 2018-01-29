@@ -3382,6 +3382,17 @@ Model
         Return result rows as objects created using the given constructor. The
         default behavior is to create model instances.
 
+        .. note::
+            This method can be used, when selecting field data from multiple
+            sources/models, to make all data available as attributes on the
+            model being queried (as opposed to constructing the graph of joined
+            model instances). For very complex queries this can have a positive
+            performance impact, especially iterating large result sets.
+
+            Similarly, you can use :py:meth:`~BaseQuery.dicts`,
+            :py:meth:`~BaseQuery.tuples` or :py:meth:`~BaseQuery.namedtuples`
+            to achieve even more performance.
+
     .. py:method:: join(dest[, join_type='INNER'[, on=None[, src=None[, attr=None]]]])
 
         :param dest: A :py:class:`Model`, :py:class:`ModelAlias`,

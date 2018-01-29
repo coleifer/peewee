@@ -1462,18 +1462,22 @@ class BaseQuery(Node):
         query._cursor_wrapper = None
         return query
 
+    @Node.copy
     def dicts(self, as_dict=True):
         self._row_type = ROW.DICT if as_dict else None
         return self
 
+    @Node.copy
     def tuples(self, as_tuple=True):
         self._row_type = ROW.TUPLE if as_tuple else None
         return self
 
+    @Node.copy
     def namedtuples(self, as_namedtuple=True):
         self._row_type = ROW.NAMED_TUPLE if as_namedtuple else None
         return self
 
+    @Node.copy
     def objects(self, constructor=None):
         self._row_type = ROW.CONSTRUCTOR if constructor else None
         self._constructor = constructor
@@ -5425,6 +5429,7 @@ class ModelSelect(BaseModelSelect, Select):
         self._join_ctx = ctx
         return self
 
+    @Node.copy
     def objects(self, constructor=None):
         self._row_type = ROW.CONSTRUCTOR
         self._constructor = self.model if constructor is None else constructor
