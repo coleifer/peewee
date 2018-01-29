@@ -57,6 +57,7 @@ Contents:
    peewee/api
    peewee/sqlite_ext
    peewee/playhouse
+   peewee/query_builder
    peewee/hacks
 
 Note
