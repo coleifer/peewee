@@ -274,6 +274,79 @@ would delete all notes by anyone whose last name is "Foo":
     # Delete all notes by any person whose ID is in the previous query.
     Note.delete().where(Note.person_id.in_(foo_people)).execute()
 
+Query Objects
+-------------
+
+One of the fundamental limitations of the abstractions provided by Peewee 2.x
+was the absence of a class that represented a structured query with no relation
+to a given model class.
+
+An example of this might be computing aggregate values over a subquery. For
+example, the :py:meth:`~SelectBase.count` method, which returns the count of
+rows in an arbitrary query, is implemented by wrapping the query:
+
+.. code-block:: sql
+
+    SELECT COUNT(1) FROM (...)
+
+To accomplish this with Peewee, the implementation is written in this way:
+
+.. code-block:: python
+
+    def count(query):
+        # Select([source1, ... sourcen], [column1, ...columnn])
+        wrapped = Select(from_list=[query], columns=[fn.COUNT(SQL('1'))])
+        curs = wrapped.tuples().execute(db)
+        return curs[0][0]  # Return first column from first row of result.
+
+We can actually express this more concisely using the
+:py:meth:`~SelectBase.scalar` method, which is suitable for returning values
+from aggregate queries:
+
+.. code-block:: python
+
+    def count(query):
+        wrapped = Select(from_list=[query], columns=[fn.COUNT(SQL('1'))])
+        return wrapped.scalar(db)
+
+The :ref:`query_examples` document has a more complex example, in which we
+write a query for a facility with the highest number of available slots booked:
+
+The SQL we wish to express is:
+
+.. code-block:: sql
+
+    SELECT facid, total FROM (
+      SELECT facid, SUM(slots) AS total,
+             rank() OVER (order by SUM(slots) DESC) AS rank
+      FROM bookings
+      GROUP BY facid
+    ) AS ranked
+    WHERE rank = 1
+
+We can express this fairly elegantly by using a plain :py:class:`Select` for
+the outer query:
+
+.. code-block:: python
+
+    # Store rank expression in variable for readability.
+    rank_expr = fn.rank().over(order_by=[fn.SUM(Booking.slots).desc()])
+
+    subq = (Booking
+            .select(Booking.facility, fn.SUM(Booking.slots).alias('total'),
+                    rank_expr.alias('rank'))
+            .group_by(Booking.facility))
+
+    # Use a plain "Select" to create outer query.
+    query = (Select(columns=[subq.c.facid, subq.c.total])
+             .from_(subq)
+             .where(subq.c.rank == 1)
+             .tuples())
+
+    # Iterate over the resulting facility ID(s) and total(s):
+    for facid, total in query.execute(db):
+        print(facid, total)
+
 More
 ----
 

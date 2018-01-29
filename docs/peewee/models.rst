@@ -396,6 +396,89 @@ have an event attached:
     be formatted so they are sorted lexicographically. That is why they are
     stored, by default, as ``YYYY-MM-DD HH:MM:SS``.
 
+BitField and BigBitField
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+The :py:class:`BitField` and :py:class:`BigBitField` are new as of 3.0.0. The
+former provides a subclass of :py:class:`IntegerField` that is suitable for
+storing feature toggles as an integer bitmask. The latter is suitable for
+storing a bitmap for a large data-set, e.g. expressing membership or
+bitmap-type data.
+
+As an example of using :py:class:`BitField`, let's say we have a *Post* model
+and we wish to store certain True/False flags about how the post. We could
+store all these feature toggles in their own :py:class:`BooleanField` objects,
+or we could use :py:class:`BitField` instead:
+
+.. code-block:: python
+
+    class Post(Model):
+        content = TextField()
+        flags = BitField()
+
+        is_favorite = flags.flag(1)
+        is_sticky = flags.flag(2)
+        is_minimized = flags.flag(4)
+        is_deleted = flags.flag(8)
+
+Using these flags is quite simple:
+
+.. code-block:: pycon
+
+    >>> p = Post()
+    >>> p.is_sticky = True
+    >>> p.is_minimized = True
+    >>> print(p.flags)  # Prints 4 | 2 --> "6"
+    6
+    >>> p.is_favorite
+    False
+    >>> p.is_sticky
+    True
+
+We can also use the flags on the Post class to build expressions in queries:
+
+.. code-block:: python
+
+    # Generates a WHERE clause that looks like:
+    # WHERE (post.flags & 1 != 0)
+    favorites = Post.select().where(Post.is_favorite)
+
+    # Query for sticky + favorite posts:
+    sticky_faves = Post.select().where(Post.is_sticky & Post.is_favorite)
+
+Since the :py:class:`BitField` is stored in an integer, there is a maximum of
+64 flags you can represent (64-bits is common size of integer column). For
+storing arbitrarily large bitmaps, you can instead use :py:class:`BigBitField`,
+which uses an automatically managed buffer of bytes, stored in a
+:py:class:`BlobField`.
+
+Example usage:
+
+.. code-block:: python
+
+    class Bitmap(Model):
+        data = BigBitField()
+
+    bitmap = Bitmap()
+
+    # Sets the ith bit, e.g. the 1st bit, the 11th bit, the 63rd, etc.
+    bits_to_set = (1, 11, 63, 31, 55, 48, 100, 99)
+    for bit_idx in bits_to_set:
+        bitmap.data.set_bit(bit_idx)
+
+    # We can test whether a bit is set using "is_set":
+    assert bitmap.data.is_set(11)
+    assert not bitmap.data.is_set(12)
+
+    # We can clear a bit:
+    bitmap.data.clear_bit(11)
+    assert not bitmap.data.is_set(11)
+
+    # We can also "toggle" a bit. Recall that the 63rd bit was set earlier.
+    assert bitmap.data.toggle_bit(63) is False
+    assert bitmap.data.toggle_bit(63) is True
+    assert bitmap.data.is_set(63)
+
 BareField
 ^^^^^^^^^
 
@@ -404,13 +487,31 @@ SQLite uses dynamic typing and data-types are not enforced, it can be perfectly
 fine to declare fields without *any* data-type. In those cases you can use
 :py:class:`BareField`. It is also common for SQLite virtual tables to use
 meta-columns or untyped columns, so for those cases as well you may wish to use
-an untyped field.
+an untyped field (although for full-text search, you should use
+:py:class:`SearchField` instead!).
 
 :py:class:`BareField` accepts a special parameter ``coerce``. This parameter is
 a function that takes a value coming from the database and converts it into the
 appropriate Python type. For instance, if you have a virtual table with an
 un-typed column but you know that it will return ``int`` objects, you can
 specify ``coerce=int``.
+
+Example:
+
+.. code-block:: python
+
+    db = SqliteDatabase(':memory:')
+
+    class Junk(Model):
+        anything = BareField()
+
+        class Meta:
+            database = db
+
+    # Store multiple data-types in the Junk.anything column:
+    Junk.create(anything='a string')
+    Junk.create(anything=12345)
+    Junk.create(anything=3.14159)
 
 .. _custom-fields:
 
