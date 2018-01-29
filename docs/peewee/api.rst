@@ -1348,7 +1348,7 @@ Query-builder
 
         Return rows as dictionaries.
 
-    .. py:method:: as_tuples([as_tuples=True])
+    .. py:method:: tuples([as_tuples=True])
 
         :param bool as_tuple: Specify whether to return rows as tuples.
 
