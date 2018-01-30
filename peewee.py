@@ -4118,12 +4118,17 @@ class ForeignKeyField(Field):
                 setattr(self.rel_model, self.backref, BackrefAccessor(self))
 
     def foreign_key_constraint(self):
-        return NodeList((
+        parts = [
             SQL('FOREIGN KEY'),
             EnclosedNodeList((self,)),
             SQL('REFERENCES'),
             self.rel_model,
-            EnclosedNodeList((self.rel_field,))))
+            EnclosedNodeList((self.rel_field,))]
+        if self.on_delete:
+            parts.append(SQL('ON DELETE %s' % self.on_delete))
+        if self.on_update:
+            parts.append(SQL('ON UPDATE %s' % self.on_update))
+        return NodeList(parts)
 
     def __getattr__(self, attr):
         if attr in self.rel_model._meta.fields:
