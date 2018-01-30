@@ -69,6 +69,9 @@ code and it's somewhat limited usefulness convinced me to scrap it. You can
 instead use :py:func:`prefetch` to achieve the same result.
 
 * :py:class:`Select` query attribute ``_select`` has changed to ``_returning``
+* The ``naive()`` method is now :py:meth:`~BaseQuery.objects`, which defaults
+  to using the model class as the constructor, but accepts any callable to use
+  as an alternate constructor.
 
 The :py:func:`Case` helper has moved from the ``playhouse.shortcuts`` module
 into the main peewee module.
