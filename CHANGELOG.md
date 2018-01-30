@@ -5,10 +5,20 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.0.3
+
+Includes fix for bug where column-name to field-name translation was not being
+done when running select queries on models whose field name differed from the
+underlying column name (#1437).
+
+[View commits](https://github.com/coleifer/peewee/compare/3.0.2...3.0.3)
+
 ## 3.0.2
 
 Ensures that the pysqlite headers are included in the source distribution so
 that certain C extensions can be compiled.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.0.0...3.0.2)
 
 ## 3.0.0
 
