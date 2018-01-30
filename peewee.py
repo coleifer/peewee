@@ -102,6 +102,7 @@ __all__ = [
     'OP',
     'OperationalError',
     'PostgresqlDatabase',
+    'PrimaryKeyField',  # XXX: Deprecated, change to AutoField.
     'prefetch',
     'ProgrammingError',
     'Proxy',
@@ -3636,6 +3637,14 @@ class AutoField(IntegerField):
             raise ValueError('AutoField must always be a primary key.')
         kwargs['primary_key'] = True
         super(AutoField, self).__init__(*args, **kwargs)
+
+
+class PrimaryKeyField(AutoField):
+    def __init__(self, *args, **kwargs):
+        __deprecated__('"PrimaryKeyField" has been renamed to "AutoField". '
+                       'Please update your code accordingly as this will be '
+                       'completely removed in a subsequent release.')
+        super(PrimaryKeyField, self).__init__(*args, **kwargs)
 
 
 class FloatField(Field):
