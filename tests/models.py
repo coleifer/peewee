@@ -31,6 +31,12 @@ class Color(TestModel):
     is_neutral = BooleanField(default=False)
 
 
+class Post(TestModel):
+    content = TextField(column_name='Content')
+    timestamp = DateTimeField(column_name='TimeStamp',
+                              default=datetime.datetime.now)
+
+
 class TestModelAPIs(ModelTestCase):
     def add_user(self, username):
         return User.create(username=username)
@@ -50,6 +56,23 @@ class TestModelAPIs(ModelTestCase):
         self.assertRaises(AssertionError, do_test, 3)
         do_test(4)
         self.assertRaises(AssertionError, do_test, 5)
+
+    @requires_models(Post)
+    def test_column_field_translation(self):
+        ts = datetime.datetime(2017, 2, 1, 13, 37)
+        ts2 = datetime.datetime(2017, 2, 2, 13, 37)
+        p = Post.create(content='p1', timestamp=ts)
+        p2 = Post.create(content='p2', timestamp=ts2)
+
+        p_db = Post.get(Post.content == 'p1')
+        self.assertEqual(p_db.content, 'p1')
+        self.assertEqual(p_db.timestamp, ts)
+
+        pd1, pd2 = Post.select().order_by(Post.id).dicts()
+        self.assertEqual(pd1['content'], 'p1')
+        self.assertEqual(pd1['timestamp'], ts)
+        self.assertEqual(pd2['content'], 'p2')
+        self.assertEqual(pd2['timestamp'], ts2)
 
     @requires_models(User, Tweet)
     def test_create(self):

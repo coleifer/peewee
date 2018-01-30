@@ -5761,6 +5761,7 @@ class BaseModelCursorWrapper(DictCursorWrapper):
         self.columns = []
         self.converters = converters = [None] * self.ncols
         self.fields = fields = [None] * self.ncols
+        self.translation = {}
 
         for idx, description_item in enumerate(description):
             column = description_item[0]
@@ -5814,12 +5815,14 @@ class ModelDictCursorWrapper(BaseModelCursorWrapper):
     def process_row(self, row):
         result = {}
         columns, converters = self.columns, self.converters
+        fields = self.fields
 
         for i in range(self.ncols):
+            attr = fields[i].name if fields[i] is not None else columns[i]
             if converters[i] is not None:
-                result[columns[i]] = converters[i](row[i])
+                result[attr] = converters[i](row[i])
             else:
-                result[columns[i]] = row[i]
+                result[attr] = row[i]
 
         return result
 
@@ -5837,7 +5840,13 @@ class ModelTupleCursorWrapper(ModelDictCursorWrapper):
 class ModelNamedTupleCursorWrapper(ModelTupleCursorWrapper):
     def initialize(self):
         self._initialize_columns()
-        self.tuple_class = namedtuple('Row', self.columns)
+        attributes = []
+        for i in range(self.ncols):
+            if self.fields[i] is not None:
+                attributes.append(self.fields[i].name)
+            else:
+                attributes.append(self.columns[i])
+        self.tuple_class = namedtuple('Row', attributes)
         self.constructor = lambda row: self.tuple_class(*row)
 
 
@@ -5915,7 +5924,10 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
         set_keys = set()
         for idx, key in enumerate(self.column_keys):
             instance = objects[key]
-            column = self.columns[idx]
+            if self.fields[idx] is not None:
+                column = self.fields[idx].name
+            else:
+                column = self.columns[idx]
             value = row[idx]
             if value is not None:
                 set_keys.add(key)
