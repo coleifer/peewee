@@ -5,6 +5,16 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.0.5
+
+Adds Model.index(), a short-hand method for declaring ModelIndex instances.
+
+* [Model.index docs](http://docs.peewee-orm.com/en/latest/peewee/api.html#Model.index)
+* [Model.add_index docs](http://docs.peewee-orm.com/en/latest/peewee/api.html#Model.add_index)
+* [ModelIndex docs](http://docs.peewee-orm.com/en/latest/peewee/api.html#ModelIndex)
+
+[View commits](https://github.com/coleifer/peewee/compare/3.0.4...3.0.5)
+
 ## 3.0.4
 
 Re-add a shim for `PrimaryKeyField` (renamed to `AutoField`) and log a
