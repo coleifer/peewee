@@ -50,8 +50,11 @@ class Article(TestModel):
 
 
 Article.add_index(Article.timestamp.desc(), Article.status)
-Article.add_index(Article.name, Article.timestamp, Article.flags.bin_and(4),
-                  where=(Article.status == 1))
+
+idx = (Article
+       .index(Article.name, Article.timestamp, Article.flags.bin_and(4))
+       .where(Article.status == 1))
+Article.add_index(idx)
 Article.add_index(SQL('CREATE INDEX "article_foo" ON "article" ("flags" & 3)'))
 
 

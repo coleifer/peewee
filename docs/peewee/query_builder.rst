@@ -350,5 +350,8 @@ the outer query:
 More
 ----
 
-If you're interested in learning more, check out the `project source code
-<https://github.com/coleifer/peewee>`_.
+For a description of the various classes used to describe a SQL AST, see the
+:ref:`query builder API documentation <query-builder-api>`.
+
+If you're interested in learning more, you can also check out the `project
+source code <https://github.com/coleifer/peewee>`_.

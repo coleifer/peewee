@@ -682,6 +682,7 @@ Database
 
     MySQL database implementation.
 
+.. _query-builder-api:
 
 Query-builder
 -------------
@@ -1929,6 +1930,49 @@ Query-builder
     :param str using: Index algorithm.
     :param str name: Optional index name.
 
+    Expressive method for declaring an index on a model.
+
+    Examples:
+
+    .. code-block:: python
+
+        class Article(Model):
+            name = TextField()
+            timestamp = TimestampField()
+            status = IntegerField()
+            flags = BitField()
+
+            is_sticky = flags.flag(1)
+            is_favorite = flags.flag(2)
+
+        # CREATE INDEX ... ON "article" ("name", "timestamp")
+        idx = ModelIndex(Article, (Article.name, Article.timestamp))
+
+        # CREATE INDEX ... ON "article" ("name", "timestamp") WHERE "status" = 1
+        idx = idx.where(Article.status == 1)
+
+        # CREATE UNIQUE INDEX ... ON "article" ("timestamp" DESC, "flags" & 2) WHERE "status" = 1
+        idx = ModelIndex(
+            Article,
+            (Article.timestamp.desc(), Article.flags.bin_and(2)),
+            unique = True).where(Article.status == 1)
+
+      You can also use :py:meth:`Model.index`:
+
+      .. code-block:: python
+
+          idx = Article.index(Article.name, Article.timestamp).where(Article.status == 1)
+
+      To add an index to a model definition use :py:meth:`Model.add_index`:
+
+      .. code-block:: python
+
+          idx = Article.index(Article.name, Article.timestamp).where(Article.status == 1)
+
+          # Add above index definition to the model definition. When you call
+          # Article.create_table() (or database.create_tables([Article])), the
+          # index will be created.
+          Article.add_index(idx)
 
 Fields
 ------
@@ -3348,10 +3392,53 @@ Model
 
         Drop the model table.
 
-    .. py:classmethod:: add_index(*fields, **kwargs)
+    .. py:classmethod:: index(*fields[, unique=False[, safe=True[, where=None[, using=None[, name=None]]]]])
 
-        :param fields: Field(s) to index, or a :py:class:`SQL` instance that
-            contains the SQL for creating the index.
+        :param fields: Fields to index.
+        :param bool unique: Whether index is UNIQUE.
+        :param bool safe: Whether to add IF NOT EXISTS clause.
+        :param Expression where: Optional WHERE clause for index.
+        :param str using: Index algorithm.
+        :param str name: Optional index name.
+
+        Expressive method for declaring an index on a model. Wraps the
+        declaration of a :py:class:`ModelIndex` instance.
+
+        Examples:
+
+        .. code-block:: python
+
+            class Article(Model):
+                name = TextField()
+                timestamp = TimestampField()
+                status = IntegerField()
+                flags = BitField()
+
+                is_sticky = flags.flag(1)
+                is_favorite = flags.flag(2)
+
+            # CREATE INDEX ... ON "article" ("name", "timestamp" DESC)
+            idx = Article.index(Article.name, Article.timestamp.desc())
+
+            # Be sure to add the index to the model:
+            Article.add_index(idx)
+
+            # CREATE UNIQUE INDEX ... ON "article" ("timestamp" DESC, "flags" & 2)
+            # WHERE ("status" = 1)
+            idx = (Article
+                   .index(Article.timestamp.desc(),
+                          Article.flags.bin_and(2),
+                          unique=True)
+                   .where(Article.status == 1))
+
+            # Add index to model:
+            Article.add_index(idx)
+
+    .. py:classmethod:: add_index(*args, **kwargs)
+
+        :param args: a :py:class:`ModelIndex` instance, Field(s) to index,
+            or a :py:class:`SQL` instance that contains the SQL for creating
+            the index.
         :param kwargs: Keyword arguments passed to :py:class:`ModelIndex`
             constructor.
 
@@ -3362,6 +3449,40 @@ Model
             Rather, it adds the index definition to the model's metadata, so
             that a subsequent call to :py:meth:`~Model.create_table` will
             create the new index (along with the table).
+
+        Examples:
+
+        .. code-block:: python
+
+            class Article(Model):
+                name = TextField()
+                timestamp = TimestampField()
+                status = IntegerField()
+                flags = BitField()
+
+                is_sticky = flags.flag(1)
+                is_favorite = flags.flag(2)
+
+            # CREATE INDEX ... ON "article" ("name", "timestamp") WHERE "status" = 1
+            idx = Article.index(Article.name, Article.timestamp).where(Article.status == 1)
+            Article.add_index(idx)
+
+            # CREATE UNIQUE INDEX ... ON "article" ("timestamp" DESC, "flags" & 2)
+            ts_flags_idx = Article.index(
+                Article.timestamp.desc(),
+                Article.flags.bin_and(2),
+                unique=True)
+            Article.add_index(ts_flags_idx)
+
+            # You can also specify a list of fields and use the same keyword
+            # arguments that the ModelIndex constructor accepts:
+            Article.add_index(
+                Article.name,
+                Article.timestamp.desc(),
+                where=(Article.status == 1))
+
+            # Or even specify a SQL query directly:
+            Article.add_index(SQL('CREATE INDEX ...'))
 
     .. py:method:: dependencies([search_nullable=False])
 
