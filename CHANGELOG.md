@@ -5,6 +5,12 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.0.6
+
+Add constraints for ON UPDATE/ON DELETE to foreign-key constraint - #1443.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.0.5...3.0.6)
+
 ## 3.0.5
 
 Adds Model.index(), a short-hand method for declaring ModelIndex instances.
