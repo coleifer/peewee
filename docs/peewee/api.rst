@@ -1709,6 +1709,25 @@ Query-builder
         Same as :py:meth:`Select.columns`, provided for
         backwards-compatibility.
 
+    .. py:method:: select_extend(*columns)
+
+        :param columns: Zero or more column-like objects to SELECT.
+
+        Extend the current selection with the given columns.
+
+        Example:
+
+        .. code-block:: python
+
+            def get_users(with_count=False):
+                query = User.select()
+                if with_count:
+                    query = (query
+                             .select_extend(fn.COUNT(Tweet.id).alias('count'))
+                             .join(Tweet, JOIN.LEFT_OUTER)
+                             .group_by(User))
+                return query
+
     .. py:method:: from_(*sources)
 
         :param sources: Zero or more sources for the FROM clause.
