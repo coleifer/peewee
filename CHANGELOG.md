@@ -5,6 +5,13 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.0.4
+
+Re-add a shim for `PrimaryKeyField` (renamed to `AutoField`) and log a
+deprecation warning if you try to use it.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.0.3...3.0.4)
+
 ## 3.0.3
 
 Includes fix for bug where column-name to field-name translation was not being
