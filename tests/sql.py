@@ -27,6 +27,21 @@ class TestSelectQuery(BaseTestCase):
             'FROM "users" AS "t1" '
             'WHERE ("t1"."username" = ?)'), ['foo'])
 
+    def test_select_extend(self):
+        query = User.select(User.c.id, User.c.username)
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1"'), [])
+
+        query = query.select(User.c.username, User.c.is_admin)
+        self.assertSQL(query, (
+            'SELECT "t1"."username", "t1"."is_admin" FROM "users" AS "t1"'),
+            [])
+
+        query = query.select_extend(User.c.is_active, User.c.id)
+        self.assertSQL(query, (
+            'SELECT "t1"."username", "t1"."is_admin", "t1"."is_active", '
+            '"t1"."id" FROM "users" AS "t1"'), [])
+
     def test_select_explicit_columns(self):
         query = (Person
                  .select()

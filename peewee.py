@@ -1773,9 +1773,13 @@ class Select(SelectBase):
         self._cursor_wrapper = None
 
     @Node.copy
-    def columns(self, *columns):
+    def columns(self, *columns, **kwargs):
         self._returning = columns
     select = columns
+
+    @Node.copy
+    def select_extend(self, *columns):
+        self._returning = tuple(self._returning) + columns
 
     @Node.copy
     def from_(self, *sources):
