@@ -749,14 +749,6 @@ The resulting query will return *User* objects with all their normal attributes
 plus an additional attribute *count* which will contain the count of tweets for
 each user. We use a left outer join to include users who have no tweets.
 
-.. code-block:: python
-
-    query = (User
-             .select(User, fn.COUNT(Tweet.id).alias('count'))
-             .join(Tweet, JOIN.LEFT_OUTER)
-             .switch(User)
-             .annotate(Tweet))
-
 Let's assume you have a tagging application and want to find tags that have a
 certain number of related objects. For this example we'll use some different
 models in a :ref:`many-to-many <manytomany>` configuration:
