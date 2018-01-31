@@ -1167,6 +1167,50 @@ class TestModelGraph(BaseTestCase):
         self.assertTrue(User._meta.database is None)
 
 
+class TestFieldInheritance(BaseTestCase):
+    def test_field_inheritance(self):
+        db = get_in_memory_db()
+
+        class BaseModel(Model):
+            class Meta:
+                database = db
+
+        class BasePost(BaseModel):
+            content = TextField()
+            timestamp = TimestampField()
+
+        class Photo(BasePost):
+            image = TextField()
+
+        class Note(BasePost):
+            category = TextField()
+
+        self.assertEqual(BasePost._meta.sorted_field_names,
+                         ['id', 'content', 'timestamp'])
+        self.assertEqual(BasePost._meta.sorted_fields, [
+            BasePost.id,
+            BasePost.content,
+            BasePost.timestamp])
+
+        self.assertEqual(Photo._meta.sorted_field_names,
+                         ['id', 'content', 'timestamp', 'image'])
+        self.assertEqual(Photo._meta.sorted_fields, [
+            Photo.id,
+            Photo.content,
+            Photo.timestamp,
+            Photo.image])
+
+        self.assertEqual(Note._meta.sorted_field_names,
+                         ['id', 'content', 'timestamp', 'category'])
+        self.assertEqual(Note._meta.sorted_fields, [
+            Note.id,
+            Note.content,
+            Note.timestamp,
+            Note.category])
+
+        self.assertTrue(id(Photo.id) != id(Note.id))
+
+
 class TestMetaInheritance(BaseTestCase):
     def test_table_name(self):
         class Foo(Model):
