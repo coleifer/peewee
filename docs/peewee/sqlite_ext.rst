@@ -1484,7 +1484,7 @@ APIs
     :param int length: Size of blob in bytes.
 
     :py:class:`ZeroBlob` is used solely to reserve space for storing a BLOB
-    that supports incremental I/O. To use the :ref:`SQLite BLOB-store <https://www.sqlite.org/c3ref/blob_open.html>`_
+    that supports incremental I/O. To use the `SQLite BLOB-store <https://www.sqlite.org/c3ref/blob_open.html>`_
     it is necessary to first insert a ZeroBlob of the desired size into the
     row you wish to use with incremental I/O.
 
