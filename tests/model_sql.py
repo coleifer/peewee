@@ -78,7 +78,10 @@ class TestModelSQL(ModelDatabaseTestCase):
         self.assertSQL(users, *expected)
 
         users = User.select().where(User.username.in_(set(['foo', 'bar'])))
-        self.assertSQL(users, *expected)
+        # Sets are unordered so params may be in either order:
+        sql, params = __sql__(users)
+        self.assertEqual(sql, expected[0])
+        self.assertTrue(params in (['foo', 'bar'], ['bar', 'foo']))
 
     def test_join_ctx(self):
         query = Tweet.select(Tweet.id).join(Favorite).switch(Tweet).join(User)
@@ -311,6 +314,28 @@ class TestModelSQL(ModelDatabaseTestCase):
             'UPDATE "stat" SET "count" = ("count" + ?) '
             'WHERE ("url" = ?)'),
             [1, '/peewee'])
+
+    def test_update_from(self):
+        class SalesPerson(TestModel):
+            first = TextField()
+            last = TextField()
+
+        class Account(TestModel):
+            contact_first = TextField()
+            contact_last = TextField()
+            sales = ForeignKeyField(SalesPerson)
+
+        query = (Account
+                 .update(contact_first=SalesPerson.first,
+                         contact_last=SalesPerson.last)
+                 .from_(SalesPerson)
+                 .where(Account.sales == SalesPerson.id))
+        self.assertSQL(query, (
+            'UPDATE "account" SET '
+            '"contact_first" = "first", '
+            '"contact_last" = "last" '
+            'FROM "salesperson" '
+            'WHERE ("sales_id" = "id")'), [])
 
     def test_delete(self):
         query = (Note
