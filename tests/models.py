@@ -1169,11 +1169,9 @@ class TestModelGraph(BaseTestCase):
 
 class TestFieldInheritance(BaseTestCase):
     def test_field_inheritance(self):
-        db = get_in_memory_db()
-
         class BaseModel(Model):
             class Meta:
-                database = db
+                database = get_in_memory_db()
 
         class BasePost(BaseModel):
             content = TextField()
@@ -1211,11 +1209,9 @@ class TestFieldInheritance(BaseTestCase):
         self.assertTrue(id(Photo.id) != id(Note.id))
 
     def test_foreign_key_field_inheritance(self):
-        db = get_in_memory_db()
-
         class BaseModel(Model):
             class Meta:
-                database = db
+                database = get_in_memory_db()
 
         class Category(BaseModel):
             name = TextField()
@@ -1263,6 +1259,44 @@ class TestFieldInheritance(BaseTestCase):
 
         self.assertEqual(Photo.category.backref, 'photo_set')
         self.assertEqual(Note.category.backref, 'note_set')
+
+    def test_foreign_key_pk_inheritance(self):
+        class BaseModel(Model):
+            class Meta:
+                database = get_in_memory_db()
+        class Account(BaseModel): pass
+        class BaseUser(BaseModel):
+            account = ForeignKeyField(Account, primary_key=True)
+        class User(BaseUser):
+            username = TextField()
+        class Admin(BaseUser):
+            role = TextField()
+
+        self.assertEqual(Account._meta.backrefs, {
+            Admin.account: Admin,
+            User.account: User,
+            BaseUser.account: BaseUser})
+
+        self.assertEqual(User.account.backref, 'user_set')
+        self.assertEqual(Admin.account.backref, 'admin_set')
+        self.assertTrue(Account.user_set.model is User)
+        self.assertTrue(Account.admin_set.model is Admin)
+
+        self.assertSQL(Account._schema._create_table(), (
+            'CREATE TABLE IF NOT EXISTS "account" ('
+            '"id" INTEGER NOT NULL PRIMARY KEY)'), [])
+
+        self.assertSQL(User._schema._create_table(), (
+            'CREATE TABLE IF NOT EXISTS "user" ('
+            '"account_id" INTEGER NOT NULL PRIMARY KEY, '
+            '"username" TEXT NOT NULL, '
+            'FOREIGN KEY ("account_id") REFERENCES "account" ("id"))'), [])
+
+        self.assertSQL(Admin._schema._create_table(), (
+            'CREATE TABLE IF NOT EXISTS "admin" ('
+            '"account_id" INTEGER NOT NULL PRIMARY KEY, '
+            '"role" TEXT NOT NULL, '
+            'FOREIGN KEY ("account_id") REFERENCES "account" ("id"))'), [])
 
 
 class TestMetaInheritance(BaseTestCase):

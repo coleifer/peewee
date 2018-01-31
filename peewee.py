@@ -4818,6 +4818,8 @@ class ModelBase(type):
             base_meta = b._meta
             if parent_pk is None:
                 parent_pk = deepcopy(base_meta.primary_key)
+                if isinstance(parent_pk, ForeignKeyField):
+                    parent_pk.backref = None
             all_inheritable = cls.inheritable | base_meta._additional_keys
             for k in base_meta.__dict__:
                 if k in all_inheritable and k not in meta_options:
