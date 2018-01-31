@@ -112,6 +112,13 @@ class TestModelDDL(ModelDatabaseTestCase):
         sql, params = User._schema._drop_table(temporary=True).query()
         self.assertEqual(sql, 'DROP TEMPORARY TABLE IF EXISTS "users"')
 
+    def test_drop_table(self):
+        sql, params = User._schema._drop_table().query()
+        self.assertEqual(sql, 'DROP TABLE IF EXISTS "users"')
+
+        sql, params = User._schema._drop_table(cascade=True).query()
+        self.assertEqual(sql, 'DROP TABLE IF EXISTS "users" CASCADE')
+
     def test_table_and_index_creation(self):
         self.assertCreateTable(Person, [
             ('CREATE TABLE "person" ('

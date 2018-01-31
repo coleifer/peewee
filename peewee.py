@@ -4443,11 +4443,13 @@ class SchemaManager(object):
 
     def _drop_table(self, safe=True, **options):
         is_temp = options.pop('temporary', False)
-        ctx = self._create_context()
-        return (ctx
-                .literal('DROP TEMPORARY ' if is_temp else 'DROP ')
-                .literal('TABLE IF EXISTS ' if safe else 'TABLE ')
-                .sql(self.model))
+        ctx = (self._create_context()
+               .literal('DROP TEMPORARY ' if is_temp else 'DROP ')
+               .literal('TABLE IF EXISTS ' if safe else 'TABLE ')
+               .sql(self.model))
+        if options.get('cascade'):
+            ctx = ctx.literal(' CASCADE')
+        return ctx
 
     def drop_table(self, safe=True, **options):
         self.database.execute(self._drop_table(safe=safe), **options)
