@@ -5,6 +5,17 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.0.7
+
+* Add `select_extend()` method to extend existing SELECT-ion. [Doc](http://docs.peewee-orm.com/en/latest/peewee/api.html#Select.select_extend).
+* Accept `set()` as iterable value type, fixes #1445
+* Add test for model/field inheritance and fix bug relating to recursion error
+  when inheriting foreign-key field. Fixes #1448.
+* Fix regression where consecutive calls to `ModelSelect.select()` with no
+  parameters resulted in an empty selection. Fixes #1438.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.0.6...3.0.7)
+
 ## 3.0.6
 
 Add constraints for ON UPDATE/ON DELETE to foreign-key constraint - #1443.
