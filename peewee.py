@@ -4825,6 +4825,8 @@ class ModelBase(type):
                 if k in attrs: continue
 
                 if isinstance(v, FieldAccessor) and not v.field.primary_key:
+                    if isinstance(v.field, ForeignKeyField):
+                        v.field.backref = None
                     attrs[k] = deepcopy(v.field)
 
         sopts = meta_options.pop('schema_options', None) or {}

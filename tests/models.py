@@ -1261,6 +1261,9 @@ class TestFieldInheritance(BaseTestCase):
         self.assertEqual(Photo._meta.refs, {Photo.category: Category})
         self.assertEqual(Note._meta.refs, {Note.category: Category})
 
+        self.assertEqual(Photo.category.backref, 'photo_set')
+        self.assertEqual(Note.category.backref, 'note_set')
+
 
 class TestMetaInheritance(BaseTestCase):
     def test_table_name(self):
