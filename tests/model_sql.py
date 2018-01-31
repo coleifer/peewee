@@ -32,6 +32,24 @@ class TestModelSQL(ModelDatabaseTestCase):
             '("t1"."last" = ?) AND '
             '("t1"."id" < ?))'), ['Leifer', 4])
 
+    def test_reselect(self):
+        sql = 'SELECT "t1"."name", "t1"."parent_id" FROM "category" AS "t1"'
+
+        query = Category.select()
+        self.assertSQL(query, sql, [])
+
+        query2 = query.select()
+        self.assertSQL(query2, sql, [])
+
+        query = Category.select(Category.name, Category.parent)
+        self.assertSQL(query, sql, [])
+
+        query2 = query.select()
+        self.assertSQL(query2, 'SELECT  FROM "category" AS "t1"', [])
+
+        query = query2.select(Category.name)
+        self.assertSQL(query, 'SELECT "t1"."name" FROM "category" AS "t1"', [])
+
     def test_where_coerce(self):
         query = Person.select(Person.last).where(Person.id == '1337')
         self.assertSQL(query, (

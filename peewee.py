@@ -5452,6 +5452,11 @@ class ModelSelect(BaseModelSelect, Select):
                 fields.append(fm)
         super(ModelSelect, self).__init__([model], fields)
 
+    def select(self, *fields):
+        if fields or not self._is_default:
+            return super(ModelSelect, self).select(*fields)
+        return self
+
     def switch(self, ctx=None):
         self._join_ctx = ctx
         return self
@@ -5460,7 +5465,6 @@ class ModelSelect(BaseModelSelect, Select):
     def objects(self, constructor=None):
         self._row_type = ROW.CONSTRUCTOR
         self._constructor = self.model if constructor is None else constructor
-        return self
 
     def _get_model(self, src):
         if is_model(src):
