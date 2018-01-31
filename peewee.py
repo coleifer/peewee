@@ -4121,6 +4121,10 @@ class ForeignKeyField(Field):
             if self.backref not in '!+':
                 setattr(self.rel_model, self.backref, BackrefAccessor(self))
 
+    def reset_backref(self):
+        if self.backref and not callable(self.backref):
+            self.backref = None
+
     def foreign_key_constraint(self):
         parts = [
             SQL('FOREIGN KEY'),
@@ -4819,7 +4823,7 @@ class ModelBase(type):
             if parent_pk is None:
                 parent_pk = deepcopy(base_meta.primary_key)
                 if isinstance(parent_pk, ForeignKeyField):
-                    parent_pk.backref = None
+                    parent_pk.reset_backref()
             all_inheritable = cls.inheritable | base_meta._additional_keys
             for k in base_meta.__dict__:
                 if k in all_inheritable and k not in meta_options:
@@ -4830,7 +4834,7 @@ class ModelBase(type):
 
                 if isinstance(v, FieldAccessor) and not v.field.primary_key:
                     if isinstance(v.field, ForeignKeyField):
-                        v.field.backref = None
+                        v.field.reset_backref()
                     attrs[k] = deepcopy(v.field)
 
         sopts = meta_options.pop('schema_options', None) or {}
