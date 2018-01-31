@@ -5,6 +5,13 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.0.8
+
+* Add support for passing `cascade=True` when dropping tables. Fixes #1449.
+* Fix issues with backrefs and inherited foreign-keys. Fixes #1448.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.0.7...3.0.8)
+
 ## 3.0.7
 
 * Add `select_extend()` method to extend existing SELECT-ion. [Doc](http://docs.peewee-orm.com/en/latest/peewee/api.html#Select.select_extend).
