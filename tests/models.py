@@ -1257,6 +1257,7 @@ class TestFieldInheritance(BaseTestCase):
         self.assertEqual(Photo._meta.refs, {Photo.category: Category})
         self.assertEqual(Note._meta.refs, {Note.category: Category})
 
+        self.assertEqual(BasePost.category.backref, 'basepost_set')
         self.assertEqual(Photo.category.backref, 'photo_set')
         self.assertEqual(Note.category.backref, 'note_set')
 
@@ -1277,6 +1278,7 @@ class TestFieldInheritance(BaseTestCase):
             User.account: User,
             BaseUser.account: BaseUser})
 
+        self.assertEqual(BaseUser.account.backref, 'baseuser_set')
         self.assertEqual(User.account.backref, 'user_set')
         self.assertEqual(Admin.account.backref, 'admin_set')
         self.assertTrue(Account.user_set.model is User)
@@ -1297,6 +1299,38 @@ class TestFieldInheritance(BaseTestCase):
             '"account_id" INTEGER NOT NULL PRIMARY KEY, '
             '"role" TEXT NOT NULL, '
             'FOREIGN KEY ("account_id") REFERENCES "account" ("id"))'), [])
+
+    def test_backref_inheritance(self):
+        class Category(TestModel): pass
+        def backref(fk_field):
+            return '%ss' % fk_field.model._meta.name
+        class BasePost(TestModel):
+            category = ForeignKeyField(Category, backref=backref)
+        class Note(BasePost): pass
+        class Photo(BasePost): pass
+
+        self.assertEqual(Category._meta.backrefs, {
+            BasePost.category: BasePost,
+            Note.category: Note,
+            Photo.category: Photo})
+        self.assertEqual(BasePost.category.backref, 'baseposts')
+        self.assertEqual(Note.category.backref, 'notes')
+        self.assertEqual(Photo.category.backref, 'photos')
+        self.assertTrue(Category.baseposts.model is BasePost)
+        self.assertTrue(Category.notes.model is Note)
+        self.assertTrue(Category.photos.model is Photo)
+
+        class BaseItem(TestModel):
+            category = ForeignKeyField(Category, backref='items')
+        class ItemA(BaseItem): pass
+        class ItemB(BaseItem): pass
+
+        self.assertEqual(BaseItem.category.backref, 'items')
+        self.assertEqual(ItemA.category.backref, 'itema_set')
+        self.assertEqual(ItemB.category.backref, 'itemb_set')
+        self.assertTrue(Category.items.model is BaseItem)
+        self.assertTrue(Category.itema_set.model is ItemA)
+        self.assertTrue(Category.itemb_set.model is ItemB)
 
 
 class TestMetaInheritance(BaseTestCase):

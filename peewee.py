@@ -4052,7 +4052,8 @@ class ForeignKeyField(Field):
 
         self.rel_model = model
         self.rel_field = field
-        self.backref = backref
+        self.declared_backref = backref
+        self.backref = None
         self.on_delete = on_delete
         self.on_update = on_update
         self.deferred = _deferred
@@ -4110,20 +4111,21 @@ class ForeignKeyField(Field):
         elif self.rel_field is None:
             self.rel_field = self.rel_model._meta.primary_key
 
-        if callable(self.backref):
-            self.backref = self.backref(self)
+        # Bind field before assigning backref, so field is bound when
+        # calling declared_backref() (if callable).
+        super(ForeignKeyField, self).bind(model, name, set_attribute)
+
+        if callable(self.declared_backref):
+            self.backref = self.declared_backref(self)
+        else:
+            self.backref, self.declared_backref = self.declared_backref, None
         if not self.backref:
             self.backref = '%s_set' % model._meta.name
 
-        super(ForeignKeyField, self).bind(model, name, set_attribute)
         if set_attribute:
             setattr(model, self.object_id_name, ObjectIdAccessor(self))
             if self.backref not in '!+':
                 setattr(self.rel_model, self.backref, BackrefAccessor(self))
-
-    def reset_backref(self):
-        if self.backref and not callable(self.backref):
-            self.backref = None
 
     def foreign_key_constraint(self):
         parts = [
@@ -4822,8 +4824,6 @@ class ModelBase(type):
             base_meta = b._meta
             if parent_pk is None:
                 parent_pk = deepcopy(base_meta.primary_key)
-                if isinstance(parent_pk, ForeignKeyField):
-                    parent_pk.reset_backref()
             all_inheritable = cls.inheritable | base_meta._additional_keys
             for k in base_meta.__dict__:
                 if k in all_inheritable and k not in meta_options:
@@ -4833,8 +4833,6 @@ class ModelBase(type):
                 if k in attrs: continue
 
                 if isinstance(v, FieldAccessor) and not v.field.primary_key:
-                    if isinstance(v.field, ForeignKeyField):
-                        v.field.reset_backref()
                     attrs[k] = deepcopy(v.field)
 
         sopts = meta_options.pop('schema_options', None) or {}
