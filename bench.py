@@ -29,7 +29,7 @@ def timed(fn):
             start = time.time()
             fn(*args, **kwargs)
             times.append(time.time() - start)
-        print fn.__name__, round(sum(times) / N, 3)
+        print(fn.__name__, round(sum(times) / N, 3))
     return inner
 
 def populate_register(n):
