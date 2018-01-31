@@ -4135,6 +4135,9 @@ class ForeignKeyField(Field):
         return NodeList(parts)
 
     def __getattr__(self, attr):
+        if attr.startswith('__'):
+            # Prevent recursion error when deep-copying.
+            raise AttributeError('Cannot look-up non-existant "__" methods.')
         if attr in self.rel_model._meta.fields:
             return self.rel_model._meta.fields[attr]
         raise AttributeError('%r has no attribute %s, nor is it a valid field '

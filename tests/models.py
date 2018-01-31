@@ -1210,6 +1210,57 @@ class TestFieldInheritance(BaseTestCase):
 
         self.assertTrue(id(Photo.id) != id(Note.id))
 
+    def test_foreign_key_field_inheritance(self):
+        db = get_in_memory_db()
+
+        class BaseModel(Model):
+            class Meta:
+                database = db
+
+        class Category(BaseModel):
+            name = TextField()
+
+        class BasePost(BaseModel):
+            category = ForeignKeyField(Category)
+            timestamp = TimestampField()
+
+        class Photo(BasePost):
+            image = TextField()
+
+        class Note(BasePost):
+            content = TextField()
+
+        self.assertEqual(BasePost._meta.sorted_field_names,
+                         ['id', 'category', 'timestamp'])
+        self.assertEqual(BasePost._meta.sorted_fields, [
+            BasePost.id,
+            BasePost.category,
+            BasePost.timestamp])
+
+        self.assertEqual(Photo._meta.sorted_field_names,
+                         ['id', 'category', 'timestamp', 'image'])
+        self.assertEqual(Photo._meta.sorted_fields, [
+            Photo.id,
+            Photo.category,
+            Photo.timestamp,
+            Photo.image])
+
+        self.assertEqual(Note._meta.sorted_field_names,
+                         ['id', 'category', 'timestamp', 'content'])
+        self.assertEqual(Note._meta.sorted_fields, [
+            Note.id,
+            Note.category,
+            Note.timestamp,
+            Note.content])
+
+        self.assertEqual(Category._meta.backrefs, {
+            BasePost.category: BasePost,
+            Photo.category: Photo,
+            Note.category: Note})
+        self.assertEqual(BasePost._meta.refs, {BasePost.category: Category})
+        self.assertEqual(Photo._meta.refs, {Photo.category: Category})
+        self.assertEqual(Note._meta.refs, {Note.category: Category})
+
 
 class TestMetaInheritance(BaseTestCase):
     def test_table_name(self):
