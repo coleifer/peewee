@@ -66,6 +66,20 @@ class TestModelSQL(ModelDatabaseTestCase):
             'SELECT "t2"."id" FROM "users" AS "t2" '
             'WHERE ("t2"."username" IN (?, ?))))'), ['foo', 'bar'])
 
+    def test_value_flattening(self):
+        sql = ('SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
+               'WHERE ("t1"."username" IN (?, ?))')
+        expected = (sql, ['foo', 'bar'])
+
+        users = User.select().where(User.username.in_(['foo', 'bar']))
+        self.assertSQL(users, *expected)
+
+        users = User.select().where(User.username.in_(('foo', 'bar')))
+        self.assertSQL(users, *expected)
+
+        users = User.select().where(User.username.in_(set(['foo', 'bar'])))
+        self.assertSQL(users, *expected)
+
     def test_join_ctx(self):
         query = Tweet.select(Tweet.id).join(Favorite).switch(Tweet).join(User)
         self.assertSQL(query, (
