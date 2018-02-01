@@ -5,6 +5,14 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.0.9
+
+* Add deprecation notice if passing `autocommit` as keyword argument to the
+  `Database` initializer. Refs #1452.
+* Add `JSONPath` and "J" helpers to sqlite extension.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.0.8...3.0.9)
+
 ## 3.0.8
 
 * Add support for passing `cascade=True` when dropping tables. Fixes #1449.
