@@ -2354,7 +2354,7 @@ class Database(_callable_context_manager):
     sequences = False
 
     def __init__(self, database, thread_safe=True, autorollback=False,
-                 field_types=None, operations=None, **kwargs):
+                 field_types=None, operations=None, autocommit=None, **kwargs):
         self._field_types = merge_dict(FIELD, self.field_types)
         self._operations = merge_dict(OP, self.operations)
         if field_types:
@@ -2370,6 +2370,16 @@ class Database(_callable_context_manager):
         else:
             self._state = _ConnectionState()
             self._lock = _NoopLock()
+
+        if autocommit is not None:
+            __deprecated__('Peewee no longer uses the "autocommit" option, as '
+                           'the semantics now require it to always be True. '
+                           'Because some database-drivers also use the '
+                           '"autocommit" parameter, you are receiving a '
+                           'warning so you may update your code and remove '
+                           'the parameter, as in the future, specifying '
+                           'autocommit could impact the behavior of the '
+                           'database driver you are using.')
 
         self.connect_params = {}
         self.init(database, **kwargs)
