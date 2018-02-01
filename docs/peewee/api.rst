@@ -382,6 +382,32 @@ Database
         Create a context-manager that binds (associates) the given models with
         the current database for the duration of the wrapped block.
 
+        Example:
+
+        .. code-block:: python
+
+            MODELS = (User, Account, Note)
+
+            # Bind the given models to the db for the duration of wrapped block.
+            def use_test_database(fn):
+                @wraps(fn)
+                def inner(self):
+                    with test_db.bind(MODELS):
+                        test_db.create_tables(MODELS)
+                        try:
+                            fn(self)
+                        finally:
+                            test_db.drop_tables(MODELS)
+                return inner
+
+
+            class TestSomething(TestCase):
+                @use_test_database
+                def test_something(self):
+                    # ... models are bound to test database ...
+                    pass
+
+
 .. py:class:: SqliteDatabase(database[, pragmas=None[, timeout=5[, **kwargs]]])
 
     :param list pragmas: A list of 2-tuples containing pragma key and value to
