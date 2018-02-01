@@ -113,6 +113,10 @@ class APIData(TestModel):
     value = TextField()
 
 
+class Metadata(TestModel):
+    data = JSONField()
+
+
 class Values(TestModel):
     klass = IntegerField()
     value = FloatField()
@@ -499,6 +503,56 @@ class TestJSONField(ModelTestCase):
             'http://charlesleifer.com/blog/my-list-of-python-and-sqlite-resources/',
             'http://charlesleifer.com/blog/using-sqlite4-s-lsm-storage-engine-as-a-stand-alone-nosql-database-with-python/',
         ])
+
+    test_metadata = [
+        {'filename': 'peewee.py', 'size': 200000, 'mimetype': 'text/python',
+         'tags': ['peewee', 'main', 'python'],
+         'metadata': {'modified': '2018-02-01 13:37:00', 'perms': 'rw'}},
+        {'filename': 'runtests.py', 'size': 2300, 'mimetype': 'text/python',
+         'tags': ['tests', 'peewee', 'python'],
+         'metadata': {'modified': '2018-01-02 00:00:00', 'perms': 'rwx'}},
+        {'filename': 'playhouse/sqlite_ext.py', 'size': 41000,
+         'mimetype': 'text/python', 'tags': ['sqlite', 'peewee', 'python'],
+         'metadata': {'modified': '2018-02-01 14:01:00', 'perms': 'rw'}},
+    ]
+
+    @requires_models(Metadata)
+    def test_json_path(self):
+        with self.database.atomic():
+            for metadata in self.test_metadata:
+                Metadata.create(data=metadata)
+
+        query = (Metadata
+                 .select(Metadata.data.extract(J['tags'][0]).alias('tag'),
+                         Metadata.data[J['filename']].alias('filename'),
+                         Metadata.data[J['metadata']['perms']].alias('perms'))
+                 .order_by(fn.json_extract(Metadata.data, J['filename']))
+                 .namedtuples())
+        self.assertSQL(query, (
+            'SELECT json_extract("t1"."data", ?) AS "tag", '
+            'json_extract("t1"."data", ?) AS "filename", '
+            'json_extract("t1"."data", ?) AS "perms" '
+            'FROM "metadata" AS "t1" '
+            'ORDER BY json_extract("t1"."data", ?)'),
+            ['$.tags[0]', '$.filename', '$.metadata.perms', '$.filename'])
+        accum = [(row.filename, row.tag, row.perms) for row in query]
+        self.assertEqual(accum, [
+            ('peewee.py', 'peewee', 'rw'),
+            ('playhouse/sqlite_ext.py', 'sqlite', 'rw'),
+            ('runtests.py', 'tests', 'rwx')])
+
+        n = (Metadata
+             .update(data=Metadata.data.set(
+                 J['metadata']['modified'], '2018-02-01 15:00:00',
+                 J['metadata']['misc'], 1337))
+             .where(Metadata.data[J['tags'][0]] != 'tests')
+             .execute())
+        self.assertEqual(n, 2)
+
+        peewee = Metadata.get(Metadata.data[J['filename']] == 'peewee.py')
+        self.assertEqual(peewee.data['metadata']['modified'],
+                         '2018-02-01 15:00:00')
+        self.assertEqual(peewee.data['metadata']['misc'], 1337)
 
 
 class TestSqliteExtensions(BaseTestCase):

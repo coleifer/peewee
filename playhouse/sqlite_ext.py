@@ -72,36 +72,23 @@ class AutoIncrementField(AutoField):
         return NodeList((node_list, SQL('AUTOINCREMENT')))
 
 
-class JSONPath(Function):
-    def __init__(self, field, path):
-        self.field = field
-        self._path = path
-        self.name = 'json_extract'
-        self.arguments = (self.field, self.sql_path)
-
-    @property
-    def path(self):
-        return ''.join(self._path)
-
-    @property
-    def sql_path(self):
-        path = self.path
-        if path[0] == '[':
-            path = '$%s' % path
-        else:
-            path = '$.%s' % path
-
-    def update_path(self, part):
-        new_path = list(self._path)
-        if isinstance(part, int):
-            new_path.append('[%s]' % part)
-        else:
-            new_path.append('.%s' % part)
-        return new_path
+class JSONPath(Node):
+    def __init__(self, path=None):
+        self._path = path or []
 
     def __getitem__(self, idx):
-        return JSONPath(self.field, self.update_path(idx))
+        path = list(self._path)
+        if isinstance(idx, int):
+            path.append('[%s]' % idx)
+        else:
+            path.append('.%s' % idx)
+        return JSONPath(path)
+    __getattr__ = __getitem__
 
+    def __sql__(self, ctx):
+        return ctx.sql(Value('$%s' % ''.join(self._path)))
+
+J = JSONPath()
 
 class JSONField(TextField):
     def python_value(self, value):
@@ -116,6 +103,8 @@ class JSONField(TextField):
             return json.dumps(value)
 
     def clean_path(self, path):
+        if isinstance(path, JSONPath):
+            return path
         if path.startswith('[') or not path:
             return '$%s' % path
         return '$.%s' % path
@@ -132,9 +121,9 @@ class JSONField(TextField):
         return fn.json_extract(self, *self.clean_paths(paths))
 
     def __getitem__(self, path):
-        if not isinstance(paths, tuple):
-            paths = (paths,)
-        return self.extract(*paths)
+        if not isinstance(path, tuple):
+            path = (path,)
+        return self.extract(*path)
 
     def _value_for_insertion(self, value):
         if isinstance(value, (list, tuple, dict)):
