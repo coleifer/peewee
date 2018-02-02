@@ -2088,9 +2088,6 @@ helpers for serializing models to dictionaries and vice-versa.
 
 .. py:function:: model_to_dict(model[, recurse=True[, backrefs=False[, only=None[, exclude=None[, extra_attrs=None[, fields_from_query=None[, max_depth=None[, manytomany=False]]]]]]]])
 
-    Convert a model instance (and optionally any related instances) to
-    a dictionary.
-
     :param bool recurse: Whether foreign-keys should be recursed.
     :param bool backrefs: Whether lists of related objects should be recursed.
     :param only: A list (or set) of field instances which should be included in the result dictionary.
@@ -2099,6 +2096,9 @@ helpers for serializing models to dictionaries and vice-versa.
     :param Select fields_from_query: The :py:class:`SelectQuery` that created this model instance. Only the fields and values explicitly selected by the query will be serialized.
     :param int max_depth: Maximum depth when recursing.
     :param bool manytomany: Process many-to-many fields.
+
+    Convert a model instance (and optionally any related instances) to
+    a dictionary.
 
     Examples:
 
@@ -2138,12 +2138,12 @@ helpers for serializing models to dictionaries and vice-versa.
 
 .. py:function:: dict_to_model(model_class, data[, ignore_unknown=False])
 
-    Convert a dictionary of data to a model instance, creating related
-    instances where appropriate.
-
     :param Model model_class: The model class to construct.
     :param dict data: A dictionary of data. Foreign keys can be included as nested dictionaries, and back-references as lists of dictionaries.
     :param bool ignore_unknown: Whether to allow unrecognized (non-field) attributes.
+
+    Convert a dictionary of data to a model instance, creating related
+    instances where appropriate.
 
     Examples:
 
@@ -2173,6 +2173,15 @@ helpers for serializing models to dictionaries and vice-versa.
         'note-1'
         >>> user.notes[0].user.username
         'charlie'
+
+
+.. py:function:: update_model_from_dict(instance, data[, ignore_unknown=False])
+
+    :param Model instance: The model instance to update.
+    :param dict data: A dictionary of data. Foreign keys can be included as nested dictionaries, and back-references as lists of dictionaries.
+    :param bool ignore_unknown: Whether to allow unrecognized (non-field) attributes.
+
+    Update a model instance with the given data dictionary.
 
 .. _signals:
 

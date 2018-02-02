@@ -126,9 +126,8 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
     return data
 
 
-def dict_to_model(model_class, data, ignore_unknown=False):
-    instance = model_class()
-    meta = model_class._meta
+def update_model_from_dict(instance, data, ignore_unknown=False):
+    meta = instance._meta
     backrefs = dict([(fk.backref, fk) for fk in meta.backrefs])
 
     for key, value in data.items():
@@ -143,7 +142,7 @@ def dict_to_model(model_class, data, ignore_unknown=False):
             continue
         else:
             raise AttributeError('Unrecognized attribute "%s" for model '
-                                 'class %s.' % (key, model_class))
+                                 'class %s.' % (key, type(instance)))
 
         is_foreign_key = isinstance(field, ForeignKeyField)
 
@@ -163,3 +162,7 @@ def dict_to_model(model_class, data, ignore_unknown=False):
             setattr(instance, field.name, value)
 
     return instance
+
+
+def dict_to_model(model_class, data, ignore_unknown=False):
+    return update_model_from_dict(model_class(), data, ignore_unknown)
