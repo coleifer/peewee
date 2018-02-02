@@ -1225,8 +1225,8 @@ class Function(ColumnBase):
             self._coerce = coerce
 
     def __getattr__(self, attr):
-        def decorator(*args):
-            return Function(attr, args)
+        def decorator(*args, coerce=True):
+            return Function(attr, args, coerce=coerce)
         return decorator
 
     def over(self, partition_by=None, order_by=None, start=None, end=None,
