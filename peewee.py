@@ -1163,8 +1163,12 @@ class Expression(ColumnBase):
             op_sql = self.op
 
         with ctx(**overrides):
-            if self.op == OP.IN and not Context().sql(self.rhs).query()[0]:
+            # Postgresql reports an error for IN/NOT IN (), so convert to
+            # the equivalent boolean expression.
+            if self.op == OP.IN and Context().parse(self.rhs)[0] == '()':
                 return ctx.literal('0 = 1')
+            elif self.op == OP.NOT_IN and Context().parse(self.rhs)[0] == '()':
+                return ctx.literal('1 = 1')
 
             return (ctx
                     .sql(self.lhs)
@@ -1357,7 +1361,7 @@ class NodeList(ColumnBase):
     def __sql__(self, ctx):
         n_nodes = len(self.nodes)
         if n_nodes == 0:
-            return ctx
+            return ctx.literal('()') if self.parens else ctx
         with ctx(parentheses=self.parens):
             for i in range(n_nodes - 1):
                 ctx.sql(self.nodes[i])

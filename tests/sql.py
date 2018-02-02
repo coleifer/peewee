@@ -296,6 +296,40 @@ class TestSelectQuery(BaseTestCase):
             'HAVING ("ct" > ?) '
             'ORDER BY "ct" DESC'), [1, 10])
 
+    def test_in_value_representation(self):
+        query = (User
+                 .select(User.c.id)
+                 .where(User.c.username.in_(['foo', 'bar', 'baz'])))
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "users" AS "t1" '
+            'WHERE ("t1"."username" IN (?, ?, ?))'), ['foo', 'bar', 'baz'])
+
+    def test_tuple_comparison(self):
+        name_dob = Tuple(Person.name, Person.dob)
+        query = (Person
+                 .select(Person.id)
+                 .where(name_dob == ('foo', '2017-01-01')))
+        expected = ('SELECT "t1"."id" FROM "person" AS "t1" '
+                    'WHERE (("t1"."name", "t1"."dob") = (?, ?))')
+        self.assertSQL(query, expected, ['foo', '2017-01-01'])
+
+        # Also works specifying rhs values as Tuple().
+        query = (Person
+                 .select(Person.id)
+                 .where(name_dob == Tuple('foo', '2017-01-01')))
+        self.assertSQL(query, expected, ['foo', '2017-01-01'])
+
+    def test_empty_in(self):
+        query = User.select(User.c.id).where(User.c.username.in_([]))
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "users" AS "t1" '
+            'WHERE (0 = 1)'), [])
+
+        query = User.select(User.c.id).where(User.c.username.not_in([]))
+        self.assertSQL(query, (
+            'SELECT "t1"."id" FROM "users" AS "t1" '
+            'WHERE (1 = 1)'), [])
+
 
 class TestInsertQuery(BaseTestCase):
     def test_insert_simple(self):
