@@ -147,10 +147,14 @@ def update_model_from_dict(instance, data, ignore_unknown=False):
         is_foreign_key = isinstance(field, ForeignKeyField)
 
         if not is_backref and is_foreign_key and isinstance(value, dict):
+            try:
+                rel_instance = instance.__rel__[field.name]
+            except KeyError:
+                rel_instance = field.rel_model()
             setattr(
                 instance,
                 field.name,
-                dict_to_model(field.rel_model, value, ignore_unknown))
+                update_model_from_dict(rel_instance, value, ignore_unknown))
         elif is_backref and isinstance(value, (list, tuple)):
             instances = [
                 dict_to_model(field.model, row_data, ignore_unknown)
