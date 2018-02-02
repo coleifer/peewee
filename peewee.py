@@ -5116,9 +5116,9 @@ class Model(with_metaclass(ModelBase, Node)):
         return new_data
 
     def _populate_unsaved_relations(self, field_dict):
-        for foreign_key in self._meta.refs:
+        for foreign_key_field in self._meta.refs:
+            foreign_key = foreign_key_field.name
             conditions = (
-                foreign_key in self._dirty and
                 foreign_key in field_dict and
                 field_dict[foreign_key] is None and
                 self.__rel__.get(foreign_key) is not None)
