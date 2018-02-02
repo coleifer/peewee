@@ -409,6 +409,7 @@ class TestModelAPIs(ModelTestCase):
 
         self.assertEqual([row.value for row in c1], [0, 1, 8, 9],
                          [row.__data__ for row in c1])
+        self.assertEqual(c1.count(), 4)
 
         q3 = Register.select().where(Register.value == 5)
         c2 = (c1.order_by() | q3).order_by(SQL('2'))
@@ -422,6 +423,7 @@ class TestModelAPIs(ModelTestCase):
             'WHERE ("t2"."value" = ?) ORDER BY 2'), [2, 7, 5])
 
         self.assertEqual([row.value for row in c2], [0, 1, 5, 8, 9])
+        self.assertEqual(c2.count(), 5)
 
     @requires_models(Category)
     def test_self_referential_fk(self):

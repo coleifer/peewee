@@ -1691,9 +1691,12 @@ class SelectBase(_HashableSource, Source, SelectQuery):
         clone = self.order_by().alias('_wrapped')
         if clear_limit:
             clone._limit = clone._offset = None
-        if clone._having is None and clone._windows is None and \
-           clone._distinct is None and clone._simple_distinct is not True:
-            clone = clone.select(SQL('1'))
+        try:
+            if clone._having is None and clone._windows is None and \
+               clone._distinct is None and clone._simple_distinct is not True:
+                clone = clone.select(SQL('1'))
+        except AttributeError:
+            pass
         return Select([clone], [fn.COUNT(SQL('1'))]).scalar(database)
 
     @database_required
