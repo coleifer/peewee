@@ -2742,9 +2742,9 @@ Connection pool
 ---------------
 
 The ``pool`` module contains a number of :py:class:`Database` classes that
-provide connection pooling for PostgreSQL and MySQL databases. The pool works
-by overriding the methods on the :py:class:`Database` class that open and close
-connections to the backend. The pool can specify a timeout after which
+provide connection pooling for PostgreSQL, MySQL and SQLite databases. The pool
+works by overriding the methods on the :py:class:`Database` class that open and
+close connections to the backend. The pool can specify a timeout after which
 connections are recycled, as well as an upper bound on the number of open
 connections.
 

@@ -739,6 +739,71 @@ The following pooled database classes are available:
 For an in-depth discussion of peewee's connection pool, see the :ref:`pool`
 section of the :ref:`playhouse` documentation.
 
+.. _testing:
+
+Testing Peewee Applications
+---------------------------
+
+When writing tests for an application that uses Peewee, it may be desirable to
+use a special database for tests. Another common practice is to run tests
+against a clean database, which means ensuring tables are empty at the start of
+each test.
+
+To bind your models to a database at run-time, you can use the following
+methods:
+
+* :py:meth:`Database.bind`, which returns a context-manager that will bind the
+  given models to the database instance for the duration of the wrapped block.
+* :py:meth:`Model.bind_ctx`, which likewise returns a context-manager that
+  binds the model (and optionally its dependencies) to the given database for
+  the duration of the wrapped block.
+* :py:meth:`Model.bind`, which is a one-time operation that binds the model
+  (and optionally its dependencies) to the given database.
+
+Depending on your use-case, one of these options may make more sense. For the
+examples below, I will use :py:meth:`Model.bind`.
+
+Example test-case setup:
+
+.. code-block:: python
+
+    # tests.py
+    import unittest
+    from my_app.models import EventLog, Relationship, Tweet, User
+
+    MODELS = [User, Tweet, EventLog, Relationship]
+
+    # use an in-memory SQLite for tests.
+    test_db = SqliteDatabase(':memory:')
+
+    class BaseTestCase(unittest.TestCase):
+        def setUp(self):
+            # Bind model classes to test db. Since we have a complete list of
+            # all models, we do not need to recursively bind dependencies.
+            for model in MODELS:
+                model.bind(test_db, bind_refs=False, bind_backrefs=False)
+
+            test_db.connect()
+            test_db.create_tables(MODELS)
+
+        def tearDown(self):
+            # Not strictly necessary since SQLite in-memory databases only live
+            # for the duration of the connection, and in the next step we close
+            # the connection...but a good practice all the same.
+            test_db.drop_tables(MODELS)
+
+            # Close connection to db.
+            test_db.close()
+
+            # If we wanted, we could re-bind the models to their original
+            # database here. But for tests this is probably not necessary.
+
+As an aside, and speaking from experience, I recommend testing your application
+using the same database backend you use in production, so as to avoid any
+potential compatibility issues.
+
+If you'd like to see some more examples of how to run tests using Peewee, check
+out Peewee's own `test-suite <https://github.com/coleifer/peewee/tree/master/tests>`_.
 
 Framework Integration
 ---------------------
