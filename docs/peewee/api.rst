@@ -3540,6 +3540,37 @@ Model
         searching dependencies of a model, i.e. things that would be orphaned
         in the event of a delete.
 
+    .. py:method:: __iter__()
+
+        :returns: a :py:class:`ModelSelect` for the given class.
+
+        Convenience function for iterating over all instances of a model.
+
+        Example:
+
+        .. code-block:: python
+
+            Setting.insert_many([
+                {'key': 'host', 'value': '192.168.1.2'},
+                {'key': 'port': 'value': '1337'},
+                {'key': 'user': 'value': 'nuggie'}]).execute()
+
+            # Load settings from db into dict.
+            settings = {setting.key: setting.value for setting in Setting}
+
+    .. py:method:: __len__()
+
+        :returns: Count of rows in table.
+
+        Example:
+
+        .. code-block:: python
+
+            n_accounts = len(Account)
+
+            # Is equivalent to:
+            n_accounts = Account.select().count()
+
 
 .. py:class:: ModelAlias(model[, alias=None])
 
