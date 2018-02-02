@@ -523,9 +523,9 @@ class TestJSONField(ModelTestCase):
                 Metadata.create(data=metadata)
 
         query = (Metadata
-                 .select(Metadata.data.extract(J['tags'][0]).alias('tag'),
-                         Metadata.data[J['filename']].alias('filename'),
-                         Metadata.data[J['metadata']['perms']].alias('perms'))
+                 .select(Metadata.data.extract(J.tags[0]).alias('tag'),
+                         Metadata.data[J.filename].alias('filename'),
+                         Metadata.data[J.metadata.perms].alias('perms'))
                  .order_by(fn.json_extract(Metadata.data, J['filename']))
                  .namedtuples())
         self.assertSQL(query, (
@@ -543,13 +543,13 @@ class TestJSONField(ModelTestCase):
 
         n = (Metadata
              .update(data=Metadata.data.set(
-                 J['metadata']['modified'], '2018-02-01 15:00:00',
+                 J.metadata.modified, '2018-02-01 15:00:00',
                  J['metadata']['misc'], 1337))
-             .where(Metadata.data[J['tags'][0]] != 'tests')
+             .where(Metadata.data[J.tags[0]] != 'tests')
              .execute())
         self.assertEqual(n, 2)
 
-        peewee = Metadata.get(Metadata.data[J['filename']] == 'peewee.py')
+        peewee = Metadata.get(Metadata.data[J.filename] == 'peewee.py')
         self.assertEqual(peewee.data['metadata']['modified'],
                          '2018-02-01 15:00:00')
         self.assertEqual(peewee.data['metadata']['misc'], 1337)

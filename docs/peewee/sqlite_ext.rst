@@ -280,9 +280,19 @@ APIs
     * ``path='metadata[0]'`` --> ``'$.metadata[0]'``
     * ``path='user.data.email'`` --> ``'$.user.data.email'``
 
+    Rather than specifying the paths as a string, you can also use the
+    :py:class:`JSONPath` helper (exposed as the ``J`` object):
+
+    * ``J`` --> ``'$'``
+    * ``J.tags`` --> ``'$.tags'``
+    * ``J[0][1].bar`` --> ``'$[0][1].bar'``
+    * ``J.metadata[0]`` --> ``'$.metadata[0]'``
+    * ``J.user.data.email`` --> ``'$.user.data.email'``
+    * ``J['1337']`` --> ``'$.1337'`` (key "1337" rather an array index)
+
     .. py:method:: length(*paths)
 
-        :param paths: Zero or more JSON paths.
+        :param JSONPath paths: Zero or more JSON paths.
 
         Returns the length of the JSON object stored, either in the column, or
         at one or more paths within the column data.
@@ -296,12 +306,12 @@ APIs
             query = (APIResponse
                      .select(
                        APIResponse,
-                       APIResponse.json_data.length('metadata.tags').alias('tag_count'))
+                       APIResponse.json_data.length(J.metadata.tags).alias('tag_count'))
                      .where(APIResponse.json_data['category'] == 'posts'))
 
     .. py:method:: extract(*paths)
 
-        :param paths: One or more JSON paths.
+        :param JSONPath paths: One or more JSON paths.
 
         Extracts the JSON objects at the given path(s) from the column data.
         For example if you have a complex JSON object and only need to work
@@ -318,9 +328,9 @@ APIs
             # Query for the "title" and "category" values stored in the
             # json_data column for APIResponses whose category is "posts".
             query = (APIResponse
-                     .select(APIResponse.json_data['title'].alias('title'),
-                             APIResponse.json_data['metadata.tags'].alias('tags'))
-                     .where(APIResponse.json_data['category'] == 'posts'))
+                     .select(APIResponse.json_data[J.title].alias('title'),
+                             APIResponse.json_data[J.metadata.tags].alias('tags'))
+                     .where(APIResponse.json_data[J.category] == 'posts'))
 
             for response in query:
                 print(response.title, response.tags)
@@ -333,8 +343,8 @@ APIs
     .. py:method:: insert(*pairs, **data)
 
         :param pairs: A flat list consisting of *key*, *value* pairs. E.g.,
-            k1, v1, k2, v2, k3, v3. The key may be a simple string or a JSON
-            path.
+            k1, v1, k2, v2, k3, v3. The key may be a simple string or a
+            :py:class:`JSONPath` instance.
         :param data: keyword arguments mapping paths to values to insert.
 
         Insert the values at the given keys (or paths) in the column data. If
@@ -351,14 +361,14 @@ APIs
             nrows = (APIResponse
                      .update(json_data=APIResponse.json_data.insert(
                         'metadata.new_key', 'new value'))
-                     .where(APIResponse.json_data['category'] == 'posts')
+                     .where(APIResponse.json_data[J.category] == 'posts')
                      .execute())
 
     .. py:method:: replace(*pairs, **data)
 
         :param pairs: A flat list consisting of *key*, *value* pairs. E.g.,
-            k1, v1, k2, v2, k3, v3. The key may be a simple string or a JSON
-            path.
+            k1, v1, k2, v2, k3, v3. The key may be a simple string or a
+            :py:class:`JSONPath` instance.
         :param data: keyword arguments mapping paths to values to replace.
 
         Replace the values at the given keys (or paths) in the column data. If
@@ -373,14 +383,14 @@ APIs
             nrows = (APIResponse
                      .update(json_data=APIResponse.json_data.replace(
                         'category', 'notes'))
-                     .where(APIResponse.json_data['category'] == 'posts')
+                     .where(APIResponse.json_data[J.category] == 'posts')
                      .execute())
 
     .. py:method:: set(*pairs, **data)
 
         :param pairs: A flat list consisting of *key*, *value* pairs. E.g.,
-            k1, v1, k2, v2, k3, v3. The key may be a simple string or a JSON
-            path.
+            k1, v1, k2, v2, k3, v3. The key may be a simple string or a
+            :py:class:`JSONPath` instance.
         :param data: keyword arguments mapping paths to values to set.
 
         Set the values at the given keys (or paths) in the column data. The
@@ -404,7 +414,7 @@ APIs
 
     .. py:method:: remove(*paths)
 
-        :param paths: One or more JSON paths.
+        :param JSONPath paths: One or more JSON paths.
 
         Remove the data at the given paths from the column data.
 
@@ -418,6 +428,13 @@ APIs
              .update(json_data=APIResponse.json_data.remove(
                 'metadata.key1',
                 'metadata.key2'))
+             .execute())
+
+             # Equivalent, using J:
+            (APIResponse
+             .update(json_data=APIResponse.json_data.remove(
+                J.metadata.key1,
+                J.metadata.key2))
              .execute())
 
     .. py:method:: update(data)
@@ -448,7 +465,7 @@ APIs
 
     .. py:method:: json_type([path=None])
 
-        :param path: A JSON path (optional).
+        :param JSONPath path: A JSON path (optional).
 
         Return a string identifying the type of value stored in the column (or
         at the given path).
@@ -511,6 +528,43 @@ APIs
 
         `SQLite documentation on json_tree <https://www.sqlite.org/json1.html#jeach>`_.
 
+.. py:class:: JSONPath([path=None])
+
+    :param list path: Components comprising the JSON path.
+
+    A convenient, Pythonic way of representing JSON paths for use with
+    :py:class:`JSONField`.
+
+    The ``JSONPath`` object implements ``__getitem__``, accumulating path
+    components, which it can turn into the corresponding json-path expression.
+
+    .. attention::
+        Rather than instantiating this class directly, use the ``J`` instance
+        to create JSON paths:
+
+        .. code-block:: python
+
+            from playhouse.sqlite_ext import J
+
+            class APIResponse(Model):
+                data = JSONField()
+
+            # Select the "title" and "metadata"."tags" paths from the data
+            # field, filtering on "category" is 'post'.
+            query = (APIResponse
+                     .select(APIResponse.data[J.title].alias('title'),
+                             APIResponse.data[J.metadata.tags].alias('tags'))
+                     .where(APIResponse.data[J.category] == 'post'))
+
+    For example (using the ``J`` mnemonic, as described above):
+
+    * J -> $  - root element lookup.
+    * J.category -> $.category
+    * J.metadata.tags[0] -> $.metadata.tags[0]
+    * J[0] -> $[0]  - Lookup the first element in an array.
+    * J['0'] -> $.0  - Here we would look up the key "0" rather than the first
+      element in an array.
+    * J['foo'] (same as J.foo) -> $.foo
 
 .. py:class:: SearchField([unindexed=False[, column_name=None]])
 
