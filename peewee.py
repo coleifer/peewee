@@ -4540,8 +4540,8 @@ class SchemaManager(object):
         self.create_table(safe, **table_options)
         self.create_indexes(safe=safe)
 
-    def drop_all(self, safe=True):
-        self.drop_table(safe)
+    def drop_all(self, safe=True, **options):
+        self.drop_table(safe, **options)
 
 
 class Metadata(object):
@@ -5242,11 +5242,11 @@ class Model(with_metaclass(ModelBase, Node)):
         cls._schema.create_all(safe, **options)
 
     @classmethod
-    def drop_table(cls, safe=True):
+    def drop_table(cls, safe=True, **options):
         if safe and not cls._meta.database.safe_drop_index \
            and not cls.table_exists():
             return
-        cls._schema.drop_all(safe)
+        cls._schema.drop_all(safe, **options)
 
     @classmethod
     def index(cls, *fields, **kwargs):
