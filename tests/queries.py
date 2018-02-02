@@ -113,3 +113,8 @@ class TestQueryExecution(DatabaseTestCase):
 
         query = query.where(Register.value >= 2)
         self.assertEqual(query.scalar(as_tuple=True), (15, 3, 5))
+
+    def test_empty_in_not_in(self):
+        self.assertEqual(User.select().where(User.id.in_([])).count(), 0)
+        self.assertEqual(User.select().where(User.id.not_in([])).count(),
+                         User.select().count())

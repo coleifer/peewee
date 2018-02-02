@@ -1357,7 +1357,10 @@ class NodeList(ColumnBase):
     def __sql__(self, ctx):
         n_nodes = len(self.nodes)
         if n_nodes == 0:
-            return ctx
+            if self.parens:
+                return ctx.literal('()')
+            else:
+                return ctx
         with ctx(parentheses=self.parens):
             for i in range(n_nodes - 1):
                 ctx.sql(self.nodes[i])
