@@ -240,6 +240,15 @@ class TestModelAPIs(ModelTestCase):
                               force_insert=True)
 
     @requires_models(User, Tweet)
+    def test_populate_unsaved_relations(self):
+        u = User(username='huey')
+        t = Tweet(user=u, content='meow')
+        u.save()
+        t.save()
+        t_db = Tweet.get(Tweet.content == 'meow')
+        self.assertEqual(t_db.user.username, 'huey')
+
+    @requires_models(User, Tweet)
     def test_model_select(self):
         query = (Tweet
                  .select(Tweet.content, User.username)
