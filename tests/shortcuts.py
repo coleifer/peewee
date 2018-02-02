@@ -369,6 +369,19 @@ class TestDictToModel(ModelTestCase):
         self.assertEqual(inst.username, 'peewee')
         self.assertEqual(inst.id, self.user.id)
 
+    def test_update_model_from_dict(self):
+        data = {'content': 'tweet', 'user': {'username': 'zaizee'}}
+        with self.assertQueryCount(0):
+            user = User(id=3, username='orig')
+            tweet = Tweet(id=4, content='orig', user=user)
+
+            obj = update_model_from_dict(tweet, data)
+
+        self.assertEqual(obj.id, 4)
+        self.assertEqual(obj.content, 'tweet')
+        self.assertEqual(obj.user.id, 3)
+        self.assertEqual(obj.user.username, 'zaizee')
+
     def test_related(self):
         data = {
             'id': 2,
