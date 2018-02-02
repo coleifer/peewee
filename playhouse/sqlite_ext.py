@@ -30,6 +30,7 @@ try:
         register_rank_functions,
         sqlite_get_db_status,
         sqlite_get_status,
+        TableFunction,
         ZeroBlob,
     )
     CYTHON_SQLITE_EXTENSIONS = True
