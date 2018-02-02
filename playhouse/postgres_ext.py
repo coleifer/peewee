@@ -160,10 +160,23 @@ class ArrayField(IndexedFieldMixin, Field):
 
     def db_value(self, value):
         if value is not None:
-            return list(value) if not isinstance(value, Node) else value
+            if isinstance(value, (list, Node)):
+                return value
+            return list(value)
 
     def __getitem__(self, value):
         return ObjectSlice.create(self, value)
+
+    def _e(op):
+        def inner(self, rhs):
+            return Expression(self, op, ArrayValue(self, rhs))
+        return inner
+    __eq__ = _e(OP.EQ)
+    __ne__ = _e(OP.NE)
+    __gt__ = _e(OP.GT)
+    __ge__ = _e(OP.GTE)
+    __lt__ = _e(OP.LT)
+    __le__ = _e(OP.LTE)
 
     def contains(self, *items):
         return Expression(self, ACONTAINS, ArrayValue(self, items))

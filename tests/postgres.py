@@ -227,6 +227,20 @@ class TestArrayField(ModelTestCase):
         self.assertEqual(am_db.tags, ['alpha', 'beta', 'gamma', 'delta'])
         self.assertEqual(am_db.ints, [[1, 2], [3, 4], [5, 6]])
 
+    def test_array_equality(self):
+        am1 = ArrayModel.create(tags=['t1'], ints=[[1, 2]])
+        am2 = ArrayModel.create(tags=['t2'], ints=[[3, 4]])
+
+        obj = ArrayModel.get(ArrayModel.tags == ['t1'])
+        self.assertEqual(obj.id, am1.id)
+        self.assertEqual(obj.tags, ['t1'])
+
+        obj = ArrayModel.get(ArrayModel.ints == [[3, 4]])
+        self.assertEqual(obj.id, am2.id)
+
+        obj = ArrayModel.get(ArrayModel.tags != ['t1'])
+        self.assertEqual(obj.id, am2.id)
+
     def test_array_db_value(self):
         am = ArrayModel.create(tags=('foo', 'bar'), ints=[])
         am_db = ArrayModel.get(ArrayModel.id == am.id)

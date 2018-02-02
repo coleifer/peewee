@@ -55,6 +55,7 @@ except ImportError:
 
 __version__ = '3.0.9'
 __all__ = [
+    'AsIs',
     'AutoField',
     'BareField',
     'BigBitField',
