@@ -5124,7 +5124,7 @@ class Model(with_metaclass(ModelBase, Node)):
                 self.__rel__.get(foreign_key) is not None)
             if conditions:
                 setattr(self, foreign_key, getattr(self, foreign_key))
-                field_dict[foreign_key] = self._data[foreign_key]
+                field_dict[foreign_key] = self.__data__[foreign_key]
 
     def save(self, force_insert=False, only=None):
         field_dict = self.__data__.copy()
