@@ -4918,6 +4918,11 @@ class ModelBase(type):
         else:
             return True
 
+    def __len__(self):
+        return self.select().count()
+    def __bool__(self): return True
+    __nonzero__ = __bool__  # Python 2.
+
 
 class _BoundModelsContext(_callable_context_manager):
     def __init__(self, models, database, bind_refs, bind_backrefs):

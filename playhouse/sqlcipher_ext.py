@@ -52,16 +52,14 @@ https://gist.github.com/thedod/11048875
 """
 import datetime
 import decimal
+import sys
 
 from peewee import *
 from playhouse.sqlite_ext import SqliteExtDatabase
-try:
+if sys.version_info[0] != 3:
     from pysqlcipher import dbapi2 as sqlcipher
-except ImportError:
-    try:
-        from pysqlcipher3 import dbapi2 as sqlcipher
-    except ImportError:
-        raise ImportError('Sqlcipher python bindings not found.')
+else:
+    from pysqlcipher3 import dbapi2 as sqlcipher
 
 sqlcipher.register_adapter(decimal.Decimal, str)
 sqlcipher.register_adapter(datetime.date, str)

@@ -141,6 +141,9 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual(Color.get_by_id('red').name, 'red')
         self.assertRaises(Color.DoesNotExist, Color.get_by_id, 'green')
 
+        self.assertEqual(Color['red'].name, 'red')
+        self.assertRaises(Color.DoesNotExist, lambda: Color['green'])
+
     @requires_models(User)
     def test_get_or_create(self):
         huey, created = User.get_or_create(username='huey')
@@ -491,6 +494,16 @@ class TestModelAPIs(ModelTestCase):
         query = User.noop()
         self.assertEqual(list(query), [])
 
+    @requires_models(User)
+    def test_iteration(self):
+        self.assertEqual(list(User), [])
+        self.assertEqual(len(User), 0)
+        self.assertTrue(User)
+
+        User.insert_many((['charlie'], ['huey']), [User.username]).execute()
+        self.assertEqual(sorted(u.username for u in User), ['charlie', 'huey'])
+        self.assertEqual(len(User), 2)
+        self.assertTrue(User)
 
 
 class TestRaw(ModelTestCase):
