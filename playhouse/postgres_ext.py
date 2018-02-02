@@ -164,9 +164,6 @@ class ArrayField(IndexedFieldMixin, Field):
                 return value
             return list(value)
 
-    def __hash__(self):
-        return super(ArrayField, self).__hash__()
-
     def __getitem__(self, value):
         return ObjectSlice.create(self, value)
 
@@ -180,6 +177,7 @@ class ArrayField(IndexedFieldMixin, Field):
     __ge__ = _e(OP.GTE)
     __lt__ = _e(OP.LT)
     __le__ = _e(OP.LTE)
+    __hash__ = Field.__hash__
 
     def contains(self, *items):
         return Expression(self, ACONTAINS, ArrayValue(self, items))
@@ -206,9 +204,7 @@ class DateTimeTZField(DateTimeField):
 
 class HStoreField(IndexedFieldMixin, Field):
     field_type = 'HSTORE'
-
-    def __hash__(self):
-        return super(HStoreField, self).__hash__()
+    __hash__ = Field.__hash__
 
     def __getitem__(self, key):
         return Expression(self, HKEY, Value(key))
@@ -281,9 +277,7 @@ def cast_jsonb(node):
 class BinaryJSONField(IndexedFieldMixin, JSONField):
     field_type = 'JSONB'
     default_index_type = 'GIN'
-
-    def __hash__(self):
-        return super(BinaryJSONField, self).__hash__()
+    __hash__ = Field.__hash__
 
     def contains(self, other):
         if isinstance(other, (list, dict)):
@@ -309,9 +303,7 @@ class BinaryJSONField(IndexedFieldMixin, JSONField):
 class TSVectorField(IndexedFieldMixin, TextField):
     field_type = 'TSVECTOR'
     default_index_type = 'GIN'
-
-    def __hash__(self):
-        return super(TSVectorField, self).__hash__()
+    __hash__ = Field.__hash__
 
     def match(self, query, language=None):
         params = (language, query) if language is not None else (query,)
