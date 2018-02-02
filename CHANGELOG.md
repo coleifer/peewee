@@ -5,6 +5,19 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.0.10
+
+* Fix `Database.drop_tables()` signature to support `cascade` argument - #1453.
+* Fix querying documentation for custom functions - #1454.
+* Added len() method to `ModelBase` for convenient counting.
+* Fix bug related to unsaved relation population (thanks @conqp) - #1459.
+* Fix count() on compound select - #1460.
+* Support `coerce` keyword argument with `fn.XXX()` - #1463.
+* Support updating existing model instance with dict_to_model-like API - #1456.
+* Fix equality tests with ArrayField - #1461.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.0.9...3.0.10)
+
 ## 3.0.9
 
 * Add deprecation notice if passing `autocommit` as keyword argument to the
