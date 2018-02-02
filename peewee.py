@@ -4092,7 +4092,7 @@ class ForeignKeyField(Field):
 
     def db_value(self, value):
         if isinstance(value, self.rel_model):
-            value = value._get_pk_value()
+            value = value.get_id()
         return self.rel_field.db_value(value)
 
     def python_value(self, value):
