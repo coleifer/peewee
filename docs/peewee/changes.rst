@@ -15,6 +15,7 @@ Database
 ^^^^^^^^
 
 * ``get_conn()`` has changed to :py:meth:`Database.connection`
+* ``get_cursor()`` has changed to :py:meth:`Database.cursor`
 * ``execution_context()`` is replaced by simply using the database instance as
   a context-manager.
 * For a connection context *without* a transaction, use
