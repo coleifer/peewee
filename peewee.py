@@ -3699,14 +3699,14 @@ class DecimalField(Field):
         if self.auto_round:
             exp = D(10) ** (-self.decimal_places)
             rounding = self.rounding
-            return D(str(value)).quantize(exp, rounding=rounding)
+            return D(text_type(value)).quantize(exp, rounding=rounding)
         return value
 
     def python_value(self, value):
         if value is not None:
             if isinstance(value, decimal.Decimal):
                 return value
-            return decimal.Decimal(str(value))
+            return decimal.Decimal(text_type(value))
 
 
 class _StringField(Field):
