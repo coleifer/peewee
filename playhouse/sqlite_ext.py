@@ -939,6 +939,8 @@ class SqliteExtDatabase(SqliteDatabase):
             else:
                 self.register_function(bm25, 'fts_bm25')
                 self.register_function(rank, 'fts_rank')
+                self.register_function(bm25, 'fts_bm25f')  # Fall back to bm25.
+                self.register_function(bm25, 'fts_lucene')
         if hash_functions:
             if not prefer_c:
                 raise ValueError('C extension required to register hash '
@@ -947,6 +949,8 @@ class SqliteExtDatabase(SqliteDatabase):
         if regexp_function:
             self.register_function(_sqlite_regexp, 'regexp', 2)
         if bloomfilter:
+            if not prefer_c:
+                raise ValueError('C extension required to use bloomfilter.')
             register_bloomfilter(self)
 
         self._c_extensions = prefer_c
