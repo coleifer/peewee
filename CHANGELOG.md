@@ -5,6 +5,18 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.0.11
+
+* Add note to changelog about `cursor()` method.
+* Add hash method to postgres indexedfield subclasses.
+* Add TableFunction to sqlite_ext module namespace.
+* Fix bug regarding NOT IN queries where the right-hand-side is an empty set.
+* Fallback implementations of bm25f and lucene search ranking algorithms.
+* Fixed DecimalField issue.
+* Fixed issue with BlobField when database is a Proxy object.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.0.10...3.0.11)
+
 ## 3.0.10
 
 * Fix `Database.drop_tables()` signature to support `cascade` argument - #1453.
