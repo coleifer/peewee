@@ -1,4 +1,5 @@
 import datetime
+import sqlite3
 from decimal import Decimal as D
 from decimal import ROUND_UP
 
@@ -6,6 +7,7 @@ from peewee import b_lit
 from peewee import bytes_type
 from peewee import *
 
+from .base import BaseTestCase
 from .base import db
 from .base import ModelTestCase
 from .base import TestModel
@@ -393,3 +395,16 @@ class TestBitFields(ModelTestCase):
                 self.assertTrue(b_db.data.is_set(x))
             else:
                 self.assertFalse(b_db.data.is_set(x))
+
+
+class TestBlobField(BaseTestCase):
+    def test_blob_on_proxy(self):
+        db = Proxy()
+        class BlobModel(Model):
+            data = BlobField()
+            class Meta:
+                database = db
+
+        db_obj = SqliteDatabase(':memory:')
+        db.initialize(db_obj)
+        self.assertTrue(BlobModel.data._constructor is sqlite3.Binary)

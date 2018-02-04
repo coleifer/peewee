@@ -3750,10 +3750,14 @@ class BlobField(Field):
     field_type = 'BLOB'
 
     def bind(self, model, name, set_attribute=True):
+        self._constructor = bytearray
         if model._meta.database:
-            self._constructor = model._meta.database.get_binary_type()
-        else:
-            self._constructor = bytearray
+            if isinstance(model._meta.database, Proxy):
+                def cb(db):
+                    self._constructor = db.get_binary_type()
+                model._meta.database.attach_callback(cb)
+            else:
+                self._constructor = model._meta.database.get_binary_type()
         return super(BlobField, self).bind(model, name, set_attribute)
 
     def db_value(self, value):
