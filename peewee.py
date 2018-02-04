@@ -5075,7 +5075,11 @@ class Model(with_metaclass(ModelBase, Node)):
 
     @classmethod
     def set_by_id(cls, key, value):
-        return cls.update(value).where(cls._meta.primary_key == key).execute()
+        if key is None:
+            return cls.insert(value).execute()
+        else:
+            return (cls.update(value)
+                    .where(cls._meta.primary_key == key).execute())
 
     @classmethod
     def delete_by_id(cls, pk):

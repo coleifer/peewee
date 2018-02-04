@@ -144,6 +144,22 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual(Color['red'].name, 'red')
         self.assertRaises(Color.DoesNotExist, lambda: Color['green'])
 
+    @requires_models(User, Color)
+    def test_get_set_item(self):
+        huey = self.add_user('huey')
+        huey_db = User[huey.id]
+        self.assertEqual(huey_db.username, 'huey')
+
+        User[huey.id] = {'username': 'huey-x'}
+        huey_db = User[huey.id]
+        self.assertEqual(huey_db.username, 'huey-x')
+        del User[huey.id]
+        self.assertEqual(len(User), 0)
+
+        # Allow creation by specifying None for key.
+        User[None] = {'username': 'zaizee'}
+        User.get(User.username == 'zaizee')
+
     @requires_models(User)
     def test_get_or_create(self):
         huey, created = User.get_or_create(username='huey')
@@ -515,6 +531,19 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual(sorted(u.username for u in User), ['charlie', 'huey'])
         self.assertEqual(len(User), 2)
         self.assertTrue(User)
+
+    @requires_models(User)
+    def test_iterator(self):
+        users = ['charlie', 'huey', 'zaizee']
+        with self.database.atomic():
+            for username in users:
+                User.create(username=username)
+
+        with self.assertQueryCount(1):
+            query = User.select().order_by(User.username).iterator()
+            self.assertEqual([u.username for u in query], users)
+
+            self.assertEqual(list(query), [])
 
 
 class TestRaw(ModelTestCase):
