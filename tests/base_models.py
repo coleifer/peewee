@@ -64,3 +64,13 @@ class Sample(TestModel):
 class SampleMeta(TestModel):
     sample = ForeignKeyField(Sample, backref='metadata')
     value = FloatField(default=0.0)
+
+
+class A(TestModel):
+    a = TextField()
+class B(TestModel):
+    a = ForeignKeyField(A, backref='bs')
+    b = TextField()
+class C(TestModel):
+    b = ForeignKeyField(B, backref='cs')
+    c = TextField()

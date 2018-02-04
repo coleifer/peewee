@@ -42,8 +42,10 @@ class TestModelAPIs(ModelTestCase):
         return User.create(username=username)
 
     def add_tweets(self, user, *tweets):
+        accum = []
         for tweet in tweets:
-            Tweet.create(user=user, content=tweet)
+            accum.append(Tweet.create(user=user, content=tweet))
+        return accum
 
     @requires_models(User, Tweet)
     def test_assertQueryCount(self):
@@ -292,6 +294,29 @@ class TestModelAPIs(ModelTestCase):
                 ('purr', 'huey'),
                 ('whine', 'mickey'),
                 ('woof', 'mickey')])
+
+    @requires_models(A, B, C)
+    def test_join_empty_intermediate_model(self):
+        a1 = A.create(a='a1')
+        a2 = A.create(a='a2')
+        b11 = B.create(a=a1, b='b11')
+        b12 = B.create(a=a1, b='b12')
+        b21 = B.create(a=a2, b='b21')
+        c111 = C.create(b=b11, c='c111')
+        c112 = C.create(b=b11, c='c112')
+        c211 = C.create(b=b21, c='c211')
+
+        query = (C
+                 .select(C, B.id, A.a)
+                 .join(B)
+                 .join(A)
+                 .order_by(C.c))
+        with self.assertQueryCount(1):
+            accum = [(c.c, c.b.a.a) for c in query]
+        self.assertEqual(accum, [
+            ('c111', 'a1'),
+            ('c112', 'a1'),
+            ('c211', 'a2')])
 
     @requires_models(User)
     def test_peek(self):
