@@ -282,3 +282,11 @@ try:
         pass
 except ImportError:
     PooledSqliteExtDatabase = None
+
+try:
+    from playhouse.sqlite_ext import CSqliteExtDatabase
+
+    class PooledCSqliteExtDatabase(_PooledSqliteDatabase, CSqliteExtDatabase):
+        pass
+except ImportError:
+    PooledCSqliteExtDatabase = None
