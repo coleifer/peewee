@@ -50,9 +50,11 @@ Fields
 * ``model_class`` attribute has changed to ``model``
 * :py:class:`PrimaryKeyField` has been renamed to :py:class:`AutoField`
 * :py:class:`ForeignKeyField` constructor has the following changes:
+
   * ``rel_model`` has changed to ``model``
   * ``to_field`` has changed to ``field``
   * ``related_name`` has changed to ``backref``
+  
 * :py:class:`ManyToManyField` is now included in the main ``peewee.py`` module
 * Removed the extension fields ``PasswordField``, ``PickledField`` and
   ``AESEncryptedField``.
@@ -65,8 +67,8 @@ been removed.
 
 Additionally, :py:meth:`Select.aggregate_rows` has been removed. This helper
 was used to de-duplicate left-join queries to give the appearance of efficiency
-when iterating a model and it's relations. In practice, the complexity of the
-code and it's somewhat limited usefulness convinced me to scrap it. You can
+when iterating a model and its relations. In practice, the complexity of the
+code and its somewhat limited usefulness convinced me to scrap it. You can
 instead use :py:func:`prefetch` to achieve the same result.
 
 * :py:class:`Select` query attribute ``_select`` has changed to ``_returning``
