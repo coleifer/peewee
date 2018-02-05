@@ -318,6 +318,18 @@ class TestModelAPIs(ModelTestCase):
             ('c112', 'a1'),
             ('c211', 'a2')])
 
+        query = (C
+                 .select(C, B, A)
+                 .join(B)
+                 .join(A)
+                 .order_by(C.c))
+        with self.assertQueryCount(1):
+            accum = [(c.c, c.b.b, c.b.a.a) for c in query]
+        self.assertEqual(accum, [
+            ('c111', 'b11', 'a1'),
+            ('c112', 'b11', 'a1'),
+            ('c211', 'b21', 'a2')])
+
     @requires_models(User)
     def test_peek(self):
         for username in ('huey', 'mickey', 'zaizee'):
