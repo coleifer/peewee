@@ -900,6 +900,30 @@ class TestFullTextSearchCython(TestFullTextSearch):
             (5, -12.01),
             (3, -11.16)])
 
+    def test_lucene(self):
+        for message in self.messages:
+            Document.create(message=message)
+
+        def assertResults(term, expected, sort_cleaned=False):
+            query = Document.search_lucene(term, with_score=True)
+            cleaned = [
+                (round(doc.score, 3), ' '.join(doc.message.split()[:2]))
+                for doc in query]
+            if sort_cleaned:
+                cleaned = sorted(cleaned)
+            self.assertEqual(cleaned, expected)
+
+        assertResults('things', [
+            (-0.166, 'Faith has'),
+            (-0.137, 'Be faithful')])
+
+        assertResults('faith', [
+            (0.036, 'All who'),
+            (0.042, 'Faith has'),
+            (0.047, 'A faith'),
+            (0.049, 'Be faithful'),
+            (0.049, 'Faith consists')], sort_cleaned=True)
+
 
 @skip_case_unless(CYTHON_EXTENSION)
 class TestMurmurHash(ModelTestCase):
