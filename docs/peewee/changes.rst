@@ -122,6 +122,11 @@ like this:
        arguments,
        options)
 
+Signals Extension
+^^^^^^^^^^^^^^^^^
+
+The ``post_init`` signal has been removed.
+
 New stuff
 ---------
 

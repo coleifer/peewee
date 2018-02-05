@@ -2234,9 +2234,6 @@ The following signals are provided:
     is used.
 ``pre_init``
     Called when a model class is first instantiated
-``post_init``
-    Called after a model class has been instantiated and the fields have been populated,
-    for example when being selected as part of a database query.
 
 
 Connecting handlers
