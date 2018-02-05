@@ -13,6 +13,11 @@ relational database:
   *DELETE* queries.
 * :py:meth:`Model.select`, for executing *SELECT* queries.
 
+.. note::
+    There is also a large collection of example queries taken from the
+    `Postgresql Exercises <https://pgexercises.com/>`_ website. Examples are
+    listed on the :ref:`query examples <query_examples>` document.
+
 Creating a new record
 ---------------------
 
