@@ -386,6 +386,16 @@ class TestInsertQuery(BaseTestCase):
             'INSERT INTO "person" ("name") '
             'SELECT "foo"."username" FROM "foo"'), [])
 
+    def test_insert_single_value_query(self):
+        query = Person.select(Person.id).where(Person.name == 'huey')
+        insert = Note.insert({
+            Note.person_id: query,
+            Note.content: 'hello'})
+        self.assertSQL(insert, (
+            'INSERT INTO "note" ("content", "person_id") VALUES (?, '
+            '(SELECT "t1"."id" FROM "person" AS "t1" '
+            'WHERE ("t1"."name" = ?)))'), ['hello', 'huey'])
+
     def test_insert_returning(self):
         query = (Person
                  .insert({

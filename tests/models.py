@@ -444,6 +444,15 @@ class TestModelAPIs(ModelTestCase):
             ('huey', 'hiss'),
             ('mickey', 'grr')])
 
+    @requires_models(User, Tweet)
+    def test_insert_query_value(self):
+        huey = self.add_user('huey')
+        query = User.select(User.id).where(User.username == 'huey')
+        tid = Tweet.insert(content='meow', user=query).execute()
+        tweet = Tweet[tid]
+        self.assertEqual(tweet.user.id, huey.id)
+        self.assertEqual(tweet.user.username, 'huey')
+
     @requires_models(Register)
     @skip_if(IS_SQLITE and sqlite3.sqlite_version_info < (3, 9))
     def test_compound_select(self):

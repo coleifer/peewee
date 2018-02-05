@@ -2095,7 +2095,8 @@ class Insert(_WriteQuery):
 
             all_values.append(EnclosedNodeList(values))
 
-        return ctx.sql(CommaNodeList(all_values))
+        with ctx.scope_values(subquery=True):
+            return ctx.sql(CommaNodeList(all_values))
 
     def _query_insert(self, ctx):
         return (ctx
