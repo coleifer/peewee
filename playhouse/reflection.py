@@ -208,20 +208,24 @@ class PostgresqlMetadata(Metadata):
 
         if postgres_ext is not None:
             # Attempt to add types like HStore and JSON.
-            cursor = self.execute('select oid, typname from pg_type;')
+            cursor = self.execute('select oid, typname, format_type(oid, NULL)'
+                                  ' from pg_type;')
             results = cursor.fetchall()
 
-            for oid, typname in results:
-                if 'json' in typname:
+            for oid, typname, formatted_type in results:
+                if typname == 'json':
                     self.column_map[oid] = postgres_ext.JSONField
-                elif 'hstore' in typname:
+                elif typname == 'jsonb':
+                    self.column_map[oid] = postgres_ext.BinaryJSONField
+                elif typname == 'hstore':
                     self.column_map[oid] = postgres_ext.HStoreField
-                elif 'tsvector' in typname:
+                elif typname == 'tsvector':
                     self.column_map[oid] = postgres_ext.TSVectorField
 
     def get_column_types(self, table, schema):
         column_types = {}
         extension_types = set((
+            postgres_ext.BinaryJSONField,
             postgres_ext.JSONField,
             postgres_ext.TSVectorField,
             postgres_ext.HStoreField)) if postgres_ext is not None else set()
