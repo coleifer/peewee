@@ -5,6 +5,16 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.0.12
+
+* Fix queries of the form INSERT ... VALUES (SELECT...) so that sub-select is
+  wrapped in parentheses.
+* Improve model-graph resolution when selecting from multiple tables that are
+  joined by foreign-keys, and an intermediate table is omitted from selection.
+* Docs update to reflect deletion of post_init signal.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.0.11...3.0.12)
+
 ## 3.0.11
 
 * Add note to changelog about `cursor()` method.

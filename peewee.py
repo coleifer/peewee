@@ -53,7 +53,7 @@ except ImportError:
         mysql = None
 
 
-__version__ = '3.0.11'
+__version__ = '3.0.12'
 __all__ = [
     'AsIs',
     'AutoField',
