@@ -307,7 +307,7 @@ class TestModelAPIs(ModelTestCase):
         c211 = C.create(b=b21, c='c211')
 
         query = (C
-                 .select(C, B.id, A.a)
+                 .select(C, A.a)
                  .join(B)
                  .join(A)
                  .order_by(C.c))

@@ -5946,8 +5946,10 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
         select, columns = self.select, self.columns
 
         self.key_to_constructor = {self.model: self.model}
+        self.src_is_dest = {}
         self.src_to_dest = []
         accum = deque(self.from_list)
+        dests = set()
         while accum:
             curr = accum.popleft()
             if isinstance(curr, Join):
@@ -5963,7 +5965,12 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
                     self.key_to_constructor[key] = constructor
                     self.src_to_dest.append((curr, attr, key,
                                              isinstance(curr, dict)))
+                    dests.add(key)
                     accum.append(key)
+
+
+        for src, _, dest, _ in self.src_to_dest:
+            self.src_is_dest[src] = src in dests
 
         self.column_keys = []
         for idx, node in enumerate(select):
@@ -6017,7 +6024,8 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
 
             # If no fields were set on the destination instance then do not
             # assign an "empty" instance.
-            if instance is None or dest is None or (dest not in set_keys):
+            if instance is None or dest is None or \
+               (dest not in set_keys and not self.src_is_dest.get(dest)):
                 continue
 
             if is_dict:
