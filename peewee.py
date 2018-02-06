@@ -5852,6 +5852,8 @@ class BaseModelCursorWrapper(DictCursorWrapper):
             if isinstance(node, Field):
                 converters[idx] = node.python_value
                 fields[idx] = node
+                if column == node.name or column == node.column_name:
+                    self.columns[idx] = node.name
             elif column in combined:
                 if not (isinstance(node, Function) and not node._coerce):
                     # Unlikely, but if a function was aliased to a column,
@@ -5887,7 +5889,7 @@ class ModelDictCursorWrapper(BaseModelCursorWrapper):
         fields = self.fields
 
         for i in range(self.ncols):
-            attr = fields[i].name if fields[i] is not None else columns[i]
+            attr = columns[i]
             if converters[i] is not None:
                 result[attr] = converters[i](row[i])
             else:
@@ -5911,10 +5913,7 @@ class ModelNamedTupleCursorWrapper(ModelTupleCursorWrapper):
         self._initialize_columns()
         attributes = []
         for i in range(self.ncols):
-            if self.fields[i] is not None:
-                attributes.append(self.fields[i].name)
-            else:
-                attributes.append(self.columns[i])
+            attributes.append(self.columns[i])
         self.tuple_class = namedtuple('Row', attributes)
         self.constructor = lambda row: self.tuple_class(*row)
 

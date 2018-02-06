@@ -125,6 +125,18 @@ class TestModelAPIs(ModelTestCase):
                           user__username__ilike='%ck%')
         self.assertEqual(tweet.content, 'woof')
 
+    @requires_models(User)
+    def test_get_with_alias(self):
+        huey = self.add_user('huey')
+        query = (User
+                 .select(User.username.alias('name'))
+                 .where(User.username == 'huey'))
+        obj = query.dicts().get()
+        self.assertEqual(obj, {'name': 'huey'})
+
+        obj = query.objects().get()
+        self.assertEqual(obj.name, 'huey')
+
     @requires_models(User, Tweet)
     def test_get_or_none(self):
         huey = self.add_user('huey')
