@@ -3,6 +3,7 @@ try:
 except ImportError:
     OrderedDict = dict
 from collections import namedtuple
+from inspect import isclass
 import re
 
 from peewee import *
@@ -38,7 +39,7 @@ class Column(object):
 
     def __init__(self, name, field_class, raw_column_type, nullable,
                  primary_key=False, column_name=None, index=False,
-                 unique=False):
+                 unique=False, extra_parameters=None):
         self.name = name
         self.field_class = field_class
         self.raw_column_type = raw_column_type
@@ -47,6 +48,7 @@ class Column(object):
         self.column_name = column_name
         self.index = index
         self.unique = unique
+        self.extra_parameters = extra_parameters
 
         # Foreign key metadata.
         self.rel_model = None
@@ -67,6 +69,8 @@ class Column(object):
 
     def get_field_parameters(self):
         params = {}
+        if self.extra_parameters is not None:
+            params.update(self.extra_parameters)
 
         # Set up default attributes.
         if self.nullable:
@@ -116,7 +120,12 @@ class Column(object):
 
     def get_field(self):
         # Generate the field definition for this column.
-        field_params = self.get_field_parameters()
+        field_params = {}
+        for key, value in self.get_field_parameters().items():
+            if isclass(value) and issubclass(value, Field):
+                value = value.__name__
+            field_params[key] = value
+
         param_str = ', '.join('%s=%s' % (k, v)
                               for k, v in sorted(field_params.items()))
         field = '%s = %s(%s)' % (
@@ -147,7 +156,7 @@ class Metadata(object):
             for metadata in self.database.get_columns(table, schema))
 
         # Look up the actual column type for each column.
-        column_types = self.get_column_types(table, schema)
+        column_types, extra_params = self.get_column_types(table, schema)
 
         # Look up the primary keys.
         pk_names = self.get_primary_keys(table, schema)
@@ -164,7 +173,8 @@ class Metadata(object):
                 raw_column_type=column_data.data_type,
                 nullable=column_data.null,
                 primary_key=column_data.primary_key,
-                column_name=name)
+                column_name=name,
+                extra_parameters=extra_params.get(name))
 
         return columns
 
@@ -201,6 +211,19 @@ class PostgresqlMetadata(Metadata):
         1700: DecimalField,
         2950: TextField, # UUID
     }
+    array_types = {
+        1000: BooleanField,
+        1001: BlobField,
+        1005: SmallIntegerField,
+        1007: IntegerField,
+        1009: TextField,
+        1014: CharField,
+        1015: CharField,
+        1016: BigIntegerField,
+        1115: DateTimeField,
+        1182: DateField,
+        1183: TimeField,
+    }
     extension_import = 'from playhouse.postgres_ext import *'
 
     def __init__(self, database):
@@ -222,9 +245,14 @@ class PostgresqlMetadata(Metadata):
                 elif typname == 'tsvector':
                     self.column_map[oid] = postgres_ext.TSVectorField
 
+            for oid in self.array_types:
+                self.column_map[oid] = postgres_ext.ArrayField
+
     def get_column_types(self, table, schema):
         column_types = {}
+        extra_params = {}
         extension_types = set((
+            postgres_ext.ArrayField,
             postgres_ext.BinaryJSONField,
             postgres_ext.JSONField,
             postgres_ext.TSVectorField,
@@ -236,13 +264,15 @@ class PostgresqlMetadata(Metadata):
 
         # Store column metadata in dictionary keyed by column name.
         for column_description in cursor.description:
-            column_types[column_description.name] = self.column_map.get(
-                column_description.type_code,
-                UnknownField)
-            if column_types[column_description.name] in extension_types:
+            name = column_description.name
+            oid = column_description.type_code
+            column_types[name] = self.column_map.get(oid, UnknownField)
+            if column_types[name] in extension_types:
                 self.requires_extension = True
+            if oid in self.array_types:
+                extra_params[name] = {'field_class': self.array_types[oid]}
 
-        return column_types
+        return column_types, extra_params
 
     def get_columns(self, table, schema=None):
         schema = schema or 'public'
@@ -304,7 +334,7 @@ class MySQLMetadata(Metadata):
             name, type_code = column_description[:2]
             column_types[name] = self.column_map.get(type_code, UnknownField)
 
-        return column_types
+        return column_types, {}
 
 
 class SqliteMetadata(Metadata):
@@ -356,7 +386,7 @@ class SqliteMetadata(Metadata):
         for column in columns:
             column_types[column.name] = self._map_col(column.data_type)
 
-        return column_types
+        return column_types, {}
 
 
 _DatabaseMetadata = namedtuple('_DatabaseMetadata', (
