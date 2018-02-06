@@ -5,6 +5,13 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.0.13
+
+* Fix bug where simple field aliases were being ignored. Fixes #1473.
+* More strict about column type inference for postgres + pwiz.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.0.12...3.0.13)
+
 ## 3.0.12
 
 * Fix queries of the form INSERT ... VALUES (SELECT...) so that sub-select is
