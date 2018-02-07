@@ -586,6 +586,7 @@ class Introspector(object):
         class BaseModel(Model):
             class Meta:
                 database = self.metadata.database
+                schema = self.schema
 
         def _create_model(table, models):
             for foreign_key in database.foreign_keys[table]:
