@@ -42,6 +42,13 @@ class NoRowid(TestModel):
         without_rowid = True
 
 
+class NoPK(TestModel):
+    data = TextField()
+
+    class Meta:
+        primary_key = False
+
+
 class Article(TestModel):
     name = TextField(unique=True)
     timestamp = TimestampField()
@@ -92,6 +99,11 @@ class TestModelDDL(ModelDatabaseTestCase):
              'WHERE ("status" = ?)', [4, 1]),
             ('CREATE INDEX "article_foo" ON "article" ("flags" & 3)', []),
         ])
+
+    def test_without_pk(self):
+        NoPK._meta.database = self.database
+        self.assertCreateTable(NoPK, [
+            ('CREATE TABLE "nopk" ("data" TEXT NOT NULL)')])
 
     def test_without_rowid(self):
         NoRowid._meta.database = self.database

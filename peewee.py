@@ -2146,8 +2146,8 @@ class Insert(_WriteQuery):
             return self.apply_returning(ctx)
 
     def _execute(self, database):
-        if not self._returning and database.returning_clause:
-            self._returning = (self.table.primary_key,)
+        if self._returning is None and database.returning_clause:
+            self._returning = (self.table._primary_key,)
         return super(Insert, self)._execute(database)
 
     def handle_result(self, database, cursor):
@@ -4764,7 +4764,7 @@ class Metadata(object):
             return tuple([self.fields[field_name]
                           for field_name in self.primary_key.field_names])
         else:
-            return (self.primary_key,)
+            return (self.primary_key,) if self.primary_key is not False else ()
 
     def get_default_dict(self):
         dd = self._default_by_name.copy()

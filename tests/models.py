@@ -37,6 +37,13 @@ class Post(TestModel):
                               default=datetime.datetime.now)
 
 
+class Point(TestModel):
+    x = IntegerField()
+    y = IntegerField()
+    class Meta:
+        primary_key = False
+
+
 class TestModelAPIs(ModelTestCase):
     def add_user(self, username):
         return User.create(username=username)
@@ -46,6 +53,15 @@ class TestModelAPIs(ModelTestCase):
         for tweet in tweets:
             accum.append(Tweet.create(user=user, content=tweet))
         return accum
+
+    @requires_models(Point)
+    def test_no_primary_key(self):
+        p11 = Point.create(x=1, y=1)
+        p33 = Point.create(x=3, y=3)
+
+        p_db = Point.get((Point.x == 3) & (Point.y == 3))
+        self.assertEqual(p_db.x, 3)
+        self.assertEqual(p_db.y, 3)
 
     @requires_models(User, Tweet)
     def test_assertQueryCount(self):
