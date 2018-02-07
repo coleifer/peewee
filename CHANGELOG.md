@@ -5,6 +5,14 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.0.14
+
+* Fix bug creating model instances on Postgres when model does not have a
+  primary key column.
+* Extend postgresql reflection to support array types.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.0.13...3.0.14)
+
 ## 3.0.13
 
 * Fix bug where simple field aliases were being ignored. Fixes #1473.
