@@ -5,6 +5,14 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.0.15
+
+* Use same `schema` used for reflection in generated models.
+* Preserve `pragmas` set on deferred Sqlite database if database is
+  re-initialized without re-specifying pragmas.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.0.14...3.0.15)
+
 ## 3.0.14
 
 * Fix bug creating model instances on Postgres when model does not have a
