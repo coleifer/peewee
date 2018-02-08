@@ -366,6 +366,22 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual(accum, [('mickey', 'meow'), ('mickey', 'purr')])
 
     @requires_models(A, B, C)
+    def test_join_issue_1482(self):
+        a1 = A.create(a='a1')
+        b1 = B.create(a=a1, b='b1')
+        c1 = C.create(b=b1, c='c1')
+
+        query = (C
+                 .select()
+                 .join(B)
+                 .join(A)
+                 .where(A.a == 'a1'))
+        with self.assertQueryCount(3):
+            accum = [(c.c, c.b.b, c.b.a.a) for c in query]
+
+        self.assertEqual(accum, [('c1', 'b1', 'a1')])
+
+    @requires_models(A, B, C)
     def test_join_empty_intermediate_model(self):
         a1 = A.create(a='a1')
         a2 = A.create(a='a2')

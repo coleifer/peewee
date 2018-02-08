@@ -5832,7 +5832,6 @@ class BaseModelCursorWrapper(DictCursorWrapper):
         self.columns = []
         self.converters = converters = [None] * self.ncols
         self.fields = fields = [None] * self.ncols
-        self.translation = {}
 
         for idx, description_item in enumerate(description):
             column = description_item[0]
@@ -5945,6 +5944,8 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
 
     def initialize(self):
         self._initialize_columns()
+        selected_src = set([field.model for field in self.fields
+                            if field is not None])
         select, columns = self.select, self.columns
 
         self.key_to_constructor = {self.model: self.model}
@@ -5972,7 +5973,8 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
 
 
         for src, _, dest, _ in self.src_to_dest:
-            self.src_is_dest[src] = src in dests
+            self.src_is_dest[src] = src in dests and (dest in selected_src
+                                                      or src in selected_src)
 
         self.column_keys = []
         for idx, node in enumerate(select):
