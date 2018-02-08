@@ -677,6 +677,22 @@ class TestModelAPIs(ModelTestCase):
             'SELECT "t1"."id", "t1"."foo_id" FROM "note" AS "t1" '
             'WHERE ("t1"."foo_id" = ?)'), [1337])
 
+    def test_table_schema(self):
+        class Schema(TestModel):
+            pass
+
+        self.assertTrue(Schema._meta.schema is None)
+        self.assertSQL(Schema.select(), (
+            'SELECT "t1"."id" FROM "schema" AS "t1"'), [])
+
+        Schema._meta.schema = 'test'
+        self.assertSQL(Schema.select(), (
+            'SELECT "t1"."id" FROM "test"."schema" AS "t1"'), [])
+
+        Schema._meta.schema = 'another'
+        self.assertSQL(Schema.select(), (
+            'SELECT "t1"."id" FROM "another"."schema" AS "t1"'), [])
+
     @requires_models(User)
     def test_noop(self):
         query = User.noop()

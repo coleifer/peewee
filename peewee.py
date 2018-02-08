@@ -4597,7 +4597,7 @@ class Metadata(object):
 
         self.indexes = list(indexes) if indexes else []
         self.constraints = constraints
-        self.schema = schema
+        self._schema = schema
         self.primary_key = primary_key
         self.composite_key = self.auto_increment = None
         self.only_save_dirty = only_save_dirty
@@ -4674,12 +4674,21 @@ class Metadata(object):
         return self._table
 
     @table.setter
-    def table(self):
+    def table(self, value):
         raise AttributeError('Cannot set the "table".')
 
     @table.deleter
     def table(self):
         self._table = None
+
+    @property
+    def schema(self):
+        return self._schema
+
+    @schema.setter
+    def schema(self, value):
+        self._schema = value
+        del self.table
 
     @property
     def entity(self):
