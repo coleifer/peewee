@@ -358,6 +358,35 @@ class TestModelAPIs(ModelTestCase):
             ('c112', 'b11', 'a1'),
             ('c211', 'b21', 'a2')])
 
+    @requires_models(Relationship, Person)
+    def test_join_same_model_twice(self):
+        d = datetime.date(2010, 1, 1)
+        huey = Person.create(first='huey', last='cat', dob=d)
+        zaizee = Person.create(first='zaizee', last='cat', dob=d)
+        mickey = Person.create(first='mickey', last='dog', dob=d)
+        relationships = (
+            (huey, zaizee),
+            (zaizee, huey),
+            (mickey, huey),
+        )
+        for src, dest in relationships:
+            Relationship.create(from_person=src, to_person=dest)
+
+        PA = Person.alias()
+        query = (Relationship
+                 .select(Relationship, Person, PA)
+                 .join(Person, on=Relationship.from_person)
+                 .switch(Relationship)
+                 .join(PA, on=Relationship.to_person)
+                 .order_by(Relationship.id))
+        with self.assertQueryCount(1):
+            results = [(r.from_person.first, r.to_person.first) for r in query]
+
+        self.assertEqual(results, [
+            ('huey', 'zaizee'),
+            ('zaizee', 'huey'),
+            ('mickey', 'huey')])
+
     @requires_models(User)
     def test_peek(self):
         for username in ('huey', 'mickey', 'zaizee'):
