@@ -5,6 +5,13 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.0.16
+
+* Improve model graph resolution when iterating results of a query. Refs #1482.
+* Allow Model._meta.schema to be changed at run-time. #1483.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.0.15...3.0.16)
+
 ## 3.0.15
 
 * Use same `schema` used for reflection in generated models.
