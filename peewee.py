@@ -2631,6 +2631,7 @@ class SqliteDatabase(Database):
     limit_max = -1
 
     def __init__(self, database, *args, **kwargs):
+        self._pragmas = kwargs.pop('pragmas', ())
         super(SqliteDatabase, self).__init__(database, *args, **kwargs)
         self._aggregates = {}
         self._collations = {}
@@ -2641,7 +2642,8 @@ class SqliteDatabase(Database):
         self.register_function(_sqlite_date_trunc, 'date_trunc', 2)
 
     def init(self, database, pragmas=None, timeout=5, **kwargs):
-        self._pragmas = pragmas or ()
+        if pragmas is not None:
+            self._pragmas = pragmas
         self._timeout = timeout
         super(SqliteDatabase, self).init(database, **kwargs)
 

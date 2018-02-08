@@ -39,6 +39,30 @@ class TestDatabase(DatabaseTestCase):
         self.database.foreign_keys = 'off'
         self.assertEqual(self.database.foreign_keys, 0)
 
+    def test_pragmas_deferred(self):
+        pragmas = (('journal_mode', 'wal'),)
+        db = SqliteDatabase(None, pragmas=pragmas)
+        self.assertEqual(db._pragmas, pragmas)
+
+        # Test pragmas preserved after initializing.
+        db.init(':memory:')
+        self.assertEqual(db._pragmas, pragmas)
+
+        db = SqliteDatabase(None)
+        self.assertEqual(db._pragmas, ())
+
+        # Test pragmas are set and subsequently overwritten.
+        db.init(':memory:', pragmas=pragmas)
+        self.assertEqual(db._pragmas, pragmas)
+
+        db.init(':memory:', pragmas=())
+        self.assertEqual(db._pragmas, ())
+
+        # Test when specified twice, the previous value is overwritten.
+        db = SqliteDatabase(None, pragmas=pragmas)
+        db.init(':memory:', pragmas=(('cache_size', -8000),))
+        self.assertEqual(db._pragmas, (('cache_size', -8000),))
+
     def test_pragmas_permanent(self):
         db = SqliteDatabase(':memory:')
         self.assertEqual(db.foreign_keys, 0)
