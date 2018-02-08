@@ -323,6 +323,48 @@ class TestModelAPIs(ModelTestCase):
                 ('whine', 'mickey'),
                 ('woof', 'mickey')])
 
+    @requires_models(User, Tweet, Favorite)
+    def test_join_two_fks(self):
+        with self.database.atomic():
+            huey = self.add_user('huey')
+            mickey = self.add_user('mickey')
+            h_m, h_p, h_h = self.add_tweets(huey, 'meow', 'purr', 'hiss')
+            m_w, m_b = self.add_tweets(mickey, 'woof', 'bark')
+            Favorite.create(user=huey, tweet=m_w)
+            Favorite.create(user=mickey, tweet=h_m)
+            Favorite.create(user=mickey, tweet=h_p)
+
+        UA = User.alias()
+
+        query = (Favorite
+                 .select(Favorite, Tweet, User, UA)
+                 .join(Tweet)
+                 .join(User)
+                 .switch(Favorite)
+                 .join(UA, on=Favorite.user)
+                 .order_by(Favorite.id))
+        with self.assertQueryCount(1):
+            accum = [(f.tweet.user.username, f.tweet.content, f.user.username)
+                     for f in query]
+
+        self.assertEqual(accum, [
+            ('mickey', 'woof', 'huey'),
+            ('huey', 'meow', 'mickey'),
+            ('huey', 'purr', 'mickey')])
+
+        # Test intermediate models not selected.
+        query = (Favorite
+                 .select()
+                 .join(Tweet)
+                 .switch(Favorite)
+                 .join(User)
+                 .where(User.username == 'mickey')
+                 .order_by(Favorite.id))
+        with self.assertQueryCount(5):
+            accum = [(f.user.username, f.tweet.content) for f in query]
+
+        self.assertEqual(accum, [('mickey', 'meow'), ('mickey', 'purr')])
+
     @requires_models(A, B, C)
     def test_join_empty_intermediate_model(self):
         a1 = A.create(a='a1')
