@@ -175,8 +175,9 @@ class SchemaMigrator(object):
             return PostgresqlMigrator(database)
         elif isinstance(database, MySQLDatabase):
             return MySQLMigrator(database)
-        else:
+        elif isinstance(database, SqliteDatabase):
             return SqliteMigrator(database)
+        raise ValueError('Unsupported database: %s' % database)
 
     @operation
     def apply_default(self, table, column_name, field):
