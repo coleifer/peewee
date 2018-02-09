@@ -2615,6 +2615,12 @@ Migrations API
 
     Generate migrations for Postgresql databases.
 
+    .. py:method:: set_search_path(schema_name)
+
+        :param str schema_name: Schema to use.
+
+        Set the search path (schema) for the subsequent operations.
+
 .. py:class:: SqliteMigrator(database)
 
     Generate migrations for SQLite databases.
