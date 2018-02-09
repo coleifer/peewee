@@ -355,6 +355,12 @@ class PostgresqlMigrator(SchemaMigrator):
         return [row[0] for row in cursor.fetchall()]
 
     @operation
+    def set_search_path(self, schema_name):
+        return (self
+                .make_context()
+                .literal('SET search_path TO %s' % schema_name))
+
+    @operation
     def rename_table(self, old_name, new_name):
         pk_names = self._primary_key_columns(old_name)
         ParentClass = super(PostgresqlMigrator, self)
