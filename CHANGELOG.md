@@ -5,6 +5,13 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.0.17
+
+* Fix `schema` inheritance regression, #1485.
+* Add helper method to postgres migrator for setting search_path, #1353.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.0.16...3.0.17)
+
 ## 3.0.16
 
 * Improve model graph resolution when iterating results of a query. Refs #1482.
