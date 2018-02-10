@@ -680,9 +680,9 @@ Option                  Meaning                                                I
 ``constraints``         a list of table constraints                            yes
 ``schema``              the database schema for the model                      yes
 ``only_save_dirty``     when calling model.save(), only save dirty fields      yes
+``options``             dictionary of options for create table extensions      yes
 ``table_alias``         an alias to use for the table in queries               no
 ``depends_on``          indicate this table depends on another for creation    no
-``options``             dictionary of options for create table extensions      no
 ``without_rowid``       indicate table should not have rowid (SQLite only)     no
 =====================   ====================================================== ====================
 

@@ -1631,6 +1631,47 @@ class TestMetaInheritance(BaseTestCase):
         self.assertTrue(Zai._meta.primary_key is Zai.zee)
         self.assertEqual(Zai._meta.sorted_field_names, ['zee', 'data'])
 
+    def test_inheritance(self):
+        db = SqliteDatabase(':memory:')
+
+        class Base(Model):
+            class Meta:
+                constraints = ['c1', 'c2']
+                database = db
+                indexes = (
+                    (('username',), True),
+                )
+                only_save_dirty = True
+                options = {'key': 'value'}
+                schema = 'magic'
+                table_alias = 'ba'
+
+        class Child(Base): pass
+        class GrandChild(Child): pass
+
+        for ModelClass in (Child, GrandChild):
+            self.assertEqual(ModelClass._meta.constraints, ['c1', 'c2'])
+            self.assertTrue(ModelClass._meta.database is db)
+            self.assertEqual(ModelClass._meta.indexes, [(('username',), True)])
+            self.assertEqual(ModelClass._meta.options, {'key': 'value'})
+            self.assertTrue(ModelClass._meta.only_save_dirty)
+            self.assertEqual(ModelClass._meta.schema, 'magic')
+            self.assertTrue(ModelClass._meta.table_alias is None)
+
+        class Overrides(Base):
+            class Meta:
+                constraints = None
+                indexes = None
+                only_save_dirty = False
+                options = {'foo': 'bar'}
+                schema = None
+
+        self.assertTrue(Overrides._meta.constraints is None)
+        self.assertEqual(Overrides._meta.indexes, [])
+        self.assertFalse(Overrides._meta.only_save_dirty)
+        self.assertEqual(Overrides._meta.options, {'foo': 'bar'})
+        self.assertTrue(Overrides._meta.schema is None)
+
 
 class TestForeignKeyFieldDescriptors(BaseTestCase):
     def test_foreign_key_field_descriptors(self):
