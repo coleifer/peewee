@@ -2648,6 +2648,8 @@ class SqliteDatabase(Database):
         super(SqliteDatabase, self).init(database, **kwargs)
 
     def _connect(self):
+        if sqlite3 is None:
+            raise ImproperlyConfigured('SQLite driver not installed!')
         conn = sqlite3.connect(self.database, timeout=self._timeout,
                                **self.connect_params)
         conn.isolation_level = None
@@ -2914,6 +2916,8 @@ class PostgresqlDatabase(Database):
         super(PostgresqlDatabase, self).init(database, **kwargs)
 
     def _connect(self):
+        if psycopg2 is None:
+            raise ImproperlyConfigured('Postgres driver not installed!')
         conn = psycopg2.connect(database=self.database, **self.connect_params)
         if self._register_unicode:
             pg_extensions.register_type(pg_extensions.UNICODE, conn)
@@ -3105,6 +3109,8 @@ class MySQLDatabase(Database):
         super(MySQLDatabase, self).init(database, **params)
 
     def _connect(self):
+        if mysql is None:
+            raise ImproperlyConfigured('MySQL driver not installed!')
         return mysql.connect(db=self.database, **self.connect_params)
 
     def default_values_insert(self, ctx):
