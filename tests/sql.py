@@ -1,6 +1,7 @@
 import datetime
 
 from peewee import *
+from peewee import Expression
 
 from .base import BaseTestCase
 from .base import IS_MYSQL
@@ -329,6 +330,18 @@ class TestSelectQuery(BaseTestCase):
         self.assertSQL(query, (
             'SELECT "t1"."id" FROM "users" AS "t1" '
             'WHERE (1 = 1)'), [])
+
+    def test_add_custom_op(self):
+        def mod(lhs, rhs):
+            return Expression(lhs, '%', rhs)
+
+        Stat = Table('stats')
+        query = (Stat
+                 .select(fn.COUNT(Stat.c.id))
+                 .where(mod(Stat.c.index, 10) == 0))
+        self.assertSQL(query, (
+            'SELECT COUNT("t1"."id") FROM "stats" AS "t1" '
+            'WHERE (("t1"."index" % ?) = ?)'), [10, 0])
 
 
 class TestInsertQuery(BaseTestCase):
