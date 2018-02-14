@@ -2002,22 +2002,22 @@ Query-builder
             (Article.timestamp.desc(), Article.flags.bin_and(2)),
             unique = True).where(Article.status == 1)
 
-      You can also use :py:meth:`Model.index`:
+    You can also use :py:meth:`Model.index`:
 
-      .. code-block:: python
+    .. code-block:: python
 
-          idx = Article.index(Article.name, Article.timestamp).where(Article.status == 1)
+        idx = Article.index(Article.name, Article.timestamp).where(Article.status == 1)
 
-      To add an index to a model definition use :py:meth:`Model.add_index`:
+    To add an index to a model definition use :py:meth:`Model.add_index`:
 
-      .. code-block:: python
+    .. code-block:: python
 
-          idx = Article.index(Article.name, Article.timestamp).where(Article.status == 1)
+        idx = Article.index(Article.name, Article.timestamp).where(Article.status == 1)
 
-          # Add above index definition to the model definition. When you call
-          # Article.create_table() (or database.create_tables([Article])), the
-          # index will be created.
-          Article.add_index(idx)
+        # Add above index definition to the model definition. When you call
+        # Article.create_table() (or database.create_tables([Article])), the
+        # index will be created.
+        Article.add_index(idx)
 
 Fields
 ------
