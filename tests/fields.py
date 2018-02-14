@@ -9,6 +9,9 @@ from peewee import *
 
 from .base import BaseTestCase
 from .base import db
+from .base import IS_MYSQL
+from .base import IS_POSTGRESQL
+from .base import IS_SQLITE
 from .base import ModelTestCase
 from .base import TestModel
 from .base_models import Tweet
@@ -200,6 +203,30 @@ class TestDateFields(ModelTestCase):
         self.assertEqual(dm2_db.date, None)
         self.assertEqual(dm2_db.date_time, dt2)
         self.assertEqual(dm2_db.time, t2)
+
+    def test_extract_parts(self):
+        dm = DateModel.create(
+            date_time=datetime.datetime(2011, 1, 2, 11, 12, 13, 54321),
+            date=datetime.date(2012, 2, 3),
+            time=datetime.time(3, 13, 37))
+        query = (DateModel
+                 .select(DateModel.date_time.year, DateModel.date_time.month,
+                         DateModel.date_time.day, DateModel.date_time.hour,
+                         DateModel.date_time.minute,
+                         DateModel.date_time.second, DateModel.date.year,
+                         DateModel.date.month, DateModel.date.day,
+                         DateModel.time.hour, DateModel.time.minute,
+                         DateModel.time.second)
+                 .tuples())
+
+        row, = query
+        if IS_SQLITE or IS_MYSQL:
+            self.assertEqual(row,
+                             (2011, 1, 2, 11, 12, 13, 2012, 2, 3, 3, 13, 37))
+        elif IS_POSTGRESQL:
+            self.assertEqual(row, (
+                2011., 1., 2., 11., 12., 13.054321, 2012., 2., 3., 3., 13.,
+                37.))
 
 
 class TestForeignKeyField(ModelTestCase):

@@ -2887,7 +2887,7 @@ class SqliteDatabase(Database):
         return fn.date_part(date_part, date_field)
 
     def truncate_date(self, date_part, date_field):
-        return fn.strftime(SQLITE_DATE_TRUNC_MAPPING[date_part], date_field)
+        return fn.date_trunc(date_part, date_field)
 
 
 class PostgresqlDatabase(Database):
