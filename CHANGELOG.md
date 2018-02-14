@@ -5,6 +5,16 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.0.18
+
+* Improved error messages when attempting to use a database class for which the
+  corresponding driver is not installed.
+* Added tests showing the use of custom operator (a-la the docs).
+* Fixed indentation issue in docs, #1493.
+* Fixed issue with the SQLite date_part issue, #1494.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.0.17...3.0.18)
+
 ## 3.0.17
 
 * Fix `schema` inheritance regression, #1485.
