@@ -37,6 +37,11 @@ class Post(TestModel):
                               default=datetime.datetime.now)
 
 
+class PostNote(TestModel):
+    post = ForeignKeyField(Post, backref='notes', primary_key=True)
+    note = TextField()
+
+
 class Point(TestModel):
     x = IntegerField()
     y = IntegerField()
@@ -62,6 +67,28 @@ class TestModelAPIs(ModelTestCase):
         p_db = Point.get((Point.x == 3) & (Point.y == 3))
         self.assertEqual(p_db.x, 3)
         self.assertEqual(p_db.y, 3)
+
+    @requires_models(Post, PostNote)
+    def test_pk_is_fk(self):
+        with self.database.atomic():
+            p1 = Post.create(content='p1')
+            p2 = Post.create(content='p2')
+            p1n = PostNote.create(post=p1, note='p1n')
+            p2n = PostNote.create(post=p2, note='p2n')
+
+        with self.assertQueryCount(2):
+            pn = PostNote.get(PostNote.note == 'p1n')
+            self.assertEqual(pn.post.content, 'p1')
+
+        with self.assertQueryCount(1):
+            pn = (PostNote
+                  .select(PostNote, Post)
+                  .join(Post)
+                  .where(PostNote.note == 'p2n')
+                  .get())
+            self.assertEqual(pn.post.content, 'p2')
+
+        self.assertRaises(Post.DoesNotExist, PostNote.create, note='pxn')
 
     @requires_models(User, Tweet)
     def test_assertQueryCount(self):
