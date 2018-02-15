@@ -123,10 +123,10 @@ class TestModelDDL(ModelDatabaseTestCase):
             class Meta:
                 db_table = 'B_tbl'
         self.assertCreateTable(A, [
-            'CREATE TABLE "A_tbl" ("id" INTEGER NOT NULL PRIMARY KEY)'])
+            'CREATE TABLE "A_tbl" ("id" SERIAL NOT NULL PRIMARY KEY)'])
         self.assertCreateTable(B, [
             ('CREATE TABLE "B_tbl" ('
-             '"id" INTEGER NOT NULL PRIMARY KEY, '
+             '"id" SERIAL NOT NULL PRIMARY KEY, '
              '"a_id" INTEGER NOT NULL, '
              'FOREIGN KEY ("a_id") REFERENCES "A_tbl" ("id"))'),
             'CREATE INDEX "b_a_id" ON "B_tbl" ("a_id")'])
