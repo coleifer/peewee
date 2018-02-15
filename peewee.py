@@ -1,13 +1,11 @@
 from bisect import bisect_left
 from bisect import bisect_right
-from collections import defaultdict
-from collections import deque
-from collections import namedtuple
 from contextlib import contextmanager
 from copy import deepcopy
 from functools import wraps
 from inspect import isclass
 import calendar
+import collections
 import datetime
 import decimal
 import hashlib
@@ -439,8 +437,8 @@ class AliasManager(object):
         self._current_index -= 1
 
 
-class State(namedtuple('_State', ('scope', 'parentheses', 'subquery',
-                                  'settings'))):
+class State(collections.namedtuple('_State', ('scope', 'parentheses',
+                                              'subquery', 'settings'))):
     def __new__(cls, scope=SCOPE_NORMAL, parentheses=False, subquery=False,
                 **kwargs):
         return super(State, cls).__new__(cls, scope, parentheses, subquery,
@@ -2074,7 +2072,7 @@ class Insert(_WriteQuery):
         all_values = []
         for row in rows_iter:
             values = []
-            is_dict = isinstance(row, dict)
+            is_dict = isinstance(row, collections.Mapping)
             for i, (column, converter) in enumerate(columns_converters):
                 try:
                     if is_dict:
@@ -2303,13 +2301,13 @@ __exception_wrapper__ = ExceptionWrapper(EXCEPTIONS)
 # DATABASE INTERFACE AND CONNECTION MANAGEMENT.
 
 
-IndexMetadata = namedtuple(
+IndexMetadata = collections.namedtuple(
     'IndexMetadata',
     ('name', 'sql', 'columns', 'unique', 'table'))
-ColumnMetadata = namedtuple(
+ColumnMetadata = collections.namedtuple(
     'ColumnMetadata',
     ('name', 'data_type', 'null', 'primary_key', 'table'))
-ForeignKeyMetadata = namedtuple(
+ForeignKeyMetadata = collections.namedtuple(
     'ForeignKeyMetadata',
     ('column', 'dest_table', 'dest_column', 'table'))
 
@@ -3422,7 +3420,7 @@ class DictCursorWrapper(CursorWrapper):
 class NamedTupleCursorWrapper(CursorWrapper):
     def initialize(self):
         description = self.cursor.description
-        self.tuple_class = namedtuple(
+        self.tuple_class = collections.namedtuple(
             'Row',
             [col[0][col[0].find('.') + 1:].strip('"') for col in description])
 
@@ -4613,8 +4611,8 @@ class Metadata(object):
 
         self.refs = {}
         self.backrefs = {}
-        self.model_refs = defaultdict(list)
-        self.model_backrefs = defaultdict(list)
+        self.model_refs = collections.defaultdict(list)
+        self.model_backrefs = collections.defaultdict(list)
         self.manytomany = {}
 
         self.options = options or {}
@@ -4628,7 +4626,7 @@ class Metadata(object):
 
         accum = [(None, self.model, None)]
         seen = set()
-        queue = deque((self,))
+        queue = collections.deque((self,))
         method = queue.pop if depth_first else queue.popleft
 
         while queue:
@@ -5695,7 +5693,7 @@ class ModelSelect(BaseModelSelect, Select):
             dq_node &= DQ(**kwargs)
 
         # dq_node should now be an Expression, lhs = Node(), rhs = ...
-        q = deque([dq_node])
+        q = collections.deque([dq_node])
         dq_joins = set()
         while q:
             curr = q.popleft()
@@ -5931,7 +5929,7 @@ class ModelNamedTupleCursorWrapper(ModelTupleCursorWrapper):
         attributes = []
         for i in range(self.ncols):
             attributes.append(self.columns[i])
-        self.tuple_class = namedtuple('Row', attributes)
+        self.tuple_class = collections.namedtuple('Row', attributes)
         self.constructor = lambda row: self.tuple_class(*row)
 
 
@@ -5967,7 +5965,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
         self.key_to_constructor = {self.model: self.model}
         self.src_is_dest = {}
         self.src_to_dest = []
-        accum = deque(self.from_list)
+        accum = collections.deque(self.from_list)
         dests = set()
         while accum:
             curr = accum.popleft()
@@ -6061,7 +6059,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
         return objects[self.model]
 
 
-class PrefetchQuery(namedtuple('_PrefetchQuery', (
+class PrefetchQuery(collections.namedtuple('_PrefetchQuery', (
     'query', 'fields', 'is_backref', 'rel_models', 'field_to_name', 'model'))):
     def __new__(cls, query, fields=None, is_backref=None, rel_models=None,
                 field_to_name=None, model=None):
