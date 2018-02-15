@@ -4426,6 +4426,18 @@ class SchemaManager(object):
     def _create_context(self):
         return self.database.get_sql_context(**self.context_options)
 
+    def _create_schema(self, safe=True):
+        meta = self.model._meta
+        ctx = self._create_context()
+        ctx.literal('CREATE SCHEMA ')
+        if safe:
+            ctx.literal('IF NOT EXISTS ')
+        ctx.literal(self.model._meta.schema)
+        return ctx
+
+    def create_schema(self, safe=True):
+        self.database.execute(self._create_schema(safe=safe))
+
     def _create_table(self, safe=True, **options):
         is_temp = options.pop('temporary', False)
         ctx = self._create_context()
@@ -4551,6 +4563,8 @@ class SchemaManager(object):
         self.database.execute(self._drop_sequence(field))
 
     def create_all(self, safe=True, **table_options):
+        if self.model._meta.schema is not None:
+            self.create_schema(safe=safe)
         if self.database.sequences:
             for field in self.model._meta.sorted_fields:
                 if field and field.sequence:
