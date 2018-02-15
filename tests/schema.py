@@ -117,10 +117,12 @@ class TestModelDDL(ModelDatabaseTestCase):
     def test_db_table(self):
         class A(TestModel):
             class Meta:
+                database = self.database
                 db_table = 'A_tbl'
         class B(TestModel):
             a = ForeignKeyField(A, backref='bs')
             class Meta:
+                database = self.database
                 db_table = 'B_tbl'
         self.assertCreateTable(A, [
             'CREATE TABLE "A_tbl" ("id" INTEGER NOT NULL PRIMARY KEY)'])
