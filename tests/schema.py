@@ -114,6 +114,23 @@ class TestModelDDL(ModelDatabaseTestCase):
 
         NoRowid._meta.database = None
 
+    def test_db_table(self):
+        class A(TestModel):
+            class Meta:
+                db_table = 'A_tbl'
+        class B(TestModel):
+            a = ForeignKeyField(A, backref='bs')
+            class Meta:
+                db_table = 'B_tbl'
+        self.assertCreateTable(A, [
+            'CREATE TABLE "A_tbl" ("id" INTEGER NOT NULL PRIMARY KEY)'])
+        self.assertCreateTable(B, [
+            ('CREATE TABLE "B_tbl" ('
+             '"id" INTEGER NOT NULL PRIMARY KEY, '
+             '"a_id" INTEGER NOT NULL, '
+             'FOREIGN KEY ("a_id") REFERENCES "A_tbl" ("id"))'),
+            'CREATE INDEX "b_a_id" ON "B_tbl" ("a_id")'])
+
     def test_temporary_table(self):
         sql, params = User._schema._create_table(temporary=True).query()
         self.assertEqual(sql, (
