@@ -825,13 +825,16 @@ Examples:
                       where=(Article.status == 1))
 
     # Create a unique index on timestamp desc, status & 4.
-    idx = ModelIndex(Article, (Article.timestamp.desc(),
-                               Article.flags.bin_and(4)), unique=True)
+    idx = Article.index(
+        Article.timestamp.desc(),
+        Article.flags.bin_and(4),
+        unique=True)
     Article.add_index(idx)
 
 For more information, see:
 
 * :py:meth:`Model.add_index`
+* :py:meth:`Model.index`
 * :py:class:`ModelIndex`
 * :py:class:`Index`
 
