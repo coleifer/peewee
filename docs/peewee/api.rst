@@ -722,6 +722,8 @@ Query-builder
         Decorator to use with Node methods that mutate the node's state.
         This allows method-chaining, e.g.:
 
+        .. code-block:: python
+
             query = MyModel.select()
             new_query = query.where(MyModel.field == 'value')
 
