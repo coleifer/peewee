@@ -1005,7 +1005,10 @@ This will yield the following DDL:
     )
 
 .. warning::
-    Some model APIs may not work correctly for models without a primary key, for instance :py:meth:`~Model.save` and `~Model.delete_instance` (you can instead use `~Model.insert`, `~Model.update` and `~Model.delete`).
+    Some model APIs may not work correctly for models without a primary key,
+    for instance :py:meth:`~Model.save` and :py:meth:`~Model.delete_instance`
+    (you can instead use :py:meth:`~Model.insert`, :py:meth:`~Model.update` and
+    :py:meth:`~Model.delete`).
 
 Self-referential foreign keys
 -----------------------------
