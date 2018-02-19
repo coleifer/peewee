@@ -3673,6 +3673,15 @@ Model
 
         Use Django-style filters to express a WHERE clause.
 
+    .. py:method:: prefetch(*subqueries)
+
+        :param subqueries: A list of :py:class:`Model` classes or select
+            queries to prefetch.
+
+        Execute the query, prefetching the given additional resources.
+
+        See also :py:func:`prefetch` standalone function.
+
 
 .. py:function:: prefetch(sq, *subqueries)
 

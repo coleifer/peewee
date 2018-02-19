@@ -177,7 +177,7 @@ Getting single records
 ^^^^^^^^^^^^^^^^^^^^^^
 
 Let's retrieve Grandma's record from the database. To get a single record from
-the database, use :py:meth:`SelectQuery.get`:
+the database, use :py:meth:`Select.get`:
 
 .. code-block:: python
 
@@ -197,7 +197,7 @@ Let's list all the people in the database:
 .. code-block:: python
 
     for person in Person.select():
-        print person.name, person.is_relative
+        print(person.name, person.is_relative)
 
     # prints:
     # Bob True
@@ -210,7 +210,7 @@ Let's list all the cats and their owner's name:
 
     query = Pet.select().where(Pet.animal_type == 'cat')
     for pet in query:
-        print pet.name, pet.owner.name
+        print(pet.name, pet.owner.name)
 
     # prints:
     # Kitty Bob
@@ -233,7 +233,7 @@ a *join*.
              .where(Pet.animal_type == 'cat'))
 
     for pet in query:
-        print pet.name, pet.owner.name
+        print(pet.name, pet.owner.name)
 
     # prints:
     # Kitty Bob
@@ -244,7 +244,7 @@ Let's get all the pets owned by Bob:
 .. code-block:: python
 
     for pet in Pet.select().join(Person).where(Person.name == 'Bob'):
-        print pet.name
+        print(pet.name)
 
     # prints:
     # Kitty
@@ -256,18 +256,18 @@ object to represent Bob, we can do this instead:
 .. code-block:: python
 
     for pet in Pet.select().where(Pet.owner == uncle_bob):
-        print pet.name
+        print(pet.name)
 
 Sorting
 ^^^^^^^
 
 Let's make sure these are sorted alphabetically by adding an
-:py:meth:`~SelectQuery.order_by` clause:
+:py:meth:`~Select.order_by` clause:
 
 .. code-block:: python
 
     for pet in Pet.select().where(Pet.owner == uncle_bob).order_by(Pet.name):
-        print pet.name
+        print(pet.name)
 
     # prints:
     # Fido
@@ -278,7 +278,7 @@ Let's list all the people now, youngest to oldest:
 .. code-block:: python
 
     for person in Person.select().order_by(Person.birthday.desc()):
-        print person.name, person.birthday
+        print(person.name, person.birthday)
 
     # prints:
     # Bob 1960-01-15
@@ -303,7 +303,7 @@ birthday was either:
              .where((Person.birthday < d1940) | (Person.birthday > d1960)))
 
     for person in query:
-        print person.name, person.birthday
+        print(person.name, person.birthday)
 
     # prints:
     # Bob 1960-01-15
@@ -318,7 +318,7 @@ Now let's do the opposite. People whose birthday is between 1940 and 1960:
              .where(Person.birthday.between(d1940, d1960)))
 
     for person in query:
-        print person.name, person.birthday
+        print(person.name, person.birthday)
 
     # prints:
     # Herb 1950-05-05
@@ -331,7 +331,7 @@ Now let's list all the people *and* how many pets they have:
 .. code-block:: python
 
     for person in Person.select():
-        print person.name, person.pets.count(), 'pets'
+        print(person.name, person.pets.count(), 'pets')
 
     # prints:
     # Bob 2 pets
@@ -353,7 +353,7 @@ a *JOIN* and using a SQL function to aggregate the results.
 
     for person in query:
         # "pet_count" becomes an attribute on the returned model instances.
-        print person.name, person.pet_count, 'pets'
+        print(person.name, person.pet_count, 'pets')
 
     # prints:
     # Bob 2 pets
@@ -385,9 +385,9 @@ It would look like this:
         # We need to check if they have a pet instance attached, since not all
         # people have pets.
         if hasattr(person, 'pet'):
-            print person.name, person.pet.name
+            print(person.name, person.pet.name)
         else:
-            print person.name, 'no pets'
+            print(person.name, 'no pets')
 
     # prints:
     # Bob Fido
@@ -398,15 +398,15 @@ It would look like this:
 Usually this type of duplication is undesirable. To accomodate the more common
 (and intuitive) workflow of listing a person and attaching **a list** of that
 person's pets, we can use a special method called
-:py:meth:`~ModelSelectQuery.prefetch`:
+:py:meth:`~ModelSelect.prefetch`:
 
 .. code-block:: python
 
     query = Person.select().order_by(Person.name).prefetch(Pet)
     for person in query:
-        print person.name
+        print(person.name)
         for pet in person.pets:
-            print '  *', pet.name
+            print('  *', pet.name)
 
     # prints:
     # Bob
@@ -426,7 +426,7 @@ start with either an upper or lower-case *G*:
 
     expression = fn.Lower(fn.Substr(Person.name, 1, 1)) == 'g'
     for person in Person.select().where(expression):
-        print person.name
+        print(person.name)
 
     # prints:
     # Grandma L.
