@@ -1303,9 +1303,10 @@ the related model using the specified *backref*.
     referenced by a foreign key in table B, and then create a new, unrelated,
     record in table A, the new record will end up mis-attached to the undeleted
     record in table B. To avoid the mis-attachment, you can use
-    :py:class:`PrimaryKeyAutoIncrementField`, but it may be better overall to
-    ensure that foreign keys are enabled with `pragmas=(('foreign_keys',
-    'on'),)` when you instantiate `SqliteDatabase`.
+    :py:class:`AutoIncrementField`, but it may be better overall to
+    ensure that foreign keys are enabled with
+    ``pragmas=(('foreign_keys', 'on'),)`` when you
+    instantiate :py:class:`SqliteDatabase`.
 
 
 Traversing foreign keys
