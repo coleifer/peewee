@@ -710,7 +710,7 @@ Connection Pooling
 ------------------
 
 Connection pooling is provided by the :ref:`pool module <pool>`, included in
-the :ref:`playhouse` extensions library. The pool supports:
+the :ref:`playhouse <playhouse>` extensions library. The pool supports:
 
 * Timeout after which connections will be recycled.
 * Upper bound on the number of open connections.
@@ -738,7 +738,7 @@ The following pooled database classes are available:
 * :py:class:`PooledSqliteExtDatabase`
 
 For an in-depth discussion of peewee's connection pool, see the :ref:`pool`
-section of the :ref:`playhouse` documentation.
+section of the :ref:`playhouse <playhouse>` documentation.
 
 .. _testing:
 
