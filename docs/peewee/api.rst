@@ -3682,6 +3682,17 @@ Model
 
         See also :py:func:`prefetch` standalone function.
 
+        Example:
+
+        .. code-block:: python
+
+            # Fetch all Users and prefetch their associated tweets.
+            query = User.select().prefetch(Tweet)
+            for user in query:
+                print(user.username)
+                for tweet in user.tweets:
+                    print('  *', tweet.content)
+
 
 .. py:function:: prefetch(sq, *subqueries)
 
