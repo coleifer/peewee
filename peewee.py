@@ -22,9 +22,12 @@ import uuid
 import warnings
 
 try:
-    from pysqlite2 import dbapi2 as pysq3
+    from pysqlite3 import dbapi2 as pysq3
 except ImportError:
-    pysq3 = None
+    try:
+        from pysqlite2 import dbapi2 as pysq3
+    except ImportError:
+        pysq3 = None
 try:
     import sqlite3
 except ImportError:
