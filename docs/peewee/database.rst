@@ -449,7 +449,8 @@ need to execute queries, and close your connection when you are done. In a
 web-application, this typically means you will open a connection when a request
 comes in, and close the connection when you return a response.
 
-See the :ref:`adding_request_hooks` for more information.
+See the :ref:`framework-integration` section for examples of configuring common
+web frameworks to manage database connections.
 
 Connecting using a Database URL
 -------------------------------
@@ -804,6 +805,8 @@ potential compatibility issues.
 
 If you'd like to see some more examples of how to run tests using Peewee, check
 out Peewee's own `test-suite <https://github.com/coleifer/peewee/tree/master/tests>`_.
+
+.. _framework-integration:
 
 Framework Integration
 ---------------------
