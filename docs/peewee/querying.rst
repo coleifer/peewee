@@ -318,7 +318,7 @@ matches the given query, a ``DoesNotExist`` exception will be raised.
     SQL: SELECT t1."id", t1."username" FROM "user" AS t1 WHERE t1."username" = ?
     PARAMS: ['nobody']
 
-For more advanced operations, you can use :py:meth:`SelectQuery.get`. The
+For more advanced operations, you can use :py:meth:`SelectBase.get`. The
 following query retrieves the latest tweet from the user named *charlie*:
 
 .. code-block:: pycon
@@ -338,7 +338,7 @@ For more information, see the documentation on:
 * :py:meth:`Model.get_or_none` - if no matching row is found, return ``None``.
 * :py:meth:`Model.first`
 * :py:meth:`Model.select`
-* :py:meth:`SelectQuery.get`
+* :py:meth:`SelectBase.get`
 
 Create or get
 -------------
@@ -570,7 +570,7 @@ Get tweets by staff or superusers using a subquery:
 Sorting records
 ---------------
 
-To return rows in order, use the :py:meth:`~SelectQuery.order_by` method:
+To return rows in order, use the :py:meth:`~Query.order_by` method:
 
 .. code-block:: pycon
 
