@@ -699,6 +699,14 @@ hstore support
 is an embedded key/value store. With hstore, you can store arbitrary key/value
 pairs in your database alongside structured relational data.
 
+To use ``hstore``, you need to specify an additional parameter when
+instantiating your :py:class:`PostgresqlExtDatabase`:
+
+.. code-block:: python
+
+    # Specify "register_hstore=True":
+    db = PostgresqlExtDatabase('my_db', register_hstore=True)
+
 Currently the ``postgres_ext`` module supports the following operations:
 
 * Store and retrieve arbitrary dictionaries
