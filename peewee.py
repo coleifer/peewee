@@ -149,7 +149,6 @@ if sys.version_info[0] == 2:
     text_type = unicode
     bytes_type = str
     buffer_type = buffer
-    b_lit = lambda x: x
     exec('def reraise(tp, value, tb=None): raise tp, value, tb')
     def print_(s):
         sys.stdout.write(s)
@@ -162,7 +161,6 @@ else:
     text_type = str
     bytes_type = bytes
     buffer_type = memoryview
-    b_lit = lambda x: x.encode('latin-1') if not isinstance(x, bytes) else x
     basestring = str
     long = int
     print_ = getattr(builtins, 'print')
@@ -3820,7 +3818,7 @@ class BigBitFieldData(object):
         byte_num, byte_offset = divmod(idx, 8)
         cur_size = len(self._buffer)
         if cur_size <= byte_num:
-            self._buffer.extend(b_lit('\x00') * ((byte_num + 1) - cur_size))
+            self._buffer.extend(b'\x00' * ((byte_num + 1) - cur_size))
         return byte_num, byte_offset
 
     def set_bit(self, idx):
