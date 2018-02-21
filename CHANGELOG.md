@@ -5,6 +5,15 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.0.19
+
+* Support for more types of mappings in `insert_many()`, refs #1495.
+* Lots of documentation improvements.
+* Fix bug when calling `tuples()` on a `ModelRaw` query. This was reported
+  originally as a bug with *sqlite-web* CSV export. See coleifer/sqlite-web#38.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.0.18...3.0.19)
+
 ## 3.0.18
 
 * Improved error messages when attempting to use a database class for which the
