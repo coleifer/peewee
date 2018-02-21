@@ -296,9 +296,11 @@ class JSONExporter(Exporter):
 class CSVExporter(Exporter):
     def export(self, file_obj, header=True, **kwargs):
         writer = csv.writer(file_obj, **kwargs)
-        if header and hasattr(self.query, '_returning'):
-            writer.writerow([field.name for field in self.query._returning])
-        for row in self.query.tuples():
+        tuples = self.query.tuples().execute()
+        tuples.initialize()
+        if header and getattr(tuples, 'columns', None):
+            writer.writerow([column for column in tuples.columns])
+        for row in tuples:
             writer.writerow(row)
 
 

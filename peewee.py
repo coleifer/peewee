@@ -5422,6 +5422,7 @@ class _ModelQueryHelper(object):
 class ModelRaw(_ModelQueryHelper, RawQuery):
     def __init__(self, model, sql, params, **kwargs):
         self.model = model
+        self._returning = ()
         super(ModelRaw, self).__init__(sql=sql, params=params, **kwargs)
 
     def get(self):
