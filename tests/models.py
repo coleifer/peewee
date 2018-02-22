@@ -1991,6 +1991,7 @@ class TestGithub1354(ModelTestCase):
 
 class TestCountUnionRegression(ModelTestCase):
     @requires_models(User)
+    @skip_if(IS_MYSQL)
     def test_count_union(self):
         with self.database.atomic():
             for i in range(5):
