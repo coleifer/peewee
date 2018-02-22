@@ -690,17 +690,13 @@ class TestModelAPIs(ModelTestCase):
             self.assertEqual([t['username'] for t in query],
                              ['huey', 'huey', 'huey'])
 
-    @requires_models(User, Tweet, Favorite)
+    @requires_models(User, Tweet)
     def test_filtering(self):
         with self.database.atomic():
             huey = self.add_user('huey')
             mickey = self.add_user('mickey')
-            meow, hiss, purr = self.add_tweets(huey, 'meow', 'hiss', 'purr')
-            woof, wheeze = self.add_tweets(mickey, 'woof', 'wheeze')
-
-            Favorite.create(user=huey, tweet=wheeze)
-            Favorite.create(user=mickey, tweet=meow)
-            Favorite.create(user=mickey, tweet=purr)
+            self.add_tweets(huey, 'meow', 'hiss', 'purr')
+            self.add_tweets(mickey, 'woof', 'wheeze')
 
         query = Tweet.filter(user__username='huey').order_by(Tweet.content)
         self.assertEqual([row.content for row in query],
@@ -709,11 +705,6 @@ class TestModelAPIs(ModelTestCase):
         query = User.filter(tweets__content__ilike='w%')
         self.assertEqual([user.username for user in query],
                          ['mickey', 'mickey'])
-
-        query = (Favorite
-                 .filter(tweet__user__username='huey')
-                 .order_by(Tweet.content))
-        self.assertEqual([f.tweet.content for f in query], ['meow', 'purr'])
 
     def test_deferred_fk(self):
         class Note(TestModel):
