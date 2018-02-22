@@ -1987,3 +1987,29 @@ class TestGithub1354(ModelTestCase):
         self.assertEqual(child_db.user.username, 'huey')
         self.assertEqual(child_db.parent.name, 'parent')
         self.assertEqual(child_db.name, 'child')
+
+
+class TestCountUnionRegression(ModelTestCase):
+    @requires_models(User)
+    def test_count_union(self):
+        with self.database.atomic():
+            for i in range(5):
+                User.create(username='user-%d' % i)
+
+        lhs = User.select()
+        rhs = User.select()
+        query = (lhs & rhs)
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
+            'INTERSECT '
+            'SELECT "t2"."id", "t2"."username" FROM "users" AS "t2"'), [])
+
+        self.assertEqual(query.count(), 5)
+
+        query = query.limit(3)
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
+            'INTERSECT '
+            'SELECT "t2"."id", "t2"."username" FROM "users" AS "t2" '
+            'LIMIT 3'), [])
+        self.assertEqual(query.count(), 3)

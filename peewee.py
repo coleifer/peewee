@@ -1752,8 +1752,9 @@ class CompoundSelectQuery(SelectBase):
                                       subquery=False):
                     ctx.sql(self.rhs)
 
-        # Apply ORDER BY, LIMIT, OFFSET.
-        self._apply_ordering(ctx)
+            # Apply ORDER BY, LIMIT, OFFSET.
+            self._apply_ordering(ctx)
+
         return self.apply_alias(ctx)
 
 
