@@ -2443,6 +2443,9 @@ class Database(_callable_context_manager):
             if self.deferred:
                 raise Exception('Error, database must be initialized before '
                                 'opening a connection.')
+            if self.in_transaction():
+                raise OperationalError('Attempting to close database while '
+                                       'transaction is open.')
             is_open = not self._state.closed
             try:
                 if is_open:
