@@ -1902,6 +1902,11 @@ class TestUpsertMySQL(OnConflictTestCase):
             ('nuggie', 'dog', '123')])
 
 
+class OCTest(TestModel):
+    a = CharField(unique=True)
+    b = IntegerField(default=0)
+
+
 @skip_case_unless(IS_POSTGRESQL)
 class TestUpsertPostgresql(OnConflictTestCase):
     def test_update(self):
@@ -1928,6 +1933,53 @@ class TestUpsertPostgresql(OnConflictTestCase):
             ('huey', 'cat', '123'),
             ('zaizee', 'cat', '124'),
             ('foo', 'baze', '125.1')])
+
+    @requires_models(OCTest)
+    def test_update_atomic(self):
+        query = OCTest.insert(a='foo', b=1).on_conflict(
+            conflict_target=(OCTest.a,),
+            update={OCTest.b: OCTest.b + 2})
+        self.assertSQL(query, (
+            'INSERT INTO "octest" ("a", "b") VALUES (?, ?) '
+            'ON CONFLICT ("a") DO UPDATE SET "b" = ("octest"."b" + ?) '
+            'RETURNING "id"'), ['foo', 1, 2])
+
+        rowid1 = query.execute()
+        rowid2 = query.clone().execute()
+        self.assertEqual(rowid1, rowid2)
+
+        obj = OCTest.get()
+        self.assertEqual(obj.a, 'foo')
+        self.assertEqual(obj.b, 3)
+
+    @requires_models(OCTest)
+    def test_update_where_clause(self):
+        query = OCTest.insert(a='foo', b=1).on_conflict(
+            conflict_target=(OCTest.a,),
+            update={OCTest.b: OCTest.b + 2},
+            where=(OCTest.b < 3))
+        self.assertSQL(query, (
+            'INSERT INTO "octest" ("a", "b") VALUES (?, ?) '
+            'ON CONFLICT ("a") DO UPDATE SET "b" = ("octest"."b" + ?) '
+            'WHERE ("octest"."b" < ?) '
+            'RETURNING "id"'), ['foo', 1, 2, 3])
+
+        rowid1 = query.execute()
+        rowid2 = query.clone().execute()
+        self.assertEqual(rowid1, rowid2)
+
+        obj = OCTest.get()
+        self.assertEqual(obj.a, 'foo')
+        self.assertEqual(obj.b, 3)
+
+        rowid3 = query.clone().execute()
+        self.assertEqual(rowid1, rowid2)
+
+        # Because we didn't satisfy the WHERE clause, the value in "b" is
+        # not incremented again.
+        obj = OCTest.get()
+        self.assertEqual(obj.a, 'foo')
+        self.assertEqual(obj.b, 3)
 
 
 class TestJoinSubquery(ModelTestCase):

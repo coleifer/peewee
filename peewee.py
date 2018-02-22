@@ -1396,6 +1396,12 @@ class DQ(ColumnBase):
 Tuple = lambda *a: EnclosedNodeList(a)
 
 
+class QualifiedNames(WrappedNode):
+    def __sql__(self, ctx):
+        with ctx.scope_column():
+            return ctx.sql(self.node)
+
+
 class OnConflict(Node):
     def __init__(self, action=None, update=None, preserve=None, where=None,
                  conflict_target=None):
@@ -3062,6 +3068,8 @@ class PostgresqlDatabase(Database):
                 if not isinstance(v, Node):
                     converter = k.db_value if isinstance(k, Field) else None
                     v = Value(v, converter=converter, unpack=False)
+                else:
+                    v = QualifiedNames(v)
                 updates.append(NodeList((ensure_entity(k), SQL('='), v)))
 
         parts = [SQL('ON CONFLICT'),
@@ -3069,7 +3077,7 @@ class PostgresqlDatabase(Database):
                  SQL('DO UPDATE SET'),
                  CommaNodeList(updates)]
         if on_conflict._where:
-            parts.extend((SQL('WHERE'), on_conflict._where))
+            parts.extend((SQL('WHERE'), QualifiedNames(on_conflict._where)))
 
         return NodeList(parts)
 

@@ -847,7 +847,8 @@ class TestOnConflictPostgresql(BaseTestCase):
         self.assertSQL(query, (
             'INSERT INTO "person" ("dob", "name") VALUES (?, ?) '
             'ON CONFLICT ("name") DO '
-            'UPDATE SET "dob" = EXCLUDED."dob", "name" = ("name" || ?)'),
+            'UPDATE SET "dob" = EXCLUDED."dob", '
+            '"name" = ("person"."name" || ?)'),
             [dob, 'huey', '-x'])
 
         query = (Person
@@ -870,8 +871,9 @@ class TestOnConflictPostgresql(BaseTestCase):
         self.assertSQL(query, (
             'INSERT INTO "person" ("name") VALUES (?) '
             'ON CONFLICT ("name") DO '
-            'UPDATE SET "dob" = EXCLUDED."dob", "name" = ("name" || ?) '
-            'WHERE ("name" != ?)'), ['huey', '-x', 'zaizee'])
+            'UPDATE SET "dob" = EXCLUDED."dob", '
+            '"name" = ("person"."name" || ?) '
+            'WHERE ("person"."name" != ?)'), ['huey', '-x', 'zaizee'])
 
 
 #Person = Table('person', ['id', 'name', 'dob'])
