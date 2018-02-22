@@ -5722,7 +5722,7 @@ class ModelSelect(BaseModelSelect, Select):
             if isinstance(field, ForeignKeyField):
                 lm, rm = field.model, field.rel_model
                 field_obj = field
-            elif isinstance(field, ReverseRelationDescriptor):
+            elif isinstance(field, BackrefAccessor):
                 lm, rm = field.field.rel_model, field.rel_model
                 field_obj = field.field
             query = query.ensure_join(lm, rm, field_obj)
