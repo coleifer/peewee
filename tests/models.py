@@ -690,6 +690,19 @@ class TestModelAPIs(ModelTestCase):
             self.assertEqual([t['username'] for t in query],
                              ['huey', 'huey', 'huey'])
 
+    @requires_models(User, Tweet)
+    def test_filtering(self):
+        self.add_tweets(self.add_user('huey'), 'meow', 'hiss', 'purr')
+        self.add_tweets(self.add_user('mickey'), 'woof', 'wheeze')
+
+        query = Tweet.filter(user__username='huey').order_by(Tweet.content)
+        self.assertEqual([row.content for row in query],
+                         ['hiss', 'meow', 'purr'])
+
+        query = User.filter(tweets__content__ilike='w%')
+        self.assertEqual([user.username for user in query],
+                         ['mickey', 'mickey'])
+
     def test_deferred_fk(self):
         class Note(TestModel):
             foo = DeferredForeignKey('Foo', backref='notes')
@@ -1538,8 +1551,10 @@ class TestFieldInheritance(BaseTestCase):
         self.assertEqual(BaseUser.account.backref, 'baseuser_set')
         self.assertEqual(User.account.backref, 'user_set')
         self.assertEqual(Admin.account.backref, 'admin_set')
-        self.assertTrue(Account.user_set.model is User)
-        self.assertTrue(Account.admin_set.model is Admin)
+        self.assertTrue(Account.user_set.model is Account)
+        self.assertTrue(Account.admin_set.model is Account)
+        self.assertTrue(Account.user_set.rel_model is User)
+        self.assertTrue(Account.admin_set.rel_model is Admin)
 
         self.assertSQL(Account._schema._create_table(), (
             'CREATE TABLE IF NOT EXISTS "account" ('
@@ -1573,9 +1588,12 @@ class TestFieldInheritance(BaseTestCase):
         self.assertEqual(BasePost.category.backref, 'baseposts')
         self.assertEqual(Note.category.backref, 'notes')
         self.assertEqual(Photo.category.backref, 'photos')
-        self.assertTrue(Category.baseposts.model is BasePost)
-        self.assertTrue(Category.notes.model is Note)
-        self.assertTrue(Category.photos.model is Photo)
+        self.assertTrue(Category.baseposts.rel_model is BasePost)
+        self.assertTrue(Category.baseposts.model is Category)
+        self.assertTrue(Category.notes.rel_model is Note)
+        self.assertTrue(Category.notes.model is Category)
+        self.assertTrue(Category.photos.rel_model is Photo)
+        self.assertTrue(Category.photos.model is Category)
 
         class BaseItem(TestModel):
             category = ForeignKeyField(Category, backref='items')
@@ -1585,9 +1603,11 @@ class TestFieldInheritance(BaseTestCase):
         self.assertEqual(BaseItem.category.backref, 'items')
         self.assertEqual(ItemA.category.backref, 'itema_set')
         self.assertEqual(ItemB.category.backref, 'itemb_set')
-        self.assertTrue(Category.items.model is BaseItem)
-        self.assertTrue(Category.itema_set.model is ItemA)
-        self.assertTrue(Category.itemb_set.model is ItemB)
+        self.assertTrue(Category.items.rel_model is BaseItem)
+        self.assertTrue(Category.itema_set.rel_model is ItemA)
+        self.assertTrue(Category.itema_set.model is Category)
+        self.assertTrue(Category.itemb_set.rel_model is ItemB)
+        self.assertTrue(Category.itemb_set.model is Category)
 
 
 class TestMetaInheritance(BaseTestCase):

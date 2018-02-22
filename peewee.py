@@ -3516,12 +3516,13 @@ class ForeignKeyAccessor(FieldAccessor):
 class BackrefAccessor(object):
     def __init__(self, field):
         self.field = field
-        self.model = field.model
+        self.model = field.rel_model
+        self.rel_model = field.model
 
     def __get__(self, instance, instance_type=None):
         if instance is not None:
             dest = self.field.rel_field.name
-            return (self.model
+            return (self.rel_model
                     .select()
                     .where(self.field == getattr(instance, dest)))
         return self
@@ -5723,7 +5724,7 @@ class ModelSelect(BaseModelSelect, Select):
                 lm, rm = field.model, field.rel_model
                 field_obj = field
             elif isinstance(field, BackrefAccessor):
-                lm, rm = field.field.rel_model, field.rel_model
+                lm, rm = field.model, field.rel_model
                 field_obj = field.field
             query = query.ensure_join(lm, rm, field_obj)
         return query.where(dq_node)
