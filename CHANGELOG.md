@@ -5,6 +5,15 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.0.20
+
+* Include `schema` (if specified) when checking for table-existence.
+* Correct placement of ORDER BY / LIMIT clauses in compound select queries.
+* Fix bug in back-reference lookups when using `filter()` API.
+* Fix bug in SQL generation for ON CONFLICT queries with Postgres, #1512.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.0.19...3.0.20)
+
 ## 3.0.19
 
 * Support for more types of mappings in `insert_many()`, refs #1495.
