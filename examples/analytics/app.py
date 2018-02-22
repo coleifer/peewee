@@ -50,6 +50,7 @@ app.config.from_object(__name__)
 
 database = PostgresqlExtDatabase(
     DATABASE_NAME,
+    register_hstore=True,
     user='postgres')
 
 class BaseModel(Model):
