@@ -1020,9 +1020,9 @@ cdef bf_t *bf_create(size_t size):
     return bf
 
 @cython.cdivision(True)
-cdef uint32_t bf_bitindex(bf_t *bf, unsigned char *key, int seed):
+cdef uint32_t bf_bitindex(bf_t *bf, unsigned char *key, size_t klen, int seed):
     cdef:
-        uint32_t h = murmurhash2(key, strlen(<const char *>key), seed)
+        uint32_t h = murmurhash2(key, klen, seed)
     return h % (bf.size * 8)
 
 @cython.cdivision(True)
@@ -1031,9 +1031,10 @@ cdef bf_add(bf_t *bf, unsigned char *key):
         uint8_t *bits = <uint8_t *>(bf.bits)
         uint32_t h
         int pos, seed
+        size_t keylen = strlen(<const char *>key)
 
     for seed in seeds:
-        h = bf_bitindex(bf, key, seed)
+        h = bf_bitindex(bf, key, keylen, seed)
         pos = h / 8
         bits[pos] = bits[pos] | (1 << (h % 8))
 
@@ -1043,9 +1044,10 @@ cdef int bf_contains(bf_t *bf, unsigned char *key):
         uint8_t *bits = <uint8_t *>(bf.bits)
         uint32_t h
         int pos, seed
+        size_t keylen = strlen(<const char *>key)
 
     for seed in seeds:
-        h = bf_bitindex(bf, key, seed)
+        h = bf_bitindex(bf, key, keylen, seed)
         pos = h / 8
         if not (bits[pos] & (1 << (h % 8))):
             return 0
