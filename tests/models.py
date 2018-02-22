@@ -715,11 +715,6 @@ class TestModelAPIs(ModelTestCase):
                  .order_by(Tweet.content))
         self.assertEqual([f.tweet.content for f in query], ['meow', 'purr'])
 
-        query = (Tweet
-                 .filter(favorites__user__username='mickey')
-                 .order_by(Tweet.content))
-        self.assertEqual([t.content for t in query], ['meow', 'purr'])
-
     def test_deferred_fk(self):
         class Note(TestModel):
             foo = DeferredForeignKey('Foo', backref='notes')
