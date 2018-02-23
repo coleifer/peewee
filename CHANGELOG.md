@@ -5,6 +5,27 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.1.0
+
+#### Backwards-incompatible changes
+
+`Database.bind()` has been renamed to `Database.bind_ctx()`, to more closely
+match the semantics of the corresponding model methods, `Model.bind()` and
+`Model.bind_ctx()`. The new `Database.bind()` method is a one-time operation
+that binds the given models to the database. See documentation:
+
+* [Database.bind()](http://docs.peewee-orm.com/en/latest/peewee/api.html#Database.bind)
+* [Database.bind_ctx()](http://docs.peewee-orm.com/en/latest/peewee/api.html#Database.bind_ctx)
+
+#### Other changes
+
+* Removed Python 2.6 support code from a few places.
+* Fixed example analytics app code to ensure hstore extension is registered.
+* Small efficiency improvement to bloom filter.
+* Removed "attention!" from *README*.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.0.20...3.1.0)
+
 ## 3.0.20
 
 * Include `schema` (if specified) when checking for table-existence.
