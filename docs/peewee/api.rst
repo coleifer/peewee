@@ -373,6 +373,15 @@ Database
 
     .. py:method:: bind(models[, bind_refs=True[, bind_backrefs=True]])
 
+        :param list models: One or more :py:class:`Model` classes to bind.
+        :param bool bind_refs: Bind related models.
+        :param bool bind_backrefs: Bind back-reference related models.
+
+        Bind the given list of models, and specified relations, to the
+        database.
+
+    .. py:method:: bind_ctx(models[, bind_refs=True[, bind_backrefs=True]])
+
         :param list models: List of models to bind to the database.
         :param bool bind_refs: Bind models that are referenced using
             foreign-keys.
@@ -392,7 +401,7 @@ Database
             def use_test_database(fn):
                 @wraps(fn)
                 def inner(self):
-                    with test_db.bind(MODELS):
+                    with test_db.bind_ctx(MODELS):
                         test_db.create_tables(MODELS)
                         try:
                             fn(self)
@@ -3409,10 +3418,14 @@ Model
 
         Bind the model (and specified relations) to the given database.
 
+        See also: :py:meth:`Database.bind`.
+
     .. py:classmethod:: bind_ctx(database[, bind_refs=True[, bind_backrefs=True]])
 
         Like :py:meth:`~Model.bind`, but returns a context manager that only
         binds the models for the duration of the wrapped block.
+
+        See also: :py:meth:`Database.bind_ctx`.
 
     .. py:classmethod:: table_exists()
 

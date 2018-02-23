@@ -753,11 +753,14 @@ each test.
 To bind your models to a database at run-time, you can use the following
 methods:
 
-* :py:meth:`Database.bind`, which returns a context-manager that will bind the
-  given models to the database instance for the duration of the wrapped block.
+* :py:meth:`Database.bind_ctx`, which returns a context-manager that will bind
+  the given models to the database instance for the duration of the wrapped
+  block.
 * :py:meth:`Model.bind_ctx`, which likewise returns a context-manager that
   binds the model (and optionally its dependencies) to the given database for
   the duration of the wrapped block.
+* :py:meth:`Database.bind`, which is a one-time operation that binds the models
+  (and optionally its dependencies) to the given database.
 * :py:meth:`Model.bind`, which is a one-time operation that binds the model
   (and optionally its dependencies) to the given database.
 

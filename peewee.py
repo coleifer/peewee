@@ -2612,6 +2612,10 @@ class Database(_callable_context_manager):
         raise NotImplementedError
 
     def bind(self, models, bind_refs=True, bind_backrefs=True):
+        for model in models:
+            model.bind(self, bind_refs=bind_refs, bind_backrefs=bind_backrefs)
+
+    def bind_ctx(self, models, bind_refs=True, bind_backrefs=True):
         return _BoundModelsContext(models, self, bind_refs, bind_backrefs)
 
     def get_noop_select(self, ctx):
@@ -5278,7 +5282,8 @@ class Model(with_metaclass(ModelBase, Node)):
 
     @classmethod
     def table_exists(cls):
-        return cls._meta.database.table_exists(cls._meta.table, cls._meta.schema)
+        meta = cls._meta
+        return meta.database.table_exists(meta.table, meta.schema)
 
     @classmethod
     def create_table(cls, safe=True, **options):

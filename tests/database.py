@@ -158,6 +158,35 @@ class TestDatabase(DatabaseTestCase):
         self.assertEqual(cursor.fetchall(), [(1337,), (31337,)])
         self.database.execute_sql('DROP TABLE register;')
 
+    def test_bind_helpers(self):
+        db = get_in_memory_db()
+        alt_db = get_in_memory_db()
+
+        class Base(Model):
+            class Meta:
+                database = db
+
+        class A(Base):
+            a = TextField()
+        class B(Base):
+            b = TextField()
+
+        db.create_tables([A, B])
+
+        # Temporarily bind A to alt_db.
+        with alt_db.bind_ctx([A]):
+            self.assertFalse(A.table_exists())
+            self.assertTrue(B.table_exists())
+
+        self.assertTrue(A.table_exists())
+        self.assertTrue(B.table_exists())
+
+        alt_db.bind([A])
+        self.assertFalse(A.table_exists())
+        self.assertTrue(B.table_exists())
+        db.close()
+        alt_db.close()
+
 
 class TestThreadSafety(ModelTestCase):
     requires = [User]
