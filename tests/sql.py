@@ -184,6 +184,17 @@ class TestSelectQuery(BaseTestCase):
             'INNER JOIN "users" AS "alt" ON ("t1"."id" = "alt"."id") '
             'ORDER BY "alt"."nuggz"'), [])
 
+    def test_simple_cte(self):
+        cte = User.select(User.c.id).cte('user_ids')
+        query = (User
+                 .select(User.c.username)
+                 .where(User.c.id.in_(cte))
+                 .with_cte(cte))
+        self.assertSQL(query, (
+            'WITH "user_ids" AS (SELECT "t1"."id" FROM "users" AS "t1") '
+            'SELECT "t2"."username" FROM "users" AS "t2" '
+            'WHERE ("t2"."id" IN "user_ids")'), [])
+
     def test_complex_select(self):
         Order = Table('orders', columns=(
             'region',
