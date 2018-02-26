@@ -4567,6 +4567,22 @@ class SchemaManager(object):
     def drop_sequence(self, field):
         self.database.execute(self._drop_sequence(field))
 
+    def _create_foreign_key(self, field):
+        name = 'fk_%s_%s_refs_%s' % (field.model._meta.table_name,
+                                     field.column_name,
+                                     field.rel_model._meta.table_name)
+        return (self
+                ._create_context()
+                .literal('ALTER TABLE ')
+                .sql(field.model)
+                .literal(' ADD CONSTRAINT ')
+                .sql(Entity(name))
+                .literal(' ')
+                .sql(field.foreign_key_constraint()))
+
+    def create_foreign_key(self, field):
+        self.database.execute(self._create_foreign_key(field))
+
     def create_all(self, safe=True, **table_options):
         if self.database.sequences:
             for field in self.model._meta.sorted_fields:

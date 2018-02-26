@@ -2831,6 +2831,42 @@ Schema Manager
 
         Drop sequence for the given :py:class:`Field`.
 
+    .. py:method:: create_foreign_key(field)
+
+        :param ForeignKeyField field: Foreign-key field constraint to add.
+
+        Add a foreign-key constraint for the given field. This method should
+        not be necessary in most cases, as foreign-key constraints are created
+        as part of table creation. The exception is when you are creating a
+        circular foreign-key relationship using :py:class:`DeferredForeignKey`.
+        In those cases, it is necessary to first create the tables, then add
+        the constraint for the deferred foreign-key:
+
+        .. code-block:: python
+
+            class Language(Model):
+                name = TextField()
+                selected_snippet = DeferredForeignKey('Snippet')
+
+            class Snippet(Model):
+                code = TextField()
+                language = ForeignKeyField(Language, backref='snippets')
+
+            # Creates both tables but does not create the constraint for the
+            # Language.selected_snippet foreign key (because of the circular
+            # dependency).
+            db.create_tables([Language, Snippet])
+
+            # Explicitly create the constraint:
+            Language._schema.create_foreign_key(Language.selected_snippet)
+
+        For more information, see documentation on :ref:`circular-fks`.
+
+        .. warning::
+            Because SQLite has limited support for altering existing tables, it
+            is not possible to add a foreign-key constraint to an existing
+            SQLite table.
+
     .. py:method:: create_all([safe=True[, **table_options]])
 
         :param bool safe: Whether to specify IF NOT EXISTS.

@@ -300,3 +300,12 @@ class TestModelDDL(ModelDatabaseTestCase):
             '"id" INTEGER NOT NULL PRIMARY KEY, '
             '"name" VARCHAR(255) NOT NULL, '
             '"selected_snippet_id" INTEGER)'))
+
+        sql, params = (Language
+                       ._schema
+                       ._create_foreign_key(Language.selected_snippet)
+                       .query())
+        self.assertEqual(sql, (
+            'ALTER TABLE "language" ADD CONSTRAINT '
+            '"fk_language_selected_snippet_id_refs_snippet" '
+            'FOREIGN KEY ("selected_snippet_id") REFERENCES "snippet" ("id")'))

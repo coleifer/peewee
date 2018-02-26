@@ -1046,6 +1046,8 @@ the category and parent model using a self-join:
              .where(GrandParent.name == 'some category')
              .order_by(Category.name))
 
+.. _circular-fks:
+
 Circular foreign key dependencies
 ---------------------------------
 
@@ -1101,3 +1103,20 @@ There is one more quirk to watch out for, though. When you call
 :py:class:`~Model.create_table` we will again encounter the same issue. For
 this reason peewee will not automatically create a foreign key constraint for
 any *deferred* foreign keys.
+
+To create the tables *and* the foreign-key constraint, you can use the
+:py:meth:`SchemaManager.create_foreign_key` method to create the constraint
+after creating the tables:
+
+.. code-block:: python
+
+    # Will create the User and Tweet tables, but does *not* create a
+    # foreign-key constraint on User.favorite_tweet.
+    db.create_tables([User, Tweet])
+
+    # Create the foreign-key constraint:
+    User._schema.create_foreign_key(User.favorite_tweet)
+
+.. note::
+    Because SQLite has limited support for altering tables, foreign-key
+    constraints cannot be added to a table after it has been created.

@@ -228,9 +228,27 @@ class SchemaMigrator(object):
                 .sql(EnclosedNodeList((Entity(field.rel_field.column_name),))))
 
     @operation
-    def add_foreign_key_constraint(self, table, column_name, field,
+    def add_foreign_key_constraint(self, table, column_name, rel, rel_column,
                                    on_delete=None, on_update=None):
-        raise NotImplementedError
+        constraint = 'fk_%s_%s_refs_%s' % (table, column_name, rel)
+        ctx = (self
+               .make_context()
+               .literal('ALTER TABLE ')
+               .sql(Entity(table))
+               .literal(' ADD CONSTRAINT ')
+               .sql(Entity(constraint))
+               .literal(' FOREIGN KEY ')
+               .sql(EnclosedNodeList((Entity(column_name),)))
+               .literal(' REFERENCES ')
+               .sql(Entity(rel))
+               .literal(' (')
+               .sql(Entity(rel_column))
+               .literal(')'))
+        if on_delete is not None:
+            ctx = ctx.literal(' ON DELETE %s' % on_delete)
+        if on_update is not None:
+            ctx = ctx.literal(' ON UPDATE %s' % on_update)
+        return ctx
 
     @operation
     def add_column(self, table, column_name, field):
@@ -441,30 +459,6 @@ class MySQLMigrator(SchemaMigrator):
             if column.name == column_name:
                 return column
         return False
-
-    @operation
-    def add_foreign_key_constraint(self, table, column_name, rel, rel_column,
-                                   on_delete=None, on_update=None):
-        # TODO: refactor, this duplicates QueryCompiler._create_foreign_key
-        constraint = 'fk_%s_%s_refs_%s' % (table, column_name, rel)
-        ctx = (self
-               .make_context()
-               .literal('ALTER TABLE ')
-               .sql(Entity(table))
-               .literal(' ADD CONSTRAINT ')
-               .sql(Entity(constraint))
-               .literal(' FOREIGN KEY ')
-               .sql(EnclosedNodeList((Entity(column_name),)))
-               .literal(' REFERENCES ')
-               .sql(Entity(rel))
-               .literal(' (')
-               .sql(Entity(rel_column))
-               .literal(')'))
-        if on_delete is not None:
-            ctx = ctx.literal(' ON DELETE %s' % on_delete)
-        if on_update is not None:
-            ctx = ctx.literal(' ON UPDATE %s' % on_update)
-        return ctx
 
     def get_foreign_key_constraint(self, table, column_name):
         cursor = self.database.execute_sql(
@@ -759,6 +753,11 @@ class SqliteMigrator(SchemaMigrator):
         def _drop_not_null(column_name, column_def):
             return column_def.replace('NOT NULL', '')
         return self._update_column(table, column, _drop_not_null)
+
+    @operation
+    def add_foreign_key_constraint(self, table, column_name, field,
+                                   on_delete=None, on_update=None):
+        raise NotImplementedError
 
 
 def migrate(*operations, **kwargs):

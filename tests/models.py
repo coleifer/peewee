@@ -1612,6 +1612,45 @@ class TestFieldInheritance(BaseTestCase):
         self.assertTrue(Category.itemb_set.rel_model is ItemB)
         self.assertTrue(Category.itemb_set.model is Category)
 
+    @skip_if(IS_SQLITE)
+    def test_deferred_fk_creation(self):
+        class B(TestModel):
+            a = DeferredForeignKey('A', null=True)
+            b = TextField()
+        class A(TestModel):
+            a = TextField()
+
+        db.create_tables([A, B])
+
+        try:
+            # Test that we can create B with null "a_id" column:
+            a = A.create(a='a')
+            b = B.create(b='b')
+
+            # Test that we can create B that has no corresponding A:
+            fake_a = A(id=31337)
+            b2 = B.create(a=fake_a, b='b2')
+            b2_db = B.get(B.a == fake_a)
+            self.assertEqual(b2_db.b, 'b2')
+
+            # Ensure error occurs trying to create_foreign_key.
+            with db.atomic():
+                self.assertRaises(
+                    IntegrityError,
+                    B._schema.create_foreign_key,
+                    B.a)
+
+            b2_db.delete_instance()
+
+            # We can now create the foreign key.
+            B._schema.create_foreign_key(B.a)
+
+            # The foreign-key is enforced:
+            with db.atomic():
+                self.assertRaises(IntegrityError, B.create, a=fake_a, b='b3')
+        finally:
+            db.drop_tables([A, B])
+
 
 class TestMetaInheritance(BaseTestCase):
     def test_table_name(self):
