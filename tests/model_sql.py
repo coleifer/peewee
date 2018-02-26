@@ -61,6 +61,11 @@ class TestModelSQL(ModelDatabaseTestCase):
             'SELECT "t1"."last" FROM "person" AS "t1" '
             'WHERE ("t1"."id" < ("t1"."id" - ?))'), [5])
 
+        query = Person.select(Person.last).where(Person.first == b'foo')
+        self.assertSQL(query, (
+            'SELECT "t1"."last" FROM "person" AS "t1" '
+            'WHERE ("t1"."first" = ?)'), ['foo'])
+
     def test_group_by(self):
         query = (User
                  .select(User, fn.COUNT(Tweet.id).alias('tweet_count'))
