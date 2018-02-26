@@ -783,6 +783,19 @@ class TestRaw(ModelTestCase):
         self.assertEqual([(row.username, row.first) for row in query],
                          [('chuck', 'c'), ('charlie', 'c')])
 
+    def test_raw_iterator(self):
+        (User
+         .insert_many([('charlie',), ('huey',)], fields=[User.username])
+         .execute())
+
+        with self.assertQueryCount(1):
+            query = User.raw('SELECT * FROM users ORDER BY id')
+            results = [user.username for user in query.iterator()]
+            self.assertEqual(results, ['charlie', 'huey'])
+
+            # Since we used iterator(), the results were not cached.
+            self.assertEqual([u.username for u in query], [])
+
 
 class TestDeleteInstance(ModelTestCase):
     database = get_in_memory_db()
