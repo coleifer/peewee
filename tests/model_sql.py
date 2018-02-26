@@ -127,6 +127,17 @@ class TestModelSQL(ModelDatabaseTestCase):
             'INNER JOIN "tweet" AS "t2" ON ("t1"."id" = "t2"."user_id") '
             'GROUP BY "t1"."id", "t1"."username"'), [])
 
+    def test_model_alias_with_schema(self):
+        class Note(TestModel):
+            content = TextField()
+            class Meta:
+                schema = 'notes'
+
+        query = Note.alias().select()
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."content" '
+            'FROM "notes"."note" AS "t1"'), [])
+
     def test_filter_simple(self):
         query = User.filter(username='huey')
         self.assertSQL(query, (

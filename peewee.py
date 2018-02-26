@@ -4729,7 +4729,10 @@ class Metadata(object):
 
     @property
     def entity(self):
-        return Entity(self.table_name)
+        if self._schema:
+            return Entity(self._schema, self.table_name)
+        else:
+            return Entity(self.table_name)
 
     def _update_sorted_fields(self):
         self.sorted_fields = list(self._sorted_field_list)
@@ -5370,7 +5373,7 @@ class ModelAlias(Node):
         if ctx.scope == SCOPE_SOURCE:
             # Define the table and its alias.
             return (ctx
-                    .sql(Entity(self.model._meta.table_name))
+                    .sql(self.model._meta.entity)
                     .literal(' AS ')
                     .sql(Entity(ctx.alias_manager[self])))
         else:
