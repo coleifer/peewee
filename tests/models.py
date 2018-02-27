@@ -602,12 +602,12 @@ class TestModelAPIs(ModelTestCase):
                  .select(User.id, User.username)
                  .where(User.username.in_(['huey', 'zaizee'])))
         query = (Tweet
-                 .select(Tweet.content, users.c.username.alias('username'))
+                 .select(Tweet.content, users.c.username)
                  .join(users, on=(Tweet.user == users.c.id))
                  .order_by(Tweet.id))
 
         self.assertSQL(query, (
-            'SELECT "t1"."content", "t2"."username" AS "username" '
+            'SELECT "t1"."content", "t2"."username" '
             'FROM "tweet" AS "t1" '
             'INNER JOIN (SELECT "t3"."id", "t3"."username" '
             'FROM "users" AS "t3" '
@@ -619,6 +619,24 @@ class TestModelAPIs(ModelTestCase):
                 ('meow', 'huey'),
                 ('purr', 'huey'),
                 ('hiss', 'huey')])
+
+        # Attempt join with subquery as common-table expression.
+        cte = users.cte('cats')
+        query = (Tweet
+                 .select(Tweet.content, cte.c.username)
+                 .join(cte, on=(Tweet.user == cte.c.id))
+                 .order_by(Tweet.id)
+                 .with_cte(cte))
+        self.assertSQL(query, (
+            'WITH "cats" AS ('
+            'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
+            'WHERE ("t1"."username" IN (?, ?))) '
+            'SELECT "t2"."content", "cats"."username" FROM "tweet" AS "t2" '
+            'INNER JOIN "cats" ON ("t2"."user_id" = "cats"."id") '
+            'ORDER BY "t2"."id"'), ['huey', 'zaizee'])
+        with self.assertQueryCount(1):
+            self.assertEqual([t.content for t in query],
+                             ['meow', 'purr', 'hiss'])
 
     @requires_models(User, Tweet)
     def test_insert_query_value(self):
