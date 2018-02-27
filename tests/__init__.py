@@ -28,6 +28,7 @@ except ImportError:
     print('Unable to import sqlite C extension tests, skipping.')
 from .dataset import *
 from .db_url import *
+from .extra_fields import *
 from .hybrid import *
 from .migrations import *
 from .pool import *

@@ -6,9 +6,14 @@ try:
     import zlib
 except ImportError:
     zlib = None
+try:
+    import cPickle as pickle
+except ImportError:
+    import pickle
 import sys
 
 from peewee import BlobField
+from peewee import buffer_type
 
 
 PY2 = sys.version_info[0] == 2
@@ -36,21 +41,30 @@ class CompressedField(BlobField):
         self.decompress = compress_module.decompress
         super(CompressedField, self).__init__(*args, **kwargs)
 
+    def python_value(self, value):
+        if value is not None:
+            return self.decompress(value)
+
     if PY2:
         def db_value(self, value):
             if value is not None:
                 return self._constructor(
                     self.compress(value, self.compression_level))
-
-        def python_value(self, value):
-            if value is not None:
-                return self.decompress(value)
     else:
         def db_value(self, value):
             if value is not None:
                 return self.compress(
                     self._constructor(value), self.compression_level)
 
-        def python_value(self, value):
-            if value is not None:
-                return self.decompress(value).decode('utf-8')
+
+class PickleField(BlobField):
+    def python_value(self, value):
+        if value is not None:
+            if isinstance(value, (self._constructor, buffer_type)):
+                value = bytes(value)
+            return pickle.loads(value)
+
+    def db_value(self, value):
+        if value is not None:
+            pickled = pickle.dumps(value, pickle.HIGHEST_PROTOCOL)
+            return self._constructor(pickled)
