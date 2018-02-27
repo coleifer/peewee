@@ -534,18 +534,22 @@ class TestModelAPIs(ModelTestCase):
         res = query.count()
         self.assertEqual(res, 5)
 
-    @requires_models(User, Tweet)
-    def test_join_subquery(self):
+    def _create_user_tweets(self):
         data = (('huey', ('meow', 'purr', 'hiss')),
                 ('zaizee', ()),
                 ('mickey', ('woof', 'grr')))
 
-        ts = int(time.time())
-        for username, tweets in data:
-            user = User.create(username=username)
-            for tweet in tweets:
-                Tweet.create(user=user, content=tweet, timestamp=ts)
-                ts += 1
+        with self.database.atomic():
+            ts = int(time.time())
+            for username, tweets in data:
+                user = User.create(username=username)
+                for tweet in tweets:
+                    Tweet.create(user=user, content=tweet, timestamp=ts)
+                    ts += 1
+
+    @requires_models(User, Tweet)
+    def test_join_subquery(self):
+        self._create_user_tweets()
 
         # Select note user and timestamp of most recent tweet.
         TA = Tweet.alias()
@@ -588,15 +592,7 @@ class TestModelAPIs(ModelTestCase):
 
     @requires_models(User, Tweet)
     def test_join_subquery_2(self):
-        data = (('huey', ('meow', 'purr', 'hiss')),
-                ('zaizee', ()),
-                ('mickey', ('woof', 'grr')))
-
-        with self.database.atomic():
-            for username, tweets in data:
-                user = User.create(username=username)
-                for tweet in tweets:
-                    Tweet.create(user=user, content=tweet)
+        self._create_user_tweets()
 
         users = (User
                  .select(User.id, User.username)
@@ -615,13 +611,29 @@ class TestModelAPIs(ModelTestCase):
             'ON ("t1"."user_id" = "t2"."id") '
             'ORDER BY "t1"."id"'), ['huey', 'zaizee'])
         with self.assertQueryCount(1):
-            self.assertEqual([(t.content, t.user.username) for t in query], [
-                ('meow', 'huey'),
-                ('purr', 'huey'),
-                ('hiss', 'huey')])
+            results = [(t.content, t.user.username) for t in query]
+            if IS_SQLITE and sqlite3.sqlite_version_info < (3, 20):
+                self.assertEqual(results, [
+                    ('meow', None),
+                    ('purr', None),
+                    ('hiss', None)])
+            else:
+                self.assertEqual(results, [
+                    ('meow', 'huey'),
+                    ('purr', 'huey'),
+                    ('hiss', 'huey')])
+
+    @requires_models(User, Tweet)
+    @skip_if(IS_MYSQL)
+    def test_join_subquery_cte(self):
+        self._create_user_tweets()
+
+        cte = (User
+               .select(User.id, User.username)
+               .where(User.username.in_(['huey', 'zaizee']))\
+               .cte('cats'))
 
         # Attempt join with subquery as common-table expression.
-        cte = users.cte('cats')
         query = (Tweet
                  .select(Tweet.content, cte.c.username)
                  .join(cte, on=(Tweet.user == cte.c.id))
