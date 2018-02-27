@@ -49,6 +49,9 @@ class Point(TestModel):
         primary_key = False
 
 
+IS_OLD_SQLITE = IS_SQLITE and sqlite3.sqlite_version_info < (3, 18)
+
+
 class TestModelAPIs(ModelTestCase):
     def add_user(self, username):
         return User.create(username=username)
@@ -573,7 +576,7 @@ class TestModelAPIs(ModelTestCase):
             data = [(user.username, user.tweet.content) for user in query]
 
         # Failing on travis-ci...old SQLite?
-        if not IS_SQLITE or sqlite3.sqlite_version_info >= (3, 15):
+        if not IS_OLD_SQLITE:
             self.assertEqual(data, [
                 ('huey', 'hiss'),
                 ('mickey', 'grr')])
@@ -612,7 +615,7 @@ class TestModelAPIs(ModelTestCase):
             'ORDER BY "t1"."id"'), ['huey', 'zaizee'])
         with self.assertQueryCount(1):
             results = [(t.content, t.user.username) for t in query]
-            if IS_SQLITE and sqlite3.sqlite_version_info < (3, 15):
+            if IS_OLD_SQLITE:
                 self.assertEqual(results, [
                     ('meow', None),
                     ('purr', None),
@@ -624,7 +627,7 @@ class TestModelAPIs(ModelTestCase):
                     ('hiss', 'huey')])
 
     @requires_models(User, Tweet)
-    @skip_if(IS_MYSQL)
+    @skip_if(IS_MYSQL or IS_OLD_SQLITE)
     def test_join_subquery_cte(self):
         self._create_user_tweets()
 
