@@ -587,6 +587,40 @@ class TestModelAPIs(ModelTestCase):
             ('mickey', 'grr')])
 
     @requires_models(User, Tweet)
+    def test_join_subquery_2(self):
+        data = (('huey', ('meow', 'purr', 'hiss')),
+                ('zaizee', ()),
+                ('mickey', ('woof', 'grr')))
+
+        with self.database.atomic():
+            for username, tweets in data:
+                user = User.create(username=username)
+                for tweet in tweets:
+                    Tweet.create(user=user, content=tweet)
+
+        users = (User
+                 .select(User.id, User.username)
+                 .where(User.username.in_(['huey', 'zaizee'])))
+        query = (Tweet
+                 .select(Tweet.content, users.c.username.alias('username'))
+                 .join(users, on=(Tweet.user == users.c.id))
+                 .order_by(Tweet.id))
+
+        self.assertSQL(query, (
+            'SELECT "t1"."content", "t2"."username" AS "username" '
+            'FROM "tweet" AS "t1" '
+            'INNER JOIN (SELECT "t3"."id", "t3"."username" '
+            'FROM "users" AS "t3" '
+            'WHERE ("t3"."username" IN (?, ?))) AS "t2" '
+            'ON ("t1"."user_id" = "t2"."id") '
+            'ORDER BY "t1"."id"'), ['huey', 'zaizee'])
+        with self.assertQueryCount(1):
+            self.assertEqual([(t.content, t.user.username) for t in query], [
+                ('meow', 'huey'),
+                ('purr', 'huey'),
+                ('hiss', 'huey')])
+
+    @requires_models(User, Tweet)
     def test_insert_query_value(self):
         huey = self.add_user('huey')
         query = User.select(User.id).where(User.username == 'huey')
@@ -764,6 +798,17 @@ class TestModelAPIs(ModelTestCase):
             self.assertEqual([u.username for u in query], users)
 
             self.assertEqual(list(query), [])
+
+    @requires_models(User)
+    def test_select_count(self):
+        users = [self.add_user(u) for u in ('huey', 'charlie', 'mickey')]
+        self.assertEqual(User.select().count(), 3)
+
+        qr = User.select().execute()
+        self.assertEqual(qr.count, 0)
+
+        list(qr)
+        self.assertEqual(qr.count, 3)
 
 
 class TestRaw(ModelTestCase):
