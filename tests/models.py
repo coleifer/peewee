@@ -573,7 +573,7 @@ class TestModelAPIs(ModelTestCase):
             data = [(user.username, user.tweet.content) for user in query]
 
         # Failing on travis-ci...old SQLite?
-        if not IS_SQLITE:
+        if not IS_SQLITE or sqlite3.sqlite_version_info >= (3, 15):
             self.assertEqual(data, [
                 ('huey', 'hiss'),
                 ('mickey', 'grr')])
@@ -612,7 +612,7 @@ class TestModelAPIs(ModelTestCase):
             'ORDER BY "t1"."id"'), ['huey', 'zaizee'])
         with self.assertQueryCount(1):
             results = [(t.content, t.user.username) for t in query]
-            if IS_SQLITE and sqlite3.sqlite_version_info < (3, 20):
+            if IS_SQLITE and sqlite3.sqlite_version_info < (3, 15):
                 self.assertEqual(results, [
                     ('meow', None),
                     ('purr', None),

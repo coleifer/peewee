@@ -45,16 +45,10 @@ class CompressedField(BlobField):
         if value is not None:
             return self.decompress(value)
 
-    if PY2:
-        def db_value(self, value):
-            if value is not None:
-                return self._constructor(
-                    self.compress(value, self.compression_level))
-    else:
-        def db_value(self, value):
-            if value is not None:
-                return self.compress(
-                    self._constructor(value), self.compression_level)
+    def db_value(self, value):
+        if value is not None:
+            return self._constructor(
+                self.compress(value, self.compression_level))
 
 
 class PickleField(BlobField):
