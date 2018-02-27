@@ -54,7 +54,7 @@ class CompressedField(BlobField):
 class PickleField(BlobField):
     def python_value(self, value):
         if value is not None:
-            if isinstance(value, (self._constructor, buffer_type)):
+            if isinstance(value, buffer_type):
                 value = bytes(value)
             return pickle.loads(value)
 
