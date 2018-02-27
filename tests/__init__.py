@@ -30,6 +30,7 @@ from .dataset import *
 from .db_url import *
 from .extra_fields import *
 from .hybrid import *
+from .kv import *
 from .migrations import *
 from .pool import *
 try:

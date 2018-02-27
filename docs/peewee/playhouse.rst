@@ -25,6 +25,7 @@ make up the ``playhouse``.
 * :ref:`extra-fields`
 * :ref:`shortcuts`
 * :ref:`hybrid`
+* :ref:`kv`
 * :ref:`signals`
 * :ref:`dataset`
 
@@ -2090,6 +2091,233 @@ Hybrid API
             (("t1"."end" - "t1"."start") > 6) AND
             ((abs("t1"."end" - "t1"."start") / 2) >= 3)
         )
+
+.. _kv:
+
+Key/Value Store
+---------------
+
+The ``playhouse.kv`` module contains the implementation of a persistent
+dictionary.
+
+.. py:class:: KeyValue([key_field=None[, value_field=None[, ordered=False[, database=None[, table_name='keyvalue']]]]])
+
+    :param Field key_field: field to use for key. Defaults to
+        :py:class:`CharField`. **Must have** ``primary_key=True``.
+    :param Field value_field: field to use for value. Defaults to
+        :py:class:`PickleField`.
+    :param bool ordered: data should be returned in key-sorted order.
+    :param Database database: database where key/value data is stored. If not
+        specified, an in-memory SQLite database will be used.
+    :param str table_name: table name for data storage.
+
+    Dictionary-like API for storing key/value data. Like dictionaries, supports
+    the expected APIs, but also has the added capability of accepting
+    expressions for getting, setting and deleting items.
+
+    Table is created automatically (if it doesn't exist) when the ``KeyValue``
+    is instantiated.
+
+    Basic examples:
+
+    .. code-block:: python
+
+        # Create a key/value store, which uses an in-memory SQLite database
+        # for data storage.
+        KV = KeyValue()
+
+        # Set (or overwrite) the value for "k1".
+        KV['k1'] = 'v1'
+
+        # Set (or update) multiple keys at once.
+        KV.update(k2='v2', k3='v3')
+
+        # Getting values works as you'd expect.
+        assert KV['k2'] == 'v2'
+
+        # We can also do this:
+        for value in KV[KV.key > 'k1']:
+            print(value)
+
+        # 'v2'
+        # 'v3'
+
+        # Update multiple values at once using expression:
+        KV[KV.key > 'k1'] = 'vx'
+
+        # What's stored in the KV?
+        print(dict(KV))
+
+        # {'k1': 'v1', 'k2': 'vx', 'k3': 'vx'}
+
+        # Delete a single item.
+        del KV['k2']
+
+        # How many items are stored in the KV?
+        print(len(KV))
+        # 2
+
+        # Delete items that match the given condition.
+        del KV[KV.key > 'k1']
+
+    .. py:method:: __contains__(expr)
+
+        :param expr: a single key or an expression
+        :returns: Boolean whether key/expression exists.
+
+        Example:
+
+        .. code-block:: pycon
+
+            >>> kv = KeyValue()
+            >>> kv.update(k1='v1', k2='v2')
+
+            >>> 'k1' in kv
+            True
+            >>> 'kx' in kv
+            False
+
+            >>> (KV.key < 'k2') in KV
+            True
+            >>> (KV.key > 'k2') in KV
+            False
+
+    .. py:method:: __len__()
+
+        :returns: Count of items stored.
+
+    .. py:method:: __getitem__(expr)
+
+        :param expr: a single key or an expression.
+        :returns: value(s) corresponding to key/expression.
+        :raises: ``KeyError`` if single key given and not found.
+
+        Examples:
+
+        .. code-block:: pycon
+
+            >>> KV = KeyValue()
+            >>> KV.update(k1='v1', k2='v2', k3='v3')
+
+            >>> KV['k1']
+            'v1'
+            >>> KV['kx']
+            KeyError: "kx" not found
+
+            >>> KV[KV.key > 'k1']
+            ['v2', 'v3']
+            >>> KV[KV.key < 'k1']
+            []
+
+    .. py:method:: __setitem__(expr, value)
+
+        :param expr: a single key or an expression.
+        :param value: value to set for key(s)
+
+        Set value for the given key. If ``expr`` is an expression, then any
+        keys matching the expression will have their value updated.
+
+        Example:
+
+        .. code-block:: pycon
+
+            >>> KV = KeyValue()
+            >>> KV.update(k1='v1', k2='v2', k3='v3')
+
+            >>> KV['k1'] = 'v1-x'
+            >>> print(KV['k1'])
+            'v1-x'
+
+            >>> KV[KV.key >= 'k2'] = 'v99'
+            >>> dict(KV)
+            {'k1': 'v1-x', 'k2': 'v99', 'k3': 'v99'}
+
+    .. py:method:: __delitem__(expr)
+
+        :param expr: a single key or an expression.
+
+        Delete the given key. If an expression is given, delete all keys that
+        match the expression.
+
+        Example:
+
+        .. code-block:: pycon
+
+            >>> KV = KeyValue()
+            >>> KV.update(k1=1, k2=2, k3=3)
+
+            >>> del KV['k1']  # Deletes "k1".
+            >>> del KV['k1']
+            KeyError: "k1" does not exist
+
+            >>> del KV[KV.key > 'k2']  # Deletes "k3".
+            >>> del KV[KV.key > 'k99']  # Nothing deleted, no keys match.
+
+    .. py:method:: keys()
+
+        :returns: an iterable of all keys in the table.
+
+    .. py:method:: values()
+
+        :returns: an iterable of all values in the table.
+
+    .. py:method:: items()
+
+        :returns: an iterable of all key/value pairs in the table.
+
+    .. py:method:: update([__data=None[, **mapping]])
+
+        Efficiently bulk-insert or replace the given key/value pairs.
+
+        Example:
+
+        .. code-block:: pycon
+
+            >>> KV = KeyValue()
+            >>> KV.update(k1=1, k2=2)  # Sets 'k1'=1, 'k2'=2.
+
+            >>> dict(KV)
+            {'k1': 1, 'k2': 2}
+
+            >>> KV.update(k2=22, k3=3)  # Updates 'k2'->22, sets 'k3'=3.
+
+            >>> dict(KV)
+            {'k1': 1, 'k2': 22, 'k3': 3}
+
+            >>> KV.update({'k2': -2, 'k4': 4})  # Also can pass a dictionary.
+
+            >>> dict(KV)
+            {'k1': 1, 'k2': -2, 'k3': 3, 'k4': 4}
+
+        .. attention::
+            Because Postgresql does not support INSERT + REPLACE, the
+            :py:meth:`KeyValue.update` method is not supported for Postgresql
+            databases (as it cannot be implemented efficiently).
+
+    .. py:method:: get(expr[, default=None])
+
+        :param expr: a single key or an expression.
+        :param default: default value if key not found.
+        :returns: value of given key/expr or default if single key not found.
+
+        Get the value at the given key. If the key does not exist, the default
+        value is returned, unless the key is an expression in which case an
+        empty list will be returned.
+
+    .. py:method:: pop(expr[, default=Sentinel])
+
+        :param expr: a single key or an expression.
+        :param default: default value if key does not exist.
+        :returns: value of given key/expr or default if single key not found.
+
+        Get value and delete the given key. If the key does not exist, the
+        default value is returned, unless the key is an expression in which
+        case an empty list is returned.
+
+    .. py:method:: clear()
+
+        Remove all items from the key-value table.
+
 
 .. _shortcuts:
 
