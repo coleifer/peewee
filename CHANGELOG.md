@@ -5,6 +5,22 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.1.1
+
+* Fixed bug when using `Model.alias()` when the model defined a particular
+  database schema.
+* Added `SchemaManager.create_foreign_key` API to simplify adding constraints
+  when dealing with circular foreign-key relationships. Updated docs
+  accordingly.
+* Improved implementation of `Migrator.add_foreign_key_constraint` so that it
+  can be used with Postgresql (in addition to MySQL).
+* Added `PickleField` to the `playhouse.fields` module. [Docs](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#PickleField).
+* Fixed bug in implementation of `CompressedField` when using Python 3.
+* Added `KeyValue` API in `playhouse.kv` module. [Docs](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#key-value-store).
+* More test cases for joining on sub-selects or common table expressions.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.1.0...3.1.1)
+
 ## 3.1.0
 
 #### Backwards-incompatible changes
