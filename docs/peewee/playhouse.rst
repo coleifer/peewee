@@ -1891,6 +1891,12 @@ These fields can be found in the ``playhouse.fields`` module.
     :py:class:`BlobField`, transparently storing a compressed representation of
     the data in the database.
 
+.. py:class:: PickleField()
+
+    Stores arbitrary Python data by transparently pickling and un-pickling data
+    stored in the field. This field extends :py:class:`BlobField`. If the
+    ``cPickle`` module is available, it will be used.
+
 .. _hybrid:
 
 Hybrid Attributes
