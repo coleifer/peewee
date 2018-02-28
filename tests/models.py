@@ -1377,6 +1377,10 @@ class TestForUpdateIntegration(ModelTestCase):
             self.assertRaises(OperationalError, will_fail)
 
 
+class ServerDefault(TestModel):
+    timestamp = DateTimeField(constraints=[SQL('default (now())')])
+
+
 @skip_case_unless(isinstance(db, PostgresqlDatabase))
 class TestReturningIntegration(ModelTestCase):
     requires = [User]
@@ -1389,8 +1393,43 @@ class TestReturningIntegration(ModelTestCase):
 
         self.assertEqual(query.execute(), 1)
 
+        query = User.insert(username='huey')
+        self.assertEqual(query.execute(), 2)
+        self.assertEqual(list(query), [(2,)])
+
+        query = (User
+                 .insert(username='zaizee')
+                 .returning(User.id, User.username)
+                 .dicts())
+        self.assertSQL(query, (
+            'INSERT INTO "users" ("username") VALUES (?) '
+            'RETURNING "id", "username"'), ['zaizee'])
+
+        cursor = query.execute()
+        row, = list(cursor)
+        self.assertEqual(row, {'id': 3, 'username': 'zaizee'})
+
+    @requires_models(ServerDefault)
+    def test_returning_server_defaults(self):
+        query = (ServerDefault
+                 .insert()
+                 .returning(ServerDefault.id, ServerDefault.timestamp))
+        self.assertSQL(query, (
+            'INSERT INTO "serverdefault" '
+            'DEFAULT VALUES '
+            'RETURNING "id", "timestamp"'), [])
+
+        with self.assertQueryCount(1):
+            cursor = query.dicts().execute()
+            row, = list(cursor)
+
+        self.assertTrue(row['timestamp'] is not None)
+
+        obj = ServerDefault.get(ServerDefault.id == row['id'])
+        self.assertEqual(obj.timestamp, row['timestamp'])
+
     def test_no_return(self):
-        query = User.insert(username='huey').returning(None)
+        query = User.insert(username='huey').returning()
         self.assertIsNone(query.execute())
 
         user = User.get(User.username == 'huey')

@@ -322,7 +322,7 @@ class TestModelSQL(ModelDatabaseTestCase):
             'INSERT INTO "person" ("ssn", "name") VALUES (?, ?) '
             'RETURNING "ssn"'), ['123', 'charlie'])
 
-        query = Person.insert({Person.name: 'huey'}).returning(None)
+        query = Person.insert({Person.name: 'huey'}).returning()
         self.assertSQL(query, (
             'INSERT INTO "person" ("name") VALUES (?)'), ['huey'])
 

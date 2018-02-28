@@ -1910,24 +1910,21 @@ class _WriteQuery(Query):
     def __init__(self, table, returning=None, **kwargs):
         self.table = table
         self._returning = returning
+        self._return_cursor = True if returning else False
         super(_WriteQuery, self).__init__(**kwargs)
 
     @Node.copy
     def returning(self, *returning):
         self._returning = returning
-
-    @property
-    def _empty_returning(self):
-        return self._returning and len(self._returning) == 1 and \
-                self._returning[0] is None
+        self._return_cursor = True if returning else False
 
     def apply_returning(self, ctx):
-        if self._returning and not self._empty_returning:
+        if self._returning:
             ctx.literal(' RETURNING ').sql(CommaNodeList(self._returning))
         return ctx
 
     def _execute(self, database):
-        if self._returning and not self._empty_returning:
+        if self._returning:
             cursor = self.execute_returning(database)
         else:
             cursor = database.execute(self)
@@ -1940,7 +1937,7 @@ class _WriteQuery(Query):
         return self._cursor_wrapper
 
     def handle_result(self, database, cursor):
-        if self._returning:
+        if self._return_cursor:
             return cursor
         return database.rows_affected(cursor)
 
@@ -2151,11 +2148,14 @@ class Insert(_WriteQuery):
             return self.apply_returning(ctx)
 
     def _execute(self, database):
-        if self._returning is None and database.returning_clause:
+        if self._returning is None and database.returning_clause \
+           and self.table._primary_key:
             self._returning = (self.table._primary_key,)
         return super(Insert, self)._execute(database)
 
     def handle_result(self, database, cursor):
+        if self._return_cursor:
+            return cursor
         return database.last_insert_id(cursor, self._query_type)
 
 
@@ -2948,7 +2948,7 @@ class PostgresqlDatabase(Database):
     def last_insert_id(self, cursor, query_type=None):
         try:
             return cursor if query_type else cursor[0][0]
-        except (IndexError, TypeError):
+        except (IndexError, KeyError, TypeError):
             pass
 
     def get_tables(self, schema=None):
