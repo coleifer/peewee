@@ -5,6 +5,21 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.1.2
+
+#### New behavior for INSERT queries with RETURNING clause
+
+Investigating #1522, it occurred to me that INSERT queries with non-default
+*RETURNING* clauses (postgres-only feature) should always return a cursor
+object. Previously, if executing a single-row INSERT query, the last-inserted
+row ID would be returned, regardless of what was specified by the RETURNING
+clause.
+
+This change only affects INSERT queries with non-default RETURNING clauses and
+will cause a cursor to be returned, as opposed to the last-inserted row ID.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.1.1...3.1.2)
+
 ## 3.1.1
 
 * Fixed bug when using `Model.alias()` when the model defined a particular
