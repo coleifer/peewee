@@ -28,6 +28,7 @@ try:
         register_bloomfilter,
         register_hash_functions,
         register_rank_functions,
+        register_json_contains,
         sqlite_get_db_status,
         sqlite_get_status,
         TableFunction,
@@ -926,7 +927,7 @@ def _sqlite_regexp(regex, value):
 class SqliteExtDatabase(SqliteDatabase):
     def __init__(self, database, c_extensions=None, rank_functions=True,
                  hash_functions=False, regexp_function=False,
-                 bloomfilter=False, *args, **kwargs):
+                 bloomfilter=False, json_contains=False, *args, **kwargs):
         super(SqliteExtDatabase, self).__init__(database, *args, **kwargs)
         self._row_factory = None
 
@@ -954,6 +955,10 @@ class SqliteExtDatabase(SqliteDatabase):
             if not prefer_c:
                 raise ValueError('C extension required to use bloomfilter.')
             register_bloomfilter(self)
+        if json_contains:
+            if not prefer_c:
+                raise ValueError('C extension required to use json_contains.')
+            register_json_contains(self)
 
         self._c_extensions = prefer_c
 

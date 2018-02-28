@@ -12,6 +12,7 @@ from .base import TestModel
 from .base import requires_models
 from .base import skip_case_unless
 from .base import skip_if
+from .sqlite_helpers import json_installed
 
 
 database = SqliteExtDatabase(':memory:', c_extensions=False, timeout=0.1)
@@ -304,20 +305,6 @@ class TestTableFunction(BaseTestCase):
             (2, 4, 'charlie@crappyblog.com'),
             (2, 5, 'huey@example.com'),
         ])
-
-
-def json_installed():
-    if sqlite3.sqlite_version_info < (3, 9, 0):
-        return False
-    # Test in-memory DB to determine if the FTS5 extension is installed.
-    tmp_db = sqlite3.connect(':memory:')
-    try:
-        tmp_db.execute('select json(?)', (1337,))
-    except:
-        return False
-    finally:
-        tmp_db.close()
-    return True
 
 
 @skip_case_unless(json_installed)
