@@ -92,6 +92,8 @@ class JSONPath(Node):
 J = JSONPath()
 
 class JSONField(TextField):
+    field_type = 'JSON'
+
     def python_value(self, value):
         if value is not None:
             try:

@@ -348,6 +348,18 @@ class TestJSONField(ModelTestCase):
             APIData.create(data=entry, value=entry['title'])
         self.Q = APIData.select().order_by(APIData.id)
 
+    def test_schema(self):
+        self.assertSQL(APIData._schema._create_table(), (
+            'CREATE TABLE IF NOT EXISTS "apidata" ('
+            '"id" INTEGER NOT NULL PRIMARY KEY, '
+            '"data" JSON NOT NULL, '
+            '"value" TEXT NOT NULL)'), [])
+
+        self.assertSQL(Metadata._schema._create_table(), (
+            'CREATE TABLE IF NOT EXISTS "metadata" ('
+            '"id" INTEGER NOT NULL PRIMARY KEY, '
+            '"data" JSON NOT NULL)'), [])
+
     def test_extract_array_agg(self):
         value = (APIData
                  .select(fn.json_group_array(
