@@ -1,5 +1,4 @@
 import hashlib
-import json
 import zlib
 from random import randint
 
@@ -915,47 +914,6 @@ def peewee_bm25f(py_match_info, *raw_weights):
     return -1 * score
 
 
-def peewee_json_contains(src_json, obj_json):
-    cdef:
-        int i
-        list stack = []
-
-    try:
-        stack.append((json.loads(obj_json), json.loads(src_json)))
-    except:
-        # Invalid JSON!
-        return False
-
-    while stack:
-        obj, src = stack.pop()
-        if isinstance(src, dict):
-            if isinstance(obj, dict):
-                for key in obj:
-                    if key not in src:
-                        return False
-                    stack.append((obj[key], src[key]))
-            elif isinstance(obj, list):
-                for item in obj:
-                    if item not in src:
-                        return False
-            elif obj not in src:
-                return False
-        elif isinstance(src, list):
-            if isinstance(obj, dict):
-                return False
-            elif isinstance(obj, list):
-                try:
-                    for i in range(len(obj)):
-                        stack.append((obj[i], src[i]))
-                except IndexError:
-                    return False
-            elif obj not in src:
-                return False
-        elif obj != src:
-            return False
-    return True
-
-
 cdef uint32_t murmurhash2(const unsigned char *key, ssize_t nlen,
                           uint32_t seed):
     cdef:
@@ -1045,10 +1003,6 @@ def register_rank_functions(database):
         (peewee_bm25f, 'fts_bm25f'),
         (peewee_lucene, 'fts_lucene'),
         (peewee_rank, 'fts_rank')))
-
-
-def register_json_contains(database):
-    database.register_function(peewee_json_contains, 'json_contains')
 
 
 ctypedef struct bf_t:

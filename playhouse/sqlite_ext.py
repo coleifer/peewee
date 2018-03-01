@@ -28,7 +28,6 @@ try:
         register_bloomfilter,
         register_hash_functions,
         register_rank_functions,
-        register_json_contains,
         sqlite_get_db_status,
         sqlite_get_status,
         TableFunction,
@@ -956,9 +955,7 @@ class SqliteExtDatabase(SqliteDatabase):
                 raise ValueError('C extension required to use bloomfilter.')
             register_bloomfilter(self)
         if json_contains:
-            if not prefer_c:
-                raise ValueError('C extension required to use json_contains.')
-            register_json_contains(self)
+            self.register_function(_json_contains, 'json_contains')
 
         self._c_extensions = prefer_c
 
@@ -1213,3 +1210,41 @@ def bm25(raw_match_info, *args):
             score += (idf * rhs) * weight
 
     return -score
+
+
+def _json_contains(src_json, obj_json):
+    stack = []
+    try:
+        stack.append((json.loads(obj_json), json.loads(src_json)))
+    except:
+        # Invalid JSON!
+        return False
+
+    while stack:
+        obj, src = stack.pop()
+        if isinstance(src, dict):
+            if isinstance(obj, dict):
+                for key in obj:
+                    if key not in src:
+                        return False
+                    stack.append((obj[key], src[key]))
+            elif isinstance(obj, list):
+                for item in obj:
+                    if item not in src:
+                        return False
+            elif obj not in src:
+                return False
+        elif isinstance(src, list):
+            if isinstance(obj, dict):
+                return False
+            elif isinstance(obj, list):
+                try:
+                    for i in range(len(obj)):
+                        stack.append((obj[i], src[i]))
+                except IndexError:
+                    return False
+            elif obj not in src:
+                return False
+        elif obj != src:
+            return False
+    return True

@@ -1,4 +1,3 @@
-import json
 import os
 
 from peewee import *
@@ -8,10 +7,6 @@ from playhouse._sqlite_ext import BloomFilter
 
 from .base import BaseTestCase
 from .base import DatabaseTestCase
-from .base import ModelTestCase
-from .base import TestModel
-from .base import skip_case_unless
-from .sqlite_helpers import json_installed
 
 
 database = CSqliteExtDatabase('peewee_test.db', timeout=0.1,
@@ -335,84 +330,3 @@ class TestBloomFilter(BaseTestCase):
             self.assertFalse(key + '-x' in self.bf)
             self.assertFalse(key + '-y' in self.bf)
             self.assertFalse(key + ' ' in self.bf)
-
-
-class Metadata(TestModel):
-    key = TextField(primary_key=True)
-    data = JSONField()
-
-
-@skip_case_unless(json_installed)
-class TestJsonContains(ModelTestCase):
-    database = CSqliteExtDatabase(':memory:', json_contains=True)
-    requires = [Metadata]
-    test_data = (
-        ('a', {'k1': 'v1', 'k2': 'v2', 'k3': 'v3'}),
-        ('b', {'k2': 'v2', 'k3': 'v3', 'k4': 'v4'}),
-        ('c', {'k3': 'v3', 'x1': {'y1': 'z1', 'y2': 'z2'}}),
-        ('d', {'k4': 'v4', 'x1': {'y2': 'z2', 'y3': [0, 1, 2]}}),
-        ('e', ['foo', 'bar', [0, 1, 2]]),
-    )
-
-    def setUp(self):
-        super(TestJsonContains, self).setUp()
-        with self.database.atomic():
-            for key, data in self.test_data:
-                Metadata.create(key=key, data=data)
-
-    def assertContains(self, obj, expected):
-        contains = fn.json_contains(Metadata.data, json.dumps(obj))
-        query = (Metadata
-                 .select(Metadata.key)
-                 .where(contains)
-                 .order_by(Metadata.key)
-                 .namedtuples())
-        self.assertEqual([m.key for m in query], expected)
-
-    def test_json_contains(self):
-        # Simple checks for key.
-        self.assertContains('k1', ['a'])
-        self.assertContains('k2', ['a', 'b'])
-        self.assertContains('k3', ['a', 'b', 'c'])
-        self.assertContains('kx', [])
-        self.assertContains('y1', [])
-
-        # Partial dictionary.
-        self.assertContains({'k1': 'v1'}, ['a'])
-        self.assertContains({'k2': 'v2'}, ['a', 'b'])
-        self.assertContains({'k3': 'v3'}, ['a', 'b', 'c'])
-        self.assertContains({'k2': 'v2', 'k3': 'v3'}, ['a', 'b'])
-
-        self.assertContains({'k2': 'vx'}, [])
-        self.assertContains({'k2': 'v2', 'k3': 'vx'}, [])
-        self.assertContains({'y1': 'z1'}, [])
-
-        # List, interpreted as list of keys.
-        self.assertContains(['k1', 'k2'], ['a'])
-        self.assertContains(['k4'], ['b', 'd'])
-        self.assertContains(['kx'], [])
-        self.assertContains(['y1'], [])
-
-        # List, interpreted as ordered list of items.
-        self.assertContains(['foo'], ['e'])
-        self.assertContains(['foo', 'bar'], ['e'])
-        self.assertContains(['bar', 'foo'], [])
-
-        # Nested dictionaries.
-        self.assertContains({'x1': 'y1'}, ['c'])
-        self.assertContains({'x1': ['y1']}, ['c'])
-        self.assertContains({'x1': {'y1': 'z1'}}, ['c'])
-        self.assertContains({'x1': {'y2': 'z2'}}, ['c', 'd'])
-        self.assertContains({'x1': {'y2': 'z2'}, 'k4': 'v4'}, ['d'])
-
-        self.assertContains({'x1': {'yx': 'z1'}}, [])
-        self.assertContains({'x1': {'y1': 'z1', 'y3': 'z3'}}, [])
-        self.assertContains({'x1': {'y2': 'zx'}}, [])
-        self.assertContains({'x1': {'k4': 'v4'}}, [])
-
-        # Mixing dictionaries and lists.
-        self.assertContains({'x1': {'y2': 'z2', 'y3': [0]}}, ['d'])
-        self.assertContains({'x1': {'y2': 'z2', 'y3': [0, 1, 2]}}, ['d'])
-
-        self.assertContains({'x1': {'y2': 'z2', 'y3': [0, 1, 2, 4]}}, [])
-        self.assertContains({'x1': {'y2': 'z2', 'y3': [0, 2]}}, [])
