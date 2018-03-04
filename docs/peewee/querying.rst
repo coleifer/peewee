@@ -407,7 +407,22 @@ Selecting multiple records
 We can use :py:meth:`Model.select` to retrieve rows from the table. When you
 construct a *SELECT* query, the database will return any rows that correspond
 to your query. Peewee allows you to iterate over these rows, as well as use
-indexing and slicing operations.
+indexing and slicing operations:
+
+.. code-block:: pycon
+
+    >>> query = User.select()
+    >>> [user.username for user in query]
+    ['Charlie', 'Huey', 'Peewee']
+
+    >>> query[1]
+    <__main__.User at 0x7f83e80f5550>
+
+    >>> query[1].username
+    'Huey'
+
+    >>> query[:2]
+    [<__main__.User at 0x7f83e80f53a8>, <__main__.User at 0x7f83e80f5550>]
 
 In the following example, we will simply call :py:meth:`~Model.select` and
 iterate over the return value, which is an instance of :py:class:`Select`.
