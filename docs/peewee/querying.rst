@@ -424,6 +424,9 @@ indexing and slicing operations:
     >>> query[:2]
     [<__main__.User at 0x7f83e80f53a8>, <__main__.User at 0x7f83e80f5550>]
 
+:py:class:`Select` queries are smart, in that you can iterate, index and slice
+the query multiple times but the query is only executed once.
+
 In the following example, we will simply call :py:meth:`~Model.select` and
 iterate over the return value, which is an instance of :py:class:`Select`.
 This will return all the rows in the *User* table:
@@ -471,6 +474,23 @@ You can iterate over the ``user.tweets`` back-reference just like any other
     hello world
     this is fun
     look at this picture of my food
+
+In addition to returning model instances, :py:class:`Select` queries can return
+dictionaries, tuples and namedtuples. Depending on your use-case, you may find
+it easier to work with rows as dictionaries, for example:
+
+.. code-block:: pycon
+
+    >>> query = User.select().dicts()
+    >>> for row in query:
+    ...     print(row)
+
+    {'id': 1, 'username': 'Charlie'}
+    {'id': 2, 'username': 'Huey'}
+    {'id': 3, 'username': 'Peewee'}
+
+See :py:meth:`~BaseQuery.namedtuples`, :py:meth:`~BaseQuery.tuples`,
+:py:meth:`~BaseQuery.dicts` for more information.
 
 Filtering records
 -----------------
