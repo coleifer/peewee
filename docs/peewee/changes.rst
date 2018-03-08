@@ -22,7 +22,7 @@ Database
   :py:meth:`Database.connection_context`.
 * :py:meth:`Database.create_tables` and :py:meth:`Database.drop_tables`, as
   well as :py:meth:`Model.create_table` and :py:meth:`Model.drop_table` all
-  default to ``safe=True`` (create if not exists, drop if exists).
+  default to ``safe=True`` (``create_table`` will create if not exists, ``drop_table`` will drop if exists).
 * ``connect_kwargs`` attribute has been renamed to ``connect_params``
 
 Model Meta options
