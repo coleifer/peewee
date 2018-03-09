@@ -3525,6 +3525,7 @@ class ForeignKeyAccessor(FieldAccessor):
             instance.__data__[self.name] = obj
             if obj != fk_value and self.name in instance.__rel__:
                 del instance.__rel__[self.name]
+        instance._dirty.add(self.name)
 
 
 class BackrefAccessor(object):
