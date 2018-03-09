@@ -591,13 +591,8 @@ TABLE* queries, additionally creating any constraints and indexes.
     later.
 
 .. note::
-    Peewee can determine if your tables already exist, and conditionally create
-    them:
-
-    .. code-block:: python
-
-        # Only create the tables if they do not exist.
-        db.create_tables([User, Tweet], safe=True)
+    By default, Peewee will determine if your tables already exist, and conditionally create
+    them. If you want to disable this, specify ``safe=False``.
 
 After you have created your tables, if you choose to modify your database
 schema (by adding, removing or otherwise changing the columns) you will need to
