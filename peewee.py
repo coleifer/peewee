@@ -4246,16 +4246,19 @@ class ManyToManyFieldAccessor(FieldAccessor):
         self.src_fk = self.through_model._meta.model_refs[self.model][0]
         self.dest_fk = self.through_model._meta.model_refs[self.rel_model][0]
 
-    def __get__(self, instance, instance_type=None):
+    def __get__(self, instance, instance_type=None, force_query=False):
         if instance is not None:
-            return (ManyToManyQuery(instance, self, self.rel_model)
-                    .join(self.through_model)
-                    .join(self.model)
-                    .where(self.src_fk == instance))
+            if not force_query and isinstance(getattr(instance, self.src_fk.backref), list):
+                return [getattr(obj, self.dest_fk.name) for obj in getattr(instance, self.src_fk.backref)]
+            else:
+                return (ManyToManyQuery(instance, self, self.rel_model)
+                        .join(self.through_model)
+                        .join(self.model)
+                        .where(self.src_fk == instance))
         return self.field
 
     def __set__(self, instance, value):
-        query = self.__get__(instance)
+        query = self.__get__(instance, force_query=True)
         query.add(value, clear_existing=True)
 
 
