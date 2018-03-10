@@ -6,6 +6,9 @@ import sys
 import unittest
 
 
+USER = os.environ.get('USER') or 'root'
+
+
 def collect():
     import tests
     runtests(tests, 1)
@@ -25,8 +28,29 @@ def get_option_parser():
         help=('Database engine to test, one of '
               '[sqlite, postgres, mysql, apsw, sqlcipher]'))
     basic.add_option('-v', '--verbosity', dest='verbosity', default=1, type='int', help='Verbosity of output')
-
     parser.add_option_group(basic)
+
+    db_param_map = (
+        ('MySQL', 'MYSQL', (
+            # param  default disp default val
+            ('host', 'localhost', 'localhost'),
+            ('port', '3306', ''),
+            ('user', USER, USER),
+            ('password', 'blank', ''))),
+        ('Postgresql', 'PSQL', (
+            ('host', 'localhost', ''),
+            ('port', '5432', ''),
+            ('user', 'postgres', 'postgres'),
+            ('password', 'blank', ''))))
+    for name, prefix, param_list in db_param_map:
+        group = optparse.OptionGroup(parser, '%s connection options' % name)
+        for param, default_disp, default_val in param_list:
+            dest = '%s_%s' % (prefix.lower(), param)
+            opt = '--%s-%s' % (prefix.lower(), param)
+            group.add_option(opt, default=default_val, dest=dest, help=(
+                '%s database %s. Default %s.' % (name, param, default_disp)))
+
+        parser.add_option_group(group)
     return parser
 
 def collect_modules(options, args):
@@ -52,6 +76,14 @@ if __name__ == '__main__':
 
     if options.engine:
         os.environ['PEEWEE_TEST_BACKEND'] = options.engine
+
+    for db in ('mysql', 'psql'):
+        for key in ('host', 'port', 'user', 'password'):
+            att_name = '_'.join((db, key))
+            value = getattr(options, att_name, None)
+            if value:
+                os.environ['PEEWEE_%s' % att_name.upper()] = value
+
     os.environ['PEEWEE_TEST_VERBOSITY'] = str(options.verbosity)
 
     suite = unittest.TestSuite()

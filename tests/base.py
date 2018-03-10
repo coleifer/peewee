@@ -29,6 +29,10 @@ def db_loader(engine, name='peewee_test', db_class=None, **params):
         db_class = engine_map[engine.lower()]
     if issubclass(db_class, SqliteDatabase) and not name.endswith('.db'):
         name = '%s.db' % name if name != ':memory:' else name
+    elif issubclass(db_class, MySQLDatabase):
+        params.update(MYSQL_PARAMS)
+    elif issubclass(db_class, PostgresqlDatabase):
+        params.update(PSQL_PARAMS)
     return db_class(name, **params)
 
 
@@ -42,6 +46,20 @@ VERBOSITY = int(os.environ.get('PEEWEE_TEST_VERBOSITY') or 1)
 IS_SQLITE = BACKEND in ('sqlite', 'sqlite3')
 IS_MYSQL = BACKEND == 'mysql'
 IS_POSTGRESQL = BACKEND in ('postgres', 'postgresql')
+
+
+def make_db_params(key):
+    params = {}
+    env_vars = [(part, 'PEEWEE_%s_%s' % (key, part.upper()))
+                for part in ('host', 'port', 'user', 'password')]
+    for param, env_var in env_vars:
+        value = os.environ.get(env_var)
+        if value:
+            params[param] = int(value) if param == 'port' else value
+    return params
+
+MYSQL_PARAMS = make_db_params('MYSQL')
+PSQL_PARAMS = make_db_params('PSQL')
 
 if VERBOSITY > 1:
     handler = logging.StreamHandler()
