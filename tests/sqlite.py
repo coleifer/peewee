@@ -315,7 +315,7 @@ class TestTableFunction(BaseTestCase):
 @skip_case_unless(json_installed)
 class TestJSONField(ModelTestCase):
     database = database
-    requires = [APIData]
+    requires = [APIData, Metadata]
     test_data = [
         {'metadata': {'tags': ['python', 'sqlite']},
          'title': 'My List of Python and SQLite Resources',
