@@ -5,6 +5,20 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.1.3
+
+* Fixed issue where scope-specific settings were being updated in-place instead
+  of copied. #1534.
+* Fixed bug where setting a `ForeignKeyField` did not add it to the model's
+  "dirty" fields list. #1530.
+* Use pre-fetched data when using `prefetch()` with `ManyToManyField`. Thanks
+  to @iBelieve for the patch. #1531.
+* Use `JSON` data-type for SQLite `JSONField` instances.
+* Add a `json_contains` function for use with SQLite `json1` extension.
+* Various documentation updates and additions.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.1.2...3.1.3)
+
 ## 3.1.2
 
 #### New behavior for INSERT queries with RETURNING clause
