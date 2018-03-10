@@ -109,7 +109,11 @@ class TestManyToMany(ModelTestCase):
 
     def test_prefetch_notes(self):
         self._set_data()
-        gargie, huey, mickey, zaizee = prefetch(User.select().order_by(User.username), NoteUserThrough, Note)
+        with self.assertQueryCount(3):
+            gargie, huey, mickey, zaizee = prefetch(
+                User.select().order_by(User.username),
+                NoteUserThrough,
+                Note)
 
         with self.assertQueryCount(0):
             self.assertNotes(gargie.notes, [1, 2])
@@ -120,7 +124,11 @@ class TestManyToMany(ModelTestCase):
 
     def test_prefetch_users(self):
         self._set_data()
-        n1, n2, n3, n4, n5 = prefetch(Note.select().order_by(Note.text), NoteUserThrough, User)
+        with self.assertQueryCount(3):
+            n1, n2, n3, n4, n5 = prefetch(
+                Note.select().order_by(Note.text),
+                NoteUserThrough,
+                User)
 
         with self.assertQueryCount(0):
             self.assertUsers(n1.users, ['gargie'])
