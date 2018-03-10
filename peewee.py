@@ -448,9 +448,15 @@ class State(collections.namedtuple('_State', ('scope', 'parentheses',
         # All state is "inherited" except parentheses.
         scope = self.scope if scope is None else scope
         subquery = self.subquery if subquery is None else subquery
-        settings = self.settings
-        if kwargs:
-            settings.update(kwargs)
+
+        # Try to avoid unnecessary dict copying.
+        if kwargs and self.settings:
+            settings = self.settings.copy()  # Copy original settings dict.
+            settings.update(kwargs)  # Update copy with overrides.
+        elif kwargs:
+            settings = kwargs
+        else:
+            settings = self.settings
         return State(scope, parentheses, subquery, **settings)
 
     def __getattr__(self, attr_name):

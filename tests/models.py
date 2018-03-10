@@ -2258,3 +2258,30 @@ class TestCountUnionRegression(ModelTestCase):
             'SELECT "t2"."id", "t2"."username" FROM "users" AS "t2" '
             'LIMIT 3'), [])
         self.assertEqual(query.count(), 3)
+
+
+class TestSumCase(ModelTestCase):
+    @requires_models(User)
+    def test_sum_case(self):
+        for username in ('charlie', 'huey', 'zaizee'):
+            User.create(username=username)
+
+        case = Case(None, [(User.username.endswith('e'), 1)], 0)
+        e_sum = fn.SUM(case)
+        query = (User
+                 .select(User.username, e_sum.alias('e_sum'))
+                 .group_by(User.username)
+                 .order_by(User.username))
+        self.assertSQL(query, (
+            'SELECT "t1"."username", '
+            'SUM(CASE WHEN ("t1"."username" ILIKE ?) THEN ? ELSE ? END) '
+            'AS "e_sum" '
+            'FROM "users" AS "t1" '
+            'GROUP BY "t1"."username" '
+            'ORDER BY "t1"."username"'), ['%e', 1, 0])
+
+        data = [(user.username, user.e_sum) for user in query]
+        self.assertEqual(data, [
+            ('charlie', 1),
+            ('huey', 0),
+            ('zaizee', 1)])
