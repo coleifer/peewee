@@ -8,11 +8,13 @@ from playhouse.postgres_ext import *
 from .base import BaseTestCase
 from .base import ModelTestCase
 from .base import TestModel
+from .base import db_loader
 from .base import skip_case_if
 from .base_models import Register
 
 
-db = PostgresqlExtDatabase('peewee_test', register_hstore=True)
+db = db_loader('postgres', db_class=PostgresqlExtDatabase,
+               register_hstore=True)
 
 
 class HStoreModel(TestModel):
