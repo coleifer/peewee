@@ -431,3 +431,23 @@ class TestBlobField(BaseTestCase):
         db_obj = SqliteDatabase(':memory:')
         db.initialize(db_obj)
         self.assertTrue(BlobModel.data._constructor is sqlite3.Binary)
+
+
+class BigModel(TestModel):
+    pk = BigAutoField()
+    data = TextField()
+
+
+class TestBigAutoField(ModelTestCase):
+    requires = [BigModel]
+
+    def test_big_auto_field(self):
+        b1 = BigModel.create(data='b1')
+        b2 = BigModel.create(data='b2')
+
+        b1_db = BigModel.get(BigModel.pk == b1.pk)
+        b2_db = BigModel.get(BigModel.pk == b2.pk)
+
+        self.assertTrue(b1_db.pk < b2_db.pk)
+        self.assertTrue(b1_db.data, 'b1')
+        self.assertTrue(b2_db.data, 'b2')

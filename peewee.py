@@ -59,6 +59,7 @@ __all__ = [
     'AsIs',
     'AutoField',
     'BareField',
+    'BigAutoField',
     'BigBitField',
     'BigIntegerField',
     'BitField',
@@ -278,6 +279,7 @@ DJANGO_MAP = attrdict({
 #: may override or add to this list.
 FIELD = attrdict(
     AUTO='INTEGER',
+    BIGAUTO='BIGINT',
     BIGINT='BIGINT',
     BLOB='BLOB',
     BOOL='SMALLINT',
@@ -2638,6 +2640,7 @@ def __pragma__(name):
 
 class SqliteDatabase(Database):
     field_types = {
+        'BIGAUTO': FIELD.AUTO,
         'BIGINT': FIELD.INT,
         'BOOL': FIELD.INT,
         'DOUBLE': FIELD.FLOAT,
@@ -2911,6 +2914,7 @@ class SqliteDatabase(Database):
 class PostgresqlDatabase(Database):
     field_types = {
         'AUTO': 'SERIAL',
+        'BIGAUTO': 'BIGSERIAL',
         'BLOB': 'BYTEA',
         'BOOL': 'BOOLEAN',
         'DATETIME': 'TIMESTAMP',
@@ -3103,6 +3107,7 @@ class PostgresqlDatabase(Database):
 class MySQLDatabase(Database):
     field_types = {
         'AUTO': 'INTEGER AUTO_INCREMENT',
+        'BIGAUTO': 'BIGINT AUTO_INCREMENT',
         'BOOL': 'BOOL',
         'DECIMAL': 'NUMERIC',
         'DOUBLE': 'DOUBLE PRECISION',
@@ -3687,9 +3692,13 @@ class AutoField(IntegerField):
 
     def __init__(self, *args, **kwargs):
         if kwargs.get('primary_key') is False:
-            raise ValueError('AutoField must always be a primary key.')
+            raise ValueError('%s must always be a primary key.' % type(self))
         kwargs['primary_key'] = True
         super(AutoField, self).__init__(*args, **kwargs)
+
+
+class BigAutoField(AutoField):
+    field_type = 'BIGAUTO'
 
 
 class PrimaryKeyField(AutoField):
