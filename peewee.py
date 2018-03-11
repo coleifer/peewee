@@ -58,6 +58,7 @@ __version__ = '3.1.3'
 __all__ = [
     'AsIs',
     'AutoField',
+    'BigAutoField',
     'BareField',
     'BigBitField',
     'BigIntegerField',
@@ -278,6 +279,7 @@ DJANGO_MAP = attrdict({
 #: may override or add to this list.
 FIELD = attrdict(
     AUTO='INTEGER',
+    BIGAUTO='BIGINT',
     BIGINT='BIGINT',
     BLOB='BLOB',
     BOOL='SMALLINT',
@@ -2638,6 +2640,7 @@ def __pragma__(name):
 
 class SqliteDatabase(Database):
     field_types = {
+        'BIGAUTO': FIELD.AUTO,
         'BIGINT': FIELD.INT,
         'BOOL': FIELD.INT,
         'DOUBLE': FIELD.FLOAT,
@@ -2911,6 +2914,7 @@ class SqliteDatabase(Database):
 class PostgresqlDatabase(Database):
     field_types = {
         'AUTO': 'SERIAL',
+        'BIGAUTO': 'BIGSERIAL',
         'BLOB': 'BYTEA',
         'BOOL': 'BOOLEAN',
         'DATETIME': 'TIMESTAMP',
@@ -3103,6 +3107,7 @@ class PostgresqlDatabase(Database):
 class MySQLDatabase(Database):
     field_types = {
         'AUTO': 'INTEGER AUTO_INCREMENT',
+        'BIGAUTO': 'BIGINT AUTO_INCREMENT',
         'BOOL': 'BOOL',
         'DECIMAL': 'NUMERIC',
         'DOUBLE': 'DOUBLE PRECISION',
@@ -3692,6 +3697,17 @@ class AutoField(IntegerField):
         super(AutoField, self).__init__(*args, **kwargs)
 
 
+class BigAutoField(BigIntegerField):
+    auto_increment = True
+    field_type = 'BIGAUTO'
+
+    def __init__(self, *args, **kwargs):
+        if kwargs.get('primary_key') is False:
+            raise ValueError('AutoField must always be a primary key.')
+        kwargs['primary_key'] = True
+        super(BigAutoField, self).__init__(*args, **kwargs)
+
+
 class PrimaryKeyField(AutoField):
     def __init__(self, *args, **kwargs):
         __deprecated__('"PrimaryKeyField" has been renamed to "AutoField". '
@@ -4121,12 +4137,12 @@ class ForeignKeyField(Field):
 
     @property
     def field_type(self):
-        if not isinstance(self.rel_field, AutoField):
+        if not (isinstance(self.rel_field, AutoField) or isinstance(self.rel_field, BigAutoField)):
             return self.rel_field.field_type
         return IntegerField.field_type
 
     def get_modifiers(self):
-        if not isinstance(self.rel_field, AutoField):
+        if not (isinstance(self.rel_field, AutoField) or isinstance(self.rel_field, BigAutoField)):
             return self.rel_field.get_modifiers()
         return super(ForeignKeyField, self).get_modifiers()
 
