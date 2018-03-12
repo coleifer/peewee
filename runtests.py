@@ -38,10 +38,10 @@ def get_option_parser():
             ('user', USER, USER),
             ('password', 'blank', ''))),
         ('Postgresql', 'PSQL', (
-            ('host', 'localhost', ''),
+            ('host', 'localhost', os.environ.get('PGHOST', '')),
             ('port', '5432', ''),
-            ('user', 'postgres', 'postgres'),
-            ('password', 'blank', ''))))
+            ('user', 'postgres', os.environ.get('PGUSER', '')),
+            ('password', 'blank', os.environ.get('PGPASSWORD', '')))))
     for name, prefix, param_list in db_param_map:
         group = optparse.OptionGroup(parser, '%s connection options' % name)
         for param, default_disp, default_val in param_list:
