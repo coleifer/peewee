@@ -277,19 +277,32 @@ class Exporter(object):
 
 
 class JSONExporter(Exporter):
-    @staticmethod
-    def default(o):
-        if isinstance(o, (datetime.datetime, datetime.date, datetime.time)):
-            return str(o)
-        elif isinstance(o, Decimal):
-            return str(o)
-        raise TypeError('Unable to serialize %r as JSON.' % o)
+    def __init__(self, query, iso8601_datetimes=False):
+        super(JSONExporter, self).__init__(query)
+        self.iso8601_datetimes = iso8601_datetimes
+
+    def _make_default(self):
+        datetime_types = (datetime.datetime, datetime.date, datetime.time)
+
+        if self.iso8601_datetimes:
+            def default(o):
+                if isinstance(o, datetime_types):
+                    return o.isoformat()
+                elif isinstance(o, Decimal):
+                    return str(o)
+                raise TypeError('Unable to serialize %r as JSON' % o)
+        else:
+            def default(o):
+                if isinstance(o, datetime_types + (Decimal,)):
+                    return str(o)
+                raise TypeError('Unable to serialize %r as JSON' % o)
+        return default
 
     def export(self, file_obj, **kwargs):
         json.dump(
             list(self.query),
             file_obj,
-            default=JSONExporter.default,
+            default=self._make_default(),
             **kwargs)
 
 
