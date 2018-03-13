@@ -280,7 +280,7 @@ class JSONExporter(Exporter):
     @staticmethod
     def default(o):
         if isinstance(o, (datetime.datetime, datetime.date, datetime.time)):
-            return o.isoformat()
+            return str(o)
         elif isinstance(o, Decimal):
             return str(o)
         raise TypeError('Unable to serialize %r as JSON.' % o)

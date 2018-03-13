@@ -308,6 +308,33 @@ class TestDataSet(ModelTestCase):
             'charlie',
             'huey'])
 
+    def test_freeze_thaw(self):
+        user = self.dataset['user']
+        user.insert(username='charlie')
+
+        note = self.dataset['note']
+        note_ts = datetime.datetime(2017, 1, 2, 3, 4, 5)
+        note.insert(content='foo', timestamp=note_ts, user_id='charlie')
+
+        buf = StringIO()
+        self.dataset.freeze(note.all(), 'json', file_obj=buf)
+        self.assertEqual(json.loads(buf.getvalue()), [{
+            'id': 1,
+            'user_id': 'charlie',
+            'content': 'foo',
+            'timestamp': '2017-01-02 03:04:05'}])
+
+        note.delete(id=1)
+        self.assertEqual(list(note.all()), [])
+
+        buf.seek(0)
+        note.thaw(format='json', file_obj=buf)
+        self.assertEqual(list(note.all()), [{
+            'id': 1,
+            'user_id': 'charlie',
+            'content': 'foo',
+            'timestamp': note_ts}])
+
     def test_table_column_creation(self):
         table = self.dataset['people']
         table.insert(name='charlie')
