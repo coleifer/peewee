@@ -278,6 +278,18 @@ Database
             for row in db.batch_commit(row_data, 100):
                 User.create(**row)
 
+        An alternative that may be more efficient is to batch the data into a
+        multi-value ``INSERT`` statement (for example, using
+        :py:meth:`Model.insert_many`):
+
+        .. code-block:: python
+
+            with db.atomic():
+                for idx in range(0, len(row_data), 100):
+                    # Insert 100 rows at a time.
+                    rows = row_data[idx:idx + 100]
+                    User.insert_many(rows).execute()
+
     .. py:method:: table_exists(table[, schema=None])
 
         :param str table: Table name.
