@@ -149,6 +149,7 @@ if sys.version_info[0] == 2:
     text_type = unicode
     bytes_type = str
     buffer_type = buffer
+    izip_longest = itertools.izip_longest
     exec('def reraise(tp, value, tb=None): raise tp, value, tb')
     def print_(s):
         sys.stdout.write(s)
@@ -164,6 +165,7 @@ else:
     basestring = str
     long = int
     print_ = getattr(builtins, 'print')
+    izip_longest = itertools.zip_longest
     def reraise(tp, value, tb=None):
         if value.__traceback__ is not tb:
             raise value.with_traceback(tb)
@@ -356,8 +358,8 @@ def ensure_entity(value):
 
 def chunked(it, n):
     marker = object()
-    for group in (list(g) for g in itertools.izip_longest(*[iter(it)] * n,
-                                                          fillvalue=marker)):
+    for group in (list(g) for g in izip_longest(*[iter(it)] * n,
+                                                fillvalue=marker)):
         if group[-1] is marker:
             del group[group.index(marker):]
         yield group
