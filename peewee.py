@@ -5104,7 +5104,7 @@ class Model(with_metaclass(ModelBase, Node)):
         return ModelInsert(cls, cls._normalize_data(__data, insert))
 
     @classmethod
-    def insert_many(cls, rows, fields=None):
+    def insert_many(cls, rows, fields=None, batch_size=None):
         return ModelInsert(cls, insert=rows, columns=fields)
 
     @classmethod

@@ -8,6 +8,7 @@ from peewee import sqlite3
 
 from .base import db
 from .base import get_in_memory_db
+from .base import mock
 from .base import new_connection
 from .base import requires_models
 from .base import skip_case_unless
@@ -842,6 +843,28 @@ class TestModelAPIs(ModelTestCase):
 
         list(qr)
         self.assertEqual(qr.count, 3)
+
+    @requires_models(User)
+    def test_batch_commit(self):
+        commit_method = self.database.commit
+
+        def assertBatch(n_rows, batch_size, n_commits):
+            User.delete().execute()
+            user_data = [{'username': 'u%s' % i} for i in range(n_rows)]
+            with mock.patch.object(self.database, 'commit') as mock_commit:
+                mock_commit.side_effect = commit_method
+                for row in self.database.batch_commit(user_data, batch_size):
+                    User.create(**row)
+
+                self.assertEqual(mock_commit.call_count, n_commits)
+                self.assertEqual(User.select().count(), n_rows)
+
+        assertBatch(6, 1, 6)
+        assertBatch(6, 2, 3)
+        assertBatch(6, 3, 2)
+        assertBatch(6, 4, 2)
+        assertBatch(6, 6, 1)
+        assertBatch(6, 7, 1)
 
 
 class TestRaw(ModelTestCase):
