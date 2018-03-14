@@ -5,6 +5,16 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.1.4
+
+* Added `BigAutoField` to support 64-bit auto-incrementing primary keys.
+* Use Peewee-compatible datetime serialization when exporting JSON from
+  a `DataSet`. Previously the JSON export used ISO-8601 by default. See #1536.
+* Added `Database.batch_commit` helper to wrap iterators in chunked
+  transactions. See #1539 for discussion.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.1.3...3.1.4)
+
 ## 3.1.3
 
 * Fixed issue where scope-specific settings were being updated in-place instead
