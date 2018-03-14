@@ -253,6 +253,31 @@ Database
             This method should only be used in conjunction with the
             :py:meth:`~Database.manual_commit` context manager.
 
+    .. py:method:: batch_commit(it, n)
+
+        :param iterable it: an iterable whose items will be yielded.
+        :param int n: commit every *n* items.
+        :return: an equivalent iterable to the one provided, with the addition
+            that groups of *n* items will be yielded in a transaction.
+
+        The purpose of this method is to simplify batching large operations,
+        such as inserts, updates, etc. You pass in an iterable and the number
+        of items-per-batch, and the items will be returned by an equivalent
+        iterator that wraps each batch in a transaction.
+
+        Example:
+
+        .. code-block:: python
+
+            # Some list or iterable containing data to insert.
+            row_data = [{'username': 'u1'}, {'username': 'u2'}, ...]
+
+            # Insert all data, committing every 100 rows. If, for example,
+            # there are 789 items in the list, then there will be a total of
+            # 8 transactions (7x100 and 1x89).
+            for row in db.batch_commit(row_data, 100):
+                User.create(**row)
+
     .. py:method:: table_exists(table[, schema=None])
 
         :param str table: Table name.

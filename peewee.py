@@ -354,6 +354,14 @@ def ensure_entity(value):
     if value is not None:
         return value if isinstance(value, Node) else Entity(value)
 
+def chunked(it, n):
+    marker = object()
+    for group in (list(g) for g in itertools.izip_longest(*[iter(it)] * n,
+                                                          fillvalue=marker)):
+        if group[-1] is marker:
+            del group[group.index(marker):]
+        yield group
+
 
 class _callable_context_manager(object):
     def __call__(self, fn):
@@ -2583,6 +2591,12 @@ class Database(_callable_context_manager):
 
     def rollback(self):
         return self._state.conn.rollback()
+
+    def batch_commit(self, it, n):
+        for group in chunked(it, n):
+            with self.atomic():
+                for obj in group:
+                    yield obj
 
     def table_exists(self, table, schema=None):
         return table.__name__ in self.get_tables(schema=schema)

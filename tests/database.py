@@ -187,6 +187,36 @@ class TestDatabase(DatabaseTestCase):
         db.close()
         alt_db.close()
 
+    def test_batch_commit(self):
+        class PatchCommitDatabase(SqliteDatabase):
+            commits = 0
+            def begin(self): pass
+            def commit(self):
+                self.commits += 1
+
+        db = PatchCommitDatabase(':memory:')
+
+        def assertBatches(n_objs, batch_size, n_commits):
+            accum = []
+            source = range(n_objs)
+            db.commits = 0
+            for item in db.batch_commit(source, batch_size):
+                accum.append(item)
+
+            self.assertEqual(accum, list(range(n_objs)))
+            self.assertEqual(db.commits, n_commits)
+
+        assertBatches(12, 1, 12)
+        assertBatches(12, 2, 6)
+        assertBatches(12, 3, 4)
+        assertBatches(12, 4, 3)
+        assertBatches(12, 5, 3)
+        assertBatches(12, 6, 2)
+        assertBatches(12, 7, 2)
+        assertBatches(12, 11, 2)
+        assertBatches(12, 12, 1)
+        assertBatches(12, 13, 1)
+
 
 class TestThreadSafety(ModelTestCase):
     requires = [User]
