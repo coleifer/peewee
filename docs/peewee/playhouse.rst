@@ -2909,8 +2909,16 @@ including :ref:`dataset` and :ref:`pwiz`.
             User = models['user']
             Tweet = models['tweet']
 
-    .. py:method:: generate_models()
+    .. py:method:: generate_models([skip_invalid=False[, table_names=None[, literal_column_names=False[, bare_fields=False]]]])
 
+        :param bool skip_invalid: Skip tables whose names are invalid python
+            identifiers.
+        :param list table_names: List of table names to generate. If
+            unspecified, models are generated for all tables.
+        :param bool literal_column_names: Use column-names as-is. By default,
+            column names are "python-ized", i.e. mixed-case becomes lower-case.
+        :param bare_fields: **SQLite-only**. Do not specify data-types for
+            introspected columns.
         :return: A dictionary mapping table-names to model classes.
 
         Introspect the database, reading in the tables, columns, and foreign
