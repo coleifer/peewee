@@ -148,6 +148,20 @@ up into chunks:
         for idx in range(0, len(data_source), 100):
             MyModel.insert_many(data_source[idx:idx+100]).execute()
 
+If :py:meth:`Model.insert_many` won't work for your use-case, you can also use
+the :py:meth:`Database.batch_commit` helper to process chunks of rows inside
+transactions:
+
+.. code-block:: python
+
+    # List of row data to insert.
+    row_data = [{'username': 'u1'}, {'username': 'u2'}, ...]
+
+    # Assume there are 789 items in row_data. The following code will result in
+    # 8 total transactions (7x100 rows + 1x89 rows).
+    for row in db.batch_commit(row_data, 100):
+        User.create(**row)
+
 .. note::
     SQLite users should be aware of some caveats when using bulk inserts.
     Specifically, your SQLite3 version must be 3.7.11.0 or newer to take
