@@ -5,6 +5,12 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.1.5
+
+Fixed Python 2/3 incompatibility with `itertools.izip_longest()`.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.1.4...3.1.5)
+
 ## 3.1.4
 
 * Added `BigAutoField` to support 64-bit auto-incrementing primary keys.
