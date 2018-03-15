@@ -10,8 +10,9 @@ from .base import ModelTestCase
 from .base import TestModel
 
 
-db = SqlCipherDatabase('peewee_test.dbc', passphrase='testing sqlcipher')
-ext_db = SqlCipherExtDatabase('peewee_test.dbx', passphrase='testing sqlcipher')
+PASSPHRASE = 'testing sqlcipher'
+db = SqlCipherDatabase('peewee_test.dbc', passphrase=PASSPHRASE)
+ext_db = SqlCipherExtDatabase('peewee_test.dbx', passphrase=PASSPHRASE)
 
 
 @ext_db.func('shazam')
@@ -49,11 +50,30 @@ class SqlCipherTestCase(CleanUpModelTestCase):
             Thing.create(name=thing)
 
         # Try to open db with wrong passphrase
-        secure = False
         bad_db = SqlCipherDatabase(db.database, passphrase='wrong passphrase')
         self.assertRaises(DatabaseError, bad_db.get_tables)
 
         # Assert that we can still access the data with the good passphrase.
+        query = Thing.select().order_by(Thing.name)
+        self.assertEqual([t.name for t in query], ['t1', 't2', 't3'])
+
+    def test_rekey(self):
+        things = ('t1', 't2', 't3')
+        for thing in things:
+            Thing.create(name=thing)
+
+        self.database.rekey('a new passphrase')
+
+        db2 = SqlCipherDatabase(db.database, passphrase='a new passphrase')
+        cursor = db2.execute_sql('select name from thing order by name;')
+        self.assertEqual([name for name, in cursor], ['t1', 't2', 't3'])
+
+        query = Thing.select().order_by(Thing.name)
+        self.assertEqual([t.name for t in query], ['t1', 't2', 't3'])
+
+        self.database.close()
+        self.database.connect()
+
         query = Thing.select().order_by(Thing.name)
         self.assertEqual([t.name for t in query], ['t1', 't2', 't3'])
 

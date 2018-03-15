@@ -594,6 +594,12 @@ sqlcipher_ext API notes
     * When trying to open an existing database, ``passhprase`` and ``kdf_iter``
       should be *identical* to the ones used when it was created.
 
+    .. py:method:: rekey(passphrase)
+
+        :param str passphrase: New passphrase for database.
+
+        Change the passphrase for database.
+
 .. _PBKDF2: https://en.wikipedia.org/wiki/PBKDF2
 .. _passphrase strength: https://en.wikipedia.org/wiki/Password_strength
 

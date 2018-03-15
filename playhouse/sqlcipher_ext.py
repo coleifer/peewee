@@ -94,6 +94,20 @@ class _SqlCipherDatabase(object):
         else:
             return conn
 
+    def rekey(self, passphrase):
+        if len(passphrase) < 8:
+            raise ImproperlyConfigured(
+                'SqlCipherDatabase passphrase should be at least eight '
+                'character long.')
+
+        if self.is_closed():
+            self.connect()
+
+        self.execute_sql(
+            'PRAGMA rekey=\'{0}\''.format(passphrase.replace("'", "''")))
+        self.connect_params['passphrase'] = passphrase
+        return True
+
 
 class SqlCipherDatabase(_SqlCipherDatabase, SqliteDatabase):
     pass
