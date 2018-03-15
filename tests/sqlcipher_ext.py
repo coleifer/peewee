@@ -61,6 +61,9 @@ class SqlCipherTestCase(CleanUpModelTestCase):
         db = SqlCipherDatabase(':memory:', passphrase='x')
         self.assertRaises(ImproperlyConfigured, db.connect)
 
+        db = SqlCipherDatabase(':memory:')
+        self.assertRaises(ImproperlyConfigured, db.connect)
+
     def test_kdf_iter(self):
         db = SqlCipherDatabase(':memory:', kdf_iter=9999)
         self.assertRaises(ImproperlyConfigured, db.connect)
