@@ -8,22 +8,34 @@ class Signal(object):
     def __init__(self):
         self._flush()
 
+    def _flush(self):
+        self._receivers = set()
+        self._receiver_list = []
+
     def connect(self, receiver, name=None, sender=None):
         name = name or receiver.__name__
-        if name not in self._receivers:
-            self._receivers[name] = (receiver, sender)
-            self._receiver_list.append(name)
+        key = (name, sender)
+        if key not in self._receivers:
+            self._receivers.add(key)
+            self._receiver_list.append((name, receiver, sender))
         else:
-            raise ValueError('receiver named %s already connected' % name)
+            raise ValueError('receiver named %s (for sender=%s) already '
+                             'connected' % (name, sender or 'any'))
 
-    def disconnect(self, receiver=None, name=None):
+    def disconnect(self, receiver=None, name=None, sender=None):
         if receiver:
-            name = receiver.__name__
-        if name:
-            del self._receivers[name]
-            self._receiver_list.remove(name)
-        else:
+            name = name or receiver.__name__
+        if not name:
             raise ValueError('a receiver or a name must be provided')
+
+        key = (name, sender)
+        if key not in self._receivers:
+            raise ValueError('receiver named %s for sender=%s not found.' %
+                             (name, sender or 'any'))
+
+        self._receivers.remove(key)
+        self._receiver_list = [(n, r, s) for n, r, s in self._receiver_list
+                               if n != name and s != sender]
 
     def __call__(self, name=None, sender=None):
         def decorator(fn):
@@ -34,15 +46,10 @@ class Signal(object):
     def send(self, instance, *args, **kwargs):
         sender = type(instance)
         responses = []
-        for name in self._receiver_list:
-            r, s = self._receivers[name]
+        for n, r, s in self._receiver_list:
             if s is None or isinstance(instance, s):
                 responses.append((r, r(sender, instance, *args, **kwargs)))
         return responses
-
-    def _flush(self):
-        self._receivers = {}
-        self._receiver_list = []
 
 
 pre_save = Signal()

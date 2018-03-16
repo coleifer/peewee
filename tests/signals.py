@@ -105,6 +105,7 @@ class TestSignals(ModelTestCase):
 
     def test_connect_disconnect(self):
         state = []
+
         @signals.post_save(sender=A)
         def post_save(sender, instance, created):
             state.append(instance)
@@ -112,9 +113,25 @@ class TestSignals(ModelTestCase):
         a = A.create()
         self.assertEqual(state, [a])
 
-        signals.post_save.disconnect(post_save)
+        # Signal was registered with a specific sender, so this fails.
+        self.assertRaises(ValueError, signals.post_save.disconnect, post_save)
+
+        # Disconnect signal, specifying sender.
+        signals.post_save.disconnect(post_save, sender=A)
+
+        # Signal handler has been unregistered.
         a2 = A.create()
         self.assertEqual(state, [a])
+
+        # Re-connect without specifying sender.
+        signals.post_save.connect(post_save)
+        a3 = A.create()
+        self.assertEqual(state, [a, a3])
+
+        # Signal was not registered with a sender, so this fails.
+        self.assertRaises(ValueError, signals.post_save.disconnect, post_save,
+                          sender=A)
+        signals.post_save.disconnect(post_save)
 
     def test_subclass_instance_receive_signals(self):
         state = []
