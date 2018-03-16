@@ -2,6 +2,7 @@
 Provide django-style hooks for model events.
 """
 from peewee import Model as _Model
+from peewee import logger
 
 
 class Signal(object):
@@ -13,8 +14,13 @@ class Signal(object):
         if name not in self._receivers:
             self._receivers[name] = (receiver, sender)
             self._receiver_list.append(name)
+        elif (receiver, sender) == self._receivers[name]:
+            logger.warning('receiver %s has been already connected' % name)
         else:
-            raise ValueError('receiver named %s already connected' % name)
+            raise ValueError(
+                'receiver %s is already attached to another sender %s' %
+                (name, self._receivers[name][1])
+            )
 
     def disconnect(self, receiver=None, name=None):
         if receiver:

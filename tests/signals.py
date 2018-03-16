@@ -125,3 +125,28 @@ class TestSignals(ModelTestCase):
 
         b = SubB.create()
         assert b in state
+
+    def test_assign_same_function_to_signal(self):
+        state = []
+
+        @signals.post_save(sender=B)
+        def post_save_one(sender, instance, created):
+            state.append(instance)
+
+        signals.post_save(sender=B)(post_save_one)
+
+        b = SubB.create()
+        assert b in state
+
+    def test_assign_same_function_another_sender(self):
+        state = []
+
+        @signals.post_save(sender=B)
+        def post_save_one(sender, instance, created):
+            state.append(instance)
+
+        with self.assertRaises(ValueError):
+            signals.post_save(sender=A)(post_save_one)
+
+        b = SubB.create()
+        assert b in state
