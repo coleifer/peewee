@@ -152,7 +152,7 @@ def operation(fn):
 
 
 def make_index_name(table_name, columns):
-    index_name = '_'.join((table_name,) + columns)
+    index_name = '_'.join((table_name,) + tuple(columns))
     if len(index_name) > 64:
         index_hash = hashlib.md5(index_name.encode('utf-8')).hexdigest()
         index_name = '%s_%s' % (index_name[:56], index_hash[:7])
