@@ -133,6 +133,20 @@ class TestSignals(ModelTestCase):
                           sender=A)
         signals.post_save.disconnect(post_save)
 
+    def test_function_reuse(self):
+        state = []
+
+        @signals.post_save(sender=A)
+        def post_save(sender, instance, created):
+            state.append(instance)
+
+        # Connect function for sender=B as well.
+        signals.post_save(sender=B)(post_save)
+
+        a = A.create()
+        b = B.create()
+        self.assertEqual(state, [a, b])
+
     def test_subclass_instance_receive_signals(self):
         state = []
 
