@@ -2155,6 +2155,10 @@ Fields
         :py:class:`AutoIncrementField` and ``pragmas=[('foreign_keys', 'on')]``
         when you instantiate :py:class:`SqliteDatabase`.
 
+.. py:class:: BigAutoField
+
+    Field class for storing auto-incrementing primary keys using 64-bits.
+
 .. py:class:: FloatField
 
     Field class for storing floating-point numbers.
