@@ -134,7 +134,7 @@ class Entry(flask_db.Model):
                 .where(
                     FTSEntry.match(search) &
                     (Entry.published == True))
-                .order_by(SQL('score').desc()))
+                .order_by(SQL('score')))
 
 class FTSEntry(FTSModel):
     content = TextField()
