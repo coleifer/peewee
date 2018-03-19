@@ -4539,7 +4539,7 @@ class SchemaManager(object):
         return ctx
 
     def drop_table(self, safe=True, **options):
-        self.database.execute(self._drop_table(safe=safe), **options)
+        self.database.execute(self._drop_table(safe=safe, **options))
 
     def _create_indexes(self, safe=True):
         return [self._create_index(index, safe)
