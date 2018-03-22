@@ -94,6 +94,14 @@ class _SqlCipherDatabase(object):
         else:
             return conn
 
+    def set_passphrase(self, passphrase):
+        if not self.is_closed():
+            raise ImproperlyConfigured('Cannot set passphrase when database '
+                                       'is open. To change passphrase of an '
+                                       'open database use the rekey() method.')
+
+        self.connect_params['passphrase'] = passphrase
+
     def rekey(self, passphrase):
         if len(passphrase) < 8:
             raise ImproperlyConfigured(
