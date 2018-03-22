@@ -84,10 +84,10 @@ class _SqlCipherDatabase(object):
         conn = sqlcipher.connect(self.database, **params)
         conn.isolation_level = None
         try:
-            self._add_conn_hooks(conn)
             conn.execute(
                 'PRAGMA key=\'{0}\''.format(passphrase.replace("'", "''")))
             conn.execute('PRAGMA kdf_iter={0:d}'.format(kdf_iter))
+            self._add_conn_hooks(conn)
         except:
             conn.close()
             raise
