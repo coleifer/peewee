@@ -147,10 +147,11 @@ class ArrayField(IndexedFieldMixin, Field):
     default_index_type = 'GIN'
     passthrough = True
 
-    def __init__(self, field_class=IntegerField, dimensions=1, *args,
-                 **kwargs):
+    def __init__(self, field_class=IntegerField, dimensions=1,
+                 convert_values=False, *args, **kwargs):
         self.__field = field_class(*args, **kwargs)
         self.dimensions = dimensions
+        self.convert_values = convert_values
         self.field_type = self.__field.field_type
         super(ArrayField, self).__init__(*args, **kwargs)
 
@@ -159,10 +160,29 @@ class ArrayField(IndexedFieldMixin, Field):
         return NodeList((data_type, SQL('[]' * self.dimensions)), glue='')
 
     def db_value(self, value):
-        if value is not None:
-            if isinstance(value, (list, Node)):
-                return value
-            return list(value)
+        if value is None or isinstance(value, Node):
+            return value
+        elif self.convert_values:
+            return self._process(self.__field.db_value, value, self.dimensions)
+        else:
+            return value if isinstance(value, list) else list(value)
+
+    def python_value(self, value):
+        if self.convert_values and value is not None:
+            conv = self.__field.python_value
+            if isinstance(value, list):
+                return self._process(conv, value, self.dimensions)
+            else:
+                return conv(value)
+        else:
+            return value
+
+    def _process(self, conv, value, dimensions):
+        dimensions -= 1
+        if dimensions == 0:
+            return [conv(v) for v in value]
+        else:
+            return [self._process(conv, v, dimensions) for v in value]
 
     def __getitem__(self, value):
         return ObjectSlice.create(self, value)

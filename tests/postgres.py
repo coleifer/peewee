@@ -28,6 +28,11 @@ class ArrayModel(TestModel):
     ints = ArrayField(IntegerField, dimensions=2)
 
 
+class ArrayTSModel(TestModel):
+    key = CharField(max_length=100, primary_key=True)
+    timestamps = ArrayField(TimestampField, convert_values=True)
+
+
 class FTSModel(TestModel):
     title = CharField()
     data = TextField()
@@ -300,6 +305,37 @@ class TestArrayField(ModelTestCase):
 
         row = AM.select(I[1:2][0].alias('ints')).dicts().get()
         self.assertEqual(row['ints'], [[3], [5]])
+
+
+class TestArrayFieldConvertValues(ModelTestCase):
+    database = db
+    requires = [ArrayTSModel]
+
+    def test_value_conversion(self):
+        def dt(day, hour=0, minute=0, second=0):
+            return datetime.datetime(2018, 1, day, hour, minute, second)
+
+        data = {
+            'k1': [dt(1), dt(2), dt(3)],
+            'k2': [],
+            'k3': [dt(4, 5, 6, 7), dt(10, 11, 12, 13)],
+        }
+        for key in sorted(data):
+            ArrayTSModel.create(key=key, timestamps=data[key])
+
+        for key in sorted(data):
+            am = ArrayTSModel.get(ArrayTSModel.key == key)
+            self.assertEqual(am.timestamps, data[key])
+
+        # Perform lookup using timestamp values.
+        ts = ArrayTSModel.get(ArrayTSModel.timestamps.contains(dt(3)))
+        self.assertEqual(ts.key, 'k1')
+
+        ts = ArrayTSModel.get(ArrayTSModel.timestamps.contains(dt(4, 5, 6, 7)))
+        self.assertEqual(ts.key, 'k3')
+
+        self.assertRaises(ArrayTSModel.DoesNotExist, ArrayTSModel.get,
+                          ArrayTSModel.timestamps.contains(dt(4, 5, 6)))
 
 
 class TestTSVectorField(ModelTestCase):
