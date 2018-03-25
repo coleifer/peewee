@@ -1076,6 +1076,24 @@ See `Publish/Subscribe pattern
     cherrypy.engine.subscribe('before_request', _db_connect)
     cherrypy.engine.subscribe('after_request', _db_close)
 
+Sanic
+^^^^^
+
+In Sanic, the connection handling code can be placed in the request and reponse middleware `sanic middleware
+<https://github.com/channelcat/sanic/blob/master/docs/sanic/middleware.md>`_.
+
+.. code-block:: python
+
+    # app.py
+    @app.middleware('request')
+    async def handle_request(request):
+        db.connect()
+
+    @app.middleware('response')
+    async def handle_response(request, response):
+        if not db.is_closed():
+            db.close()
+
 Other frameworks
 ^^^^^^^^^^^^^^^^
 
