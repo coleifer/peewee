@@ -1079,8 +1079,8 @@ See `Publish/Subscribe pattern
 Sanic
 ^^^^^
 
-In Sanic, the connection handling code can be placed in the request and reponse middleware `sanic middleware
-<https://github.com/channelcat/sanic/blob/master/docs/sanic/middleware.md>`_.
+In Sanic, the connection handling code can be placed in the request and
+response middleware `sanic middleware <http://sanic.readthedocs.io/en/latest/sanic/middleware.html>`_.
 
 .. code-block:: python
 
