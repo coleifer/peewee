@@ -1079,7 +1079,7 @@ See `Publish/Subscribe pattern
 Sanic
 ^^^^^
 
-The connection handling code can be placed in the request and reponse middleware `sanic middleware
+In Sanic, the connection handling code can be placed in the request and reponse middleware `sanic middleware
 <https://github.com/channelcat/sanic/blob/master/docs/sanic/middleware.md>`_.
 
 .. code-block:: python
@@ -1091,7 +1091,7 @@ The connection handling code can be placed in the request and reponse middleware
 
     @app.middleware('response')
     async def handle_response(request, response):
-        if not db.is_closed()#
+        if not db.is_closed():
             db.close()
 
 Other frameworks
