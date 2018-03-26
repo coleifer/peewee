@@ -551,7 +551,7 @@ class Context(object):
     def value(self, value, converter=None):
         if converter is None:
             converter = self.state.converter
-        if converter is not None:
+        if converter:
             value = converter(value)
         self._values.append(value)
         return self

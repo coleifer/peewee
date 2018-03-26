@@ -451,3 +451,56 @@ class TestBigAutoField(ModelTestCase):
         self.assertTrue(b1_db.pk < b2_db.pk)
         self.assertTrue(b1_db.data, 'b1')
         self.assertTrue(b2_db.data, 'b2')
+
+
+class Item(TestModel):
+    price = IntegerField()
+    multiplier = FloatField(default=1.)
+
+
+class TestFieldValueHandling(ModelTestCase):
+    requires = [Item]
+
+    def test_int_float_multi(self):
+        i = Item.create(price=10, multiplier=0.75)
+
+        query = (Item
+                 .select(Item, (Item.price * Item.multiplier).alias('total'))
+                 .where(Item.id == i.id))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."price", "t1"."multiplier", '
+            '("t1"."price" * "t1"."multiplier") AS "total" '
+            'FROM "item" AS "t1" '
+            'WHERE ("t1"."id" = ?)'), [i.id])
+
+        i_db = query.get()
+        self.assertEqual(i_db.price, 10)
+        self.assertEqual(i_db.multiplier, .75)
+        self.assertEqual(i_db.total, 7.5)
+
+        # By default, Peewee will use the Price field (integer) converter to
+        # coerce the value of it's right-hand operand (converting to 0).
+        query = (Item
+                 .select(Item, (Item.price * 0.75).alias('total'))
+                 .where(Item.id == i.id))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."price", "t1"."multiplier", '
+            '("t1"."price" * ?) AS "total" '
+            'FROM "item" AS "t1" '
+            'WHERE ("t1"."id" = ?)'), [0, i.id])
+
+        # We can explicitly pass "False" and the value will not be converted.
+        exp = Item.price * Value(0.75, False)
+        query = (Item
+                 .select(Item, exp.alias('total'))
+                 .where(Item.id == i.id))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."price", "t1"."multiplier", '
+            '("t1"."price" * ?) AS "total" '
+            'FROM "item" AS "t1" '
+            'WHERE ("t1"."id" = ?)'), [0.75, i.id])
+
+        i_db = query.get()
+        self.assertEqual(i_db.price, 10)
+        self.assertEqual(i_db.multiplier, .75)
+        self.assertEqual(i_db.total, 7.5)
