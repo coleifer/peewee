@@ -54,7 +54,7 @@ except ImportError:
         mysql = None
 
 
-__version__ = '3.1.5'
+__version__ = '3.1.6'
 __all__ = [
     'AsIs',
     'AutoField',
@@ -5104,7 +5104,7 @@ class Model(with_metaclass(ModelBase, Node)):
         return ModelInsert(cls, cls._normalize_data(__data, insert))
 
     @classmethod
-    def insert_many(cls, rows, fields=None, batch_size=None):
+    def insert_many(cls, rows, fields=None):
         return ModelInsert(cls, insert=rows, columns=fields)
 
     @classmethod

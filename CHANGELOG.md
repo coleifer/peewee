@@ -5,6 +5,19 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.1.6
+
+* Added `rekey()` method to SqlCipher database for changing encryption key and
+  documentation for `set_passphrase()` method.
+* Added `convert_values` parameter to `ArrayField` constructor, which will
+  cause the array values to be processed using the underlying data-type's
+  conversion logic.
+* Fixed unreported bug using `TimestampField` with sub-second resolutions.
+* Fixed bug where options were not being processed when calling `drop_table()`.
+* Some fixes and improvements to `signals` extension.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.1.5...3.1.6)
+
 ## 3.1.5
 
 Fixed Python 2/3 incompatibility with `itertools.izip_longest()`.
