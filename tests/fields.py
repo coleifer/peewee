@@ -513,15 +513,16 @@ class TestFieldValueHandling(ModelTestCase):
         self.assertEqual(i_db.multiplier, .75)
         self.assertEqual(i_db.total, 7.5)
 
-    @skip_if(IS_MYSQL)
     def test_explicit_cast(self):
         prices = ((10, 1.1), (5, .5))
         for price, multiplier in prices:
             Item.create(price=price, multiplier=multiplier)
 
+        text = 'CHAR' if IS_MYSQL else 'TEXT'
+
         query = (Item
-                 .select(Item.price.cast('TEXT').alias('price_text'),
-                         Item.multiplier.cast('TEXT').alias('multiplier_text'))
+                 .select(Item.price.cast(text).alias('price_text'),
+                         Item.multiplier.cast(text).alias('multiplier_text'))
                  .order_by(Item.id)
                  .dicts())
         self.assertEqual(list(query), [
