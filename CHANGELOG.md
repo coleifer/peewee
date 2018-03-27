@@ -5,6 +5,14 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.1.7
+
+For all the winblows lusers out there, added an option to skip compilation of
+the SQLite C extensions during installation. Set env var `NO_SQLITE=1` and run
+`setup.py install` and you should be able to build without requiring SQLite.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.1.6...3.1.7)
+
 ## 3.1.6
 
 * Added `rekey()` method to SqlCipher database for changing encryption key and
