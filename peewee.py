@@ -572,6 +572,8 @@ class Context(object):
 
 
 class Node(object):
+    _coerce = True
+
     def clone(self):
         obj = self.__class__.__new__(self.__class__)
         obj.__dict__ = self.__dict__.copy()
@@ -587,6 +589,13 @@ class Node(object):
             method(clone, *args, **kwargs)
             return clone
         return inner
+
+    def coerce(self, _coerce=True):
+        if _coerce != self._coerce:
+            clone = self.clone()
+            clone._coerce = _coerce
+            return clone
+        return self
 
     def unwrap(self):
         return self
@@ -1012,6 +1021,7 @@ class Column(ColumnBase):
 class WrappedNode(ColumnBase):
     def __init__(self, node):
         self.node = node
+        self._coerce = getattr(node, '_coerce', True)
 
     def unwrap(self):
         return self.node.unwrap()
@@ -1124,6 +1134,7 @@ class Cast(WrappedNode):
     def __init__(self, node, cast):
         super(Cast, self).__init__(node)
         self.cast = cast
+        self._coerce = False
 
     def __sql__(self, ctx):
         return (ctx
@@ -1240,7 +1251,7 @@ class Function(ColumnBase):
     def __init__(self, name, arguments, coerce=True):
         self.name = name
         self.arguments = arguments
-        if name and name.lower() in ('sum', 'count'):
+        if name and name.lower() in ('sum', 'count', 'cast'):
             self._coerce = False
         else:
             self._coerce = coerce
@@ -1265,10 +1276,6 @@ class Function(ColumnBase):
         else:
             node = SQL(window._alias)
         return NodeList((self, SQL('OVER'), node))
-
-    def coerce(self, coerce=True):
-        self._coerce = coerce
-        return self
 
     def __sql__(self, ctx):
         ctx.literal(self.name)
@@ -3637,14 +3644,14 @@ class Field(ColumnBase):
     def column(self):
         return Column(self.model._meta.table, self.column_name)
 
-    def coerce(self, value):
+    def adapt(self, value):
         return value
 
     def db_value(self, value):
-        return value if value is None else self.coerce(value)
+        return value if value is None else self.adapt(value)
 
     def python_value(self, value):
-        return value if value is None else self.coerce(value)
+        return value if value is None else self.adapt(value)
 
     def get_sort_key(self, ctx):
         return self._sort_key
@@ -3691,7 +3698,7 @@ class Field(ColumnBase):
 
 class IntegerField(Field):
     field_type = 'INT'
-    coerce = int
+    adapt = int
 
 
 class BigIntegerField(IntegerField):
@@ -3727,7 +3734,7 @@ class PrimaryKeyField(AutoField):
 
 class FloatField(Field):
     field_type = 'FLOAT'
-    coerce = float
+    adapt = float
 
 
 class DoubleField(FloatField):
@@ -3766,7 +3773,7 @@ class DecimalField(Field):
 
 
 class _StringField(Field):
-    def coerce(self, value):
+    def adapt(self, value):
         if isinstance(value, text_type):
             return value
         elif isinstance(value, bytes_type):
@@ -4095,14 +4102,14 @@ class IPField(BigIntegerField):
 
 class BooleanField(Field):
     field_type = 'BOOL'
-    coerce = bool
+    adapt = bool
 
 
 class BareField(Field):
-    def __init__(self, coerce=None, *args, **kwargs):
+    def __init__(self, adapt=None, *args, **kwargs):
         super(BareField, self).__init__(*args, **kwargs)
-        if coerce is not None:
-            self.coerce = coerce
+        if adapt is not None:
+            self.adapt = adapt
 
     def ddl(self, ctx):
         return Entity(self.column_name)
@@ -4155,8 +4162,8 @@ class ForeignKeyField(Field):
             return self.rel_field.get_modifiers()
         return super(ForeignKeyField, self).get_modifiers()
 
-    def coerce(self, value):
-        return self.rel_field.coerce(value)
+    def adapt(self, value):
+        return self.rel_field.adapt(value)
 
     def db_value(self, value):
         if isinstance(value, self.rel_model):
@@ -5431,7 +5438,7 @@ class FieldAlias(Field):
     def clone(self):
         return FieldAlias(self.source, self.field)
 
-    def coerce(self, value): return self.field.coerce(value)
+    def adapt(self, value): return self.field.adapt(value)
     def python_value(self, value): return self.field.python_value(value)
     def db_value(self, value): return self.field.db_value(value)
     def __getattr__(self, attr):
@@ -5928,16 +5935,16 @@ class BaseModelCursorWrapper(DictCursorWrapper):
 
             self.columns.append(column)
             try:
-                node = self.select[idx]
+                raw_node = self.select[idx]
             except IndexError:
                 continue
             else:
-                node = node.unwrap()
+                node = raw_node.unwrap()
 
             # Heuristics used to attempt to get the field associated with a
             # given SELECT column, so that we can accurately convert the value
             # returned by the database-cursor into a Python object.
-            if isinstance(node, Field):
+            if isinstance(node, Field) and raw_node._coerce:
                 converters[idx] = node.python_value
                 fields[idx] = node
                 if column == node.name or column == node.column_name:

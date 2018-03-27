@@ -7,12 +7,15 @@ from peewee import bytes_type
 from peewee import *
 
 from .base import BaseTestCase
-from .base import db
 from .base import IS_MYSQL
 from .base import IS_POSTGRESQL
 from .base import IS_SQLITE
 from .base import ModelTestCase
 from .base import TestModel
+from .base import db
+from .base import requires_models
+from .base import skip_if
+from .base import skip_unless
 from .base_models import Tweet
 from .base_models import User
 
@@ -458,6 +461,11 @@ class Item(TestModel):
     multiplier = FloatField(default=1.)
 
 
+class Bare(TestModel):
+    key = BareField()
+    value = BareField(adapt=int, null=True)
+
+
 class TestFieldValueHandling(ModelTestCase):
     requires = [Item]
 
@@ -504,3 +512,38 @@ class TestFieldValueHandling(ModelTestCase):
         self.assertEqual(i_db.price, 10)
         self.assertEqual(i_db.multiplier, .75)
         self.assertEqual(i_db.total, 7.5)
+
+    @skip_if(IS_MYSQL)
+    def test_explicit_cast(self):
+        prices = ((10, 1.1), (5, .5))
+        for price, multiplier in prices:
+            Item.create(price=price, multiplier=multiplier)
+
+        query = (Item
+                 .select(Item.price.cast('TEXT').alias('price_text'),
+                         Item.multiplier.cast('TEXT').alias('multiplier_text'))
+                 .order_by(Item.id)
+                 .dicts())
+        self.assertEqual(list(query), [
+            {'price_text': '10', 'multiplier_text': '1.1'},
+            {'price_text': '5', 'multiplier_text': '0.5'},
+        ])
+
+    @skip_unless(IS_SQLITE)
+    @requires_models(Bare)
+    def test_bare_model_adapt(self):
+        b1 = Bare.create(key='k1', value=1)
+        b2 = Bare.create(key='k2', value='2')
+        b3 = Bare.create(key='k3', value=None)
+
+        b1_db = Bare.get(Bare.id == b1.id)
+        self.assertEqual(b1_db.key, 'k1')
+        self.assertEqual(b1_db.value, 1)
+
+        b2_db = Bare.get(Bare.id == b2.id)
+        self.assertEqual(b2_db.key, 'k2')
+        self.assertEqual(b2_db.value, 2)
+
+        b3_db = Bare.get(Bare.id == b3.id)
+        self.assertEqual(b3_db.key, 'k3')
+        self.assertTrue(b3_db.value is None)
