@@ -41,6 +41,7 @@ If you would like to build the SQLite extension in a git checkout, you can run:
     # Build the C extension and place shared libraries alongside other modules.
     python setup.py build_ext -i
 
+
 Running tests
 -------------
 
@@ -66,6 +67,7 @@ You can test specific features or specific database drivers using the
 
         -- install the hstore extension on the peewee_test postgres db.
         CREATE EXTENSION hstore;
+
 
 Optional dependencies
 ---------------------
@@ -95,3 +97,16 @@ Optional dependencies
   tricky so `here are instructions <http://charlesleifer.com/blog/updated-instructions-for-compiling-berkeleydb-with-sqlite-for-use-with-python/>`_.
 * Lastly, if you use the *Flask* framework, there are helper extension modules
   available.
+
+
+Skip Compilation of SQLite Extensions
+-------------------------------------
+
+I've received reports from Windows users that they have some trouble installing
+Peewee due to missing a SQLite shared library. If you would like to simply skip
+compilation of the SQLite-specific C extensions, you can set the ``NO_SQLITE``
+environment variable:
+
+.. code-block:: console
+
+    $ NO_SQLITE=1 python setup.py build
