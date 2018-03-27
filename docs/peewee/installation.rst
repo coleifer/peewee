@@ -85,10 +85,6 @@ Optional dependencies
 * `apsw <https://github.com/rogerbinns/apsw>`_: an optional 3rd-party SQLite
   binding offering greater performance and much, much saner semantics than the
   standard library ``pysqlite``. Use with :py:class:`APSWDatabase`.
-* `sweepea <https://github.com/coleifer/sweepea>` is used to provide some
-  table-valued functions for Sqlite as part of the ``sqlite_udf`` extensions
-  module. Alternatively, you can also use `vtfunc <https://github.com/coleifer/sqlite-vtfunc>`,
-  which is a smaller module that provides the same functionality.
 * `gevent <http://www.gevent.org/>`_ is an optional dependency for
   :py:class:`SqliteQueueDatabase` (though it works with ``threading`` just
   fine).
