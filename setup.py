@@ -37,6 +37,9 @@ else:
     else:
         cython_installed = True
 
+NO_SQLITE = os.environ.get('NO_SQLITE') or False
+
+
 speedups_ext_module = Extension(
     'playhouse._speedups',
     ['playhouse/_speedups.pyx'])
@@ -50,11 +53,14 @@ sqlite_ext_module = Extension(
 
 
 if cython_installed:
-    ext_modules.extend([
-        speedups_ext_module,
-        sqlite_udf_module,
-        sqlite_ext_module,
-    ])
+    ext_modules = [speedups_ext_module]
+    if not NO_SQLITE:
+        ext_modules.extend([
+            sqlite_udf_module,
+            sqlite_ext_module,
+        ])
+    else:
+        warnings.warn('SQLite extensions will not be built at users request.')
 
 if ext_modules:
     setup_kwargs.update(
