@@ -530,6 +530,14 @@ class TestFieldValueHandling(ModelTestCase):
             {'price_text': '5', 'multiplier_text': '0.5'},
         ])
 
+        item = (Item
+                .select(Item.price.cast(text).alias('price'),
+                        Item.multiplier.cast(text).alias('multiplier'))
+                .where(Item.price == 10)
+                .get())
+        self.assertEqual(item.price, '10')
+        self.assertEqual(item.multiplier, '1.1')
+
     @skip_unless(IS_SQLITE)
     @requires_models(Bare)
     def test_bare_model_adapt(self):

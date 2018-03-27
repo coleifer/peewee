@@ -5944,13 +5944,14 @@ class BaseModelCursorWrapper(DictCursorWrapper):
             # Heuristics used to attempt to get the field associated with a
             # given SELECT column, so that we can accurately convert the value
             # returned by the database-cursor into a Python object.
-            if isinstance(node, Field) and raw_node._coerce:
-                converters[idx] = node.python_value
+            if isinstance(node, Field):
+                if raw_node._coerce:
+                    converters[idx] = node.python_value
                 fields[idx] = node
                 if column == node.name or column == node.column_name:
                     self.columns[idx] = node.name
             elif column in combined:
-                if not (isinstance(node, Function) and not node._coerce):
+                if raw_node._coerce:
                     # Unlikely, but if a function was aliased to a column,
                     # don't use that column's converter if coerce is False.
                     converters[idx] = combined[column].python_value
