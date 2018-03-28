@@ -5,6 +5,56 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.2.0
+
+The 3.2.0 release introduces a potentially backwards-incompatible change. The
+only users affected will be those that have implemented custom `Field` types
+with a user-defined `coerce` method. tl/dr: rename the coerce attribute to
+adapt and you should be set.
+
+#### Field.coerce renamed to Field.adapt
+
+The `Field.coerce` method has been renamed to `Field.adapt`. The purpose of
+this method is to convert a value from the application/database into the
+appropriate Python data-type. For instance, `IntegerField.adapt` is simply the
+`int` built-in function.
+
+The motivation for this change is to support adding metadata to any AST node
+instructing Peewee to not coerce the associated value. As an example, consider
+this code:
+
+```python
+
+class Note(Model):
+    id = AutoField()  # autoincrementing integer primary key.
+    content = TextField()
+
+# Query notes table and cast the "id" to a string and store as "id_text" attr.
+query = Note.select(Note.id.cast('TEXT').alias('id_text'), Note.content)
+
+a_note = query.get()
+print((a_note.id_text, a_note.content))
+
+# Prior to 3.2.0 the CAST is "un-done" because the value gets converted
+# back to an integer, since the value is associated with the Note.id field:
+(1, u'some note')  # 3.1.7, e.g. -- "id_text" is an integer!
+
+# As of 3.2.0, CAST will automatically prevent the conversion of field values,
+# which is an extension of a more general metadata API that can instruct Peewee
+# not to convert certain values.
+(u'1', u'some note')  # 3.2.0 -- "id_text" is a string as expected.
+```
+
+If you have implemented custom `Field` classes and are using `coerce` to
+enforce a particular data-type, you can simply rename the attribute to `adapt`.
+
+#### Other changes
+
+Old versions of SQLite do not strip quotation marks from aliased column names
+in compound queries (e.g. UNION). Fixed in 3.2.0.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.1.7...3.2.0)
+
 ## 3.1.7
 
 For all the winblows lusers out there, added an option to skip compilation of
