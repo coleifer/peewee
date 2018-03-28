@@ -2308,3 +2308,43 @@ class TestSumCase(ModelTestCase):
             ('charlie', 1),
             ('huey', 0),
             ('zaizee', 1)])
+
+
+class TUser(TestModel):
+    username = TextField()
+
+
+class Transaction(TestModel):
+    user = ForeignKeyField(TUser, backref='transactions')
+    amount = FloatField(default=0.)
+
+
+class TestMaxAlias(ModelTestCase):
+    requires = [Transaction, TUser]
+
+    def test_max_alias(self):
+        with self.database.atomic():
+            charlie = TUser.create(username='charlie')
+            huey = TUser.create(username='huey')
+
+            data = (
+                (charlie, 10.),
+                (charlie, 20.),
+                (charlie, 30.),
+                (huey, 1.5),
+                (huey, 2.5))
+            for user, amount in data:
+                Transaction.create(user=user, amount=amount)
+
+        amount = fn.MAX(Transaction.amount).alias('amount')
+        query = (Transaction
+                 .select(amount, TUser.username)
+                 .join(TUser)
+                 .group_by(TUser.username)
+                 .order_by(TUser.username))
+        with self.assertQueryCount(1):
+            data = [(txn.amount, txn.user.username) for txn in query]
+
+        self.assertEqual(data, [
+            (30., 'charlie'),
+            (2.5, 'huey')])
