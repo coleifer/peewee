@@ -3452,7 +3452,7 @@ class CursorWrapper(object):
 class DictCursorWrapper(CursorWrapper):
     def _initialize_columns(self):
         description = self.cursor.description
-        self.columns = [t[0][t[0].find('.') + 1:]
+        self.columns = [t[0][t[0].find('.') + 1:].strip('"')
                         for t in description]
         self.ncols = len(description)
 
@@ -5953,7 +5953,7 @@ class BaseModelCursorWrapper(DictCursorWrapper):
             if dot_index != -1:
                 column = column[dot_index + 1:]
 
-            self.columns.append(column)
+            self.columns.append(column.strip('"'))
             try:
                 raw_node = self.select[idx]
             except IndexError:
