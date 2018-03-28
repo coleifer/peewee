@@ -2385,18 +2385,19 @@ class TestCompoundSelectModels(ModelTestCase):
             for filename, data in file_data:
                 CFile.create(filename=filename, data=data, timestamp=make_ts())
 
-    def test_cannot_mix_models_with_model_row_type(self):
+    def test_mix_models_with_model_row_type(self):
         cast = 'CHAR' if IS_MYSQL else 'TEXT'
-        lhs = CNote.select(CNote.id.cast(cast).alias('id'),
+        lhs = CNote.select(CNote.id.cast(cast).alias('id_text'),
                            CNote.content, CNote.timestamp)
         rhs = CFile.select(CFile.filename, CFile.data, CFile.timestamp)
-        query = (lhs | rhs)
-        self.assertRaises(ValueError, query.execute)
+        query = (lhs | rhs).order_by(SQL('timestamp')).limit(4)
 
-        # Can use tuples/dicts/namedtuples.
-        query.tuples().execute()
-        query.dicts().execute()
-        query.namedtuples().execute()
+        data = [(n.id_text, n.content, n.timestamp) for n in query]
+        self.assertEqual(data, [
+            ('1', 'note-a', self.ts(1)),
+            ('2', 'note-b', self.ts(2)),
+            ('3', 'note-c', self.ts(3)),
+            ('peewee.txt', 'peewee orm', self.ts(4))])
 
     def test_mixed_models_tuple_row_type(self):
         cast = 'CHAR' if IS_MYSQL else 'TEXT'
