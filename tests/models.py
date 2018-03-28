@@ -2348,3 +2348,77 @@ class TestMaxAlias(ModelTestCase):
         self.assertEqual(data, [
             (30., 'charlie'),
             (2.5, 'huey')])
+
+
+class CNote(TestModel):
+    content = TextField()
+    timestamp = TimestampField()
+
+class CFile(TestModel):
+    filename = CharField(primary_key=True)
+    data = TextField()
+    timestamp = TimestampField()
+
+
+class TestCompoundSelectModels(ModelTestCase):
+    requires = [CFile, CNote]
+
+    def setUp(self):
+        super(TestCompoundSelectModels, self).setUp()
+        def generate_ts():
+            i = [0]
+            def _inner():
+                i[0] += 1
+                return datetime.datetime(2018, 1, i[0])
+            return _inner
+        make_ts = generate_ts()
+        self.ts = lambda i: datetime.datetime(2018, 1, i)
+
+        with self.database.atomic():
+            for content in ('note-a', 'note-b', 'note-c'):
+                CNote.create(content=content, timestamp=make_ts())
+
+            file_data = (
+                ('peewee.txt', 'peewee orm'),
+                ('walrus.txt', 'walrus redis toolkit'),
+                ('huey.txt', 'huey task queue'))
+            for filename, data in file_data:
+                CFile.create(filename=filename, data=data, timestamp=make_ts())
+
+    def test_cannot_mix_models_with_model_row_type(self):
+        cast = 'CHAR' if IS_MYSQL else 'TEXT'
+        lhs = CNote.select(CNote.id.cast(cast).alias('id'),
+                           CNote.content, CNote.timestamp)
+        rhs = CFile.select(CFile.filename, CFile.data, CFile.timestamp)
+        query = (lhs | rhs)
+        self.assertRaises(ValueError, query.execute)
+
+        # Can use tuples/dicts/namedtuples.
+        query.tuples().execute()
+        query.dicts().execute()
+        query.namedtuples().execute()
+
+    def test_mixed_models_tuple_row_type(self):
+        cast = 'CHAR' if IS_MYSQL else 'TEXT'
+        lhs = CNote.select(CNote.id.cast(cast).alias('id'),
+                           CNote.content, CNote.timestamp)
+        rhs = CFile.select(CFile.filename, CFile.data, CFile.timestamp)
+        query = (lhs | rhs).order_by(SQL('timestamp')).limit(5)
+
+        self.assertEqual(list(query.tuples()), [
+            ('1', 'note-a', self.ts(1)),
+            ('2', 'note-b', self.ts(2)),
+            ('3', 'note-c', self.ts(3)),
+            ('peewee.txt', 'peewee orm', self.ts(4)),
+            ('walrus.txt', 'walrus redis toolkit', self.ts(5))])
+
+    def test_mixed_models_dict_row_type(self):
+        notes = CNote.select(CNote.content, CNote.timestamp)
+        files = CFile.select(CFile.filename, CFile.timestamp)
+
+        query = (notes | files).order_by(SQL('timestamp').desc()).limit(4)
+        self.assertEqual(list(query.dicts()), [
+            {'content': 'huey.txt', 'timestamp': self.ts(6)},
+            {'content': 'walrus.txt', 'timestamp': self.ts(5)},
+            {'content': 'peewee.txt', 'timestamp': self.ts(4)},
+            {'content': 'note-c', 'timestamp': self.ts(3)}])

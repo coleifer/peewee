@@ -5568,6 +5568,26 @@ class ModelCompoundSelectQuery(BaseModelSelect, CompoundSelectQuery):
         self.model = model
         super(ModelCompoundSelectQuery, self).__init__(*args, **kwargs)
 
+    def get_query_models(self):
+        accum = set()
+        stack = [self.lhs, self.rhs]
+        while stack:
+            src = stack.pop()
+            if isinstance(src, ModelCompoundSelectQuery):
+                stack.extend([src.lhs, src.rhs])
+            elif isinstance(src, ModelSelect):
+                accum.add(src.model)
+        return accum
+
+    def _get_cursor_wrapper(self, cursor):
+        row_type = self._row_type or self.default_row_type
+        if row_type == ROW.MODEL and len(self.get_query_models()) > 1:
+            raise ValueError('Compound queries involving multiple model '
+                             'classes must use dicts(), tuples() or '
+                             'namedtuples() for the row type.')
+        return (super(ModelCompoundSelectQuery, self)
+                ._get_cursor_wrapper(cursor))
+
 
 class ModelSelect(BaseModelSelect, Select):
     def __init__(self, model, fields_or_models, is_default=False):
