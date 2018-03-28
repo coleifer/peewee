@@ -5928,11 +5928,12 @@ class BaseModelCursorWrapper(DictCursorWrapper):
         self.fields = fields = [None] * self.ncols
 
         for idx, description_item in enumerate(description):
-            column = description_item[0].strip('"')
+            column = description_item[0]
             dot_index = column.find('.')
             if dot_index != -1:
                 column = column[dot_index + 1:]
 
+            column = column.strip('"')
             self.columns.append(column)
             try:
                 raw_node = self.select[idx]
