@@ -809,6 +809,55 @@ potential compatibility issues.
 If you'd like to see some more examples of how to run tests using Peewee, check
 out Peewee's own `test-suite <https://github.com/coleifer/peewee/tree/master/tests>`_.
 
+Async with Gevent
+-----------------
+
+`gevent <http://www.gevent.org/>` is recommended for doing asynchronous i/o
+with Postgresql or MySQL. Reasons I prefer gevent:
+
+* No need for special-purpose "loop-aware" re-implementations of *everything*.
+  Third-party libraries using asyncio usually have to re-implement layers and
+  layers of code as well as re-implementing the protocols themselves.
+* Gevent allows you to write your application in normal, clean, idiomatic
+  Python. No need to litter every line with "async", "await" and other noise.
+  No callbacks. No cruft.
+* Gevent works with both Python 2 *and* Python 3.
+* Gevent is *Pythonic*. Asyncio is an un-pythonic abomination.
+
+Besides monkey-patching socket, no special steps are required if you are using
+**MySQL** with a pure Python driver like `pymysql <https://github.com/PyMySQL/PyMySQL>`_.
+MySQL drivers written in C will require special configuration which is beyond
+the scope of this document.
+
+For **Postgres** and `psycopg2 <http://initd.org/psycopg>`_, which is a C
+extension, you can use the following code snippet to register event hooks that
+will make your connection async:
+
+.. code-block:: python
+
+    from gevent.socket import wait_read, wait_write
+    from psycopg2 import extensions
+
+    # Call this function after monkey-patching socket (etc).
+    def patch_psycopg2():
+        extensions.set_wait_callback(_psycopg2_gevent_callback)
+
+    def _psycopg2_gevent_callback(conn, timeout=None):
+        while True:
+            state = conn.poll()
+            if state == extensions.POLL_OK:
+                break
+            elif state == extensions.POLL_READ:
+                wait_read(conn.fileno(), timeout=timeout)
+            elif state == extensions.POLL_WRITE:
+                wait_write(conn.fileno(), timeout=timeout)
+            else:
+                raise ValueError('poll() returned unexpected result')
+
+**SQLite**, because it is embedded in the Python application itself, does not
+do any socket operations that would be a candidate for non-blocking. Async has
+no effect one way or the other on SQLite databases.
+
 .. _framework-integration:
 
 Framework Integration
