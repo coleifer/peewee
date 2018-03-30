@@ -9,7 +9,6 @@ env:
   - PEEWEE_TEST_BACKEND=sqlite
   - PEEWEE_TEST_BACKEND=postgresql
   - PEEWEE_TEST_BACKEND=mysql
-  - PEEWEE_TEST_BACKEND=mysqlconnector
 addons:
   postgresql: "9.6"
 services:
