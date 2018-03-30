@@ -45,11 +45,14 @@ try:
     from psycopg2 import extensions as pg_extensions
 except ImportError:
     psycopg2 = None
+
+mysql_passwd = False
 try:
-    import MySQLdb as mysql  # prefer the C module.
+    import pymysql as mysql
 except ImportError:
     try:
-        import pymysql as mysql
+        import MySQLdb as mysql  # prefer the C module.
+        mysql_passwd = True
     except ImportError:
         mysql = None
 
@@ -3152,7 +3155,7 @@ class MySQLDatabase(Database):
     def init(self, database, **kwargs):
         params = {'charset': 'utf8', 'use_unicode': True}
         params.update(kwargs)
-        if 'password' in params:
+        if 'password' in params and mysql_passwd:
             params['passwd'] = params.pop('password')
         super(MySQLDatabase, self).init(database, **params)
 
