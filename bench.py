@@ -2,6 +2,8 @@ from peewee import *
 
 
 db = SqliteDatabase(':memory:')
+#db = PostgresqlDatabase('peewee_test', host='127.0.0.1', port=26257, user='root')
+#db = PostgresqlDatabase('peewee_test', host='127.0.0.1', user='postgres')
 
 class Base(Model):
     class Meta:
@@ -48,6 +50,20 @@ def insert():
         populate_register(1000)
 
 @timed
+def batch_insert():
+    with db.atomic():
+        it = range(1000)
+        for i in db.batch_commit(it, 100):
+            Register.insert(value=i + 100000).execute()
+
+@timed
+def bulk_insert():
+    with db.atomic():
+        for i in range(0, 1000, 100):
+            data = [(j,) for j in range(i, i + 100)]
+            Register.insert_many(data, fields=[Register.value]).execute()
+
+@timed
 def select():
     query = Register.select()
     for row in query:
@@ -81,7 +97,12 @@ if __name__ == '__main__':
     db.create_tables([Register, Collection, Item])
     insert()
     insert_related()
+    Register.delete().execute()
+    batch_insert()
+    Register.delete().execute()
+    bulk_insert()
     select()
     select_related()
     select_related_left()
     select_related_dicts()
+    db.drop_tables([Register, Collection, Item])
