@@ -13,8 +13,7 @@ from .base import skip_case_if
 from .base_models import Register
 
 
-db = db_loader('postgres', db_class=PostgresqlExtDatabase,
-               register_hstore=True)
+db = db_loader('postgres', db_class=PostgresqlExtDatabase)
 
 
 class HStoreModel(TestModel):
@@ -83,7 +82,8 @@ class TestTZField(ModelTestCase):
 
 
 class TestHStoreField(ModelTestCase):
-    database = db
+    database = db_loader('postgres', db_class=PostgresqlExtDatabase,
+                         register_hstore=True)
     requires = [HStoreModel]
 
     def setUp(self):
