@@ -825,9 +825,10 @@ with Postgresql or MySQL. Reasons I prefer gevent:
 * Gevent is *Pythonic*. Asyncio is an un-pythonic abomination.
 
 Besides monkey-patching socket, no special steps are required if you are using
-**MySQL** with a pure Python driver like `pymysql <https://github.com/PyMySQL/PyMySQL>`_.
-MySQL drivers written in C will require special configuration which is beyond
-the scope of this document.
+**MySQL** with a pure Python driver like `pymysql <https://github.com/PyMySQL/PyMySQL>`_
+or are using `mysql-connector <https://dev.mysql.com/doc/connector-python/en/>`_
+in pure-python mode. MySQL drivers written in C will require special
+configuration which is beyond the scope of this document.
 
 For **Postgres** and `psycopg2 <http://initd.org/psycopg>`_, which is a C
 extension, you can use the following code snippet to register event hooks that
