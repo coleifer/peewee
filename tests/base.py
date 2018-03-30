@@ -10,6 +10,7 @@ except ImportError:
     from .libs import mock
 
 from peewee import *
+from playhouse.mysql_ext import MySQLConnectorDatabase
 
 
 logger = logging.getLogger('peewee')
@@ -21,6 +22,7 @@ def db_loader(engine, name='peewee_test', db_class=None, **params):
             SqliteDatabase: ['sqlite', 'sqlite3'],
             MySQLDatabase: ['mysql'],
             PostgresqlDatabase: ['postgres', 'postgresql'],
+            MySQLConnectorDatabase: ['mysqlconnector'],
         }
         engine_map = dict((alias, db) for db, aliases in engine_aliases.items()
                           for alias in aliases)
@@ -44,7 +46,7 @@ BACKEND = os.environ.get('PEEWEE_TEST_BACKEND') or 'sqlite'
 VERBOSITY = int(os.environ.get('PEEWEE_TEST_VERBOSITY') or 1)
 
 IS_SQLITE = BACKEND in ('sqlite', 'sqlite3')
-IS_MYSQL = BACKEND == 'mysql'
+IS_MYSQL = BACKEND in ('mysql', 'mysqlconnector')
 IS_POSTGRESQL = BACKEND in ('postgres', 'postgresql')
 
 

@@ -26,7 +26,7 @@ def get_option_parser():
         '--engine',
         dest='engine',
         help=('Database engine to test, one of '
-              '[sqlite, postgres, mysql, apsw, sqlcipher]'))
+              '[sqlite, postgres, mysql, mysqlconnector, apsw, sqlcipher]'))
     basic.add_option('-v', '--verbosity', dest='verbosity', default=1, type='int', help='Verbosity of output')
     parser.add_option_group(basic)
 
