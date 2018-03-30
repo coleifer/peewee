@@ -8,10 +8,10 @@ import re
 
 from peewee import *
 try:
-    from MySQLdb.constants import FIELD_TYPE
+    from pymysql.constants import FIELD_TYPE
 except ImportError:
     try:
-        from pymysql.constants import FIELD_TYPE
+        from MySQLdb.constants import FIELD_TYPE
     except ImportError:
         FIELD_TYPE = None
 try:
