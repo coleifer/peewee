@@ -5829,6 +5829,15 @@ class _ModelWriteQueryHelper(_ModelQueryHelper):
         self.model = model
         super(_ModelWriteQueryHelper, self).__init__(model, *args, **kwargs)
 
+    def returning(self, *returning):
+        accum = []
+        for item in returning:
+            if is_model(item):
+                accum.extend(item._meta.sorted_fields)
+            else:
+                accum.append(item)
+        return super(_ModelWriteQueryHelper, self).returning(*accum)
+
     def _set_table_alias(self, ctx):
         table = self.model._meta.table
         ctx.alias_manager[table] = table.__name__

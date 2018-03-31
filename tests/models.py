@@ -1432,6 +1432,18 @@ class TestReturningIntegration(ModelTestCase):
         row, = list(cursor)
         self.assertEqual(row, {'id': 3, 'username': 'zaizee'})
 
+        query = (User
+                 .insert(username='mickey')
+                 .returning(User)
+                 .objects())
+        self.assertSQL(query, (
+            'INSERT INTO "users" ("username") VALUES (?) '
+            'RETURNING "id", "username"'), ['mickey'])
+        cursor = query.execute()
+        row, = list(cursor)
+        self.assertEqual(row.id, 4)
+        self.assertEqual(row.username, 'mickey')
+
     @requires_models(ServerDefault)
     def test_returning_server_defaults(self):
         query = (ServerDefault
