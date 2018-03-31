@@ -5,6 +5,22 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.2.1
+
+**Notice:** the default mysql driver for Peewee has changed to [pymysql](https://github.com/PyMySQL/PyMySQL)
+in version 3.2.1. In previous versions, if both *mysql-python* and *pymysql*
+were installed, Peewee would use *mysql-python*. As of 3.2.1, if both libraries
+are installed Peewee will use *pymysql*.
+
+* Added new module `playhouse.mysql_ext` which includes
+  `MySQLConnectorDatabase`, a database implementation that works with the
+  [mysql-connector](https://dev.mysql.com/doc/connector-python/en/) driver.
+* Added new field to `ColumnMetadata` class which captures a database column's
+  default value. `ColumnMetadata` is returned by `Database.get_columns()`.
+* Added [documentation on making Peewee async](http://docs.peewee-orm.com/en/latest/peewee/database.html#async-with-gevent).
+
+[View commits](https://github.com/coleifer/peewee/compare/3.2.0...3.2.1)
+
 ## 3.2.0
 
 The 3.2.0 release introduces a potentially backwards-incompatible change. The
