@@ -19,6 +19,7 @@ make up the ``playhouse``.
 * :ref:`apsw`
 * :ref:`sqlcipher_ext`
 * :ref:`postgres_ext`
+* :ref:`mysql_ext`
 
 **High-level features**
 
@@ -1540,6 +1541,24 @@ postgres_ext API notes
               content=content,
               search_content=fn.to_tsvector(content))  # Note `to_tsvector()`.
 
+
+.. _mysql_ext:
+
+MySQL Extensions
+----------------
+
+Peewee provides an alternate database implementation for using the
+`mysql-connector <https://dev.mysql.com/doc/connector-python/en/>`_ driver. The
+implementation can be found in ``playhouse.mysql_ext``.
+
+Example usage:
+
+.. code-block:: python
+
+    from playhouse.mysql_ext import MySQLConnectorDatabase
+
+    # MySQL database implementation that utilizes mysql-connector driver.
+    db = MySQLConnectorDatabase('my_database', host='1.2.3.4', user='mysql')
 
 .. _dataset:
 
