@@ -4599,7 +4599,9 @@ class SchemaManager(object):
                     .sql(Entity(field.sequence)))
 
     def create_sequence(self, field):
-        self.database.execute(self._create_sequence(field))
+        seq_ctx = self._create_sequence(field)
+        if seq_ctx is not None:
+            self.database.execute(seq_ctx)
 
     def _drop_sequence(self, field):
         self._check_sequences(field)
@@ -4610,7 +4612,9 @@ class SchemaManager(object):
                     .sql(Entity(field.sequence)))
 
     def drop_sequence(self, field):
-        self.database.execute(self._drop_sequence(field))
+        seq_ctx = self._drop_sequence(field)
+        if seq_ctx is not None:
+            self.database.execute(seq_ctx)
 
     def _create_foreign_key(self, field):
         name = 'fk_%s_%s_refs_%s' % (field.model._meta.table_name,
@@ -4628,17 +4632,27 @@ class SchemaManager(object):
     def create_foreign_key(self, field):
         self.database.execute(self._create_foreign_key(field))
 
-    def create_all(self, safe=True, **table_options):
+    def create_sequences(self):
         if self.database.sequences:
             for field in self.model._meta.sorted_fields:
-                if field and field.sequence:
+                if field.sequence:
                     self.create_sequence(field)
 
+    def create_all(self, safe=True, **table_options):
+        self.create_sequences()
         self.create_table(safe, **table_options)
         self.create_indexes(safe=safe)
 
-    def drop_all(self, safe=True, **options):
+    def drop_sequences(self):
+        if self.database.sequences:
+            for field in self.model._meta.sorted_fields:
+                if field.sequence:
+                    self.drop_sequence(field)
+
+    def drop_all(self, safe=True, drop_sequences=True, **options):
         self.drop_table(safe, **options)
+        if drop_sequences:
+            self.drop_sequences()
 
 
 class Metadata(object):
@@ -5362,11 +5376,11 @@ class Model(with_metaclass(ModelBase, Node)):
         cls._schema.create_all(safe, **options)
 
     @classmethod
-    def drop_table(cls, safe=True, **options):
+    def drop_table(cls, safe=True, drop_sequences=True, **options):
         if safe and not cls._meta.database.safe_drop_index \
            and not cls.table_exists():
             return
-        cls._schema.drop_all(safe, **options)
+        cls._schema.drop_all(safe, drop_sequences, **options)
 
     @classmethod
     def index(cls, *fields, **kwargs):

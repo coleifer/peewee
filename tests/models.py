@@ -2435,3 +2435,31 @@ class TestCompoundSelectModels(ModelTestCase):
             {'content': 'walrus.txt', 'timestamp': self.ts(5)},
             {'content': 'peewee.txt', 'timestamp': self.ts(4)},
             {'content': 'note-c', 'timestamp': self.ts(3)}])
+
+
+class SequenceModel(TestModel):
+    seq_id = IntegerField(sequence='seq_id_sequence')
+    key = TextField()
+
+
+@skip_case_unless(IS_POSTGRESQL)
+class TestSequence(ModelTestCase):
+    requires = [SequenceModel]
+
+    def test_create_table(self):
+        query = SequenceModel._schema._create_table()
+        self.assertSQL(query, (
+            'CREATE TABLE IF NOT EXISTS "sequencemodel" ('
+            '"id" SERIAL NOT NULL PRIMARY KEY, '
+            '"seq_id" INTEGER NOT NULL DEFAULT NEXTVAL(\'seq_id_sequence\'), '
+            '"key" TEXT NOT NULL)'), [])
+
+    def test_sequence(self):
+        for key in ('k1', 'k2', 'k3'):
+            SequenceModel.create(key=key)
+
+        s1, s2, s3 = SequenceModel.select().order_by(SequenceModel.key)
+
+        self.assertEqual(s1.seq_id, 1)
+        self.assertEqual(s2.seq_id, 2)
+        self.assertEqual(s3.seq_id, 3)

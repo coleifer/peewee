@@ -2841,9 +2841,11 @@ Schema Manager
 
         Execute CREATE TABLE query for the given model.
 
-    .. py:method:: drop_table([safe=True[, **options]])
+    .. py:method:: drop_table([safe=True[, drop_sequences=True[, **options]]])
 
         :param bool safe: Specify IF EXISTS clause.
+        :param bool drop_sequences: Drop any sequences associated with the
+            columns on the table (postgres only).
         :param options: Arbitrary options.
 
         Execute DROP TABLE query for the given model.
@@ -2914,11 +2916,14 @@ Schema Manager
 
         Create sequence(s), index(es) and table for the model.
 
-    .. py:method:: drop_all([safe=True])
+    .. py:method:: drop_all([safe=True[, drop_sequences=True[, **options]]])
 
         :param bool safe: Whether to specify IF EXISTS.
+        :param bool drop_sequences: Drop any sequences associated with the
+            columns on the table (postgres only).
+        :param options: Arbitrary options.
 
-        Drop table for the model.
+        Drop table for the model and associated indexes.
 
 
 Model
