@@ -5,6 +5,17 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.2.2
+
+* Added support for passing `Model` classes to the `returning()` method when
+  you intend to return all columns for the given model.
+* Fixed a bug when using user-defined sequences, and the underlying sequence
+  already exists.
+* Added `drop_sequences` parameter to `drop_table()` method which allows you to
+  conditionally drop any user-defined sequences when dropping the table.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.2.1...3.2.2)
+
 ## 3.2.1
 
 **Notice:** the default mysql driver for Peewee has changed to [pymysql](https://github.com/PyMySQL/PyMySQL)
