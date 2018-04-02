@@ -5,12 +5,15 @@ from random import randint
 cimport cython
 from cpython cimport datetime
 from cpython.bytes cimport PyBytes_AsStringAndSize
+from cpython.bytes cimport PyBytes_Check
 from cpython.bytes cimport PyBytes_FromStringAndSize
 from cpython.bytes cimport PyBytes_AS_STRING
 from cpython.mem cimport PyMem_Free
 from cpython.mem cimport PyMem_Malloc
 from cpython.object cimport PyObject
 from cpython.ref cimport Py_INCREF, Py_DECREF
+from cpython.unicode cimport PyUnicode_AsUTF8String
+from cpython.unicode cimport PyUnicode_Check
 from libc.float cimport DBL_MAX
 from libc.math cimport ceil, log, sqrt
 from libc.math cimport pow as cpow
@@ -669,19 +672,27 @@ cdef tuple validate_and_format_datetime(lookup, date_str):
 
 cdef inline bytes encode(key):
     cdef bytes bkey
-    if isinstance(key, unicode):
-        bkey = <bytes>key.encode('utf-8')
-    else:
+    if PyUnicode_Check(key):
+        bkey = PyUnicode_AsUTF8String(key)
+    elif PyBytes_Check(key):
         bkey = <bytes>key
+    elif key is None:
+        return None
+    else:
+        bkey = PyUnicode_AsUTF8String(str(key))
     return bkey
 
 
 cdef inline unicode decode(key):
     cdef unicode ukey
-    if isinstance(key, bytes):
+    if PyBytes_Check(key):
         ukey = key.decode('utf-8')
+    elif PyUnicode_Check(key):
+        ukey = <unicode>key
+    elif key is None:
+        return None
     else:
-        ukey = key
+        ukey = unicode(key)
     return ukey
 
 
@@ -955,13 +966,8 @@ def peewee_murmurhash(key, seed=None):
         return
 
     cdef:
-        bytes bkey
+        bytes bkey = encode(key)
         int nseed = seed or 0
-
-    if isinstance(key, unicode):
-        bkey = <bytes>key.encode('utf-8')
-    else:
-        bkey = <bytes>key
 
     if key:
         return murmurhash2(<unsigned char *>bkey, len(bkey), nseed)
@@ -1124,11 +1130,7 @@ def peewee_bloomfilter_contains(key, data):
 
     bf.size = len(data)
     bf.bits = <void *>cdata
-
-    if isinstance(key, unicode):
-        bkey = <bytes>key.encode('utf-8')
-    else:
-        bkey = <bytes>key
+    bkey = encode(key)
 
     return bf_contains(&bf, <unsigned char *>bkey)
 
@@ -1420,7 +1422,7 @@ cdef void _update_callback(void *userData, int queryType, char *database,
         query = 'DELETE'
     else:
         query = ''
-    fn(query, database.decode('utf-8'), table.decode('utf-8'), <int>rowid)
+    fn(query, decode(database), decode(table), <int>rowid)
 
 
 def backup(src_conn, dest_conn):
