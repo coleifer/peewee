@@ -32,6 +32,11 @@ from .extra_fields import *
 from .hybrid import *
 from .kv import *
 from .migrations import *
+try:
+    import mysql.connector
+    from .mysql_ext import *
+except ImportError:
+    print('Unable to import mysql-connector, skipping mysql_ext tests.')
 from .pool import *
 try:
     from .postgres import *
