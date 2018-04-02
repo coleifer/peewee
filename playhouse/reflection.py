@@ -39,7 +39,7 @@ class Column(object):
 
     def __init__(self, name, field_class, raw_column_type, nullable,
                  primary_key=False, column_name=None, index=False,
-                 unique=False, extra_parameters=None):
+                 unique=False, default=None, extra_parameters=None):
         self.name = name
         self.field_class = field_class
         self.raw_column_type = raw_column_type
@@ -48,6 +48,7 @@ class Column(object):
         self.column_name = column_name
         self.index = index
         self.unique = unique
+        self.default = default
         self.extra_parameters = extra_parameters
 
         # Foreign key metadata.
@@ -77,8 +78,10 @@ class Column(object):
             params['null'] = True
         if self.field_class is ForeignKeyField or self.name != self.column_name:
             params['column_name'] = "'%s'" % self.column_name
-        if self.primary_key and self.field_class is not AutoField:
+        if self.primary_key and not issubclass(self.field_class, AutoField):
             params['primary_key'] = True
+        if self.default is not None:
+            params['constraints'] = '[SQL("DEFAULT %s")]' % self.default
 
         # Handle ForeignKeyField-specific attributes.
         if self.is_foreign_key():
@@ -164,22 +167,34 @@ class Metadata(object):
             pk = pk_names[0]
             if column_types[pk] is IntegerField:
                 column_types[pk] = AutoField
+            elif column_types[pk] is BigIntegerField:
+                column_types[pk] = BigAutoField
 
         columns = OrderedDict()
         for name, column_data in metadata.items():
+            field_class = column_types[name]
+            default = self._clean_default(field_class, column_data.default)
+
             columns[name] = Column(
                 name,
-                field_class=column_types[name],
+                field_class=field_class,
                 raw_column_type=column_data.data_type,
                 nullable=column_data.null,
                 primary_key=column_data.primary_key,
                 column_name=name,
+                default=default,
                 extra_parameters=extra_params.get(name))
 
         return columns
 
     def get_column_types(self, table, schema=None):
         raise NotImplementedError
+
+    def _clean_default(self, field_class, default):
+        if default is None or field_class in (AutoField, BigAutoField) or \
+           default.lower() == 'null':
+            return
+        return default or "''"
 
     def get_foreign_keys(self, table, schema=None):
         return self.database.get_foreign_keys(table, schema)
@@ -646,7 +661,13 @@ class Introspector(object):
 
                     # Generate a unique related name.
                     params['backref'] = '%s_%s_rel' % (table, column_name)
-                if column_name in column_indexes and not column.is_primary_key():
+
+                if column.default is not None:
+                    constraint = SQL('DEFAULT %s' % column.default)
+                    params['constraints'] = [constraint]
+
+                if column_name in column_indexes and not \
+                   column.is_primary_key():
                     if column_indexes[column_name]:
                         params['unique'] = True
                     elif not column.is_foreign_key():

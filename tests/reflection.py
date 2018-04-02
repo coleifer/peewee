@@ -4,6 +4,9 @@ import re
 from peewee import *
 from playhouse.reflection import *
 
+from .base import IS_MYSQL
+from .base import IS_POSTGRESQL
+from .base import IS_SQLITE
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db
@@ -61,13 +64,15 @@ class Nugget(TestModel):
     category = CharField()
 
 
-class TestReflection(ModelTestCase):
+class BaseReflectionTestCase(ModelTestCase):
+    def setUp(self):
+        super(BaseReflectionTestCase, self).setUp()
+        self.introspector = Introspector.from_database(self.database)
+
+
+class TestReflection(BaseReflectionTestCase):
     requires = [ColTypes, Nullable, RelModel, FKPK, Underscores, Category,
                 Nugget]
-
-    def setUp(self):
-        super(TestReflection, self).setUp()
-        self.introspector = Introspector.from_database(self.database)
 
     def test_generate_models(self):
         models = self.introspector.generate_models()
@@ -411,3 +416,49 @@ class TestReflection(ModelTestCase):
                 actual = columns[table][field_name].get_field()
                 self.assertTrue(actual in fields,
                                 '%s not in %s' % (actual, fields))
+
+
+class EventLog(TestModel):
+    data = CharField(constraints=[SQL('DEFAULT \'\'')])
+    timestamp = DateTimeField(constraints=[SQL('DEFAULT current_timestamp')])
+    flags = IntegerField(constraints=[SQL('DEFAULT 0')])
+
+
+class TestReflectDefaultValues(BaseReflectionTestCase):
+    requires = [EventLog]
+
+    def test_default_values(self):
+        models = self.introspector.generate_models()
+        eventlog = models['eventlog']
+
+        if IS_SQLITE:
+            create_table = (
+                'CREATE TABLE IF NOT EXISTS "eventlog" ('
+                '"id" INTEGER NOT NULL PRIMARY KEY, '
+                '"data" VARCHAR(255) NOT NULL DEFAULT \'\', '
+                '"timestamp" DATETIME NOT NULL DEFAULT current_timestamp, '
+                '"flags" INTEGER NOT NULL DEFAULT 0)')
+        elif IS_POSTGRESQL:
+            create_table = (
+                'CREATE TABLE IF NOT EXISTS "eventlog" ('
+                '"id" SERIAL NOT NULL PRIMARY KEY, '
+                '"data" VARCHAR(255) NOT NULL DEFAULT \'\'::character varying,'
+                ' "timestamp" TIMESTAMP NOT NULL DEFAULT now(), '
+                '"flags" INTEGER NOT NULL DEFAULT 0)')
+        elif IS_MYSQL:
+            create_table = (
+                'CREATE TABLE IF NOT EXISTS `eventlog` ('
+                '`id` INTEGER AUTO_INCREMENT NOT NULL PRIMARY KEY, '
+                '`data` VARCHAR(255) NOT NULL DEFAULT \'\', '
+                '`timestamp` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, '
+                '`flags` INTEGER NOT NULL DEFAULT 0)')
+
+        # Re-create table using the introspected schema.
+        self.assertSQL(eventlog._schema._create_table(), create_table, [])
+        eventlog.drop_table()
+        eventlog.create_table()
+
+        # Verify that the introspected schema has not changed.
+        models = self.introspector.generate_models()
+        eventlog = models['eventlog']
+        self.assertSQL(eventlog._schema._create_table(), create_table, [])
