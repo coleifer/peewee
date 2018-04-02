@@ -1,8 +1,10 @@
 from peewee import *
 
-from .base import db_loader
+from .base import IS_MYSQL
 from .base import ModelTestCase
 from .base import TestModel
+from .base import db_loader
+from .base import skip_case_unless
 
 
 mysql_ext_db = db_loader('mysqlconnector')
@@ -20,6 +22,7 @@ class Note(TestModel):
     timestamp = TimestampField(resolution=1e6)
 
 
+@skip_case_unless(IS_MYSQL)
 class TestMySQLConnector(ModelTestCase):
     requires = [Person, Note]
 
