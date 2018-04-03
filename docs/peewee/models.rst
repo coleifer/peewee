@@ -940,6 +940,12 @@ key, you must set the ``primary_key`` attribute of the model options to a
         class Meta:
             primary_key = CompositeKey('blog', 'tag')
 
+.. warning::
+    Peewee does not support foreign-keys to models that define a
+    :ref:`CompositeKey` primary key. If you wish to add a foreign-key to a
+    model that has a composite primary key, replicate the columns on the
+    related model and add a custom accessor (e.g. a property).
+
 Manually specifying primary keys
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
