@@ -1927,6 +1927,23 @@ class TestMetaInheritance(BaseTestCase):
         self.assertTrue(Overrides._meta.schema is None)
 
 
+class TestModelSetDatabase(BaseTestCase):
+    def test_set_database(self):
+        class Register(Model):
+            value = IntegerField()
+
+        db_a = get_in_memory_db()
+        db_b = get_in_memory_db()
+        Register._meta.set_database(db_a)
+        Register.create_table()
+        Register._meta.set_database(db_b)
+        self.assertFalse(Register.table_exists())
+        self.assertEqual(db_a.get_tables(), ['register'])
+        self.assertEqual(db_b.get_tables(), [])
+        db_a.close()
+        db_b.close()
+
+
 class TestForeignKeyFieldDescriptors(BaseTestCase):
     def test_foreign_key_field_descriptors(self):
         class User(Model): pass
