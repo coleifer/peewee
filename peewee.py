@@ -4911,6 +4911,7 @@ class Metadata(object):
     def set_database(self, database):
         self.database = database
         self.model._schema._database = database
+        del self.table
 
 
 class SubclassAwareMetadata(Metadata):
