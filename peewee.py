@@ -5078,7 +5078,12 @@ class Model(with_metaclass(ModelBase, Node)):
         self.__rel__ = {}
 
         for k in kwargs:
-            setattr(self, k, kwargs[k])
+            try:
+                setattr(self, k, kwargs[k])
+            except AttributeError:
+                # the default message isn't very helpful. Make it more so.
+                raise AttributeError('Unable to set attribute "%s" on %s '
+                                     'instance' % (k, self.__class__.__name__))
 
     @classmethod
     def validate_model(cls):
