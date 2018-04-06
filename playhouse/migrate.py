@@ -261,7 +261,7 @@ class SchemaMigrator(object):
 
         is_foreign_key = isinstance(field, ForeignKeyField)
         if is_foreign_key and not field.rel_field:
-            raise ValueError('Foreign keys must specify a `rel_field`.')
+            raise ValueError('Foreign keys must specify a `field`.')
 
         operations = [self.alter_add_column(table, column_name, field)]
 
