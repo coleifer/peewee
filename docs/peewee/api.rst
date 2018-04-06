@@ -460,7 +460,7 @@ Database
         set every time a connection is opened.
     :param timeout: Set the busy-timeout on the SQLite driver (in seconds).
 
-    Sqlite database implementation. :py:class:`SqliteDatabase` that provides
+    Sqlite database implementation. :py:class:`SqliteDatabase` inherits from :py:class:`Database` and provides
     some advanced features only offered by Sqlite.
 
     * Register custom aggregates, collations and functions
