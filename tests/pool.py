@@ -68,6 +68,16 @@ class TestPooledDatabase(BaseTestCase):
         self.db.connect()
         self.assertEqual(self.db.connection(), 1)
 
+    def test_reuse_connection(self):
+        self.assertEqual(self.db.connection(), 1)
+        self.assertRaises(OperationalError, self.db.connect)
+        self.assertFalse(self.db.connect(reuse_if_open=True))
+
+        self.assertEqual(self.db.connection(), 1)
+        self.db.close()
+        self.db.connect()
+        self.assertEqual(self.db.connection(), 1)
+
     def test_concurrent_connections(self):
         db = FakePooledDatabase('testing')
         signal = threading.Event()
