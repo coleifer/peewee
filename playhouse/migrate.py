@@ -221,11 +221,16 @@ class SchemaMigrator(object):
         return ctx
 
     def add_inline_fk_sql(self, ctx, field):
-        return (ctx
-                .literal(' REFERENCES ')
-                .sql(Entity(field.rel_model._meta.table_name))
-                .literal(' ')
-                .sql(EnclosedNodeList((Entity(field.rel_field.column_name),))))
+        ctx = (ctx
+               .literal(' REFERENCES ')
+               .sql(Entity(field.rel_model._meta.table_name))
+               .literal(' ')
+               .sql(EnclosedNodeList((Entity(field.rel_field.column_name),))))
+        if field.on_delete is not None:
+            ctx = ctx.literal(' ON DELETE %s' % field.on_delete)
+        if field.on_update is not None:
+            ctx = ctx.literal(' ON UPDATE %s' % field.on_update)
+        return ctx
 
     @operation
     def add_foreign_key_constraint(self, table, column_name, rel, rel_column,
