@@ -52,6 +52,9 @@ class IndexModel(TestModel):
             (('first_name', 'last_name'), True),
         )
 
+class Category(TestModel):
+    name = TextField()
+
 
 class TestSchemaMigration(ModelTestCase):
     requires = [Person, Tag, User, Page, Session]
@@ -565,6 +568,22 @@ class TestSchemaMigration(ModelTestCase):
         migrate(self.migrator.rename_column('page', 'page', 'name'))
         self.assertEqual(columns(),  orig_columns)
         self.assertEqual(indexes(), orig_indexes)
+
+    @skip_unless(isinstance(db, SqliteDatabase))
+    @requires_models(Category)
+    def test_add_fk_with_constraints(self):
+        self.reset_sql_history()
+        field = ForeignKeyField(Category, Category.id, backref='children',
+                                null=True, on_delete='SET NULL')
+        migrate(self.migrator.add_column(
+            Category._meta.table_name,
+            'parent_id',
+            field))
+        queries = [x.msg for x in self.history]
+        self.assertEqual(queries, [
+            ('ALTER TABLE "category" ADD COLUMN "parent_id" '
+             'INTEGER REFERENCES "category" ("id") ON DELETE SET NULL', []),
+        ])
 
     @skip_unless(isinstance(db, SqliteDatabase))
     @requires_models(IndexModel)
