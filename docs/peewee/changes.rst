@@ -54,7 +54,7 @@ Fields
   * ``rel_model`` has changed to ``model``
   * ``to_field`` has changed to ``field``
   * ``related_name`` has changed to ``backref``
-  
+
 * :py:class:`ManyToManyField` is now included in the main ``peewee.py`` module
 * Removed the extension fields ``PasswordField``, ``PickledField`` and
   ``AESEncryptedField``.
@@ -81,6 +81,9 @@ into the main peewee module.
 
 The :py:meth:`~BaseColumn.cast` method is no longer a function, but instead is
 a method on all column-like objects.
+
+The ``InsertQuery.return_id_list()`` method has been replaced by a more general
+pattern of using :py:meth:`_WriteQuery.returning`.
 
 When using :py:func:`prefetch`, the collected instances will be stored in the
 same attribute as the foreign-key's ``backref``. Previously, you would access
