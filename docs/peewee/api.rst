@@ -3693,12 +3693,17 @@ Model
         :py:meth:`~ModelSelect.join` will be joined against. Used for
         specifying multiple joins against a single table.
 
+        If the ``ctx`` is not given, then the query's model will be used.
+
         The following example selects from tweet and joins on both user and
         tweet-flag:
 
         .. code-block:: python
 
             sq = Tweet.select().join(User).switch(Tweet).join(TweetFlag)
+
+            # Equivalent (since Tweet is the query's model)
+            sq = Tweet.select().join(User).switch().join(TweetFlag)
 
     .. py:method:: objects([constructor=None])
 
