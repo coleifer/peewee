@@ -5,6 +5,16 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.2.3
+
+* `pwiz` tool will capture column defaults defined as part of the table schema.
+* Fixed a misleading error message - #1563.
+* Ensure `reuse_if_open` parameter has effect on pooled databases.
+* Added support for on update/delete when migrating foreign-key.
+* Fixed bug in SQL generation for subqueries in aliased functions #1572.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.2.2...3.2.3)
+
 ## 3.2.2
 
 * Added support for passing `Model` classes to the `returning()` method when
