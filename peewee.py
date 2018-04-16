@@ -1283,20 +1283,13 @@ class Function(ColumnBase):
     def __sql__(self, ctx):
         ctx.literal(self.name)
         if not len(self.arguments):
-            ctx.literal('()')
-        else:
-            # Special-case to avoid double-wrapping functions whose only
-            # argument is a sub-query.
-            if len(self.arguments) == 1 and isinstance(self.arguments[0],
-                                                       SelectQuery):
-                wrapper = CommaNodeList
-            else:
-                wrapper = EnclosedNodeList
-            ctx.sql(wrapper([
+            return ctx.literal('()')
+
+        with ctx(in_function=True):
+            return ctx.sql(EnclosedNodeList([
                 (argument if isinstance(argument, Node)
                  else Value(argument))
                 for argument in self.arguments]))
-        return ctx
 
 
 fn = Function(None, None)
@@ -1887,10 +1880,16 @@ class Select(SelectBase):
             return self.apply_column(ctx)
 
         is_subquery = ctx.subquery
-        parentheses = is_subquery or (ctx.scope == SCOPE_SOURCE)
+        state = {
+            'converter': None,
+            'in_function': False,
+            'parentheses': is_subquery or (ctx.scope == SCOPE_SOURCE),
+            'subquery': True,
+        }
+        if ctx.state.in_function:
+            state['parentheses'] = False
 
-        with ctx.scope_normal(converter=None, parentheses=parentheses,
-                              subquery=True):
+        with ctx.scope_normal(**state):
             ctx.literal('SELECT ')
             if self._simple_distinct or self._distinct is not None:
                 ctx.literal('DISTINCT ')
@@ -1930,7 +1929,8 @@ class Select(SelectBase):
                 ctx.literal(' ')
                 ctx.sql(SQL(self._for_update))
 
-        ctx = self.apply_alias(ctx)
+        if not ctx.state.in_function:
+            ctx = self.apply_alias(ctx)
         return ctx
 
 

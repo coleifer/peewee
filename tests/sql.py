@@ -28,6 +28,17 @@ class TestSelectQuery(BaseTestCase):
             'FROM "users" AS "t1" '
             'WHERE ("t1"."username" = ?)'), ['foo'])
 
+    def test_select_subselect_function(self):
+        exists = fn.EXISTS(Tweet
+                           .select(Tweet.c.id)
+                           .where(Tweet.c.user_id == User.c.id))
+        query = User.select(User.c.username, exists.alias('has_tweet'))
+        self.assertSQL(query, (
+            'SELECT "t1"."username", EXISTS('
+            'SELECT "t2"."id" FROM "tweets" AS "t2" '
+            'WHERE ("t2"."user_id" = "t1"."id")) AS "has_tweet" '
+            'FROM "users" AS "t1"'), [])
+
     def test_select_extend(self):
         query = User.select(User.c.id, User.c.username)
         self.assertSQL(query, (

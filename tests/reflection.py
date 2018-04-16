@@ -427,31 +427,17 @@ class EventLog(TestModel):
 class TestReflectDefaultValues(BaseReflectionTestCase):
     requires = [EventLog]
 
+    @skip_unless(IS_SQLITE)
     def test_default_values(self):
         models = self.introspector.generate_models()
         eventlog = models['eventlog']
 
-        if IS_SQLITE:
-            create_table = (
-                'CREATE TABLE IF NOT EXISTS "eventlog" ('
-                '"id" INTEGER NOT NULL PRIMARY KEY, '
-                '"data" VARCHAR(255) NOT NULL DEFAULT \'\', '
-                '"timestamp" DATETIME NOT NULL DEFAULT current_timestamp, '
-                '"flags" INTEGER NOT NULL DEFAULT 0)')
-        elif IS_POSTGRESQL:
-            create_table = (
-                'CREATE TABLE IF NOT EXISTS "eventlog" ('
-                '"id" SERIAL NOT NULL PRIMARY KEY, '
-                '"data" VARCHAR(255) NOT NULL DEFAULT \'\'::character varying,'
-                ' "timestamp" TIMESTAMP NOT NULL DEFAULT now(), '
-                '"flags" INTEGER NOT NULL DEFAULT 0)')
-        elif IS_MYSQL:
-            create_table = (
-                'CREATE TABLE IF NOT EXISTS `eventlog` ('
-                '`id` INTEGER AUTO_INCREMENT NOT NULL PRIMARY KEY, '
-                '`data` VARCHAR(255) NOT NULL DEFAULT \'\', '
-                '`timestamp` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, '
-                '`flags` INTEGER NOT NULL DEFAULT 0)')
+        create_table = (
+            'CREATE TABLE IF NOT EXISTS "eventlog" ('
+            '"id" INTEGER NOT NULL PRIMARY KEY, '
+            '"data" VARCHAR(255) NOT NULL DEFAULT \'\', '
+            '"timestamp" DATETIME NOT NULL DEFAULT current_timestamp, '
+            '"flags" INTEGER NOT NULL DEFAULT 0)')
 
         # Re-create table using the introspected schema.
         self.assertSQL(eventlog._schema._create_table(), create_table, [])
