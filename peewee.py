@@ -5610,7 +5610,7 @@ class ModelSelect(BaseModelSelect, Select):
         return self
 
     def switch(self, ctx=None):
-        self._join_ctx = ctx
+        self._join_ctx = self.model if ctx is None else ctx
         return self
 
     @Node.copy
