@@ -1806,6 +1806,12 @@ class Select(SelectBase):
 
         self._cursor_wrapper = None
 
+    def clone(self):
+        clone = super(Select, self).clone()
+        if clone._from_list:
+            clone._from_list = list(clone._from_list)
+        return clone
+
     @Node.copy
     def columns(self, *columns, **kwargs):
         self._returning = columns
@@ -5604,6 +5610,12 @@ class ModelSelect(BaseModelSelect, Select):
                 fields.append(fm)
         super(ModelSelect, self).__init__([model], fields)
 
+    def clone(self):
+        clone = super(ModelSelect, self).clone()
+        if clone._joins:
+            clone._joins = dict(clone._joins)
+        return clone
+
     def select(self, *fields):
         if fields or not self._is_default:
             return super(ModelSelect, self).select(*fields)
@@ -5696,9 +5708,11 @@ class ModelSelect(BaseModelSelect, Select):
             self._joins.setdefault(src, [])
             self._joins[src].append((dest, attr, constructor))
 
-        return super(ModelSelect, self).join(dest, join_type, on)
+        if not self._from_list:
+            raise ValueError('No sources to join on.')
+        item = self._from_list.pop()
+        self._from_list.append(Join(item, dest, join_type, on))
 
-    @Node.copy
     def join_from(self, src, dest, join_type='INNER', on=None, attr=None):
         return self.join(dest, join_type, on, src, attr)
 

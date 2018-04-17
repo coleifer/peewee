@@ -1,7 +1,9 @@
 from peewee import *
 
-from .base import get_in_memory_db
+from .base import BaseTestCase
 from .base import DatabaseTestCase
+from .base import TestModel
+from .base import get_in_memory_db
 
 
 User = Table('users', ['id', 'username'])
@@ -113,3 +115,53 @@ class TestQueryExecution(DatabaseTestCase):
 
         query = query.where(Register.value >= 2)
         self.assertEqual(query.scalar(as_tuple=True), (15, 3, 5))
+
+
+class TestQueryCloning(BaseTestCase):
+    def test_clone_tables(self):
+        self._do_test_clone(User, Tweet)
+
+    def test_clone_models(self):
+        class User(TestModel):
+            username = TextField()
+            class Meta:
+                table_name = 'users'
+        class Tweet(TestModel):
+            user = ForeignKeyField(User, backref='tweets')
+            content = TextField()
+        self._do_test_clone(User, Tweet)
+
+    def _do_test_clone(self, User, Tweet):
+        query = Tweet.select(Tweet.id)
+        base_sql = 'SELECT "t1"."id" FROM "tweet" AS "t1"'
+        self.assertSQL(query, base_sql, [])
+
+        qj = query.join(User, on=(Tweet.user_id == User.id))
+        self.assertSQL(query, base_sql, [])
+        self.assertSQL(qj, (
+            'SELECT "t1"."id" FROM "tweet" AS "t1" '
+            'INNER JOIN "users" AS "t2" ON ("t1"."user_id" = "t2"."id")'), [])
+
+        qw = query.where(Tweet.id > 3)
+        self.assertSQL(query, base_sql, [])
+        self.assertSQL(qw, base_sql + ' WHERE ("t1"."id" > ?)', [3])
+
+        qw2 = qw.where(Tweet.id < 6)
+        self.assertSQL(query, base_sql, [])
+        self.assertSQL(qw, base_sql + ' WHERE ("t1"."id" > ?)', [3])
+        self.assertSQL(qw2, base_sql + (' WHERE (("t1"."id" > ?) '
+                                        'AND ("t1"."id" < ?))'), [3, 6])
+
+        qo = query.order_by(Tweet.id)
+        self.assertSQL(query, base_sql, [])
+        self.assertSQL(qo, base_sql + ' ORDER BY "t1"."id"', [])
+
+        qo2 = qo.order_by(Tweet.content, Tweet.id)
+        self.assertSQL(query, base_sql, [])
+        self.assertSQL(qo, base_sql + ' ORDER BY "t1"."id"', [])
+        self.assertSQL(qo2,
+                       base_sql + ' ORDER BY "t1"."content", "t1"."id"', [])
+
+        qg = query.group_by(Tweet.id)
+        self.assertSQL(query, base_sql, [])
+        self.assertSQL(qg, base_sql + ' GROUP BY "t1"."id"', [])
