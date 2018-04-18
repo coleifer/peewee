@@ -5,6 +5,18 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.2.4
+
+* Smarter handling of model-graph when dealing with compound queries (union,
+  intersect, etc). #1579.
+* If the same column-name is selected multiple times, first value wins. #1579.
+* If `ModelSelect.switch()` is called without any arguments, default to the
+  query's model. Refs #1573.
+* Fix issue where cloning a ModelSelect query did not result in the joins being
+  cloned. #1576.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.2.3...3.2.4)
+
 ## 3.2.3
 
 * `pwiz` tool will capture column defaults defined as part of the table schema.
