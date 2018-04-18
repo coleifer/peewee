@@ -570,6 +570,33 @@ like *contains* and *update*. You can specify :ref:`custom operations
 <custom-operators>` as well. For example code, check out the source code for
 the :py:class:`HStoreField`, in ``playhouse.postgres_ext``.
 
+Field-naming conflicts
+----------------------
+
+:py:class:`Model` classes implement a number of class- and instance-methods,
+for example :py:meth:`Model.save` or :py:meth:`Model.create`. If you declare a
+field whose name coincides with a model method, it could cause problems.
+Consider:
+
+.. code-block:: python
+
+    class LogEntry(Model):
+        event = TextField()
+        create = TimestampField()  # Uh-oh.
+        update = TimestampField()  # Uh-oh.
+
+To avoid this problem while still using the desired column name in the database
+schema, explicitly specify the ``column_name`` while providing an alternative
+name for the field attribute:
+
+.. code-block:: python
+
+    class LogEntry(Model):
+        event = TextField()
+        create_ = TimestampField(column_name='create')
+        update_ = TimestampField(column_name='update')
+
+
 Creating model tables
 ---------------------
 
