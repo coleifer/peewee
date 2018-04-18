@@ -3470,7 +3470,7 @@ class DictCursorWrapper(CursorWrapper):
     def _row_to_dict(self, row):
         result = {}
         for i in range(self.ncols):
-            result[self.columns[i]] = row[i]
+            result.setdefault(self.columns[i], row[i])  # Do not overwite.
         return result
 
     process_row = _row_to_dict
@@ -5555,6 +5555,11 @@ class BaseModelSelect(_ModelQueryHelper):
             self.execute()
         return iter(self._cursor_wrapper)
 
+    @Node.copy
+    def objects(self, constructor=None):
+        self._row_type = ROW.CONSTRUCTOR
+        self._constructor = self.model if constructor is None else constructor
+
     def prefetch(self, *subqueries):
         return prefetch(self, *subqueries)
 
@@ -5592,6 +5597,9 @@ class ModelCompoundSelectQuery(BaseModelSelect, CompoundSelectQuery):
         self.model = model
         super(ModelCompoundSelectQuery, self).__init__(*args, **kwargs)
 
+    def _get_model_cursor_wrapper(self, cursor):
+        return self.lhs._get_model_cursor_wrapper(cursor)
+
 
 class ModelSelect(BaseModelSelect, Select):
     def __init__(self, model, fields_or_models, is_default=False):
@@ -5624,11 +5632,6 @@ class ModelSelect(BaseModelSelect, Select):
     def switch(self, ctx=None):
         self._join_ctx = self.model if ctx is None else ctx
         return self
-
-    @Node.copy
-    def objects(self, constructor=None):
-        self._row_type = ROW.CONSTRUCTOR
-        self._constructor = self.model if constructor is None else constructor
 
     def _get_model(self, src):
         if is_model(src):
@@ -6031,6 +6034,7 @@ class ModelDictCursorWrapper(BaseModelCursorWrapper):
 
         for i in range(self.ncols):
             attr = columns[i]
+            if attr in result: continue  # Don't overwrite if we have dupes.
             if converters[i] is not None:
                 result[attr] = converters[i](row[i])
             else:

@@ -697,6 +697,57 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual([row.value for row in c2], [0, 1, 5, 8, 9])
         self.assertEqual(c2.count(), 5)
 
+    @requires_models(User, Tweet)
+    def test_union_column_resolution(self):
+        u1 = User.create(username='u1')
+        u2 = User.create(username='u2')
+        q1 = User.select().where(User.id == 1)
+        q2 = User.select()
+        union = q1 | q2
+        self.assertSQL(union, (
+            'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
+            'WHERE ("t1"."id" = ?) '
+            'UNION '
+            'SELECT "t2"."id", "t2"."username" FROM "users" AS "t2"'), [1])
+
+        results = [(user.id, user.username) for user in union]
+        self.assertEqual(sorted(results), [
+            (1, 'u1'),
+            (2, 'u2')])
+
+        t1_1 = Tweet.create(user=u1, content='u1-t1')
+        t1_2 = Tweet.create(user=u1, content='u1-t2')
+        t2_1 = Tweet.create(user=u2, content='u2-t1')
+        q1 = Tweet.select(Tweet, User).join(User).where(User.id == 1)
+        q2 = Tweet.select(Tweet, User).join(User)
+        union = q1 | q2
+        self.assertSQL(union, (
+            'SELECT "t1"."id", "t1"."user_id", "t1"."content", '
+            '"t1"."timestamp", "t2"."id", "t2"."username" '
+            'FROM "tweet" AS "t1" '
+            'INNER JOIN "users" AS "t2" ON ("t1"."user_id" = "t2"."id") '
+            'WHERE ("t2"."id" = ?) '
+            'UNION '
+            'SELECT "t3"."id", "t3"."user_id", "t3"."content", '
+            '"t3"."timestamp", "t4"."id", "t4"."username" '
+            'FROM "tweet" AS "t3" '
+            'INNER JOIN "users" AS "t4" ON ("t3"."user_id" = "t4"."id")'), [1])
+
+        with self.assertQueryCount(1):
+            results = [(t.id, t.content, t.user.username) for t in union]
+            self.assertEqual(sorted(results), [
+                (1, 'u1-t1', 'u1'),
+                (2, 'u1-t2', 'u1'),
+                (3, 'u2-t1', 'u2')])
+
+        union_flat = (q1 | q2).objects()
+        with self.assertQueryCount(1):
+            results = [(t.id, t.content, t.username) for t in union_flat]
+            self.assertEqual(sorted(results), [
+                (1, 'u1-t1', 'u1'),
+                (2, 'u1-t2', 'u1'),
+                (3, 'u2-t1', 'u2')])
+
     @requires_models(Category)
     def test_self_referential_fk(self):
         self.assertTrue(Category.parent.rel_model is Category)
