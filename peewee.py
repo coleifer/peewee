@@ -4020,7 +4020,7 @@ class DateTimeField(_BaseFormattedField):
         '%Y-%m-%d',
     ]
 
-    def python_value(self, value):
+    def adapt(self, value):
         if value and isinstance(value, basestring):
             return format_date_time(value, self.formats)
         return value
@@ -4041,7 +4041,7 @@ class DateField(_BaseFormattedField):
         '%Y-%m-%d %H:%M:%S.%f',
     ]
 
-    def python_value(self, value):
+    def adapt(self, value):
         if value and isinstance(value, basestring):
             pp = lambda x: x.date()
             return format_date_time(value, self.formats, pp)
@@ -4064,7 +4064,7 @@ class TimeField(_BaseFormattedField):
         '%Y-%m-%d %H:%M:%S',
     ]
 
-    def python_value(self, value):
+    def adapt(self, value):
         if value:
             if isinstance(value, basestring):
                 pp = lambda x: x.time()

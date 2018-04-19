@@ -180,7 +180,9 @@ class DateModel(TestModel):
 
 
 class CustomDateTimeModel(TestModel):
-    date_time = DateTimeField(formats=['%m/%d/%Y %I:%M %p'])
+    date_time = DateTimeField(formats=[
+        '%m/%d/%Y %I:%M %p',
+        '%Y-%m-%d %H:%M:%S'])
 
 
 class TestDateFields(ModelTestCase):
