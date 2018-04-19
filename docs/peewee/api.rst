@@ -1624,6 +1624,9 @@ Query-builder
         Convenience method for specifying the LIMIT and OFFSET in a more
         intuitive way.
 
+        This feature is designed with web-site pagination in mind, so the first
+        page starts with ``page=1``.
+
 
 .. py:class:: SelectQuery()
 
