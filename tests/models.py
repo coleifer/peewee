@@ -1312,6 +1312,55 @@ class TestWindowFunctionIntegration(ModelTestCase):
                  .tuples())
         self.assertEqual(list(query), expected)
 
+    def test_mixed_ordering(self):
+        s = fn.SUM(Sample.value).over(order_by=[Sample.value])
+        query = (Sample
+                 .select(Sample.counter, Sample.value, s.alias('rtotal'))
+                 .order_by(Sample.id))
+        # We end up with window going 1., 3., 10., 20., 100..
+        # So:
+        # 1 |  10 | (1 + 3 + 10)
+        # 1 |  20 | (1 + 3 + 10  + 20)
+        # 2 |   1 | (1)
+        # 2 |   3 | (1 + 3)
+        # 3 | 100 | (1 + 3 + 10 + 20 + 100)
+        self.assertEqual([(r.counter, r.value, r.rtotal) for r in query], [
+            (1, 10., 14.),
+            (1, 20., 34.),
+            (2, 1., 1.),
+            (2, 3., 4.),
+            (3, 100., 134.)])
+
+    def test_reuse_window(self):
+        w = Window(order_by=[Sample.value])
+        with self.database.atomic():
+            Sample.delete().execute()
+            for i in range(10):
+                Sample.create(counter=i, value=10 * i)
+
+        query = (Sample
+                 .select(Sample.counter, Sample.value,
+                         fn.NTILE(4).over(w).alias('quartile'),
+                         fn.NTILE(5).over(w).alias('quintile'),
+                         fn.NTILE(100).over(w).alias('percentile'))
+                 .window(w)
+                 .order_by(Sample.id))
+        results = [(r.counter, r.value, r.quartile, r.quintile, r.percentile)
+                   for r in query]
+        self.assertEqual(results, [
+            # ct, v, 4tile, 5tile, 100tile
+            (0, 0., 1, 1, 1),
+            (1, 10., 1, 1, 2),
+            (2, 20., 1, 2, 3),
+            (3, 30., 2, 2, 4),
+            (4, 40., 2, 3, 5),
+            (5, 50., 2, 3, 6),
+            (6, 60., 3, 4, 7),
+            (7, 70., 3, 4, 8),
+            (8, 80., 4, 5, 9),
+            (9, 90., 4, 5, 10),
+        ])
+
     def test_ordered_window(self):
         window = Window(partition_by=[Sample.counter],
                         order_by=[Sample.value.desc()])
