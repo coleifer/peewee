@@ -596,6 +596,31 @@ class TestWindowFunctions(BaseTestCase):
             'ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING) '
             'FROM "register" AS "t1"'), [])
 
+    def test_running_total(self):
+        EventLog = Table('evtlog', ('id', 'timestamp', 'data'))
+
+        w = fn.SUM(EventLog.timestamp).over(order_by=[EventLog.timestamp])
+        query = (EventLog
+                 .select(EventLog.timestamp, EventLog.data, w.alias('elapsed'))
+                 .order_by(EventLog.timestamp))
+        self.assertSQL(query, (
+            'SELECT "t1"."timestamp", "t1"."data", '
+            'SUM("t1"."timestamp") OVER (ORDER BY "t1"."timestamp") '
+            'AS "elapsed" '
+            'FROM "evtlog" AS "t1" ORDER BY "t1"."timestamp"'), [])
+
+        w = fn.SUM(EventLog.timestamp).over(
+            order_by=[EventLog.timestamp],
+            partition_by=[EventLog.data])
+        query = (EventLog
+                 .select(EventLog.timestamp, EventLog.data, w.alias('elapsed'))
+                 .order_by(EventLog.timestamp))
+        self.assertSQL(query, (
+            'SELECT "t1"."timestamp", "t1"."data", '
+            'SUM("t1"."timestamp") OVER '
+            '(PARTITION BY "t1"."data" ORDER BY "t1"."timestamp") AS "elapsed"'
+            ' FROM "evtlog" AS "t1" ORDER BY "t1"."timestamp"'), [])
+
     def test_partition_unordered(self):
         partition = [Register.category]
         query = (Register
@@ -653,6 +678,27 @@ class TestWindowFunctions(BaseTestCase):
             'FROM "register" AS "t1" '
             'WINDOW w1 AS (PARTITION BY "t1"."category"), '
             'w2 AS (ORDER BY "t1"."value")'), [])
+
+    def test_reuse_window(self):
+        EventLog = Table('evt', ('id', 'timestamp', 'key'))
+        window = Window(partition_by=[EventLog.key],
+                        order_by=[EventLog.timestamp])
+        query = (EventLog
+                 .select(EventLog.timestamp, EventLog.key,
+                         fn.NTILE(4).over(window).alias('quartile'),
+                         fn.NTILE(5).over(window).alias('quintile'),
+                         fn.NTILE(100).over(window).alias('percentile'))
+                 .order_by(EventLog.timestamp)
+                 .window(window))
+        self.assertSQL(query, (
+            'SELECT "t1"."timestamp", "t1"."key", '
+            'NTILE(?) OVER w AS "quartile", '
+            'NTILE(?) OVER w AS "quintile", '
+            'NTILE(?) OVER w AS "percentile" '
+            'FROM "evt" AS "t1" '
+            'WINDOW w AS ('
+            'PARTITION BY "t1"."key" ORDER BY "t1"."timestamp") '
+            'ORDER BY "t1"."timestamp"'), [4, 5, 100])
 
     def test_ordered_unpartitioned(self):
         query = (Register
@@ -734,6 +780,11 @@ class TestSelectFeatures(BaseTestCase):
         query = Person.select(Person.name).distinct()
         self.assertSQL(query,
                        'SELECT DISTINCT "t1"."name" FROM "person" AS "t1"', [])
+
+    def test_distinct_count(self):
+        query = Person.select(fn.COUNT(Person.name.distinct()))
+        self.assertSQL(query, (
+            'SELECT COUNT(DISTINCT "t1"."name") FROM "person" AS "t1"'), [])
 
     def test_for_update(self):
         query = (Person
