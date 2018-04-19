@@ -990,6 +990,46 @@ Query-builder
         Specify the predicate expression used for this join.
 
 
+.. py:class:: ValuesList(values[, columns=None[, alias=None]])
+
+    Represent a values list that can be used like a table.
+
+    :param values: a list-of-lists containing the row data to represent.
+    :param list columns: the names to give to the columns in each row.
+    :param str alias: alias to use for values-list.
+
+    Example:
+
+    .. code-block:: python
+
+        data = [(1, 'first'), (2, 'second')]
+        vl = ValuesList(data, columns=('idx', 'name'))
+
+        query = (vl
+                 .select(vl.c.idx, vl.c.name)
+                 .order_by(vl.c.idx))
+        # Yields:
+        # SELECT t1.idx, t1.name
+        # FROM (VALUES (1, 'first'), (2, 'second')) AS t1(idx, name)
+        # ORDER BY t1.idx
+
+    .. py:method:: columns(*names)
+
+        :param names: names to apply to the columns of data.
+
+        Example:
+
+        .. code-block:: python
+
+            vl = ValuesList([(1, 'first'), (2, 'second')])
+            vl = vl.columns('idx', 'name').alias('v')
+
+            query = vl.select(vl.c.idx, vl.c.name)
+            # Yields:
+            # SELECT v.idx, v.name
+            # FROM (VALUES (1, 'first'), (2, 'second')) AS v(idx, name)
+
+
 .. py:class:: CTE(name, query[, recursive=False[, columns=None]])
 
     Represent a common-table-expression.

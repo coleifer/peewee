@@ -124,6 +124,7 @@ __all__ = [
     'Tuple',
     'UUIDField',
     'Value',
+    'ValuesList',
     'Window',
 ]
 
@@ -863,6 +864,37 @@ class Join(BaseTable):
          .sql(self.rhs))
         if self._on is not None:
             ctx.literal(' ON ').sql(self._on)
+        return ctx
+
+
+class ValuesList(BaseTable):
+    def __init__(self, values, columns=None, alias=None):
+        super(ValuesList, self).__init__(alias=alias)
+        self._values = values
+        self._columns = columns
+
+    def _get_hash(self):
+        return hash((self.__class__, id(self._values), self._alias))
+
+    @Node.copy
+    def columns(self, *names):
+        self._columns = names
+
+    def __sql__(self, ctx):
+        if self._alias:
+            ctx.alias_manager[self] = self._alias
+
+        if ctx.scope == SCOPE_SOURCE:
+            ctx = (ctx
+                   .literal('(VALUES ')
+                   .sql(CommaNodeList([
+                       EnclosedNodeList(row) for row in self._values]))
+                   .literal(') AS ')
+                   .sql(Entity(ctx.alias_manager[self])))
+            if self._columns:
+                ctx.sql(EnclosedNodeList([Entity(c) for c in self._columns]))
+        else:
+            ctx.sql(Entity(ctx.alias_manager[self]))
         return ctx
 
 

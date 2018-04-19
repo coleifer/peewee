@@ -719,6 +719,57 @@ class TestWindowFunctions(BaseTestCase):
             'ORDER BY "t1"."value"'), [1])
 
 
+class TestValuesList(BaseTestCase):
+    _data = [(1, 'one'), (2, 'two'), (3, 'three')]
+
+    def test_values_list(self):
+        vl = ValuesList(self._data)
+
+        query = vl.select(SQL('*'))
+        self.assertSQL(query, (
+            'SELECT * FROM (VALUES (?, ?), (?, ?), (?, ?)) AS "t1"'),
+            [1, 'one', 2, 'two', 3, 'three'])
+
+    def test_values_list_named_columns(self):
+        vl = ValuesList(self._data).columns('idx', 'name')
+        query = (vl
+                 .select(vl.c.idx, vl.c.name)
+                 .order_by(vl.c.idx))
+        self.assertSQL(query, (
+            'SELECT "t1"."idx", "t1"."name" '
+            'FROM (VALUES (?, ?), (?, ?), (?, ?)) AS "t1"("idx", "name") '
+            'ORDER BY "t1"."idx"'), [1, 'one', 2, 'two', 3, 'three'])
+
+    def test_named_values_list(self):
+        vl = ValuesList(self._data, ['idx', 'name']).alias('vl')
+        query = (vl
+                 .select(vl.c.idx, vl.c.name)
+                 .order_by(vl.c.idx))
+        self.assertSQL(query, (
+            'SELECT "vl"."idx", "vl"."name" '
+            'FROM (VALUES (?, ?), (?, ?), (?, ?)) AS "vl"("idx", "name") '
+            'ORDER BY "vl"."idx"'), [1, 'one', 2, 'two', 3, 'three'])
+
+    def test_docs_examples(self):
+        data = [(1, 'first'), (2, 'second')]
+        vl = ValuesList(data, columns=('idx', 'name'))
+        query = (vl
+                 .select(vl.c.idx, vl.c.name)
+                 .order_by(vl.c.idx))
+        self.assertSQL(query, (
+            'SELECT "t1"."idx", "t1"."name" '
+            'FROM (VALUES (?, ?), (?, ?)) AS "t1"("idx", "name") '
+            'ORDER BY "t1"."idx"'), [1, 'first', 2, 'second'])
+
+        vl = ValuesList([(1, 'first'), (2, 'second')])
+        vl = vl.columns('idx', 'name').alias('v')
+        query = vl.select(vl.c.idx, vl.c.name)
+        self.assertSQL(query, (
+            'SELECT "v"."idx", "v"."name" '
+            'FROM (VALUES (?, ?), (?, ?)) AS "v"("idx", "name")'),
+            [1, 'first', 2, 'second'])
+
+
 class TestCaseFunction(BaseTestCase):
     def test_case_function(self):
         NameNum = Table('nn', ('name', 'number'))
