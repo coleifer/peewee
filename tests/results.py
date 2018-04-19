@@ -154,3 +154,20 @@ class TestModelObjectCursorWrapper(ModelTestCase):
                 ('huey', 'meow'),
                 ('huey', 'purr'),
                 ('mickey', 'woof')])
+
+    def test_dict_flattening(self):
+        u = User.create(username='u1')
+        for i in range(3):
+            Tweet.create(user=u, content='t%d' % (i + 1))
+
+        query = (Tweet
+                 .select(Tweet, User)
+                 .join(User)
+                 .order_by(Tweet.id)
+                 .dicts())
+        with self.assertQueryCount(1):
+            results = [(r['id'], r['content'], r['username']) for r in query]
+            self.assertEqual(results, [
+                (1, 't1', 'u1'),
+                (2, 't2', 'u1'),
+                (3, 't3', 'u1')])
