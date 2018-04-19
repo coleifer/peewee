@@ -5,6 +5,15 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.2.5
+
+* Added `ValuesList` for representing values lists. [Docs](http://docs.peewee-orm.com/en/latest/peewee/api.html#ValuesList).
+* `DateTimeField`, `DateField` and `TimeField` will parse formatted-strings
+  before sending to the database. Previously this only occurred when reading
+  values from the database.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.2.4...3.2.5)
+
 ## 3.2.4
 
 * Smarter handling of model-graph when dealing with compound queries (union,
