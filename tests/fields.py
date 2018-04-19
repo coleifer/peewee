@@ -179,8 +179,19 @@ class DateModel(TestModel):
     date_time = DateTimeField(null=True)
 
 
+class CustomDateTimeModel(TestModel):
+    date_time = DateTimeField(formats=['%m/%d/%Y %I:%M %p'])
+
+
 class TestDateFields(ModelTestCase):
     requires = [DateModel]
+
+    @requires_models(CustomDateTimeModel)
+    def test_date_time_custom_format(self):
+        cdtm = CustomDateTimeModel.create(date_time='01/02/2003 01:37 PM')
+        cdtm_db = CustomDateTimeModel[cdtm.id]
+        self.assertEqual(cdtm_db.date_time,
+                         datetime.datetime(2003, 1, 2, 13, 37, 0))
 
     def test_date_fields(self):
         dt1 = datetime.datetime(2011, 1, 2, 11, 12, 13, 54321)
