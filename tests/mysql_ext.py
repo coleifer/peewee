@@ -1,3 +1,5 @@
+import datetime
+
 from peewee import *
 
 from .base import IS_MYSQL
