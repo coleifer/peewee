@@ -51,6 +51,23 @@ class Point(TestModel):
 
 
 IS_OLD_SQLITE = IS_SQLITE and sqlite3.sqlite_version_info < (3, 18)
+MYSQL_WINDOW_QUERIES = False
+if IS_MYSQL:
+    conn = db.connection()
+    try:
+        # pymysql
+        server_info = conn.server_version
+        MYSQL_WINDOW_QUERIES = 'MariaDB-10.3' in server_info
+    except AttributeError:
+        try:
+            # mysql-connector
+            server_info = conn.get_server_version()
+            MYSQL_WINDOW_QUERIES = server_info[0] >= 8
+        except AttributeError:
+            pass
+    db.close()
+    if not MYSQL_WINDOW_QUERIES:
+        logger.warning('MySQL too old to test window query integration.')
 
 
 class TestModelAPIs(ModelTestCase):
@@ -1277,7 +1294,7 @@ class TestJoinModelAlias(ModelTestCase):
                 self.assertEqual(data, [('meow', 'huey'), ('purr', 'huey')])
 
 
-@skip_case_unless(IS_POSTGRESQL)
+@skip_case_unless(IS_POSTGRESQL or MYSQL_WINDOW_QUERIES)
 class TestWindowFunctionIntegration(ModelTestCase):
     requires = [Sample]
 
@@ -1293,7 +1310,7 @@ class TestWindowFunctionIntegration(ModelTestCase):
                  .select(Sample.counter, Sample.value,
                          fn.AVG(Sample.value).over(
                              partition_by=[Sample.counter]))
-                 .order_by(Sample.counter)
+                 .order_by(Sample.counter, Sample.value)
                  .tuples())
         expected = [
             (1, 10., 15.),
@@ -1308,7 +1325,7 @@ class TestWindowFunctionIntegration(ModelTestCase):
                  .select(Sample.counter, Sample.value,
                          fn.AVG(Sample.value).over(window))
                  .window(window)
-                 .order_by(Sample.counter)
+                 .order_by(Sample.counter, Sample.value)
                  .tuples())
         self.assertEqual(list(query), expected)
 
