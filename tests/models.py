@@ -2253,6 +2253,30 @@ class TestUpsertSqlite(OnConflictTestCase):
             ('nuggie', 'dog', '123'),
             ('beanie', 'cat', '126')])
 
+    def test_model_replace(self):
+        Emp.replace(first='mickey', last='dog', empno='1337').execute()
+        self.assertData([
+            ('huey', 'cat', '123'),
+            ('zaizee', 'cat', '124'),
+            ('mickey', 'dog', '1337')])
+
+        Emp.replace(first='beanie', last='cat', empno='999').execute()
+        self.assertData([
+            ('huey', 'cat', '123'),
+            ('zaizee', 'cat', '124'),
+            ('mickey', 'dog', '1337'),
+            ('beanie', 'cat', '999')])
+
+        Emp.replace_many([('h', 'cat', '123'), ('z', 'cat', '124'),
+                          ('b', 'cat', '125')],
+                         fields=[Emp.first, Emp.last, Emp.empno]).execute()
+        self.assertData([
+            ('mickey', 'dog', '1337'),
+            ('beanie', 'cat', '999'),
+            ('h', 'cat', '123'),
+            ('z', 'cat', '124'),
+            ('b', 'cat', '125')])
+
     @skip_if(IS_SQLITE_24)
     def test_no_preserve_update_where(self):
         # Ensure on SQLite < 3.24 we cannot update or preserve values.
