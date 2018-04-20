@@ -12,11 +12,11 @@ from peewee import sqlite3
 from playhouse.sqlite_ext import SqliteExtDatabase
 from playhouse.sqlite_udf import register_all
 
+from .base import IS_SQLITE_9
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db_loader
 from .base import skip_case_unless
-from .base import skip_if
 from .base import skip_unless
 try:
     from playhouse import _sqlite_udf as cython_udf
@@ -320,7 +320,7 @@ class TestScalarFunctions(BaseTestUDF):
             ('a.b.c.peewee', 1),
             ('a.charlesleifer.com', 1)])
 
-    @skip_if(sqlite3.sqlite_version_info < (3, 9))
+    @skip_unless(IS_SQLITE_9)
     def test_toggle(self):
         self.assertEqual(self.sql1('select toggle(?)', 'foo'), 1)
         self.assertEqual(self.sql1('select toggle(?)', 'bar'), 1)

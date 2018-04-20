@@ -1,6 +1,7 @@
 from peewee import *
 
 from .base import IS_MYSQL
+from .base import IS_SQLITE
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db
@@ -413,9 +414,8 @@ class TestForeignKeyConstraints(ModelTestCase):
         super(TestForeignKeyConstraints, self).tearDown()
 
     def set_foreign_key_pragma(self, is_enabled):
-        if not isinstance(self.database, SqliteDatabase):
-            return
-        self.database.foreign_keys = 'on' if is_enabled else 'off'
+        if IS_SQLITE:
+            self.database.foreign_keys = 'on' if is_enabled else 'off'
 
     def test_constraint_exists(self):
         max_id = User.select(fn.MAX(User.id)).scalar() or 0
@@ -423,7 +423,7 @@ class TestForeignKeyConstraints(ModelTestCase):
             with self.database.atomic():
                 Note.create(user=max_id + 1, content='test')
 
-    @skip_unless(isinstance(db, SqliteDatabase))
+    @skip_unless(IS_SQLITE)
     def test_disable_constraint(self):
         self.set_foreign_key_pragma(False)
         Note.create(user=0, content='test')

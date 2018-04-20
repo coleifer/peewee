@@ -1,12 +1,9 @@
 import datetime
-import logging
-import re
 import sys
 import time
 import unittest
 
 from peewee import *
-from peewee import sqlite3
 
 from .base import db
 from .base import get_in_memory_db
@@ -18,8 +15,12 @@ from .base import skip_if
 from .base import skip_unless
 from .base import BaseTestCase
 from .base import IS_MYSQL
+from .base import IS_MYSQL_ADVANCED_FEATURES
 from .base import IS_POSTGRESQL
 from .base import IS_SQLITE
+from .base import IS_SQLITE_OLD
+from .base import IS_SQLITE_15
+from .base import IS_SQLITE_9
 from .base import ModelTestCase
 from .base import TestModel
 from .base_models import *
@@ -50,29 +51,6 @@ class Point(TestModel):
     y = IntegerField()
     class Meta:
         primary_key = False
-
-
-IS_OLD_SQLITE = IS_SQLITE and sqlite3.sqlite_version_info < (3, 18)
-MYSQL_WINDOW_QUERIES = False
-if IS_MYSQL:
-    logger = logging.getLogger('peewee')
-    conn = db.connection()
-    try:
-        # pymysql
-        server_info = conn.server_version
-        if re.search('(8\.\d+\.\d+|10\.[2-9]\.)', server_info):
-            MYSQL_WINDOW_QUERIES = True
-    except AttributeError:
-        try:
-            # mysql-connector
-            server_info = conn.get_server_version()
-            MYSQL_WINDOW_QUERIES = (server_info[0] == 8 or
-                                    server_info[:2] >= (10, 2))
-        except AttributeError:
-            logger.warning('Could not determine mysql server version.')
-    db.close()
-    if not MYSQL_WINDOW_QUERIES:
-        logger.warning('MySQL too old to test window query integration.')
 
 
 class TestModelAPIs(ModelTestCase):
@@ -599,7 +577,7 @@ class TestModelAPIs(ModelTestCase):
             data = [(user.username, user.tweet.content) for user in query]
 
         # Failing on travis-ci...old SQLite?
-        if not IS_OLD_SQLITE:
+        if not IS_SQLITE_OLD:
             self.assertEqual(data, [
                 ('huey', 'hiss'),
                 ('mickey', 'grr')])
@@ -638,7 +616,7 @@ class TestModelAPIs(ModelTestCase):
             'ORDER BY "t1"."id"'), ['huey', 'zaizee'])
         with self.assertQueryCount(1):
             results = [(t.content, t.user.username) for t in query]
-            if IS_OLD_SQLITE:
+            if IS_SQLITE_OLD:
                 self.assertEqual(results, [
                     ('meow', None),
                     ('purr', None),
@@ -650,7 +628,7 @@ class TestModelAPIs(ModelTestCase):
                     ('hiss', 'huey')])
 
     @requires_models(User, Tweet)
-    @skip_if(IS_MYSQL or IS_OLD_SQLITE)
+    @skip_if(IS_SQLITE_OLD or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES))
     def test_join_subquery_cte(self):
         self._create_user_tweets()
 
@@ -686,7 +664,7 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual(tweet.user.username, 'huey')
 
     @requires_models(Register)
-    @skip_if(IS_SQLITE and sqlite3.sqlite_version_info < (3, 9))
+    @skip_if(IS_SQLITE and not IS_SQLITE_9)
     def test_compound_select(self):
         for i in range(10):
             Register.create(value=i)
@@ -1299,7 +1277,7 @@ class TestJoinModelAlias(ModelTestCase):
                 self.assertEqual(data, [('meow', 'huey'), ('purr', 'huey')])
 
 
-@skip_case_unless(IS_POSTGRESQL or MYSQL_WINDOW_QUERIES)
+@skip_case_unless(IS_POSTGRESQL or IS_MYSQL_ADVANCED_FEATURES)
 class TestWindowFunctionIntegration(ModelTestCase):
     requires = [Sample]
 
@@ -1681,10 +1659,7 @@ class TestReturningIntegration(ModelTestCase):
         self.assertEqual(user.id, zaizee_id)
 
 
-supports_tuples = sqlite3.sqlite_version_info >= (3, 15, 0)
-
-
-@skip_case_unless(IS_POSTGRESQL or (IS_SQLITE and supports_tuples))
+@skip_case_unless(IS_POSTGRESQL or IS_SQLITE_15)
 class TestTupleComparison(ModelTestCase):
     requires = [User]
 

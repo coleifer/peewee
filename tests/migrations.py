@@ -6,6 +6,7 @@ from peewee import *
 from playhouse.migrate import *
 from .base import BaseTestCase
 from .base import IS_MYSQL
+from .base import IS_SQLITE
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db
@@ -497,7 +498,7 @@ class TestSchemaMigration(ModelTestCase):
         self.assertEqual(foreign_key.dest_column, 'id')
         self.assertEqual(foreign_key.dest_table, 'users')
 
-    @skip_unless(isinstance(db, SqliteDatabase))
+    @skip_unless(IS_SQLITE)
     def test_valid_column_required(self):
         self.assertRaises(
             ValueError,
@@ -509,7 +510,7 @@ class TestSchemaMigration(ModelTestCase):
             migrate,
             self.migrator.rename_column('page', 'xx', 'yy'))
 
-    @skip_unless(isinstance(db, SqliteDatabase))
+    @skip_unless(IS_SQLITE)
     @requires_models(IndexModel)
     def test_table_case_insensitive(self):
         migrate(self.migrator.drop_column('PaGe', 'name'))
@@ -526,7 +527,7 @@ class TestSchemaMigration(ModelTestCase):
         self.assertEqual(len(indexes), 1)
         self.assertEqual(indexes[0].name, 'indexmodel_data')
 
-    @skip_unless(isinstance(db, SqliteDatabase))
+    @skip_unless(IS_SQLITE)
     @requires_models(IndexModel)
     def test_add_column_indexed_table(self):
         # Ensure that columns can be added to tables that have indexes.
@@ -544,7 +545,7 @@ class TestSchemaMigration(ModelTestCase):
             [('indexmodel_data', ['data']),
              ('indexmodel_first_name_last_name', ['first_name', 'last_name'])])
 
-    @skip_unless(isinstance(db, SqliteDatabase))
+    @skip_unless(IS_SQLITE)
     def test_rename_column_to_table_name(self):
         db = self.migrator.database
         columns = lambda: sorted(col.name for col in db.get_columns('page'))
@@ -569,7 +570,7 @@ class TestSchemaMigration(ModelTestCase):
         self.assertEqual(columns(),  orig_columns)
         self.assertEqual(indexes(), orig_indexes)
 
-    @skip_unless(isinstance(db, SqliteDatabase))
+    @skip_unless(IS_SQLITE)
     @requires_models(Category)
     def test_add_fk_with_constraints(self):
         self.reset_sql_history()
@@ -585,7 +586,7 @@ class TestSchemaMigration(ModelTestCase):
              'INTEGER REFERENCES "category" ("id") ON DELETE SET NULL', []),
         ])
 
-    @skip_unless(isinstance(db, SqliteDatabase))
+    @skip_unless(IS_SQLITE)
     @requires_models(IndexModel)
     def test_index_preservation(self):
         self.reset_sql_history()

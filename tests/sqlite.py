@@ -7,6 +7,7 @@ from playhouse.sqlite_ext import *
 from playhouse._sqlite_ext import TableFunction
 
 from .base import BaseTestCase
+from .base import IS_SQLITE_9
 from .base import ModelTestCase
 from .base import TestModel
 from .base import requires_models
@@ -191,7 +192,7 @@ class Split(TableFunction):
         raise StopIteration
 
 
-@skip_case_unless(sqlite3.sqlite_version_info[:2] >= (3, 9))
+@skip_case_unless(IS_SQLITE_9)
 class TestTableFunction(BaseTestCase):
     def setUp(self):
         super(TestTableFunction, self).setUp()
