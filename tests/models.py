@@ -57,7 +57,7 @@ if IS_MYSQL:
     try:
         # pymysql
         server_info = conn.server_version
-        MYSQL_WINDOW_QUERIES = 'MariaDB-10.3' in server_info
+        MYSQL_WINDOW_QUERIES = 'MariaDB-10.' in server_info
     except AttributeError:
         try:
             # mysql-connector
