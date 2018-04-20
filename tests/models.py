@@ -1368,7 +1368,7 @@ class TestWindowFunctionIntegration(ModelTestCase):
                  .select(Sample.counter, Sample.value,
                          fn.RANK().over(window=window).alias('rank'))
                  .window(window)
-                 .order_by(Sample.counter, SQL('rank'))
+                 .order_by(Sample.counter, fn.RANK().over(window=window))
                  .tuples())
         self.assertEqual(list(query), [
             (1, 20., 1),
