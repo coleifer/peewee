@@ -1,4 +1,5 @@
 import datetime
+import logging
 import re
 import sys
 import time
@@ -54,25 +55,24 @@ class Point(TestModel):
 IS_OLD_SQLITE = IS_SQLITE and sqlite3.sqlite_version_info < (3, 18)
 MYSQL_WINDOW_QUERIES = False
 if IS_MYSQL:
+    logger = logging.getLogger('peewee')
     conn = db.connection()
     try:
         # pymysql
         server_info = conn.server_version
-        print('MySQL server info: %s' % server_info)
         if re.search('(8\.\d+\.\d+|10\.[2-9]\.)', server_info):
             MYSQL_WINDOW_QUERIES = True
     except AttributeError:
         try:
             # mysql-connector
             server_info = conn.get_server_version()
-            print('MySQL server info: %s' % server_info)
             MYSQL_WINDOW_QUERIES = (server_info[0] == 8 or
                                     server_info[:2] >= (10, 2))
         except AttributeError:
-            print('Could not determine mysql server version.')
+            logger.warning('Could not determine mysql server version.')
     db.close()
     if not MYSQL_WINDOW_QUERIES:
-        print('MySQL too old to test window query integration.')
+        logger.warning('MySQL too old to test window query integration.')
 
 
 class TestModelAPIs(ModelTestCase):
