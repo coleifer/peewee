@@ -67,7 +67,7 @@ if IS_MYSQL:
             pass
     db.close()
     if not MYSQL_WINDOW_QUERIES:
-        logger.warning('MySQL too old to test window query integration.')
+        print('MySQL too old to test window query integration.')
 
 
 class TestModelAPIs(ModelTestCase):
