@@ -21,7 +21,7 @@ class Person(TestModel):
 class Note(TestModel):
     person = ForeignKeyField(Person, backref='notes')
     content = TextField()
-    timestamp = TimestampField(resolution=1e6)
+    timestamp = DateTimeField(default=datetime.datetime.now)
 
 
 @skip_case_unless(IS_MYSQL)

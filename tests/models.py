@@ -58,13 +58,15 @@ if IS_MYSQL:
         # pymysql
         server_info = conn.server_version
         print('MySQL server info: %s' % server_info)
-        MYSQL_WINDOW_QUERIES = 'MariaDB-10.' in server_info
+        if re.search('(8\.\d+\.\d+|10\.[2-9]\.)', server_info):
+            MYSQL_WINDOW_QUERIES = True
     except AttributeError:
         try:
             # mysql-connector
             server_info = conn.get_server_version()
             print('MySQL server info: %s' % server_info)
-            MYSQL_WINDOW_QUERIES = server_info[0] >= 8
+            MYSQL_WINDOW_QUERIES = (server_info[0] == 8 or
+                                    server_info[:2] >= (10, 2))
         except AttributeError:
             print('Could not determine mysql server version.')
     db.close()
