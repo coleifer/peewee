@@ -13,7 +13,7 @@ mysql_ext_db = db_loader('mysqlconnector')
 class Person(TestModel):
     first = CharField()
     last = CharField()
-    dob = DateField()
+    dob = DateField(default=datetime.date(2000, 1, 1))
 
 
 class Note(TestModel):
