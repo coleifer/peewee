@@ -14,7 +14,7 @@ addons:
 services:
   - postgresql
   - mysql
-install: "pip install psycopg2 Cython pymysql apsw mysql-connector"
+install: "pip install psycopg2-binary Cython pymysql apsw mysql-connector"
 before_script:
   - python setup.py build_ext -i
   - psql -c 'drop database if exists peewee_test;' -U postgres
