@@ -180,6 +180,9 @@ if sqlite3:
     sqlite3.register_adapter(decimal.Decimal, str)
     sqlite3.register_adapter(datetime.date, str)
     sqlite3.register_adapter(datetime.time, str)
+    __sqlite_version__ = sqlite3.sqlite_version_info
+else:
+    __sqlite_version__ = (0, 0, 0)
 
 
 __date_parts__ = set(('year', 'month', 'day', 'hour', 'minute', 'second'))
@@ -2595,6 +2598,38 @@ class Database(_callable_context_manager):
     def conflict_update(self, on_conflict):
         raise NotImplementedError
 
+    def _build_on_conflict_update(self, on_conflict):
+        target = EnclosedNodeList([
+            Entity(col) if isinstance(col, basestring) else col
+            for col in on_conflict._conflict_target])
+
+        updates = []
+        if on_conflict._preserve:
+            for column in on_conflict._preserve:
+                excluded = NodeList((SQL('EXCLUDED'), ensure_entity(column)),
+                                    glue='.')
+                expression = NodeList((ensure_entity(column), SQL('='),
+                                       excluded))
+                updates.append(expression)
+
+        if on_conflict._update:
+            for k, v in on_conflict._update.items():
+                if not isinstance(v, Node):
+                    converter = k.db_value if isinstance(k, Field) else None
+                    v = Value(v, converter=converter, unpack=False)
+                else:
+                    v = QualifiedNames(v)
+                updates.append(NodeList((ensure_entity(k), SQL('='), v)))
+
+        parts = [SQL('ON CONFLICT'),
+                 target,
+                 SQL('DO UPDATE SET'),
+                 CommaNodeList(updates)]
+        if on_conflict._where:
+            parts.extend((SQL('WHERE'), QualifiedNames(on_conflict._where)))
+
+        return NodeList(parts)
+
     def last_insert_id(self, cursor, query_type=None):
         return cursor.lastrowid
 
@@ -2959,14 +2994,34 @@ class SqliteDatabase(Database):
         return sqlite3.Binary
 
     def conflict_statement(self, on_conflict):
-        if on_conflict._action:
+        action = on_conflict._action.lower() if on_conflict._action else ''
+        if action and action not in ('nothing', 'update'):
             return SQL('INSERT OR %s' % on_conflict._action.upper())
 
     def conflict_update(self, on_conflict):
-        if any((on_conflict._preserve, on_conflict._update, on_conflict._where,
+        # Sqlite prior to 3.24.0 does not support Postgres-style upsert.
+        if __sqlite_version__ < (3, 24, 0) and \
+           any((on_conflict._preserve, on_conflict._update, on_conflict._where,
                 on_conflict._conflict_target)):
             raise ValueError('SQLite does not support specifying which values '
                              'to preserve or update.')
+
+        action = on_conflict._action.lower() if on_conflict._action else ''
+        if action and action not in ('nothing', 'update', ''):
+            return
+
+        if action == 'nothing':
+            return SQL('ON CONFLICT DO NOTHING')
+        elif not on_conflict._update and not on_conflict._preserve:
+            raise ValueError('If you are not performing any updates (or '
+                             'preserving any INSERTed values), then the '
+                             'conflict resolution action should be set to '
+                             '"NOTHING".')
+        elif not on_conflict._conflict_target:
+            raise ValueError('SQLite requires that a conflict target be '
+                             'specified when doing an upsert.')
+
+        return self._build_on_conflict_update(on_conflict)
 
     def extract_date(self, date_part, date_field):
         return fn.date_part(date_part, date_field)
@@ -3127,36 +3182,7 @@ class PostgresqlDatabase(Database):
             raise ValueError('Postgres requires that a conflict target be '
                              'specified when doing an upsert.')
 
-        target = EnclosedNodeList([
-            Entity(col) if isinstance(col, basestring) else col
-            for col in on_conflict._conflict_target])
-
-        updates = []
-        if on_conflict._preserve:
-            for column in on_conflict._preserve:
-                excluded = NodeList((SQL('EXCLUDED'), ensure_entity(column)),
-                                    glue='.')
-                expression = NodeList((ensure_entity(column), SQL('='),
-                                       excluded))
-                updates.append(expression)
-
-        if on_conflict._update:
-            for k, v in on_conflict._update.items():
-                if not isinstance(v, Node):
-                    converter = k.db_value if isinstance(k, Field) else None
-                    v = Value(v, converter=converter, unpack=False)
-                else:
-                    v = QualifiedNames(v)
-                updates.append(NodeList((ensure_entity(k), SQL('='), v)))
-
-        parts = [SQL('ON CONFLICT'),
-                 target,
-                 SQL('DO UPDATE SET'),
-                 CommaNodeList(updates)]
-        if on_conflict._where:
-            parts.extend((SQL('WHERE'), QualifiedNames(on_conflict._where)))
-
-        return NodeList(parts)
+        return self._build_on_conflict_update(on_conflict)
 
     def extract_date(self, date_part, date_field):
         return fn.EXTRACT(NodeList((date_part, SQL('FROM'), date_field)))

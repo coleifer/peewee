@@ -19,7 +19,8 @@ from .base import IS_MYSQL_ADVANCED_FEATURES
 from .base import IS_POSTGRESQL
 from .base import IS_SQLITE
 from .base import IS_SQLITE_OLD
-from .base import IS_SQLITE_15
+from .base import IS_SQLITE_15  # Row-values.
+from .base import IS_SQLITE_24  # Upsert.
 from .base import IS_SQLITE_9
 from .base import ModelTestCase
 from .base import TestModel
@@ -2149,6 +2150,11 @@ class Emp(TestModel):
         )
 
 
+class OCTest(TestModel):
+    a = CharField(unique=True)
+    b = IntegerField(default=0)
+
+
 class OnConflictTestCase(ModelTestCase):
     requires = [Emp]
     test_data = (
@@ -2177,10 +2183,46 @@ class OnConflictTestCase(ModelTestCase):
         self.assertData(list(self.test_data))
 
 
+@skip_case_unless(IS_MYSQL)
+class TestUpsertMySQL(OnConflictTestCase):
+    def test_replace(self):
+        # Unique constraint on first/last would fail - replace.
+        query = (Emp
+                 .insert(first='mickey', last='dog', empno='1337')
+                 .on_conflict('replace')
+                 .execute())
+        self.assertData([
+            ('huey', 'cat', '123'),
+            ('zaizee', 'cat', '124'),
+            ('mickey', 'dog', '1337')])
+
+        # Unique constraint on empno would fail - replace.
+        query = (Emp
+                 .insert(first='nuggie', last='dog', empno='123')
+                 .on_conflict('replace')
+                 .execute())
+        self.assertData([
+            ('zaizee', 'cat', '124'),
+            ('mickey', 'dog', '1337'),
+            ('nuggie', 'dog', '123')])
+
+        # No problems, data added.
+        query = (Emp
+                 .insert(first='beanie', last='cat', empno='126')
+                 .on_conflict('replace')
+                 .execute())
+        self.assertData([
+            ('zaizee', 'cat', '124'),
+            ('mickey', 'dog', '1337'),
+            ('nuggie', 'dog', '123'),
+            ('beanie', 'cat', '126')])
+
+
 class TestUpsertSqlite(OnConflictTestCase):
     database = get_in_memory_db()
 
     def test_replace(self):
+        # Unique constraint on first/last would fail - replace.
         query = (Emp
                  .insert(first='mickey', last='dog', empno='1337')
                  .on_conflict('replace')
@@ -2190,6 +2232,7 @@ class TestUpsertSqlite(OnConflictTestCase):
             ('zaizee', 'cat', '124'),
             ('mickey', 'dog', '1337')])
 
+        # Unique constraint on empno would fail - replace.
         query = (Emp
                  .insert(first='nuggie', last='dog', empno='123')
                  .on_conflict('replace')
@@ -2199,37 +2242,48 @@ class TestUpsertSqlite(OnConflictTestCase):
             ('mickey', 'dog', '1337'),
             ('nuggie', 'dog', '123')])
 
-
-@skip_case_unless(IS_MYSQL)
-class TestUpsertMySQL(OnConflictTestCase):
-    def test_replace(self):
+        # No problems, data added.
         query = (Emp
-                 .insert(first='mickey', last='dog', empno='1337')
-                 .on_conflict('replace')
-                 .execute())
-        self.assertData([
-            ('huey', 'cat', '123'),
-            ('zaizee', 'cat', '124'),
-            ('mickey', 'dog', '1337')])
-
-        query = (Emp
-                 .insert(first='nuggie', last='dog', empno='123')
+                 .insert(first='beanie', last='cat', empno='126')
                  .on_conflict('replace')
                  .execute())
         self.assertData([
             ('zaizee', 'cat', '124'),
             ('mickey', 'dog', '1337'),
-            ('nuggie', 'dog', '123')])
+            ('nuggie', 'dog', '123'),
+            ('beanie', 'cat', '126')])
 
+    @skip_if(IS_SQLITE_24)
+    def test_no_preserve_update_where(self):
+        # Ensure on SQLite < 3.24 we cannot update or preserve values.
+        base = Emp.insert(first='foo', last='bar', empno='125')
 
-class OCTest(TestModel):
-    a = CharField(unique=True)
-    b = IntegerField(default=0)
+        preserve = base.on_conflict(preserve=[Emp.last])
+        self.assertRaises(ValueError, preserve.execute)
 
+        update = base.on_conflict(update={Emp.empno: 'xxx'})
+        self.assertRaises(ValueError, update.execute)
 
-@skip_case_unless(IS_POSTGRESQL)
-class TestUpsertPostgresql(OnConflictTestCase):
+        where = base.on_conflict(where=(Emp.id > 10))
+        self.assertRaises(ValueError, where.execute)
+
+    @skip_unless(IS_SQLITE_24)
+    def test_update_meets_requirements(self):
+        # Ensure that on >= 3.24 any updates meet the minimum criteria.
+        base = Emp.insert(first='foo', last='bar', empno='125')
+
+        # Must specify update or preserve.
+        no_update_preserve = base.on_conflict(conflict_target=(Emp.empno,))
+        self.assertRaises(ValueError, no_update_preserve.execute)
+
+        # Must specify a conflict target.
+        no_conflict_target = base.on_conflict(update={Emp.empno: '125.1'})
+        self.assertRaises(ValueError, no_conflict_target.execute)
+
+    @skip_unless(IS_SQLITE_24)
     def test_update(self):
+        # Conflict on empno - we'll preserve name and update the ID. This will
+        # overwrite the previous row and set a new ID.
         res = (Emp
                .insert(first='foo', last='bar', empno='125')
                .on_conflict(
@@ -2242,6 +2296,112 @@ class TestUpsertPostgresql(OnConflictTestCase):
             ('zaizee', 'cat', '124'),
             ('foo', 'bar', '125.1')])
 
+        # Conflicts on first/last name. The first name is preserved while the
+        # last-name is updated. The new empno is thrown out.
+        res = (Emp
+               .insert(first='foo', last='bar', empno='126')
+               .on_conflict(
+                   conflict_target=(Emp.first, Emp.last),
+                   preserve=(Emp.first,),
+                   update={Emp.last: 'baze'})
+               .execute())
+        self.assertData([
+            ('huey', 'cat', '123'),
+            ('zaizee', 'cat', '124'),
+            ('foo', 'baze', '125.1')])
+
+    @requires_models(OCTest)
+    @skip_unless(IS_SQLITE_24)
+    def test_update_atomic(self):
+        # Add a new row with the given "a" value. If a conflict occurs,
+        # re-insert with b=b+2.
+        query = OCTest.insert(a='foo', b=1).on_conflict(
+            conflict_target=(OCTest.a,),
+            update={OCTest.b: OCTest.b + 2})
+
+        # Sanity-check the SQL.
+        self.assertSQL(query, (
+            'INSERT INTO "octest" ("a", "b") VALUES (?, ?) '
+            'ON CONFLICT ("a") '
+            'DO UPDATE SET "b" = ("octest"."b" + ?)'), ['foo', 1, 2])
+
+        # First execution returns rowid=1. Second execution hits the conflict-
+        # resolution, and will update the value in "b" from 1 -> 3.
+        rowid1 = query.execute()
+        rowid2 = query.clone().execute()
+        self.assertEqual(rowid1, rowid2)
+
+        obj = OCTest.get()
+        self.assertEqual(obj.a, 'foo')
+        self.assertEqual(obj.b, 3)
+
+    @requires_models(OCTest)
+    @skip_unless(IS_SQLITE_24)
+    def test_update_where_clause(self):
+        # Add a new row with the given "a" value. If a conflict occurs,
+        # re-insert with b=b+2 so long as the original b < 3.
+        query = OCTest.insert(a='foo', b=1).on_conflict(
+            conflict_target=(OCTest.a,),
+            update={OCTest.b: OCTest.b + 2},
+            where=(OCTest.b < 3))
+        self.assertSQL(query, (
+            'INSERT INTO "octest" ("a", "b") VALUES (?, ?) '
+            'ON CONFLICT ("a") DO UPDATE SET "b" = ("octest"."b" + ?) '
+            'WHERE ("octest"."b" < ?)'), ['foo', 1, 2, 3])
+
+        # First execution returns rowid=1. Second execution hits the conflict-
+        # resolution, and will update the value in "b" from 1 -> 3.
+        rowid1 = query.execute()
+        rowid2 = query.clone().execute()
+        self.assertEqual(rowid1, rowid2)
+
+        obj = OCTest.get()
+        self.assertEqual(obj.a, 'foo')
+        self.assertEqual(obj.b, 3)
+
+        # Third execution also returns rowid=1. The WHERE clause prevents us
+        # from updating "b" again, so it remains 3.
+        rowid3 = query.clone().execute()
+        self.assertEqual(rowid1, rowid3)
+
+        # Because we didn't satisfy the WHERE clause, the value in "b" is
+        # not incremented again.
+        obj = OCTest.get()
+        self.assertEqual(obj.a, 'foo')
+        self.assertEqual(obj.b, 3)
+
+    @skip_unless(IS_SQLITE_24)
+    def test_do_nothing(self):
+        query = (Emp
+                 .insert(first='foo', last='bar', empno='123')
+                 .on_conflict('nothing'))
+        self.assertSQL(query, (
+            'INSERT INTO "emp" ("first", "last", "empno") '
+            'VALUES (?, ?, ?) ON CONFLICT DO NOTHING'), ['foo', 'bar', '123'])
+
+        query.execute()  # Conflict occurs with empno='123'.
+        self.assertData(list(self.test_data))
+
+
+@skip_case_unless(IS_POSTGRESQL)
+class TestUpsertPostgresql(OnConflictTestCase):
+    def test_update(self):
+        # Conflict on empno - we'll preserve name and update the ID. This will
+        # overwrite the previous row and set a new ID.
+        res = (Emp
+               .insert(first='foo', last='bar', empno='125')
+               .on_conflict(
+                   conflict_target=(Emp.empno,),
+                   preserve=(Emp.first, Emp.last),
+                   update={Emp.empno: '125.1'})
+               .execute())
+        self.assertData([
+            ('huey', 'cat', '123'),
+            ('zaizee', 'cat', '124'),
+            ('foo', 'bar', '125.1')])
+
+        # Conflicts on first/last name. The first name is preserved while the
+        # last-name is updated. The new empno is thrown out.
         res = (Emp
                .insert(first='foo', last='bar', empno='126')
                .on_conflict(
@@ -2256,6 +2416,8 @@ class TestUpsertPostgresql(OnConflictTestCase):
 
     @requires_models(OCTest)
     def test_update_atomic(self):
+        # Add a new row with the given "a" value. If a conflict occurs,
+        # re-insert with b=b+2.
         query = OCTest.insert(a='foo', b=1).on_conflict(
             conflict_target=(OCTest.a,),
             update={OCTest.b: OCTest.b + 2})
@@ -2264,6 +2426,8 @@ class TestUpsertPostgresql(OnConflictTestCase):
             'ON CONFLICT ("a") DO UPDATE SET "b" = ("octest"."b" + ?) '
             'RETURNING "id"'), ['foo', 1, 2])
 
+        # First execution returns rowid=1. Second execution hits the conflict-
+        # resolution, and will update the value in "b" from 1 -> 3.
         rowid1 = query.execute()
         rowid2 = query.clone().execute()
         self.assertEqual(rowid1, rowid2)
@@ -2274,6 +2438,8 @@ class TestUpsertPostgresql(OnConflictTestCase):
 
     @requires_models(OCTest)
     def test_update_where_clause(self):
+        # Add a new row with the given "a" value. If a conflict occurs,
+        # re-insert with b=b+2 so long as the original b < 3.
         query = OCTest.insert(a='foo', b=1).on_conflict(
             conflict_target=(OCTest.a,),
             update={OCTest.b: OCTest.b + 2},
@@ -2284,6 +2450,8 @@ class TestUpsertPostgresql(OnConflictTestCase):
             'WHERE ("octest"."b" < ?) '
             'RETURNING "id"'), ['foo', 1, 2, 3])
 
+        # First execution returns rowid=1. Second execution hits the conflict-
+        # resolution, and will update the value in "b" from 1 -> 3.
         rowid1 = query.execute()
         rowid2 = query.clone().execute()
         self.assertEqual(rowid1, rowid2)
@@ -2292,8 +2460,10 @@ class TestUpsertPostgresql(OnConflictTestCase):
         self.assertEqual(obj.a, 'foo')
         self.assertEqual(obj.b, 3)
 
+        # Third execution returns rowid=None. The WHERE clause prevents us
+        # from updating "b" again, so nothing happened.
         rowid3 = query.clone().execute()
-        self.assertEqual(rowid1, rowid2)
+        self.assertTrue(rowid3 is None)
 
         # Because we didn't satisfy the WHERE clause, the value in "b" is
         # not incremented again.
