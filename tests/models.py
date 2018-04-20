@@ -64,7 +64,7 @@ if IS_MYSQL:
             server_info = conn.get_server_version()
             MYSQL_WINDOW_QUERIES = server_info[0] >= 8
         except AttributeError:
-            pass
+            print('Could not determine mysql server version.')
     db.close()
     if not MYSQL_WINDOW_QUERIES:
         print('MySQL too old to test window query integration.')
