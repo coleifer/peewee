@@ -1277,7 +1277,7 @@ class TestJoinModelAlias(ModelTestCase):
                 self.assertEqual(data, [('meow', 'huey'), ('purr', 'huey')])
 
 
-@skip_case_unless(isinstance(db, PostgresqlDatabase))
+@skip_case_unless(IS_POSTGRESQL)
 class TestWindowFunctionIntegration(ModelTestCase):
     requires = [Sample]
 
@@ -1438,7 +1438,7 @@ class TestWindowFunctionIntegration(ModelTestCase):
             (3, 100., 104.)])
 
 
-@skip_case_unless(isinstance(db, PostgresqlDatabase))
+@skip_case_unless(IS_POSTGRESQL)
 class TestForUpdateIntegration(ModelTestCase):
     requires = [User]
 
@@ -1504,7 +1504,7 @@ class ServerDefault(TestModel):
     timestamp = DateTimeField(constraints=[SQL('default (now())')])
 
 
-@skip_case_unless(isinstance(db, PostgresqlDatabase))
+@skip_case_unless(IS_POSTGRESQL)
 class TestReturningIntegration(ModelTestCase):
     requires = [User]
 
@@ -1662,8 +1662,7 @@ class TestReturningIntegration(ModelTestCase):
 supports_tuples = sqlite3.sqlite_version_info >= (3, 15, 0)
 
 
-@skip_case_unless(isinstance(db, PostgresqlDatabase) or
-                  (isinstance(db, SqliteDatabase) and supports_tuples))
+@skip_case_unless(IS_POSTGRESQL or (IS_SQLITE and supports_tuples))
 class TestTupleComparison(ModelTestCase):
     requires = [User]
 
