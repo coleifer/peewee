@@ -11,9 +11,10 @@ env:
   - PEEWEE_TEST_BACKEND=mysql
 addons:
   postgresql: "9.6"
+  mariadb: "10.3"
 services:
   - postgresql
-  - mysql
+  - mariadb
 install: "pip install psycopg2-binary Cython pymysql apsw mysql-connector"
 before_script:
   - python setup.py build_ext -i
