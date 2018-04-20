@@ -57,11 +57,13 @@ if IS_MYSQL:
     try:
         # pymysql
         server_info = conn.server_version
+        print('MySQL server info: %s' % server_info)
         MYSQL_WINDOW_QUERIES = 'MariaDB-10.' in server_info
     except AttributeError:
         try:
             # mysql-connector
             server_info = conn.get_server_version()
+            print('MySQL server info: %s' % server_info)
             MYSQL_WINDOW_QUERIES = server_info[0] >= 8
         except AttributeError:
             print('Could not determine mysql server version.')
