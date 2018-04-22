@@ -206,6 +206,22 @@ class TestSelectQuery(BaseTestCase):
             'SELECT "t2"."username" FROM "users" AS "t2" '
             'WHERE ("t2"."id" IN "user_ids")'), [])
 
+    def test_two_ctes(self):
+        c1 = User.select(User.c.id).cte('user_ids')
+        c2 = User.select(User.c.username).cte('user_names')
+        query = (User
+                 .select(c1.c.id, c2.c.username)
+                 .where((c1.c.id == User.c.id) &
+                        (c2.c.username == User.c.username))
+                 .with_cte(c1, c2))
+        self.assertSQL(query, (
+            'WITH "user_ids" AS (SELECT "t1"."id" FROM "users" AS "t1"), '
+            '"user_names" AS (SELECT "t1"."username" FROM "users" AS "t1") '
+            'SELECT "user_ids"."id", "user_names"."username" '
+            'FROM "users" AS "t2" '
+            'WHERE (("user_ids"."id" = "t2"."id") AND '
+            '("user_names"."username" = "t2"."username"))'), [])
+
     def test_complex_select(self):
         Order = Table('orders', columns=(
             'region',
