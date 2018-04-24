@@ -1660,6 +1660,11 @@ class TestReturningIntegration(ModelTestCase):
         self.assertEqual(user.id, zaizee_id)
 
 
+class Member(TestModel):
+    name = TextField()
+    recommendedby = ForeignKeyField('self', null=True)
+
+
 class TestCTEIntegration(ModelTestCase):
     requires = [Category]
 
@@ -1673,6 +1678,35 @@ class TestCTEIntegration(ModelTestCase):
         c11 = CC(name='c11', parent=p1)
         c12 = CC(name='c12', parent=p1)
         c31 = CC(name='c31', parent=p3)
+
+    @requires_models(Member)
+    @skip_if(IS_SQLITE_OLD or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES))
+    def test_docs_example(self):
+        f = Member.create(name='founder')
+        gen2_1 = Member.create(name='g2-1', recommendedby=f)
+        gen2_2 = Member.create(name='g2-2', recommendedby=f)
+        gen2_3 = Member.create(name='g2-3', recommendedby=f)
+        gen3_1_1 = Member.create(name='g3-1-1', recommendedby=gen2_1)
+        gen3_1_2 = Member.create(name='g3-1-2', recommendedby=gen2_1)
+        gen3_3_1 = Member.create(name='g3-3-1', recommendedby=gen2_3)
+
+        # Get recommender chain for 331.
+        base = (Member
+                .select(Member.recommendedby)
+                .where(Member.id == gen3_3_1.id)
+                .cte('recommenders', recursive=True, columns=('recommender',)))
+
+        MA = Member.alias()
+        recursive = (MA
+                     .select(MA.recommendedby)
+                     .join(base, on=(MA.id == base.c.recommender)))
+
+        cte = base.union_all(recursive)
+        query = (cte
+                 .select_from(cte.c.recommender, Member.name)
+                 .join(Member, on=(cte.c.recommender == Member.id))
+                 .order_by(Member.id.desc()))
+        self.assertEqual([m.name for m in query], ['g2-3', 'founder'])
 
     @skip_if(IS_SQLITE_OLD or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES))
     def test_simple_cte(self):

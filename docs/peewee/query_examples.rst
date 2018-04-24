@@ -1359,18 +1359,23 @@ Return member ID, first name, and surname. Order by descending member id.
 
 .. code-block:: python
 
-    MA = Member.alias()
-    Recommenders = Table('recommenders')  # Obtain reference to cte name.
-    lhs = Member.select(Member.recommendedby).where(Member.memid == 27)
-    rhs = (Recommenders
-           .select(MA.recommendedby)
-           .join(MA, on=(MA.memid == Recommenders.c.recommender)))
-    cte = (lhs + rhs).cte('recommenders', recursive=True, columns=['recommender'])
+    # Base-case of recursive CTE. Get member recommender where memid=27.
+    base = (Member
+            .select(Member.recommendedby)
+            .where(Member.memid == 27)
+            .cte('recommenders', recursive=True, columns=('recommender',)))
 
-    query = (Select(columns=[cte.c.recommender, Member.firstname,
-                             Member.surname])
-             .from_(cte)
+    # Recursive term of CTE. Get recommender of previous recommender.
+    MA = Member.alias()
+    recursive = (MA
+                 .select(MA.recommendedby)
+                 .join(base, on=(MA.memid == base.c.recommender)))
+
+    # Combine the base-case with the recursive term.
+    cte = base.union_all(recursive)
+
+    # Select from the recursive CTE, joining on member to get name info.
+    query = (cte
+             .select_from(cte.c.recommender, Member.firstname, Member.surname)
              .join(Member, on=(cte.c.recommender == Member.memid))
-             .with_cte(cte)
-             .order_by(Member.memid.desc())
-             .bind(db))
+             .order_by(Member.memid.desc()))
