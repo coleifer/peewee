@@ -1674,6 +1674,34 @@ class TestCTEIntegration(ModelTestCase):
         c12 = CC(name='c12', parent=p1)
         c31 = CC(name='c31', parent=p3)
 
+    @skip_if(IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES)
+    def test_simple_cte(self):
+        cte = (Category
+               .select(Category.name)
+               .cte('parents', columns=('name',)))
+
+        query = (Category
+                 .select(Category.name, cte.c.name.alias('pname'))
+                 .join(cte, on=(Category.parent == cte.c.name))
+                 .order_by(Category.name)
+                 .with_cte(cte))
+
+        self.assertSQL(query, (
+            'WITH "parents" ("name") AS ('
+            'SELECT "t1"."name" FROM "category" AS "t1") '
+            'SELECT "t2"."name", "parents"."name" AS "pname" '
+            'FROM "category" AS "t2" '
+            'INNER JOIN "parents" ON ("t2"."parent_id" = "parents"."name") '
+            'ORDER BY "t2"."name"'), [])
+        self.assertEqual([(c.name, c.parents['pname']) for c in query], [
+            ('c11', 'p1'),
+            ('c12', 'p1'),
+            ('c31', 'p3'),
+            ('p1', 'root'),
+            ('p2', 'root'),
+            ('p3', 'root'),
+        ])
+
     @skip_if(IS_SQLITE_OLD or IS_MYSQL)
     def test_recursive_cte(self):
         def get_parents(cname):
