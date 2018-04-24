@@ -917,6 +917,10 @@ class CTE(_HashableSource, Source):
     def _get_hash(self):
         return hash((self.__class__, self._alias, id(self._query)))
 
+    def __add__(self, rhs):
+        clone = self._query.clone()
+        return CTE(self._alias, clone + rhs, self._recursive, self._columns)
+
     def __sql__(self, ctx):
         if ctx.scope != SCOPE_CTE:
             return ctx.sql(Entity(self._alias))

@@ -1660,6 +1660,84 @@ class TestReturningIntegration(ModelTestCase):
         self.assertEqual(user.id, zaizee_id)
 
 
+class TestCTEIntegration(ModelTestCase):
+    requires = [Category]
+
+    def setUp(self):
+        super(TestCTEIntegration, self).setUp()
+        CC = Category.create
+        root = CC(name='root')
+        p1 = CC(name='p1', parent=root)
+        p2 = CC(name='p2', parent=root)
+        p3 = CC(name='p3', parent=root)
+        c11 = CC(name='c11', parent=p1)
+        c12 = CC(name='c12', parent=p1)
+        c31 = CC(name='c31', parent=p3)
+
+    @skip_if(IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES)
+    def test_recursive_cte(self):
+        def get_parents(cname):
+            C1 = Category.alias()
+            C2 = Category.alias()
+
+            level = SQL('1').cast('integer').alias('level')
+            path = C1.name.cast('text').alias('path')
+
+            base = (C1
+                    .select(C1.name, C1.parent, level, path)
+                    .where(C1.name == cname)
+                    .cte('parents', recursive=True))
+
+            rlevel = (base.c.level + 1).alias('level')
+            rpath = base.c.path.concat('->').concat(C2.name).alias('path')
+            recursive = (C2
+                         .select(C2.name, C2.parent, rlevel, rpath)
+                         .from_(base)
+                         .join(C2, on=(C2.name == base.c.parent_id)))
+
+            cte = base + recursive
+            query = (Category
+                     .select(cte.c.name, cte.c.level, cte.c.path)
+                     .join(cte, on=(Category.name == cte.c.name))
+                     .order_by(cte.c.level)
+                     .with_cte(cte))
+            self.assertSQL(query, (
+                'WITH RECURSIVE "parents" AS ('
+                'SELECT "t1"."name", "t1"."parent_id", '
+                'CAST(1 AS integer) AS "level", '
+                'CAST("t1"."name" AS text) AS "path" '
+                'FROM "category" AS "t1" '
+                'WHERE ("t1"."name" = ?) '
+                'UNION ALL '
+                'SELECT "t2"."name", "t2"."parent_id", '
+                '("parents"."level" + ?) AS "level", '
+                '(("parents"."path" || ?) || "t2"."name") AS "path" '
+                'FROM "parents" '
+                'INNER JOIN "category" AS "t2" '
+                'ON ("t2"."name" = "parents"."parent_id")) '
+                'SELECT "parents"."name", "parents"."level", "parents"."path" '
+                'FROM "category" AS "t3" '
+                'INNER JOIN "parents" ON ("t3"."name" = "parents"."name") '
+                'ORDER BY "parents"."level"'), [cname, 1, '->'])
+            return query
+
+        data = [row for row in get_parents('c31').tuples()]
+        self.assertEqual(data, [
+            ('c31', 1, 'c31'),
+            ('p3', 2, 'c31->p3'),
+            ('root', 3, 'c31->p3->root')])
+
+        data = [(c.name, c.level, c.path)
+                for c in get_parents('c12').namedtuples()]
+        self.assertEqual(data, [
+            ('c12', 1, 'c12'),
+            ('p1', 2, 'c12->p1'),
+            ('root', 3, 'c12->p1->root')])
+
+        data = [r for r in get_parents('root').tuples()]
+        self.assertEqual(data, [('root', 1, 'root')])
+
+
 @skip_case_unless(IS_POSTGRESQL or IS_SQLITE_15)
 class TestTupleComparison(ModelTestCase):
     requires = [User]
