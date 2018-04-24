@@ -1674,7 +1674,7 @@ class TestCTEIntegration(ModelTestCase):
         c12 = CC(name='c12', parent=p1)
         c31 = CC(name='c31', parent=p3)
 
-    @skip_if(IS_SQLITE_OLD or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES))
+    @skip_if(IS_SQLITE_OLD or IS_MYSQL)
     def test_recursive_cte(self):
         def get_parents(cname):
             C1 = Category.alias()
