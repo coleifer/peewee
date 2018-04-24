@@ -914,6 +914,16 @@ class CTE(_HashableSource, Source):
         self._columns = columns
         super(CTE, self).__init__(alias=name)
 
+    def select(self, *columns):
+        query = (Select((self,), columns)
+                 .with_cte(self)
+                 .bind(self._query._database))
+        try:
+            query = query.objects(self._query.model)
+        except AttributeError:
+            pass
+        return query
+
     def _get_hash(self):
         return hash((self.__class__, self._alias, id(self._query)))
 

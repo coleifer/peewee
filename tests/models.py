@@ -1674,8 +1674,34 @@ class TestCTEIntegration(ModelTestCase):
         c12 = CC(name='c12', parent=p1)
         c31 = CC(name='c31', parent=p3)
 
-    @skip_if(IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES)
+    @skip_if(IS_SQLITE_OLD or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES))
     def test_simple_cte(self):
+        cte = (Category
+               .select(Category.name, Category.parent)
+               .cte('catz', columns=('name', 'parent')))
+
+        query = (cte
+                 .select(cte.c.name, cte.c.parent.alias('pname'))
+                 .order_by(cte.c.name))
+        self.assertSQL(query, (
+            'WITH "catz" ("name", "parent") AS ('
+            'SELECT "t1"."name", "t1"."parent_id" '
+            'FROM "category" AS "t1") '
+            'SELECT "catz"."name", "catz"."parent" AS "pname" '
+            'FROM "catz" '
+            'ORDER BY "catz"."name"'), [])
+
+        self.assertEqual([(row.name, row.pname) for row in query], [
+            ('c11', 'p1'),
+            ('c12', 'p1'),
+            ('c31', 'p3'),
+            ('p1', 'root'),
+            ('p2', 'root'),
+            ('p3', 'root'),
+            ('root', None)])
+
+    @skip_if(IS_SQLITE_OLD or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES))
+    def test_cte_join(self):
         cte = (Category
                .select(Category.name)
                .cte('parents', columns=('name',)))
@@ -1724,11 +1750,9 @@ class TestCTEIntegration(ModelTestCase):
                          .join(C2, on=(C2.name == base.c.parent_id)))
 
             cte = base + recursive
-            query = (Category
+            query = (cte
                      .select(cte.c.name, cte.c.level, cte.c.path)
-                     .join(cte, on=(Category.name == cte.c.name))
-                     .order_by(cte.c.level)
-                     .with_cte(cte))
+                     .order_by(cte.c.level))
             self.assertSQL(query, (
                 'WITH RECURSIVE "parents" AS ('
                 'SELECT "t1"."name", "t1"."parent_id", '
@@ -1744,8 +1768,7 @@ class TestCTEIntegration(ModelTestCase):
                 'INNER JOIN "category" AS "t2" '
                 'ON ("t2"."name" = "parents"."parent_id")) '
                 'SELECT "parents"."name", "parents"."level", "parents"."path" '
-                'FROM "category" AS "t3" '
-                'INNER JOIN "parents" ON ("t3"."name" = "parents"."name") '
+                'FROM "parents" '
                 'ORDER BY "parents"."level"'), [cname, 1, '->'])
             return query
 
@@ -1763,7 +1786,7 @@ class TestCTEIntegration(ModelTestCase):
             ('root', 3, 'c12->p1->root')])
 
         query = get_parents('root')
-        data = [(r.name, r.level, r.path) for r in query.objects()]
+        data = [(r.name, r.level, r.path) for r in query]
         self.assertEqual(data, [('root', 1, 'root')])
 
 
