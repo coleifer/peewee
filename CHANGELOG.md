@@ -5,6 +5,19 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.3.0
+
+* Added support for SQLite's new `ON CONFLICT` clause, which is modelled on the
+  syntax used by Postgresql and will be available in SQLite 3.24.0 and onward.
+* Added better support for using common table expressions and a cleaner way of
+  implementing recursive CTEs, both of which are also tested with integration
+  tests (as opposed to just checking the generated SQL).
+* Modernized the CI environment to utilize the latest MariaDB features, so we
+  can test window functions and CTEs with MySQL (when available).
+* Reorganized and unified the feature-flags in the test suite.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.2.5...3.3.0)
+
 ## 3.2.5
 
 * Added `ValuesList` for representing values lists. [Docs](http://docs.peewee-orm.com/en/latest/peewee/api.html#ValuesList).
