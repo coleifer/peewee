@@ -1798,6 +1798,31 @@ class TestCTEIntegration(ModelTestCase):
         data = [(r.name, r.level, r.path) for r in query]
         self.assertEqual(data, [('root', 1, 'root')])
 
+    @skip_if(IS_SQLITE_OLD or IS_MYSQL)
+    def test_recursive_cte2(self):
+        hierarchy = (Category
+                     .select(Category.name, Value(0).alias('level'))
+                     .where(Category.parent.is_null(True))
+                     .cte(name='hierarchy', recursive=True))
+
+        C = Category.alias()
+        recursive = (C
+                     .select(C.name, (hierarchy.c.level + 1).alias('level'))
+                     .join(hierarchy, on=(C.parent == hierarchy.c.name)))
+
+        cte = hierarchy.union_all(recursive)
+        query = (cte
+                 .select_from(cte.c.name, cte.c.level)
+                 .order_by(cte.c.name))
+        self.assertEqual([(r.name, r.level) for r in query], [
+            ('c11', 2),
+            ('c12', 2),
+            ('c31', 2),
+            ('p1', 1),
+            ('p2', 1),
+            ('p3', 1),
+            ('root', 0)])
+
 
 @skip_case_unless(IS_POSTGRESQL or IS_SQLITE_15)
 class TestTupleComparison(ModelTestCase):
