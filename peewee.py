@@ -914,7 +914,7 @@ class CTE(_HashableSource, Source):
         self._columns = columns
         super(CTE, self).__init__(alias=name)
 
-    def select(self, *columns):
+    def select_from(self, *columns):
         query = (Select((self,), columns)
                  .with_cte(self)
                  .bind(self._query._database))

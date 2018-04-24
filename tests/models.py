@@ -1680,16 +1680,23 @@ class TestCTEIntegration(ModelTestCase):
                .select(Category.name, Category.parent)
                .cte('catz', columns=('name', 'parent')))
 
-        query = (cte
+        cte_sql = ('WITH "catz" ("name", "parent") AS ('
+                   'SELECT "t1"."name", "t1"."parent_id" '
+                   'FROM "category" AS "t1") '
+                   'SELECT "catz"."name", "catz"."parent" AS "pname" '
+                   'FROM "catz" '
+                   'ORDER BY "catz"."name"')
+
+        query = (Category
                  .select(cte.c.name, cte.c.parent.alias('pname'))
-                 .order_by(cte.c.name))
-        self.assertSQL(query, (
-            'WITH "catz" ("name", "parent") AS ('
-            'SELECT "t1"."name", "t1"."parent_id" '
-            'FROM "category" AS "t1") '
-            'SELECT "catz"."name", "catz"."parent" AS "pname" '
-            'FROM "catz" '
-            'ORDER BY "catz"."name"'), [])
+                 .from_(cte)
+                 .order_by(cte.c.name)
+                 .with_cte(cte))
+        self.assertSQL(query, cte_sql, [])
+
+        query2 = (cte.select_from(cte.c.name, cte.c.parent.alias('pname'))
+                  .order_by(cte.c.name))
+        self.assertSQL(query2, cte_sql, [])
 
         self.assertEqual([(row.name, row.pname) for row in query], [
             ('c11', 'p1'),
@@ -1699,6 +1706,8 @@ class TestCTEIntegration(ModelTestCase):
             ('p2', 'root'),
             ('p3', 'root'),
             ('root', None)])
+        self.assertEqual([(row.name, row.pname) for row in query],
+                         [(row.name, row.pname) for row in query2])
 
     @skip_if(IS_SQLITE_OLD or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES))
     def test_cte_join(self):
@@ -1751,7 +1760,7 @@ class TestCTEIntegration(ModelTestCase):
 
             cte = base + recursive
             query = (cte
-                     .select(cte.c.name, cte.c.level, cte.c.path)
+                     .select_from(cte.c.name, cte.c.level, cte.c.path)
                      .order_by(cte.c.level))
             self.assertSQL(query, (
                 'WITH RECURSIVE "parents" AS ('

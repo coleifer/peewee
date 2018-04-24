@@ -1039,9 +1039,10 @@ Query-builder
     :param bool recursive: Whether the CTE is recursive.
     :param list columns: Explicit list of columns produced by CTE (optional).
 
-    .. py:method:: select(*columns)
+    .. py:method:: select_from(*columns)
 
-        Create a SELECT query that utilizes the given common table expression.
+        Create a SELECT query that utilizes the given common table expression
+        as the source for a new query.
 
         :param columns: One or more columns to select from the CTE.
         :return: :py:class:`Select` query utilizing the common table expression
