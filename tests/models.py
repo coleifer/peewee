@@ -1674,7 +1674,7 @@ class TestCTEIntegration(ModelTestCase):
         c12 = CC(name='c12', parent=p1)
         c31 = CC(name='c31', parent=p3)
 
-    @skip_if(IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES)
+    @skip_if(IS_SQLITE_OLD or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES))
     def test_recursive_cte(self):
         def get_parents(cname):
             C1 = Category.alias()
@@ -1734,7 +1734,8 @@ class TestCTEIntegration(ModelTestCase):
             ('p1', 2, 'c12->p1'),
             ('root', 3, 'c12->p1->root')])
 
-        data = [r for r in get_parents('root').tuples()]
+        query = get_parents('root')
+        data = [(r.name, r.level, r.path) for r in query.objects()]
         self.assertEqual(data, [('root', 1, 'root')])
 
 
