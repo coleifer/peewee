@@ -222,6 +222,30 @@ class TestSelectQuery(BaseTestCase):
             'WHERE (("user_ids"."id" = "t2"."id") AND '
             '("user_names"."username" = "t2"."username"))'), [])
 
+    def test_fibonacci_cte(self):
+        q1 = Select(columns=(
+            Value(1).alias('n'),
+            Value(0).alias('fib_n'),
+            Value(1).alias('next_fib_n'))).cte('fibonacci', recursive=True)
+        n = (q1.c.n + 1).alias('n')
+        rterm = Select(columns=(
+            n,
+            q1.c.next_fib_n,
+            q1.c.fib_n + q1.c.next_fib_n)).from_(q1).where(n < 10)
+
+        cte = q1.union_all(rterm)
+        query = cte.select_from(cte.c.n, cte.c.fib_n)
+        self.assertSQL(query, (
+            'WITH RECURSIVE "fibonacci" AS ('
+            'SELECT ? AS "n", ? AS "fib_n", ? AS "next_fib_n" '
+            'UNION ALL '
+            'SELECT ("fibonacci"."n" + ?) AS "n", "fibonacci"."next_fib_n", '
+            '("fibonacci"."fib_n" + "fibonacci"."next_fib_n") '
+            'FROM "fibonacci" '
+            'WHERE ("n" < ?)) '
+            'SELECT "fibonacci"."n", "fibonacci"."fib_n" '
+            'FROM "fibonacci"'), [1, 0, 1, 1, 10])
+
     def test_complex_select(self):
         Order = Table('orders', columns=(
             'region',
