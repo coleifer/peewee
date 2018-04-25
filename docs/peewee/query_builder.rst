@@ -347,6 +347,39 @@ the outer query:
     for facid, total in query.execute(db):
         print(facid, total)
 
+For another example, let's create a recursive common table expression to
+calculate the first 10 fibonacci numbers:
+
+.. code-block:: python
+
+    base = Select(columns=(
+        Value(1).alias('n'),
+        Value(0).alias('fib_n'),
+        Value(1).alias('next_fib_n'))).cte('fibonacci', recursive=True)
+
+    n = (base.c.n + 1).alias('n')
+    recursive_term = Select(columns=(
+        n,
+        base.c.next_fib_n,
+        base.c.fib_n + base.c.next_fib_n)).from_(base).where(n < 10)
+
+    fibonacci = base.union_all(recursive_term)
+    query = fibonacci.select_from(fibonacci.c.n, fibonacci.c.fib_n)
+
+    results = list(query.execute(db))
+
+    # Generates the following result list:
+    [{'fib_n': 0, 'n': 1},
+     {'fib_n': 1, 'n': 2},
+     {'fib_n': 1, 'n': 3},
+     {'fib_n': 2, 'n': 4},
+     {'fib_n': 3, 'n': 5},
+     {'fib_n': 5, 'n': 6},
+     {'fib_n': 8, 'n': 7},
+     {'fib_n': 13, 'n': 8},
+     {'fib_n': 21, 'n': 9},
+     {'fib_n': 34, 'n': 10}]
+
 More
 ----
 
