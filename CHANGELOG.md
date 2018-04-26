@@ -5,6 +5,16 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.3.1
+
+* Fixed long-standing bug in 3.x regarding using column aliases with queries
+  that utilize the ModelCursorWrapper (typically queries with one or more
+  joins).
+* Fix typo in model metadata code, thanks @klen.
+* Add examples of using recursive CTEs to docs.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.3.0...3.3.1)
+
 ## 3.3.0
 
 * Added support for SQLite's new `ON CONFLICT` clause, which is modelled on the
