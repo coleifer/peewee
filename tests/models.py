@@ -1166,6 +1166,25 @@ class TestJoinModelAlias(ModelTestCase):
     def test_control(self):
         self.assertTweets(self._test_query(lambda: User).join(User))
 
+    def test_join_aliased_columns(self):
+        query = (Tweet
+                 .select(Tweet.id.alias('tweet_id'), Tweet.content)
+                 .order_by(Tweet.id))
+        self.assertEqual([(t.tweet_id, t.content) for t in query], [
+            (1, 'meow'),
+            (2, 'purr'),
+            (3, 'hiss'),
+            (4, 'woof')])
+
+        query = (Tweet
+                 .select(Tweet.id.alias('tweet_id'), Tweet.content)
+                 .join(User)
+                 .where(User.username == 'huey')
+                 .order_by(Tweet.id))
+        self.assertEqual([(t.tweet_id, t.content) for t in query], [
+            (1, 'meow'),
+            (2, 'purr')])
+
     def test_join(self):
         UA = User.alias('ua')
         query = self._test_query(lambda: UA).join(UA)

@@ -6188,7 +6188,6 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
                     dests.add(key)
                     accum.append(key)
 
-
         for src, _, dest, _ in self.src_to_dest:
             self.src_is_dest[src] = src in dests and (dest in selected_src
                                                       or src in selected_src)
@@ -6220,10 +6219,7 @@ class ModelCursorWrapper(BaseModelCursorWrapper):
         set_keys = set()
         for idx, key in enumerate(self.column_keys):
             instance = objects[key]
-            if self.fields[idx] is not None:
-                column = self.fields[idx].name
-            else:
-                column = self.columns[idx]
+            column = self.columns[idx]
             value = row[idx]
             if value is not None:
                 set_keys.add(key)
