@@ -4826,7 +4826,7 @@ class Metadata(object):
     def remove_ref(self, field):
         rel = field.rel_model
         del self.refs[field]
-        self.model_ref[rel].remove(field)
+        self.model_refs[rel].remove(field)
         del rel._meta.backrefs[field]
         rel._meta.model_backrefs[self.model].remove(field)
 
