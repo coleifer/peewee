@@ -603,13 +603,14 @@ class TestModelAPIs(ModelTestCase):
                  .select(User.id, User.username)
                  .where(User.username.in_(['huey', 'zaizee'])))
         query = (Tweet
-                 .select(Tweet.content, users.c.username)
+                 .select(Tweet.content.alias('content'),
+                         users.c.username.alias('username'))
                  .join(users, on=(Tweet.user == users.c.id))
                  .order_by(Tweet.id))
 
         self.assertSQL(query, (
-            'SELECT "t1"."content", "t2"."username" '
-            'FROM "tweet" AS "t1" '
+            'SELECT "t1"."content" AS "content", "t2"."username" AS "username"'
+            ' FROM "tweet" AS "t1" '
             'INNER JOIN (SELECT "t3"."id", "t3"."username" '
             'FROM "users" AS "t3" '
             'WHERE ("t3"."username" IN (?, ?))) AS "t2" '
@@ -617,16 +618,10 @@ class TestModelAPIs(ModelTestCase):
             'ORDER BY "t1"."id"'), ['huey', 'zaizee'])
         with self.assertQueryCount(1):
             results = [(t.content, t.user.username) for t in query]
-            if IS_SQLITE_OLD:
-                self.assertEqual(results, [
-                    ('meow', None),
-                    ('purr', None),
-                    ('hiss', None)])
-            else:
-                self.assertEqual(results, [
-                    ('meow', 'huey'),
-                    ('purr', 'huey'),
-                    ('hiss', 'huey')])
+            self.assertEqual(results, [
+                ('meow', 'huey'),
+                ('purr', 'huey'),
+                ('hiss', 'huey')])
 
     @requires_models(User, Tweet)
     @skip_if(IS_SQLITE_OLD or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES))
