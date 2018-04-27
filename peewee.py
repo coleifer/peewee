@@ -5552,8 +5552,11 @@ def sort_models(models):
     def dfs(model):
         if model in models and model not in seen:
             seen.add(model)
-            for rel_model in model._meta.refs.values():
-                dfs(rel_model)
+            for foreign_key, rel_model in model._meta.refs.items():
+                # Do not depth-first search deferred foreign-keys as this can
+                # cause tables to be created in the incorrect order.
+                if not foreign_key.deferred:
+                    dfs(rel_model)
             if model._meta.depends_on:
                 for dependency in model._meta.depends_on:
                     dfs(dependency)

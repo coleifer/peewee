@@ -4,6 +4,7 @@ import time
 import unittest
 
 from peewee import *
+from peewee import sort_models
 
 from .base import db
 from .base import get_in_memory_db
@@ -834,6 +835,14 @@ class TestModelAPIs(ModelTestCase):
         self.assertSQL(f.notes, (
             'SELECT "t1"."id", "t1"."foo_id" FROM "note" AS "t1" '
             'WHERE ("t1"."foo_id" = ?)'), [1337])
+
+    def test_deferred_fk_dependency_graph(self):
+        class AUser(TestModel):
+            foo = DeferredForeignKey('Tweet')
+        class ZTweet(TestModel):
+            user = ForeignKeyField(AUser, backref='ztweets')
+
+        self.assertEqual(sort_models([AUser, ZTweet]), [AUser, ZTweet])
 
     def test_table_schema(self):
         class Schema(TestModel):
