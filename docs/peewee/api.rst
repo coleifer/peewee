@@ -110,6 +110,8 @@ Database
 
     .. py:method:: cursor([commit=None])
 
+        :param commit: For internal use.
+
         Return a ``cursor`` object on the current connection. If a connection
         is not open, one will be opened. The cursor will be whatever the
         underlying database-driver uses to encapsulate a database cursor.

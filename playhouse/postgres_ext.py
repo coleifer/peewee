@@ -428,7 +428,7 @@ class PostgresqlExtDatabase(PostgresqlDatabase):
             register_hstore(conn, globally=True)
         return conn
 
-    def cursor(self, commit):
+    def cursor(self, commit=None):
         if self.is_closed():
             self.connect()
         if commit is __named_cursor__:
