@@ -5552,8 +5552,9 @@ def sort_models(models):
     def dfs(model):
         if model in models and model not in seen:
             seen.add(model)
-            for rel_model in model._meta.refs.values():
-                dfs(rel_model)
+            for rel_field, rel_model in model._meta.refs.items():
+                if not rel_field.deferred:
+                    dfs(rel_model)
             if model._meta.depends_on:
                 for dependency in model._meta.depends_on:
                     dfs(dependency)
