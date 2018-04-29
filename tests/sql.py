@@ -321,6 +321,34 @@ class TestSelectQuery(BaseTestCase):
             'FROM "users" AS "U2" '
             'WHERE ("U2"."superuser" = ?)'), ['charlie', True, False])
 
+    def test_compound_operations(self):
+        admin = (User
+                 .select(User.c.username, Value('admin').alias('role'))
+                 .where(User.c.is_admin == True))
+        editors = (User
+                   .select(User.c.username, Value('editor').alias('role'))
+                   .where(User.c.is_editor == True))
+
+        union = admin.union(editors)
+        self.assertSQL(union, (
+            'SELECT "t1"."username", ? AS "role" '
+            'FROM "users" AS "t1" '
+            'WHERE ("t1"."is_admin" = ?) '
+            'UNION '
+            'SELECT "t2"."username", ? AS "role" '
+            'FROM "users" AS "t2" '
+            'WHERE ("t2"."is_editor" = ?)'), ['admin', 1, 'editor', 1])
+
+        xcept = editors.except_(admin)
+        self.assertSQL(xcept, (
+            'SELECT "t1"."username", ? AS "role" '
+            'FROM "users" AS "t1" '
+            'WHERE ("t1"."is_editor" = ?) '
+            'EXCEPT '
+            'SELECT "t2"."username", ? AS "role" '
+            'FROM "users" AS "t2" '
+            'WHERE ("t2"."is_admin" = ?)'), ['editor', 1, 'admin', 1])
+
     def test_join_on_query(self):
         inner = User.select(User.c.id).alias('j1')
         query = (Tweet
