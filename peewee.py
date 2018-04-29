@@ -1725,10 +1725,10 @@ def __compound_select__(operation, inverted=False):
 
 
 class SelectQuery(Query):
-    __add__ = __compound_select__('UNION ALL')
-    __or__ = __compound_select__('UNION')
-    __and__ = __compound_select__('INTERSECT')
-    __sub__ = __compound_select__('EXCEPT')
+    union_all = __add__ = __compound_select__('UNION ALL')
+    union = __or__ = __compound_select__('UNION')
+    intersect = __and__ = __compound_select__('INTERSECT')
+    except_ = __sub__ = __compound_select__('EXCEPT')
     __radd__ = __compound_select__('UNION ALL', inverted=True)
     __ror__ = __compound_select__('UNION', inverted=True)
     __rand__ = __compound_select__('INTERSECT', inverted=True)

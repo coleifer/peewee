@@ -1690,17 +1690,34 @@ Query-builder
     Select query helper-class that implements operator-overloads for creating
     compound queries.
 
+    .. py:method:: union_all(dest)
+
+        Create a UNION ALL query with ``dest``.
+
     .. py:method:: __add__(dest)
 
         Create a UNION ALL query with ``dest``.
+
+    .. py:method:: union(dest)
+
+        Create a UNION query with ``dest``.
 
     .. py:method:: __or__(dest)
 
         Create a UNION query with ``dest``.
 
+    .. py:method:: intersect(dest)
+
+        Create an INTERSECT query with ``dest``.
+
     .. py:method:: __and__(dest)
 
         Create an INTERSECT query with ``dest``.
+
+    .. py:method:: except_(dest)
+
+        Create an EXCEPT query with ``dest``. Note that the method name has a
+        trailing "_" character since ``except`` is a Python reserved word.
 
     .. py:method:: __sub__(dest)
 
