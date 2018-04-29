@@ -24,6 +24,8 @@ Database
   well as :py:meth:`Model.create_table` and :py:meth:`Model.drop_table` all
   default to ``safe=True`` (``create_table`` will create if not exists, ``drop_table`` will drop if exists).
 * ``connect_kwargs`` attribute has been renamed to ``connect_params``
+* initialization parameter for custom field-type definitions has changed
+  from ``fields`` to ``field_types``.
 
 Model Meta options
 ^^^^^^^^^^^^^^^^^^
@@ -88,6 +90,9 @@ pattern of using :py:meth:`_WriteQuery.returning`.
 When using :py:func:`prefetch`, the collected instances will be stored in the
 same attribute as the foreign-key's ``backref``. Previously, you would access
 joined instances using ``(backref)_prefetch``.
+
+The :py:class:`SQL` object, used to create a composable a SQL string, now
+expects the second parameter to be a list/tuple of parameters.
 
 Removed Extensions
 ^^^^^^^^^^^^^^^^^^
