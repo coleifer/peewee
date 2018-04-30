@@ -368,7 +368,7 @@ class TestModelSQL(ModelDatabaseTestCase):
             'UPDATE "account" SET '
             '"contact_first" = "first", '
             '"contact_last" = "last" '
-            'FROM "salesperson" '
+            'FROM "salesperson" AS "t1" '
             'WHERE ("sales_id" = "id")'), [])
 
     def test_delete(self):
