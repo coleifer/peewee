@@ -2056,7 +2056,8 @@ class Update(_WriteQuery):
              .sql(CommaNodeList(expressions)))
 
             if self._from:
-                ctx.literal(' FROM ').sql(CommaNodeList(self._from))
+                with ctx.scope_source(parentheses=False):
+                    ctx.literal(' FROM ').sql(CommaNodeList(self._from))
 
             if self._where:
                 ctx.literal(' WHERE ').sql(self._where)

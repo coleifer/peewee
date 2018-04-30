@@ -4,6 +4,7 @@ import time
 import unittest
 
 from peewee import *
+from peewee import QualifiedNames
 from peewee import sort_models
 
 from .base import db
@@ -2991,3 +2992,27 @@ class TestSequence(ModelTestCase):
         self.assertEqual(s1.seq_id, 1)
         self.assertEqual(s2.seq_id, 2)
         self.assertEqual(s3.seq_id, 3)
+
+
+@skip_case_unless(IS_POSTGRESQL)
+class TestUpdateFrom(ModelTestCase):
+    requires = [User]
+
+    def test_update_from(self):
+        u1 = User.create(username='u1')
+        u2 = User.create(username='u2')
+        data = [(u1.id, 'u1-x'), (u2.id, 'u2-x')]
+        vl = ValuesList(data, columns=('id', 'username'), alias='tmp')
+        query = (User
+                 .update({User.username: QualifiedNames(vl.c.username)})
+                 .from_(vl)
+                 .where(QualifiedNames(User.id == vl.c.id)))
+        self.assertSQL(query, (
+            'UPDATE "users" SET "username" = "tmp"."username" '
+            'FROM (VALUES (?, ?), (?, ?)) AS "tmp"("id", "username") '
+            'WHERE ("users"."id" = "tmp"."id")'),
+            [u1.id, 'u1-x', u2.id, 'u2-x'])
+
+        query.execute()
+        usernames = [u.username for u in User.select().order_by(User.username)]
+        self.assertEqual(usernames, ['u1-x', 'u2-x'])
