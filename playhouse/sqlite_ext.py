@@ -213,6 +213,10 @@ class VirtualTableSchemaManager(SchemaManager):
         options = self.model.clean_options(
             merge_dict(self.model._meta.options, options))
 
+        # Structure:
+        # CREATE VIRTUAL TABLE <model>
+        # USING <extension_module>
+        # ([prefix_arguments, ...] fields, ... [arguments, ...], [options...])
         ctx = self._create_context()
         ctx.literal('CREATE VIRTUAL TABLE ')
         if safe:
