@@ -418,6 +418,7 @@ class TestScalarFunctions(BaseTestUDF):
 
 
 @skip_unless(cython_ext is not None, 'requires sqlite c extension')
+@skip_unless(sqlite3.sqlite_version_info >= (3, 9), 'requires sqlite >= 3.9')
 class TestVirtualTableFunctions(ModelTestCase):
     database = database
     requires = MODELS
