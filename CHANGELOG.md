@@ -5,6 +5,17 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.3.2
+
+* Add methods for `union()`, `union_all`, `intersect()` and `except_()`.
+  Previously, these methods were only available as operator overloads.
+* Removed some Python 2.6-specific support code, as 2.6 is no longer officially
+  supported.
+* Fixed model-graph resolution logic for deferred foreign-keys.
+* Better support for UPDATE...FROM queries (Postgresql).
+
+[View commits](https://github.com/coleifer/peewee/compare/3.3.1...3.3.2)
+
 ## 3.3.1
 
 * Fixed long-standing bug in 3.x regarding using column aliases with queries
