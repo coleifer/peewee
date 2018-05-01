@@ -2999,8 +2999,7 @@ class TestUpdateFrom(ModelTestCase):
     requires = [User]
 
     def test_update_from(self):
-        u1 = User.create(username='u1')
-        u2 = User.create(username='u2')
+        u1, u2 = [User.create(username=username) for username in ('u1', 'u2')]
         data = [(u1.id, 'u1-x'), (u2.id, 'u2-x')]
         vl = ValuesList(data, columns=('id', 'username'), alias='tmp')
         query = (User
@@ -3017,6 +3016,8 @@ class TestUpdateFrom(ModelTestCase):
         usernames = [u.username for u in User.select().order_by(User.username)]
         self.assertEqual(usernames, ['u1-x', 'u2-x'])
 
+    def test_update_from_subselect(self):
+        u1, u2 = [User.create(username=username) for username in ('u1', 'u2')]
         data = [(u1.id, 'u1-y'), (u2.id, 'u2-y')]
         vl = ValuesList(data, columns=('id', 'username'), alias='tmp')
         subq = vl.select(vl.c.id, vl.c.username)
@@ -3034,3 +3035,21 @@ class TestUpdateFrom(ModelTestCase):
         query.execute()
         usernames = [u.username for u in User.select().order_by(User.username)]
         self.assertEqual(usernames, ['u1-y', 'u2-y'])
+
+    @requires_models(User, Tweet)
+    def test_update_from_simple(self):
+        u = User.create(username='u1')
+        t1 = Tweet.create(user=u, content='t1')
+        t2 = Tweet.create(user=u, content='t2')
+
+        query = (User
+                 .update({User.username: QualifiedNames(Tweet.content)})
+                 .from_(Tweet)
+                 .where(Tweet.content == 't2'))
+        self.assertSQL(query, (
+            'UPDATE "users" SET "username" = "t1"."content" '
+            'FROM "tweet" AS "t1" '
+            'WHERE ("content" = ?)'), ['t2'])
+        query.execute()
+
+        self.assertEqual(User.get(User.id == u.id).username, 't2')
