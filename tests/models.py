@@ -3016,3 +3016,21 @@ class TestUpdateFrom(ModelTestCase):
         query.execute()
         usernames = [u.username for u in User.select().order_by(User.username)]
         self.assertEqual(usernames, ['u1-x', 'u2-x'])
+
+        data = [(u1.id, 'u1-y'), (u2.id, 'u2-y')]
+        vl = ValuesList(data, columns=('id', 'username'), alias='tmp')
+        subq = vl.select(vl.c.id, vl.c.username)
+        query = (User
+                 .update({User.username: QualifiedNames(subq.c.username)})
+                 .from_(subq)
+                 .where(QualifiedNames(User.id == subq.c.id)))
+        self.assertSQL(query, (
+            'UPDATE "users" SET "username" = "t1"."username" FROM ('
+            'SELECT "tmp"."id", "tmp"."username" '
+            'FROM (VALUES (?, ?), (?, ?)) AS "tmp"("id", "username")) AS "t1" '
+            'WHERE ("users"."id" = "t1"."id")'),
+            [u1.id, 'u1-y', u2.id, 'u2-y'])
+
+        query.execute()
+        usernames = [u.username for u in User.select().order_by(User.username)]
+        self.assertEqual(usernames, ['u1-y', 'u2-y'])
