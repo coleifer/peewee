@@ -9,12 +9,9 @@ import unittest
 USER = os.environ.get('USER') or 'root'
 
 
-def collect():
-    import tests
-    runtests(tests, 1)
-
-def runtests(suite, verbosity):
-    results = unittest.TextTestRunner(verbosity=verbosity).run(suite)
+def runtests(suite, verbosity=1, failfast=False):
+    runner = unittest.TextTestRunner(verbosity=verbosity, failfast=failfast)
+    results = runner.run(suite)
     return results.failures, results.errors
 
 def get_option_parser():
@@ -27,7 +24,10 @@ def get_option_parser():
         dest='engine',
         help=('Database engine to test, one of '
               '[sqlite, postgres, mysql, mysqlconnector, apsw, sqlcipher]'))
-    basic.add_option('-v', '--verbosity', dest='verbosity', default=1, type='int', help='Verbosity of output')
+    basic.add_option('-v', '--verbosity', dest='verbosity', default=1,
+                     type='int', help='Verbosity of output')
+    basic.add_option('-f', '--failfast', action='store_true', default=False,
+                     dest='failfast', help='Exit on first failure/error.')
     parser.add_option_group(basic)
 
     db_param_map = (
@@ -53,22 +53,20 @@ def get_option_parser():
         parser.add_option_group(group)
     return parser
 
-def collect_modules(options, args):
-    modules = []
-    from peewee import print_
+def collect_tests(args):
+    suite = unittest.TestSuite()
 
-    for arg in args:
-        try:
-            __import__('tests.%s' % arg)
-            modules.append(sys.modules['tests.%s' % arg])
-        except ImportError:
-            print_('ERROR: unable to import requested tests: "tests.%s"' % arg)
-
-    if not modules:
+    if not args:
         import tests
-        modules.insert(0, tests)
+        module_suite = unittest.TestLoader().loadTestsFromModule(tests)
+        suite.addTest(module_suite)
+    else:
+        cleaned = ['tests.%s' % arg if not arg.startswith('tests.') else arg
+                   for arg in args]
+        user_suite = unittest.TestLoader().loadTestsFromNames(cleaned)
+        suite.addTest(user_suite)
 
-    return modules
+    return suite
 
 if __name__ == '__main__':
     parser = get_option_parser()
@@ -86,12 +84,8 @@ if __name__ == '__main__':
 
     os.environ['PEEWEE_TEST_VERBOSITY'] = str(options.verbosity)
 
-    suite = unittest.TestSuite()
-    for module in collect_modules(options, args):
-        module_suite = unittest.TestLoader().loadTestsFromModule(module)
-        suite.addTest(module_suite)
-
-    failures, errors = runtests(suite, options.verbosity)
+    suite = collect_tests(args)
+    failures, errors = runtests(suite, options.verbosity, options.failfast)
 
     files_to_delete = [
         'peewee_test.db',
