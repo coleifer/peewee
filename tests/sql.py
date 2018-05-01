@@ -4,12 +4,10 @@ from peewee import *
 from peewee import Expression
 
 from .base import BaseTestCase
-from .base import IS_MYSQL
-from .base import IS_POSTGRESQL
-from .base import IS_SQLITE
 from .base import TestModel
 from .base import db
-from .base import skip_unless
+from .base import requires_mysql
+from .base import requires_sqlite
 
 
 User = Table('users')
@@ -444,7 +442,7 @@ class TestInsertQuery(BaseTestCase):
             'INSERT INTO "users" ("admin", "superuser", "username") '
             'VALUES (?, ?, ?)'), [True, False, 'charlie'])
 
-    @skip_unless(IS_SQLITE)
+    @requires_sqlite
     def test_replace_sqlite(self):
         query = User.replace({
             User.c.username: 'charlie',
@@ -453,7 +451,7 @@ class TestInsertQuery(BaseTestCase):
             'INSERT OR REPLACE INTO "users" ("superuser", "username") '
             'VALUES (?, ?)'), [False, 'charlie'])
 
-    @skip_unless(IS_MYSQL)
+    @requires_mysql
     def test_replace_mysql(self):
         query = User.replace({
             User.c.username: 'charlie',

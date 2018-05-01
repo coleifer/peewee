@@ -4,13 +4,10 @@ import re
 from peewee import *
 from playhouse.reflection import *
 
-from .base import IS_MYSQL
-from .base import IS_POSTGRESQL
-from .base import IS_SQLITE
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db
-from .base import skip_unless
+from .base import requires_sqlite
 
 
 class ColTypes(TestModel):
@@ -116,7 +113,7 @@ class TestReflection(BaseReflectionTestCase):
         self.assertEqual(relmodel.col_types_nullable.rel_model,
                          models['coltypes'])
 
-    @skip_unless(IS_SQLITE)
+    @requires_sqlite
     def test_generate_models_indexes(self):
         models = self.introspector.generate_models()
 
@@ -143,7 +140,7 @@ class TestReflection(BaseReflectionTestCase):
             'foobarbaz'])
         self.assertEqual(sorted(models.keys()), ['category', 'coltypes'])
 
-    @skip_unless(IS_SQLITE)
+    @requires_sqlite
     def test_sqlite_fk_re(self):
         user_id_tests = [
             'FOREIGN KEY("user_id") REFERENCES "users"("id")',
@@ -427,7 +424,7 @@ class EventLog(TestModel):
 class TestReflectDefaultValues(BaseReflectionTestCase):
     requires = [EventLog]
 
-    @skip_unless(IS_SQLITE)
+    @requires_sqlite
     def test_default_values(self):
         models = self.introspector.generate_models()
         eventlog = models['eventlog']

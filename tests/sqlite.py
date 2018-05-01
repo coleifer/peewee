@@ -11,8 +11,8 @@ from .base import IS_SQLITE_9
 from .base import ModelTestCase
 from .base import TestModel
 from .base import requires_models
-from .base import skip_case_unless
 from .base import skip_if
+from .base import skip_unless
 from .sqlite_helpers import json_installed
 
 
@@ -192,7 +192,7 @@ class Split(TableFunction):
         raise StopIteration
 
 
-@skip_case_unless(IS_SQLITE_9)
+@skip_unless(IS_SQLITE_9, 'requires sqlite >= 3.9')
 class TestTableFunction(BaseTestCase):
     def setUp(self):
         super(TestTableFunction, self).setUp()
@@ -313,7 +313,7 @@ class TestTableFunction(BaseTestCase):
         ])
 
 
-@skip_case_unless(json_installed)
+@skip_unless(json_installed(), 'requires sqlite json1')
 class TestJSONField(ModelTestCase):
     database = database
     requires = [APIData, Metadata]
@@ -872,7 +872,7 @@ class TestFullTextSearch(ModelTestCase):
             (2, 0.85)])
 
 
-@skip_case_unless(CYTHON_EXTENSION)
+@skip_unless(CYTHON_EXTENSION, 'requires sqlite c extension')
 class TestFullTextSearchCython(TestFullTextSearch):
     database = SqliteExtDatabase(':memory:', c_extensions=CYTHON_EXTENSION)
 
@@ -930,7 +930,7 @@ class TestFullTextSearchCython(TestFullTextSearch):
             (0.049, 'Faith consists')], sort_cleaned=True)
 
 
-@skip_case_unless(CYTHON_EXTENSION)
+@skip_unless(CYTHON_EXTENSION, 'requires sqlite c extension')
 class TestMurmurHash(ModelTestCase):
     database = SqliteExtDatabase(':memory:', c_extensions=CYTHON_EXTENSION,
                                  hash_functions=True)
@@ -948,7 +948,7 @@ class TestMurmurHash(ModelTestCase):
         self.assertHash('this is a test of a longer string', 2569735385)
         self.assertHash(None, None)
 
-    @skip_if(sys.version_info[0] == 3)
+    @skip_if(sys.version_info[0] == 3, 'requres python 2')
     def test_checksums(self):
         self.assertHash('testkey', -225678656, 'crc32')
         self.assertHash('murmur', 1507884895, 'crc32')
@@ -1125,7 +1125,7 @@ class BaseExtModel(TestModel):
         database = database
 
 
-@skip_case_unless(CLOSURE_EXTENSION)
+@skip_unless(CLOSURE_EXTENSION, 'requires closure table extension')
 class TestTransitiveClosureManyToMany(BaseTestCase):
     def setUp(self):
         super(TestTransitiveClosureManyToMany, self).setUp()
@@ -1180,7 +1180,8 @@ class TestTransitiveClosureManyToMany(BaseTestCase):
         assertPeople(PC.siblings(z), [])
 
 
-@skip_case_unless(CLOSURE_EXTENSION and os.path.exists(CLOSURE_EXTENSION))
+@skip_unless(CLOSURE_EXTENSION and os.path.exists(CLOSURE_EXTENSION),
+             'requires closure extension')
 class TestTransitiveClosureIntegration(BaseTestCase):
     tree = {
         'books': [
@@ -1371,7 +1372,7 @@ class TestTransitiveClosureIntegration(BaseTestCase):
         database.drop_tables([Node, NodeClosure])
 
 
-@skip_case_unless(FTS5Model.fts5_installed)
+@skip_unless(FTS5Model.fts5_installed(), 'requires fts5')
 class TestFTS5(ModelTestCase):
     database = database
     requires = [FTS5Test]
@@ -1460,7 +1461,8 @@ class KVI(LSMTable):
         filename = 'test_lsm.ldb'
 
 
-@skip_case_unless(LSM_EXTENSION and os.path.exists(LSM_EXTENSION))
+@skip_unless(LSM_EXTENSION and os.path.exists(LSM_EXTENSION),
+             'requires lsm1 sqlite extension')
 class TestLSM1Extension(BaseTestCase):
     def setUp(self):
         super(TestLSM1Extension, self).setUp()
@@ -1585,7 +1587,7 @@ class TestLSM1Extension(BaseTestCase):
         self.assertEqual(keys, [96, 97, 98, 99])
 
 
-@skip_case_unless(json_installed)
+@skip_unless(json_installed(), 'requires json1 sqlite extension')
 class TestJsonContains(ModelTestCase):
     database = SqliteExtDatabase(':memory:', json_contains=True)
     requires = [KeyData]

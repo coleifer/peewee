@@ -14,8 +14,7 @@ from .base import ModelTestCase
 from .base import TestModel
 from .base import db
 from .base import requires_models
-from .base import skip_if
-from .base import skip_unless
+from .base import requires_sqlite
 from .base_models import Tweet
 from .base_models import User
 
@@ -551,7 +550,7 @@ class TestFieldValueHandling(ModelTestCase):
         self.assertEqual(item.price, '10')
         self.assertEqual(item.multiplier, '1.1')
 
-    @skip_unless(IS_SQLITE)
+    @requires_sqlite
     @requires_models(Bare)
     def test_bare_model_adapt(self):
         b1 = Bare.create(key='k1', value=1)

@@ -12,7 +12,8 @@ from .base import get_in_memory_db
 from .base import mock
 from .base import new_connection
 from .base import requires_models
-from .base import skip_case_unless
+from .base import requires_mysql
+from .base import requires_postgresql
 from .base import skip_if
 from .base import skip_unless
 from .base import BaseTestCase
@@ -625,8 +626,8 @@ class TestModelAPIs(ModelTestCase):
                 ('purr', 'huey'),
                 ('hiss', 'huey')])
 
-    @requires_models(User, Tweet)
     @skip_if(IS_SQLITE_OLD or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES))
+    @requires_models(User, Tweet)
     def test_join_subquery_cte(self):
         self._create_user_tweets()
 
@@ -661,8 +662,8 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual(tweet.user.id, huey.id)
         self.assertEqual(tweet.user.username, 'huey')
 
+    @skip_if(IS_SQLITE and not IS_SQLITE_9, 'requires sqlite >= 3.9')
     @requires_models(Register)
-    @skip_if(IS_SQLITE and not IS_SQLITE_9)
     def test_compound_select(self):
         for i in range(10):
             Register.create(value=i)
@@ -1302,7 +1303,7 @@ class TestJoinModelAlias(ModelTestCase):
                 self.assertEqual(data, [('meow', 'huey'), ('purr', 'huey')])
 
 
-@skip_case_unless(IS_POSTGRESQL or IS_MYSQL_ADVANCED_FEATURES)
+@skip_unless(IS_POSTGRESQL or IS_MYSQL_ADVANCED_FEATURES, 'window queries')
 class TestWindowFunctionIntegration(ModelTestCase):
     requires = [Sample]
 
@@ -1463,7 +1464,7 @@ class TestWindowFunctionIntegration(ModelTestCase):
             (3, 100., 104.)])
 
 
-@skip_case_unless(IS_POSTGRESQL)
+@requires_postgresql
 class TestForUpdateIntegration(ModelTestCase):
     requires = [User]
 
@@ -1529,7 +1530,7 @@ class ServerDefault(TestModel):
     timestamp = DateTimeField(constraints=[SQL('default (now())')])
 
 
-@skip_case_unless(IS_POSTGRESQL)
+@requires_postgresql
 class TestReturningIntegration(ModelTestCase):
     requires = [User]
 
@@ -1703,8 +1704,8 @@ class TestCTEIntegration(ModelTestCase):
         c12 = CC(name='c12', parent=p1)
         c31 = CC(name='c31', parent=p3)
 
-    @requires_models(Member)
     @skip_if(IS_SQLITE_OLD or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES))
+    @requires_models(Member)
     def test_docs_example(self):
         f = Member.create(name='founder')
         gen2_1 = Member.create(name='g2-1', recommendedby=f)
@@ -1795,7 +1796,7 @@ class TestCTEIntegration(ModelTestCase):
             ('p3', 'root'),
         ])
 
-    @skip_if(IS_SQLITE_OLD or IS_MYSQL)
+    @skip_if(IS_SQLITE_OLD or IS_MYSQL, 'requires recursive cte support')
     def test_recursive_cte(self):
         def get_parents(cname):
             C1 = Category.alias()
@@ -1856,7 +1857,7 @@ class TestCTEIntegration(ModelTestCase):
         data = [(r.name, r.level, r.path) for r in query]
         self.assertEqual(data, [('root', 1, 'root')])
 
-    @skip_if(IS_SQLITE_OLD or IS_MYSQL)
+    @skip_if(IS_SQLITE_OLD or IS_MYSQL, 'requires recursive cte support')
     def test_recursive_cte2(self):
         hierarchy = (Category
                      .select(Category.name, Value(0).alias('level'))
@@ -1882,7 +1883,7 @@ class TestCTEIntegration(ModelTestCase):
             ('root', 0)])
 
 
-@skip_case_unless(IS_POSTGRESQL or IS_SQLITE_15)
+@skip_unless(IS_POSTGRESQL or IS_SQLITE_15, 'requires row-value support')
 class TestTupleComparison(ModelTestCase):
     requires = [User]
 
@@ -2096,7 +2097,7 @@ class TestFieldInheritance(BaseTestCase):
         self.assertTrue(Category.itemb_set.rel_model is ItemB)
         self.assertTrue(Category.itemb_set.model is Category)
 
-    @skip_if(IS_SQLITE)
+    @skip_if(IS_SQLITE, 'sqlite is not supported')
     def test_deferred_fk_creation(self):
         class B(TestModel):
             a = DeferredForeignKey('A', null=True)
@@ -2405,7 +2406,7 @@ class OnConflictTestCase(ModelTestCase):
         self.assertData(list(self.test_data))
 
 
-@skip_case_unless(IS_MYSQL)
+@requires_mysql
 class TestUpsertMySQL(OnConflictTestCase):
     def test_replace(self):
         # Unique constraint on first/last would fail - replace.
@@ -2499,7 +2500,7 @@ class TestUpsertSqlite(OnConflictTestCase):
             ('z', 'cat', '124'),
             ('b', 'cat', '125')])
 
-    @skip_if(IS_SQLITE_24)
+    @skip_if(IS_SQLITE_24, 'requires sqlite < 3.24')
     def test_no_preserve_update_where(self):
         # Ensure on SQLite < 3.24 we cannot update or preserve values.
         base = Emp.insert(first='foo', last='bar', empno='125')
@@ -2513,7 +2514,7 @@ class TestUpsertSqlite(OnConflictTestCase):
         where = base.on_conflict(where=(Emp.id > 10))
         self.assertRaises(ValueError, where.execute)
 
-    @skip_unless(IS_SQLITE_24)
+    @skip_unless(IS_SQLITE_24, 'requires sqlite >= 3.24')
     def test_update_meets_requirements(self):
         # Ensure that on >= 3.24 any updates meet the minimum criteria.
         base = Emp.insert(first='foo', last='bar', empno='125')
@@ -2526,7 +2527,7 @@ class TestUpsertSqlite(OnConflictTestCase):
         no_conflict_target = base.on_conflict(update={Emp.empno: '125.1'})
         self.assertRaises(ValueError, no_conflict_target.execute)
 
-    @skip_unless(IS_SQLITE_24)
+    @skip_unless(IS_SQLITE_24, 'requires sqlite >= 3.24')
     def test_update(self):
         # Conflict on empno - we'll preserve name and update the ID. This will
         # overwrite the previous row and set a new ID.
@@ -2556,8 +2557,8 @@ class TestUpsertSqlite(OnConflictTestCase):
             ('zaizee', 'cat', '124'),
             ('foo', 'baze', '125.1')])
 
+    @skip_unless(IS_SQLITE_24, 'requires sqlite >= 3.24')
     @requires_models(OCTest)
-    @skip_unless(IS_SQLITE_24)
     def test_update_atomic(self):
         # Add a new row with the given "a" value. If a conflict occurs,
         # re-insert with b=b+2.
@@ -2581,8 +2582,8 @@ class TestUpsertSqlite(OnConflictTestCase):
         self.assertEqual(obj.a, 'foo')
         self.assertEqual(obj.b, 3)
 
+    @skip_unless(IS_SQLITE_24, 'requires sqlite >= 3.24')
     @requires_models(OCTest)
-    @skip_unless(IS_SQLITE_24)
     def test_update_where_clause(self):
         # Add a new row with the given "a" value. If a conflict occurs,
         # re-insert with b=b+2 so long as the original b < 3.
@@ -2616,7 +2617,7 @@ class TestUpsertSqlite(OnConflictTestCase):
         self.assertEqual(obj.a, 'foo')
         self.assertEqual(obj.b, 3)
 
-    @skip_unless(IS_SQLITE_24)
+    @skip_unless(IS_SQLITE_24, 'requires sqlite >= 3.24')
     def test_do_nothing(self):
         query = (Emp
                  .insert(first='foo', last='bar', empno='123')
@@ -2629,7 +2630,7 @@ class TestUpsertSqlite(OnConflictTestCase):
         self.assertData(list(self.test_data))
 
 
-@skip_case_unless(IS_POSTGRESQL)
+@requires_postgresql
 class TestUpsertPostgresql(OnConflictTestCase):
     def test_update(self):
         # Conflict on empno - we'll preserve name and update the ID. This will
@@ -2798,8 +2799,8 @@ class TestGithub1354(ModelTestCase):
 
 
 class TestCountUnionRegression(ModelTestCase):
+    @requires_mysql
     @requires_models(User)
-    @skip_if(IS_MYSQL)
     def test_count_union(self):
         with self.database.atomic():
             for i in range(5):
@@ -2971,7 +2972,7 @@ class SequenceModel(TestModel):
     key = TextField()
 
 
-@skip_case_unless(IS_POSTGRESQL)
+@requires_postgresql
 class TestSequence(ModelTestCase):
     requires = [SequenceModel]
 
@@ -2994,7 +2995,7 @@ class TestSequence(ModelTestCase):
         self.assertEqual(s3.seq_id, 3)
 
 
-@skip_case_unless(IS_POSTGRESQL)
+@requires_postgresql
 class TestUpdateFrom(ModelTestCase):
     requires = [User]
 

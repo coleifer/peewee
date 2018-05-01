@@ -9,7 +9,7 @@ from .base import BaseTestCase
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db_loader
-from .base import skip_case_if
+from .base import skip_unless
 from .base_models import Register
 
 
@@ -536,18 +536,14 @@ class BaseJsonFieldTestCase(object):
         self.assertItems((self.M.data['k2']['xxx'] == 'v1'))
 
 
-def json_ok():
-    if JsonModel is None:
-        return False
-    return pg93()
-
-
 def pg93():
     with db:
         return db.connection().server_version >= 90300
 
+JSON_SUPPORT = (JsonModel is not None) and pg93()
 
-@skip_case_if(lambda: not json_ok())
+
+@skip_unless(JSON_SUPPORT, 'json support unavailable')
 class TestJsonField(BaseJsonFieldTestCase, ModelTestCase):
     M = JsonModel
     database = db
@@ -567,7 +563,7 @@ class TestJsonField(BaseJsonFieldTestCase, ModelTestCase):
         self.assertEqual(query.get(), tjn)
 
 
-@skip_case_if(lambda: not json_ok())
+@skip_unless(JSON_SUPPORT, 'json support unavailable')
 class TestBinaryJsonField(BaseJsonFieldTestCase, ModelTestCase):
     M = BJson
     database = db

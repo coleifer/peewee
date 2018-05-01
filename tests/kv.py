@@ -60,7 +60,7 @@ class TestKeyValue(DatabaseTestCase):
         KV.clear()
         self.assertEqual(len(KV), 0)
 
-    @skip_if(IS_POSTGRESQL)
+    @skip_if(IS_POSTGRESQL, 'requires replace support')
     def test_update(self):
         KV = self.create_kv()
         KV.update(k1='v1', k2='v2', k3='v3')

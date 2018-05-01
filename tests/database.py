@@ -19,7 +19,7 @@ from .base import db
 from .base import db_loader
 from .base import get_in_memory_db
 from .base import requires_models
-from .base import skip_case_unless
+from .base import requires_postgresql
 from .base_models import Category
 from .base_models import Tweet
 from .base_models import User
@@ -287,7 +287,7 @@ class CatToy(TestModel):
         schema = 'huey'
 
 
-@skip_case_unless(isinstance(db, PostgresqlDatabase))
+@requires_postgresql
 class TestSchemaNamespace(ModelTestCase):
     requires = [CatToy]
 

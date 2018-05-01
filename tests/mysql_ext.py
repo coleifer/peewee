@@ -2,11 +2,10 @@ import datetime
 
 from peewee import *
 
-from .base import IS_MYSQL
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db_loader
-from .base import skip_case_unless
+from .base import requires_mysql
 
 
 mysql_ext_db = db_loader('mysqlconnector')
@@ -24,7 +23,7 @@ class Note(TestModel):
     timestamp = DateTimeField(default=datetime.datetime.now)
 
 
-@skip_case_unless(IS_MYSQL)
+@requires_mysql
 class TestMySQLConnector(ModelTestCase):
     requires = [Person, Note]
 

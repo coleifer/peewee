@@ -19,7 +19,7 @@ from playhouse.sqliteq import WriterPaused
 from .base import BaseTestCase
 from .base import TestModel
 from .base import db_loader
-from .base import skip_case_if
+from .base import skip_if
 
 
 get_db = partial(db_loader, 'sqlite', db_class=SqliteQueueDatabase)
@@ -240,7 +240,7 @@ class TestThreadedDatabaseThreads(BaseTestQueueDatabase, BaseTestCase):
         self.database.stop()
 
 
-@skip_case_if(gevent is None)
+@skip_if(gevent is None, 'gevent not installed')
 class TestThreadedDatabaseGreenlets(BaseTestQueueDatabase, BaseTestCase):
     database_config = {'use_gevent': True}
     n_rows = 10

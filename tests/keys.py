@@ -5,7 +5,7 @@ from .base import IS_SQLITE
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db
-from .base import skip_unless
+from .base import requires_sqlite
 
 
 class Package(TestModel):
@@ -423,7 +423,7 @@ class TestForeignKeyConstraints(ModelTestCase):
             with self.database.atomic():
                 Note.create(user=max_id + 1, content='test')
 
-    @skip_unless(IS_SQLITE)
+    @requires_sqlite
     def test_disable_constraint(self):
         self.set_foreign_key_pragma(False)
         Note.create(user=0, content='test')

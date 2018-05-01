@@ -2,11 +2,6 @@ import datetime
 import json
 import random
 
-try:
-    import vtfunc
-except ImportError:
-    vtfunc = None
-
 from peewee import *
 from peewee import sqlite3
 from playhouse.sqlite_ext import SqliteExtDatabase
@@ -16,8 +11,11 @@ from .base import IS_SQLITE_9
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db_loader
-from .base import skip_case_unless
 from .base import skip_unless
+try:
+    from playhouse import _sqlite_ext as cython_ext
+except ImportError:
+    cython_ext = None
 try:
     from playhouse import _sqlite_udf as cython_udf
 except ImportError:
@@ -25,11 +23,8 @@ except ImportError:
 
 
 def requires_cython(method):
-    return skip_unless(lambda: cython_udf is not None)(method)
-
-def requires_vtfunc(testcase):
-    return skip_case_unless(lambda: vtfunc is not None)(testcase)
-
+    return skip_unless(cython_udf is not None,
+                       'requires sqlite udf c extension')(method)
 
 database = db_loader('sqlite')
 register_all(database)
@@ -320,7 +315,7 @@ class TestScalarFunctions(BaseTestUDF):
             ('a.b.c.peewee', 1),
             ('a.charlesleifer.com', 1)])
 
-    @skip_unless(IS_SQLITE_9)
+    @skip_unless(IS_SQLITE_9, 'requires sqlite >= 3.9')
     def test_toggle(self):
         self.assertEqual(self.sql1('select toggle(?)', 'foo'), 1)
         self.assertEqual(self.sql1('select toggle(?)', 'bar'), 1)
@@ -422,7 +417,7 @@ class TestScalarFunctions(BaseTestUDF):
             'hey foo')
 
 
-@requires_vtfunc
+@skip_unless(cython_ext is not None, 'requires sqlite c extension')
 class TestVirtualTableFunctions(ModelTestCase):
     database = database
     requires = MODELS

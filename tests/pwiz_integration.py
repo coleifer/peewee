@@ -14,7 +14,7 @@ from .base import ModelTestCase
 from .base import TestModel
 from .base import db_loader
 from .base import mock
-from .base import skip_case_if
+from .base import skip_if
 
 
 db = db_loader('sqlite')
@@ -173,7 +173,6 @@ class TestPwiz(BasePwizTestCase):
             '# Peewee version: %s') % (cmdline, db.database, peewee_version))
 
 
-@skip_case_if(lambda: sys.version_info[:2] < (2, 7))
 class TestPwizOrdered(BasePwizTestCase):
     requires = [User, Note]
 
