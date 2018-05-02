@@ -132,11 +132,11 @@ tuples or dictionaries to insert.
     data = [('val1-1', 'val1-2'),
             ('val2-1', 'val2-2'),
             ('val3-1', 'val3-2')]
-    MyModel.insert_many(data, fields=fields)
+    MyModel.insert_many(data, fields=fields).execute()
 
     # You can, of course, wrap this in a transaction as well:
     with db.atomic():
-        MyModel.insert_many(data, fields=fields)
+        MyModel.insert_many(data, fields=fields).execute()
 
 Depending on the number of rows in your data source, you may need to break it
 up into chunks:
