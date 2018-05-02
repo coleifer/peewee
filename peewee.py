@@ -5605,17 +5605,21 @@ class ModelRaw(_ModelQueryHelper, RawQuery):
 
 
 class BaseModelSelect(_ModelQueryHelper):
-    def __add__(self, rhs):
+    def union_all(self, rhs):
         return ModelCompoundSelectQuery(self.model, self, 'UNION ALL', rhs)
+    __add__ = union_all
 
-    def __or__(self, rhs):
+    def union(self, rhs):
         return ModelCompoundSelectQuery(self.model, self, 'UNION', rhs)
+    __or__ = union
 
-    def __and__(self, rhs):
+    def intersect(self, rhs):
         return ModelCompoundSelectQuery(self.model, self, 'INTERSECT', rhs)
+    __and__ = intersect
 
-    def __sub__(self, rhs):
+    def except_(self, rhs):
         return ModelCompoundSelectQuery(self.model, self, 'EXCEPT', rhs)
+    __sub__ = except_
 
     def __iter__(self):
         if not self._cursor_wrapper:
