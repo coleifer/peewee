@@ -5,6 +5,19 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.3.3
+
+* More efficient implementation of model dependency-graph generation. Improves
+  performance of recursively deleting related objects by omitting unnecessary
+  subqueries.
+* Added `union()`, `union_all()`, `intersect()` and `except_()` to the
+  `Model`-specific query implementations. This was an oversight that should
+  have been patched in 3.3.2, but is fixed in 3.3.3.
+* Major cleanup to test runner and standardized test skipping logic to
+  integrate with standard-library `unittest` conventions.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.3.2...3.3.3)
+
 ## 3.3.2
 
 * Add methods for `union()`, `union_all`, `intersect()` and `except_()`.
