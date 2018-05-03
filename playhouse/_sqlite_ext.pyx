@@ -743,7 +743,7 @@ def peewee_lucene(py_match_info, *raw_weights):
         char *match_info_buf = _match_info_buf
         int argc = len(raw_weights)
         int term_count, col_count
-        double total_docs, term_frequency,
+        double total_docs, term_frequency
         double doc_length, docs_with_term, avg_length
         double idf, weight, rhs, denom
         double *weights
@@ -799,7 +799,7 @@ def peewee_bm25(py_match_info, *raw_weights):
         int argc = len(raw_weights)
         int term_count, col_count
         double B = 0.75, K = 1.2, D
-        double total_docs, term_frequency,
+        double total_docs, term_frequency
         double doc_length, docs_with_term, avg_length
         double idf, weight, rhs, denom
         double *weights
