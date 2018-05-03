@@ -41,7 +41,7 @@ def db_loader(engine, name='peewee_test', db_class=None, **params):
 
 
 def get_in_memory_db(**params):
-    return db_loader('sqlite3', ':memory:', **params)
+    return db_loader('sqlite3', ':memory:', thread_safe=False, **params)
 
 
 BACKEND = os.environ.get('PEEWEE_TEST_BACKEND') or 'sqlite'
