@@ -65,6 +65,7 @@ __all__ = [
     'BigAutoField',
     'BigBitField',
     'BigIntegerField',
+    'BinaryUUIDField',
     'BitField',
     'BlobField',
     'BooleanField',
@@ -304,6 +305,7 @@ FIELD = attrdict(
     TEXT='TEXT',
     TIME='TIME',
     UUID='TEXT',
+    UUIDB='BLOB',
     VARCHAR='VARCHAR')
 
 #: Join helpers (for convenience) -- all join types are supported, this object
@@ -3045,7 +3047,8 @@ class PostgresqlDatabase(Database):
         'DATETIME': 'TIMESTAMP',
         'DECIMAL': 'NUMERIC',
         'DOUBLE': 'DOUBLE PRECISION',
-        'UUID': 'UUID'}
+        'UUID': 'UUID',
+        'UUIDB': 'BYTEA'}
     operations = {'REGEXP': '~'}
     param = '%s'
 
@@ -3208,7 +3211,8 @@ class MySQLDatabase(Database):
         'DECIMAL': 'NUMERIC',
         'DOUBLE': 'DOUBLE PRECISION',
         'FLOAT': 'FLOAT',
-        'UUID': 'VARCHAR(40)'}
+        'UUID': 'VARCHAR(40)',
+        'UUIDB': 'VARBINARY(16)'}
     operations = {
         'LIKE': 'LIKE BINARY',
         'ILIKE': 'LIKE',
@@ -4017,7 +4021,26 @@ class UUIDField(Field):
     def python_value(self, value):
         if isinstance(value, uuid.UUID):
             return value
-        return None if value is None else uuid.UUID(value)
+        return uuid.UUID(value) if value is not None else None
+
+
+class BinaryUUIDField(BlobField):
+    field_type = 'UUIDB'
+
+    def db_value(self, value):
+        if isinstance(value, uuid.UUID):
+            return self._constructor(value.bytes)
+        elif value is not None:
+            raise ValueError('value for binary UUID field must be UUID().')
+
+    def python_value(self, value):
+        if isinstance(value, uuid.UUID):
+            return value
+        elif isinstance(value, memoryview):
+            value = value.tobytes()
+        elif value and not isinstance(value, bytes):
+            value = bytes(value)
+        return uuid.UUID(bytes=value) if value is not None else None
 
 
 def _date_part(date_part):

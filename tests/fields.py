@@ -1,5 +1,6 @@
 import datetime
 import sqlite3
+import uuid
 from decimal import Decimal as D
 from decimal import ROUND_UP
 
@@ -586,3 +587,34 @@ class TestFieldValueHandling(ModelTestCase):
         b3_db = Bare.get(Bare.id == b3.id)
         self.assertEqual(b3_db.key, 'k3')
         self.assertTrue(b3_db.value is None)
+
+
+class UUIDModel(TestModel):
+    data = UUIDField(null=True)
+    bdata = BinaryUUIDField(null=True)
+
+
+class TestUUIDField(ModelTestCase):
+    requires = [UUIDModel]
+
+    def test_uuid_field(self):
+        uu = uuid.uuid4()
+        u = UUIDModel.create(data=uu)
+
+        u_db = UUIDModel.get(UUIDModel.id == u.id)
+        self.assertEqual(u_db.data, uu)
+        self.assertTrue(u_db.bdata is None)
+
+        u_db2 = UUIDModel.get(UUIDModel.data == uu)
+        self.assertEqual(u_db2.id, u.id)
+
+    def test_binary_uuid_field(self):
+        uu = uuid.uuid4()
+        u = UUIDModel.create(bdata=uu)
+
+        u_db = UUIDModel.get(UUIDModel.id == u.id)
+        self.assertEqual(u_db.bdata, uu)
+        self.assertTrue(u_db.data is None)
+
+        u_db2 = UUIDModel.get(UUIDModel.bdata == uu)
+        self.assertEqual(u_db2.id, u.id)

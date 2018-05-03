@@ -2392,7 +2392,15 @@ Fields
 
 .. py:class:: UUIDField
 
-    Field class for storing ``uuid.UUID`` objects.
+    Field class for storing ``uuid.UUID`` objects. With Postgres, the
+    underlying column's data-type will be *UUID*. Since SQLite and MySQL do not
+    have a native UUID type, the UUID is stored as a *VARCHAR* instead.
+
+.. py:class:: BinaryUUIDField
+
+    Field class for storing ``uuid.UUID`` objects efficiently in 16-bytes. Uses
+    the database's *BLOB* data-type (or *VARBINARY* in MySQL, or *BYTEA* in
+    Postgres).
 
 .. py:class:: DateTimeField([formats=None[, **kwargs]])
 

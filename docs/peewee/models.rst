@@ -155,6 +155,7 @@ Field Type              Sqlite              Postgresql          MySQL
 ``BitField``            integer             bigint              bigint
 ``BigBitField``         blob                bytea               blob
 ``UUIDField``           text                uuid                varchar(40)
+``BinaryUUIDField``     blob                bytea               varbinary(16)
 ``DateTimeField``       datetime            timestamp           datetime
 ``DateField``           date                date                date
 ``TimeField``           time                time                time
@@ -528,14 +529,18 @@ field data will be stored in. If you just want to add python behavior atop,
 say, a decimal field (for instance to make a currency field) you would just
 subclass :py:class:`DecimalField`. On the other hand, if the database offers a
 custom column type you will need to let peewee know. This is controlled by the
-:py:attr:`Field.db_field` attribute.
+:py:attr:`Field.field_type` attribute.
+
+.. note::
+    Peewee ships with a :py:class:`UUIDField`, the following code is intended
+    only as an example.
 
 Let's start by defining our UUID field:
 
 .. code-block:: python
 
     class UUIDField(Field):
-        db_field = 'uuid'
+        field_type = 'uuid'
 
 We will store the UUIDs in a native UUID column. Since psycopg2 treats the data
 as a string by default, we will add two methods to the field to handle:
@@ -551,18 +556,24 @@ as a string by default, we will add two methods to the field to handle:
         field_type = 'uuid'
 
         def db_value(self, value):
-            return str(value) # convert UUID to str
+            return value.hex  # convert UUID to hex string.
 
         def python_value(self, value):
-            return uuid.UUID(value) # convert str to UUID
+            return uuid.UUID(value) # convert hex string to UUID
 
-Now, we need to let the database know how to map this *uuid* label to an actual
-*uuid* column type in the database. Specify the overrides in the
-:py:class:`Database` constructor:
+**This step is optional.** By default, the ``field_type`` value will be used
+for the columns data-type in the database schema. If you need to support
+multiple databases which use different data-types for your field-data, we need
+to let the database know how to map this *uuid* label to an actual *uuid*
+column type in the database. Specify the overrides in the :py:class:`Database` constructor:
 
   .. code-block:: python
 
+      # Postgres, we use UUID data-type.
       db = PostgresqlDatabase('my_db', field_types={'uuid': 'uuid'})
+
+      # Sqlite doesn't have a UUID type, so we use text type.
+      db = SqliteDatabase('my_db', field_types={'uuid': 'text'})
 
 That is it! Some fields may support exotic operations, like the postgresql
 HStore field acts like a key/value store and has custom operators for things
