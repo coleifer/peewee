@@ -435,17 +435,35 @@ class TestBitFields(ModelTestCase):
                 self.assertFalse(b_db.data.is_set(x))
 
 
-class TestBlobField(BaseTestCase):
+class BlobModel(TestModel):
+    data = BlobField()
+
+
+class TestBlobField(ModelTestCase):
+    requires = [BlobModel]
+
+    def test_blob_field(self):
+        b = BlobModel.create(data=b'\xff\x01')
+        b_db = BlobModel.get(BlobModel.data == b'\xff\x01')
+        self.assertEqual(b.id, b_db.id)
+
+        data = b_db.data
+        if isinstance(data, memoryview):
+            data = data.tobytes()
+        elif not isinstance(data, bytes):
+            data = bytes(data)
+        self.assertEqual(data, b'\xff\x01')
+
     def test_blob_on_proxy(self):
         db = Proxy()
-        class BlobModel(Model):
+        class NewBlobModel(Model):
             data = BlobField()
             class Meta:
                 database = db
 
         db_obj = SqliteDatabase(':memory:')
         db.initialize(db_obj)
-        self.assertTrue(BlobModel.data._constructor is sqlite3.Binary)
+        self.assertTrue(NewBlobModel.data._constructor is sqlite3.Binary)
 
 
 class BigModel(TestModel):
