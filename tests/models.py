@@ -956,6 +956,76 @@ class TestRaw(ModelTestCase):
             self.assertEqual([u.username for u in query], [])
 
 
+class DiA(TestModel):
+    a = TextField(unique=True)
+class DiB(TestModel):
+    a = ForeignKeyField(DiA)
+    b = TextField()
+class DiC(TestModel):
+    b = ForeignKeyField(DiB)
+    c = TextField()
+class DiD(TestModel):
+    c = ForeignKeyField(DiC)
+    d = TextField()
+class DiBA(TestModel):
+    a = ForeignKeyField(DiA, to_field=DiA.a)
+    b = TextField()
+
+
+class TestDeleteInstanceRegression(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [DiA, DiB, DiC, DiD, DiBA]
+
+    def test_delete_instance_regression(self):
+        with self.database.atomic():
+            a1, a2, a3 = [DiA.create(a=a) for a in ('a1', 'a2', 'a3')]
+            for a in (a1, a2, a3):
+                for j in (1, 2):
+                    b = DiB.create(a=a, b='%s-b%s' % (a.a, j))
+                    c = DiC.create(b=b, c='%s-c' % (b.b))
+                    d = DiD.create(c=c, d='%s-d' % (c.c))
+
+                    DiBA.create(a=a, b='%s-b%s' % (a.a, j))
+
+        # (a1 (b1 (c (d))), (b2 (c (d)))), (a2 ...), (a3 ...)
+        with self.assertQueryCount(5):
+            a2.delete_instance(recursive=True)
+
+        queries = [logrecord.msg for logrecord in self._qh.queries[-5:]]
+        self.assertEqual(queries, [
+            ('DELETE FROM "did" WHERE ("c_id" IN ('
+             'SELECT "t1"."id" FROM "dic" AS "t1" WHERE ("t1"."b_id" IN ('
+             'SELECT "t2"."id" FROM "dib" AS "t2" WHERE ("t2"."a_id" = ?)'
+             '))))', [2]),
+            ('DELETE FROM "dic" WHERE ("b_id" IN ('
+             'SELECT "t1"."id" FROM "dib" AS "t1" WHERE ("t1"."a_id" = ?)'
+             '))', [2]),
+            ('DELETE FROM "dib" WHERE ("a_id" = ?)', [2]),
+            ('DELETE FROM "diba" WHERE ("a_id" = ?)', ['a2']),
+            ('DELETE FROM "dia" WHERE ("id" = ?)', [2])
+        ])
+
+        # a1 & a3 exist, plus their relations.
+        self.assertTrue(DiA.select().count(), 2)
+        for rel in (DiB, DiBA, DiC, DiD):
+            self.assertTrue(rel.select().count(), 4)  # 2x2
+
+        with self.assertQueryCount(5):
+            a1.delete_instance(recursive=True)
+
+        # Only the objects related to a3 exist still.
+        self.assertTrue(DiA.select().count(), 1)
+        self.assertEqual(DiA.get(DiA.a == 'a3').id, a3.id)
+        self.assertEqual([d.d for d in DiD.select().order_by(DiD.d)],
+                         ['a3-b1-c-d', 'a3-b2-c-d'])
+        self.assertEqual([c.c for c in DiC.select().order_by(DiC.c)],
+                         ['a3-b1-c', 'a3-b2-c'])
+        self.assertEqual([b.b for b in DiB.select().order_by(DiB.b)],
+                         ['a3-b1', 'a3-b2'])
+        self.assertEqual([ba.b for ba in DiBA.select().order_by(DiBA.b)],
+                         ['a3-b1', 'a3-b2'])
+
+
 class TestDeleteInstance(ModelTestCase):
     database = get_in_memory_db()
     requires = [User, Account, Tweet, Favorite]
@@ -989,7 +1059,25 @@ class TestDeleteInstance(ModelTestCase):
 
     def test_delete_nullable(self):
         huey = User.get(User.username == 'huey')
-        huey.delete_instance(recursive=True, delete_nullable=True)
+        # Favorite -> Tweet -> User (other users' favorites of huey's tweets)
+        # Favorite -> User (huey's favorite tweets)
+        # Account -> User (huey's account)
+        # User ... for a total of 5. Favorite x2, Tweet, Account, User.
+        with self.assertQueryCount(5):
+            huey.delete_instance(recursive=True, delete_nullable=True)
+
+        # Get the last 5 delete queries.
+        queries = [logrecord.msg for logrecord in self._qh.queries[-5:]]
+        self.assertEqual(sorted(queries), [
+            ('DELETE FROM "account" WHERE ("user_id" = ?)', [huey.id]),
+            ('DELETE FROM "favorite" WHERE ('
+             '"tweet_id" IN (SELECT "t1"."id" FROM "tweet" AS "t1" WHERE ('
+             '"t1"."user_id" = ?)))', [huey.id]),
+            ('DELETE FROM "favorite" WHERE ("user_id" = ?)', [huey.id]),
+            ('DELETE FROM "tweet" WHERE ("user_id" = ?)', [huey.id]),
+            ('DELETE FROM "users" WHERE ("id" = ?)', [huey.id]),
+        ])
+
         self.assertEqual(User.select().count(), 1)
         self.assertEqual(Account.select().count(), 0)
         self.assertEqual(Favorite.select().count(), 0)

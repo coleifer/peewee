@@ -5369,8 +5369,7 @@ class Model(with_metaclass(ModelBase, Node)):
 
     def dependencies(self, search_nullable=False):
         model_class = type(self)
-        query = self.select(self._meta.primary_key).where(self._pk_expr())
-        stack = [(type(self), query)]
+        stack = [(type(self), None)]
         seen = set()
 
         while stack:
@@ -5379,7 +5378,7 @@ class Model(with_metaclass(ModelBase, Node)):
                 continue
             seen.add(klass)
             for fk, rel_model in klass._meta.backrefs.items():
-                if rel_model is model_class:
+                if rel_model is model_class or query is None:
                     node = (fk == self.__data__[fk.rel_field.name])
                 else:
                     node = fk << query

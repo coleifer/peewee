@@ -408,24 +408,11 @@ class TestModelSQL(ModelDatabaseTestCase):
             ('DELETE FROM "like" WHERE ('
              '"tweet_id" IN ('
              'SELECT "t1"."id" FROM "tweet" AS "t1" WHERE ('
-             '"t1"."user_id" IN ('
-             'SELECT "t2"."id" FROM "user" AS "t2" WHERE ("t2"."id" = ?)))))',
-             [1]),
-            ('DELETE FROM "like" WHERE ("user_id" IN ('
-             'SELECT "t1"."id" FROM "user" AS "t1" WHERE ("t1"."id" = ?)))',
-             [1]),
-            ('DELETE FROM "relationship" WHERE ('
-             '"from_user_id" IN ('
-             'SELECT "t1"."id" FROM "user" AS "t1" WHERE ("t1"."id" = ?)))',
-             [1]),
-            ('DELETE FROM "relationship" WHERE ('
-             '"to_user_id" IN ('
-             'SELECT "t1"."id" FROM "user" AS "t1" WHERE ("t1"."id" = ?)))',
-             [1]),
-            ('DELETE FROM "tweet" WHERE ('
-             '"user_id" IN ('
-             'SELECT "t1"."id" FROM "user" AS "t1" WHERE ("t1"."id" = ?)))',
-             [1]),
+             '"t1"."user_id" = ?)))', [1]),
+            ('DELETE FROM "like" WHERE ("user_id" = ?)', [1]),
+            ('DELETE FROM "relationship" WHERE ("from_user_id" = ?)', [1]),
+            ('DELETE FROM "relationship" WHERE ("to_user_id" = ?)', [1]),
+            ('DELETE FROM "tweet" WHERE ("user_id" = ?)', [1]),
         ])
 
     def test_aliases(self):
