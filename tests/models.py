@@ -992,7 +992,7 @@ class TestDeleteInstanceRegression(ModelTestCase):
             a2.delete_instance(recursive=True)
 
         queries = [logrecord.msg for logrecord in self._qh.queries[-5:]]
-        self.assertEqual(queries, [
+        self.assertEqual(sorted(queries, reverse=True), [
             ('DELETE FROM "did" WHERE ("c_id" IN ('
              'SELECT "t1"."id" FROM "dic" AS "t1" WHERE ("t1"."b_id" IN ('
              'SELECT "t2"."id" FROM "dib" AS "t2" WHERE ("t2"."a_id" = ?)'
@@ -1000,8 +1000,8 @@ class TestDeleteInstanceRegression(ModelTestCase):
             ('DELETE FROM "dic" WHERE ("b_id" IN ('
              'SELECT "t1"."id" FROM "dib" AS "t1" WHERE ("t1"."a_id" = ?)'
              '))', [2]),
-            ('DELETE FROM "dib" WHERE ("a_id" = ?)', [2]),
             ('DELETE FROM "diba" WHERE ("a_id" = ?)', ['a2']),
+            ('DELETE FROM "dib" WHERE ("a_id" = ?)', [2]),
             ('DELETE FROM "dia" WHERE ("id" = ?)', [2])
         ])
 
