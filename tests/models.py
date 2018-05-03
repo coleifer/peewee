@@ -1045,14 +1045,32 @@ class TestDeleteInstance(ModelTestCase):
 
     def test_delete_instance_recursive(self):
         huey = User.get(User.username == 'huey')
-        huey.delete_instance(recursive=True)
+        with self.assertQueryCount(5):
+            huey.delete_instance(recursive=True)
+
+        queries = [logrecord.msg for logrecord in self._qh.queries[-5:]]
+        self.assertEqual(sorted(queries), [
+            ('DELETE FROM "favorite" WHERE ('
+             '"tweet_id" IN (SELECT "t1"."id" FROM "tweet" AS "t1" WHERE ('
+             '"t1"."user_id" = ?)))', [huey.id]),
+            ('DELETE FROM "favorite" WHERE ("user_id" = ?)', [huey.id]),
+            ('DELETE FROM "tweet" WHERE ("user_id" = ?)', [huey.id]),
+            ('DELETE FROM "users" WHERE ("id" = ?)', [huey.id]),
+            ('UPDATE "account" SET "user_id" = ? WHERE ("user_id" = ?)',
+             [None, huey.id]),
+        ])
+
+        # Only one user left.
         self.assertEqual(User.select().count(), 1)
 
+        # Huey's account has had the FK cleared out.
         acct = Account.get(Account.email == 'huey@meow.com')
         self.assertTrue(acct.user is None)
 
+        # Huey owned a favorite and one of huey's tweets was the other fav.
         self.assertEqual(Favorite.select().count(), 0)
 
+        # The only tweet left is mickey's.
         self.assertEqual(Tweet.select().count(), 1)
         tweet = Tweet.get()
         self.assertEqual(tweet.content, 'woof')
