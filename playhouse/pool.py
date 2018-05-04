@@ -60,12 +60,7 @@ Execution context examples (using above `db` instance):
 """
 import heapq
 import logging
-import threading
 import time
-try:
-    from Queue import Queue
-except ImportError:
-    from queue import Queue
 
 try:
     from psycopg2 import extensions as pg_extensions
@@ -100,11 +95,6 @@ class PooledDatabase(object):
         self._connections = []
         self._in_use = {}
         self.conn_key = id
-
-        if self._wait_timeout:
-            self._event = threading.Event()
-            self._ready_queue = Queue()
-
         super(PooledDatabase, self).__init__(database, **kwargs)
 
     def init(self, database, max_connections=None, stale_timeout=None,
