@@ -5,6 +5,15 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## 3.3.4
+
+* Added a `BinaryUUIDField` class for efficiently storing UUIDs in 16-bytes.
+* Fix dataset's `update_cache()` logic so that when updating a single table
+  that was newly-added, we also ensure that all dependent tables are updated at
+  the same time. Refs coleifer/sqlite-web#42.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.3.3...3.3.4)
+
 ## 3.3.3
 
 * More efficient implementation of model dependency-graph generation. Improves
