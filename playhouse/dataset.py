@@ -84,6 +84,8 @@ class DataSet(object):
                 dependencies.extend([
                     related._meta.table_name for _, related, _ in
                     model_class._meta.model_graph()])
+            else:
+                dependencies.extend(self.get_table_dependencies(table))
         else:
             dependencies = None  # Update all tables.
         updated = self._introspector.generate_models(
@@ -91,6 +93,19 @@ class DataSet(object):
             table_names=dependencies,
             literal_column_names=True)
         self._models.update(updated)
+
+    def get_table_dependencies(self, table):
+        stack = [table]
+        accum = []
+        seen = set()
+        while stack:
+            table = stack.pop()
+            for fk_meta in self._database.get_foreign_keys(table):
+                dest = fk_meta.dest_table
+                if dest not in seen:
+                    stack.append(dest)
+                    accum.append(dest)
+        return accum
 
     def __enter__(self):
         self.connect()
