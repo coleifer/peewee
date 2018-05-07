@@ -146,14 +146,14 @@ APIs
             >>> db.autocommit
             True
 
-    .. py:method:: backup(destination[, pages=-1, name='main', progress=None])
+    .. py:method:: backup(destination[, pages=None, name=None, progress=None])
 
         :param SqliteDatabase destination: Database object to serve as
             destination for the backup.
         :param int pages: Number of pages per iteration. Default value of -1
             indicates all pages should be backed-up in a single step.
         :param str name: Name of source database (may differ if you used ATTACH
-            DATABASE to load multiple databases).
+            DATABASE to load multiple databases). Defaults to "main".
         :param progress: Progress callback, called with three parameters: the
             number of pages remaining, the total page count, and whether the
             backup is complete.
@@ -168,13 +168,13 @@ APIs
             # Backup the contents of master to replica.
             master.backup(replica)
 
-    .. py:method:: backup_to_file(filename)
+    .. py:method:: backup_to_file(filename[, pages, name, progress])
 
         :param filename: Filename to store the database backup.
         :param int pages: Number of pages per iteration. Default value of -1
             indicates all pages should be backed-up in a single step.
         :param str name: Name of source database (may differ if you used ATTACH
-            DATABASE to load multiple databases).
+            DATABASE to load multiple databases). Defaults to "main".
         :param progress: Progress callback, called with three parameters: the
             number of pages remaining, the total page count, and whether the
             backup is complete.

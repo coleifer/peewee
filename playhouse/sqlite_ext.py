@@ -1080,11 +1080,11 @@ if CYTHON_SQLITE_EXTENSIONS:
         def autocommit(self):
             return self._conn_helper.autocommit()
 
-        def backup(self, destination, pages=-1, name='main', progress=None):
+        def backup(self, destination, pages=None, name=None, progress=None):
             return backup(self.connection(), destination.connection(),
                           pages=pages, name=name, progress=progress)
 
-        def backup_to_file(self, filename, pages=-1, name='main',
+        def backup_to_file(self, filename, pages=None, name=None,
                            progress=None):
             return backup_to_file(self.connection(), filename, pages=pages,
                                   name=name, progress=progress)

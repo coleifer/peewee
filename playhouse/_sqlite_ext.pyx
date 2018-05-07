@@ -245,7 +245,7 @@ cdef extern from "sqlite3.h":
 
     # Misc.
     cdef int sqlite3_busy_handler(sqlite3 *db, int(*)(void *, int), void *)
-    cdef int sqlite3_sleep(int ms)
+    cdef int sqlite3_sleep(int ms) nogil
     cdef sqlite3_backup *sqlite3_backup_init(
         sqlite3 *pDest,
         const char *zDestName,
@@ -253,8 +253,8 @@ cdef extern from "sqlite3.h":
         const char *zSourceName)
 
     # Backup.
-    cdef int sqlite3_backup_step(sqlite3_backup *p, int nPage)
-    cdef int sqlite3_backup_finish(sqlite3_backup *p)
+    cdef int sqlite3_backup_step(sqlite3_backup *p, int nPage) nogil
+    cdef int sqlite3_backup_finish(sqlite3_backup *p) nogil
     cdef int sqlite3_backup_remaining(sqlite3_backup *p)
     cdef int sqlite3_backup_pagecount(sqlite3_backup *p)
 
@@ -1433,8 +1433,10 @@ cdef void _update_callback(void *userData, int queryType, char *database,
     fn(query, decode(database), decode(table), <int>rowid)
 
 
-def backup(src_conn, dest_conn, pages=-1, name='main', progress=None):
+def backup(src_conn, dest_conn, pages=None, name=None, progress=None):
     cdef:
+        bytes bname = encode(name or 'main')
+        int page_step = pages or -1
         int rc
         pysqlite_Connection *src = <pysqlite_Connection *>src_conn
         pysqlite_Connection *dest = <pysqlite_Connection *>dest_conn
@@ -1443,30 +1445,33 @@ def backup(src_conn, dest_conn, pages=-1, name='main', progress=None):
         sqlite3_backup *backup
 
     # We always backup to the "main" database in the dest db.
-    backup = sqlite3_backup_init(dest_db, b'main', src_db, encode(name))
+    backup = sqlite3_backup_init(dest_db, b'main', src_db, bname)
     if backup == NULL:
         raise OperationalError('Unable to initialize backup.')
 
     while True:
-        rc = sqlite3_backup_step(backup, pages)
+        with nogil:
+            rc = sqlite3_backup_step(backup, page_step)
         if progress is not None:
             # Progress-handler is called with (remaining, page count, is done?)
             remaining = sqlite3_backup_remaining(backup)
             page_count = sqlite3_backup_pagecount(backup)
             progress(remaining, page_count, rc == SQLITE_DONE)
         if rc == SQLITE_BUSY or rc == SQLITE_LOCKED:
-            sqlite3_sleep(250)
+            with nogil:
+                sqlite3_sleep(250)
         elif rc == SQLITE_DONE:
             break
 
-    sqlite3_backup_finish(backup)
+    with nogil:
+        sqlite3_backup_finish(backup)
     if sqlite3_errcode(dest_db):
         raise OperationalError('Error backuping up database: %s' %
                                sqlite3_errmsg(dest_db))
     return True
 
 
-def backup_to_file(src_conn, filename, pages=-1, name='main', progress=None):
+def backup_to_file(src_conn, filename, pages=None, name=None, progress=None):
     dest_conn = pysqlite.connect(filename)
     backup(src_conn, dest_conn, pages=pages, name=name, progress=progress)
     dest_conn.close()
