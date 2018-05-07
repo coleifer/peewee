@@ -1443,7 +1443,7 @@ def backup(src_conn, dest_conn, pages=-1, name='main', progress=None):
         sqlite3_backup *backup
 
     # We always backup to the "main" database in the dest db.
-    backup = sqlite3_backup_init(dest_db, 'main', src_db, name)
+    backup = sqlite3_backup_init(dest_db, b'main', src_db, encode(name))
     if backup == NULL:
         raise OperationalError('Unable to initialize backup.')
 
