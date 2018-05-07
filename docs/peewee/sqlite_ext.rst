@@ -146,10 +146,17 @@ APIs
             >>> db.autocommit
             True
 
-    .. py:method:: backup(destination)
+    .. py:method:: backup(destination[, pages=-1, name='main', progress=None])
 
         :param SqliteDatabase destination: Database object to serve as
             destination for the backup.
+        :param int pages: Number of pages per iteration. Default value of -1
+            indicates all pages should be backed-up in a single step.
+        :param str name: Name of source database (may differ if you used ATTACH
+            DATABASE to load multiple databases).
+        :param progress: Progress callback, called with three parameters: the
+            number of pages remaining, the total page count, and whether the
+            backup is complete.
 
         Example:
 
@@ -164,6 +171,13 @@ APIs
     .. py:method:: backup_to_file(filename)
 
         :param filename: Filename to store the database backup.
+        :param int pages: Number of pages per iteration. Default value of -1
+            indicates all pages should be backed-up in a single step.
+        :param str name: Name of source database (may differ if you used ATTACH
+            DATABASE to load multiple databases).
+        :param progress: Progress callback, called with three parameters: the
+            number of pages remaining, the total page count, and whether the
+            backup is complete.
 
         Backup the current database to a file. The backed-up data is not a
         database dump, but an actual SQLite database file.
