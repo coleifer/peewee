@@ -747,6 +747,37 @@ class TestModelAPIs(ModelTestCase):
                 (2, 'u1-t2', 'u1'),
                 (3, 'u2-t1', 'u2')])
 
+    @requires_models(User, Tweet)
+    def test_union_with_join(self):
+        u1, u2 = [User.create(username='u%s' % i) for i in (1, 2)]
+        for u, ts in ((u1, ('t1', 't2')), (u2, ('t1',))):
+            for t in ts:
+                Tweet.create(user=u, content='%s-%s' % (u.username, t))
+
+        q1 = (User
+              .select(User, Tweet)
+              .join(Tweet, on=(Tweet.user == User.id).alias('tweet')))
+        q2 = (User
+              .select(User, Tweet)
+              .join(Tweet, on=(Tweet.user == User.id).alias('tweet')))
+
+        with self.assertQueryCount(1):
+            self.assertEqual(
+                sorted([(user.username, user.tweet.content) for user in q1]),
+                [('u1', 'u1-t1'), ('u1', 'u1-t2'), ('u2', 'u2-t1')])
+
+        uq = q1.union_all(q2)
+        with self.assertQueryCount(1):
+            result = [(user.username, user.tweet.content) for user in uq]
+            self.assertEqual(sorted(result), [
+                ('u1', 'u1-t1'),
+                ('u1', 'u1-t1'),
+                ('u1', 'u1-t2'),
+                ('u1', 'u1-t2'),
+                ('u2', 'u2-t1'),
+                ('u2', 'u2-t1'),
+            ])
+
     @requires_models(Category)
     def test_self_referential_fk(self):
         self.assertTrue(Category.parent.rel_model is Category)
