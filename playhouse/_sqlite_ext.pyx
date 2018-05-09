@@ -46,7 +46,7 @@ cdef struct sqlite3_index_constraint_usage:
     unsigned char omit
 
 
-cdef extern from "sqlite3.h":
+cdef extern from "sqlite3.h" nogil:
     ctypedef struct sqlite3:
         int busyTimeout
     ctypedef struct sqlite3_backup
@@ -245,7 +245,7 @@ cdef extern from "sqlite3.h":
 
     # Misc.
     cdef int sqlite3_busy_handler(sqlite3 *db, int(*)(void *, int), void *)
-    cdef int sqlite3_sleep(int ms) nogil
+    cdef int sqlite3_sleep(int ms)
     cdef sqlite3_backup *sqlite3_backup_init(
         sqlite3 *pDest,
         const char *zDestName,
@@ -253,8 +253,8 @@ cdef extern from "sqlite3.h":
         const char *zSourceName)
 
     # Backup.
-    cdef int sqlite3_backup_step(sqlite3_backup *p, int nPage) nogil
-    cdef int sqlite3_backup_finish(sqlite3_backup *p) nogil
+    cdef int sqlite3_backup_step(sqlite3_backup *p, int nPage)
+    cdef int sqlite3_backup_finish(sqlite3_backup *p)
     cdef int sqlite3_backup_remaining(sqlite3_backup *p)
     cdef int sqlite3_backup_pagecount(sqlite3_backup *p)
 
@@ -1478,7 +1478,7 @@ def backup_to_file(src_conn, filename, pages=None, name=None, progress=None):
     return True
 
 
-cdef int _aggressive_busy_handler(void *ptr, int n):
+cdef int _aggressive_busy_handler(void *ptr, int n) nogil:
     # In concurrent environments, it often seems that if multiple queries are
     # kicked off at around the same time, they proceed in lock-step to check
     # for the availability of the lock. By introducing some "jitter" we can
