@@ -1661,3 +1661,44 @@ class TestJsonContains(ModelTestCase):
 
         self.assertContains({'x1': {'y2': 'z2', 'y3': [0, 1, 2, 4]}}, [])
         self.assertContains({'x1': {'y2': 'z2', 'y3': [0, 2]}}, [])
+
+
+class CalendarMonth(TestModel):
+    name = TextField()
+    value = IntegerField()
+
+class CalendarDay(TestModel):
+    month = ForeignKeyField(CalendarMonth, backref='days')
+    value = IntegerField()
+
+
+class TestIntWhereChain(ModelTestCase):
+    database = database
+    requires = [CalendarMonth, CalendarDay]
+
+    def test_int_where_chain(self):
+        with self.database.atomic():
+            jan = CalendarMonth.create(name='january', value=1)
+            feb = CalendarMonth.create(name='february', value=2)
+            CalendarDay.insert_many([{'month': jan, 'value': i + 1}
+                                     for i in range(31)]).execute()
+            CalendarDay.insert_many([{'month': feb, 'value': i + 1}
+                                     for i in range(28)]).execute()
+
+        def assertValues(query, expected):
+            self.assertEqual(sorted([d.value for d in query]), list(expected))
+
+        q = CalendarDay.select().join(CalendarMonth)
+        jq = q.where(CalendarMonth.name == 'january')
+        jq1 = jq.where(CalendarDay.value >= 25)
+        assertValues(jq1, range(25, 32))
+
+        jq2 = jq1.where(CalendarDay.value < 30)
+        assertValues(jq2, range(25, 30))
+
+        fq = q.where(CalendarMonth.name == 'february')
+        fq1 = fq.where(CalendarDay.value >= 25)
+        assertValues(fq1, range(25, 29))
+
+        fq2 = fq1.where(CalendarDay.value < 30)
+        assertValues(fq2, range(25, 29))
