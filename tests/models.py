@@ -756,19 +756,19 @@ class TestModelAPIs(ModelTestCase):
 
         q1 = (User
               .select(User, Tweet)
-              .join(Tweet, on=(Tweet.user == User.id).alias('tweet')))
+              .join(Tweet, on=(Tweet.user == User.id).alias('foo')))
         q2 = (User
               .select(User, Tweet)
-              .join(Tweet, on=(Tweet.user == User.id).alias('tweet')))
+              .join(Tweet, on=(Tweet.user == User.id).alias('foo')))
 
         with self.assertQueryCount(1):
             self.assertEqual(
-                sorted([(user.username, user.tweet.content) for user in q1]),
+                sorted([(user.username, user.foo.content) for user in q1]),
                 [('u1', 'u1-t1'), ('u1', 'u1-t2'), ('u2', 'u2-t1')])
 
         uq = q1.union_all(q2)
         with self.assertQueryCount(1):
-            result = [(user.username, user.tweet.content) for user in uq]
+            result = [(user.username, user.foo.content) for user in uq]
             self.assertEqual(sorted(result), [
                 ('u1', 'u1-t1'),
                 ('u1', 'u1-t1'),
