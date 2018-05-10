@@ -778,6 +778,25 @@ class TestModelAPIs(ModelTestCase):
                 ('u2', 'u2-t1'),
             ])
 
+    @skip_if(IS_SQLITE_OLD or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES))
+    @requires_models(User)
+    def test_union_cte(self):
+        with self.database.atomic():
+            (User
+             .insert_many({'username': 'u%s' % i} for i in range(10))
+             .execute())
+
+        lhs = User.select().where(User.username.in_(['u1', 'u3']))
+        rhs = User.select().where(User.username.in_(['u5', 'u7']))
+        u_cte = (lhs | rhs).cte('users_union')
+
+        query = (User
+                 .select(User.username)
+                 .join(u_cte, on=(User.id == u_cte.c.id))
+                 .where(User.username.in_(['u1', 'u7']))
+                 .with_cte(u_cte))
+        self.assertEqual(sorted([u.username for u in query]), ['u1', 'u7'])
+
     @requires_models(Category)
     def test_self_referential_fk(self):
         self.assertTrue(Category.parent.rel_model is Category)
