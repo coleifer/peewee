@@ -212,11 +212,11 @@ To accomplish this with peewee we'll need to express the lateral join as a :py:c
     # Now we join the outer and inner queries using the LEFT LATERAL
     # JOIN. The join predicate is *ON TRUE*, since we're effectively
     # joining in the tweet subquery's WHERE clause.
-    join_clause = Clause(
+    join_clause = NodeList((
         user_query,
         SQL('LEFT JOIN LATERAL'),
         tweet_query,
-        SQL('ON %s', True))
+        SQL('ON %s', True)))
 
     # Finally, we'll wrap these up and SELECT from the result.
     query = (Tweet
