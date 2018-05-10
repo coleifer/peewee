@@ -317,7 +317,6 @@ JOIN = attrdict(
     FULL='FULL',
     FULL_OUTER='FULL OUTER',
     CROSS='CROSS',
-    LATERAL='LATERAL',
     NATURAL='NATURAL')
 
 # Row representations.

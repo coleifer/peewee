@@ -4,6 +4,7 @@ import time
 import unittest
 
 from peewee import *
+from peewee import NodeList
 from peewee import QualifiedNames
 from peewee import sort_models
 
@@ -3210,3 +3211,48 @@ class TestUpdateFrom(ModelTestCase):
         query.execute()
 
         self.assertEqual(User.get(User.id == u.id).username, 't2')
+
+
+@requires_postgresql
+class TestLateralJoin(ModelTestCase):
+    requires = [User, Tweet]
+
+    def test_lateral_join(self):
+        with self.database.atomic():
+            for i in range(3):
+                u = User.create(username='u%s' % i)
+                for j in range(4):
+                    Tweet.create(user=u, content='u%s-t%s' % (i, j))
+
+        # GOAL: query users and their 2 most-recent tweets (by ID).
+        TA = Tweet.alias()
+
+        # The "outer loop" will be iterating over the users whose tweets we are
+        # trying to find.
+        user_query = (User
+                      .select(User.id, User.username)
+                      .order_by(User.id)
+                      .alias('uq'))
+
+        # The inner loop will select tweets and is correlated to the outer loop
+        # via the WHERE clause. Note that we are using a LIMIT clause.
+        tweet_query = (TA
+                       .select(TA.id, TA.content)
+                       .where(TA.user == user_query.c.id)
+                       .order_by(TA.id.desc())
+                       .limit(2)
+                       .alias('pq'))
+
+        join = NodeList((user_query, SQL('LEFT JOIN LATERAL'), tweet_query,
+                         SQL('ON %s', [True])))
+        query = (Tweet
+                 .select(user_query.c.username, tweet_query.c.content)
+                 .from_(join)
+                 .dicts())
+        self.assertEqual([row for row in query], [
+            {'username': 'u0', 'content': 'u0-t3'},
+            {'username': 'u0', 'content': 'u0-t2'},
+            {'username': 'u1', 'content': 'u1-t3'},
+            {'username': 'u1', 'content': 'u1-t2'},
+            {'username': 'u2', 'content': 'u2-t3'},
+            {'username': 'u2', 'content': 'u2-t2'}])

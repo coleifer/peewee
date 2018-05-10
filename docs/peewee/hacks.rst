@@ -216,11 +216,12 @@ To accomplish this with peewee we'll need to express the lateral join as a :py:c
         user_query,
         SQL('LEFT JOIN LATERAL'),
         tweet_query,
-        SQL('ON %s', True)))
+        SQL('ON %s', [True])))
 
     # Finally, we'll wrap these up and SELECT from the result.
     query = (Tweet
-             .select(SQL('*'))
+             .select(user_query.c.username, tweet_query.c.message,
+                     tweet_query.c.create_date)
              .from_(join_clause))
 
 Window functions
