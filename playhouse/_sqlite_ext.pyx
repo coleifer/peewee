@@ -1456,7 +1456,11 @@ def backup(src_conn, dest_conn, pages=None, name=None, progress=None):
             # Progress-handler is called with (remaining, page count, is done?)
             remaining = sqlite3_backup_remaining(backup)
             page_count = sqlite3_backup_pagecount(backup)
-            progress(remaining, page_count, rc == SQLITE_DONE)
+            try:
+                progress(remaining, page_count, rc == SQLITE_DONE)
+            except:
+                sqlite3_backup_finish(backup)
+                raise
         if rc == SQLITE_BUSY or rc == SQLITE_LOCKED:
             with nogil:
                 sqlite3_sleep(250)

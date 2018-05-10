@@ -154,13 +154,26 @@ class TestBackup(CyDatabaseTestCase):
         if os.path.exists(self.backup_filename):
             os.unlink(self.backup_filename)
 
-    def test_backup_to_file(self):
-        # Populate the database with some test data.
+    def _populate_test_data(self, nrows=100):
         self.execute('CREATE TABLE register (id INTEGER NOT NULL PRIMARY KEY, '
                      'value INTEGER NOT NULL)')
         with self.database.atomic():
-            for i in range(100):
+            for i in range(nrows):
                 self.execute('INSERT INTO register (value) VALUES (?)', i)
+
+    def test_backup(self):
+        self._populate_test_data()
+
+        # Back-up to an in-memory database and verify contents.
+        other_db = CSqliteExtDatabase(':memory:')
+        self.database.backup(other_db)
+        cursor = other_db.execute_sql('SELECT value FROM register ORDER BY '
+                                      'value;')
+        self.assertEqual([val for val, in cursor.fetchall()], list(range(100)))
+        other_db.close()
+
+    def test_backup_to_file(self):
+        self._populate_test_data()
 
         self.database.backup_to_file(self.backup_filename)
         backup_db = CSqliteExtDatabase(self.backup_filename)
@@ -168,6 +181,33 @@ class TestBackup(CyDatabaseTestCase):
                                        'value;')
         self.assertEqual([val for val, in cursor.fetchall()], list(range(100)))
         backup_db.close()
+
+    def test_backup_progress(self):
+        self._populate_test_data()
+
+        accum = []
+        def progress(remaining, total, is_done):
+            accum.append((remaining, total, is_done))
+
+        other_db = CSqliteExtDatabase(':memory:')
+        self.database.backup(other_db, pages=1, progress=progress)
+        self.assertTrue(len(accum) > 0)
+
+        sql = 'select value from register order by value;'
+        self.assertEqual([r for r, in other_db.execute_sql(sql)],
+                         list(range(100)))
+        other_db.close()
+
+    def test_backup_progress_error(self):
+        self._populate_test_data()
+
+        def broken_progress(remaining, total, is_done):
+            raise ValueError('broken')
+
+        other_db = CSqliteExtDatabase(':memory:')
+        self.assertRaises(ValueError, self.database.backup, other_db,
+                          progress=broken_progress)
+        other_db.close()
 
 
 class TestBlob(CyDatabaseTestCase):
