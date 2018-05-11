@@ -5,6 +5,21 @@ releases, visit GitHub:
 
 https://github.com/coleifer/peewee/releases
 
+## master
+
+* LIMIT and OFFSET parameters are now treated as parameterized values instead
+  of literals.
+* SQLite backup interface supports specifying page-counts and a user-defined
+  progress handler.
+* GIL is released when doing backups or during SQLite busy timeouts (when using
+  the peewee SQLite busy-handler).
+* Add NATURAL join-type to the `JOIN` helper.
+* Improved identifier quoting to allow specifying distinct open/close-quote
+  characters. Enables adding support for MSSQL, for instance, which uses square
+  brackets, e.g. `[table].[column]`.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.3.4...HEAD)
+
 ## 3.3.4
 
 * Added a `BinaryUUIDField` class for efficiently storing UUIDs in 16-bytes.

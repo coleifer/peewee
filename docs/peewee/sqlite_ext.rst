@@ -60,7 +60,19 @@ APIs
     Extends :py:class:`SqliteDatabase` and inherits methods for declaring
     user-defined functions, pragmas, etc.
 
-.. py:class:: CSqliteExtDatabase(database[, pragmas=None[, timeout=5[, c_extensions=None[, rank_functions=True[, hash_functions=False[, regexp_function=False[, bloomfilter=False]]]]]]])
+.. py:class:: CSqliteExtDatabase(database[, pragmas=None[, timeout=5[, c_extensions=None[, rank_functions=True[, hash_functions=False[, regexp_function=False[, bloomfilter=False[, replace_busy_handler=False]]]]]]]])
+
+    :param list pragmas: A list of 2-tuples containing pragma key and value to
+        set every time a connection is opened.
+    :param timeout: Set the busy-timeout on the SQLite driver (in seconds).
+    :param bool c_extensions: Declare that C extension speedups must/must-not
+        be used. If set to ``True`` and the extension module is not available,
+        will raise an :py:class:`ImproperlyConfigured` exception.
+    :param bool rank_functions: Make search result ranking functions available.
+    :param bool hash_functions: Make hashing functions available (md5, sha1, etc).
+    :param bool regexp_function: Make the REGEXP function available.
+    :param bool bloomfilter: Make the :ref:`sqlite-bloomfilter` available.
+    :param bool replace_busy_handler: Use a smarter busy-handler implementation.
 
     Extends :py:class:`SqliteExtDatabase` and requires that the
     ``playhouse._sqlite_ext`` extension module be available.
