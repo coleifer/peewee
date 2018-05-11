@@ -1621,7 +1621,7 @@ class TestWindowFunctionIntegration(ModelTestCase):
             (3, 100., 104.)])
 
 
-@requires_postgresql
+@skip_if(IS_SQLITE or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES))
 class TestForUpdateIntegration(ModelTestCase):
     requires = [User]
 
