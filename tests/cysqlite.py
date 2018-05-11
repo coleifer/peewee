@@ -9,7 +9,7 @@ from .base import BaseTestCase
 from .base import DatabaseTestCase
 
 
-database = CSqliteExtDatabase('peewee_test.db', timeout=0.1,
+database = CSqliteExtDatabase('peewee_test.db', timeout=100,
                               hash_functions=1)
 
 

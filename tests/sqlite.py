@@ -16,7 +16,7 @@ from .base import skip_unless
 from .sqlite_helpers import json_installed
 
 
-database = SqliteExtDatabase(':memory:', c_extensions=False, timeout=0.1)
+database = SqliteExtDatabase(':memory:', c_extensions=False, timeout=100)
 
 
 CLOSURE_EXTENSION = os.environ.get('PEEWEE_CLOSURE_EXTENSION')
