@@ -577,8 +577,8 @@ class TestDeleteQuery(BaseTestCase):
                  .limit(3))
         self.assertSQL(
             query,
-            'DELETE FROM "users" WHERE ("username" != ?) LIMIT 3',
-            ['charlie'])
+            'DELETE FROM "users" WHERE ("username" != ?) LIMIT ?',
+            ['charlie', 3])
 
     def test_delete_subquery(self):
         count = fn.COUNT(Tweet.c.id).alias('ct')

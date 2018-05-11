@@ -581,9 +581,9 @@ class TestModelCompoundSelect(BaseTestCase):
         # This may be invalid SQL, but this at least documents the behavior.
         self.assertSQL(compound, (
             'SELECT "t1"."alpha" FROM "alpha" AS "t1" '
-            'ORDER BY "t1"."alpha" LIMIT 3 UNION '
+            'ORDER BY "t1"."alpha" LIMIT ? UNION '
             'SELECT "t2"."beta" FROM "beta" AS "t2" '
-            'ORDER BY "t2"."beta" LIMIT 4 LIMIT 5'), [])
+            'ORDER BY "t2"."beta" LIMIT ? LIMIT ?'), [3, 4, 5])
 
     def test_union_from(self):
         lhs = Alpha.select(Alpha.alpha).where(Alpha.alpha < 2)

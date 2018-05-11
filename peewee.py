@@ -1691,9 +1691,9 @@ class Query(BaseQuery):
              .sql(CommaNodeList(self._order_by)))
         if self._limit is not None or (self._offset is not None and
                                        ctx.state.limit_max):
-            ctx.literal(' LIMIT %d' % (self._limit or ctx.state.limit_max))
+            ctx.literal(' LIMIT ').sql(self._limit or ctx.state.limit_max)
         if self._offset is not None:
-            ctx.literal(' OFFSET %d' % self._offset)
+            ctx.literal(' OFFSET ').sql(self._offset)
         return ctx
 
     def __sql__(self, ctx):

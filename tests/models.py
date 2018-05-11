@@ -2978,7 +2978,7 @@ class TestCountUnionRegression(ModelTestCase):
             'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
             'INTERSECT '
             'SELECT "t2"."id", "t2"."username" FROM "users" AS "t2" '
-            'LIMIT 3'), [])
+            'LIMIT ?'), [3])
         self.assertEqual(query.count(), 3)
 
 
