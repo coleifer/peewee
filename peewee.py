@@ -143,11 +143,10 @@ logger.addHandler(NullHandler())
 try:
     from playhouse._speedups import quote
 except ImportError:
-    def quote(path, quote_char):
-        quotes = (quote_char, quote_char)
+    def quote(path, quote_chars):
         if len(path) == 1:
-            return path[0].join(quotes)
-        return '.'.join([part.join(quotes) for part in path])
+            return path[0].join(quote_chars)
+        return '.'.join([part.join(quote_chars) for part in path])
 
 
 if sys.version_info[0] == 2:
@@ -1270,7 +1269,7 @@ class Entity(ColumnBase):
         return hash((self.__class__.__name__, tuple(self._path)))
 
     def __sql__(self, ctx):
-        return ctx.literal(quote(self._path, ctx.state.quote or '"'))
+        return ctx.literal(quote(self._path, ctx.state.quote or '""'))
 
 
 class SQL(ColumnBase):
@@ -2433,7 +2432,7 @@ class Database(_callable_context_manager):
     field_types = {}
     operations = {}
     param = '?'
-    quote = '"'
+    quote = '""'
 
     # Feature toggles.
     commit_select = False
@@ -3219,7 +3218,7 @@ class MySQLDatabase(Database):
         'ILIKE': 'LIKE',
         'XOR': 'XOR'}
     param = '%s'
-    quote = '`'
+    quote = '``'
 
     commit_select = True
     for_update = True
@@ -3422,7 +3421,7 @@ class _savepoint(_callable_context_manager):
     def __init__(self, db, sid=None):
         self.db = db
         self.sid = sid or 's' + uuid.uuid4().hex
-        self.quoted_sid = self.sid.join((self.db.quote, self.db.quote))
+        self.quoted_sid = self.sid.join(self.db.quote)
 
     def _begin(self):
         self.db.execute_sql('SAVEPOINT %s;' % self.quoted_sid)

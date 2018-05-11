@@ -93,7 +93,7 @@ class TestDatabase(DatabaseTestCase):
         self.assertEqual(state.operations['ILIKE'], 'ILIKE')
 
         self.assertEqual(state.param, '$')
-        self.assertEqual(state.quote, '"')
+        self.assertEqual(state.quote, '""')
 
         test_db2 = TestDatabase(None, field_types={'BIGINT': 'XXX_BIGINT',
                                                    'INT': 'XXX_INT'})
