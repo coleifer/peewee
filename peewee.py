@@ -5745,12 +5745,16 @@ class ModelSelect(BaseModelSelect, Select):
             attr = on._alias
             on = on.alias()
 
+        # Obtain references to the source and destination models being joined.
         src_model, src_is_model = self._get_model(src)
         dest_model, dest_is_model = self._get_model(dest)
+
         if src_model and dest_model:
             self._join_ctx = dest
             constructor = dest_model
 
+            # In the case where the "on" clause is a Column or Field, we will
+            # convert that field into the appropriate predicate expression.
             if not (src_is_model and dest_is_model) and isinstance(on, Column):
                 if on.source is src:
                     to_field = src_model._meta.columns[on.name]
@@ -5795,6 +5799,42 @@ class ModelSelect(BaseModelSelect, Select):
 
         return (on, attr, constructor)
 
+    def _generate_on_clause(self, src, dest, to_field=None, on=None):
+        meta = src._meta
+        is_backref = fk_fields = False
+
+        # Get all the foreign keys between source and dest, and determine if
+        # the join is via a back-reference.
+        if dest in meta.model_refs:
+            fk_fields = meta.model_refs[dest]
+        elif dest in meta.model_backrefs:
+            fk_fields = meta.model_backrefs[dest]
+            is_backref = True
+
+        if not fk_fields:
+            if on is not None:
+                return None, False
+            raise ValueError('Unable to find foreign key between %s and %s. '
+                             'Please specify an explicit join condition.' %
+                             (src, dest))
+        elif to_field is not None:
+            # If the foreign-key field was specified explicitly, remove all
+            # other foreign-key fields from the list.
+            target = (to_field.field if isinstance(to_field, FieldAlias)
+                      else to_field)
+            fk_fields = [f for f in fk_fields if (
+                         (f is target) or
+                         (is_backref and f.rel_field is to_field))]
+
+        if len(fk_fields) > 1:
+            if on is None:
+                raise ValueError('More than one foreign key between %s and %s.'
+                                 ' Please specify which you are joining on.' %
+                                 (src, dest))
+            return None, False
+        else:
+            return fk_fields[0], is_backref
+
     @Node.copy
     def join(self, dest, join_type='INNER', on=None, src=None, attr=None):
         src = self._join_ctx if src is None else src
@@ -5811,39 +5851,6 @@ class ModelSelect(BaseModelSelect, Select):
 
     def join_from(self, src, dest, join_type='INNER', on=None, attr=None):
         return self.join(dest, join_type, on, src, attr)
-
-    def _generate_on_clause(self, src, dest, to_field=None, on=None):
-        meta = src._meta
-        backref = fk_fields = False
-        if dest in meta.model_refs:
-            fk_fields = meta.model_refs[dest]
-        elif dest in meta.model_backrefs:
-            fk_fields = meta.model_backrefs[dest]
-            backref = True
-
-        if not fk_fields:
-            if on is not None:
-                return None, False
-            raise ValueError('Unable to find foreign key between %s and %s. '
-                             'Please specify an explicit join condition.' %
-                             (src, dest))
-        if to_field is not None:
-            target = (to_field.field if isinstance(to_field, FieldAlias)
-                      else to_field)
-            fk_fields = [f for f in fk_fields if (
-                         (f is target) or
-                         (backref and f.rel_field is to_field))]
-
-        if len(fk_fields) > 1:
-            if on is None:
-                raise ValueError('More than one foreign key between %s and %s.'
-                                 ' Please specify which you are joining on.' %
-                                 (src, dest))
-            return None, False
-        else:
-            fk_field = fk_fields[0]
-
-        return fk_field, backref
 
     def _get_model_cursor_wrapper(self, cursor):
         if len(self._from_list) == 1 and not self._joins:
