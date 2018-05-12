@@ -302,8 +302,8 @@ Postgresql and SQLite (3.24.0 and newer) provide a different syntax that allows
 for more granular control over which constraint violation should trigger the
 conflict resolution, and what values should be updated or preserved.
 
-Example of using :py:meth:`~Insert.on_conflict` with Postgresql to update
-certain values:
+Example of using :py:meth:`~Insert.on_conflict` to perform a Postgresql-style
+upsert (or SQLite 3.24+):
 
 .. code-block:: python
 
