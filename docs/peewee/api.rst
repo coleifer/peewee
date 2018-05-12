@@ -1459,7 +1459,7 @@ Query-builder
 
     :param str action: Action to take when resolving conflict.
     :param update: A dictionary mapping column to new value.
-    :param preserve: A list of columns whose values should be preserved.
+    :param preserve: A list of columns whose values should be preserved from the original INSERT.
     :param where: Expression to restrict the conflict resolution.
     :param conflict_target: Name of column or constraint to check.
 
@@ -2051,10 +2051,42 @@ Query-builder
 
         Specify REPLACE conflict resolution strategy.
 
-    .. py:method:: on_conflict(*args, **kwargs)
+    .. py:method:: on_conflict([action=None[, update=None[, preserve=None[, where=None[, conflict_target=None]]]]])
 
-        Specify an ON CONFLICT clause by populating a :py:class:`OnConflict`
-        object.
+        :param str action: Action to take when resolving conflict. If blank,
+            action is assumed to be "update".
+        :param update: A dictionary mapping column to new value.
+        :param preserve: A list of columns whose values should be preserved from the original INSERT.
+        :param where: Expression to restrict the conflict resolution.
+        :param conflict_target: Name of column or constraint to check.
+
+        Specify the parameters for an :py:class:`OnConflict` clause to use for
+        conflict resolution.
+
+        Example:
+
+        .. code-block:: python
+
+            class User(Model):
+                username = TextField(unique=True)
+                last_login = DateTimeField(null=True)
+                login_count = IntegerField()
+
+            def log_user_in(username):
+                now = datetime.datetime.now()
+
+                # INSERT a new row for the user with the current timestamp and
+                # login count set to 1. If the user already exists, then we
+                # will preserve the last_login value from the "insert()" clause
+                # and atomically increment the login-count.
+                userid = (User
+                          .insert(username=username, last_login=now, login_count=1)
+                          .on_conflict(
+                              conflict_target=[User.username],
+                              preserve=[User.last_login],
+                              update={User.login_count: User.login_count + 1})
+                          .execute())
+                return userid
 
 
 .. py:class:: Delete()
