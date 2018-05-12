@@ -265,6 +265,74 @@ write such a query:
     >>> update = User.update(num_tweets=subquery)
     >>> update.execute()
 
+Upsert
+^^^^^^
+
+Peewee provides support for varying types of upsert functionality. With SQLite
+prior to 3.24.0 and MySQL, Peewee offers the :py:meth:`~Model.replace`, which
+allows you to insert a record or, in the event of a constraint violation,
+replace the existing record.
+
+Example of using `~Model.replace` and :py:meth:`~Insert.on_conflict_replace`:
+
+.. code-block:: python
+
+    class User(Model):
+        username = TextField(unique=True)
+        last_login = DateTimeField(null=True)
+
+    # Insert or update the user. The "last_login" value will be updated
+    # regardless of whether the user existed previously.
+    user_id = (User
+               .replace(username='the-user', last_login=datetime.now())
+               .execute())
+
+    # This query is equivalent:
+    user_id = (User
+               .insert(username='the-user', last_login=datetime.now())
+               .on_conflict_replace()
+               .execute())
+
+.. note::
+    In addition to *replace*, SQLite, MySQL and Postgresql provide an *ignore*
+    action (see: :py:meth:`~Insert.on_conflict_ignore`) if you simply wish to
+    insert and ignore any potential constraint violation.
+
+Postgresql and SQLite (3.24.0 and newer) provide a different syntax that allows
+for more granular control over which constraint violation should trigger the
+conflict resolution, and what values should be updated or preserved.
+
+Example of using :py:meth:`~Insert.on_conflict` with Postgresql to update
+certain values:
+
+.. code-block:: python
+
+    class User(Model):
+        username = TextField(unique=True)
+        last_login = DateTimeField(null=True)
+        login_count = IntegerField()
+
+    # Insert a new user.
+    User.create(username='huey', login_count=0)
+
+    # Simulate the user logging in. The login count and timestamp will be
+    # either created or updated correctly.
+    now = datetime.now()
+    rowid = (User
+             .insert(username='huey', last_login=now, login_count=1)
+             .on_conflict(
+                 conflict_target=(User.username,),  # Which constraint?
+                 preserve=(User.last_login,),  # Use the value we would have inserted.
+                 update={User.login_count: User.login_count + 1})
+             .execute())
+
+In the above example, we could safely invoke the upsert query as many times as
+we wanted. The login count will be incremented atomically, the last login
+column will be updated, and no duplicate rows will be created.
+
+For more information, see :py:meth:`Insert.on_conflict` and
+:py:class:`OnConflict`.
+
 Deleting records
 ----------------
 
