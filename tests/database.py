@@ -65,6 +65,7 @@ class TestDatabase(DatabaseTestCase):
 
     def test_pragmas_permanent(self):
         db = SqliteDatabase(':memory:')
+        db.execute_sql('pragma foreign_keys=0')
         self.assertEqual(db.foreign_keys, 0)
 
         db.pragma('foreign_keys', 1, True)

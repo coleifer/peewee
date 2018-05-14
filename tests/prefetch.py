@@ -290,6 +290,7 @@ class TestPrefetch(ModelTestCase):
 
     @requires_models(Relationship)
     def test_multiple_foreign_keys(self):
+        self.database.pragma('foreign_keys', 0)
         Person.delete().execute()
         c, h, z = [Person.create(name=name) for name in
                                  ('charlie', 'huey', 'zaizee')]
