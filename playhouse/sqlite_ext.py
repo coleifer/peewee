@@ -1049,7 +1049,8 @@ if CYTHON_SQLITE_EXTENSIONS:
             if self._update_hook is not None:
                 self._conn_helper.set_update_hook(self._update_hook)
             if self._replace_busy_handler:
-                self._conn_helper.set_busy_handler(self.timeout or 5000)
+                timeout = self._timeout or 5
+                self._conn_helper.set_busy_handler(timeout * 1000)
 
         def on_commit(self, fn):
             self._commit_hook = fn

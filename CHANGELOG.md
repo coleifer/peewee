@@ -17,6 +17,8 @@ https://github.com/coleifer/peewee/releases
 * Improved identifier quoting to allow specifying distinct open/close-quote
   characters. Enables adding support for MSSQL, for instance, which uses square
   brackets, e.g. `[table].[column]`.
+* Unify timeout interfaces for SQLite databases (use seconds everywhere rather
+  than mixing seconds and milliseconds, which was confusing).
 
 [View commits](https://github.com/coleifer/peewee/compare/3.3.4...HEAD)
 

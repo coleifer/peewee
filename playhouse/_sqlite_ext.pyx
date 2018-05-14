@@ -1375,12 +1375,12 @@ cdef class ConnectionHelper(object):
         else:
             sqlite3_update_hook(self.conn.db, _update_callback, <void *>fn)
 
-    def set_busy_handler(self, timeout=5000):
+    def set_busy_handler(self, timeout=5):
         """
         Replace the default busy handler with one that introduces some "jitter"
         into the amount of time delayed between checks.
         """
-        cdef int n = timeout
+        cdef int n = timeout * 1000
         sqlite3_busy_handler(self.conn.db, _aggressive_busy_handler, <void *>n)
         return True
 

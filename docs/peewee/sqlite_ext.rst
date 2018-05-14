@@ -44,11 +44,11 @@ Instantiating a :py:class:`SqliteExtDatabase`:
 APIs
 ----
 
-.. py:class:: SqliteExtDatabase(database[, pragmas=None[, timeout=5000[, c_extensions=None[, rank_functions=True[, hash_functions=False[, regexp_function=False[, bloomfilter=False]]]]]]])
+.. py:class:: SqliteExtDatabase(database[, pragmas=None[, timeout=5[, c_extensions=None[, rank_functions=True[, hash_functions=False[, regexp_function=False[, bloomfilter=False]]]]]]])
 
     :param list pragmas: A list of 2-tuples containing pragma key and value to
         set every time a connection is opened.
-    :param int timeout: Set the busy-timeout on the SQLite driver (in milliseconds).
+    :param timeout: Set the busy-timeout on the SQLite driver (in seconds).
     :param bool c_extensions: Declare that C extension speedups must/must-not
         be used. If set to ``True`` and the extension module is not available,
         will raise an :py:class:`ImproperlyConfigured` exception.
@@ -60,11 +60,11 @@ APIs
     Extends :py:class:`SqliteDatabase` and inherits methods for declaring
     user-defined functions, pragmas, etc.
 
-.. py:class:: CSqliteExtDatabase(database[, pragmas=None[, timeout=5000[, c_extensions=None[, rank_functions=True[, hash_functions=False[, regexp_function=False[, bloomfilter=False[, replace_busy_handler=False]]]]]]]])
+.. py:class:: CSqliteExtDatabase(database[, pragmas=None[, timeout=5[, c_extensions=None[, rank_functions=True[, hash_functions=False[, regexp_function=False[, bloomfilter=False[, replace_busy_handler=False]]]]]]]])
 
     :param list pragmas: A list of 2-tuples containing pragma key and value to
         set every time a connection is opened.
-    :param int timeout: Set the busy-timeout on the SQLite driver (in milliseconds).
+    :param timeout: Set the busy-timeout on the SQLite driver (in seconds).
     :param bool c_extensions: Declare that C extension speedups must/must-not
         be used. If set to ``True`` and the extension module is not available,
         will raise an :py:class:`ImproperlyConfigured` exception.

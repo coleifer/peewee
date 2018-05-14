@@ -456,11 +456,11 @@ Database
                     pass
 
 
-.. py:class:: SqliteDatabase(database[, pragmas=None[, timeout=5000[, **kwargs]]])
+.. py:class:: SqliteDatabase(database[, pragmas=None[, timeout=5[, **kwargs]]])
 
     :param list pragmas: A list of 2-tuples containing pragma key and value to
         set every time a connection is opened.
-    :param timeout: Set the busy-timeout on the SQLite driver (in milliseconds).
+    :param timeout: Set the busy-timeout on the SQLite driver (in seconds).
 
     Sqlite database implementation. :py:class:`SqliteDatabase` that provides
     some advanced features only offered by Sqlite.
@@ -534,7 +534,7 @@ Database
 
     .. py:attribute:: timeout
 
-        Get or set the busy timeout (milliseconds).
+        Get or set the busy timeout (seconds).
 
     .. py:method:: register_aggregate(klass[, name=None[, num_params=-1]])
 

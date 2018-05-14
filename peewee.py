@@ -2769,7 +2769,7 @@ class SqliteDatabase(Database):
         self.register_function(_sqlite_date_part, 'date_part', 2)
         self.register_function(_sqlite_date_trunc, 'date_trunc', 2)
 
-    def init(self, database, pragmas=None, timeout=5000, **kwargs):
+    def init(self, database, pragmas=None, timeout=5, **kwargs):
         if pragmas is not None:
             self._pragmas = pragmas
         self._timeout = timeout
@@ -2835,13 +2835,15 @@ class SqliteDatabase(Database):
         return self._timeout
 
     @timeout.setter
-    def timeout(self, milliseconds):
-        if self._timeout == milliseconds:
+    def timeout(self, seconds):
+        if self._timeout == seconds:
             return
 
-        self._timeout = milliseconds
+        self._timeout = seconds
         if not self.is_closed():
-            self.execute_sql('PRAGMA busy_timeout=%d;' % milliseconds)
+            # PySQLite multiplies user timeout by 1000, but the unit of the
+            # timeout PRAGMA is actually milliseconds.
+            self.execute_sql('PRAGMA busy_timeout=%d;' % (seconds * 1000))
 
     def _load_aggregates(self, conn):
         for name, (klass, num_params) in self._aggregates.items():
