@@ -39,6 +39,20 @@ class TestDatabase(DatabaseTestCase):
         self.database.foreign_keys = 'off'
         self.assertEqual(self.database.foreign_keys, 0)
 
+    def test_timeout_semantics(self):
+        self.assertEqual(self.database.timeout, 5)
+        self.assertEqual(self.database.pragma('busy_timeout'), 5000)
+
+        self.database.timeout = 2.5
+        self.assertEqual(self.database.timeout, 2.5)
+        self.assertEqual(self.database.pragma('busy_timeout'), 2500)
+
+        self.database.close()
+        self.database.connect()
+
+        self.assertEqual(self.database.timeout, 2.5)
+        self.assertEqual(self.database.pragma('busy_timeout'), 2500)
+
     def test_pragmas_deferred(self):
         pragmas = (('journal_mode', 'wal'),)
         db = SqliteDatabase(None, pragmas=pragmas)
