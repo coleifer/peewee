@@ -3256,3 +3256,70 @@ class TestLateralJoin(ModelTestCase):
             {'username': 'u1', 'content': 'u1-t2'},
             {'username': 'u2', 'content': 'u2-t3'},
             {'username': 'u2', 'content': 'u2-t2'}])
+
+
+class Task(TestModel):
+    heading = ForeignKeyField('self', backref='tasks', null=True)
+    project = ForeignKeyField('self', backref='projects', null=True)
+    title = TextField()
+    type = IntegerField()
+
+    PROJECT = 1
+    HEADING = 2
+
+
+class TestMultiSelfJoin(ModelTestCase):
+    requires = [Task]
+
+    def setUp(self):
+        super(TestMultiSelfJoin, self).setUp()
+
+        with self.database.atomic():
+            p_dev = Task.create(title='dev', type=Task.PROJECT)
+            p_p = Task.create(title='peewee', project=p_dev, type=Task.PROJECT)
+            p_h = Task.create(title='huey', project=p_dev, type=Task.PROJECT)
+
+            heading_data = (
+                ('peewee-1', p_p, 2),
+                ('peewee-2', p_p, 0),
+                ('huey-1', p_h, 1),
+                ('huey-2', p_h, 1))
+            for title, proj, n_subtasks in heading_data:
+                t = Task.create(title=title, project=proj, type=Task.HEADING)
+                for i in range(n_subtasks):
+                    Task.create(title='%s-%s' % (title, i + 1), project=proj,
+                                heading=t, type=Task.HEADING)
+
+    def test_multi_self_join(self):
+        Project = Task.alias()
+        Heading = Task.alias()
+        query = (Task
+                 .select(Task, Project, Heading)
+                 .join(Heading, JOIN.LEFT_OUTER,
+                       on=(Task.heading == Heading.id).alias('heading'))
+                 .switch(Task)
+                 .join(Project, JOIN.LEFT_OUTER,
+                       on=(Task.project == Project.id).alias('project'))
+                 .order_by(Task.id))
+
+        with self.assertQueryCount(1):
+            accum = []
+            for task in query:
+                h_title = task.heading.title if task.heading else None
+                p_title = task.project.title if task.project else None
+                accum.append((task.title, h_title, p_title))
+
+        self.assertEqual(accum, [
+            # title - heading - project
+            ('dev', None, None),
+            ('peewee', None, 'dev'),
+            ('huey', None, 'dev'),
+            ('peewee-1', None, 'peewee'),
+            ('peewee-1-1', 'peewee-1', 'peewee'),
+            ('peewee-1-2', 'peewee-1', 'peewee'),
+            ('peewee-2', None, 'peewee'),
+            ('huey-1', None, 'huey'),
+            ('huey-1-1', 'huey-1', 'huey'),
+            ('huey-2', None, 'huey'),
+            ('huey-2-1', 'huey-2', 'huey'),
+        ])
