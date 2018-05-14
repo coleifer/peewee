@@ -618,3 +618,33 @@ class TestUUIDField(ModelTestCase):
 
         u_db2 = UUIDModel.get(UUIDModel.bdata == uu)
         self.assertEqual(u_db2.id, u.id)
+
+
+class ListField(TextField):
+    def db_value(self, value):
+        return ','.join(value) if value else ''
+
+    def python_value(self, value):
+        return value.split(',') if value else []
+
+
+class Todo(TestModel):
+    content = TextField()
+    tags = ListField()
+
+
+class TestCustomField(ModelTestCase):
+    requires = [Todo]
+
+    def test_custom_field(self):
+        t1 = Todo.create(content='t1', tags=['t1-a', 't1-b'])
+        t2 = Todo.create(content='t2', tags=[])
+
+        t1_db = Todo.get(Todo.id == t1.id)
+        self.assertEqual(t1_db.tags, ['t1-a', 't1-b'])
+
+        t2_db = Todo.get(Todo.id == t2.id)
+        self.assertEqual(t2_db.tags, [])
+
+        t1_db = Todo.get(Todo.tags == Value(['t1-a', 't1-b'], unpack=False))
+        self.assertEqual(t1_db.id, t1.id)
