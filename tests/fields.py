@@ -646,5 +646,8 @@ class TestCustomField(ModelTestCase):
         t2_db = Todo.get(Todo.id == t2.id)
         self.assertEqual(t2_db.tags, [])
 
-        t1_db = Todo.get(Todo.tags == Value(['t1-a', 't1-b'], unpack=False))
+        t1_db = Todo.get(Todo.tags == AsIs(['t1-a', 't1-b']))
         self.assertEqual(t1_db.id, t1.id)
+
+        t2_db = Todo.get(Todo.tags == AsIs([]))
+        self.assertEqual(t2_db.id, t2.id)
