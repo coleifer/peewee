@@ -25,6 +25,93 @@ from .base_models import Tweet
 from .base_models import User
 
 
+class Data(TestModel):
+    key = TextField()
+    value = TextField()
+
+    class Meta:
+        schema = 'main'
+
+
+class TestAttachDatabase(ModelTestCase):
+    database = db_loader('sqlite3')
+    requires = [Data]
+
+    def test_attach(self):
+        database = self.database
+        Data.create(key='k1', value='v1')
+        Data.create(key='k2', value='v2')
+
+        # Attach an in-memory cache database.
+        database.attach(':memory:', 'cache')
+
+        # Clone data into the in-memory cache.
+        class CacheData(Data):
+            class Meta:
+                schema = 'cache'
+
+        CacheData.create_table(safe=False)
+        (CacheData
+         .insert_from(Data.select(), fields=[Data.id, Data.key, Data.value])
+         .execute())
+
+        # Update the source data.
+        query = Data.update({Data.value: Data.value + '-x'})
+        self.assertEqual(query.execute(), 2)
+
+        # Verify the source data was updated.
+        query = Data.select(Data.key, Data.value).order_by(Data.key)
+        self.assertSQL(query, (
+            'SELECT "t1"."key", "t1"."value" '
+            'FROM "main"."data" AS "t1" '
+            'ORDER BY "t1"."key"'), [])
+        self.assertEqual([v for k, v in query.tuples()], ['v1-x', 'v2-x'])
+
+        # Verify the cached data reflects the original data, pre-update.
+        query = (CacheData
+                 .select(CacheData.key, CacheData.value)
+                 .order_by(CacheData.key))
+        self.assertSQL(query, (
+            'SELECT "t1"."key", "t1"."value" '
+            'FROM "cache"."cachedata" AS "t1" '
+            'ORDER BY "t1"."key"'), [])
+        self.assertEqual([v for k, v in query.tuples()], ['v1', 'v2'])
+
+        database.close()
+
+        # On re-connecting, the in-memory database will re-attached.
+        database.connect()
+
+        # Cache-Data table does not exist.
+        curs = database.execute_sql('select * from cache.sqlite_master;')
+        self.assertEqual(curs.fetchall(), [])
+
+        # Because it's in-memory, the table needs to be re-created.
+        CacheData.create_table(safe=False)
+        self.assertEqual(CacheData.select().count(), 0)
+
+        # Original data is still there.
+        self.assertEqual(Data.select().count(), 2)
+
+    def test_attach_detach(self):
+        database = self.database
+        Data.create(key='k1', value='v1')
+        Data.create(key='k2', value='v2')
+
+        # Attach an in-memory cache database.
+        database.attach(':memory:', 'cache')
+        curs = database.execute_sql('select * from cache.sqlite_master')
+        self.assertEqual(curs.fetchall(), [])
+
+        self.assertFalse(database.attach(':memory:', 'cache'))
+        self.assertRaises(OperationalError, database.attach, 'foo.db', 'cache')
+
+        self.assertTrue(database.detach('cache'))
+        self.assertFalse(database.detach('cache'))
+        self.assertRaises(OperationalError, database.execute_sql,
+                          'select * from cache.sqlite_master')
+
+
 class TestDatabase(DatabaseTestCase):
     database = db_loader('sqlite3')
 

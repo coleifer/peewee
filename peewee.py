@@ -2766,6 +2766,7 @@ class SqliteDatabase(Database):
         self._functions = {}
         self._table_functions = []
         self._extensions = set()
+        self._attached = {}
         self.register_function(_sqlite_date_part, 'date_part', 2)
         self.register_function(_sqlite_date_trunc, 'date_trunc', 2)
 
@@ -2798,6 +2799,8 @@ class SqliteDatabase(Database):
                 table_function.register(conn)
         if self._extensions:
             self._load_extensions(conn)
+        for db_name, filename in self._attached.items():
+            conn.execute('ATTACH DATABASE "%s" AS "%s"' % (filename, db_name))
 
     def _set_pragmas(self, conn):
         if self._pragmas:
@@ -2940,6 +2943,26 @@ class SqliteDatabase(Database):
 
     def unload_extension(self, extension):
         self._extensions.remove(extension)
+
+    def attach(self, filename, name):
+        if name in self._attached:
+            if self._attached[name] == filename:
+                return False
+            raise OperationalError('schema "%s" already attached.' % name)
+
+        self._attached[name] = filename
+        if not self.is_closed():
+            self.execute_sql('ATTACH DATABASE "%s" AS "%s"' % (filename, name))
+        return True
+
+    def detach(self, name):
+        if name not in self._attached:
+            return False
+
+        del self._attached[name]
+        if not self.is_closed():
+            self.execute_sql('DETACH DATABASE "%s"' % name)
+        return True
 
     def atomic(self, lock_type=None):
         return _atomic(self, lock_type=lock_type)

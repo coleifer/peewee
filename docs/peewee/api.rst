@@ -734,6 +734,30 @@ Database
             db = SqliteExtDatabase('my_app.db')
             db.load_extension('closure')
 
+    .. py:method:: attach(filename, name)
+
+        :param str filename: Database to attach (or ``:memory:`` for in-memory)
+        :param str name: Schema name for attached database.
+        :return: boolean indicating success
+
+        Register another database file that will be attached to every database
+        connection. If the main database is currently connected, the new
+        database will be attached on the open connection.
+
+        .. note::
+            Databases that are attached using this method will be attached
+            every time a database connection is opened.
+
+    .. py:method:: detach(name)
+
+        :param str name: Schema name for attached database.
+        :return: boolean indicating success
+
+        Unregister another database file that was attached previously with a
+        call to :py:meth:`~SqliteDatabase.attach`. If the main database is
+        currently connected, the attached database will be detached from the
+        open connection.
+
     .. py:method:: transaction([lock_type=None])
 
         :param str lock_type: Locking strategy: DEFERRED, IMMEDIATE, EXCLUSIVE.
