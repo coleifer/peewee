@@ -518,7 +518,10 @@ class TestAttachDatabase(ModelTestCase):
             class Meta:
                 schema = 'cache'
 
+        self.assertFalse(CacheData.table_exists())
         CacheData.create_table(safe=False)
+        self.assertTrue(CacheData.table_exists())
+
         (CacheData
          .insert_from(Data.select(), fields=[Data.id, Data.key, Data.value])
          .execute())
@@ -551,6 +554,9 @@ class TestAttachDatabase(ModelTestCase):
         database.connect()
 
         # Cache-Data table does not exist.
+        self.assertFalse(CacheData.table_exists())
+
+        # Double-check the sqlite master table.
         curs = database.execute_sql('select * from cache.sqlite_master;')
         self.assertEqual(curs.fetchall(), [])
 
@@ -578,3 +584,18 @@ class TestAttachDatabase(ModelTestCase):
         self.assertFalse(database.detach('cache'))
         self.assertRaises(OperationalError, database.execute_sql,
                           'select * from cache.sqlite_master')
+
+    def test_sqlite_schema_support(self):
+        class CacheData(Data):
+            class Meta:
+                schema = 'cache'
+
+        # Attach an in-memory cache database and create the cache table.
+        self.database.attach(':memory:', 'cache')
+        CacheData.create_table()
+
+        tables = self.database.get_tables()
+        self.assertEqual(tables, ['data'])
+
+        tables = self.database.get_tables(schema='cache')
+        self.assertEqual(tables, ['cachedata'])

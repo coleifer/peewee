@@ -597,7 +597,7 @@ class TestSchemaMigration(ModelTestCase):
         queries = [x.msg for x in self.history]
         self.assertEqual(queries, [
             # Get all the columns.
-            ('PRAGMA table_info("indexmodel")', None),
+            ('PRAGMA "main".table_info("indexmodel")', None),
 
             # Get the table definition.
             ('select name, sql from sqlite_master '
@@ -605,15 +605,16 @@ class TestSchemaMigration(ModelTestCase):
              ['table', 'indexmodel']),
 
             # Get the indexes and indexed columns for the table.
-            ('SELECT name, sql FROM sqlite_master '
+            ('SELECT name, sql FROM "main".sqlite_master '
              'WHERE tbl_name = ? AND type = ? ORDER BY name',
              ('indexmodel', 'index')),
-            ('PRAGMA index_list("indexmodel")', None),
-            ('PRAGMA index_info("indexmodel_data")', None),
-            ('PRAGMA index_info("indexmodel_first_name_last_name")', None),
+            ('PRAGMA "main".index_list("indexmodel")', None),
+            ('PRAGMA "main".index_info("indexmodel_data")', None),
+            ('PRAGMA "main".index_info("indexmodel_first_name_last_name")',
+             None),
 
             # Get foreign keys.
-            ('PRAGMA foreign_key_list("indexmodel")', None),
+            ('PRAGMA "main".foreign_key_list("indexmodel")', None),
 
             # Drop any temporary table, if it exists.
             ('DROP TABLE IF EXISTS "indexmodel__tmp__"', []),

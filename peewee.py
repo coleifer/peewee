@@ -2790,6 +2790,8 @@ class SqliteDatabase(Database):
         return conn
 
     def _add_conn_hooks(self, conn):
+        for db_name, filename in self._attached.items():
+            conn.execute('ATTACH DATABASE "%s" AS "%s"' % (filename, db_name))
         self._set_pragmas(conn)
         self._load_aggregates(conn)
         self._load_collations(conn)
@@ -2799,8 +2801,6 @@ class SqliteDatabase(Database):
                 table_function.register(conn)
         if self._extensions:
             self._load_extensions(conn)
-        for db_name, filename in self._attached.items():
-            conn.execute('ATTACH DATABASE "%s" AS "%s"' % (filename, db_name))
 
     def _set_pragmas(self, conn):
         if self._pragmas:
@@ -2809,7 +2809,9 @@ class SqliteDatabase(Database):
                 cursor.execute('PRAGMA %s = %s;' % (pragma, value))
             cursor.close()
 
-    def pragma(self, key, value=SENTINEL, permanent=False):
+    def pragma(self, key, value=SENTINEL, permanent=False, schema=None):
+        if schema is not None:
+            key = '"%s".%s' % (schema, key)
         sql = 'PRAGMA %s' % key
         if value is not SENTINEL:
             sql += ' = %s' % (value or 0)
@@ -2975,19 +2977,22 @@ class SqliteDatabase(Database):
         self.execute_sql(statement, commit=False)
 
     def get_tables(self, schema=None):
-        cursor = self.execute_sql('SELECT name FROM sqlite_master WHERE '
-                                  'type = ? ORDER BY name;', ('table',))
+        schema = schema or 'main'
+        cursor = self.execute_sql('SELECT name FROM "%s".sqlite_master WHERE '
+                                  'type=? ORDER BY name' % schema, ('table',))
         return [row for row, in cursor.fetchall()]
 
     def get_indexes(self, table, schema=None):
-        query = ('SELECT name, sql FROM sqlite_master '
-                 'WHERE tbl_name = ? AND type = ? ORDER BY name')
+        schema = schema or 'main'
+        query = ('SELECT name, sql FROM "%s".sqlite_master '
+                 'WHERE tbl_name = ? AND type = ? ORDER BY name') % schema
         cursor = self.execute_sql(query, (table, 'index'))
         index_to_sql = dict(cursor.fetchall())
 
         # Determine which indexes have a unique constraint.
         unique_indexes = set()
-        cursor = self.execute_sql('PRAGMA index_list("%s")' % table)
+        cursor = self.execute_sql('PRAGMA "%s".index_list("%s")' %
+                                  (schema, table))
         for row in cursor.fetchall():
             name = row[1]
             is_unique = int(row[2]) == 1
@@ -2997,7 +3002,8 @@ class SqliteDatabase(Database):
         # Retrieve the indexed columns.
         index_columns = {}
         for index_name in sorted(index_to_sql):
-            cursor = self.execute_sql('PRAGMA index_info("%s")' % index_name)
+            cursor = self.execute_sql('PRAGMA "%s".index_info("%s")' %
+                                      (schema, index_name))
             index_columns[index_name] = [row[2] for row in cursor.fetchall()]
 
         return [
@@ -3010,16 +3016,19 @@ class SqliteDatabase(Database):
             for name in sorted(index_to_sql)]
 
     def get_columns(self, table, schema=None):
-        cursor = self.execute_sql('PRAGMA table_info("%s")' % table)
+        cursor = self.execute_sql('PRAGMA "%s".table_info("%s")' %
+                                  (schema or 'main', table))
         return [ColumnMetadata(r[1], r[2], not r[3], bool(r[5]), table, r[4])
                 for r in cursor.fetchall()]
 
     def get_primary_keys(self, table, schema=None):
-        cursor = self.execute_sql('PRAGMA table_info("%s")' % table)
+        cursor = self.execute_sql('PRAGMA "%s".table_info("%s")' %
+                                  (schema or 'main', table))
         return [row[1] for row in filter(lambda r: r[-1], cursor.fetchall())]
 
     def get_foreign_keys(self, table, schema=None):
-        cursor = self.execute_sql('PRAGMA foreign_key_list("%s")' % table)
+        cursor = self.execute_sql('PRAGMA "%s".foreign_key_list("%s")' %
+                                  (schema or 'main', table))
         return [ForeignKeyMetadata(row[3], row[2], row[4], table)
                 for row in cursor.fetchall()]
 
