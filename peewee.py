@@ -41,7 +41,7 @@ from copy import deepcopy
 from functools import wraps
 from inspect import isclass
 
-__version__ = '2.10.1.1'
+__version__ = '2.10.1.3'
 __all__ = [
     'BareField',
     'BigIntegerField',
@@ -2028,7 +2028,8 @@ class QueryCompiler(object):
             clauses.append(SQL('OFFSET %d' % query._offset))
 
         if query._for_update:
-            clauses.append(SQL(query._for_update))
+            clauses.extend(query._for_update.sql(alias_map=alias_map))
+
 
         return self.build_query(clauses, alias_map)
 
@@ -3109,13 +3110,18 @@ class SelectQuery(Query):
         self._distinct = is_distinct
 
     @returns_clone
-    def for_update(self, for_update=True, nowait=False):
-        self._for_update = 'FOR UPDATE NOWAIT' if for_update and nowait else \
-                'FOR UPDATE' if for_update else None
+    def for_update(self, for_update=True, nowait=False, of=None):
+        if not for_update:
+            self._for_update = None
+            return
+        self._for_update = ForUpdateLockExpression(of=of, nowait=nowait)
 
     @returns_clone
     def with_lock(self, lock_type='UPDATE'):
-        self._for_update = ('FOR %s' % lock_type) if lock_type else None
+        if not lock_type:
+            self._for_update = None
+            return
+        self._for_update = ForUpdateLockExpression(lock_type=lock_type)
 
     @returns_clone
     def naive(self, naive=True):
@@ -5304,3 +5310,26 @@ def drop_model_tables(models, **drop_table_kwargs):
     """Drop tables for all given models (in the right order)."""
     for m in reversed(sort_models_topologically(models)):
         m.drop_table(**drop_table_kwargs)
+
+
+class ForUpdateLockExpression:
+    """ for update of - expression """
+    def __init__(self, of=None, nowait=False, lock_type="UPDATE"):
+        self.of = of
+        self.nowait = nowait
+        self.lock_type = lock_type
+
+    def sql(self, alias_map):
+
+        ret = [SQL("FOR %s" % self.lock_type)]
+        if self.of:
+            ret.append(SQL("OF"))
+            tables = [self.of] if not isinstance(self.of, (list, tuple, set)) else self.of
+            for i, t in enumerate(tables):
+                ret.append(Entity(alias_map[t]))
+                if i != len(tables) - 1:
+                    ret.append(SQL(','))
+
+        if self.nowait:
+            ret.append(SQL("NOWAIT"))
+        return ret
