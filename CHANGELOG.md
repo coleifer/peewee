@@ -19,6 +19,9 @@ https://github.com/coleifer/peewee/releases
   brackets, e.g. `[table].[column]`.
 * Unify timeout interfaces for SQLite databases (use seconds everywhere rather
   than mixing seconds and milliseconds, which was confusing).
+* Added `attach()` and `detach()` methods to SQLite database, making it
+  possible to attach additional databases (e.g. an in-memory cache db).
+* Support the `schema` parameter for SQLite database introspection methods.
 
 [View commits](https://github.com/coleifer/peewee/compare/3.3.4...HEAD)
 
