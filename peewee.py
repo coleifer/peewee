@@ -1042,6 +1042,9 @@ class ColumnBase(Node):
     def distinct(self):
         return NodeList((SQL('DISTINCT'), self))
 
+    def collate(self, collation):
+        return NodeList((self, SQL('COLLATE %s' % collation)))
+
     def get_sort_key(self, ctx):
         return ()
 
@@ -4246,8 +4249,8 @@ class BareField(Field):
         if adapt is not None:
             self.adapt = adapt
 
-    def ddl(self, ctx):
-        return Entity(self.column_name)
+    def ddl_datatype(self, ctx):
+        return
 
 
 class ForeignKeyField(Field):

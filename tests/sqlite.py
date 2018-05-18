@@ -10,6 +10,7 @@ from .base import BaseTestCase
 from .base import IS_SQLITE_9
 from .base import ModelTestCase
 from .base import TestModel
+from .base import get_in_memory_db
 from .base import requires_models
 from .base import skip_if
 from .base import skip_unless
@@ -1702,3 +1703,67 @@ class TestIntWhereChain(ModelTestCase):
 
         fq2 = fq1.where(CalendarDay.value < 30)
         assertValues(fq2, range(25, 29))
+
+
+class Datum(TestModel):
+    a = BareField()
+    b = BareField(collation='BINARY')
+    c = BareField(collation='RTRIM')
+    d = BareField(collation='NOCASE')
+
+
+class TestCollatedFieldDefinitions(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [Datum]
+
+    def test_collated_fields(self):
+        rows = (
+            (1, 'abc', 'abc',  'abc  ', 'abc'),
+            (2, 'abc', 'abc',  'abc',   'ABC'),
+            (3, 'abc', 'abc',  'abc ',  'Abc'),
+            (4, 'abc', 'abc ', 'ABC',   'abc'))
+        for pk, a, b, c, d in rows:
+            Datum.create(id=pk, a=a, b=b, c=c, d=d)
+
+        def assertC(query, expected):
+            self.assertEqual([r.id for r in query], expected)
+
+        base = Datum.select().order_by(Datum.id)
+
+        # Text comparison a=b is performed using binary collating sequence.
+        assertC(base.where(Datum.a == Datum.b), [1, 2, 3])
+
+        # Text comparison a=b is performed using the RTRIM collating sequence.
+        assertC(base.where(Datum.a == Datum.b.collate('RTRIM')), [1, 2, 3, 4])
+
+        # Text comparison d=a is performed using the NOCASE collating sequence.
+        assertC(base.where(Datum.d == Datum.a), [1, 2, 3, 4])
+
+        # Text comparison a=d is performed using the BINARY collating sequence.
+        assertC(base.where(Datum.a == Datum.d), [1, 4])
+
+        # Text comparison 'abc'=c is performed using RTRIM collating sequence.
+        assertC(base.where('abc' == Datum.c), [1, 2, 3])
+
+        # Text comparison c='abc' is performed using RTRIM collating sequence.
+        assertC(base.where(Datum.c == 'abc'), [1, 2, 3])
+
+        # Grouping is performed using the NOCASE collating sequence (Values
+        # 'abc', 'ABC', and 'Abc' are placed in the same group).
+        query = Datum.select(fn.COUNT(Datum.id)).group_by(Datum.d)
+        self.assertEqual(query.scalar(), 4)
+
+        # Grouping is performed using the BINARY collating sequence.  'abc' and
+        # 'ABC' and 'Abc' form different groups.
+        query = Datum.select(fn.COUNT(Datum.id)).group_by(Datum.d.concat(''))
+        self.assertEqual([r[0] for r in query.tuples()], [1, 1, 2])
+
+        # Sorting or column c is performed using the RTRIM collating sequence.
+        assertC(base.order_by(Datum.c, Datum.id), [4, 1, 2, 3])
+
+        # Sorting of (c||'') is performed using the BINARY collating sequence.
+        assertC(base.order_by(Datum.c.concat(''), Datum.id), [4, 2, 3, 1])
+
+        # Sorting of column c is performed using the NOCASE collating sequence.
+        assertC(base.order_by(Datum.c.collate('NOCASE'), Datum.id),
+                [2, 4, 3, 1])
