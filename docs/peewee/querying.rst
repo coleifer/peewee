@@ -1152,7 +1152,8 @@ Method                  Meaning
 ``.startswith(prefix)`` Search for values beginning with ``prefix``.
 ``.endswith(suffix)``   Search for values ending with ``suffix``.
 ``.between(low, high)`` Search for values between ``low`` and ``high``.
-``.regexp(exp)``        Regular expression match.
+``.regexp(exp)``        Regular expression match (case-sensitive).
+``.iregexp(exp)``       Regular expression match (case-insensitive).
 ``.bin_and(value)``     Binary AND.
 ``.bin_or(value)``      Binary OR.
 ``.in_(value)``         IN lookup (identical to ``<<``).
