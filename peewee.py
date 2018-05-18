@@ -3501,8 +3501,6 @@ class CursorWrapper(object):
 
     def __getitem__(self, item):
         if isinstance(item, slice):
-            # TODO: getslice
-            start = item.start
             stop = item.stop
             if stop is None or stop < 0:
                 self.fill_cache()
@@ -3546,7 +3544,7 @@ class CursorWrapper(object):
         while True:
             yield self.iterate(False)
 
-    def fill_cache(self, n=0.):
+    def fill_cache(self, n=0):
         n = n or float('Inf')
         if n < 0:
             raise ValueError('Negative values are not supported.')
