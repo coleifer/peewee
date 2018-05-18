@@ -266,6 +266,7 @@ OP = attrdict(
     ILIKE='ILIKE',
     BETWEEN='BETWEEN',
     REGEXP='REGEXP',
+    IREGEXP='IREGEXP',
     CONCAT='||',
     BITWISE_NEGATION='~')
 
@@ -1026,6 +1027,10 @@ class ColumnBase(Node):
         return Expression(self, OP.BETWEEN, NodeList((lo, SQL('AND'), hi)))
     def concat(self, rhs):
         return StringExpression(self, OP.CONCAT, rhs)
+    def regexp(self, rhs):
+        return Expression(self, OP.REGEXP, rhs)
+    def iregexp(self, rhs):
+        return Expression(self, OP.IREGEXP, rhs)
     def __getitem__(self, item):
         if isinstance(item, slice):
             if item.start is None or item.stop is None:
@@ -3083,7 +3088,7 @@ class PostgresqlDatabase(Database):
         'DOUBLE': 'DOUBLE PRECISION',
         'UUID': 'UUID',
         'UUIDB': 'BYTEA'}
-    operations = {'REGEXP': '~'}
+    operations = {'REGEXP': '~', 'IREGEXP': '~*'}
     param = '%s'
 
     commit_select = True
@@ -3250,6 +3255,8 @@ class MySQLDatabase(Database):
     operations = {
         'LIKE': 'LIKE BINARY',
         'ILIKE': 'LIKE',
+        'REGEXP': 'REGEXP BINARY',
+        'IREGEXP': 'REGEXP',
         'XOR': 'XOR'}
     param = '%s'
     quote = '``'

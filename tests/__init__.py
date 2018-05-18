@@ -5,6 +5,7 @@ from peewee import OperationalError
 
 # Core modules.
 from .database import *
+from .expressions import *
 from .fields import *
 from .keys import *
 from .manytomany import *
