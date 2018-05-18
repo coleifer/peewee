@@ -7,8 +7,21 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+**Backwards-incompatible changes**
+
+* The `regexp()` operation is now case-sensitive for MySQL and Postgres. To
+  perform case-insensitive regexp operations, use `iregexp()`.
+* The SQLite `BareField()` field-type now supports all column constraints
+  *except* specifying the data-type. Previously it silently ignored any column
+  constraints.
 * LIMIT and OFFSET parameters are now treated as parameterized values instead
   of literals.
+* The `schema` parameter for SQLite database introspection methods is no longer
+  ignored by default. The schema corresponds to the name given to an attached
+  database.
+
+**New features and other changes**
+
 * SQLite backup interface supports specifying page-counts and a user-defined
   progress handler.
 * GIL is released when doing backups or during SQLite busy timeouts (when using
@@ -21,7 +34,6 @@ https://github.com/coleifer/peewee/releases
   than mixing seconds and milliseconds, which was confusing).
 * Added `attach()` and `detach()` methods to SQLite database, making it
   possible to attach additional databases (e.g. an in-memory cache db).
-* Support the `schema` parameter for SQLite database introspection methods.
 
 [View commits](https://github.com/coleifer/peewee/compare/3.3.4...HEAD)
 
