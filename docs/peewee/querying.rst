@@ -273,7 +273,7 @@ prior to 3.24.0 and MySQL, Peewee offers the :py:meth:`~Model.replace`, which
 allows you to insert a record or, in the event of a constraint violation,
 replace the existing record.
 
-Example of using `~Model.replace` and :py:meth:`~Insert.on_conflict_replace`:
+Example of using :py:meth:`~Model.replace` and :py:meth:`~Insert.on_conflict_replace`:
 
 .. code-block:: python
 
