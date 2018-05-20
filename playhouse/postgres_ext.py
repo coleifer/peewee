@@ -147,9 +147,9 @@ class ArrayField(IndexedFieldMixin, Field):
     default_index_type = 'GIN'
     passthrough = True
 
-    def __init__(self, field_class=IntegerField, dimensions=1,
-                 convert_values=False, *args, **kwargs):
-        self.__field = field_class(*args, **kwargs)
+    def __init__(self, field_class=IntegerField, field_kwargs=None,
+                 dimensions=1, convert_values=False, *args, **kwargs):
+        self.__field = field_class(**(field_kwargs or {}))
         self.dimensions = dimensions
         self.convert_values = convert_values
         self.field_type = self.__field.field_type

@@ -1,5 +1,6 @@
 #coding:utf-8
 import datetime
+from decimal import Decimal as Dc
 from types import MethodType
 
 from peewee import *
@@ -9,6 +10,7 @@ from .base import BaseTestCase
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db_loader
+from .base import requires_models
 from .base import skip_unless
 from .base_models import Register
 
@@ -30,6 +32,10 @@ class ArrayModel(TestModel):
 class ArrayTSModel(TestModel):
     key = CharField(max_length=100, primary_key=True)
     timestamps = ArrayField(TimestampField, convert_values=True)
+
+
+class DecimalArray(TestModel):
+    values = ArrayField(DecimalField, field_kwargs={'decimal_places': 1})
 
 
 class FTSModel(TestModel):
@@ -305,6 +311,16 @@ class TestArrayField(ModelTestCase):
 
         row = AM.select(I[1:2][0].alias('ints')).dicts().get()
         self.assertEqual(row['ints'], [[3], [5]])
+
+    @requires_models(DecimalArray)
+    def test_field_kwargs(self):
+        vl1, vl2 = [Dc('3.1'), Dc('1.3')], [Dc('3.14'), Dc('1')]
+        da1, da2 = [DecimalArray.create(values=vl) for vl in (vl1, vl2)]
+
+        da1_db = DecimalArray.get(DecimalArray.id == da1.id)
+        da2_db = DecimalArray.get(DecimalArray.id == da2.id)
+        self.assertEqual(da1_db.values, [Dc('3.1'), Dc('1.3')])
+        self.assertEqual(da2_db.values, [Dc('3.1'), Dc('1.0')])
 
 
 class TestArrayFieldConvertValues(ModelTestCase):

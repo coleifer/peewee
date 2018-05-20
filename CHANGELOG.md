@@ -19,6 +19,8 @@ https://github.com/coleifer/peewee/releases
 * The `schema` parameter for SQLite database introspection methods is no longer
   ignored by default. The schema corresponds to the name given to an attached
   database.
+* `ArrayField` now accepts a new parameter `field_kwargs`, which is used to
+  pass information to the array field's `field_class` initializer.
 
 **New features and other changes**
 

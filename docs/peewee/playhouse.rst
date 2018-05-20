@@ -1090,9 +1090,10 @@ postgres_ext API notes
 
 .. _pgarrays:
 
-.. py:class:: ArrayField([field_class=IntegerField[, dimensions=1[, convert_values=False]]])
+.. py:class:: ArrayField([field_class=IntegerField[, field_kwargs=None[, dimensions=1[, convert_values=False]]]])
 
     :param field_class: a subclass of :py:class:`Field`, e.g. :py:class:`IntegerField`.
+    :param dict field_kwargs: arguments to initialize ``field_class``.
     :param int dimensions: dimensions of array.
     :param bool convert_values: apply ``field_class`` value conversion to array data.
 
