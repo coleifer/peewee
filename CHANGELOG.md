@@ -7,6 +7,10 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/3.4.0...HEAD)
+
+## 3.4.0
+
 **Backwards-incompatible changes**
 
 * The `regexp()` operation is now case-sensitive for MySQL and Postgres. To
@@ -37,7 +41,7 @@ https://github.com/coleifer/peewee/releases
 * Added `attach()` and `detach()` methods to SQLite database, making it
   possible to attach additional databases (e.g. an in-memory cache db).
 
-[View commits](https://github.com/coleifer/peewee/compare/3.3.4...HEAD)
+[View commits](https://github.com/coleifer/peewee/compare/3.3.4...3.4.0)
 
 ## 3.3.4
 
