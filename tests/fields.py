@@ -244,6 +244,15 @@ class TestDateFields(ModelTestCase):
                 37.))
 
 
+class U2(TestModel):
+    username = TextField()
+
+
+class T2(TestModel):
+    user = ForeignKeyField(U2, backref='tweets', on_delete='CASCADE')
+    content = TextField()
+
+
 class TestForeignKeyField(ModelTestCase):
     requires = [User, Tweet]
 
@@ -295,6 +304,27 @@ class TestForeignKeyField(ModelTestCase):
 
         # We still preserve the metadata about the relationship.
         self.assertTrue(Pet.owner in Person._meta.backrefs)
+
+    @requires_models(U2, T2)
+    def test_on_delete_behavior(self):
+        with self.database.atomic():
+            for username in ('u1', 'u2', 'u3'):
+                user = U2.create(username=username)
+                for i in range(3):
+                    T2.create(user=user, content='%s-%s' % (username, i))
+
+        self.assertEqual(T2.select().count(), 9)
+        U2.delete().where(U2.username == 'u2').execute()
+        self.assertEqual(T2.select().count(), 6)
+
+        query = (U2
+                 .select(U2.username, fn.COUNT(T2.id).alias('ct'))
+                 .join(T2, JOIN.LEFT_OUTER)
+                 .group_by(U2.username)
+                 .order_by(U2.username))
+        self.assertEqual([(u.username, u.ct) for u in query], [
+            ('u1', 3),
+            ('u3', 3)])
 
 
 class Composite(TestModel):
