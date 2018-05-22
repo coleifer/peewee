@@ -307,6 +307,9 @@ class TestForeignKeyField(ModelTestCase):
 
     @requires_models(U2, T2)
     def test_on_delete_behavior(self):
+        if IS_SQLITE:
+            self.database.foreign_keys = 1
+
         with self.database.atomic():
             for username in ('u1', 'u2', 'u3'):
                 user = U2.create(username=username)
@@ -667,9 +670,6 @@ class TestCustomField(ModelTestCase):
     requires = [Todo]
 
     def test_custom_field(self):
-        if IS_SQLITE:
-            self.database.foreign_keys = 1
-
         t1 = Todo.create(content='t1', tags=['t1-a', 't1-b'])
         t2 = Todo.create(content='t2', tags=[])
 
