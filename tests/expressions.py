@@ -121,3 +121,39 @@ class TestValueConversion(ModelTestCase):
             'SELECT "t1"."id", "t1"."name" FROM "uppermodel" AS "t1" '
             'WHERE ("t1"."name" = ?)'), ['huey'])
         self.assertRaises(UpperModel.DoesNotExist, sq.get)
+
+    def test_value_conversion_query(self):
+        um = UpperModel.create(name='huey')
+        UM = UpperModel.alias()
+        subq = UM.select(UM.name).where(UM.name == 'huey')
+
+        # Select from WHERE ... IN <subquery>.
+        query = UpperModel.select().where(UpperModel.name.in_(subq))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."name" FROM "uppermodel" AS "t1" '
+            'WHERE ("t1"."name" IN ('
+            'SELECT "t2"."name" FROM "uppermodel" AS "t2" '
+            'WHERE ("t2"."name" = UPPER(?))))'), ['huey'])
+        self.assertEqual(query.get().id, um.id)
+
+        # Join on sub-query.
+        query = (UpperModel
+                 .select()
+                 .join(subq, on=(UpperModel.name == subq.c.name)))
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."name" FROM "uppermodel" AS "t1" '
+            'INNER JOIN (SELECT "t2"."name" FROM "uppermodel" AS "t2" '
+            'WHERE ("t2"."name" = UPPER(?))) AS "t3" '
+            'ON ("t1"."name" = "t3"."name")'), ['huey'])
+        self.assertEqual(query.get().id, um.id)
+
+    def test_having_clause(self):
+        query = (UpperModel
+                 .select(UpperModel.name, fn.COUNT(UpperModel.id).alias('ct'))
+                 .group_by(UpperModel.name)
+                 .having(UpperModel.name == 'huey'))
+        self.assertSQL(query, (
+            'SELECT "t1"."name", COUNT("t1"."id") AS "ct" '
+            'FROM "uppermodel" AS "t1" '
+            'GROUP BY "t1"."name" '
+            'HAVING ("t1"."name" = UPPER(?))'), ['huey'])
