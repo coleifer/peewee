@@ -145,7 +145,8 @@ class TestValueConversion(ModelTestCase):
             'INNER JOIN (SELECT "t2"."name" FROM "uppermodel" AS "t2" '
             'WHERE ("t2"."name" = UPPER(?))) AS "t3" '
             'ON ("t1"."name" = "t3"."name")'), ['huey'])
-        self.assertEqual(query.get().id, um.id)
+        row = query.tuples().get()
+        self.assertEqual(row, (um.id, 'HUEY'))
 
     def test_having_clause(self):
         query = (UpperModel
