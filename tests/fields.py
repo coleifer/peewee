@@ -667,6 +667,9 @@ class TestCustomField(ModelTestCase):
     requires = [Todo]
 
     def test_custom_field(self):
+        if IS_SQLITE:
+            self.database.foreign_keys = 1
+
         t1 = Todo.create(content='t1', tags=['t1-a', 't1-b'])
         t2 = Todo.create(content='t2', tags=[])
 
