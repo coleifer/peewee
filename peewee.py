@@ -1252,10 +1252,9 @@ class Expression(ColumnBase):
         with ctx(**overrides):
             # Postgresql reports an error for IN/NOT IN (), so convert to
             # the equivalent boolean expression.
-            if self.op == OP.IN and Context().parse(self.rhs)[0] == '()':
-                return ctx.literal('0 = 1')
-            elif self.op == OP.NOT_IN and Context().parse(self.rhs)[0] == '()':
-                return ctx.literal('1 = 1')
+            if (self.op == OP.IN or self.op == OP.NOT_IN) and \
+               Context().parse(self.rhs)[0] == '()':
+                return ctx.literal('0 = 1' if self.op == OP.IN else '1 = 1')
 
             return (ctx
                     .sql(self.lhs)
