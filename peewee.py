@@ -548,13 +548,22 @@ class Context(object):
         self._sql.append(keyword)
         return self
 
-    def value(self, value, converter=None):
-        if converter is None:
-            converter = self.state.converter
+    def value(self, value, converter=None, add_param=True):
         if converter:
             value = converter(value)
+            if isinstance(value, Node):
+                return self.sql(value)
+        elif converter is None and self.state.converter:
+            # Explicitly check for None so that "False" can be used to signify
+            # that no conversion should be applied.
+            value = self.state.converter(value)
+
+        if isinstance(value, Node):
+            with self(converter=None):
+                return self.sql(value)
+
         self._values.append(value)
-        return self
+        return self.literal(self.state.param or '?') if add_param else self
 
     def __sql__(self, ctx):
         ctx._sql.extend(self._sql)
@@ -1171,12 +1180,10 @@ class Value(ColumnBase):
 
     def __sql__(self, ctx):
         if self.multi:
-            ctx.sql(EnclosedNodeList(self.values))
-        else:
-            (ctx
-             .literal(ctx.state.param or '?')
-             .value(self.value, self.converter))
-        return ctx
+            # For multi-part values (e.g. lists of IDs).
+            return ctx.sql(EnclosedNodeList(self.values))
+
+        return ctx.value(self.value, self.converter)
 
 
 def AsIs(value):
@@ -1289,10 +1296,7 @@ class SQL(ColumnBase):
         ctx.literal(self.sql)
         if self.params:
             for param in self.params:
-                if isinstance(param, Node):
-                    ctx.sql(param)
-                else:
-                    ctx.value(param)
+                ctx.value(param, False, add_param=False)
         return ctx
 
 
@@ -1634,10 +1638,7 @@ class RawQuery(BaseQuery):
         ctx.literal(self._sql)
         if self._params:
             for param in self._params:
-                if isinstance(param, Node):
-                    ctx.sql(param)
-                else:
-                    ctx.value(param)
+                ctx.value(param, add_param=False)
         return ctx
 
     def _execute(self, database):

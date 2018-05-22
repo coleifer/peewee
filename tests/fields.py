@@ -14,6 +14,7 @@ from .base import IS_SQLITE
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db
+from .base import get_in_memory_db
 from .base import requires_models
 from .base import requires_sqlite
 from .base_models import Tweet
@@ -684,3 +685,39 @@ class TestCustomField(ModelTestCase):
 
         t2_db = Todo.get(Todo.tags == AsIs([]))
         self.assertEqual(t2_db.id, t2.id)
+
+
+class UpperField(TextField):
+    def db_value(self, value):
+        return fn.UPPER(value)
+
+
+class UpperModel(TestModel):
+    name = UpperField()
+
+
+class TestSQLFunctionDBValue(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [UpperModel]
+
+    def test_sql_function_db_value(self):
+        # Verify that the db function is applied as part of an INSERT.
+        um = UpperModel.create(name='huey')
+        um_db = UpperModel.get(UpperModel.id == um.id)
+        self.assertEqual(um_db.name, 'HUEY')
+
+        # Verify that the db function is applied as part of an UPDATE.
+        um_db.name = 'zaizee'
+        um_db.save()
+
+        # Ensure that the name was updated correctly.
+        um_db2 = UpperModel.get(UpperModel.id == um.id)
+        self.assertEqual(um_db2.name, 'ZAIZEE')
+
+        # Verify that the db function is applied in a WHERE expression.
+        um_db3 = UpperModel.get(UpperModel.name == 'zaiZee')
+        self.assertEqual(um_db3.id, um.id)
+
+        # If we nest the field in a function, the conversion is not applied.
+        expr = fn.SUBSTR(UpperModel.name, 1, 1) == 'z'
+        self.assertRaises(UpperModel.DoesNotExist, UpperModel.get, expr)
