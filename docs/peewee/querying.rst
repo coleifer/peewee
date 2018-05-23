@@ -1019,9 +1019,9 @@ query parameter and not part of the actual SQL query:
 Window functions
 ----------------
 
-peewee comes with basic support for SQL window functions, which can be created
-by calling :py:meth:`Function.over` and passing in your partitioning or
-ordering parameters.
+peewee comes with support for SQL window functions, which can be created by
+calling :py:meth:`Function.over` and passing in your partitioning or ordering
+parameters.
 
 .. code-block:: python
 
