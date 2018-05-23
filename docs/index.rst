@@ -38,7 +38,7 @@ New to peewee? Here is a list of documents you might find most helpful when gett
 started:
 
 * :ref:`Quickstart guide <quickstart>` -- this guide covers all the bare essentials. It will take you between 5 and 10 minutes to go through it.
-* :ref:`Example queries <query-examples>` taken from the `PostgreSQL exercises website <https://pgexercises.com>`_.
+* :ref:`Example Twitter app <example-app>` written using Flask framework.
 * :ref:`Guide to the various query operators <query-operators>` describes how to construct queries and combine expressions.
 * :ref:`Field types table <field_types_table>` lists the various field types peewee supports and the parameters they accept. There is also an :ref:`extension module <playhouse>` that contains :ref:`special/custom field types <extra-fields>`.
 
@@ -53,17 +53,17 @@ Contents:
    peewee/quickstart
    peewee/example
    peewee/contributing
-   peewee/query_examples
    peewee/database
    peewee/models
    peewee/querying
    peewee/transactions
-   peewee/changes
    peewee/api
    peewee/sqlite_ext
    peewee/playhouse
+   peewee/query_examples
    peewee/query_builder
    peewee/hacks
+   peewee/changes
 
 Note
 ----
