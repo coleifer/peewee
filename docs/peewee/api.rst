@@ -2621,7 +2621,7 @@ Fields
     Accepts a special ``coerce`` parameter, a function that takes a value
     coming from the database and converts it into the appropriate Python type.
 
-.. py:class:: ForeignKeyField(model[, field=None[, backref=None[, on_delete=None[, on_update=None[, object_id_name=None[, **kwargs]]]]]])
+.. py:class:: ForeignKeyField(model[, field=None[, backref=None[, on_delete=None[, on_update=None[, deferrable=None[, object_id_name=None[, **kwargs]]]]]]])
 
     :param Model model: Model to reference or the string 'self' if declaring a
         self-referential foreign key.
@@ -2630,6 +2630,7 @@ Fields
     :param str backref: Accessor name for back-reference.
     :param str on_delete: ON DELETE action, e.g. ``'CASCADE'``..
     :param str on_update: ON UPDATE action.
+    :param str deferrable: Control when constraint is enforced, e.g. ``'INITIALLY DEFERRED'``.
     :param str object_id_name: Name for object-id accessor.
 
     Field class for storing a foreign key.
@@ -2677,7 +2678,22 @@ Fields
 
     :param str rel_model_name: Model name to reference.
 
-    Field class for representing a deferred foreign key.
+    Field class for representing a deferred foreign key. Useful for circular
+    foreign-key references, for example:
+
+    .. code-block:: python
+
+        class Husband(Model):
+            name = TextField()
+            wife = DeferredForeignKey('Wife', deferrable='INITIALLY DEFERRED')
+
+        class Wife(Model):
+            name = TextField()
+            husband = ForeignKeyField(Husband, deferrable='INITIALLY DEFERRED')
+
+    In the above example, when the ``Wife`` model is declared, the foreign-key
+    ``Husband.wife`` is automatically resolved and turned into a regular
+    :py:class:`ForeignKeyField`.
 
 .. py:class:: ManyToManyField(model[, backref=None[, through_model=None]])
 

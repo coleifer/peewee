@@ -4257,8 +4257,9 @@ class ForeignKeyField(Field):
     accessor_class = ForeignKeyAccessor
 
     def __init__(self, model, field=None, backref=None, on_delete=None,
-                 on_update=None, _deferred=None, rel_model=None, to_field=None,
-                 object_id_name=None, related_name=None, *args, **kwargs):
+                 on_update=None, deferrable=None, _deferred=None,
+                 rel_model=None, to_field=None, object_id_name=None,
+                 related_name=None, *args, **kwargs):
         super(ForeignKeyField, self).__init__(*args, **kwargs)
         if rel_model is not None:
             __deprecated__('"rel_model" has been deprecated in favor of '
@@ -4279,6 +4280,7 @@ class ForeignKeyField(Field):
         self.backref = None
         self.on_delete = on_delete
         self.on_update = on_update
+        self.deferrable = deferrable
         self.deferred = _deferred
         self.object_id_name = object_id_name
 
@@ -4361,6 +4363,8 @@ class ForeignKeyField(Field):
             parts.append(SQL('ON DELETE %s' % self.on_delete))
         if self.on_update:
             parts.append(SQL('ON UPDATE %s' % self.on_update))
+        if self.deferrable:
+            parts.append(SQL('DEFERRABLE %s' % self.deferrable))
         return NodeList(parts)
 
     def __getattr__(self, attr):

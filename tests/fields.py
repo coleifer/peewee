@@ -17,6 +17,7 @@ from .base import db
 from .base import get_in_memory_db
 from .base import requires_models
 from .base import requires_sqlite
+from .base import skip_if
 from .base_models import Tweet
 from .base_models import User
 
@@ -329,6 +330,33 @@ class TestForeignKeyField(ModelTestCase):
         self.assertEqual([(u.username, u.ct) for u in query], [
             ('u1', 3),
             ('u3', 3)])
+
+
+class M1(TestModel):
+    name = CharField(primary_key=True)
+    m2 = DeferredForeignKey('M2', deferrable='INITIALLY DEFERRED',
+                            on_delete='CASCADE')
+
+class M2(TestModel):
+    name = CharField(primary_key=True)
+    m1 = ForeignKeyField(M1, deferrable='INITIALLY DEFERRED',
+                         on_delete='CASCADE')
+
+
+@skip_if(IS_MYSQL)
+class TestDeferredForeignKey(ModelTestCase):
+    requires = [M1, M2]
+
+    def test_deferred_foreign_key(self):
+        with self.database.atomic():
+            m1 = M1.create(name='m1', m2='m2')
+            m2 = M2.create(name='m2', m1='m1')
+
+        m1_db = M1.get(M1.name == 'm1')
+        self.assertEqual(m1_db.m2.name, 'm2')
+
+        m2_db = M2.get(M2.name == 'm2')
+        self.assertEqual(m2_db.m1.name, 'm1')
 
 
 class Composite(TestModel):
