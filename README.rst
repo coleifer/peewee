@@ -25,7 +25,7 @@ started:
 
 * `Quickstart guide <http://docs.peewee-orm.com/en/latest/peewee/quickstart.html#quickstart>`_ -- this guide covers all the essentials. It will take you between 5 and 10 minutes to go through it.
 * `Example queries <http://docs.peewee-orm.com/en/latest/peewee/query_examples.html>`_ taken from the `PostgreSQL Exercises website <https://pgexercises.com/>`_.
-* `Guide to the various query operators <http://docs.peewee-orm.com/en/latest/peewee/querying.html#query-operators>`_ describes how to construct queries and combine expressions.
+* `Guide to the various query operators <http://docs.peewee-orm.com/en/latest/peewee/query_operators.html>`_ describes how to construct queries and combine expressions.
 * `Field types table <http://docs.peewee-orm.com/en/latest/peewee/models.html#field-types-table>`_ lists the various field types peewee supports and the parameters they accept.
 
 For flask helpers, check out the `flask_utils extension module <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#flask-utils>`_. You can also use peewee with the popular extension `flask-admin <https://flask-admin.readthedocs.io/en/latest/>`_ to provide a Django-like admin interface for managing peewee models.
