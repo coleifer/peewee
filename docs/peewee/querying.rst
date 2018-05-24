@@ -1678,6 +1678,15 @@ If you would like to join the same table twice, use the :py:meth:`~ModelSelect.s
     # Join the Artist table on both `Album` and `Genre`.
     Artist.select().join(Album).switch(Artist).join(Genre)
 
+Alternatively, you can use :py:meth:`~ModelSelect.join_from`:
+
+.. code-block:: python
+
+    query = (Artist
+             .select()
+             .join(Album)
+             .join_from(Artist, Genre))
+
 .. _manytomany:
 
 Implementing Many to Many
