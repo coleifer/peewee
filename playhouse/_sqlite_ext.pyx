@@ -492,12 +492,18 @@ cdef int pwFilter(sqlite3_vtab_cursor *pBase, int idxNum,
         else:
             query[param] = None
 
-    table_func.initialize(**query)
+    try:
+        table_func.initialize(**query)
+    except:
+        return SQLITE_ERROR
+
     pCur.stopped = False
     try:
         row_data = table_func.iterate(0)
     except StopIteration:
         pCur.stopped = True
+    except:
+        return SQLITE_ERROR
     else:
         Py_INCREF(row_data)
         pCur.row_data = <void *>row_data
