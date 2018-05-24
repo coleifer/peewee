@@ -424,6 +424,27 @@ class TestIPField(ModelTestCase):
 class TestBitFields(ModelTestCase):
     requires = [Bits]
 
+    def test_bit_field_auto_flag(self):
+        class Bits2(TestModel):
+            flags = BitField()
+
+            f1 = flags.flag()  # Automatically gets 1.
+            f2 = flags.flag()  # 2
+            f4 = flags.flag()  # 4
+            f16 = flags.flag(16)
+            f32 = flags.flag()  # 32
+
+        b = Bits2()
+        self.assertEqual(b.flags, 0)
+
+        b.f1 = True
+        self.assertEqual(b.flags, 1)
+        b.f4 = True
+        self.assertEqual(b.flags, 5)
+
+        b.f32 = True
+        self.assertEqual(b.flags, 37)
+
     def test_bit_field_instance_flags(self):
         b = Bits()
         self.assertEqual(b.flags, 0)

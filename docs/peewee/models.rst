@@ -177,17 +177,17 @@ Field initialization arguments
 
 Parameters accepted by all field types and their default values:
 
-* ``null = False`` -- boolean indicating whether null values are allowed to be stored
-* ``index = False`` -- boolean indicating whether to create an index on this column
-* ``unique = False`` -- boolean indicating whether to create a unique index on this column. See also :ref:`adding composite indexes <model_indexes>`.
-* ``column_name = None`` -- string representing the underlying column to use if different, useful for legacy databases
-* ``default = None`` -- any value to use as a default for uninitialized models; If ``callable``, will be called to produce value
-* ``primary_key = False`` -- whether this field is the primary key for the table
-* ``constraints = None`` - a list of one or more constraints, e.g. ``[Check('price > 0')]``
-* ``sequence = None`` -- sequence to populate field (if backend supports it)
+* ``null = False`` -- allow null values
+* ``index = False`` -- create an index on this column
+* ``unique = False`` -- create a unique index on this column. See also :ref:`adding composite indexes <model_indexes>`.
+* ``column_name = None`` -- explicitly specify the column name in the database.
+* ``default = None`` -- any value or callable to use as a default for uninitialized models
+* ``primary_key = False`` -- primary key for the table
+* ``constraints = None`` - one or more constraints, e.g. ``[Check('price > 0')]``
+* ``sequence = None`` -- sequence name (if backend supports it)
 * ``collation = None`` -- collation to use for ordering the field / index
 * ``unindexed = False`` -- indicate field on virtual table should be unindexed (**SQLite-only**)
-* ``choices = None`` -- an optional iterable containing 2-tuples of ``value``, ``display``
+* ``choices = None`` -- optional iterable containing 2-tuples of ``value``, ``display``
 * ``help_text = None`` -- string representing any helpful text for this field
 * ``verbose_name = None`` -- string representing the "user-friendly" name of this field
 
@@ -213,9 +213,9 @@ Some fields take special parameters...
 |                                | ``auto_round``, ``rounding``                   |
 +--------------------------------+------------------------------------------------+
 | :py:class:`ForeignKeyField`    | ``model``, ``field``, ``backref``,             |
-|                                | ``on_delete``, ``on_update``, ``extra``        |
+|                                | ``on_delete``, ``on_update``, ``deferrable``   |
 +--------------------------------+------------------------------------------------+
-| :py:class:`BareField`          | ``coerce``                                     |
+| :py:class:`BareField`          | ``adapt``                                      |
 +--------------------------------+------------------------------------------------+
 
 .. note::
@@ -492,11 +492,11 @@ meta-columns or untyped columns, so for those cases as well you may wish to use
 an untyped field (although for full-text search, you should use
 :py:class:`SearchField` instead!).
 
-:py:class:`BareField` accepts a special parameter ``coerce``. This parameter is
+:py:class:`BareField` accepts a special parameter ``adapt``. This parameter is
 a function that takes a value coming from the database and converts it into the
 appropriate Python type. For instance, if you have a virtual table with an
 un-typed column but you know that it will return ``int`` objects, you can
-specify ``coerce=int``.
+specify ``adapt=int``.
 
 Example:
 
@@ -520,9 +520,8 @@ Example:
 Creating a custom field
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-It isn't too difficult to add support for custom field types in peewee. In this
-example we will create a UUID field for postgresql (which has a native UUID
-column type).
+It is easy to add support for custom field types in peewee. In this example we
+will create a UUID field for postgresql (which has a native UUID column type).
 
 To add a custom field type you need to first identify what type of column the
 field data will be stored in. If you just want to add python behavior atop,
@@ -582,7 +581,7 @@ like *contains* and *update*. You can specify :ref:`custom operations
 the :py:class:`HStoreField`, in ``playhouse.postgres_ext``.
 
 Field-naming conflicts
-----------------------
+^^^^^^^^^^^^^^^^^^^^^^
 
 :py:class:`Model` classes implement a number of class- and instance-methods,
 for example :py:meth:`Model.save` or :py:meth:`Model.create`. If you declare a
@@ -691,7 +690,8 @@ relationships, and more).
 .. code-block:: pycon
 
     >>> Person._meta.fields
-    {'id': <peewee.PrimaryKeyField object at 0x7f51a2e92750>, 'name': <peewee.CharField object at 0x7f51a2f0a510>}
+    {'id': <peewee.PrimaryKeyField object at 0x7f51a2e92750>,
+     'name': <peewee.CharField object at 0x7f51a2f0a510>}
 
     >>> Person._meta.primary_key
     <peewee.PrimaryKeyField object at 0x7f51a2e92750>

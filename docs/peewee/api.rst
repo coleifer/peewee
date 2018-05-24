@@ -458,8 +458,8 @@ Database
 
 .. py:class:: SqliteDatabase(database[, pragmas=None[, timeout=5[, **kwargs]]])
 
-    :param list pragmas: A list of 2-tuples containing pragma key and value to
-        set every time a connection is opened.
+    :param pragmas: Either a dictionary or a list of 2-tuples containing
+        pragma key and value to set every time a connection is opened.
     :param timeout: Set the busy-timeout on the SQLite driver (in seconds).
 
     Sqlite database implementation. :py:class:`SqliteDatabase` that provides
@@ -467,15 +467,20 @@ Database
 
     * Register custom aggregates, collations and functions
     * Load C extensions
-    * Advanced transactions (specify isolation level)
+    * Advanced transactions (specify lock type)
     * For even more features, see :py:class:`SqliteExtDatabase`.
 
-    Example of using PRAGMAs::
+    Example of initializing a database and configuring some PRAGMAs:
+
+    .. code-block:: python
 
         db = SqliteDatabase('my_app.db', pragmas=(
             ('cache_size', -16000),  # 16MB
             ('journal_mode', 'wal'),  # Use write-ahead-log journal mode.
         ))
+
+        # Alternatively, pragmas can be specified using a dictionary.
+        db = SqliteDatabase('my_app.db', pragmas={'journal_mode': 'wal'})
 
     .. py:method:: pragma(key[, value=SENTINEL[, permanent=False]])
 
@@ -2369,11 +2374,17 @@ Fields
         # Query for sticky + favorite posts:
         query = Post.select().where(Post.is_sticky & Post.is_favorite)
 
-    .. py:method:: flag(value)
+    .. py:method:: flag([value=None])
+
+        :param int value: Value associated with flag, typically a power of 2.
 
         Returns a descriptor that can get or set specific bits in the overall
         value. When accessed on the class itself, it returns a
         :py:class:`Expression` object suitable for use in a query.
+
+        If the value is not provided, it is assumed that each flag will be an
+        increasing power of 2, so if you had four flags, they would have the
+        values 1, 2, 4, 8.
 
 .. py:class:: BigBitField
 

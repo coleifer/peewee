@@ -2781,6 +2781,8 @@ class SqliteDatabase(Database):
     def init(self, database, pragmas=None, timeout=5, **kwargs):
         if pragmas is not None:
             self._pragmas = pragmas
+        if isinstance(self._pragmas, dict):
+            self._pragmas = list(self._pragmas.items())
         self._timeout = timeout
         super(SqliteDatabase, self).init(database, **kwargs)
 
@@ -3954,8 +3956,15 @@ class BitField(BitwiseMixin, BigIntegerField):
     def __init__(self, *args, **kwargs):
         kwargs.setdefault('default', 0)
         super(BitField, self).__init__(*args, **kwargs)
+        self.__current_flag = 1
 
-    def flag(self, value):
+    def flag(self, value=None):
+        if value is None:
+            value = self.__current_flag
+            self.__current_flag <<= 1
+        else:
+            self.__current_flag = value << 1
+
         class FlagDescriptor(object):
             def __init__(self, field, value):
                 self._field = field

@@ -77,6 +77,23 @@ class TestDatabase(DatabaseTestCase):
         db.init(':memory:', pragmas=(('cache_size', -8000),))
         self.assertEqual(db._pragmas, (('cache_size', -8000),))
 
+    def test_pragmas_as_dict(self):
+        pragmas = {'journal_mode': 'wal'}
+        pragma_list = [('journal_mode', 'wal')]
+
+        db = SqliteDatabase(':memory:', pragmas=pragmas)
+        self.assertEqual(db._pragmas, pragma_list)
+
+        # Test deferred databases correctly handle pragma dicts.
+        db = SqliteDatabase(None, pragmas=pragmas)
+        self.assertEqual(db._pragmas, pragma_list)
+
+        db.init(':memory:')
+        self.assertEqual(db._pragmas, pragma_list)
+
+        db.init(':memory:', pragmas={})
+        self.assertEqual(db._pragmas, [])
+
     def test_pragmas_permanent(self):
         db = SqliteDatabase(':memory:')
         db.execute_sql('pragma foreign_keys=0')

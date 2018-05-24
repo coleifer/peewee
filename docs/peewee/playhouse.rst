@@ -668,8 +668,8 @@ Postgresql Extensions
 The postgresql extensions module provides a number of "postgres-only" functions,
 currently:
 
-* :ref:`hstore support <hstore>`
 * :ref:`json support <pgjson>`, including *jsonb* for Postgres 9.4.
+* :ref:`hstore support <hstore>`
 * :ref:`server-side cursors <server_side_cursors>`
 * :ref:`full-text search <pg_fts>`
 * :py:class:`ArrayField` field type, for storing arrays.
@@ -697,6 +697,81 @@ The code below will assume you are using the following database and base model:
     class BaseExtModel(Model):
         class Meta:
             database = ext_db
+
+.. _pgjson:
+
+JSON Support
+^^^^^^^^^^^^
+
+peewee has basic support for Postgres' native JSON data type, in the form of
+:py:class:`JSONField`. As of version 2.4.7, peewee also supports the Postgres
+9.4 binary json ``jsonb`` type, via :py:class:`BinaryJSONField`.
+
+.. warning::
+  Postgres supports a JSON data type natively as of 9.2 (full support in 9.3).
+  In order to use this functionality you must be using the correct version of
+  Postgres with `psycopg2` version 2.5 or greater.
+
+  To use :py:class:`BinaryJSONField`, which has many performance and querying
+  advantages, you must have Postgres 9.4 or later.
+
+.. note::
+  You must be sure your database is an instance of
+  :py:class:`PostgresqlExtDatabase` in order to use the `JSONField`.
+
+Here is an example of how you might declare a model with a JSON field:
+
+.. code-block:: python
+
+    import json
+    import urllib2
+    from playhouse.postgres_ext import *
+
+    db = PostgresqlExtDatabase('my_database')
+
+    class APIResponse(Model):
+        url = CharField()
+        response = JSONField()
+
+        class Meta:
+            database = db
+
+        @classmethod
+        def request(cls, url):
+            fh = urllib2.urlopen(url)
+            return cls.create(url=url, response=json.loads(fh.read()))
+
+    APIResponse.create_table()
+
+    # Store a JSON response.
+    offense = APIResponse.request('http://crime-api.com/api/offense/')
+    booking = APIResponse.request('http://crime-api.com/api/booking/')
+
+    # Query a JSON data structure using a nested key lookup:
+    offense_responses = APIResponse.select().where(
+        APIResponse.response['meta']['model'] == 'offense')
+
+    # Retrieve a sub-key for each APIResponse. By calling .as_json(), the
+    # data at the sub-key will be returned as Python objects (dicts, lists,
+    # etc) instead of serialized JSON.
+    q = (APIResponse
+         .select(
+           APIResponse.data['booking']['person'].as_json().alias('person'))
+         .where(APIResponse.data['meta']['model'] == 'booking'))
+
+    for result in q:
+        print(result.person['name'], result.person['dob'])
+
+The :py:class:`BinaryJSONField` works the same and supports the same operations
+as the regular :py:class:`JSONField`, but provides several additional
+operations for testing **containment**. Using the binary json field, you can
+test whether your JSON data contains other partial JSON structures
+(:py:meth:`~BinaryJSONField.contains`, :py:meth:`~BinaryJSONField.contains_any`,
+:py:meth:`~BinaryJSONField.contains_all`), or whether it is a subset of a
+larger JSON document (:py:meth:`~BinaryJSONField.contained_by`).
+
+For more examples, see the :py:class:`JSONField` and
+:py:class:`BinaryJSONField` API documents below.
 
 .. _hstore:
 
@@ -864,81 +939,6 @@ Postgres supports durations through the ``INTERVAL`` data-type (`docs <https://w
             @classmethod
             def get_long_meetings(cls):
                 return cls.select().where(cls.duration > timedelta(hours=1))
-
-.. _pgjson:
-
-JSON Support
-^^^^^^^^^^^^
-
-peewee has basic support for Postgres' native JSON data type, in the form of
-:py:class:`JSONField`. As of version 2.4.7, peewee also supports the Postgres
-9.4 binary json ``jsonb`` type, via :py:class:`BinaryJSONField`.
-
-.. warning::
-  Postgres supports a JSON data type natively as of 9.2 (full support in 9.3).
-  In order to use this functionality you must be using the correct version of
-  Postgres with `psycopg2` version 2.5 or greater.
-
-  To use :py:class:`BinaryJSONField`, which has many performance and querying
-  advantages, you must have Postgres 9.4 or later.
-
-.. note::
-  You must be sure your database is an instance of
-  :py:class:`PostgresqlExtDatabase` in order to use the `JSONField`.
-
-Here is an example of how you might declare a model with a JSON field:
-
-.. code-block:: python
-
-    import json
-    import urllib2
-    from playhouse.postgres_ext import *
-
-    db = PostgresqlExtDatabase('my_database')
-
-    class APIResponse(Model):
-        url = CharField()
-        response = JSONField()
-
-        class Meta:
-            database = db
-
-        @classmethod
-        def request(cls, url):
-            fh = urllib2.urlopen(url)
-            return cls.create(url=url, response=json.loads(fh.read()))
-
-    APIResponse.create_table()
-
-    # Store a JSON response.
-    offense = APIResponse.request('http://crime-api.com/api/offense/')
-    booking = APIResponse.request('http://crime-api.com/api/booking/')
-
-    # Query a JSON data structure using a nested key lookup:
-    offense_responses = APIResponse.select().where(
-        APIResponse.response['meta']['model'] == 'offense')
-
-    # Retrieve a sub-key for each APIResponse. By calling .as_json(), the
-    # data at the sub-key will be returned as Python objects (dicts, lists,
-    # etc) instead of serialized JSON.
-    q = (APIResponse
-         .select(
-           APIResponse.data['booking']['person'].as_json().alias('person'))
-         .where(APIResponse.data['meta']['model'] == 'booking'))
-
-    for result in q:
-        print(result.person['name'], result.person['dob'])
-
-The :py:class:`BinaryJSONField` works the same and supports the same operations
-as the regular :py:class:`JSONField`, but provides several additional
-operations for testing **containment**. Using the binary json field, you can
-test whether your JSON data contains other partial JSON structures
-(:py:meth:`~BinaryJSONField.contains`, :py:meth:`~BinaryJSONField.contains_any`,
-:py:meth:`~BinaryJSONField.contains_all`), or whether it is a subset of a
-larger JSON document (:py:meth:`~BinaryJSONField.contained_by`).
-
-For more examples, see the :py:class:`JSONField` and
-:py:class:`BinaryJSONField` API documents below.
 
 .. _server_side_cursors:
 

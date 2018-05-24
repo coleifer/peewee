@@ -1121,7 +1121,7 @@ class.
 .. _query-operators:
 
 Query operators
-===============
+---------------
 
 The following types of comparisons are supported by peewee:
 
@@ -1404,8 +1404,8 @@ Expressions allow us to do atomic updates:
 
 Expressions can be used in all parts of a query, so experiment!
 
-Foreign Keys
-============
+Foreign Keys and Joins
+----------------------
 
 Foreign keys are created using a special field class
 :py:class:`ForeignKeyField`. Each foreign key also creates a back-reference on
@@ -1428,7 +1428,7 @@ the related model using the specified *backref*.
 
 
 Traversing foreign keys
------------------------
+^^^^^^^^^^^^^^^^^^^^^^^
 
 Referring back to the :ref:`User and Tweet models <blog-models>`, note that
 there is a :py:class:`ForeignKeyField` from *Tweet* to *User*. The foreign key
@@ -1468,7 +1468,7 @@ Under the hood, the *tweets* attribute is just a :py:class:`Select` with the
      [1])
 
 Joining tables
---------------
+^^^^^^^^^^^^^^
 
 Use the :py:meth:`~ModelSelect.join` method to *JOIN* additional tables. When a
 foreign key exists between the source model and the join model, you do not need
@@ -1897,7 +1897,7 @@ which will generate the appropriate SQL expression:
     # Becomes: (t1."parent_id" = "jq"."id")
 
 Performance Techniques
-======================
+----------------------
 
 This section outlines some techniques for improving performance when using
 peewee.
@@ -1905,7 +1905,7 @@ peewee.
 .. _nplusone:
 
 Avoiding N+1 queries
---------------------
+^^^^^^^^^^^^^^^^^^^^
 
 The term *N+1 queries* refers to a situation where an application performs a
 query, then for each row of the result set, the application performs at least
@@ -2025,7 +2025,7 @@ Some things to consider when using :py:func:`prefetch`:
   to implement correctly if trying to limit the size of the sub-selects.
 
 Iterating over lots of rows
----------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 By default peewee will cache the rows returned when iterating of a
 :py:class:`Select`. This is an optimization to allow multiple iterations as
@@ -2096,7 +2096,7 @@ very-complex queries.
         serializer.serialize_object(stat)
 
 Speeding up Bulk Inserts
-------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^
 
 See the :ref:`bulk_inserts` section for details on speeding up bulk insert
 operations.
