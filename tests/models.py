@@ -3323,3 +3323,39 @@ class TestMultiSelfJoin(ModelTestCase):
             ('huey-2', None, 'huey'),
             ('huey-2-1', 'huey-2', 'huey'),
         ])
+
+
+class Product(TestModel):
+    name = TextField()
+    price = IntegerField()
+    flags = IntegerField(constraints=[SQL('DEFAULT 99')])
+
+    class Meta:
+        constraints = [Check('price > 0')]
+
+
+class TestModelConstraints(ModelTestCase):
+    requires = [Product]
+
+    def test_model_constraints(self):
+        if IS_MYSQL:
+            exc_type = OperationalError
+        else:
+            exc_type = IntegrityError
+
+        p = Product.create(name='p1', price=1)
+        self.assertTrue(p.flags is None)
+
+        # Price was saved successfully, flags got server-side default value.
+        p_db = Product.get(Product.id == p.id)
+        self.assertEqual(p_db.price, 1)
+        self.assertEqual(p_db.flags, 99)
+
+        # Cannot update price with invalid value, must be > 0.
+        with self.database.atomic():
+            p.price = -1
+            self.assertRaises(exc_type, p.save)
+
+        # Nor can we create a new product with an invalid price.
+        with self.database.atomic():
+            self.assertRaises(exc_type, Product.create, name='p2', price=0)
