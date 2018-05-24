@@ -56,6 +56,7 @@ Contents:
    peewee/database
    peewee/models
    peewee/querying
+   peewee/query_operators
    peewee/api
    peewee/sqlite_ext
    peewee/playhouse
