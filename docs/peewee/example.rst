@@ -264,7 +264,7 @@ constraint, so if the username is taken the database will raise an
 .. code-block:: python
 
     try:
-        with database.transaction():
+        with database.atomic():
             # Attempt to create the user. If the username is taken, due to the
             # unique constraint, the database will raise an IntegrityError.
             user = User.create(
@@ -289,7 +289,7 @@ pointing from one user to another. Due to the unique index on ``from_user`` and
 
     user = get_object_or_404(User, username=username)
     try:
-        with database.transaction():
+        with database.atomic():
             Relationship.create(
                 from_user=get_current_user(),
                 to_user=user)
@@ -383,9 +383,14 @@ mentioning briefly.
           except model.DoesNotExist:
               abort(404)
 
-To avoid having to frequently copy/paste :py:func:`object_list` or
-:py:func:`get_object_or_404`, these functions are included as part of the
-playhouse :ref:`flask extension module <flask_utils>`.
+.. note::
+    To avoid having to frequently copy/paste :py:func:`object_list` or
+    :py:func:`get_object_or_404`, these functions are included as part of the
+    playhouse :ref:`flask extension module <flask_utils>`.
+
+    .. code-block:: python
+
+        from playhouse.flask_utils import get_object_or_404, object_list
 
 More examples
 -------------
