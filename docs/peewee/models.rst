@@ -107,6 +107,10 @@ an example:
         join_date = DateTimeField()
         about_me = TextField()
 
+In the above example, because none of the fields are initialized with
+``primary_key=True``, an auto-incrementing primary key will automatically be
+created and named "id".
+
 There is one special type of field, :py:class:`ForeignKeyField`, which allows
 you to represent foreign-key relationships between models in an intuitive way:
 
@@ -115,7 +119,7 @@ you to represent foreign-key relationships between models in an intuitive way:
     class Message(Model):
         user = ForeignKeyField(User, backref='messages')
         body = TextField()
-        send_date = DateTimeField()
+        send_date = DateTimeField(default=datetime.datetime.now)
 
 This allows you to write code like the following:
 
@@ -167,7 +171,8 @@ Field Type              Sqlite              Postgresql          MySQL
 =====================   =================   =================   =================
 
 .. note::
-    Don't see the field you're looking for in the above table? It's easy to create custom field types and use them with your models.
+    Don't see the field you're looking for in the above table? It's easy to
+    create custom field types and use them with your models.
 
     * :ref:`custom-fields`
     * :py:class:`Database`, particularly the ``fields`` parameter.
@@ -338,22 +343,22 @@ foreign key field's name:
         print(tweet.user_id, tweet.message)
 
 :py:class:`ForeignKeyField` allows for a backreferencing property to be bound
-to the target model. Implicitly, this property will be named `classname_set`,
-where `classname` is the lowercase name of the class, but can be overridden via
-the parameter ``backref``:
+to the target model. Implicitly, this property will be named ``classname_set``,
+where ``classname`` is the lowercase name of the class, but can be overridden
+using the parameter ``backref``:
 
 .. code-block:: python
 
     class Message(Model):
-        from_user = ForeignKeyField(User)
-        to_user = ForeignKeyField(User, backref='received_messages')
+        from_user = ForeignKeyField(User, backref='outbox')
+        to_user = ForeignKeyField(User, backref='inbox')
         text = TextField()
 
-    for message in some_user.message_set:
+    for message in some_user.outbox:
         # We are iterating over all Messages whose from_user is some_user.
         print(message)
 
-    for message in some_user.received_messages:
+    for message in some_user.inbox:
         # We are iterating over all Messages whose to_user is some_user
         print(message)
 
@@ -997,12 +1002,22 @@ during the import:
     data = load_user_csv() # load up a bunch of data
 
     User._meta.auto_increment = False # turn off auto incrementing IDs
-    with db.transaction():
+    with db.atomic():
         for row in data:
             u = User(id=row[0], username=row[1])
             u.save(force_insert=True) # <-- force peewee to insert row
 
     User._meta.auto_increment = True
+
+Although a better way to accomplish the above, without resorting to hacks, is
+to use the :py:meth:`Model.insert_many` API:
+
+.. code-block:: python
+
+    data = load_user_csv()
+    fields = [User.id, User.username]
+    with db.atomic():
+        User.insert_many(data, fields=fields).execute()
 
 If you *always* want to have control over the primary key, simply do not use
 the :py:class:`PrimaryKeyField` field type, but use a normal
