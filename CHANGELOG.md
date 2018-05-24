@@ -7,6 +7,9 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Better default `repr` for model classes and fields.
+* Custom Model `repr` no longer use the convention of overriding `__unicode__`,
+  and now use `__str__`.
 * `ForeignKeyField()` accepts a new initialization parameter, `deferrable`, for
   specifying when constraints should be enforced.
 * `BitField.flag()` can be called without a value parameter for the common

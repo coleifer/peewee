@@ -3754,6 +3754,13 @@ class Field(ColumnBase):
     def __hash__(self):
         return hash(self.name + '.' + self.model.__name__)
 
+    def __repr__(self):
+        if hasattr(self, 'model') and getattr(self, 'name', None):
+            return '<%s: %s.%s>' % (type(self).__name__,
+                                    self.model.__name__,
+                                    self.name)
+        return '<%s: (unbound)>' % type(self).__name__
+
     def bind(self, model, name, set_attribute=True):
         self.model = model
         self.name = name
@@ -4292,13 +4299,6 @@ class ForeignKeyField(Field):
         self.deferrable = deferrable
         self.deferred = _deferred
         self.object_id_name = object_id_name
-
-    def __repr__(self):
-        if hasattr(self, 'model') and getattr(self, 'name', None):
-            return '<%s: "%s"."%s">' % (type(self).__name__,
-                                        self.model._meta.name,
-                                        self.name)
-        return '<%s: (unbound)>' % type(self).__name__
 
     @property
     def field_type(self):
@@ -5157,9 +5157,9 @@ class ModelBase(type):
             cls._meta.add_field(name, field)
 
         # Create a repr and error class before finalizing.
-        if hasattr(cls, '__unicode__'):
-            setattr(cls, '__repr__', lambda self: '<%s: %r>' % (
-                cls.__name__, self.__unicode__()))
+        if hasattr(cls, '__str__'):
+            setattr(cls, '__repr__', lambda self: '<%s: %s>' % (
+                cls.__name__, self.__str__()))
 
         exc_name = '%sDoesNotExist' % cls.__name__
         exc_attrs = {'__module__': cls.__module__}
@@ -5170,6 +5170,9 @@ class ModelBase(type):
         cls.validate_model()
         DeferredForeignKey.resolve(cls)
         return cls
+
+    def __repr__(self):
+        return '<Model: %s>' % self.__name__
 
     def __iter__(self):
         return iter(self.select())
@@ -5227,6 +5230,9 @@ class Model(with_metaclass(ModelBase, Node)):
 
         for k in kwargs:
             setattr(self, k, kwargs[k])
+
+    def __str__(self):
+        return str(self._pk) if self._meta.primary_key is not False else 'n/a'
 
     @classmethod
     def validate_model(cls):

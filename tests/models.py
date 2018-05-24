@@ -3359,3 +3359,45 @@ class TestModelConstraints(ModelTestCase):
         # Nor can we create a new product with an invalid price.
         with self.database.atomic():
             self.assertRaises(exc_type, Product.create, name='p2', price=0)
+
+
+class TestModelFieldReprs(BaseTestCase):
+    def test_model_reprs(self):
+        class User(Model):
+            username = TextField(primary_key=True)
+        class Tweet(Model):
+            user = ForeignKeyField(User, backref='tweets')
+            content = TextField()
+            timestamp = TimestampField()
+        class EAV(Model):
+            entity = TextField()
+            attribute = TextField()
+            value = TextField()
+            class Meta:
+                primary_key = CompositeKey('entity', 'attribute')
+        class NoPK(Model):
+            key = TextField()
+            class Meta:
+                primary_key = False
+
+        self.assertEqual(repr(User), '<Model: User>')
+        self.assertEqual(repr(Tweet), '<Model: Tweet>')
+        self.assertEqual(repr(EAV), '<Model: EAV>')
+        self.assertEqual(repr(NoPK), '<Model: NoPK>')
+
+        self.assertEqual(repr(User()), '<User: None>')
+        self.assertEqual(repr(Tweet()), '<Tweet: None>')
+        self.assertEqual(repr(EAV()), '<EAV: (None, None)>')
+        self.assertEqual(repr(NoPK()), '<NoPK: n/a>')
+
+        self.assertEqual(repr(User(username='huey')), '<User: huey>')
+        self.assertEqual(repr(Tweet(id=1337)), '<Tweet: 1337>')
+        self.assertEqual(repr(EAV(entity='e', attribute='a')),
+                         "<EAV: ('e', 'a')>")
+        self.assertEqual(repr(NoPK(key='k')), '<NoPK: n/a>')
+
+        self.assertEqual(repr(User.username), '<TextField: User.username>')
+        self.assertEqual(repr(Tweet.user), '<ForeignKeyField: Tweet.user>')
+        self.assertEqual(repr(EAV.entity), '<TextField: EAV.entity>')
+
+        self.assertEqual(repr(TextField()), '<TextField: (unbound)>')
