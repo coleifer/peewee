@@ -7,6 +7,13 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* `ForeignKeyField()` accepts a new initialization parameter, `deferrable`, for
+  specifying when constraints should be enforced.
+* `BitField.flag()` can be called without a value parameter for the common
+  use-case of using flags that are powers-of-2.
+* `SqliteDatabase` pragmas can be specified as a `dict` (previously required a
+  list of 2-tuples).
+
 [View commits](https://github.com/coleifer/peewee/compare/3.4.0...HEAD)
 
 ## 3.4.0
