@@ -1151,6 +1151,12 @@ APIs
         *Optional* - specify the name for the table function. If not provided,
         name will be taken from the class name.
 
+    .. py:attribute:: print_tracebacks = True
+
+        Print a full traceback for any errors that occur in the
+        table-function's callback methods. When set to False, only the generic
+        OperationalError will be visible.
+
     .. py:method:: initialize(**parameter_values)
 
         :param parameter_values: Parameters the function was called with.
