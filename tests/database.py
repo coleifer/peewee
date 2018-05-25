@@ -394,8 +394,8 @@ class TestIntrospection(ModelTestCase):
     requires = [Category, User, UniqueModel, IndexedModel]
 
     def test_table_exists(self):
-        self.assertTrue(self.database.table_exists(User._meta.table))
-        self.assertFalse(self.database.table_exists(Table('nuggies')))
+        self.assertTrue(self.database.table_exists(User._meta.table_name))
+        self.assertFalse(self.database.table_exists('nuggies'))
 
     def test_get_tables(self):
         tables = self.database.get_tables()

@@ -5514,7 +5514,7 @@ class Model(with_metaclass(ModelBase, Node)):
     @classmethod
     def table_exists(cls):
         meta = cls._meta
-        return meta.database.table_exists(meta.table.name, meta.schema)
+        return meta.database.table_exists(meta.table.__name__, meta.schema)
 
     @classmethod
     def create_table(cls, safe=True, **options):
