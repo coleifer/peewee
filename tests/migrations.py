@@ -4,12 +4,14 @@ from functools import partial
 
 from peewee import *
 from playhouse.migrate import *
+from playhouse.postgres_ext import BinaryJSONField
 from .base import BaseTestCase
 from .base import IS_MYSQL
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db
 from .base import requires_models
+from .base import requires_postgresql
 from .base import requires_sqlite
 
 try:
@@ -496,6 +498,19 @@ class TestSchemaMigration(ModelTestCase):
         self.assertEqual(foreign_key.column, 'huey_id')
         self.assertEqual(foreign_key.dest_column, 'id')
         self.assertEqual(foreign_key.dest_table, 'users')
+
+    @requires_postgresql
+    @requires_models(Tag)
+    def test_add_column_with_index_type(self):
+        self.reset_sql_history()
+        field = BinaryJSONField(default=dict, index=True, null=True)
+        migrate(self.migrator.add_column('tag', 'metadata', field))
+        queries = [x.msg for x in self.history]
+        self.assertEqual(queries, [
+            ('ALTER TABLE "tag" ADD COLUMN "metadata" JSONB', []),
+            ('CREATE INDEX "tag_metadata" ON "tag" USING GIN ("metadata")',
+             []),
+        ])
 
     @requires_sqlite
     def test_valid_column_required(self):

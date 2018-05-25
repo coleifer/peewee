@@ -2869,11 +2869,12 @@ Migrations API
         :param str old_name: Current name of the table.
         :param str new_name: New name for the table.
 
-    .. py:method:: add_index(table, columns[, unique=False])
+    .. py:method:: add_index(table, columns[, unique=False[, using=None]])
 
         :param str table: Name of table on which to create the index.
         :param list columns: List of columns which should be indexed.
         :param bool unique: Whether the new index should specify a unique constraint.
+        :param str using: Index type (where supported), e.g. GiST or GIN.
 
     .. py:method:: drop_index(table, index_name)
 

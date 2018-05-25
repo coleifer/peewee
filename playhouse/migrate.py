@@ -288,8 +288,9 @@ class SchemaMigrator(object):
                     field.on_update))
 
         if field.index or field.unique:
+            using = getattr(field, 'index_type', None)
             operations.append(self.add_index(table, (column_name,),
-                                             field.unique))
+                                             field.unique, using))
 
         return operations
 
@@ -344,15 +345,13 @@ class SchemaMigrator(object):
                 .sql(Entity(new_name)))
 
     @operation
-    def add_index(self, table, columns, unique=False):
+    def add_index(self, table, columns, unique=False, using=None):
         ctx = self.make_context()
         index_name = make_index_name(table, columns)
-        return (ctx
-                .literal('CREATE UNIQUE INDEX ' if unique else 'CREATE INDEX ')
-                .sql(Entity(index_name))
-                .literal(' ON ')
-                .sql(Entity(table))
-                .sql(EnclosedNodeList([Entity(column) for column in columns])))
+        table_obj = Table(table)
+        cols = [getattr(table_obj.c, column) for column in columns]
+        index = Index(index_name, table_obj, cols, unique=unique, using=using)
+        return ctx.sql(index)
 
     @operation
     def drop_index(self, table, index_name):

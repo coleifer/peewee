@@ -2347,7 +2347,6 @@ class ModelIndex(Index):
         return index_name
 
 
-
 # DB-API 2.0 EXCEPTIONS.
 
 
