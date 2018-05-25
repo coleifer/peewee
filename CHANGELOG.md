@@ -16,6 +16,12 @@ https://github.com/coleifer/peewee/releases
   use-case of using flags that are powers-of-2.
 * `SqliteDatabase` pragmas can be specified as a `dict` (previously required a
   list of 2-tuples).
+* Fixed bug in `migrator.add_column()` where, if the field being added declared
+  a non-standard index type (e.g., binary json field with GIN index), this
+  index type was not being respected.
+* Fixed bug in `database.table_exists()` where the implementation did not match
+  the documentation. Implementation has been updated to match the
+  documentation.
 
 [View commits](https://github.com/coleifer/peewee/compare/3.4.0...HEAD)
 
