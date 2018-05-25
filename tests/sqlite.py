@@ -157,13 +157,6 @@ class Series(TableFunction):
         return (ret,)
 
 
-class BrokenSeries(Series):
-    name = 'broken'
-
-    def initialize(self, start=0, stop=None, step=1):
-        1 / 0
-
-
 class RegexSearch(TableFunction):
     columns = ['match']
     params = ['regex', 'search_string']
@@ -210,21 +203,24 @@ class TestTableFunction(BaseTestCase):
         super(TestTableFunction, self).tearDown()
         self.conn.close()
 
+    def execute(self, sql, params=None):
+        return self.conn.execute(sql, params or ())
+
     def test_split(self):
         Split.register(self.conn)
-        curs = self.conn.execute('select part from str_split(?) order by part '
-                                 'limit 3', ('well hello huey and zaizee',))
+        curs = self.execute('select part from str_split(?) order by part '
+                            'limit 3', ('well hello huey and zaizee',))
         self.assertEqual([row for row, in curs.fetchall()],
                          ['and', 'hello', 'huey'])
 
     def test_split_tbl(self):
         Split.register(self.conn)
-        self.conn.execute('create table post (content TEXT);')
-        self.conn.execute('insert into post (content) values (?), (?), (?)',
-                          ('huey secret post',
-                           'mickey message',
-                           'zaizee diary'))
-        curs = self.conn.execute('SELECT * FROM post, str_split(post.content)')
+        self.execute('create table post (content TEXT);')
+        self.execute('insert into post (content) values (?), (?), (?)',
+                     ('huey secret post',
+                      'mickey message',
+                      'zaizee diary'))
+        curs = self.execute('SELECT * FROM post, str_split(post.content)')
         results = curs.fetchall()
         self.assertEqual(results, [
             ('huey secret post', 'huey'),
@@ -244,7 +240,7 @@ class TestTableFunction(BaseTestCase):
             sql = 'SELECT * FROM series(%s)' % param_sql
             if extra_sql:
                 sql = ' '.join((sql, extra_sql))
-            curs = self.conn.execute(sql, params)
+            curs = self.execute(sql, params)
             self.assertEqual([row for row, in curs.fetchall()], values)
 
         assertSeries((0, 10, 2), [0, 2, 4, 6, 8, 10])
@@ -255,32 +251,25 @@ class TestTableFunction(BaseTestCase):
 
     def test_series_tbl(self):
         Series.register(self.conn)
-        self.conn.execute('CREATE TABLE nums (id INTEGER PRIMARY KEY)')
-        self.conn.execute('INSERT INTO nums DEFAULT VALUES;')
-        self.conn.execute('INSERT INTO nums DEFAULT VALUES;')
-        curs = self.conn.execute(
-            'SELECT * FROM nums, series(nums.id, nums.id + 2)')
+        self.execute('CREATE TABLE nums (id INTEGER PRIMARY KEY)')
+        self.execute('INSERT INTO nums DEFAULT VALUES;')
+        self.execute('INSERT INTO nums DEFAULT VALUES;')
+        curs = self.execute('SELECT * FROM nums, series(nums.id, nums.id + 2)')
         results = curs.fetchall()
         self.assertEqual(results, [
             (1, 1), (1, 2), (1, 3),
             (2, 2), (2, 3), (2, 4)])
 
-        curs = self.conn.execute(
-            'SELECT * FROM nums, series(nums.id) LIMIT 3')
+        curs = self.execute('SELECT * FROM nums, series(nums.id) LIMIT 3')
         results = curs.fetchall()
         self.assertEqual(results, [(1, 1), (1, 2), (1, 3)])
-
-    def test_error_in_table_function(self):
-        BrokenSeries.register(self.conn)
-        self.assertRaises(sqlite3.OperationalError, self.conn.execute,
-                          'SELECT * FROM broken(10)')
 
     def test_regex(self):
         RegexSearch.register(self.conn)
 
         def assertResults(regex, search_string, values):
             sql = 'SELECT * FROM regex_search(?, ?)'
-            curs = self.conn.execute(sql, (regex, search_string))
+            curs = self.execute(sql, (regex, search_string))
             self.assertEqual([row for row, in curs.fetchall()], values)
 
         assertResults(
@@ -310,12 +299,12 @@ class TestTableFunction(BaseTestCase):
             '')
         RegexSearch.register(self.conn)
 
-        self.conn.execute('create table posts (id integer primary key, msg)')
-        self.conn.execute('insert into posts (msg) values (?), (?), (?), (?)',
-                          messages)
-        cur = self.conn.execute('select posts.id, regex_search.rowid, regex_search.match '
-                                'FROM posts, regex_search(?, posts.msg)',
-                                ('[\w]+@[\w]+\.\w{2,3}',))
+        self.execute('create table posts (id integer primary key, msg)')
+        self.execute('insert into posts (msg) values (?), (?), (?), (?)',
+                     messages)
+        cur = self.execute('select posts.id, regex_search.rowid, regex_search.match '
+                           'FROM posts, regex_search(?, posts.msg)',
+                           ('[\w]+@[\w]+\.\w{2,3}',))
         results = cur.fetchall()
         self.assertEqual(results, [
             (1, 1, 'foo@example.fap'),
@@ -324,6 +313,71 @@ class TestTableFunction(BaseTestCase):
             (2, 4, 'charlie@crappyblog.com'),
             (2, 5, 'huey@example.com'),
         ])
+
+    def test_error_instantiate(self):
+        class BrokenInstantiate(Series):
+            name = 'broken_instantiate'
+            print_tracebacks = False
+
+            def __init__(self, *args, **kwargs):
+                super(BrokenInstantiate, self).__init__(*args, **kwargs)
+                raise ValueError('broken instantiate')
+
+        BrokenInstantiate.register(self.conn)
+        self.assertRaises(sqlite3.OperationalError, self.execute,
+                          'SELECT * FROM broken_instantiate(1, 10)')
+
+    def test_error_init(self):
+        class BrokenInit(Series):
+            name = 'broken_init'
+            print_tracebacks = False
+
+            def initialize(self, start=0, stop=None, step=1):
+                raise ValueError('broken init')
+
+        BrokenInit.register(self.conn)
+        self.assertRaises(sqlite3.OperationalError, self.execute,
+                          'SELECT * FROM broken_init(1, 10)')
+        self.assertRaises(sqlite3.OperationalError, self.execute,
+                          'SELECT * FROM broken_init(0, 1)')
+
+    def test_error_iterate(self):
+        class BrokenIterate(Series):
+            name = 'broken_iterate'
+            print_tracebacks = False
+
+            def iterate(self, idx):
+                raise ValueError('broken iterate')
+
+        BrokenIterate.register(self.conn)
+        self.assertRaises(sqlite3.OperationalError, self.execute,
+                          'SELECT * FROM broken_iterate(1, 10)')
+        self.assertRaises(sqlite3.OperationalError, self.execute,
+                          'SELECT * FROM broken_iterate(0, 1)')
+
+    def test_error_iterate_delayed(self):
+        # Only raises an exception if the value 7 comes up.
+        class SomewhatBroken(Series):
+            name = 'somewhat_broken'
+            print_tracebacks = False
+
+            def iterate(self, idx):
+                ret = super(SomewhatBroken, self).iterate(idx)
+                if ret == (7,):
+                    raise ValueError('somewhat broken')
+                else:
+                    return ret
+
+        SomewhatBroken.register(self.conn)
+        curs = self.execute('SELECT * FROM somewhat_broken(0, 3)')
+        self.assertEqual(curs.fetchall(), [(0,), (1,), (2,), (3,)])
+
+        curs = self.execute('SELECT * FROM somewhat_broken(5, 8)')
+        self.assertEqual(curs.fetchone(), (5,))
+        self.assertRaises(sqlite3.OperationalError, curs.fetchall)
+
+        curs = self.execute('SELECT * FROM somewhat_broken(0, 2)')
+        self.assertEqual(curs.fetchall(), [(0,), (1,), (2,)])
 
 
 @skip_unless(json_installed(), 'requires sqlite json1')

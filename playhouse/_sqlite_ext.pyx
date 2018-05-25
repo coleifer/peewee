@@ -28,6 +28,8 @@ from peewee import Node
 from peewee import OperationalError
 from peewee import sqlite3 as pysqlite
 
+import traceback
+
 
 cdef struct sqlite3_index_constraint:
     int iColumn
@@ -353,7 +355,14 @@ cdef int pwOpen(sqlite3_vtab *pBase, sqlite3_vtab_cursor **ppCursor) with gil:
     memset(<char *>pCur, 0, sizeof(pCur[0]))
     ppCursor[0] = &(pCur.base)
     pCur.idx = 0
-    table_func = table_func_cls()
+    try:
+        table_func = table_func_cls()
+    except:
+        if table_func_cls.print_tracebacks:
+            traceback.print_exc()
+        sqlite3_free(pCur)
+        return SQLITE_ERROR
+
     Py_INCREF(table_func)
     pCur.table_func = <void *>table_func
     pCur.stopped = False
@@ -380,11 +389,14 @@ cdef int pwNext(sqlite3_vtab_cursor *pBase) with gil:
     if pCur.row_data:
         Py_DECREF(<tuple>pCur.row_data)
 
+    pCur.row_data = NULL
     try:
         result = tuple(table_func.iterate(pCur.idx))
     except StopIteration:
         pCur.stopped = True
     except:
+        if table_func.print_tracebacks:
+            traceback.print_exc()
         return SQLITE_ERROR
     else:
         Py_INCREF(result)
@@ -407,6 +419,10 @@ cdef int pwColumn(sqlite3_vtab_cursor *pBase, sqlite3_context *ctx,
     if iCol == -1:
         sqlite3_result_int64(ctx, <sqlite3_int64>pCur.idx)
         return SQLITE_OK
+
+    if not pCur.row_data:
+        sqlite3_result_error(ctx, encode('no row data'), -1)
+        return SQLITE_ERROR
 
     row_data = <tuple>pCur.row_data
     value = row_data[iCol]
@@ -495,6 +511,8 @@ cdef int pwFilter(sqlite3_vtab_cursor *pBase, int idxNum,
     try:
         table_func.initialize(**query)
     except:
+        if table_func.print_tracebacks:
+            traceback.print_exc()
         return SQLITE_ERROR
 
     pCur.stopped = False
@@ -503,6 +521,8 @@ cdef int pwFilter(sqlite3_vtab_cursor *pBase, int idxNum,
     except StopIteration:
         pCur.stopped = True
     except:
+        if table_func.print_tracebacks:
+            traceback.print_exc()
         return SQLITE_ERROR
     else:
         Py_INCREF(row_data)
@@ -614,6 +634,7 @@ class TableFunction(object):
     columns = None
     params = None
     name = None
+    print_tracebacks = True
     _ncols = None
 
     @classmethod
