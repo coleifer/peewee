@@ -2699,8 +2699,8 @@ class Database(_callable_context_manager):
                 for obj in group:
                     yield obj
 
-    def table_exists(self, table, schema=None):
-        return table.__name__ in self.get_tables(schema=schema)
+    def table_exists(self, table_name, schema=None):
+        return table_name in self.get_tables(schema=schema)
 
     def get_tables(self, schema=None):
         raise NotImplementedError
@@ -5515,7 +5515,7 @@ class Model(with_metaclass(ModelBase, Node)):
     @classmethod
     def table_exists(cls):
         meta = cls._meta
-        return meta.database.table_exists(meta.table, meta.schema)
+        return meta.database.table_exists(meta.table.name, meta.schema)
 
     @classmethod
     def create_table(cls, safe=True, **options):
