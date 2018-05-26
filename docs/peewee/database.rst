@@ -20,9 +20,9 @@ provides some basic, database-specific configuration options.
     from peewee import *
 
     # SQLite database using WAL journal mode and 64MB cache.
-    sqlite_db = SqliteDatabase('/path/to/app.db', pragmas=(
-        ('journal_mode', 'wal'),
-        ('cache_size', -1024 * 64)))
+    sqlite_db = SqliteDatabase('/path/to/app.db', pragmas={
+        'journal_mode': 'wal',
+        'cache_size': -1024 * 64})
 
     # Connect to a MySQL database on network.
     mysql_db = MySQLDatabase('my_app', user='app', password='db_password',
@@ -42,7 +42,7 @@ database-specific module and use the database class provided:
 
     # Use SQLite (will register a REGEXP function and set busy timeout to 3s).
     db = SqliteExtDatabase('/path/to/app.db', regexp_function=True, timeout=3,
-                           pragmas=(('journal_mode', 'wal'),))
+                           pragmas={'journal_mode': 'wal'})
 
 
     from playhouse.postgres_ext import PostgresqlExtDatabase
@@ -55,7 +55,7 @@ For more information on database extensions, see:
 * :ref:`postgres_ext`
 * :ref:`sqlite_ext`
 * :ref:`sqlcipher_ext`
-* :ref:`apsw_ext`
+* :ref:`apsw`
 * :ref:`sqliteq`
 
 Initializing a Database
@@ -145,7 +145,7 @@ you can specify a list or pragmas or any other arbitrary `sqlite3 parameters
 
 .. code-block:: python
 
-    sqlite_db = SqliteDatabase('my_app.db', pragmas=[('journal_mode', 'wal')])
+    sqlite_db = SqliteDatabase('my_app.db', pragmas={'journal_mode': 'wal'})
 
     class BaseModel(Model):
         """A base model that will use our Sqlite database."""
@@ -166,10 +166,10 @@ to use these awesome features, use the :py:class:`SqliteExtDatabase` from the
 
     from playhouse.sqlite_ext import SqliteExtDatabase
 
-    sqlite_db = SqliteExtDatabase('my_app.db', pragmas=(
-        ('journal_mode', 'wal'),  # WAL-mode.
-        ('cache_size', -64 * 1000),  # 64MB cache.
-        ('synchronous', 0)))  # Let the OS manage syncing.
+    sqlite_db = SqliteExtDatabase('my_app.db', pragmas={
+        'journal_mode': 'wal',  # WAL-mode.
+        'cache_size': -64 * 1000,  # 64MB cache.
+        'synchronous': 0})  # Let the OS manage syncing.
 
 .. _sqlite-pragma:
 
@@ -180,7 +180,7 @@ SQLite allows run-time configuration of a number of parameters through
 ``PRAGMA`` statements (`documentation <https://www.sqlite.org/pragma.html>`_).
 These statements are typically run against a new database connection. To run
 one or more ``PRAGMA`` statements against new connections, you can specify them
-as a list or tuple of 2-tuples containing the pragma name and value:
+as a dictionary or a list of 2-tuples containing the pragma name and value:
 
 .. code-block:: python
 
@@ -196,7 +196,7 @@ the :py:class:`SqliteDatabase` object:
 
 .. code-block:: python
 
-    # Set cache size to 64MB for current connection.
+    # Set cache size to 64MB for *current connection*.
     db.pragma('cache_size', -1024 * 64)
 
     # Same as above.

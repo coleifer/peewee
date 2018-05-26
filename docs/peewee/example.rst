@@ -197,6 +197,13 @@ This is a peewee idiom:
     # execute queries
     database = SqliteDatabase(DATABASE)
 
+    # Create a base-class all our models will inherit, which defines
+    # the database we'll be using.
+    class BaseModel(Model):
+        class Meta:
+            database = database
+
+
 When developing a web application, it's common to open a connection when a
 request starts, and close it when the response is returned. **You should always
 manage your connections explicitly**. For instance, if you are using a
