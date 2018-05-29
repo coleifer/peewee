@@ -111,15 +111,6 @@ class RowIDModel(TestModel):
     data = IntegerField()
 
 
-class APIData(TestModel):
-    data = JSONField()
-    value = TextField()
-
-
-class Metadata(TestModel):
-    data = JSONField()
-
-
 class KeyData(TestModel):
     key = TextField()
     data = JSONField()
@@ -383,248 +374,114 @@ class TestTableFunction(BaseTestCase):
 @skip_unless(json_installed(), 'requires sqlite json1')
 class TestJSONField(ModelTestCase):
     database = database
-    requires = [APIData, Metadata]
+    requires = [KeyData]
     test_data = [
-        {'metadata': {'tags': ['python', 'sqlite']},
-         'title': 'My List of Python and SQLite Resources',
-         'url': 'http://charlesleifer.com/blog/my-list-of-python-and-sqlite-resources/'},
-        {'metadata': {'tags': ['nosql', 'python', 'sqlite', 'cython']},
-         'title': "Using SQLite4's LSM Storage Engine as a Stand-alone NoSQL Database with Python",
-         'url': 'http://charlesleifer.com/blog/using-sqlite4-s-lsm-storage-engine-as-a-stand-alone-nosql-database-with-python/'},
-        {'metadata': {'tags': ['sqlite', 'search', 'python', 'peewee']},
-         'title': 'Building the SQLite FTS5 Search Extension',
-         'url': 'http://charlesleifer.com/blog/building-the-sqlite-fts5-search-extension/'},
-        {'metadata': {'tags': ['nosql', 'python', 'unqlite', 'cython']},
-         'title': 'Introduction to the fast new UnQLite Python Bindings',
-         'url': 'http://charlesleifer.com/blog/introduction-to-the-fast-new-unqlite-python-bindings/'},
-        {'metadata': {'tags': ['python', 'walrus', 'redis', 'nosql']},
-         'title': 'Alternative Redis-Like Databases with Python',
-         'url': 'http://charlesleifer.com/blog/alternative-redis-like-databases-with-python/'},
+        ('a', {'k1': 'v1', 'x1': {'y1': 'z1'}}),
+        ('b', {'k2': 'v2', 'x2': {'y2': 'z2'}}),
+        ('c', {'k1': 'v1', 'k2': 'v2'}),
+        ('d', {'x1': {'y1': 'z1', 'y2': 'z2'}}),
+        ('e', {'l1': [0, 1, 2], 'l2': [1, [3, 3], 7]}),
     ]
 
     def setUp(self):
         super(TestJSONField, self).setUp()
-        for entry in self.test_data:
-            APIData.create(data=entry, value=entry['title'])
-        self.Q = APIData.select().order_by(APIData.id)
+        with self.database.atomic():
+            for key, data in self.test_data:
+                KeyData.create(key=key, data=data)
 
-    def test_schema(self):
-        self.assertSQL(APIData._schema._create_table(), (
-            'CREATE TABLE IF NOT EXISTS "apidata" ('
-            '"id" INTEGER NOT NULL PRIMARY KEY, '
-            '"data" JSON NOT NULL, '
-            '"value" TEXT NOT NULL)'), [])
+        self.Q = KeyData.select().order_by(KeyData.key)
 
-        self.assertSQL(Metadata._schema._create_table(), (
-            'CREATE TABLE IF NOT EXISTS "metadata" ('
-            '"id" INTEGER NOT NULL PRIMARY KEY, '
-            '"data" JSON NOT NULL)'), [])
-
-    def test_extract_array_agg(self):
-        value = (APIData
-                 .select(fn.json_group_array(
-                     APIData.data.extract('metadata.tags[0]')))
-                 .order_by(APIData.id)
-                 .scalar())
-        data = json.loads(value)
-        self.assertEqual(data, ['python', 'nosql', 'sqlite', 'nosql',
-                                'python'])
+    def assertRows(self, where, expected):
+        self.assertEqual([kd.key for kd in self.Q.where(where)], expected)
 
     def test_extract(self):
-        titles = self.Q.columns(APIData.data.extract('title')).tuples()
-        self.assertEqual([row for row, in titles], [
-            'My List of Python and SQLite Resources',
-            'Using SQLite4\'s LSM Storage Engine as a Stand-alone NoSQL Database with Python',
-            'Building the SQLite FTS5 Search Extension',
-            'Introduction to the fast new UnQLite Python Bindings',
-            'Alternative Redis-Like Databases with Python',
-        ])
-
-        tags = (self.Q
-                .columns(APIData.data.extract('metadata.tags').alias('tags'))
-                .dicts())
-        self.assertEqual(list(tags), [
-            {'tags': ['python', 'sqlite']},
-            {'tags': ['nosql', 'python', 'sqlite', 'cython']},
-            {'tags': ['sqlite', 'search', 'python', 'peewee']},
-            {'tags': ['nosql', 'python', 'unqlite', 'cython']},
-            {'tags': ['python', 'walrus', 'redis', 'nosql']},
-        ])
-
-        missing = self.Q.columns(APIData.data.extract('foo.bar')).tuples()
-        self.assertEqual([row for row, in missing], [None] * 5)
-
-    def test_length(self):
-        tag_len = (self.Q
-                   .columns(APIData.data.length('metadata.tags').alias('len'))
-                   .dicts())
-        self.assertEqual(list(tag_len), [
-            {'len': 2},
-            {'len': 4},
-            {'len': 4},
-            {'len': 4},
-            {'len': 4},
-        ])
-
-    def test_remove(self):
-        query = (self.Q
-                 .columns(
-                     fn.json_extract(
-                         APIData.data.remove('metadata.tags'),
-                         '$.metadata'))
-                 .tuples())
-        self.assertEqual([row for row, in query], ['{}'] * 5)
-
-        Clone = APIData.alias()
-        query = (APIData
-                 .update(
-                     data=(Clone
-                           .select(Clone.data.remove('metadata.tags[2]'))
-                           .where(Clone.id == APIData.id)))
-                 .where(
-                     APIData.value.contains('LSM Storage') |
-                     APIData.value.contains('UnQLite Python')))
-        result = query.execute()
-        self.assertEqual(result, 2)
-
-        tag_len = (self.Q
-                   .columns(APIData.data.length('metadata.tags').alias('len'))
-                   .dicts())
-        self.assertEqual(list(tag_len), [
-            {'len': 2},
-            {'len': 3},
-            {'len': 4},
-            {'len': 3},
-            {'len': 4},
-        ])
+        self.assertRows((KeyData.data['k1'] == 'v1'), ['a', 'c'])
+        self.assertRows((KeyData.data['k2'] == 'v2'), ['b', 'c'])
+        self.assertRows((KeyData.data['x1']['y1'] == 'z1'), ['a', 'd'])
+        self.assertRows((KeyData.data['l1'][1] == 1), ['e'])
+        self.assertRows((KeyData.data['l2'][1][1] == 3), ['e'])
 
     def test_set(self):
-        query = (self.Q
-                 .columns(
-                     fn.json_extract(
-                         APIData.data.set(
-                             'metadata',
-                             {'k1': {'k2': 'bar'}}),
-                         '$.metadata.k1'))
-                 .tuples())
-        self.assertEqual(
-            [json.loads(row) for row, in query],
-            [{'k2': 'bar'}] * 5)
+        query = (KeyData
+                 .update({KeyData.data: KeyData.data['k1'].set('v1-x')})
+                 .where(KeyData.data['k1'] == 'v1'))
+        self.assertEqual(query.execute(), 2)
+        self.assertRows((KeyData.data['k1'] == 'v1-x'), ['a', 'c'])
 
-        Clone = APIData.alias()
-        query = (APIData
-                 .update(
-                     data=(Clone
-                           .select(Clone.data.set('title', 'hello'))
-                           .where(Clone.id == APIData.id)))
-                 .where(APIData.value.contains('LSM Storage'))
+        self.assertEqual(KeyData.get(KeyData.key == 'a').data,
+                         {'k1': 'v1-x', 'x1': {'y1': 'z1'}})
+
+    def test_set_json(self):
+        set_json = KeyData.data['x1'].set({'y1': 'z1-x', 'y3': 'z3'})
+        query = (KeyData
+                 .update({KeyData.data: set_json})
+                 .where(KeyData.data['x1']['y1'] == 'z1'))
+        self.assertEqual(query.execute(), 2)
+        self.assertRows((KeyData.data['x1']['y1'] == 'z1-x'), ['a', 'd'])
+
+        self.assertEqual(KeyData.get(KeyData.key == 'a').data,
+                         {'k1': 'v1', 'x1': {'y1': 'z1-x', 'y3': 'z3'}})
+        self.assertEqual(KeyData.get(KeyData.key == 'd').data,
+                         {'x1': {'y1': 'z1-x', 'y3': 'z3'}})
+
+    def test_update(self):
+        merged = KeyData.data.update({'x1': {'y1': 'z1-x', 'y3': 'z3'}})
+        query = (KeyData
+                 .update({KeyData.data: merged})
+                 .where(KeyData.data['x1']['y1'] == 'z1'))
+        self.assertEqual(query.execute(), 2)
+        self.assertRows((KeyData.data['x1']['y1'] == 'z1-x'), ['a', 'd'])
+
+        self.assertEqual(KeyData.get(KeyData.key == 'a').data,
+                         {'k1': 'v1', 'x1': {'y1': 'z1-x', 'y3': 'z3'}})
+        self.assertEqual(KeyData.get(KeyData.key == 'd').data,
+                         {'x1': {'y1': 'z1-x', 'y2': 'z2', 'y3': 'z3'}})
+
+    def test_remove(self):
+        query = (KeyData
+                 .update(data=KeyData.data['k1'].remove())
+                 .where(KeyData.data['k1'] == 'v1'))
+        self.assertEqual(query.execute(), 2)
+
+        self.assertEqual(KeyData.get(KeyData.key == 'a').data,
+                         {'x1': {'y1': 'z1'}})
+        self.assertEqual(KeyData.get(KeyData.key == 'c').data, {'k2': 'v2'})
+
+        nrows = (KeyData
+                 .update(data=KeyData.data['l2'][1][1].remove())
+                 .where(KeyData.key == 'e')
                  .execute())
-        self.assertEqual(query, 1)
+        self.assertEqual(KeyData.get(KeyData.key == 'e').data,
+                         {'l1': [0, 1, 2], 'l2': [1, [3], 7]})
 
-        titles = self.Q.columns(APIData.data.extract('title')).tuples()
-        for idx, (row,) in enumerate(titles):
-            if idx == 1:
-                self.assertEqual(row, 'hello')
-            else:
-                self.assertNotEqual(row, 'hello')
-
-    def test_multi_set(self):
-        Clone = APIData.alias()
-        set_query = (Clone
-                     .select(Clone.data.set(
-                         'foo', 'foo value',
-                         'tagz', ['list', 'of', 'tags'],
-                         'x.y.z', 3,
-                         'metadata.foo', None,
-                         'bar.baze', True))
-                     .where(Clone.id == APIData.id))
-        query = (APIData
-                 .update(data=set_query)
-                 .where(APIData.value.contains('LSM Storage'))
+    def test_simple_update(self):
+        nrows = (KeyData
+                 .update(data={'foo': 'bar'})
+                 .where(KeyData.key.in_(['a', 'b']))
                  .execute())
-        self.assertEqual(query, 1)
+        for k in self.Q.where(KeyData.key.in_(['a', 'b'])):
+            self.assertEqual(k.data, {'foo': 'bar'})
 
-        result = APIData.select().where(APIData.value.contains('LSM storage')).get()
-        self.assertEqual(result.data, {
-            'bar': {'baze': 1},
-            'foo': 'foo value',
-            'metadata': {'tags': ['nosql', 'python', 'sqlite', 'cython'], 'foo': None},
-            'tagz': ['list', 'of', 'tags'],
-            'title': 'Using SQLite4\'s LSM Storage Engine as a Stand-alone NoSQL Database with Python',
-            'url': 'http://charlesleifer.com/blog/using-sqlite4-s-lsm-storage-engine-as-a-stand-alone-nosql-database-with-python/',
-            'x': {'y': {'z': 3}},
-        })
-
-    def test_children(self):
-        children = APIData.data.children().alias('children')
-        query = (APIData
-                 .select(children.c.value.alias('value'))
-                 .from_(APIData, children)
-                 .where(children.c.key.in_(['title', 'url']))
+    def test_tree(self):
+        tree = KeyData.data.tree().alias('tree')
+        query = (KeyData
+                 .select(tree.c.fullkey.alias('fullkey'))
+                 .from_(KeyData, tree)
+                 .where(KeyData.key == 'd')
                  .order_by(SQL('1'))
                  .tuples())
-        self.assertEqual([row for row, in query], [
-            'Alternative Redis-Like Databases with Python',
-            'Building the SQLite FTS5 Search Extension',
-            'Introduction to the fast new UnQLite Python Bindings',
-            'My List of Python and SQLite Resources',
-            'Using SQLite4\'s LSM Storage Engine as a Stand-alone NoSQL Database with Python',
-            'http://charlesleifer.com/blog/alternative-redis-like-databases-with-python/',
-            'http://charlesleifer.com/blog/building-the-sqlite-fts5-search-extension/',
-            'http://charlesleifer.com/blog/introduction-to-the-fast-new-unqlite-python-bindings/',
-            'http://charlesleifer.com/blog/my-list-of-python-and-sqlite-resources/',
-            'http://charlesleifer.com/blog/using-sqlite4-s-lsm-storage-engine-as-a-stand-alone-nosql-database-with-python/',
-        ])
+        self.assertEqual([fullkey for fullkey, in query], [
+            '$',
+            '$.x1',
+            '$.x1.y1',
+            '$.x1.y2'])
 
-    test_metadata = [
-        {'filename': 'peewee.py', 'size': 200000, 'mimetype': 'text/python',
-         'tags': ['peewee', 'main', 'python'],
-         'metadata': {'modified': '2018-02-01 13:37:00', 'perms': 'rw'}},
-        {'filename': 'runtests.py', 'size': 2300, 'mimetype': 'text/python',
-         'tags': ['tests', 'peewee', 'python'],
-         'metadata': {'modified': '2018-01-02 00:00:00', 'perms': 'rwx'}},
-        {'filename': 'playhouse/sqlite_ext.py', 'size': 41000,
-         'mimetype': 'text/python', 'tags': ['sqlite', 'peewee', 'python'],
-         'metadata': {'modified': '2018-02-01 14:01:00', 'perms': 'rw'}},
-    ]
-
-    @requires_models(Metadata)
-    def test_json_path(self):
-        with self.database.atomic():
-            for metadata in self.test_metadata:
-                Metadata.create(data=metadata)
-
-        query = (Metadata
-                 .select(Metadata.data.extract(J.tags[0]).alias('tag'),
-                         Metadata.data[J.filename].alias('filename'),
-                         Metadata.data[J.metadata.perms].alias('perms'))
-                 .order_by(fn.json_extract(Metadata.data, J['filename']))
-                 .namedtuples())
-        self.assertSQL(query, (
-            'SELECT json_extract("t1"."data", ?) AS "tag", '
-            'json_extract("t1"."data", ?) AS "filename", '
-            'json_extract("t1"."data", ?) AS "perms" '
-            'FROM "metadata" AS "t1" '
-            'ORDER BY json_extract("t1"."data", ?)'),
-            ['$.tags[0]', '$.filename', '$.metadata.perms', '$.filename'])
-        accum = [(row.filename, row.tag, row.perms) for row in query]
-        self.assertEqual(accum, [
-            ('peewee.py', 'peewee', 'rw'),
-            ('playhouse/sqlite_ext.py', 'sqlite', 'rw'),
-            ('runtests.py', 'tests', 'rwx')])
-
-        n = (Metadata
-             .update(data=Metadata.data.set(
-                 J.metadata.modified, '2018-02-01 15:00:00',
-                 J['metadata']['misc'], 1337))
-             .where(Metadata.data[J.tags[0]] != 'tests')
-             .execute())
-        self.assertEqual(n, 2)
-
-        peewee = Metadata.get(Metadata.data[J.filename] == 'peewee.py')
-        self.assertEqual(peewee.data['metadata']['modified'],
-                         '2018-02-01 15:00:00')
-        self.assertEqual(peewee.data['metadata']['misc'], 1337)
+    def test_schema(self):
+        self.assertSQL(KeyData._schema._create_table(), (
+            'CREATE TABLE IF NOT EXISTS "keydata" ('
+            '"id" INTEGER NOT NULL PRIMARY KEY, '
+            '"key" TEXT NOT NULL, '
+            '"data" JSON NOT NULL)'), [])
 
 
 class TestSqliteExtensions(BaseTestCase):

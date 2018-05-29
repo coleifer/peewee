@@ -5,20 +5,16 @@ import struct
 import sys
 
 from peewee import *
-from peewee import Alias
+from peewee import ColumnBase
 from peewee import EnclosedNodeList
 from peewee import Entity
 from peewee import Expression
-from peewee import Function
 from peewee import Node
 from peewee import NodeList
 from peewee import OP
-from peewee import Select
 from peewee import VirtualField
 from peewee import merge_dict
-from peewee import sort_models
 from peewee import sqlite3
-from peewee import text_type
 try:
     from playhouse._sqlite_ext import (
         backup,
@@ -73,23 +69,44 @@ class AutoIncrementField(AutoField):
         return NodeList((node_list, SQL('AUTOINCREMENT')))
 
 
-class JSONPath(Node):
-    def __init__(self, path=None):
-        self._path = path or []
+class JSONPath(ColumnBase):
+    def __init__(self, field, path=None):
+        super(JSONPath, self).__init__()
+        self._field = field
+        self._path = path or ()
+
+    @property
+    def path(self):
+        return Value('$%s' % ''.join(self._path))
 
     def __getitem__(self, idx):
-        path = list(self._path)
         if isinstance(idx, int):
-            path.append('[%s]' % idx)
+            item = '[%s]' % idx
         else:
-            path.append('.%s' % idx)
-        return JSONPath(path)
-    __getattr__ = __getitem__
+            item = '.%s' % idx
+        return JSONPath(self._field, self._path + (item,))
+
+    def set(self, value, as_json=None):
+        if as_json or isinstance(value, (list, dict)):
+            value = fn.json(json.dumps(value))
+        return fn.json_set(self._field, self.path, value)
+
+    def update(self, value):
+        return fn.json_patch(self, json.dumps(value))
+
+    def remove(self):
+        return fn.json_remove(self._field, self.path)
+
+    def json_type(self):
+        return fn.json_type(self._field, self.path)
+
+    def length(self):
+        return fn.json_array_length(self._field, self.path)
 
     def __sql__(self, ctx):
-        return ctx.sql(Value('$%s' % ''.join(self._path)))
+        return ctx.sql(fn.json_extract(self._field, self.path)
+                       if self._path else self._field)
 
-J = JSONPath()
 
 class JSONField(TextField):
     field_type = 'JSON'
@@ -105,76 +122,25 @@ class JSONField(TextField):
         if value is not None:
             return json.dumps(value)
 
-    def clean_path(self, path):
-        if isinstance(path, JSONPath):
-            return path
-        if path.startswith('[') or not path:
-            return '$%s' % path
-        return '$.%s' % path
+    def __getitem__(self, item):
+        return JSONPath(self)[item]
 
-    def clean_paths(self, paths):
-        return [self.clean_path(path) for path in paths]
-
-    def length(self, *paths):
-        if paths:
-            return fn.json_array_length(self, *self.clean_paths(paths))
-        return fn.json_array_length(self)
-
-    def extract(self, *paths):
-        return fn.json_extract(self, *self.clean_paths(paths))
-
-    def __getitem__(self, path):
-        if not isinstance(path, tuple):
-            path = (path,)
-        return self.extract(*path)
-
-    def _value_for_insertion(self, value):
-        if isinstance(value, (list, tuple, dict)):
-            return fn.json(json.dumps(value))
-        return value
-
-    def _insert_like(self, fn, pairs, mapping):
-        npairs = len(pairs)
-        if npairs == 1 and isinstance(pairs[0], dict):
-            # We were passed a single dictionary to update the field with.
-            mapping.update(pairs[0])
-            npairs = 0
-        elif npairs % 2 != 0:
-            raise ValueError('Unequal key and value parameters.')
-
-        accum = []
-        if npairs:
-            for i in range(0, npairs, 2):
-                accum.append(self.clean_path(pairs[i]))
-                accum.append(self._value_for_insertion(pairs[i + 1]))
-        if mapping:
-            for key in mapping:
-                val = mapping[key]
-                accum.append(self.clean_path(key))
-                accum.append(self._value_for_insertion(val))
-        return fn(self, *accum)
-
-    def insert(self, *pairs, **data):
-        return self._insert_like(fn.json_insert, pairs, data)
-
-    def replace(self, *pairs, **data):
-        return self._insert_like(fn.json_replace, pairs, data)
-
-    def set(self, *pairs, **data):
-        return self._insert_like(fn.json_set, pairs, data)
-
-    def remove(self, *paths):
-        return fn.json_remove(self, *self.clean_paths(paths))
+    def set(self, value, as_json=None):
+        return JSONPath(self).set(value, as_json)
 
     def update(self, data):
-        return fn.json_patch(self, self._value_for_insertion(data))
+        return JSONPath(self).update(data)
 
-    def json_type(self, path=None):
-        if path:
-            return fn.json_type(self, self.clean_path(path))
+    def remove(self):
+        return JSONPath(self).remove()
+
+    def json_type(self):
         return fn.json_type(self)
 
-    def children(self, path=None):
+    def length(self):
+        return fn.json_array_length(self)
+
+    def children(self):
         """
         Schema of `json_each` and `json_tree`:
 
@@ -189,13 +155,9 @@ class JSONField(TextField):
         json JSON hidden (1st input parameter to function)
         root TEXT hidden (2nd input parameter, path at which to start)
         """
-        if path:
-            return fn.json_each(self, self.clean_path(path))
         return fn.json_each(self)
 
-    def tree(self, path=None):
-        if path:
-            return fn.json_tree(self, self.clean_path(path))
+    def tree(self):
         return fn.json_tree(self)
 
 
