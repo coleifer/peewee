@@ -394,6 +394,16 @@ class TestJSONField(ModelTestCase):
     def assertRows(self, where, expected):
         self.assertEqual([kd.key for kd in self.Q.where(where)], expected)
 
+    def assertData(self, key, expected):
+        self.assertEqual(KeyData.get(KeyData.key == key).data, expected)
+
+    def test_schema(self):
+        self.assertSQL(KeyData._schema._create_table(), (
+            'CREATE TABLE IF NOT EXISTS "keydata" ('
+            '"id" INTEGER NOT NULL PRIMARY KEY, '
+            '"key" TEXT NOT NULL, '
+            '"data" JSON NOT NULL)'), [])
+
     def test_extract(self):
         self.assertRows((KeyData.data['k1'] == 'v1'), ['a', 'c'])
         self.assertRows((KeyData.data['k2'] == 'v2'), ['b', 'c'])
@@ -408,8 +418,7 @@ class TestJSONField(ModelTestCase):
         self.assertEqual(query.execute(), 2)
         self.assertRows((KeyData.data['k1'] == 'v1-x'), ['a', 'c'])
 
-        self.assertEqual(KeyData.get(KeyData.key == 'a').data,
-                         {'k1': 'v1-x', 'x1': {'y1': 'z1'}})
+        self.assertData('a', {'k1': 'v1-x', 'x1': {'y1': 'z1'}})
 
     def test_set_json(self):
         set_json = KeyData.data['x1'].set({'y1': 'z1-x', 'y3': 'z3'})
@@ -419,10 +428,8 @@ class TestJSONField(ModelTestCase):
         self.assertEqual(query.execute(), 2)
         self.assertRows((KeyData.data['x1']['y1'] == 'z1-x'), ['a', 'd'])
 
-        self.assertEqual(KeyData.get(KeyData.key == 'a').data,
-                         {'k1': 'v1', 'x1': {'y1': 'z1-x', 'y3': 'z3'}})
-        self.assertEqual(KeyData.get(KeyData.key == 'd').data,
-                         {'x1': {'y1': 'z1-x', 'y3': 'z3'}})
+        self.assertData('a', {'k1': 'v1', 'x1': {'y1': 'z1-x', 'y3': 'z3'}})
+        self.assertData('d', {'x1': {'y1': 'z1-x', 'y3': 'z3'}})
 
     def test_update(self):
         merged = KeyData.data.update({'x1': {'y1': 'z1-x', 'y3': 'z3'}})
@@ -432,10 +439,17 @@ class TestJSONField(ModelTestCase):
         self.assertEqual(query.execute(), 2)
         self.assertRows((KeyData.data['x1']['y1'] == 'z1-x'), ['a', 'd'])
 
-        self.assertEqual(KeyData.get(KeyData.key == 'a').data,
-                         {'k1': 'v1', 'x1': {'y1': 'z1-x', 'y3': 'z3'}})
-        self.assertEqual(KeyData.get(KeyData.key == 'd').data,
-                         {'x1': {'y1': 'z1-x', 'y2': 'z2', 'y3': 'z3'}})
+        self.assertData('a', {'k1': 'v1', 'x1': {'y1': 'z1-x', 'y3': 'z3'}})
+        self.assertData('d', {'x1': {'y1': 'z1-x', 'y2': 'z2', 'y3': 'z3'}})
+
+    def test_update_with_removal(self):
+        m = KeyData.data.update({'k1': None, 'x1': {'y1': None, 'y3': 'z3'}})
+        query = KeyData.update(data=m).where(KeyData.data['x1']['y1'] == 'z1')
+        self.assertEqual(query.execute(), 2)
+        self.assertRows((KeyData.data['x1']['y3'] == 'z3'), ['a', 'd'])
+
+        self.assertData('a', {'x1': {'y3': 'z3'}})
+        self.assertData('d', {'x1': {'y2': 'z2', 'y3': 'z3'}})
 
     def test_update_nested(self):
         merged = KeyData.data['x1'].update({'y1': 'z1-x', 'y3': 'z3'})
@@ -443,13 +457,20 @@ class TestJSONField(ModelTestCase):
                  .update(data=merged)
                  .where(KeyData.data['x1']['y1'] == 'z1'))
         self.assertEqual(query.execute(), 2)
-
         self.assertRows((KeyData.data['x1']['y1'] == 'z1-x'), ['a', 'd'])
 
-        self.assertEqual(KeyData.get(KeyData.key == 'a').data,
-                         {'k1': 'v1', 'x1': {'y1': 'z1-x', 'y3': 'z3'}})
-        self.assertEqual(KeyData.get(KeyData.key == 'd').data,
-                         {'x1': {'y1': 'z1-x', 'y2': 'z2', 'y3': 'z3'}})
+        self.assertData('a', {'k1': 'v1', 'x1': {'y1': 'z1-x', 'y3': 'z3'}})
+        self.assertData('d', {'x1': {'y1': 'z1-x', 'y2': 'z2', 'y3': 'z3'}})
+
+    def test_updated_nested_with_removal(self):
+        merged = KeyData.data['x1'].update({'o1': 'p1', 'y1': None})
+        nrows = (KeyData
+                 .update(data=merged)
+                 .where(KeyData.data['x1']['y1'] == 'z1')
+                 .execute())
+        self.assertRows((KeyData.data['x1']['o1'] == 'p1'), ['a', 'd'])
+        self.assertData('a', {'k1': 'v1', 'x1': {'o1': 'p1'}})
+        self.assertData('d', {'x1': {'o1': 'p1', 'y2': 'z2'}})
 
     def test_remove(self):
         query = (KeyData
@@ -457,16 +478,14 @@ class TestJSONField(ModelTestCase):
                  .where(KeyData.data['k1'] == 'v1'))
         self.assertEqual(query.execute(), 2)
 
-        self.assertEqual(KeyData.get(KeyData.key == 'a').data,
-                         {'x1': {'y1': 'z1'}})
-        self.assertEqual(KeyData.get(KeyData.key == 'c').data, {'k2': 'v2'})
+        self.assertData('a', {'x1': {'y1': 'z1'}})
+        self.assertData('c', {'k2': 'v2'})
 
         nrows = (KeyData
                  .update(data=KeyData.data['l2'][1][1].remove())
                  .where(KeyData.key == 'e')
                  .execute())
-        self.assertEqual(KeyData.get(KeyData.key == 'e').data,
-                         {'l1': [0, 1, 2], 'l2': [1, [3], 7]})
+        self.assertData('e', {'l1': [0, 1, 2], 'l2': [1, [3], 7]})
 
     def test_simple_update(self):
         nrows = (KeyData
@@ -489,13 +508,6 @@ class TestJSONField(ModelTestCase):
             '$.x1',
             '$.x1.y1',
             '$.x1.y2'])
-
-    def test_schema(self):
-        self.assertSQL(KeyData._schema._create_table(), (
-            'CREATE TABLE IF NOT EXISTS "keydata" ('
-            '"id" INTEGER NOT NULL PRIMARY KEY, '
-            '"key" TEXT NOT NULL, '
-            '"data" JSON NOT NULL)'), [])
 
 
 class TestSqliteExtensions(BaseTestCase):
