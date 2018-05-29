@@ -103,6 +103,12 @@ class JSONPath(ColumnBase):
     def length(self):
         return fn.json_array_length(self._field, self.path)
 
+    def children(self):
+        return fn.json_each(self._field, self.path)
+
+    def tree(self):
+        return fn.json_tree(self._field, self.path)
+
     def __sql__(self, ctx):
         return ctx.sql(fn.json_extract(self._field, self.path)
                        if self._path else self._field)
