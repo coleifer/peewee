@@ -453,8 +453,16 @@ APIs
         :param data: a scalar value, list or dictionary to merge with the data
             currently stored in a :py:class:`JSONField`.
 
-        Uses the `json_patch() <http://sqlite.org/json1.html#jpatch>`_ function
-        from the json1 extension.
+        Merge new data into the JSON value using the RFC-7396 MergePatch
+        algorithm to apply a patch (``data`` parameter) against the column
+        data. MergePatch can add, modify, or delete elements of a JSON object,
+        which means :py:meth:`~JSONField.update` is a generalized replacement
+        for both :py:meth:`~JSONField.set` and :py:meth:`~JSONField.remove`.
+        MergePatch treats JSON array objects as atomic, so ``update()`` cannot
+        append to an array, nor modify individual elements of an array.
+
+        For more information as well as examples, see the SQLite `json_patch() <http://sqlite.org/json1.html#jpatch>`_
+        function documentation.
 
     .. py:method:: remove()
 
@@ -587,8 +595,16 @@ APIs
         :param data: a scalar value, list or dictionary to merge with the data
             at the given location in the JSON data.
 
-        Uses the `json_patch() <http://sqlite.org/json1.html#jpatch>`_ function
-        from the json1 extension.
+        Merge new data into the JSON value using the RFC-7396 MergePatch
+        algorithm to apply a patch (``data`` parameter) against the column
+        data. MergePatch can add, modify, or delete elements of a JSON object,
+        which means :py:meth:`~JSONPath.update` is a generalized replacement
+        for both :py:meth:`~JSONPath.set` and :py:meth:`~JSONPath.remove`.
+        MergePatch treats JSON array objects as atomic, so ``update()`` cannot
+        append to an array, nor modify individual elements of an array.
+
+        For more information as well as examples, see the SQLite `json_patch() <http://sqlite.org/json1.html#jpatch>`_
+        function documentation.
 
     .. py:method:: remove()
 
