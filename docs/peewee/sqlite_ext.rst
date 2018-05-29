@@ -332,11 +332,23 @@ APIs
         >>> KV.get(KV.value['k1'] == 'v1').key
         'a'
 
-    It's possible to update a JSON value in-place using the :py:meth:`~JSONField.update` method:
+    It's possible to update a JSON value in-place using the :py:meth:`~JSONField.update`
+    method. Note that "k1=v1" is preserved:
 
     .. code-block:: pycon
 
-        >>> KV.update(value=KV.value.update({'k1': 'v1-x', 'k2': 'v2'})).execute()
+        >>> KV.update(value=KV.value.update({'k2': 'v2', 'k3': 'v3'})).execute()
+        1
+        >>> KV.get(KV.key == 'a').value
+        {'k1': 'v1', 'k2': 'v2', 'k3': 'v3'}
+
+    We can also update existing data atomically, or remove keys by setting
+    their value to ``None``. In the following example, we'll update the value
+    of "k1" and remove "k3" ("k2" will not be modified):
+
+    .. code-block:: pycon
+
+        >>> KV.update(value=KV.value.update({'k1': 'v1-x', 'k3': None})).execute()
         1
         >>> KV.get(KV.key == 'a').value
         {'k1': 'v1-x', 'k2': 'v2'}
@@ -413,7 +425,7 @@ APIs
 
         'b', {'x1': {'y1': 'z1', 'y2': 'z2'}, 'x2': [1, 2]}
 
-    API documentation for :py:class:`JSONField` follows.
+    For more information, refer to the `sqlite json1 documentation <http://sqlite.org/json1.html>`_.
 
     .. py:method:: __getitem__(item)
 
