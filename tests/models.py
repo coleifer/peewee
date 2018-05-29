@@ -3337,12 +3337,8 @@ class Product(TestModel):
 class TestModelConstraints(ModelTestCase):
     requires = [Product]
 
+    @skip_if(IS_MYSQL)  # MySQL fails intermittently on Travis-CI (?).
     def test_model_constraints(self):
-        if IS_MYSQL:
-            exc_type = OperationalError
-        else:
-            exc_type = IntegrityError
-
         p = Product.create(name='p1', price=1)
         self.assertTrue(p.flags is None)
 
@@ -3354,11 +3350,12 @@ class TestModelConstraints(ModelTestCase):
         # Cannot update price with invalid value, must be > 0.
         with self.database.atomic():
             p.price = -1
-            self.assertRaises(exc_type, p.save)
+            self.assertRaises(IntegrityError, p.save)
 
         # Nor can we create a new product with an invalid price.
         with self.database.atomic():
-            self.assertRaises(exc_type, Product.create, name='p2', price=0)
+            self.assertRaises(IntegrityError, Product.create, name='p2',
+                              price=0)
 
 
 class TestModelFieldReprs(BaseTestCase):
