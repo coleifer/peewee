@@ -451,7 +451,8 @@ APIs
     .. py:method:: update(data)
 
         :param data: a scalar value, list or dictionary to merge with the data
-            currently stored in a :py:class:`JSONField`.
+            currently stored in a :py:class:`JSONField`. To remove a particular
+            key, set that key to ``None`` in the updated data.
 
         Merge new data into the JSON value using the RFC-7396 MergePatch
         algorithm to apply a patch (``data`` parameter) against the column
@@ -593,7 +594,8 @@ APIs
     .. py:method:: update(data)
 
         :param data: a scalar value, list or dictionary to merge with the data
-            at the given location in the JSON data.
+            at the given location in the JSON data. To remove a particular key,
+            set that key to ``None`` in the updated data.
 
         Merge new data into the JSON value using the RFC-7396 MergePatch
         algorithm to apply a patch (``data`` parameter) against the column
