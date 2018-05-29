@@ -437,6 +437,20 @@ class TestJSONField(ModelTestCase):
         self.assertEqual(KeyData.get(KeyData.key == 'd').data,
                          {'x1': {'y1': 'z1-x', 'y2': 'z2', 'y3': 'z3'}})
 
+    def test_update_nested(self):
+        merged = KeyData.data['x1'].update({'y1': 'z1-x', 'y3': 'z3'})
+        query = (KeyData
+                 .update(data=merged)
+                 .where(KeyData.data['x1']['y1'] == 'z1'))
+        self.assertEqual(query.execute(), 2)
+
+        self.assertRows((KeyData.data['x1']['y1'] == 'z1-x'), ['a', 'd'])
+
+        self.assertEqual(KeyData.get(KeyData.key == 'a').data,
+                         {'k1': 'v1', 'x1': {'y1': 'z1-x', 'y3': 'z3'}})
+        self.assertEqual(KeyData.get(KeyData.key == 'd').data,
+                         {'x1': {'y1': 'z1-x', 'y2': 'z2', 'y3': 'z3'}})
+
     def test_remove(self):
         query = (KeyData
                  .update(data=KeyData.data['k1'].remove())

@@ -92,7 +92,7 @@ class JSONPath(ColumnBase):
         return fn.json_set(self._field, self.path, value)
 
     def update(self, value):
-        return fn.json_patch(self, json.dumps(value))
+        return self.set(fn.json_patch(self, json.dumps(value)))
 
     def remove(self):
         return fn.json_remove(self._field, self.path)
