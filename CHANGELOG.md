@@ -7,23 +7,45 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-* Better default `repr` for model classes and fields.
+[View commits](https://github.com/coleifer/peewee/compare/3.5.0...HEAD)
+
+## 3.5.0
+
+**Backwards-incompatible changes**
+
 * Custom Model `repr` no longer use the convention of overriding `__unicode__`,
   and now use `__str__`.
+* Redesigned the [sqlite json1 integration](http://docs.peewee-orm.com/en/latest/peewee/sqlite_ext.html#sqlite-json1).
+  and changed some of the APIs and semantics of various `JSONField` methods.
+  The documentation has been expanded to include more examples and the API has
+  been simplified to make it easier to work with. These changes **do not** have
+  any effect on the [Postgresql JSON fields](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#pgjson).
+
+**New features**
+
+* Better default `repr` for model classes and fields.
 * `ForeignKeyField()` accepts a new initialization parameter, `deferrable`, for
   specifying when constraints should be enforced.
 * `BitField.flag()` can be called without a value parameter for the common
   use-case of using flags that are powers-of-2.
 * `SqliteDatabase` pragmas can be specified as a `dict` (previously required a
   list of 2-tuples).
+* SQLite `TableFunction` ([docs](http://docs.peewee-orm.com/en/latest/peewee/sqlite_ext.html#sqlite-vtfunc))
+  will print Python exception tracebacks raised in the `initialize` and
+  `iterate` callbacks, making debugging significantly easier.
+
+**Bug fixes**
+
 * Fixed bug in `migrator.add_column()` where, if the field being added declared
   a non-standard index type (e.g., binary json field with GIN index), this
   index type was not being respected.
 * Fixed bug in `database.table_exists()` where the implementation did not match
   the documentation. Implementation has been updated to match the
   documentation.
+* Fixed bug in SQLite `TableFunction` implementation which raised errors if the
+  return value of the `iterate()` method was not a `tuple`.
 
-[View commits](https://github.com/coleifer/peewee/compare/3.4.0...HEAD)
+[View commits](https://github.com/coleifer/peewee/compare/3.4.0...3.5.0)
 
 ## 3.4.0
 
