@@ -24,6 +24,7 @@ from peewee import DateField as _DateField
 from peewee import DateTimeField as _DateTimeField
 from peewee import DecimalField as _DecimalField
 from peewee import TimeField as _TimeField
+from peewee import logger
 
 from playhouse.sqlite_ext import SqliteExtDatabase
 
@@ -35,6 +36,8 @@ class APSWDatabase(SqliteExtDatabase):
 
     def register_module(self, mod_name, mod_inst):
         self._modules[mod_name] = mod_inst
+        if not self.is_closed():
+            self.connection().createmodule(mod_name, mod_inst)
 
     def unregister_module(self, mod_name):
         del(self._modules[mod_name])
@@ -62,8 +65,7 @@ class APSWDatabase(SqliteExtDatabase):
     def _load_aggregates(self, conn):
         for name, (klass, num_params) in self._aggregates.items():
             def make_aggregate():
-                instance = klass()
-                return (instance, instance.step, instance.finalize)
+                return (klass(), klass.step, klass.finalize)
             conn.createaggregatefunction(name, make_aggregate)
 
     def _load_collations(self, conn):
@@ -82,7 +84,7 @@ class APSWDatabase(SqliteExtDatabase):
     def load_extension(self, extension):
         self._extensions.add(extension)
         if not self.is_closed():
-            conn = self.get_conn()
+            conn = self.connection()
             conn.enableloadextension(True)
             conn.loadextension(extension)
 
@@ -102,6 +104,7 @@ class APSWDatabase(SqliteExtDatabase):
         self.cursor().execute('rollback;')
 
     def execute_sql(self, sql, params=None, commit=True):
+        logger.debug((sql, params))
         with __exception_wrapper__:
             cursor = self.cursor()
             cursor.execute(sql, params or ())

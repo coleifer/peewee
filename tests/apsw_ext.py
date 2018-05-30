@@ -32,6 +32,43 @@ class TestAPSWExtension(ModelTestCase):
         curs = self.database.execute_sql('SELECT title(?)', ('heLLo',))
         self.assertEqual(curs.fetchone()[0], 'Hello')
 
+    def test_db_register_aggregate(self):
+        @database.aggregate()
+        class First(object):
+            def __init__(self):
+                self._value = None
+
+            def step(self, value):
+                if self._value is None:
+                    self._value = value
+
+            def finalize(self):
+                return self._value
+
+        with database.atomic():
+            for i in range(10):
+                User.create(username='u%s' % i)
+
+        query = User.select(fn.First(User.username)).order_by(User.username)
+        self.assertEqual(query.scalar(), 'u0')
+
+    def test_db_register_collation(self):
+        @database.collation()
+        def reverse(lhs, rhs):
+            lhs, rhs = lhs.lower(), rhs.lower()
+            if lhs < rhs:
+                return 1
+            return -1 if rhs > lhs else 0
+
+        with database.atomic():
+            for i in range(3):
+                User.create(username='u%s' % i)
+
+        query = (User
+                 .select(User.username)
+                 .order_by(User.username.collate('reverse')))
+        self.assertEqual([u.username for u in query], ['u2', 'u1', 'u0'])
+
     def test_db_pragmas(self):
         test_db = APSWDatabase(':memory:', pragmas=(
             ('cache_size', '1337'),
