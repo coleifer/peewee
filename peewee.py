@@ -4686,13 +4686,13 @@ class SchemaManager(object):
         self.database.execute(self._create_table(safe=safe, **options))
 
     def _drop_table(self, safe=True, **options):
-        is_temp = options.pop('temporary', False)
         ctx = (self._create_context()
-               .literal('DROP TEMPORARY ' if is_temp else 'DROP ')
-               .literal('TABLE IF EXISTS ' if safe else 'TABLE ')
+               .literal('DROP TABLE IF EXISTS ' if safe else 'DROP TABLE ')
                .sql(self.model))
         if options.get('cascade'):
             ctx = ctx.literal(' CASCADE')
+        elif options.get('restrict'):
+            ctx = ctx.literal(' RESTRICT')
         return ctx
 
     def drop_table(self, safe=True, **options):
@@ -4807,7 +4807,7 @@ class Metadata(object):
                  primary_key=None, constraints=None, schema=None,
                  only_save_dirty=False, table_alias=None, depends_on=None,
                  options=None, db_table=None, table_function=None,
-                 without_rowid=False, **kwargs):
+                 without_rowid=False, temporary=False, **kwargs):
         if db_table is not None:
             __deprecated__('"db_table" has been deprecated in favor of '
                            '"table_name" for Models.')
@@ -4847,6 +4847,7 @@ class Metadata(object):
         self.table_alias = table_alias
         self.depends_on = depends_on
         self.without_rowid = without_rowid
+        self.temporary = temporary
 
         self.refs = {}
         self.backrefs = {}
@@ -5078,7 +5079,7 @@ class DoesNotExist(Exception): pass
 
 class ModelBase(type):
     inheritable = set(['constraints', 'database', 'indexes', 'primary_key',
-                       'options', 'schema', 'table_function',
+                       'options', 'schema', 'table_function', 'temporary',
                        'only_save_dirty'])
 
     def __new__(cls, name, bases, attrs):
@@ -5526,6 +5527,8 @@ class Model(with_metaclass(ModelBase, Node)):
         if safe and not cls._meta.database.safe_create_index \
            and cls.table_exists():
             return
+        if cls._meta.temporary:
+            options.setdefault('temporary', cls._meta.temporary)
         cls._schema.create_all(safe, **options)
 
     @classmethod
@@ -5533,6 +5536,8 @@ class Model(with_metaclass(ModelBase, Node)):
         if safe and not cls._meta.database.safe_drop_index \
            and not cls.table_exists():
             return
+        if cls._meta.temporary:
+            options.setdefault('temporary', cls._meta.temporary)
         cls._schema.drop_all(safe, drop_sequences, **options)
 
     @classmethod

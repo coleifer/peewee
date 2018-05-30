@@ -2403,6 +2403,22 @@ class TestMetaInheritance(BaseTestCase):
         self.assertEqual(Overrides._meta.options, {'foo': 'bar'})
         self.assertTrue(Overrides._meta.schema is None)
 
+    def test_temporary_inheritance(self):
+        class T0(TestModel): pass
+        class T1(TestModel):
+            class Meta:
+                temporary = True
+
+        class T2(T1): pass
+        class T3(T1):
+            class Meta:
+                temporary = False
+
+        self.assertFalse(T0._meta.temporary)
+        self.assertTrue(T1._meta.temporary)
+        self.assertTrue(T2._meta.temporary)
+        self.assertFalse(T3._meta.temporary)
+
 
 class TestModelSetDatabase(BaseTestCase):
     def test_set_database(self):

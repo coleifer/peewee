@@ -720,6 +720,7 @@ Option                  Meaning                                                I
 ``schema``              the database schema for the model                      yes
 ``only_save_dirty``     when calling model.save(), only save dirty fields      yes
 ``options``             dictionary of options for create table extensions      yes
+``temporary``           indicate temporary table                               yes
 ``table_alias``         an alias to use for the table in queries               no
 ``depends_on``          indicate this table depends on another for creation    no
 ``without_rowid``       indicate table should not have rowid (SQLite only)     no

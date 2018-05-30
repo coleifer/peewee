@@ -112,6 +112,14 @@ class TestModelDDL(ModelDatabaseTestCase):
              '"key" TEXT NOT NULL PRIMARY KEY, '
              '"value" TEXT NOT NULL) WITHOUT ROWID')])
 
+        # Subclasses do not inherit "without_rowid" setting.
+        class SubNoRowid(NoRowid): pass
+
+        self.assertCreateTable(SubNoRowid, [
+            ('CREATE TABLE "subnorowid" ('
+             '"key" TEXT NOT NULL PRIMARY KEY, '
+             '"value" TEXT NOT NULL)')])
+
         NoRowid._meta.database = None
 
     def test_db_table(self):
@@ -140,8 +148,20 @@ class TestModelDDL(ModelDatabaseTestCase):
             '"id" INTEGER NOT NULL PRIMARY KEY, '
             '"username" VARCHAR(255) NOT NULL)'))
 
-        sql, params = User._schema._drop_table(temporary=True).query()
-        self.assertEqual(sql, 'DROP TEMPORARY TABLE IF EXISTS "users"')
+    def test_model_temporary_table(self):
+        class TempUser(User):
+            class Meta:
+                temporary = True
+
+        self.reset_sql_history()
+        TempUser.create_table()
+        TempUser.drop_table()
+        queries = [x.msg for x in self.history]
+        self.assertEqual(queries, [
+            ('CREATE TEMPORARY TABLE IF NOT EXISTS "tempuser" ('
+             '"id" INTEGER NOT NULL PRIMARY KEY, '
+             '"username" VARCHAR(255) NOT NULL)', []),
+            ('DROP TABLE IF EXISTS "tempuser"', [])])
 
     def test_drop_table(self):
         sql, params = User._schema._drop_table().query()
@@ -149,6 +169,9 @@ class TestModelDDL(ModelDatabaseTestCase):
 
         sql, params = User._schema._drop_table(cascade=True).query()
         self.assertEqual(sql, 'DROP TABLE IF EXISTS "users" CASCADE')
+
+        sql, params = User._schema._drop_table(restrict=True).query()
+        self.assertEqual(sql, 'DROP TABLE IF EXISTS "users" RESTRICT')
 
     def test_table_and_index_creation(self):
         self.assertCreateTable(Person, [
