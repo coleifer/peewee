@@ -170,8 +170,8 @@ class Metadata(object):
     def get_column_types(self, table, schema=None):
         raise NotImplementedError
 
-    def get_foreign_keys(self, table, schema=None):
-        return self.database.get_foreign_keys(table, schema)
+    def get_foreign_keys(self, table, schema=None, try_guess_foreign_keys=False):
+        return self.database.get_foreign_keys(table, schema, try_guess_foreign_keys)
 
     def get_primary_keys(self, table, schema=None):
         return self.database.get_primary_keys(table, schema)
@@ -431,7 +431,7 @@ class Introspector(object):
             column = '_' + column
         return column
 
-    def introspect(self, table_names=None, literal_column_names=False):
+    def introspect(self, table_names=None, literal_column_names=False,try_guess_foreign_keys=False):
         # Retrieve all the tables in the database.
         if self.schema:
             tables = self.metadata.database.get_tables(schema=self.schema)
@@ -462,7 +462,7 @@ class Introspector(object):
             table_columns = self.metadata.get_columns(table, self.schema)
             try:
                 foreign_keys[table] = self.metadata.get_foreign_keys(
-                    table, self.schema)
+                    table, self.schema,try_guess_foreign_keys)
             except ValueError as exc:
                 err(*exc.args)
                 foreign_keys[table] = []

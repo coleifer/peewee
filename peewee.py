@@ -4346,7 +4346,7 @@ class MySQLDatabase(Database):
         cursor = self.execute_sql('SHOW INDEX FROM `%s`' % table)
         return [row[4] for row in cursor.fetchall() if row[2] == 'PRIMARY']
 
-    def get_foreign_keys(self, table, schema=None):
+    def get_foreign_keys(self, table, schema=None,try_guess_foreign_keys=False):
         query = """
             SELECT column_name, referenced_table_name, referenced_column_name
             FROM information_schema.key_column_usage
@@ -4355,9 +4355,19 @@ class MySQLDatabase(Database):
                 AND referenced_table_name IS NOT NULL
                 AND referenced_column_name IS NOT NULL"""
         cursor = self.execute_sql(query, (table,))
-        return [
-            ForeignKeyMetadata(column, dest_table, dest_column, table)
+        foreign_keys = [ ForeignKeyMetadata(column, dest_table, dest_column, table)
             for column, dest_table, dest_column in cursor.fetchall()]
+        if foreign_keys == [] and try_guess_foreign_keys:
+            for column in self.get_columns(table) :
+                if column.name[-3:] == '_id'  :
+                    dest_table = None
+                    if  column.name[:-3] in self.get_tables():
+                        dest_table = column.name[:-3]
+                    elif column.name[:-3] + 's' in self.get_tables():
+                        dest_table = column.name[:-3] + 's'
+                    if dest_table is not None :
+                        foreign_keys += [ ForeignKeyMetadata(column.name,dest_table,'',table) ]
+        return foreign_keys
 
     def extract_date(self, date_part, date_field):
         return fn.EXTRACT(Clause(R(date_part), R('FROM'), date_field))

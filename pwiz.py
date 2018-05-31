@@ -43,8 +43,8 @@ def make_introspector(database_type, database_name, **kwargs):
     db = DatabaseClass(database_name, **kwargs)
     return Introspector.from_database(db, schema=schema)
 
-def print_models(introspector, tables=None, preserve_order=False):
-    database = introspector.introspect(table_names=tables)
+def print_models(introspector, tables=None, preserve_order=False,try_guess_foreign_keys=False):
+    database = introspector.introspect(table_names=tables,try_guess_foreign_keys=try_guess_foreign_keys)
 
     print_(TEMPLATE % (
         introspector.get_additional_imports(),
@@ -157,13 +157,13 @@ def get_option_parser():
              'generated file.'))
     ao('-o', '--preserve-order', action='store_true', dest='preserve_order',
        help='Model definition column ordering matches source table.')
+    ao('-g', '--try-guess-foreign-keys', action='store_true', dest='try_guess_foreign_keys',
+       help='Try to guess Foreign keys relationship based on fieldname_id')
     return parser
 
 def get_connect_kwargs(options):
     ops = ('host', 'port', 'user', 'schema')
     kwargs = dict((o, getattr(options, o)) for o in ops if getattr(options, o))
-    if options.password:
-        kwargs['password'] = getpass()
     return kwargs
 
 
@@ -184,6 +184,9 @@ if __name__ == '__main__':
         err('Missing required parameter "database"')
         parser.print_help()
         sys.exit(1)
+    if options.try_guess_foreign_keys and options.engine != 'mysql':
+        err('--try-guess-foreign-keys is only available for mysql')
+        sys.exit(1)
 
     connect = get_connect_kwargs(options)
     database = args[-1]
@@ -198,4 +201,5 @@ if __name__ == '__main__':
         cmd_line = ' '.join(raw_argv[1:])
         print_header(cmd_line, introspector)
 
-    print_models(introspector, tables, preserve_order=options.preserve_order)
+    print_models(introspector, tables, preserve_order=options.preserve_order, try_guess_foreign_keys=options.try_guess_foreign_keys
+    )
