@@ -1069,7 +1069,7 @@ This will yield the following DDL:
 Self-referential foreign keys
 -----------------------------
 
-When creating a heirarchical structure it is necessary to create a
+When creating a hierarchical structure it is necessary to create a
 self-referential foreign key which links a child object to its parent.  Because
 the model class is not defined at the time you instantiate the self-referential
 foreign key, use the special string ``'self'`` to indicate a self-referential

@@ -5,7 +5,7 @@ Project page: https://github.com/leapcode/pysqlcipher/
 
 **WARNING!!! EXPERIMENTAL!!!**
 
-* Although this extention's code is short, it has not been propery
+* Although this extention's code is short, it has not been properly
   peer-reviewed yet and may have introduced vulnerabilities.
 * The code contains minimum values for `passphrase` length and
   `kdf_iter`, as well as a default value for the later.
@@ -25,7 +25,7 @@ Example usage:
 * `passphrase`: should be "long enough".
   Note that *length beats vocabulary* (much exponential), and even
   a lowercase-only passphrase like easytorememberyethardforotherstoguess
-  packs more noise than 8 random printable chatacters and *can* be memorized.
+  packs more noise than 8 random printable characters and *can* be memorized.
 * `kdf_iter`: Should be "as much as the weakest target machine can afford".
 
 When opening an existing database, passphrase and kdf_iter should be identical
