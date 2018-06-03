@@ -608,11 +608,11 @@ Notes:
 
     * [Hopefully] there's no way to tell whether the passphrase is wrong
       or the file is corrupt.
-      In both cases -- *the first time we try to acces the database* -- a
+      In both cases -- *the first time we try to access the database* -- a
       :py:class:`DatabaseError` error is raised,
       with the *exact* message: ``"file is encrypted or is not a database"``.
 
-      As mentioned above, this only happens when you *access* the databse,
+      As mentioned above, this only happens when you *access* the database,
       so if you need to know *right away* whether the passphrase was correct,
       you can trigger this check by calling [e.g.]
       :py:meth:`~Database.get_tables()` (see example below).
@@ -1287,7 +1287,7 @@ postgres_ext API notes
 
         :param keys: One or more keys to search for.
 
-        Query rows for the existince of *any* key.
+        Query rows for the existence of *any* key.
 
 .. py:class:: JSONField(dumps=None, *args, **kwargs)
 

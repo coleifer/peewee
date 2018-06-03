@@ -1295,10 +1295,10 @@ APIs
     `transitive closure <http://www.sqlite.org/cgi/src/artifact/636024302cde41b2bf0c542f81c40c624cfb7012>`_
     table. Closure tables are :py:class:`VirtualModel` subclasses that work
     with the transitive closure SQLite extension. These special tables are
-    designed to make it easy to efficiently query heirarchical data. The SQLite
+    designed to make it easy to efficiently query hierarchical data. The SQLite
     extension manages an AVL tree behind-the-scenes, transparently updating the
     tree when your table changes and making it easy to perform common queries
-    on heirarchical data.
+    on hierarchical data.
 
     To use the closure table extension in your project, you need:
 
@@ -1536,7 +1536,7 @@ APIs
         ts = get_timestamp()
         EventLog[ts] = ('pageview', 'search', '/blog/some-post/')
 
-        # Retreive row from event log.
+        # Retrieve row from event log.
         log = EventLog[ts]
         print(log.action, log.sender, log.target)
         # Prints ("pageview", "search", "/blog/some-post/")

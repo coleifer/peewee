@@ -2227,7 +2227,7 @@ Fields
     :param str help_text: Help-text for field, metadata purposes only.
     :param str verbose_name: Verbose name for field, metadata purposes only.
 
-    Fields on a :py:class:`Model` are analagous to columns on a table.
+    Fields on a :py:class:`Model` are analogous to columns on a table.
 
     .. py:attribute:: field_type = '<some field type>'
 

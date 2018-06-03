@@ -61,7 +61,7 @@ clone, there are just three models:
     the *User* model and stores which users follow one another.
 
 *Message*:
-    Analagous to a tweet. The Message model stores the text content of
+    Analogous to a tweet. The Message model stores the text content of
     the tweet, when it was created, and who posted it (foreign key to User).
 
 If you like UML, these are the tables and relationships:

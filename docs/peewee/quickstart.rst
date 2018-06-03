@@ -395,7 +395,7 @@ It would look like this:
     # Grandma L. no pets
     # Herb Mittens Jr
 
-Usually this type of duplication is undesirable. To accomodate the more common
+Usually this type of duplication is undesirable. To accommodate the more common
 (and intuitive) workflow of listing a person and attaching **a list** of that
 person's pets, we can use a special method called
 :py:meth:`~ModelSelect.prefetch`:
