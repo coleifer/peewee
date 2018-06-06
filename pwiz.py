@@ -165,7 +165,7 @@ def get_connect_kwargs(options):
     ops = ('host', 'port', 'user', 'schema')
     kwargs = dict((o, getattr(options, o)) for o in ops if getattr(options, o))
     if options.password:
-        kwargs['password'] = getpass
+        kwargs['password'] = getpass()
     return kwargs
 
 
