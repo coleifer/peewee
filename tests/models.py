@@ -3414,3 +3414,20 @@ class TestModelFieldReprs(BaseTestCase):
         self.assertEqual(repr(EAV.entity), '<TextField: EAV.entity>')
 
         self.assertEqual(repr(TextField()), '<TextField: (unbound)>')
+
+    def test_custom_reprs(self):
+        class User(Model):
+            username = TextField(primary_key=True)
+
+            def __str__(self):
+                return self.username.title()
+
+        class Foo(Model):
+            def __repr__(self):
+                return 'TWEET: %s' % self.id
+
+        u = User(username='charlie')
+        self.assertEqual(repr(u), '<User: Charlie>')
+
+        f = Foo(id=1337)
+        self.assertEqual(repr(f), 'TWEET: 1337')
