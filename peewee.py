@@ -4303,6 +4303,8 @@ class ForeignKeyField(Field):
     def field_type(self):
         if not isinstance(self.rel_field, AutoField):
             return self.rel_field.field_type
+        elif isinstance(self.rel_field, BigAutoField):
+            return BigIntegerField.field_type
         return IntegerField.field_type
 
     def get_modifiers(self):
