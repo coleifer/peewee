@@ -1467,6 +1467,12 @@ Modeling students and courses using :py:class:`ManyToManyField`:
     # Calling .clear() will remove all associated objects:
     cs_150.students.clear()
 
+.. attention::
+    Before many-to-many relationships can be added, the objects being
+    referenced will need to be saved first. In order to create relationships in
+    the many-to-many through table, Peewee needs to know the primary keys of
+    the models being referenced.
+
 For more examples, see:
 
 * :py:meth:`ManyToManyField.add`
