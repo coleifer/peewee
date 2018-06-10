@@ -10,7 +10,9 @@ Database
 
 .. py:class:: Database(database[, thread_safe=True[, autorollback=False[, field_types=None[, operations=None[, **kwargs]]]]])
 
-    :param str database: Database name or filename for SQLite.
+    :param str database: Database name or filename for SQLite (or None to
+        defer initialization, in which case you must call
+        :py:meth:`Database.init`, specifying the database name).
     :param bool thread_safe: Whether to store connection state in a
         thread-local.
     :param bool autorollback: Automatically rollback queries that fail when
