@@ -13,6 +13,7 @@ from .models import *
 from .model_sql import *
 from .prefetch import *
 from .queries import *
+from .regressions import *
 from .results import *
 from .schema import *
 from .sql import *

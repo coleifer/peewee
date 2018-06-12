@@ -606,6 +606,9 @@ class Node(object):
             return clone
         return self
 
+    def is_alias(self):
+        return False
+
     def unwrap(self):
         return self
 
@@ -1085,6 +1088,9 @@ class WrappedNode(ColumnBase):
         self.node = node
         self._coerce = getattr(node, '_coerce', True)
 
+    def is_alias(self):
+        return self.node.is_alias()
+
     def unwrap(self):
         return self.node.unwrap()
 
@@ -1120,6 +1126,9 @@ class Alias(WrappedNode):
 
     def unalias(self):
         return self.node
+
+    def is_alias(self):
+        return True
 
     def __sql__(self, ctx):
         if ctx.scope == SCOPE_SOURCE:
@@ -5857,6 +5866,11 @@ class ModelSelect(BaseModelSelect, Select):
                     attr = fk_field.name
                 else:
                     attr = dest_model._meta.name
+            elif on_alias and fk_field is not None and \
+                    attr == fk_field.object_id_name and not is_backref:
+                raise ValueError('Cannot assign join alias to "%s", as this '
+                                 'attribute is the object_id_name for the '
+                                 'foreign-key field "%s"' % (attr, fk_field))
 
         elif isinstance(dest, Source):
             constructor = dict
@@ -6163,7 +6177,8 @@ class BaseModelCursorWrapper(DictCursorWrapper):
                 if raw_node._coerce:
                     converters[idx] = node.python_value
                 fields[idx] = node
-                if column == node.name or column == node.column_name:
+                if (column == node.name or column == node.column_name) and \
+                   not raw_node.is_alias():
                     self.columns[idx] = node.name
             elif column in combined:
                 if raw_node._coerce:
