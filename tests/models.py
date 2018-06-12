@@ -3424,3 +3424,25 @@ class TestModelFieldReprs(BaseTestCase):
 
         u = User(username='charlie')
         self.assertEqual(repr(u), '<User: Charlie>')
+
+
+class TestGetWithSecondDatabase(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [User]
+
+    def test_get_with_second_database(self):
+        User.create(username='huey')
+        query = User.select().where(User.username == 'huey')
+        self.assertEqual(query.get().username, 'huey')
+
+        alt_db = get_in_memory_db()
+        with User.bind_ctx(alt_db):
+            User.create_table()
+
+        self.assertRaises(User.DoesNotExist, query.get, alt_db)
+        with User.bind_ctx(alt_db):
+            User.create(username='zaizee')
+
+        query = User.select().where(User.username == 'zaizee')
+        self.assertRaises(User.DoesNotExist, query.get)
+        self.assertEqual(query.get(alt_db).username, 'zaizee')

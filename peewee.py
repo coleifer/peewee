@@ -5732,11 +5732,11 @@ class BaseModelSelect(_ModelQueryHelper):
     def prefetch(self, *subqueries):
         return prefetch(self, *subqueries)
 
-    def get(self):
+    def get(self, database=None):
         clone = self.paginate(1, 1)
         clone._cursor_wrapper = None
         try:
-            return clone.execute()[0]
+            return clone.execute(database)[0]
         except IndexError:
             sql, params = clone.sql()
             raise self.model.DoesNotExist('%s instance matching query does '
