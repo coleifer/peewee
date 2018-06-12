@@ -8,6 +8,8 @@ https://github.com/coleifer/peewee/releases
 ## master
 
 * Add new model meta option for indicating that a model uses a temporary table.
+* Allow `database` parameter to be specified with `ModelSelect.get()` method.
+  For discussion, see #1620.
 * Fixed edge-case where attempting to alias a field to it's underlying
   column-name (when different), Peewee would not respect the alias and use the
   field name instead. See #1625 for details and discussion.
