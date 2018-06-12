@@ -1,5 +1,6 @@
 from peewee import *
 
+from .base import BaseTestCase
 from .base import ModelTestCase
 from .base import TestModel
 
@@ -60,3 +61,18 @@ class TestQueryAliasToColumnName(ModelTestCase):
         query = CARef.select(CARef, ColAlias.name.alias('pname'))
         expr = (CARef.colalias == ColAlias.id).alias('colalias_id')
         self.assertRaises(ValueError, query.join, ColAlias, on=expr)
+
+
+class TestOverrideModelRepr(BaseTestCase):
+    def test_custom_reprs(self):
+        # In 3.5.0, Peewee included a new implementation and semantics for
+        # customizing model reprs. This introduced a regression where model
+        # classes that defined a __repr__() method had this override ignored
+        # silently. This test ensures that it is possible to completely
+        # override the model repr.
+        class Foo(Model):
+            def __repr__(self):
+                return 'FOO: %s' % self.id
+
+        f = Foo(id=1337)
+        self.assertEqual(repr(f), 'FOO: 1337')

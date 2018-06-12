@@ -7,6 +7,19 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Add new model meta option for indicating that a model uses a temporary table.
+* Fixed edge-case where attempting to alias a field to it's underlying
+  column-name (when different), Peewee would not respect the alias and use the
+  field name instead. See #1625 for details and discussion.
+* Raise a `ValueError` when joining and aliasing the join to a foreign-key's
+  `object_id_name` descriptor. Should prevent accidentally introducing O(n)
+  queries or silently ignoring data from a joined-instance.
+* Fixed bug for MySQL when creating a foreign-key to a model which used the
+  `BigAutoField` for it's primary-key.
+* Fixed bugs in the implementation of user-defined aggregates and extensions
+  with the APSW SQLite driver.
+* Fixed regression introduced in 3.5.0 which ignored custom Model `__repr__()`.
+
 [View commits](https://github.com/coleifer/peewee/compare/3.5.0...HEAD)
 
 ## 3.5.0
