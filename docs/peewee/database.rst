@@ -819,7 +819,7 @@ out Peewee's own `test-suite <https://github.com/coleifer/peewee/tree/master/tes
 Async with Gevent
 -----------------
 
-`gevent <http://www.gevent.org/>` is recommended for doing asynchronous i/o
+`gevent <http://www.gevent.org/>`_ is recommended for doing asynchronous I/O
 with Postgresql or MySQL. Reasons I prefer gevent:
 
 * No need for special-purpose "loop-aware" re-implementations of *everything*.
