@@ -5,30 +5,20 @@ peewee
 
 Peewee is a simple and small ORM. It has few (but expressive) concepts, making it easy to learn and intuitive to use.
 
-* A small, expressive ORM
-* Written in python with support for versions 2.7+ and 3.4+ (developed with 3.6)
-* built-in support for sqlite, mysql and postgresql
-* tons of extensions available in the `playhouse <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html>`_
-
-  * `Postgresql HStore, JSON, arrays and more <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#postgres-ext>`_
-  * `SQLite full-text search, user-defined functions, virtual tables and more <http://docs.peewee-orm.com/en/latest/peewee/sqlite_ext.html>`_
-  * `Schema migrations <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#migrate>`_ and `model code generator <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#pwiz>`_
-  * `Connection pool <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#pool>`_
-  * `Encryption <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#sqlcipher-ext>`_
-  * `and much, much more... <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html>`_
+* a small, expressive ORM
+* python 2.7+ and 3.4+ (developed with 3.6)
+* supports sqlite, mysql and postgresql
+* tons of `extensions <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html>`_
 
 .. image:: https://travis-ci.org/coleifer/peewee.svg?branch=master
   :target: https://travis-ci.org/coleifer/peewee
 
-New to peewee? Here is a list of documents you might find most helpful when getting
-started:
+New to peewee? These may help:
 
-* `Quickstart guide <http://docs.peewee-orm.com/en/latest/peewee/quickstart.html#quickstart>`_ -- this guide covers all the essentials. It will take you between 5 and 10 minutes to go through it.
-* `Example queries <http://docs.peewee-orm.com/en/latest/peewee/query_examples.html>`_ taken from the `PostgreSQL Exercises website <https://pgexercises.com/>`_.
-* `Guide to the various query operators <http://docs.peewee-orm.com/en/latest/peewee/query_operators.html>`_ describes how to construct queries and combine expressions.
-* `Field types table <http://docs.peewee-orm.com/en/latest/peewee/models.html#field-types-table>`_ lists the various field types peewee supports and the parameters they accept.
-
-For flask helpers, check out the `flask_utils extension module <http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#flask-utils>`_. You can also use peewee with the popular extension `flask-admin <https://flask-admin.readthedocs.io/en/latest/>`_ to provide a Django-like admin interface for managing peewee models.
+* `Quickstart <http://docs.peewee-orm.com/en/latest/peewee/quickstart.html#quickstart>`_
+* `Example twitter app <http://docs.peewee-orm.com/en/latest/peewee/example.html>`_
+* `Query operators <http://docs.peewee-orm.com/en/latest/peewee/query_operators.html>`_
+* `Field types <http://docs.peewee-orm.com/en/latest/peewee/models.html#field-types-table>`_
 
 Examples
 --------
@@ -115,7 +105,7 @@ Queries are expressive and composable:
     # Do an atomic update
     Counter.update(count=Counter.count + 1).where(Counter.url == request.url)
 
-Check out the `example app <http://docs.peewee-orm.com/en/latest/peewee/example.html>`_ for a working Twitter-clone website written with Flask.
+Check out the `example twitter app <http://docs.peewee-orm.com/en/latest/peewee/example.html>`_.
 
 Learning more
 -------------
