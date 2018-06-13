@@ -3638,9 +3638,7 @@ class ResultIterator(object):
 
     __next__ = next
 
-
 # FIELDS
-
 
 class FieldAccessor(object):
     def __init__(self, model, field, name):
@@ -3718,7 +3716,6 @@ class ObjectIdAccessor(object):
 
     def __set__(self, instance, value):
         setattr(instance, self.field.name, value)
-
 
 
 class Field(ColumnBase):
