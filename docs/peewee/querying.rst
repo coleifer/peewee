@@ -1172,8 +1172,8 @@ which has it's username attribute set:
 
 When doing complicated joins, joins where no foreign-key exists (for example
 joining on a subquery), etc., it is necessary to tell Peewee where to place the
-joined attributes. This is done by putting an *alias* on the join predicate
-expression.
+joined attributes. This is done by specifying an ``attr`` parameter in the join
+method.
 
 For example, let's say that in the above query we want to put the joined user
 data in the *Tweet.foo* attribute:
@@ -1182,12 +1182,22 @@ data in the *Tweet.foo* attribute:
 
     query = (Tweet
              .select(Tweet.content, Tweet.timestamp, User.username)
-             .join(User, on=(Tweet.user == User.id).alias('foo'))
+             .join(User, attr='foo')
              .order_by(Tweet.timestamp.desc()))
 
     for tweet in query:
         # Joined user data is stored in "tweet.foo":
         print(tweet.content, tweet.timestamp, tweet.foo.username)
+
+Alternatively, we can also specify the attribute name by putting an *alias* on
+the join predicate expression:
+
+.. code-block:: python
+
+    query = (Tweet
+             .select(Tweet.content, Tweet.timestamp, User.username)
+             .join(User, on=(Tweet.user == User.id).alias('foo'))
+             .order_by(Tweet.timestamp.desc()))
 
 For queries with complex joins and selections from several models, constructing
 this graph can be expensive. If you wish, instead, to have *all* columns as
