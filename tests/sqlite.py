@@ -989,6 +989,16 @@ class TestUserDefinedCallbacks(ModelTestCase):
         self.assertEqual([x[0] for x in pq.tuples()], [
             'testing', 'chatting', '  foo'])
 
+    def test_use_across_connections(self):
+        db = get_in_memory_db()
+        @db.func()
+        def rev(s):
+            return s[::-1]
+
+        db.connect(); db.close(); db.connect()
+        curs = db.execute_sql('select rev(?)', ('hello',))
+        self.assertEqual(curs.fetchone(), ('olleh',))
+
 
 class TestRowIDField(ModelTestCase):
     database = database

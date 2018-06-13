@@ -700,6 +700,14 @@ APIs
           constructor.
     * ``primary_key`` - defaults to ``False``, indicating no primary key.
 
+    These all are combined in the following way:
+
+    .. code-block:: sql
+
+        CREATE VIRTUAL TABLE <table_name>
+        USING <extension_module>
+        ([prefix_arguments, ...] fields, ... [arguments, ...], [options...])
+
 .. _sqlite-fts:
 
 .. py:class:: FTSModel()
@@ -790,8 +798,8 @@ APIs
                     .order_by(DocumentIndex.bm25()))
 
     .. warning::
-        All SQL queries on ``FTSModel`` classes will be slow **except**
-        full-text searches and ``rowid`` lookups.
+        All SQL queries on ``FTSModel`` classes will be full-table scans
+        **except** full-text searches and ``rowid`` lookups.
 
     If the primary source of the content you are indexing exists in a separate
     table, you can save some disk space by instructing SQLite to not store an
