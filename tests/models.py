@@ -1355,8 +1355,7 @@ class TestJoinModelAlias(ModelTestCase):
 
     def test_join_on(self):
         UA = User.alias('ua')
-        query = self._test_query(lambda: UA)
-        query = query.join(UA, on=(Tweet.user == UA.id))
+        query = self._test_query(lambda: UA).join(UA, on=(Tweet.user == UA.id))
         self.assertTweets(query)
 
     def test_join_on_field(self):

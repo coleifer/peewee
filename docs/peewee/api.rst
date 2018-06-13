@@ -10,9 +10,9 @@ Database
 
 .. py:class:: Database(database[, thread_safe=True[, autorollback=False[, field_types=None[, operations=None[, **kwargs]]]]])
 
-    :param str database: Database name or filename for SQLite (or None to
-        defer initialization, in which case you must call
-        :py:meth:`Database.init`, specifying the database name).
+    :param str database: Database name or filename for SQLite (or ``None`` to
+        :ref:`defer initialization <deferring_initialization>`, in which case
+        you must call :py:meth:`Database.init`, specifying the database name).
     :param bool thread_safe: Whether to store connection state in a
         thread-local.
     :param bool autorollback: Automatically rollback queries that fail when
@@ -31,14 +31,40 @@ Database
     * Introspection
 
     .. note::
-
         The database can be instantiated with ``None`` as the database name if
         the database is not known until run-time. In this way you can create a
         database instance and then configure it elsewhere when the settings are
-        known. This is called *deferred* initialization.
+        known. This is called :ref:`deferred* initialization <deferring_initialization>`.
 
-        To initialize a database that has been *deferred*, use the
-        :py:meth:`~Database.init` method.
+    Examples:
+
+    .. code-block:: python
+
+        # Sqlite database using WAL-mode and 32MB page-cache.
+        db = SqliteDatabase('app.db', pragmas={
+            'journal_mode': 'wal',
+            'cache_size': -32 * 1000})
+
+        # Postgresql database on remote host.
+        db = PostgresqlDatabase('my_app', user='postgres', host='10.1.0.3',
+                                password='secret')
+
+    Deferred initialization example:
+
+    .. code-block:: python
+
+        db = PostgresqlDatabase(None)
+
+        class BaseModel(Model):
+            class Meta:
+                database = db
+
+        # Read database connection info from env, for example:
+        db_name = os.environ['DATABASE']
+        db_host = os.environ['PGHOST']
+
+        # Initialize database.
+        db.init(db_name, host=db_host, user='postgres')
 
     .. py:attribute:: param = '?'
 
@@ -56,7 +82,8 @@ Database
             database driver when a connection is created, for example
             ``password``, ``host``, etc.
 
-        Initialize a *deferred* database.
+        Initialize a *deferred* database. See :ref:`deferring_initialization`
+        for more info.
 
     .. py:method:: __enter__()
 
@@ -811,6 +838,11 @@ Query-builder
         API for recursively unwrapping "wrapped" nodes. Base case is to
         return self.
 
+    .. py:method:: is_alias()
+
+        API for determining if a node, at any point, has been explicitly
+        aliased by the user.
+
 
 .. py:class:: Source([alias=None])
 
@@ -1197,7 +1229,9 @@ Query-builder
 .. py:function:: AsIs(value)
 
     Represents a :py:class:`Value` that is treated as-is, and passed directly
-    back to the database driver.
+    back to the database driver. This may be useful if you are using database
+    extensions that accept native Python data-types and you do not wish Peewee
+    to impose any handling of the values.
 
 
 .. py:class:: Cast(node, cast)
@@ -2482,14 +2516,17 @@ Fields
     the datetime can be encoded with (for databases that do not have support
     for a native datetime data-type). The default supported formats are:
 
-    .. note::
-        If the incoming value does not match a format, it is returned as-is.
-
     .. code-block:: python
 
         '%Y-%m-%d %H:%M:%S.%f' # year-month-day hour-minute-second.microsecond
         '%Y-%m-%d %H:%M:%S' # year-month-day hour-minute-second
         '%Y-%m-%d' # year-month-day
+
+    .. note::
+        SQLite does not have a native datetime data-type, so datetimes are
+        stored as strings. This is handled transparently by Peewee, but if you
+        have pre-existing data you should ensure it is stored as
+        ``YYYY-mm-dd HH:MM:SS`` or one of the other supported formats.
 
     .. py:attribute:: year
 
@@ -2681,10 +2718,10 @@ Fields
         Take care with foreign keys in SQLite. By default, ON DELETE has no
         effect, which can have surprising (and usually unwanted) effects on
         your database integrity. This can affect you even if you don't specify
-        on_delete, since the default ON DELETE behaviour (to fail without
+        ``on_delete``, since the default ON DELETE behaviour (to fail without
         modifying your data) does not happen, and your data can be silently
         relinked. The safest thing to do is to specify
-        ``pragmas=(('foreign_keys', 'on'),)`` when you instantiate
+        ``pragmas={'foreign_keys': 1}`` when you instantiate
         :py:class:`SqliteDatabase`.
 
 .. py:class:: DeferredForeignKey(rel_model_name[, **kwargs])
@@ -3187,17 +3224,13 @@ Model
 
         Example:
 
-        .. code-block:: pycon
+        .. code-block:: python
 
             Parent = Category.alias()
             sq = (Category
                   .select(Category, Parent)
                   .join(Parent, on=(Category.parent == Parent.id))
                   .where(Parent.name == 'parent category'))
-
-        .. note::
-            When using a :py:class:`ModelAlias` in a join, you must explicitly
-            specify the join condition.
 
     .. py:classmethod:: select(*fields)
 
@@ -3439,7 +3472,7 @@ Model
 
             q = User.raw('select id, username from users')
             for user in q:
-                print user.id, user.username
+                print(user.id, user.username)
 
         .. note::
             Generally the use of ``raw`` is reserved for those cases where you
