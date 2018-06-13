@@ -321,7 +321,7 @@ subquery:
     user = get_current_user()
     messages = (Message
                 .select()
-                .where(Message.user << user.following())
+                .where(Message.user.in_(user.following()))
                 .order_by(Message.pub_date.desc()))
 
 This code corresponds to the following SQL query:

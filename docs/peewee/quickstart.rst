@@ -13,7 +13,8 @@ features. This guide will cover:
 .. note::
     If you'd like something a bit more meaty, there is a thorough tutorial on
     :ref:`creating a "twitter"-style web app <example-app>` using peewee and the
-    Flask framework.
+    Flask framework. In the projects ``examples/`` folder you can find more
+    self-contained Peewee examples, like a `blog app <https://github.com/coleifer/peewee/tree/master/examples/blog>`_.
 
 I **strongly** recommend opening an interactive shell session and running the
 code. That way you can get a feel for typing in queries.
@@ -162,7 +163,6 @@ adopts Fido:
 
     herb_fido.owner = uncle_bob
     herb_fido.save()
-    bob_fido = herb_fido # rename our variable for clarity
 
 .. _retrieving-data:
 
@@ -441,13 +441,6 @@ We're done with our database, let's close the connection:
     db.close()
 
 This is just the basics! You can make your queries as complex as you like.
-
-All the other SQL clauses are available as well, such as:
-
-* :py:meth:`~SelectQuery.group_by`
-* :py:meth:`~SelectQuery.having`
-* :py:meth:`~SelectQuery.limit` and :py:meth:`~SelectQuery.offset`
-
 Check the documentation on :ref:`querying` for more info.
 
 Working with existing databases

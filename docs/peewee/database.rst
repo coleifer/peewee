@@ -792,8 +792,7 @@ Example test-case setup:
         def setUp(self):
             # Bind model classes to test db. Since we have a complete list of
             # all models, we do not need to recursively bind dependencies.
-            for model in MODELS:
-                model.bind(test_db, bind_refs=False, bind_backrefs=False)
+            test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
 
             test_db.connect()
             test_db.create_tables(MODELS)
