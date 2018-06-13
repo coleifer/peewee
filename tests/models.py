@@ -3451,3 +3451,24 @@ class TestGetWithSecondDatabase(ModelTestCase):
         query = User.select().where(User.username == 'zaizee')
         self.assertRaises(User.DoesNotExist, query.get)
         self.assertEqual(query.get(alt_db).username, 'zaizee')
+
+
+class TestMixModelsTables(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [User]
+
+    def test_mix_models_tables(self):
+        Tbl = User._meta.table
+        self.assertEqual(Tbl.insert({Tbl.username: 'huey'}).execute(), 1)
+
+        huey = Tbl.select(User.username).get()
+        self.assertEqual(huey, {'username': 'huey'})
+
+        huey = User.select(Tbl.username).get()
+        self.assertEqual(huey.username, 'huey')
+
+        Tbl.update(username='huey-x').where(Tbl.username == 'huey').execute()
+        self.assertEqual(User.select().get().username, 'huey-x')
+
+        Tbl.delete().where(User.username == 'huey-x').execute()
+        self.assertEqual(Tbl.select().count(), 0)
