@@ -1375,6 +1375,12 @@ class TestJoinModelAlias(ModelTestCase):
         query = self._test_query(lambda: UA).join(UA, attr='baz')
         self.assertTweets(query, 'baz')
 
+    def test_join_on_alias_attr(self):
+        UA = User.alias('ua')
+        q = self._test_query(lambda: UA)
+        q = q.join(UA, on=(Tweet.user == UA.id).alias('foo'), attr='bar')
+        self.assertTweets(q, 'bar')
+
     def _test_query_backref(self, alias_expr):
         TA = alias_expr()
         return (User

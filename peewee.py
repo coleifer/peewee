@@ -5818,7 +5818,7 @@ class ModelSelect(BaseModelSelect, Select):
         # destination attribute for the joined data.
         on_alias = isinstance(on, Alias)
         if on_alias:
-            attr = on._alias
+            attr = attr or on._alias
             on = on.alias()
 
         # Obtain references to the source and destination models being joined.
