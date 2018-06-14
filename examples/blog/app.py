@@ -121,7 +121,7 @@ class Entry(flask_db.Model):
         words = [word.strip() for word in query.split() if word.strip()]
         if not words:
             # Return an empty query.
-            return Entry.select().where(Entry.id == 0)
+            return Entry.noop()
         else:
             search = ' '.join(words)
 
