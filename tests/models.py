@@ -2554,6 +2554,7 @@ class Emp(TestModel):
 class OCTest(TestModel):
     a = CharField(unique=True)
     b = IntegerField(default=0)
+    c = IntegerField(default=0)
 
 
 class OnConflictTestCase(ModelTestCase):
@@ -2617,6 +2618,59 @@ class TestUpsertMySQL(OnConflictTestCase):
             ('mickey', 'dog', '1337'),
             ('nuggie', 'dog', '123'),
             ('beanie', 'cat', '126')])
+
+    @requires_models(OCTest)
+    def test_update(self):
+        pk = (OCTest
+              .insert(a='a', b=3)
+              .on_conflict(update={OCTest.b: 1337})
+              .execute())
+        oc = OCTest.get(OCTest.a == 'a')
+        self.assertEqual(oc.b, 3)
+
+        pk2 = (OCTest
+               .insert(a='a', b=4)
+               .on_conflict(update={OCTest.b: OCTest.b + 10})
+               .execute())
+        self.assertEqual(pk, pk2)
+        self.assertEqual(OCTest.select().count(), 1)
+
+        oc = OCTest.get(OCTest.a == 'a')
+        self.assertEqual(oc.b, 13)
+
+        pk3 = (OCTest
+               .insert(a='a2', b=5)
+               .on_conflict(update={OCTest.b: 1337})
+               .execute())
+        self.assertTrue(pk3 != pk2)
+        self.assertEqual(OCTest.select().count(), 2)
+
+        oc = OCTest.get(OCTest.a == 'a2')
+        self.assertEqual(oc.b, 5)
+
+    @requires_models(OCTest)
+    def test_update_preserve(self):
+        OCTest.create(a='a', b=3)
+
+        pk = (OCTest
+              .insert(a='a', b=4)
+              .on_conflict(preserve=[OCTest.b])
+              .execute())
+        oc = OCTest.get(OCTest.a == 'a')
+        self.assertEqual(oc.b, 4)
+
+        pk2 = (OCTest
+               .insert(a='a', b=5, c=6)
+               .on_conflict(
+                   preserve=[OCTest.c],
+                   update={OCTest.b: OCTest.b + 100})
+               .execute())
+        self.assertEqual(pk, pk2)
+        self.assertEqual(OCTest.select().count(), 1)
+
+        oc = OCTest.get(OCTest.a == 'a')
+        self.assertEqual(oc.b, 104)
+        self.assertEqual(oc.c, 6)
 
 
 class TestUpsertSqlite(OnConflictTestCase):
@@ -2746,9 +2800,9 @@ class TestUpsertSqlite(OnConflictTestCase):
 
         # Sanity-check the SQL.
         self.assertSQL(query, (
-            'INSERT INTO "octest" ("a", "b") VALUES (?, ?) '
+            'INSERT INTO "octest" ("a", "b", "c") VALUES (?, ?, ?) '
             'ON CONFLICT ("a") '
-            'DO UPDATE SET "b" = ("octest"."b" + ?)'), ['foo', 1, 2])
+            'DO UPDATE SET "b" = ("octest"."b" + ?)'), ['foo', 1, 0, 2])
 
         # First execution returns rowid=1. Second execution hits the conflict-
         # resolution, and will update the value in "b" from 1 -> 3.
@@ -2760,6 +2814,17 @@ class TestUpsertSqlite(OnConflictTestCase):
         self.assertEqual(obj.a, 'foo')
         self.assertEqual(obj.b, 3)
 
+        query = OCTest.insert(a='foo', b=4, c=5).on_conflict(
+            conflict_target=[OCTest.a],
+            preserve=[OCTest.c],
+            update={OCTest.b: OCTest.b + 100})
+        self.assertEqual(query.execute(), rowid2)
+
+        obj = OCTest.get()
+        self.assertEqual(obj.a, 'foo')
+        self.assertEqual(obj.b, 103)
+        self.assertEqual(obj.c, 5)
+
     @skip_unless(IS_SQLITE_24, 'requires sqlite >= 3.24')
     @requires_models(OCTest)
     def test_update_where_clause(self):
@@ -2770,9 +2835,9 @@ class TestUpsertSqlite(OnConflictTestCase):
             update={OCTest.b: OCTest.b + 2},
             where=(OCTest.b < 3))
         self.assertSQL(query, (
-            'INSERT INTO "octest" ("a", "b") VALUES (?, ?) '
+            'INSERT INTO "octest" ("a", "b", "c") VALUES (?, ?, ?) '
             'ON CONFLICT ("a") DO UPDATE SET "b" = ("octest"."b" + ?) '
-            'WHERE ("octest"."b" < ?)'), ['foo', 1, 2, 3])
+            'WHERE ("octest"."b" < ?)'), ['foo', 1, 0, 2, 3])
 
         # First execution returns rowid=1. Second execution hits the conflict-
         # resolution, and will update the value in "b" from 1 -> 3.
@@ -2847,9 +2912,9 @@ class TestUpsertPostgresql(OnConflictTestCase):
             conflict_target=(OCTest.a,),
             update={OCTest.b: OCTest.b + 2})
         self.assertSQL(query, (
-            'INSERT INTO "octest" ("a", "b") VALUES (?, ?) '
+            'INSERT INTO "octest" ("a", "b", "c") VALUES (?, ?, ?) '
             'ON CONFLICT ("a") DO UPDATE SET "b" = ("octest"."b" + ?) '
-            'RETURNING "id"'), ['foo', 1, 2])
+            'RETURNING "id"'), ['foo', 1, 0, 2])
 
         # First execution returns rowid=1. Second execution hits the conflict-
         # resolution, and will update the value in "b" from 1 -> 3.
@@ -2861,6 +2926,17 @@ class TestUpsertPostgresql(OnConflictTestCase):
         self.assertEqual(obj.a, 'foo')
         self.assertEqual(obj.b, 3)
 
+        query = OCTest.insert(a='foo', b=4, c=5).on_conflict(
+            conflict_target=[OCTest.a],
+            preserve=[OCTest.c],
+            update={OCTest.b: OCTest.b + 100})
+        self.assertEqual(query.execute(), rowid2)
+
+        obj = OCTest.get()
+        self.assertEqual(obj.a, 'foo')
+        self.assertEqual(obj.b, 103)
+        self.assertEqual(obj.c, 5)
+
     @requires_models(OCTest)
     def test_update_where_clause(self):
         # Add a new row with the given "a" value. If a conflict occurs,
@@ -2870,10 +2946,10 @@ class TestUpsertPostgresql(OnConflictTestCase):
             update={OCTest.b: OCTest.b + 2},
             where=(OCTest.b < 3))
         self.assertSQL(query, (
-            'INSERT INTO "octest" ("a", "b") VALUES (?, ?) '
+            'INSERT INTO "octest" ("a", "b", "c") VALUES (?, ?, ?) '
             'ON CONFLICT ("a") DO UPDATE SET "b" = ("octest"."b" + ?) '
             'WHERE ("octest"."b" < ?) '
-            'RETURNING "id"'), ['foo', 1, 2, 3])
+            'RETURNING "id"'), ['foo', 1, 0, 2, 3])
 
         # First execution returns rowid=1. Second execution hits the conflict-
         # resolution, and will update the value in "b" from 1 -> 3.

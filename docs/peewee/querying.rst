@@ -108,8 +108,8 @@ The above approach is slow for a couple of reasons:
 4. We are retrieving the *last insert id*, which causes an additional query to
    be executed in some cases.
 
-You can get a **very significant speedup** by simply wrapping this in a
-:py:meth:`~Database.atomic`.
+You can get a **significant speedup** by simply wrapping this in a transaction
+with :py:meth:`~Database.atomic`.
 
 .. code-block:: python
 
@@ -127,7 +127,7 @@ tuples or dictionaries to insert.
     # Fastest.
     MyModel.insert_many(data_source).execute()
 
-    # Fastest using tuples and specifying the fields being inserted.
+    # We can also use tuples and specify the fields being inserted.
     fields = [MyModel.field1, MyModel.field2]
     data = [('val1-1', 'val1-2'),
             ('val2-1', 'val2-2'),
@@ -298,9 +298,36 @@ Example of using :py:meth:`~Model.replace` and :py:meth:`~Insert.on_conflict_rep
     action (see: :py:meth:`~Insert.on_conflict_ignore`) if you simply wish to
     insert and ignore any potential constraint violation.
 
-Postgresql and SQLite (3.24.0 and newer) provide a different syntax that allows
-for more granular control over which constraint violation should trigger the
-conflict resolution, and what values should be updated or preserved.
+**MySQL** supports upsert via the *ON DUPLICATE KEY UPDATE* clause. For
+example:
+
+.. code-block:: python
+
+    class User(Model):
+        username = TextField(unique=True)
+        last_login = DateTimeField(null=True)
+        login_count = IntegerField()
+
+    # Insert a new user.
+    User.create(username='huey', login_count=0)
+
+    # Simulate the user logging in. The login count and timestamp will be
+    # either created or updated correctly.
+    now = datetime.now()
+    rowid = (User
+             .insert(username='huey', last_login=now, login_count=1)
+             .on_conflict(
+                 preserve=[User.last_login],  # Use the value we would have inserted.
+                 update={User.login_count: User.login_count + 1})
+             .execute())
+
+In the above example, we could safely invoke the upsert query as many times as
+we wanted. The login count will be incremented atomically, the last login
+column will be updated, and no duplicate rows will be created.
+
+**Postgresql and SQLite** (3.24.0 and newer) provide a different syntax that
+allows for more granular control over which constraint violation should trigger
+the conflict resolution, and what values should be updated or preserved.
 
 Example of using :py:meth:`~Insert.on_conflict` to perform a Postgresql-style
 upsert (or SQLite 3.24+):
@@ -321,14 +348,18 @@ upsert (or SQLite 3.24+):
     rowid = (User
              .insert(username='huey', last_login=now, login_count=1)
              .on_conflict(
-                 conflict_target=(User.username,),  # Which constraint?
-                 preserve=(User.last_login,),  # Use the value we would have inserted.
+                 conflict_target=[User.username],  # Which constraint?
+                 preserve=[User.last_login],  # Use the value we would have inserted.
                  update={User.login_count: User.login_count + 1})
              .execute())
 
 In the above example, we could safely invoke the upsert query as many times as
 we wanted. The login count will be incremented atomically, the last login
 column will be updated, and no duplicate rows will be created.
+
+.. note::
+    The main difference between MySQL and Postgresql/SQLite is that Postgresql
+    and SQLite require that you specify a ``conflict_target``.
 
 For more information, see :py:meth:`Insert.on_conflict` and
 :py:class:`OnConflict`.
