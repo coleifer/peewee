@@ -251,22 +251,23 @@ class TestDatabase(DatabaseTestCase):
 
 
 class TestThreadSafety(ModelTestCase):
+    nthreads = 4
+    nrows = 10
     requires = [User]
 
     def test_multiple_writers(self):
         def create_users(idx):
-            n = 10
-            for i in range(idx * n, (idx + 1) * n):
+            for i in range(idx * self.nrows, (idx + 1) * self.nrows):
                 User.create(username='u%d' % i)
 
         threads = []
-        for i in range(4):
+        for i in range(self.nthreads):
             threads.append(threading.Thread(target=create_users, args=(i,)))
 
         for t in threads: t.start()
         for t in threads: t.join()
 
-        self.assertEqual(User.select().count(), 40)
+        self.assertEqual(User.select().count(), self.nrows * self.nthreads)
 
     def test_multiple_readers(self):
         data = Queue()
@@ -275,13 +276,13 @@ class TestThreadSafety(ModelTestCase):
                 data.put(User.select().count())
 
         threads = []
-        for i in range(4):
+        for i in range(self.nthreads):
             threads.append(threading.Thread(target=read_user_count,
-                                            args=(10,)))
+                                            args=(self.nrows,)))
 
         for t in threads: t.start()
         for t in threads: t.join()
-        self.assertEqual(data.qsize(), 40)
+        self.assertEqual(data.qsize(), self.nrows * self.nthreads)
 
 
 class TestDeferredDatabase(BaseTestCase):

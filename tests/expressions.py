@@ -55,6 +55,13 @@ class UpperModel(TestModel):
 
 
 class TestValueConversion(ModelTestCase):
+    """
+    Test the conversion of field values using a field's db_value() function.
+
+    It is possible that a field's `db_value()` function may returns a Node
+    subclass (e.g. a SQL function). These tests verify and document how such
+    conversions are applied in various parts of the query.
+    """
     database = get_in_memory_db()
     requires = [UpperModel]
 
