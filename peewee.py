@@ -4331,9 +4331,6 @@ class ForeignKeyField(Field):
             return value
         return self.rel_field.python_value(value)
 
-    def expression(self):
-        return self.column == self.rel_field.column
-
     def bind(self, model, name, set_attribute=True):
         if not self.column_name:
             self.column_name = name if name.endswith('_id') else name + '_id'
