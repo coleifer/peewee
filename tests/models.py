@@ -1211,12 +1211,15 @@ class TestDefaultValues(ModelTestCase):
     database = get_in_memory_db()
     requires = [Sample, SampleMeta]
 
-    def test_default_absent_on_insert(self):
+    def test_default_present_on_insert(self):
+        # Although value is not specified, it has a default, which is included
+        # in the INSERT.
         query = Sample.insert(counter=0)
         self.assertSQL(query, (
             'INSERT INTO "sample" ("counter", "value") '
             'VALUES (?, ?)'), [0, 1.0])
 
+        # Default values are also included when doing bulk inserts.
         query = Sample.insert_many([
             {'counter': '0'},
             {'counter': 1, 'value': 2},
@@ -1231,7 +1234,6 @@ class TestDefaultValues(ModelTestCase):
             'INSERT INTO "sample" ("counter", "value") '
             'VALUES (?, ?), (?, ?)'), [0, 1.0, 1, 2.0])
 
-
     def test_default_present_on_create(self):
         s = Sample.create(counter=3)
         s_db = Sample.get(Sample.counter == 3)
@@ -1245,6 +1247,7 @@ class TestDefaultValues(ModelTestCase):
         # Simple query.
         query = SampleMeta.select(SampleMeta.sample).order_by(SampleMeta.value)
 
+        # Defaults are not present when doing a read query.
         with self.assertQueryCount(1):
             sm1_db, sm2_db = list(query)
             self.assertIsNone(sm1_db.value)
@@ -3250,24 +3253,19 @@ class TestSequence(ModelTestCase):
 
 
 @requires_postgresql
-class TestUpdateFrom(ModelTestCase):
+class TestUpdateFromIntegration(ModelTestCase):
     requires = [User]
 
     def test_update_from(self):
         u1, u2 = [User.create(username=username) for username in ('u1', 'u2')]
         data = [(u1.id, 'u1-x'), (u2.id, 'u2-x')]
         vl = ValuesList(data, columns=('id', 'username'), alias='tmp')
-        query = (User
-                 .update({User.username: QualifiedNames(vl.c.username)})
-                 .from_(vl)
-                 .where(QualifiedNames(User.id == vl.c.id)))
-        self.assertSQL(query, (
-            'UPDATE "users" SET "username" = "tmp"."username" '
-            'FROM (VALUES (?, ?), (?, ?)) AS "tmp"("id", "username") '
-            'WHERE ("users"."id" = "tmp"."id")'),
-            [u1.id, 'u1-x', u2.id, 'u2-x'])
+        (User
+         .update({User.username: QualifiedNames(vl.c.username)})
+         .from_(vl)
+         .where(QualifiedNames(User.id == vl.c.id))
+         .execute())
 
-        query.execute()
         usernames = [u.username for u in User.select().order_by(User.username)]
         self.assertEqual(usernames, ['u1-x', 'u2-x'])
 
@@ -3276,18 +3274,12 @@ class TestUpdateFrom(ModelTestCase):
         data = [(u1.id, 'u1-y'), (u2.id, 'u2-y')]
         vl = ValuesList(data, columns=('id', 'username'), alias='tmp')
         subq = vl.select(vl.c.id, vl.c.username)
-        query = (User
-                 .update({User.username: QualifiedNames(subq.c.username)})
-                 .from_(subq)
-                 .where(QualifiedNames(User.id == subq.c.id)))
-        self.assertSQL(query, (
-            'UPDATE "users" SET "username" = "t1"."username" FROM ('
-            'SELECT "tmp"."id", "tmp"."username" '
-            'FROM (VALUES (?, ?), (?, ?)) AS "tmp"("id", "username")) AS "t1" '
-            'WHERE ("users"."id" = "t1"."id")'),
-            [u1.id, 'u1-y', u2.id, 'u2-y'])
+        (User
+         .update({User.username: QualifiedNames(subq.c.username)})
+         .from_(subq)
+         .where(QualifiedNames(User.id == subq.c.id))
+         .execute())
 
-        query.execute()
         usernames = [u.username for u in User.select().order_by(User.username)]
         self.assertEqual(usernames, ['u1-y', 'u2-y'])
 
@@ -3297,15 +3289,11 @@ class TestUpdateFrom(ModelTestCase):
         t1 = Tweet.create(user=u, content='t1')
         t2 = Tweet.create(user=u, content='t2')
 
-        query = (User
-                 .update({User.username: QualifiedNames(Tweet.content)})
-                 .from_(Tweet)
-                 .where(Tweet.content == 't2'))
-        self.assertSQL(query, (
-            'UPDATE "users" SET "username" = "t1"."content" '
-            'FROM "tweet" AS "t1" '
-            'WHERE ("content" = ?)'), ['t2'])
-        query.execute()
+        (User
+         .update({User.username: QualifiedNames(Tweet.content)})
+         .from_(Tweet)
+         .where(Tweet.content == 't2')
+         .execute())
 
         self.assertEqual(User.get(User.id == u.id).username, 't2')
 

@@ -113,6 +113,7 @@ __all__ = [
     'prefetch',
     'ProgrammingError',
     'Proxy',
+    'QualifiedNames',
     'SchemaManager',
     'SmallIntegerField',
     'Select',

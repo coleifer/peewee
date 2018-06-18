@@ -371,6 +371,40 @@ class TestModelSQL(ModelDatabaseTestCase):
             'FROM "salesperson" AS "t1" '
             'WHERE ("sales_id" = "id")'), [])
 
+        query = (User
+                 .update({User.username: QualifiedNames(Tweet.content)})
+                 .from_(Tweet)
+                 .where(Tweet.content == 'tx'))
+        self.assertSQL(query, (
+            'UPDATE "users" SET "username" = "t1"."content" '
+            'FROM "tweet" AS "t1" WHERE ("content" = ?)'), ['tx'])
+
+    def test_update_from_qualnames(self):
+        data = [(1, 'u1-x'), (2, 'u2-x')]
+        vl = ValuesList(data, columns=('id', 'username'), alias='tmp')
+        query = (User
+                 .update({User.username: QualifiedNames(vl.c.username)})
+                 .from_(vl)
+                 .where(QualifiedNames(User.id == vl.c.id)))
+        self.assertSQL(query, (
+            'UPDATE "users" SET "username" = "tmp"."username" '
+            'FROM (VALUES (?, ?), (?, ?)) AS "tmp"("id", "username") '
+            'WHERE ("users"."id" = "tmp"."id")'), [1, 'u1-x', 2, 'u2-x'])
+
+    def test_update_from_subselect(self):
+        data = [(1, 'u1-x'), (2, 'u2-x')]
+        vl = ValuesList(data, columns=('id', 'username'), alias='tmp')
+        subq = vl.select(vl.c.id, vl.c.username)
+        query = (User
+                 .update({User.username: QualifiedNames(subq.c.username)})
+                 .from_(subq)
+                 .where(QualifiedNames(User.id == subq.c.id)))
+        self.assertSQL(query, (
+            'UPDATE "users" SET "username" = "t1"."username" FROM ('
+            'SELECT "tmp"."id", "tmp"."username" '
+            'FROM (VALUES (?, ?), (?, ?)) AS "tmp"("id", "username")) AS "t1" '
+            'WHERE ("users"."id" = "t1"."id")'), [1, 'u1-x', 2, 'u2-x'])
+
     def test_delete(self):
         query = (Note
                  .delete()
