@@ -5379,6 +5379,34 @@ class Model(with_metaclass(ModelBase, Node)):
                     raise exc
 
     @classmethod
+    def update_or_create(cls, **kwargs):
+        defaults = kwargs.pop('defaults', {})
+        query = cls.select()
+        for field, value in kwargs.items():
+            query = query.where(getattr(cls, field) == value)
+
+        try:
+            inst = query.get()
+
+            for key, val in defaults.items():
+                setattr(inst, key, val)
+
+            inst.save()
+
+            return inst, False
+        except cls.DoesNotExist:
+            try:
+                if defaults:
+                    kwargs.update(defaults)
+                with cls._meta.database.atomic():
+                    return cls.create(**kwargs), True
+            except IntegrityError as exc:
+                try:
+                    return query.get(), False
+                except cls.DoesNotExist:
+                    raise exc
+
+    @classmethod
     def filter(cls, *dq_nodes, **filters):
         return cls.select().filter(*dq_nodes, **filters)
 

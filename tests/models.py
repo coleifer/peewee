@@ -243,6 +243,27 @@ class TestModelAPIs(ModelTestCase):
         self.assertEqual(child_db.name, 'child')
 
     @requires_models(Person)
+    def test_update_or_create(self):
+        huey, created = Person.update_or_create(first='huey', defaults={
+            'last': 'meow',
+            'dob': datetime.date(2017, 1, 1)})
+        self.assertTrue(created)
+        huey2, created2 = Person.update_or_create(first='huey', defaults={
+            'last': 'meow2',
+            'dob': datetime.date(2017, 1, 2)})
+        self.assertFalse(created2)
+        self.assertEqual(huey.id, huey2.id)
+        self.assertNotEqual(huey.last, huey2.last)
+
+    @requires_models(Category)
+    def test_update_or_create_self_referential_fk(self):
+        parent = Category.create(name='parent')
+        child, created = Category.update_or_create(parent=parent, name='child')
+        child_db = Category.get(Category.parent == parent)
+        self.assertEqual(child_db.parent.name, 'parent')
+        self.assertEqual(child_db.name, 'child')
+
+    @requires_models(Person)
     def test_save(self):
         huey = Person(first='huey', last='cat', dob=datetime.date(2010, 7, 1))
         self.assertTrue(huey.save() > 0)
