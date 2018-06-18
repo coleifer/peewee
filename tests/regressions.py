@@ -3,6 +3,10 @@ from peewee import *
 from .base import BaseTestCase
 from .base import ModelTestCase
 from .base import TestModel
+from .base import get_in_memory_db
+from .base import requires_models
+from .base import requires_mysql
+from .base_models import User
 
 
 class ColAlias(TestModel):
@@ -76,3 +80,122 @@ class TestOverrideModelRepr(BaseTestCase):
 
         f = Foo(id=1337)
         self.assertEqual(repr(f), 'FOO: 1337')
+
+
+class DiA(TestModel):
+    a = TextField(unique=True)
+class DiB(TestModel):
+    a = ForeignKeyField(DiA)
+    b = TextField()
+class DiC(TestModel):
+    b = ForeignKeyField(DiB)
+    c = TextField()
+class DiD(TestModel):
+    c = ForeignKeyField(DiC)
+    d = TextField()
+class DiBA(TestModel):
+    a = ForeignKeyField(DiA, to_field=DiA.a)
+    b = TextField()
+
+
+class TestDeleteInstanceRegression(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [DiA, DiB, DiC, DiD, DiBA]
+
+    def test_delete_instance_regression(self):
+        with self.database.atomic():
+            a1, a2, a3 = [DiA.create(a=a) for a in ('a1', 'a2', 'a3')]
+            for a in (a1, a2, a3):
+                for j in (1, 2):
+                    b = DiB.create(a=a, b='%s-b%s' % (a.a, j))
+                    c = DiC.create(b=b, c='%s-c' % (b.b))
+                    d = DiD.create(c=c, d='%s-d' % (c.c))
+
+                    DiBA.create(a=a, b='%s-b%s' % (a.a, j))
+
+        # (a1 (b1 (c (d))), (b2 (c (d)))), (a2 ...), (a3 ...)
+        with self.assertQueryCount(5):
+            a2.delete_instance(recursive=True)
+
+        queries = [logrecord.msg for logrecord in self._qh.queries[-5:]]
+        self.assertEqual(sorted(queries, reverse=True), [
+            ('DELETE FROM "did" WHERE ("c_id" IN ('
+             'SELECT "t1"."id" FROM "dic" AS "t1" WHERE ("t1"."b_id" IN ('
+             'SELECT "t2"."id" FROM "dib" AS "t2" WHERE ("t2"."a_id" = ?)'
+             '))))', [2]),
+            ('DELETE FROM "dic" WHERE ("b_id" IN ('
+             'SELECT "t1"."id" FROM "dib" AS "t1" WHERE ("t1"."a_id" = ?)'
+             '))', [2]),
+            ('DELETE FROM "diba" WHERE ("a_id" = ?)', ['a2']),
+            ('DELETE FROM "dib" WHERE ("a_id" = ?)', [2]),
+            ('DELETE FROM "dia" WHERE ("id" = ?)', [2])
+        ])
+
+        # a1 & a3 exist, plus their relations.
+        self.assertTrue(DiA.select().count(), 2)
+        for rel in (DiB, DiBA, DiC, DiD):
+            self.assertTrue(rel.select().count(), 4)  # 2x2
+
+        with self.assertQueryCount(5):
+            a1.delete_instance(recursive=True)
+
+        # Only the objects related to a3 exist still.
+        self.assertTrue(DiA.select().count(), 1)
+        self.assertEqual(DiA.get(DiA.a == 'a3').id, a3.id)
+        self.assertEqual([d.d for d in DiD.select().order_by(DiD.d)],
+                         ['a3-b1-c-d', 'a3-b2-c-d'])
+        self.assertEqual([c.c for c in DiC.select().order_by(DiC.c)],
+                         ['a3-b1-c', 'a3-b2-c'])
+        self.assertEqual([b.b for b in DiB.select().order_by(DiB.b)],
+                         ['a3-b1', 'a3-b2'])
+        self.assertEqual([ba.b for ba in DiBA.select().order_by(DiBA.b)],
+                         ['a3-b1', 'a3-b2'])
+
+
+class TestCountUnionRegression(ModelTestCase):
+    @requires_mysql
+    @requires_models(User)
+    def test_count_union(self):
+        with self.database.atomic():
+            for i in range(5):
+                User.create(username='user-%d' % i)
+
+        lhs = User.select()
+        rhs = User.select()
+        query = (lhs | rhs)
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
+            'UNION '
+            'SELECT "t2"."id", "t2"."username" FROM "users" AS "t2"'), [])
+
+        self.assertEqual(query.count(), 5)
+
+        query = query.limit(3)
+        self.assertSQL(query, (
+            'SELECT "t1"."id", "t1"."username" FROM "users" AS "t1" '
+            'UNION '
+            'SELECT "t2"."id", "t2"."username" FROM "users" AS "t2" '
+            'LIMIT ?'), [3])
+        self.assertEqual(query.count(), 3)
+
+
+class User2(TestModel):
+    username = TextField()
+
+class Category2(TestModel):
+    name = TextField()
+    parent = ForeignKeyField('self', backref='children', null=True)
+    user = ForeignKeyField(User2)
+
+
+class TestGithub1354(ModelTestCase):
+    @requires_models(Category2, User2)
+    def test_get_or_create_self_referential_fk2(self):
+        huey = User2.create(username='huey')
+        parent = Category2.create(name='parent', user=huey)
+        child, created = Category2.get_or_create(parent=parent, name='child',
+                                                 user=huey)
+        child_db = Category2.get(Category2.parent == parent)
+        self.assertEqual(child_db.user.username, 'huey')
+        self.assertEqual(child_db.parent.name, 'parent')
+        self.assertEqual(child_db.name, 'child')
