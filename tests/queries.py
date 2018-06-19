@@ -116,6 +116,25 @@ class TestQueryExecution(DatabaseTestCase):
         query = query.where(Register.value >= 2)
         self.assertEqual(query.scalar(as_tuple=True), (15, 3, 5))
 
+    def test_slicing_select(self):
+        values = [1., 1., 2., 3., 5., 8.]
+        (Register
+         .insert([(v,) for v in values], columns=(Register.value,))
+         .execute())
+
+        query = (Register
+                 .select(Register.value)
+                 .order_by(Register.value)
+                 .tuples())
+        with self.assertQueryCount(1):
+            self.assertEqual(query[0], (1.,))
+            self.assertEqual(query[:2], [(1.,), (1.,)])
+            self.assertEqual(query[1:4], [(1.,), (2.,), (3.,)])
+            self.assertEqual(query[-1], (8.,))
+            self.assertEqual(query[-2], (5.,))
+            self.assertEqual(query[-2:], [(5.,), (8.,)])
+            self.assertEqual(query[2:-2], [(2.,), (3.,)])
+
 
 class TestQueryCloning(BaseTestCase):
     def test_clone_tables(self):

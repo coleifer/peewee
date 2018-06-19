@@ -831,7 +831,7 @@ class Table(_HashableSource, BaseTable):
             update = {} if update is None else update
             for key, value in kwargs.items():
                 src = self if self._columns else self.c
-                update[getattr(self, key)] = value
+                update[getattr(src, key)] = value
         return Update(self, update=update)
 
     @__bind_database__
@@ -910,14 +910,13 @@ class ValuesList(BaseTable):
 class CTE(_HashableSource, Source):
     def __init__(self, name, query, recursive=False, columns=None):
         self._alias = name
-        self._nested_cte_list = query._cte_list
-        query._cte_list = ()
         self._query = query
         self._recursive = recursive
         if columns is not None:
             columns = [Entity(c) if isinstance(c, basestring) else c
                        for c in columns]
         self._columns = columns
+        query._cte_list = ()
         super(CTE, self).__init__(alias=name)
 
     def select_from(self, *columns):
@@ -1629,7 +1628,7 @@ class BaseQuery(Node):
             index = value
         if index is not None and index >= 0:
             index += 1
-        self._cursor_wrapper.fill_cache(index)
+        self._cursor_wrapper.fill_cache(index if index > 0 else 0)
         return self._cursor_wrapper.row_cache[value]
 
     def __len__(self):

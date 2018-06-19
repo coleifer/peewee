@@ -220,6 +220,29 @@ class TestSelectQuery(BaseTestCase):
             'WHERE (("user_ids"."id" = "t2"."id") AND '
             '("user_names"."username" = "t2"."username"))'), [])
 
+    def test_select_from_cte(self):
+        # Use the "select_from()" helper on the CTE object.
+        cte = User.select(User.c.username).cte('user_cte')
+        query = cte.select_from(cte.c.username).order_by(cte.c.username)
+        self.assertSQL(query, (
+            'WITH "user_cte" AS (SELECT "t1"."username" FROM "users" AS "t1") '
+            'SELECT "user_cte"."username" FROM "user_cte" '
+            'ORDER BY "user_cte"."username"'), [])
+
+        # Test selecting from multiple CTEs, which is done manually.
+        c1 = User.select(User.c.username).where(User.c.is_admin == 1).cte('c1')
+        c2 = User.select(User.c.username).where(User.c.is_staff == 1).cte('c2')
+        query = (Select((c1, c2), (c1.c.username, c2.c.username))
+                 .with_cte(c1, c2))
+        self.assertSQL(query, (
+            'WITH "c1" AS ('
+            'SELECT "t1"."username" FROM "users" AS "t1" '
+            'WHERE ("t1"."is_admin" = ?)), '
+            '"c2" AS ('
+            'SELECT "t1"."username" FROM "users" AS "t1" '
+            'WHERE ("t1"."is_staff" = ?)) '
+            'SELECT "c1"."username", "c2"."username" FROM "c1", "c2"'), [1, 1])
+
     def test_fibonacci_cte(self):
         q1 = Select(columns=(
             Value(1).alias('n'),
@@ -558,6 +581,29 @@ class TestUpdateQuery(BaseTestCase):
             'ON ("t1"."user_id" = "users"."id") '
             'GROUP BY "users"."id" '
             'HAVING ("ct" > ?)))'), [0, True, 100])
+
+    def test_update_from(self):
+        data = [(1, 'u1-x'), (2, 'u2-x')]
+        vl = ValuesList(data, columns=('id', 'username'), alias='tmp')
+        query = (User
+                 .update(username=QualifiedNames(vl.c.username))
+                 .from_(vl)
+                 .where(QualifiedNames(User.c.id == vl.c.id)))
+        self.assertSQL(query, (
+            'UPDATE "users" SET "username" = "tmp"."username" '
+            'FROM (VALUES (?, ?), (?, ?)) AS "tmp"("id", "username") '
+            'WHERE ("users"."id" = "tmp"."id")'), [1, 'u1-x', 2, 'u2-x'])
+
+        subq = vl.select(vl.c.id, vl.c.username)
+        query = (User
+                 .update({User.c.username: QualifiedNames(subq.c.username)})
+                 .from_(subq)
+                 .where(QualifiedNames(User.c.id == subq.c.id)))
+        self.assertSQL(query, (
+            'UPDATE "users" SET "username" = "t1"."username" FROM ('
+            'SELECT "tmp"."id", "tmp"."username" '
+            'FROM (VALUES (?, ?), (?, ?)) AS "tmp"("id", "username")) AS "t1" '
+            'WHERE ("users"."id" = "t1"."id")'), [1, 'u1-x', 2, 'u2-x'])
 
     def test_update_returning(self):
         query = (User
