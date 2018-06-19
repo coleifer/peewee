@@ -1626,9 +1626,9 @@ class BaseQuery(Node):
             index = value.stop
         else:
             index = value
-        if index is not None and index >= 0:
-            index += 1
-        self._cursor_wrapper.fill_cache(index if index > 0 else 0)
+        if index is not None:
+            index = index + 1 if index >= 0 else 0
+        self._cursor_wrapper.fill_cache(index)
         return self._cursor_wrapper.row_cache[value]
 
     def __len__(self):
