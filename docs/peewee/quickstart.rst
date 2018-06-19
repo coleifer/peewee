@@ -46,7 +46,6 @@ data model, by defining one or more :py:class:`Model` classes:
     class Person(Model):
         name = CharField()
         birthday = DateField()
-        is_relative = BooleanField()
 
         class Meta:
             database = db # This model uses the "people.db" database.
@@ -107,7 +106,7 @@ people's records.
 .. code-block:: python
 
     from datetime import date
-    uncle_bob = Person(name='Bob', birthday=date(1960, 1, 15), is_relative=True)
+    uncle_bob = Person(name='Bob', birthday=date(1960, 1, 15))
     uncle_bob.save() # bob is now stored in the database
     # Returns: 1
 
@@ -120,8 +119,8 @@ returns a model instance:
 
 .. code-block:: python
 
-    grandma = Person.create(name='Grandma', birthday=date(1935, 3, 1), is_relative=True)
-    herb = Person.create(name='Herb', birthday=date(1950, 5, 5), is_relative=False)
+    grandma = Person.create(name='Grandma', birthday=date(1935, 3, 1))
+    herb = Person.create(name='Herb', birthday=date(1950, 5, 5))
 
 To update a row, modify the model instance and call :py:meth:`~Model.save` to
 persist the changes. Here we will change Grandma's name and then save the
@@ -197,12 +196,12 @@ Let's list all the people in the database:
 .. code-block:: python
 
     for person in Person.select():
-        print(person.name, person.is_relative)
+        print(person.name)
 
     # prints:
-    # Bob True
-    # Grandma L. True
-    # Herb False
+    # Bob
+    # Grandma L.
+    # Herb
 
 Let's list all the cats and their owner's name:
 
