@@ -17,8 +17,8 @@ New to peewee? These may help:
 
 * `Quickstart <http://docs.peewee-orm.com/en/latest/peewee/quickstart.html#quickstart>`_
 * `Example twitter app <http://docs.peewee-orm.com/en/latest/peewee/example.html>`_
-* `Query operators <http://docs.peewee-orm.com/en/latest/peewee/query_operators.html>`_
-* `Field types <http://docs.peewee-orm.com/en/latest/peewee/models.html#field-types-table>`_
+* `Models and fields <http://docs.peewee-orm.com/en/latest/peewee/models.html>`_
+* `Querying <http://docs.peewee-orm.com/en/latest/peewee/querying.html>`_
 
 Examples
 --------
