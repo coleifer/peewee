@@ -40,6 +40,10 @@ make up the ``playhouse``.
 * :ref:`test_utils`
 * :ref:`flask_utils`
 
+Sqlite Extensions
+-----------------
+
+The Sqlite extensions have been moved to :ref:`their own page <sqlite_ext>`.
 
 .. _sqliteq:
 
