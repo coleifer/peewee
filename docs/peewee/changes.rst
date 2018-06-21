@@ -132,6 +132,13 @@ like this:
        arguments,
        options)
 
+Postgresql Extension
+^^^^^^^^^^^^^^^^^^^^
+
+The `PostgresqlExtDatabase` no longer registers the `hstore` extension by
+default. To use the `hstore` extension in 3.0 and onwards, pass
+`register_hstore=True` when initializing the database object.
+
 Signals Extension
 ^^^^^^^^^^^^^^^^^
 
