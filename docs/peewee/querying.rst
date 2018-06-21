@@ -1,5 +1,7 @@
 .. _querying:
 
+.. include:: help-request.rst
+
 Querying
 ========
 

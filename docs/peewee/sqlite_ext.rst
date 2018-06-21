@@ -55,7 +55,7 @@ APIs
     :param bool rank_functions: Make search result ranking functions available.
     :param bool hash_functions: Make hashing functions available (md5, sha1, etc).
     :param bool regexp_function: Make the REGEXP function available.
-    :param bool bloomfilter: Make the :ref:`sqlite-bloomfilter` available.
+    :param bool bloomfilter: Make the :ref:`bloom filter <sqlite-extras>` available.
 
     Extends :py:class:`SqliteDatabase` and inherits methods for declaring
     user-defined functions, pragmas, etc.
@@ -71,7 +71,7 @@ APIs
     :param bool rank_functions: Make search result ranking functions available.
     :param bool hash_functions: Make hashing functions available (md5, sha1, etc).
     :param bool regexp_function: Make the REGEXP function available.
-    :param bool bloomfilter: Make the :ref:`sqlite-bloomfilter` available.
+    :param bool bloomfilter: Make the :ref:`bloom filter <sqlite-extras>` available.
     :param bool replace_busy_handler: Use a smarter busy-handler implementation.
 
     Extends :py:class:`SqliteExtDatabase` and requires that the

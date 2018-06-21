@@ -1,5 +1,7 @@
 .. _api:
 
+.. include:: help-request.rst
+
 API Documentation
 =================
 
@@ -2240,6 +2242,8 @@ Query-builder
         # Article.create_table() (or database.create_tables([Article])), the
         # index will be created.
         Article.add_index(idx)
+
+.. _fields-api:
 
 Fields
 ------

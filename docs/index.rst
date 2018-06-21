@@ -37,6 +37,8 @@ New to peewee? These may help:
 * :ref:`Models and fields <models>`
 * :ref:`Querying <querying>`
 
+.. include:: help-request.rst
+
 Contents:
 ---------
 
