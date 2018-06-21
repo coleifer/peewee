@@ -1077,6 +1077,59 @@ columns from tables listed in the query's ``FROM`` clause. To select all
 columns from a particular table, you can simply pass in the :py:class:`Model`
 class.
 
+Common Table Expressions
+------------------------
+
+Peewee supports the inclusion of common table expressions (CTEs) in all types
+of queries. To declare a :py:class:`Select` query for use as a CTE, use
+:py:meth:`~SelectQuery.cte` method, which wraps the query in a :py:class:`CTE`
+object. To indicate that a :py:class:`CTE` should be included as part of a
+query, use the :py:meth:`Query.with_cte` method, passing a list of CTE objects.
+
+For an example, let's say we have some data points that consist of a key and a
+floating-point value. We wish to, for each distinct key, find the values that
+were above-average for that key.
+
+.. code-block:: python
+
+    class Sample(Model):
+        key = TextField()
+        value = FloatField()
+
+    data = (
+        ('a', (1.25, 1.5, 1.75)),
+        ('b', (2.1, 2.3, 2.5, 2.7, 2.9)),
+        ('c', (3.5, 3.5)))
+
+    # Populate data.
+    for key, values in data:
+        Sample.insert_many([(key, value) for value in values],
+                           fields=[Sample.key, Sample.value]).execute()
+
+    # First we'll declare the query that will be used as a CTE. This query
+    # simply determines the average value for each key.
+    cte = (Sample
+           .select(Sample.key, fn.AVG(Sample.value).alias('avg_value'))
+           .group_by(Sample.key)
+           .cte('key_avgs', columns=('key', 'avg_value')))
+
+    # Now we'll query the sample table, using our CTE to find rows whose value
+    # exceeds the average for the given key. We'll calculate how far above the
+    # average the given sample's value is, as well.
+    query = (Sample
+             .select(Sample.key, (Sample.value - cte.c.avg_value).alias('diff'))
+             .join(cte, on=(Sample.key == cte.c.key))
+             .where(Sample.value > cte.c.avg_value)
+             .order_by(Sample.value)
+             .with_cte(cte))
+
+    for sample in query:
+        print(sample.key, sample.diff)
+
+    # 'a', .25  -- for (a, 1.75)
+    # 'b', .2   -- for (b, 2.7)
+    # 'b', .4   -- for (b, 2.9)
+
 Foreign Keys and Joins
 ----------------------
 

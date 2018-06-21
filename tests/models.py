@@ -1977,6 +1977,36 @@ class TestCTEIntegration(ModelTestCase):
             ('p3', 1),
             ('root', 0)])
 
+    @requires_models(Sample)
+    def test_cte_reuse_aggregate(self):
+        data = (
+            (1, (1.25, 1.5, 1.75)),
+            (2, (2.1, 2.3, 2.5, 2.7, 2.9)),
+            (3, (3.5, 3.5)))
+        with self.database.atomic():
+            for counter, values in data:
+                (Sample
+                 .insert_many([(counter, value) for value in values],
+                              fields=[Sample.counter, Sample.value])
+                 .execute())
+
+        cte = (Sample
+               .select(Sample.counter, fn.AVG(Sample.value).alias('avg_value'))
+               .group_by(Sample.counter)
+               .cte('count_to_avg', columns=('counter', 'avg_value')))
+
+        query = (Sample
+                 .select(Sample.counter,
+                         (Sample.value - cte.c.avg_value).alias('diff'))
+                 .join(cte, on=(Sample.counter == cte.c.counter))
+                 .where(Sample.value > cte.c.avg_value)
+                 .order_by(Sample.value)
+                 .with_cte(cte))
+        self.assertEqual([(a, round(b, 2)) for a, b in query.tuples()], [
+            (1, .25),
+            (2, .2),
+            (2, .4)])
+
 
 @skip_unless(IS_POSTGRESQL or IS_SQLITE_15, 'requires row-value support')
 class TestTupleComparison(ModelTestCase):
