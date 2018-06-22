@@ -1982,8 +1982,8 @@ class TestCTEIntegration(ModelTestCase):
         # Define the base case of our recursive CTE. This will be categories that
         # have a null parent foreign-key.
         Base = Category.alias()
-        level = Value(1).alias('level')
-        path = Base.name.alias('path')
+        level = Value(1).cast('integer').alias('level')
+        path = Base.name.cast('text').alias('path')
         base_case = (Base
                      .select(Base.name, Base.parent, level, path)
                      .where(Base.parent.is_null())
