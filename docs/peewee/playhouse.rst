@@ -2641,6 +2641,10 @@ This will print a bunch of models to standard output. So you can do this:
     >>> from mymodels import Blog, Entry, Tag, Whatever
     >>> print [blog.name for blog in Blog.select()]
 
+Command-line options
+^^^^^^^^^^^^^^^^^^^^
+
+pwiz accepts the following command-line options:
 
 ======    ========================= ============================================
 Option    Meaning                   Example
@@ -2659,6 +2663,83 @@ The following are valid parameters for the engine:
 * sqlite
 * mysql
 * postgresql
+
+pwiz examples
+^^^^^^^^^^^^^
+
+Examples of introspecting various databases:
+
+.. code-block:: console
+
+    # Introspect a Sqlite database.
+    python -m pwiz -e sqlite path/to/sqlite_database.db
+
+    # Introspect a MySQL database, logging in as root:secret.
+    python -m pwiz -e mysql -u root -P secret mysql_db_name
+
+    # Introspect a Postgresql database on a remote server.
+    python -m pwiz -e postgres -u postgres -H 10.1.0.3 pg_db_name
+
+Full example:
+
+.. code-block:: console
+
+    $ sqlite3 example.db << EOM
+    CREATE TABLE "user" ("id" INTEGER NOT NULL PRIMARY KEY, "username" TEXT NOT NULL);
+    CREATE TABLE "tweet" (
+        "id" INTEGER NOT NULL PRIMARY KEY,
+        "content" TEXT NOT NULL,
+        "timestamp" DATETIME NOT NULL,
+        "user_id" INTEGER NOT NULL,
+        FOREIGN KEY ("user_id") REFERENCES "user" ("id"));
+    CREATE UNIQUE INDEX "user_username" ON "user" ("username");
+    EOM
+
+    $ python -m pwiz -e sqlite example.db
+
+Produces the following output:
+
+.. code-block:: python
+
+    from peewee import *
+
+    database = SqliteDatabase('example.db', **{})
+
+    class UnknownField(object):
+        def __init__(self, *_, **__): pass
+
+    class BaseModel(Model):
+        class Meta:
+            database = database
+
+    class User(BaseModel):
+        username = TextField(unique=True)
+
+        class Meta:
+            table_name = 'user'
+
+    class Tweet(BaseModel):
+        content = TextField()
+        timestamp = DateTimeField()
+        user = ForeignKeyField(column_name='user_id', field='id', model=User)
+
+        class Meta:
+            table_name = 'tweet'
+
+Observations:
+
+* The foreign-key ``Tweet.user_id`` is detected and mapped correctly.
+* The ``User.username`` UNIQUE constraint is detected.
+* Each model explicitly declares its table name, even in cases where it is not
+  necessary (as Peewee would automatically translate the class name into the
+  appropriate table name).
+* All the parameters of the :py:class:`ForeignKeyField` are explicitly
+  declared, even though they follow the conventions Peewee uses by default.
+
+.. note::
+    The ``UnknownField`` is a placeholder that is used in the event your schema
+    contains a column declaration that Peewee doesn't know how to map to a
+    field class.
 
 .. _migrate:
 
@@ -2717,11 +2798,11 @@ Use :py:func:`migrate` to execute one or more operations:
 .. warning::
     Migrations are not run inside a transaction. If you wish the migration to
     run in a transaction you will need to wrap the call to `migrate` in a
-    transaction block, e.g.
+    :py:meth:`~Database.atomic` context-manager, e.g.
 
     .. code-block:: python
 
-        with my_db.transaction():
+        with my_db.atomic():
             migrate(...)
 
 Supported Operations
