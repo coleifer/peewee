@@ -1077,6 +1077,8 @@ columns from tables listed in the query's ``FROM`` clause. To select all
 columns from a particular table, you can simply pass in the :py:class:`Model`
 class.
 
+.. _cte:
+
 Common Table Expressions
 ------------------------
 
@@ -1129,6 +1131,64 @@ were above-average for that key.
     # 'a', .25  -- for (a, 1.75)
     # 'b', .2   -- for (b, 2.7)
     # 'b', .4   -- for (b, 2.9)
+
+Recursive CTEs
+^^^^^^^^^^^^^^
+
+Peewee supports recursive CTEs. Recursive CTEs can be useful when, for example,
+you have a tree data-structure represented by a parent-link foreign key.
+Suppose, for example, that we have a hierarchy of categories for an online
+bookstore. We wish to generate a table showing all categories and their
+absolute depths, along with the path from the root to the category.
+
+For this, we can use a recursive CTE:
+
+.. code-block:: python
+
+    class Category(Model):
+        name = TextField()
+        parent = ForeignKeyField('self', backref='children', null=True)
+
+    # Define the base case of our recursive CTE. This will be categories that
+    # have a null parent foreign-key.
+    Base = Category.alias()
+    level = Value(1).alias('level')
+    path = Base.name.alias('path')
+    base_case = (Base
+                 .select(Base.name, Base.parent, level, path)
+                 .where(Base.parent.is_null())
+                 .cte('base', recursive=True))
+
+    # Define the recursive terms.
+    RTerm = Category.alias()
+    rlevel = (base_case.c.level + 1).alias('level')
+    rpath = base_case.c.path.concat('->').concat(RTerm.name).alias('path')
+    recursive = (RTerm
+                 .select(RTerm.name, RTerm.parent, rlevel, rpath)
+                 .join(base_case, on=(RTerm.parent == base_case.c.id)))
+
+    # The recursive CTE is created by taking the base case and UNION ALL with
+    # the recursive term.
+    cte = base_case.union_all(recursive)
+
+    # We will now query from the CTE to get the categories, their levels,  and
+    # their paths.
+    query = (cte
+             .select_from(cte.c.name, cte.c.level, cte.c.path)
+             .order_by(cte.c.path))
+
+    # We can now iterate over a list of all categories and print their names,
+    # absolute levels, and path from root -> category.
+    for category in query:
+        print(category.name, category.level, category.path)
+
+    # Example output:
+    # root, 1, root
+    # p1, 2, root->p1
+    # c1-1, 3, root->p1->c1-1
+    # c1-2, 3, root->p1->c1-2
+    # p2, 2, root->p2
+    # c2-1, 3, root->p2->c2-1
 
 Foreign Keys and Joins
 ----------------------

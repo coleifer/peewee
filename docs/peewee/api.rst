@@ -1099,7 +1099,7 @@ Query-builder
 
 .. py:class:: CTE(name, query[, recursive=False[, columns=None]])
 
-    Represent a common-table-expression.
+    Represent a common-table-expression. For example queries, see :ref:`cte`.
 
     :param name: Name for the CTE.
     :param query: :py:class:`Select` query describing CTE.
@@ -1677,8 +1677,9 @@ Query-builder
 
         :param cte_list: zero or more :py:class:`CTE` objects.
 
-        Include the given common-table-expressions in the query. Any previously
-        specified CTEs will be overwritten.
+        Include the given common-table expressions in the query. Any previously
+        specified CTEs will be overwritten. For examples of common-table
+        expressions, see :ref:`cte`.
 
     .. py:method:: where(*expressions)
 
@@ -1799,6 +1800,8 @@ Query-builder
 
             for category in query:
                 print(category.name, category.level)
+
+        For more examples of CTEs, see :ref:`cte`.
 
     .. py:method:: union_all(dest)
 

@@ -1977,7 +1977,47 @@ class TestCTEIntegration(ModelTestCase):
             ('p3', 1),
             ('root', 0)])
 
+    @skip_if(IS_SQLITE_OLD or IS_MYSQL, 'requires recursive cte support')
+    def test_recursive_cte_docs_example(self):
+        # Define the base case of our recursive CTE. This will be categories that
+        # have a null parent foreign-key.
+        Base = Category.alias()
+        level = Value(1).alias('level')
+        path = Base.name.alias('path')
+        base_case = (Base
+                     .select(Base.name, Base.parent, level, path)
+                     .where(Base.parent.is_null())
+                     .cte('base', recursive=True))
+
+        # Define the recursive terms.
+        RTerm = Category.alias()
+        rlevel = (base_case.c.level + 1).alias('level')
+        rpath = base_case.c.path.concat('->').concat(RTerm.name).alias('path')
+        recursive = (RTerm
+                     .select(RTerm.name, RTerm.parent, rlevel, rpath)
+                     .join(base_case, on=(RTerm.parent == base_case.c.name)))
+
+        # The recursive CTE is created by taking the base case and UNION ALL with
+        # the recursive term.
+        cte = base_case.union_all(recursive)
+
+        # We will now query from the CTE to get the categories, their levels,  and
+        # their paths.
+        query = (cte
+                 .select_from(cte.c.name, cte.c.level, cte.c.path)
+                 .order_by(cte.c.path))
+        data = [(obj.name, obj.level, obj.path) for obj in query]
+        self.assertEqual(data, [
+            ('root', 1, 'root'),
+            ('p1', 2, 'root->p1'),
+            ('c11', 3, 'root->p1->c11'),
+            ('c12', 3, 'root->p1->c12'),
+            ('p2', 2, 'root->p2'),
+            ('p3', 2, 'root->p3'),
+            ('c31', 3, 'root->p3->c31')])
+
     @requires_models(Sample)
+    @skip_if(IS_SQLITE_OLD, 'sqlite too old for ctes')
     def test_cte_reuse_aggregate(self):
         data = (
             (1, (1.25, 1.5, 1.75)),
