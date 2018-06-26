@@ -36,6 +36,7 @@ New to peewee? These may help:
 * :ref:`Example twitter app <example-app>`
 * :ref:`Models and fields <models>`
 * :ref:`Querying <querying>`
+* :ref:`Relationships and joins <relationships>`
 
 Contents:
 ---------

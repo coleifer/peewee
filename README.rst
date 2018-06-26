@@ -19,6 +19,7 @@ New to peewee? These may help:
 * `Example twitter app <http://docs.peewee-orm.com/en/latest/peewee/example.html>`_
 * `Models and fields <http://docs.peewee-orm.com/en/latest/peewee/models.html>`_
 * `Querying <http://docs.peewee-orm.com/en/latest/peewee/querying.html>`_
+* `Relationships and joins <http://docs.peewee-orm.com/en/latest/peewee/relationships.html>`_
 
 Examples
 --------
