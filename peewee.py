@@ -2224,7 +2224,7 @@ class Insert(_WriteQuery):
                 except self.DefaultValuesException:
                     self._default_values(ctx)
                 self._query_type = Insert.SIMPLE
-            elif isinstance(self._insert, SelectQuery):
+            elif isinstance(self._insert, (SelectQuery, SQL)):
                 self._query_insert(ctx)
                 self._query_type = Insert.QUERY
             else:

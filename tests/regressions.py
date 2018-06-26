@@ -199,3 +199,23 @@ class TestGithub1354(ModelTestCase):
         self.assertEqual(child_db.user.username, 'huey')
         self.assertEqual(child_db.parent.name, 'parent')
         self.assertEqual(child_db.name, 'child')
+
+
+class TestInsertFromSQL(ModelTestCase):
+    def setUp(self):
+        super(TestInsertFromSQL, self).setUp()
+
+        self.database.execute_sql('create table if not exists user_src '
+                                  '(name TEXT);')
+        tbl = Table('user_src').bind(self.database)
+        tbl.insert(name='foo').execute()
+
+    def tearDown(self):
+        super(TestInsertFromSQL, self).tearDown()
+        self.database.execute_sql('drop table if exists user_src')
+
+    @requires_models(User)
+    def test_insert_from_sql(self):
+        query_src = SQL('SELECT name FROM user_src')
+        User.insert_from(query=query_src, fields=[User.username]).execute()
+        self.assertEqual([u.username for u in User.select()], ['foo'])
