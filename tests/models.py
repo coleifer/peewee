@@ -654,6 +654,7 @@ class TestModelAPIs(ModelTestCase):
             self.assertEqual([t.content for t in query],
                              ['meow', 'purr', 'hiss'])
 
+    @skip_if(IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES)
     @requires_models(User)
     def test_subquery_emulate_window(self):
         # We have duplicated users. Select a maximum of 2 instances of the
