@@ -2755,6 +2755,9 @@ Fields
         Another tweet
         Yet another tweet
 
+    For an in-depth discussion of foreign-keys, joins and relationships between
+    models, refer to :ref:`relationships`.
+
     .. note::
         Foreign keys do not have a particular ``field_type`` as they will take
         their field type depending on the type of primary key on the model they
@@ -4011,6 +4014,9 @@ Model
         .. code-block:: python
 
             sq = User.select().join(Relationship, on=Relationship.to_user)
+
+        For an in-depth discussion of foreign-keys, joins and relationships
+        between models, refer to :ref:`relationships`.
 
     .. py:method:: join_from(src, dest[, join_type='INNER'[, on=None[, attr=None]]])
 

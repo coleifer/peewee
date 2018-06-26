@@ -61,8 +61,7 @@ by the database, so you can use Python types in your code without having to
 worry.
 
 Things get interesting when we set up relationships between models using
-`foreign keys (wikipedia) <http://en.wikipedia.org/wiki/Foreign_key>`_. This is
-easy to do with peewee:
+:ref:`foreign key relationships <relationships>`. This is simple with peewee:
 
 .. code-block:: python
 
@@ -215,11 +214,15 @@ Let's list all the cats and their owner's name:
     # Kitty Bob
     # Mittens Jr Herb
 
-There is a big problem with the previous query: because we are accessing
-``pet.owner.name`` and we did not select this relation in our original query,
-peewee will have to perform an additional query to retrieve the pet's owner.
-This behavior is referred to as :ref:`N+1 <nplusone>` and it should generally
-be avoided.
+.. attention::
+    There is a big problem with the previous query: because we are accessing
+    ``pet.owner.name`` and we did not select this relation in our original
+    query, peewee will have to perform an additional query to retrieve the
+    pet's owner.  This behavior is referred to as :ref:`N+1 <nplusone>` and it
+    should generally be avoided.
+
+    For an in-depth guide to working with relationships and joins, refer to the
+    :ref:`relationships` documentation.
 
 We can avoid the extra queries by selecting both *Pet* and *Person*, and adding
 a *join*.

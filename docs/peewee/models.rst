@@ -136,6 +136,10 @@ This allows you to write code like the following:
     another message
     yet another message
 
+.. note::
+    Refer to the :ref:`relationships` document for an in-depth discussion of
+    foreign-keys, joins and relationships between models.
+
 For full documentation on fields, see the :ref:`Fields API notes <fields-api>`
 
 .. _field_types_table:
@@ -303,6 +307,10 @@ In our example models, there is a foreign key from ``Tweet`` to ``User``. This
 means that all the users are stored in their own table, as are the tweets, and
 the foreign key from tweet to user allows each tweet to *point* to a particular
 user object.
+
+.. note::
+    Refer to the :ref:`relationships` document for an in-depth discussion of
+    foreign keys, joins and relationships between models.
 
 In peewee, accessing the value of a :py:class:`ForeignKeyField` will return the
 entire related object, e.g.:
