@@ -49,6 +49,8 @@ data:
 .. code-block:: python
 
     def populate_test_data():
+        db.create_tables([User, Tweet, Favorite])
+
         data = (
             ('huey', ('meow', 'hiss', 'purr')),
             ('mickey', ('woof', 'whine')),
@@ -387,3 +389,131 @@ selected and reconstructed the model graph:
         logger = logging.getLogger('peewee')
         logger.addHandler(logging.StreamHandler())
         logger.setLevel(logging.DEBUG)
+
+Subqueries
+----------
+
+Peewee allows you to join on any table-like object, including subqueries or
+common table expressions (CTEs). To demonstrate joining on a subquery, let's
+query for all users and their latest tweet.
+
+Here is the SQL:
+
+.. code-block:: sql
+
+    SELECT tweet.*, user.*
+    FROM tweet
+    INNER JOIN (
+        SELECT latest.user_id, MAX(latest.timestamp) AS max_ts
+        FROM tweet AS latest
+        GROUP BY latest.user_id) AS latest_query
+    ON ((tweet.user_id = latest_query.user_id) AND (tweet.timestamp = latest_query.max_ts))
+    INNER JOIN user ON (tweet.user_id = user.id)
+
+We'll do this by creating a subquery which selects each user and the timestamp
+of their latest tweet. Then we can query the tweets table in the outer query
+and join on the user and timestamp combination from the subquery.
+
+.. code-block:: python
+
+    # Define our subquery first. We'll use an alias of the Tweet model, since
+    # we will be querying from the Tweet model directly in the outer query.
+    Latest = Tweet.alias()
+    latest_query = (Latest
+                    .select(Latest.user, fn.MAX(Latest.timestamp).alias('max_ts'))
+                    .group_by(Latest.user)
+                    .alias('latest_query'))
+
+    # Our join predicate will ensure that we match tweets based on their
+    # timestamp *and* user_id.
+    predicate = ((Tweet.user == latest_query.c.user_id) &
+                 (Tweet.timestamp == latest_query.c.max_ts))
+
+    # We put it all together, querying from tweet and joining on the subquery
+    # using the above predicate.
+    query = (Tweet
+             .select(Tweet, User)  # Select all columns from tweet and user.
+             .join(latest_query, on=predicate)  # Join tweet -> subquery.
+             .join_from(Tweet, User))  # Join from tweet -> user.
+
+Iterating over the query, we can see each user and their latest tweet.
+
+.. code-block:: pycon
+
+    >>> for tweet in query:
+    ...     print(tweet.user.username, '->', tweet.content)
+    ...
+    huey -> purr
+    mickey -> whine
+
+There are a couple things you may not have seen before in the code we used to
+create the query in this section:
+
+* We used :py:meth:`~ModelSelect.join_from` to explicitly specify the join
+  context. We wrote ``.join_from(Tweet, User)``, which is equivalent to
+  ``.switch(Tweet).join(User)``.
+* We referenced columns in the subquery using the magic ``.c`` attribute,
+  for example ``latest_query.c.max_ts``. The ``.c`` attribute is used to
+  dynamically create column references.
+* Instead of passing individual fields to ``Tweet.select()``, we passed the
+  ``Tweet`` and ``User`` models. This is shorthand for selecting all fields on
+  the given model.
+
+Common-table Expressions
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+In the previous section we joined on a subquery, but we could just as easily
+have used a common-table expression (CTE). We will repeat the same query as
+before, listing users and their latest tweets, but this time we will do it
+using a CTE.
+
+Here is the SQL:
+
+.. code-block:: sql
+
+    WITH latest AS (
+        SELECT user_id, MAX(timestamp) AS max_ts
+        FROM tweet
+        GROUP BY user_id)
+    SELECT tweet.*, user.*
+    FROM tweet
+    INNER JOIN latest
+        ON ((latest.user_id = tweet.user_id) AND (latest.max_ts = tweet.timestamp))
+    INNER JOIN user
+        ON (tweet.user_id = user.id)
+
+This example looks very similar to the previous example with the subquery:
+
+.. code-block:: python
+
+    # Define our CTE first. We'll use an alias of the Tweet model, since
+    # we will be querying from the Tweet model directly in the main query.
+    Latest = Tweet.alias()
+    cte = (Latest
+           .select(Latest.user, fn.MAX(Latest.timestamp).alias('max_ts'))
+           .group_by(Latest.user)
+           .cte('latest'))
+
+    # Our join predicate will ensure that we match tweets based on their
+    # timestamp *and* user_id.
+    predicate = ((Tweet.user == cte.c.user_id) &
+                 (Tweet.timestamp == cte.c.max_ts))
+
+    # We put it all together, querying from tweet and joining on the CTE
+    # using the above predicate.
+    query = (Tweet
+             .select(Tweet, User)  # Select all columns from tweet and user.
+             .join(cte, on=predicate)  # Join tweet -> CTE.
+             .join_from(Tweet, User)  # Join from tweet -> user.
+             .with_cte(cte))
+
+We can iterate over the result-set, which consists of the latest tweets for
+each user:
+
+.. code-block:: pycon
+
+    >>> for tweet in query:
+    ...     print(tweet.user.username, '->', tweet.content)
+    ...
+    huey -> purr
+    mickey -> whine
