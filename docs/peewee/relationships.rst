@@ -83,6 +83,18 @@ mickey    woof
 mickey    whine      huey
 ========= ========== ===========================
 
+.. attention::
+    In the following examples we will be executing a number of queries. If you
+    are unsure how many queries are being executed, you can add the following
+    code, which will log all queries to the console:
+
+    .. code-block:: python
+
+        import logging
+        logger = logging.getLogger('peewee')
+        logger.addHandler(logging.StreamHandler())
+        logger.setLevel(logging.DEBUG)
+
 Performing simple joins
 -----------------------
 
@@ -226,6 +238,19 @@ the *join context* back to ``Tweet``. If we had omitted the explicit call to
 switch, Peewee would have used ``User`` (the last model we joined) as the join
 context and constructed the join from User to Favorite using the
 ``Favorite.user`` foreign-key, which would have given us incorrect results.
+
+If we wanted to omit the join-context switching we could instead use the
+:py:meth:`~ModelSelect.join_from` method. The following query is equivalent to
+the previous one:
+
+.. code-block:: python
+
+    query = (Tweet
+             .select(Tweet.content, fn.COUNT(Favorite.id).alias('count'))
+             .join_from(Tweet, User)  # Join tweet -> user.
+             .join_from(Tweet, Favorite, JOIN.LEFT_OUTER)  # Join tweet -> favorite.
+             .where(User.username == 'huey')
+             .group_by(Tweet.content))
 
 We can iterate over the results of the above query to print the tweet's content
 and the favorite count:
@@ -378,17 +403,6 @@ selected and reconstructed the model graph:
     mickey liked purr by huey
     zaizee liked meow by huey
     zaizee liked purr by huey
-
-.. attention::
-    If you are unsure how many queries are being executed, you can add the
-    following code, which will log all queries to the console:
-
-    .. code-block:: python
-
-        import logging
-        logger = logging.getLogger('peewee')
-        logger.addHandler(logging.StreamHandler())
-        logger.setLevel(logging.DEBUG)
 
 Subqueries
 ----------
