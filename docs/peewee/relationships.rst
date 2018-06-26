@@ -95,6 +95,21 @@ mickey    whine      huey
         logger.addHandler(logging.StreamHandler())
         logger.setLevel(logging.DEBUG)
 
+.. note::
+    In SQLite, foreign keys are not enabled by default. Most things, including
+    the Peewee foreign-key API, will work fine, but ON DELETE behaviour will be
+    ignored, even if you explicitly specify on_delete to your ForeignKeyField.
+    In conjunction with the default PrimaryKeyField behaviour (where deleted
+    record IDs can be reused), this can lead to surprising (and almost
+    certainly unwanted) behaviour where if you delete a record in table A
+    referenced by a foreign key in table B, and then create a new, unrelated,
+    record in table A, the new record will end up mis-attached to the undeleted
+    record in table B. To avoid the mis-attachment, you can use
+    :py:class:`AutoIncrementField`, but it may be better overall to
+    ensure that foreign keys are enabled with
+    ``pragmas=(('foreign_keys', 'on'),)`` when you
+    instantiate :py:class:`SqliteDatabase`.
+
 Performing simple joins
 -----------------------
 
@@ -531,3 +546,319 @@ each user:
     ...
     huey -> purr
     mickey -> whine
+
+Multiple foreign-keys to the same Model
+---------------------------------------
+
+When there are multiple foreign keys to the same model, it is good practice to
+explicitly specify which field you are joining on.
+
+Referring back to the :ref:`example app's models <example-app-models>`,
+consider the *Relationship* model, which is used to denote when one user
+follows another. Here is the model definition:
+
+.. code-block:: python
+
+    class Relationship(BaseModel):
+        from_user = ForeignKeyField(User, backref='relationships')
+        to_user = ForeignKeyField(User, backref='related_to')
+
+        class Meta:
+            indexes = (
+                # Specify a unique multi-column index on from/to-user.
+                (('from_user', 'to_user'), True),
+            )
+
+Since there are two foreign keys to *User*, we should always specify which
+field we are using in a join.
+
+For example, to determine which users I am following, I would write:
+
+.. code-block:: python
+
+    (User
+     .select()
+     .join(Relationship, on=Relationship.to_user)
+     .where(Relationship.from_user == charlie))
+
+On the other hand, if I wanted to determine which users are following me, I
+would instead join on the *from_user* column and filter on the relationship's
+*to_user*:
+
+.. code-block:: python
+
+    (User
+     .select()
+     .join(Relationship, on=Relationship.from_user)
+     .where(Relationship.to_user == charlie))
+
+Joining on arbitrary fields
+---------------------------
+
+If a foreign key does not exist between two tables you can still perform a
+join, but you must manually specify the join predicate.
+
+In the following example, there is no explicit foreign-key between *User* and
+*ActivityLog*, but there is an implied relationship between the
+*ActivityLog.object_id* field and *User.id*. Rather than joining on a specific
+:py:class:`Field`, we will join using an :py:class:`Expression`.
+
+.. code-block:: python
+
+    user_log = (User
+                .select(User, ActivityLog)
+                .join(ActivityLog, on=(User.id == ActivityLog.object_id), attr='log')
+                .where(
+                    (ActivityLog.activity_type == 'user_activity') &
+                    (User.username == 'charlie')))
+
+    for user in user_log:
+        print(user.username, user.log.description)
+
+    #### Print something like ####
+    charlie logged in
+    charlie posted a tweet
+    charlie retweeted
+    charlie posted a tweet
+    charlie logged out
+
+.. note::
+    Recall that we can control the attribute Peewee will assign the joined
+    instance to by specifying the ``attr`` parameter in the ``join()`` method.
+    In the previous example, we used the following *join*:
+
+    .. code-block:: python
+
+        join(ActivityLog, on=(User.id == ActivityLog.object_id), attr='log')
+
+    Then when iterating over the query, we were able to directly access the
+    joined *ActivityLog* without incurring an additional query:
+
+    .. code-block:: python
+
+        for user in user_log:
+            print(user.username, user.log.description)
+
+.. _manytomany:
+
+Implementing Many to Many
+-------------------------
+
+Peewee provides a field for representing many-to-many relationships, much like
+Django does. This feature was added due to many requests from users, but I
+strongly advocate against using it, since it conflates the idea of a field with
+a junction table and hidden joins. It's just a nasty hack to provide convenient
+accessors.
+
+To implement many-to-many **correctly** with peewee, you will therefore create
+the intermediary table yourself and query through it:
+
+.. code-block:: python
+
+    class Student(Model):
+        name = CharField()
+
+    class Course(Model):
+        name = CharField()
+
+    class StudentCourse(Model):
+        student = ForeignKeyField(Student)
+        course = ForeignKeyField(Course)
+
+To query, let's say we want to find students who are enrolled in math class:
+
+.. code-block:: python
+
+    query = (Student
+             .select()
+             .join(StudentCourse)
+             .join(Course)
+             .where(Course.name == 'math'))
+    for student in query:
+        print(student.name)
+
+To query what classes a given student is enrolled in:
+
+.. code-block:: python
+
+    courses = (Course
+               .select()
+               .join(StudentCourse)
+               .join(Student)
+               .where(Student.name == 'da vinci'))
+
+    for course in courses:
+        print(course.name)
+
+To efficiently iterate over a many-to-many relation, i.e., list all students
+and their respective courses, we will query the *through* model
+``StudentCourse`` and *precompute* the Student and Course:
+
+.. code-block:: python
+
+    query = (StudentCourse
+             .select(StudentCourse, Student, Course)
+             .join(Course)
+             .switch(StudentCourse)
+             .join(Student)
+             .order_by(Student.name))
+
+To print a list of students and their courses you might do the following:
+
+.. code-block:: python
+
+    for student_course in query:
+        print(student_course.student.name, '->', student_course.course.name)
+
+Since we selected all fields from ``Student`` and ``Course`` in the *select*
+clause of the query, these foreign key traversals are "free" and we've done the
+whole iteration with just 1 query.
+
+ManyToManyField
+^^^^^^^^^^^^^^^
+
+The :py:class:`ManyToManyField` provides a *field-like* API over many-to-many
+fields. For all but the simplest many-to-many situations, you're better off
+using the standard peewee APIs. But, if your models are very simple and your
+querying needs are not very complex, you can get a big boost by using
+:py:class:`ManyToManyField`. Check out the :ref:`extra-fields` extension module
+for details.
+
+Modeling students and courses using :py:class:`ManyToManyField`:
+
+.. code-block:: python
+
+    from peewee import *
+    from playhouse.fields import ManyToManyField
+
+    db = SqliteDatabase('school.db')
+
+    class BaseModel(Model):
+        class Meta:
+            database = db
+
+    class Student(BaseModel):
+        name = CharField()
+
+    class Course(BaseModel):
+        name = CharField()
+        students = ManyToManyField(Student, backref='courses')
+
+    StudentCourse = Course.students.get_through_model()
+
+    db.create_tables([
+        Student,
+        Course,
+        StudentCourse])
+
+    # Get all classes that "huey" is enrolled in:
+    huey = Student.get(Student.name == 'Huey')
+    for course in huey.courses.order_by(Course.name):
+        print(course.name)
+
+    # Get all students in "English 101":
+    engl_101 = Course.get(Course.name == 'English 101')
+    for student in engl_101.students:
+        print(student.name)
+
+    # When adding objects to a many-to-many relationship, we can pass
+    # in either a single model instance, a list of models, or even a
+    # query of models:
+    huey.courses.add(Course.select().where(Course.name.contains('English')))
+
+    engl_101.students.add(Student.get(Student.name == 'Mickey'))
+    engl_101.students.add([
+        Student.get(Student.name == 'Charlie'),
+        Student.get(Student.name == 'Zaizee')])
+
+    # The same rules apply for removing items from a many-to-many:
+    huey.courses.remove(Course.select().where(Course.name.startswith('CS')))
+
+    engl_101.students.remove(huey)
+
+    # Calling .clear() will remove all associated objects:
+    cs_150.students.clear()
+
+.. attention::
+    Before many-to-many relationships can be added, the objects being
+    referenced will need to be saved first. In order to create relationships in
+    the many-to-many through table, Peewee needs to know the primary keys of
+    the models being referenced.
+
+For more examples, see:
+
+* :py:meth:`ManyToManyField.add`
+* :py:meth:`ManyToManyField.remove`
+* :py:meth:`ManyToManyField.clear`
+* :py:meth:`ManyToManyField.get_through_model`
+
+Self-joins
+----------
+
+Peewee supports constructing queries containing a self-join.
+
+Using model aliases
+^^^^^^^^^^^^^^^^^^^
+
+To join on the same model (table) twice, it is necessary to create a model
+alias to represent the second instance of the table in a query. Consider the
+following model:
+
+.. code-block:: python
+
+    class Category(Model):
+        name = CharField()
+        parent = ForeignKeyField('self', backref='children')
+
+What if we wanted to query all categories whose parent category is
+*Electronics*. One way would be to perform a self-join:
+
+.. code-block:: python
+
+    Parent = Category.alias()
+    query = (Category
+             .select()
+             .join(Parent, on=(Category.parent == Parent.id))
+             .where(Parent.name == 'Electronics'))
+
+When performing a join that uses a :py:class:`ModelAlias`, it is necessary to
+specify the join condition using the ``on`` keyword argument. In this case we
+are joining the category with its parent category.
+
+Using subqueries
+^^^^^^^^^^^^^^^^
+
+Another less common approach involves the use of subqueries. Here is another
+way we might construct a query to get all the categories whose parent category
+is *Electronics* using a subquery:
+
+.. code-block:: python
+
+    Parent = Category.alias()
+    join_query = Parent.select().where(Parent.name == 'Electronics')
+
+    # Subqueries used as JOINs need to have an alias.
+    join_query = join_query.alias('jq')
+
+    query = (Category
+             .select()
+             .join(join_query, on=(Category.parent == join_query.c.id)))
+
+This will generate the following SQL query:
+
+.. code-block:: sql
+
+    SELECT t1."id", t1."name", t1."parent_id"
+    FROM "category" AS t1
+    INNER JOIN (
+      SELECT t2."id"
+      FROM "category" AS t2
+      WHERE (t2."name" = ?)) AS jq ON (t1."parent_id" = "jq"."id")
+
+To access the ``id`` value from the subquery, we use the ``.c`` magic lookup
+which will generate the appropriate SQL expression:
+
+.. code-block:: python
+
+    Category.parent == join_query.c.id
+    # Becomes: (t1."parent_id" = "jq"."id")
