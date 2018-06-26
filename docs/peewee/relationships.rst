@@ -720,9 +720,7 @@ ManyToManyField
 The :py:class:`ManyToManyField` provides a *field-like* API over many-to-many
 fields. For all but the simplest many-to-many situations, you're better off
 using the standard peewee APIs. But, if your models are very simple and your
-querying needs are not very complex, you can get a big boost by using
-:py:class:`ManyToManyField`. Check out the :ref:`extra-fields` extension module
-for details.
+querying needs are not very complex, :py:class:`ManyToManyField` may work.
 
 Modeling students and courses using :py:class:`ManyToManyField`:
 
