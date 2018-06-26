@@ -654,6 +654,52 @@ class TestModelAPIs(ModelTestCase):
             self.assertEqual([t.content for t in query],
                              ['meow', 'purr', 'hiss'])
 
+    @requires_models(User)
+    def test_subquery_emulate_window(self):
+        # We have duplicated users. Select a maximum of 2 instances of the
+        # username.
+        name2count = {
+            'beanie': 6,
+            'huey': 5,
+            'mickey': 3,
+            'pipey': 1,
+            'zaizee': 4}
+        names = []
+        for name, count in sorted(name2count.items()):
+            names += [name] * count
+        User.insert_many([(n,) for n in names], [User.username]).execute()
+
+        # The results we are trying to obtain.
+        expected = [
+            ('beanie', 1), ('beanie', 2),
+            ('huey', 7), ('huey', 8),
+            ('mickey', 12), ('mickey', 13),
+            ('pipey', 15),
+            ('zaizee', 16), ('zaizee', 17)]
+
+        # Using a self-join.
+        UA = User.alias()
+        query = (User
+                 .select(User.username, UA.id)
+                 .join(UA, on=((UA.username == User.username) &
+                               (UA.id >= User.id)))
+                 .group_by(User.username, UA.id)
+                 .having(fn.COUNT(UA.id) < 3)
+                 .order_by(User.username, UA.id))
+        self.assertEqual(query.tuples()[:], expected)
+
+        # Using a correlated subquery.
+        subq = (UA
+                .select(UA.id)
+                .where(User.username == UA.username)
+                .order_by(UA.id)
+                .limit(2))
+        query = (User
+                 .select(User.username, User.id)
+                 .where(User.id.in_(subq.alias('subq')))
+                 .order_by(User.username, User.id))
+        self.assertEqual(query.tuples()[:], expected)
+
     @requires_models(User, Tweet)
     def test_insert_query_value(self):
         huey = self.add_user('huey')
