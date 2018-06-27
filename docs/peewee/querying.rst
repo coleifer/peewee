@@ -607,6 +607,67 @@ it easier to work with rows as dictionaries, for example:
 See :py:meth:`~BaseQuery.namedtuples`, :py:meth:`~BaseQuery.tuples`,
 :py:meth:`~BaseQuery.dicts` for more information.
 
+Iterating over large result-sets
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+By default peewee will cache the rows returned when iterating over a
+:py:class:`Select` query. This is an optimization to allow multiple iterations
+as well as indexing and slicing without causing additional queries. This
+caching can problematic, however, when you plan to iterate over a large
+number of rows.
+
+To reduce the amount of memory used by peewee when iterating over a query, use
+the :py:meth:`~BaseQuery.iterator` method. This method allows you to iterate
+without caching each model returned, using much less memory when iterating over
+large result sets.
+
+.. code-block:: python
+
+    # Let's assume we've got 10 million stat objects to dump to a csv file.
+    stats = Stat.select()
+
+    # Our imaginary serializer class
+    serializer = CSVSerializer()
+
+    # Loop over all the stats and serialize.
+    for stat in stats.iterator():
+        serializer.serialize_object(stat)
+
+For simple queries you can see further speed improvements by returning rows as
+dictionaries, namedtuples or tuples. The following methods can be used on any
+:py:class:`Select` query to change the result row type:
+
+* :py:meth:`~BaseQuery.dicts`
+* :py:meth:`~BaseQuery.namedtuples`
+* :py:meth:`~BaseQuery.tuples`
+
+When iterating over a large number of rows that contain columns from multiple
+tables, peewee will reconstruct the model graph for each row returned. This
+operation can be slow for complex graphs. For example, if we were selecting a
+list of tweets along with the username and avatar of the tweet's author, Peewee
+would have to create two objects for each row (a tweet and a user). In addition
+to the above row-types, there is a fourth method :py:meth:`~BaseQuery.objects`
+which will return the rows as model instances, but will not attempt to resolve
+the model graph.
+
+For example:
+
+.. code-block:: python
+
+    query = (Tweet
+             .select(Tweet, User)  # Select tweet and user data.
+             .join(User))
+
+    # Note that the user columns are stored in a separate User instance
+    # accessible at tweet.user:
+    for tweet in query:
+        print(tweet.user.username, tweet.content)
+
+    # Using ".objects()" will not create the tweet.user object and assigns all
+    # user attributes to the tweet instance:
+    for tweet in query.objects():
+        print(tweet.username, tweet.content)
+
 Filtering records
 -----------------
 
@@ -715,7 +776,7 @@ Get tweets by staff or superusers using a subquery:
 
     staff_super = User.select(User.id).where(
         (User.is_staff == True) | (User.is_superuser == True))
-    Tweet.select().where(Tweet.user << staff_super)
+    Tweet.select().where(Tweet.user.in_(staff_super))
 
 Sorting records
 ---------------
@@ -1194,208 +1255,3 @@ Foreign Keys and Joins
 ----------------------
 
 This section have been moved into its own document: :ref:`relationships`.
-
-Performance Techniques
-----------------------
-
-This section outlines some techniques for improving performance when using
-peewee.
-
-.. _nplusone:
-
-Avoiding N+1 queries
-^^^^^^^^^^^^^^^^^^^^
-
-The term *N+1 queries* refers to a situation where an application performs a
-query, then for each row of the result set, the application performs at least
-one other query (another way to conceptualize this is as a nested loop). In
-many cases, these *n* queries can be avoided through the use of a SQL join or
-subquery. The database itself may do a nested loop, but it will usually be more
-performant than doing *n* queries in your application code, which involves
-latency communicating with the database and may not take advantage of indices
-or other optimizations employed by the database when joining or executing a
-subquery.
-
-Peewee provides several APIs for mitigating *N+1* query behavior. Recollecting
-the models used throughout this document, *User* and *Tweet*, this section will
-try to outline some common *N+1* scenarios, and how peewee can help you avoid
-them.
-
-.. note::
-    In some cases, N+1 queries will not result in a significant or measurable
-    performance hit. It all depends on the data you are querying, the database
-    you are using, and the latency involved in executing queries and retrieving
-    results. As always when making optimizations, profile before and after to
-    ensure the changes do what you expect them to.
-
-List recent tweets
-^^^^^^^^^^^^^^^^^^
-
-The twitter timeline displays a list of tweets from multiple users. In addition
-to the tweet's content, the username of the tweet's author is also displayed.
-The N+1 scenario here would be:
-
-1. Fetch the 10 most recent tweets.
-2. For each tweet, select the author (10 queries).
-
-By selecting both tables and using a *join*, peewee makes it possible to
-accomplish this in a single query:
-
-.. code-block:: python
-
-    query = (Tweet
-             .select(Tweet, User)  # Note that we are selecting both models.
-             .join(User)  # Use an INNER join because every tweet has an author.
-             .order_by(Tweet.id.desc())  # Get the most recent tweets.
-             .limit(10))
-
-    for tweet in query:
-        print(tweet.user.username, '-', tweet.message)
-
-Without the join, accessing ``tweet.user.username`` would trigger a query to
-resolve the foreign key ``tweet.user`` and retrieve the associated user. But
-since we have selected and joined on ``User``, peewee will automatically
-resolve the foreign-key for us.
-
-List users and all their tweets
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Let's say you want to build a page that shows several users and all of their
-tweets. The N+1 scenario would be:
-
-1. Fetch some users.
-2. For each user, fetch their tweets.
-
-This situation is similar to the previous example, but there is one important
-difference: when we selected tweets, they only have a single associated user,
-so we could directly assign the foreign key. The reverse is not true, however,
-as one user may have any number of tweets (or none at all).
-
-Peewee provides an approach to avoiding *O(n)* queries in this situation. Fetch
-users first, then fetch all the tweets associated with those users.  Once
-peewee has the big list of tweets, it will assign them out, matching them with
-the appropriate user. This method is usually faster but will involve a query
-for each table being selected.
-
-.. _prefetch:
-
-Using prefetch
-^^^^^^^^^^^^^^
-
-peewee supports pre-fetching related data using sub-queries. This method
-requires the use of a special API, :py:func:`prefetch`. Pre-fetch, as its name
-indicates, will eagerly load the appropriate tweets for the given users using
-subqueries. This means instead of *O(n)* queries for *n* rows, we will do
-*O(k)* queries for *k* tables.
-
-Here is an example of how we might fetch several users and any tweets they
-created within the past week.
-
-.. code-block:: python
-
-    week_ago = datetime.date.today() - datetime.timedelta(days=7)
-    users = User.select()
-    tweets = (Tweet
-              .select()
-              .where(
-                  (Tweet.is_published == True) &
-                  (Tweet.created_date >= week_ago)))
-
-    # This will perform two queries.
-    users_with_tweets = prefetch(users, tweets)
-
-    for user in users_with_tweets:
-        print(user.username)
-        for tweet in user.tweets:
-            print('  ', tweet.message)
-
-.. note::
-    Note that neither the ``User`` query, nor the ``Tweet`` query contained a
-    JOIN clause. When using :py:func:`prefetch` you do not need to specify the
-    join.
-
-:py:func:`prefetch` can be used to query an arbitrary number of tables. Check
-the API documentation for more examples.
-
-Some things to consider when using :py:func:`prefetch`:
-
-* Foreign keys must exist between the models being prefetched.
-* `LIMIT` works as you'd expect on the outer-most query, but may be difficult
-  to implement correctly if trying to limit the size of the sub-selects.
-
-Iterating over lots of rows
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-By default peewee will cache the rows returned when iterating of a
-:py:class:`Select`. This is an optimization to allow multiple iterations as
-well as indexing and slicing without causing additional queries. This caching
-can be problematic, however, when you plan to iterate over a large number of
-rows.
-
-To reduce the amount of memory used by peewee when iterating over a query, use
-the :py:meth:`~BaseQuery.iterator` method. This method allows you to iterate
-without caching each model returned, using much less memory when iterating over
-large result sets.
-
-.. code-block:: python
-
-    # Let's assume we've got 10 million stat objects to dump to a csv file.
-    stats = Stat.select()
-
-    # Our imaginary serializer class
-    serializer = CSVSerializer()
-
-    # Loop over all the stats and serialize.
-    for stat in stats.iterator():
-        serializer.serialize_object(stat)
-
-For simple queries you can see further speed improvements by using:
-
-* :py:meth:`~BaseQuery.dicts`
-* :py:meth:`~BaseQuery.namedtuples`
-* :py:meth:`~BaseQuery.objects`
-* :py:meth:`~BaseQuery.tuples`
-
-When iterating over a large number of rows that contain columns from multiple
-tables, peewee will reconstruct the model graph for each row returned. This
-operation can be slow for complex graphs.
-
-Ordinarily, when a query contains joins, peewee will reconstruct the graph of
-joined data returned by cursor. Using the above helpers returns a simpler
-data-structure which can be much more efficient when iterating over large or
-very-complex queries.
-
-.. note::
-    If no constructor is passed to :py:meth:`~BaseQuery.objects`, then peewee
-    will return model instances. However, instead of attempting to reconstruct
-    a graph of any joined data, all columns will be returned as attributes of
-    the model.
-
-    For example:
-
-    .. code-block:: python
-
-        query = (Tweet
-                 .select(Tweet, User)
-                 .join(User))
-
-        # Note that the user columns are stored in a separate User instance
-        # accessible at row.user:
-        for tweet in query:
-            print(tweet.user.username, tweet.content)
-
-        # Using ".objects()" will put all attributes on the model we are
-        # querying.
-        for tweet in query.objects():
-            print(tweet.username, tweet.content)
-
-.. code-block:: python
-
-    for stat in stats.objects().iterator():
-        serializer.serialize_object(stat)
-
-Speeding up Bulk Inserts
-^^^^^^^^^^^^^^^^^^^^^^^^
-
-See the :ref:`bulk_inserts` section for details on speeding up bulk insert
-operations.
