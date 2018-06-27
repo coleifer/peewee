@@ -1762,7 +1762,8 @@ API
 
 .. py:class:: DataSet(url)
 
-    :param str url: A database URL. See :ref:`db_url` for examples.
+    :param url: A database URL or a :py:class:`Database` instance. For
+        details on using a URL, see :ref:`db_url` for examples.
 
     The *DataSet* class provides a high-level API for working with relational
     databases.
