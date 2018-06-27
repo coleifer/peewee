@@ -13,10 +13,11 @@ from playhouse.db_url import connect as db_url_connect
 
 
 class PaginatedQuery(object):
-    def __init__(self, query_or_model, paginate_by, page_var='page',
+    def __init__(self, query_or_model, paginate_by, page_var='page', page=None,
                  check_bounds=False):
         self.paginate_by = paginate_by
         self.page_var = page_var
+        self.page = None
         self.check_bounds = check_bounds
 
         if isinstance(query_or_model, SelectQuery):
@@ -27,6 +28,9 @@ class PaginatedQuery(object):
             self.query = self.model.select()
 
     def get_page(self):
+        if self.page is not None:
+            return self.page
+
         curr_page = request.args.get(self.page_var)
         if curr_page and curr_page.isdigit():
             return max(1, int(curr_page))
@@ -53,12 +57,14 @@ def get_object_or_404(query_or_model, *query):
         abort(404)
 
 def object_list(template_name, query, context_variable='object_list',
-                paginate_by=20, page_var='page', check_bounds=True, **kwargs):
+                paginate_by=20, page_var='page', page=None, check_bounds=True,
+                **kwargs):
     paginated_query = PaginatedQuery(
         query,
-        paginate_by,
-        page_var,
-        check_bounds)
+        paginate_by=paginate_by,
+        page_var=page_var,
+        page=page,
+        check_bounds=check_bounds)
     kwargs[context_variable] = paginated_query.get_object_list()
     return render_template(
         template_name,
