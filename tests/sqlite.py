@@ -14,6 +14,7 @@ from .base import get_in_memory_db
 from .base import requires_models
 from .base import skip_if
 from .base import skip_unless
+from .base_models import User
 from .sqlite_helpers import json_installed
 
 
@@ -1726,3 +1727,22 @@ class TestCollatedFieldDefinitions(ModelTestCase):
         # Sorting of column c is performed using the NOCASE collating sequence.
         assertC(base.order_by(Datum.c.collate('NOCASE'), Datum.id),
                 [2, 4, 3, 1])
+
+
+class TestReadOnly(ModelTestCase):
+    @skip_if(sys.version_info < (3, 4, 0), 'requres python >= 3.4.0')
+    @requires_models(User)
+    def test_read_only(self):
+        User.create(username='foo')
+
+        db_filename = self.database.database
+        db = SqliteDatabase('file:%s?mode=ro' % db_filename, uri=True)
+        cursor = db.execute_sql('select username from users')
+        self.assertEqual(cursor.fetchone(), ('foo',))
+
+        self.assertRaises(OperationalError, db.execute_sql,
+                          'insert into users (username) values (?)', ('huey',))
+
+        # We cannot create a database if in read-only mode.
+        db = SqliteDatabase('file:xx_not_exists.db?mode=ro', uri=True)
+        self.assertRaises(OperationalError, db.connect)
