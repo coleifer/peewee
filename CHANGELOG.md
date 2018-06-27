@@ -7,10 +7,23 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/3.5.1...master)
+
+## 3.5.1
+
+**New features**
+
+* New documentation for working with [relationships](http://docs.peewee-orm.com/en/latest/peewee/relationships.html)
+  in Peewee.
+* Improved tests and documentation for MySQL upsert functionality.
 * Allow `database` parameter to be specified with `ModelSelect.get()` method.
   For discussion, see #1620.
 * Add `QualifiedNames` helper to peewee module exports.
 * Add `temporary=` meta option to support temporary tables.
+* Allow a `Database` object to be passed to constructor of `DataSet` helper.
+
+**Bug fixes**
+
 * Fixed edge-case where attempting to alias a field to it's underlying
   column-name (when different), Peewee would not respect the alias and use the
   field name instead. See #1625 for details and discussion.
@@ -22,8 +35,10 @@ https://github.com/coleifer/peewee/releases
 * Fixed bugs in the implementation of user-defined aggregates and extensions
   with the APSW SQLite driver.
 * Fixed regression introduced in 3.5.0 which ignored custom Model `__repr__()`.
+* Fixed regression from 2.x in which inserting from a query using a `SQL()` was
+  no longer working. Refs #1645.
 
-[View commits](https://github.com/coleifer/peewee/compare/3.5.0...HEAD)
+[View commits](https://github.com/coleifer/peewee/compare/3.5.0...3.5.1)
 
 ## 3.5.0
 
