@@ -49,6 +49,15 @@ class TestDataSet(ModelTestCase):
         self.dataset.close()
         super(TestDataSet, self).tearDown()
 
+    def test_pass_database(self):
+        db = SqliteDatabase(':memory:')
+        dataset = DataSet(db)
+        self.assertEqual(dataset._database_path, ':memory:')
+
+        users = dataset['users']
+        users.insert(username='charlie')
+        self.assertEqual(list(users), [{'id': 1, 'username': 'charlie'}])
+
     def create_users(self, n=2):
         user = self.dataset['user']
         for i in range(min(n, len(self.names))):

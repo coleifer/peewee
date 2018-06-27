@@ -22,12 +22,18 @@ if sys.version_info[0] == 3:
 
 class DataSet(object):
     def __init__(self, url, bare_fields=False):
-        self._url = url
-        parse_result = urlparse(url)
-        self._database_path = parse_result.path[1:]
+        if isinstance(url, Database):
+            self._url = None
+            self._database = url
+            self._database_path = self._database.database
+        else:
+            self._url = url
+            parse_result = urlparse(url)
+            self._database_path = parse_result.path[1:]
 
-        # Connect to the database.
-        self._database = connect(url)
+            # Connect to the database.
+            self._database = connect(url)
+
         self._database.connect()
 
         # Introspect the database and generate models.
