@@ -3642,7 +3642,8 @@ Model
 
         :param kwargs: Mapping of field-name to value.
         :param defaults: Default values to use if creating a new row.
-        :returns: :py:class:`Model` instance.
+        :returns: Tuple of :py:class:`Model` instance and boolean indicating
+            if a new object was created.
 
         Attempt to get the row matching the given filters. If no matching row
         is found, create a new row.
