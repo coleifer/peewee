@@ -492,9 +492,9 @@ Common-table Expressions
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
 In the previous section we joined on a subquery, but we could just as easily
-have used a common-table expression (CTE). We will repeat the same query as
-before, listing users and their latest tweets, but this time we will do it
-using a CTE.
+have used a :ref:`common-table expression (CTE) <cte>`. We will repeat the same
+query as before, listing users and their latest tweets, but this time we will
+do it using a CTE.
 
 Here is the SQL:
 
@@ -546,6 +546,10 @@ each user:
     ...
     huey -> purr
     mickey -> whine
+
+.. note::
+    For more information about using CTEs, including information on writing
+    recursive CTEs, see the :ref:`cte` section of the "Querying" document.
 
 Multiple foreign-keys to the same Model
 ---------------------------------------
@@ -638,6 +642,77 @@ In the following example, there is no explicit foreign-key between *User* and
 
         for user in user_log:
             print(user.username, user.log.description)
+
+Self-joins
+----------
+
+Peewee supports constructing queries containing a self-join.
+
+Using model aliases
+^^^^^^^^^^^^^^^^^^^
+
+To join on the same model (table) twice, it is necessary to create a model
+alias to represent the second instance of the table in a query. Consider the
+following model:
+
+.. code-block:: python
+
+    class Category(Model):
+        name = CharField()
+        parent = ForeignKeyField('self', backref='children')
+
+What if we wanted to query all categories whose parent category is
+*Electronics*. One way would be to perform a self-join:
+
+.. code-block:: python
+
+    Parent = Category.alias()
+    query = (Category
+             .select()
+             .join(Parent, on=(Category.parent == Parent.id))
+             .where(Parent.name == 'Electronics'))
+
+When performing a join that uses a :py:class:`ModelAlias`, it is necessary to
+specify the join condition using the ``on`` keyword argument. In this case we
+are joining the category with its parent category.
+
+Using subqueries
+^^^^^^^^^^^^^^^^
+
+Another less common approach involves the use of subqueries. Here is another
+way we might construct a query to get all the categories whose parent category
+is *Electronics* using a subquery:
+
+.. code-block:: python
+
+    Parent = Category.alias()
+    join_query = Parent.select().where(Parent.name == 'Electronics')
+
+    # Subqueries used as JOINs need to have an alias.
+    join_query = join_query.alias('jq')
+
+    query = (Category
+             .select()
+             .join(join_query, on=(Category.parent == join_query.c.id)))
+
+This will generate the following SQL query:
+
+.. code-block:: sql
+
+    SELECT t1."id", t1."name", t1."parent_id"
+    FROM "category" AS t1
+    INNER JOIN (
+      SELECT t2."id"
+      FROM "category" AS t2
+      WHERE (t2."name" = ?)) AS jq ON (t1."parent_id" = "jq"."id")
+
+To access the ``id`` value from the subquery, we use the ``.c`` magic lookup
+which will generate the appropriate SQL expression:
+
+.. code-block:: python
+
+    Category.parent == join_query.c.id
+    # Becomes: (t1."parent_id" = "jq"."id")
 
 .. _manytomany:
 
@@ -789,74 +864,3 @@ For more examples, see:
 * :py:meth:`ManyToManyField.remove`
 * :py:meth:`ManyToManyField.clear`
 * :py:meth:`ManyToManyField.get_through_model`
-
-Self-joins
-----------
-
-Peewee supports constructing queries containing a self-join.
-
-Using model aliases
-^^^^^^^^^^^^^^^^^^^
-
-To join on the same model (table) twice, it is necessary to create a model
-alias to represent the second instance of the table in a query. Consider the
-following model:
-
-.. code-block:: python
-
-    class Category(Model):
-        name = CharField()
-        parent = ForeignKeyField('self', backref='children')
-
-What if we wanted to query all categories whose parent category is
-*Electronics*. One way would be to perform a self-join:
-
-.. code-block:: python
-
-    Parent = Category.alias()
-    query = (Category
-             .select()
-             .join(Parent, on=(Category.parent == Parent.id))
-             .where(Parent.name == 'Electronics'))
-
-When performing a join that uses a :py:class:`ModelAlias`, it is necessary to
-specify the join condition using the ``on`` keyword argument. In this case we
-are joining the category with its parent category.
-
-Using subqueries
-^^^^^^^^^^^^^^^^
-
-Another less common approach involves the use of subqueries. Here is another
-way we might construct a query to get all the categories whose parent category
-is *Electronics* using a subquery:
-
-.. code-block:: python
-
-    Parent = Category.alias()
-    join_query = Parent.select().where(Parent.name == 'Electronics')
-
-    # Subqueries used as JOINs need to have an alias.
-    join_query = join_query.alias('jq')
-
-    query = (Category
-             .select()
-             .join(join_query, on=(Category.parent == join_query.c.id)))
-
-This will generate the following SQL query:
-
-.. code-block:: sql
-
-    SELECT t1."id", t1."name", t1."parent_id"
-    FROM "category" AS t1
-    INNER JOIN (
-      SELECT t2."id"
-      FROM "category" AS t2
-      WHERE (t2."name" = ?)) AS jq ON (t1."parent_id" = "jq"."id")
-
-To access the ``id`` value from the subquery, we use the ``.c`` magic lookup
-which will generate the appropriate SQL expression:
-
-.. code-block:: python
-
-    Category.parent == join_query.c.id
-    # Becomes: (t1."parent_id" = "jq"."id")
