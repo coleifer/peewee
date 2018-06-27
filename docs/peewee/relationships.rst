@@ -924,7 +924,7 @@ since we have selected and joined on ``User``, peewee will automatically
 resolve the foreign-key for us.
 
 .. note::
-    This technique is also discussed in the :ref:`multiple-sources` section.
+    This technique is discussed in more detail in :ref:`multiple-sources`.
 
 List users and all their tweets
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
