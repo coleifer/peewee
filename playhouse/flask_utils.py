@@ -17,7 +17,7 @@ class PaginatedQuery(object):
                  check_bounds=False):
         self.paginate_by = paginate_by
         self.page_var = page_var
-        self.page = None
+        self.page = page or None
         self.check_bounds = check_bounds
 
         if isinstance(query_or_model, SelectQuery):
