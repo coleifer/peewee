@@ -70,6 +70,15 @@ def select():
         pass
 
 @timed
+def select_related_dbapi_raw():
+    cursor = db.execute_sql('select item.*, collection.* '
+                            'from item '
+                            'inner join collection '
+                            'on (item.collection_id = collection.id);')
+    for row in cursor:
+        pass
+
+@timed
 def insert_related():
     with db.atomic():
         populate_collections(30, 35)
@@ -105,4 +114,5 @@ if __name__ == '__main__':
     select_related()
     select_related_left()
     select_related_dicts()
+    select_related_dbapi_raw()
     db.drop_tables([Register, Collection, Item])
