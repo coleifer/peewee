@@ -69,7 +69,7 @@ class TestValueConversion(ModelTestCase):
         # Ensure value is converted on INSERT.
         insert = UpperModel.insert({UpperModel.name: 'huey'})
         self.assertSQL(insert, (
-            'INSERT INTO "uppermodel" ("name") VALUES (UPPER(?))'), ['huey'])
+            'INSERT INTO "upper_model" ("name") VALUES (UPPER(?))'), ['huey'])
         uid = insert.execute()
 
         obj = UpperModel.get(UpperModel.id == uid)
@@ -80,14 +80,14 @@ class TestValueConversion(ModelTestCase):
                   .update({UpperModel.name: 'zaizee'})
                   .where(UpperModel.id == uid))
         self.assertSQL(update, (
-            'UPDATE "uppermodel" SET "name" = UPPER(?) WHERE ("id" = ?)'),
+            'UPDATE "upper_model" SET "name" = UPPER(?) WHERE ("id" = ?)'),
             ['zaizee', uid])
         update.execute()
 
         # Ensure it works with SELECT (or more generally, WHERE expressions).
         select = UpperModel.select().where(UpperModel.name == 'zaizee')
         self.assertSQL(select, (
-            'SELECT "t1"."id", "t1"."name" FROM "uppermodel" AS "t1" '
+            'SELECT "t1"."id", "t1"."name" FROM "upper_model" AS "t1" '
             'WHERE ("t1"."name" = UPPER(?))'), ['zaizee'])
         obj = select.get()
         self.assertEqual(obj.name, 'ZAIZEE')
@@ -95,7 +95,7 @@ class TestValueConversion(ModelTestCase):
         # Ensure it works with DELETE.
         delete = UpperModel.delete().where(UpperModel.name == 'zaizee')
         self.assertSQL(delete, (
-            'DELETE FROM "uppermodel" WHERE ("name" = UPPER(?))'), ['zaizee'])
+            'DELETE FROM "upper_model" WHERE ("name" = UPPER(?))'), ['zaizee'])
         self.assertEqual(delete.execute(), 1)
 
     def test_value_conversion_mixed(self):
@@ -104,28 +104,28 @@ class TestValueConversion(ModelTestCase):
         # If we apply a function to the field, the conversion is not applied.
         sq = UpperModel.select().where(fn.SUBSTR(UpperModel.name, 1, 1) == 'h')
         self.assertSQL(sq, (
-            'SELECT "t1"."id", "t1"."name" FROM "uppermodel" AS "t1" '
+            'SELECT "t1"."id", "t1"."name" FROM "upper_model" AS "t1" '
             'WHERE (SUBSTR("t1"."name", ?, ?) = ?)'), [1, 1, 'h'])
         self.assertRaises(UpperModel.DoesNotExist, sq.get)
 
         # If we encapsulate the object as a value, the conversion is applied.
         sq = UpperModel.select().where(UpperModel.name == Value('huey'))
         self.assertSQL(sq, (
-            'SELECT "t1"."id", "t1"."name" FROM "uppermodel" AS "t1" '
+            'SELECT "t1"."id", "t1"."name" FROM "upper_model" AS "t1" '
             'WHERE ("t1"."name" = UPPER(?))'), ['huey'])
         self.assertEqual(sq.get().id, um.id)
 
         # Unless we explicitly pass converter=False.
         sq = UpperModel.select().where(UpperModel.name == Value('huey', False))
         self.assertSQL(sq, (
-            'SELECT "t1"."id", "t1"."name" FROM "uppermodel" AS "t1" '
+            'SELECT "t1"."id", "t1"."name" FROM "upper_model" AS "t1" '
             'WHERE ("t1"."name" = ?)'), ['huey'])
         self.assertRaises(UpperModel.DoesNotExist, sq.get)
 
         # If we specify explicit SQL on the rhs, the conversion is not applied.
         sq = UpperModel.select().where(UpperModel.name == SQL('?', ['huey']))
         self.assertSQL(sq, (
-            'SELECT "t1"."id", "t1"."name" FROM "uppermodel" AS "t1" '
+            'SELECT "t1"."id", "t1"."name" FROM "upper_model" AS "t1" '
             'WHERE ("t1"."name" = ?)'), ['huey'])
         self.assertRaises(UpperModel.DoesNotExist, sq.get)
 
@@ -137,9 +137,9 @@ class TestValueConversion(ModelTestCase):
         # Select from WHERE ... IN <subquery>.
         query = UpperModel.select().where(UpperModel.name.in_(subq))
         self.assertSQL(query, (
-            'SELECT "t1"."id", "t1"."name" FROM "uppermodel" AS "t1" '
+            'SELECT "t1"."id", "t1"."name" FROM "upper_model" AS "t1" '
             'WHERE ("t1"."name" IN ('
-            'SELECT "t2"."name" FROM "uppermodel" AS "t2" '
+            'SELECT "t2"."name" FROM "upper_model" AS "t2" '
             'WHERE ("t2"."name" = UPPER(?))))'), ['huey'])
         self.assertEqual(query.get().id, um.id)
 
@@ -148,8 +148,8 @@ class TestValueConversion(ModelTestCase):
                  .select()
                  .join(subq, on=(UpperModel.name == subq.c.name)))
         self.assertSQL(query, (
-            'SELECT "t1"."id", "t1"."name" FROM "uppermodel" AS "t1" '
-            'INNER JOIN (SELECT "t2"."name" FROM "uppermodel" AS "t2" '
+            'SELECT "t1"."id", "t1"."name" FROM "upper_model" AS "t1" '
+            'INNER JOIN (SELECT "t2"."name" FROM "upper_model" AS "t2" '
             'WHERE ("t2"."name" = UPPER(?))) AS "t3" '
             'ON ("t1"."name" = "t3"."name")'), ['huey'])
         row = query.tuples().get()
@@ -162,6 +162,6 @@ class TestValueConversion(ModelTestCase):
                  .having(UpperModel.name == 'huey'))
         self.assertSQL(query, (
             'SELECT "t1"."name", COUNT("t1"."id") AS "ct" '
-            'FROM "uppermodel" AS "t1" '
+            'FROM "upper_model" AS "t1" '
             'GROUP BY "t1"."name" '
             'HAVING ("t1"."name" = UPPER(?))'), ['huey'])

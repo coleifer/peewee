@@ -391,7 +391,7 @@ class TestFieldFunction(ModelTestCase):
                  .order_by(PB.name))
         self.assertSQL(query, (
             'SELECT "t1"."id", "t1"."name" '
-            'FROM "phonebook" AS "t1" '
+            'FROM "phone_book" AS "t1" '
             'WHERE (SUBSTR("t1"."name", ?, ?) = ?) '
             'ORDER BY "t1"."name"'), [1, 1, 'h'])
 

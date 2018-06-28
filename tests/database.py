@@ -408,32 +408,32 @@ class TestIntrospection(ModelTestCase):
         self.assertFalse(UniqueModel._meta.table_name in tables)
 
     def test_get_indexes(self):
-        indexes = self.database.get_indexes('uniquemodel')
+        indexes = self.database.get_indexes('unique_model')
         data = [(index.name, index.columns, index.unique, index.table)
                 for index in indexes
-                if index.name not in ('uniquemodel_pkey', 'PRIMARY')]
+                if index.name not in ('unique_model_pkey', 'PRIMARY')]
         self.assertEqual(data, [
-            ('uniquemodel_name', ['name'], True, 'uniquemodel')])
+            ('unique_model_name', ['name'], True, 'unique_model')])
 
-        indexes = self.database.get_indexes('indexedmodel')
+        indexes = self.database.get_indexes('indexed_model')
         data = [(index.name, index.columns, index.unique, index.table)
                 for index in indexes
-                if index.name not in ('indexedmodel_pkey', 'PRIMARY')]
+                if index.name not in ('indexed_model_pkey', 'PRIMARY')]
         self.assertEqual(sorted(data), [
-            ('indexedmodel_first_last', ['first', 'last'], False,
-             'indexedmodel'),
-            ('indexedmodel_first_last_dob', ['first', 'last', 'dob'], True,
-             'indexedmodel')])
+            ('indexed_model_first_last', ['first', 'last'], False,
+             'indexed_model'),
+            ('indexed_model_first_last_dob', ['first', 'last', 'dob'], True,
+             'indexed_model')])
 
     def test_get_columns(self):
-        columns = self.database.get_columns('indexedmodel')
+        columns = self.database.get_columns('indexed_model')
         data = [(c.name, c.null, c.primary_key, c.table)
                 for c in columns]
         self.assertEqual(data, [
-            ('id', False, True, 'indexedmodel'),
-            ('first', False, False, 'indexedmodel'),
-            ('last', False, False, 'indexedmodel'),
-            ('dob', False, False, 'indexedmodel')])
+            ('id', False, True, 'indexed_model'),
+            ('first', False, False, 'indexed_model'),
+            ('last', False, False, 'indexed_model'),
+            ('dob', False, False, 'indexed_model')])
 
         columns = self.database.get_columns('category')
         data = [(c.name, c.null, c.primary_key, c.table)
@@ -562,7 +562,7 @@ class TestAttachDatabase(ModelTestCase):
                  .order_by(CacheData.key))
         self.assertSQL(query, (
             'SELECT "t1"."key", "t1"."value" '
-            'FROM "cache"."cachedata" AS "t1" '
+            'FROM "cache"."cache_data" AS "t1" '
             'ORDER BY "t1"."key"'), [])
         self.assertEqual([v for k, v in query.tuples()], ['v1', 'v2'])
 
@@ -616,4 +616,4 @@ class TestAttachDatabase(ModelTestCase):
         self.assertEqual(tables, ['data'])
 
         tables = self.database.get_tables(schema='cache')
-        self.assertEqual(tables, ['cachedata'])
+        self.assertEqual(tables, ['cache_data'])

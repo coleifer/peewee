@@ -536,28 +536,29 @@ class TestSchemaMigration(ModelTestCase):
         column_names = self.get_column_names('page')
         self.assertEqual(column_names, set(['id', 'user_id', 'testing']))
 
-        migrate(self.migrator.drop_column('indeXmOdel', 'first_name'))
-        indexes = self.migrator.database.get_indexes('indexmodel')
+        migrate(self.migrator.drop_column('indeX_mOdel', 'first_name'))
+        indexes = self.migrator.database.get_indexes('index_model')
         self.assertEqual(len(indexes), 1)
-        self.assertEqual(indexes[0].name, 'indexmodel_data')
+        self.assertEqual(indexes[0].name, 'index_model_data')
 
     @requires_sqlite
     @requires_models(IndexModel)
     def test_add_column_indexed_table(self):
         # Ensure that columns can be added to tables that have indexes.
         field = CharField(default='')
-        migrate(self.migrator.add_column('indexmodel', 'foo', field))
+        migrate(self.migrator.add_column('index_model', 'foo', field))
 
         db = self.migrator.database
-        columns = db.get_columns('indexmodel')
+        columns = db.get_columns('index_model')
         self.assertEqual(sorted(column.name for column in columns),
                          ['data', 'first_name', 'foo', 'id', 'last_name'])
 
-        indexes = db.get_indexes('indexmodel')
+        indexes = db.get_indexes('index_model')
         self.assertEqual(
             sorted((index.name, index.columns) for index in indexes),
-            [('indexmodel_data', ['data']),
-             ('indexmodel_first_name_last_name', ['first_name', 'last_name'])])
+            [('index_model_data', ['data']),
+             ('index_model_first_name_last_name',
+              ['first_name', 'last_name'])])
 
     @requires_sqlite
     def test_rename_column_to_table_name(self):
@@ -605,59 +606,59 @@ class TestSchemaMigration(ModelTestCase):
     def test_index_preservation(self):
         self.reset_sql_history()
         migrate(self.migrator.rename_column(
-            'indexmodel',
+            'index_model',
             'first_name',
             'first'))
 
         queries = [x.msg for x in self.history]
         self.assertEqual(queries, [
             # Get all the columns.
-            ('PRAGMA "main".table_info("indexmodel")', None),
+            ('PRAGMA "main".table_info("index_model")', None),
 
             # Get the table definition.
             ('select name, sql from sqlite_master '
              'where type=? and LOWER(name)=?',
-             ['table', 'indexmodel']),
+             ['table', 'index_model']),
 
             # Get the indexes and indexed columns for the table.
             ('SELECT name, sql FROM "main".sqlite_master '
              'WHERE tbl_name = ? AND type = ? ORDER BY name',
-             ('indexmodel', 'index')),
-            ('PRAGMA "main".index_list("indexmodel")', None),
-            ('PRAGMA "main".index_info("indexmodel_data")', None),
-            ('PRAGMA "main".index_info("indexmodel_first_name_last_name")',
+             ('index_model', 'index')),
+            ('PRAGMA "main".index_list("index_model")', None),
+            ('PRAGMA "main".index_info("index_model_data")', None),
+            ('PRAGMA "main".index_info("index_model_first_name_last_name")',
              None),
 
             # Get foreign keys.
-            ('PRAGMA "main".foreign_key_list("indexmodel")', None),
+            ('PRAGMA "main".foreign_key_list("index_model")', None),
 
             # Drop any temporary table, if it exists.
-            ('DROP TABLE IF EXISTS "indexmodel__tmp__"', []),
+            ('DROP TABLE IF EXISTS "index_model__tmp__"', []),
 
             # Create a temporary table with the renamed column.
-            ('CREATE TABLE "indexmodel__tmp__" ('
+            ('CREATE TABLE "index_model__tmp__" ('
              '"id" INTEGER NOT NULL PRIMARY KEY, '
              '"first" VARCHAR(255) NOT NULL, '
              '"last_name" VARCHAR(255) NOT NULL, '
              '"data" INTEGER NOT NULL)', []),
 
             # Copy data from original table into temporary table.
-            ('INSERT INTO "indexmodel__tmp__" '
+            ('INSERT INTO "index_model__tmp__" '
              '("id", "first", "last_name", "data") '
              'SELECT "id", "first_name", "last_name", "data" '
-             'FROM "indexmodel"', []),
+             'FROM "index_model"', []),
 
             # Drop the original table.
-            ('DROP TABLE "indexmodel"', []),
+            ('DROP TABLE "index_model"', []),
 
             # Rename the temporary table, replacing the original.
-            ('ALTER TABLE "indexmodel__tmp__" RENAME TO "indexmodel"', []),
+            ('ALTER TABLE "index_model__tmp__" RENAME TO "index_model"', []),
 
             # Re-create the indexes.
-            ('CREATE UNIQUE INDEX "indexmodel_data" '
-             'ON "indexmodel" ("data")', []),
-            ('CREATE UNIQUE INDEX "indexmodel_first_name_last_name" '
-             'ON "indexmodel" ("first", "last_name")', [])
+            ('CREATE UNIQUE INDEX "index_model_data" '
+             'ON "index_model" ("data")', []),
+            ('CREATE UNIQUE INDEX "index_model_first_name_last_name" '
+             'ON "index_model" ("first", "last_name")', [])
         ])
 
     @requires_sqlite

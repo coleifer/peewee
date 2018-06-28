@@ -382,7 +382,7 @@ class TestTSVectorField(ModelTestCase):
         query = FTSModel.select().where(Match(FTSModel.data, 'foo bar'))
         self.assertSQL(query, (
             'SELECT "t1"."id", "t1"."title", "t1"."data", "t1"."fts_data" '
-            'FROM "ftsmodel" AS "t1" '
+            'FROM "fts_model" AS "t1" '
             'WHERE (to_tsvector("t1"."data") @@ to_tsquery(?))'), ['foo bar'])
 
     def test_match_function(self):
@@ -776,7 +776,7 @@ class TestIndexedField(BaseTestCase):
 
         create_sql, _ = IndexedModel._schema._create_table(False).query()
         self.assertEqual(create_sql, (
-            'CREATE TABLE "indexedmodel" ('
+            'CREATE TABLE "indexed_model" ('
             '"id" SERIAL NOT NULL PRIMARY KEY, '
             '"array_index" VARCHAR(255)[] NOT NULL, '
             '"array_noindex" INTEGER[] NOT NULL, '
@@ -787,12 +787,12 @@ class TestIndexedField(BaseTestCase):
         indexes = [idx.query()[0]
                    for idx in IndexedModel._schema._create_indexes(False)]
         self.assertEqual(indexes, [
-            ('CREATE INDEX "indexedmodel_array_index" ON "indexedmodel" '
+            ('CREATE INDEX "indexed_model_array_index" ON "indexed_model" '
              'USING GIN ("array_index")'),
-            ('CREATE INDEX "indexedmodel_fake_index" ON "indexedmodel" '
+            ('CREATE INDEX "indexed_model_fake_index" ON "indexed_model" '
              'USING GiST ("fake_index")'),
-            ('CREATE INDEX "indexedmodel_fake_index_with_type" '
-             'ON "indexedmodel" '
+            ('CREATE INDEX "indexed_model_fake_index_with_type" '
+             'ON "indexed_model" '
              'USING MAGIC ("fake_index_with_type")')])
 
 
