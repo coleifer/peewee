@@ -659,3 +659,57 @@ class TestSchemaMigration(ModelTestCase):
             ('CREATE UNIQUE INDEX "indexmodel_first_name_last_name" '
              'ON "indexmodel" ("first", "last_name")', [])
         ])
+
+    @requires_sqlite
+    @requires_models(User, Page)
+    def test_modify_fk_constraint(self):
+        self.reset_sql_history()
+        new_fk = ForeignKeyField(User, User.id, null=True, on_delete='CASCADE')
+        migrate(
+            self.migrator.drop_column('page', 'user_id'),
+            self.migrator.add_column('page', 'user_id', new_fk))
+
+        queries = [x.msg for x in self.history]
+        self.assertEqual(queries, [
+            # Get all columns for table.
+            ('PRAGMA "main".table_info("page")', None),
+
+            # Get the SQL used to generate the table and indexes.
+            ('select name, sql from sqlite_master '
+             'where type=? and LOWER(name)=?', ['table', 'page']),
+            ('SELECT name, sql FROM "main".sqlite_master '
+             'WHERE tbl_name = ? AND type = ? ORDER BY name',
+             ('page', 'index')),
+
+            # Get the indexes and indexed columns for the table.
+            ('PRAGMA "main".index_list("page")', None),
+            ('PRAGMA "main".index_info("page_name")', None),
+            ('PRAGMA "main".index_info("page_user_id")', None),
+            ('PRAGMA "main".foreign_key_list("page")', None),
+
+            # Clear out a temp table and create it w/o the user_id FK.
+            ('DROP TABLE IF EXISTS "page__tmp__"', []),
+            ('CREATE TABLE "page__tmp__" ('
+             '"id" INTEGER NOT NULL PRIMARY KEY, "name" VARCHAR(100))', []),
+
+            # Copy data into the temp table, drop the original and rename
+            # the temp -> original. Recreate index(es).
+            ('INSERT INTO "page__tmp__" ("id", "name") '
+             'SELECT "id", "name" FROM "page"', []),
+            ('DROP TABLE "page"', []),
+            ('ALTER TABLE "page__tmp__" RENAME TO "page"', []),
+            ('CREATE UNIQUE INDEX "page_name" ON "page" ("name")', []),
+
+            # Add new foreign-key field with appropriate constraint.
+            ('ALTER TABLE "page" ADD COLUMN "user_id" VARCHAR(20) '
+             'REFERENCES "users" ("id") ON DELETE CASCADE', []),
+        ])
+
+        self.database.pragma('foreign_keys', 1)
+        huey = User.create(id='huey')
+        huey_page = Page.create(user=huey, name='huey page')
+        self.assertEqual(Page.select().count(), 1)
+
+        # Deleting the user will cascade to the associated page.
+        User.delete().where(User.id == 'huey').execute()
+        self.assertEqual(Page.select().count(), 0)
