@@ -337,6 +337,8 @@ class TestModelDDL(ModelDatabaseTestCase):
         class PG10Identity(TestModel):
             id = IdentityField()
             data = TextField()
+            class Meta:
+                database = self.database
 
         self.assertCreateTable(PG10Identity, [
             ('CREATE TABLE "pg10identity" ('
