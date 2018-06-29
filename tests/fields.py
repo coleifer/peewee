@@ -245,6 +245,18 @@ class TestDateFields(ModelTestCase):
                 2011., 1., 2., 11., 12., 13.054321, 2012., 2., 3., 3., 13.,
                 37.))
 
+    def test_distinct_date_part(self):
+        years = (1980, 1990, 2000, 2010)
+        for i, year in enumerate(years):
+            for j in range(i + 1):
+                DateModel.create(date=datetime.date(year, i + 1, 1))
+
+        query = (DateModel
+                 .select(DateModel.date.year.distinct())
+                 .order_by(DateModel.date.year))
+        self.assertEqual([year for year, in query.tuples()],
+                         [1980, 1990, 2000, 2010])
+
 
 class U2(TestModel):
     username = TextField()
