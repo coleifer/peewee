@@ -7,6 +7,10 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Added `IdentityField` class suitable for use with Postgres 10's new identity
+  column type. It can be used anywhere `AutoField` or `BigAutoField` was being
+  used previously.
+
 [View commits](https://github.com/coleifer/peewee/compare/3.5.1...master)
 
 ## 3.5.1

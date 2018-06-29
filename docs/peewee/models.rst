@@ -155,6 +155,7 @@ Field Type              Sqlite              Postgresql          MySQL
 ``SmallIntegerField``   integer             smallint            smallint
 ``AutoField``           integer             serial              integer
 ``BigAutoField``        integer             bigserial           bigint
+``IdentityField``       not supported       int identity        not supported
 ``FloatField``          real                real                real
 ``DoubleField``         real                double precision    double precision
 ``DecimalField``        decimal             numeric             numeric
