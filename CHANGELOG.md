@@ -7,6 +7,11 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* New and improved table name auto-generation. This feature is not backwards
+  compatible, so it is **disabled by default**. To enable, set
+  `legacy_table_names=False` in your model's `Meta` options. For more details,
+  see [table names](http://docs.peewee-orm.com/en/latest/peewee/models.html#table_names)
+  documentation.
 * Added `IdentityField` class suitable for use with Postgres 10's new identity
   column type. It can be used anywhere `AutoField` or `BigAutoField` was being
   used previously.

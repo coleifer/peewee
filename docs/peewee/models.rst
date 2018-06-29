@@ -645,8 +645,8 @@ TABLE* queries, additionally creating any constraints and indexes.
     later.
 
 .. note::
-    By default, Peewee will determine if your tables already exist, and conditionally create
-    them. If you want to disable this, specify ``safe=False``.
+    By default, Peewee includes an ``IF NOT EXISTS`` clause when creating
+    tables. If you want to disable this, specify ``safe=False``.
 
 After you have created your tables, if you choose to modify your database
 schema (by adding, removing or otherwise changing the columns) you will need to
@@ -732,6 +732,7 @@ Option                  Meaning                                                I
 ``only_save_dirty``     when calling model.save(), only save dirty fields      yes
 ``options``             dictionary of options for create table extensions      yes
 ``temporary``           indicate temporary table                               yes
+``legacy_table_names``  use legacy table name generation (enabled by default)  yes
 ``table_alias``         an alias to use for the table in queries               no
 ``depends_on``          indicate this table depends on another for creation    no
 ``without_rowid``       indicate table should not have rowid (SQLite only)     no
@@ -781,6 +782,70 @@ Examples:
 
         class Meta:
             primary_key = False
+
+.. _table_names:
+
+Table Names
+^^^^^^^^^^^
+
+By default Peewee will automatically generate a table name based on the name of
+your model class. The way the table-name is generated depends on the value of
+``Meta.legacy_table_names``. By default, ``legacy_table_names=True`` so as to
+avoid breaking backwards-compatibility. However, if you wish to use the new and
+improved table-name generation, you can specify ``legacy_table_names=False``.
+
+This table shows the differences in how a model name is converted to a SQL
+table name, depending on the value of ``legacy_table_names``:
+
+=================== ========================= ==============================
+Model name          legacy_table_names=True   legacy_table_names=False (new)
+=================== ========================= ==============================
+User                user                      user
+UserProfile         userprofile               user_profile
+APIResponse         apiresponse               api_response
+WebHTTPRequest      webhttprequest            web_http_request
+mixedCamelCase      mixedcamelcase            mixed_camel_case
+Name2Numbers3XYZ    name2numbers3xyz          name2_numbers3_xyz
+=================== ========================= ==============================
+
+.. attention::
+    To preserve backwards-compatibility, the current release (Peewee 3.x)
+    specifies ``legacy_table_names=True`` by default.
+
+    In the next major release (Peewee 4.0), ``legacy_table_names`` will have a
+    default value of ``False``.
+
+To explicitly specify the table name for a model class, use the ``table_name``
+Meta option. This feature can be useful for dealing with pre-existing database
+schemas that may have used awkward naming conventions:
+
+.. code-block:: python
+
+    class UserProfile(Model):
+        class Meta:
+            table_name = 'user_profile_tbl'
+
+If you wish to implement your own naming convention, you can specify the
+``table_function`` Meta option. This function will be called with your model
+class and should return the desired table name as a string. Suppose our company
+specifies that table names should be lower-cased and end with "_tbl", we can
+implement this as a table function:
+
+.. code-block:: python
+
+    def make_table_name(model_class):
+        model_name = model_class.__name__
+        return model_name.lower() + '_tbl'
+
+    class BaseModel(Model):
+        class Meta:
+            table_function = make_table_name
+
+    class User(BaseModel):
+        # table_name will be "user_tbl".
+
+    class UserProfile(BaseModel):
+        # table_name will be "userprofile_tbl".
 
 .. _model_indexes:
 
