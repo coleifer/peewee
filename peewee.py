@@ -335,6 +335,12 @@ SCOPE_VALUES = 4
 SCOPE_CTE = 8
 SCOPE_COLUMN = 16
 
+# Regular expressions used to convert class names to snake-case table names.
+# First regex handles acronym followed by word or initial lower-word followed
+# by a capitalized word. e.g. APIResponse -> API_Response / fooBar -> foo_Bar.
+# Second regex handles the normal case of two title-cased words.
+SNAKE_CASE_STEP1 = re.compile('(.)_*([A-Z][a-z]+)')
+SNAKE_CASE_STEP2 = re.compile('([a-z0-9])_*([A-Z])')
 
 # Helper functions that are used in various parts of the codebase.
 MODEL_BASE = '_metaclass_helper_'
@@ -2349,8 +2355,10 @@ class ModelIndex(Index):
             raise ValueError('Unable to generate a name for the index, please '
                              'explicitly specify a name.')
 
-        index_name = re.sub('[^\w]+', '',
-                            '%s_%s' % (model._meta.name, '_'.join(accum)))
+        clean_field_names = re.sub('[^\w]+', '', '_'.join(accum))
+        meta = model._meta
+        prefix = meta.name if meta.legacy_table_names else meta.table_name
+        index_name = '_'.join((prefix, clean_field_names))
         if len(index_name) > 64:
             index_hash = hashlib.md5(index_name.encode('utf-8')).hexdigest()
             index_name = '%s_%s' % (index_name[:56], index_hash[:7])
@@ -4817,7 +4825,8 @@ class Metadata(object):
                  primary_key=None, constraints=None, schema=None,
                  only_save_dirty=False, table_alias=None, depends_on=None,
                  options=None, db_table=None, table_function=None,
-                 without_rowid=False, temporary=False, **kwargs):
+                 without_rowid=False, temporary=False,
+                 legacy_table_names=True, **kwargs):
         if db_table is not None:
             __deprecated__('"db_table" has been deprecated in favor of '
                            '"table_name" for Models.')
@@ -4841,10 +4850,11 @@ class Metadata(object):
 
         self.name = model.__name__.lower()
         self.table_function = table_function
+        self.legacy_table_names = legacy_table_names
         if not table_name:
             table_name = (self.table_function(model)
                           if self.table_function
-                          else re.sub('[^\w]+', '_', self.name))
+                          else self.make_table_name())
         self.table_name = table_name
         self._table = None
 
@@ -4869,6 +4879,13 @@ class Metadata(object):
         for key, value in kwargs.items():
             setattr(self, key, value)
         self._additional_keys = set(kwargs.keys())
+
+    def make_table_name(self):
+        if self.legacy_table_names:
+            return re.sub('[^\w]+', '_', self.name)
+
+        first = SNAKE_CASE_STEP1.sub(r'\1_\2', self.model.__name__)
+        return SNAKE_CASE_STEP2.sub(r'\1_\2', first).lower()
 
     def model_graph(self, refs=True, backrefs=True, depth_first=True):
         if not refs and not backrefs:
@@ -5090,7 +5107,7 @@ class DoesNotExist(Exception): pass
 class ModelBase(type):
     inheritable = set(['constraints', 'database', 'indexes', 'primary_key',
                        'options', 'schema', 'table_function', 'temporary',
-                       'only_save_dirty'])
+                       'only_save_dirty', 'legacy_table_names'])
 
     def __new__(cls, name, bases, attrs):
         if name == MODEL_BASE or bases[0].__name__ == MODEL_BASE:

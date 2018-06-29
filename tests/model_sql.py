@@ -368,7 +368,7 @@ class TestModelSQL(ModelDatabaseTestCase):
             'UPDATE "account" SET '
             '"contact_first" = "first", '
             '"contact_last" = "last" '
-            'FROM "salesperson" AS "t1" '
+            'FROM "sales_person" AS "t1" '
             'WHERE ("sales_id" = "id")'), [])
 
         query = (User
@@ -489,7 +489,7 @@ class TestModelSQL(ModelDatabaseTestCase):
         query = WithSchema.select().where(WithSchema.data == 'zaizee')
         self.assertSQL(query, (
             'SELECT "t1"."data" '
-            'FROM "huey"."withschema" AS "t1" '
+            'FROM "huey"."with_schema" AS "t1" '
             'WHERE ("t1"."data" = ?)'), ['zaizee'])
 
 

@@ -259,7 +259,7 @@ class TestCompositePrimaryKey(ModelTestCase):
 
     def test_create_table_query(self):
         query, params = TagPostThrough._schema._create_table().query()
-        sql = ('CREATE TABLE IF NOT EXISTS "tagpostthrough" ('
+        sql = ('CREATE TABLE IF NOT EXISTS "tag_post_through" ('
                '"tag_id" INTEGER NOT NULL, '
                '"post_id" INTEGER NOT NULL, '
                'PRIMARY KEY ("tag_id", "post_id"), '

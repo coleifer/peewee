@@ -129,6 +129,9 @@ class FTS5Test(FTS5Model):
     data = SearchField()
     misc = SearchField(unindexed=True)
 
+    class Meta:
+        legacy_table_names = False
+
 
 class Series(TableFunction):
     columns = ['value']
@@ -401,7 +404,7 @@ class TestJSONField(ModelTestCase):
 
     def test_schema(self):
         self.assertSQL(KeyData._schema._create_table(), (
-            'CREATE TABLE IF NOT EXISTS "keydata" ('
+            'CREATE TABLE IF NOT EXISTS "key_data" ('
             '"id" INTEGER NOT NULL PRIMARY KEY, '
             '"key" TEXT NOT NULL, '
             '"data" JSON NOT NULL)'), [])
@@ -518,6 +521,7 @@ class TestSqliteExtensions(BaseTestCase):
             class Meta:
                 database = database
                 extension_module = 'ext1337'
+                legacy_table_names = False
                 options = {'huey': 'cat', 'mickey': 'dog'}
                 primary_key = False
 
@@ -528,7 +532,7 @@ class TestSqliteExtensions(BaseTestCase):
             'USING ext1337 '
             '(huey=cat, mickey=dog)'), [])
         self.assertSQL(SubTest._schema._create_table(), (
-            'CREATE VIRTUAL TABLE IF NOT EXISTS "subtest" '
+            'CREATE VIRTUAL TABLE IF NOT EXISTS "sub_test" '
             'USING ext1337 '
             '(huey=cat, mickey=dog)'), [])
         self.assertSQL(
@@ -544,7 +548,7 @@ class TestSqliteExtensions(BaseTestCase):
                 database = database
 
         self.assertSQL(AutoIncrement._schema._create_table(), (
-            'CREATE TABLE IF NOT EXISTS "autoincrement" '
+            'CREATE TABLE IF NOT EXISTS "auto_increment" '
             '("id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, '
             '"data" TEXT NOT NULL)'), [])
 
@@ -1023,7 +1027,7 @@ class TestRowIDField(ModelTestCase):
         query = RowIDModel.select().where(RowIDModel.rowid == 2)
         self.assertSQL(query, (
             'SELECT "t1"."rowid", "t1"."data" '
-            'FROM "rowidmodel" AS "t1" '
+            'FROM "row_id_model" AS "t1" '
             'WHERE ("t1"."rowid" = ?)'), [2])
         r_db = query.get()
         self.assertEqual(r_db.rowid, 2)
@@ -1352,7 +1356,7 @@ class TestFTS5(ModelTestCase):
     def test_create_table(self):
         query = FTS5Test._schema._create_table()
         self.assertSQL(query, (
-            'CREATE VIRTUAL TABLE IF NOT EXISTS "fts5test" USING fts5 '
+            'CREATE VIRTUAL TABLE IF NOT EXISTS "fts5_test" USING fts5 '
             '("title", "data", "misc" UNINDEXED)'), [])
 
     def test_create_table_options(self):
@@ -1388,8 +1392,8 @@ class TestFTS5(ModelTestCase):
         query = FTS5Test.search('bb')
         self.assertSQL(query, (
             'SELECT "t1"."rowid", "t1"."title", "t1"."data", "t1"."misc" '
-            'FROM "fts5test" AS "t1" '
-            'WHERE ("fts5test" MATCH ?) ORDER BY rank'), ['bb'])
+            'FROM "fts5_test" AS "t1" '
+            'WHERE ("fts5_test" MATCH ?) ORDER BY rank'), ['bb'])
         self.assertResults(query, ['nug aa dd', 'foo aa bb', 'bar bb cc'])
 
 

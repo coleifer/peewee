@@ -1718,7 +1718,7 @@ class TestReturningIntegration(ModelTestCase):
                  .insert()
                  .returning(ServerDefault.id, ServerDefault.timestamp))
         self.assertSQL(query, (
-            'INSERT INTO "serverdefault" '
+            'INSERT INTO "server_default" '
             'DEFAULT VALUES '
             'RETURNING "id", "timestamp"'), [])
 
@@ -2349,6 +2349,34 @@ class TestFieldInheritance(BaseTestCase):
             db.drop_tables([A, B])
 
 
+class TestMetaTableName(BaseTestCase):
+    def test_table_name_behavior(self):
+        def make_model(model_name, table=None):
+            class Meta:
+                legacy_table_names = False
+                table_name = table
+            return type(model_name, (Model,), {'Meta': Meta})
+        def assertTableName(expected, model_name, table_name=None):
+            model_class = make_model(model_name, table_name)
+            self.assertEqual(model_class._meta.table_name, expected)
+
+        assertTableName('users', 'User', 'users')
+        assertTableName('tweet', 'Tweet')
+        assertTableName('user_profile', 'UserProfile')
+        assertTableName('activity_log_status', 'ActivityLogStatus')
+
+        assertTableName('camel_case', 'CamelCase')
+        assertTableName('camel_camel_case', 'CamelCamelCase')
+        assertTableName('camel2_camel2_case', 'Camel2Camel2Case')
+        assertTableName('http_request', 'HTTPRequest')
+        assertTableName('api_response', 'APIResponse')
+        assertTableName('api_response', 'API_Response')
+        assertTableName('web_http_request', 'WebHTTPRequest')
+        assertTableName('get_http_response_code', 'getHTTPResponseCode')
+        assertTableName('foo_bar', 'foo_Bar')
+        assertTableName('foo_bar', 'Foo__Bar')
+
+
 class TestMetaInheritance(BaseTestCase):
     def test_table_name(self):
         class Foo(Model):
@@ -2850,9 +2878,9 @@ class TestUpsertSqlite(OnConflictTestCase):
 
         # Sanity-check the SQL.
         self.assertSQL(query, (
-            'INSERT INTO "octest" ("a", "b", "c") VALUES (?, ?, ?) '
+            'INSERT INTO "oc_test" ("a", "b", "c") VALUES (?, ?, ?) '
             'ON CONFLICT ("a") '
-            'DO UPDATE SET "b" = ("octest"."b" + ?)'), ['foo', 1, 0, 2])
+            'DO UPDATE SET "b" = ("oc_test"."b" + ?)'), ['foo', 1, 0, 2])
 
         # First execution returns rowid=1. Second execution hits the conflict-
         # resolution, and will update the value in "b" from 1 -> 3.
@@ -2885,9 +2913,9 @@ class TestUpsertSqlite(OnConflictTestCase):
             update={OCTest.b: OCTest.b + 2},
             where=(OCTest.b < 3))
         self.assertSQL(query, (
-            'INSERT INTO "octest" ("a", "b", "c") VALUES (?, ?, ?) '
-            'ON CONFLICT ("a") DO UPDATE SET "b" = ("octest"."b" + ?) '
-            'WHERE ("octest"."b" < ?)'), ['foo', 1, 0, 2, 3])
+            'INSERT INTO "oc_test" ("a", "b", "c") VALUES (?, ?, ?) '
+            'ON CONFLICT ("a") DO UPDATE SET "b" = ("oc_test"."b" + ?) '
+            'WHERE ("oc_test"."b" < ?)'), ['foo', 1, 0, 2, 3])
 
         # First execution returns rowid=1. Second execution hits the conflict-
         # resolution, and will update the value in "b" from 1 -> 3.
@@ -2962,8 +2990,8 @@ class TestUpsertPostgresql(OnConflictTestCase):
             conflict_target=(OCTest.a,),
             update={OCTest.b: OCTest.b + 2})
         self.assertSQL(query, (
-            'INSERT INTO "octest" ("a", "b", "c") VALUES (?, ?, ?) '
-            'ON CONFLICT ("a") DO UPDATE SET "b" = ("octest"."b" + ?) '
+            'INSERT INTO "oc_test" ("a", "b", "c") VALUES (?, ?, ?) '
+            'ON CONFLICT ("a") DO UPDATE SET "b" = ("oc_test"."b" + ?) '
             'RETURNING "id"'), ['foo', 1, 0, 2])
 
         # First execution returns rowid=1. Second execution hits the conflict-
@@ -2996,9 +3024,9 @@ class TestUpsertPostgresql(OnConflictTestCase):
             update={OCTest.b: OCTest.b + 2},
             where=(OCTest.b < 3))
         self.assertSQL(query, (
-            'INSERT INTO "octest" ("a", "b", "c") VALUES (?, ?, ?) '
-            'ON CONFLICT ("a") DO UPDATE SET "b" = ("octest"."b" + ?) '
-            'WHERE ("octest"."b" < ?) '
+            'INSERT INTO "oc_test" ("a", "b", "c") VALUES (?, ?, ?) '
+            'ON CONFLICT ("a") DO UPDATE SET "b" = ("oc_test"."b" + ?) '
+            'WHERE ("oc_test"."b" < ?) '
             'RETURNING "id"'), ['foo', 1, 0, 2, 3])
 
         # First execution returns rowid=1. Second execution hits the conflict-
@@ -3233,7 +3261,7 @@ class TestSequence(ModelTestCase):
     def test_create_table(self):
         query = SequenceModel._schema._create_table()
         self.assertSQL(query, (
-            'CREATE TABLE IF NOT EXISTS "sequencemodel" ('
+            'CREATE TABLE IF NOT EXISTS "sequence_model" ('
             '"id" SERIAL NOT NULL PRIMARY KEY, '
             '"seq_id" INTEGER NOT NULL DEFAULT NEXTVAL(\'seq_id_sequence\'), '
             '"key" TEXT NOT NULL)'), [])

@@ -100,15 +100,60 @@ class TestModelDDL(ModelDatabaseTestCase):
             ('CREATE INDEX "article_foo" ON "article" ("flags" & 3)', []),
         ])
 
+    def test_legacy_model_table_and_indexes(self):
+        class Base(Model):
+            class Meta:
+                database = self.database
+
+        class WebHTTPRequest(Base):
+            timestamp = DateTimeField(index=True)
+            data = TextField()
+
+        self.assertTrue(WebHTTPRequest._meta.legacy_table_names)
+        self.assertCreateTable(WebHTTPRequest, [
+            ('CREATE TABLE "webhttprequest" ('
+             '"id" INTEGER NOT NULL PRIMARY KEY, '
+             '"timestamp" DATETIME NOT NULL, "data" TEXT NOT NULL)'),
+            ('CREATE INDEX "webhttprequest_timestamp" ON "webhttprequest" '
+             '("timestamp")')])
+
+        # Table name is explicit, but legacy table names == false, so we get
+        # the new index name format.
+        class FooBar(Base):
+            data = IntegerField(unique=True)
+            class Meta:
+                legacy_table_names = False
+                table_name = 'foobar_tbl'
+
+        self.assertFalse(FooBar._meta.legacy_table_names)
+        self.assertCreateTable(FooBar, [
+            ('CREATE TABLE "foobar_tbl" ("id" INTEGER NOT NULL PRIMARY KEY, '
+             '"data" INTEGER NOT NULL)'),
+            ('CREATE UNIQUE INDEX "foobar_tbl_data" ON "foobar_tbl" ("data")'),
+        ])
+
+        # Table name is explicit and legacy table names == true, so we get
+        # the old index name format.
+        class FooBar2(Base):
+            data = IntegerField(unique=True)
+            class Meta:
+                table_name = 'foobar2_tbl'
+
+        self.assertTrue(FooBar2._meta.legacy_table_names)
+        self.assertCreateTable(FooBar2, [
+            ('CREATE TABLE "foobar2_tbl" ("id" INTEGER NOT NULL PRIMARY KEY, '
+             '"data" INTEGER NOT NULL)'),
+            ('CREATE UNIQUE INDEX "foobar2_data" ON "foobar2_tbl" ("data")')])
+
     def test_without_pk(self):
         NoPK._meta.database = self.database
         self.assertCreateTable(NoPK, [
-            ('CREATE TABLE "nopk" ("data" TEXT NOT NULL)')])
+            ('CREATE TABLE "no_pk" ("data" TEXT NOT NULL)')])
 
     def test_without_rowid(self):
         NoRowid._meta.database = self.database
         self.assertCreateTable(NoRowid, [
-            ('CREATE TABLE "norowid" ('
+            ('CREATE TABLE "no_rowid" ('
              '"key" TEXT NOT NULL PRIMARY KEY, '
              '"value" TEXT NOT NULL) WITHOUT ROWID')])
 
@@ -116,7 +161,7 @@ class TestModelDDL(ModelDatabaseTestCase):
         class SubNoRowid(NoRowid): pass
 
         self.assertCreateTable(SubNoRowid, [
-            ('CREATE TABLE "subnorowid" ('
+            ('CREATE TABLE "sub_no_rowid" ('
              '"key" TEXT NOT NULL PRIMARY KEY, '
              '"value" TEXT NOT NULL)')])
 
@@ -139,7 +184,7 @@ class TestModelDDL(ModelDatabaseTestCase):
              '"id" INTEGER NOT NULL PRIMARY KEY, '
              '"a_id" INTEGER NOT NULL, '
              'FOREIGN KEY ("a_id") REFERENCES "A_tbl" ("id"))'),
-            'CREATE INDEX "b_a_id" ON "B_tbl" ("a_id")'])
+            'CREATE INDEX "B_tbl_a_id" ON "B_tbl" ("a_id")'])
 
     def test_temporary_table(self):
         sql, params = User._schema._create_table(temporary=True).query()
@@ -158,10 +203,10 @@ class TestModelDDL(ModelDatabaseTestCase):
         TempUser.drop_table()
         queries = [x.msg for x in self.history]
         self.assertEqual(queries, [
-            ('CREATE TEMPORARY TABLE IF NOT EXISTS "tempuser" ('
+            ('CREATE TEMPORARY TABLE IF NOT EXISTS "temp_user" ('
              '"id" INTEGER NOT NULL PRIMARY KEY, '
              '"username" VARCHAR(255) NOT NULL)', []),
-            ('DROP TABLE IF EXISTS "tempuser"', [])])
+            ('DROP TABLE IF EXISTS "temp_user"', [])])
 
     def test_drop_table(self):
         sql, params = User._schema._drop_table().query()
@@ -212,27 +257,28 @@ class TestModelDDL(ModelDatabaseTestCase):
              'ON "relationship" ("to_person_id")')])
 
         self.assertCreateTable(TMUnique, [
-            ('CREATE TABLE "tmunique" ('
+            ('CREATE TABLE "tm_unique" ('
              '"id" INTEGER NOT NULL PRIMARY KEY, '
              '"data" TEXT NOT NULL)'),
-            'CREATE UNIQUE INDEX "tmunique_data" ON "tmunique" ("data")'])
+            'CREATE UNIQUE INDEX "tm_unique_data" ON "tm_unique" ("data")'])
 
         self.assertCreateTable(TMSequence, [
-            ('CREATE TABLE "tmsequence" ('
+            ('CREATE TABLE "tm_sequence" ('
              '"id" INTEGER NOT NULL PRIMARY KEY, '
              '"value" INTEGER NOT NULL DEFAULT NEXTVAL(\'test_seq\'))')])
 
         self.assertCreateTable(TMIndexes, [
-            ('CREATE TABLE "tmindexes" ("id" INTEGER NOT NULL PRIMARY KEY, '
+            ('CREATE TABLE "tm_indexes" ("id" INTEGER NOT NULL PRIMARY KEY, '
              '"alpha" INTEGER NOT NULL, "beta" INTEGER NOT NULL, '
              '"gamma" INTEGER NOT NULL)'),
-            ('CREATE UNIQUE INDEX "tmindexes_alpha_beta" '
-             'ON "tmindexes" ("alpha", "beta")'),
-            ('CREATE INDEX "tmindexes_beta_gamma" '
-             'ON "tmindexes" ("beta", "gamma")')])
+            ('CREATE UNIQUE INDEX "tm_indexes_alpha_beta" '
+             'ON "tm_indexes" ("alpha", "beta")'),
+            ('CREATE INDEX "tm_indexes_beta_gamma" '
+             'ON "tm_indexes" ("beta", "gamma")')])
 
         self.assertCreateTable(TMConstraints, [
-            ('CREATE TABLE "tmconstraints" ("id" INTEGER NOT NULL PRIMARY KEY,'
+            ('CREATE TABLE "tm_constraints" ('
+             '"id" INTEGER NOT NULL PRIMARY KEY,'
              ' "data" INTEGER CHECK (data < 5), '
              '"value" TEXT NOT NULL COLLATE NOCASE)')])
 
@@ -251,8 +297,8 @@ class TestModelDDL(ModelDatabaseTestCase):
         ctx = LongIndex._schema._create_index(idx)
         self.assertSQL(ctx, (
             'CREATE INDEX IF NOT EXISTS "'
-            'longindex_a123456789012345678901234567890_b1234567890123_5088012'
-            '" ON "longindex" ('
+            'long_index_a123456789012345678901234567890_b123456789012_9dd2139'
+            '" ON "long_index" ('
             '"a123456789012345678901234567890", '
             '"b123456789012345678901234567890", '
             '"c123456789012345678901234567890")'), [])

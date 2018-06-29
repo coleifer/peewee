@@ -119,16 +119,16 @@ class TestDeleteInstanceRegression(ModelTestCase):
 
         queries = [logrecord.msg for logrecord in self._qh.queries[-5:]]
         self.assertEqual(sorted(queries, reverse=True), [
-            ('DELETE FROM "did" WHERE ("c_id" IN ('
-             'SELECT "t1"."id" FROM "dic" AS "t1" WHERE ("t1"."b_id" IN ('
-             'SELECT "t2"."id" FROM "dib" AS "t2" WHERE ("t2"."a_id" = ?)'
+            ('DELETE FROM "di_d" WHERE ("c_id" IN ('
+             'SELECT "t1"."id" FROM "di_c" AS "t1" WHERE ("t1"."b_id" IN ('
+             'SELECT "t2"."id" FROM "di_b" AS "t2" WHERE ("t2"."a_id" = ?)'
              '))))', [2]),
-            ('DELETE FROM "dic" WHERE ("b_id" IN ('
-             'SELECT "t1"."id" FROM "dib" AS "t1" WHERE ("t1"."a_id" = ?)'
+            ('DELETE FROM "di_c" WHERE ("b_id" IN ('
+             'SELECT "t1"."id" FROM "di_b" AS "t1" WHERE ("t1"."a_id" = ?)'
              '))', [2]),
-            ('DELETE FROM "diba" WHERE ("a_id" = ?)', ['a2']),
-            ('DELETE FROM "dib" WHERE ("a_id" = ?)', [2]),
-            ('DELETE FROM "dia" WHERE ("id" = ?)', [2])
+            ('DELETE FROM "di_ba" WHERE ("a_id" = ?)', ['a2']),
+            ('DELETE FROM "di_b" WHERE ("a_id" = ?)', [2]),
+            ('DELETE FROM "di_a" WHERE ("id" = ?)', [2])
         ])
 
         # a1 & a3 exist, plus their relations.

@@ -192,12 +192,12 @@ class TestPwizInvalidColumns(BasePwizTestCase):
 
         result = output.data.strip()
         expected = textwrap.dedent("""
-            class Oddcolumnnames(BaseModel):
+            class OddColumnNames(BaseModel):
                 s_p_aces = CharField(column_name='s p aces')
                 w_nug_ = CharField(column_name='w/-nug!')
 
                 class Meta:
-                    table_name = 'oddcolumnnames'""").strip()
+                    table_name = 'odd_column_names'""").strip()
 
         actual = result[-len(expected):]
         self.assertEqual(actual, expected)
