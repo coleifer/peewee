@@ -100,6 +100,51 @@ class TestModelDDL(ModelDatabaseTestCase):
             ('CREATE INDEX "article_foo" ON "article" ("flags" & 3)', []),
         ])
 
+    def test_legacy_model_table_and_indexes(self):
+        class Base(Model):
+            class Meta:
+                database = self.database
+
+        class WebHTTPRequest(Base):
+            timestamp = DateTimeField(index=True)
+            data = TextField()
+
+        self.assertTrue(WebHTTPRequest._meta.legacy_table_names)
+        self.assertCreateTable(WebHTTPRequest, [
+            ('CREATE TABLE "webhttprequest" ('
+             '"id" INTEGER NOT NULL PRIMARY KEY, '
+             '"timestamp" DATETIME NOT NULL, "data" TEXT NOT NULL)'),
+            ('CREATE INDEX "webhttprequest_timestamp" ON "webhttprequest" '
+             '("timestamp")')])
+
+        # Table name is explicit, but legacy table names == false, so we get
+        # the new index name format.
+        class FooBar(Base):
+            data = IntegerField(unique=True)
+            class Meta:
+                legacy_table_names = False
+                table_name = 'foobar_tbl'
+
+        self.assertFalse(FooBar._meta.legacy_table_names)
+        self.assertCreateTable(FooBar, [
+            ('CREATE TABLE "foobar_tbl" ("id" INTEGER NOT NULL PRIMARY KEY, '
+             '"data" INTEGER NOT NULL)'),
+            ('CREATE UNIQUE INDEX "foobar_tbl_data" ON "foobar_tbl" ("data")'),
+        ])
+
+        # Table name is explicit and legacy table names == true, so we get
+        # the old index name format.
+        class FooBar2(Base):
+            data = IntegerField(unique=True)
+            class Meta:
+                table_name = 'foobar2_tbl'
+
+        self.assertTrue(FooBar2._meta.legacy_table_names)
+        self.assertCreateTable(FooBar2, [
+            ('CREATE TABLE "foobar2_tbl" ("id" INTEGER NOT NULL PRIMARY KEY, '
+             '"data" INTEGER NOT NULL)'),
+            ('CREATE UNIQUE INDEX "foobar2_data" ON "foobar2_tbl" ("data")')])
+
     def test_without_pk(self):
         NoPK._meta.database = self.database
         self.assertCreateTable(NoPK, [

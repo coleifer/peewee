@@ -2355,7 +2355,9 @@ class ModelIndex(Index):
                              'explicitly specify a name.')
 
         clean_field_names = re.sub('[^\w]+', '', '_'.join(accum))
-        index_name = '_'.join((model._meta.table_name, clean_field_names))
+        meta = model._meta
+        prefix = meta.name if meta.legacy_table_names else meta.table_name
+        index_name = '_'.join((prefix, clean_field_names))
         if len(index_name) > 64:
             index_hash = hashlib.md5(index_name.encode('utf-8')).hexdigest()
             index_name = '%s_%s' % (index_name[:56], index_hash[:7])
@@ -4819,7 +4821,7 @@ class Metadata(object):
                  only_save_dirty=False, table_alias=None, depends_on=None,
                  options=None, db_table=None, table_function=None,
                  without_rowid=False, temporary=False,
-                 legacy_table_names=False, **kwargs):
+                 legacy_table_names=True, **kwargs):
         if db_table is not None:
             __deprecated__('"db_table" has been deprecated in favor of '
                            '"table_name" for Models.')

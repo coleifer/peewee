@@ -129,6 +129,9 @@ class FTS5Test(FTS5Model):
     data = SearchField()
     misc = SearchField(unindexed=True)
 
+    class Meta:
+        legacy_table_names = False
+
 
 class Series(TableFunction):
     columns = ['value']
@@ -518,6 +521,7 @@ class TestSqliteExtensions(BaseTestCase):
             class Meta:
                 database = database
                 extension_module = 'ext1337'
+                legacy_table_names = False
                 options = {'huey': 'cat', 'mickey': 'dog'}
                 primary_key = False
 

@@ -109,6 +109,7 @@ if IS_MYSQL:
 class TestModel(Model):
     class Meta:
         database = db
+        legacy_table_names = False
 
 
 def __sql__(q, **state):
