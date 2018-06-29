@@ -4513,6 +4513,7 @@ class ManyToManyField(MetaField):
 
             class Meta:
                 database = self.model._meta.database
+                schema = self.model._meta.schema
                 table_name = '%s_%s_through' % tuple(tables)
                 indexes = (
                     ((lhs._meta.name, rhs._meta.name),
