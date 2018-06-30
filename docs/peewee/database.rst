@@ -153,14 +153,14 @@ you can specify a list or pragmas or any other arbitrary `sqlite3 parameters
             database = sqlite_db
 
     class User(BaseModel):
-        username = CharField()
+        username = TextField()
         # etc, etc
 
-The :ref:`playhouse` contains a :ref:`SQLite extension module <sqlite_ext>`
-which provides many SQLite-specific features such as :ref:`full-text search
-<sqlite_fts>`, json extension support, and much, much more. If you would like
-to use these awesome features, use the :py:class:`SqliteExtDatabase` from the
-``playhouse.sqlite_ext`` module:
+Peewee includes a :ref:`SQLite extension module <sqlite_ext>` which provides
+many SQLite-specific features such as :ref:`full-text search <sqlite-fts>`,
+:ref:`json extension support <sqlite-json1>`, and much, much more. If you would
+like to use these awesome features, use the :py:class:`SqliteExtDatabase` from
+the ``playhouse.sqlite_ext`` module:
 
 .. code-block:: python
 
@@ -177,10 +177,11 @@ PRAGMA statements
 ^^^^^^^^^^^^^^^^^
 
 SQLite allows run-time configuration of a number of parameters through
-``PRAGMA`` statements (`documentation <https://www.sqlite.org/pragma.html>`_).
-These statements are typically run against a new database connection. To run
-one or more ``PRAGMA`` statements against new connections, you can specify them
-as a dictionary or a list of 2-tuples containing the pragma name and value:
+``PRAGMA`` statements (`SQLite documentation <https://www.sqlite.org/pragma.html>`_).
+These statements are typically run when a new database connection is created.
+To run one or more ``PRAGMA`` statements against new connections, you can
+specify them as a dictionary or a list of 2-tuples containing the pragma name
+and value:
 
 .. code-block:: python
 
@@ -220,6 +221,33 @@ the :py:class:`SqliteDatabase` object:
 .. note::
     A full list of PRAGMA settings, their meaning and accepted values can be
     found in the SQLite documentation: http://sqlite.org/pragma.html
+
+Recommended Settings
+^^^^^^^^^^^^^^^^^^^^
+
+The following settings are what I use with SQLite for a typical web
+application database.
+
+========================= =================== ===============================================
+pragma                    recommended setting explanation
+========================= =================== ===============================================
+journal_mode              wal                 allow readers and writers to co-exist
+cache_size                -1 * data_size_kb   set page-cache size in KiB, e.g. -32000 = 32MB
+foreign_keys              1                   enforce foreign-key constraints
+ignore_check_constraints  0                   enforce CHECK constraints
+synchronous               0                   let OS handle fsync (use with caution)
+========================= =================== ===============================================
+
+Example database using the above options:
+
+.. code-block:: python
+
+    db = SqliteDatabase('my_app.db', pragmas={
+        'journal_mode': 'wal',
+        'cache_size': -1 * 64000,  # 64MB
+        'foreign_keys': 1,
+        'ignore_check_constraints': 0,
+        'synchronous': 0})
 
 .. _sqlite-user-functions:
 
