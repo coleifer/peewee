@@ -11,7 +11,7 @@ from .keys import *
 from .manytomany import *
 from .models import *
 from .model_sql import *
-from .prefetch import *
+from .prefetch_tests import *
 from .queries import *
 from .regressions import *
 from .results import *

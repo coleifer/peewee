@@ -180,15 +180,39 @@ class TestPrefetch(ModelTestCase):
             for person in query:
                 notes = []
                 for note in person.notes:
-                    items = []
-                    likes = []
-                    flags = []
-                    for item in note.items:
-                        items.append(item.content)
-                    for like in note.likes:
-                        likes.append(like.person.name)
-                    for flag in note.flags:
-                        flags.append(flag.is_spam)
+                    items = [item.content for item in note.items]
+                    likes = [like.person.name for like in note.likes]
+                    flags = [flag.is_spam for flag in note.flags]
+                    notes.append((note.content, items, likes, flags))
+                accum.append((person.name, notes))
+
+        self.assertEqual(accum, [
+            ('huey', [
+                ('hiss', ['hiss-1', 'hiss-2'], [], []),
+                ('meow', ['meow-1', 'meow-2', 'meow-3'], ['mickey'], []),
+                ('purr', [], [], [True])]),
+            ('mickey', [
+                ('bark', ['bark-1', 'bark-2'], [], []),
+                ('woof', [], ['huey'], [True])]),
+            (u'zaizee', []),
+        ])
+
+    def test_prefetch_multi_depth_no_join(self):
+        LikePerson = Person.alias()
+        people = Person.select().order_by(Person.name)
+        notes = Note.select().order_by(Note.content)
+        items = NoteItem.select().order_by(NoteItem.content)
+        flags = Flag.select().order_by(Flag.id)
+
+        with self.assertQueryCount(6):
+            query = prefetch(people, notes, items, flags, Like, LikePerson)
+            accum = []
+            for person in query:
+                notes = []
+                for note in person.notes:
+                    items = [item.content for item in note.items]
+                    likes = [like.person.name for like in note.likes]
+                    flags = [flag.is_spam for flag in note.flags]
                     notes.append((note.content, items, likes, flags))
                 accum.append((person.name, notes))
 

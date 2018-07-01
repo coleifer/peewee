@@ -6448,7 +6448,7 @@ def prefetch_add_subquery(sq, subqueries):
                 fks = [getattr(subquery_model, fk.name) for fk in rels]
                 pks = [getattr(last_model, fk.rel_field.name) for fk in rels]
             else:
-                backrefs = last_model._meta.model_refs.get(subquery_model, [])
+                backrefs = subquery_model._meta.model_backrefs.get(last_model)
             if (fks or backrefs) and ((target_model is last_model) or
                                       (target_model is None)):
                 break
@@ -6465,10 +6465,12 @@ def prefetch_add_subquery(sq, subqueries):
             subquery = subquery.where(expr)
             fixed_queries.append(PrefetchQuery(subquery, fks, False))
         elif backrefs:
-            expr = reduce(operator.or_, [
-                (backref.rel_field << last_query.select(backref))
-                for backref in backrefs])
-            subquery = subquery.where(expr)
+            expressions = []
+            for backref in backrefs:
+                rel_field = getattr(subquery_model, backref.rel_field.name)
+                fk_field = getattr(last_model, backref.name)
+                expressions.append(rel_field << last_query.select(fk_field))
+            subquery = subquery.where(reduce(operator.or_, expressions))
             fixed_queries.append(PrefetchQuery(subquery, backrefs, True))
 
     return fixed_queries
