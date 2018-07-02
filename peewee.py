@@ -2840,9 +2840,10 @@ class SqliteDatabase(Database):
         return conn
 
     def _add_conn_hooks(self, conn):
-        for db_name, filename in self._attached.items():
-            conn.execute('ATTACH DATABASE "%s" AS "%s"' % (filename, db_name))
-        self._set_pragmas(conn)
+        if self._attached:
+            self._attach_databases(conn)
+        if self._pragmas:
+            self._set_pragmas(conn)
         self._load_aggregates(conn)
         self._load_collations(conn)
         self._load_functions(conn)
@@ -2853,11 +2854,16 @@ class SqliteDatabase(Database):
             self._load_extensions(conn)
 
     def _set_pragmas(self, conn):
-        if self._pragmas:
-            cursor = conn.cursor()
-            for pragma, value in self._pragmas:
-                cursor.execute('PRAGMA %s = %s;' % (pragma, value))
-            cursor.close()
+        cursor = conn.cursor()
+        for pragma, value in self._pragmas:
+            cursor.execute('PRAGMA %s = %s;' % (pragma, value))
+        cursor.close()
+
+    def _attach_databases(self, conn):
+        cursor = conn.cursor()
+        for name, db in self._attached.items():
+            cursor.execute('ATTACH DATABASE "%s" AS "%s"' % (db, name))
+        cursor.close()
 
     def pragma(self, key, value=SENTINEL, permanent=False, schema=None):
         if schema is not None:
