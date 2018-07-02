@@ -1374,7 +1374,7 @@ fn = Function(None, None)
 
 
 class Window(Node):
-    CURRENT_ROW = 'CURRENT ROW'
+    CURRENT_ROW = SQL('CURRENT ROW')
 
     def __init__(self, partition_by=None, order_by=None, start=None, end=None,
                  alias=None):

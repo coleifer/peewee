@@ -1039,9 +1039,216 @@ You can retrieve multiple scalar values by passing ``as_tuple=True``:
 Window functions
 ----------------
 
+A :py:class:`Window` function refers to an aggregate function that operates on
+a sliding window of data that is being processed as part of a ``SELECT`` query.
+Window functions make it possible to do things like:
+
+1. Perform aggregations against subsets of a result-set.
+2. Calculate a running total.
+3. Rank results.
+4. Compare a row value to a value in the preceding (or succeeding!) row(s).
+
 peewee comes with support for SQL window functions, which can be created by
 calling :py:meth:`Function.over` and passing in your partitioning or ordering
 parameters.
+
+For the following examples, we'll use the following model and sample data:
+
+.. code-block:: python
+
+    class Sample(Model):
+        counter = IntegerField()
+        value = FloatField()
+
+    data = [(1, 10),
+            (1, 20),
+            (2, 1),
+            (2, 3),
+            (3, 100)]
+    Sample.insert_many(data, fields=[Sample.counter, Sample.value]).execute()
+
+Our sample table now contains:
+
+=== ======== ======
+id  counter  value
+=== ======== ======
+1   1        10.0
+2   1        20.0
+3   2        1.0
+4   2        3.0
+5   3        100.0
+=== ======== ======
+
+Ordered Windows
+^^^^^^^^^^^^^^^
+
+Let's calculate a running sum of the ``value`` field. In order for it to be a
+"running" sum, we need it to be ordered, so we'll order with respect to the
+Sample's ``id`` field:
+
+.. code-block:: python
+
+    query = Sample.select(
+        Sample.counter,
+        Sample.value,
+        fn.SUM(Sample.value).over(order_by=[Sample.id]).alias('total'))
+
+    for sample in query:
+        print(sample.counter, sample.value, sample.total)
+
+    # 1    10.    10.
+    # 1    20.    30.
+    # 2     1.    31.
+    # 2     3.    34.
+    # 3   100    134.
+
+For another example, we'll calculate the difference between the current value
+and the previous value, when ordered by the ``id``:
+
+.. code-block:: python
+
+    difference = Sample.value - fn.LAG(Sample.value, 1).over(order_by=[Sample.id])
+    query = Sample.select(
+        Sample.counter,
+        Sample.value,
+        difference.alias('diff'))
+
+    for sample in query:
+        print(sample.counter, sample.value, sample.diff)
+
+    # 1    10.   NULL
+    # 1    20.    10.  -- (20 - 10)
+    # 2     1.   -19.  -- (1 - 20)
+    # 2     3.     2.  -- (3 - 1)
+    # 3   100     97.  -- (100 - 3)
+
+Partitioned Windows
+^^^^^^^^^^^^^^^^^^^
+
+Let's calculate the average ``value`` for each distinct "counter" value. Notice
+that there are three possible values for the ``counter`` field (1, 2, and 3).
+We can do this by calculating the ``AVG()`` of the ``value`` column over a
+window that is partitioned depending on the ``counter`` field:
+
+.. code-block:: python
+
+    query = Sample.select(
+        Sample.counter,
+        Sample.value,
+        fn.AVG(Sample.value).over(partition_by=[Sample.counter]).alias('cavg'))
+
+    for sample in query:
+        print(sample.counter, sample.value, sample.cavg)
+
+    # 1    10.    15.
+    # 1    20.    15.
+    # 2     1.     2.
+    # 2     3.     2.
+    # 3   100    100.
+
+Bounded windows
+^^^^^^^^^^^^^^^
+
+By default, window functions are evaluated using an *unbounded preceding* start
+for the window, and the *current row* as the end. We can change the bounds of
+the window our aggregate functions operate on by specifying a ``start`` and/or
+``end`` in the call to :py:meth:`Function.over`. Additionally, Peewee comes
+with helper-methods on the :py:class:`Window` object for generating the
+appropriate boundary references:
+
+* :py:attr:`Window.CURRENT_ROW` - attribute that references the current row.
+* :py:meth:`Window.preceding` - specify row(s) preceding.
+* :py:meth:`Window.following` - specify row(s) following.
+
+To examine how boundaries work, we'll calculate a running total of the
+``value`` column, ordered with respect to ``id``, **but** we'll only look the
+running total of the current row and it's two preceding rows:
+
+.. code-block:: python
+
+    query = Sample.select(
+        Sample.counter,
+        Sample.value,
+        fn.SUM(Sample.value).over(
+            order_by=[Sample.id],
+            start=Window.preceding(2),
+            end=Window.CURRENT_ROW).alias('rsum'))
+
+    for sample in query:
+        print(sample.counter, sample.value, sample.rsum)
+
+    # 1    10.    10.
+    # 1    20.    30.  -- (20 + 10)
+    # 2     1.    31.  -- (1 + 20 + 10)
+    # 2     3.    24.  -- (3 + 1 + 20)
+    # 3   100    104.  -- (100 + 3 + 1)
+
+.. note::
+    Technically we did not need to specify the ``end=Window.CURRENT`` because
+    that is the default. It was shown in the example for demonstration.
+
+Filtered Aggregates
+^^^^^^^^^^^^^^^^^^^
+
+Aggregate functions may also support filter functions (Postgres and Sqlite
+3.25+), which get translated into a ``FILTER (WHERE...)`` clause. Filter
+expressions are added to an aggregate function with the
+:py:meth:`Function.filter` method.
+
+For an example, we will calculate the running sum of the ``value`` field with
+respect to the ``id``, but we will filter-out any samples whose ``counter=2``.
+
+.. code-block:: python
+
+    query = Sample.select(
+        Sample.counter,
+        Sample.value,
+        fn.SUM(Sample.value).filter(Sample.counter != 2).over(
+            order_by=[Sample.id]).alias('csum'))
+
+    for sample in query:
+        print(sample.counter, sample.value, sample.csum)
+
+    # 1    10.    10.
+    # 1    20.    30.
+    # 2     1.    30.
+    # 2     3.    30.
+    # 3   100    130.
+
+Reusing Window Definitions
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you intend to use the same window definition for multiple aggregates, you
+can create a :py:class:`Window` object. The :py:class:`Window` object takes the
+same parameters as :py:meth:`Function.over`, and can be passed to the
+``over()`` method in-place of the individual parameters.
+
+Here we'll declare a single window, ordered with respect to the sample ``id``,
+and call several window functions using that window definition:
+
+.. code-block:: python
+
+    win = Window(order_by=[Sample.id])
+    query = Sample.select(
+        Sample.counter,
+        Sample.value,
+        fn.LEAD(Sample.value).over(win),
+        fn.LAG(Sample.value).over(win),
+        fn.SUM(Sample.value).over(win)
+    ).window(win)  # Include our window definition in query.
+
+    for row in query.tuples():
+        print(row)
+
+    # counter  value  lead()  lag()  sum()
+    # 1          10.     20.   NULL    10.
+    # 1          20.      1.    10.    30.
+    # 2           1.      3.    20.    31.
+    # 2           3.    100.     1.    34.
+    # 3         100.    NULL     3.   134.
+
+More examples
+^^^^^^^^^^^^^
 
 .. code-block:: python
 
