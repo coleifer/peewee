@@ -1323,6 +1323,7 @@ class Function(ColumnBase):
     def __init__(self, name, arguments, coerce=True):
         self.name = name
         self.arguments = arguments
+        self._filter = None
         if name and name.lower() in ('sum', 'count', 'cast'):
             self._coerce = False
         else:
@@ -1332,6 +1333,10 @@ class Function(ColumnBase):
         def decorator(*args, **kwargs):
             return Function(attr, args, **kwargs)
         return decorator
+
+    @Node.copy
+    def filter(self, where=None):
+        self._filter = where
 
     def over(self, partition_by=None, order_by=None, start=None, end=None,
              window=None):
@@ -1352,13 +1357,17 @@ class Function(ColumnBase):
     def __sql__(self, ctx):
         ctx.literal(self.name)
         if not len(self.arguments):
-            return ctx.literal('()')
+            ctx.literal('()')
+        else:
+            with ctx(in_function=True):
+                ctx.sql(EnclosedNodeList([
+                    (argument if isinstance(argument, Node)
+                     else Value(argument))
+                    for argument in self.arguments]))
 
-        with ctx(in_function=True):
-            return ctx.sql(EnclosedNodeList([
-                (argument if isinstance(argument, Node)
-                 else Value(argument))
-                for argument in self.arguments]))
+        if self._filter:
+            ctx.literal(' FILTER (WHERE ').sql(self._filter).literal(')')
+        return ctx
 
 
 fn = Function(None, None)

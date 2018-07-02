@@ -1607,6 +1607,21 @@ class TestWindowFunctionIntegration(ModelTestCase):
             (2, 3., 24.),
             (3, 100., 104.)])
 
+    @skip_if(IS_MYSQL, 'requires OVER() with FILTER')
+    def test_filter_clause(self):
+        condsum = fn.SUM(Sample.value).filter(Sample.counter > 1).over(
+            order_by=[Sample.id], start=Window.preceding(1))
+        query = (Sample
+                 .select(Sample.counter, Sample.value, condsum.alias('cs'))
+                 .order_by(Sample.value))
+        self.assertEqual(list(query.tuples()), [
+            (2, 1., 1.),
+            (2, 3., 4.),
+            (1, 10., None),
+            (1, 20., None),
+            (3, 100., 103.),
+        ])
+
 
 @skip_if(IS_SQLITE or (IS_MYSQL and not IS_MYSQL_ADVANCED_FEATURES))
 class TestForUpdateIntegration(ModelTestCase):

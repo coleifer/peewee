@@ -1370,6 +1370,15 @@ Query-builder
                                 end=Window.following(1)))  # 1 following.
                      .order_by(Sample.id))
 
+    .. py:method:: filter(where)
+
+        :param where: Expression for filtering aggregate.
+
+        Add a ``FILTER (WHERE...)`` clause to an aggregate function. The where
+        expression is evaluated to determine which rows are fed to the
+        aggregate function. This SQL feature is supported for Postgres and
+        SQLite.
+
     .. py:method:: coerce([coerce=True])
 
         :param bool coerce: Whether to coerce function-call result.

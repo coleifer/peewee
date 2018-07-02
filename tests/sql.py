@@ -830,6 +830,20 @@ class TestWindowFunctions(BaseTestCase):
             'FROM "register" AS "t1" '
             'ORDER BY "t1"."value"'), [1])
 
+    def test_filter_clause(self):
+        condsum = fn.SUM(Register.value).filter(Register.value > 1).over(
+            order_by=[Register.id], partition_by=[Register.category],
+            start=Window.preceding(1))
+        query = (Register
+                 .select(Register.category, Register.value, condsum)
+                 .order_by(Register.category))
+        self.assertSQL(query, (
+            'SELECT "t1"."category", "t1"."value", SUM("t1"."value") FILTER ('
+            'WHERE ("t1"."value" > ?)) OVER (PARTITION BY "t1"."category" '
+            'ORDER BY "t1"."id" ROWS 1 PRECEDING) '
+            'FROM "register" AS "t1" '
+            'ORDER BY "t1"."category"'), [1])
+
 
 class TestValuesList(BaseTestCase):
     _data = [(1, 'one'), (2, 'two'), (3, 'three')]
@@ -948,6 +962,15 @@ class TestSelectFeatures(BaseTestCase):
         query = Person.select(fn.COUNT(Person.name.distinct()))
         self.assertSQL(query, (
             'SELECT COUNT(DISTINCT "t1"."name") FROM "person" AS "t1"'), [])
+
+    def test_filtered_count(self):
+        filtered_count = (fn.COUNT(Person.name)
+                          .filter(Person.dob < datetime.date(2000, 1, 1)))
+        query = Person.select(fn.COUNT(Person.name), filtered_count)
+        self.assertSQL(query, (
+            'SELECT COUNT("t1"."name"), COUNT("t1"."name") '
+            'FILTER (WHERE ("t1"."dob" < ?)) '
+            'FROM "person" AS "t1"'), [datetime.date(2000, 1, 1)])
 
     def test_for_update(self):
         query = (Person
