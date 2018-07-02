@@ -1338,8 +1338,8 @@ Query-builder
         :param Window window: A :py:class:`Window` instance.
 
         .. note::
-            For simplicity, it is permissible to call ``over()`` with a
-            :py:class:`Window` instance as the first and only parameter.
+            For an in-depth guide to using window functions with Peewee,
+            see the :ref:`window-functions` section.
 
         Examples::
 
@@ -1366,8 +1366,8 @@ Query-builder
                      .select(Sample.value,
                              fn.SUM(Sample.value).over(
                                 partition_by=[Sample.counter],
-                                start=Window.preceding(),  # unbounded.
-                                end=Window.following(1)))  # 1 following.
+                                start=Window.CURRENT_ROW,  # current row
+                                end=Window.following()))  # unbounded following
                      .order_by(Sample.id))
 
     .. py:method:: filter(where)
@@ -1427,13 +1427,20 @@ Query-builder
 
     Represent a WINDOW clause.
 
+    .. note::
+        For an in-depth guide to using window functions with Peewee,
+        see the :ref:`window-functions` section.
+
     .. py:attribute:: CURRENT_ROW
 
-        Handy reference to current row for use in start/end clause.
+        Reference to current row for use in start/end clause.
 
-    .. py:method:: alias([alias=None])
+    .. py:staticmethod:: preceding([value=None])
 
-        :param str alias: Alias to use for window.
+        :param value: Number of rows preceding. If ``None`` is UNBOUNDED.
+
+        Convenience method for generating SQL suitable for passing in as the
+        ``start`` parameter for a window range.
 
     .. py:staticmethod:: following([value=None])
 
@@ -1442,12 +1449,9 @@ Query-builder
         Convenience method for generating SQL suitable for passing in as the
         ``end`` parameter for a window range.
 
-    .. py:staticmethod:: preceding([value=None])
+    .. py:method:: alias([alias=None])
 
-        :param value: Number of rows preceding. If ``None`` is UNBOUNDED.
-
-        Convenience method for generating SQL suitable for passing in as the
-        ``start`` parameter for a window range.
+        :param str alias: Alias to use for window.
 
 
 .. py:function:: Case(predicate, expression_tuples[, default=None]])
