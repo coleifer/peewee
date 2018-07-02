@@ -25,6 +25,7 @@ from .base import IS_SQLITE
 from .base import IS_SQLITE_OLD
 from .base import IS_SQLITE_15  # Row-values.
 from .base import IS_SQLITE_24  # Upsert.
+from .base import IS_SQLITE_25  # Window functions.
 from .base import IS_SQLITE_9
 from .base import ModelTestCase
 from .base import TestModel
@@ -1445,7 +1446,8 @@ class TestJoinModelAlias(ModelTestCase):
                 self.assertEqual(data, [('meow', 'huey'), ('purr', 'huey')])
 
 
-@skip_unless(IS_POSTGRESQL or IS_MYSQL_ADVANCED_FEATURES, 'window queries')
+@skip_unless(IS_POSTGRESQL or IS_MYSQL_ADVANCED_FEATURES or IS_SQLITE_25,
+             'window function')
 class TestWindowFunctionIntegration(ModelTestCase):
     requires = [Sample]
 
