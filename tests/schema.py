@@ -49,6 +49,14 @@ class NoPK(TestModel):
         primary_key = False
 
 
+class CacheData(TestModel):
+    key = TextField(unique=True)
+    value = TextField()
+
+    class Meta:
+        schema = 'cache'
+
+
 class Article(TestModel):
     name = TextField(unique=True)
     timestamp = TimestampField()
@@ -68,7 +76,7 @@ Article.add_index(SQL('CREATE INDEX "article_foo" ON "article" ("flags" & 3)'))
 class TestModelDDL(ModelDatabaseTestCase):
     database = get_in_memory_db()
     requires = [Article, Category, Note, Person, Relationship, TMUnique,
-                TMSequence, TMIndexes, TMConstraints, User]
+                TMSequence, TMIndexes, TMConstraints, User, CacheData]
 
     def assertCreateTable(self, model_class, expected):
         sql, params = model_class._schema._create_table(False).query()
@@ -88,6 +96,41 @@ class TestModelDDL(ModelDatabaseTestCase):
             indexes.append(create_index.query())
 
         self.assertEqual(indexes, expected)
+
+    def test_model_indexes_with_schema(self):
+        # Attach cache database so we can reference "cache." as the schema.
+        self.database.execute_sql("attach database ':memory:' as cache;")
+        self.assertCreateTable(CacheData, [
+            ('CREATE TABLE "cache"."cache_data" ('
+             '"id" INTEGER NOT NULL PRIMARY KEY, "key" TEXT NOT NULL, '
+             '"value" TEXT NOT NULL)'),
+            ('CREATE UNIQUE INDEX "cache"."cache_data_key" ON "cache_data" '
+             '("key")')])
+
+        # Actually create the table to verify it works correctly.
+        CacheData.create_table()
+
+        # Introspect the database and get indexes for the "cache" schema.
+        indexes = self.database.get_indexes('cache_data', 'cache')
+        self.assertEqual(len(indexes), 1)
+        index_metadata = indexes[0]
+        self.assertEqual(index_metadata.name, 'cache_data_key')
+
+        # Verify the index does not exist in the main schema.
+        self.assertEqual(len(self.database.get_indexes('cache_data')), 0)
+
+        class TestDatabase(Database):
+            index_schema_prefix = False
+
+        # When "index_schema_prefix == False", the index name is not prefixed
+        # with the schema, and the schema is referenced via the table name.
+        with CacheData.bind_ctx(TestDatabase(None)):
+            self.assertCreateTable(CacheData, [
+                ('CREATE TABLE "cache"."cache_data" ('
+                 '"id" INTEGER NOT NULL PRIMARY KEY, "key" TEXT NOT NULL, '
+                 '"value" TEXT NOT NULL)'),
+                ('CREATE UNIQUE INDEX "cache_data_key" ON "cache"."cache_data"'
+                 ' ("key")')])
 
     def test_model_indexes(self):
         self.assertIndexes(Article, [

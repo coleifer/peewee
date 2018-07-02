@@ -2304,10 +2304,21 @@ class Index(Node):
             ctx.literal(statement)
             if self._safe:
                 ctx.literal('IF NOT EXISTS ')
+
+            # Sqlite uses CREATE INDEX <schema>.<name> ON <table>, whereas most
+            # others use: CREATE INDEX <name> ON <schema>.<table>.
+            if ctx.state.index_schema_prefix and \
+               isinstance(self._table, Table) and self._table._schema:
+                index_name = Entity(self._table._schema, self._name)
+                table_name = Entity(self._table.__name__)
+            else:
+                index_name = Entity(self._name)
+                table_name = self._table
+
             (ctx
-             .sql(Entity(self._name))
+             .sql(index_name)
              .literal(' ON ')
-             .sql(self._table)
+             .sql(table_name)
              .literal(' '))
             if self._using is not None:
                 ctx.literal('USING %s ' % self._using)
@@ -2463,6 +2474,7 @@ class Database(_callable_context_manager):
     commit_select = False
     compound_select_parentheses = False
     for_update = False
+    index_schema_prefix = False
     limit_max = None
     returning_clause = False
     safe_create_index = True
@@ -2616,6 +2628,7 @@ class Database(_callable_context_manager):
             'conflict_statement': self.conflict_statement,
             'conflict_update': self.conflict_update,
             'for_update': self.for_update,
+            'index_schema_prefix': self.index_schema_prefix,
             'limit_max': self.limit_max,
         }
 
@@ -2781,6 +2794,7 @@ class SqliteDatabase(Database):
     operations = {
         'LIKE': 'GLOB',
         'ILIKE': 'LIKE'}
+    index_schema_prefix = True
     limit_max = -1
 
     def __init__(self, database, *args, **kwargs):
@@ -4742,10 +4756,14 @@ class SchemaManager(object):
         statement = 'DROP INDEX '
         if safe and self.database.safe_drop_index:
             statement += 'IF EXISTS '
+        if isinstance(index._table, Table) and index._table._schema:
+            index_name = Entity(index._table._schema, index._name)
+        else:
+            index_name = Entity(index._name)
         return (self
                 ._create_context()
                 .literal(statement)
-                .sql(Entity(index._name)))
+                .sql(index_name))
 
     def drop_indexes(self, safe=True):
         for query in self._drop_indexes(safe=safe):
@@ -4756,13 +4774,19 @@ class SchemaManager(object):
             raise ValueError('Sequences are either not supported, or are not '
                              'defined for "%s".' % field.name)
 
+    def _sequence_for_field(self, field):
+        if field.model._meta.schema:
+            return Entity(field.model._meta.schema, field.sequence)
+        else:
+            return Entity(field.sequence)
+
     def _create_sequence(self, field):
         self._check_sequences(field)
         if not self.database.sequence_exists(field.sequence):
             return (self
                     ._create_context()
                     .literal('CREATE SEQUENCE ')
-                    .sql(Entity(field.sequence)))
+                    .sql(self._sequence_for_field(field)))
 
     def create_sequence(self, field):
         seq_ctx = self._create_sequence(field)
@@ -4775,7 +4799,7 @@ class SchemaManager(object):
             return (self
                     ._create_context()
                     .literal('DROP SEQUENCE ')
-                    .sql(Entity(field.sequence)))
+                    .sql(self._sequence_for_field(field)))
 
     def drop_sequence(self, field):
         seq_ctx = self._drop_sequence(field)
