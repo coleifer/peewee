@@ -1146,6 +1146,28 @@ window that is partitioned depending on the ``counter`` field:
     # 2     3.     2.
     # 3   100    100.
 
+We can use ordering within partitions by specifying both the ``order_by`` and
+``partition_by`` parameters. For an example, let's rank the samples by value
+within each distinct ``counter`` group.
+
+.. code-block:: python
+
+    query = Sample.select(
+        Sample.counter,
+        Sample.value,
+        fn.RANK().over(
+            order_by=[Sample.value],
+            partition_by=[Sample.counter]).alias('rank'))
+
+    for sample in query:
+        print(sample.counter, sample.value, sample.rank)
+
+    # 1    10.    1
+    # 1    20.    2
+    # 2     1.    1
+    # 2     3.    2
+    # 3   100     1
+
 Bounded windows
 ^^^^^^^^^^^^^^^
 
@@ -1157,8 +1179,10 @@ with helper-methods on the :py:class:`Window` object for generating the
 appropriate boundary references:
 
 * :py:attr:`Window.CURRENT_ROW` - attribute that references the current row.
-* :py:meth:`Window.preceding` - specify row(s) preceding.
-* :py:meth:`Window.following` - specify row(s) following.
+* :py:meth:`Window.preceding` - specify number of row(s) preceding, or omit
+  number to indicate **all** preceding rows.
+* :py:meth:`Window.following` - specify number of row(s) following, or omit
+  number to indicate **all** following rows.
 
 To examine how boundaries work, we'll calculate a running total of the
 ``value`` column, ordered with respect to ``id``, **but** we'll only look the
@@ -1187,6 +1211,27 @@ running total of the current row and it's two preceding rows:
     Technically we did not need to specify the ``end=Window.CURRENT`` because
     that is the default. It was shown in the example for demonstration.
 
+Let's look at another example. In this example we will calculate the "opposite"
+of a running total, in which the total sum of all values is decreased by the
+value of the samples, ordered by ``id``. To accomplish this, we'll calculate
+the sum from the current row to the last row.
+
+.. code-block:: python
+
+    query = Sample.select(
+        Sample.counter,
+        Sample.value,
+        fn.SUM(Sample.value).over(
+            order_by=[Sample.id],
+            start=Window.CURRENT_ROW,
+            end=Window.following()).alias('rsum'))
+
+    # 1    10.   134.  -- (10 + 20 + 1 + 3 + 100)
+    # 1    20.   124.  -- (20 + 1 + 3 + 100)
+    # 2     1.   104.  -- (1 + 3 + 100)
+    # 2     3.   103.  -- (3 + 100)
+    # 3   100    100.  -- (100)
+
 Filtered Aggregates
 ^^^^^^^^^^^^^^^^^^^
 
@@ -1214,6 +1259,10 @@ respect to the ``id``, but we will filter-out any samples whose ``counter=2``.
     # 2     1.    30.
     # 2     3.    30.
     # 3   100    130.
+
+.. note::
+    The call to :py:meth:`~Function.filter` must precede the call to
+    :py:meth:`~Function.over`.
 
 Reusing Window Definitions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1246,29 +1295,6 @@ and call several window functions using that window definition:
     # 2           1.      3.    20.    31.
     # 2           3.    100.     1.    34.
     # 3         100.    NULL     3.   134.
-
-More examples
-^^^^^^^^^^^^^
-
-.. code-block:: python
-
-    # Get the list of employees and the average salary for their dept.
-    query = (Employee
-             .select(
-                 Employee.name,
-                 Employee.department,
-                 Employee.salary,
-                 fn.Avg(Employee.salary).over(
-                     partition_by=[Employee.department]))
-             .order_by(Employee.name))
-
-    # Rank employees by salary.
-    query = (Employee
-             .select(
-                 Employee.name,
-                 Employee.salary,
-                 fn.rank().over(
-                     order_by=[Employee.salary])))
 
 For general information on window functions, check out the `postgresql docs <http://www.postgresql.org/docs/9.1/static/tutorial-window.html>`_.
 
