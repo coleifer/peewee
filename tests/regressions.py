@@ -219,3 +219,17 @@ class TestInsertFromSQL(ModelTestCase):
         query_src = SQL('SELECT name FROM user_src')
         User.insert_from(query=query_src, fields=[User.username]).execute()
         self.assertEqual([u.username for u in User.select()], ['foo'])
+
+
+class TestSubqueryFunctionCall(BaseTestCase):
+    def test_subquery_function_call(self):
+        Sample = Table('sample')
+        SA = Sample.alias('s2')
+        query = (Sample
+                 .select(Sample.c.data)
+                 .where(~fn.EXISTS(
+                     SA.select(SQL('1')).where(SA.c.key == 'foo'))))
+        self.assertSQL(query, (
+            'SELECT "t1"."data" FROM "sample" AS "t1" '
+            'WHERE NOT EXISTS('
+            'SELECT 1 FROM "sample" AS "s2" WHERE ("s2"."key" = ?))'), ['foo'])
