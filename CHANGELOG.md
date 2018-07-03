@@ -7,12 +7,18 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/3.5.2...master)
+
+## 3.5.2
+
 * New guide to using [window functions in Peewee](http://docs.peewee-orm.com/en/latest/peewee/querying.html#window-functions).
 * New and improved table name auto-generation. This feature is not backwards
   compatible, so it is **disabled by default**. To enable, set
   `legacy_table_names=False` in your model's `Meta` options. For more details,
   see [table names](http://docs.peewee-orm.com/en/latest/peewee/models.html#table_names)
   documentation.
+* Allow passing single fields/columns to window function `order_by` and
+  `partition_by` arguments.
 * Support for `FILTER (WHERE...)` clauses with window functions and aggregates.
 * Added `IdentityField` class suitable for use with Postgres 10's new identity
   column type. It can be used anywhere `AutoField` or `BigAutoField` was being
@@ -21,7 +27,7 @@ https://github.com/coleifer/peewee/releases
 * Fixed obscure bug when using `prefetch()` and `ModelAlias` to populate a
   back-reference related model.
 
-[View commits](https://github.com/coleifer/peewee/compare/3.5.1...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.5.1...3.5.2)
 
 ## 3.5.1
 
