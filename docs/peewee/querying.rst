@@ -1307,7 +1307,7 @@ each window has a unique alias:
 .. code-block:: python
 
     w1 = Window(order_by=[Sample.id]).alias('w1')
-    w2 = Window(partition_by=[Sample.category]).alias('w2')
+    w2 = Window(partition_by=[Sample.counter]).alias('w2')
     query = Sample.select(
         Sample.counter,
         Sample.value,
