@@ -1415,14 +1415,22 @@ Common Table Expressions
 ------------------------
 
 Peewee supports the inclusion of common table expressions (CTEs) in all types
-of queries. To declare a :py:class:`Select` query for use as a CTE, use
+of queries. CTEs may be useful for:
+
+* Factoring out a common subquery.
+* Grouping or filtering by a column derived in the CTE's result set.
+* Writing recursive queries.
+
+To declare a :py:class:`Select` query for use as a CTE, use
 :py:meth:`~SelectQuery.cte` method, which wraps the query in a :py:class:`CTE`
 object. To indicate that a :py:class:`CTE` should be included as part of a
 query, use the :py:meth:`Query.with_cte` method, passing a list of CTE objects.
 
+Simple Example
+^^^^^^^^^^^^^^
+
 For an example, let's say we have some data points that consist of a key and a
-floating-point value. We wish to, for each distinct key, find the values that
-were above-average for that key.
+floating-point value. Let's define our model and populate some test data:
 
 .. code-block:: python
 
@@ -1440,6 +1448,11 @@ were above-average for that key.
         Sample.insert_many([(key, value) for value in values],
                            fields=[Sample.key, Sample.value]).execute()
 
+Let's use a CTE to calculate, for each distinct key, which values were
+above-average for that key.
+
+.. code-block:: python
+
     # First we'll declare the query that will be used as a CTE. This query
     # simply determines the average value for each key.
     cte = (Sample
@@ -1451,18 +1464,85 @@ were above-average for that key.
     # exceeds the average for the given key. We'll calculate how far above the
     # average the given sample's value is, as well.
     query = (Sample
-             .select(Sample.key, (Sample.value - cte.c.avg_value).alias('diff'))
+             .select(Sample.key, Sample.value)
              .join(cte, on=(Sample.key == cte.c.key))
              .where(Sample.value > cte.c.avg_value)
              .order_by(Sample.value)
              .with_cte(cte))
 
-    for sample in query:
-        print(sample.key, sample.diff)
+We can iterate over the samples returned by the query to see which samples had
+above-average values for their given group:
 
-    # 'a', .25  -- for (a, 1.75)
-    # 'b', .2   -- for (b, 2.7)
-    # 'b', .4   -- for (b, 2.9)
+.. code-block:: pycon
+
+    >>> for sample in query:
+    ...     print(sample.key, sample.diff)
+
+    # 'a', 1.75
+    # 'b', 2.7
+    # 'b', 2.9
+
+Complex Example
+^^^^^^^^^^^^^^^
+
+For a more complete example, let's consider the following query which uses
+multiple CTEs to find per-product sales totals in only the top sales regions.
+Our model looks like this:
+
+.. code-block:: python
+
+    class Order(Model):
+        region = TextField()
+        amount = FloatField()
+        product = TextField()
+        quantity = IntegerField()
+
+Here is how the query might be written in SQL. This example can be found in
+the `postgresql documentation <https://www.postgresql.org/docs/current/static/queries-with.html>`_.
+
+.. code-block:: sql
+
+    WITH regional_sales AS (
+        SELECT region, SUM(amount) AS total_sales
+        FROM orders
+        GROUP BY region
+      ), top_regions AS (
+        SELECT region
+        FROM regional_sales
+        WHERE total_sales > (SELECT SUM(total_sales) / 10 FROM regional_sales)
+      )
+    SELECT region,
+           product,
+           SUM(quantity) AS product_units,
+           SUM(amount) AS product_sales
+    FROM orders
+    WHERE region IN (SELECT region FROM top_regions)
+    GROUP BY region, product;
+
+With Peewee, we would write:
+
+.. code-block:: python
+
+    reg_sales = (Order
+                 .select(Order.region,
+                         fn.SUM(Order.amount).alias('total_sales'))
+                 .group_by(Order.region)
+                 .cte('regional_sales'))
+
+    top_regions = (reg_sales
+                   .select(reg_sales.c.region)
+                   .where(reg_sales.c.total_sales > (
+                       reg_sales.select(fn.SUM(reg_sales.c.total_sales) / 10)))
+                   .cte('top_regions'))
+
+    query = (Order
+             .select(Order.region,
+                     Order.product,
+                     fn.SUM(Order.quantity).alias('product_units'),
+                     fn.SUM(Order.amount).alias('product_sales'))
+             .where(Order.region.in_(top_regions.select(top_regions.c.region)))
+             .group_by(Order.region, Order.product)
+             .with_cte(regional_sales, top_regions))
 
 Recursive CTEs
 ^^^^^^^^^^^^^^
@@ -1473,13 +1553,19 @@ Suppose, for example, that we have a hierarchy of categories for an online
 bookstore. We wish to generate a table showing all categories and their
 absolute depths, along with the path from the root to the category.
 
-For this, we can use a recursive CTE:
+We'll assume the following model definition, in which each category has a
+foreign-key to its immediate parent category:
 
 .. code-block:: python
 
     class Category(Model):
         name = TextField()
         parent = ForeignKeyField('self', backref='children', null=True)
+
+To list all categories along with their depth and parents, we can use a
+recursive CTE:
+
+.. code-block:: python
 
     # Define the base case of our recursive CTE. This will be categories that
     # have a null parent foreign-key.
