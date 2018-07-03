@@ -1296,7 +1296,45 @@ and call several window functions using that window definition:
     # 2           3.    100.     1.    34.
     # 3         100.    NULL     3.   134.
 
-For general information on window functions, check out the `postgresql docs <http://www.postgresql.org/docs/9.1/static/tutorial-window.html>`_.
+Multiple window definitions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+In the previous example, we saw how to declare a :py:class:`Window` definition
+and re-use it for multiple different aggregations. You can include as many
+window definitions as you need in your queries, but it is necessary to ensure
+each window has a unique alias:
+
+.. code-block:: python
+
+    w1 = Window(order_by=[Sample.id]).alias('w1')
+    w2 = Window(partition_by=[Sample.category]).alias('w2')
+    query = Sample.select(
+        Sample.counter,
+        Sample.value,
+        fn.SUM(Sample.value).over(w1).alias('rsum'),  # Running total.
+        fn.AVG(Sample.value).over(w2).alias('cavg')   # Avg per category.
+    ).window(w1, w2)  # Include our window definitions.
+
+    for sample in query:
+        print(sample.counter, sample.value, sample.rsum, sample.cavg)
+
+    # counter  value   rsum     cavg
+    # 1          10.     10.     15.
+    # 1          20.     30.     15.
+    # 2           1.     31.      2.
+    # 2           3.     34.      2.
+    # 3         100     134.    100.
+
+.. note::
+    For information about the window function APIs, see:
+
+    * :py:meth:`Function.over`
+    * :py:meth:`Function.filter`
+    * :py:class:`Window`
+
+    For general information on window functions, the
+    `postgresql docs <http://www.postgresql.org/docs/9.1/static/tutorial-window.html>`_.
+    have a good overview.
 
 Retrieving row tuples / dictionaries / namedtuples
 --------------------------------------------------
