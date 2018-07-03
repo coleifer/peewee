@@ -681,6 +681,48 @@ Register = Table('register', ('id', 'value', 'category'))
 
 
 class TestWindowFunctions(BaseTestCase):
+    def test_partition_unordered(self):
+        partition = [Register.category]
+        query = (Register
+                 .select(
+                     Register.category,
+                     Register.value,
+                     fn.AVG(Register.value).over(partition_by=partition))
+                 .order_by(Register.id))
+        self.assertSQL(query, (
+            'SELECT "t1"."category", "t1"."value", AVG("t1"."value") '
+            'OVER (PARTITION BY "t1"."category") '
+            'FROM "register" AS "t1" ORDER BY "t1"."id"'), [])
+
+    def test_ordered_unpartitioned(self):
+        query = (Register
+                 .select(
+                     Register.value,
+                     fn.RANK().over(order_by=[Register.value])))
+        self.assertSQL(query, (
+            'SELECT "t1"."value", RANK() OVER (ORDER BY "t1"."value") '
+            'FROM "register" AS "t1"'), [])
+
+    def test_ordered_partitioned(self):
+        query = Register.select(
+            Register.value,
+            fn.SUM(Register.value).over(
+                order_by=Register.id,
+                partition_by=Register.category).alias('rsum'))
+        self.assertSQL(query, (
+            'SELECT "t1"."value", SUM("t1"."value") '
+            'OVER (PARTITION BY "t1"."category" ORDER BY "t1"."id") AS "rsum" '
+            'FROM "register" AS "t1"'), [])
+
+    def test_empty_over(self):
+        query = (Register
+                 .select(Register.value, fn.LAG(Register.value, 1).over())
+                 .order_by(Register.value))
+        self.assertSQL(query, (
+            'SELECT "t1"."value", LAG("t1"."value", ?) OVER () '
+            'FROM "register" AS "t1" '
+            'ORDER BY "t1"."value"'), [1])
+
     def test_frame(self):
         query = (Register
                  .select(
@@ -699,7 +741,7 @@ class TestWindowFunctions(BaseTestCase):
                  .select(Register.value, fn.AVG(Register.value).over(
                      partition_by=[Register.category],
                      order_by=[Register.value],
-                     start=SQL('CURRENT ROW'),
+                     start=Window.CURRENT_ROW,
                      end=Window.following())))
         self.assertSQL(query, (
             'SELECT "t1"."value", AVG("t1"."value") '
@@ -732,19 +774,6 @@ class TestWindowFunctions(BaseTestCase):
             'SUM("t1"."timestamp") OVER '
             '(PARTITION BY "t1"."data" ORDER BY "t1"."timestamp") AS "elapsed"'
             ' FROM "evtlog" AS "t1" ORDER BY "t1"."timestamp"'), [])
-
-    def test_partition_unordered(self):
-        partition = [Register.category]
-        query = (Register
-                 .select(
-                     Register.category,
-                     Register.value,
-                     fn.AVG(Register.value).over(partition_by=partition))
-                 .order_by(Register.id))
-        self.assertSQL(query, (
-            'SELECT "t1"."category", "t1"."value", AVG("t1"."value") '
-            'OVER (PARTITION BY "t1"."category") '
-            'FROM "register" AS "t1" ORDER BY "t1"."id"'), [])
 
     def test_named_window(self):
         window = Window(partition_by=[Register.category])
@@ -791,6 +820,18 @@ class TestWindowFunctions(BaseTestCase):
             'WINDOW w1 AS (PARTITION BY "t1"."category"), '
             'w2 AS (ORDER BY "t1"."value")'), [])
 
+    def test_alias_window(self):
+        w = Window(order_by=Register.value).alias('wx')
+        query = Register.select(Register.value, fn.RANK().over(w)).window(w)
+
+        # We can re-alias the window and it's updated alias is reflected
+        # correctly in the final query.
+        w.alias('wz')
+        self.assertSQL(query, (
+            'SELECT "t1"."value", RANK() OVER wz '
+            'FROM "register" AS "t1" '
+            'WINDOW wz AS (ORDER BY "t1"."value")'), [])
+
     def test_reuse_window(self):
         EventLog = Table('evt', ('id', 'timestamp', 'key'))
         window = Window(partition_by=[EventLog.key],
@@ -811,24 +852,6 @@ class TestWindowFunctions(BaseTestCase):
             'WINDOW w AS ('
             'PARTITION BY "t1"."key" ORDER BY "t1"."timestamp") '
             'ORDER BY "t1"."timestamp"'), [4, 5, 100])
-
-    def test_ordered_unpartitioned(self):
-        query = (Register
-                 .select(
-                     Register.value,
-                     fn.RANK().over(order_by=[Register.value])))
-        self.assertSQL(query, (
-            'SELECT "t1"."value", RANK() OVER (ORDER BY "t1"."value") '
-            'FROM "register" AS "t1"'), [])
-
-    def test_empty_over(self):
-        query = (Register
-                 .select(Register.value, fn.LAG(Register.value, 1).over())
-                 .order_by(Register.value))
-        self.assertSQL(query, (
-            'SELECT "t1"."value", LAG("t1"."value", ?) OVER () '
-            'FROM "register" AS "t1" '
-            'ORDER BY "t1"."value"'), [1])
 
     def test_filter_clause(self):
         condsum = fn.SUM(Register.value).filter(Register.value > 1).over(

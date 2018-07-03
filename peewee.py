@@ -1342,16 +1342,12 @@ class Function(ColumnBase):
              window=None):
         if isinstance(partition_by, Window) and window is None:
             window = partition_by
-        if start is not None and not isinstance(start, SQL):
-            start = SQL(*start)
-        if end is not None and not isinstance(end, SQL):
-            end = SQL(*end)
 
-        if window is None:
+        if window is not None:
+            node = WindowAlias(window)
+        else:
             node = Window(partition_by=partition_by, order_by=order_by,
                           start=start, end=end)
-        else:
-            node = SQL(window._alias)
         return NodeList((self, SQL('OVER'), node))
 
     def __sql__(self, ctx):
@@ -1379,8 +1375,13 @@ class Window(Node):
     def __init__(self, partition_by=None, order_by=None, start=None, end=None,
                  alias=None):
         super(Window, self).__init__()
-        self.partition_by = partition_by
-        self.order_by = order_by
+        if start is not None and not isinstance(start, SQL):
+            start = SQL(start)
+        if end is not None and not isinstance(end, SQL):
+            end = SQL(end)
+
+        self.partition_by = ensure_tuple(partition_by)
+        self.order_by = ensure_tuple(order_by)
         self.start = start
         self.end = end
         if self.start is None and self.end is not None:
@@ -1429,8 +1430,17 @@ class Window(Node):
             ctx.sql(NodeList(parts))
         return ctx
 
-    def clone_base(self):
-        return Window(self.partition_by, self.order_by)
+
+class WindowAlias(Node):
+    def __init__(self, window):
+        self.window = window
+
+    def alias(self, window_alias):
+        self.window._alias = window_alias
+        return self
+
+    def __sql__(self, ctx):
+        return ctx.literal(self.window._alias or 'w')
 
 
 def Case(predicate, expression_tuples, default=None):
