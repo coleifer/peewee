@@ -593,7 +593,9 @@ Database
 
         Class decorator to register a user-defined aggregate function.
 
-        Example::
+        Example:
+
+        .. code-block:: python
 
             @db.aggregate('md5')
             class MD5(object):
@@ -635,7 +637,9 @@ Database
 
         Decorator to register a user-defined collation.
 
-        Example::
+        Example:
+
+        .. code-block:: python
 
             @db.collation('reverse')
             def collate_reverse(s1, s2):
@@ -672,7 +676,9 @@ Database
 
         Decorator to register a user-defined scalar function.
 
-        Example::
+        Example:
+
+        .. code-block:: python
 
             @db.func('title_case')
             def title_case(s):
@@ -680,6 +686,58 @@ Database
 
             # Usage:
             title_case_books = Book.select(fn.title_case(Book.title))
+
+    .. py:method:: register_window_function(klass[, name=None[, num_params=-1]])
+
+        :param klass: Class implementing window function API.
+        :param str name: Window function name (defaults to name of class).
+        :param int num_params: Number of parameters the function accepts, or
+            -1 for any number.
+
+        Register a user-defined window function.
+
+        .. attention::
+            This feature requires SQLite >= 3.25.0 **and**
+            `pysqlite3 <https://github.com/coleifer/pysqlite3>`_ >= 0.2.0.
+
+        The window function will be registered each time a new connection is
+        opened. Additionally, if a connection is already open, the window
+        function will be registered with the open connection.
+
+    .. py:method:: window_function([name=None[, num_params=-1]])
+
+        :param str name: Name of the window function (defaults to class name).
+        :param int num_params: Number of parameters the function accepts, or -1
+            for any number.
+
+        Class decorator to register a user-defined window function. Window
+        functions must define the following methods:
+
+        * ``step(<params>)`` - receive values from a row and update state.
+        * ``inverse(<params>)`` - inverse of ``step()`` for the given values.
+        * ``value()`` - return the current value of the window function.
+        * ``finalize()`` - return the final value of the window function.
+
+        Example:
+
+        .. code-block:: python
+
+            @db.window_function('my_sum')
+            class MySum(object):
+                def __init__(self):
+                    self._value = 0
+
+                def step(self, value):
+                    self._value += value
+
+                def inverse(self, value):
+                    self._value -= value
+
+                def value(self):
+                    return self._value
+
+                def finalize(self):
+                    return self._value
 
     .. py:method:: table_function([name=None])
 
@@ -850,7 +908,9 @@ Query-builder
 
     A source of row tuples, for example a table, join, or select query. By
     default provides a "magic" attribute named "c" that is a factory for
-    column/attribute lookups, for example::
+    column/attribute lookups, for example:
+
+    .. code-block:: python
 
         User = Table('users')
         query = (User
