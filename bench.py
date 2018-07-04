@@ -71,10 +71,8 @@ def select():
 
 @timed
 def select_related_dbapi_raw():
-    cursor = db.execute_sql('select item.*, collection.* '
-                            'from item '
-                            'inner join collection '
-                            'on (item.collection_id = collection.id);')
+    query = Item.select(Item, Collection).join(Collection)
+    cursor = db.execute(query)
     for row in cursor:
         pass
 
