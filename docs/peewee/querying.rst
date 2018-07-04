@@ -1476,7 +1476,7 @@ above-average values for their given group:
 .. code-block:: pycon
 
     >>> for sample in query:
-    ...     print(sample.key, sample.diff)
+    ...     print(sample.key, sample.value)
 
     # 'a', 1.75
     # 'b', 2.7
