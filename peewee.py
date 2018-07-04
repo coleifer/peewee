@@ -2822,6 +2822,7 @@ class SqliteDatabase(Database):
         self._aggregates = {}
         self._collations = {}
         self._functions = {}
+        self._window_functions = {}
         self._table_functions = []
         self._extensions = set()
         self._attached = {}
@@ -2857,6 +2858,8 @@ class SqliteDatabase(Database):
         self._load_aggregates(conn)
         self._load_collations(conn)
         self._load_functions(conn)
+        if __sqlite_version__ >= (3, 25, 0):
+            self._load_window_functions(conn)
         if self._table_functions:
             for table_function in self._table_functions:
                 table_function.register(conn)
@@ -2928,6 +2931,10 @@ class SqliteDatabase(Database):
         for name, (fn, num_params) in self._functions.items():
             conn.create_function(name, num_params, fn)
 
+    def _load_window_functions(self, conn):
+        for name, (klass, num_params) in self._window_functions.items():
+            conn.create_window_function(name, num_params, klass)
+
     def register_aggregate(self, klass, name=None, num_params=-1):
         self._aggregates[name or klass.__name__.lower()] = (klass, num_params)
         if not self.is_closed():
@@ -2966,6 +2973,18 @@ class SqliteDatabase(Database):
             return fn
         return decorator
 
+    def register_window_function(self, klass, name=None, num_params=-1):
+        name = name or klass.__name__.lower()
+        self._window_functions[name] = (klass, num_params)
+        if not self.is_closed():
+            self._load_window_functions(self.connection())
+
+    def window_function(self, name=None, num_params=-1):
+        def decorator(klass):
+            self.register_window_function(klass, name, num_params)
+            return klass
+        return decorator
+
     def register_table_function(self, klass, name=None):
         if name is not None:
             klass.name = name
@@ -2987,6 +3006,9 @@ class SqliteDatabase(Database):
 
     def unregister_function(self, name):
         del(self._functions[name])
+
+    def unregister_window_function(self, name):
+        del(self._window_functions[name])
 
     def unregister_table_function(self, name):
         for idx, klass in enumerate(self._table_functions):
