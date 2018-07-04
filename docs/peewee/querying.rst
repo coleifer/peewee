@@ -668,6 +668,18 @@ For example:
     for tweet in query.objects():
         print(tweet.username, tweet.content)
 
+For maximum performance, you can execute queries and then iterate over the
+results using the underlying database cursor. :py:meth:`Database.execute`
+accepts a query object, executes the query, and returns a DB-API 2.0 ``Cursor``
+object. The cursor will return the raw row-tuples:
+
+.. code-block:: python
+
+    query = Tweet.select(Tweet.content, User.username).join(User)
+    cursor = database.execute(query)
+    for (content, username) in cursor:
+        print(username, '->', content)
+
 Filtering records
 -----------------
 
