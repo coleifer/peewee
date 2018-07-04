@@ -3578,3 +3578,16 @@ class TestMixModelsTables(ModelTestCase):
 
         Tbl.delete().where(User.username == 'huey-x').execute()
         self.assertEqual(Tbl.select().count(), 0)
+
+
+class TestDatabaseExecuteQuery(ModelTestCase):
+    database = get_in_memory_db()
+    requires = [User]
+
+    def test_execute_query(self):
+        for username in ('huey', 'zaizee'):
+            User.create(username=username)
+
+        query = User.select().order_by(User.username.desc())
+        cursor = self.database.execute(query)
+        self.assertEqual([row[1] for row in cursor], ['zaizee', 'huey'])
