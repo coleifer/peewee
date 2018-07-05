@@ -7,6 +7,9 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Add APIs for user-defined window functions if using [pysqlite3](https://github.com/coleifer/pysqlite3)
+  and sqlite 3.25.0 or newer.
+
 [View commits](https://github.com/coleifer/peewee/compare/3.5.2...master)
 
 ## 3.5.2
