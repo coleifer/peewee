@@ -20,9 +20,41 @@ class Message(TestModel):
     published = BooleanField()
 
 
+class VTSource(object):
+    def Create(self, db, modulename, dbname, tablename, *args):
+        schema = 'CREATE TABLE x(value)'
+        return schema, VTable()
+    Connect = Create
+class VTable(object):
+    def BestIndex(self, *args):
+        return
+    def Open(self):
+        return VTCursor()
+    def Disconnect(self): pass
+    Destroy = Disconnect
+class VTCursor(object):
+    def Filter(self, *a):
+        self.val = 0
+    def Eof(self): return False
+    def Rowid(self):
+        return self.val
+    def Column(self, col):
+        return self.val
+    def Next(self):
+        self.val += 1
+    def Close(self): pass
+
+
 class TestAPSWExtension(ModelTestCase):
     database = database
     requires = [User, Message]
+
+    def test_db_register_module(self):
+        database.register_module('series', VTSource())
+        database.execute_sql('create virtual table foo using series()')
+        curs = database.execute_sql('select * from foo limit 5;')
+        self.assertEqual([v for v, in curs], [0, 1, 2, 3, 4])
+        database.unregister_module('series')
 
     def test_db_register_function(self):
         @database.func()
