@@ -48,11 +48,11 @@ except ImportError:
 
 mysql_passwd = False
 try:
-    import pymysql as mysql
+    import MySQLdb as mysql  # prefer the C module.
+    mysql_passwd = True
 except ImportError:
     try:
-        import MySQLdb as mysql  # prefer the C module.
-        mysql_passwd = True
+        import pymysql as mysql
     except ImportError:
         mysql = None
 
