@@ -570,10 +570,7 @@ class FTS5Model(BaseFTSModel):
 
     @classmethod
     def rank(cls, *args):
-        if args:
-            return cls.bm25(*args)
-        else:
-            return SQL('rank')
+        return cls.bm25(*args) if args else SQL('rank')
 
     @classmethod
     def bm25(cls, *weights):
