@@ -963,8 +963,8 @@ if CYTHON_SQLITE_EXTENSIONS:
 
     def __status__(flag, return_highwater=False):
         """
-        Expose a sqlite3_status() call for a particular flag as a property of the
-        Database object.
+        Expose a sqlite3_status() call for a particular flag as a property of
+        the Database object.
         """
         def getter(self):
             result = sqlite_get_status(flag)
@@ -973,9 +973,9 @@ if CYTHON_SQLITE_EXTENSIONS:
 
     def __dbstatus__(flag, return_highwater=False, return_current=False):
         """
-        Expose a sqlite3_dbstatus() call for a particular flag as a property of the
-        Database instance. Unlike sqlite3_status(), the dbstatus properties pertain
-        to the current connection.
+        Expose a sqlite3_dbstatus() call for a particular flag as a property of
+        the Database instance. Unlike sqlite3_status(), the dbstatus properties
+        pertain to the current connection.
         """
         def getter(self):
             result = sqlite_get_db_status(self._state.conn, flag)
