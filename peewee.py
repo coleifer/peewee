@@ -1339,7 +1339,7 @@ class Function(ColumnBase):
         self._filter = where
 
     def over(self, partition_by=None, order_by=None, start=None, end=None,
-             window=None):
+             frame_type=None, window=None):
         if isinstance(partition_by, Window) and window is None:
             window = partition_by
 
@@ -1347,7 +1347,7 @@ class Function(ColumnBase):
             node = WindowAlias(window)
         else:
             node = Window(partition_by=partition_by, order_by=order_by,
-                          start=start, end=end)
+                          start=start, end=end, frame_type=frame_type)
         return NodeList((self, SQL('OVER'), node))
 
     def __sql__(self, ctx):
@@ -1371,9 +1371,11 @@ fn = Function(None, None)
 
 class Window(Node):
     CURRENT_ROW = SQL('CURRENT ROW')
+    RANGE = 'RANGE'
+    ROWS = 'ROWS'
 
     def __init__(self, partition_by=None, order_by=None, start=None, end=None,
-                 alias=None):
+                 frame_type=None, alias=None):
         super(Window, self).__init__()
         if start is not None and not isinstance(start, SQL):
             start = SQL(start)
@@ -1387,10 +1389,19 @@ class Window(Node):
         if self.start is None and self.end is not None:
             raise ValueError('Cannot specify WINDOW end without start.')
         self._alias = alias or 'w'
+        self.frame_type = frame_type
 
     def alias(self, alias=None):
         self._alias = alias or 'w'
         return self
+
+    @Node.copy
+    def as_range(self):
+        self.frame_type = Window.RANGE
+
+    @Node.copy
+    def as_rows(self):
+        self.frame_type = Window.ROWS
 
     @staticmethod
     def following(value=None):
@@ -1420,13 +1431,16 @@ class Window(Node):
                     SQL('ORDER BY'),
                     CommaNodeList(self.order_by)))
             if self.start is not None and self.end is not None:
+                frame = self.frame_type or 'ROWS'
                 parts.extend((
-                    SQL('ROWS BETWEEN'),
+                    SQL('%s BETWEEN' % frame),
                     self.start,
                     SQL('AND'),
                     self.end))
             elif self.start is not None:
-                parts.extend((SQL('ROWS'), self.start))
+                parts.extend((SQL(self.frame_type or 'ROWS'), self.start))
+            elif self.frame_type is not None:
+                parts.append(SQL('%s UNBOUNDED PRECEDING' % self.frame_type))
             ctx.sql(NodeList(parts))
         return ctx
 

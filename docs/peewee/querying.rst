@@ -1337,6 +1337,103 @@ each window has a unique alias:
     # 2           3.     34.      2.
     # 3         100     134.    100.
 
+.. _window-frame-types:
+
+Frame types: RANGE vs ROWS
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Depending on the frame type, the database will process ordered groups
+differently. Let's create two additional ``Sample`` rows to visualize the
+difference:
+
+.. code-block:: pycon
+
+    >>> Sample.create(counter=1, value=20.)
+    <Sample 6>
+    >>> Sample.create(counter=2, value=1.)
+    <Sample 7>
+
+Our table now contains:
+
+=== ======== ======
+id  counter  value
+=== ======== ======
+1   1        10.0
+2   1        20.0
+3   2        1.0
+4   2        3.0
+5   3        100.0
+6   1        20.0
+7   2        1.0
+=== ======== ======
+
+Let's examine the difference by calculating a "running sum" of the samples,
+ordered with respect to the ``counter`` and ``value`` fields. To specify the
+frame type, we can use either:
+
+* :py:attr:`Window.RANGE`
+* :py:attr:`Window.ROWS`
+
+The behavior of :py:attr:`~Window.RANGE`, when there are logical duplicates,
+may lead to unexpected results:
+
+.. code-block:: python
+
+    query = Sample.select(
+        Sample.counter,
+        Sample.value,
+        fn.SUM(Sample.value).over(
+            order_by=[Sample.counter, Sample.value],
+            frame_type=Window.RANGE).alias('rsum'))
+
+    for sample in query.order_by(Sample.counter, Sample.value):
+        print(sample.counter, sample.value, sample.rsum)
+
+    # counter  value   rsum
+    # 1          10.     10.
+    # 1          20.     50.
+    # 1          20.     50.
+    # 2           1.     52.
+    # 2           1.     52.
+    # 2           3.     55.
+    # 3         100     155.
+
+With the inclusion of the new rows we now have some rows that have duplicate
+``category`` and ``value`` values. The :py:attr:`~Window.RANGE` frame type
+causes these duplicates to be evaluated together rather than separately.
+
+The more expected result can be achieved by using :py:attr:`~Window.ROWS` as
+the frame-type:
+
+.. code-block:: python
+
+    query = Sample.select(
+        Sample.counter,
+        Sample.value,
+        fn.SUM(Sample.value).over(
+            order_by=[Sample.counter, Sample.value],
+            frame_type=Window.ROWS).alias('rsum'))
+
+    for sample in query.order_by(Sample.counter, Sample.value):
+        print(sample.counter, sample.value, sample.rsum)
+
+    # counter  value   rsum
+    # 1          10.     10.
+    # 1          20.     30.
+    # 1          20.     50.
+    # 2           1.     51.
+    # 2           1.     52.
+    # 2           3.     55.
+    # 3         100     155.
+
+Peewee uses these rules for determining what frame-type to use:
+
+* If the user specifies a ``frame_type``, that frame type will be used.
+* If ``start`` and/or ``end`` boundaries are specified Peewee will default to
+  using ``ROWS``.
+* If the user did not specify frame type or start/end boundaries, Peewee will
+  use the database default, which is ``RANGE``.
+
 .. note::
     For information about the window function APIs, see:
 

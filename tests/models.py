@@ -1607,6 +1607,57 @@ class TestWindowFunctionIntegration(ModelTestCase):
             (2, 3., 24.),
             (3, 100., 104.)])
 
+    def test_frame_types(self):
+        Sample.create(counter=1, value=20.)
+        Sample.create(counter=2, value=1.)  # Observe logical peer handling.
+
+        # Defaults to RANGE.
+        query = (Sample
+                 .select(Sample.counter, Sample.value,
+                         fn.SUM(Sample.value).over(
+                             order_by=[Sample.counter, Sample.value]))
+                 .order_by(Sample.id))
+        self.assertEqual(list(query.tuples()), [
+            (1, 10., 10.),
+            (1, 20., 50.),
+            (2, 1., 52.),
+            (2, 3., 55.),
+            (3, 100., 155.),
+            (1, 20., 50.),
+            (2, 1., 52.)])
+
+        # Explicitly specify ROWS.
+        query = (Sample
+                 .select(Sample.counter, Sample.value,
+                         fn.SUM(Sample.value).over(
+                             order_by=[Sample.counter, Sample.value],
+                             frame_type=Window.ROWS))
+                 .order_by(Sample.counter, Sample.value))
+        self.assertEqual(list(query.tuples()), [
+            (1, 10., 10.),
+            (1, 20., 30.),
+            (1, 20., 50.),
+            (2, 1., 51.),
+            (2, 1., 52.),
+            (2, 3., 55.),
+            (3, 100., 155.)])
+
+        # Including a boundary results in ROWS.
+        query = (Sample
+                 .select(Sample.counter, Sample.value,
+                         fn.SUM(Sample.value).over(
+                             order_by=[Sample.counter, Sample.value],
+                             start=Window.preceding(2)))
+                 .order_by(Sample.counter, Sample.value))
+        self.assertEqual(list(query.tuples()), [
+            (1, 10., 10.),
+            (1, 20., 30.),
+            (1, 20., 50.),
+            (2, 1., 41.),
+            (2, 1., 22.),
+            (2, 3., 5.),
+            (3, 100., 104.)])
+
     @skip_if(IS_MYSQL, 'requires OVER() with FILTER')
     def test_filter_clause(self):
         condsum = fn.SUM(Sample.value).filter(Sample.counter > 1).over(

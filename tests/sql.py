@@ -1,4 +1,5 @@
 import datetime
+import re
 
 from peewee import *
 from peewee import Expression
@@ -8,6 +9,7 @@ from .base import TestModel
 from .base import db
 from .base import requires_mysql
 from .base import requires_sqlite
+from .base import __sql__
 
 
 User = Table('users')
@@ -749,6 +751,75 @@ class TestWindowFunctions(BaseTestCase):
             'ORDER BY "t1"."value" '
             'ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING) '
             'FROM "register" AS "t1"'), [])
+
+    def test_frame_types(self):
+        def assertFrame(over_kwargs, expected):
+            query = Register.select(
+                Register.value,
+                fn.SUM(Register.value).over(**over_kwargs))
+            sql, params = __sql__(query)
+            match_obj = re.search('OVER \((.*?)\) FROM', sql)
+            self.assertTrue(match_obj is not None)
+            self.assertEqual(match_obj.groups()[0], expected)
+            self.assertEqual(params, [])
+
+        # No parameters -- empty OVER().
+        assertFrame({}, (''))
+        # Explicitly specify RANGE / ROWS frame-types.
+        assertFrame({'frame_type': Window.RANGE}, 'RANGE UNBOUNDED PRECEDING')
+        assertFrame({'frame_type': Window.ROWS}, 'ROWS UNBOUNDED PRECEDING')
+
+        # Start and end boundaries.
+        assertFrame({'start': Window.preceding(), 'end': Window.following()},
+                    'ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING')
+        assertFrame({
+            'start': Window.preceding(),
+            'end': Window.following(),
+            'frame_type': Window.RANGE,
+        }, 'RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING')
+        assertFrame({
+            'start': Window.preceding(),
+            'end': Window.following(),
+            'frame_type': Window.ROWS,
+        }, 'ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING')
+
+        # Start boundary.
+        assertFrame({'start': Window.preceding()}, 'ROWS UNBOUNDED PRECEDING')
+        assertFrame({'start': Window.preceding(), 'frame_type': Window.RANGE},
+                    'RANGE UNBOUNDED PRECEDING')
+        assertFrame({'start': Window.preceding(), 'frame_type': Window.ROWS},
+                    'ROWS UNBOUNDED PRECEDING')
+
+        # Ordered or partitioned.
+        assertFrame({'order_by': Register.value}, 'ORDER BY "t1"."value"')
+        assertFrame({'frame_type': Window.RANGE, 'order_by': Register.value},
+                    'ORDER BY "t1"."value" RANGE UNBOUNDED PRECEDING')
+        assertFrame({'frame_type': Window.ROWS, 'order_by': Register.value},
+                    'ORDER BY "t1"."value" ROWS UNBOUNDED PRECEDING')
+        assertFrame({'partition_by': Register.category},
+                    'PARTITION BY "t1"."category"')
+        assertFrame({
+            'frame_type': Window.RANGE,
+            'partition_by': Register.category,
+        }, 'PARTITION BY "t1"."category" RANGE UNBOUNDED PRECEDING')
+        assertFrame({
+            'frame_type': Window.ROWS,
+            'partition_by': Register.category,
+        }, 'PARTITION BY "t1"."category" ROWS UNBOUNDED PRECEDING')
+
+        # Ordering and boundaries.
+        assertFrame({'order_by': Register.value, 'start': Window.CURRENT_ROW,
+                     'end': Window.following()},
+                    ('ORDER BY "t1"."value" '
+                     'ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING'))
+        assertFrame({'order_by': Register.value, 'start': Window.CURRENT_ROW,
+                     'end': Window.following(), 'frame_type': Window.RANGE},
+                    ('ORDER BY "t1"."value" '
+                     'RANGE BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING'))
+        assertFrame({'order_by': Register.value, 'start': Window.CURRENT_ROW,
+                     'end': Window.following(), 'frame_type': Window.ROWS},
+                    ('ORDER BY "t1"."value" '
+                     'ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING'))
 
     def test_running_total(self):
         EventLog = Table('evtlog', ('id', 'timestamp', 'data'))
