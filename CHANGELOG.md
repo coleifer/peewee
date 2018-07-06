@@ -7,6 +7,8 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Support for specifying `ROWS` or `RANGE` window frame types. For more
+  information, see the [window functions documentation](http://docs.peewee-orm.com/en/latest/peewee/querying.html#window-functions).
 * Add APIs for user-defined window functions if using [pysqlite3](https://github.com/coleifer/pysqlite3)
   and sqlite 3.25.0 or newer.
 
