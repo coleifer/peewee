@@ -2,21 +2,18 @@ import os
 import platform
 import sys
 import warnings
-from distutils.core import setup
-from distutils.extension import Extension
-from distutils.version import LooseVersion
+from setuptools import setup
+from setuptools.extension import Extension
 
 f = open(os.path.join(os.path.dirname(__file__), 'README.rst'))
 readme = f.read()
 f.close()
 
 setup_kwargs = {}
-cython_min_version = '0.22.1'
 ext_modules = []
 
 try:
-    from Cython.Distutils import build_ext
-    from Cython import __version__ as cython_version
+    from Cython.Build import cythonize
 except ImportError:
     cython_installed = False
     warnings.warn('Cython C extensions for peewee will NOT be built, because '
@@ -27,13 +24,6 @@ else:
         cython_installed = False
         warnings.warn('Cython C extensions disabled as you are not using '
                       'CPython.')
-    elif LooseVersion(cython_version) < LooseVersion(cython_min_version):
-        cython_installed = False
-        warnings.warn('Cython C extensions for peewee will NOT be built, '
-                      'because the installed Cython version '
-                      '(' + cython_version + ') is too old. To enable Cython '
-                      'C extensions, install Cython >=' + cython_min_version +
-                      '.')
     else:
         cython_installed = True
 
@@ -63,9 +53,7 @@ if cython_installed:
         warnings.warn('SQLite extensions will not be built at users request.')
 
 if ext_modules:
-    setup_kwargs.update(
-        cmdclass={'build_ext': build_ext},
-        ext_modules=ext_modules)
+    setup_kwargs.update(ext_modules=cythonize(ext_modules))
 
 setup(
     name='peewee',
