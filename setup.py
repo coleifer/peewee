@@ -74,4 +74,5 @@ setup(
         'Programming Language :: Python :: 3',
     ],
     scripts = ['pwiz.py'],
+    zip_safe=False,
     **setup_kwargs)
