@@ -8,6 +8,8 @@ from .base import ModelTestCase
 from .base import TestModel
 from .base import db
 from .base import requires_sqlite
+from .base_models import Tweet
+from .base_models import User
 
 
 class ColTypes(TestModel):
@@ -445,3 +447,24 @@ class TestReflectDefaultValues(BaseReflectionTestCase):
         models = self.introspector.generate_models()
         eventlog = models['event_log']
         self.assertSQL(eventlog._schema._create_table(), create_table, [])
+
+
+class TestReflectionDependencies(BaseReflectionTestCase):
+    requires = [User, Tweet]
+
+    def test_generate_dependencies(self):
+        models = self.introspector.generate_models(table_names=['tweet'])
+        self.assertEqual(set(models), set(('users', 'tweet')))
+
+        IUser = models['users']
+        ITweet = models['tweet']
+
+        self.assertEqual(set(ITweet._meta.fields), set((
+            'id', 'user', 'content', 'timestamp')))
+        self.assertEqual(set(IUser._meta.fields), set(('id', 'username')))
+        self.assertTrue(ITweet.user.rel_model is IUser)
+        self.assertTrue(ITweet.user.rel_field is IUser.id)
+
+    def test_ignore_backrefs(self):
+        models = self.introspector.generate_models(table_names=['users'])
+        self.assertEqual(set(models), set(('users',)))

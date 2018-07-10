@@ -490,6 +490,7 @@ class Introspector(object):
 
         if table_names is not None:
             tables = [table for table in tables if table in table_names]
+        table_set = set(tables)
 
         # Store a mapping of table name -> dictionary of columns.
         columns = {}
@@ -516,6 +517,14 @@ class Introspector(object):
             except ValueError as exc:
                 err(*exc.args)
                 foreign_keys[table] = []
+            else:
+                # If there is a possibility we could exclude a dependent table,
+                # ensure that we introspect it so FKs will work.
+                if table_names is not None:
+                    for foreign_key in foreign_keys[table]:
+                        if foreign_key.dest_table not in table_set:
+                            tables.append(foreign_key.dest_table)
+                            table_set.add(foreign_key.dest_table)
 
             model_names[table] = self.make_model_name(table)
 
