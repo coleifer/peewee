@@ -2132,7 +2132,7 @@ class TestCTEIntegration(ModelTestCase):
             ('c31', 3, 'root->p3->c31')])
 
     @requires_models(Sample)
-    @skip_if(IS_SQLITE_OLD, 'sqlite too old for ctes')
+    @skip_if(IS_SQLITE_OLD or IS_MYSQL, 'sqlite too old for ctes, mysql flaky')
     def test_cte_reuse_aggregate(self):
         data = (
             (1, (1.25, 1.5, 1.75)),
