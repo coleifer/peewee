@@ -79,6 +79,10 @@ if __name__ == '__main__':
         sys.stderr.write('Passphrase required to access diary.\n')
         sys.stderr.flush()
         sys.exit(1)
+    elif len(passphrase) < 8:
+        sys.stderr.write('Passphrase must be at least 8 characters.\n')
+        sys.stderr.flush()
+        sys.exit(1)
 
     # Initialize the database.
     initialize(passphrase)
