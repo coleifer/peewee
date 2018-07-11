@@ -1,7 +1,6 @@
 import sys
 
-from peewee import *
-from peewee import Alias
+from peewee import Alias, Field, ForeignKeyField
 
 if sys.version_info[0] == 3:
     from collections import Callable
