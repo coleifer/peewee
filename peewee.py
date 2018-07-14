@@ -2768,6 +2768,9 @@ class Database(_callable_context_manager):
     def get_tables(self, schema=None):
         raise NotImplementedError
 
+    def get_views(self, sechema=None):
+        raise NotImplementedError
+
     def get_indexes(self, table, schema=None):
         raise NotImplementedError
 
@@ -3231,6 +3234,24 @@ class PostgresqlDatabase(Database):
         cursor = self.execute_sql(query, (schema or 'public',))
         return [table for table, in cursor.fetchall()]
 
+    def get_views(self, schema=None):
+        query = '''
+            SELECT
+                c.relname as "Name"
+	    FROM pg_catalog.pg_class c
+		 LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+	    WHERE 
+                c.relkind IN ('v','')
+	        AND n.nspname <> 'pg_catalog'
+		AND n.nspname <> 'information_schema'
+		AND n.nspname !~ '^pg_toast'
+	        AND pg_catalog.pg_table_is_visible(c.oid)
+                AND n.nspname = %s
+	    ORDER BY 1
+        '''
+        cursor = self.execute_sql(query, (schema or 'public',))
+        return [view for view, in cursor.fetchall()]
+
     def get_indexes(self, table, schema=None):
         query = """
             SELECT
@@ -3381,7 +3402,7 @@ class MySQLDatabase(Database):
 
     def get_tables(self, schema=None):
         return [table for table, in self.execute_sql('SHOW TABLES')]
-
+    
     def get_indexes(self, table, schema=None):
         cursor = self.execute_sql('SHOW INDEX FROM `%s`' % table)
         unique = set()

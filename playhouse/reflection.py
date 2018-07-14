@@ -481,12 +481,18 @@ class Introspector(object):
             column = '_' + column
         return column
 
-    def introspect(self, table_names=None, literal_column_names=False):
+    def introspect(self, table_names=None, literal_column_names=False,
+            views_only=False):
+        # Maybe we want the just the views instead of tables.
+        if views_only:
+            func = self.metadata.database.get_views
+        else:
+            func = self.metadata.database.get_tables
         # Retrieve all the tables in the database.
         if self.schema:
-            tables = self.metadata.database.get_tables(schema=self.schema)
+            tables = func(schema=self.schema)
         else:
-            tables = self.metadata.database.get_tables()
+            tables = func()
 
         if table_names is not None:
             tables = [table for table in tables if table in table_names]
