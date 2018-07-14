@@ -3646,7 +3646,10 @@ class CursorWrapper(object):
     def iterator(self):
         """Efficient one-pass iteration over the result set."""
         while True:
-            yield self.iterate(False)
+            try:
+                yield self.iterate(False)
+            except StopIteration:
+                return
 
     def fill_cache(self, n=0):
         n = n or float('Inf')
