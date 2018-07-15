@@ -1,5 +1,5 @@
 todo
 ====
 
-* Speedups
-* model and table .bind() as a context manager / decorator, too?
+* Introspecting VIEWs (add support to pwiz as well).
+* Speedups (?)
