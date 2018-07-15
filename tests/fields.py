@@ -715,6 +715,26 @@ class TestUUIDField(ModelTestCase):
         self.assertEqual(u_db2.id, u.id)
 
 
+class TSModel(TestModel):
+    ts_s = TimestampField()
+    ts_us = TimestampField(resolution=10 ** 6)
+
+
+class TestTimestampField(ModelTestCase):
+    requires = [TSModel]
+
+    def test_timestamp_field(self):
+        dt = datetime.datetime(2018, 3, 1, 3, 3, 7)
+        dt = dt.replace(microsecond=31337)
+        ts = TSModel.create(ts_s=dt, ts_us=dt)
+        ts_db = TSModel.get(TSModel.id == ts.id)
+        self.assertEqual(ts_db.ts_s, dt.replace(microsecond=0))
+        self.assertEqual(ts_db.ts_us, dt)
+
+        self.assertEqual(TSModel.get(TSModel.ts_s == dt).id, ts.id)
+        self.assertEqual(TSModel.get(TSModel.ts_us == dt).id, ts.id)
+
+
 class ListField(TextField):
     def db_value(self, value):
         return ','.join(value) if value else ''

@@ -4289,7 +4289,7 @@ class TimeField(_BaseFormattedField):
     second = property(_date_part('second'))
 
 
-class TimestampField(IntegerField):
+class TimestampField(BigIntegerField):
     # Support second -> microsecond resolution.
     valid_resolutions = [10**i for i in range(7)]
 
