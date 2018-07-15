@@ -363,7 +363,7 @@ class FetchManyCursor(object):
         while True:
             rows = self.cursor.fetchmany(self.array_size)
             if not rows:
-                raise StopIteration
+                return
             for row in rows:
                 yield row
 
