@@ -11,6 +11,7 @@ https://github.com/coleifer/peewee/releases
   information, see the new [frame type documentation](http://docs.peewee-orm.com/en/latest/peewee/querying.html#frame-types-range-vs-rows).
 * Add APIs for user-defined window functions if using [pysqlite3](https://github.com/coleifer/pysqlite3)
   and sqlite 3.25.0 or newer.
+* `TimestampField` now uses 64-bit integer data-type for storage.
 
 [View commits](https://github.com/coleifer/peewee/compare/3.5.2...master)
 
