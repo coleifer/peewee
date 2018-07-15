@@ -43,8 +43,8 @@ def make_introspector(database_type, database_name, **kwargs):
     db = DatabaseClass(database_name, **kwargs)
     return Introspector.from_database(db, schema=schema)
 
-def print_models(introspector, tables=None, preserve_order=False):
-    database = introspector.introspect(table_names=tables)
+def print_models(introspector, tables=None, preserve_order=False, views_only=False):
+    database = introspector.introspect(table_names=tables, views_only=views_only)
 
     print_(TEMPLATE % (
         introspector.get_additional_imports(),
@@ -157,6 +157,8 @@ def get_option_parser():
              'generated file.'))
     ao('-o', '--preserve-order', action='store_true', dest='preserve_order',
        help='Model definition column ordering matches source table.')
+    ao('-v', '--views', action='store_true',
+       help='Get definitions for views instead of tables (Postgres only).')
     return parser
 
 def get_connect_kwargs(options):
@@ -198,4 +200,5 @@ if __name__ == '__main__':
         cmd_line = ' '.join(raw_argv[1:])
         print_header(cmd_line, introspector)
 
-    print_models(introspector, tables, preserve_order=options.preserve_order)
+    print_models(introspector, tables, preserve_order=options.preserve_order,
+            views_only=options.views)
