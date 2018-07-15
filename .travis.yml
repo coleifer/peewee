@@ -4,7 +4,6 @@ python:
   - "3.4"
   - "3.5"
   - "3.6"
-  - "3.7"
 dist: trusty
 env:
   - PEEWEE_TEST_BACKEND=sqlite
