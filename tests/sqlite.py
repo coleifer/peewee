@@ -17,6 +17,7 @@ from .base import skip_if
 from .base import skip_unless
 from .base_models import User
 from .sqlite_helpers import json_installed
+from .sqlite_helpers import json_patch_installed
 
 
 database = SqliteExtDatabase(':memory:', c_extensions=False, timeout=100)
@@ -436,6 +437,7 @@ class TestJSONField(ModelTestCase):
         self.assertData('a', {'k1': 'v1', 'x1': {'y1': 'z1-x', 'y3': 'z3'}})
         self.assertData('d', {'x1': {'y1': 'z1-x', 'y3': 'z3'}})
 
+    @skip_unless(json_patch_installed())
     def test_update(self):
         merged = KeyData.data.update({'x1': {'y1': 'z1-x', 'y3': 'z3'}})
         query = (KeyData
@@ -447,6 +449,7 @@ class TestJSONField(ModelTestCase):
         self.assertData('a', {'k1': 'v1', 'x1': {'y1': 'z1-x', 'y3': 'z3'}})
         self.assertData('d', {'x1': {'y1': 'z1-x', 'y2': 'z2', 'y3': 'z3'}})
 
+    @skip_unless(json_patch_installed())
     def test_update_with_removal(self):
         m = KeyData.data.update({'k1': None, 'x1': {'y1': None, 'y3': 'z3'}})
         query = KeyData.update(data=m).where(KeyData.data['x1']['y1'] == 'z1')
@@ -456,6 +459,7 @@ class TestJSONField(ModelTestCase):
         self.assertData('a', {'x1': {'y3': 'z3'}})
         self.assertData('d', {'x1': {'y2': 'z2', 'y3': 'z3'}})
 
+    @skip_unless(json_patch_installed())
     def test_update_nested(self):
         merged = KeyData.data['x1'].update({'y1': 'z1-x', 'y3': 'z3'})
         query = (KeyData
@@ -467,6 +471,7 @@ class TestJSONField(ModelTestCase):
         self.assertData('a', {'k1': 'v1', 'x1': {'y1': 'z1-x', 'y3': 'z3'}})
         self.assertData('d', {'x1': {'y1': 'z1-x', 'y2': 'z2', 'y3': 'z3'}})
 
+    @skip_unless(json_patch_installed())
     def test_updated_nested_with_removal(self):
         merged = KeyData.data['x1'].update({'o1': 'p1', 'y1': None})
         nrows = (KeyData

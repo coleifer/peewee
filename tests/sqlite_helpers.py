@@ -13,3 +13,7 @@ def json_installed():
     finally:
         tmp_db.close()
     return True
+
+
+def json_patch_installed():
+    return sqlite3.sqlite_version_info >= (3, 18, 0)
