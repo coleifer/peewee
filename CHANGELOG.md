@@ -7,6 +7,8 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Support for Python 3.7, including bugfixes related to new StopIteration
+  handling inside of generators.
 * Support for specifying `ROWS` or `RANGE` window frame types. For more
   information, see the new [frame type documentation](http://docs.peewee-orm.com/en/latest/peewee/querying.html#frame-types-range-vs-rows).
 * Add APIs for user-defined window functions if using [pysqlite3](https://github.com/coleifer/pysqlite3)
