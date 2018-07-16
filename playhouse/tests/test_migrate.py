@@ -680,3 +680,6 @@ class MySQLMigrationTestCase(BaseMigrationTestCase, PeeweeTestCase):
     # MySQL does not raise an exception when adding a not null constraint
     # to a column that contains NULL values.
     _exception_add_not_null = False
+
+    def test_modify_not_null_foreign_key(self):
+        pass
