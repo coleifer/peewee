@@ -343,7 +343,7 @@ Database
 
         Example::
 
-            print db.get_indexes('entry')
+            print(db.get_indexes('entry'))
             [IndexMetadata(
                  name='entry_public_list',
                  sql='CREATE INDEX "entry_public_list" ...',
@@ -366,7 +366,7 @@ Database
 
         Example::
 
-            print db.get_columns('entry')
+            print(db.get_columns('entry'))
             [ColumnMetadata(
                  name='id',
                  data_type='INTEGER',
@@ -390,7 +390,7 @@ Database
 
         Example::
 
-            print db.get_primary_keys('entry')
+            print(db.get_primary_keys('entry'))
             ['id']
 
     .. py:method:: get_foreign_keys(table[, schema=None])
@@ -403,12 +403,27 @@ Database
 
         Example::
 
-            print db.get_foreign_keys('entrytag')
+            print(db.get_foreign_keys('entrytag'))
             [ForeignKeyMetadata(
                  column='entry_id',
                  dest_table='entry',
                  dest_column='id',
                  table='entrytag'),
+             ...]
+
+    .. py:method:: get_views([schema=None])
+
+        :param str schema: Schema name (optional).
+
+        Return a list of :py:class:`ViewMetadata` tuples for VIEWs present in
+        the database.
+
+        Example::
+
+            print(db.get_views())
+            [ViewMetadata(
+                 name='entries_public',
+                 sql='CREATE VIEW entries_public AS SELECT ... '),
              ...]
 
     .. py:method:: sequence_exists(seq)

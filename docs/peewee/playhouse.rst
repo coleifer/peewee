@@ -2647,19 +2647,23 @@ Command-line options
 
 pwiz accepts the following command-line options:
 
-======    ========================= ============================================
-Option    Meaning                   Example
-======    ========================= ============================================
+======    =================================== ============================================
+Option    Meaning                             Example
+======    =================================== ============================================
 -h        show help
--e        database backend          -e mysql
--H        host to connect to        -H remote.db.server
--p        port to connect on        -p 9001
--u        database user             -u postgres
--P        database password         -P secret
--s        postgres schema           -s public
-======    ========================= ============================================
+-e        database backend                    -e mysql
+-H        host to connect to                  -H remote.db.server
+-p        port to connect on                  -p 9001
+-u        database user                       -u postgres
+-P        database password                   -P secret
+-s        schema                              -s public
+-t        tables to generate                  -t tweet,users,relationships
+-v        generate models for VIEWs           (no argument)
+-i        add info metadata to generated file (no argument)
+-o        table column order is preserved     (no argument)
+======    =================================== ============================================
 
-The following are valid parameters for the engine:
+The following are valid parameters for the ``engine`` (``-e``):
 
 * sqlite
 * mysql
@@ -3023,7 +3027,7 @@ including :ref:`dataset` and :ref:`pwiz`.
             User = models['user']
             Tweet = models['tweet']
 
-    .. py:method:: generate_models([skip_invalid=False[, table_names=None[, literal_column_names=False[, bare_fields=False]]]])
+    .. py:method:: generate_models([skip_invalid=False[, table_names=None[, literal_column_names=False[, bare_fields=False[, include_views=False]]]]])
 
         :param bool skip_invalid: Skip tables whose names are invalid python
             identifiers.
@@ -3033,6 +3037,7 @@ including :ref:`dataset` and :ref:`pwiz`.
             column names are "python-ized", i.e. mixed-case becomes lower-case.
         :param bare_fields: **SQLite-only**. Do not specify data-types for
             introspected columns.
+        :param include_views: generate models for VIEWs as well.
         :return: A dictionary mapping table-names to model classes.
 
         Introspect the database, reading in the tables, columns, and foreign

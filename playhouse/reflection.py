@@ -447,8 +447,10 @@ class Introspector(object):
             metadata = PostgresqlMetadata(database)
         elif isinstance(database, MySQLDatabase):
             metadata = MySQLMetadata(database)
-        else:
+        elif isinstance(database, SqliteDatabase):
             metadata = SqliteMetadata(database)
+        else:
+            raise ValueError('Introspection not supported for %r' % database)
         return cls(metadata, schema=schema)
 
     def get_database_class(self):
@@ -481,12 +483,13 @@ class Introspector(object):
             column = '_' + column
         return column
 
-    def introspect(self, table_names=None, literal_column_names=False):
+    def introspect(self, table_names=None, literal_column_names=False,
+                   include_views=False):
         # Retrieve all the tables in the database.
-        if self.schema:
-            tables = self.metadata.database.get_tables(schema=self.schema)
-        else:
-            tables = self.metadata.database.get_tables()
+        tables = self.metadata.database.get_tables(schema=self.schema)
+        if include_views:
+            views = self.metadata.database.get_views(schema=self.schema)
+            tables.extend([view.name for view in views])
 
         if table_names is not None:
             tables = [table for table in tables if table in table_names]
@@ -602,9 +605,10 @@ class Introspector(object):
             indexes)
 
     def generate_models(self, skip_invalid=False, table_names=None,
-                        literal_column_names=False, bare_fields=False):
-        database = self.introspect(table_names=table_names,
-                                   literal_column_names=literal_column_names)
+                        literal_column_names=False, bare_fields=False,
+                        include_views=False):
+        database = self.introspect(table_names, literal_column_names,
+                                   include_views)
         models = {}
 
         class BaseModel(Model):

@@ -48,6 +48,11 @@ class OddColumnNames(TestModel):
     symbols = CharField(column_name='w/-nug!')
 
 
+class Event(TestModel):
+    data = TextField()
+    status = IntegerField()
+
+
 class capture_output(object):
     def __enter__(self):
         self._stdout = sys.stdout
@@ -201,3 +206,46 @@ class TestPwizInvalidColumns(BasePwizTestCase):
 
         actual = result[-len(expected):]
         self.assertEqual(actual, expected)
+
+
+class TestPwizIntrospectViews(BasePwizTestCase):
+    requires = [Event]
+
+    def setUp(self):
+        super(TestPwizIntrospectViews, self).setUp()
+        self.database.execute_sql('CREATE VIEW "events_public" AS '
+                                  'SELECT data FROM event WHERE status = 1')
+
+    def tearDown(self):
+        self.database.execute_sql('DROP VIEW "events_public"')
+        super(TestPwizIntrospectViews, self).tearDown()
+
+    def test_introspect_ignore_views(self):
+        # By default views are not included in the output.
+        with capture_output() as output:
+            print_models(self.introspector)
+        self.assertFalse('events_public' in output.data.strip())
+
+    def test_introspect_views(self):
+        # Views can be introspected, however.
+        with capture_output() as output:
+            print_models(self.introspector, include_views=True)
+
+        result = output.data.strip()
+        event_tbl = textwrap.dedent("""
+            class Event(BaseModel):
+                data = TextField()
+                status = IntegerField()
+
+                class Meta:
+                    table_name = 'event'""").strip()
+        self.assertTrue(event_tbl in result)
+
+        event_view = textwrap.dedent("""
+            class EventsPublic(BaseModel):
+                data = TextField(null=True)
+
+                class Meta:
+                    table_name = 'events_public'
+                    primary_key = False""").strip()
+        self.assertTrue(event_view in result)
