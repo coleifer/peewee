@@ -2463,6 +2463,7 @@ ColumnMetadata = collections.namedtuple(
 ForeignKeyMetadata = collections.namedtuple(
     'ForeignKeyMetadata',
     ('column', 'dest_table', 'dest_column', 'table'))
+ViewMetadata = collections.namedtuple('ViewMetadata', ('name', 'sql'))
 
 
 class _ConnectionState(object):
@@ -3084,6 +3085,11 @@ class SqliteDatabase(Database):
                                   'type=? ORDER BY name' % schema, ('table',))
         return [row for row, in cursor.fetchall()]
 
+    def get_views(self, schema=None):
+        sql = ('SELECT name, sql FROM "%s".sqlite_master WHERE type=? '
+               'ORDER BY name') % (schema or 'main')
+        return [ViewMetadata(*row) for row in self.execute_sql(sql, ('view',))]
+
     def get_indexes(self, table, schema=None):
         schema = schema or 'main'
         query = ('SELECT name, sql FROM "%s".sqlite_master '
@@ -3230,6 +3236,12 @@ class PostgresqlDatabase(Database):
                  'WHERE schemaname = %s ORDER BY tablename')
         cursor = self.execute_sql(query, (schema or 'public',))
         return [table for table, in cursor.fetchall()]
+
+    def get_views(self, schema=None):
+        query = ('SELECT viewname, definition FROM pg_catalog.pg_views '
+                 'WHERE schemaname = %s ORDER BY viewname')
+        cursor = self.execute_sql(query, (schema or 'public',))
+        return [ViewMetadata(v, sql.strip()) for (v, sql) in cursor.fetchall()]
 
     def get_indexes(self, table, schema=None):
         query = """
@@ -3380,7 +3392,17 @@ class MySQLDatabase(Database):
         return ctx.literal('() VALUES ()')
 
     def get_tables(self, schema=None):
-        return [table for table, in self.execute_sql('SHOW TABLES')]
+        query = ('SELECT table_name FROM information_schema.tables '
+                 'WHERE table_schema = DATABASE() AND table_type != %s '
+                 'ORDER BY table_name')
+        return [table for table, in self.execute_sql(query, ('VIEW',))]
+
+    def get_views(self, schema=None):
+        query = ('SELECT table_name, view_definition '
+                 'FROM information_schema.views '
+                 'WHERE table_schema = DATABASE() ORDER BY table_name')
+        cursor = self.execute_sql(query)
+        return [ViewMetadata(*row) for row in cursor.fetchall()]
 
     def get_indexes(self, table, schema=None):
         cursor = self.execute_sql('SHOW INDEX FROM `%s`' % table)
