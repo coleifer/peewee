@@ -5,10 +5,12 @@ import re
 from peewee import *
 from playhouse.reflection import *
 
+from .base import IS_SQLITE_OLD
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db
 from .base import requires_sqlite
+from .base import skip_if
 from .base_models import Tweet
 from .base_models import User
 
@@ -504,6 +506,7 @@ class TestReflectViews(BaseReflectionTestCase):
         self.assertTrue(isinstance(NotesPublic.content, TextField))
         self.assertTrue(isinstance(NotesPublic.timestamp, DateTimeField))
 
+    @skip_if(IS_SQLITE_OLD)
     def test_introspect_view_integration(self):
         for i, (ct, st) in enumerate([('n1', 1), ('n2', 2), ('n3', 1)]):
             Note.create(content=ct, status=st,
