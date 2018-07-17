@@ -1,3 +1,4 @@
+import datetime
 import os
 import re
 
@@ -468,3 +469,48 @@ class TestReflectionDependencies(BaseReflectionTestCase):
     def test_ignore_backrefs(self):
         models = self.introspector.generate_models(table_names=['users'])
         self.assertEqual(set(models), set(('users',)))
+
+
+class Note(TestModel):
+    content = TextField()
+    timestamp = DateTimeField(default=datetime.datetime.now)
+    status = IntegerField()
+
+
+class TestReflectViews(BaseReflectionTestCase):
+    requires = [Note]
+
+    def setUp(self):
+        super(TestReflectViews, self).setUp()
+        self.database.execute_sql('CREATE VIEW notes_public AS '
+                                  'SELECT content, timestamp FROM note '
+                                  'WHERE status = 1 ORDER BY timestamp DESC')
+
+    def tearDown(self):
+        self.database.execute_sql('DROP VIEW notes_public')
+        super(TestReflectViews, self).tearDown()
+
+    def test_views_ignored_default(self):
+        models = self.introspector.generate_models()
+        self.assertFalse('notes_public' in models)
+
+    def test_introspect_view(self):
+        models = self.introspector.generate_models(include_views=True)
+        self.assertTrue('notes_public' in models)
+
+        NotesPublic = models['notes_public']
+        self.assertEqual(sorted(NotesPublic._meta.fields),
+                         ['content', 'timestamp'])
+        self.assertTrue(isinstance(NotesPublic.content, TextField))
+        self.assertTrue(isinstance(NotesPublic.timestamp, DateTimeField))
+
+    def test_introspect_view_integration(self):
+        for i, (ct, st) in enumerate([('n1', 1), ('n2', 2), ('n3', 1)]):
+            Note.create(content=ct, status=st,
+                        timestamp=datetime.datetime(2018, 1, 1 + i))
+
+        NP = self.introspector.generate_models(
+            table_names=['notes_public'], include_views=True)['notes_public']
+        self.assertEqual([(np.content, np.timestamp) for np in NP.select()], [
+            ('n3', datetime.datetime(2018, 1, 3)),
+            ('n1', datetime.datetime(2018, 1, 1))])
