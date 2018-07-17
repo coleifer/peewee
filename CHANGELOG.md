@@ -7,6 +7,10 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/3.6.0...master)
+
+## 3.6.0
+
 * Support for Python 3.7, including bugfixes related to new StopIteration
   handling inside of generators.
 * Support for specifying `ROWS` or `RANGE` window frame types. For more
@@ -14,8 +18,16 @@ https://github.com/coleifer/peewee/releases
 * Add APIs for user-defined window functions if using [pysqlite3](https://github.com/coleifer/pysqlite3)
   and sqlite 3.25.0 or newer.
 * `TimestampField` now uses 64-bit integer data-type for storage.
+* Added support to `pwiz` and `playhouse.reflection` to enable generating
+  models from VIEWs.
+* Added lower-level database API for introspecting VIEWs.
+* Revamped continuous integration setup for better coverage, including 3.7 and
+  3.8-dev.
+* Allow building C extensions even if Cython is not installed, by distributing
+  pre-generated C source files.
+* Switch to using `setuptools` for packaging.
 
-[View commits](https://github.com/coleifer/peewee/compare/3.5.2...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.5.2...3.6.0)
 
 ## 3.5.2
 
