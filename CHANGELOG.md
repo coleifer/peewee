@@ -9,6 +9,12 @@ https://github.com/coleifer/peewee/releases
 
 [View commits](https://github.com/coleifer/peewee/compare/3.6.0...master)
 
+## 3.6.1
+
+Fixed issue with setup script.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.6.0...3.6.1)
+
 ## 3.6.0
 
 * Support for Python 3.7, including bugfixes related to new StopIteration
