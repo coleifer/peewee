@@ -15,9 +15,6 @@ try:
     from Cython.Build import cythonize
 except ImportError:
     cython_installed = False
-    warnings.warn('Cython C extensions for peewee will NOT be built, because '
-                  'Cython does not seem to be installed. To enable Cython C '
-                  'extensions, install Cython >=' + cython_min_version + '.')
 else:
     if platform.python_implementation() != 'CPython':
         cython_installed = extension_support = False
