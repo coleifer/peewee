@@ -2,9 +2,10 @@ import os
 import platform
 import sys
 import warnings
-from distutils.errors import CompileError
+from distutils.command.build_ext import build_ext
+from distutils.errors import CCompilerError
 from distutils.errors import DistutilsExecError
-from distutils.errors import LinkError
+from distutils.errors import DistutilsPlatformError
 
 from setuptools import setup
 from setuptools.extension import Extension
@@ -24,6 +25,7 @@ extension_support = True  # Assume we are building C extensions.
 # (so long as we're running on CPython).
 try:
     from Cython.Build import cythonize
+    from Cython.Distutils import build_ext
 except ImportError:
     cython_installed = False
 else:
@@ -62,6 +64,22 @@ if extension_support:
     else:
         sqlite_extension_support = True
 
+# Exception we will raise to indicate a failure to build C extensions.
+class BuildFailure(Exception): pass
+
+class _PeeweeBuildExt(build_ext):
+    def run(self):
+        try:
+            build_ext.run(self)
+        except DistutilsPlatformError:
+            raise BuildFailure()
+
+    def build_extension(self, ext):
+        try:
+            build_ext.build_extension(self, ext)
+        except (CCompilerError, DistutilsExecError, DistutilsPlatformError):
+            raise BuildFailure()
+
 def _do_setup(c_extensions, sqlite_extensions):
     if c_extensions:
         ext_modules = [speedups_ext_module]
@@ -90,13 +108,14 @@ def _do_setup(c_extensions, sqlite_extensions):
         ],
         scripts = ['pwiz.py'],
         zip_safe=False,
+        cmdclass={'build_ext': _PeeweeBuildExt},
         ext_modules=cythonize(ext_modules))
 
 
 if extension_support:
     try:
         _do_setup(extension_support, sqlite_extension_support)
-    except (CompileError, DistutilsExecError, LinkError):
+    except BuildFailure:
         print('#' * 75)
         print('Error compiling C extensions, C extensions will not be built.')
         print('#' * 75)
