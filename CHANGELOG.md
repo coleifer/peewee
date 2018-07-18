@@ -7,7 +7,15 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.6.3...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.6.4...master)
+
+## 3.6.4
+
+Take a whole new approach, following what `simplejson` does. Allow the
+`build_ext` command class to fail, and retry without extensions in the event we
+run into issues building extensions. References #1676.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.6.3...3.6.4)
 
 ## 3.6.3
 
