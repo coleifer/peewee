@@ -2,8 +2,13 @@ import os
 import platform
 import sys
 import warnings
+
 from setuptools import setup
 from setuptools.extension import Extension
+try:
+    from ctypes.util import find_library
+except ImportError:
+    find_library = lambda x: None
 
 f = open(os.path.join(os.path.dirname(__file__), 'README.rst'))
 readme = f.read()
@@ -22,8 +27,6 @@ else:
                       'CPython.')
     else:
         cython_installed = True
-
-NO_SQLITE = os.environ.get('NO_SQLITE') or False
 
 if cython_installed:
     src_ext = '.pyx'
@@ -48,10 +51,15 @@ elif NO_SQLITE:
     ext_modules = [speedups_ext_module]
     warnings.warn('SQLite extensions will not be built at users request.')
 else:
-    ext_modules = [
-        speedups_ext_module,
-        sqlite_udf_module,
-        sqlite_ext_module]
+    if not find_library('sqlite3'):
+        warnings.warn('Could not find libsqlite3, SQLite extensions will not '
+                      'be built.')
+        ext_modules = [speedups_ext_module]
+    else:
+        ext_modules = [
+            speedups_ext_module,
+            sqlite_udf_module,
+            sqlite_ext_module]
 
 setup(
     name='peewee',
