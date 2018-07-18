@@ -4,7 +4,6 @@ from functools import partial
 
 from peewee import *
 from playhouse.migrate import *
-from playhouse.postgres_ext import BinaryJSONField
 from .base import BaseTestCase
 from .base import IS_MYSQL
 from .base import ModelTestCase
@@ -502,6 +501,7 @@ class TestSchemaMigration(ModelTestCase):
     @requires_postgresql
     @requires_models(Tag)
     def test_add_column_with_index_type(self):
+        from playhouse.postgres_ext import BinaryJSONField
         self.reset_sql_history()
         field = BinaryJSONField(default=dict, index=True, null=True)
         migrate(self.migrator.add_column('tag', 'metadata', field))
