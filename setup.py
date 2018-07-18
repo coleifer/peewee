@@ -45,6 +45,9 @@ sqlite_ext_module = Extension(
     ['playhouse/_sqlite_ext' + src_ext],
     libraries=['sqlite3'])
 
+# Are SQLite extensions explicitly disabled?
+NO_SQLITE = os.environ.get('NO_SQLITE') or False
+
 if not extension_support:
     ext_modules = None
 elif NO_SQLITE:

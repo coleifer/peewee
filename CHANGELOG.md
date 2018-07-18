@@ -7,7 +7,15 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.6.0...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.6.2...master)
+
+## 3.6.2
+
+Use `ctypes.util.find_library` to determine if `libsqlite3` is installed.
+Should fix problems people are encountering installing when SQLite3 is not
+available.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.6.1...3.6.2)
 
 ## 3.6.1
 
