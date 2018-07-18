@@ -81,7 +81,9 @@ Optional dependencies
     respectively.
 
 * `Cython <http://cython.org/>`_: used for various speedups. Can give a big
-  boost to certain operations, particularly if you use SQLite.
+  boost to certain operations, particularly if you use SQLite. Since the
+  generated C files are included with the package distribution, Cython is no
+  longer required to use the C extensions (as of v3.6.0).
 * `apsw <https://github.com/rogerbinns/apsw>`_: an optional 3rd-party SQLite
   binding offering greater performance and comprehensive support for SQLite's C
   APIs. Use with :py:class:`APSWDatabase`.
@@ -95,14 +97,24 @@ Optional dependencies
   available.
 
 
-Skip Compilation of SQLite Extensions
--------------------------------------
+Note on the SQLite extensions
+-----------------------------
 
-I've received reports from Windows users that they have some trouble installing
-Peewee due to missing a SQLite shared library. If you would like to simply skip
-compilation of the SQLite-specific C extensions, you can set the ``NO_SQLITE``
-environment variable:
+Peewee includes two SQLite-specific C extensions which provide additional
+functionality and improved performance for SQLite database users. Peewee will
+attempt to determine ahead-of-time if SQLite3 is installed, and only build the
+SQLite extensions if the SQLite shared-library is available on your system.
+
+If, however, you receive errors like the following when attempting to install
+Peewee, you can explicitly disable the compilation of the SQLite C extensions
+by settings the ``NO_SQLITE`` environment variable.
+
+.. code-block::
+
+    fatal error: sqlite3.h: No such file or directory
+
+Here is how to install Peewee with the SQLite extensions explicitly disabled:
 
 .. code-block:: console
 
-    $ NO_SQLITE=1 python setup.py build
+    $ NO_SQLITE=1 python setup.py install
