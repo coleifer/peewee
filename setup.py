@@ -16,6 +16,9 @@ f.close()
 
 extension_support = True  # Assume we are building C extensions.
 
+# Check if Cython is available and use it to generate extension modules. If
+# Cython is not installed, we will fall back to using the pre-generated C files
+# (so long as we're running on CPython).
 try:
     from Cython.Build import cythonize
 except ImportError:
@@ -27,6 +30,29 @@ else:
                       'CPython.')
     else:
         cython_installed = True
+
+def have_compiler():
+    from distutils.ccompiler import new_compiler
+    from distutils.errors import CompileError
+    from distutils.errors import DistutilsExecError
+    import tempfile
+    fd, fname = tempfile.mkstemp('.c', text=True)
+    f = os.fdopen(fd, 'w')
+    f.write('int main(int argc, char **argv) { return 0; }')
+    f.close()
+    compiler = new_compiler()
+    try:
+        compiler.compile([fname])
+    except (CompileError, DistutilsExecError):
+        warnings.warn('C compiler does not appear to be installed. C '
+                      'extensions will not be built.')
+        return False
+    except Exception as exc:
+        warnings.warn('unexpected error encountered while testing if compiler '
+                      'available: %s' % exc)
+        return False
+    else:
+        return True
 
 if cython_installed:
     src_ext = '.pyx'
@@ -48,7 +74,7 @@ sqlite_ext_module = Extension(
 # Are SQLite extensions explicitly disabled?
 NO_SQLITE = os.environ.get('NO_SQLITE') or False
 
-if not extension_support:
+if not extension_support or not have_compiler():
     ext_modules = None
 elif NO_SQLITE:
     ext_modules = [speedups_ext_module]
