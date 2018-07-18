@@ -7,7 +7,14 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
-[View commits](https://github.com/coleifer/peewee/compare/3.6.2...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.6.3...master)
+
+## 3.6.3
+
+Add check in `setup.py` to determine if a C compiler is available before
+building C extensions. References #1676.
+
+[View commits](https://github.com/coleifer/peewee/compare/3.6.2...3.6.3)
 
 ## 3.6.2
 
