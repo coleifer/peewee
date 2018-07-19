@@ -26,6 +26,16 @@ matrix:
     - python: 3.8-dev
       dist: xenial
       sudo: true
+    - python: 3.7
+      dist: xenial
+      sudo: true
+      env:
+      - PEEWEE_TEST_BUILD_SQLITE=1
+      - PEEWEE_CLOSURE_EXTENSION=/usr/local/lib/closure.so
+      - LSM_EXTENSION=/usr/local/lib/lsm.so
+      before_install:
+        - sudo apt-get install -y tcl-dev
+        - ./.travis_deps.sh
 addons:
   postgresql: "9.6"
   mariadb: "10.3"
