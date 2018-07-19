@@ -69,7 +69,7 @@ def _have_sqlite_extension_support():
     success = False
     try:
         compiler.link_executable(
-            compiler.compile([src_file]),
+            compiler.compile([src_file], output_dir=tmp_dir),
             bin_file,
             libraries=['sqlite3'])
     except CCompilerError:
