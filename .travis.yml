@@ -36,6 +36,7 @@ matrix:
       before_install:
         - sudo apt-get install -y tcl-dev
         - ./.travis_deps.sh
+        - sudo ldconfig
       script: "python runtests.py -v2"
 addons:
   postgresql: "9.6"
