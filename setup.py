@@ -22,6 +22,7 @@ extension_support = True  # Assume we are building C extensions.
 try:
     from Cython.Build import cythonize
     from Cython.Distutils import build_ext
+    from Cython.Distutils.extension import Extension
 except ImportError:
     cython_installed = False
 else:
@@ -30,6 +31,9 @@ else:
         warnings.warn('C extensions disabled as you are not using CPython.')
     else:
         cython_installed = True
+
+if 'sdist' in sys.argv and not cython_installed:
+    raise Exception('Building sdist requires that Cython be installed.')
 
 if cython_installed:
     src_ext = '.pyx'
