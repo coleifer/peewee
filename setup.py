@@ -9,10 +9,6 @@ from distutils.errors import DistutilsPlatformError
 
 from setuptools import setup
 from setuptools.extension import Extension
-try:
-    from ctypes.util import find_library
-except ImportError:
-    find_library = lambda x: None
 
 f = open(os.path.join(os.path.dirname(__file__), 'README.rst'))
 readme = f.read()
@@ -52,13 +48,49 @@ sqlite_ext_module = Extension(
     ['playhouse/_sqlite_ext' + src_ext],
     libraries=['sqlite3'])
 
+
+def _have_sqlite_extension_support():
+    import shutil
+    import tempfile
+    from distutils.ccompiler import new_compiler
+    from distutils.sysconfig import customize_compiler
+
+    libraries = ['sqlite3']
+    c_code = ('#include <sqlite3.h>\n\n'
+              'int main(int argc, char **argv) { return 0; }')
+    tmp_dir = tempfile.mkdtemp(prefix='tmp_pw_sqlite3_')
+    bin_file = os.path.join(tmp_dir, 'test_pw_sqlite3')
+    src_file = bin_file + '.c'
+    with open(src_file, 'w') as fh:
+        fh.write(c_code)
+
+    compiler = new_compiler()
+    customize_compiler(compiler)
+    success = False
+    try:
+        compiler.link_executable(
+            compiler.compile([src_file]),
+            bin_file,
+            libraries=['sqlite3'])
+    except CCompilerError:
+        print('unable to compile sqlite3 C extensions - missing headers?')
+    except DistutilsExecError:
+        print('unable to compile sqlite3 C extensions - no c compiler?')
+    except DistutilsPlatformError:
+        print('unable to compile sqlite3 C extensions - platform error')
+    else:
+        success = True
+    shutil.rmtree(tmp_dir)
+    return success
+
+
 # This is set to True if there is extension support and libsqlite3 is found.
 sqlite_extension_support = False
 
 if extension_support:
     if os.environ.get('NO_SQLITE'):
         warnings.warn('SQLite extensions will not be built at users request.')
-    elif not find_library('sqlite3'):
+    elif not _have_sqlite_extension_support():
         warnings.warn('Could not find libsqlite3, SQLite extensions will not '
                       'be built.')
     else:
