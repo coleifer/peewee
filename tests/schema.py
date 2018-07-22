@@ -1,4 +1,5 @@
 from peewee import *
+from peewee import NodeList
 
 from .base import get_in_memory_db
 from .base import ModelDatabaseTestCase
@@ -141,6 +142,25 @@ class TestModelDDL(ModelDatabaseTestCase):
              '"name", "timestamp", ("flags" & ?)) '
              'WHERE ("status" = ?)', [4, 1]),
             ('CREATE INDEX "article_foo" ON "article" ("flags" & 3)', []),
+        ])
+
+    def test_model_indexes_complex_columns(self):
+        class Taxonomy(TestModel):
+            name = CharField()
+            name_class = CharField()
+            class Meta:
+                database = self.database
+
+        name = NodeList((fn.LOWER(Taxonomy.name), SQL('varchar_pattern_ops')))
+        index = (Taxonomy
+                 .index(name, Taxonomy.name_class)
+                 .where(Taxonomy.name_class == 'scientific name'))
+        Taxonomy.add_index(index)
+
+        self.assertIndexes(Taxonomy, [
+            ('CREATE INDEX "taxonomy_name_class" ON "taxonomy" ('
+             'LOWER("name") varchar_pattern_ops, "name_class") '
+             'WHERE ("name_class" = ?)', ['scientific name']),
         ])
 
     def test_legacy_model_table_and_indexes(self):
