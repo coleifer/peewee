@@ -33,6 +33,7 @@ class ArrayModel(TestModel):
 class UUIDList(TestModel):
     key = CharField()
     id_list = ArrayField(BinaryUUIDField, convert_values=True, index=False)
+    id_list_native = ArrayField(UUIDField, index=False)
 
 
 class ArrayTSModel(TestModel):
@@ -364,15 +365,25 @@ class TestArrayUUIDField(ModelTestCase):
     database = db
     requires = [UUIDList]
 
+    def setUp(self):
+        super(TestArrayUUIDField, self).setUp()
+        import psycopg2.extras
+        psycopg2.extras.register_uuid()
+
     def test_array_of_uuids(self):
         u1, u2, u3, u4 = [uuid.uuid4() for _ in range(4)]
-        a = UUIDList.create(key='a', id_list=[u1, u2, u3])
-        b = UUIDList.create(key='b', id_list=[u2, u3, u4])
+        a = UUIDList.create(key='a', id_list=[u1, u2, u3],
+                            id_list_native=[u1, u2, u3])
+        b = UUIDList.create(key='b', id_list=[u2, u3, u4],
+                            id_list_native=[u2, u3, u4])
         a_db = UUIDList.get(UUIDList.key == 'a')
         b_db = UUIDList.get(UUIDList.key == 'b')
 
         self.assertEqual(a.id_list, [u1, u2, u3])
         self.assertEqual(b.id_list, [u2, u3, u4])
+
+        self.assertEqual(a.id_list_native, [u1, u2, u3])
+        self.assertEqual(b.id_list_native, [u2, u3, u4])
 
 
 class TestTSVectorField(ModelTestCase):
