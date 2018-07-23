@@ -4023,7 +4023,10 @@ class _StringField(Field):
         if isinstance(value, text_type):
             return value
         elif isinstance(value, bytes_type):
-            return value.decode('utf-8')
+            try:
+                return value.decode('utf-8')
+            except UnicodeDecodeError:
+                return value
         return text_type(value)
 
     def __add__(self, other): return self.concat(other)
