@@ -3839,6 +3839,12 @@ Model
                         database = db
                         only_save_dirty = True
 
+        .. warning::
+            Peewee determines whether a field is "dirty" by observing when the
+            field attribute is set on a model instance. If the field contains a
+            value that is mutable, such as a dictionary instance, and that
+            dictionary is then modified, Peewee will not notice the change.
+
     .. py:method:: is_dirty()
 
         Return boolean indicating whether any fields were manually set.
