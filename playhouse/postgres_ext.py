@@ -155,6 +155,11 @@ class ArrayField(IndexedFieldMixin, Field):
         self.field_type = self.__field.field_type
         super(ArrayField, self).__init__(*args, **kwargs)
 
+    def bind(self, model, name, set_attribute=True):
+        ret = super(ArrayField, self).bind(model, name, set_attribute)
+        self.__field.bind(model, '__array_%s' % name, False)
+        return ret
+
     def ddl_datatype(self, ctx):
         data_type = self.__field.ddl_datatype(ctx)
         return NodeList((data_type, SQL('[]' * self.dimensions)), glue='')

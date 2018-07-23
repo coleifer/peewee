@@ -1,5 +1,6 @@
 #coding:utf-8
 import datetime
+import uuid
 from decimal import Decimal as Dc
 from types import MethodType
 
@@ -27,6 +28,11 @@ D = HStoreModel.data
 class ArrayModel(TestModel):
     tags = ArrayField(CharField)
     ints = ArrayField(IntegerField, dimensions=2)
+
+
+class UUIDList(TestModel):
+    key = CharField()
+    id_list = ArrayField(BinaryUUIDField, convert_values=True, index=False)
 
 
 class ArrayTSModel(TestModel):
@@ -352,6 +358,21 @@ class TestArrayFieldConvertValues(ModelTestCase):
 
         self.assertRaises(ArrayTSModel.DoesNotExist, ArrayTSModel.get,
                           ArrayTSModel.timestamps.contains(dt(4, 5, 6)))
+
+
+class TestArrayUUIDField(ModelTestCase):
+    database = db
+    requires = [UUIDList]
+
+    def test_array_of_uuids(self):
+        u1, u2, u3, u4 = [uuid.uuid4() for _ in range(4)]
+        a = UUIDList.create(key='a', id_list=[u1, u2, u3])
+        b = UUIDList.create(key='b', id_list=[u2, u3, u4])
+        a_db = UUIDList.get(UUIDList.key == 'a')
+        b_db = UUIDList.get(UUIDList.key == 'b')
+
+        self.assertEqual(a.id_list, [u1, u2, u3])
+        self.assertEqual(b.id_list, [u2, u3, u4])
 
 
 class TestTSVectorField(ModelTestCase):
