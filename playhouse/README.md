@@ -22,6 +22,7 @@ The `playhouse` namespace contains numerous extensions to Peewee. These include 
     * Arrays
     * Server-side cursors
     * Full-text search
+* [MySQL extensions](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#mysql-ext)
 
 ### High-level libraries
 
