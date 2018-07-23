@@ -719,9 +719,9 @@ There are several options you can specify as ``Meta`` attributes. While most
 options are inheritable, some are table-specific and will not be inherited by
 subclasses.
 
-=====================   ====================================================== ====================
+======================  ====================================================== ====================
 Option                  Meaning                                                Inheritable?
-=====================   ====================================================== ====================
+======================  ====================================================== ====================
 ``database``            database for model                                     yes
 ``table_name``          name of the table to store data                        no
 ``table_function``      function to generate table name dynamically            yes
@@ -736,7 +736,7 @@ Option                  Meaning                                                I
 ``table_alias``         an alias to use for the table in queries               no
 ``depends_on``          indicate this table depends on another for creation    no
 ``without_rowid``       indicate table should not have rowid (SQLite only)     no
-=====================   ====================================================== ====================
+======================  ====================================================== ====================
 
 Here is an example showing inheritable versus non-inheritable attributes:
 
