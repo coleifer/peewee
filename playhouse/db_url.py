@@ -115,13 +115,6 @@ else:
     register_database(APSWDatabase, 'apsw')
 
 try:
-    from playhouse.berkeleydb import BerkeleyDatabase
-except ImportError:
-    pass
-else:
-    register_database(BerkeleyDatabase, 'berkeleydb')
-
-try:
     from playhouse.postgres_ext import PostgresqlExtDatabase
 except ImportError:
     pass
