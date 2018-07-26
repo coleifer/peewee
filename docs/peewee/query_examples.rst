@@ -614,17 +614,19 @@ membercost: 20, guestcost: 30, initialoutlay: 100000, monthlymaintenance: 800
 
 .. code-block:: python
 
-    query = Facility.insert({
+    res = Facility.insert({
         Facility.facid: 9,
         Facility.name: 'Spa',
         Facility.membercost: 20,
         Facility.guestcost: 30,
         Facility.initialoutlay: 100000,
-        Facility.monthlymaintenance: 800})
+        Facility.monthlymaintenance: 800}).execute()
 
     # OR:
-    query = Facility.insert(facid=9, name='Spa', membercost=20, guestcost=30,
-                            initialoutlay=100000, monthlymaintenance=800)
+    res = (Facility
+           .insert(facid=9, name='Spa', membercost=20, guestcost=30,
+                   initialoutlay=100000, monthlymaintenance=800)
+           .execute())
 
 
 Insert multiple rows of data into a table
@@ -650,7 +652,7 @@ initialoutlay: 5000, monthlymaintenance: 80.
          'initialoutlay': 100000, 'monthlymaintenance': 800},
         {'facid': 10, 'name': 'Squash Court 2', 'membercost': 3.5,
          'guestcost': 17.5, 'initialoutlay': 5000, 'monthlymaintenance': 80}]
-    query = Facility.insert_many(data)
+    res = Facility.insert_many(data).execute()
 
 
 Insert calculated data into a table
@@ -673,7 +675,7 @@ monthlymaintenance: 800.
 
     maxq = Facility.select(fn.MAX(Facility.facid) + 1)
     subq = Select(columns=(maxq, 'Spa', 20, 30, 100000, 800))
-    query = Facility.insert_from(subq, Facility._meta.sorted_fields)
+    res = Facility.insert_from(subq, Facility._meta.sorted_fields).execute()
 
 Update some existing data
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -688,14 +690,16 @@ the error.
 
 .. code-block:: python
 
-    query = (Facility
-             .update({Facility.initialoutlay: 10000})
-             .where(Facility.name == 'Tennis Court 2'))
+    res = (Facility
+           .update({Facility.initialoutlay: 10000})
+           .where(Facility.name == 'Tennis Court 2')
+           .execute())
 
     # OR:
-    query = (Facility
-             .update(initialoutlay=10000)
-             .where(Facility.name == 'Tennis Court 2'))
+    res = (Facility
+           .update(initialoutlay=10000)
+           .where(Facility.name == 'Tennis Court 2')
+           .execute())
 
 Update multiple rows and columns at the same time
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -709,9 +713,10 @@ guests. Update the costs to be 6 for members, and 30 for guests.
 
 .. code-block:: python
 
-    query = (Facility
+    nrows = (Facility
              .update(membercost=6, guestcost=30)
-             .where(Facility.name.startswith('Tennis')))
+             .where(Facility.name.startswith('Tennis'))
+             .execute())
 
 Update a row based on the contents of another row
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -741,20 +746,22 @@ prices, so that we can reuse the statement if we want to.
     sq1 = Facility.select(Facility.membercost * 1.1).where(Facility.facid == 0)
     sq2 = Facility.select(Facility.guestcost * 1.1).where(Facility.facid == 0)
 
-    query = (Facility
-             .update(membercost=sq1, guestcost=sq2)
-             .where(Facility.facid == 1))
+    res = (Facility
+           .update(membercost=sq1, guestcost=sq2)
+           .where(Facility.facid == 1)
+           .execute())
 
     # OR:
     cte = (Facility
            .select(Facility.membercost * 1.1, Facility.guestcost * 1.1)
            .where(Facility.name == 'Tennis Court 1')
            .cte('new_prices', columns=('nmc', 'ngc')))
-    query = (Facility
-             .update(membercost=SQL('new_prices.nmc'), guestcost=SQL('new_prices.ngc'))
-             .with_cte(cte)
-             .from_(cte)
-             .where(Facility.name == 'Tennis Court 2'))
+    res = (Facility
+           .update(membercost=SQL('new_prices.nmc'), guestcost=SQL('new_prices.ngc'))
+           .with_cte(cte)
+           .from_(cte)
+           .where(Facility.name == 'Tennis Court 2')
+           .execute())
 
 Delete all bookings
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -768,7 +775,7 @@ the bookings table.
 
 .. code-block:: python
 
-    query = Booking.delete()
+    nrows = Booking.delete().execute()
 
 
 Delete a member from the cd.members table
@@ -782,7 +789,7 @@ We want to remove member 37, who has never made a booking, from our database.
 
 .. code-block:: python
 
-    query = Member.delete().where(Member.memid == 37)
+    nrows = Member.delete().where(Member.memid == 37).execute()
 
 Delete based on a subquery
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -798,7 +805,7 @@ a booking?
 .. code-block:: python
 
     subq = Booking.select().where(Booking.member == Member.memid)
-    query = Member.delete().where(~fn.EXISTS(subq))
+    nrows = Member.delete().where(~fn.EXISTS(subq)).execute()
 
 
 Aggregation
