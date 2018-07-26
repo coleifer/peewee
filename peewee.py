@@ -5455,6 +5455,30 @@ class Model(with_metaclass(ModelBase, Node)):
         return inst
 
     @classmethod
+    def bulk_create(cls, model_list, batch_size=None):
+        if batch_size is not None:
+            batches = chunked(model_list, batch_size)
+        else:
+            batches = [model_list]
+
+        field_names = list(cls._meta.sorted_field_names)
+        if cls._meta.auto_increment:
+            pk_name = cls._meta.primary_key.name
+            field_names.remove(pk_name)
+            ids_returned = cls._meta.database.returning_clause
+        else:
+            ids_returned = False
+
+        fields = [cls._meta.fields[field_name] for field_name in field_names]
+        for batch in batches:
+            accum = ([getattr(model, f) for f in field_names]
+                     for model in batch)
+            res = cls.insert_many(accum, fields=fields).execute()
+            if ids_returned:
+                for (obj_id,), model in zip(res, batch):
+                    setattr(model, pk_name, obj_id)
+
+    @classmethod
     def noop(cls):
         return NoopModelSelect(cls, ())
 

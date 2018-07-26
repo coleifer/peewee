@@ -145,6 +145,46 @@ class TestModelAPIs(ModelTestCase):
             self.assertTrue(isinstance(tweet.id, int))
             self.assertTrue(tweet.id > 0)
 
+    @requires_models(User)
+    def test_bulk_create(self):
+        users = [User(username='u%s' % i) for i in range(5)]
+        self.assertEqual(User.select().count(), 0)
+
+        with self.assertQueryCount(1):
+            User.bulk_create(users)
+
+        self.assertEqual(User.select().count(), 5)
+        self.assertEqual([u.username for u in User.select().order_by(User.id)],
+                         ['u0', 'u1', 'u2', 'u3', 'u4'])
+
+        if IS_POSTGRESQL:
+            self.assertEqual([u.id for u in User.select().order_by(User.id)],
+                             [user.id for user in users])
+
+    @requires_models(User)
+    def test_bulk_create_batching(self):
+        users = [User(username=str(i)) for i in range(10)]
+        with self.assertQueryCount(4):
+            User.bulk_create(users, 3)
+
+        self.assertEqual(User.select().count(), 10)
+        self.assertEqual([u.username for u in User.select().order_by(User.id)],
+                         list('0123456789'))
+
+        if IS_POSTGRESQL:
+            self.assertEqual([u.id for u in User.select().order_by(User.id)],
+                             [user.id for user in users])
+
+    @requires_models(Person)
+    def test_bulk_create_error(self):
+        people = [Person(first='a', last='b'),
+                  Person(first='b', last='c'),
+                  Person(first='a', last='b')]
+        with self.assertRaises(IntegrityError):
+            with self.database.atomic():
+                Person.bulk_create(people)
+        self.assertEqual(Person.select().count(), 0)
+
     @requires_models(User, Tweet)
     def test_get_shortcut(self):
         huey = self.add_user('huey')

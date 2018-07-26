@@ -3676,6 +3676,51 @@ Model
         .. note::
             The create() method is a shorthand for instantiate-then-save.
 
+    .. py:classmethod:: bulk_create(model_list[, batch_size=None])
+
+        :param iterable model_list: a list or other iterable of unsaved
+            :py:class:`Model` instances.
+        :param int batch_size: number of rows to batch per insert. If
+            unspecified, all models will be inserted in a single query.
+        :returns: no return value.
+
+        Efficiently INSERT multiple unsaved model instances into the database.
+        Unlike :py:meth:`~Model.insert_many`, which accepts row data as a list
+        of either dictionaries or lists, this method accepts a list of unsaved
+        model instances.
+
+        Example:
+
+        .. code-block:: python
+
+            # List of 10 unsaved users.
+            user_list = [User(username='u%s' % i) for i in range(10)]
+
+            # All 10 users are inserted in a single query.
+            User.bulk_create(user_list)
+
+        Batches:
+
+        .. code-block:: python
+
+            user_list = [User(username='u%s' % i) for i in range(10)]
+
+            with database.atomic():
+                # Will execute 4 INSERT queries (3 batches of 3, 1 batch of 1).
+                User.bulk_create(user_list, batch_size=3)
+
+        .. warning::
+
+            * The primary-key value for the newly-created models will only be
+              set if you are using Postgresql (which supports the ``RETURNING``
+              clause).
+            * SQLite generally has a limit of 999 bound parameters for a query,
+              so the batch size should be roughly 1000 / number-of-fields.
+            * When a batch-size is provided it is **strongly recommended** that
+              you wrap the call in a transaction or savepoint using
+              :py:meth:`Database.atomic`. Otherwise an error in a batch mid-way
+              through could leave the database in an inconsistent state.
+
     .. py:classmethod:: get(*query, **filters)
 
         :param query: Zero or more :py:class:`Expression` objects.
