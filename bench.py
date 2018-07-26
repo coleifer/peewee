@@ -29,13 +29,13 @@ def timed(fn):
         N = 10
         for i in range(N):
             start = time.time()
-            fn(*args, **kwargs)
+            fn(i, *args, **kwargs)
             times.append(time.time() - start)
-        print(fn.__name__, round(sum(times) / N, 3))
+        print('%0.2f ... %s' % (round(sum(times) / N, 2), fn.__name__))
     return inner
 
-def populate_register(n):
-    for i in range(n):
+def populate_register(s, n):
+    for i in range(s, n):
         Register.create(value=i)
 
 def populate_collections(n, n_i):
@@ -45,56 +45,62 @@ def populate_collections(n, n_i):
             Item.create(collection=c, name=str(j))
 
 @timed
-def insert():
+def insert(i):
     with db.atomic():
-        populate_register(1000)
+        populate_register((i * 1000), (i + 1) * 1000)
 
 @timed
-def batch_insert():
+def batch_insert(i):
     with db.atomic():
-        it = range(1000)
+        it = range(i * 1000, (i + 1) * 1000)
         for i in db.batch_commit(it, 100):
-            Register.insert(value=i + 100000).execute()
+            Register.insert(value=i).execute()
 
 @timed
-def bulk_insert():
+def bulk_insert(i):
     with db.atomic():
-        for i in range(0, 1000, 100):
+        for i in range(i * 1000, (i + 1) * 1000, 100):
             data = [(j,) for j in range(i, i + 100)]
             Register.insert_many(data, fields=[Register.value]).execute()
 
 @timed
-def select():
+def bulk_create(i):
+    with db.atomic():
+        data = [Register(value=i) for i in range(i * 1000, (i + 1) * 1000)]
+        Register.bulk_create(data, batch_size=100)
+
+@timed
+def select(i):
     query = Register.select()
     for row in query:
         pass
 
 @timed
-def select_related_dbapi_raw():
+def select_related_dbapi_raw(i):
     query = Item.select(Item, Collection).join(Collection)
     cursor = db.execute(query)
     for row in cursor:
         pass
 
 @timed
-def insert_related():
+def insert_related(i):
     with db.atomic():
         populate_collections(30, 35)
 
 @timed
-def select_related():
+def select_related(i):
     query = Item.select(Item, Collection).join(Collection)
     for item in query:
         pass
 
 @timed
-def select_related_left():
+def select_related_left(i):
     query = Collection.select(Collection, Item).join(Item, JOIN.LEFT_OUTER)
     for collection in query:
         pass
 
 @timed
-def select_related_dicts():
+def select_related_dicts(i):
     query = Item.select(Item, Collection).join(Collection).dicts()
     for row in query:
         pass
@@ -106,8 +112,13 @@ if __name__ == '__main__':
     insert_related()
     Register.delete().execute()
     batch_insert()
+    assert Register.select().count() == 10000
     Register.delete().execute()
     bulk_insert()
+    assert Register.select().count() == 10000
+    Register.delete().execute()
+    bulk_create()
+    assert Register.select().count() == 10000
     select()
     select_related()
     select_related_left()
