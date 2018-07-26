@@ -110,8 +110,8 @@ The above approach is slow for a couple of reasons:
 4. We are retrieving the *last insert id*, which causes an additional query to
    be executed in some cases.
 
-You can get a **significant speedup** by simply wrapping this in a transaction
-with :py:meth:`~Database.atomic`.
+You can get a significant speedup by simply wrapping this in a transaction with
+:py:meth:`~Database.atomic`.
 
 .. code-block:: python
 
@@ -121,27 +121,56 @@ with :py:meth:`~Database.atomic`.
             MyModel.create(**data_dict)
 
 The above code still suffers from points 2, 3 and 4. We can get another big
-boost by calling :py:meth:`~Model.insert_many`. This method accepts a list of
-tuples or dictionaries to insert.
+boost by using :py:meth:`~Model.insert_many`. This method accepts a list of
+tuples or dictionaries, and inserts multiple rows in a single query:
 
 .. code-block:: python
 
-    # Fastest.
+    data_source = [
+        {'field1': 'val1-1', 'field2': 'val1-2'},
+        {'field1': 'val2-1', 'field2': 'val2-2'},
+        # ...
+    ]
+
+    # Fastest way to INSERT multiple rows.
     MyModel.insert_many(data_source).execute()
 
-    # We can also use tuples and specify the fields being inserted.
-    fields = [MyModel.field1, MyModel.field2]
+The :py:meth:`~Model.insert_many` method also accepts a list of row-tuples,
+provided you also specify the corresponding fields:
+
+.. code-block:: python
+
+    # We can INSERT tuples as well...
     data = [('val1-1', 'val1-2'),
             ('val2-1', 'val2-2'),
             ('val3-1', 'val3-2')]
-    MyModel.insert_many(data, fields=fields).execute()
+
+    # But we need to indicate which fields the values correspond to.
+    MyModel.insert_many(data, fields=[MyModel.field1, MyModel.field2]).execute()
+
+It is also a good practice to wrap the bulk insert in a transaction:
+
+.. code-block:: python
 
     # You can, of course, wrap this in a transaction as well:
     with db.atomic():
         MyModel.insert_many(data, fields=fields).execute()
 
+.. note::
+    SQLite users should be aware of some caveats when using bulk inserts.
+    Specifically, your SQLite3 version must be 3.7.11.0 or newer to take
+    advantage of the bulk insert API. Additionally, by default SQLite limits
+    the number of bound variables in a SQL query to ``999``.
+
+Inserting rows in batches
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
 Depending on the number of rows in your data source, you may need to break it
-up into chunks:
+up into chunks. SQLite in particular typically has a `limit of 999 <https://www.sqlite.org/limits.html#max_variable_number>`_
+variables-per-query (batch size would then be roughly 1000 / row length).
+
+You can write a loop to batch your data into chunks (in which case it is
+**strongly recommended** you use a transaction):
 
 .. code-block:: python
 
@@ -150,9 +179,48 @@ up into chunks:
         for idx in range(0, len(data_source), 100):
             MyModel.insert_many(data_source[idx:idx+100]).execute()
 
-If :py:meth:`Model.insert_many` won't work for your use-case, you can also use
-the :py:meth:`Database.batch_commit` helper to process chunks of rows inside
-transactions:
+Peewee comes with a ``chunked()`` helper function which you can explicitly
+import and use for *efficiently* chunking a generic iterable into a series of
+*batch*-sized iterables:
+
+.. code-block:: python
+
+    from peewee import chunked
+
+    # Insert rows 100 at a time.
+    with db.atomic():
+        for batch in chunked(data_source, 100):
+            MyModel.insert_many(batch).execute()
+
+Alternatives
+^^^^^^^^^^^^
+
+The :py:meth:`Model.bulk_create` method behaves much like
+:py:meth:`Model.insert_many`, but instead it accepts a list of unsaved model
+instances to insert, and it optionally accepts a batch-size parameter. To use
+the :py:meth:`~Model.bulk_create` API:
+
+.. code-block:: python
+
+    # Read list of usernames from a file, for example.
+    with open('user_list.txt') as fh:
+        # Create a list of unsaved User instances.
+        users = [User(username=line.strip()) for line in fh.readlines()]
+
+    # Wrap the operation in a transaction and batch INSERT the users
+    # 100 at a time.
+    with db.atomic():
+        User.bulk_create(users, batch_size=100)
+
+.. note::
+    If you are using Postgresql (which supports the ``RETURNING`` clause), then
+    the previously-unsaved model instances will have their new primary key
+    values automatically populated.
+
+Alternatively, you can use the :py:meth:`Database.batch_commit` helper to
+process chunks of rows inside *batch*-sized transactions. This method also
+provides a workaround for databases besides Postgresql, when the primary-key of
+the newly-created rows must be obtained.
 
 .. code-block:: python
 
@@ -164,12 +232,8 @@ transactions:
     for row in db.batch_commit(row_data, 100):
         User.create(**row)
 
-.. note::
-    SQLite users should be aware of some caveats when using bulk inserts.
-    Specifically, your SQLite3 version must be 3.7.11.0 or newer to take
-    advantage of the bulk insert API. Additionally, by default SQLite limits
-    the number of bound variables in a SQL query to ``999``. This value can be
-    modified by setting the ``SQLITE_MAX_VARIABLE_NUMBER`` flag.
+Bulk-loading from another table
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 If the data you would like to bulk load is stored in another table, you can
 also create *INSERT* queries whose source is a *SELECT* query. Use the
@@ -177,11 +241,19 @@ also create *INSERT* queries whose source is a *SELECT* query. Use the
 
 .. code-block:: python
 
-    query = (TweetArchive
-             .insert_from(
-                 Tweet.select(Tweet.user, Tweet.message),
-                 fields=[Tweet.user, Tweet.message])
-             .execute())
+    res = (TweetArchive
+           .insert_from(
+               Tweet.select(Tweet.user, Tweet.message),
+               fields=[TweetArchive.user, TweetArchive.message])
+           .execute())
+
+The above query is equivalent to the following SQL:
+
+.. code-block:: sql
+
+    INSERT INTO "tweet_archive" ("user_id", "message")
+    SELECT "user_id", "message" FROM "tweet";
+
 
 Updating existing records
 -------------------------
