@@ -7,9 +7,12 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+* Add [Model.bulk_create()](http://docs.peewee-orm.com/en/latest/peewee/api.html#Model.bulk_create)
+  method for bulk-inserting unsaved model instances.
 * Even *more* changes to the `setup.py` script. In this case I've added a helper
   function which will reliably determine if the SQLite3 extensions can be built.
   This follows the approach taken by the Python YAML package.
+* Fixed bug when using the Postgres `ArrayField` with an array of `BlobField`.
 
 [View commits](https://github.com/coleifer/peewee/compare/3.6.4...master)
 
