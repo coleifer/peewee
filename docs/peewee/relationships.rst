@@ -98,17 +98,17 @@ mickey    whine      huey
 .. note::
     In SQLite, foreign keys are not enabled by default. Most things, including
     the Peewee foreign-key API, will work fine, but ON DELETE behaviour will be
-    ignored, even if you explicitly specify on_delete to your ForeignKeyField.
-    In conjunction with the default PrimaryKeyField behaviour (where deleted
-    record IDs can be reused), this can lead to surprising (and almost
-    certainly unwanted) behaviour where if you delete a record in table A
-    referenced by a foreign key in table B, and then create a new, unrelated,
-    record in table A, the new record will end up mis-attached to the undeleted
-    record in table B. To avoid the mis-attachment, you can use
-    :py:class:`AutoIncrementField`, but it may be better overall to
-    ensure that foreign keys are enabled with
-    ``pragmas=(('foreign_keys', 'on'),)`` when you
-    instantiate :py:class:`SqliteDatabase`.
+    ignored, even if you explicitly specify ``on_delete`` in your
+    :py:class:`ForeignKeyField`. In conjunction with the default
+    :py:class:`AutoField` behaviour (where deleted record IDs can be reused),
+    this can lead to subtle bugs. To avoid problems, I recommend that you
+    enable foreign-key constraints when using SQLite, by setting
+    ``pragmas={'foreign_keys': 1}`` when you instantiate :py:class:`SqliteDatabase`.
+
+    .. code-block:: python
+
+        # Ensure foreign-key constraints are enforced.
+        db = SqliteDatabase('my_app.db', pragmas={'foreign_keys': 1})
 
 Performing simple joins
 -----------------------
@@ -362,7 +362,7 @@ the above query, by specifying an ``attr`` in the ``join()`` method:
     mickey -> woof
     mickey -> whine
 
-Conversely, if we simply wish *all* attributes we select to me attributes of
+Conversely, if we simply wish *all* attributes we select to be attributes of
 the ``Tweet`` instance, we can add a call to :py:meth:`~ModelSelect.objects` at
 the end of our query (similar to how we called ``dicts()``):
 
