@@ -4417,3 +4417,26 @@ Constants and Helpers
 
         Add a callback to be executed when the proxy is initialized.
 
+.. py:function:: chunked(iterable, n)
+
+    :param iterable: an iterable that is the source of the data to be chunked.
+    :param int n: chunk size
+    :returns: a new iterable that yields *n*-length chunks of the source data.
+
+    Efficient implementation for breaking up large lists of data into
+    smaller-sized chunks.
+
+    Usage:
+
+    .. code-block:: python
+
+        it = range(10)  # An iterable that yields 0...9.
+
+        # Break the iterable into chunks of length 4.
+        for chunk in chunked(it, 4):
+            print(', '.join(str(num) for num in chunk))
+
+        # PRINTS:
+        # 0, 1, 2, 3
+        # 4, 5, 6, 7
+        # 8, 9

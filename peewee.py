@@ -73,6 +73,7 @@ __all__ = [
     'Cast',
     'CharField',
     'Check',
+    'chunked',
     'Column',
     'CompositeKey',
     'Context',

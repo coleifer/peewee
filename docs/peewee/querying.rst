@@ -179,9 +179,9 @@ You can write a loop to batch your data into chunks (in which case it is
         for idx in range(0, len(data_source), 100):
             MyModel.insert_many(data_source[idx:idx+100]).execute()
 
-Peewee comes with a ``chunked()`` helper function which you can explicitly
-import and use for *efficiently* chunking a generic iterable into a series of
-*batch*-sized iterables:
+Peewee comes with a :py:func:`chunked` helper function which you can use for
+*efficiently* chunking a generic iterable into a series of *batch*-sized
+iterables:
 
 .. code-block:: python
 
