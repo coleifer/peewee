@@ -66,10 +66,18 @@ class PooledDatabase(object):
         if self._wait_timeout == 0:
             self._wait_timeout = float('inf')
 
-        # Used for tracking connections that were closed.
+        # Available / idle connections stored in a heap, sorted oldest first.
         self._connections = []
+
+        # Mapping of connection id to timestamp. Ordinarily we would want to
+        # use a WeakKeyDictionary, but Python typically won't allow us to
+        # create weak references to connection objects.
         self._in_use = {}
+
+        # Use the memory address of the connection as the key in the event the
+        # connection object is not hashable or gets garbage-collected.
         self.conn_key = id
+
         super(PooledDatabase, self).__init__(database, **kwargs)
 
     def init(self, database, max_connections=None, stale_timeout=None,
