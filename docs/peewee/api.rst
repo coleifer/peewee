@@ -2234,13 +2234,66 @@ Query-builder
 
     Class representing an UPDATE query.
 
-    Example::
+    Example:
+
+    .. code-block:: python
 
         PageView = Table('page_views')
         query = (PageView
                  .update({PageView.c.page_views: PageView.c.page_views + 1})
                  .where(PageView.c.url == url))
         query.execute(database)
+
+    .. py:method:: from_(*sources)
+
+        :param Source sources: one or more :py:class:`Table`,
+            :py:class:`Model`, query, or :py:class:`ValuesList` to join with.
+
+        Specify additional tables to join with using the UPDATE ... FROM
+        syntax, which is supported by Postgres. The `Postgres documentation <https://www.postgresql.org/docs/10/static/sql-update.html#id-1.9.3.176.8>`_
+        provides additional detail, but to summarize:
+
+            When a ``FROM`` clause is present, what essentially happens is that
+            the target table is joined to the tables mentioned in the
+            from_list, and each output row of the join represents an update
+            operation for the target table. When using ``FROM`` you should
+            ensure that the join produces at most one output row for each row
+            to be modified.
+
+        Example:
+
+        .. code-block:: python
+
+            # Update multiple users in a single query.
+            data = [('huey', True),
+                    ('mickey', False),
+                    ('zaizee', True)]
+            vl = ValuesList(data, columns=('username', 'is_admin'), alias='vl')
+
+            # Here we'll update the "is_admin" status of the above users,
+            # "joining" the VALUES() on the "username" column.
+            query = (User
+                     .update(is_admin=QualifiedNames(vl.c.is_admin))
+                     .from_(vl)
+                     .where(QualifiedNames(User.username == vl.c.username)))
+
+        The above query produces the following SQL:
+
+        .. code-block:: sql
+
+            UPDATE "users" SET "is_admin" = "vl"."is_admin"
+            FROM (
+                VALUES ('huey', t), ('mickey', f), ('zaizee', t))
+                AS "vl"("username", "is_admin")
+            WHERE ("users"."username" = "vl"."username")
+
+        .. note::
+            Note the usage of :py:class:`QualifiedNames`, which wraps the
+            "is_admin" value in the assignment portion of the query, and which
+            wraps both tables in the join condition. Ordinarily,
+            fully-qualified names are not supported in UPDATE queries, so we
+            must explicitly tell Peewee that we wish to use qualified names
+            when using the UPDATE ... FROM syntax.
 
 
 .. py:class:: Insert(table[, insert=None[, columns=None[, on_conflict=None[, **kwargs]]]])
