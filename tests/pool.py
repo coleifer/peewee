@@ -128,7 +128,6 @@ class TestPooledDatabase(BaseTestCase):
         db.close()
         self.assertEqual(db._in_use, {})
         self.assertEqual(db._connections, [])
-        self.assertEqual(db._closed, set())
 
         # A new connection will be returned.
         self.assertEqual(db.connection(), 2)
@@ -153,7 +152,6 @@ class TestPooledDatabase(BaseTestCase):
         # The stale connection (1) will be removed and not placed in the
         # "closed" set.
         self.assertEqual(db.connection(), 2)
-        self.assertEqual(db._closed, set())
 
     def test_manual_close(self):
         self.assertEqual(self.db.connection(), 1)
@@ -163,12 +161,10 @@ class TestPooledDatabase(BaseTestCase):
         # back to the queue (because close() calls _close()), then close it
         # for real, and mark it with a tombstone. The next time it's checked
         # out, it will simply be removed and skipped over.
-        self.assertEqual(self.db._closed, set([1]))
-        self.assertEqual(len(self.db._connections), 1)
+        self.assertEqual(len(self.db._connections), 0)
         self.assertEqual(self.db._in_use, {})
 
         self.assertEqual(self.db.connection(), 2)
-        self.assertEqual(self.db._closed, set())
         self.assertEqual(len(self.db._connections), 0)
         self.assertEqual(list(self.db._in_use.keys()), [2])
 
@@ -193,16 +189,18 @@ class TestPooledDatabase(BaseTestCase):
 
     def test_connect_cascade(self):
         now = time.time()
-        db = FakePooledDatabase('testing', stale_timeout=10)
+        class ClosedPooledDatabase(FakePooledDatabase):
+            def _is_closed(self, conn):
+                return conn in (2, 4)
+
+        db = ClosedPooledDatabase('testing', stale_timeout=10)
 
         conns = [
             (now - 15, 1),  # Skipped due to being stale.
-            (now - 5, 2),  # In the 'closed' set.
+            (now - 5, 2),  # Will appear closed.
             (now - 3, 3),
-            (now, 4),  # In the 'closed' set.
+            (now, 4),  # Will appear closed.
         ]
-        db._closed.add(2)
-        db._closed.add(4)
         db.counter = 4  # The next connection we create will have id=5.
         for ts_conn in conns:
             heapq.heappush(db._connections, ts_conn)
@@ -260,7 +258,7 @@ class TestLivePooledDatabase(ModelTestCase):
 
     def tearDown(self):
         super(TestLivePooledDatabase, self).tearDown()
-        self.database.close_all()
+        self.database.close_idle()
         if os.path.exists('test_pooled.db'):
             os.unlink('test_pooled.db')
 

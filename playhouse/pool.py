@@ -36,9 +36,10 @@ import logging
 import time
 
 try:
-    from psycopg2 import extensions as pg_extensions
+    from psycopg2.extensions import TRANSACTION_STATUS_INERROR
+    from psycopg2.extensions import TRANSACTION_STATUS_UNKNOWN
 except ImportError:
-    pg_extensions = None
+    TRANSACTION_STATUS_INERROR = TRANSACTION_STATUS_UNKNOWN = None
 
 from peewee import MySQLDatabase
 from peewee import PostgresqlDatabase
@@ -64,7 +65,8 @@ class PooledDatabase(object):
         self._wait_timeout = make_int(timeout)
         if self._wait_timeout == 0:
             self._wait_timeout = float('inf')
-        self._closed = set()
+
+        # Used for tracking connections that were closed.
         self._connections = []
         self._in_use = {}
         self.conn_key = id
@@ -108,7 +110,7 @@ class PooledDatabase(object):
                 logger.debug('No connection available in pool.')
                 break
             else:
-                if self._is_closed(key, conn):
+                if self._is_closed(conn):
                     # This connecton was closed, but since it was not stale
                     # it got added back to the queue of available conns. We
                     # then closed it and marked it as explicitly closed, so
@@ -116,7 +118,6 @@ class PooledDatabase(object):
                     # (Because Database.close() calls Database._close()).
                     logger.debug('Connection %s was closed.', key)
                     ts = conn = None
-                    self._closed.discard(key)
                 elif self._stale_timeout and self._is_stale(ts):
                     # If we are attempting to check out a stale connection,
                     # then close it. We don't need to mark it in the "closed"
@@ -124,7 +125,6 @@ class PooledDatabase(object):
                     # anymore.
                     logger.debug('Connection %s was stale, closing.', key)
                     self._close(conn, True)
-                    self._closed.discard(key)
                     ts = conn = None
                 else:
                     break
@@ -146,8 +146,8 @@ class PooledDatabase(object):
         # not outlived the stale timeout.
         return (time.time() - timestamp) > self._stale_timeout
 
-    def _is_closed(self, key, conn):
-        return key in self._closed
+    def _is_closed(self, conn):
+        return False
 
     def _can_reuse(self, conn):
         # Called on check-in to make sure the connection can be re-used.
@@ -156,11 +156,9 @@ class PooledDatabase(object):
     def _close(self, conn, close_conn=False):
         key = self.conn_key(conn)
         if close_conn:
-            self._closed.add(key)
             super(PooledDatabase, self)._close(conn)
         elif key in self._in_use:
-            ts = self._in_use[key]
-            del self._in_use[key]
+            ts = self._in_use.pop(key)
             if self._stale_timeout and self._is_stale(ts):
                 logger.debug('Closing stale connection %s.', key)
                 super(PooledDatabase, self)._close(conn)
@@ -174,43 +172,52 @@ class PooledDatabase(object):
         """
         Close the underlying connection without returning it to the pool.
         """
-        conn = self.connection()
-        self.close()
-        if not self._is_closed(self.conn_key(conn), conn):
-            self._close(conn, close_conn=True)
+        if self.is_closed():
+            return False
 
-    def close_all(self):
-        """
-        Close all connections managed by the pool.
-        """
-        for _, conn in self._connections:
-            self._close(conn, close_conn=True)
+        conn = self.connection()
+
+        # A connection will only be re-added to the available list if it is
+        # marked as "in use" at the time it is closed. We will explicitly
+        # remove it from the "in use" list, call "close()" for the
+        # side-effects, and then explicitly close the connection.
+        self._in_use.pop(self.conn_key(conn), None)
+        self.close()
+        self._close(conn, close_conn=True)
+
+    def close_idle(self):
+        # Close any open connections that are not currently in-use.
+        with self._lock:
+            while self._connections:
+                ts, conn = self._connections.pop()
+                self._close(conn, close_conn=True)
 
 
 class PooledMySQLDatabase(PooledDatabase, MySQLDatabase):
-    def _is_closed(self, key, conn):
-        is_closed = super(PooledMySQLDatabase, self)._is_closed(key, conn)
-        if not is_closed:
-            try:
-                conn.ping(False)
-            except:
-                is_closed = True
-        return is_closed
+    def _is_closed(self, conn):
+        try:
+            conn.ping(False)
+        except:
+            return True
+        else:
+            return False
 
 
 class _PooledPostgresqlDatabase(PooledDatabase):
-    def _is_closed(self, key, conn):
-        closed = super(_PooledPostgresqlDatabase, self)._is_closed(key, conn)
-        if not closed:
-            closed = bool(conn.closed)
-        return closed
+    def _is_closed(self, conn):
+        if not conn.closed:
+            return conn.get_transaction_status() == TRANSACTION_STATUS_UNKNOWN
+        return False
 
     def _can_reuse(self, conn):
         txn_status = conn.get_transaction_status()
         # Do not return connection in an error state, as subsequent queries
-        # will all fail.
-        if txn_status == pg_extensions.TRANSACTION_STATUS_INERROR:
+        # will all fail. If the status is unknown then we lost the connection
+        # to the server and the connection should not be re-used.
+        if txn_status == TRANSACTION_STATUS_INERROR:
             conn.reset()
+        elif txn_status == TRANSACTION_STATUS_UNKNOWN:
+            return False
         return True
 
 class PooledPostgresqlDatabase(_PooledPostgresqlDatabase, PostgresqlDatabase):
@@ -226,14 +233,13 @@ except ImportError:
 
 
 class _PooledSqliteDatabase(PooledDatabase):
-    def _is_closed(self, key, conn):
-        closed = super(_PooledSqliteDatabase, self)._is_closed(key, conn)
-        if not closed:
-            try:
-                conn.total_changes
-            except:
-                return True
-        return closed
+    def _is_closed(self, conn):
+        try:
+            conn.total_changes
+        except:
+            return True
+        else:
+            return False
 
 class PooledSqliteDatabase(_PooledSqliteDatabase, SqliteDatabase):
     pass

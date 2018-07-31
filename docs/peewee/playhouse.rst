@@ -3170,7 +3170,7 @@ Pool APIs
     :param str database: The name of the database or database file.
     :param int max_connections: Maximum number of connections. Provide ``None`` for unlimited.
     :param int stale_timeout: Number of seconds to allow connections to be used.
-    :param int timeout: Number of seconds block when pool is full. By default peewee does not block when the pool is full but simply throws an exception. To block indefinitely set this value to ``0``.
+    :param int timeout: Number of seconds to block when pool is full. By default peewee does not block when the pool is full but simply throws an exception. To block indefinitely set this value to ``0``.
     :param kwargs: Arbitrary keyword arguments passed to database class.
 
     Mixin class intended to be used with a subclass of :py:class:`Database`.
@@ -3179,17 +3179,13 @@ Pool APIs
 
     .. note:: If the number of open connections exceeds `max_connections`, a `ValueError` will be raised.
 
-    .. py:method:: _connect(*args, **kwargs)
-
-        Request a connection from the pool. If there are no available connections a new one will be opened.
-
-    .. py:method:: _close(conn[, close_conn=False])
-
-        By default `conn` will not be closed and instead will be returned to the pool of available connections. If `close_conn=True`, then `conn` will be closed and *not* be returned to the pool.
-
     .. py:method:: manual_close()
 
         Close the currently-open connection without returning it to the pool.
+
+    .. py:method:: close_idle()
+
+        Close all idle connections.
 
 .. py:class:: PooledPostgresqlDatabase
 
