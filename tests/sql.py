@@ -29,6 +29,9 @@ class TestSelectQuery(BaseTestCase):
             'WHERE ("t1"."username" = ?)'), ['foo'])
 
     def test_select_subselect_function(self):
+        # For functions whose only argument is a subquery, we do not need to
+        # include additional parentheses -- in fact, some databases will report
+        # a syntax error if we do.
         exists = fn.EXISTS(Tweet
                            .select(Tweet.c.id)
                            .where(Tweet.c.user_id == User.c.id))
@@ -38,6 +41,17 @@ class TestSelectQuery(BaseTestCase):
             'SELECT "t2"."id" FROM "tweets" AS "t2" '
             'WHERE ("t2"."user_id" = "t1"."id")) AS "has_tweet" '
             'FROM "users" AS "t1"'), [])
+
+        # If the function has more than one argument, we need to wrap the
+        # subquery in parentheses.
+        Stat = Table('stat', ['id', 'val'])
+        SA = Stat.alias('sa')
+        subq = SA.select(fn.SUM(SA.val).alias('val_sum'))
+        query = Stat.select(fn.COALESCE(subq, 0))
+        self.assertSQL(query, (
+            'SELECT COALESCE(('
+            'SELECT SUM("sa"."val") AS "val_sum" FROM "stat" AS "sa"'
+            '), ?) FROM "stat" AS "t1"'), [0])
 
     def test_select_extend(self):
         query = User.select(User.c.id, User.c.username)

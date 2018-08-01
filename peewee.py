@@ -1356,7 +1356,7 @@ class Function(ColumnBase):
         if not len(self.arguments):
             ctx.literal('()')
         else:
-            with ctx(in_function=True):
+            with ctx(in_function=True, function_arg_count=len(self.arguments)):
                 ctx.sql(EnclosedNodeList([
                     (argument if isinstance(argument, Node)
                      else Value(argument))
@@ -1992,7 +1992,7 @@ class Select(SelectBase):
             'parentheses': is_subquery or (ctx.scope == SCOPE_SOURCE),
             'subquery': True,
         }
-        if ctx.state.in_function:
+        if ctx.state.in_function and ctx.state.function_arg_count == 1:
             state['parentheses'] = False
 
         with ctx.scope_normal(**state):
