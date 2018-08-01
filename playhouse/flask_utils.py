@@ -85,8 +85,9 @@ def get_next_url(default='/'):
     return default
 
 class FlaskDB(object):
-    def __init__(self, app=None, database=None):
+    def __init__(self, app=None, database=None, model_class=Model):
         self.database = None  # Reference to actual Peewee database instance.
+        self.base_model_class = model_class
         self._app = app
         self._db = database  # dict, url, Database, or None (default).
         if app is not None:
@@ -159,7 +160,7 @@ class FlaskDB(object):
         if self.database is None:
             raise RuntimeError('Database must be initialized.')
 
-        class BaseModel(Model):
+        class BaseModel(self.base_model_class):
             class Meta:
                 database = self.database
 
