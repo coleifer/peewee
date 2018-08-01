@@ -556,6 +556,23 @@ class TestSortModels(BaseTestCase):
 
 
 class TestDBProxy(BaseTestCase):
+    def test_proxy_context_manager(self):
+        db = Proxy()
+        class User(Model):
+            username = TextField()
+
+            class Meta:
+                database = db
+
+        self.assertRaises(AttributeError, User.create_table)
+
+        sqlite_db = SqliteDatabase(':memory:')
+        db.initialize(sqlite_db)
+        User.create_table()
+        with db:
+            self.assertFalse(db.is_closed())
+        self.assertTrue(db.is_closed())
+
     def test_db_proxy(self):
         db = Proxy()
         class BaseModel(Model):

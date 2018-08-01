@@ -402,6 +402,17 @@ class Proxy(object):
         self._callbacks.append(callback)
         return callback
 
+    def passthrough(method):
+        def inner(self, *args, **kwargs):
+            if self.obj is None:
+                raise AttributeError('Cannot use uninitialized Proxy.')
+            return getattr(self.obj, method)(*args, **kwargs)
+        return inner
+
+    # Allow proxy to be used as a context-manager.
+    __enter__ = passthrough('__enter__')
+    __exit__ = passthrough('__exit__')
+
     def __getattr__(self, attr):
         if self.obj is None:
             raise AttributeError('Cannot use uninitialized Proxy.')
