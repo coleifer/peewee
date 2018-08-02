@@ -30,6 +30,8 @@ from playhouse.sqlite_ext import SqliteExtDatabase
 
 
 class APSWDatabase(SqliteExtDatabase):
+    _sqlite_version = tuple(int(i) for i in apsw.sqlitelibversion().split('.'))
+
     def __init__(self, database, **kwargs):
         self._modules = {}
         super(APSWDatabase, self).__init__(database, **kwargs)

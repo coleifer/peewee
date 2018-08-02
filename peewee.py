@@ -2842,6 +2842,7 @@ class SqliteDatabase(Database):
         'ILIKE': 'LIKE'}
     index_schema_prefix = True
     limit_max = -1
+    _sqlite_version = __sqlite_version__
 
     def __init__(self, database, *args, **kwargs):
         self._pragmas = kwargs.pop('pragmas', ())
@@ -2885,7 +2886,7 @@ class SqliteDatabase(Database):
         self._load_aggregates(conn)
         self._load_collations(conn)
         self._load_functions(conn)
-        if __sqlite_version__ >= (3, 25, 0):
+        if self._sqlite_version_ >= (3, 25, 0):
             self._load_window_functions(conn)
         if self._table_functions:
             for table_function in self._table_functions:
@@ -3162,7 +3163,7 @@ class SqliteDatabase(Database):
 
     def conflict_update(self, on_conflict):
         # Sqlite prior to 3.24.0 does not support Postgres-style upsert.
-        if __sqlite_version__ < (3, 24, 0) and \
+        if self._sqlite_version < (3, 24, 0) and \
            any((on_conflict._preserve, on_conflict._update, on_conflict._where,
                 on_conflict._conflict_target)):
             raise ValueError('SQLite does not support specifying which values '
