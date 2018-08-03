@@ -2886,7 +2886,7 @@ class SqliteDatabase(Database):
         self._load_aggregates(conn)
         self._load_collations(conn)
         self._load_functions(conn)
-        if self._sqlite_version_ >= (3, 25, 0):
+        if self._sqlite_version >= (3, 25, 0):
             self._load_window_functions(conn)
         if self._table_functions:
             for table_function in self._table_functions:
