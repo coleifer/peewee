@@ -978,6 +978,8 @@ if CYTHON_SQLITE_EXTENSIONS:
         pertain to the current connection.
         """
         def getter(self):
+            if self._state.conn is None:
+                raise ImproperlyConfigured('database connection not opened.')
             result = sqlite_get_db_status(self._state.conn, flag)
             if return_current:
                 return result[0]
