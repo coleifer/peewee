@@ -714,3 +714,16 @@ class TestSchemaMigration(ModelTestCase):
         # Deleting the user will cascade to the associated page.
         User.delete().where(User.id == 'huey').execute()
         self.assertEqual(Page.select().count(), 0)
+
+    def test_make_index_name(self):
+        self.assertEqual(make_index_name('table', ['column']), 'table_column')
+
+    def test_make_index_name_long(self):
+        columns = [
+            'very_long_column_name_number_1',
+            'very_long_column_name_number_2',
+            'very_long_column_name_number_3',
+            'very_long_column_name_number_4'
+        ]
+        name = make_index_name('very_long_table_name', columns)
+        self.assertEqual(len(name), 64)
