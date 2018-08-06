@@ -57,7 +57,7 @@ except ImportError:
         mysql = None
 
 
-__version__ = '3.6.4'
+__version__ = '3.6.4.1'
 __all__ = [
     'AsIs',
     'AutoField',
@@ -320,6 +320,7 @@ JOIN = attrdict(
     FULL='FULL',
     FULL_OUTER='FULL OUTER',
     CROSS='CROSS',
+    LATERAL='LATERAL',
     NATURAL='NATURAL')
 
 # Row representations.
@@ -1898,7 +1899,7 @@ class CompoundSelectQuery(SelectBase):
 class Select(SelectBase):
     def __init__(self, from_list=None, columns=None, group_by=None,
                  having=None, distinct=None, windows=None, for_update=None,
-                 **kwargs):
+                 of=None, **kwargs):
         super(Select, self).__init__(**kwargs)
         self._from_list = (list(from_list) if isinstance(from_list, tuple)
                            else from_list) or []
@@ -1906,7 +1907,7 @@ class Select(SelectBase):
         self._group_by = group_by
         self._having = having
         self._windows = None
-        self._for_update = 'FOR UPDATE' if for_update is True else for_update
+        self._for_update = ForUpdateLockExpression(expression='FOR UPDATE' if for_update is True else for_update, of=of)
 
         self._distinct = self._simple_distinct = None
         if distinct:
@@ -1982,8 +1983,8 @@ class Select(SelectBase):
         self._windows = windows if windows else None
 
     @Node.copy
-    def for_update(self, for_update=True):
-        self._for_update = 'FOR UPDATE' if for_update is True else for_update
+    def for_update(self, for_update=True, of=None):
+        self._for_update = ForUpdateLockExpression(expression='FOR UPDATE' if for_update is True else for_update, of=of)
 
     def _get_query_key(self):
         return self._alias
@@ -2044,7 +2045,7 @@ class Select(SelectBase):
                     raise ValueError('FOR UPDATE specified but not supported '
                                      'by database.')
                 ctx.literal(' ')
-                ctx.sql(SQL(self._for_update))
+                ctx.sql(self._for_update)
 
         if not ctx.state.in_function:
             ctx = self.apply_alias(ctx)
@@ -6649,3 +6650,24 @@ def prefetch(sq, *subqueries):
                     rel.populate_instance(instance, deps[rel.model])
 
     return pq.query
+
+
+class ForUpdateLockExpression(Node):
+    """ for update of - expression """
+    def __init__(self, expression, of=None):
+        self.of = of
+        self.expression = expression
+
+    def __bool__(self):
+        return bool(self.expression)
+
+    def __sql__(self, ctx):
+
+        ctx.literal('%s' % self.expression)
+        if self.of:
+
+            tables = [self.of] if not isinstance(self.of, (list, tuple, set)) else self.of
+            with ctx.scope_values(parentheses=False):
+                ctx.literal(" OF ").sql(CommaNodeList(tables))
+
+        return ctx
