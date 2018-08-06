@@ -21,19 +21,27 @@ if sys.version_info[0] == 3:
 
 
 class DataSet(object):
-    def __init__(self, url):
-        self._url = url
-        parse_result = urlparse(url)
-        self._database_path = parse_result.path[1:]
+    def __init__(self, url, bare_fields=False):
+        if isinstance(url, Database):
+            self._url = None
+            self._database = url
+            self._database_path = self._database.database
+        else:
+            self._url = url
+            parse_result = urlparse(url)
+            self._database_path = parse_result.path[1:]
 
-        # Connect to the database.
-        self._database = connect(url)
+            # Connect to the database.
+            self._database = connect(url)
+
         self._database.connect()
 
         # Introspect the database and generate models.
         self._introspector = Introspector.from_database(self._database)
         self._models = self._introspector.generate_models(
-            skip_invalid=True, literal_column_names=True)
+            skip_invalid=True,
+            literal_column_names=True,
+            bare_fields=bare_fields)
         self._migrator = SchemaMigrator.from_database(self._database)
 
         class BaseModel(Model):
@@ -80,8 +88,10 @@ class DataSet(object):
             if table in self._models:
                 model_class = self._models[table]
                 dependencies.extend([
-                    related._meta.db_table for related in
-                    model_class._meta.related_models(backrefs=True)])
+                    related._meta.table_name for _, related, _ in
+                    model_class._meta.model_graph()])
+            else:
+                dependencies.extend(self.get_table_dependencies(table))
         else:
             dependencies = None  # Update all tables.
         updated = self._introspector.generate_models(
@@ -89,6 +99,19 @@ class DataSet(object):
             table_names=dependencies,
             literal_column_names=True)
         self._models.update(updated)
+
+    def get_table_dependencies(self, table):
+        stack = [table]
+        accum = []
+        seen = set()
+        while stack:
+            table = stack.pop()
+            for fk_meta in self._database.get_foreign_keys(table):
+                dest = fk_meta.dest_table
+                if dest not in seen:
+                    stack.append(dest)
+                    accum.append(dest)
+        return accum
 
     def __enter__(self):
         self.connect()
@@ -170,7 +193,7 @@ class Table(object):
 
     def _create_model(self):
         class Meta:
-            db_table = self.name
+            table_name = self.name
         return type(
             str(self.name),
             (self.dataset._base_model,),
@@ -210,7 +233,7 @@ class Table(object):
                 field = field_class(null=True)
                 operations.append(
                     self.dataset._migrator.add_column(self.name, key, field))
-                field.add_to_class(self.model_class, key)
+                field.bind(self.model_class, key)
 
             migrate(*operations)
 
@@ -275,28 +298,43 @@ class Exporter(object):
 
 
 class JSONExporter(Exporter):
-    @staticmethod
-    def default(o):
-        if isinstance(o, (datetime.datetime, datetime.date, datetime.time)):
-            return o.isoformat()
-        elif isinstance(o, Decimal):
-            return str(o)
-        raise TypeError('Unable to serialize %r as JSON.' % o)
+    def __init__(self, query, iso8601_datetimes=False):
+        super(JSONExporter, self).__init__(query)
+        self.iso8601_datetimes = iso8601_datetimes
+
+    def _make_default(self):
+        datetime_types = (datetime.datetime, datetime.date, datetime.time)
+
+        if self.iso8601_datetimes:
+            def default(o):
+                if isinstance(o, datetime_types):
+                    return o.isoformat()
+                elif isinstance(o, Decimal):
+                    return str(o)
+                raise TypeError('Unable to serialize %r as JSON' % o)
+        else:
+            def default(o):
+                if isinstance(o, datetime_types + (Decimal,)):
+                    return str(o)
+                raise TypeError('Unable to serialize %r as JSON' % o)
+        return default
 
     def export(self, file_obj, **kwargs):
         json.dump(
             list(self.query),
             file_obj,
-            default=JSONExporter.default,
+            default=self._make_default(),
             **kwargs)
 
 
 class CSVExporter(Exporter):
     def export(self, file_obj, header=True, **kwargs):
         writer = csv.writer(file_obj, **kwargs)
-        if header and hasattr(self.query, '_select'):
-            writer.writerow([field.name for field in self.query._select])
-        for row in self.query.tuples():
+        tuples = self.query.tuples().execute()
+        tuples.initialize()
+        if header and getattr(tuples, 'columns', None):
+            writer.writerow([column for column in tuples.columns])
+        for row in tuples:
             writer.writerow(row)
 
 

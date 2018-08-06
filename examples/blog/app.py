@@ -93,18 +93,20 @@ class Entry(flask_db.Model):
         # Create a row in the FTSEntry table with the post content. This will
         # allow us to use SQLite's awesome full-text search extension to
         # search our entries.
-        query = (FTSEntry
-                 .select(FTSEntry.docid, FTSEntry.entry_id)
-                 .where(FTSEntry.entry_id == self.id))
-        try:
-            fts_entry = query.get()
-        except FTSEntry.DoesNotExist:
-            fts_entry = FTSEntry(entry_id=self.id)
-            force_insert = True
+        exists = (FTSEntry
+                  .select(FTSEntry.docid)
+                  .where(FTSEntry.docid == self.id)
+                  .exists())
+        content = '\n'.join((self.title, self.content))
+        if exists:
+            (FTSEntry
+             .update({FTSEntry.content: content})
+             .where(FTSEntry.docid == self.id)
+             .execute())
         else:
-            force_insert = False
-        fts_entry.content = '\n'.join((self.title, self.content))
-        fts_entry.save(force_insert=force_insert)
+            FTSEntry.insert({
+                FTSEntry.docid: self.id,
+                FTSEntry.content: content}).execute()
 
     @classmethod
     def public(cls):
@@ -119,26 +121,22 @@ class Entry(flask_db.Model):
         words = [word.strip() for word in query.split() if word.strip()]
         if not words:
             # Return an empty query.
-            return Entry.select().where(Entry.id == 0)
+            return Entry.noop()
         else:
             search = ' '.join(words)
 
         # Query the full-text search index for entries matching the given
         # search query, then join the actual Entry data on the matching
         # search result.
-        return (FTSEntry
-                .select(
-                    FTSEntry,
-                    Entry,
-                    FTSEntry.rank().alias('score'))
-                .join(Entry, on=(FTSEntry.entry_id == Entry.id).alias('entry'))
+        return (Entry
+                .select(Entry, FTSEntry.rank().alias('score'))
+                .join(FTSEntry, on=(Entry.id == FTSEntry.docid))
                 .where(
-                    (Entry.published == True) &
-                    (FTSEntry.match(search)))
-                .order_by(SQL('score').desc()))
+                    FTSEntry.match(search) &
+                    (Entry.published == True))
+                .order_by(SQL('score')))
 
 class FTSEntry(FTSModel):
-    entry_id = IntegerField(Entry)
     content = TextField()
 
     class Meta:

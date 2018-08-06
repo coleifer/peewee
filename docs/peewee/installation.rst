@@ -9,18 +9,13 @@ Most users will want to simply install the latest version, hosted on PyPI:
 
     pip install peewee
 
-Peewee comes with two C extensions that can optionally be compiled:
+Peewee comes with a couple C extensions that will be built if Cython is
+available.
 
-* Speedups, which includes miscellaneous functions re-implemented with Cython. This module will be built automatically if Cython is installed.
-* Sqlite extensions, which includes Cython implementations of the SQLite date manipulation functions, the REGEXP operator, and full-text search result ranking algorithms. This module should be built using the ``build_sqlite_ext`` command.
-
-.. note::
-    If you have Cython installed, then the ``speedups`` module will automatically be built. If you wish to also build the SQLite Cython extension, you must manually run:
-
-    .. code-block:: console
-
-        python setup.py build_sqlite_ext
-        python setup.py install
+* Speedups, which includes miscellaneous functions re-implemented with Cython.
+* Sqlite extensions, which includes Cython implementations of the SQLite date
+  manipulation functions, the REGEXP operator, and full-text search result
+  ranking algorithms.
 
 
 Installing with git
@@ -35,15 +30,17 @@ using git:
     cd peewee
     python setup.py install
 
+.. note::
+    On some systems you may need to use ``sudo python setup.py install`` to
+    install peewee system-wide.
+
 If you would like to build the SQLite extension in a git checkout, you can run:
 
 .. code-block:: console
 
-    # Build the sqlite extension and place the shared library alongside the other modules.
-    python setup.py build_sqlite_ext -i
+    # Build the C extension and place shared libraries alongside other modules.
+    python setup.py build_ext -i
 
-.. note::
-    On some systems you may need to use ``sudo python setup.py install`` to install peewee system-wide.
 
 Running tests
 -------------
@@ -52,18 +49,25 @@ You can test your installation by running the test suite.
 
 .. code-block:: console
 
-    python setup.py test
-
-    # Or use the test runner:
     python runtests.py
 
-You can test specific features or specific database drivers using the ``runtests.py``
-script. By default the test suite is run using SQLite and the ``playhouse``
-extension tests are not run. To view the available test runner options, use:
+You can test specific features or specific database drivers using the
+``runtests.py`` script. To view the available test runner options, use:
 
 .. code-block:: console
 
     python runtests.py --help
+
+.. note::
+    To run tests against Postgres or MySQL you need to create a database named
+    "peewee_test". To test the Postgres extension module, you will also want to
+    install the HStore extension in the postgres test database:
+
+    .. code-block:: sql
+
+        -- install the hstore extension on the peewee_test postgres db.
+        CREATE EXTENSION hstore;
+
 
 Optional dependencies
 ---------------------
@@ -77,21 +81,40 @@ Optional dependencies
     respectively.
 
 * `Cython <http://cython.org/>`_: used for various speedups. Can give a big
-  boost to certain operations, particularly if you use SQLite.
+  boost to certain operations, particularly if you use SQLite. Since the
+  generated C files are included with the package distribution, Cython is no
+  longer required to use the C extensions (as of v3.6.0).
 * `apsw <https://github.com/rogerbinns/apsw>`_: an optional 3rd-party SQLite
-  binding offering greater performance and much, much saner semantics than the
-  standard library ``pysqlite``. Use with :py:class:`APSWDatabase`.
-* `pycrypto <http://pythonhosted.org/pycrypto/>`_ is used for the
-  :py:class:`AESEncryptedField`.
-* ``bcrypt`` module is used for the :py:class:`PasswordField`.
-* `vtfunc <https://github.com/coleifer/sqlite-vtfunc>` is used to provide some
-  table-valued functions for Sqlite as part of the ``sqlite_udf`` extensions
-  module.
+  binding offering greater performance and comprehensive support for SQLite's C
+  APIs. Use with :py:class:`APSWDatabase`.
 * `gevent <http://www.gevent.org/>`_ is an optional dependency for
   :py:class:`SqliteQueueDatabase` (though it works with ``threading`` just
   fine).
 * `BerkeleyDB <http://www.oracle.com/technetwork/database/database-technologies/berkeleydb/downloads/index.html>`_ can
   be compiled with a SQLite frontend, which works with Peewee. Compiling can be
   tricky so `here are instructions <http://charlesleifer.com/blog/updated-instructions-for-compiling-berkeleydb-with-sqlite-for-use-with-python/>`_.
-* Lastly, if you use the *Flask* or *Django* frameworks, there are helper
-  extension modules available.
+* Lastly, if you use the *Flask* framework, there are helper extension modules
+  available.
+
+
+Note on the SQLite extensions
+-----------------------------
+
+Peewee includes two SQLite-specific C extensions which provide additional
+functionality and improved performance for SQLite database users. Peewee will
+attempt to determine ahead-of-time if SQLite3 is installed, and only build the
+SQLite extensions if the SQLite shared-library is available on your system.
+
+If, however, you receive errors like the following when attempting to install
+Peewee, you can explicitly disable the compilation of the SQLite C extensions
+by settings the ``NO_SQLITE`` environment variable.
+
+.. code-block::
+
+    fatal error: sqlite3.h: No such file or directory
+
+Here is how to install Peewee with the SQLite extensions explicitly disabled:
+
+.. code-block:: console
+
+    $ NO_SQLITE=1 python setup.py install

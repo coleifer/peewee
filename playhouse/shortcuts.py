@@ -1,74 +1,19 @@
 import sys
 
 from peewee import *
-from peewee import Node
+from peewee import Alias
 
 if sys.version_info[0] == 3:
     from collections import Callable
     callable = lambda c: isinstance(c, Callable)
 
 
-def case(predicate, expression_tuples, default=None):
-    """
-    CASE statement builder.
+_clone_set = lambda s: set(s) if s else set()
 
-    Example CASE statements:
-
-        SELECT foo,
-            CASE
-                WHEN foo = 1 THEN "one"
-                WHEN foo = 2 THEN "two"
-                ELSE "?"
-            END -- will be in column named "case" in postgres --
-        FROM bar;
-
-        -- equivalent to above --
-        SELECT foo,
-            CASE foo
-                WHEN 1 THEN "one"
-                WHEN 2 THEN "two"
-                ELSE "?"
-            END
-
-    Corresponding peewee:
-
-        # No predicate, use expressions.
-        Bar.select(Bar.foo, case(None, (
-            (Bar.foo == 1, "one"),
-            (Bar.foo == 2, "two")), "?"))
-
-        # Predicate, will test for equality.
-        Bar.select(Bar.foo, case(Bar.foo, (
-            (1, "one"),
-            (2, "two")), "?"))
-    """
-    clauses = [SQL('CASE')]
-    simple_case = predicate is not None
-    if simple_case:
-        clauses.append(predicate)
-    for expr, value in expression_tuples:
-        # If this is a simple case, each tuple will contain (value, value) pair
-        # since the DB will be performing an equality check automatically.
-        # Otherwise, we will have (expression, value) pairs.
-        clauses.extend((SQL('WHEN'), expr, SQL('THEN'), value))
-    if default is not None:
-        clauses.extend((SQL('ELSE'), default))
-    clauses.append(SQL('END'))
-    return Clause(*clauses)
-
-
-def cast(node, as_type):
-    return fn.CAST(Clause(node, SQL('AS %s' % as_type)))
-
-
-def _clone_set(s):
-    if s:
-        return set(s)
-    return set()
 
 def model_to_dict(model, recurse=True, backrefs=False, only=None,
                   exclude=None, seen=None, extra_attrs=None,
-                  fields_from_query=None, max_depth=None):
+                  fields_from_query=None, max_depth=None, manytomany=False):
     """
     Convert a model instance (and any related objects) to a dictionary.
 
@@ -83,6 +28,7 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
     :param SelectQuery fields_from_query: Query that was source of model. Take
         fields explicitly selected by the query and serialize them.
     :param int max_depth: Maximum depth to recurse, value <= 0 means no max.
+    :param bool manytomany: Process many-to-many fields.
     """
     max_depth = -1 if max_depth is None else max_depth
     if max_depth == 0:
@@ -92,10 +38,10 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
     extra_attrs = _clone_set(extra_attrs)
 
     if fields_from_query is not None:
-        for item in fields_from_query._select:
+        for item in fields_from_query._returning:
             if isinstance(item, Field):
                 only.add(item)
-            elif isinstance(item, Node) and item._alias:
+            elif isinstance(item, Alias):
                 extra_attrs.add(item._alias)
 
     data = {}
@@ -104,11 +50,31 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
     exclude |= seen
     model_class = type(model)
 
-    for field in model._meta.declared_fields:
+    if manytomany:
+        for name, m2m in model._meta.manytomany.items():
+            if (name in exclude) or (only and (name not in only)):
+                continue
+
+            exclude.update((m2m, m2m.rel_model._meta.manytomany[m2m.backref]))
+            for fkf in m2m.through_model._meta.refs:
+                exclude.add(fkf)
+
+            accum = []
+            for rel_obj in getattr(model, name):
+                accum.append(model_to_dict(
+                    rel_obj,
+                    recurse=recurse,
+                    backrefs=backrefs,
+                    only=only,
+                    exclude=exclude,
+                    max_depth=max_depth - 1))
+            data[name] = accum
+
+    for field in model._meta.sorted_fields:
         if field in exclude or (only and (field not in only)):
             continue
 
-        field_data = model._data.get(field.name)
+        field_data = model.__data__.get(field.name)
         if isinstance(field, ForeignKeyField) and recurse:
             if field_data:
                 seen.add(field)
@@ -135,8 +101,8 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
                 data[attr_name] = attr
 
     if backrefs and recurse:
-        for related_name, foreign_key in model._meta.reverse_rel.items():
-            descriptor = getattr(model_class, related_name)
+        for foreign_key, rel_model in model._meta.backrefs.items():
+            descriptor = getattr(model_class, foreign_key.backref)
             if descriptor in exclude or foreign_key in exclude:
                 continue
             if only and (descriptor not in only) and (foreign_key not in only):
@@ -144,10 +110,7 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
 
             accum = []
             exclude.add(foreign_key)
-            related_query = getattr(
-                model,
-                related_name + '_prefetch',
-                getattr(model, related_name))
+            related_query = getattr(model, foreign_key.backref)
 
             for rel_obj in related_query:
                 accum.append(model_to_dict(
@@ -158,62 +121,52 @@ def model_to_dict(model, recurse=True, backrefs=False, only=None,
                     exclude=exclude,
                     max_depth=max_depth - 1))
 
-            data[related_name] = accum
+            data[foreign_key.backref] = accum
 
     return data
 
 
-def dict_to_model(model_class, data, ignore_unknown=False):
-    instance = model_class()
-    meta = model_class._meta
+def update_model_from_dict(instance, data, ignore_unknown=False):
+    meta = instance._meta
+    backrefs = dict([(fk.backref, fk) for fk in meta.backrefs])
+
     for key, value in data.items():
-        if key in meta.fields:
-            field = meta.fields[key]
+        if key in meta.combined:
+            field = meta.combined[key]
             is_backref = False
-        elif key in model_class._meta.reverse_rel:
-            field = meta.reverse_rel[key]
+        elif key in backrefs:
+            field = backrefs[key]
             is_backref = True
         elif ignore_unknown:
             setattr(instance, key, value)
             continue
         else:
             raise AttributeError('Unrecognized attribute "%s" for model '
-                                 'class %s.' % (key, model_class))
+                                 'class %s.' % (key, type(instance)))
 
         is_foreign_key = isinstance(field, ForeignKeyField)
 
         if not is_backref and is_foreign_key and isinstance(value, dict):
+            try:
+                rel_instance = instance.__rel__[field.name]
+            except KeyError:
+                rel_instance = field.rel_model()
             setattr(
                 instance,
                 field.name,
-                dict_to_model(field.rel_model, value, ignore_unknown))
+                update_model_from_dict(rel_instance, value, ignore_unknown))
         elif is_backref and isinstance(value, (list, tuple)):
             instances = [
-                dict_to_model(
-                    field.model_class,
-                    row_data,
-                    ignore_unknown)
+                dict_to_model(field.model, row_data, ignore_unknown)
                 for row_data in value]
             for rel_instance in instances:
                 setattr(rel_instance, field.name, instance)
-            setattr(instance, field.related_name, instances)
+            setattr(instance, field.backref, instances)
         else:
             setattr(instance, field.name, value)
 
     return instance
 
 
-class RetryOperationalError(object):
-    def execute_sql(self, sql, params=None, require_commit=True):
-        try:
-            cursor = super(RetryOperationalError, self).execute_sql(
-                sql, params, require_commit)
-        except OperationalError:
-            if not self.is_closed():
-                self.close()
-            with self.exception_wrapper:
-                cursor = self.get_cursor()
-                cursor.execute(sql, params or ())
-                if require_commit and self.get_autocommit():
-                    self.commit()
-        return cursor
+def dict_to_model(model_class, data, ignore_unknown=False):
+    return update_model_from_dict(model_class(), data, ignore_unknown)

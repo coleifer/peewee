@@ -43,8 +43,10 @@ def make_introspector(database_type, database_name, **kwargs):
     db = DatabaseClass(database_name, **kwargs)
     return Introspector.from_database(db, schema=schema)
 
-def print_models(introspector, tables=None, preserve_order=False):
-    database = introspector.introspect(table_names=tables)
+def print_models(introspector, tables=None, preserve_order=False,
+                 include_views=False):
+    database = introspector.introspect(table_names=tables,
+                                       include_views=include_views)
 
     print_(TEMPLATE % (
         introspector.get_additional_imports(),
@@ -92,7 +94,7 @@ def print_models(introspector, tables=None, preserve_order=False):
 
         print_('')
         print_('    class Meta:')
-        print_('        db_table = \'%s\'' % table)
+        print_('        table_name = \'%s\'' % table)
         multi_column_indexes = database.multi_column_indexes(table)
         if multi_column_indexes:
             print_('        indexes = (')
@@ -152,6 +154,8 @@ def get_option_parser():
     ao('-t', '--tables', dest='tables',
        help=('Only generate the specified tables. Multiple table names should '
              'be separated by commas.'))
+    ao('-v', '--views', dest='views', action='store_true',
+       help='Generate model classes for VIEWs in addition to tables.')
     ao('-i', '--info', dest='info', action='store_true',
        help=('Add database information and other metadata to top of the '
              'generated file.'))
@@ -173,13 +177,6 @@ if __name__ == '__main__':
     parser = get_option_parser()
     options, args = parser.parse_args()
 
-    if options.preserve_order:
-        try:
-            from collections import OrderedDict
-        except ImportError:
-            err('Preserve order requires Python >= 2.7.')
-            sys.exit(1)
-
     if len(args) < 1:
         err('Missing required parameter "database"')
         parser.print_help()
@@ -198,4 +195,4 @@ if __name__ == '__main__':
         cmd_line = ' '.join(raw_argv[1:])
         print_header(cmd_line, introspector)
 
-    print_models(introspector, tables, preserve_order=options.preserve_order)
+    print_models(introspector, tables, options.preserve_order, options.views)

@@ -1,6 +1,7 @@
 *.pyc
 build
 prof/
+docs/_build/
 playhouse/*.c
 playhouse/*.h
 playhouse/*.so
@@ -9,3 +10,4 @@ playhouse/tests/peewee_test.db
 MANIFEST
 peewee_test.db
 closure.so
+lsm.so

@@ -18,41 +18,36 @@ Here are just a few reasons to use APSW, taken from the documentation:
 """
 import apsw
 from peewee import *
-from peewee import _sqlite_date_part
-from peewee import _sqlite_date_trunc
-from peewee import _sqlite_regexp
+from peewee import __exception_wrapper__
 from peewee import BooleanField as _BooleanField
 from peewee import DateField as _DateField
 from peewee import DateTimeField as _DateTimeField
 from peewee import DecimalField as _DecimalField
-from peewee import logger
-from peewee import savepoint
 from peewee import TimeField as _TimeField
-from peewee import transaction
+from peewee import logger
+
 from playhouse.sqlite_ext import SqliteExtDatabase
-from playhouse.sqlite_ext import VirtualCharField
-from playhouse.sqlite_ext import VirtualField
-from playhouse.sqlite_ext import VirtualFloatField
-from playhouse.sqlite_ext import VirtualIntegerField
-from playhouse.sqlite_ext import VirtualModel
 
 
 class APSWDatabase(SqliteExtDatabase):
-    def __init__(self, database, timeout=None, **kwargs):
-        self.timeout = timeout
+    _sqlite_version = tuple(int(i) for i in apsw.sqlitelibversion().split('.'))
+
+    def __init__(self, database, **kwargs):
         self._modules = {}
         super(APSWDatabase, self).__init__(database, **kwargs)
 
     def register_module(self, mod_name, mod_inst):
         self._modules[mod_name] = mod_inst
+        if not self.is_closed():
+            self.connection().createmodule(mod_name, mod_inst)
 
     def unregister_module(self, mod_name):
         del(self._modules[mod_name])
 
-    def _connect(self, database, **kwargs):
-        conn = apsw.Connection(database, **kwargs)
-        if self.timeout is not None:
-            conn.setbusytimeout(self.timeout)
+    def _connect(self):
+        conn = apsw.Connection(self.database, **self.connect_params)
+        if self._timeout is not None:
+            conn.setbusytimeout(self._timeout * 1000)
         try:
             self._add_conn_hooks(conn)
         except:
@@ -72,8 +67,7 @@ class APSWDatabase(SqliteExtDatabase):
     def _load_aggregates(self, conn):
         for name, (klass, num_params) in self._aggregates.items():
             def make_aggregate():
-                instance = klass()
-                return (instance, instance.step, instance.finalize)
+                return (klass(), klass.step, klass.finalize)
             conn.createaggregatefunction(name, make_aggregate)
 
     def _load_collations(self, conn):
@@ -92,42 +86,31 @@ class APSWDatabase(SqliteExtDatabase):
     def load_extension(self, extension):
         self._extensions.add(extension)
         if not self.is_closed():
-            conn = self.get_conn()
+            conn = self.connection()
             conn.enableloadextension(True)
             conn.loadextension(extension)
 
-    def _execute_sql(self, cursor, sql, params):
-        cursor.execute(sql, params or ())
-        return cursor
-
-    def execute_sql(self, sql, params=None, require_commit=True):
-        logger.debug((sql, params))
-        with self.exception_wrapper:
-            cursor = self.get_cursor()
-            self._execute_sql(cursor, sql, params)
-        return cursor
-
-    def last_insert_id(self, cursor, model):
-        if model._meta.auto_increment:
-            return cursor.getconnection().last_insert_rowid()
+    def last_insert_id(self, cursor, query_type=None):
+        return cursor.getconnection().last_insert_rowid()
 
     def rows_affected(self, cursor):
         return cursor.getconnection().changes()
 
     def begin(self, lock_type='deferred'):
-        self.get_cursor().execute('begin %s;' % lock_type)
+        self.cursor().execute('begin %s;' % lock_type)
 
     def commit(self):
-        self.get_cursor().execute('commit;')
+        self.cursor().execute('commit;')
 
     def rollback(self):
-        self.get_cursor().execute('rollback;')
+        self.cursor().execute('rollback;')
 
-    def transaction(self, lock_type='deferred'):
-        return transaction(self, lock_type)
-
-    def savepoint(self, sid=None):
-        return savepoint(self, sid)
+    def execute_sql(self, sql, params=None, commit=True):
+        logger.debug((sql, params))
+        with __exception_wrapper__:
+            cursor = self.cursor()
+            cursor.execute(sql, params or ())
+        return cursor
 
 
 def nh(s, v):

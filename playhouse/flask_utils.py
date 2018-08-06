@@ -13,27 +13,34 @@ from playhouse.db_url import connect as db_url_connect
 
 
 class PaginatedQuery(object):
-    def __init__(self, query_or_model, paginate_by, page_var='page',
+    def __init__(self, query_or_model, paginate_by, page_var='page', page=None,
                  check_bounds=False):
         self.paginate_by = paginate_by
         self.page_var = page_var
+        self.page = page or None
         self.check_bounds = check_bounds
 
         if isinstance(query_or_model, SelectQuery):
             self.query = query_or_model
-            self.model = self.query.model_class
+            self.model = self.query.model
         else:
             self.model = query_or_model
             self.query = self.model.select()
 
     def get_page(self):
+        if self.page is not None:
+            return self.page
+
         curr_page = request.args.get(self.page_var)
         if curr_page and curr_page.isdigit():
             return max(1, int(curr_page))
         return 1
 
     def get_page_count(self):
-        return int(math.ceil(float(self.query.count()) / self.paginate_by))
+        if not hasattr(self, '_page_count'):
+            self._page_count = int(math.ceil(
+                float(self.query.count()) / self.paginate_by))
+        return self._page_count
 
     def get_object_list(self):
         if self.check_bounds and self.get_page() > self.get_page_count():
@@ -50,12 +57,14 @@ def get_object_or_404(query_or_model, *query):
         abort(404)
 
 def object_list(template_name, query, context_variable='object_list',
-                paginate_by=20, page_var='page', check_bounds=True, **kwargs):
+                paginate_by=20, page_var='page', page=None, check_bounds=True,
+                **kwargs):
     paginated_query = PaginatedQuery(
         query,
-        paginate_by,
-        page_var,
-        check_bounds)
+        paginate_by=paginate_by,
+        page_var=page_var,
+        page=page,
+        check_bounds=check_bounds)
     kwargs[context_variable] = paginated_query.get_object_list()
     return render_template(
         template_name,
@@ -76,8 +85,9 @@ def get_next_url(default='/'):
     return default
 
 class FlaskDB(object):
-    def __init__(self, app=None, database=None):
+    def __init__(self, app=None, database=None, model_class=Model):
         self.database = None  # Reference to actual Peewee database instance.
+        self.base_model_class = model_class
         self._app = app
         self._db = database  # dict, url, Database, or None (default).
         if app is not None:
@@ -150,7 +160,7 @@ class FlaskDB(object):
         if self.database is None:
             raise RuntimeError('Database must be initialized.')
 
-        class BaseModel(Model):
+        class BaseModel(self.base_model_class):
             class Meta:
                 database = self.database
 

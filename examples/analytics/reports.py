@@ -43,7 +43,7 @@ class Report(object):
         """
         return (self.get_query()
                 .select(PageView.ip, PageView.headers['Cookie'])
-                .where(~(PageView.headers['Cookie'] >> None))
+                .where(PageView.headers['Cookie'].is_null(False))
                 .tuples())
 
     def user_agents(self):
@@ -86,7 +86,7 @@ class Report(object):
         return (PageView
                 .select(
                     PageView.ip,
-                    fn.array_agg(PageView.url).coerce(False).alias('urls'))
+                    fn.array_agg(PageView.url).alias('urls'))
                 .from_(inner.alias('t1'))
                 .group_by(PageView.ip))
 
