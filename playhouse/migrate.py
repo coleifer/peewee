@@ -101,6 +101,7 @@ Dropping an index:
 """
 from collections import namedtuple
 import functools
+import hashlib
 import re
 
 from peewee import *
