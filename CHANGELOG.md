@@ -7,12 +7,32 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+**Backwards-incompatible changes**
+
+* Pool database `close_all()` method renamed to `close_idle()` to better
+  reflect the actual behavior.
+
+**New features**
+
 * Add [Model.bulk_create()](http://docs.peewee-orm.com/en/latest/peewee/api.html#Model.bulk_create)
   method for bulk-inserting unsaved model instances.
-* Even *more* changes to the `setup.py` script. In this case I've added a helper
-  function which will reliably determine if the SQLite3 extensions can be built.
-  This follows the approach taken by the Python YAML package.
+* The `FlaskDB` class in `playhouse.flask_utils` now accepts a `model_class`
+  parameter, which can be used to specify a custom base-class for models.
+
+**Bugfixes**
+
 * Fixed bug when using the Postgres `ArrayField` with an array of `BlobField`.
+* Fixed bug where parentheses were not added to subqueries used in function
+  calls with more than one argument.
+* Fixed bug which prevented `Proxy` databases from being used as a
+  context-manager.
+* Fixed bug where the APSW driver was referring to the SQLite version from the
+  standard library `sqlite3` driver, rather than from `apsw`.
+* Fixed missing import in migrations library, which would cause errors when
+  attempting to add indexes whose name exceeded 64 chars.
+* Even *more* changes to the `setup.py` script. In this case I've added a
+  helper function which will reliably determine if the SQLite3 extensions can
+  be built. This follows the approach taken by the Python YAML package.
 
 [View commits](https://github.com/coleifer/peewee/compare/3.6.4...master)
 
