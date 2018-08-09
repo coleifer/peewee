@@ -6375,7 +6375,8 @@ class BaseModelCursorWrapper(DictCursorWrapper):
                     if first.name not in self.columns:
                         fields[idx] = first
                         self.columns[idx] = first.column_name
-                    self.columns[idx] += '_' + first.column_name
+                    else:
+                        self.columns[idx] += '_' + first.column_name
 
     initialize = _initialize_columns
 
