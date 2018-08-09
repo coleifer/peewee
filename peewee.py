@@ -6356,20 +6356,24 @@ class BaseModelCursorWrapper(DictCursorWrapper):
                     converters[idx] = combined[column].python_value
                 if isinstance(node, Column) and node.source == table:
                     fields[idx] = combined[column]
-            elif (isinstance(node, Function) and node.arguments and
-                  node._coerce):
+            elif isinstance(node, Function) and node.arguments:
                 # Try to special-case functions calling fields.
                 first = node.arguments[0]
                 if isinstance(first, Node):
                     first = first.unwrap()
-
-                if isinstance(first, Field):
-                    converters[idx] = first.python_value
-                elif isinstance(first, Entity):
-                    path = first._path[-1]
-                    field = combined.get(path)
-                    if field is not None:
-                        converters[idx] = field.python_value
+                if node._coerce:
+                    if isinstance(first, Field):
+                        converters[idx] = first.python_value
+                    elif isinstance(first, Entity):
+                        path = first._path[-1]
+                        field = combined.get(path)
+                        if field is not None:
+                            converters[idx] = field.python_value
+                if isinstance(raw_node, Function) and isinstance(first, Field):
+                    if first.name not in self.columns:
+                        fields[idx] = first
+                        self.columns[idx] = first.column_name
+                    self.columns[idx] += '_' + first.column_name
 
     initialize = _initialize_columns
 
