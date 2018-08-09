@@ -314,14 +314,14 @@ FIELD = attrdict(
 #: Join helpers (for convenience) -- all join types are supported, this object
 #: is just to help avoid introducing errors by using strings everywhere.
 JOIN = attrdict(
-    INNER='INNER',
-    LEFT_OUTER='LEFT OUTER',
-    RIGHT_OUTER='RIGHT OUTER',
-    FULL='FULL',
-    FULL_OUTER='FULL OUTER',
-    CROSS='CROSS',
-    LATERAL='LATERAL',
-    NATURAL='NATURAL')
+    INNER='INNER JOIN',
+    LEFT_OUTER='LEFT OUTER JOIN',
+    RIGHT_OUTER='RIGHT OUTER JOIN',
+    FULL='FULL JOIN',
+    FULL_OUTER='FULL OUTER JOIN',
+    CROSS='CROSS JOIN',
+    LATERAL='LEFT JOIN LATERAL',
+    NATURAL='NATURAL JOIN')
 
 # Row representations.
 ROW = attrdict(
@@ -678,7 +678,7 @@ class Source(Node):
     def select(self, *columns):
         return Select((self,), columns)
 
-    def join(self, dest, join_type='INNER', on=None):
+    def join(self, dest, join_type=JOIN.INNER, on=None):
         return Join(self, dest, join_type, on)
 
     def left_outer_join(self, dest, on=None):
@@ -740,7 +740,7 @@ def __bind_database__(meth):
     return inner
 
 
-def __join__(join_type='INNER', inverted=False):
+def __join__(join_type=JOIN.INNER, inverted=False):
     def method(self, other):
         if inverted:
             self, other = other, self
@@ -889,7 +889,7 @@ class Join(BaseTable):
     def __sql__(self, ctx):
         (ctx
          .sql(self.lhs)
-         .literal(' %s JOIN ' % self.join_type)
+         .literal(' %s ' % self.join_type)
          .sql(self.rhs))
         if self._on is not None:
             ctx.literal(' ON ').sql(self._on)
@@ -1938,7 +1938,7 @@ class Select(SelectBase):
         self._from_list = list(sources)
 
     @Node.copy
-    def join(self, dest, join_type='INNER', on=None):
+    def join(self, dest, join_type=JOIN.INNER, on=None):
         if not self._from_list:
             raise ValueError('No sources to join on.')
         item = self._from_list.pop()
@@ -4404,11 +4404,12 @@ class BareField(Field):
 class ForeignKeyField(Field):
     accessor_class = ForeignKeyAccessor
 
-    def __init__(self, model, field=None, backref=None, on_delete=None,
+    def __init__(self, model=None, field=None, backref=None, on_delete=None,
                  on_update=None, deferrable=None, _deferred=None,
                  rel_model=None, to_field=None, object_id_name=None,
                  related_name=None, *args, **kwargs):
         super(ForeignKeyField, self).__init__(*args, **kwargs)
+        assert model is not None or rel_model is not None
         if rel_model is not None:
             __deprecated__('"rel_model" has been deprecated in favor of '
                            '"model" for ForeignKeyField objects.')
@@ -6082,10 +6083,13 @@ class ModelSelect(BaseModelSelect, Select):
             return fk_fields[0], is_backref
 
     @Node.copy
-    def join(self, dest, join_type='INNER', on=None, src=None, attr=None):
+    def join(self, dest, join_type=JOIN.INNER, on=None, src=None, attr=None):
         src = self._join_ctx if src is None else src
 
-        on, attr, constructor = self._normalize_join(src, dest, on, attr)
+        if join_type != JOIN.LATERAL:
+            on, attr, constructor = self._normalize_join(src, dest, on, attr)
+        else:
+            on = True
         if attr:
             self._joins.setdefault(src, [])
             self._joins[src].append((dest, attr, constructor))
@@ -6095,7 +6099,7 @@ class ModelSelect(BaseModelSelect, Select):
         item = self._from_list.pop()
         self._from_list.append(Join(item, dest, join_type, on))
 
-    def join_from(self, src, dest, join_type='INNER', on=None, attr=None):
+    def join_from(self, src, dest, join_type=JOIN.INNER, on=None, attr=None):
         return self.join(dest, join_type, on, src, attr)
 
     def _get_model_cursor_wrapper(self, cursor):
