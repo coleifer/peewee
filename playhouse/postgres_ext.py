@@ -149,11 +149,11 @@ class ArrayField(IndexedFieldMixin, Field):
 
     def __init__(self, field_class=IntegerField, field_kwargs=None,
                  dimensions=1, convert_values=False, *args, **kwargs):
+        super(ArrayField, self).__init__(*args, **kwargs)
         self.__field = field_class(**(field_kwargs or {}))
         self.dimensions = dimensions
         self.convert_values = convert_values
         self.field_type = self.__field.field_type
-        super(ArrayField, self).__init__(*args, **kwargs)
 
     def bind(self, model, name, set_attribute=True):
         ret = super(ArrayField, self).bind(model, name, set_attribute)
@@ -168,9 +168,10 @@ class ArrayField(IndexedFieldMixin, Field):
         if value is None or isinstance(value, Node):
             return value
         elif self.convert_values:
-            return self._process(self.__field.db_value, value, self.dimensions)
+            value = self._process(self.__field.db_value, value, self.dimensions)
         else:
-            return value if isinstance(value, list) else list(value)
+            value = value if isinstance(value, list) else list(value)
+        return ArrayValue(self, value)
 
     def python_value(self, value):
         if self.convert_values and value is not None:
