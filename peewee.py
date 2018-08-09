@@ -3932,10 +3932,12 @@ class Field(ColumnBase):
         else:
             return SQL(column_type)
 
-    def ddl(self, ctx):
+    def ddl(self, ctx, alter=False):
         accum = [Entity(self.column_name)]
         data_type = self.ddl_datatype(ctx)
         if data_type:
+            if alter:
+                accum.append(SQL(' TYPE '))
             accum.append(data_type)
         if self.unindexed:
             accum.append(SQL('UNINDEXED'))
