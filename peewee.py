@@ -936,6 +936,10 @@ class CTE(_HashableSource, Source):
         super(CTE, self).__init__(alias=name)
 
     def select_from(self, *columns):
+        if not columns:
+            raise ValueError('select_from() must specify one or more columns '
+                             'from the CTE to select.')
+
         query = (Select((self,), columns)
                  .with_cte(self)
                  .bind(self._query._database))
