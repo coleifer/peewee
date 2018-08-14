@@ -3185,7 +3185,14 @@ Pool APIs
 
     .. py:method:: close_idle()
 
-        Close all idle connections.
+        Close all idle connections. This does not include any connections that
+        are currently in-use -- only those that were previously created but
+        have since been returned back to the pool.
+
+    .. py:method:: close_all()
+
+        Close all connections. This includes any connections that may be in use
+        at the time. **Use caution when calling this method!**
 
 .. py:class:: PooledPostgresqlDatabase
 

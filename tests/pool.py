@@ -30,7 +30,7 @@ class FakeTransaction(_transaction):
 
 class FakeDatabase(SqliteDatabase):
     def __init__(self, *args, **kwargs):
-        self.counter = self.closed_counter = 0
+        self.counter = self.closed_counter = kwargs.pop('counter', 0)
         self.transaction_history = []
         super(FakeDatabase, self).__init__(*args, **kwargs)
 
@@ -171,6 +171,42 @@ class TestPooledDatabase(BaseTestCase):
         self.db.close()
         self.assertEqual(self.db.connection(), 2)
 
+    def test_close_idle(self):
+        db = FakePooledDatabase('testing', counter=3)
+
+        now = time.time()
+        heapq.heappush(db._connections, (now - 10, 3))
+        heapq.heappush(db._connections, (now - 5, 2))
+        heapq.heappush(db._connections, (now - 1, 1))
+
+        self.assertEqual(db.connection(), 3)
+        self.assertTrue(3 in db._in_use)
+
+        db.close_idle()
+        self.assertEqual(len(db._connections), 0)
+        self.assertEqual(len(db._in_use), 1)
+        self.assertTrue(3 in db._in_use)
+        self.assertEqual(db.connection(), 3)
+
+        db.manual_close()
+        self.assertEqual(db.connection(), 4)
+
+    def test_close_all(self):
+        db = FakePooledDatabase('testing', counter=3)
+
+        now = time.time()
+        heapq.heappush(db._connections, (now - 10, 3))
+        heapq.heappush(db._connections, (now - 5, 2))
+        heapq.heappush(db._connections, (now - 1, 1))
+        self.assertEqual(db.connection(), 3)
+        self.assertTrue(3 in db._in_use)
+
+        db.close_all()
+        self.assertEqual(len(db._connections), 0)
+        self.assertEqual(len(db._in_use), 0)
+
+        self.assertEqual(db.connection(), 4)
+
     def test_stale_timeout_cascade(self):
         now = time.time()
         db = FakePooledDatabase('testing', stale_timeout=10)
@@ -184,7 +220,7 @@ class TestPooledDatabase(BaseTestCase):
             heapq.heappush(db._connections, ts_conn)
 
         self.assertEqual(db.connection(), 3)
-        self.assertEqual(db._in_use, {3: now - 5})
+        self.assertEqual(db._in_use, {3: (now - 5, 3)})
         self.assertEqual(db._connections, [(now, 4)])
 
     def test_connect_cascade(self):
@@ -207,7 +243,7 @@ class TestPooledDatabase(BaseTestCase):
 
         # Conn 3 is not stale or closed, so we will get it.
         self.assertEqual(db.connection(), 3)
-        self.assertEqual(db._in_use, {3: now - 3})
+        self.assertEqual(db._in_use, {3: (now - 3, 3)})
         self.assertEqual(db._connections, [(now, 4)])
 
         # Since conn 4 is closed, we will open a new conn.

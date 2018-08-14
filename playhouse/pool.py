@@ -34,6 +34,7 @@ That's it!
 import heapq
 import logging
 import time
+from itertools import chain
 
 try:
     from psycopg2.extensions import TRANSACTION_STATUS_INERROR
@@ -69,13 +70,15 @@ class PooledDatabase(object):
         # Available / idle connections stored in a heap, sorted oldest first.
         self._connections = []
 
-        # Mapping of connection id to timestamp. Ordinarily we would want to
-        # use a WeakKeyDictionary, but Python typically won't allow us to
-        # create weak references to connection objects.
+        # Mapping of connection id to (timestamp, conn). Ordinarily we would
+        # want to use a WeakKeyDictionary, but Python typically won't allow us
+        # to create weak references to connection objects.
         self._in_use = {}
 
         # Use the memory address of the connection as the key in the event the
-        # connection object is not hashable or gets garbage-collected.
+        # connection object is not hashable. Connections will not get
+        # garbage-collected, however, because a reference to them will persist
+        # in "_in_use" as long as the conn has not been closed.
         self.conn_key = id
 
         super(PooledDatabase, self).__init__(database, **kwargs)
@@ -146,7 +149,7 @@ class PooledDatabase(object):
             key = self.conn_key(conn)
             logger.debug('Created new connection %s.', key)
 
-        self._in_use[key] = ts
+        self._in_use[key] = (ts, conn)
         return conn
 
     def _is_stale(self, timestamp):
@@ -166,7 +169,7 @@ class PooledDatabase(object):
         if close_conn:
             super(PooledDatabase, self)._close(conn)
         elif key in self._in_use:
-            ts = self._in_use.pop(key)
+            ts, _ = self._in_use.pop(key)
             if self._stale_timeout and self._is_stale(ts):
                 logger.debug('Closing stale connection %s.', key)
                 super(PooledDatabase, self)._close(conn)
@@ -196,9 +199,18 @@ class PooledDatabase(object):
     def close_idle(self):
         # Close any open connections that are not currently in-use.
         with self._lock:
-            while self._connections:
-                ts, conn = self._connections.pop()
+            for _, conn in self._connections:
                 self._close(conn, close_conn=True)
+            self._connections = []
+
+    def close_all(self):
+        self.close()
+        with self._lock:
+            all_conns = chain(self._connections, self._in_use.values())
+            for _, conn in all_conns:
+                self._close(conn, close_conn=True)
+            self._connections = []
+            self._in_use = {}
 
 
 class PooledMySQLDatabase(PooledDatabase, MySQLDatabase):
