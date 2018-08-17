@@ -203,6 +203,21 @@ class PooledDatabase(object):
                 self._close(conn, close_conn=True)
             self._connections = []
 
+    def close_stale(self, age=600):
+        # Close any connections that are in-use but were checked out
+        with self._lock:
+            in_use = {}
+            cutoff = time.time() - age
+            n = 0
+            for key, (ts, conn) in self._in_use.items():
+                if ts < cutoff:
+                    self._close(conn, close_conn=True)
+                    n += 1
+                else:
+                    in_use[key] = (ts, conn)
+            self._in_use = in_use
+        return n
+
     def close_all(self):
         self.close()
         with self._lock:

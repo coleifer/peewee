@@ -3189,6 +3189,14 @@ Pool APIs
         are currently in-use -- only those that were previously created but
         have since been returned back to the pool.
 
+    .. py:method:: close_stale([age=600])
+
+        :param int age: Age at which a connection should be considered stale.
+        :returns: Number of connections closed.
+
+        Close connections which are in-use but exceed the given age. **Use
+        caution when calling this method!**
+
     .. py:method:: close_all()
 
         Close all connections. This includes any connections that may be in use

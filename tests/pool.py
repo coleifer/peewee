@@ -191,6 +191,17 @@ class TestPooledDatabase(BaseTestCase):
         db.manual_close()
         self.assertEqual(db.connection(), 4)
 
+    def test_close_stale(self):
+        db = FakePooledDatabase('testing', counter=3)
+
+        now = time.time()
+        db._in_use[1] = (now - 300, 1)
+        db._in_use[2] = (now - 200, 2)
+        db._in_use[3] = (now - 100, 3)
+        db._in_use[4] = (now, 4)
+        self.assertEqual(db.close_stale(age=200), 2)
+        self.assertEqual(len(db._in_use), 2)
+
     def test_close_all(self):
         db = FakePooledDatabase('testing', counter=3)
 
