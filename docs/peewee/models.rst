@@ -947,6 +947,20 @@ Examples:
         unique=True)
     Article.add_index(idx)
 
+.. warning::
+    SQLite does not support parameterized ``CREATE INDEX`` queries. This means
+    that when using SQLite to create an index that involves an expression or
+    scalar value, you will need to declare the index using the :py:class:`SQL`
+    helper:
+
+    .. code-block:: python
+
+        # SQLite does not support parameterized CREATE INDEX queries, so
+        # we declare it manually.
+        Article.add_index(SQL('CREATE INDEX ...'))
+
+    See :py:meth:`~Model.add_index` for details.
+
 For more information, see:
 
 * :py:meth:`Model.add_index`
