@@ -77,6 +77,7 @@ instead use :py:func:`prefetch` to achieve the same result.
 * The ``naive()`` method is now :py:meth:`~BaseQuery.objects`, which defaults
   to using the model class as the constructor, but accepts any callable to use
   as an alternate constructor.
+* The ``annotate()`` query method is no longer supported.
 
 The :py:func:`Case` helper has moved from the ``playhouse.shortcuts`` module
 into the main peewee module.
@@ -86,6 +87,9 @@ a method on all column-like objects.
 
 The ``InsertQuery.return_id_list()`` method has been replaced by a more general
 pattern of using :py:meth:`_WriteQuery.returning`.
+
+The ``InsertQuery.upsert()`` method has been replaced by the more general and
+flexible :py:meth:`Insert.on_conflict` method.
 
 When using :py:func:`prefetch`, the collected instances will be stored in the
 same attribute as the foreign-key's ``backref``. Previously, you would access
