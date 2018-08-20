@@ -3932,9 +3932,17 @@ class Field(ColumnBase):
         else:
             return SQL(column_type)
 
+    def _db_default(self):
+        if self.default is None or issubclass(self.model, (AutoField, BigAutoField)) or callable(self.default):
+            return None
+
+        return self.default
+
+
     def ddl(self, ctx, alter=False):
         accum = [Entity(self.column_name)]
         data_type = self.ddl_datatype(ctx)
+        default = self._db_default()
         if data_type:
             if alter:
                 accum.append(SQL(' TYPE '))
@@ -3947,6 +3955,8 @@ class Field(ColumnBase):
             accum.append(SQL('PRIMARY KEY'))
         if self.sequence:
             accum.append(SQL("DEFAULT NEXTVAL('%s')" % self.sequence))
+        elif default:
+            accum.append(SQL('DEFAULT %s' % default))
         if self.constraints:
             accum.extend(self.constraints)
         if self.collation:
@@ -4473,6 +4483,7 @@ class ForeignKeyField(Field):
                              'object_id_name that conflicts with its field '
                              'name.' % (model._meta.name, name))
         if self.rel_model == 'self':
+            self.origin_rel_model = self.rel_model
             self.rel_model = model
         if isinstance(self.rel_field, basestring):
             self.rel_field = getattr(self.rel_model, self.rel_field)
