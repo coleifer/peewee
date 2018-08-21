@@ -7,6 +7,8 @@ from inspect import isclass
 import re
 
 from peewee import *
+from peewee import _StringField
+from peewee import text_type
 try:
     from pymysql.constants import FIELD_TYPE
 except ImportError:
@@ -194,6 +196,9 @@ class Metadata(object):
         if default is None or field_class in (AutoField, BigAutoField) or \
            default.lower() == 'null':
             return
+        if issubclass(field_class, _StringField) and \
+           isinstance(default, text_type) and not default.startswith("'"):
+            default = "'%s'" % default
         return default or "''"
 
     def get_foreign_keys(self, table, schema=None):
