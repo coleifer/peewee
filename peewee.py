@@ -1582,8 +1582,8 @@ def database_required(method):
     def inner(self, database=None, *args, **kwargs):
         database = self._database if database is None else database
         if not database:
-            raise Exception('Query must be bound to a database in order '
-                            'to call "%s".' % method.__name__)
+            raise InterfaceError('Query must be bound to a database in order '
+                                 'to call "%s".' % method.__name__)
         return method(self, database, *args, **kwargs)
     return inner
 
@@ -2588,8 +2588,8 @@ class Database(_callable_context_manager):
     def connect(self, reuse_if_open=False):
         with self._lock:
             if self.deferred:
-                raise Exception('Error, database must be initialized before '
-                                'opening a connection.')
+                raise InterfaceError('Error, database must be initialized '
+                                     'before opening a connection.')
             if not self._state.closed:
                 if reuse_if_open:
                     return False
@@ -2607,8 +2607,8 @@ class Database(_callable_context_manager):
     def close(self):
         with self._lock:
             if self.deferred:
-                raise Exception('Error, database must be initialized before '
-                                'opening a connection.')
+                raise InterfaceError('Error, database must be initialized '
+                                     'before opening a connection.')
             if self.in_transaction():
                 raise OperationalError('Attempting to close database while '
                                        'transaction is open.')
