@@ -37,10 +37,13 @@ import time
 from itertools import chain
 
 try:
+    from psycopg2.extensions import TRANSACTION_STATUS_IDLE
     from psycopg2.extensions import TRANSACTION_STATUS_INERROR
     from psycopg2.extensions import TRANSACTION_STATUS_UNKNOWN
 except ImportError:
-    TRANSACTION_STATUS_INERROR = TRANSACTION_STATUS_UNKNOWN = None
+    TRANSACTION_STATUS_IDLE = \
+            TRANSACTION_STATUS_INERROR = \
+            TRANSACTION_STATUS_UNKNOWN = None
 
 from peewee import MySQLDatabase
 from peewee import PostgresqlDatabase
@@ -253,6 +256,8 @@ class _PooledPostgresqlDatabase(PooledDatabase):
             conn.reset()
         elif txn_status == TRANSACTION_STATUS_UNKNOWN:
             return False
+        elif txn_status != TRANSACTION_STATUS_IDLE:
+            conn.rollback()
         return True
 
 class PooledPostgresqlDatabase(_PooledPostgresqlDatabase, PostgresqlDatabase):
