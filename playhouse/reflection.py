@@ -21,6 +21,12 @@ try:
 except ImportError:
     postgres_ext = None
 
+import sys
+if sys.version_info[0] == 2:
+    text_type = unicode
+else:
+    text_type = str
+
 RESERVED_WORDS = set([
     'and', 'as', 'assert', 'break', 'class', 'continue', 'def', 'del', 'elif',
     'else', 'except', 'exec', 'finally', 'for', 'from', 'global', 'if',
@@ -83,7 +89,10 @@ class Column(object):
         if self.primary_key and not issubclass(self.field_class, AutoField):
             params['primary_key'] = True
         if self.default is not None:
-            params['constraints'] = '[SQL("DEFAULT %s")]' % self.default
+            if isinstance(self.default, text_type):
+                params['constraints'] = '[SQL("DEFAULT \'%s\'")]' % self.default
+            else:
+                params['constraints'] = '[SQL("DEFAULT %s")]' % self.default
 
         # Handle ForeignKeyField-specific attributes.
         if self.is_foreign_key():
