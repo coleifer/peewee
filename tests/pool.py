@@ -61,6 +61,7 @@ class TestPooledDatabase(BaseTestCase):
         self.db = FakePooledDatabase('testing')
 
     def test_connection_pool(self):
+        # Closing and reopening a connection returns us the same conn.
         self.assertEqual(self.db.connection(), 1)
         self.assertEqual(self.db.connection(), 1)
 
@@ -69,6 +70,7 @@ class TestPooledDatabase(BaseTestCase):
         self.assertEqual(self.db.connection(), 1)
 
     def test_reuse_connection(self):
+        # Verify the connection pool correctly handles calling connect twice.
         self.assertEqual(self.db.connection(), 1)
         self.assertRaises(OperationalError, self.db.connect)
         self.assertFalse(self.db.connect(reuse_if_open=True))
@@ -149,8 +151,7 @@ class TestPooledDatabase(BaseTestCase):
         self.assertEqual(len(db._connections), 1)
 
         # A new connection will be returned, as the original one is stale.
-        # The stale connection (1) will be removed and not placed in the
-        # "closed" set.
+        # The stale connection (1) will be removed.
         self.assertEqual(db.connection(), 2)
 
     def test_manual_close(self):
@@ -195,12 +196,15 @@ class TestPooledDatabase(BaseTestCase):
         db = FakePooledDatabase('testing', counter=3)
 
         now = time.time()
-        db._in_use[1] = (now - 300, 1)
-        db._in_use[2] = (now - 200, 2)
-        db._in_use[3] = (now - 100, 3)
-        db._in_use[4] = (now, 4)
+        # Closing stale uses the last checkout time rather than the creation
+        # time for the connection.
+        db._in_use[1] = PoolConnection(now - 400, 1, now - 300)
+        db._in_use[2] = PoolConnection(now - 200, 2, now - 200)
+        db._in_use[3] = PoolConnection(now - 300, 3, now - 100)
+        db._in_use[4] = PoolConnection(now, 4, now)
         self.assertEqual(db.close_stale(age=200), 2)
         self.assertEqual(len(db._in_use), 2)
+        self.assertEqual(sorted(db._in_use), [3, 4])
 
     def test_close_all(self):
         db = FakePooledDatabase('testing', counter=3)
@@ -231,7 +235,8 @@ class TestPooledDatabase(BaseTestCase):
             heapq.heappush(db._connections, ts_conn)
 
         self.assertEqual(db.connection(), 3)
-        self.assertEqual(db._in_use, {3: (now - 5, 3)})
+        self.assertEqual(len(db._in_use), 1)
+        self.assertTrue(3 in db._in_use)
         self.assertEqual(db._connections, [(now, 4)])
 
     def test_connect_cascade(self):
@@ -254,7 +259,11 @@ class TestPooledDatabase(BaseTestCase):
 
         # Conn 3 is not stale or closed, so we will get it.
         self.assertEqual(db.connection(), 3)
-        self.assertEqual(db._in_use, {3: (now - 3, 3)})
+        self.assertEqual(len(db._in_use), 1)
+        self.assertTrue(3 in db._in_use)
+        pool_conn = db._in_use[3]
+        self.assertEqual(pool_conn.timestamp, now - 3)
+        self.assertEqual(pool_conn.connection, 3)
         self.assertEqual(db._connections, [(now, 4)])
 
         # Since conn 4 is closed, we will open a new conn.

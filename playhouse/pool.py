@@ -34,6 +34,7 @@ That's it!
 import heapq
 import logging
 import time
+from collections import namedtuple
 from itertools import chain
 
 try:
@@ -61,6 +62,10 @@ def make_int(val):
 class MaxConnectionsExceeded(ValueError): pass
 
 
+PoolConnection = namedtuple('PoolConnection', ('timestamp', 'connection',
+                                               'checked_out'))
+
+
 class PooledDatabase(object):
     def __init__(self, database, max_connections=20, stale_timeout=None,
                  timeout=None, **kwargs):
@@ -73,9 +78,9 @@ class PooledDatabase(object):
         # Available / idle connections stored in a heap, sorted oldest first.
         self._connections = []
 
-        # Mapping of connection id to (timestamp, conn). Ordinarily we would
-        # want to use a WeakKeyDictionary, but Python typically won't allow us
-        # to create weak references to connection objects.
+        # Mapping of connection id to PoolConnection. Ordinarily we would want
+        # to use something like a WeakKeyDictionary, but Python typically won't
+        # allow us to create weak references to connection objects.
         self._in_use = {}
 
         # Use the memory address of the connection as the key in the event the
@@ -152,7 +157,7 @@ class PooledDatabase(object):
             key = self.conn_key(conn)
             logger.debug('Created new connection %s.', key)
 
-        self._in_use[key] = (ts, conn)
+        self._in_use[key] = PoolConnection(ts, conn, time.time())
         return conn
 
     def _is_stale(self, timestamp):
@@ -172,13 +177,13 @@ class PooledDatabase(object):
         if close_conn:
             super(PooledDatabase, self)._close(conn)
         elif key in self._in_use:
-            ts, _ = self._in_use.pop(key)
-            if self._stale_timeout and self._is_stale(ts):
+            pool_conn = self._in_use.pop(key)
+            if self._stale_timeout and self._is_stale(pool_conn.timestamp):
                 logger.debug('Closing stale connection %s.', key)
                 super(PooledDatabase, self)._close(conn)
             elif self._can_reuse(conn):
                 logger.debug('Returning %s to pool.', key)
-                heapq.heappush(self._connections, (ts, conn))
+                heapq.heappush(self._connections, (pool_conn.timestamp, conn))
             else:
                 logger.debug('Closed %s.', key)
 
@@ -189,6 +194,7 @@ class PooledDatabase(object):
         if self.is_closed():
             return False
 
+        # Obtain reference to the connection in-use by the calling thread.
         conn = self.connection()
 
         # A connection will only be re-added to the available list if it is
@@ -207,26 +213,30 @@ class PooledDatabase(object):
             self._connections = []
 
     def close_stale(self, age=600):
-        # Close any connections that are in-use but were checked out
+        # Close any connections that are in-use but were checked out quite some
+        # time ago and can be considered stale.
         with self._lock:
             in_use = {}
             cutoff = time.time() - age
             n = 0
-            for key, (ts, conn) in self._in_use.items():
-                if ts < cutoff:
-                    self._close(conn, close_conn=True)
+            for key, pool_conn in self._in_use.items():
+                if pool_conn.checked_out < cutoff:
+                    self._close(pool_conn.connection, close_conn=True)
                     n += 1
                 else:
-                    in_use[key] = (ts, conn)
+                    in_use[key] = pool_conn
             self._in_use = in_use
         return n
 
     def close_all(self):
+        # Close all connections -- available and in-use. Warning: may break any
+        # active connections used by other threads.
         self.close()
         with self._lock:
-            all_conns = chain(self._connections, self._in_use.values())
-            for _, conn in all_conns:
+            for _, conn in self._connections:
                 self._close(conn, close_conn=True)
+            for pool_conn in self._in_use.values():
+                self._close(pool_conn.connection, close_conn=True)
             self._connections = []
             self._in_use = {}
 
@@ -243,8 +253,14 @@ class PooledMySQLDatabase(PooledDatabase, MySQLDatabase):
 
 class _PooledPostgresqlDatabase(PooledDatabase):
     def _is_closed(self, conn):
-        if not conn.closed:
-            return conn.get_transaction_status() == TRANSACTION_STATUS_UNKNOWN
+        if conn.closed:
+            return True
+
+        txn_status = conn.get_transaction_status()
+        if txn_status == TRANSACTION_STATUS_UNKNOWN:
+            return True
+        elif txn_status != TRANSACTION_STATUS_IDLE:
+            conn.rollback()
         return False
 
     def _can_reuse(self, conn):
@@ -252,10 +268,10 @@ class _PooledPostgresqlDatabase(PooledDatabase):
         # Do not return connection in an error state, as subsequent queries
         # will all fail. If the status is unknown then we lost the connection
         # to the server and the connection should not be re-used.
-        if txn_status == TRANSACTION_STATUS_INERROR:
-            conn.reset()
-        elif txn_status == TRANSACTION_STATUS_UNKNOWN:
+        if txn_status == TRANSACTION_STATUS_UNKNOWN:
             return False
+        elif txn_status == TRANSACTION_STATUS_INERROR:
+            conn.reset()
         elif txn_status != TRANSACTION_STATUS_IDLE:
             conn.rollback()
         return True
