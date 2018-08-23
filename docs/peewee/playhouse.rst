@@ -2655,7 +2655,7 @@ Option    Meaning                             Example
 -H        host to connect to                  -H remote.db.server
 -p        port to connect on                  -p 9001
 -u        database user                       -u postgres
--P        database password                   -P secret
+-P        database password                   -P (will be prompted for password)
 -s        schema                              -s public
 -t        tables to generate                  -t tweet,users,relationships
 -v        generate models for VIEWs           (no argument)
@@ -2669,6 +2669,14 @@ The following are valid parameters for the ``engine`` (``-e``):
 * mysql
 * postgresql
 
+.. warning::
+    If a password is required to access your database, you will be prompted to
+    enter it using a secure prompt.
+
+    **The password will be included in the output**. Specifically, at the top
+    of the file a :py:class:`Database` will be defined along with any required
+    parameters -- including the password.
+
 pwiz examples
 ^^^^^^^^^^^^^
 
@@ -2679,8 +2687,9 @@ Examples of introspecting various databases:
     # Introspect a Sqlite database.
     python -m pwiz -e sqlite path/to/sqlite_database.db
 
-    # Introspect a MySQL database, logging in as root:secret.
-    python -m pwiz -e mysql -u root -P secret mysql_db_name
+    # Introspect a MySQL database, logging in as root. You will be prompted
+    # for a password ("-P").
+    python -m pwiz -e mysql -u root -P mysql_db_name
 
     # Introspect a Postgresql database on a remote server.
     python -m pwiz -e postgres -u postgres -H 10.1.0.3 pg_db_name
