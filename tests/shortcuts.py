@@ -240,6 +240,24 @@ class TestModelToDict(ModelTestCase):
                 {'id': 4, 'name': 'cd'}]},
             {'id': 3, 'name': 's3', 'courses': []}])
 
+        query = Course.select().order_by(Course.name)
+        data = []
+        for course in query:
+            course_dict = model_to_dict(course, manytomany=True)
+            course_dict['students'].sort(key=operator.itemgetter('id'))
+            data.append(course_dict)
+
+        self.assertEqual(data, [
+            {'id': 1, 'name': 'ca', 'students': [
+                {'id': 1, 'name': 's1'}]},
+            {'id': 2, 'name': 'cb', 'students': [
+                {'id': 1, 'name': 's1'},
+                {'id': 2, 'name': 's2'}]},
+            {'id': 3, 'name': 'cc', 'students': [
+                {'id': 1, 'name': 's1'}]},
+            {'id': 4, 'name': 'cd', 'students': [
+                {'id': 2, 'name': 's2'}]}])
+
     def test_recurse_max_depth(self):
         t0, t1, t2 = [Tweet.create(user=self.user, content='t%s' % i)
                       for i in range(3)]

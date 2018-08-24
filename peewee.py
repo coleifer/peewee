@@ -4542,14 +4542,16 @@ class DeferredForeignKey(Field):
 
 
 class DeferredThroughModel(object):
+    def __init__(self):
+        self._refs = []
+
     def set_field(self, model, field, name):
-        self.model = model
-        self.field = field
-        self.name = name
+        self._refs.append((model, field, name))
 
     def set_model(self, through_model):
-        self.field.through_model = through_model
-        self.field.bind(self.model, self.name)
+        for src_model, m2mfield, name in self._refs:
+            m2mfield.through_model = through_model
+            src_model._meta.add_field(name, m2mfield)
 
 
 class MetaField(Field):
@@ -4611,9 +4613,10 @@ class ManyToManyField(MetaField):
             many_to_many_field = ManyToManyField(
                 self.model,
                 through_model=self.through_model,
+                backref=name,
                 _is_backref=True)
-            backref = self.backref or model._meta.name + 's'
-            self.rel_model._meta.add_field(backref, many_to_many_field)
+            self.backref = self.backref or model._meta.name + 's'
+            self.rel_model._meta.add_field(self.backref, many_to_many_field)
 
     def get_models(self):
         return [model for _, model in sorted((
@@ -5129,7 +5132,7 @@ class Metadata(object):
 
         if isinstance(field, ForeignKeyField):
             self.add_ref(field)
-        elif isinstance(field, ManyToManyField):
+        elif isinstance(field, ManyToManyField) and field.name:
             self.add_manytomany(field)
 
     def remove_field(self, field_name):
