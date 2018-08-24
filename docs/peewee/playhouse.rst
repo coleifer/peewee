@@ -2901,6 +2901,22 @@ Dropping an index:
     # Specify the index name.
     migrate(migrator.drop_index('story', 'story_pub_date_status'))
 
+Adding or dropping table constraints:
+
+.. code-block:: python
+
+    # Add a CHECK() constraint to enforce the price cannot be negative.
+    migrate(migrator.add_constraint(
+        'products',
+        'price_check',
+        Check('price >= 0')))
+
+    # Remove the price check constraint.
+    migrate(migrator.drop_constraint('products', 'price_check'))
+
+    # Add a UNIQUE constraint on the first and last names.
+    migrate(migrator.add_unique('person', 'first_name', 'last_name'))
+
 
 Migrations API
 ^^^^^^^^^^^^^^
@@ -2977,8 +2993,25 @@ Migrations API
 
     .. py:method:: drop_index(table, index_name)
 
-        :param str table Name of the table containing the index to be dropped.
+        :param str table: Name of the table containing the index to be dropped.
         :param str index_name: Name of the index to be dropped.
+
+    .. py:method:: add_constraint(table, name, constraint)
+
+        :param str table: Table to add constraint to.
+        :param str name: Name used to identify the constraint.
+        :param constraint: either a :py:func:`Check` constraint or for
+            adding an arbitrary constraint use :py:class:`SQL`.
+
+    .. py:method:: drop_constraint(table, name)
+
+        :param str table: Table to drop constraint from.
+        :param str name: Name of constraint to drop.
+
+    .. py:method:: add_unique(table, *column_names)
+
+        :param str table: Table to add constraint to.
+        :param str column_names: One or more columns for UNIQUE constraint.
 
 .. py:class:: PostgresqlMigrator(database)
 
@@ -2993,6 +3026,13 @@ Migrations API
 .. py:class:: SqliteMigrator(database)
 
     Generate migrations for SQLite databases.
+
+    SQLite has limited support for ``ALTER TABLE`` queries, so the following
+    operations are currently not supported for SQLite:
+
+    * ``add_constraint``
+    * ``drop_constraint``
+    * ``add_unique``
 
 .. py:class:: MySQLMigrator(database)
 

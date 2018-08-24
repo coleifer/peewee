@@ -98,6 +98,22 @@ Dropping an index:
 
     # Specify the index name.
     migrate(migrator.drop_index('story', 'story_pub_date_status'))
+
+Adding or dropping table constraints:
+
+.. code-block:: python
+
+    # Add a CHECK() constraint to enforce the price cannot be negative.
+    migrate(migrator.add_constraint(
+        'products',
+        'price_check',
+        Check('price >= 0')))
+
+    # Remove the price check constraint.
+    migrate(migrator.drop_constraint('products', 'price_check'))
+
+    # Add a UNIQUE constraint on the first and last names.
+    migrate(migrator.add_unique('person', 'first_name', 'last_name'))
 """
 from collections import namedtuple
 import functools
@@ -220,6 +236,30 @@ class SchemaMigrator(object):
         if isinstance(field, ForeignKeyField):
             self.add_inline_fk_sql(ctx, field)
         return ctx
+
+    @operation
+    def add_constraint(self, table, name, constraint):
+        return (self
+                ._alter_table(self.make_context(), table)
+                .literal(' ADD CONSTRAINT ')
+                .sql(Entity(name))
+                .literal(' ')
+                .sql(constraint))
+
+    @operation
+    def add_unique(self, table, *column_names):
+        constraint_name = 'uniq_%s' % '_'.join(column_names)
+        constraint = NodeList((
+            SQL('UNIQUE'),
+            EnclosedNodeList([Entity(column) for column in column_names])))
+        return self.add_constraint(table, constraint_name, constraint)
+
+    @operation
+    def drop_constraint(self, table, name):
+        return (self
+                ._alter_table(self.make_context(), table)
+                .literal(' DROP CONSTRAINT ')
+                .sql(Entity(name)))
 
     def add_inline_fk_sql(self, ctx, field):
         ctx = (ctx
@@ -758,6 +798,14 @@ class SqliteMigrator(SchemaMigrator):
         def _drop_not_null(column_name, column_def):
             return column_def.replace('NOT NULL', '')
         return self._update_column(table, column, _drop_not_null)
+
+    @operation
+    def add_constraint(self, table, name, constraint):
+        raise NotImplementedError
+
+    @operation
+    def drop_constraint(self, table, name):
+        raise NotImplementedError
 
     @operation
     def add_foreign_key_constraint(self, table, column_name, field,

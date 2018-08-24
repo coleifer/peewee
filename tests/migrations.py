@@ -6,12 +6,14 @@ from peewee import *
 from playhouse.migrate import *
 from .base import BaseTestCase
 from .base import IS_MYSQL
+from .base import IS_SQLITE
 from .base import ModelTestCase
 from .base import TestModel
 from .base import db
 from .base import requires_models
 from .base import requires_postgresql
 from .base import requires_sqlite
+from .base import skip_if
 
 try:
     from psycopg2cffi import compat
@@ -79,6 +81,67 @@ class TestSchemaMigration(ModelTestCase):
         finally:
             self.database.close()
 
+    @requires_postgresql
+    def test_add_table_constraint(self):
+        price = FloatField(default=0.)
+        migrate(self.migrator.add_column('tag', 'price', price),
+                self.migrator.add_constraint('tag', 'price_check',
+                                             Check('price >= 0')))
+        class Tag2(Model):
+            tag = CharField()
+            price = FloatField(default=0.)
+            class Meta:
+                database = self.database
+                table_name = Tag._meta.table_name
+
+        with self.database.atomic():
+            self.assertRaises(IntegrityError, Tag2.create, tag='t1', price=-1)
+
+        Tag2.create(tag='t1', price=1.0)
+        t1_db = Tag2.get(Tag2.tag == 't1')
+        self.assertEqual(t1_db.price, 1.0)
+
+    @skip_if(IS_SQLITE)
+    def test_add_unique(self):
+        alt_id = IntegerField(default=0)
+        migrate(
+            self.migrator.add_column('tag', 'alt_id', alt_id),
+            self.migrator.add_unique('tag', 'alt_id'))
+
+        class Tag2(Model):
+            tag = CharField()
+            alt_id = IntegerField(default=0)
+            class Meta:
+                database = self.database
+                table_name = Tag._meta.table_name
+
+        Tag2.create(tag='t1', alt_id=1)
+        with self.database.atomic():
+            self.assertRaises(IntegrityError, Tag2.create, tag='t2', alt_id=1)
+
+    @requires_postgresql
+    def test_drop_table_constraint(self):
+        price = FloatField(default=0.)
+        migrate(
+            self.migrator.add_column('tag', 'price', price),
+            self.migrator.add_constraint('tag', 'price_check',
+                                         Check('price >= 0')))
+
+        class Tag2(Model):
+            tag = CharField()
+            price = FloatField(default=0.)
+            class Meta:
+                database = self.database
+                table_name = Tag._meta.table_name
+
+        with self.database.atomic():
+            self.assertRaises(IntegrityError, Tag2.create, tag='t1', price=-1)
+
+        migrate(self.migrator.drop_constraint('tag', 'price_check'))
+        Tag2.create(tag='t1', price=-1)
+        t1_db = Tag2.get(Tag2.tag == 't1')
+        self.assertEqual(t1_db.price, -1.0)
+
     def test_add_column(self):
         # Create some fields with a variety of NULL / default values.
         df = DateTimeField(null=True)
@@ -132,6 +195,36 @@ class TestSchemaMigration(ModelTestCase):
             (t1.id, 't1', None, datetime.datetime(2012, 1, 1), '', True, 0.0),
             (t2.id, 't2', None, datetime.datetime(2012, 1, 1), '', True, 0.0),
         ])
+
+    @skip_if(IS_MYSQL, 'mysql does not support CHECK()')
+    def test_add_column_constraint(self):
+        cf = CharField(null=True, constraints=[SQL('default \'foo\'')])
+        ff = FloatField(default=0., constraints=[Check('val < 1.0')])
+        t1 = Tag.create(tag='t1')
+        migrate(
+            self.migrator.add_column('tag', 'misc', cf),
+            self.migrator.add_column('tag', 'val', ff))
+
+        class NewTag(Model):
+            tag = CharField()
+            misc = CharField()
+            val = FloatField()
+            class Meta:
+                database = self.database
+                table_name = Tag._meta.table_name
+
+        t1_db = NewTag.get(NewTag.tag == 't1')
+        self.assertEqual(t1_db.misc, 'foo')
+        self.assertEqual(t1_db.val, 0.)
+
+        with self.database.atomic():
+            self.assertRaises(IntegrityError, NewTag.create, tag='t2',
+                              misc='bar', val=2.)
+
+        NewTag.create(tag='t3', misc='baz', val=0.9)
+        t3_db = NewTag.get(NewTag.tag == 't3')
+        self.assertEqual(t3_db.misc, 'baz')
+        self.assertEqual(t3_db.val, 0.9)
 
     def _create_people(self):
         for first, last, dob in self._person_data:
