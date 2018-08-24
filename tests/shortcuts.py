@@ -1,3 +1,5 @@
+import operator
+
 from peewee import *
 from playhouse.shortcuts import *
 
@@ -41,6 +43,22 @@ class Gallery(TestModel):
     owner = ForeignKeyField(Owner, backref='galleries')
 
 GalleryLabel = Gallery.labels.through_model
+
+class Student(TestModel):
+    name = TextField()
+
+StudentCourseProxy = DeferredThroughModel()
+
+class Course(TestModel):
+    name = TextField()
+    students = ManyToManyField(Student, through_model=StudentCourseProxy,
+                               backref='courses')
+
+class StudentCourse(TestModel):
+    student = ForeignKeyField(Student)
+    course = ForeignKeyField(Course)
+
+StudentCourseProxy.set_model(StudentCourse)
 
 
 class TestModelToDict(ModelTestCase):
@@ -190,6 +208,37 @@ class TestModelToDict(ModelTestCase):
                 'labels': [{'id': 1, 'label': 'nuggie'},
                            {'id': 3, 'label': 'huey'}],
             }])
+
+    @requires_models(Student, Course, StudentCourse)
+    def test_manytomany_deferred(self):
+        data = (
+            ('s1', ('ca', 'cb', 'cc')),
+            ('s2', ('cb', 'cd')),
+            ('s3', ()))
+        c = {}
+        for student, courses in data:
+            s = Student.create(name=student)
+            for course in courses:
+                if course not in c:
+                    c[course] = Course.create(name=course)
+                StudentCourse.create(student=s, course=c[course])
+
+        query = Student.select().order_by(Student.name)
+        data = []
+        for user in query:
+            user_dict = model_to_dict(user, manytomany=True)
+            user_dict['courses'].sort(key=operator.itemgetter('id'))
+            data.append(user_dict)
+
+        self.assertEqual(data, [
+            {'id': 1, 'name': 's1', 'courses': [
+                {'id': 1, 'name': 'ca'},
+                {'id': 2, 'name': 'cb'},
+                {'id': 3, 'name': 'cc'}]},
+            {'id': 2, 'name': 's2', 'courses': [
+                {'id': 2, 'name': 'cb'},
+                {'id': 4, 'name': 'cd'}]},
+            {'id': 3, 'name': 's3', 'courses': []}])
 
     def test_recurse_max_depth(self):
         t0, t1, t2 = [Tweet.create(user=self.user, content='t%s' % i)
