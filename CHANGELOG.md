@@ -14,8 +14,12 @@ https://github.com/coleifer/peewee/releases
 
 **New features**
 
+* Add methods to the migrations extension to support adding and dropping table
+  constraints.
 * Add [Model.bulk_create()](http://docs.peewee-orm.com/en/latest/peewee/api.html#Model.bulk_create)
   method for bulk-inserting unsaved model instances.
+* Add `close_stale()` method to the connection pool to support closing stale
+  connections.
 * The `FlaskDB` class in `playhouse.flask_utils` now accepts a `model_class`
   parameter, which can be used to specify a custom base-class for models.
 
