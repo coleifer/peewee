@@ -79,6 +79,12 @@ class TestModelDDL(ModelDatabaseTestCase):
     requires = [Article, Category, Note, Person, Relationship, TMUnique,
                 TMSequence, TMIndexes, TMConstraints, User, CacheData]
 
+    def test_database_required(self):
+        class MissingDB(Model):
+            data = TextField()
+
+        self.assertRaises(ImproperlyConfigured, MissingDB.create_table)
+
     def assertCreateTable(self, model_class, expected):
         sql, params = model_class._schema._create_table(False).query()
         self.assertEqual(params, [])

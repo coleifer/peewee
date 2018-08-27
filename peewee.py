@@ -4762,7 +4762,11 @@ class SchemaManager(object):
 
     @property
     def database(self):
-        return self._database or self.model._meta.database
+        db = self._database or self.model._meta.database
+        if db is None:
+            raise ImproperlyConfigured('database attribute does not appear to '
+                                       'be set on the model: %s' % self.model)
+        return db
 
     @database.setter
     def database(self, value):
@@ -5693,8 +5697,8 @@ class Model(with_metaclass(ModelBase, Node)):
 
     @classmethod
     def table_exists(cls):
-        meta = cls._meta
-        return meta.database.table_exists(meta.table.__name__, meta.schema)
+        M = cls._meta
+        return cls._schema.database.table_exists(M.table.__name__, M.schema)
 
     @classmethod
     def create_table(cls, safe=True, **options):
@@ -5703,7 +5707,7 @@ class Model(with_metaclass(ModelBase, Node)):
                            '"safe" for the create_table() method.')
             safe = options.pop('fail_silently')
 
-        if safe and not cls._meta.database.safe_create_index \
+        if safe and not cls._schema.database.safe_create_index \
            and cls.table_exists():
             return
         if cls._meta.temporary:
@@ -5712,7 +5716,7 @@ class Model(with_metaclass(ModelBase, Node)):
 
     @classmethod
     def drop_table(cls, safe=True, drop_sequences=True, **options):
-        if safe and not cls._meta.database.safe_drop_index \
+        if safe and not cls._schema.database.safe_drop_index \
            and not cls.table_exists():
             return
         if cls._meta.temporary:
