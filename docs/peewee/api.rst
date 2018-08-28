@@ -1,7 +1,5 @@
 .. _api:
 
-.. include:: help-request.rst
-
 API Documentation
 =================
 

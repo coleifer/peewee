@@ -1,7 +1,5 @@
 .. _query-operators:
 
-.. include:: help-request.rst
-
 Query operators
 ===============
 

@@ -991,7 +991,7 @@ APIs
 
     .. py:classmethod:: rank([col1_weight, col2_weight...coln_weight])
 
-        :param float col_weight: (Optional) weight to give to the *i*th column
+        :param float col_weight: (Optional) weight to give to the *ith* column
             of the model. By default all columns have a weight of ``1.0``.
 
         Generate an expression that will calculate and return the quality of
@@ -1024,7 +1024,7 @@ APIs
 
     .. py:classmethod:: bm25([col1_weight, col2_weight...coln_weight])
 
-        :param float col_weight: (Optional) weight to give to the *i*th column
+        :param float col_weight: (Optional) weight to give to the *ith* column
             of the model. By default all columns have a weight of ``1.0``.
 
         Generate an expression that will calculate and return the quality of
@@ -1154,7 +1154,7 @@ APIs
 
     .. py:classmethod:: rank([col1_weight, col2_weight...coln_weight])
 
-        :param float col_weight: (Optional) weight to give to the *i*th column
+        :param float col_weight: (Optional) weight to give to the *ith* column
             of the model. By default all columns have a weight of ``1.0``.
 
         Generate an expression that will calculate and return the quality of

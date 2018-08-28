@@ -1,7 +1,5 @@
 .. _models:
 
-.. include:: help-request.rst
-
 Models and Fields
 =================
 
