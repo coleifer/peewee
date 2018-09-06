@@ -7,6 +7,10 @@ https://github.com/coleifer/peewee/releases
 
 ## master
 
+[View commits](https://github.com/coleifer/peewee/compare/3.7.0...master)
+
+## 3.7.0
+
 **Backwards-incompatible changes**
 
 * Pool database `close_all()` method renamed to `close_idle()` to better
@@ -45,7 +49,7 @@ https://github.com/coleifer/peewee/releases
   helper function which will reliably determine if the SQLite3 extensions can
   be built. This follows the approach taken by the Python YAML package.
 
-[View commits](https://github.com/coleifer/peewee/compare/3.6.4...master)
+[View commits](https://github.com/coleifer/peewee/compare/3.6.4...3.7.0)
 
 ## 3.6.4
 
