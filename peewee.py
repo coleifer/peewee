@@ -6101,13 +6101,17 @@ class ModelSelect(BaseModelSelect, Select):
     def join(self, dest, join_type='INNER', on=None, src=None, attr=None):
         src = self._join_ctx if src is None else src
 
-        on, attr, constructor = self._normalize_join(src, dest, on, attr)
-        if attr:
-            self._joins.setdefault(src, [])
-            self._joins[src].append((dest, attr, constructor))
+        if join_type != JOIN.CROSS:
+            on, attr, constructor = self._normalize_join(src, dest, on, attr)
+            if attr:
+                self._joins.setdefault(src, [])
+                self._joins[src].append((dest, attr, constructor))
+        elif on is not None:
+            raise ValueError('Cannot specify on clause with cross join.')
 
         if not self._from_list:
             raise ValueError('No sources to join on.')
+
         item = self._from_list.pop()
         self._from_list.append(Join(item, dest, join_type, on))
 

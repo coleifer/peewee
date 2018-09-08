@@ -222,6 +222,21 @@ class TestModelSQL(ModelDatabaseTestCase):
             'SELECT "t1"."name", "t1"."parent_id" FROM "category" AS "t1" '
             'WHERE ("t1"."parent_id" = ?)'), ['test'])
 
+    def test_cross_join(self):
+        class A(TestModel):
+            id = IntegerField(primary_key=True)
+        class B(TestModel):
+            id = IntegerField(primary_key=True)
+        query = (A
+                 .select(A.id.alias('aid'), B.id.alias('bid'))
+                 .join(B, JOIN.CROSS)
+                 .order_by(A.id, B.id))
+        self.assertSQL(query, (
+            'SELECT "t1"."id" AS "aid", "t2"."id" AS "bid" '
+            'FROM "a" AS "t1" '
+            'CROSS JOIN "b" AS "t2" '
+            'ORDER BY "t1"."id", "t2"."id"'), [])
+
     def test_raw(self):
         query = (Person
                  .raw('SELECT first, last, dob FROM person '
