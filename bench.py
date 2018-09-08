@@ -51,10 +51,9 @@ def insert(i):
 
 @timed
 def batch_insert(i):
-    with db.atomic():
-        it = range(i * 1000, (i + 1) * 1000)
-        for i in db.batch_commit(it, 100):
-            Register.insert(value=i).execute()
+    it = range(i * 1000, (i + 1) * 1000)
+    for i in db.batch_commit(it, 100):
+        Register.insert(value=i).execute()
 
 @timed
 def bulk_insert(i):
